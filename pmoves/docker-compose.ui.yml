@@ -104,7 +104,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
+  # Consciousness Service - CHR Algorithm & CGP Generation (port 8106)
     deploy:
       resources:
         limits:
@@ -137,7 +137,7 @@ services:
     - TOKENISM_PORT=${TOKENISM_PORT:-8100}
     - FLASK_ENV=${FLASK_ENV:-production}
     - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_CLIENT_NAME=tokenism-simulator
     - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -167,8 +167,9 @@ services:
           cpus: '2.0'
           memory: 2G
   invidious:
-    # Quay tags churn; default to latest unless explicitly pinned via env.
-    image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious:latest}
+    # F-07: pinned by digest for reproducible/supply-chain-safe default.
+    # Override INVIDIOUS_IMAGE (e.g. ...:latest) to track newer builds.
+    image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious@sha256:9d972ea5930c2e170b3c4d49bdd9fa09bf03f077d555f58747342062dffc5876}
     restart: unless-stopped
     env_file:
     - env.shared
@@ -206,8 +207,9 @@ services:
           cpus: '1.0'
           memory: 512M
   invidious-companion:
-    # Quay tags churn; default to latest unless explicitly pinned via env.
-    image: ${INVIDIOUS_COMPANION_IMAGE:-quay.io/invidious/invidious-companion:latest}
+    # F-07: pinned by digest for reproducible/supply-chain-safe default.
+    # Override INVIDIOUS_COMPANION_IMAGE (e.g. ...:latest) to track newer builds.
+    image: ${INVIDIOUS_COMPANION_IMAGE:-quay.io/invidious/invidious-companion@sha256:4dbe5c51811cf049ceeb690fe39040896734acce9c0dd7344519d6e2b4345c0b}
     restart: unless-stopped
     env_file:
     - env.shared
@@ -230,12 +232,15 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # YouTube innertube API
+    # The invidious-companion image is a compiled Deno binary with NO shell
+    # and NO wget/curl — CMD-SHELL based healthchecks fail every time (Phase
+    # 9P observed 760+ failing streak despite service working normally).
+    # Docker has no way to HTTP-probe without invoking something in the
+    # container, so we disable the healthcheck. Liveness is still monitored
+    # via Prometheus scraping (service exposes metrics) and the PMOVES.YT
+    # fallback flow surfaces actual unhealthy states as 5xx response chains.
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8282/ >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+      disable: true
     deploy:
       resources:
         limits:
@@ -309,7 +314,10 @@ services:
           cpus: '1.0'
           memory: 512M
   grayjay-server:
-    image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
+    # F-07: env-overridable so it can be pinned at deploy (previously a hard :latest).
+    # TODO: pin default by digest — FUTO registry (registry.gitlab.futo.org) was
+    # unreachable from the authoring node, so digest could not be resolved here.
+    image: ${GRAYJAY_IMAGE:-registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest}
     restart: unless-stopped
     env_file:
     - env.shared.generated

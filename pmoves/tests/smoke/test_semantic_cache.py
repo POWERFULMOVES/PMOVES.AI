@@ -1,0 +1,1 @@
+§§include(/tmp/pmoves-cache-p2/pmoves/tests/smoke/test_semantic_cache.py)

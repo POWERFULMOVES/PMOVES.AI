@@ -29,6 +29,11 @@ from nats_sse import nats_event_generator, NATS_URL
 from agent_registry import load_cards, enrich_with_health, get_card_by_id
 from notebook_client import fetch_notebooks
 from cgp_decoder import validate_cgp, ValidationResult
+from updater import (
+    SAFE_DEFAULT_BLAST_RADIUS,
+    evaluate_gate,
+    run_update,
+)
 
 logger = logging.getLogger("showtime")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -89,6 +94,68 @@ async def _get_nats():
 _last_state: str | None = None
 
 
+async def _publish_update_event(subject: str, payload: dict[str, Any]) -> None:
+    """Publish a showtime updater event to NATS (best-effort)."""
+    nc = await _get_nats()
+    if not nc:
+        return
+    try:
+        await nc.publish(subject, json.dumps(payload).encode())
+    except Exception as exc:
+        NATS_PUBLISH_FAILURES.inc()
+        logger.warning("Failed to publish %s: %s", subject, exc)
+
+
+async def _run_preflight_updater() -> None:
+    """On startup, if the readiness state would be preflight, attempt a gated,
+    blast-radius-scoped update.
+
+    * Checks the two-factor CHIT+OAuth gate. If locked -> publish
+      ``showtime.update.blocked.v1`` and return.
+    * If unlocked -> publish ``showtime.update.started.v1``, run
+      ``run_update`` against the SAFE DEFAULT (data-tier) radius, then publish
+      ``showtime.update.complete.v1`` with a summary.
+
+    Opt out by setting ``SHOWTIME_UPDATER_AUTORUN=0``. Never raises — startup
+    must not fail because of the updater.
+    """
+    if not _is_truthy(os.environ.get("SHOWTIME_UPDATER_AUTORUN", "1")):
+        logger.info("Preflight updater disabled (SHOWTIME_UPDATER_AUTORUN=0)")
+        return
+    try:
+        report = await probe_all()
+        state = report.get("state")
+        if state != "preflight":
+            logger.info("Preflight updater skipped (state=%s, not preflight)", state)
+            return
+
+        gate = evaluate_gate()
+        if not gate.get("unlocked"):
+            logger.info("Preflight updater gate locked: %s", gate.get("reason"))
+            await _publish_update_event(
+                "showtime.update.blocked.v1",
+                {"source": "showtime-api", "gate": gate, "state": state},
+            )
+            return
+
+        await _publish_update_event(
+            "showtime.update.started.v1",
+            {"source": "showtime-api", "blast_radius": list(SAFE_DEFAULT_BLAST_RADIUS)},
+        )
+        summary = await asyncio.to_thread(run_update, None)
+        await _publish_update_event(
+            "showtime.update.complete.v1",
+            {"source": "showtime-api", "summary": summary},
+        )
+        logger.info("Preflight updater complete: %s", summary.get("status"))
+    except Exception:
+        logger.exception("Preflight updater failed (non-fatal)")
+
+
+def _is_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 async def _check_state_transition(new_state: str) -> None:
     """Publish NATS event on state transition to showtime."""
     global _last_state
@@ -113,7 +180,16 @@ async def _check_state_transition(new_state: str) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Showtime API starting on port %s", os.environ.get("PORT", "9225"))
+    # Fire the gated preflight updater as a background task so a slow update
+    # (or a dead NATS broker) never blocks startup.
+    updater_task = asyncio.create_task(_run_preflight_updater())
     yield
+    if not updater_task.done():
+        updater_task.cancel()
+        try:
+            await updater_task
+        except (asyncio.CancelledError, Exception):
+            pass
     # Cleanup NATS on shutdown
     global _nats_client
     if _nats_client and _nats_client.is_connected:
@@ -132,7 +208,8 @@ app = FastAPI(
 _cors_origins = [
     o.strip()
     for o in os.environ.get(
-        "SHOWTIME_CORS_ORIGINS", "http://localhost:3000,http://localhost:9225"
+        "SHOWTIME_CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:3001,http://localhost:4482,http://localhost:9225",
     ).split(",")
     if o.strip()
 ]
@@ -168,6 +245,21 @@ async def health_all():
     SHOWTIME_STATE.set(STATE_ORDINALS.get(report["state"], 0))
     await _check_state_transition(report["state"])
     return report
+
+
+@app.get("/updater/gate")
+async def updater_gate():
+    """Two-factor updater gate (non-placeholder CHIT passphrase AND Google
+    session token). Fails closed.
+
+    **Coarse by design** (Safe-Activation Contract Clause 3 — a reachable surface
+    must not leak its security posture): returns only ``{"unlocked": bool}`` so a
+    caller who can reach showtime-api cannot enumerate *which* factor is absent.
+    The per-factor breakdown stays in-process (lifespan/CLI call ``evaluate_gate``
+    directly). The CHIT escape hatch is **env-only** (``SHOWTIME_UPDATER_SKIP_CHIT``)
+    and is never accepted over HTTP."""
+    gate = evaluate_gate()
+    return {"unlocked": bool(gate.get("unlocked", False))}
 
 
 @app.get("/sse/events")

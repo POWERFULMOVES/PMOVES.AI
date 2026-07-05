@@ -12,9 +12,9 @@ POWERFULMOVES forks of upstream agent-skill repositories. Each entry is a git su
 |-----------|------|----------|---------|--------|
 | `Pmoves-skills` | `skills/Pmoves-skills/` | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's official skills library — reference for skill authoring patterns | ✅ Added |
 | `PMOVES-awesome-agent-skills` | `skills/PMOVES-awesome-agent-skills/` | [heilcheng/awesome-agent-skills](https://github.com/heilcheng/awesome-agent-skills) | Curated index of skills/tools/tutorials for AI coding agents | ✅ Added (2026-05-09) |
-| `pmoves-fork-repository-skill` | `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work | ✅ Added (2026-05-09) |
-| `PMOVES-agent-sandbox-skill` | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents | ✅ Added (2026-05-09) |
-| `Pmoves-claude-d3js-skill` | `skills/Pmoves-claude-d3js-skill/` | [chrisvoncsefalvay/claude-d3js-skill](https://github.com/chrisvoncsefalvay/claude-d3js-skill) | D3.js skill — Claude-driven data visualization | ✅ Added (2026-05-09) |
+| `pmoves-fork-repository-skill` | `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work | ✅ Activated (2026-05-15) — pointer at `.claude/skills/fork-repository/` |
+| `PMOVES-agent-sandbox-skill` | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents | ✅ Activated (2026-05-15) — pointer at `.claude/skills/agent-sandbox/` |
+| `Pmoves-claude-d3js-skill` | `skills/Pmoves-claude-d3js-skill/` | [chrisvoncsefalvay/claude-d3js-skill](https://github.com/chrisvoncsefalvay/claude-d3js-skill) | D3.js skill — Claude-driven data visualization | ✅ Activated (2026-05-15) — pointer at `.claude/skills/claude-d3js/` |
 
 ## Adding more skill forks (future)
 

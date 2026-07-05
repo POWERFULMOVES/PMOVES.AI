@@ -57,7 +57,7 @@ Detail files live in `.claude/context/`:
 - `runner-topology.md` — condensed node/runner/team topology
 - `credentials-workflow.md` — credential bootstrap, secrets-funnel, JWT-from-Supabase
 - `services-catalog.md` — full service listing (superset of CATALOG.md)
-- `submodules.md` — complete submodules catalog (20 submodules)
+- `submodules.md` — complete submodules catalog (50 submodules per `git submodule status`)
 - `nats-subjects.md` — comprehensive NATS subject catalog
 - `geometry-nats-subjects.md` — GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` — Agent Zero MCP API reference
@@ -70,7 +70,7 @@ Detail files live in `.claude/context/`:
 - `tensorzero.md` — TensorZero detailed documentation
 - `flute-gateway.md` — Flute-Gateway API reference
 
-**CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8105), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator. See `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md` for per-service status (5 Full, 8 Partial, 15 None).
+**CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8106), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator. See `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md` for per-service status (5 Full, 8 Partial, 15 None).
 
 ## Git Worktree Workflow
 

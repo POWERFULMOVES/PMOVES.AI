@@ -27,6 +27,15 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from pmoves.services.common.model_fitness import (
+    build_model_candidate_record,
+    require_trusted_agent_identity,
+)
+
 
 @dataclass
 class ModelCard:
@@ -237,6 +246,23 @@ def generate_agent_card_fragment(model_card: ModelCard) -> AgentCardFragment:
     )
 
 
+def generate_model_candidate_record(
+    model_card: ModelCard,
+    *,
+    agent_id: str = "codex",
+    signed_trail_ref: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Generate a PMOVES model candidate record from HF metadata."""
+
+    card = asdict(model_card)
+    card["hf_id"] = model_card.model_id
+    return build_model_candidate_record(
+        card,
+        agent_id=agent_id,
+        signed_trail_ref=signed_trail_ref,
+    ).to_dict()
+
+
 def upsert_to_supabase(fragment: AgentCardFragment) -> bool:
     """Upsert agent card fragment to Supabase persona_framework table."""
     supabase_url = os.environ.get("SUPABASE_URL")
@@ -289,7 +315,52 @@ def upsert_to_supabase(fragment: AgentCardFragment) -> bool:
         return False
 
 
-def publish_nats_event(fragment: AgentCardFragment) -> bool:
+def upsert_candidate_to_supabase(candidate: Dict[str, Any]) -> bool:
+    """Upsert a HuggingFace candidate record to Supabase model_candidates."""
+
+    try:
+        require_trusted_agent_identity(str(candidate.get("agent_id") or ""))
+    except ValueError as exc:
+        print(f"Untrusted agent_id for candidate upsert: {exc}", file=sys.stderr)
+        return False
+
+    if not candidate.get("signed_trail_ref"):
+        print("signed_trail_ref required for candidate persistence; run sign-trail first", file=sys.stderr)
+        return False
+
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+    if not supabase_url or not supabase_key:
+        print("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required for candidate upsert", file=sys.stderr)
+        return False
+
+    try:
+        import httpx
+
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates",
+        }
+        resp = httpx.post(
+            f"{supabase_url}/rest/v1/model_candidates?on_conflict=hf_id,intended_lane",
+            headers=headers,
+            json=candidate,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return True
+    except ImportError:
+        print("httpx not installed. Install with: uv pip install httpx", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"Supabase candidate upsert failed: {e}", file=sys.stderr)
+        return False
+
+
+def publish_nats_event(fragment: AgentCardFragment, candidate: Optional[Dict[str, Any]] = None) -> bool:
     """Publish model onboarding event to NATS."""
     import asyncio
 
@@ -306,6 +377,7 @@ def publish_nats_event(fragment: AgentCardFragment) -> bool:
                 "tier": fragment.tier,
                 "capabilities": fragment.capabilities,
                 "onboarded_at": fragment.onboarded_at,
+                "candidate": candidate or {},
             }
             await nc.publish(
                 "hf.model.onboarded.v1",
@@ -328,6 +400,8 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--no-nats", action="store_true", help="Skip NATS event publication")
     parser.add_argument("--no-supabase", action="store_true", help="Skip Supabase upsert")
+    parser.add_argument("--agent-id", default="codex", help="Agent identity producing the candidate record")
+    parser.add_argument("--signed-trail-ref", default=None, help="Optional signed Graphiti trail reference")
 
     args = parser.parse_args()
 
@@ -337,11 +411,17 @@ def main() -> int:
 
     # Generate agent card fragment
     fragment = generate_agent_card_fragment(model_card)
+    candidate = generate_model_candidate_record(
+        model_card,
+        agent_id=args.agent_id,
+        signed_trail_ref=args.signed_trail_ref,
+    )
 
     if args.json or args.dry_run:
         output = {
             "model_card": asdict(model_card),
             "agent_card_fragment": asdict(fragment),
+            "model_candidate_record": candidate,
         }
         print(json.dumps(output, indent=2, default=str))
 
@@ -354,10 +434,14 @@ def main() -> int:
             print(f"Upserted {fragment.model_id} to Supabase", file=sys.stderr)
         else:
             print("Supabase upsert skipped (missing credentials or error)", file=sys.stderr)
+        if upsert_candidate_to_supabase(candidate):
+            print(f"Upserted candidate {candidate['hf_id']} to Supabase", file=sys.stderr)
+        else:
+            print("Supabase candidate upsert skipped (missing credentials or error)", file=sys.stderr)
 
     # Publish NATS event
     if not args.no_nats:
-        if publish_nats_event(fragment):
+        if publish_nats_event(fragment, candidate):
             print(f"Published onboarding event for {fragment.model_id}", file=sys.stderr)
         else:
             print("NATS publish skipped", file=sys.stderr)

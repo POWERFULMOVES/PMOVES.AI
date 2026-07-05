@@ -90,6 +90,21 @@ def _get_kv(text: str, key: str) -> str:
 
 
 def _set_kv(text: str, key: str, value: str) -> str:
+    # Dotenv-safety guard: env.shared is Docker Compose env_file format. Values
+    # containing embedded newlines or carriage returns break parsing on the
+    # NEXT line (the parser reads the next line as a new KEY=value where the
+    # wrapped content has invalid chars in the "key" position). Reject at
+    # write-time rather than letting a corrupted value reach compose.
+    # See feedback_env_shared_not_bash_extract_pattern.md for the line-513
+    # incident that motivated this guard.
+    if "\n" in value or "\r" in value:
+        raise ValueError(
+            f"Refusing to write {key} with embedded newline/CR: "
+            f"breaks Docker Compose env_file parsing. "
+            f"Strip newlines from the generator or use a single-line "
+            f"alternative (e.g., secrets.token_urlsafe instead of "
+            f"base64.b64encode with MIME-style wrapping)."
+        )
     pat = rf"^(\s*{re.escape(key)}\s*=).*$"
     if re.search(pat, text, re.M):
         return re.sub(pat, lambda m: m.group(1) + value, text, flags=re.M)
@@ -195,26 +210,35 @@ def _ensure_integration_credentials(text: str) -> str:
             print("Generate manually: python -c 'import secrets; print(secrets.token_urlsafe(24))'", file=sys.stderr)
             sys.exit(1)
 
-    # Wger Django secret key: Django SECRET_KEY for cryptographic signing
+    # Wger Django secret key: Django SECRET_KEY for cryptographic signing.
+    # Django docs accept any random string; their default get_random_secret_key()
+    # uses [a-zA-Z0-9!@#$%^&*(-_=+)] but `+` and `=` break dotenv parsing when
+    # the file is consumed via Docker Compose env_file. Use url-safe base64 to
+    # match the rest of brand_defaults (PMOVES dotenv-safety principle — see
+    # feedback_env_shared_not_bash_extract_pattern.md).
+    # token_urlsafe(48) ≈ 64 chars from [A-Za-z0-9_-], safe for env.shared.
     wger_secret = _get_kv(text, "WGER_SECRET_KEY")
     if _is_blank_or_placeholder(wger_secret):
         try:
-            wger_secret = base64.b64encode(secrets.token_bytes(48)).decode("utf-8")
+            wger_secret = secrets.token_urlsafe(48)
             text = _set_kv(text, "WGER_SECRET_KEY", wger_secret)
         except Exception as e:
             print(f"ERROR: Failed to generate WGER_SECRET_KEY: {e}", file=sys.stderr)
-            print("Generate manually: openssl rand -base64 48", file=sys.stderr)
+            print("Generate manually: python -c 'import secrets; print(secrets.token_urlsafe(48))'", file=sys.stderr)
             sys.exit(1)
 
-    # Wger admin password: Admin account password for the wger web interface
+    # Wger admin password: Admin account password for the wger web interface.
+    # Django accepts any string; url-safe base64 keeps the value safe for both
+    # dotenv parsing and Django admin login (no special-char escaping needed
+    # at the browser login form).
     wger_admin_pass = _get_kv(text, "WGER_ADMIN_PASSWORD")
     if _is_blank_or_placeholder(wger_admin_pass):
         try:
-            wger_admin_pass = base64.b64encode(secrets.token_bytes(16)).decode("utf-8")
+            wger_admin_pass = secrets.token_urlsafe(16)
             text = _set_kv(text, "WGER_ADMIN_PASSWORD", wger_admin_pass)
         except Exception as e:
             print(f"ERROR: Failed to generate WGER_ADMIN_PASSWORD: {e}", file=sys.stderr)
-            print("Generate manually: openssl rand -base64 16", file=sys.stderr)
+            print("Generate manually: python -c 'import secrets; print(secrets.token_urlsafe(16))'", file=sys.stderr)
             sys.exit(1)
 
     # Wger API token: Django REST Framework tokens must be created via the
@@ -341,6 +365,21 @@ def _ensure_agent_zero_defaults(text: str) -> str:
     events_token = _get_kv(text, "AGENT_ZERO_EVENTS_TOKEN")
     if _is_blank_or_placeholder(events_token):
         text = _set_kv(text, "AGENT_ZERO_EVENTS_TOKEN", _strong_random(32))
+
+    # A0_SELF_UPDATE_REMOTE_URL: pin the in-app self-updater at the PMOVES fork.
+    # Without this, Agent Zero's webUI "Update" button defaults to upstream
+    # agent0ai/agent-zero and its post-fetch `git clean -ffd` wipes the PMOVES
+    # custom modules. Upserting here (not just env.shared.example) is what reaches
+    # EXISTING installs — ensure_env_shared only copies the example when env.shared
+    # is missing, so the example default alone never lands on already-provisioned
+    # nodes (Codex P1 #1906). See pmoves/docs/security/AGENT_ZERO_SELF_UPDATER.md.
+    self_update_remote = _get_kv(text, "A0_SELF_UPDATE_REMOTE_URL")
+    if not self_update_remote:
+        text = _set_kv(
+            text,
+            "A0_SELF_UPDATE_REMOTE_URL",
+            "https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git",
+        )
 
     return text
 

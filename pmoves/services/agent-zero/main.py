@@ -58,6 +58,8 @@ except ImportError:
     create_a2a_router = None
     _A2A_ROUTER_AVAILABLE = False
 
+_A2A_ENABLED = os.environ.get("A2A_ENABLED", "true").lower() in ("true", "1", "yes", "on")
+
 
 @dataclass
 class AgentZeroRuntimeConfig:
@@ -65,7 +67,7 @@ class AgentZeroRuntimeConfig:
 
     root: Path = field(
         default_factory=lambda: Path(
-            os.environ.get("AGENT_ZERO_ROOT", "/opt/agent-zero")
+            os.environ.get("AGENT_ZERO_ROOT", "/a0")
         )
     )
     entrypoint: str = field(
@@ -77,7 +79,7 @@ class AgentZeroRuntimeConfig:
     extra_args: List[str] = field(default_factory=list)
     api_base_url: str = field(
         default_factory=lambda: os.environ.get(
-            "AGENT_ZERO_API_BASE", "http://127.0.0.1:80"
+            "AGENT_ZERO_API_BASE", "http://127.0.0.1:5000"
         )
     )
     api_key: Optional[str] = field(
@@ -315,11 +317,18 @@ class AgentZeroClient:
             if isinstance(result, dict):
                 return result
             return {"status": "ok", "raw": result}
-        except AgentZeroRequestError as exc:  # pragma: no cover - runtime might not be ready
+        except AgentZeroRequestError as exc:
+            # 404 means the server IS running but has no health endpoint.
+            # This is expected for PMOVES-Agent-Zero fork — treat as healthy.
+            if exc.status_code == 404:
+                logger.info(
+                    "Agent Zero health endpoint returned 404 — "
+                    "server is responding, treating as healthy"
+                )
+                return {"status": "ok", "note": "health endpoint not found (404)"}
             fallback = self._config.health_path_fallback
             if (
-                exc.status_code == 404
-                and fallback
+                fallback
                 and fallback != self._config.health_path
             ):
                 try:
@@ -332,6 +341,13 @@ class AgentZeroClient:
                         return result
                     return {"status": "ok", "raw": result}
                 except AgentZeroRequestError as fallback_exc:
+                    # Same 404 heuristic for fallback path
+                    if fallback_exc.status_code == 404:
+                        logger.info(
+                            "Agent Zero fallback health endpoint returned 404 — "
+                            "server is responding, treating as healthy"
+                        )
+                        return {"status": "ok", "note": "health endpoint not found (404)"}
                     logger.debug(
                         "Agent Zero fallback health check failed: %s", fallback_exc
                     )
@@ -599,8 +615,8 @@ async def lifespan(app: FastAPI):
     url = os.getenv("SERVICE_URL") or f"http://{hostname}:{port}"
     health_check = f"{url}/healthz"
 
-    # Announce service on NATS
-    if NATS_ANNOUNCE_AVAILABLE:
+    # Announce service on NATS (only in docked mode with JetStream)
+    if NATS_ANNOUNCE_AVAILABLE and _env_bool("AGENTZERO_JETSTREAM"):
         try:
             await announce_service(
                 nats_url=os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
@@ -621,9 +637,12 @@ async def lifespan(app: FastAPI):
     _warn_missing_notebook_config()
     await process_manager.start()
     _controller_shutdown.clear()
-    _controller_task = asyncio.create_task(
-        _controller_connect_loop(), name="agent-zero-controller-connect"
-    )
+    if _env_bool("AGENTZERO_JETSTREAM"):
+        _controller_task = asyncio.create_task(
+            _controller_connect_loop(), name="agent-zero-controller-connect"
+        )
+    else:
+        logger.info("JetStream disabled — skipping NATS controller connect loop")
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
@@ -651,12 +670,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
 
 # Mount A2A protocol routes
-if _A2A_ROUTER_AVAILABLE:
+if _A2A_ROUTER_AVAILABLE and _A2A_ENABLED:
     a2a_router = create_a2a_router()
     app.include_router(a2a_router)
     logger.info("A2A protocol routes mounted (/.well-known/agent-card.json, /a2a/v1/*)")
 else:
-    logger.warning("A2A router not available — python.features.a2a.server import failed")
+    if not _A2A_ROUTER_AVAILABLE:
+        logger.warning("A2A router not available — python.features.a2a.server import failed")
+    else:
+        logger.info("A2A protocol routes disabled via A2A_ENABLED=false")
 
 # Prometheus metrics
 from prometheus_client import (

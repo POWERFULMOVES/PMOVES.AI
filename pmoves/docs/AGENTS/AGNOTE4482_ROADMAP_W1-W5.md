@@ -506,7 +506,7 @@ All resolved. No blockers.
 | W6-P3 (Persona selector + BoTZ CLI) | 4090-claude | 2026-03-25 | SHIPPED — botz_cli.py (19 tests) | — | — | feat/w6-p3-persona-selector |
 | W6-P3 (NATS push model: beats_to_voice reactive synthesis) | 4090-claude | 2026-04-27 | SHIPPED — publish + listen loop, 5 tests green | #1402, #1404, #1405, #1406 | — | main |
 | W6-P3 (Voice binding: persona → Flute prosodic) | 5090-claude | 2026-03-23 | READY — P2 shipped; needs 5090 live Flute verification | — | — | — |
-| W6-P5 (FlOO$ life-persona-voice pipeline) | claude-opus | 2026-03-23 | RECOMMENDED — issue #1412 | #1412 | — | — |
+| W6-P5 (FlOO$ life-persona-voice pipeline) | 5090-claude (opus) | 2026-05-20 | IN PROGRESS — Phase A merged (#1487); Phase B spec in flight (`TAC_FLOOZ_PHASE_B.md`) | #1412 | #1487 (Phase A merged) | feat/w6-p5-flooz-phase-b-spec |
 | Infra (CHIT CGP Wave 1: Extract Worker + FFmpeg-Whisper) | 4090-claude | 2026-03-24 | SHIPPED `f7dafa56`, `6046d518` | — | — | feat/chit-integration-wave-1 |
 | Infra (Embedding standardization: Qwen3-4b/3072d) | 4090-claude | 2026-03-24 | SHIPPED `77888c8b` | — | — | feat/chit-integration-wave-1 |
 | Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | — | — | feat/chit-integration-wave-1 |
@@ -520,7 +520,7 @@ All resolved. No blockers.
 | Infra (KiloCode claw config rebase + 18 CR fixes) | 4090-claude | 2026-03-28 | SHIPPED (merged 2026-03-30) | #1151 | — | feature/kilo-claw-config |
 | Infra (Provider cascade: 7 CR + 3 Kilo fixes) | 4090-claude | 2026-03-28 | SHIPPED (merged 2026-03-29) | #1155 | — | feat/4090-coding-workstation-stack |
 
-> **ORPHANED status**: A claim transitions to ORPHANED when CLAIMED >7 days with no PR and no CHIT trail activity on `branch.{branch_name}.trail.v1`. ORPHANED entries trigger branch deletion via `stale-branch-sweep.yml`.
+> **ORPHANED status**: A claim transitions to ORPHANED when CLAIMED >7 days with no PR and no CHIT trail activity on `branch.<path-segments>.trail.v1` (slash → dot encoding; e.g. `feat/foo` → `branch.feat.foo.trail.v1`). ORPHANED entries trigger branch deletion via `stale-branch-sweep.yml`.
 
 
 ## Recommended Next Steps (Post 2026-03-30 PR Sweep)

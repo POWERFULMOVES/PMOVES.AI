@@ -1,0 +1,293 @@
+name: Agent Zero Upstream Check
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      upstream_version:
+        description: 'Upstream version tag (e.g. v1.14)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  UPSTREAM_REPO: agent0ai/agent-zero
+  VERSION_FILE: pmoves/services/agent-zero/.a0-upstream-version
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      upstream_current: ${{ steps.compare.outputs.UPSTREAM_CURRENT }}
+      new_tag: ${{ steps.compare.outputs.NEW_TAG }}
+      new_version: ${{ steps.compare.outputs.NEW_VERSION }}
+      pr_exists: ${{ steps.check_pr.outputs.PR_EXISTS }}
+      current_tag: ${{ steps.read_version.outputs.CURRENT_TAG }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+
+      - name: Detect latest upstream release
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ inputs.upstream_version }}" ]; then
+            echo "tag=${{ inputs.upstream_version }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG=$(gh api repos/${{ env.UPSTREAM_REPO }}/releases/latest --jq '.tag_name')
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Read current pinned version
+        id: read_version
+        run: |
+          CURRENT_TAG=$(cat "${{ env.VERSION_FILE }}")
+          echo "CURRENT_TAG=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          CURRENT_NO_V="${{ steps.read_version.outputs.CURRENT_TAG }}"
+          CURRENT_NO_V="${CURRENT_NO_V#v}"
+          NEW_TAG="${{ steps.detect.outputs.tag }}"
+          NEW_NO_V="${NEW_TAG#v}"
+
+          if [ "${CURRENT_NO_V}" = "${NEW_NO_V}" ]; then
+            echo "UPSTREAM_CURRENT=true" >> "$GITHUB_OUTPUT"
+            echo "Versions match: ${CURRENT_NO_V}"
+          else
+            echo "UPSTREAM_CURRENT=false" >> "$GITHUB_OUTPUT"
+            echo "NEW_TAG=${NEW_TAG}" >> "$GITHUB_OUTPUT"
+            echo "NEW_VERSION=${NEW_NO_V}" >> "$GITHUB_OUTPUT"
+            echo "Version change: ${CURRENT_NO_V} -> ${NEW_NO_V}"
+          fi
+
+      - name: Check for existing PR
+        id: check_pr
+        if: steps.compare.outputs.UPSTREAM_CURRENT == 'false'
+        run: |
+          BRANCH="chore/agent-zero-upstream-${{ steps.compare.outputs.NEW_TAG }}"
+          PR_NUM=$(gh pr list --head "${BRANCH}" --json number --jq '.[0].number')
+          if [ -n "${PR_NUM}" ]; then
+            echo "PR_EXISTS=true" >> "$GITHUB_OUTPUT"
+            echo "Existing PR found: #${PR_NUM}"
+          else
+            echo "PR_EXISTS=false" >> "$GITHUB_OUTPUT"
+            echo "No existing PR for branch ${BRANCH}"
+          fi
+
+  create-pr:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.upstream_current == 'false' && needs.check-upstream.outputs.pr_exists != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      pr_number: ${{ steps.create_pr.outputs.PR_NUMBER }}
+      branch_name: ${{ steps.create_pr.outputs.BRANCH_NAME }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Configure git
+        run: |
+          git config user.name "pmoves-bot[bot]"
+          git config user.email "pmoves-bot[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream requirements for constraint analysis
+        run: |
+          curl -sL "https://raw.githubusercontent.com/${{ env.UPSTREAM_REPO }}/${{ needs.check-upstream.outputs.new_tag }}/requirements.txt" -o /tmp/upstream-requirements.txt
+          echo "Fetched upstream requirements.txt"
+          if grep -q "pyreqwest-impersonate" /tmp/upstream-requirements.txt; then
+            echo "PYREQWEST_PRESENT=true" >> "$GITHUB_ENV"
+            echo "WARNING: pyreqwest-impersonate found in upstream requirements"
+          else
+            echo "PYREQWEST_PRESENT=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Update version pin file
+        run: |
+          echo "${{ needs.check-upstream.outputs.new_tag }}" > "${{ env.VERSION_FILE }}"
+
+      - name: Update Dockerfile AGENT_ZERO_REF
+        run: |
+          sed -i 's/^ARG AGENT_ZERO_REF=.*/ARG AGENT_ZERO_REF=${{ needs.check-upstream.outputs.new_tag }}/' pmoves/services/agent-zero/Dockerfile.multiarch
+
+      - name: Update upstream-constraints.txt if needed
+        run: |
+          CONSTRAINTS_FILE="pmoves/services/agent-zero/upstream-constraints.txt"
+          if [ "${PYREQWEST_PRESENT}" = "true" ]; then
+            if [ ! -f "${CONSTRAINTS_FILE}" ]; then
+              echo "# upstream-constraints.txt" > "${CONSTRAINTS_FILE}"
+              echo "# Transitive dependency pins for agent-zero upstream Stage 1 install" >> "${CONSTRAINTS_FILE}"
+              echo "" >> "${CONSTRAINTS_FILE}"
+            fi
+            if ! grep -q "pyreqwest-impersonate" "${CONSTRAINTS_FILE}"; then
+              echo "pyreqwest-impersonate<0.5.5" >> "${CONSTRAINTS_FILE}"
+              echo "Added pyreqwest-impersonate<0.5.5 to constraints"
+            else
+              echo "pyreqwest-impersonate pin already present in constraints"
+            fi
+          else
+            echo "No constraint update needed"
+          fi
+
+      - name: Commit and push
+        run: |
+          BRANCH="chore/agent-zero-upstream-${{ needs.check-upstream.outputs.new_tag }}"
+          git checkout -b "${BRANCH}"
+          git add -A
+          git commit -m "chore(agent-zero): bump upstream to ${{ needs.check-upstream.outputs.new_tag }}"
+          git push origin "${BRANCH}"
+
+      - name: Create draft PR
+        id: create_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="chore/agent-zero-upstream-${{ needs.check-upstream.outputs.new_tag }}"
+          TAG="${{ needs.check-upstream.outputs.new_tag }}"
+          TAG_NO_V="${TAG#v}"
+          CURRENT_TAG="${{ needs.check-upstream.outputs.current_tag }}"
+
+          cat > /tmp/pr_body.md << 'PRBODY'
+          ## Upstream Version Bump
+
+          **Upstream:** agent0ai/agent-zero `${{ needs.check-upstream.outputs.new_tag }}`
+          **Previous:** `${{ needs.check-upstream.outputs.current_tag }}`
+
+          ### What this PR does
+          - Bumps `AGENT_ZERO_REF` in `Dockerfile.multiarch` to `${{ needs.check-upstream.outputs.new_tag }}`
+          - Updates `.a0-upstream-version` pin file
+          - Updates `upstream-constraints.txt` if transitive dep pins needed
+
+          ### ⚠️ Fork Sync Required
+          This PR bumps the Dockerfile to clone from upstream tag `${{ needs.check-upstream.outputs.new_tag }}`, but the PMOVES fork branch has not been synced yet.
+
+          **Before this PR can pass CI, a maintainer must:**
+          1. Sync `POWERFULMOVES/PMOVES-Agent-Zero` to upstream `${{ needs.check-upstream.outputs.new_tag }}`
+          2. Create fork branch `PMOVES.AI-Edition-${{ needs.check-upstream.outputs.new_version }}` with PMOVES overlays applied
+          3. Update this PR to use the fork branch instead of upstream tag:
+             - Change `AGENT_ZERO_REF=${{ needs.check-upstream.outputs.new_tag }}` → `AGENT_ZERO_REF=PMOVES.AI-Edition-${{ needs.check-upstream.outputs.new_version }}`
+             - Change `AGENT_ZERO_REPO` if needed
+
+          ### Review Checklist
+          - [ ] Fork sync completed with all 24 overlay commits
+          - [ ] 6 conflicting files re-implemented on new upstream architecture
+          - [ ] NATS compatibility verified
+          - [ ] API schema changes reviewed
+          - [ ] Healthcheck endpoint confirmed
+          - [ ] Config format changes documented
+          - [ ] `upstream-constraints.txt` pins verified against new transitive deps
+          - [ ] CVE check: `pip-audit -r requirements.txt`
+
+          ---
+          _Auto-generated by agent-zero-upstream-check workflow_
+          PRBODY
+
+          PR_NUM=$(gh pr create --draft \
+            --title "chore(agent-zero): bump upstream to ${TAG}" \
+            --body-file /tmp/pr_body.md \
+            --label "upstream-update,dependencies" \
+            --jq '.number')
+
+          echo "PR_NUMBER=${PR_NUM}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_NAME=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "Created draft PR #${PR_NUM}"
+
+  post-ci:
+    needs: create-pr
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Skip if no PR was created
+        if: needs.create-pr.result != 'success'
+        run: |
+          echo "create-pr job did not succeed (result: ${{ needs.create-pr.result }}), skipping post-CI"
+          exit 0
+
+      - name: Checkout repository
+        if: needs.create-pr.result == 'success'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3 SHA-pinned to match integrations-ghcr.yml convention
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Wait for CI checks to complete
+        if: needs.create-pr.result == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.create-pr.outputs.pr_number }}
+          BRANCH_NAME: ${{ needs.create-pr.outputs.branch_name }}
+        run: |
+          echo "Waiting for CI on PR #${PR_NUMBER} (branch: ${BRANCH_NAME})..."
+          TIMEOUT=1800
+          INTERVAL=60
+          ELAPSED=0
+
+          while [ "${ELAPSED}" -lt "${TIMEOUT}" ]; do
+            RUN_INFO=$(gh run list --branch "${BRANCH_NAME}" --limit 1 --json databaseId,status,conclusion --jq '.[0]')
+            STATUS=$(echo "${RUN_INFO}" | jq -r '.status')
+            CONCLUSION=$(echo "${RUN_INFO}" | jq -r '.conclusion')
+
+            echo "  [${ELAPSED}s] Status: ${STATUS}, Conclusion: ${CONCLUSION}"
+
+            if [ "${STATUS}" = "completed" ]; then
+              echo "CI_RUN_CONCLUSION=${CONCLUSION}" >> "$GITHUB_ENV"
+              echo "CI completed with conclusion: ${CONCLUSION}"
+              break
+            fi
+
+            sleep "${INTERVAL}"
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ "${ELAPSED}" -ge "${TIMEOUT}" ]; then
+            echo "CI_RUN_CONCLUSION=timed_out" >> "$GITHUB_ENV"
+            echo "Timed out waiting for CI after ${TIMEOUT}s"
+          fi
+
+      - name: Handle CI result
+        if: needs.create-pr.result == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.create-pr.outputs.pr_number }}
+        run: |
+          if [ "${CI_RUN_CONCLUSION}" = "success" ]; then
+            gh pr edit "${PR_NUMBER}" --add-label "ready-for-review"
+            gh pr comment "${PR_NUMBER}" --body "✅ All CI checks passed. Ready for maintainer review."
+          else
+            BRANCH="${{ needs.create-pr.outputs.branch_name }}"
+            RUN_ID=$(gh run list --branch "${BRANCH}" --limit 1 --json databaseId --jq '.[0].databaseId')
+
+            FAILED_JOBS=""
+            if [ -n "${RUN_ID}" ] && [ "${RUN_ID}" != "null" ]; then
+              FAILED_JOBS=$(gh run view "${RUN_ID}" --json jobs --jq '[.jobs[] | select(.conclusion == "failure") | "- `\(.name)`: \(.conclusion)"] | join("\n")')
+            fi
+
+            cat > /tmp/failure_comment.md << 'COMMENT'
+            ## CI Failure Analysis
+
+            The following checks failed:
+            FAILED_JOBS_PLACEHOLDER
+
+            ### Likely Cause
+            The Dockerfile is currently pointed at the upstream tag, but the PMOVES fork hasn't been synced yet. This is expected behavior.
+
+            ### Next Steps
+            1. Complete the fork sync process (see PR description)
+            2. Update `AGENT_ZERO_REF` to point to the synced fork branch
+            3. Push the update — CI will re-run automatically
+            COMMENT
+
+            sed -i "s|FAILED_JOBS_PLACEHOLDER|${FAILED_JOBS:-"- CI did not complete or timed out"}|" /tmp/failure_comment.md
+            gh pr comment "${PR_NUMBER}" --body-file /tmp/failure_comment.md
+          fi

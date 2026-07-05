@@ -2,7 +2,7 @@
 import { DEFAULT_CONFIG, BADGE_COLORS } from './lib/constants.js';
 import {
   setServiceUrls, healthCheckAll, shapeSvgUrl,
-  tensorZero, gpu, hirag, yt, agentZero, flute, mesh, chit,
+  tensorZero, gpu, hirag, yt, agentZero, flute, mesh, chit, creator,
 } from './lib/pmoves-api.js';
 
 let config = structuredClone(DEFAULT_CONFIG);
@@ -332,6 +332,10 @@ async function handleMessage(req) {
 
     case 'getShapeSvgUrl':
       return { url: shapeSvgUrl(req.shapeId) };
+
+    // Creator Pipeline
+    case 'creatorWebhook':
+      return creator.webhook(req.type, req.payload);
 
     default:
       return { error: `Unknown action: ${req.action}` };

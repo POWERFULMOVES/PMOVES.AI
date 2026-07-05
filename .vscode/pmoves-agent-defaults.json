@@ -1,0 +1,40 @@
+{
+  "_doc": "Per-node Claude Code skill defaults for PMOVES fleet. auto_load = invoked at session start; on_demand = available but not auto-started.",
+  "nodes": {
+    "4090-claude": {
+      "role": "Field agent, mobile relay, PR triage",
+      "auto_load": ["4090:sitrep"],
+      "on_demand": ["shift:listen", "shift:from-bpm", "persona:bind", "agentgym:run", "4090:probe", "4090:field-brief", "brain:obsidian", "brain:google"]
+    },
+    "z890": {
+      "role": "Infrastructure coordinator, CI, data services",
+      "auto_load": ["health:check-all", "nats:monitor"],
+      "on_demand": ["gpu:status", "db:query", "deploy:services", "fleet:status"]
+    },
+    "spark": {
+      "role": "DGX Grace-Blackwell, 128GB unified, ARM64 primary inference",
+      "auto_load": ["gpu:status"],
+      "on_demand": ["model:load", "model:unload", "agentgym:run", "tts:synthesize", "gpu:models"]
+    },
+    "rdna4": {
+      "role": "Dual R9700 workstation, ROCm 7.1, 64GB VRAM",
+      "auto_load": ["gpu:status"],
+      "on_demand": ["model:load", "agentgym:run", "gpu:optimize"]
+    },
+    "5090-claude": {
+      "role": "GPU primary, TTS, inference, voice synthesis",
+      "auto_load": ["tts:status", "gpu:status"],
+      "on_demand": ["tts:synthesize", "voice:synthesize", "model:load", "chit:bpm", "chit:floos"]
+    },
+    "kvm4-1": {
+      "role": "API gateway (TZ, A0, Hi-RAG, Archon)",
+      "auto_load": ["health:check-all"],
+      "on_demand": ["deploy:services", "fleet:status", "observability:dashboard"]
+    },
+    "jons": {
+      "role": "Jetson Orin Nano Super edge inference (×3)",
+      "auto_load": [],
+      "on_demand": ["model:load", "fleet:status", "gpu:status"]
+    }
+  }
+}

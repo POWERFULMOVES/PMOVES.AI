@@ -10,7 +10,10 @@
   "properties": {
     "spec": {
       "type": "string",
-      "const": "chit.cgp.v0.1"
+      "enum": [
+        "chit.cgp.v0.2",
+        "chit.cgp.v1.0"
+      ]
     },
     "summary": {
       "type": "string"

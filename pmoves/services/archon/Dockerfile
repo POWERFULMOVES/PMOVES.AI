@@ -1,5 +1,5 @@
 # Needs apt-get for system libs (git, nodejs) — cannot use DHI; pinned digest instead
-FROM python:3.12-slim@sha256:ccc7089399c8bb65dd1fb3ed6d55efa538a3f5e7fca3f5988ac3b5b87e593bf0
+FROM python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,6 +14,7 @@ RUN apt-get update \
         build-essential \
         git \
         curl \
+        unzip \
         ca-certificates \
         gnupg \
         libnss3 \
@@ -41,7 +42,10 @@ RUN apt-get update \
     && corepack enable \
     && corepack prepare yarn@stable --activate \
     && corepack prepare pnpm@latest --activate \
+    && for i in 1 2 3 4 5; do curl -fsSL https://bun.sh/install | bash && break || { echo "bun install attempt $i failed (transient bun.sh/GitHub-releases 504?), retrying in 15s..."; sleep 15; }; done \
+    && test -x /root/.bun/bin/bun \
     && rm -rf /var/lib/apt/lists/*
+ENV PATH="/root/.bun/bin:$PATH"
 
 ARG ARCHON_GIT_REMOTE=https://github.com/POWERFULMOVES/PMOVES-Archon.git
 # PMOVES-Archon fork default branch is PMOVES.AI-Edition-Hardened, not main.
@@ -168,20 +172,29 @@ COPY services /app/services
 # Prepare directories used at runtime
 RUN mkdir -p /app/static/archon-ui /app/config/mcp
 
-# Build the Archon UI if sources are present in the build context
-ARG ARCHON_UI_DIR=archon-ui-main
+# Build the Archon UI from vendored sources (packages/web).
+# Archon uses Bun workspaces — bun is installed via corepack above.
+ARG ARCHON_UI_DIR=vendor/archon/packages/web
 ARG ARCHON_UI_BUILD_DIR=dist
-RUN if [ -d "$ARCHON_UI_DIR" ]; then \
-        cd "$ARCHON_UI_DIR" \
-        && if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile && pnpm build; \
-           elif [ -f yarn.lock ]; then yarn install --frozen-lockfile && yarn build; \
-           elif [ -f package-lock.json ]; then npm ci && npm run build; \
-           else npm install && npm run build; fi \
-        && mkdir -p "$ARCHON_UI_STATIC_DIR" \
-        && cp -R "$ARCHON_UI_BUILD_DIR"/* "$ARCHON_UI_STATIC_DIR"/; \
+RUN if [ -d "/app/$ARCHON_UI_DIR" ]; then \
+        echo "→ Building Archon UI from $ARCHON_UI_DIR" && \
+        cd /app/vendor/archon && bun install --frozen-lockfile && \
+        cd "/app/$ARCHON_UI_DIR" && bun run build && \
+        mkdir -p "$ARCHON_UI_STATIC_DIR" \
+        && cp -R "$ARCHON_UI_BUILD_DIR"/* "$ARCHON_UI_STATIC_DIR"/ && \
+        echo "→ Pruning JS build-only deps from runtime image" && \
+        find /app/vendor/archon -type d -name node_modules -prune -exec rm -rf {} + && \
+        rm -rf /root/.bun/install/cache; \
     else \
         echo "Archon UI directory '$ARCHON_UI_DIR' not found. Skipping UI build."; \
     fi
+
+# Rationale: the UI is compiled to static assets (copied to ARCHON_UI_STATIC_DIR)
+# and the runtime is the Python server — the JS build toolchain (esbuild & co.)
+# under vendor/archon/**/node_modules is build-only. Removing it in the SAME layer
+# keeps build tools out of the shipped image (clears e.g. esbuild's embedded Go
+# stdlib CVE-2026-42504, which no released esbuild has yet rebuilt away) and
+# shrinks the image. Python sources under vendor/archon/python are retained.
 
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \

@@ -37,7 +37,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel a0-plugins-check a0-plugins-check-remote
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-rotate a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -100,6 +100,16 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
+.PHONY: secrets-funnel-sync-from-bundle
+secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files from a pre-installed CI CHIT bundle (skips chit-export so CI credentials are not overwritten)
+	@if [ ! -f "$(CHIT_EXPORT_PATH)" ]; then \
+	  echo "❌ No bundle at $(CHIT_EXPORT_PATH) — download via:"; \
+	  echo "   gh run download <RUN_ID> --repo POWERFULMOVES/PMOVES.AI --name chit-bundle-4090-<RUN_ID> --dir \"\$$(dirname $(CHIT_EXPORT_PATH))\""; \
+	  exit 1; \
+	fi
+	@echo "→ Reading CHIT bundle from $(CHIT_EXPORT_PATH)"
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
+
 secrets-funnel: ## Portable secrets flow: local hydrate -> CHIT export -> manifest sync -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
@@ -110,6 +120,15 @@ secrets-funnel: ## Portable secrets flow: local hydrate -> CHIT export -> manife
 ifneq ($(SECRETS_FUNNEL_BOOT_USER_TARGET),)
 	@$(MAKE) --no-print-directory $(SECRETS_FUNNEL_BOOT_USER_TARGET)
 endif
+
+secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make secrets-rotate KEY=NAME [VALUE=v | export PMOVES_ROTATE_VALUE] [LEN=48]
+	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
+	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
+	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
+	@$(MAKE) --no-print-directory chit-export
+	@$(MAKE) --no-print-directory secrets-funnel
+	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
+	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
 
 a0-plugins-check: ## Validate local Agent0 plugin catalog manifests (structure + field constraints)
 	@$(CODEX_PY) tools/a0_plugins_check.py --catalog-root integrations/agent0-plugins/catalog

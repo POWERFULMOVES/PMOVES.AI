@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Adult Swim Sealed Record",
+  "description": "P7 privacy primitive: a sealed record whose payload is stored externally and can only be unsealed after age requirements are met",
+  "type": "object",
+  "required": [
+    "sealed_record_id",
+    "owner_id",
+    "payload_ref",
+    "sealed_at",
+    "unsealed_at",
+    "age_required",
+    "compression_ratio",
+    "checksum"
+  ],
+  "properties": {
+    "sealed_record_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "owner_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payload_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "MinIO URI to the sealed payload object"
+    },
+    "sealed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "unsealed_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Null until the record has been unsealed"
+    },
+    "age_required": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Minimum age (in whatever unit the seal policy defines) before this record can be unsealed"
+    },
+    "compression_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Compression ratio achieved when sealing the payload"
+    },
+    "checksum": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "BLAKE3 hash of the sealed payload"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+name: Review Auto-Fix (opt-in)
+
+# Aggressive counterpart to review-comment-monitor.yml. When a PR is EXPLICITLY
+# opted in with the `pr-trim:auto` label, a trusted-bot review triggers an
+# automated pr-trim pass that APPLIES fixes for clearly-actionable findings and
+# resolves the addressed threads.
+#
+# Safety: gated on a HUMAN-applied label — it never fires unsolicited. Changes
+# land as commits on the PR branch (still reviewed before merge), and the pass is
+# instructed to skip anything requiring judgment. Remove the label to disable per-PR.
+on:
+  pull_request_review:
+    types: [submitted]
+
+concurrency:
+  group: review-autofix-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  autofix:
+    # Fire only when ALL of: (a) the PR is from THIS repo, not a fork; (b) a human
+    # opted it in with the `pr-trim:auto` label; (c) a trusted automated reviewer
+    # submitted the review.
+    # The same-repo gate is load-bearing: `actions/checkout`'s `ref` resolves against
+    # the base repo, so a fork PR whose head branch is named like a base branch (e.g.
+    # `main`) could otherwise make this job check out + push its commit to the WRONG
+    # repo. Restricting to same-repo PRs makes head==base, so the `ref` below is safe.
+    if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'pr-trim:auto') &&
+      (github.event.review.user.login == 'coderabbitai' ||
+       github.event.review.user.login == 'coderabbitai[bot]' ||
+       github.event.review.user.login == 'chatgpt-codex-connector' ||
+       github.event.review.user.login == 'chatgpt-codex-connector[bot]')
+    runs-on: ubuntu-latest
+    # Aggressive: needs contents:write to apply + push fixes to the PR head branch.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Auto-fix from bot review
+        uses: anthropics/claude-code-action@6c0083bb7289c31716797a039b6367b3079cc46e # v1.0.162
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # claude-code-action default-denies bot triggers; this job is intentionally
+          # triggered by bot reviews on opted-in PRs.
+          allowed_bots: 'coderabbitai[bot],chatgpt-codex-connector[bot]'
+          prompt: |
+            A trusted bot reviewer ("${{ github.event.review.user.login }}") reviewed ${{ github.repository }} PR #${{ github.event.pull_request.number }}, which is OPTED IN to automated fixes (label `pr-trim:auto`).
+
+            Run a CONSERVATIVE pr-trim pass on its findings:
+            - Read the bot's review comments and the PR diff.
+            - Apply fixes ONLY for clearly-correct, actionable findings (P0/P1/P2 with an unambiguous, mechanical fix). SKIP P3/stylistic, anything requiring design judgment, and anything that changes behaviour beyond the specific finding.
+            - Commit the applied fixes to the PR head branch with a descriptive message and push.
+            - Reply to each addressed review thread noting the fix, then resolve that thread.
+            - Post ONE summary comment: what was fixed (file:line) and what was deliberately skipped, with reasons.
+            - Touch ONLY files referenced by the bot's findings. If nothing is unambiguously fixable, make NO changes and post a comment saying so.

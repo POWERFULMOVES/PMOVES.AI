@@ -140,6 +140,34 @@
     "gen.text.result.v1": {
       "schema": "schemas/gen/text.result.v1.schema.json"
     },
+    "tokenism.attribution.recorded.v1": {
+      "schema": "schemas/tokenism/attribution.recorded.v1.schema.json"
+    },
+    "tokenism.cgp.weekly.v1": {
+      "schema": "schemas/tokenism/cgp.weekly.v1.schema.json"
+    },
+    "tokenism.cgp.ready.v1": {
+      "schema": "schemas/tokenism/cgp.ready.v1.schema.json"
+    },
+    "tokenism.swarm.population.v1": {
+      "schema": "schemas/tokenism/swarm.population.v1.schema.json"
+    },
+    "tokenism.activation.pack.v1": {
+      "schema": "schemas/tokenism/activation.pack.v1.schema.json",
+      "description": "Signed Tokenism production activation artifact binding deployment manifest, endpoint references, dry-run evidence, rollback, and approvals."
+    },
+    "tokenism.settlement.requested.v1": {
+      "schema": "schemas/tokenism/settlement.requested.v1.schema.json",
+      "description": "Signed Tokenism settlement batch planned from CGP attribution for Firefly/contract executors."
+    },
+    "tokenism.settlement.recorded.v1": {
+      "schema": "schemas/tokenism/settlement.recorded.v1.schema.json",
+      "description": "Settlement instruction was recorded or skipped idempotently by a Firefly/contract executor."
+    },
+    "tokenism.settlement.failed.v1": {
+      "schema": "schemas/tokenism/settlement.failed.v1.schema.json",
+      "description": "Settlement instruction failed with retryability metadata."
+    },
     "geometry.cgp.v1": {
       "schema": "schemas/geometry/cgp.v1.schema.json"
     },
@@ -149,6 +177,10 @@
     },
     "geometry.swarm.meta.v1": {
       "schema": "schemas/geometry/swarm.meta.v1.schema.json"
+    },
+    "model.fitness.recorded.v1": {
+      "schema": "schemas/model/fitness.recorded.v1.schema.json",
+      "description": "Normalized model fitness score from TensorZero telemetry and optional Pinokio/Unsloth eval metrics."
     },
     "health.metrics.updated.v1": {
       "schema": "schemas/health/metrics.updated.v1.schema.json"

@@ -11,6 +11,11 @@ Primary convergence record lives at:
 - `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md` (Phase 5 signature and traversal review snapshot)
 - `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` (Codex-led collision overlay and weave protocol)
 - `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` (model infrastructure + persona production readiness execution overlay)
+- `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md` (**per-node auto-mode `autoMode` block** — every node pastes this into its gitignored `.claude/settings.local.json`; the classifier cannot read checked-in settings)
+- `pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md` (HERMES Agent (NousResearch) integration spec — room manifest, TAC tree, 6 node profiles, local model mesh, deployment runbook)
+- `pmoves/configs/tac_trees/node-hermes-agent.tac.yaml` (HERMES Agent integration TAC roadmap)
+- `.claude/agents/hermes-agent.md` (Three-Body Delivery Body agent definition for Hermes Agent)
+- `.claude/skills/hermes-agent-integration/SKILL.md` (Operator skill for launching/managing Hermes gateway)
 
 All agents entering PMOVES lanes should read that file first, then claim work before edits.
 
@@ -952,6 +957,309 @@ Translation is handled at the ingestion layer — Whisper/cloud API does the lin
 - Timestamp: `2026-05-11`
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY-OPUS::MULTILINGUAL-TRANSLATION-TOOLING::2026-05-11 -->
+
+### ACK::ANTIGRAVITY-OPUS::MULTILINGUAL-TRANSLATION-TOOLING::2026-05-11
+- **Status**: VALIDATED (Local Path)
+- **Validation Results**:
+    - `target_language` and `task` parameters successfully propagated to `WhisperModel.transcribe`.
+    - Markdown metadata injection verified (`**Task:** Translate`, `**Detected Language:** en`).
+    - Renamed `process_audio_with_groq` -> `process_audio_with_cloud_api` for provider-agnosticism.
+    - dispatcher logic refactored for clean engine switching (Local vs Registry vs Cloud API).
+- **Handoff to SPARK/4090-CLAUDE**:
+    - **SPARK**: Complete the implementation of `process_audio_with_cloud_api` to support configurable `base_url` for Ollama/MiniMax/Alibaba (replacing hardcoded Groq endpoints).
+    - **4090-CLAUDE**: Implement strict Pydantic validation for `VideoRequest.task` in `main.py` (ensure values are limited to `["transcribe", "translate"]`).
+    - **SPARK**: Scale Remotion/Three.js hologram geometry in A2UI to fill the 1920x1080 viewport.
+- **Commit Reference**: `feat(transcribe): rename groq to cloud_api and validate multilingual parameters`
+- **Timestamp**: `2026-05-12T16:59:00Z`
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY::MULTILINGUAL-VALIDATION::2026-05-12 -->
+
+## MiniMax Edition Integration — Token Plan Phase 2 (2026-05-13)
+
+### Context
+Operator requested proper integration of MiniMax Token Plan into PMOVES.AI agent and service ecosystem. Based on Token Plan documentation (https://platform.minimax.io/docs/token-plan/intro) and existing AGNOTE4482 MiniMax parity work.
+
+### Work Performed
+
+**Token Plan Integration (New):**
+- Created `minimax-m2.7.yaml` model suit (1M token context, primary)
+- Created `minimax-m2.1.yaml` model suit (100K token context, efficient)
+- Created `minimax_edition.yaml` agent profile (5090/4090/Z890 node affinity)
+- Updated `minimax_provider_cascade.yaml` with Token Plan configuration
+- Added MiniMax NATS subjects to `nats-subjects.md` catalog
+- Updated `agent_signatures.yaml` with `minimax-edition` alter
+
+**Token Plan Details Captured:**
+| Plan | M2.7 Requests/5hr | Speech | Images | Video | Music |
+|------|-------------------|--------|--------|-------|-------|
+| Starter | 1,500 | — | — | — | 100/day |
+| Plus | 4,500 | 4,000 chars/day | 50/day | — | 100/day |
+| Max | 15,000 | 11,000 chars/day | 120/day | 2/day | 100/day |
+| Ultra-Highspeed | 30,000 | 50,000 chars/day | 800/day | 5/day | 100/day |
+
+**Key Integration Points:**
+- `MINIMAX_TOKEN_PLAN_API_KEY` — Token Plan subscription key
+- `MINIMAX_API_KEY` — Pay-as-you-go fallback key
+- M2.7 uses 5-hour rolling window for quota reset
+- Other models use daily quotas
+- Fallback chain: MiniMax → GLM pay-as-you-go
+
+### Files Created/Modified
+| File | Action | Purpose |
+|------|--------|---------|
+| `pmoves/configs/model-suits/minimax-m2.7.yaml` | **NEW** | M2.7 model suit (1M context) |
+| `pmoves/configs/model-suits/minimax-m2.1.yaml` | **NEW** | M2.1 model suit (100K context) |
+| `pmoves/configs/agent-profiles/minimax_edition.yaml` | **NEW** | MiniMax edition agent profile |
+| `pmoves/tools/models/minimax_provider_cascade.yaml` | **EDIT** | Token Plan + model suit refs |
+| `pmoves/.claude/context/nats-subjects.md` | **EDIT** | Added 7 MiniMax subjects |
+| `pmoves/config/agent_signatures.yaml` | **EDIT** | Added minimax-edition alter |
+
+### MiniMax NATS Subjects Added
+- `minimax.character.request.v1` — Character persona requests
+- `minimax.character.response.v1` — Character synthesis response
+- `minimax.voice.prosodic.v1` — Prosodic voice synthesis
+- `minimax.agent.trail.v1` — Agent trail entries
+- `minimax.agent.status.v1` — Health heartbeat
+- `minimax.quota.warning.v1` — Quota low alert
+- `minimax.quota.exhausted.v1` — Quota exhausted alert
+
+### FlOO$ Character Personas Defined
+| Character | Archetype | Voice Register | Temperature |
+|-----------|----------|---------------|-------------|
+| Dr. Bean | Methodical genius, quietly absurd | Measured, precise, deadpan | 0.3 |
+| Mr. Clean | Precise, powerful, no-nonsense | Direct, confident, crisp | 0.1 |
+| PowerPuff Girls | Trio of specialized powers | High energy, distinct | 0.6 |
+
+### Three-Body Pattern
+| Role | Agent | Scope |
+|------|-------|-------|
+| Delivery | `MiniMax Agent` | Model suits, agent profile, NATS subjects, cascade update |
+| Control | Operator | Review, Token Plan API key configuration |
+| Memory | AGNOTE4482 | This trail entry, signoff checklist update |
+
+### Signoff Checklist Status
+⚠️ §Skills Catalog parity pending — MiniMax skills translation from GLM skills not yet complete
+⚠️ §Runtime smoke tests pending — need to verify Token Plan key + quota monitoring
+
+### Handoff Items for Next Agent
+- [ ] Configure `MINIMAX_TOKEN_PLAN_API_KEY` in env.shared
+- [ ] Run smoke test: `curl https://api.minimax.chat/v1/models` with Token Plan key
+- [ ] Validate quota monitoring via NATS subjects
+- [ ] Create MiniMax skills (translate from GLM skills)
+
+### Agent ACK
+- Agent: `MiniMax Agent`
+- Signature: `ACK::MINIMAX-AGENT::TOKEN-PLAN-PHASE2-INTEGRATION`
+- Timestamp: `2026-05-13T05:30:00Z`
+
+<!-- GRAPHITI_MARK: MINIMAX-AGENT::TOKEN-PLAN-PHASE2-INTEGRATION::2026-05-13 -->
+
+## Supply Chain Audit (2026-05-14)
+
+### Work Performed
+- Full TanStack supply chain audit across all PMOVES submodules
+- 16 findings identified across dependency trees
+- 6 findings patched with version pins or replacements
+- Audit report: `research/TANSTACK_SUPPLY_CHAIN_AUDIT_2026-05-14.md`
+- Hardening plan: `research/SUPPLY_CHAIN_HARDENING_PLAN_2026-05-14.md`
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::SUPPLY-CHAIN-AUDIT`
+- Timestamp: `2026-05-14`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::SUPPLY-CHAIN-AUDIT::2026-05-14 -->
+
+## SPARK Model Strategy + Profile Reconciliation (2026-05-15)
+
+### Work Performed
+- Created canonical SPARK model strategy document: `pmoves/docs/SPARK_MODEL_STRATEGY.md` (785 lines)
+- Reconciled hardware profiles for DGX Spark GB10 (128GB unified memory, Blackwell)
+- Documented model deployment strategy: Ollama local (nemotron-3-super:120b), cloud GLM coding, MiniMax
+- Resolved SPARK agent profile configuration gaps
+- Node doc: `pmoves/docs/AGENTS/AGNOTE-dgx-spark.md`
+- Related: `research/LONGBOW_COMPARATIVE_ANALYSIS.md` signoff corrected (36/36), SITREP signoff figures fixed
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::SPARK-MODEL-STRATEGY`
+- Timestamp: `2026-05-15`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::SPARK-MODEL-STRATEGY::2026-05-15 -->
+
+## CHIT Hardening Sprint (2026-05-16)
+
+### Work Performed
+- 66-file security audit across CHIT crypto, signing, and compose hardening
+- Crypto consolidation: unified signing primitives across 3 services (agent-zero, archon, supabase-proxy)
+- CHIT signing enabled for 3 services in compose stack
+- Compose hardening: secret passing, network isolation, health check validation
+- Doc closure: stale signoff figures corrected across LONGBOW, SITREP, and related docs
+- Signoff checklist: **37/37** — all items checked (up from 35/37 on 2026-05-03)
+- Related: `research/LONGBOW_COMPARATIVE_ANALYSIS.md` corrected (36/36), `research/ISSUE_AGNOTE4482_DOC_GAPS.md` (C1+H1 marked RESOLVED)
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::CHIT-HARDENING-SPRINT`
+- Timestamp: `2026-05-16`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::CHIT-HARDENING-SPRINT::2026-05-16 -->
+
+## Big Ball 5090 CODEX Gap Closure (2026-05-25 to 2026-05-26)
+
+### Context
+Operator asked Codex to validate SPARK's cursory PMOVES/CHIT findings, close partial implementation gaps, initialize submodules, validate on the 5090 TensorZero node, and proceed through ToKenism/Tokenism lanes while keeping unfinished math claims honest.
+
+This work ran on branch `codex/big-ball-5090-gap-closure` in the parent PMOVES repo and `codex/tokenism-chit-gap-closure` in `PMOVES-ToKenism-Multi`.
+
+### Work Performed
+- Initialized declared submodules and verified `make -C pmoves submodule-integrity`: 50 gitlinks, 0 uninitialized, 0 drifted.
+- Validated TensorZero 5090 health at `http://localhost:3030/health`: gateway, ClickHouse, Postgres, and Valkey all `ok`.
+- Preserved unrelated dirty `PMOVES-Headscale` generated/testdata marker; not staged or reverted.
+- Landed DoX hyperbolic projection wiring in parent via `PMOVES-DoX` gitlink update.
+- Closed Tokenism settlement lanes in `PMOVES-ToKenism-Multi`:
+  - deterministic settlement planner
+  - signed settlement requested/recorded/failed events
+  - Firefly dry-run executor
+  - live Firefly executor gate
+  - guarded contract settlement executor
+  - signed deployment attestation gate for Firefly and contract live execution
+  - Hardhat ABI manifest export and local sample manifest
+- Updated parent Tokenism matrix docs to distinguish implemented guardrails from remaining production activation.
+
+### Lane Status
+
+| Lane | Status | Notes |
+|------|--------|-------|
+| CHIT core | Merged | PR #1633 landed the review fixes for the Big Ball CHIT closure pass; PR #1638 landed the transcribe LFS gitlink cleanup needed for a clean parent pointer |
+| Hyperbolic geometry | Implemented as embedding support | DoX Poincare projection is wired; still not a proof-backed fairness pillar |
+| Tokenism Firefly settlement | Approval-gated | Dry-run default; live writes require signed executor identity, matching operator approval, and signed deployment attestation |
+| Tokenism contract settlement | Approval/deployment-gated | Dry-run call drafts; live writes require deployment manifest, signed deployment attestation, RPC/wallet custody references, signed executor identity, and matching operator approval |
+| TensorZero 5090 | Healthy on latest recheck | Health endpoint returned all `ok` during the pass and again on 2026-05-27 from host `POWERFULMOVES` |
+| Model fitness / EvoSwarm | Parent work exists; trust bridge remains | Signed scorecards and deterministic optimizer operators are present, but trusted optimizer publishing still needs live identities/topology |
+| Zeta | Heuristic | Keep labeled heuristic until a method-design doc is accepted |
+
+### PR Closeout
+
+The Big Ball CHIT/Tokenism hardening lane has moved from draft readiness to merged closeout:
+- PR #1633 merged the `codex/big-ball-5090-gap-closure` review fixes into main.
+- PR #1638 merged the `PMOVES-transcribe-and-fetch` LFS cleanup gitlink update into main.
+- PR #1561, the pinned `sigstore/cosign-installer` patch bump, was reviewed and merged on 2026-05-27 with green checks.
+
+Evidence collected during the implementation pass:
+- ToKenism focused Jest settlement suites: 32 tests passing.
+- ToKenism `npm run typecheck`: passing.
+- ToKenism Hardhat harness: 5 tests passing.
+- Hardhat manifest export: passing with and without required deployment attestation.
+- Parent `git diff --check`: passing.
+- Parent submodule integrity: passing.
+- TensorZero 5090 health: passing.
+
+Evidence collected during the 2026-05-27 closeout:
+- Host `POWERFULMOVES` reports `NVIDIA GeForce RTX 5090`, 32607 MiB VRAM, driver `595.79`.
+- `http://localhost:3030/health` returns gateway, ClickHouse, Postgres, and Valkey all `ok`.
+- `make -C pmoves submodule-integrity` passes in the closeout worktree with 50 gitlinks, 0 uninitialized, 0 drifted, 0 conflicts.
+- Pinokio root exists at `D:\pinokio`; direct Python `unsloth` import is not installed in the base environment and remains a runtime-lane setup item.
+
+### Remaining 5090 CODEX Work
+
+1. Production activation pack: real deployed contract addresses, RPC/wallet custody references, FireFly environment binding, and operator-signed production manifests.
+2. Trusted optimizer bridge: verify PMOVES-AGENT-ZERO-CODEX, HERMES, and Claw signing identities before accepting optimizer output as trusted.
+3. Model-fitness integration: connect Hugging Face candidate discovery, TensorZero telemetry, and Pinokio/Unsloth eval output into persisted `model.fitness.recorded.v1` scorecards.
+4. P7/5090 runtime checks: validate P7 requirements directly on 5090, NATS leaf path, and TensorZero/Unsloth/Pinokio callable smoke.
+5. Zeta method design: write/review method doc before stronger math claims.
+
+### Agent ACK
+- Agent: `CODEX-GPT5`
+- Signature: `ACK::CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE`
+- Timestamp: `2026-05-26`
+
+<!-- GRAPHITI_MARK: CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE::2026-05-26 -->
+
+## Hardened-Branch Reconciliation + Auto Mode Fleet Config (2026-05-31)
+
+### Work Performed
+- **Hardened-branch fleet audit** of all 38 submodules tracking `PMOVES.AI-Edition-Hardened`. Established the deployment invariant **`hardened ⊇ default`** (hardened, which the parent gitlink deploys, must contain every commit on the repo's default branch — else security fixes merged to `main` silently never deploy). Audit doc: `pmoves/docs/audit/HARDENED_BRANCH_FLEET_AUDIT_2026-05-31.md` (PR #1659).
+- **17-agent read-only merge-safety fan-out** (workflow `wf_1fd8647f-03c`) verifying every drifted repo's `main→hardened` merge wouldn't reintroduce an intentionally-removed hardening. Surfaced **5 security gaps** that had merged to `main` but never reached the deployed hardened branch:
+  - **PMOVES-DoX** — CVE-2025-55182 (CVSS 10.0 RCE, Next.js RSC) → PR #172
+  - **PMOVES-BoTZ** — #72 JWT auth-gate → PR #142
+  - **PMOVES-Agent-Zero** — path-containment + drop-root-supervisord (resolved a modify/delete conflict by `git rm`, keeping the removed endpoint deleted) → PR #10
+  - **PMOVES-BotZ-gateway** — #4 log-sanitize → PR #7
+  - **PMOVES-Pinokio-Ultimate-TTS-Studio** — Gradio 127.0.0.1 bind → PR #3
+- **15 of 17 drifted repos reconciled** (5 security + 7 clean + 3 hygiene merge-forwards); parent gitlinks promoted via PRs **#1659 / #1660 / #1661**. Deferred: Open-Notebook, Wealth (heavy upstream divergence, no security gap).
+- **Auto Mode fleet config**: authored `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md` — the canonical copy-paste `autoMode` block for `.claude/settings.local.json` (gitignored, so every node must apply locally). Declares POWERFULMOVES org + Tailscale/VPS fleet trusted; adds `allow` for merged-worktree cleanup / gitlink promotion / non-destructive fleet SSH; adds `soft_deny` (hardened-branch rewrite) + `hard_deny` (CHIT/secrets exfil with secrets-funnel carve-out). All arrays keep `"$defaults"`. Validated with `claude auto-mode config` + `critique`.
+
+### Fleet Action Required
+**Every node (5090, 4090, B850, Spark, KVM) must paste the `autoMode` block from `AUTOMODE_FLEET_CONFIG.md` into its own `.claude/settings.local.json`** — the classifier does not read checked-in settings, so this cannot propagate via the repo. Validate per-node with `claude auto-mode config`.
+
+### Key Lessons
+1. `merge_forward_safe` (no hardening undo) and `conflict-free` are orthogonal — a verdict of safe still needs per-repo conflict resolution; resolve via the fix's *shape* (isolated commit → cherry-pick, mega-squash → merge-forward).
+2. The compose damage-control guard has **no Known-Road bypass for submodule paths** (`compose` domain requires `/pmoves/`); resolve submodule compose conflicts git-native (`--ours`/`--theirs`) rather than editing.
+3. Bash loops that build Windows paths (`"...\$repo"`) can silently run git in the **parent superproject** — do submodule git ops one repo per call, forward-slash paths.
+
+### Agent ACK
+- Agent: `Z890-CLAUDE (opus 4.8 1M)`
+- Signature: `ACK::Z890-CLAUDE::HARDENED-RECONCILE-AUTOMODE-FLEET`
+- Timestamp: `2026-05-31`
+
+<!-- GRAPHITI_MARK: Z890-CLAUDE::HARDENED-RECONCILE-AUTOMODE-FLEET::2026-05-31 -->
+
+## Antigravity CLI A2UI Hologram Scaling Fix (2026-05-30)
+
+### Context
+Operator requested fixing the "identical pink dot" gallery issue stemming from the pending `A2UI Remotion hologram viewport scaling (1920x1080 viewport)` ticket. The `geometry_mesh` element in `a2ui-renderer` was stubbed out and required DGX SPARK physical access.
+
+This work ran on the local workspace `3fd5d899-f774-45da-bae1-ef349bf01951` targeting branch `fix/ghcr-matrix-paths-gate` in the parent PMOVES repo.
+
+### Work Performed
+- Bypassed the stubbed Remotion 2D generator and implemented a live interactive 3D WebGL solution on the landing page.
+- Upgraded `website/hyperdim/index.html` with URL parameter parsing (`?preset=` and `?ui=none`) for headless preset embedding.
+- Generated three distinct parametric topology presets derived from `beats_constellation.json`:
+  - `beats_c5.json`: Allegro Balanced Bright (High tempo, bright color)
+  - `beats_c3.json`: Allegro Balanced Deep (Moderate tempo, deep color)
+  - `beats_c1.json`: Cluster 1 (High fitness, tight curvature, very bright)
+- Replaced the three static `<video>` elements in `website/index.html` gallery with `<iframe>` embeds targeting the Hyperdimensions viewer, successfully resolving the 1920x1080 scaling issue via live rendering.
+
+### Lane Status
+| Lane | Status | Notes |
+|------|--------|-------|
+| A2UI Hologram Scaling | Resolved (Live WebGL) | DGX SPARK dependency bypassed. Rendering now happens live in the browser via Three.js. |
+| Custom Domain Linking | Handoff | Operator to configure `pmoves.ai` domain in Cloudflare dashboard manually. |
+
+### PR Readiness
+Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto clean `main`, rebased, review-clean. Carries the WebGL embed fix + cf-pages/pmoves-ai deploy targets. Follow-up #1667 tracks reconciling `website/hyperdim/` with the `Pmoves-hyperdimensions` fork (the embed code + `beats_c{1,3,5}` presets currently live only in the vendored copy).
+
+### Agent ACK
+- Agent: `ANTIGRAVITY-GEMINI`
+- Signature: `ACK::ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX`
+- Timestamp: `2026-05-30`
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX::2026-05-30 -->
+
+## CHIT Signing-Card Schema + Room Activation Checklist (2026-06-30)
+
+### Work Performed
+- Canonical schema landed: `pmoves/contracts/schemas/identity/signing-card.v1.schema.json`.
+- Audit script `pmoves/scripts/audit_naming_drift.py` now loads the canonical schema from disk, falling back to the previous inline literal for stale environments.
+- Added the CHIT / room activation checklist below to this file and to `pmoves/docs/ROOMS_ON_A_STAGE.md` and `pmoves/docs/ROOM_MANIFEST_CONTRACT.md`.
+
+### CHIT / room activation checklist (must be complete before a room transitions `planned` → `active`)
+
+- [ ] Room manifest has a valid `card_id` in `meta.chit.card_id` or the room skill has an active signing card row in `pmoves/config/signing_identity_cards.yaml`.
+- [ ] `signing-card.v1.schema.json` validates the referenced card (`card_id` UUID, `ml.primary_method` in `[ssh,gpg,github-app]`, `h.agent_id` matches registry, `active=true`).
+- [ ] `pmoves/config/signing_identity_cards.yaml` has an entry for the room's operating agent with matching `ssh_fingerprint` / `github_app_installation_id` / `gpg_key_id`.
+- [ ] `make sign-trail AGENT=<agent_id>` returns `status: signed` or `unsigned-local` advisories are explicitly accepted for the transition.
+- [ ] Room's `mcp_servers` and `a2a_servers` (if any) are present in `pmoves/config/agent_registry.yaml` and reachable in the target topology mode.
+- [ ] `PGRST_DB_EXTRA_SEARCH_PATH` includes the schemas the room touches; PostgREST returns HTTP 200 on a representative schema-qualified endpoint.
+- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles are documented in `sidecar.env` for the target topology gradient (`standalone` → `docked` → `fleet`).
+
+### Agent ACK
+- Agent: `AGENT-ZERO-0`
+- Signature: `ACK::AGENT-ZERO-0::CHIT-SIGNING-CARD-SCHEMA-CARVEOUT`
+- Timestamp: `2026-06-30T23:50:00Z`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-0::CHIT-SIGNING-CARD-SCHEMA-CARVEOUT::2026-06-30 -->
+
 
 ## Fleet Onboarding: PMOVES-MISSLING-LINK (2026-06-23)
 

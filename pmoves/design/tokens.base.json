@@ -1,0 +1,15 @@
+{
+  "color": {
+    "void": "#050508", "void-elevated": "#0a0a0f", "surface": "#12121a",
+    "border-subtle": "rgba(255,255,255,0.08)", "border-strong": "rgba(255,255,255,0.15)",
+    "ink": "#f8f8f8", "ink-dim": "#a0a0a8", "ink-mute": "#606068", "ink-inverse": "#050508"
+  },
+  "radius": { "sm": "4px", "md": "8px", "lg": "14px" },
+  "space": { "xs": "4px", "sm": "8px", "md": "16px", "lg": "24px", "xl": "40px" },
+  "ease": { "out-expo": "cubic-bezier(0.16,1,0.3,1)", "out-back": "cubic-bezier(0.34,1.56,0.64,1)" },
+  "font": {
+    "display": "'Orbitron', 'Exo 2', system-ui, sans-serif",
+    "body": "'Exo 2', system-ui, sans-serif",
+    "mono": "'JetBrains Mono', ui-monospace, monospace"
+  }
+}

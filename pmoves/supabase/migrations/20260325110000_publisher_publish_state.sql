@@ -22,11 +22,18 @@ begin
 end;
 $$;
 
-drop trigger if exists studio_board_touch_updated_at on public.studio_board;
-create trigger studio_board_touch_updated_at
-before update on public.studio_board
-for each row
-execute function public.set_studio_board_updated_at();
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'studio_board'
+  ) THEN
+    DROP TRIGGER IF EXISTS studio_board_touch_updated_at ON public.studio_board;
+    CREATE TRIGGER studio_board_touch_updated_at
+    BEFORE UPDATE ON public.studio_board
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_studio_board_updated_at();
+  END IF;
+END $$;
 
 create table if not exists public.publisher_audit (
   publish_event_id text primary key,

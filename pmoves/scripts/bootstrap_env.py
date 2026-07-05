@@ -24,6 +24,8 @@ from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY_PATH = REPO_ROOT / "pmoves" / "bootstrap" / "registry.json"
+ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
+_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _warn(msg: str) -> None:
@@ -102,6 +104,78 @@ def value_matches_spec(value: Optional[str], spec: Optional[Dict]) -> bool:
     # strict character-set check because their downstream consumers (Fernet /
     # vault keys) actually require hex.
     return True
+
+
+def rotate_secret(
+    key: str,
+    *,
+    value: Optional[str] = None,
+    length: int = 48,
+    gen_type: str = "random_urlsafe",
+    env_path: Optional[Path] = None,
+) -> str:
+    """Surgically rotate a single secret in env.shared (the secrets-funnel source).
+
+    Replaces the ``KEY=...`` line in place — preserving every other line, comment,
+    and ordering exactly — or appends ``KEY=value`` if the key is absent. When
+    *value* is None a fresh value is generated from (gen_type, length). The new
+    value must be single-line: multi-line values corrupt line-based env files
+    (see ``secrets_sync._drop_multiline``); PEM/SSH keys belong in the ``*_FILE``
+    convention, not here.
+
+    env.shared is the canonical funnel source — after rotating, run
+    ``make -C pmoves chit-export`` (encode env.shared -> CGP bundle) then
+    ``make -C pmoves secrets-funnel`` to propagate to the tier env files.
+
+    Returns the new value; callers MUST NOT log it.
+    """
+    target = env_path or ENV_SHARED_PATH
+    if not _ENV_KEY_RE.match(key or ""):
+        raise ValueError(
+            f"invalid env key (must match [A-Za-z_][A-Za-z0-9_]*): {key!r}"
+        )
+    if value is None:
+        value = generate_value({"type": gen_type, "length": length})
+    if not value:
+        raise ValueError(
+            f"no value to rotate {key!r}: pass --value, or use a generatable --gen-type"
+        )
+    if "\n" in value or "\r" in value:
+        raise ValueError(
+            f"refusing to write a multi-line value for {key!r} — multi-line values "
+            "corrupt line-based env files; use the *_FILE convention for PEM/SSH keys"
+        )
+    if not target.exists():
+        raise FileNotFoundError(f"env file not found: {target}")
+
+    original = target.read_text(encoding="utf-8")
+    new_line = f"{key}={value}"
+    out: List[str] = []
+    replaced = False
+    for raw in original.splitlines():
+        stripped = raw.lstrip()
+        is_target = (
+            "=" in stripped
+            and not stripped.startswith("#")
+            and stripped.split("=", 1)[0].strip() == key
+        )
+        if is_target:
+            # Replace the first occurrence; DROP any later duplicates so a stale
+            # later value can't win in last-wins env parsers (chit_encode_secrets).
+            if not replaced:
+                out.append(new_line)
+                replaced = True
+            continue
+        out.append(raw)
+    if not replaced:
+        out.append(new_line)
+    text = "\n".join(out)
+    if original.endswith("\n") or not original:
+        text += "\n"
+    target.write_text(text, encoding="utf-8")
+    return value
+
+
 def normalize_bool(value: str) -> str:
     truthy = {"true", "t", "yes", "y", "1"}
     falsy = {"false", "f", "no", "n", "0"}
@@ -507,11 +581,69 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Do not write files; exit non-zero if required values are missing.",
     )
+    parser.add_argument(
+        "--rotate",
+        metavar="KEY",
+        help="Rotate a single secret in env.shared (surgical in-place replace). "
+        "Then run: make -C pmoves chit-export && make -C pmoves secrets-funnel.",
+    )
+    parser.add_argument(
+        "--value",
+        help="Explicit new value for --rotate (e.g. an externally-minted API key). "
+        "If omitted, a value is generated from --gen-type/--length. "
+        "Prefer --value-env for values with shell-active characters.",
+    )
+    parser.add_argument(
+        "--value-env",
+        metavar="VARNAME",
+        help="Read the --rotate value from this environment variable (shell-safe: "
+        "the secret never passes through argv/make expansion). Overrides --value.",
+    )
+    parser.add_argument(
+        "--length",
+        type=int,
+        default=48,
+        help="Length of the generated --rotate value (default: 48).",
+    )
+    parser.add_argument(
+        "--gen-type",
+        default="random_urlsafe",
+        help="Generator type for --rotate (random_urlsafe | random_hex | passphrase).",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
+
+    if args.rotate:
+        rotate_value = args.value
+        if args.value_env:
+            rotate_value = os.environ.get(args.value_env)
+            if rotate_value is None:
+                _error(f"--value-env {args.value_env}: environment variable not set")
+                return 2
+        try:
+            rotate_secret(
+                args.rotate,
+                value=rotate_value,
+                length=args.length,
+                gen_type=args.gen_type,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            _error(str(exc))
+            return 2
+        source = (
+            "supplied value" if (args.value or args.value_env)
+            else f"generated {args.gen_type}"
+        )
+        _info(
+            f"Rotated {args.rotate} in env.shared ({source}). "
+            "Next: make -C pmoves chit-export && make -C pmoves secrets-funnel, "
+            "then restart the affected consumers."
+        )
+        return 0
+
     registry = load_registry(args.registry)
     try:
         services = select_services(registry, args.services)

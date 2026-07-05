@@ -17,6 +17,13 @@ ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
 RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
       ${AGENT_ZERO_REPO} /git/agent-zero
 
+# Bake the PMOVES.Notes A0 plugin into usr/plugins (parity with Dockerfile).
+ARG A0_PLUGIN_PMOVES_NOTES_REMOTE=https://github.com/POWERFULMOVES/Pmoves-a0-plugin-pmoves-notes.git
+ARG A0_PLUGIN_PMOVES_NOTES_REF=PMOVES.AI-Edition-Hardened
+RUN git clone --depth=1 --single-branch --branch ${A0_PLUGIN_PMOVES_NOTES_REF} \
+      ${A0_PLUGIN_PMOVES_NOTES_REMOTE} /git/agent-zero/usr/plugins/pmoves_notes \
+    && rm -rf /git/agent-zero/usr/plugins/pmoves_notes/.git
+
 # Minimal constraints for upstream transitive deps that have broken releases.
 # Do NOT use requirements.lock here — it pins our direct deps and will
 # conflict with upstream version requirements (e.g. crontab version mismatch).
@@ -43,9 +50,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Create the runtime user before COPY steps so we can preserve ownership as
+# files enter the image instead of paying for a large recursive chown later.
+RUN groupadd -r pmoves --gid=65532 \
+    && useradd -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves \
+    && install -d -o 65532 -g 65532 /a0 \
+    && chown 65532:65532 /app
+
 # Bring in upstream runtime from builder stage
-COPY --from=upstream /opt/venv-a0 /opt/venv-a0
-COPY --from=upstream /git/agent-zero /git/agent-zero
+COPY --from=upstream --chown=65532:65532 /opt/venv-a0 /opt/venv-a0
+COPY --from=upstream --chown=65532:65532 /git/agent-zero /git/agent-zero
 
 # System deps that the regular Dockerfile adds
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -54,48 +68,62 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # PMOVES Python requirements (overrides upstream pins where needed)
-COPY services/agent-zero/requirements.txt services/agent-zero/requirements.lock ./
+COPY --chown=65532:65532 services/agent-zero/requirements.txt services/agent-zero/requirements.lock ./
 RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir \
        --constraint requirements.lock -r requirements.txt
 
 # Init script (replaces upstream /ins/copy_A0.sh)
-RUN mkdir -p /a0 \
+RUN install -d -o 65532 -g 65532 /a0 \
     && printf '#!/bin/bash\nset -e\nif [ ! -f "/a0/run_ui.py" ]; then\n  cp -rn --no-preserve=ownership,mode "/git/agent-zero/." "/a0"\nfi\n' \
        > /usr/local/bin/init-a0.sh \
     && chmod +x /usr/local/bin/init-a0.sh
 
 # PMOVES runtime assets
-COPY services/agent-zero/runtime ${AGENT_ZERO_HOME}/runtime
+COPY --chown=65532:65532 services/agent-zero/runtime ${AGENT_ZERO_HOME}/runtime
 
 # PMOVES Python namespace package (for `from pmoves.chit import ...`)
 # Generate a minimal __init__.py instead of copying the repo's version,
 # which imports pmoves.services — a path that doesn't exist in the Docker layout.
-RUN mkdir -p /app/pmoves \
-    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
-COPY chit /app/pmoves/chit
+RUN install -d -o 65532 -g 65532 /app/pmoves \
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py \
+    && chown 65532:65532 /app/pmoves/__init__.py
+COPY --chown=65532:65532 chit /app/pmoves/chit
 
 # PMOVES contract schemas + agent forms
-COPY contracts /app/contracts
-COPY configs /app/configs
+COPY --chown=65532:65532 contracts /app/contracts
+COPY --chown=65532:65532 configs /app/configs
 
 # PMOVES services (includes services/common, services/agent_zero, etc.)
-COPY services /app/services
+COPY --chown=65532:65532 services /app/services
 
 # Compatibility overlay: recent flaredantic builds may omit Microsoft/notifier symbols.
 # Keep Agent Zero startup resilient by overlaying a tunnel manager that degrades gracefully.
-COPY services/agent-zero/overrides/tunnel_manager.py /git/agent-zero/python/helpers/tunnel_manager.py
-
-# Security: non-root user (PMOVES standard)
-RUN groupadd -r pmoves --gid=65532 \
-    && useradd -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves \
-    && chown -R pmoves:pmoves /app /a0 /git/agent-zero \
-    && if [ -d /opt/venv-a0 ]; then chown -R pmoves:pmoves /opt/venv-a0; fi \
-    && if [ -d /opt/pyenv ]; then chown -R pmoves:pmoves /opt/pyenv; fi
+COPY --chown=65532:65532 services/agent-zero/overrides/tunnel_manager.py /git/agent-zero/python/helpers/tunnel_manager.py
 
 
 # Install curl for healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Orchestrator MCP toolkit deps (parity with Dockerfile): docker CLI for the
+# Docker MCP (mcp/docker over the socket) + pre-installed Supabase PostgREST MCP
+# so A0_SET_mcp_servers local commands resolve in the published image too.
+# Arch-aware static docker CLI (buildx provides TARGETARCH).
+ARG TARGETARCH
+ARG DOCKER_CLI_VERSION=27.5.1
+ARG SUPABASE_POSTGREST_MCP_VERSION=0.1.1
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) DOCKER_ARCH=x86_64 ;; \
+      arm64) DOCKER_ARCH=aarch64 ;; \
+      *) DOCKER_ARCH=x86_64 ;; \
+    esac; \
+    curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-${DOCKER_CLI_VERSION}.tgz" \
+      | tar -xz -C /usr/local/bin --strip-components=1 docker/docker; \
+    docker --version; \
+    npm install -g "@supabase/mcp-server-postgrest@${SUPABASE_POSTGREST_MCP_VERSION}"; \
+    command -v mcp-server-postgrest
+
 USER pmoves:pmoves
 
 EXPOSE 8080
@@ -104,4 +132,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8080/healthz || exit 1
 ENTRYPOINT ["/bin/bash", "-lc", \
-  "/usr/local/bin/init-a0.sh 2>/dev/null || true && if [ \"$(id -u)\" = \"0\" ]; then /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true; fi && export PYTHONPATH=/app:/app/services:${PYTHONPATH:-} && exec /opt/venv-a0/bin/python /app/services/agent-zero/main.py"]
+  "/usr/local/bin/init-a0.sh 2>/dev/null || true && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true && export PYTHONPATH=/app:/app/services:${PYTHONPATH:-} && exec /opt/venv-a0/bin/python /app/services/agent-zero/main.py"]

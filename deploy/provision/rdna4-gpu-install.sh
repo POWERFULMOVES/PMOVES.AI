@@ -29,6 +29,12 @@ set -euo pipefail
 # Configuration
 # ------------------------------------------------------------------
 ROCM_VERSION="${ROCM_VERSION:-7.1}"
+# AMD publishes the amdgpu driver under a separate year.month-style version
+# stream (latest / 30.30.3 / 25.35 / etc.) — NOT aligned with ROCM_VERSION.
+# https://repo.radeon.com/amdgpu/${ROCM_VERSION}/ubuntu returns 404 for any
+# value < 30 (e.g. 7.1). Default to `latest` so a fresh box tracks the
+# current driver; pin (e.g. 30.30.3) for reproducible builds.
+AMDGPU_VERSION="${AMDGPU_VERSION:-latest}"
 LLAMA_CPP_PIN="a6e76c64dd525a1bd7726fa1d1145954cef375a8"
 LLAMA_CPP_REPO="${LLAMA_CPP_REPO:-https://github.com/tlee933/llama.cpp-rdna4-gfx1201}"
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/opt/llama.cpp-rdna4}"
@@ -89,7 +95,7 @@ install_rocm() {
     return 0
   fi
 
-  log "Installing ROCm ${ROCM_VERSION}"
+  log "Installing ROCm ${ROCM_VERSION} (with amdgpu driver stream: ${AMDGPU_VERSION})"
 
   DEBIAN_FRONTEND=noninteractive apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
@@ -104,7 +110,7 @@ deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/ro
 EOF
 
   cat >/etc/apt/sources.list.d/amdgpu.list <<EOF
-deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/amdgpu/${ROCM_VERSION}/ubuntu noble main
+deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/amdgpu/${AMDGPU_VERSION}/ubuntu noble main
 EOF
 
   # Priority pin so rocm packages aren't clobbered by stock Ubuntu
@@ -133,7 +139,7 @@ EOF
     fi
   done
 
-  log "ROCm ${ROCM_VERSION} installed"
+  log "ROCm ${ROCM_VERSION} installed (amdgpu driver: ${AMDGPU_VERSION})"
 }
 
 # ------------------------------------------------------------------

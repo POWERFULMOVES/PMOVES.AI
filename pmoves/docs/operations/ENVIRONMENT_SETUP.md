@@ -100,6 +100,18 @@ Contains internal service URLs and API credentials for service-to-service commun
 - `DOCKERHUB_PAT` - Docker Hub PAT
 - `DOCKERHUB_USERNAME` - Docker Hub username
 
+**Docker Hub managed setup** (nodes that pull Docker images — e.g., 4090 Docker runners):
+```bash
+# Step 1: authenticate via Docker Desktop CLI
+docker login
+
+# Step 2: inject stored credentials into env.tier-api (mirrors github-pat-inject pattern)
+make -C pmoves docker-hub-inject
+# Expected: OK: DOCKERHUB_USERNAME=<user>, DOCKERHUB_PAT written to .../pmoves/env/env.tier-api (token length=...)
+```
+`docker-hub-inject` reads from the platform credential helper (`docker-credential-desktop` on
+Windows, `docker-credential-osxkeychain` on macOS) — no manual copy-paste required.
+
 ### Tier 3: LLM (`env.tier-llm`)
 
 Contains external LLM provider API keys. **This is the most sensitive tier from a cost perspective** - these keys can incur charges.

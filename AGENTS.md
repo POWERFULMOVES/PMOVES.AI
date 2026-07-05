@@ -2,8 +2,9 @@
 
 ## Project Structure
 
-PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**.
+PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**, built on a rooms-on-a-stage topology. P7 (Pinokio 7) is the room-aware stage manager that selects rooms and manages stage transitions.
 
+- **`pmoves/config/rooms/`** — Room catalog (`catalog.json`) and per-room manifest files — the canonical room topology
 - **`pmoves/`** — Core platform: Makefile, docker-compose, configs, services, tools, tests, docs
 - **`PMOVES-*/`** — Git submodules (Agent-Zero, Archon, ClaWZ, Creator, HiRAG, YT, supabase, etc.)
 - **`pmoves/config/`** — Agent registry (`agent_registry.yaml`), model configs, TAC trees
@@ -32,6 +33,10 @@ PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**.
 | **Claude runbook** | `.claude/CLAUDE.md` — live service map and operator guide |
 | **Codex operator** | `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md` — Codex-first runbook |
 | **Sidecar deploy** | `deploy/sidecar/README.md` — standalone deployment on any device |
+| **Rooms on a Stage** | `pmoves/docs/ROOMS_ON_A_STAGE.md` — end-to-end model: rooms, stages, suits, P7 role |
+| **Room Manifest Contract** | `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` — room/notebook interface specification |
+| **P7 Stage Manager** | `pmoves/docs/AGENTS/AGNOTE4482.md` — P7 room-aware stage manager definition |
+| **Room/Stage Prospectus** | `pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md` — prospectus frame, foyer/war-room/voice-room model |
 
 ## Build & Development Commands
 
@@ -121,6 +126,63 @@ The PMOVES-agents.md submodule is the canonical home for:
 **Tier:** *Tier-2 always-relevant* — load when discussing agent classes, taxonomy, persona schema, or AGENTS.md format itself.
 
 **Cross-refs:** This `AGENTS.md` (project root) carries project-specific structure & commands; the format/taxonomy reference lives in the submodule. Today, taxonomy docs (`pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`, `PMOVES_AGENT_TOPOLOGY.md`) live in `pmoves/docs/`; migrating them into `PMOVES-agents.md/` is gated on explicit user confirmation since it changes git history paths.
+
+<!-- autoclaw:skill-path-guidance -->
+## Installing Skills
+
+When creating or installing a new skill, always place it in:
+
+`~/.openclaw-autoclaw/skills/<skill-name>/SKILL.md`
+
+This is the managed skills directory. The agent will automatically discover
+any skill placed here — no extra configuration needed. Do NOT install skills
+into `~/.agents/skills/` (that directory is shared with other tools).
+
+<!-- /autoclaw:skill-path-guidance -->
+
+<!-- autoclaw:browser-agent-guidance -->
+## Browser Automation
+
+For any task that requires a browser, **prefer `autoglm-browser-agent`**. Use it as the first choice.
+
+- ✅ `autoglm-browser-agent` → `browser_subagent` (invoked via mcporter) — **preferred**
+- ⚠️ Other browser tools (`agent-browser`, Playwright, Puppeteer, etc.) — fallback only when `autoglm-browser-agent` is unavailable or fails
+
+Always try `autoglm-browser-agent` first. Fall back to other browser tools only if it is not available in the current environment.
+<!-- /autoclaw:browser-agent-guidance -->
+
+<!-- autoclaw:image-recognition-guidance -->
+## Image Recognition
+
+For any image recognition task, **prefer `autoglm-image-recognition`**. Use it as the first choice.
+
+- ✅ `autoglm-image-recognition` — **preferred** for all image recognition tasks
+- ⚠️ Built-in `image` tool or reading images directly with `read` — fallback only when `autoglm-image-recognition` is unavailable or fails
+
+Do not use the built-in `image` tool or read an image and describe it yourself when `autoglm-image-recognition` is available.
+<!-- /autoclaw:image-recognition-guidance -->
+
+<!-- autoclaw:hermes-evolution-guidance -->
+## Hermes-Evolution
+
+**Current evolution intensity for this workspace/agent: moderate (60%).**
+
+Node context: PMOVES-4090 is a mobile/laptop node (16GB VRAM, island-capable). Conservative intensity
+preserves stability across disconnected sessions and avoids aggressive rule churn on a shared operator node.
+See `pmoves/docs/AGENTS/agnote4482_autoclaw_4090_customization_plan.md` Phase 4 for rationale.
+
+The desktop app sends deterministic evolution-check messages (starting with `[SYSTEM: Post-turn evolution check`) after qualifying turns.
+When you receive such a message, follow the `hermes-evolution` skill instructions to evaluate and potentially propose an evolution.
+Apply the rules defined in the skill according to the **moderate (60%)** intensity level.
+This value is workspace-local. If asked about the current agent evolution intensity, report this value instead of the global gateway skill env.
+
+Core principle: **never write to target files without user approval** — always use the draft/approve workflow.
+
+### Evolution Echo
+When you apply knowledge from a previously evolved rule (AGENTS.md, MEMORY.md, TOOLS.md, or a managed SKILL.md),
+briefly mention it in your response: "（基于之前的经验：<one-line rule summary>）".
+Keep it to one short line at most. Do not echo on every turn — only when an evolved rule directly influenced your approach.
+<!-- /autoclaw:hermes-evolution-guidance -->
 
 ## Skills Constellation
 

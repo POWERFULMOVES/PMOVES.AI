@@ -539,11 +539,29 @@ name: pmoves
 
 services:
   # =============================================================================
-  # SUPABASE SELF-HOSTED STACK (2025 Best Practices)
+  # SUPABASE SELF-HOSTED STACK (currency reviewed 2026-06-21)
   # =============================================================================
   # Unified 13-service self-hosted stack (profile: supabase-local)
   # Standard naming: JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY (SUPABASE_* aliases for compat)
   # JWT: HS256 symmetric
+  #
+  # Currency notes (verified against supabase.com/changelog.md, 2026-06-21):
+  # - On Postgres 17 (supabase/postgres:17.6.1.108) — the 2026-05-18 self-hosted
+  #   PG15->17 migration is already done.
+  # - CONFIG ALIGNMENT (Supabase discussion #47093, 2026-06-18): the self-hosted
+  #   reference compose now defaults API_EXTERNAL_URL to INCLUDE /auth/v1
+  #   (e.g. https://host -> https://host/auth/v1), WITH matching Kong OAuth
+  #   callback (${API_EXTERNAL_URL}/callback) and SAML (/auth/v1/sso/saml/*)
+  #   routes + GOTRUE_JWT_ISSUER. This is a compose/route alignment applied as a
+  #   SET, not a gotrue-image-version gate. This stack still uses the older
+  #   consistent scheme (API_EXTERNAL_URL = base + Kong routes that add /auth/v1),
+  #   so it is internally consistent and needs no change in isolation. BUT when
+  #   adopting Supabase's updated self-hosted compose defaults OR enabling custom
+  #   OAuth/SAML, move the WHOLE set together (API_EXTERNAL_URL + Kong routes +
+  #   issuer) and re-test auth — applying any one piece alone breaks auth.
+  # - OPTIONAL hardening: asymmetric JWT signing keys (ES256/RS256) over the
+  #   current HS256 symmetric secret — larger migration (touches every
+  #   JWT-validating service); tracked separately.
   # =============================================================================
 
   supabase-db:
@@ -584,12 +602,16 @@ services:
           memory: 4G
   supabase-gotrue:
     <<: *tier-supabase-hardened
-    image: supabase/gotrue:v2.186.0
+    image: supabase/gotrue:v2.191.0
     restart: unless-stopped
     profiles:
     - supabase-local
     environment:
     - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
+    # Older consistent scheme: base URL here + Kong routes that add /auth/v1.
+    # The 2026-06-18 self-hosted alignment (API_EXTERNAL_URL incl. /auth/v1 +
+    # matching Kong OAuth/SAML routes + issuer) is applied as a SET, not piecemeal
+    # and not gated on the gotrue tag — see the stack header note before changing.
     - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
     - GOTRUE_API_HOST=0.0.0.0
     - GOTRUE_API_PORT=9999
@@ -656,6 +678,9 @@ services:
     - PGRST_DB_USE_LEGACY_GUCS=false
     - PGRST_APP_SETTINGS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}}
+    # Extra search_path so pmoves_core and pmoves_kb objects are addressable
+    # without fully-qualified names. Must match env.tier-supabase.example.
+    - PGRST_DB_EXTRA_SEARCH_PATH=${PGRST_DB_EXTRA_SEARCH_PATH:-pmoves_core,pmoves_kb,public}
     # API configuration
     - PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}
     - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
@@ -675,6 +700,7 @@ services:
     - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
     networks:
     - pmoves_api
+    - pmoves_public
 
     deploy:
       resources:
@@ -713,7 +739,8 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    entrypoint: ["/bin/sh", "-c", "echo 'Waiting for DNS resolution...'; for i in $(seq 1 30); do nc -z supabase-db 5432 && echo 'Database reachable' && break; echo \"DNS not ready yet ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
+    # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
+    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -725,19 +752,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     ports:
-    # NOTE: Kong host bind defaults to 0.0.0.0 (not 127.0.0.1) because
-    # Docker Desktop on Windows silently drops explicit 127.0.0.1 binds on
-    # services that declare multiple host ports — the HostConfig declares
-    # the mapping but NetworkSettings.Ports stays empty, host-side forwarder
-    # never activates, and you get connection-refused from the host while
-    # the service is fine on the Docker network. 0.0.0.0 works around it.
-    # Operators who need LAN-isolation should set KONG_PROXY_BIND=127.0.0.1
-    # in env.shared AND confirm Docker Desktop version ≥29.5 (where this
-    # is reportedly fixed upstream).
-    - ${KONG_PROXY_BIND:-0.0.0.0}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
-    - ${KONG_ADMIN_BIND:-0.0.0.0}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
+    # Default host bind tightened to 127.0.0.1 for safer standalone/sidecar
+    # operation. Override with KONG_PROXY_BIND / KONG_ADMIN_BIND in env.shared
+    # if you need LAN access or are on Docker Desktop versions <29.5 where
+    # explicit loopback binds were silently dropped on multi-port services.
+    - ${KONG_PROXY_BIND:-127.0.0.1}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
+    - ${KONG_ADMIN_BIND:-127.0.0.1}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
     networks:
     - pmoves_api
+    - pmoves_public
 
     deploy:
       resources:
@@ -1277,9 +1300,15 @@ services:
           memory: 4G
   minio:
     <<: *tier-data-hardened
-    # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
-    # ⚠️ WARNING: MinIO Community Edition is EOL (archived Feb 2026). Migration to SeaweedFS/Garage/Enterprise planned.
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-12-20T04-58-37Z}
+    # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
+    # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
+    # RELEASE.2025-12-20T04-58-37Z was a phantom — a December date AFTER MinIO
+    # stopped publishing minio/minio community images, so it 404s on the registry
+    # ("not found") and broke every data-tier bring-up. Verified 2026-06-22:
+    # 2025-09-07 is the newest tag on hub.docker.com/r/minio/minio.
+    # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
+    # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
@@ -1307,6 +1336,106 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+
+  # ── JuiceFS object store (PoC) — durable replacement for EOL MinIO ───────────
+  # See docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md. PROFILE-GATED ("juicefs")
+  # so it is purely additive — it does NOT start with the default data tier and does
+  # not touch existing MinIO consumers yet (consumer repoint = Phase 2).
+  # ⚠️ DRAFT / not yet live-verified (deploy-env drift blocks a live run on Z890 —
+  # see handoff z890-deploy-spine-mcp-env-2026-06-22.md). Validate on first run:
+  #   (a) `juicefs` CLI entrypoint in juicedata/mount:ce-v1.3.0,
+  #   (b) `juicefs format`/`gateway` flag syntax + cache dir,
+  #   (c) --multi-buckets exposes assets/outputs/pmoves-comfyui,
+  #   (d) the gateway's S3 creds (MINIO_ROOT_USER/PASSWORD env) match consumers.
+  juicefs-redis:  # metadata engine
+    <<: *tier-data-hardened
+    image: redis:7.4.1-alpine
+    profiles: ["juicefs"]
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+    - juicefs-meta:/data
+    networks:
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  juicefs-format:  # one-time FS format (idempotent); gateway waits on this
+    <<: *tier-data-hardened
+    image: juicedata/mount:ce-v1.3.0
+    profiles: ["juicefs"]
+    restart: "no"
+    depends_on:
+      juicefs-redis:
+        condition: service_healthy
+    entrypoint: ["sh", "-lc"]
+    command:
+    # No `|| true`: juicefs format is idempotent (re-run on a formatted FS exits 0),
+    # so a non-zero exit here is a REAL error and must fail the service_completed_successfully
+    # gate rather than releasing the gateway against an unformatted volume.
+    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
+    volumes:
+    - juicefs-data:/data
+    networks:
+    - pmoves_data
+
+  juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
+    <<: *tier-data-hardened
+    image: juicedata/mount:ce-v1.3.0
+    profiles: ["juicefs"]
+    restart: unless-stopped
+    depends_on:
+      juicefs-redis:
+        condition: service_healthy
+      juicefs-format:
+        condition: service_completed_successfully
+    environment:
+    # juicefs gateway uses the MinIO gateway code: these are the S3 access/secret keys.
+    - MINIO_ROOT_USER=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
+    - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
+    entrypoint: ["sh", "-lc"]
+    command:
+    - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
+    volumes:
+    - juicefs-data:/data
+    networks:
+    - pmoves_data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  juicefs-smoke:  # one-off S3 round-trip + multi-bucket test (profile juicefs-smoke; never auto-starts)
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    profiles: ["juicefs-smoke"]
+    depends_on:
+      juicefs-gateway:
+        condition: service_healthy
+    environment:
+    # Same credential chain as juicefs-gateway (no baked-in secret) so smoke auth always matches.
+    - MC_HOST_jfs=http://${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}:${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}@juicefs-gateway:9000
+    entrypoint: ["sh", "-lc"]
+    command:
+    - "set -e; mc mb -p jfs/assets jfs/outputs; printf 'hello-juicefs-2026' | mc pipe jfs/assets/smoke.txt; echo '--- GET ---'; mc cat jfs/assets/smoke.txt; echo; echo '--- multi-bucket list (assets+outputs => --multi-buckets works) ---'; mc ls jfs/"
+    networks:
+    - pmoves_data
+    restart: "no"
   hi-rag-gateway:
     <<: *tier-api-hardened
     build:
@@ -1412,7 +1541,7 @@ services:
     build: ./services/presign
     restart: unless-stopped
     environment:
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=false
     - AWS_DEFAULT_REGION=us-east-1
     - ALLOWED_BUCKETS=${ALLOWED_BUCKETS:-assets,outputs}
@@ -1477,13 +1606,13 @@ services:
   model-registry:
     <<: *tier-api-hardened
     build:
-      context: ./services/model-registry
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/model-registry/Dockerfile
     restart: unless-stopped
     environment:
     - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:?MODEL_REGISTRY requires SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1515,6 +1644,44 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  clap-embed:
+    <<: *tier-api-hardened
+    build:
+      context: ./services/clap-embed
+      dockerfile: Dockerfile
+    image: pmoves/clap-embed:latest
+    environment:
+      - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
+      - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
+      - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
+      - CLAP_EMBED_PORT=8108
+      - NATS_URL=${NATS_URL:-}
+      - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    ports:
+      - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - orchestration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8108/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   extract-worker:
     <<: *tier-worker-hardened
     build: ./services/extract-worker
@@ -1573,6 +1740,45 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  spark-shape-worker:
+    <<: *tier-worker-hardened
+    build: ./services/spark-shape-worker
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SPARK_SHAPE_SECRET=${SPARK_SHAPE_SECRET:-}
+    - MESH_PASSPHRASE=${MESH_PASSPHRASE:-}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; exit(0 if os.path.exists('/proc/1/cmdline') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   pdf-ingest:
     <<: *tier-worker-hardened
     build:
@@ -1581,13 +1787,13 @@ services:
     restart: unless-stopped
     environment:
     # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=false
     - PDF_DEFAULT_BUCKET=${PDF_DEFAULT_BUCKET:-assets}
     - PDF_DEFAULT_NAMESPACE=${PDF_DEFAULT_NAMESPACE:-pmoves}
     - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
     - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     depends_on:
       extract-worker:
         condition: service_started
@@ -1696,8 +1902,8 @@ services:
     - NO_PROXY=
     - SUPABASE_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - NATS_URL=${NATS_URL}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     depends_on:
       nats:
@@ -1733,7 +1939,7 @@ services:
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
     environment:
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
@@ -1785,7 +1991,7 @@ services:
     build: ./services/media-video
     restart: unless-stopped
     environment:
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
@@ -1823,7 +2029,7 @@ services:
     build: ./services/media-audio
     restart: unless-stopped
     environment:
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
@@ -1865,7 +2071,7 @@ services:
     restart: unless-stopped
     environment:
     # NATS_URL from env.tier-media has credentials: nats://nats:pmoves@nats:4222
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
@@ -1873,7 +2079,7 @@ services:
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - SUPA_REST_URL=${PMOVES_YT_SUPA_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - YT_NATS_ENABLE=${YT_NATS_ENABLE:-true}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     # Multi-client rotation (Phase 9C + 2026-04-21 robustness fix): yt-dlp tries
@@ -1896,6 +2102,9 @@ services:
     - YT_WHISPER_MODEL=${YT_WHISPER_MODEL:-small}
     - YT_TRANSCRIPT_DIARIZE=${YT_TRANSCRIPT_DIARIZE:-false}
     - YT_CHANNEL_CHECK_INTERVAL=${YT_CHANNEL_CHECK_INTERVAL:-3600}
+    - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+    - YT_SUMMARY_PROVIDER=${YT_SUMMARY_PROVIDER:-ollama}
+    - YT_SUMMARY_OLLAMA_MODEL=${YT_SUMMARY_OLLAMA_MODEL:-gemma2:9b-instruct}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1981,7 +2190,7 @@ services:
     - OPEN_NOTEBOOK_API_URL=${CHANNEL_MONITOR_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
     - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${SUPABASE_DB_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}}@supabase-db:5432/${CHANNEL_MONITOR_DB_NAME:-postgres}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -2310,9 +2519,9 @@ services:
     - -m
     - '8222'
     - --user
-    - ${NATS_USER:-nats}
+    - ${NATS_USER}
     - --pass
-    - ${NATS_PASSWORD:-pmoves}
+    - ${NATS_PASSWORD}
     restart: unless-stopped
     ports:
     # NATS is the mesh-wide event bus — credential-guarded (nats:pmoves@),
@@ -2320,7 +2529,13 @@ services:
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
     - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
     networks:
+    # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
+    # internal-only network gets NO published-port DNAT rules from Docker, so the
+    # ports above are recorded but never plumbed — Tailscale mesh peers can't reach
+    # 4222/9223 cross-node. Multi-home nats onto the non-internal pmoves_external so
+    # its published ports actually bind, while keeping pmoves_bus for in-stack comms.
     - pmoves_bus
+    - pmoves_external
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -2343,7 +2558,7 @@ services:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     volumes:
     - ./scripts/nats:/scripts:ro
     networks:
@@ -2375,7 +2590,7 @@ services:
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
-    - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
+    - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
     - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
     - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
@@ -2391,6 +2606,24 @@ services:
     # A2A protocol — Agent-to-Agent interoperability (AGNOTE4482 Item 2)
     - A2A_DISCOVERY_PUBLIC=${A2A_DISCOVERY_PUBLIC:-false}
     - A2A_TASKS_PUBLIC=${A2A_TASKS_PUBLIC:-false}
+    # PMOVES.Notes plugin (baked into the image at usr/plugins/pmoves_notes).
+    # Defaults match the plugin's own fallbacks; set explicitly so a token can be
+    # supplied and the plugin can be toggled off without rebuilding.
+    - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+    - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+    - PMOVES_NOTES_ENABLED=${PMOVES_NOTES_ENABLED:-true}
+    # Orchestrator MCP toolkit — Agent Zero is the primary orchestrator and acts
+    # as an MCP *client* to the PMOVES service mesh. A0 reads A0_SET_mcp_servers
+    # (standard {"mcpServers":{...}} schema) via get_default_value(). Servers:
+    #   docker          — full container control over the mounted socket (mcp/docker)
+    #   pmoves-supabase — self-hosted PostgREST data plane (pre-installed in image)
+    #   cipher          — Consciousness/CHIT persistent memory over SSE
+    # BoTZ-gateway (persona/forms) and Hi-RAG are added by their owning lanes once
+    # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
+    - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -2410,12 +2643,7 @@ services:
     - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_a2a_server_enabled=true
-    # A0_SET_mcp_server_token: intentionally NOT set here. Compose's `${MCP_SERVER_TOKEN:-}`
-    # expansion converts an unset host var to an empty string, which would override any value
-    # supplied via env_file (env.tier-agent / env.shared) and block Agent Zero's token
-    # auto-generation when the operator has not pinned a token. Operators who need to pin a
-    # specific token should set it in env.tier-agent (or pass it via env_file/--env-file),
-    # not via shell environment.
+    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:?MCP_SERVER_TOKEN must be set when a2a_server_enabled=true}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -2441,16 +2669,40 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
+    # Read-only: forms are introspective metadata; runtime never rewrites them.
+    - ./configs/agents/forms:/app/configs/agents/forms:ro
+    # Operator-state mount — env.shared into DARKXSIDE-AZ-5090.
+    # DARKXSIDE is the witness + co-creator identity layer; POWERFULMOVES (this
+    # org / brand / repo) emerges from it. rw is the correct default for
+    # operator-state surfaces — DARKXSIDE-AZ is the operator on this node, not
+    # a peripheral service requesting elevation. Constraints (if any) are
+    # operator self-discipline, not architecture.
+    # Override: set ENV_SHARED_MODE=ro in env.shared to harden on nodes where
+    # write access is not needed (e.g., read-only observer deployments).
+    - ./env.shared:/secrets/env.shared:${ENV_SHARED_MODE:-rw}
+    # Docker socket for the orchestrator's docker MCP (mcp/docker via
+    # A0_SET_mcp_servers). This grants Agent Zero full container control — an
+    # intentional posture for the primary orchestrator. Note: :ro on the socket
+    # is cosmetic (the Docker API is bidirectional regardless of file mode).
+    - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    # Grant the runtime user (uid/gid 65532) access to the mounted Docker socket
+    # (root:docker 0660 on Linux hosts) so the docker MCP (mcp/docker) can reach
+    # the daemon without weakening socket perms. DOCKER_GID must match the host's
+    # docker group gid; Docker Desktop (Win/Mac) proxies the socket and ignores it.
+    group_add:
+    - "${DOCKER_GID:-999}"
     networks:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Required for LLM provider APIs
+    - pmoves_api  # Reach supabase-kong (PostgREST) for the pmoves-supabase MCP
     deploy:
       resources:
         limits:
@@ -2485,7 +2737,7 @@ services:
     - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
       # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
       # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
@@ -2553,7 +2805,7 @@ services:
     - NEO4J_URI=bolt://neo4j:7687
     - NEO4J_USER=${NEO4J_USER:-neo4j}
     - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - OLLAMA_BASE_URL=http://pmoves-ollama:11434
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -2562,14 +2814,20 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
-    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8105}:3000"
+    # Default to localhost-only — cipher is now on pmoves_external (host-publishable),
+    # so a 0.0.0.0 default would expose the API/SSE on all interfaces with an empty
+    # CIPHER_API_TOKEN. Operators override CIPHER_BIND for intentional LAN exposure.
+    - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:3000"
     depends_on:
       neo4j:
         condition: service_healthy
       nats:
         condition: service_healthy
     profiles: ["agents"]
-    networks: [pmoves_app, pmoves_data, pmoves_bus]
+    # pmoves_external (non-internal) lets the host-side MCP client reach cipher's
+    # SSE on 127.0.0.1:8105 — pmoves_app/data/bus are internal:true and cannot
+    # publish host ports. CIPHER_BIND defaults to 127.0.0.1 (localhost-only inbound).
+    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
       interval: 30s
@@ -2610,7 +2868,7 @@ services:
     build: ./services/botz-gateway
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -2652,11 +2910,11 @@ services:
     hostname: github-branch-cleanup
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SERVICE_PORT=8100
     - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
     - DRY_RUN=${DRY_RUN:-true}
-    - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-Hardened,release-*}
+    - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-v1.13,release-*}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - GH_APP_ID=${GH_APP_ID:-}
     - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
@@ -2694,7 +2952,7 @@ services:
     hostname: github-issue-triage
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SERVICE_PORT=8101
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
@@ -2728,6 +2986,23 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+  notebooklm-agent:
+    build:
+      context: ./services/notebooklm-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_external]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro
     build: ./services/a2ui-nats-bridge
@@ -2736,7 +3011,7 @@ services:
     hostname: a2ui-nats-bridge
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
@@ -2776,7 +3051,7 @@ services:
     image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
     - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
@@ -2824,7 +3099,7 @@ services:
     restart: unless-stopped
     environment:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
@@ -2855,7 +3130,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
     depends_on:
     - nats
@@ -2882,7 +3157,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
     depends_on:
     - nats
@@ -2909,7 +3184,7 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on:
@@ -3161,7 +3436,7 @@ services:
     - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
     - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
@@ -3253,7 +3528,7 @@ services:
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
     - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
     - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
@@ -3294,7 +3569,7 @@ services:
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
-    profiles: ["gpu", "tts"]
+    profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
       resources:
@@ -3324,10 +3599,21 @@ services:
     environment:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
     - PORT=8055
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-    - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+    # Default TTS = OmniVoice (k2-fsa, Apache-2.0; license-clean creator-pipeline
+    # voice). Overridable: DEFAULT_VOICE_PROVIDER=vibevoice restores z890's lane.
+    - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-omnivoice}
+    # OmniVoice server (creator-operator omnivoice.compose.yml, :8002). On a
+    # shared host bring OmniVoice up with OMNIVOICE_BIND=0.0.0.0 so this container
+    # reaches it via host.docker.internal; set OMNIVOICE_TOKEN once 0.0.0.0-bound.
+    - OMNIVOICE_URL=${OMNIVOICE_URL:-http://host.docker.internal:8002}
+    - OMNIVOICE_TOKEN=${OMNIVOICE_TOKEN:-}
+    - OMNIVOICE_TIMEOUT_SEC=${OMNIVOICE_TIMEOUT_SEC:-300}
+    # Realtime duplex voice agent (/v1/voice/agent: mic→Whisper→LLM→VibeVoice).
+    # Off by default — requires pipecat-ai installed + VibeVoice (7860) running.
+    - PIPECAT_ENABLED=${PIPECAT_ENABLED:-false}
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
     - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
     - FLUTE_API_KEY=${FLUTE_API_KEY:-}
@@ -3382,7 +3668,7 @@ services:
     - TOKENISM_PORT=${TOKENISM_PORT:-8100}
     - FLASK_ENV=${FLASK_ENV:-production}
     - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_CLIENT_NAME=tokenism-simulator
     - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -3432,7 +3718,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
+  # Consciousness Service - CHR Algorithm & CGP Generation (port 8106)
     deploy:
       resources:
         limits:
@@ -3448,7 +3734,7 @@ services:
     environment:
     - SERVICE_NAME=consciousness-service
     - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8106}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
@@ -3483,10 +3769,10 @@ services:
     - PORT=8060
     - FLUTE_GATEWAY_URL=http://flute-gateway:8055
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
     - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
-    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
@@ -3526,7 +3812,7 @@ services:
     <<: *tier-worker-hardened
     environment:
     - PORT=8121
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
     - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
     ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
@@ -3625,7 +3911,7 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8100
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
     ports:
     - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
@@ -3655,16 +3941,16 @@ services:
     restart: unless-stopped
     environment:
       # Database configuration
-    - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-changeme}@wger-db:5432/wger
+    - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:?set WGER_DB_PASSWORD in env.tier-data}@wger-db:5432/wger
       # Django configuration
     - DJANGO_ALLOWED_HOSTS=*
-    - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:-changeme}
+    - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:?set WGER_SECRET_KEY in env.tier-api}
     - WGER_ENABLE_REGISTRATION=${WGER_ENABLE_REGISTRATION:-true}
       # NATS configuration for event publishing
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - WGER_ENABLE_NATS=${WGER_ENABLE_NATS:-true}
       # Admin credentials
-    - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:-changeme}
+    - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:?set WGER_ADMIN_PASSWORD in env.tier-api}
       # PMOVES integration
     - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
     - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
@@ -3703,7 +3989,7 @@ services:
     environment:
     - POSTGRES_DB=wger
     - POSTGRES_USER=wger
-    - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:-changeme}
+    - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:?set WGER_DB_PASSWORD in env.tier-data}
     - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
     - wger-db:/var/lib/postgresql/data
@@ -3731,11 +4017,11 @@ services:
     <<: *tier-worker-hardened
     environment:
       # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
-    - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
+    - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-${S3_PUBLIC_BASE_URL:-http://${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}}}
     - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
     depends_on:
       nats:
@@ -3779,7 +4065,7 @@ services:
     profiles: ["agents"]
     networks: [pmoves_api, pmoves_app, pmoves_bus]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8111/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${GATEWAY_AGENT_PORT:-8111}/healthz', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -3797,7 +4083,7 @@ services:
     <<: *tier-agent-hardened-rw
     environment:
     - PORT=8104
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - GITHUB_PAT=${GITHUB_PAT:-}
     - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
     - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
@@ -3854,8 +4140,9 @@ services:
           cpus: '2.0'
           memory: 4G
   invidious-companion:
-    # Quay tags churn; default to latest unless explicitly pinned via env.
-    image: ${INVIDIOUS_COMPANION_IMAGE:-quay.io/invidious/invidious-companion:latest}
+    # F-07: pinned by digest for reproducible/supply-chain-safe default.
+    # Override INVIDIOUS_COMPANION_IMAGE (e.g. ...:latest) to track newer builds.
+    image: ${INVIDIOUS_COMPANION_IMAGE:-quay.io/invidious/invidious-companion@sha256:4dbe5c51811cf049ceeb690fe39040896734acce9c0dd7344519d6e2b4345c0b}
     restart: unless-stopped
     env_file:
     - env.shared
@@ -3893,8 +4180,9 @@ services:
           cpus: '1.0'
           memory: 512M
   invidious:
-    # Quay tags churn; default to latest unless explicitly pinned via env.
-    image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious:latest}
+    # F-07: pinned by digest for reproducible/supply-chain-safe default.
+    # Override INVIDIOUS_IMAGE (e.g. ...:latest) to track newer builds.
+    image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious@sha256:9d972ea5930c2e170b3c4d49bdd9fa09bf03f077d555f58747342062dffc5876}
     restart: unless-stopped
     env_file:
     - env.shared
@@ -3965,7 +4253,10 @@ services:
           cpus: '1.0'
           memory: 512M
   grayjay-server:
-    image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
+    # F-07: env-overridable so it can be pinned at deploy (previously a hard :latest).
+    # TODO: pin default by digest — FUTO registry (registry.gitlab.futo.org) was
+    # unreachable from the authoring node, so digest could not be resolved here.
+    image: ${GRAYJAY_IMAGE:-registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest}
     restart: unless-stopped
     env_file:
     - env.shared.generated
@@ -4075,7 +4366,7 @@ services:
     - LLAMA_MODEL_PATH=/models/${LLAMA_MODEL:-model.gguf}
     - LLAMA_SERVER_HOST=127.0.0.1
     - LLAMA_RESULTS_DIR=/results
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8105}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
@@ -4123,7 +4414,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8102
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
@@ -4162,7 +4453,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8103
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
@@ -4203,7 +4494,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8104
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
@@ -4240,6 +4531,8 @@ volumes:
   qdrant-data: {}
   meilisearch-data: {}
   minio-data: {}
+  juicefs-meta: {}   # JuiceFS metadata engine (Redis) persistence (profile: juicefs)
+  juicefs-data: {}   # JuiceFS object-store backend (profile: juicefs)
   # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}
   # 2025 Supabase integrated volumes
@@ -4271,6 +4564,18 @@ networks:
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
+  # Non-internal bridge for services that expose host-facing ports.
+  # Kong proxy/admin and PostgREST REST port attach here; the services still
+  # default to 127.0.0.1 host binds for safer standalone operation.
+  pmoves_public:
+    name: pmoves_public
+    driver: bridge
+    internal: false
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.7.0/24
+        gateway: 172.30.7.1
   pmoves_api:
     name: pmoves_api
     driver: bridge
@@ -4315,12 +4620,11 @@ networks:
   cataclysm:
     external: true
     name: cataclysm-net
-  # External network for services requiring internet access (YouTube API, LLM providers, etc.)
+  # External network for services requiring internet access (YouTube API, LLM providers, etc.).
+  # Declared external because it is SHARED across stacks (the overlay/NATS stack multi-homes
+  # nats here too) — a compose-managed network can't be adopted by a second stack (the other
+  # stack sees an unlabeled "foreign" net → "incorrect label" error). Created out-of-band by
+  # clean_networks.py (make-target paths) or an inline guard (raw CI deploy paths).
   pmoves_external:
+    external: true
     name: pmoves_external
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.30.6.0/24
-        gateway: 172.30.6.1

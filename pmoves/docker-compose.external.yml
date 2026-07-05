@@ -75,6 +75,9 @@ services:
       - /var/www/html/storage/framework/sessions:noexec,nosuid
       - /var/www/html/storage/framework/views:noexec,nosuid
       - /var/www/html/storage/framework/cache:noexec,nosuid
+    # Health check — Firefly III is upstream Laravel with no /healthz endpoint.
+    # Probe the /api/v1/about route (Firefly-specific health indicator).
+    # Matches the Archon/agent-zero blackbox pattern for upstream services.
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/v1/about || exit 1"]
       interval: 30s
@@ -118,7 +121,7 @@ services:
 
   open-notebook-ext:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
-    # Default points at the PMOVES.AI-Edition-Hardened fork image (matches
+    # Default points at the PMOVES.AI-Edition-v1.13 fork image (matches
     # docker-compose.open-notebook.yml). The `*-ext` suffix here indicates the
     # sidecar SurrealDB topology; still the same hardened fork image underneath.
     depends_on:

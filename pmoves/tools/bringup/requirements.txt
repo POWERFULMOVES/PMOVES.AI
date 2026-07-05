@@ -1,0 +1,23 @@
+# PMOVES.AI Bringup Toolchain — Python deps
+# ============================================================================
+# Installed into `pmoves/.venv-pmoves/` when `INCLUDE_BRINGUP=1` is set on
+# `pmoves/scripts/create_venv.sh` (or invoked via `make -C pmoves venv-bringup`).
+#
+# These are operator-facing CLI tools used during node bringup, validation, and
+# topology evidence capture. Mirror of how `INCLUDE_DOCS=1` adds docs/** deps.
+#
+# Non-Python prerequisites (jq, make, curl, git) are checked separately by
+# pmoves/scripts/check_prereqs.sh — they remain system binaries.
+#
+# Updated: 2026-05-15 (Wave 0.6 doc-audit + topology validation)
+
+# Glances — cross-platform system monitor; underpins deploy/provision/glances-autodetect.{sh,ps1}
+# Stable JSON API; used to populate pmoves/configs/node_profiles/*.json.
+glances>=4.5.0,<5.0
+
+# psutil — Glances dep; explicit pin so `bringup` and `lite` stay coherent.
+psutil>=5.9.8
+
+# PyYAML — autodetect script emits YAML profile.yaml on Z890 distro post-install;
+# we may parse it back during topology validation.
+PyYAML>=6.0

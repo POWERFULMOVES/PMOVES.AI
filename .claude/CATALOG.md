@@ -33,7 +33,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
 
-**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). API: `POST /api/memory`, `GET /api/memory/search?q=...`. Health: `GET /health`. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
+**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). Live surface: MCP over SSE at `/sse` (Express route `src/app/mcp/mcp_sse_server.ts`; matches `.claude/mcp.json`) + streamable-http at `/http`; health `GET /health` / `/healthz`. **Auth (submodule ed701ca):** all routes require `Authorization: Bearer <token>` EXCEPT the public paths `/health`, `/healthz`, `/.well-known/` — so `/sse` is not anonymously reachable. NOTE: the `/api/memory` + `/api/memory/search` REST paths previously documented do **not exist** (no such route in Cipher submodule source) — use the MCP tools over `/sse`, not a REST API. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
 
 ## Retrieval & Knowledge Services
 
@@ -46,6 +46,10 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 **SupaSerch** `:8099` — Multimodal holographic deep research orchestrator. Coordinates DeepResearch + Archon/Agent Zero MCP. NATS: `supaserch.request.v1` / `supaserch.result.v1`. Metrics: `GET /metrics`.
 
 **Open Notebook** (external, SurrealDB) — Accessed via `$OPEN_NOTEBOOK_API_URL` + token.
+
+**clap-embed** `:8108` — Deterministic CLAP audio/text embedder (MOF lattice node, `laion/larger_clap_music`). `POST /embed/audio`, `POST /embed/text`, `GET /healthz`, `GET /metrics`. Optional NATS `audio.embed.request.v1`/`audio.embed.result.v1`. WS-A grounding layer.
+
+**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.**
 
 ## Voice & Speech
 
@@ -90,7 +94,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 ## Data Storage
 
-**NATS** `:4222`, `:9222` WS (standalone DoX), `:9223` WS (docked via compose) — JetStream event broker. **Always authenticated:** `nats://nats:pmoves@nats:4222`. Subject catalog: `.claude/context/nats-subjects.md`.
+**NATS** `:4222`, `:9223` WS (standalone DoX), `:9222` WS (docked via parent compose) — JetStream event broker. **Always authenticated:** `nats://${NATS_USER}:${NATS_PASS}@localhost:4222` (set via `${NATS_URL}` env var in `env.tier-*`). Subject catalog: `.claude/context/nats-subjects.md`.
 
 **Supabase** — 13-service self-hosted stack (profile `supabase-local`). Kong `:8000`, PostgREST `:3000`, Studio `:54323`. Canonical consumer URL: `http://supabase-kong:8000/rest/v1`. Standard vars: `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` (`SUPABASE_*` aliases for compat). Services: DB (Postgres 17.6.1), GoTrue, PostgREST v14.3, Kong 3.7.1, Realtime v2.72.0, Storage v1.37.1, Studio, imgproxy, pg-meta, Edge Functions, Analytics (Logflare), Vector, Supavisor.
 
@@ -102,12 +106,39 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **MinIO** `:9000` API, `:9001` Console — S3-compatible. Buckets: `assets`, `outputs`.
 
+## Hostinger KVM Fleet
+
+Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOPOLOGY.md` lines 20–22, 135–180, 240–243, 258 for the canonical source):
+
+| Host | Tailscale name | Role | Key services | Hub flag |
+|------|---------------|------|--------------|----------|
+| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086` (⚠ NOT currently deployed — :8086 down / no container, verified 2026-07-04), Archon `:8091`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
+| `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, DNS `nats.pmoves.ai`)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
+| `pmoves-kvm2` | `pmoves-kvm2` | Reverse proxy + relay | nginx `:80/443` (SSL termination), RustDesk `hbbs/hbbr` (rendezvous + relay) | — |
+
+**NATS hub addressing**: `nats://${NATS_USER}:${NATS_PASS}@pmoves-kvm4-2:4222` (Tailscale-internal, set via `${NATS_URL}`). All nodes (5090, 4090, SPARK, B850, Z890) connect here for cross-node fan-out. Local-node NATS instances (e.g. `pmoves-nats-1` on 5090) are NOT leafnoded to the hub by default — for fleet signal dispatch use either an MCP that points at the hub URL or SSH to KVM4-2 then `docker exec ... nats pub`.
+
+**SSH addressing (fallback path)**: `${HOSTINGER_KVM4_N_USER:-root}@${HOSTINGER_KVM4_N_IP:-pmoves-kvm4-N}` per `deploy/scripts/deploy-vps.sh:38`. Key at `$PMOVES_SECRETS_DIR/hostinger_vps` (fallback `$LOCALAPPDATA/Temp/hostinger_vps`).
+
+## MCP Servers — declared in `.claude/mcp.json`
+
+| Server | Transport | Required env | Source path | Notes |
+|--------|-----------|--------------|-------------|-------|
+| `pmoves-cipher` | SSE `localhost:8105/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
+| `pmoves-nats-fleet` | stdio | `NATS_URL` (declared inline) | `pmoves-nats-mcp/nats_mcp/server.py` | Publishes/subscribes to the fleet hub at KVM4-2. No env.shared dependency. |
+| `docker` | stdio (image `mcp/docker`) | none | Docker socket | Container inspect/exec on the local Docker daemon |
+| `hostinger-mcp` | stdio (npm pkg `hostinger-api-mcp@0.2.1`) | `HOSTINGER_API_KEY` | npm package | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |
+| `tailscale` | stdio (npm pkg `tailscale-mcp@2026.4.10-1`) | `TAILSCALE_API_KEY`, `TAILSCALE_TAILNET` | npm package | No-op until env populated. Tailnet inventory, ACL audit, stale-node sweep |
+
+**Secrets pipeline (canonical)** — never paste API keys in chat. Set in `pmoves/env.tier-api` (or per-tier file), run `make -C pmoves secrets-funnel`, restart the consuming container or Claude Code session. The env.shared multi-line value rule applies: keep secrets single-line escaped or behind `_PATH` references; multi-line bodies break dotenv parsing.
+
 ## Integration Rule — Leverage, Don't Duplicate
 
 - **DO** use Hi-RAG v2 for knowledge retrieval
-- **DO** publish to NATS for event coordination
+- **DO** publish to NATS for event coordination (via `pmoves-nats-fleet` MCP, `make -C pmoves nats-pub`, or AZ `/mcp/execute`)
 - **DO** store artifacts in MinIO via Presign
 - **DO** call Agent Zero MCP API for orchestration
 - **DON'T** build new RAG, search, or monitoring systems
 - **DON'T** create new event buses or message brokers
 - **DON'T** duplicate existing embeddings or indexing
+- **DON'T** paste API keys / secrets in chat — secrets flow through env.tier-* → `make secrets-funnel`

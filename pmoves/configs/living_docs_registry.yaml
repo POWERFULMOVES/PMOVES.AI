@@ -54,6 +54,34 @@ tracked:
     freshness_days: 3
     severity: P1
     description: "Active claim register — Village Rule coordination, fastest-moving doc"
+  - path: pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md
+    freshness_days: 30
+    severity: P1
+    description: "Sign-off checklist — release/governance gate; verified by .claude/hooks/governance/signoff-gate.sh"
+  - path: pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md
+    freshness_days: 30
+    severity: P1
+    description: "Wave roadmap W1-W5 — operational milestones cited from SITREP"
+  - path: pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md
+    freshness_days: 14
+    severity: P1
+    description: "Per-service CHIT integration tier (Full/Partial/None) — high-velocity"
+  - path: pmoves/docs/AGENTS/AGNOTE4482.BEATS.md
+    freshness_days: 60
+    severity: P2
+    description: "BPM encoding + prosodic bridge spec (referenced by W6 Convergence)"
+  - path: pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md
+    freshness_days: 60
+    severity: P2
+    description: "FlOO$ skill pairings spec (ToKenism bridge)"
+  - path: pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md
+    freshness_days: 90
+    severity: INFO
+    description: "Multi-agent collision protocol — stable, slow-changing"
+  - path: pmoves/docs/AGENTS/KRISS_KROSS_ACK.md
+    freshness_days: 90
+    severity: INFO
+    description: "KRISS-KROSS ratification witness — stable, slow-changing"
 
   # ── Navigable index (front-and-center entry point) ─────────────────────
   - path: LIVING_DOCS_INDEX.md

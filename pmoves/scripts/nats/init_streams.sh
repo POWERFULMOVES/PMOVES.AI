@@ -8,6 +8,13 @@
 #   GEOMETRY_CGP           geometry.>    limits   30d  1GB
 #   TOKENISM_ATTRIBUTION   tokenism.>    interest 90d  2GB
 #   BOTZ_COORDINATION      botz.>        limits   7d   500MB
+#   MESH_GPU               mesh.gpu.>    limits   7d   1GB   (DGX Spark GB10 GPU mesh)
+#   CONTENT_PROVENANCE     content.>     interest 90d  2GB   (SPARK shaped packets / provenance)
+#
+# NOTE: The catch-all MESH_GPU and CONTENT_PROVENANCE streams supersede the
+# reference-only YAMLs in pmoves/nats/mesh_gpu_streams.yaml and
+# pmoves/nats/content_provenance_streams.yaml. No service currently creates
+# those granular streams; this script is the canonical creator.
 
 set -u
 # Note: set -e intentionally omitted — add_stream returns non-zero on real
@@ -83,6 +90,28 @@ add_stream BOTZ_COORDINATION \
   --retention limits \
   --max-age 168h \
   --max-bytes 524288000 \
+  --discard old \
+  --replicas 1
+
+# ---------- MESH_GPU (DGX Spark GB10 GPU mesh) ----------
+add_stream MESH_GPU \
+  --subjects "mesh.gpu.>" \
+  --storage file \
+  --retention limits \
+  --max-age 168h \
+  --max-bytes 1073741824 \
+  --discard old \
+  --replicas 1
+
+# ---------- CONTENT_PROVENANCE (SPARK shaped packets / provenance) ----------
+# Use limits retention so early content.* messages are not discarded before
+# the durable consumers from the reference topology are attached.
+add_stream CONTENT_PROVENANCE \
+  --subjects "content.>" \
+  --storage file \
+  --retention limits \
+  --max-age 2160h \
+  --max-bytes 2147483648 \
   --discard old \
   --replicas 1
 

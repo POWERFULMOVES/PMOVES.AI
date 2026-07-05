@@ -161,6 +161,39 @@ include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
 include mk/yt-cookies.mk
+include mk/mcp-toolkit.mk
+include mk/mcp-toolkit-4090.mk
+include mk/mcp-toolkit-spark.mk
+include mk/unsloth.mk
+
+# ----------------------------------------------------------------------------
+# venv + bringup-toolchain prereqs
+# ----------------------------------------------------------------------------
+# pmoves/.venv-pmoves/ hosts the canonical Python toolchain. `venv` creates it
+# with service+tool requirements only. `venv-bringup` adds the operator-facing
+# bringup toolchain (glances, telemetry helpers) and gates on the non-Python
+# prereqs check (jq, make, curl, git, python3).
+#
+# This is the prereq layer the user named on 2026-05-15: glances + bringup
+# binaries are NOT system-wide installs — they live under the venv. Non-Python
+# binaries (make, jq) stay as system binaries, but check_prereqs.sh surfaces
+# any gaps with platform-specific install hints.
+
+.PHONY: check-prereqs
+check-prereqs: ## Verify system binaries required for bringup (jq, make, curl, git, python3)
+	@bash scripts/check_prereqs.sh
+
+.PHONY: venv
+venv: ## Create pmoves/.venv-pmoves and install service + tool requirements
+	@bash scripts/create_venv.sh
+
+.PHONY: venv-bringup
+venv-bringup: check-prereqs ## Bringup-ready venv: service+tool deps PLUS glances/telemetry toolchain
+	@INCLUDE_BRINGUP=1 bash scripts/create_venv.sh
+	@echo
+	@echo "✅ Bringup venv ready at pmoves/.venv-pmoves/"
+	@echo "   Glances: $$(./.venv-pmoves/bin/glances --version 2>&1 | head -1 || echo 'NOT FOUND')"
+	@echo "   Activate: source pmoves/.venv-pmoves/bin/activate"
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
@@ -211,6 +244,33 @@ up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
 up-bots: ## Start bot services (BotZ gateway)
 	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway
 	@echo "✔ Bots up (botz-gateway)."
+
+# --- JuiceFS object-store PoC (replaces EOL MinIO; see docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md) ---
+# Scoped to base+juicefs overlays ONLY (not the monolith $(DC)): a full-monolith
+# `compose up` interpolates EVERY service's env, so unrelated ${VAR:?} guards
+# (e.g. hi-rag-gpu's CHIT_PROD_PASSPHRASE) would fail. Docker profiles gate START,
+# not PARSE — so isolation requires a separate file set, not just --profile.
+JUICEFS_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.base.yml -f docker-compose.juicefs.yml
+.PHONY: up-juicefs down-juicefs juicefs-status
+up-juicefs: ensure-env-shared bootstrap-tier-envs ## Start the JuiceFS PoC: redis metadata + one-time format + S3 gateway (base+juicefs overlays)
+	@$(JUICEFS_DC) --profile juicefs up -d juicefs-redis juicefs-format juicefs-gateway
+	@echo "✔ JuiceFS PoC started (base+juicefs overlays — no monolith secrets needed)."
+	@echo "  S3 endpoint: juicefs-gateway:9000 (drop-in for minio:9000)."
+	@echo "  Creds: JUICEFS_S3_USER/PASSWORD (fallback MINIO_USER/PASSWORD — run 'make brand-defaults' if unset)."
+	@echo "  Check:  make juicefs-status   |   Stop: make down-juicefs"
+
+down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-meta/juicefs-data volumes preserved)
+	@$(JUICEFS_DC) --profile juicefs stop juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
+	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
+	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-meta $(PROJECT)_juicefs-data)."
+
+juicefs-smoke: ## S3 round-trip + multi-bucket smoke test against a running gateway (needs: make up-juicefs)
+	@$(JUICEFS_DC) --profile juicefs --profile juicefs-smoke run --rm juicefs-smoke
+
+juicefs-status: ## Show JuiceFS PoC container state + gateway health
+	@$(JUICEFS_DC) --profile juicefs ps juicefs-redis juicefs-format juicefs-gateway
+	@echo "--- gateway health probe ---"
+	@$(JUICEFS_DC) --profile juicefs exec -T juicefs-gateway sh -lc 'curl -fsS http://localhost:9000/minio/health/live && echo " GATEWAY S3 HEALTHY"' 2>/dev/null || echo "gateway not healthy yet (give it ~15s after up; check 'make juicefs-status')"
 
 # =============================================================================
 # CLAWZ (OpenClaw) — Standalone submodule with own docker-compose.yml
@@ -366,7 +426,7 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
 			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
 		$(MAKE) --no-print-directory supa-bootstrap-db; \
-		$(DC) up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
+		$(DC) --profile supabase-local up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
 	@$(MAKE) --no-print-directory supa-collation-refresh 2>/dev/null || true
@@ -391,6 +451,12 @@ supa-restart: ## Restart Supabase stack for selected runtime
 	@$(MAKE) --no-print-directory supa-stop
 	@sleep 2
 	@$(MAKE) --no-print-directory supa-start
+
+.PHONY: pooler-recreate
+pooler-recreate: ## Force-recreate supabase-pooler container to pick up env file changes (non-disruptive)
+	@echo "→ Force-recreating supabase-pooler with current env..."
+	@$(DC) --profile supabase-local up -d --force-recreate supabase-pooler
+	@echo "✓ pooler recreated — give it 30s for health check"
 
 supa-status: ## Show Supabase status for selected runtime and export env snapshot when available
 	@echo "🔍 Supabase status (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME)):"
@@ -549,6 +615,18 @@ supa-use-remote: ## Write .env.local from remote Supabase template (fill remote 
 	@rm -f env.supa.runtime
 	@echo "✅ .env.local updated for remote Supabase runtime template"
 
+.PHONY: db-apply-migration
+db-apply-migration: ## Known Road: mirror a versioned db/v5_*.sql into the ledgered supabase/migrations/ path. Usage: make db-apply-migration SRC=db/v5_16_voice_catalog.sql DST=20260628000000_voice_catalog.sql
+	@test -n "$(SRC)" || { echo "❌ SRC required (e.g. db/v5_16_voice_catalog.sql)"; exit 1; }
+	@test -n "$(DST)" || { echo "❌ DST required (e.g. 20260628000000_voice_catalog.sql)"; exit 1; }
+	@case "$(SRC)" in db/v5_*.sql) : ;; *) echo "❌ SRC must be a versioned db/v5_*.sql source-of-truth"; exit 1 ;; esac
+	@case "$(DST)" in */*) echo "❌ DST must be a bare filename, not a path"; exit 1 ;; esac
+	@case "$(DST)" in *.sql) : ;; *) echo "❌ DST must end in .sql"; exit 1 ;; esac
+	@test -f "$(SRC)" || { echo "❌ SRC not found: $(SRC)"; exit 1; }
+	@test ! -e "supabase/migrations/$(DST)" || { echo "❌ refusing to overwrite existing supabase/migrations/$(DST)"; exit 1; }
+	@cp "$(SRC)" "supabase/migrations/$(DST)"
+	@cmp -s "$(SRC)" "supabase/migrations/$(DST)" && echo "✅ mirrored $(SRC) -> supabase/migrations/$(DST) (verbatim)" || { echo "❌ verbatim copy verification failed"; exit 1; }
+
 supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase DB container
 	@echo "🗄️ Applying Supabase migrations..."
 	@if [ ! -d "supabase/migrations" ]; then \
@@ -573,18 +651,18 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 	@set -euo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			[ -f "$$migration" ] || continue; \
 			name=$$(basename "$$migration"); \
-			applied=$$(docker exec -i "$$db" psql -U postgres -d postgres -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
 			if [ "$$applied" = "1" ]; then \
 				echo "   Skipping migration (already applied): $$name"; \
 				continue; \
 			fi; \; echo "   Applying migration: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$migration"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$migration"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	else \
 		echo "   ⚠️  No migrations directory found"; \
@@ -593,18 +671,62 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			[ -f "$$seed" ] || continue; \
 			name=$$(basename "$$seed"); \
-			applied=$$(docker exec -i "$$db" psql -U postgres -d postgres -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
 			if [ "$$applied" = "1" ]; then \
 				echo "   Skipping seed (already applied): $$name"; \
 				continue; \
 			fi; \; echo "   Applying seed: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$seed"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$seed"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	else \
 		echo "   ⚠️  No initdb directory found"; \
 	fi
 	@echo "✅ Supabase bootstrap complete"
+
+.PHONY: supabase-bootstrap-no-start
+supabase-bootstrap-no-start: ## Apply migrations+seeds against already-running DB (skips supa-start; uses SUPABASE_DB_USER)
+	@echo "🗄️ Applying Supabase schema + seeds (no-start mode)..."
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found — start it first"; exit 1; fi; \
+	pg_user=$$(docker exec "$$db" sh -c 'echo $${POSTGRES_USER:-postgres}'); \
+	echo "   DB container: $$db | pg_user: $$pg_user"; \
+	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d ${POSTGRES_DB:-pmoves} "$$@"; }; \
+	_psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	if [ -d "supabase/migrations" ]; then \
+		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$migration" ] || continue; \
+			name=$$(basename "$$migration"); \
+			applied=$$(_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   SKIP (applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   APPLY: $$name"; \
+			_psql < "$$migration" && \
+			_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind,filename) VALUES('migration','$$name') ON CONFLICT DO NOTHING;" || \
+			echo "   WARN: $$name failed — continuing"; \
+		done; \
+	fi; \
+	if [ -d "supabase/initdb" ]; then \
+		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$seed" ] || continue; \
+			name=$$(basename "$$seed"); \
+			applied=$$(_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   SKIP (applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   APPLY seed: $$name"; \
+			_psql < "$$seed" && \
+			_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind,filename) VALUES('seed','$$name') ON CONFLICT DO NOTHING;" || \
+			echo "   WARN: seed $$name failed — continuing"; \
+		done; \
+	else \
+		echo "   ⚠️  No initdb directory found"; \
+	fi
+	@echo "✅ Supabase bootstrap (no-start) complete"
 
 supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in bootstrap history (no SQL execution)
 	@echo "📝 Marking migrations/seeds as applied in public.pmoves_bootstrap_history..."
@@ -612,17 +734,17 @@ supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in 
 	@set -euo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			name=$$(basename "$$migration"); \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	fi; \
 	if [ -d "supabase/initdb" ]; then \
 		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			name=$$(basename "$$seed"); \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	fi
 	@echo "✅ Bootstrap history updated"
@@ -885,6 +1007,23 @@ up-bus: ## Start message bus (NATS)
 	@$(DC) up -d nats
 	@timeout 30 bash -c 'until docker exec pmoves-nats-1 nc -z localhost 4222 2>/dev/null; do sleep 1; done' || echo "⚠️ NATS may still be starting"
 	@echo "✅ NATS ready"
+
+NATS_BOX_IMAGE ?= natsio/nats-box:0.14.5
+NATS_DOCKER_NETWORK ?= pmoves_bus
+
+.PHONY: nats-pub
+nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Road — run on the NATS node)
+## Usage: make nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark"}'
+## From a remote node: connect to nats://nats:pmoves@pmoves-kvm4-2:4222 via Tailscale hostname
+	@test -n "$(SUBJECT)" || (echo "ERROR: SUBJECT is required" && exit 1)
+	@test -n "$(PAYLOAD)" || (echo "ERROR: PAYLOAD is required" && exit 1)
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$(SUBJECT)" '$(PAYLOAD)'
+
+.PHONY: nats-agent-inbox
+nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
+	@bash -lc '. ./scripts/with-env.sh; exec uv run --script tools/nats_agent_inbox.py'
 
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
@@ -1385,6 +1524,74 @@ bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened br
 		echo "✓ All tier env files already exist."; \
 	fi
 
+.PHONY: tier-data-patch-missing
+tier-data-patch-missing: ## Append compose-required keys missing from env.tier-data (idempotent)
+	@if [ ! -f env.tier-data ]; then echo "env.tier-data not found"; exit 1; fi; \
+	changed=0; \
+	for key in QDRANT__API_KEY NEO4J_PASSWORD; do \
+		if ! grep -q "^$$key=" env.tier-data 2>/dev/null; then \
+			val=$$(openssl rand -hex 32); \
+			echo "$$key=$$val" >> env.tier-data; \
+			echo "→ Appended $$key to env.tier-data"; \
+			changed=1; \
+		fi; \
+	done; \
+	if ! grep -q "^MINIO_USER=" env.tier-data 2>/dev/null; then \
+		echo "MINIO_USER=minioadmin" >> env.tier-data; \
+		echo "→ Appended MINIO_USER to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if ! grep -q "^MINIO_PASSWORD=" env.tier-data 2>/dev/null; then \
+		val=$$(openssl rand -base64 24 | tr -d '\n='); \
+		echo "MINIO_PASSWORD=$$val" >> env.tier-data; \
+		echo "→ Appended MINIO_PASSWORD to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if ! grep -q "^WGER_DB_PASSWORD=" env.tier-data 2>/dev/null; then \
+		val=$$(openssl rand -base64 24 | tr -d '\n='); \
+		echo "WGER_DB_PASSWORD=$$val" >> env.tier-data; \
+		echo "→ Appended WGER_DB_PASSWORD to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-data already has all required keys"; fi
+
+.PHONY: tier-api-patch-missing
+tier-api-patch-missing: ## Append compose-required keys missing from env.tier-api (idempotent)
+	@if [ ! -f env.tier-api ]; then echo "env.tier-api not found"; exit 1; fi; \
+	changed=0; \
+	for key in WGER_SECRET_KEY WGER_ADMIN_PASSWORD MCP_SERVER_TOKEN; do \
+		if ! grep -q "^$$key=" env.tier-api 2>/dev/null; then \
+			val=$$(openssl rand -base64 32 | tr -d '\n='); \
+			echo "$$key=$$val" >> env.tier-api; \
+			echo "→ Appended $$key to env.tier-api"; \
+			changed=1; \
+		fi; \
+	done; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-api already has all required keys"; fi
+
+.PHONY: tier-supabase-patch-missing
+tier-supabase-patch-missing: ## Append/fix compose-required keys in env.tier-supabase (idempotent)
+	@if [ ! -f env.tier-supabase ]; then echo "env.tier-supabase not found"; exit 1; fi; \
+	changed=0; \
+	for key in SECRET_KEY_BASE LOGFLARE_PUBLIC_ACCESS_TOKEN LOGFLARE_PRIVATE_ACCESS_TOKEN; do \
+		if ! grep -q "^$$key=" env.tier-supabase 2>/dev/null; then \
+			val=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64); \
+			echo "$$key=$$val" >> env.tier-supabase; \
+			echo "→ Appended $$key to env.tier-supabase"; \
+			changed=1; \
+		fi; \
+	done; \
+	_vault_val=$$(grep "^VAULT_ENC_KEY=" env.tier-supabase 2>/dev/null | cut -d= -f2-); \
+	if [ -z "$$_vault_val" ]; then \
+		echo "VAULT_ENC_KEY=$$(openssl rand -hex 16)" >> env.tier-supabase; \
+		echo "→ Appended VAULT_ENC_KEY (32-char hex)"; changed=1; \
+	elif [ "$${#_vault_val}" -ne 32 ]; then \
+		_new_vault=$$(openssl rand -hex 16); \
+		sed -i "s|^VAULT_ENC_KEY=.*|VAULT_ENC_KEY=$$_new_vault|" env.tier-supabase; \
+		echo "→ Fixed VAULT_ENC_KEY (was $${#_vault_val} chars, now 32)"; changed=1; \
+	fi; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-supabase already has all required keys"; fi
+
 .PHONY: populate-tier-envs
 populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults from env.shared and .env.local
 	@echo "Populating tier env files with defaults..."
@@ -1397,7 +1604,7 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		echo "✓ Populated env.tier-data"; \
 	fi; \
 	if [ -f "env.tier-supabase" ]; then \
-		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then \; echo "Generating Supabase secrets with proper JWT tokens..."; \
+		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then echo "Generating Supabase secrets with proper JWT tokens..."; \
 			if [ -x scripts/supabase/generate-keys.sh ]; then \
 				scripts/supabase/generate-keys.sh > env.tier-supabase; \
 				echo "✓ Populated env.tier-supabase (via generate-keys.sh with valid JWTs)"; \
@@ -1701,6 +1908,130 @@ integration-contract-check-strict: ## Strict integration contract check (missing
 integration-contract-check-baseline: ## Strict contract checks for template + baseline overlays
 	@$(PYTHON) tools/integration_contract_check.py $(INTEGRATION_CONTRACT_BASELINE) --strict-hooks
 
+CF_PAGES_PROJECT ?= cataclysmstudios
+CF_PAGES_DIR ?= ../deploy/cataclysmstudios
+CF_PAGES_BRANCH ?= main
+
+CF_PAGES_PORT ?= 8788
+
+.PHONY: cf-pages-dev cf-pages-create cf-pages-deploy cf-pages-status
+cf-pages-dev: ## Serve cataclysmstudios locally via wrangler pages dev (http://localhost:CF_PAGES_PORT)
+	@echo "→ Previewing $(CF_PAGES_PROJECT) at http://localhost:$(CF_PAGES_PORT)"
+	npx wrangler pages dev "$(CF_PAGES_DIR)" --port $(CF_PAGES_PORT)
+cf-pages-create: ensure-env-shared ## Create Cloudflare Pages project (one-time bootstrap)
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Creating Cloudflare Pages project: $(CF_PAGES_PROJECT)"; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages project create "$(CF_PAGES_PROJECT)" \
+	  --production-branch "$(CF_PAGES_BRANCH)" 2>&1 \
+	  || { echo "❌ wrangler project create failed"; exit 1; }; \
+	echo "✅ CF Pages project created — now run: make cf-pages-deploy"
+
+cf-pages-deploy: ensure-env-shared ## Deploy cataclysmstudios static site to Cloudflare Pages
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync"; \
+	  exit 1; \
+	fi; \
+	echo "→ Deploying $(CF_PAGES_PROJECT) to Cloudflare Pages..."; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages deploy "$(CF_PAGES_DIR)" \
+	  --project-name "$(CF_PAGES_PROJECT)" \
+	  --branch "$(CF_PAGES_BRANCH)" \
+	  --commit-dirty=true 2>&1 \
+	  || { echo "❌ wrangler deploy failed"; exit 1; }; \
+	echo "✅ CF Pages deploy complete"
+
+cf-pages-status: ensure-env-shared ## Check Cloudflare Pages project status
+	@$(LOAD_ENV_SHARED); \
+	out=$$(CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	  CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	  npx wrangler pages project list 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "❌ wrangler error (exit $$rc):"; echo "$$out"; exit $$rc; fi; \
+	echo "$$out" | grep -i "$(CF_PAGES_PROJECT)" || echo "(project '$(CF_PAGES_PROJECT)' not found)"
+
+PMOVES_AI_PROJECT ?= pmoves-ai
+PMOVES_AI_DIR     ?= ../website
+PMOVES_AI_BRANCH  ?= main
+PMOVES_AI_PORT    ?= 8789
+
+# Hyperdimensions viewer: generated from the Pmoves-hyperdimensions submodule
+# (single source of truth) rather than hand-maintained. website/hyperdim/ is
+# gitignored and rebuilt by pmoves-ai-sync-hyperdim before dev/deploy.
+HYPERDIM_SRC ?= $(abspath $(CURDIR)/../Pmoves-hyperdimensions)
+HYPERDIM_DST ?= $(abspath $(CURDIR)/$(PMOVES_AI_DIR)/hyperdim)
+
+.PHONY: pmoves-ai-sync-hyperdim
+pmoves-ai-sync-hyperdim: ## Sync Pmoves-hyperdimensions submodule → website/hyperdim/ (generated; run before deploy)
+	@$(PYTHON) tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
+	  || python tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
+	  || py -3 tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)"
+
+.PHONY: pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
+pmoves-ai-dev: pmoves-ai-sync-hyperdim ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
+	@echo "→ Previewing $(PMOVES_AI_PROJECT) at http://localhost:$(PMOVES_AI_PORT)"
+	npx wrangler pages dev "$(PMOVES_AI_DIR)" --port $(PMOVES_AI_PORT)
+
+pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project (one-time bootstrap)
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Creating Cloudflare Pages project: $(PMOVES_AI_PROJECT)"; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages project create "$(PMOVES_AI_PROJECT)" \
+	  --production-branch "$(PMOVES_AI_BRANCH)" 2>&1 \
+	  || { echo "❌ wrangler project create failed"; exit 1; }; \
+	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
+
+pmoves-ai-deploy: pmoves-ai-sync-hyperdim ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Deploying $(PMOVES_AI_PROJECT) to Cloudflare Pages (branch: $(PMOVES_AI_BRANCH))..."; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages deploy "$(PMOVES_AI_DIR)" \
+	  --project-name "$(PMOVES_AI_PROJECT)" \
+	  --branch "$(PMOVES_AI_BRANCH)" \
+	  --commit-dirty=true 2>&1 \
+	  || { echo "❌ wrangler deploy failed"; exit 1; }; \
+	echo "✅ pmoves-ai deploy complete"
+
+pmoves-ai-status: ensure-env-shared ## Check pmoves-ai Cloudflare Pages project status
+	@$(LOAD_ENV_SHARED); \
+	out=$$(CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	  CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	  npx wrangler pages project list 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "❌ wrangler error (exit $$rc):"; echo "$$out"; exit $$rc; fi; \
+	echo "$$out" | grep -i "$(PMOVES_AI_PROJECT)" || echo "(pmoves-ai project not found)"
+
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
 	@$(LOAD_ENV_SHARED); \
 	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ] && [ -z "$$CLOUDFLARE_TUNNEL_NAME" ]; then \
@@ -1781,10 +2112,69 @@ up-yt-published: ## Start YouTube ingest stack using published images (no local 
 	@$(DC) -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started using published image. Override PMOVES_YT_IMAGE to pin versions."
 
-.PHONY: up-agents-hardened up-yt-hardened
+.PHONY: up-agents-hardened up-workers-hardened up-yt-hardened up-core-hardened up-agents-standalone up-agents-auto up-core-capable up-core-gpu
 up-agents-hardened: ## Start Agents (NATS, Agent Zero, Archon, Mesh Agent) with hardened security options
 	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 	@echo "✔ Agents started (hardened overrides applied)."
+
+up-workers-hardened: ## Start worker services WITH the hardened overlay (read_only/cap_drop/tmpfs)
+	@echo "⚙️ Starting worker services (hardened)..."
+	@$(DC) -f docker-compose.hardened.yml up -d $(WORKER_SERVICES)
+	@$(MAKE) --no-print-directory wait-workers
+	@echo "✅ Workers ready (hardened overrides applied)"
+
+up-core-hardened: ## Start core in dependency order with HARDENED agents (data tier BEFORE agents)
+	@echo "🧱 Bringing up core in dependency order (data → bus → workers → agents, hardened)…"
+	@$(MAKE) --no-print-directory up-obs
+	@$(MAKE) --no-print-directory up-supabase
+	@$(MAKE) --no-print-directory up-data-tier
+	@$(MAKE) --no-print-directory up-bus
+	@$(MAKE) --no-print-directory up-workers-hardened
+	@$(MAKE) --no-print-directory up-agents-hardened
+	@echo "✅ Core PMOVES services (hardened) started in dependency order."
+
+up-agents-standalone: ## Start Agent Zero + mesh STANDALONE (no Supabase/data tier; TOPOLOGY_MODE=standalone)
+	@echo "🧍 Starting Agent Zero standalone (Docker-DNS discovery, no docked data dependency)…"
+	@TOPOLOGY_MODE=standalone DOCKED_MODE=false $(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero mesh-agent
+	@echo "✔ Agent Zero started standalone (archon/Supabase-dependent services intentionally excluded)."
+
+up-agents-auto: ## Capability-aware bring-up: tier (lean|capable|gpu) picks the service set; within lean, Supabase reachability picks docked-vs-standalone
+	@# Capability-adaptive standalone (docs/architecture/CAPABILITY_ADAPTIVE_STANDALONE.md).
+	@# tier = node_capability_tier.py (PMOVES_NODE_TIER override -> PMOVES_NODE_PROBE json -> lean).
+	@set -e; \
+	probe_arg=""; [ -n "$${PMOVES_NODE_PROBE:-}" ] && probe_arg="--input $${PMOVES_NODE_PROBE}"; \
+	tier="$$($(PYTHON) tools/node_capability_tier.py --make $$probe_arg </dev/null 2>/dev/null || true)"; \
+	[ -n "$$tier" ] || tier=lean; \
+	echo "🧭 Capability tier: $$tier (override: PMOVES_NODE_TIER=lean|capable|gpu)"; \
+	case "$$tier" in \
+	capable) $(MAKE) --no-print-directory up-core-capable ;; \
+	gpu) $(MAKE) --no-print-directory up-core-gpu ;; \
+	*) \
+		[ -f .supabase.status.env ] && . ./.supabase.status.env || true; \
+		[ -f env.supa.runtime ] && . ./env.supa.runtime || true; \
+		base="$${SUPABASE_REST_URL:-$${SUPA_REST_URL:-$${API_URL:-$${SUPABASE_URL:-http://localhost:8000}}}}"; \
+		case "$$base" in */rest/v1|*/rest/v1/) probe_url="$$base";; *) probe_url="$${base%/}/rest/v1/";; esac; \
+		if curl -sf -m 3 "$$probe_url" >/dev/null 2>&1; then \
+			echo "🔌 lean: Supabase reachable at $$probe_url → docked (hardened) agents"; \
+			$(MAKE) --no-print-directory up-agents-hardened; \
+		else \
+			echo "🧍 lean: Supabase NOT reachable ($$probe_url) → standalone agents"; \
+			$(MAKE) --no-print-directory up-agents-standalone; \
+		fi ;; \
+	esac
+
+up-core-capable: ## Capable tier: dependency-ordered core (data tier BEFORE agents) + Consciousness/CHIT
+	@echo "🧩 Capable tier: hardened dep-ordered core + Consciousness/CHIT (consciousness-service, cipher-api)…"
+	@$(MAKE) --no-print-directory up-core-hardened
+	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d consciousness-service cipher-api
+	@echo "✅ Capable tier up (data tier + agents + Consciousness/CHIT)."
+
+up-core-gpu: ## GPU tier: capable tier + GPU services (best-effort; requires NVIDIA container runtime)
+	@$(MAKE) --no-print-directory up-core-capable
+	@echo "🎮 GPU tier: adding GPU services (requires NVIDIA runtime + a GPU override compose)…"
+	@$(DC) -f docker-compose.gpu.yml --profile workers up -d hi-rag-gateway-v2-gpu media-video media-audio \
+		|| echo "⚠ GPU services not started; verify NVIDIA runtime + docker-compose.gpu.yml wiring on this host (Phase 3 live verify)."
+	@echo "✅ GPU tier bring-up attempted (capable + GPU services)."
 
 up-yt-hardened: ## Start YT stack with hardened security options (published images)
 	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
@@ -1797,6 +2187,44 @@ up-media:
 .PHONY: up-invidious
 up-invidious:
 	@bash -lc '. ./scripts/with-env.sh; INVIDIOUS_BIND="${INVIDIOUS_BIND:-127.0.0.1:3005}" docker compose -p $(PROJECT) --profile invidious up -d invidious invidious-db invidious-companion'
+
+# -------- Standalone sidecar composes (PR #1533 follow-up: PR-2 wraps the raw compose files) --------
+# Each sidecar is its own docker-compose project (separate -p) so it doesn't entangle with the main
+# PMOVES stack. Env files live alongside the compose: `env.<name>-sidecar` (copied from
+# `env.<name>-sidecar.example` on first run if missing — no secrets in the template).
+
+.PHONY: up-darkxside-sidecar down-darkxside-sidecar
+up-darkxside-sidecar: ## Start DARKXSIDE standalone sidecar (port 8092, cloud LLM + host Ollama)
+	@if [ ! -f env.darkxside-sidecar ]; then \
+		echo "📝 Bootstrapping env.darkxside-sidecar from template..."; \
+		cp env.darkxside-sidecar.example env.darkxside-sidecar; \
+	fi
+	@echo "🌑 Starting DARKXSIDE sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar up -d'
+	@echo "✔ DARKXSIDE sidecar starting. Health: curl -sf http://127.0.0.1:$${DARKXSIDE_PORT:-8092}/"
+
+down-darkxside-sidecar: ## Stop DARKXSIDE standalone sidecar
+	@echo "🌑 Stopping DARKXSIDE sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar stop' >/dev/null 2>&1 || true
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar rm -f' >/dev/null 2>&1 || true
+	@echo "✔ DARKXSIDE sidecar stopped."
+
+.PHONY: up-spark-sidecar down-spark-sidecar
+up-spark-sidecar: ## Start DGX Spark standalone sidecar (port 8093, in-container Ollama, NVIDIA GPU passthrough)
+	@if [ ! -f env.spark-sidecar ]; then \
+		echo "📝 Bootstrapping env.spark-sidecar from template..."; \
+		cp env.spark-sidecar.example env.spark-sidecar; \
+	fi
+	@echo "⚡ Starting DGX Spark sidecar (ARM64 + NVIDIA Blackwell)..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
+	@echo "✔ DGX Spark sidecar starting. Health: curl -sf http://127.0.0.1:$${SPARK_PORT:-8093}/"
+	@echo "  GPU check: docker exec pmoves-ollama-spark nvidia-smi"
+
+down-spark-sidecar: ## Stop DGX Spark standalone sidecar
+	@echo "⚡ Stopping DGX Spark sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar stop' >/dev/null 2>&1 || true
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar rm -f' >/dev/null 2>&1 || true
+	@echo "✔ DGX Spark sidecar stopped."
 
 # TensorZero model gateway stack
 .PHONY: up-tensorzero up-tensorzero-full down-tensorzero-full
@@ -1954,7 +2382,7 @@ hostinger-ssh: ## SSH into Hostinger VPS using CHIT-managed credentials
 	@$(LOAD_ENV_SHARED) bash -lc 'ssh -o StrictHostKeyChecking=no -i <(echo "$$HOSTINGER_SSH_PRIVATE_KEY") $$HOSTINGER_SSH_USER@$$HOSTINGER_SSH_HOST'
 
 # -------- Multi-Claw Fleet (Kilo Code / OpenClaw) --------
-.PHONY: claw-deploy claw-verify claws-status claw-rotate
+.PHONY: claw-deploy claw-verify claws-status claw-rotate claw-key-install
 
 CLAW_SCRIPTS := $(CURDIR)/scripts/claws
 CLAW_SCOPES  := $(CURDIR)/configs/claws/scopes
@@ -1999,6 +2427,15 @@ claw-rotate: ## Rotate tokens on claw: make claw-rotate SCOPE=kvm4-1 [DRY_RUN=1]
 	TARGET="$${!TARGET_VAR:-}"; \
 	if [ -z "$$TARGET" ]; then echo "ERROR: No target for scope $(SCOPE)"; exit 1; fi; \
 	$(CLAW_SCRIPTS)/rotate-tokens.sh --target "$$TARGET" $(if $(DRY_RUN),--dry-run)
+
+.PHONY: claw-key-install
+claw-key-install: ## Install hostinger_vps SSH key: HOSTINGER_VPS_KEY="$(cat /path/to/key)" make claw-key-install
+	@test -n "$(HOSTINGER_VPS_KEY)" || (echo "ERROR: HOSTINGER_VPS_KEY is required" && echo "Usage: HOSTINGER_VPS_KEY=\"\$$(cat /path/to/key)\" make -C pmoves claw-key-install" && exit 1)
+	@mkdir -p $(CURDIR)/secrets
+	@printf '%s\n' "$(HOSTINGER_VPS_KEY)" > $(CURDIR)/secrets/hostinger_vps
+	@chmod 600 $(CURDIR)/secrets/hostinger_vps
+	@echo "✔ Key installed: pmoves/secrets/hostinger_vps"
+	@echo "  Claw scripts will now find it at the primary path."
 
 # -------- Brand defaults (branded env + first-run resources) --------
 .PHONY: brand-defaults brand-verify
@@ -2168,6 +2605,38 @@ voice-follow-stop: ## Stop voice-follow daemon
 voice-follow-logs: ## Tail voice-follow logs
 	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
 
+# -------- Voice stack health + unified launch --------
+.PHONY: voice-health up-voice
+
+voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Voice-Relay)
+	@echo "=== Voice Stack Health ==="
+	@curl -sf http://localhost:4222/healthz > /dev/null 2>&1 \
+	  && echo "  NATS       (:4222) ✔" \
+	  || echo "  NATS       (:4222) ✗  — run: make up-bus"
+	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
+	  && echo "  Flute      (:8055) ✔" \
+	  || echo "  Flute      (:8055) ✗  — run: make overlay-up-media  (needs env.tier-media)"
+	@curl -sf http://localhost:3000/ > /dev/null 2>&1 \
+	  && echo "  VibeVoice  (:3000) ✔  [CPU fallback]" \
+	  || echo "  VibeVoice  (:3000) ✗  — optional; run: make up-voice"
+	@curl -sf http://localhost:7861/gradio_api/info > /dev/null 2>&1 \
+	  && echo "  UltimateTTS(:7861) ✔  [GPU preferred]" \
+	  || echo "  UltimateTTS(:7861) ✗  — GPU nodes only; run: make up-tts-studio"
+	@curl -sf http://localhost:8121/healthz > /dev/null 2>&1 \
+	  && echo "  VoiceRelay (:8121) ✔" \
+	  || echo "  VoiceRelay (:8121) ✗  — run: make up-voice-relay"
+
+up-voice: ## Start voice stack: Flute-Gateway + VibeVoice CPU fallback + Voice-Relay
+	@echo "Starting voice stack (Flute + VibeVoice + Voice-Relay)..."
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) \
+		-f docker-compose.base.yml \
+		-f docker-compose.media.yml \
+		-f docker-compose.voice.yml \
+		--profile media --profile voice \
+		up -d flute-gateway vibevoice voice-relay
+	@echo ""
+	@$(MAKE) --no-print-directory voice-health
+
 .PHONY: voice-follow-smoke voice-agent-discord-smoke
 
 voice-follow-smoke: ## Smoke: start speaker + follow(--once), trigger voice agent, assert speaker was called
@@ -2304,6 +2773,11 @@ up-jellyfin:
 up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, Cipher Memory, etc.) preferring submodule builds
 	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord cipher-api
 
+.PHONY: up-notebooklm
+up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
+	@$(DC) --profile agents up -d --build notebooklm-agent
+	@echo "✔ NotebookLM MCP agent up (stdio via docker exec; needs GOOGLE_REFRESH_TOKEN for live NotebookLM calls)"
+
 .PHONY: up-cipher
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
@@ -2312,6 +2786,10 @@ up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agen
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8096}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
+
+.PHONY: spark-health
+spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
+	@$(PYTHON) scripts/spark_health.py
 
 .PHONY: agents-headless-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
@@ -2589,6 +3067,13 @@ ghcr-dispatch-one: ci-runners-check-strict ## Dispatch GHCR workflow for a singl
 ghcr-list: ## List all images in the integrations-ghcr matrix
 	@$(PYTHON) -c "import json,pathlib;[print(e['name']) for e in json.loads(pathlib.Path('$(GHCR_MATRIX_FILE)').read_text())]"
 
+.PHONY: ghcr-matrix-paths-check
+ghcr-matrix-paths-check: ## Validate all in-repo GHCR matrix context/dockerfile paths exist (no Docker build)
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --paths-only
+
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
 	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && PYTHONPATH="$(CURDIR)/.." python3 tools/deepresearch_smoke.py --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
@@ -2787,6 +3272,32 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 	fi; \
 	echo "✔ VibeVoice /config 200"; \
 	curl -sS "http://localhost:$$port/config" | jq .
+
+# ────────────────────────────────────────────────────────────────────────────
+# OMNIVOICE (k2-fsa/OmniVoice production voice server — managed fleet deploy unit)
+# ────────────────────────────────────────────────────────────────────────────
+# Service-local compose at services/creator-operator/omnivoice.compose.yml
+# (named *.compose.yml — outside the docker-compose*.yml guard glob — so it's a
+# real committed file, not a doc snippet). Opt-in via the `voice` profile.
+# torch/torchaudio are the per-node CUDA build, installed in the image via
+# ARG-driven index URL. SPARK (arm64 + CUDA GB10) needs the arm64/sbsa wheel —
+# see services/creator-operator/SPARK_DEPLOY.md (TODO-confirm-on-node).
+OMNIVOICE_COMPOSE ?= services/creator-operator/omnivoice.compose.yml
+
+.PHONY: omnivoice-build omnivoice-up omnivoice-down
+omnivoice-build: ## Build the OmniVoice voice-server image (amd64 default; pass OMNIVOICE_PLATFORM=linux/arm64 for SPARK)
+	@test -f "$(OMNIVOICE_COMPOSE)" || (echo "✖ $(OMNIVOICE_COMPOSE) missing — operator must install it from SPARK_DEPLOY.md (compose Known Road)" && exit 1)
+	@docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice build omnivoice-server
+	@echo "✔ OmniVoice image built (image=$${OMNIVOICE_IMAGE:-pmoves-omnivoice:latest})"
+
+omnivoice-up: ## Start the OmniVoice voice server (voice profile; GPU via nvidia runtime)
+	@test -f "$(OMNIVOICE_COMPOSE)" || (echo "✖ $(OMNIVOICE_COMPOSE) missing — operator must install it from SPARK_DEPLOY.md (compose Known Road)" && exit 1)
+	@docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice up -d omnivoice-server
+	@echo "✔ OmniVoice up at http://$${OMNIVOICE_BIND:-127.0.0.1}:$${OMNIVOICE_HOST_PORT:-8002}/healthz"
+
+omnivoice-down: ## Stop the OmniVoice voice server (keeps the HF model-cache volume)
+	@docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice down
+	@echo "✔ OmniVoice down (omnivoice-hf-cache volume preserved)"
 
 # ────────────────────────────────────────────────────────────────────────────
 # VOICEBOX (Pinokio-managed voice production service)
@@ -3470,6 +3981,28 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 # For the original monolithic compose, use the existing up-all / up-core targets.
 # =============================================================================
 
+# The split overlays are GENERATED from docker-compose.yml by scripts/split_compose.py.
+# Never hand-edit them (damage-control blocks it) — edit the source and regenerate.
+# ruamel.yaml is pinned so CI and local renders are byte-identical (drift gate).
+# --no-project: pmoves/pyproject.toml documents that uv run here must skip project
+# discovery, else it syncs the whole workspace (cryptography, dev deps) before running.
+COMPOSE_SPLIT_RUN := uv run --no-project --with ruamel.yaml==0.19.1 python scripts/split_compose.py
+COMPOSE_SPLIT_FILES := docker-compose.base.yml docker-compose.core.yml \
+	docker-compose.agents.yml docker-compose.media.yml docker-compose.ui.yml \
+	docker-compose.workers.yml docker-compose.apps.yml docker-compose.juicefs.yml
+
+.PHONY: compose-split compose-split-check
+compose-split: ## Regenerate the split compose overlays from docker-compose.yml
+	@cd $(CURDIR) && $(COMPOSE_SPLIT_RUN)
+
+compose-split-check: ## Drift gate: fail if committed overlays differ from regenerated output
+	@cd $(CURDIR) && $(COMPOSE_SPLIT_RUN) >/dev/null
+	@cd $(CURDIR) && if [ -n "$$(git status --porcelain -- $(COMPOSE_SPLIT_FILES))" ]; then \
+	    echo "ERROR: split overlays out of sync with docker-compose.yml (modified or missing) — run 'make -C pmoves compose-split' and commit"; \
+	    git status --porcelain -- $(COMPOSE_SPLIT_FILES); \
+	    exit 1; \
+	  fi
+
 OVERLAY_BASE    := -f docker-compose.base.yml
 OVERLAY_CORE    := -f docker-compose.core.yml
 OVERLAY_AGENTS  := -f docker-compose.agents.yml
@@ -3492,12 +4025,36 @@ OVERLAY_PROFILES_WORKERS := --profile workers
 OVERLAY_PROFILES_APPS    := --profile apps
 OVERLAY_PROFILES_FULL    := $(OVERLAY_PROFILES_CORE) $(OVERLAY_PROFILES_AGENTS) $(OVERLAY_PROFILES_MEDIA) $(OVERLAY_PROFILES_UI) $(OVERLAY_PROFILES_WORKERS) $(OVERLAY_PROFILES_APPS)
 
-.PHONY: overlay-up-full overlay-up-core overlay-up-agents overlay-up-media overlay-up-ui overlay-up-workers overlay-up-apps overlay-down
+.PHONY: overlay-up-full overlay-up-bus ensure-overlay-networks overlay-up-core overlay-up-agents overlay-up-media overlay-up-ui overlay-up-workers overlay-up-apps overlay-down
 
 overlay-up-full: ## Start ALL services via overlay files (base + all tiers)
 	@echo "🚀 Starting full stack via overlay files..."
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) up -d
 	@echo "✅ Full stack started (84 services across 6 overlays)"
+
+# ensure-overlay-networks creates the bus overlay networks if missing. The overlay
+# files declare networks `external: true` (so each overlay parses standalone), so they
+# must EXIST at runtime; docker-compose.base.yml owns them but only materializes them
+# in a full `up`. Subnets here MUST match docker-compose.base.yml.
+ensure-overlay-networks: ## Create the bus overlay networks (pmoves_bus, pmoves_external) if missing
+	@docker network inspect pmoves_bus >/dev/null 2>&1 || \
+		docker network create --internal --driver bridge --subnet 172.30.3.0/24 --gateway 172.30.3.1 pmoves_bus >/dev/null
+	@docker network inspect pmoves_external >/dev/null 2>&1 || \
+		docker network create --driver bridge --subnet 172.30.6.0/24 --gateway 172.30.6.1 pmoves_external >/dev/null
+	@echo "✅ overlay bus networks present (pmoves_bus, pmoves_external)"
+
+# overlay-up-bus brings up ONLY the NATS event bus via the split overlays
+# (OVERLAY_DC = base+core), NOT the monolith via DC/STACK_FILES. The monolith's
+# CHIT app services (agent-zero, evo-controller, hi-rag-gateway-gpu) carry a
+# fail-fast required-passphrase guard that compose resolves project-wide at parse
+# time, blocking even a single-service `up -d nats` on nodes that do not hold the
+# voice-activated CHIT passphrase (e.g. kvm4-2). base.yml/core.yml carry no such
+# guard and core.yml's nats uses NATS_USER/NATS_PASSWORD defaults, so the bus comes
+# up cleanly with the fleet-wide fail-fast guards left fully intact.
+overlay-up-bus: ensure-overlay-networks ## Start ONLY the NATS event bus via overlay (no CHIT passphrase / no app services)
+	@echo "📨 Starting NATS event bus via overlay (base+core, bus-only)..."
+	@$(OVERLAY_DC) $(OVERLAY_CORE) up -d nats nats-init
+	@echo "✅ NATS event bus started (no CHIT passphrase required — app guards untouched)"
 
 overlay-up-core: ## Start core infrastructure via overlay (nats, supabase, data stores)
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_PROFILES_CORE) up -d
@@ -3526,3 +4083,35 @@ overlay-up-apps: ## Start application services via overlay
 overlay-down: ## Stop all overlay services
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) down
 	@echo "✅ All overlay services stopped"
+
+.PHONY: design-tokens design-tokens-check design-test-js
+
+design-tokens: ## Regenerate pmoves/design token CSS + TS from agent_signatures.yaml
+	cd design && uv run --no-project --with pyyaml python generate.py
+
+design-tokens-check: design-tokens ## Fail if committed pmoves/design/build drifted from generator output
+	@# intent-to-add surfaces NEW untracked build/ artifacts to `git diff` too —
+	@# a plain `git diff` only sees tracked files, so a brand-new generated file
+	@# would otherwise pass the gate silently.
+	@git add --intent-to-add design/build 2>/dev/null || true
+	@git diff --exit-code -- design/build \
+		|| { echo "❌ pmoves/design/build drifted — run 'make -C pmoves design-tokens' and commit"; exit 1; }
+	@echo "✅ design/build matches generator output"
+
+design-test-js: ## Run the pmoves/design JS unit tests (node --test, no npm deps)
+	node --test design/tests/*.test.js
+
+.PHONY: design-vendor design-vendor-check
+
+design-vendor: ## Resync the vendored design engine into ui/lib/persona/ from canonical design/
+	@for f in persona-theme persona-resolver theme-provider showtime-live; do \
+		cp design/$$f.js ui/lib/persona/$$f.js; \
+	done
+	@echo "✅ ui/lib/persona resynced from design/"
+
+design-vendor-check: ## Fail if the vendored ui/lib/persona/*.js drifted from canonical design/
+	@for f in persona-theme persona-resolver theme-provider showtime-live; do \
+		diff -q design/$$f.js ui/lib/persona/$$f.js \
+			|| { echo "❌ pmoves/ui/lib/persona drifted — run 'make -C pmoves design-vendor' and commit"; exit 1; }; \
+	done
+	@echo "✅ ui/lib/persona matches design/ source"

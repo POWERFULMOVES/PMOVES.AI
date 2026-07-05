@@ -1,6 +1,6 @@
 [
   {
-    "name": "PMOVES • Supabase Approval Poller v1",
+    "name": "PMOVES - Supabase Approval Poller v1",
     "nodes": [
       {
         "parameters": {
@@ -81,7 +81,7 @@
       },
       {
         "parameters": {
-          "functionCode": "const row = item.json || {};\nconst meta = (row.meta && typeof row.meta === 'object') ? row.meta : {};\nconst payload = {\n  artifact_uri: row.content_url,\n  title: row.title || meta.title || 'Untitled Artifact',\n  namespace: row.namespace || undefined,\n  description: meta.description || undefined,\n  tags: Array.isArray(meta.tags) ? meta.tags : undefined,\n  meta\n};\n\nif (!payload.namespace) {\n  delete payload.namespace;\n}\nif (!payload.description) {\n  delete payload.description;\n}\nif (!payload.tags || payload.tags.length === 0) {\n  delete payload.tags;\n}\n\nconst patch = {\n  status: 'published',\n  meta: {\n    ...meta,\n    publish_event_sent_at: new Date().toISOString()\n  }\n};\n\nreturn {\n  json: {\n    envelope: {\n      topic: 'content.publish.approved.v1',\n      payload\n    },\n    rowId: row.id,\n    patch\n  }\n};"
+          "functionCode": "const row = item.json || {};\nconst meta = (row.meta && typeof row.meta === 'object') ? row.meta : {};\nconst requestedAt = new Date().toISOString();\nconst publishRequestId = `${row.id}:${requestedAt}`;\nconst payload = {\n  studio_board_id: row.id,\n  publish_request_id: publishRequestId,\n  artifact_uri: row.content_url,\n  title: row.title || meta.title || 'Untitled Artifact',\n  namespace: row.namespace || undefined,\n  description: meta.description || undefined,\n  tags: Array.isArray(meta.tags) ? meta.tags : undefined,\n  meta: {\n    ...meta,\n    studio_board_id: row.id,\n    publish_request_id: publishRequestId,\n    publish_requested_at: requestedAt,\n    publish_request_source: 'n8n-approval-poller'\n  }\n};\n\nif (!payload.namespace) {\n  delete payload.namespace;\n}\nif (!payload.description) {\n  delete payload.description;\n}\nif (!payload.tags || payload.tags.length === 0) {\n  delete payload.tags;\n}\n\nconst patch = {\n  status: 'publishing',\n  meta: {\n    ...meta,\n    studio_board_id: row.id,\n    publish_request_id: publishRequestId,\n    publish_requested_at: requestedAt,\n    publish_request_source: 'n8n-approval-poller'\n  }\n};\n\nreturn {\n  json: {\n    envelope: {\n      topic: 'content.publish.approved.v1',\n      payload\n    },\n    rowId: row.id,\n    patch\n  }\n};"
         },
         "id": "prepare_event",
         "name": "Prepare Publish Envelope",
@@ -129,7 +129,7 @@
       {
         "parameters": {
           "method": "PATCH",
-          "url": "={{ $env.SUPABASE_REST_URL }}/studio_board?id=eq.{{$json.rowId}}",
+          "url": "={{ $env.SUPABASE_REST_URL }}/studio_board?id=eq.{{$node[\"Prepare Publish Envelope\"].json[\"rowId\"]}}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -155,11 +155,11 @@
           "bodyParameters": {
             "parameters": []
           },
-          "body": "={{ JSON.stringify($json.patch) }}",
+          "body": "={{ JSON.stringify($node[\"Prepare Publish Envelope\"].json[\"patch\"]) }}",
           "options": {}
         },
         "id": "mark_processed",
-        "name": "Mark Approval Row",
+        "name": "Mark Publish Requested",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
         "onError": "continueErrorOutput",
@@ -266,7 +266,7 @@
         "main": [
           [
             {
-              "node": "Mark Approval Row",
+              "node": "Mark Publish Requested",
               "type": "main",
               "index": 0
             }
@@ -280,7 +280,7 @@
           ]
         ]
       },
-      "Mark Approval Row": {
+      "Mark Publish Requested": {
         "main": [
           [
             {

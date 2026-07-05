@@ -23,5 +23,17 @@
 .gitignore @powerfulmoves
 .gitmodules @powerfulmoves
 
+# Configuration & registry (room catalog, agent registry, TAC trees, model configs)
+/pmoves/config/ @powerfulmoves
+
+# Test integrity
+/pmoves/tests/ @powerfulmoves
+
+# Runner registration and deployment config
+/deploy/runners/ @powerfulmoves
+
+# Cloudflare DNS and access config
+/deploy/cloudflare/ @powerfulmoves
+
 # GitHub configuration
 /.github/ @powerfulmoves

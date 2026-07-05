@@ -34,8 +34,8 @@ cards:
     active: true
     ml:
       primary_method: ssh
-      ssh_fingerprint: null   # operator-provided when ssh-keygen lands on Z890
-      ssh_allowed_signers_line: null
+      ssh_fingerprint: "SHA256:ml72HJ6Ogy1+ItxLrmw2MUSppoF6R4o+Wu4JBjZ6fjc"
+      ssh_allowed_signers_line: "darkxside ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKlUa2a2mSQU4XjjMowHr/0M8XtUG+mmxLcf7NIWOkGD pmoves@pmoves.ai"
     h:
       agent_id: "darkxside"
       display_name: "DARKXSIDE"
@@ -71,6 +71,50 @@ cards:
       glyph: "■"        # ■
       color: "#2563EB"
       voice: terse
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000040"
+    issued_at: "2026-05-22T00:00:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+      ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
+    h:
+      agent_id: "agent-zero-codex"
+      display_name: "PMOVES-AGENT-ZERO-CODEX"
+      glyph: "▣"
+      color: "#1D4ED8"
+      voice: terse
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000041"
+    issued_at: "2026-05-22T00:00:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+    h:
+      agent_id: "hermes"
+      display_name: "HERMES"
+      glyph: "✧"
+      color: "#047857"
+      voice: analytical
+      role: evaluator
+
+  - card_id: "00000000-0000-4000-8000-000000000042"
+    issued_at: "2026-05-22T00:00:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+      ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
+    h:
+      agent_id: "coder_claw"
+      display_name: "Coder Claw"
+      glyph: "⌾"
+      color: "#0F766E"
+      voice: implementation
       role: agent
 
   - card_id: "00000000-0000-4000-8000-000000000004"
@@ -285,3 +329,22 @@ cards:
       color: "#EA580C"
       voice: directive
       role: runner
+
+  - card_id: "00000000-0000-4000-8000-000000000035"
+    issued_at: "2026-05-12T00:00:00Z"
+    active: true
+    notes: |
+      CI emitter identity for §9.4 branch lifecycle trail. Used by
+      .github/workflows/branch-trail-emit.yml when publishing
+      branch.<segments>.trail.v1 events to NATS. Key material delivered
+      via CHIT_SIGNING_KEY repo secret on self-hosted, ai-lab runners.
+    ml:
+      primary_method: github-app
+      ci_runner_label: "self-hosted, ai-lab"
+    h:
+      agent_id: "pmoves-ci-bot"
+      display_name: "PMOVES CI Bot"
+      glyph: "⚙"
+      color: "#475569"
+      voice: directive
+      role: ci-bot

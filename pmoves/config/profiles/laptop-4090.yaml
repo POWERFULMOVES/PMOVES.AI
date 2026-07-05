@@ -92,6 +92,7 @@ mcp:
   - compose
   - pmoves-cipher
   - huggingface
+  - pmoves_4090_web
 
 # ═══════════════════════════════════════════════════════════════
 # Cross-Node Awareness — 4090 as Kinetic Claw Host
@@ -116,14 +117,6 @@ cross_node:
         - ollama:11434
         - tts-studio:7861
         - vllm:8000
-      access_via: [tailscale, nats]
-    pmoves-3090ti:
-      role: secondary_gpu
-      tailscale_host: pmoves-3090ti
-      services:
-        - ollama:11434
-        - comfyui:8188
-        - whisper:8078
       access_via: [tailscale, nats]
     pmoves-vps-kvm4-1:
       role: api_gateway

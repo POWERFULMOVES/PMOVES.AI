@@ -1,3 +1,7 @@
+> **DEPRECATED** — This document references branch `PMOVES.AI-Edition-Hardened` which no longer exists. Retained for historical reference only. Updated 2026-05-15.
+
+> **DEPRECATION NOTICE (2026-05-08):** This document references the historical branch `PMOVES.AI-Edition-Hardened` (pre-v1.9 sync). Multiple gaps listed below are now RESOLVED per AGNOTE4482 self-review (2026-04-01): A2A server exposed, thread patterns (P/F/L-Thread) operational, SKILL.md template deployed. Read `AGNOTE4482.md` for current status. This file needs a full refresh or archival.
+>
 # AGENTS Documentation Implementation Gap Analysis
 
 > **DEPRECATION NOTICE (per issue #1436 C3):** This document references the historical `PMOVES.AI-Edition-Hardened` branch as its baseline. The active hardened branch is now `PMOVES.AI-Edition-v1.9` (sync completed 2026-04-25). Multiple gaps documented here have been **RESOLVED** in v1.9 — including A2A server, thread types, and SKILL.md pattern. Treat all gap claims below as **historical** until a full refresh against `PMOVES.AI-Edition-v1.9` is published. Do not use this document to plan new work without cross-checking against the v1.9 branch first.

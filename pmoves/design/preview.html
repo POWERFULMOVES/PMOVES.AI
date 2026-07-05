@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="pmoves-armor">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PMOVES Design Tokens — Preview</title>
+  <link rel="stylesheet" href="./build/tokens.pmoves-armor.css">
+  <link rel="stylesheet" href="./build/tokens.darkxside-skin.css">
+  <link rel="stylesheet" href="./preview.css">
+</head>
+<body>
+  <header><h1>PMOVES Design Tokens</h1>
+    <button id="toggle" class="cta">Toggle armor / skin</button></header>
+  <section class="persona-bar">
+    <label>Persona
+      <select id="persona"><option value="">— base theme —</option></select>
+    </label>
+    <label>Alter
+      <select id="alter"><option value="">— none —</option></select>
+    </label>
+    <label class="live-toggle">
+      <input type="checkbox" id="live"> simulate Showtime <span class="star">✦</span> live
+    </label>
+    <span id="persona-status" class="status" role="status"></span>
+  </section>
+  <section class="swatches">
+    <span class="sw" data-var="--pm-accent">accent</span>
+    <span class="sw" data-var="--pm-accent-2">accent-2</span>
+    <span class="sw" data-var="--pm-signature">✦ signature</span>
+    <span class="sw" data-var="--pm-surface">surface</span>
+  </section>
+  <section class="motifs">
+    <span class="shard"></span><span class="hex"></span><span class="star">✦</span>
+  </section>
+  <script type="module" src="./preview.js"></script>
+</body>
+</html>

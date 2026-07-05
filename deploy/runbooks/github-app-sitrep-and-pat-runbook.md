@@ -82,7 +82,7 @@ Runner registration tokens expire after 1 hour. Re-registration requires a valid
 
 ### 2.6 Research Assessment Correction
 
-The researcher's `GITHUB_APPS_TECHNICAL_REFERENCE.html` contains stale data in its PMOVES.AI Assessment section:
+The consolidated research reference (now removed) contained stale data in its PMOVES.AI Assessment section:
 
 > ❌ "GH_APP_ID and GH_APP_INSTALLATION_ID are missing"
 
@@ -362,7 +362,6 @@ App webhooks (vs repo webhooks):
 
 | File | Lines | Topic |
 |------|-------|-------|
-| `research/GITHUB_APPS_TECHNICAL_REFERENCE.html` | 936 | Consolidated reference (⚠️ §PMOVES Assessment stale) |
 | `research/topic1_slsa_provenance_github_apps.md` | 888 | SLSA provenance with App signing |
 | `research/topic2_pat_rotation_automation.md` | 912 | PAT rotation limitations & workarounds |
 | `research/topic3_create_github-app-token.md` | 902 | Action internals & configuration |

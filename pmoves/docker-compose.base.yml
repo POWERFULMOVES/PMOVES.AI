@@ -494,6 +494,8 @@ volumes:
   qdrant-data: {}
   meilisearch-data: {}
   minio-data: {}
+  juicefs-meta: {}   # JuiceFS metadata engine (Redis) persistence (profile: juicefs)
+  juicefs-data: {}   # JuiceFS object-store backend (profile: juicefs)
   # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}
   # 2025 Supabase integrated volumes
@@ -525,6 +527,18 @@ networks:
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
+  # Non-internal bridge for services that expose host-facing ports.
+  # Kong proxy/admin and PostgREST REST port attach here; the services still
+  # default to 127.0.0.1 host binds for safer standalone operation.
+  pmoves_public:
+    name: pmoves_public
+    driver: bridge
+    internal: false
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.7.0/24
+        gateway: 172.30.7.1
   pmoves_api:
     name: pmoves_api
     driver: bridge
@@ -569,12 +583,11 @@ networks:
   cataclysm:
     external: true
     name: cataclysm-net
-  # External network for services requiring internet access (YouTube API, LLM providers, etc.)
+  # External network for services requiring internet access (YouTube API, LLM providers, etc.).
+  # Declared external because it is SHARED across stacks (the overlay/NATS stack multi-homes
+  # nats here too) — a compose-managed network can't be adopted by a second stack (the other
+  # stack sees an unlabeled "foreign" net → "incorrect label" error). Created out-of-band by
+  # clean_networks.py (make-target paths) or an inline guard (raw CI deploy paths).
   pmoves_external:
+    external: true
     name: pmoves_external
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.30.6.0/24
-        gateway: 172.30.6.1

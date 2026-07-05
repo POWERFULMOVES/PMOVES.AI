@@ -36,6 +36,8 @@ A2UI_WS_URL = os.getenv("A2UI_WS_URL", "ws://localhost:9223")
 A2UI_RENDER_SUBJECT = os.getenv("A2UI_RENDER_SUBJECT", "a2ui.render.v1")
 A2UI_REQUEST_SUBJECT = os.getenv("A2UI_REQUEST_SUBJECT", "a2ui.request.v1")
 GEOMETRY_WILDCARD = os.getenv("GEOMETRY_WILDCARD", "geometry.>")
+GEOMETRY_CGP_SUBJECT = os.getenv("GEOMETRY_CGP_SUBJECT", "geometry.cgp.v1")
+GEOMETRY_WS_ROOM = os.getenv("GEOMETRY_WS_ROOM", "geometry")
 PORT = int(os.getenv("PORT", "9224"))
 
 # Logging
@@ -49,6 +51,7 @@ logger = logging.getLogger("a2ui-nats-bridge")
 a2ui_events_published = Counter("a2ui_events_published_total", "A2UI events published to NATS", ["event_type"])
 a2ui_events_received = Counter("a2ui_events_received_total", "Events received from A2UI agents")
 a2ui_events_forwarded = Counter("a2ui_events_forwarded_total", "A2UI events forwarded to WebSocket clients")
+geometry_events_forwarded = Counter("a2ui_geometry_events_forwarded_total", "Geometry CGP events forwarded to WebSocket clients")
 active_websockets = Gauge("a2ui_active_websockets", "Active WebSocket connections")
 nats_connected = Gauge("a2ui_nats_connected", "NATS connection status")
 
@@ -124,6 +127,7 @@ nc: Optional[nats.aio.client.Client] = None
 js: Optional["nats.js.client.JetStreamContext"] = None
 active_ws_connections: set[WebSocket] = set()
 connected_a2ui_surfaces: dict[str, str] = {}  # surface_id -> client_id
+_js_geom_sub_active: bool = False  # True when startup JetStream geometry sub succeeded
 
 
 async def connect_nats() -> None:
@@ -135,15 +139,17 @@ async def connect_nats() -> None:
     Retries up to 5 times with linear backoff (5s, 10s, 15s, 20s, 25s).
 
     Side effects:
-        - Sets global `nc` and `js` variables
+        - Sets global `nc`, `js`, and `_js_geom_sub_active` variables
         - Updates `nats_connected` Prometheus gauge
         - Creates A2UI JetStream stream if not exists
         - Subscribes to geometry.* wildcard subject
 
     Note:
         Logs error but continues if geometry subscription fails (non-critical).
+        When geometry JetStream sub succeeds, per-connection core NATS subs are
+        skipped to prevent double delivery once the JS consumer is wired to forward.
     """
-    global nc, js
+    global nc, js, _js_geom_sub_active
     retry_count = 0
     max_retries = 5
 
@@ -173,16 +179,18 @@ async def connect_nats() -> None:
                     logger.error(f"Failed to create A2UI stream: {e}")
                     raise
 
-            # Subscribe to geometry events for bidirectional communication
+            # Register the durable JetStream geometry consumer.
+            # _js_geom_sub_active stays False until a forwarding callback is
+            # wired here — per-connection core NATS subs handle delivery until then.
             try:
                 await js.subscribe(
                     GEOMETRY_WILDCARD,
                     "a2ui_geom_sub",
                     stream="GEOMETRY"
                 )
-                logger.info(f"Subscribed to {GEOMETRY_WILDCARD}")
+                logger.info(f"Registered durable JetStream consumer for {GEOMETRY_WILDCARD} (forwarding via core NATS per-connection subs)")
             except Exception as e:
-                logger.warning(f"Could not subscribe to geometry: {e}")
+                logger.warning(f"Could not register geometry JetStream consumer: {e} — per-connection core subs will handle forwarding")
 
             nats_connected.set(1)
             logger.info("NATS connection established")
@@ -478,12 +486,37 @@ async def client_websocket(websocket: WebSocket):
         except Exception as e:
             logger.warning(f"Failed to forward A2UI message: {e}")
 
+    async def geometry_handler(msg):
+        """Forward NATS geometry.cgp.v1 messages to WebSocket client.
+
+        Wraps the payload in a room envelope so the frontend can route it
+        to the geometry/cymatic visualization room.
+        """
+        try:
+            payload = json.loads(msg.data.decode())
+            envelope = {
+                "room": GEOMETRY_WS_ROOM,
+                "subject": msg.subject,
+                "data": payload,
+            }
+            await websocket.send_text(json.dumps(envelope) + "\n")
+            geometry_events_forwarded.inc()
+        except Exception as e:
+            logger.warning(f"Failed to forward geometry message: {e}")
+
     sub = None
+    geom_sub = None
     try:
         if nc:
             # Subscribe to all A2UI events
             sub = await nc.subscribe("a2ui.>", cb=a2ui_handler)
             logger.info(f"Forwarding A2UI events to {client_id}")
+
+            # Subscribe to geometry CGP events only when the startup JetStream
+            # consumer is not active; otherwise that consumer handles delivery.
+            if not _js_geom_sub_active:
+                geom_sub = await nc.subscribe(GEOMETRY_CGP_SUBJECT, cb=geometry_handler)
+                logger.info(f"Forwarding {GEOMETRY_CGP_SUBJECT} -> room '{GEOMETRY_WS_ROOM}' to {client_id}")
 
             # Keep connection alive
             while True:
@@ -497,6 +530,8 @@ async def client_websocket(websocket: WebSocket):
         active_websockets.set(len(active_ws_connections))
         if sub:
             await sub.unsubscribe()
+        if geom_sub:
+            await geom_sub.unsubscribe()
 
 
 def main() -> None:

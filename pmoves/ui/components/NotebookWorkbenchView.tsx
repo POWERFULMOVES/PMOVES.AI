@@ -15,6 +15,8 @@ import {
 import DashboardNavigation, { type NavKey } from "@/components/DashboardNavigation";
 import { logForDebugging } from '@/lib/errorUtils';
 import { GraphitiStatusBadge } from "@/components/GraphitiStatusBadge";
+import { PersonaStageController } from "@/components/PersonaStageController";
+import { LiveStageBadge } from "@/components/LiveStageBadge";
 import type { Message } from "@/runtime/notebook/useSupabaseViews";
 
 const SKIN_URL = "/skins/comic-pop/1.1.0/skin.json";
@@ -46,6 +48,7 @@ export function NotebookWorkbenchView({
   activeNavKey = "notebook-workbench",
 }: NotebookWorkbenchViewProps) {
   const [threadId, setThreadId] = useState("");
+  const [stageLive, setStageLive] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [selection, setSelection] = useState<string[]>([]);
   const [draftViews, setDraftViews] = useState<Record<string, EditorView[]>>({});
@@ -193,6 +196,7 @@ export function NotebookWorkbenchView({
 
   return (
     <SkinProvider url={SKIN_URL}>
+      <PersonaStageController onLive={setStageLive} />
       <div className={containerClasses}>
         {showNavigation ? <DashboardNavigation active={resolvedNavKey} /> : null}
         <main style={{ padding: 24, display: "grid", gap: 24 }}>
@@ -201,7 +205,10 @@ export function NotebookWorkbenchView({
             <p style={{ margin: 0, opacity: 0.75 }}>
               Explore chat message views, manage layout, and persist new variants directly into Supabase.
             </p>
-            <GraphitiStatusBadge />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <GraphitiStatusBadge />
+              <LiveStageBadge live={stageLive} />
+            </div>
             <label style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <span>Thread ID</span>
               <input
