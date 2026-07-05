@@ -3,7 +3,7 @@ name: model:pull
 description: >
   Pull local inference models (Hermes V4, Qwen3 embed, Gemma 4 multimodal, NeMo Omni,
   Unsloth GGUF variants) via Ollama or HuggingFace CLI. Node-aware routing: ≥70B → SPARK
-  only; 8B → any node with Ollama; embedding models → Z890/RDNA4/Spark; multimodal any-to-any
+  only; 8B → any node with Ollama; embedding models → Z890/RDNA4/Spark; multimodal (text/image/audio in, text out)
   → Spark/5090/4090; NeMo Omni → Spark only.
   Use /model:pull <model-id> or describe what you want to pull.
 disable-model-invocation: true
@@ -54,10 +54,13 @@ huggingface-cli download Qwen/Qwen3-Embedding-0.6B --local-dir ~/.cache/huggingf
 huggingface-cli download Qwen/Qwen3-Embedding-4B --local-dir ~/.cache/huggingface/qwen3-embed-4b
 ```
 
-**Ollama — Gemma 4 E4B multimodal any-to-any (text/image/audio):**
+**Ollama — Gemma 4 E4B (text + image input; GGUF via Ollama):**
 ```bash
 ollama pull gemma4:e4b
 ```
+> The Ollama tag `gemma4:e4b` serves **text + image input, text output** only — its
+> model card lists `Text, Image input`. For **audio-input** Gemma 4 usage, serve the
+> full weights via HF/transformers or vLLM (`google/gemma-4-E4B-it`), not the Ollama tag.
 
 **Ollama (8B on local node):**
 ```bash
@@ -82,7 +85,7 @@ huggingface-cli download nvidia/NVLM-D-72B --local-dir ~/.cache/huggingface/nemo
 ## Node routing rules
 
 - **dgx-spark** (`pmoves-spark`): All models, primary for 70B+, Gemma 4 31B, and NeMo Omni
-- **5090 / 4090**: 8B models via Ollama (Unsloth GGUF preferred); Gemma 4 E4B multimodal; Qwen3-Embedding-4B on 5090
+- **5090 / 4090**: 8B models via Ollama (Unsloth GGUF preferred); Gemma 4 E4B (text+image via Ollama); Qwen3-Embedding-4B on 5090
 - **rdna4** (`pmoves-rdna4`): 8B via Ollama + ROCm; Qwen3-Embedding-0.6B via HF sentence-transformers
 - **z890**: Qwen3-Embedding-0.6B only (no GPU large-model inference)
 
