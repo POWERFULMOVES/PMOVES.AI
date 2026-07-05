@@ -1,0 +1,22 @@
+{
+  "name": "notebooklm-mcp-agent",
+  "version": "1.0.0",
+  "description": "MCP server for NotebookLM and Google Services via Universal OAuth",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "googleapis": "^140.0.0",
+    "google-auth-library": "^9.11.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "typescript": "^5.5.3"
+  }
+}
