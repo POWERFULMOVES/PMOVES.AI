@@ -269,7 +269,7 @@ DARKXSIDE, founder of Cataclysm Studios Inc., is publicly launching **PMOVES.AI*
 
 **Three angles worth pursuing:**
 
-1. **Community-owned AI infrastructure vs. the centralized-provider model** — Fordham Hill Bronx cooperative is live; St. Maarten disaster-response blueprint is next.
+1. **Community-owned AI infrastructure vs. the centralized-provider model** — the Fordham Hill Bronx cooperative pilot is operational (public registration opens after pilot review); St. Maarten disaster-response blueprint is next.
 2. **Zero-retention as enterprise moat** — UNFCU is the flagship Y2 enterprise client. Proposal going out this week.
 3. **Voice-agent range demo** — through-walls / miles-of-range is filmable in under an hour. Mobile demo unit available.
 
