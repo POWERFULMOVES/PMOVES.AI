@@ -125,3 +125,68 @@ api_key_location = "none"
     parsed = _toml.loads(out)
     assert parsed["models"]["registry_worker_a"]["providers"]["local_active"]["model_name"] == "local-a"
     assert parsed["models"]["registry_worker_b"]["providers"]["bootstrap_parent"]["model_name"] == "cloud-parent-b"
+
+
+def test_default_sync_fetches_alias_lanes_from_api_models(monkeypatch, tmp_path, capsys):
+    """The default sync (no --models-json) must fetch /api/models — the only
+    endpoint carrying registry_* aliases — so a promoted lane gets its real
+    body while lanes absent from the payload keep their bootstrap block."""
+    import io
+    import json as _json
+    import tomllib as _toml
+
+    import tools.tz_registry_sync as tz
+
+    static = """
+# BEGIN REGISTRY-MANAGED MODELS
+[models.registry_worker_qwen]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_qwen.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://cloud.example/v1"
+model_name = "cloud-parent-qwen"
+api_key_location = "none"
+
+[models.registry_worker_other]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_other.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://cloud.example/v1"
+model_name = "cloud-parent-other"
+api_key_location = "none"
+# END REGISTRY-MANAGED MODELS
+"""
+    toml_path = tmp_path / "tensorzero.toml"
+    toml_path.write_text(static, encoding="utf-8")
+    monkeypatch.setattr(tz, "TZ_TOML", toml_path)
+
+    # registry_worker_qwen is promoted (local alias + api_base); the "other"
+    # lane is absent from /api/models and must fall through to the guard.
+    payload = {"items": [
+        {"model_id": "qwen3-coder:30b",
+         "api_base": "http://pmoves-ollama:11434/v1",
+         "aliases": [{"alias": "registry_worker_qwen", "context": "worker"}]},
+    ]}
+
+    requested = {}
+
+    def fake_urlopen(url, timeout=None):
+        requested["url"] = url
+        return io.BytesIO(_json.dumps(payload).encode("utf-8"))
+
+    monkeypatch.setattr(tz.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(sys, "argv", ["tz_registry_sync.py", "--dry-run"])
+
+    assert tz.main() == 0
+    assert requested["url"].endswith("/api/models"), requested["url"]
+
+    parsed = _toml.loads(capsys.readouterr().out)
+    # promoted lane got its real registry-managed body from /api/models
+    qwen = parsed["models"]["registry_worker_qwen"]["providers"]["local_active"]
+    assert qwen["model_name"] == "qwen3-coder:30b"
+    assert qwen["api_base"] == "http://pmoves-ollama:11434/v1"
+    # lane absent from the payload keeps its bootstrap block (#1950 guard)
+    other = parsed["models"]["registry_worker_other"]["providers"]["bootstrap_parent"]
+    assert other["model_name"] == "cloud-parent-other"

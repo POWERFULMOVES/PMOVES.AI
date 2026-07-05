@@ -11,6 +11,7 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import urllib.request
@@ -98,22 +99,33 @@ def sync_registry_section(static_toml_text: str, registry_toml_text: str) -> str
     )
 
 
+def _fetch_models(registry_url: str) -> dict:
+    """Fetch the /api/models payload (rows carry their registry_* aliases)."""
+    with urllib.request.urlopen(f"{registry_url}/api/models", timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--registry-url", default="http://127.0.0.1:8110")
-    ap.add_argument("--models-json", help="Path to a saved /api/models JSON payload; lane blocks are synthesized from aliases instead of fetching the registry TOML")
+    ap.add_argument("--models-json", help="Path to a saved /api/models JSON payload; lane blocks are synthesized offline instead of fetching the live registry")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
+    # The default sync fetches /api/models (not /api/tensorzero/config):
+    # only the alias-backed rows carry the registry_* lane names that
+    # synthesize_lane_blocks() splices, so a promoted lane like
+    # registry_worker_qwen gets its real registry-managed body. The
+    # TensorZeroConfigBuilder behind /api/tensorzero/config names its model
+    # tables from model_id and never emits registry_* tables, so it would
+    # leave every promoted lane empty and the #1950 guard would keep the
+    # stale bootstrap cloud-parent block. Lanes still absent from the payload
+    # keep their bootstrap block via that same guard in sync_registry_section.
     if args.models_json:
-        import json
         payload = json.loads(Path(args.models_json).read_text(encoding="utf-8"))
-        registry_text = synthesize_lane_blocks(payload)
     else:
-        with urllib.request.urlopen(
-            f"{args.registry_url}/api/tensorzero/config", timeout=15
-        ) as resp:
-            registry_text = resp.read().decode("utf-8")
+        payload = _fetch_models(args.registry_url)
+    registry_text = synthesize_lane_blocks(payload)
     static_text = TZ_TOML.read_text(encoding="utf-8")
     merged = sync_registry_section(static_text, registry_text)
     if args.dry_run:
