@@ -65,7 +65,7 @@ From a trusted PMOVES node:
 
 ```bash
 ssh pmoves@pmoves-9850x3d-r9700
-curl http://localhost:8080/v1/models
+curl http://localhost:8090/v1/models
 curl http://localhost:9835/ | head -20
 ```
 

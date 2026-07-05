@@ -3,8 +3,9 @@
 #
 # Installs ROCm 7.1, AMD GPU drivers, and builds the gfx1201-compatible
 # llama.cpp HIP fork (Ollama bundled ROCm v6 does not support gfx1201 as of
-# 2026-04). Produces a systemd-managed llama-server at :8080 with an
-# OpenAI-compatible API.
+# 2026-04). Produces a systemd-managed llama-server at :8090 with an
+# OpenAI-compatible API. Port 8090 (not 8080) because 8080 is reserved for
+# Agent Zero fleet-wide; the TensorZero llamacpp_rocm route targets :8090.
 #
 # Sourced by deploy/provision/hostinger-kvm-setup.sh when
 # --node-type=rdna4-workstation is selected, but safe to run standalone.
@@ -38,7 +39,9 @@ AMDGPU_VERSION="${AMDGPU_VERSION:-latest}"
 LLAMA_CPP_PIN="a6e76c64dd525a1bd7726fa1d1145954cef375a8"
 LLAMA_CPP_REPO="${LLAMA_CPP_REPO:-https://github.com/tlee933/llama.cpp-rdna4-gfx1201}"
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/opt/llama.cpp-rdna4}"
-LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8080}"
+# 8090 (not 8080): 8080 is reserved for Agent Zero fleet-wide; the TensorZero
+# llamacpp_rocm route in tensorzero.toml targets pmoves-9850x3d-r9700:8090.
+LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8090}"
 LLAMA_MODELS_DIR="${LLAMA_MODELS_DIR:-/var/lib/llama-models}"
 DEFAULT_MODEL="${DEFAULT_MODEL:-bartowski/gemma-2-27b-it-GGUF}"
 GPU_TARGETS="${GPU_TARGETS:-gfx1201}"
