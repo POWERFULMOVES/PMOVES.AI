@@ -117,3 +117,12 @@ mesh-egress-measure: ## Measure CURRENT egress only (portable; e.g. ARGS='--labe
 
 mesh-capacity: ## Map homes onto node capacity: make mesh-capacity DOWN=845 HOMES=200
 	@bash $(MESH_AB) capacity --down $(or $(DOWN),845) $(if $(HOMES),--homes $(HOMES),) $(ARGS)
+
+# On-VPS exit-node observer — solo-operator pilot observation (no agent on any home).
+# Pairs with Hostinger MCP (VM CPU/RAM/bandwidth, agent-free) for the full picture.
+EXIT_OBS := ../deploy/provision/exit-node-observer.sh
+
+.PHONY: exit-node-observe
+exit-node-observe: ## Run the on-VPS observer on a node: make exit-node-observe NODE=pmoves-kvm4-1 [FMT=--json|--prom]
+	@cat $(EXIT_OBS) | ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes root@$(or $(NODE),pmoves-kvm4-1) \
+		'cat > /tmp/exit-node-observer.sh && bash /tmp/exit-node-observer.sh $(or $(FMT),human)'
