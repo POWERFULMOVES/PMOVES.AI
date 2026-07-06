@@ -1,4 +1,4 @@
-# Cloud-Hybrid HERMES + Agent Zero Provider Standup Implementation Plan (rev 3)
+# Cloud-Hybrid HERMES + Agent Zero Provider Standup Implementation Plan (rev 4)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -19,7 +19,7 @@
 - Claim before edits / release after, in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
 - TZ endpoint from host: `http://127.0.0.1:3030/openai/v1`; model syntax `tensorzero::function_name::<fn>`.
 - llama.cpp/vLLM local serving binds **:8090** (8080 is Agent Zero's; existing `llamacpp_rocm` blocks all carry weight 0.0 — moving them is safe and required).
-- Spec deviations documented in spec rev 3: no `pmoves_embed` function (reuse `gemma_embed_local`); Alibaba canonical env is `ALIBABA_PRO_CODING_PLAN`.
+- Spec deviations documented in spec rev 4: no `pmoves_embed` function (reuse `gemma_embed_local`); Alibaba canonical env is `ALIBABA_PRO_CODING_PLAN`.
 
 ---
 
@@ -54,12 +54,13 @@ Expected: both verify (adjust import path to the module's actual API after readi
 ### Task 0b: Topology regeneration + corrections
 
 **Files:**
-- Regenerate: `pmoves/docs/AGENTS/PMOVES_AGENT_TOPOLOGY.md` via `python -m pmoves.tools.agent_taxonomy_helper mermaid` (from `pmoves/`; read the helper's --help first — regenerate, don't hand-edit)
+- Regenerate: `pmoves/docs/AGENTS/PMOVES_AGENT_TOPOLOGY.md` via `python -m tools.agent_taxonomy_helper mermaid` run from inside `pmoves/` (the package root is `pmoves/`, so `pmoves.tools.…` does not resolve from there; read the helper's --help first — regenerate, don't hand-edit)
 - Modify: `.claude/context/runner-topology.md` — split into "CI runner fabric" and "model runner fabric" sections; add missing rows: `pmoves-spark-runner` (self-hosted,spark,ARM64, `/opt/actions-runner-spark`), `hotfix` lane (`local_cert_runners.py:45`), `cloudstartup,staging`; fix Z890-as-primary framing (dev host is B850/Knuckles); note Workers AI = planned fallback tier, CI Worker routes commented out
 - Modify: `pmoves/config/agent_registry.yaml` header — `taxonomy_version: 1.5.0`, updated date
 - Modify: `CLAUDE.md` / `pmoves/docs/ROOMS_ON_A_STAGE.md` P7 links — point to `pmoves/docs/archive/AGNOTE_P7_PLAYGROUND-2026-04-10.md` (the named doc is a 2-line stub)
 - Modify: `.claude/commands/archon/mint-agent.md:36` — room list 4 → the 6 rooms in `catalog.json`
 - Fix: `pbnj/pinokio/api/pmoves-pbnj/demo.js:46` — `2>nul` → `2>/dev/null` (cmd.exe-ism creates a literal `nul` file on Linux)
+- Refresh: `.claude/context/nats-subjects.md` + `.claude/context/services-catalog.md` — any port, NATS-subject, or health-endpoint change in this task must land in the operator-facing context docs in the same PR (they drifted before; don't reopen the gap)
 
 - [ ] **Step 1:** Run the generator; diff against the hand-edited doc; keep generator output (it reflects the 79-agent registry; old doc listed ~59 and claimed 76).
 - [ ] **Step 2:** Apply the runner-topology, link, room-list, and demo.js fixes. Gateway-agent port corrections (8100→8111) ride along wherever the topology doc mentions it.
@@ -285,6 +286,12 @@ api_key_location = "env::MOONSHOT_API_KEY"
 ```
 
 (The hermes bootstrap id: verify against `curl -s https://openrouter.ai/api/v1/models | grep -o '"nousresearch/[^"]*"' | head` and use a live id.)
+
+> **Sync-tool contract note (post-landing):** the sketch above reads like a straight
+> marker-section replacement, but the landed `pmoves/tools/tz_registry_sync.py`
+> **merges** lanes — a lane absent from the registry payload keeps its cloud-parent
+> bootstrap block; only lanes the registry actually publishes get replaced. Partial
+> promotion must never drop a fallback lane (see `test_tz_registry_sync.py`).
 
 - [ ] **Step 4: Function shells** — orchestrator variants reference static cloud models; worker variants reference ONLY lane aliases:
 
@@ -681,7 +688,7 @@ git commit -m "feat(providers): env slots + tier manifest + canonical aliases (k
 git push -u origin feat/provider-cloud-hybrid-tier
 gh pr create --title "feat(providers): cloud-hybrid tier — kilocode/ollama-cloud/hf + registry-managed worker lanes" --body "$(cat <<'EOF'
 ## Summary
-- Spec rev 3 (docs/superpowers/specs/2026-07-02-hermes-agent-zero-provider-standup-design.md): cloud coding plans orchestrate; local workers are Supabase/registry-managed — NO hardcoded local model IDs
+- Spec rev 4 (docs/superpowers/specs/2026-07-02-hermes-agent-zero-provider-standup-design.md): cloud coding plans orchestrate; local workers are Supabase/registry-managed — NO hardcoded local model IDs
 - provider_catalog.yaml: +kilocode, +ollama_cloud, +huggingface (weight 0.0, cascade-activated)
 - tensorzero.toml: orchestrator/worker function shells; REGISTRY-MANAGED marker section with cloud-parent bootstrap lanes; llamacpp_rocm 8080→8090 (Agent Zero owns 8080)
 - tz_registry_sync.py: splices model-registry (:8110) generated blocks into the marker section
@@ -901,7 +908,7 @@ gh pr create --base main --title "feat(hermes): Knuckles live standup — dynami
 
 ```bash
 git checkout -b feat/pinokio-model-selector
-git add pmoves/integrations/pinokio/pmoves-model-selector/
+git add pbnj/pinokio/api/pmoves-model-selector/
 git commit -m "feat(pinokio): model-selector launcher — registry/gpu-orchestrator UI + gfx1201 llama-server lane"
 ```
 

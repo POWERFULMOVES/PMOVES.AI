@@ -1,9 +1,9 @@
 # Design: Node-Aware HERMES + Agent Zero Provider Standup (Knuckles + SPARK)
 
-**Date:** 2026-07-02 (rev 3 — dynamic model plane: no hardcoded models, Supabase + APIs)
+**Date:** 2026-07-02 (rev 4 — topology fan-out synthesis on top of the rev 3 dynamic model plane)
 **Node:** B850 / PMOVES-Knuckles (dual AMD R9700 64GB, ROCm 7.1)
 **Author:** B850-CLAUDE
-**Status:** Rev 3 pending operator re-approval
+**Status:** Rev 4 — executed via PRs #1948/#1950/#1952 (see §Rev 4)
 
 ## Rev 3 correction (operator, 2026-07-02)
 
@@ -175,9 +175,9 @@ siblings are added as rows in the pairing matrix, not new architectures.
 
 | Provider key | Tier | Credential (canonical) | Plan |
 |---|---|---|---|
-| `zai` | orchestrator | `ZAI_API_KEY` (+`ZAI_API_KEYS` pool) | GLM Coding Plan |
+| `zai` | orchestrator | `Z_AI_API_KEY` (aliases ZAI_API_KEY, +`ZAI_API_KEYS` pool) | GLM Coding Plan |
 | `kimi` | orchestrator | `MOONSHOT_API_KEY` (alias KIMI_API_KEY) | Kimi coding plan |
-| `alibaba` | orchestrator | `DASHSCOPE_API_KEY` (alias ALIBABA_API_KEY) | Alibaba coding plan |
+| `alibaba` | orchestrator | `ALIBABA_PRO_CODING_PLAN` (legacy aliases DASHSCOPE_API_KEY, ALIBABA_API_KEY) | Alibaba coding plan |
 | `kilocode` | orchestrator | `KILOCODE_API_KEY` | Kilo Code plan |
 | `ollama_cloud` | orchestrator | `OLLAMA_API_KEY` | Ollama Pro |
 | `huggingface` | fallback | `HF_TOKEN` | HF router |
