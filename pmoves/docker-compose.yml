@@ -2643,7 +2643,12 @@ services:
     - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_a2a_server_enabled=true
-    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:?MCP_SERVER_TOKEN must be set when a2a_server_enabled=true}
+    # A0_SET_mcp_server_token intentionally NOT set here (CANONICAL_NAMES.md §5):
+    # env_file env.tier-agent provides it when the operator has pinned a token;
+    # otherwise Agent Zero auto-generates one at startup. The previous
+    # ${MCP_SERVER_TOKEN:?...} hard-require made *every* compose invocation on
+    # the shared file fail interpolation on nodes without the var — blocking
+    # bring-up of unrelated services (hit on Knuckles 2026-07-06).
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
