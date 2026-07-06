@@ -33,7 +33,7 @@ Ask the operator for:
 
 - `agent-name` — kebab-case, unique under `PMOVES-agents.md/` (e.g. `geometry-curator`).
 - `role` — short capability summary (e.g. "Validates CHIT-CGP geometry payloads before publish").
-- `room` — one of the entries in `pmoves/config/rooms/catalog.json` (`4090-field.room.control`, `5090-voice.room.studio`, `5090-kilocode.room.studio`, `z890-infra.room.fabric`).
+- `room` — one of the entries in `pmoves/config/rooms/catalog.json` (`4090-field.room.control`, `5090-voice.room.studio`, `5090-kilocode.room.studio`, `z890-infra.room.fabric`, `demo.room.rehearsal`, `hermes-agent.room.control`).
 - `owning-persona` — the human or higher-tier agent accountable. Default to the authenticated creator's Google email from Step 0; only override if a higher-tier agent (e.g. `delivery-agent`) is the actual owner.
 - `coding-agent?` — boolean. If true, also scaffold a `.claude/agents/<agent-name>.md` definition.
 - Optional: `tools`, `forms`, `tags`.

@@ -1,0 +1,6 @@
+{
+  "name": "pmoves-design",
+  "private": true,
+  "type": "module",
+  "description": "PMOVES design token layer — browser-loaded ESM; no build deps."
+}

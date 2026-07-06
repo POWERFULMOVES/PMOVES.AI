@@ -1637,6 +1637,11 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    # pmoves_external: required for the ports: stanza to actually publish —
+    # pmoves_api/pmoves_bus are internal:true, and Docker silently skips host
+    # port publishing when a container has no non-internal network attached
+    # (HostConfig.PortBindings gets recorded but NetworkSettings.Ports stays null).
+    - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     deploy:
@@ -2986,6 +2991,23 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+  notebooklm-agent:
+    build:
+      context: ./services/notebooklm-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_external]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro
     build: ./services/a2ui-nats-bridge
@@ -3318,6 +3340,9 @@ services:
     - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
     - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
     - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
+    - OLLAMA_API_KEY=${OLLAMA_API_KEY:-local-disabled}
+    - KILOCODE_API_KEY=${KILOCODE_API_KEY:-local-disabled}
+    - HF_TOKEN=${HF_TOKEN:-local-disabled}
     - MINIMAX_API_KEY=${MINIMAX_API_KEY:-local-disabled}
     - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
     - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}

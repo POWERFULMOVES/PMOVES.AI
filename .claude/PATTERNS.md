@@ -59,6 +59,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Supabase stack restart (13 services) | `make -C pmoves supa-restart` | — |
 | Supabase crash-loop diagnosis | `pmoves/docs/operations/SUPABASE_OPERATIONS.md` | — |
 | Kong port bind silent-fail | `docker events --filter container=X` — check OOM FIRST | — |
+| Bootstrap a node onto the Docker MCP Toolkit (per-node MCP surface) | `make -C pmoves mcp-toolkit-bootstrap` + `mcp-toolkit-connect` — **run ON the node**, no raw-SSH sidestep | runbook `pmoves/docs/runbooks/MCP_TOOLKIT_NODE_BOOTSTRAP.md`; agent `fleet-node-deployer` |
 
 **`volume-reset SERVICE` values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`.
 
