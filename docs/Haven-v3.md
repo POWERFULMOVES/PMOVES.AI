@@ -61,7 +61,7 @@ A commodity-parts alternative to $8,000+ MPU5-class radios — built from gear y
 
 - **Mostly allied supply chain.** Raspberry Pi manufactured in Wales (UK); Morse Micro HaLow silicon designed in Sydney, Australia; most of the rest off-the-shelf from U.S./E.U. distributors (DigiKey, Mouser, Amazon).
 - **Standard removable 21700 lithium-ion cells.** No proprietary battery pack.
-- **Overclocked HaLow radio.** 27 dBm TX vs. ~22 dBm on most stock HaLow gear — roughly 3.2× more output power, all within FCC limits.
+- **Overclocked HaLow radio.** Up to 27 dBm TX (Haven 1 firmware overclock; Haven 2 reaches 26 dBm via its integrated PA) vs. ~22 dBm on most stock HaLow gear — roughly 3.2× more output power, all within FCC limits.
 - **True 802.11s mesh + BATMAN-adv.** Standards-based, self-healing routing on a unified Layer 2 mesh — not a proprietary vendor protocol.
 - **Sovereign routing layer.** Optional Reticulum on top for encrypted, identity-based comms — independent of any infrastructure or cloud.
 - **Fully open source.** OpenWRT base, OpenMANET / MorseMicro images, install scripts, integrations on GitHub.
@@ -78,7 +78,7 @@ Haven uses Wi-Fi HaLow for the long-distance link between nodes — operates aro
 
 ### Transmit Power
 
-Much stock HaLow gear sits around 21–22 dBm (~125–160 mW). Haven can push to 27 dBm (~500 mW). Because dBm is logarithmic, 22→27 dBm is ~3.2× more output (vs 21 dBm, ~4×), while staying below the FCC's 30 dBm EIRP / 1 W ceiling with correct antenna setup.
+Much stock HaLow gear sits around 21–22 dBm (~125–160 mW). Haven can push to 27 dBm (~500 mW) — that's Haven 1's firmware overclock on the MM6108; Haven 2's MM8108 tops out at 26 dBm from its integrated PA. Because dBm is logarithmic, 22→27 dBm is ~3.2× more output (vs 21 dBm, ~4×), while staying below the FCC's 30 dBm EIRP / 1 W ceiling with correct antenna setup.
 
 ### Proven Throughput
 

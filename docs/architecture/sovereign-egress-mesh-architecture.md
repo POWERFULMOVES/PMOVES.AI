@@ -24,7 +24,7 @@ missing capability.
 |-------|-----------------|-----------|------------------|--------|
 | **L1 — Access mesh** | Off-grid RF reach where there is no uplink | **Haven** (Wi-Fi HaLow 802.11ah ~900 MHz, 802.11s + BATMAN-adv) | `docs/Haven-v3.md` (external blueprint) | Not built — reference |
 | **L2 — Identity overlay** | Encrypted, identity-addressed L7 routing; bridge dissimilar transports | **Reticulum** (`rnsd`; AutoInterface/UDP/TCP; mandatory encryption) | `docs/Reticulum-Network-Blueprint-v1.md` (external blueprint) | Not built — reference |
-| **L3 — Long-haul overlay** | Bridge distant nodes over any internet uplink | **Tailscale / Headscale / WireGuard** | `pmoves/docs/operations/TAILSCALE_EXIT_NODE_RUNBOOK.md`, `pmoves/configs/tailscale-acl-policy.json` | **Live** (all 3 KVMs are approved exit nodes) |
+| **L3 — Long-haul overlay** | Bridge distant nodes over any internet uplink | **Tailscale / Headscale / WireGuard** | `pmoves/docs/operations/TAILSCALE_EXIT_NODE_RUNBOOK.md`, `pmoves/configs/tailscale-acl-policy.json` | **Live** (`pmoves-kvm2` + `pmoves-kvm4-1` approved; `pmoves-kvm4-2` advertised, pending one console approve — see runbook) |
 | **L4 — Egress privacy** | Public exit-IP ≠ the VPS's Hostinger IP | **Mullvad WG upstream** | `pmoves/docs/operations/MULLVAD_EXIT_UPSTREAM.md`, `deploy/provision/kvm-mullvad-upstream.sh` | **PR #1945** — coded, review-cleared, held for this doc |
 
 Adjacent (not a routing layer, but part of the same sovereign-networking posture):

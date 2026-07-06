@@ -39,7 +39,7 @@ Both use LoRa radios and form decentralized meshes, but solve different problems
 
 **Not competitors — complementary.** Meshtastic is the frictionless gateway; Reticulum is the composable network stack you reach for when you outgrow a simple LoRa mesh.
 
-**Unattended MCU caveat:** Meshtastic runs entirely on a cheap MCU (flash, box it, deploy). An RNode by itself is *just a radio modem* — no routing/app logic on the MCU; it needs an **RNS instance (`rnsd`)** running on a connected host (phone, laptop, SBC, OpenWrt router). So a bare-MCU Reticulum node isn't a drop-in unattended deployment — pair the RNode with a small host (Pi / OpenWrt router) running RNS.
+**Unattended MCU caveat:** Meshtastic runs entirely on a cheap MCU (flash, box it, deploy). An RNode by itself is *just a radio modem* — no routing/app logic on the MCU; it needs an **RNS instance** running on a connected host — a laptop, SBC, or OpenWrt router running the `rnsd` daemon, or a phone hosting a shared RNS instance via Sideband. So a bare-MCU Reticulum node isn't a drop-in unattended deployment — pair the RNode with a small host (Pi / OpenWrt router) running RNS.
 
 ## RNode Build Instructions
 
@@ -87,7 +87,7 @@ Pre-built `.bin`: **releases/tag/v1.75-neopixel**.
 ### Client applications
 
 - **MeshChat** — desktop (macOS/Windows/Linux), easiest over USB. Most success. (Sometimes must navigate away + back to see latest messages.)
-- **Sideband** — Android/iOS `.apk` from the public repo. Harder with a direct RNode; effortless over default ethernet/wifi interface.
+- **Sideband** — Android `.apk` from the public repo (also desktop: Linux/macOS/Windows). Harder with a direct RNode; effortless over default ethernet/wifi interface.
 
 ## LoRa Radio Configuration
 
@@ -113,7 +113,7 @@ Distilled from the GitHub Reticulum README. **Why:** end-to-end encryption by de
 
 ### Two deployment approaches
 
-**Easy — Reticulum on EUDs only (no node install):** mesh nodes act as pure IP routers; each end-user device runs a Reticulum client over WiFi; HaLow transport is invisible. Laptop joins the gate's WiFi AP → `10.41.x.x`; phone joins a heltec node's bridged AP → also `10.41.x.x`; both on the same mesh subnet, IP routes over HaLow transparently. **RNS AutoInterface uses UDP multicast** to auto-discover peers. No RNS config / node SSH / node install needed. Apps: Sideband (iOS/Android), MeshChat (desktop), NomadNet (desktop). **Recommended starting point.**
+**Easy — Reticulum on EUDs only (no node install):** mesh nodes act as pure IP routers; each end-user device runs a Reticulum client over WiFi; HaLow transport is invisible. Laptop joins the gate's WiFi AP → `10.41.x.x`; phone joins a heltec node's bridged AP → also `10.41.x.x`; both on the same mesh subnet, IP routes over HaLow transparently. **RNS AutoInterface uses UDP multicast** to auto-discover peers. No RNS config / node SSH / node install needed. Apps: Sideband (Android + desktop), MeshChat (desktop), NomadNet (desktop). **Recommended starting point.**
 
 **Advanced — RNS installed on nodes:** enables transport-node relaying (bridge HaLow mesh ↔ LoRa RNode for extreme range), always-on services (NomadNet/LXMF stores), cross-interface routing (HaLow/LoRa/internet), and store-and-forward buffering for offline EUDs.
 
