@@ -68,7 +68,7 @@ mutates the MCP config — get operator auth first (auto-mode classifier policy)
 
 Mirror `make -C pmoves up-all-new` / `up-core`:
 
-```
+```text
 up-obs → up-supabase → up-data-tier → up-bus → up-workers → up-agents → up-tensorzero → up-integrations → auth-bootstrap → up-ui
 ```
 
