@@ -15,8 +15,17 @@ module.exports = {
     },
     {
       method: "notify",
+      when: "{{exists('llama.cpp-rdna4-gfx1201')}}",
       params: {
         html: "llama.cpp (gfx1201) updated and rebuilt."
+      }
+    },
+    {
+      method: "notify",
+      when: "{{!exists('llama.cpp-rdna4-gfx1201')}}",
+      params: {
+        html: "Nothing to update — the gfx1201 fork is not installed. Run Install first.",
+        type: "warning"
       }
     }
   ]

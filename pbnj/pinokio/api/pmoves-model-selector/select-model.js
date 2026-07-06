@@ -1,8 +1,12 @@
 // select-model.js — the model-selection UI. Pure UI over the live APIs:
 //   registry        GET  http://127.0.0.1:8110/api/models
-//   gpu-orchestrator GET http://127.0.0.1:8200/models   (loaded + registry known)
-//   gpu-orchestrator POST http://127.0.0.1:8200/models/load           {model_id, provider}
-//   gpu-orchestrator POST http://127.0.0.1:8200/models/unload/{provider}/{model_id}
+//   gpu-orchestrator GET http://127.0.0.1:8200/api/gpu/models   (loaded + registry known)
+//   gpu-orchestrator POST http://127.0.0.1:8200/api/gpu/models/load           {model_id, provider}
+//   gpu-orchestrator POST http://127.0.0.1:8200/api/gpu/models/unload/{provider}/{model_id}
+//
+// The gpu-orchestrator router is mounted under APIRouter(prefix="/api/gpu")
+// (pmoves/services/gpu-orchestrator/api/routes.py), so every gpu-orchestrator
+// URL below is prefixed with /api/gpu.
 //
 // There are NO hardcoded model ids anywhere: the picker is built entirely from
 // the API responses at runtime. Both services must be reachable for the load
@@ -17,7 +21,7 @@ module.exports = {
     {
       method: "net",
       when: "{{args.action != 'unload'}}",
-      params: { url: "http://127.0.0.1:8200/models", method: "get" }
+      params: { url: "http://127.0.0.1:8200/api/gpu/models", method: "get" }
     },
     {
       method: "local.set",
@@ -39,7 +43,7 @@ module.exports = {
       when: "{{args.action != 'unload'}}",
       params: {
         title: "Load a model",
-        description: "Pick a model to load via the gpu-orchestrator (:8200). List is built live from :8200/models + registry :8110.",
+        description: "Pick a model to load via the gpu-orchestrator (:8200). List is built live from :8200/api/gpu/models + registry :8110.",
         form: [{
           type: "select",
           key: "selection",
@@ -60,7 +64,7 @@ module.exports = {
       method: "net",
       when: "{{args.action != 'unload'}}",
       params: {
-        url: "http://127.0.0.1:8200/models/load",
+        url: "http://127.0.0.1:8200/api/gpu/models/load",
         method: "post",
         data: {
           model_id: "{{local.sel.model_id}}",
@@ -80,7 +84,7 @@ module.exports = {
     {
       method: "net",
       when: "{{args.action == 'unload'}}",
-      params: { url: "http://127.0.0.1:8200/models/loaded", method: "get" }
+      params: { url: "http://127.0.0.1:8200/api/gpu/models/loaded", method: "get" }
     },
     {
       method: "local.set",
@@ -110,7 +114,7 @@ module.exports = {
       method: "net",
       when: "{{args.action == 'unload'}}",
       params: {
-        url: "http://127.0.0.1:8200/models/unload/{{local.sel.provider}}/{{local.sel.model_id}}",
+        url: "http://127.0.0.1:8200/api/gpu/models/unload/{{encodeURIComponent(local.sel.provider)}}/{{encodeURIComponent(local.sel.model_id)}}",
         method: "post"
       }
     },

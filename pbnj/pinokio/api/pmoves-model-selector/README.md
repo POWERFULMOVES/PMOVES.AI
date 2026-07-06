@@ -16,8 +16,8 @@ provider.
 |-----------|--------|--------|
 | Install (build llama.cpp gfx1201) | `install.js` | Clone `tlee933/llama.cpp-rdna4-gfx1201`, `cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx1201`, build `llama-server`. Optional operator-supplied `hf.download` (never a default id). |
 | Start llama-server (GGUF, :8090) | `start.js` | `filepicker` a `*.gguf`, then serve it with `HIP_VISIBLE_DEVICES=0,1 llama-server --host 127.0.0.1 --port 8090 --tensor-split 0.5,0.5`. Captures the http URL. |
-| Select & Load Model | `select-model.js` | GET registry `:8110/api/models` + gpu-orchestrator `:8200/models` → `input` select picker → POST `:8200/models/load`. |
-| Unload Model | `select-model.js` (`action: unload`) | GET `:8200/models/loaded` → picker → POST `:8200/models/unload/{provider}/{model_id}`. |
+| Select & Load Model | `select-model.js` | GET registry `:8110/api/models` + gpu-orchestrator `:8200/api/gpu/models` → `input` select picker → POST `:8200/api/gpu/models/load`. |
+| Unload Model | `select-model.js` (`action: unload`) | GET `:8200/api/gpu/models/loaded` → picker → POST `:8200/api/gpu/models/unload/{provider}/{model_id}`. |
 | Update / Reset | `update.js` / `reset.js` | Rebuild / remove the gfx1201 fork. Downloaded `models/` are left untouched. |
 
 ## API contract
@@ -25,11 +25,11 @@ provider.
 ```
 registry            GET  http://127.0.0.1:8110/api/models
                     → { "items": [ { "model_id": "...", "provider_type": "...", ... } ] }
-gpu-orchestrator    GET  http://127.0.0.1:8200/models
+gpu-orchestrator    GET  http://127.0.0.1:8200/api/gpu/models
                     → { "loaded": [...], "registry": [ { "id": "...", "provider": "..." } ] }
-gpu-orchestrator    GET  http://127.0.0.1:8200/models/loaded  → { "models": [...] }
-gpu-orchestrator    POST http://127.0.0.1:8200/models/load    body { "model_id": "...", "provider": "..." }
-gpu-orchestrator    POST http://127.0.0.1:8200/models/unload/{provider}/{model_id}
+gpu-orchestrator    GET  http://127.0.0.1:8200/api/gpu/models/loaded  → { "models": [...] }
+gpu-orchestrator    POST http://127.0.0.1:8200/api/gpu/models/load    body { "model_id": "...", "provider": "..." }
+gpu-orchestrator    POST http://127.0.0.1:8200/api/gpu/models/unload/{provider}/{model_id}
 llama-server (GGUF) GET  http://127.0.0.1:8090/v1/models      → TensorZero `llamacpp_rocm` provider (http://<host>:8090/v1)
 ```
 
@@ -57,13 +57,13 @@ This is the documented deviation from the `{{port}}` convention.
 ```bash
 # What can I load?
 curl -s http://127.0.0.1:8110/api/models        | jq '.items[] | {model_id, provider_type}'
-curl -s http://127.0.0.1:8200/models            | jq '{loaded, registry}'
+curl -s http://127.0.0.1:8200/api/gpu/models    | jq '{loaded, registry}'
 
 # Load / unload
-curl -s -X POST http://127.0.0.1:8200/models/load \
+curl -s -X POST http://127.0.0.1:8200/api/gpu/models/load \
   -H 'content-type: application/json' \
   -d '{"model_id":"qwen3-coder:30b","provider":"ollama"}'
-curl -s -X POST http://127.0.0.1:8200/models/unload/ollama/qwen3-coder:30b
+curl -s -X POST http://127.0.0.1:8200/api/gpu/models/unload/ollama/qwen3-coder:30b
 
 # GGUF lane (once start.js is running)
 curl -s http://127.0.0.1:8090/v1/models
@@ -77,7 +77,7 @@ import requests
 catalog = requests.get("http://127.0.0.1:8110/api/models").json()["items"]
 pick = catalog[0]  # choose interactively in real use — never hardcode
 requests.post(
-    "http://127.0.0.1:8200/models/load",
+    "http://127.0.0.1:8200/api/gpu/models/load",
     json={"model_id": pick["model_id"], "provider": pick["provider_type"]},
 )
 ```
@@ -87,7 +87,7 @@ requests.post(
 ```js
 const catalog = (await (await fetch("http://127.0.0.1:8110/api/models")).json()).items;
 const pick = catalog[0]; // choose interactively — never hardcode
-await fetch("http://127.0.0.1:8200/models/load", {
+await fetch("http://127.0.0.1:8200/api/gpu/models/load", {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ model_id: pick.model_id, provider: pick.provider_type }),
@@ -101,8 +101,9 @@ This launcher currently lives inside a temporary git worktree, so a symlink from
 should create the live link from the canonical repo checkout:
 
 ```bash
-ln -sfn /home/pmoves-knuckles/pinokio/api/PMOVES.AI/pbnj/pinokio/api/pmoves-model-selector \
-        /home/pmoves-knuckles/pinokio/api/pmoves-model-selector
+# Replace /path/to/your/checkout with wherever this repo is cloned on the operator machine.
+ln -sfn /path/to/your/checkout/pbnj/pinokio/api/pmoves-model-selector \
+        "$HOME/pinokio/api/pmoves-model-selector"
 ```
 
 ## Launcher conformance (exit-checklist confirmations)

@@ -62,7 +62,7 @@ module.exports = {
       }].concat(selectItems, [{
         icon: "fa-solid fa-book",
         text: "gpu-orchestrator loaded models",
-        href: "http://127.0.0.1:8200/models/loaded"
+        href: "http://127.0.0.1:8200/api/gpu/models/loaded"
       }, {
         icon: "fa-solid fa-list",
         text: "registry catalog (:8110)",
@@ -91,7 +91,7 @@ module.exports = {
     .concat([{
       icon: "fa-solid fa-book",
       text: "gpu-orchestrator loaded models",
-      href: "http://127.0.0.1:8200/models/loaded"
+      href: "http://127.0.0.1:8200/api/gpu/models/loaded"
     }, {
       icon: "fa-solid fa-list",
       text: "registry catalog (:8110)",
