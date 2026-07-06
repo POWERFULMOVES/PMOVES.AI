@@ -6,7 +6,8 @@ GRAPHITI_MARK: `PHI-4482-HERMES::SPARK-APPLY::PMOVES`
 (2026-07-03; last seen <1h, flappy). Apply when it reappears:
 `tailscale status | grep -w pmoves-spark`.
 
-**Context:** spec rev 4 (`docs/superpowers/specs/2026-07-02-hermes-agent-zero-provider-standup-design.md`).
+**Context:** spec rev 4 (`docs/superpowers/specs/2026-07-02-hermes-agent-zero-provider-standup-design.md`
+— lands on main via PR #1974; until that merges, read it on branch `docs/agnote-data-tier-knuckles`).
 Knuckles standup evidence: AGNOTE4482.md § Cloud-Hybrid Provider Standup.
 SPARK's differences: 128GB unified memory (70B+ worker lanes), ARM64 CUDA,
 native shape-worker role, registered CI runner `pmoves-spark-runner`.
@@ -33,10 +34,17 @@ native shape-worker role, registered CI runner `pmoves-spark-runner`.
    Knuckles against SPARK's fit envelope (~110GB usable):
    - research live via HF API / `hf-mem` (70B-class per family now viable:
      e.g. the Hermes-4-70B and Kimi-Dev-72B lanes fit unquantized/Q8);
-   - sign the selection trail: `python pmoves/tools/sign_trail.py --agent-id spark-codex ...`
-     (spark identity needs an active signing card — verify with
-     `verify_agent_identity('spark-codex')` first; add a card via the PR 0
-     pattern if missing);
+   - **mint the SPARK trust identity first (mandatory, not conditional):** as of
+     2026-07-06 `spark-codex` has NO entry in ANY of the three trust-ledger files
+     (`agent_signatures.yaml`, `agent_registry.yaml`, `signing_identity_cards.yaml`),
+     so `require_trusted_agent_identity()` will 403 every candidate write. Add all
+     three entries via the PR 0 pattern (cards 036/037 are the template; QA-gate
+     with archon-qa-agent), then confirm `verify_agent_identity('spark-codex')`
+     → `trusted: True`;
+   - sign the selection trail: `make -C pmoves sign-trail AGENT=spark-codex ...`
+     (the make target; running `python pmoves/tools/sign_trail.py` from the repo
+     root fails with `ModuleNotFoundError: No module named 'pmoves.tools'` —
+     if you need the script directly, run it from inside `pmoves/`);
    - register: `POST /api/model-candidates` (model-registry :8110);
    - promote: provider/model/alias rows via PostgREST (service_role), alias
      `registry_worker_<lane>`;
