@@ -526,6 +526,11 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    # pmoves_external: required for the ports: stanza to actually publish —
+    # pmoves_api/pmoves_bus are internal:true, and Docker silently skips host
+    # port publishing when a container has no non-internal network attached
+    # (HostConfig.PortBindings gets recorded but NetworkSettings.Ports stays null).
+    - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     deploy:

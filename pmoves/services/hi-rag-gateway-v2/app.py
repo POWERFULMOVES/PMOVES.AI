@@ -56,8 +56,15 @@ app.mount(
     name="geometry",
 )
 
-_hyperdimensions_dir = Path(__file__).resolve().parents[3] / "Pmoves-hyperdimensions"
-if _hyperdimensions_dir.exists():
+# parents[3] assumes the host source-tree depth (pmoves/services/hi-rag-gateway-v2/
+# app.py -> repo root). In the container the app is at /app/app.py, which is too
+# shallow, so guard the index like the _repo_root resolution above — otherwise this
+# IndexErrors at import and crash-loops the gateway before the exists() check runs.
+_resolved = Path(__file__).resolve()
+_hyperdimensions_dir = (
+    _resolved.parents[3] / "Pmoves-hyperdimensions" if len(_resolved.parents) > 3 else None
+)
+if _hyperdimensions_dir is not None and _hyperdimensions_dir.exists():
     app.mount(
         "/hyperdimensions/app",
         StaticFiles(directory=str(_hyperdimensions_dir), html=True),
