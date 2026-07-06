@@ -2,6 +2,10 @@
 # DISTINCT from the 11 functional agent teams in pmoves/configs/agent-teams.yaml
 # (cross-linked via functional_teams). members reference ids in users.yaml
 # (humans + actors). access_policy drives provisioning. See README.md.
+# NOTE: tailscale_group values (admin/infra) are DECLARATIONS. The current ACL
+# (pmoves/configs/tailscale-acl-policy.json) is tag/autogroup-based and defines no
+# group:* principals — add matching group:<name> there at provisioning before these
+# grants translate to live access (access grants ≠ provisioning; see README Guardrails).
 version: 1
 
 groups:

@@ -12,7 +12,7 @@ humans:
     contact: cataclysmstudios@gmail.com
     tier: owner
     guilds: [core, infra-cloud, governance]
-    contributor_ref: "agent-teams.yaml → External Contributors: powerfulmoves"
+    contributor_ref: "agent_registry.yaml → external_contributors: powerfulmoves"
     access:
       tailscale: { member: true, groups: [admin] }
       rustdesk:  { enrolled: true, role: owner }
@@ -30,7 +30,7 @@ actors:
   # -- agents (definition + role live in agent-teams.yaml; persona in PERSONAS.md) --
   - id: claude-4090
     kind: agent
-    ref: "agent-teams.yaml → External Contributors: claude-opus"
+    ref: "agent_registry.yaml → external_contributors: claude-opus"
     persona: null            # TODO: link a PERSONAS.md persona if one applies
     host: pmoves-4090
     guilds: [infra-cloud, delivery]
@@ -40,15 +40,15 @@ actors:
 
   - id: kilocode
     kind: agent
-    ref: "agent-teams.yaml → External Contributors: kilocode"
+    ref: "agent_registry.yaml → external_contributors: kilocode"
     persona: null
     host: pmoves-5090
-    guilds: [delivery]
+    guilds: [infra-cloud, delivery]   # infra-cloud per groups.yaml membership
     access: { tailscale: { via_host: pmoves-5090 } }
 
   - id: codex
     kind: agent
-    ref: "agent-teams.yaml → External Contributors: codex"
+    ref: "agent_registry.yaml → external_contributors: codex"
     guilds: [delivery]
 
   - id: cipher
@@ -65,7 +65,7 @@ actors:
   # -- nodes (hardware in node profiles / agent-teams node_affinity; access here) --
   - id: node-4090
     kind: node
-    ref: "agent-teams.yaml node_affinity: powerfulmoves; profile: pmoves/config/profiles/4090.yaml"
+    ref: "agent-teams.yaml node_affinity: powerfulmoves; profile: pmoves/config/profiles/laptop-4090.yaml"
     tailnet_host: pmoves-4090
     exit_node: false
     guilds: [core, infra-cloud]
@@ -75,21 +75,21 @@ actors:
 
   - id: node-5090
     kind: node
-    ref: "agent-teams.yaml node_affinity: <TODO>; profile: pmoves/config/profiles/5090.yaml"
+    ref: "agent-teams.yaml node_affinity: <TODO>; profile: pmoves/config/profiles/workstation_5090.yaml"
     tailnet_host: pmoves-5090   # TODO confirm
     exit_node: false
     guilds: [infra-cloud]
 
   - id: node-spark
     kind: node
-    ref: "profile: pmoves/config/profiles/spark.yaml"   # TODO confirm node_affinity name
+    ref: "profile: pmoves/config/profiles/dgx-spark-grace-blackwell.yaml"   # TODO confirm node_affinity name
     tailnet_host: pmoves-spark
     exit_node: false
     guilds: [infra-cloud]
 
   - id: node-z890
     kind: node
-    ref: "agent-teams.yaml node_affinity: z890; profile: pmoves/config/profiles/z890.yaml"
+    ref: "agent-teams.yaml node_affinity: z890; profile: TODO — no pmoves/config/profiles entry yet"
     tailnet_host: pmoves-z890   # TODO confirm
     exit_node: false
     guilds: [infra-cloud]
@@ -97,7 +97,7 @@ actors:
 
   - id: node-knuckles
     kind: node
-    ref: "profile: pmoves/config/profiles/knuckles.yaml"   # TODO confirm node_affinity name
+    ref: "profile: TODO — no pmoves/config/profiles entry yet"   # TODO confirm node_affinity name
     tailnet_host: pmoves-knuckles   # TODO confirm
     exit_node: false
     guilds: [infra-cloud]

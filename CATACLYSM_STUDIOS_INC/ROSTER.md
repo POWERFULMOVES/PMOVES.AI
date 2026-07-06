@@ -29,7 +29,7 @@ _Add collaborators / DAO members / Fordham Hill participants in `users.yaml:huma
 | Actor | Canonical ref (`agent-teams.yaml`) | Persona | Host | Guilds |
 |-------|-----------------------------------|---------|------|--------|
 | **4090-claude** `claude-4090` | External Contributors: claude-opus | — | `pmoves-4090` | Infra Cloud · Delivery |
-| **KiloCode** `kilocode` | External Contributors: kilocode | — | `pmoves-5090` | Delivery |
+| **KiloCode** `kilocode` | External Contributors: kilocode | — | `pmoves-5090` | Infra Cloud · Delivery |
 | **Codex** `codex` | External Contributors: codex | — | — | Delivery |
 | **Cipher** `cipher` | Research & Knowledge: cipher_memory (:8105) | — | — | Core |
 | **MiniMax (FlOO$)** `minimax-floos` | Media & Voice _(TODO)_ | PERSONAS.md → FlOO$ suits | — | Voice |
@@ -39,10 +39,10 @@ _Add collaborators / DAO members / Fordham Hill participants in `users.yaml:huma
 | Node | Canonical ref | Tailnet host | Exit | Guilds |
 |------|---------------|--------------|------|--------|
 | **4090** `node-4090` | node_affinity: powerfulmoves | `pmoves-4090` | — | Core · Infra Cloud |
-| **5090** `node-5090` | profile: 5090.yaml | `pmoves-5090` | — | Infra Cloud |
-| **SPARK** `node-spark` | profile: spark.yaml | `pmoves-spark` | — | Infra Cloud |
+| **5090** `node-5090` | profile: workstation_5090.yaml | `pmoves-5090` | — | Infra Cloud |
+| **SPARK** `node-spark` | profile: dgx-spark-grace-blackwell.yaml | `pmoves-spark` | — | Infra Cloud |
 | **Z890** `node-z890` | node_affinity: z890 | `pmoves-z890` | — | Infra Cloud |
-| **Knuckles** `node-knuckles` | profile: knuckles.yaml | `pmoves-knuckles` | — | Infra Cloud |
+| **Knuckles** `node-knuckles` | profile: _TODO_ | `pmoves-knuckles` | — | Infra Cloud |
 | **pmoves-kvm2** `node-kvm2` | node_affinity: kvm2 | `pmoves-kvm2` | ✓ | Infra Cloud |
 | **pmoves-kvm4-1** `node-kvm4-1` | node_affinity: kvm4-1 | `pmoves-kvm4-1` | ✓ | Infra Cloud |
 | **pmoves-kvm4-2** `node-kvm4-2` | node_affinity: kvm4-2 | `pmoves-kvm4-2` | ✓ | Infra Cloud |
