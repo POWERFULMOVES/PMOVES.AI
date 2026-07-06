@@ -301,8 +301,19 @@ clawz-logs: ## Tail ClawZ gateway logs
 # OBSERVABILITY-FIRST STARTUP (Tier-based, dependency-ordered)
 # =============================================================================
 
+.PHONY: ensure-networks
+ensure-networks: ## Materialize the shared compose-owned networks (idempotent) so obs-first bring-up can attach BEFORE the core stack runs. Config MIRRORS docker-compose.yml networks: — keep subnets/internal in sync.
+	@echo "🕸  Ensuring shared networks exist (obs-first prereq)..."
+	@docker network inspect pmoves_api >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.1.0/24 --gateway 172.30.1.1 --label com.docker.compose.network=pmoves_api --label com.docker.compose.project=$(PROJECT) pmoves_api >/dev/null 2>&1 || true
+	@docker network inspect pmoves_app >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.2.0/24 --gateway 172.30.2.1 --label com.docker.compose.network=pmoves_app --label com.docker.compose.project=$(PROJECT) pmoves_app >/dev/null 2>&1 || true
+	@docker network inspect pmoves_bus >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.3.0/24 --gateway 172.30.3.1 --label com.docker.compose.network=pmoves_bus --label com.docker.compose.project=$(PROJECT) pmoves_bus >/dev/null 2>&1 || true
+	@docker network inspect pmoves_data >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.4.0/24 --gateway 172.30.4.1 --label com.docker.compose.network=pmoves_data --label com.docker.compose.project=$(PROJECT) pmoves_data >/dev/null 2>&1 || true
+	@docker network inspect pmoves_monitoring >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.5.0/24 --gateway 172.30.5.1 --label com.docker.compose.network=pmoves_monitoring --label com.docker.compose.project=$(PROJECT) pmoves_monitoring >/dev/null 2>&1 || true
+	@docker network inspect pmoves-net >/dev/null 2>&1 || docker network create --driver bridge --label com.docker.compose.network=pmoves --label com.docker.compose.project=$(PROJECT) pmoves-net >/dev/null 2>&1 || true
+	@echo "✔ shared networks ensured"
+
 .PHONY: up-obs
-up-obs: ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
+up-obs: ensure-networks ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
 	@echo "📊 Starting observability stack (monitoring FIRST)..."
 	@$(LOAD_ENV_SHARED); docker compose -p monitoring -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
 	@echo "⏳ Waiting for observability to be ready..."
