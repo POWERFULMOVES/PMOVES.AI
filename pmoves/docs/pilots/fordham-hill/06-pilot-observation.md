@@ -54,6 +54,34 @@ Hostinger data adds the **monthly bandwidth cap** as an independent ceiling:
   fleet then comfortably carries a Fordham Hill building, and every node added lifts both
   ceilings.
 
+## Resident dashboard — viewable on a passed-around tablet, over the mesh
+
+SLATE is a **Galaxy Tab S11 Ultra passed around for viewing** — no terminal, no login.
+So the observation is rendered as a **calm, non-technical web page served over Tailscale**
+(tailnet-private HTTPS, *not* public Funnel). Any tablet/phone on the tailnet opens the URL
+in a browser and sees the pilot at a glance; it auto-refreshes every 60s.
+
+- **URL (open on SLATE's browser):** `https://pmoves-kvm4-1.tailcad9b4.ts.net/`
+- Shows: homes on the network, % of hub capacity used, community savings /mo + /yr,
+  live network speed, privacy state, "all good / needs a look" status, and a plain-language
+  "what is this" note. **Numbers residents see are REAL** — from
+  `/opt/pilot-dashboard/pilot.conf` (operator edits `HOMES=` as households enroll), never
+  hardcoded. Given the fraud context, honesty of the displayed figures is a design rule.
+- **Served from:** `pilot-dashboard-serve.sh` on the KVM → systemd static server on
+  127.0.0.1:8899 + cron refresh (observer→generator→`index.html`) + `tailscale serve`.
+
+```bash
+# deploy/update on a hub
+for f in exit-node-observer pilot-dashboard-gen pilot-dashboard-serve; do
+  scp deploy/provision/$f.sh root@pmoves-kvm4-1:/opt/pilot-dashboard/ ; done
+ssh root@pmoves-kvm4-1 'bash /opt/pilot-dashboard/pilot-dashboard-serve.sh'
+# update the household count residents see
+ssh root@pmoves-kvm4-1 'sed -i "s/^HOMES=.*/HOMES=32/" /opt/pilot-dashboard/pilot.conf'
+```
+
+Verified: reachable over the tailnet (HTTP 200 from another tailnet node → SLATE reaches
+it identically). Tailnet-only, no public exposure.
+
 ## Operator quick reference
 
 ```bash
