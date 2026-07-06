@@ -166,3 +166,16 @@ The audit gate prefers the durable `canonical_aliases` block in `pmoves/bootstra
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::CANONICAL-NAMES-DECISIONS::2026-04-26 -->
 <!-- GRAPHITI_MARK: Z890-CLAUDE::CREDENTIAL-AUDIT-REVIEW::2026-04-26 -->
+
+## Provider keys (2026-07-02)
+
+Canonical env names for LLM provider credentials follow `pmoves/config/provider_catalog.yaml` (single source of truth). Structured form lives in `pmoves/bootstrap/registry.json` → `canonical_aliases`.
+
+| Canonical | Deprecated aliases | Sunset |
+|-----------|-------------------|--------|
+| `MOONSHOT_API_KEY` | `KIMI_API_KEY` | 2026-10-01 |
+| `ALIBABA_PRO_CODING_PLAN` | `ALIBABA_API_KEY`, `DASHSCOPE_API_KEY` | 2026-10-01 |
+| `Z_AI_API_KEY` | `ZAI_API_KEY` | 2026-10-01 |
+| `HF_TOKEN` | `HUGGINGFACE_TOKEN` | 2026-10-01 |
+
+New providers added with the cloud-hybrid tier (2026-07-02): `KILOCODE_API_KEY`, `OLLAMA_API_KEY` (Ollama Pro cloud — distinct from `OLLAMA_BASE_URL` local) — no aliases, born canonical.

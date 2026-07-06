@@ -33,7 +33,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
 
-**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). API: `POST /api/memory`, `GET /api/memory/search?q=...`. Health: `GET /health`. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
+**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). Live surface: MCP over SSE at `/sse` (Express route `src/app/mcp/mcp_sse_server.ts`; matches `.claude/mcp.json`) + streamable-http at `/http`; health `GET /health` / `/healthz`. **Auth (submodule ed701ca):** all routes require `Authorization: Bearer <token>` EXCEPT the public paths `/health`, `/healthz`, `/.well-known/` — so `/sse` is not anonymously reachable. NOTE: the `/api/memory` + `/api/memory/search` REST paths previously documented do **not exist** (no such route in Cipher submodule source) — use the MCP tools over `/sse`, not a REST API. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
 
 ## Retrieval & Knowledge Services
 
@@ -112,7 +112,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 
 | Host | Tailscale name | Role | Key services | Hub flag |
 |------|---------------|------|--------------|----------|
-| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086`, Archon `:8091`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
+| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086` (⚠ NOT currently deployed — :8086 down / no container, verified 2026-07-04), Archon `:8091`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
 | `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, DNS `nats.pmoves.ai`)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
 | `pmoves-kvm2` | `pmoves-kvm2` | Reverse proxy + relay | nginx `:80/443` (SSL termination), RustDesk `hbbs/hbbr` (rendezvous + relay) | — |
 
@@ -124,7 +124,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 
 | Server | Transport | Required env | Source path | Notes |
 |--------|-----------|--------------|-------------|-------|
-| `pmoves-cipher` | SSE `localhost:8105/mcp/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
+| `pmoves-cipher` | SSE `localhost:8105/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
 | `pmoves-nats-fleet` | stdio | `NATS_URL` (declared inline) | `pmoves-nats-mcp/nats_mcp/server.py` | Publishes/subscribes to the fleet hub at KVM4-2. No env.shared dependency. |
 | `docker` | stdio (image `mcp/docker`) | none | Docker socket | Container inspect/exec on the local Docker daemon |
 | `hostinger-mcp` | stdio (npm pkg `hostinger-api-mcp@0.2.1`) | `HOSTINGER_API_KEY` | npm package | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |

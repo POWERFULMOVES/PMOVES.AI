@@ -218,6 +218,27 @@ cards:
       voice: terse
       role: agent
 
+  - card_id: "00000000-0000-4000-8000-000000000013"
+    issued_at: "2026-06-23T16:23:45Z"
+    active: true
+    ml:
+      primary_method: ssh
+      ssh_fingerprint: null   # operator-provided when ssh-keygen lands on PMOVES-MISSLING-LINK
+      ssh_allowed_signers_line: null
+    h:
+      agent_id: "missling-link"
+      display_name: "Missing Link Hermes"
+      glyph: "❖"        # ❖ decorative diamond — missing-link / bridge junction
+      color: "#DB2777"   # pink-600 — distinct from existing node palette
+      voice: analytical
+      role: agent
+    notes: |
+      PMOVES-MISSLING-LINK node — runs Hermes Agent (Nous Research) rather than
+      Claude Code/Codex. Seeded h-only on fleet onboarding (2026-06-23) per audit
+      policy "cards seeded only when an agent_id starts emitting trail entries."
+      ML half (ssh_fingerprint) pending operator ssh-keygen (Owner-Decision A).
+      Capacity: i7-7700HQ 4c/8t, 16GB RAM, GTX 1070 8GB (Pascal sm_61), Win 11.
+
   # ---- Service account: GitHub App ----
   - card_id: "00000000-0000-4000-8000-000000000020"
     issued_at: "2026-04-26T14:06:00Z"
@@ -327,3 +348,42 @@ cards:
       color: "#475569"
       voice: directive
       role: ci-bot
+
+  - card_id: "00000000-0000-4000-8000-000000000036"
+    issued_at: "2026-07-02T00:00:00Z"
+    active: true
+    notes: |
+      B850 Knuckles node agent — dual AMD R9700 (RDNA4 gfx1201) 64GB VRAM,
+      ROCm 7.1. Added with the cloud-hybrid HERMES/Agent Zero standup lane
+      (spec rev 4) to unblock model-registry trusted-identity checks.
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+      ci_runner_label: "self-hosted, ai-lab, gpu, rocm, rdna4"
+    h:
+      agent_id: "b850-claude"
+      display_name: "B850 Claude"
+      glyph: "⌬"
+      color: "#DC2626"
+      voice: analytical
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000037"
+    issued_at: "2026-07-02T00:00:00Z"
+    active: true
+    notes: |
+      HERMES Agent (NousResearch framework) integration body — distinct from
+      the `hermes` LLM-persona card. Gateway :7700, profile-scoped per node.
+      Card added so hermes-agent passes require_trusted_agent_identity for
+      model-candidate and fitness writes.
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+      ci_runner_label: "self-hosted, ai-lab"
+    h:
+      agent_id: "hermes-agent"
+      display_name: "HERMES Agent"
+      glyph: "★"
+      color: "#047857"
+      voice: analytical
+      role: agent

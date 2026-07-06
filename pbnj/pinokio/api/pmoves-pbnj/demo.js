@@ -42,7 +42,7 @@ module.exports = {
       method: "shell.run",
       params: {
         message: [
-          "nats pub p7.nats.launch \"{\\\"room\\\":\\\"demo.room.rehearsal\\\",\\\"stage\\\":\\\"rehearsal\\\",\\\"suits\\\":[\\\"agent-zero-local\\\",\\\"4090-claws\\\",\\\"hermes-v4\\\"]}\" 2>nul || echo NATS skip"
+          "nats pub p7.nats.launch \"{\\\"room\\\":\\\"demo.room.rehearsal\\\",\\\"stage\\\":\\\"rehearsal\\\",\\\"suits\\\":[\\\"agent-zero-local\\\",\\\"4090-claws\\\",\\\"hermes-v4\\\"]}\" 2>/dev/null || echo NATS skip"
         ]
       }
     },

@@ -16,14 +16,14 @@ cpu_only_edge:
       variant: q4_0
       reason: "Fastest 3.8B model with 128K context"
     fallback:
-      name: gemma-2-2b
+      name: qwen2.5-3b
       variant: q4_0
-      reason: "Google's efficient 2B model"
+      reason: "Qwen2.5 3B — Apache-2.0, fits the 3B edge cap (Gemma 4 E2B is 5.12B actual — too large for CPU edge)"
   use_cases:
     orchestrator: phi3-mini:q4_0
     coding: phi3-mini:q4_0
     utility: phi3-mini:q4_0
-    embeddings: gemma-embedding-300m:f16
+    embeddings: qwen3-embedding-0.6b:f16
     vl_sentinel: null  # Not recommended for CPU
 
 # Single Consumer GPU (8-12GB VRAM)
@@ -229,7 +229,7 @@ botz_components:
 
   # Auditor (Haiku review - fast, cost-effective)
   auditor:
-    cpu_only: gemma-2-2b:q4_0
+    cpu_only: qwen2.5-3b:q4_0
     consumer_8gb: qwen2.5-3b:q4_0
     midrange_16gb: qwen2.5-3b:q4_0
     ai_workstation_32gb: qwen3.5-4b:q4_k_m
@@ -277,7 +277,7 @@ botz_components:
 
   # Embeddings (text embeddings for RAG)
   embeddings:
-    cpu_only: gemma-embedding-300m:f16
+    cpu_only: qwen3-embedding-0.6b:f16
     consumer_8gb: qwen3-embedding-4b:f16
     midrange_16gb: qwen3-embedding-8b:f16
     ai_workstation_32gb: qwen3-embedding-8b:f16
@@ -342,14 +342,14 @@ nvidia_optimized:
 ollama_models:
   small:
     - phi3:3.8b-mini-128k-instruct
-    - gemma-2:2b
     - qwen2.5:3b
 
   medium:
     - qwen2.5:7b
     - qwen2.5:14b
     - llama3.1:8b
-    - gemma-2:9b
+    - gemma4:e2b
+    - gemma4:e4b
     - qwen2.5-coder:7b
     - deepseek-coder:6.7b
     - qwen3:8b
@@ -364,5 +364,5 @@ ollama_models:
     - qwen3-embedding:4b
     - qwen3-embedding:8b
     - nomic-embed-text
-    - embeddinggemma:300m
+    - qwen3-embedding:0.6b
     - qwen3-reranker:4b

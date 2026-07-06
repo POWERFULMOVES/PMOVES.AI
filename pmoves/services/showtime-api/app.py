@@ -208,7 +208,8 @@ app = FastAPI(
 _cors_origins = [
     o.strip()
     for o in os.environ.get(
-        "SHOWTIME_CORS_ORIGINS", "http://localhost:3000,http://localhost:9225"
+        "SHOWTIME_CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:3001,http://localhost:4482,http://localhost:9225",
     ).split(",")
     if o.strip()
 ]

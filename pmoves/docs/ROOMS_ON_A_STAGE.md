@@ -76,7 +76,7 @@ Rooms do NOT own:
 
 - [Room Manifest Contract](ROOM_MANIFEST_CONTRACT.md) — interface specification
 - [AGNOTE4482](AGENTS/AGNOTE4482.md) — P7 stage manager definition (L25-27)
-- [P7 Playground — Prospectus Frame](AGENTS/AGNOTE_P7_PLAYGROUND.md) — rooms/stage/suits model (L338-368)
+- [P7 Playground — Prospectus Frame](archive/AGNOTE_P7_PLAYGROUND-2026-04-10.md) — rooms/stage/suits model (L338-368)
 - [Roadmap W1-W5](AGENTS/AGNOTE4482_ROADMAP_W1-W5.md) — prospectus alignment
 - [Signoff Checklist](AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md) — 1.4 coherence gate
 - [CnC Architecture](architecture/PMOVES_CnC.md) — P7 as stage manager in command-and-control context

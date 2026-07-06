@@ -317,6 +317,23 @@ signatures:
         resonance: [infrastructure, persistence-modeling, supabase-integration, docker-hardening]
         description: "Infrastructure mode — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
 
+  b850-claude:
+    agent_id: "b850-claude"
+    display_name: "B850 Claude"
+    glyph: "⌬"              # Benzene ring — MOF lattice node (Knuckles)
+    color: "#DC2626"             # AMD Red
+    accent: "#F87171"
+    voice: analytical             # data-tier + ROCm focused, structured, evidence-first
+    co_author: "B850 Claude (pmoves-b850) <b850@pmoves.ai>"
+    specialization: rocm-data-tier-coordinator
+    routes_to: [rocm-inference, data-tier-ops, model-registry-ops, tensorzero-routing, hermes-standup]
+    resonance:
+      - rocm-dual-gpu
+      - data-tier
+      - dynamic-model-plane
+      - cloud-hybrid-workers
+    description: "Data-tier + ROCm coordinator on B850 Knuckles (dual R9700 64GB, ROCm 7.1) — dynamic model plane, TensorZero routing, HERMES/Agent Zero standup"
+
   5090-claude:
     agent_id: "5090-claude"
     display_name: "5090 Claude"
@@ -425,6 +442,22 @@ signatures:
       - subagent-delegation
       - cron-orchestration
     description: "NousResearch Hermes Agent integration body -- gateway operator, skill curator, NATS bridge, and cross-platform delegator. Distinct from the Hermes-3 LLM model persona (see `hermes` signature above)."
+
+  missling-link:
+    agent_id: "missling-link"
+    display_name: "Missing Link Hermes"
+    glyph: "❖"              # ❖ Decorative diamond -- bridge/junction (missing link)
+    color: "#DB2777"             # Pink-600 -- distinct from existing node palette
+    accent: "#F472B6"            # Pink-400
+    voice: analytical
+    co_author: "Missing Link Hermes (missling-link) <missling-link@pmoves.ai>"
+    node: "missling-link"
+    resonance:
+      - hermes-native-runtime
+      - fleet-onboarding
+      - legacy-pascal-compute
+      - cross-platform
+    description: "Hermes-Agent-native node persona -- first PMOVES fleet node whose primary runtime is Hermes Agent (Nous Research), not Claude Code/Codex. Legacy Pascal GTX 1070; light-GPU dev/ops. H-half mirror of signing card ...0013 (agent_id missling-link)."
 
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists

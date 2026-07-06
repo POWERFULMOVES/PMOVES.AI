@@ -1259,3 +1259,77 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 - Timestamp: `2026-06-30T23:50:00Z`
 
 <!-- GRAPHITI_MARK: AGENT-ZERO-0::CHIT-SIGNING-CARD-SCHEMA-CARVEOUT::2026-06-30 -->
+
+## Cloud-Hybrid Provider Standup — Knuckles (2026-07-03)
+
+### Work Performed
+- **Spec+plan (4 revisions)**: `docs/superpowers/specs/2026-07-02-hermes-agent-zero-provider-standup-design.md` — cloud coding plans orchestrate, local models are worker siblings, NO hardcoded local model IDs (Supabase model-registry is the catalog). Grounded by a 4-agent topology fan-out (P7/pbnj, Archon minting, runner fabric, agent inventory).
+- **PR 0 (#1948)**: trust-ledger entries `b850-claude` (new, glyph ⌬, card 036) + `hermes-agent` (card 037) — archon-qa-agent gated (caught a glyph collision); topology doc regenerated from the 79-agent registry; gateway-agent port fixed 8100→8111 at the registry source; runner-topology split into CI vs model fabrics (+SPARK/hotfix/cloudstartup); `demo.js` `2>nul` Linux bug fixed.
+- **PR 1 (#1950)**: providers kilocode/ollama_cloud/huggingface (live-verified IDs); TZ orchestrator/worker function shells; REGISTRY-MANAGED marker section (bootstrap = cloud parents); `tz_registry_sync.py` (+lane synthesis +merge); function-ref + workers-use-registry-lanes test gates; env slots + tier manifest + canonical aliases (both surfaces); llamacpp_rocm 8080→8090 (TZ + node profile).
+- **Live standup (this PR)**: TZ gateway recreated with new config (make-recreate path, honoring pipeline hook); **model-registry :8110 live** after 4 data-tier repairs — Kong had ZERO routes (imported orphaned `.generated/kong.yml` w/ compose hostnames + live service-key credential + reload), migrations belong in DB `pmoves` not `postgres`, missing `pmoves_kb` schema blocked PostgREST's whole schema cache, public compat views + service_role grants (v5_19, v5_20 via db-apply-migration Known Road).
+- **Trust chain proven in production**: CHIT trail signed as b850-claude → `signing_card_id` 036 stamped → 4 worker candidates registered via `POST /api/model-candidates` (200, `trusted: true`): zai-org/GLM-4.7-Flash, Qwen/Qwen3-Coder-30B-A3B-Instruct, NousResearch/Hermes-4-14B, unsloth/Kimi-Dev-72B-GGUF — all live-researched (HF API, hf-mem sizing vs 64GB ROCm).
+- **worker_qwen lane promoted**: catalog row + `registry_worker_qwen` alias via PostgREST (RLS path, after the direct-psql attempt was correctly hook-blocked); `qwen3-coder:30b` pulled; sync tool spliced the local lane into TZ (other 3 lanes stay on cloud-parent bootstrap).
+- **HERMES live**: updated v0.15.1→v0.18.0; `pmoves-hermes-knuckles` profile (TZ-first, worker delegation lane); `hermes doctor` clean; chat smoke traverses Hermes→TZ→z.ai and receives the expected 401 on the placeholder key (mechanically correct; awaiting real keys).
+
+### Key Findings / GAPs (operator attention)
+| Item | Status |
+|---|---|
+| Provider keys | **ALL EMPTY on this node** — entire llm tier unset; last CI chit-bundle expired. Fill: `Z_AI_API_KEY`, `MOONSHOT_API_KEY`, `ALIBABA_PRO_CODING_PLAN`, `KILOCODE_API_KEY`, `OLLAMA_API_KEY`, `HF_TOKEN`, `MINIMAX_API_KEY`, `OPENROUTER_API_KEY` → local.env or CHIT source → `make -C pmoves secrets-funnel` |
+| Host Ollama bind | 127.0.0.1-only → TZ container cannot reach local models. Operator: systemd override `OLLAMA_HOST=0.0.0.0:11434` (fleet convention, PR #1162) or bridge-only `172.17.0.1` |
+| `MCP_SERVER_TOKEN` | Not pinned; compose interpolation hard-requires it (a2a enabled). Ephemeral token used this session — pin durably per CANONICAL_NAMES §5 |
+| Hermes gateway :7700 | v0.18 exits with no messaging platform configured — needs Discord/Telegram token (fill-list) |
+| Kong route seeding | No in-repo mechanism (DB-mode, zero routes on fresh bring-up) — needs a durable seeder in the supa bring-up path |
+| gpu-orchestrator | Make gate is NVIDIA-only (skips on ROCm); image digest-pin also breaks `compose up` build fallback |
+| `local-disabled` sentinel | Reads backwards in cloud-hybrid era — rename sweep to `unset-pending-key` (operator approved option 1: follow-up) |
+| supabase-bootstrap-no-start | psql arg-ordering bug (`-v` parsed as dbname) |
+| Agent Zero bring-up | Deferred pending MCP_SERVER_TOKEN pin (compose gate) — wiring already TZ-first in compose |
+
+### Agent ACK
+- Agent: `B850-CLAUDE`
+- Signature: `ACK::B850-CLAUDE::CLOUD-HYBRID-STANDUP-KNUCKLES::2026-07-03`
+- Timestamp: `2026-07-03`
+
+<!-- GRAPHITI_MARK: B850-CLAUDE::CLOUD-HYBRID-STANDUP-KNUCKLES::2026-07-03 -->
+
+## Fleet Onboarding: PMOVES-MISSLING-LINK (2026-06-23)
+
+### Work Performed
+- Onboarded PMOVES-MISSLING-LINK — **the first Hermes-Agent-native node** in the PMOVES fleet.
+- Hardware scanned via CIM + nvidia-smi: Intel i7-7700HQ 4c/8t @ 2.80GHz, 16 GB RAM, NVIDIA GTX 1070 8 GB GDDR5 (Pascal sm_61, driver 546.33), Windows 11 Pro, D: 48 GB free.
+- Added node-capacity row to `AGNOTE4482_SITREP.md` (Laptop / light-GPU dev, legacy Pascal).
+- Seeded signing identity card `00000000-0000-4000-8000-000000000013` (agent_id `missling-link`, h-only — ML half pending operator ssh-keygen per Owner-Decision A).
+- Created node doc `pmoves/docs/AGENTS/AGNOTE-pmoves-missling-link.md` (mirrors AGNOTE-dgx-spark.md structure).
+- Continues the W0 Substrate cross-platform-onboarding lane (Z890-CLAUDE 2026-05-09).
+
+### Key Findings
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| Node registered in SITREP capacity table | **RESOLVED** | `AGNOTE4482_SITREP.md` MISSLING-LINK row added |
+| Signing card seeded for `missling-link` | **RESOLVED** | `signing_identity_cards.yaml` card `…0013` (h-only) |
+| Node doc authored | **RESOLVED** | `AGNOTE-pmoves-missling-link.md` (mirrors dgx-spark template) |
+| Hermes Agent as a fleet member | **NEW CAPABILITY** | First node whose primary agent runtime is Hermes Agent (not Claude Code/Codex/KiloCode) |
+| Tailscale mesh enrollment | **PENDING** | Operator action |
+| SSH fingerprint for signing card | **PENDING** | Operator `ssh-keygen` (Owner-Decision A) |
+
+### Handoff Notes
+- This node's primary agent is **Hermes Agent** — AGNOTE4482's Claude-Code-centric Three-Body enforcement (`.claude/agents/` frontmatter `disallowedTools`) does not apply here. The Hermes-native translation lives in the `pmoves-convergence` skill (claim register, branch naming, Three-Body via `delegate_task` roles). Read-only Control bodies are advisory on Hermes, not hard-enforced.
+- Capacity advisory: legacy Pascal GPU — small/quantized inference + dev/ops only; not a full-stack or heavy-inference host.
+- ML half of the signing card is intentionally null until the operator runs `ssh-keygen` on this host (matches the audit policy and the `darkxside` card precedent).
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` | MISSLING-LINK row in node-capacity table |
+| `pmoves/config/signing_identity_cards.yaml` | Card `…0013` (missling-link, h-only) |
+| `pmoves/docs/AGENTS/AGNOTE-pmoves-missling-link.md` | New — node doc mirroring AGNOTE-dgx-spark.md |
+| `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` | CLAIM/RELEASE entries (this lane) |
+| `pmoves/docs/AGENTS/AGNOTE4482.md` | This audit section |
+
+### Agent ACK
+- Agent: `MISSING-LINK-HERMES`
+- Signature: `ACK::MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK`
+- Timestamp: `2026-06-23T16:23:45Z`
+- Branch Cleanup: none (docs-only lane)
+
+<!-- GRAPHITI_MARK: MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK::2026-06-23 -->
