@@ -67,7 +67,7 @@ Then either start the gateway explicitly (`docker mcp gateway run --profile pmov
 |---|---|---|
 | 5090 | ✅ Profile imported + ✅ claude-code connected | Lane A connect landed (this PR). `MCP_DOCKER` stdio gateway entry in `.mcp.json`. Restart Claude Code session to consume gateway. |
 | Z890 | unknown | TODO bootstrap when next Z890 session opens |
-| 4090 | unknown | TODO bootstrap during next 4090 session (per [[project_4090_active_lanes_2026_05_16]]) |
+| 4090 | ✅ Profile imported + ✅ claude-code connected | Bootstrapped 2026-07 (docker mcp v0.42.2). `MCP_DOCKER` stdio gateway in the gitignored repo-root `.mcp.json` (+ `.pre-toolkit-connect.bak` backup); **200 tools** (GitHub/DockerHub/Context7/Hostinger DNS+VPS/Cloudflare). Restart Claude Code to consume. OAuth Cloudflare servers (13/25) still need a one-time browser authorize (§5). |
 | SPARK | unknown | TODO — likely needs `docker-pass` provider since SPARK is Linux-headless |
 | B850 | unknown | TODO |
 | KVM4-1 / KVM4-2 / KVM2 | likely not applicable | KVMs run service workloads, not interactive Claude sessions — Toolkit only needed if a sandbox runs there |
