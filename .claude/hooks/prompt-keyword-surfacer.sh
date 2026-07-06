@@ -94,6 +94,15 @@ if echo "$PROMPT" | grep -iqE '(tac tree|chit|sign.?trail|village.?rule|phi\.t1|
     append "  Claims: pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"
 fi
 
+# ── MCP Toolkit / per-node bootstrap (Known Road) ─────────────────────────────
+if echo "$PROMPT" | grep -iqE '(mcp.?toolkit|mcp.?bootstrap|bootstrap.?node|mcp-toolkit-connect|docker mcp|per-node mcp|node.?deployer|load mcp)'; then
+    append "MCP-TOOLKIT surface (per-node bootstrap = Known Road):"
+    append "  Runbook: pmoves/docs/runbooks/MCP_TOOLKIT_NODE_BOOTSTRAP.md (copy-paste, ~5min)"
+    append "  Targets: make -C pmoves mcp-toolkit-bootstrap ; make -C pmoves mcp-toolkit-connect"
+    append "  Agent:   .claude/agents/fleet-node-deployer.md (fleet MCP + obs-first + Tailscale-SSH)"
+    append "  Ref:     pmoves/docs/operations/MCP_TOOLKIT.md | RUN ON THE NODE (no raw-SSH host-key sidestep)"
+fi
+
 # No keywords matched — silent pass
 if [ -z "$SURFACED" ]; then
     echo '{"decision":"approve"}'
