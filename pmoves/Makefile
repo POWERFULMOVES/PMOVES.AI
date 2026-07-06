@@ -231,14 +231,15 @@ update: ensure-env-shared  ## Pull repo + images, recreate stack
 
 # One-shot bring-up for the common local dev stack (keeps container names stable under the $(PROJECT) project).
 .PHONY: up-all
-up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
+up-all: ## Start observability FIRST, then core, agents+UIs, n8n (obs-first order)
+	@$(MAKE) up-obs
 	@$(MAKE) up
 	@$(MAKE) up-agents-ui
 	@$(MAKE) up-bots
-
 	@$(MAKE) up-n8n
-	@$(MAKE) up-monitoring
-	@echo "✔ Full stack up (core + agents UI + n8n + monitoring)."
+	@echo "✔ Full stack up (obs-first: monitoring → core → agents UI → n8n)."
+	@echo "  Watch it live: Grafana http://localhost:3002 · Prometheus http://localhost:9090 · Loki http://localhost:3100"
+	@echo "  (granular obs-first orchestrators: 'make up-all-new' = full incl. supabase/tensorzero/ui · 'make up-core' = core only)"
 
 .PHONY: up-bots
 up-bots: ## Start bot services (BotZ gateway)
