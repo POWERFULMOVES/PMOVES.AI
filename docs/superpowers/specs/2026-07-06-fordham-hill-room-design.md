@@ -62,11 +62,16 @@ Archon mint (register + `archon.mint.agent.v1`) is a separate activation step re
 5. Voice agent can speak the dashboard state + an onboarding prompt (persona-bound).
 6. CF public page live; governance scaffold routed to counsel.
 
-## Archon prerequisite
+## Archon prerequisite (corrected topology)
 
-Archon is currently DOWN (8091 unreachable on 4090 and z890). Bring-up:
-`make -C pmoves up-archon-submodule` + `make -C pmoves archon-db-setup` (Supabase-backed).
-**Decision needed:** which node hosts Archon (z890 service host recommended). Gates the mint-activation only.
+Archon is **not** a single central service. Archon + Agent Zero run as a **distributed duo** —
+paired, per-node / per-node-pair (e.g. 5090↔Z890, SPARK↔Knuckles), Agent Zero as "Galvatron"
+to Archon's "Psychronus". There is not one Archon just as there is not one Agent Zero.
+
+For the Fordham mint, **this node (4090) runs its own Agent-Zero + Archon duo** — no central
+host decision. Bring-up on 4090: the Agent-Zero + Archon duo (Supabase-backed) via the agents
+compose (`make -C pmoves up-archon-submodule` + `archon-db-setup`, with Agent Zero as the duo
+partner). Gates the live mint-activation only; artifact scaffolding does not need it.
 
 ## Fan-out lanes (once approved)
 
