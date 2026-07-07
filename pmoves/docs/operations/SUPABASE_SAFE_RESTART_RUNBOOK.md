@@ -103,7 +103,7 @@ Supabase agree, without losing data.
 If a dependent won't authenticate after the restart, the DB data is still intact
 (volume never touched). Re-check §3.4 (key populated + accepted); if the running stack
 was a standalone project, ensure step 3's explicit `-p supabase` recreate actually
-restarted *that* project's auth services, not a second (stopped) pmoses runtime.
+restarted *that* project's auth services, not a second (stopped) pmoves runtime.
 
 ## 5. Multi-node consistency (the root cause of the "Archon workaround")
 

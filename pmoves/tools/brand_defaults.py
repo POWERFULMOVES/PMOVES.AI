@@ -169,28 +169,15 @@ def _ensure_channel_monitor_google_alias(text: str) -> str:
     return text
 
 
-def _ensure_archon_supabase_alias(text: str) -> str:
-    """Mirror the standardized Supabase service key into Archon's expected name.
-
-    Archon's native compose reads SUPABASE_SERVICE_KEY, but the PMOVES-supabase
-    fork emits the standardized SERVICE_ROLE_KEY. SUPABASE_SERVICE_KEY is a *pure
-    derived alias* — never set independently — so keep it in lockstep with the
-    source: if SERVICE_ROLE_KEY is rotated, the alias follows instead of a stale
-    copy lingering. SUPABASE_URL carries its own default in the env example.
-    """
-    pairs = (("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY"),)
-    for source, target in pairs:
-        source_val = _get_kv(text, source)
-        if _is_blank_or_placeholder(source_val):
-            continue
-        if _get_kv(text, target) != source_val:
-            text = _set_kv(text, target, source_val)
-    # SUPABASE_URL default: the host-published Kong gateway, reachable from
-    # Archon's standalone compose network via host.docker.internal. Left alone
-    # if the operator set it explicitly.
-    if _is_blank_or_placeholder(_get_kv(text, "SUPABASE_URL")):
-        text = _set_kv(text, "SUPABASE_URL", "http://host.docker.internal:8000")
-    return text
+# NOTE: SUPABASE_SERVICE_KEY (Archon's alias for SERVICE_ROLE_KEY) is intentionally
+# NOT seeded here. This function runs in `ensure-env-shared`, BEFORE
+# `secrets-runtime-hydrate`. Writing the standardized key here — while it may still
+# be the template demo JWT or a stale local value — produces a non-placeholder that
+# hydration then refuses to overwrite (without FORCE=1), so Archon boots on a stale
+# key and 401s (Codex #1984 P1). Ownership belongs to runtime_secrets_hydrate.py,
+# which selects the freshest canonical source (the live Supabase container's
+# SERVICE_ROLE_KEY). SUPABASE_URL is likewise not seeded globally — the Makefile
+# injects it scoped to the Archon-native compose (see up-archon-native).
 
 
 def _ensure_integration_credentials(text: str) -> str:
@@ -477,9 +464,9 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     # and the OAuth flow refuses to start.
     text = _ensure_channel_monitor_google_alias(text)
 
-    # Archon (native compose) reads SUPABASE_SERVICE_KEY; the pipeline emits the
-    # standardized SERVICE_ROLE_KEY. Alias in lockstep so the funnel populates it.
-    text = _ensure_archon_supabase_alias(text)
+    # Archon (native compose) SUPABASE_SERVICE_KEY is hydrated post-funnel by
+    # secrets-runtime-hydrate (freshest canonical source), NOT aliased here —
+    # a pre-hydration copy would block that fresh key (Codex #1984 P1).
 
     # Identity defaults: operator email cascades to Supabase, n8n, Wger.
     text = _ensure_identity_defaults(text)

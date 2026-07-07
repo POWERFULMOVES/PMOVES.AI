@@ -29,13 +29,13 @@ root:
           agent_hint: codex
 
         - id: supabase.keys.archon-alias
-          task: "Archon SUPABASE_* names aliased from standardized keys (no per-client key copies)"
+          task: "Archon SUPABASE_SERVICE_KEY hydrated from the freshest canonical key (no pre-hydration copies)"
           action:
             type: grep
-            target: "pmoves/tools/brand_defaults.py"
-            pattern: "_ensure_archon_supabase_alias|SUPABASE_SERVICE_KEY"
-            expect: "brand_defaults aliases SUPABASE_SERVICE_KEY <- SERVICE_ROLE_KEY, one-way"
-          context: "Clients consume the same emitted key set; names bridged in code, not hand-edited env"
+            target: "pmoves/tools/runtime_secrets_hydrate.py"
+            pattern: "SUPABASE_SERVICE_KEY"
+            expect: "runtime hydration aliases SUPABASE_SERVICE_KEY <- live SERVICE_ROLE_KEY, one-way"
+          context: "Alias derived post-hydration from the freshest canonical source; NOT written pre-hydration in brand_defaults (would block the fresh key — Codex #1984 P1)"
           agent_hint: codex
 
         - id: supabase.keys.machine-emitted
