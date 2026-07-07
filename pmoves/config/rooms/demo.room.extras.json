@@ -1,0 +1,30 @@
+{
+  "_note": "Extended fields stripped from the manifest to conform to room.manifest.v1 (operator chose lossy conform, 2026-07-07). Preserved here so nothing is destroyed; runtime P7 + hermes read these. Restore if the schema is later extended to allow p7/config/sandbox_policy/multi_user.",
+  "room_id": "demo.room.rehearsal",
+  "app_config": {
+    "agent-zero-webui": {
+      "port": 8080,
+      "model": "hermes-v4-8b",
+      "start_script": "pbnj/pinokio/api/pmoves-pbnj/demo.js"
+    },
+    "claude-code-session": {
+      "node": "4090-claude",
+      "skills": "auto"
+    },
+    "hermes-assist": {
+      "model": "hermes3:8b",
+      "role": "assist",
+      "system_prompt": "You are HERMES \u2014 reasoning backbone for the PMOVES demo. Provide analytical support to Agent Zero and Claude Code."
+    }
+  },
+  "p7": {
+    "launch_subject": "p7.nats.launch",
+    "session_subject": "p7.nats.session",
+    "stage": "rehearsal",
+    "suits": [
+      "agent-zero-local",
+      "4090-claws",
+      "hermes-v4"
+    ]
+  }
+}
