@@ -53,17 +53,16 @@ def kebab_to_snake(name: str) -> str:
 # --- Ratchet baseline -------------------------------------------------------
 # Pre-existing origin/main coupling drift. Allowed so the gate is green today;
 # NEW entries outside these sets fail. Reconcile these separately (do NOT add).
-# Reconciled 2026-07-07: botz_architect/builder/auditor + space_agent -> orchestration,
-# cipher_beats_analyst -> media, notebooklm_agent -> research (each per its own
-# registry topology.team). Remaining have no declared team (operator assignment needed).
-BASELINE_UNTEAMED = frozenset({
-    "a0_plugins", "autoresearch", "clawz", "hermes_agent",
-    "pmoves_ci_bot", "pr_hedge_trim",
-})
-BASELINE_UNREGISTERED = frozenset({
-    "container_agent", "nemoclaw", "nemotron_claw", "podcast_producer",
-    "remotion_renderer", "youtube_publisher",
-})
+# Fully reconciled 2026-07-07 — the registry↔teams coupling is now clean, so both
+# baselines are EMPTY and the gate enforces zero drift (any future violation fails).
+# Round 1: botz×3 + space_agent -> orchestration, cipher_beats_analyst -> media,
+#   notebooklm_agent -> research (each per its own registry topology.team).
+# Round 2: a0_plugins/hermes_agent -> orchestration, autoresearch -> research,
+#   clawz/pmoves_ci_bot/pr_hedge_trim -> automation; and registry entries authored for
+#   nemoclaw/container_agent (infra), nemotron_claw (evolution), podcast_producer/
+#   remotion_renderer/youtube_publisher (media).
+BASELINE_UNTEAMED: frozenset = frozenset()
+BASELINE_UNREGISTERED: frozenset = frozenset()
 
 
 # --- Pydantic models (structural + naming validation) -----------------------

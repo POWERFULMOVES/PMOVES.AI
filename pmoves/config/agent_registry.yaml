@@ -2257,7 +2257,7 @@ agents:
       cipher_categories: []
     topology:
       node_affinity: [ai-lab]
-      team: ci
+      team: automation
       ci_runner: ai-lab
       compose_profile: null
     signing_card_id: "00000000-0000-4000-8000-000000000035"
@@ -2493,6 +2493,188 @@ agents:
       ci_runner: vps
       compose_profile: agents
     description: "Accessible spoken interaction (FlOO$ suit via persona-bind + shift-from-bpm). Every spoken figure carries an audible draft/pending-legal disclaimer. Collaborates with 5090-voice.room.studio."
+
+
+  # --- Enterprise + media/infra agents (registry entries completing the teams coupling) ---
+  nemoclaw:
+    name: "NeMo Claw"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: "/healthz"
+    layers: [L1, L3]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [jetson, spark, z890]
+      team: infra
+      ci_runner: vps
+      compose_profile: agents
+    description: "NeMo-guardrailed enterprise agent (NVIDIA NeMo Guardrails). Jetson/edge-GPU hybrid (Kilo Code + Agent Zero subordinate); enterprise config + wiring — NVIDIA users may prefer it over the vanilla assistant."
+
+  nemotron_claw:
+    name: "Nemotron Claw"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: "/healthz"
+    layers: [L1, L3]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: evolution
+      ci_runner: ai-lab
+      compose_profile: gpu
+    description: "Nemotron/NIM-based guardrailed enterprise agent for beefy NVIDIA GPU local reasoning. Enterprise config + wiring."
+
+  container_agent:
+    name: "Container Agent"
+    class: utility
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: "/healthz"
+    layers: [L0, L2]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm2, jetson]
+      team: infra
+      ci_runner: vps
+      compose_profile: agents
+    description: "Docker networking diagnostics + sidecar bridge."
+
+  podcast_producer:
+    name: "Podcast Producer"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: 8110
+    health: "/healthz"
+    layers: [L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: yt
+    description: "Podcast RSS feed generation + multi-episode TTS."
+
+  remotion_renderer:
+    name: "Remotion Renderer"
+    class: standard
+    primary_type: media
+    secondary_type: ui
+    port: 8107
+    health: "/healthz"
+    layers: [L2, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: gpu
+    description: "A2UI Remotion video rendering."
+
+  youtube_publisher:
+    name: "YouTube Publisher"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: 8111
+    health: "/healthz"
+    layers: [L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: yt
+    description: "YouTube upload + metadata + thumbnail generation."
 
 
 # ── MCP Server Registry ─────────────────────────────────────────────────────

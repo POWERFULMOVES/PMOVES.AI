@@ -24,6 +24,8 @@ teams:
       - botz_builder      # BoTZ skill builder
       - botz_auditor      # BoTZ skill auditor
       - space_agent       # Port 3010 — spatial/canvas agent
+      - a0_plugins        # Agent Zero community plugin index + validation CI
+      - hermes_agent      # HERMES gateway/reasoning agent (hermes-agent.room.control)
 
   research:
     name: "Research & Knowledge"
@@ -42,6 +44,7 @@ teams:
       - open_notebook     # Knowledge base (SurrealDB)
       - cipher_memory     # Port 8105 — Knowledge graph memory
       - notebooklm_agent  # NotebookLM source-grounded research (registry topology.team=research)
+      - autoresearch      # Autonomous ML training/experiment loop
 
   media:
     name: "Media & Voice"
@@ -109,6 +112,9 @@ teams:
       - publisher_discord  # Port 8094 — Discord notifications
       - render_webhook    # Port 8085 — ComfyUI callback handler
       - presign           # Port 8088 — MinIO URL presigner
+      - clawz             # Multi-channel messaging gateway (OpenClaw, 25+ platforms)
+      - pmoves_ci_bot     # CI automation bot
+      - pr_hedge_trim     # PR review-thread trimmer
 
   evolution:
     name: "Evolution & CHIT"
