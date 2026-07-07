@@ -799,6 +799,7 @@ services:
     # JWT secret (must match gotrue) - standard variable name
     - API_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:-${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}}
+    - METRICS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1157,6 +1158,7 @@ services:
     - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - CLUSTER_POSTGRES=true
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
+    - METRICS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
     - API_JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
     - REGION=local
