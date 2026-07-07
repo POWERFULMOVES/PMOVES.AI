@@ -11,8 +11,16 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $envf = if ($env:PMOVES_ENV_SHARED) { $env:PMOVES_ENV_SHARED } else { Join-Path $root 'pmoves\env.shared' }
 
 if (Test-Path $envf) {
-    # Pass 1: read KEY=VALUE verbatim into an ordered map. Values are NOT set into
-    # the environment yet — env.shared has ALIAS lines like
+    # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
+    # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
+    # Sourcing them forces API billing (ANTHROPIC_API_KEY) or clobbers session state.
+    $blocklist = @(
+        'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'
+        'CLAUDECODE', 'CLAUDE_CODE_*', 'CLAUDE_SESSION_*'
+    ) -replace '\*', '.*'
+
+    # Pass 1: read KEY=VALUE verbatim into an ordered map, skipping blocklisted keys.
+    # Values are NOT set into the environment yet — env.shared has ALIAS lines like
     # SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}; exporting them verbatim leaks
     # the literal "${SERVICE_ROLE_KEY}" into the MCP --apiKey, starting an
     # alias-backed MCP unauthorized even though the canonical key is present
@@ -24,6 +32,10 @@ if (Test-Path $envf) {
         $eq = $line.IndexOf('=')
         if ($eq -lt 1) { continue }
         $key = $line.Substring(0, $eq).Trim()
+        # Skip blocklisted keys (these control Claude SDK/session, not MCP)
+        $blocked = $false
+        foreach ($pat in $blocklist) { if ($key -match "^$pat$") { $blocked = $true; break } }
+        if ($blocked) { continue }
         $val = ($line.Substring($eq + 1) -replace '\r$','')
         if ($key) { $vars[$key] = $val }
     }
