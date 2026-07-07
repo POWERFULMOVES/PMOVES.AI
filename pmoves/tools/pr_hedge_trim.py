@@ -242,15 +242,17 @@ def classify_comment(body: str, *, is_bot: bool = True) -> str:
     # 1. An author reply explicitly calling it a false positive wins.
     if any(token in text for token in FALSE_POSITIVE_TOKENS):
         return "false-positive"
-    # 2. Explicit review-tool TYPE/SEVERITY markers are authoritative over the keyword
-    #    heuristics below. Nitpick marker (🧹) first — so a "🧹 Nitpick" that happens to
-    #    say "missing"/"must" stays a nitpick — then the high-severity markers, so a Codex
-    #    P1 or CodeRabbit 🟠 Major never falls through to the nitpick default.
-    if any(token in text for token in NITPICK_TOKENS):
-        return "nitpick"
+    # 2. High-severity explicit markers win FIRST — a Codex P1/P2 badge or CodeRabbit
+    #    🔴 Critical / 🟠 Major / ⚠️ Potential issue is actionable even if its PROSE
+    #    mentions the word "nitpick" (Codex #1985 P2: badges before broad nitpick words).
     if any(token in text for token in ACTIONABLE_MARKERS):
         return "actionable"
-    # 3. Fall back to keyword heuristics.
+    # 3. Then CodeRabbit's 🧹 Nitpick TYPE marker — authoritative over the keyword
+    #    heuristics below, so a "🧹 Nitpick: x is missing a prefix" stays a nitpick and
+    #    is not swept up by the "missing"/"must" actionable keywords.
+    if any(token in text for token in NITPICK_TOKENS):
+        return "nitpick"
+    # 4. Fall back to keyword heuristics.
     if any(token in text for token in DESIGN_TOKENS):
         return "design-decision"
     if any(token in text for token in ACTIONABLE_TOKENS):

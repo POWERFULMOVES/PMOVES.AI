@@ -41,6 +41,9 @@ NIT = "\U0001f9f9"        # 🧹
         # CodeRabbit Nitpick TYPE marker is authoritative even over actionable keywords.
         (f"_{NIT} Nitpick_ | _{MINOR} Minor_ **Add a language tag to the fenced block.**", "nitpick"),
         (f"_{NIT} Nitpick_ this variable name is missing a prefix and must be renamed", "nitpick"),
+        # Severity badge wins over the word "nitpick" appearing in prose (Codex #1985 P2).
+        (f"_Functional Correctness_ | _{MAJOR} Major_ this is more than a nitpick — fix the crash", "actionable"),
+        ("**![P1 Badge](x)** not a nitpick: the token never reaches Agent Zero", "actionable"),
         # Plain Minor with no Potential-issue/severity marker defaults to nitpick.
         (f"_Maintainability_ | _{MINOR} Minor_ tidy the wording", "nitpick"),
         # Author replies.
