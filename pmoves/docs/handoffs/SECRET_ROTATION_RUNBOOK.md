@@ -34,6 +34,23 @@ make -C pmoves up-<media/jellyfin-bridge>          # restart consumers (+ jellyf
 ```
 Auth scheme (verified vs official OpenAPI): the declared `CustomAuthentication` securityScheme is the **`X-Emby-Authorization`** header; **`Authorization: MediaBrowser Client="…" … Token="…"`** is the recommended standard form carrying the same token scheme. `/Auth/Keys` is `RequiresElevation` (admin token). The deprecated token-only forms — `X-Emby-Token` header + `api_key` query param — are removal-bound in 12.0 (10.11 added `EnableLegacyAuthorization`, default on). `jellyfin-bridge` now builds the branded `Authorization: MediaBrowser` header (Client/Device = `JELLYFIN_CLIENT_NAME`, default `PMOVES.AI`) and no longer uses `X-Emby-Token`/`api_key`.
 
+## 4. Leaked generated env file (a committed `env.tier-*` carrying live secrets)
+
+A *generated* env file (`env.shared`, `env.tier-*`, `.env.generated`) that is **git-tracked** has been shipping live secrets into history. These files are gitignored + local-only by design, but git keeps tracking files added *before* an ignore rule — which is how `pmoves/env.tier-media` leaked a live `MINIO_SECRET_KEY` + a real `SUPABASE_SERVICE_ROLE_KEY` (closed #1988, untracked in #1992). `secrets_hardening_audit.py` check #9 now fails CI on any such tracked file, so this is caught automatically going forward.
+
+Remediation is **two independent actions — untrack, then rotate.** Untracking stops future leaks; only rotation makes the already-exposed history value inert.
+
+**1. Untrack** (operator-only — these paths are damage-control *zero-access*, so an agent cannot run this; run it yourself via `!`):
+```bash
+git rm --cached pmoves/env.tier-<tier>     # stays on disk (now-effective gitignore); the .example template stays tracked
+git commit -m "chore(secrets): untrack generated <tier>-tier env file (already gitignored)"
+```
+
+**2. Rotate every secret the file exposed.** Two gotchas make these NOT a plain `secrets-rotate`:
+
+- **MinIO** — `MINIO_SECRET_KEY`, `MINIO_PASSWORD`, and `MINIO_ROOT_PASSWORD` are three aliases of one canonical value (seeded together by `brand_defaults._ensure_minio_credentials`); after rotating they must all still match, so rotate through the pipeline and confirm with `secrets-funnel`, then `make -C pmoves up-media` to restart MinIO + S3 consumers. Push the new value to the GH/Docker secret copies.
+- **Supabase service-role key** — `SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_SERVICE_KEY` alias `SERVICE_ROLE_KEY`, which is a **JWT signed by `JWT_SECRET`**, not a standalone random value. Do **not** `secrets-rotate KEY=SERVICE_ROLE_KEY` — reissue via the Supabase key flow (`generate-keys.sh`; see `.claude/context/credentials-workflow.md`), then `make -C pmoves chit-export && make -C pmoves secrets-funnel && make -C pmoves supa-restart`, and update the GH/Docker `SERVICE_ROLE_KEY` copies. (Rotating `JWT_SECRET` instead invalidates the anon key too — heavier; confirm blast radius first.)
+
 ---
 
 ## Jellyfin fork staleness (separate from the key)
