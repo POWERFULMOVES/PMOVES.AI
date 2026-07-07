@@ -1,0 +1,6 @@
+{
+  "title": "PMOVES Model Selector",
+  "description": "UI over the PMOVES model-registry (:8110) + gpu-orchestrator (:8200) APIs, plus a gfx1201 llama-server GGUF lane on :8090. No hardcoded models.",
+  "icon": "icon.svg",
+  "platform": ["linux"]
+}

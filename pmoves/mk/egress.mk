@@ -97,3 +97,32 @@ yt-egress-verify: ## Compare host IP vs PMOVES.YT egress IP + test-ingest refere
 		-d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'); \
 	echo "$$response" | head -c 500; \
 	echo
+
+# ---------------------------------------------------------------------------
+# Community-mesh egress A/B + capacity planner (Fordham Hill pilot tooling).
+# Portable node-level probe: measure what an exit node buys a household vs the
+# raw local uplink, and map participating homes onto measured node capacity.
+# Script: deploy/provision/mesh-egress-ab.sh (curl+awk; adds tailscale for `ab`).
+# Runbook: pmoves/docs/operations/MESH_EGRESS_AB_RUNBOOK.md
+# ---------------------------------------------------------------------------
+MESH_AB := ../deploy/provision/mesh-egress-ab.sh
+
+.PHONY: mesh-egress-ab mesh-egress-measure mesh-capacity
+
+mesh-egress-ab: ## Auto A/B: direct vs every approved exit node (needs tailscale CLI; self-restoring)
+	@bash $(MESH_AB) ab $(ARGS)
+
+mesh-egress-measure: ## Measure CURRENT egress only (portable; e.g. ARGS='--label starlink-direct --save snap.json')
+	@bash $(MESH_AB) measure $(ARGS)
+
+mesh-capacity: ## Map homes onto node capacity: make mesh-capacity DOWN=845 HOMES=200
+	@bash $(MESH_AB) capacity --down $(or $(DOWN),845) $(if $(HOMES),--homes $(HOMES),) $(ARGS)
+
+# On-VPS exit-node observer — solo-operator pilot observation (no agent on any home).
+# Pairs with Hostinger MCP (VM CPU/RAM/bandwidth, agent-free) for the full picture.
+EXIT_OBS := ../deploy/provision/exit-node-observer.sh
+
+.PHONY: exit-node-observe
+exit-node-observe: ## Run the on-VPS observer on a node: make exit-node-observe NODE=pmoves-kvm4-1 [FMT=--json|--prom]
+	@cat $(EXIT_OBS) | ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes root@$(or $(NODE),pmoves-kvm4-1) \
+		'cat > /tmp/exit-node-observer.sh && bash /tmp/exit-node-observer.sh $(or $(FMT),human)'
