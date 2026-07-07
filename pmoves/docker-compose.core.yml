@@ -488,9 +488,8 @@ services:
     networks:
     - pmoves_api  # supabase-db and analytics reachable via kong on pmoves_api
     # pmoves_public is required, not optional: pmoves_api is internal:true,
-    # so without an egress-capable network the Deno cold-boot import of
-    # https://deno.land/x/jose fails DNS and the worker crash-loops —
-    # pinned resolvers alone can't help on an internal-only bridge.
+    # so edge-runtime cannot reach external Deno imports unless it also joins
+    # the egress-capable bridge. DNS pins alone do not create an egress route.
     - pmoves_public
     # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
     # image fetches https://deno.land/std@...` at worker-bootstrap time;
@@ -728,9 +727,6 @@ services:
     # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
     - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      # 127.0.0.1, not localhost: alpine wget tries ::1 first and Vector's
-      # api binds IPv4 0.0.0.0 only → perpetual "unhealthy" on IPv6-enabled
-      # engines even while /health returns {"ok":true}.
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9001/health"]
       interval: 20s
       timeout: 5s
