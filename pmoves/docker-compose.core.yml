@@ -487,6 +487,10 @@ services:
         condition: service_healthy
     networks:
     - pmoves_api  # supabase-db and analytics reachable via kong on pmoves_api
+    # pmoves_public is required, not optional: pmoves_api is internal:true,
+    # so edge-runtime cannot reach external Deno imports unless it also joins
+    # the egress-capable bridge. DNS pins alone do not create an egress route.
+    - pmoves_public
     # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
     # image fetches https://deno.land/std@...` at worker-bootstrap time;
     # Docker's embedded DNS (127.0.0.11) intermittently fails to forward
@@ -723,7 +727,7 @@ services:
     # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
     - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9001/health"]
       interval: 20s
       timeout: 5s
       retries: 3
