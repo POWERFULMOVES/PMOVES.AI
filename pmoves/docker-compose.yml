@@ -740,7 +740,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
-    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
+    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -1159,7 +1159,6 @@ services:
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
     - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
     - API_JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
-    - METRICS_JWT_SECRET=${JWT_SECRET}
     - REGION=local
     - ERL_AFLAGS=-proto_dist inet_tcp
     - POOLER_TENANT_ID=${POOLER_TENANT_ID:-default-tenant}
