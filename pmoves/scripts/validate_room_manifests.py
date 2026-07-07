@@ -137,14 +137,25 @@ def main(argv: list[str] | None = None) -> int:
     if not matched:
         raise SystemExit(f"No catalog entries found for room_id={args.room_id!r}")
 
+    # Validate every catalog entry and REPORT ALL results rather than crashing on
+    # the first invalid manifest — a single bad room must not hide the health of the
+    # rest. Exit non-zero if any room is invalid.
     seen_ids: set[str] = set()
+    failures: list[str] = []
     for entry in matched:
-        manifest_path, manifest = validate_entry(entry, validator)
-        check_app_registry_consistency(manifest, registered_ns)
-        room_id = manifest["room_id"]
-        if room_id in seen_ids:
-            raise ValueError(f"duplicate room_id in selection: {room_id}")
-        seen_ids.add(room_id)
+        room_ref = entry.get("room_id") or entry.get("manifest") or "<unknown>"
+        try:
+            manifest_path, manifest = validate_entry(entry, validator)
+            check_app_registry_consistency(manifest, registered_ns)
+            room_id = manifest["room_id"]
+            if room_id in seen_ids:
+                raise ValueError(f"duplicate room_id in selection: {room_id}")
+            seen_ids.add(room_id)
+        except Exception as exc:  # noqa: BLE001 - surface each room's failure, keep going
+            first_line = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+            failures.append(f"{room_ref}: {first_line}")
+            print(f"FAIL {room_ref}: {first_line}")
+            continue
 
         if not args.quiet:
             apps = len(manifest.get("apps", []))
@@ -152,8 +163,13 @@ def main(argv: list[str] | None = None) -> int:
             route = manifest.get("shell", {}).get("layout", {}).get("default_route", "-")
             print(f"OK {manifest_path.name} room_id={room_id} apps={apps} skills={skills} route={route}")
 
-    if args.quiet:
-        print(f"validated {len(matched)} room manifest(s)")
+    ok = len(matched) - len(failures)
+    print(f"\nvalidated {len(matched)} room manifest(s): {ok} OK, {len(failures)} FAILED")
+    if failures:
+        print("FAILED rooms (fix separately — one bad manifest no longer hides the rest):")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
     return 0
 
 
