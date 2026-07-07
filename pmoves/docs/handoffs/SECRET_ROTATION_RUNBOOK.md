@@ -49,7 +49,10 @@ git commit -m "chore(secrets): untrack generated <tier>-tier env file (already g
 **2. Rotate every secret the file exposed.** Two gotchas make these NOT a plain `secrets-rotate`:
 
 - **MinIO** — `MINIO_SECRET_KEY`, `MINIO_PASSWORD`, and `MINIO_ROOT_PASSWORD` are three aliases of one canonical value (seeded together by `brand_defaults._ensure_minio_credentials`); after rotating they must all still match, so rotate through the pipeline and confirm with `secrets-funnel`, then `make -C pmoves up-media` to restart MinIO + S3 consumers. Push the new value to the GH/Docker secret copies.
-- **Supabase service-role key** — `SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_SERVICE_KEY` alias `SERVICE_ROLE_KEY`, which is a **JWT signed by `JWT_SECRET`**, not a standalone random value. Do **not** `secrets-rotate KEY=SERVICE_ROLE_KEY` — reissue via the Supabase key flow (`generate-keys.sh`; see `.claude/context/credentials-workflow.md`), then `make -C pmoves chit-export && make -C pmoves secrets-funnel && make -C pmoves supa-restart`, and update the GH/Docker `SERVICE_ROLE_KEY` copies. (Rotating `JWT_SECRET` instead invalidates the anon key too — heavier; confirm blast radius first.)
+- **Supabase service-role key** — `SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_SERVICE_KEY` alias `SERVICE_ROLE_KEY`, a **JWT signed by `JWT_SECRET`**. Three tools, by role — no single one does it all:
+  - **Mint:** `secrets-rotate` (random values only) and `brand_defaults` (which *aliases* SERVICE_ROLE_KEY→SUPABASE_SERVICE_KEY, it does not mint) **cannot** reissue a JWT. Re-sign it with `pmoves/scripts/supabase/generate-keys.sh` (uses `JWT_SECRET`; rotating `JWT_SECRET` itself does a full anon+service reissue — heavier, confirm blast radius). See `.claude/context/credentials-workflow.md`.
+  - **Propagate:** `make -C pmoves chit-export && make -C pmoves secrets-funnel` — the funnel runs `brand_defaults`, which re-aliases the new key into `SUPABASE_SERVICE_KEY`.
+  - **Apply/verify DB side:** use the **`supabase-db` Postgres MCP** to confirm roles + RLS still validate under the reissued key, then `make -C pmoves supa-restart`. Update the off-box GH/Docker `SERVICE_ROLE_KEY` copies.
 
 ---
 
