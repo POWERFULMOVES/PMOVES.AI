@@ -69,6 +69,7 @@ jobs:
             pmoves-e2b-mcp-server
             PMOVES-ClawRouter
             PMOVES-AgentGym
+            PMOVES-Jellyfin
 
       - name: Discover forks
         env:
@@ -142,6 +143,7 @@ jobs:
           e2b-dev/mcp-server|pmoves-e2b-mcp-server|
           BlockRunAI/ClawRouter|PMOVES-ClawRouter|
           WooooDyy/AgentGym|PMOVES-AgentGym|
+          jellyfin/jellyfin|PMOVES-Jellyfin|PMOVES.AI-Edition-Hardened
           "
 
           echo "$FORKS" | grep '|' | while IFS='|' read upstream fork branch_override; do
