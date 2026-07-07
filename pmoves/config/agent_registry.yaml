@@ -2502,7 +2502,7 @@ agents:
     primary_type: agent
     secondary_type: llm
     port: null
-    health: "/healthz"
+    health: null   # NATS-only health (mesh.gpu.status.v1) — no HTTP endpoint on Jetson edge
     layers: [L1, L3]
     evolution_stage: stage_1
     nats:
@@ -2563,7 +2563,7 @@ agents:
     class: utility
     primary_type: agent
     secondary_type: worker
-    port: null
+    port: 8111   # z890-bound 127.0.0.1:8111 (docker-compose.z890.yml); matches agent-teams.yaml annotation
     health: "/healthz"
     layers: [L0, L2]
     evolution_stage: stage_1
@@ -2595,7 +2595,7 @@ agents:
     primary_type: media
     secondary_type: worker
     port: null   # skill-only; 8110 is claimed by model-registry
-    health: "/healthz"
+    health: null   # no HTTP service (skill-only) — /healthz would be unreachable
     layers: [L2, L4]
     evolution_stage: stage_1
     nats:
@@ -2626,7 +2626,7 @@ agents:
     primary_type: media
     secondary_type: ui
     port: null   # headless render; no dedicated compose port
-    health: "/healthz"
+    health: null   # headless render, no HTTP daemon — /healthz would be unreachable
     layers: [L2, L5]
     evolution_stage: stage_1
     nats:
@@ -2657,7 +2657,7 @@ agents:
     primary_type: media
     secondary_type: worker
     port: null   # skill-only; 8111 is the real gateway-agent/container-agent port
-    health: "/healthz"
+    health: null   # no HTTP service (skill-only) — /healthz would be unreachable
     layers: [L2, L4]
     evolution_stage: stage_1
     nats:

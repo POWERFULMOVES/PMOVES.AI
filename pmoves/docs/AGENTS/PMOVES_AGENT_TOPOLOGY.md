@@ -1,6 +1,6 @@
 # PMOVES Agent Topology & TAC Tree
 
-_v1.6.0 (91 agents; regenerated from agent_registry.yaml) — Last updated: 2026-07-07_
+_v1.6.0 (91 agents; regenerated from agent_registry.yaml, with the Fordham cluster hand-reconciled — see refresh note) — Last updated: 2026-07-07_
 
 > **Refresh note (2026-07-07):** roster is now 91 agents / 13 teams (added the `fordham_community` team + 5 room agents; reconciled registry↔teams to zero drift). The `agent_taxonomy_helper mermaid` generator's subsystem map is stale for 31 agents (pre-existing gap — incl. `cast_tts_gateway`, `vps_fleet_manager`, the observability specialists, and the new fordham/nemo agents), so a full auto-regen currently drops them. The Fordham cluster is added by hand below; updating the generator's subsystem map is a tracked follow-up.
 

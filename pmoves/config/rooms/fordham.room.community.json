@@ -308,7 +308,7 @@
       "tags": ["governance", "receipt", "scaffolded", "draft-legal-review", "rehearsal-gated"]
     }
   ],
-  "team_refs": ["fordham-community", "orchestration", "media", "data", "research"],
+  "team_refs": ["fordham_community", "orchestration", "media", "data", "research"],
   "service_refs": ["nats", "supabase", "agent-zero", "archon", "cipher-memory", "tokenism-simulator", "flute-gateway", "firefly-iii"],
   "launcher_refs": ["up-agents", "up-supabase", "up-voice", "up-cipher", "pilot-dashboard-serve"],
   "policies": {
