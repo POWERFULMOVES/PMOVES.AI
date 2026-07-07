@@ -37,7 +37,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-rotate a0-plugins-check a0-plugins-check-remote
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-rotate secrets-untrack a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -129,6 +129,10 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@$(MAKE) --no-print-directory secrets-funnel
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
+
+secrets-untrack: ## Untrack a leaked generated secret env file (git rm --cached; then commit + rotate). Usage: make secrets-untrack FILE=pmoves/env.shared.pre-funnel [DRY_RUN=1]
+	$(if $(strip $(FILE)),,$(error Usage: make -C pmoves secrets-untrack FILE=<repo-relative generated env path> [DRY_RUN=1]. Only untracks a gitignored generated-secret file (env.shared*/env.tier-*); the audit gate (secrets_hardening_audit.py #9) lists them.))
+	@$(CODEX_PY) tools/secrets_untrack.py --file "$(FILE)" $(if $(DRY_RUN),--dry-run)
 
 a0-plugins-check: ## Validate local Agent0 plugin catalog manifests (structure + field constraints)
 	@$(CODEX_PY) tools/a0_plugins_check.py --catalog-root integrations/agent0-plugins/catalog
