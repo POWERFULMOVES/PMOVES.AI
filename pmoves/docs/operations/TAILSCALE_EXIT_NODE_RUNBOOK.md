@@ -128,6 +128,11 @@ KVM). `hostinger-kvm-setup.sh` installs this automatically on freshly provisione
 Refs: [tailscale/tailscale#13367](https://github.com/tailscale/tailscale/issues/13367),
 [blog.thms.uk/2026/06/docker-tailscale-exit-node](https://blog.thms.uk/2026/06/docker-tailscale-exit-node).
 
+> **Caveat:** the rule sends *everything* destined for `172.16.0.0/12` to the main table on
+> Docker hosts. If a tailnet subnet router ever advertises a LAN inside that range (none does
+> today — gateway kits use `192.168.x`), Docker hosts with this shim will silently bypass it.
+> Pick LAN CIDRs outside `172.16/12` for future subnet routers, or narrow the rule per-node.
+
 ### Auto / recommended exit node (scales with the fleet)
 
 Instead of pinning every client to a specific node, let Tailscale pick the lowest-latency
