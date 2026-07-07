@@ -63,21 +63,25 @@ GitHub event → CF Worker (analyzes files; routes only, execution stays on runn
             → ai-lab (GPU) / vps (Docker) / hotfix / spark (ARM64) / cloudstartup (staging) / ubuntu-latest (light)
 ```
 
-## Agent Teams (11 teams, 62 agents)
+## Agent Teams (13 teams, 91 agents)
+
+_Counts are authoritative from `pmoves/config/agent_registry.yaml` ↔ `pmoves/configs/agent-teams.yaml` (enforced by the pydantic gate `make -C pmoves validate-agents`). Regenerate after roster changes._
 
 | Team | Node Affinity | CI Runner | Count |
 |------|--------------|-----------|-------|
-| orchestration | kvm4-1, z890, 5090 | ai-lab | 6 |
-| research | kvm4-1, kvm4-2, z890 | vps | 9 |
-| media | 5090, z890 | ai-lab | 11 |
+| orchestration | kvm4-1, z890, powerfulmoves | ai-lab | 12 |
+| research | kvm4-1, kvm4-2, z890 | vps | 11 |
+| media | powerfulmoves, z890 | ai-lab | 16 |
 | data | kvm4-2, z890 | vps | 9 |
-| ui | z890, 5090 | ubuntu-latest | 6 |
-| automation | kvm4-1, z890 | vps | 4 |
-| evolution | 5090, z890 | ai-lab | 4 |
-| infra | kvm4-1, kvm2 | vps | 3 |
-| sandbox | cloud | ubuntu-latest | 7 |
+| ui | z890, powerfulmoves | ubuntu-latest | 6 |
+| automation | kvm4-1, z890 | vps | 7 |
+| evolution | powerfulmoves, z890 | ai-lab | 5 |
+| infra | kvm4-1, kvm2, jetson | vps | 5 |
+| sandbox | cloud | ubuntu-latest | 8 |
+| observability | kvm4-1, z890 | ai-lab | 5 |
 | life | z890 | ubuntu-latest | 2 |
-| external | N/A (CLI) | N/A | 0 agents (7 human contributors) |
+| **fordham_community** | kvm4-1, kvm4-2, kvm2, z890, powerfulmoves | vps | 5 |
+| external | N/A (CLI) | N/A | 0 agents (human + dev-agent contributors) |
 
 ## DNS Subdomains (pmoves.ai)
 

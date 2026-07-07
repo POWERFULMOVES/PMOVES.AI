@@ -1,6 +1,8 @@
 # PMOVES Agent Topology & TAC Tree
 
-_v1.5.0 (79 agents; regenerated from agent_registry.yaml) — Last updated: 2026-07-02_
+_v1.6.0 (91 agents; regenerated from agent_registry.yaml) — Last updated: 2026-07-07_
+
+> **Refresh note (2026-07-07):** roster is now 91 agents / 13 teams (added the `fordham_community` team + 5 room agents; reconciled registry↔teams to zero drift). The `agent_taxonomy_helper mermaid` generator's subsystem map is stale for 31 agents (pre-existing gap — incl. `cast_tts_gateway`, `vps_fleet_manager`, the observability specialists, and the new fordham/nemo agents), so a full auto-regen currently drops them. The Fordham cluster is added by hand below; updating the generator's subsystem map is a tracked follow-up.
 
 Visual topology of the PMOVES.AI agent ecosystem. All diagrams are derived from the single source of truth at `pmoves/config/agent_registry.yaml` and can be regenerated with:
 
@@ -125,6 +127,20 @@ graph TD
         render_webhook["Render Webhook<br/>:8085"]:::utility
         mesh_agent["Mesh Agent"]:::standard
     end
+
+    subgraph FORDHAM_COMMUNITY["Fordham Community Room — Cost-Pooling + Self-Governance Pilot"]
+        fordham_steward["Fordham Steward<br/>(coordinator)"]:::specialized
+        fordham_onboarding["Fordham Onboarding<br/>mesh + voter roll"]:::specialized
+        fordham_transaction["Fordham Transaction<br/>dues + co-op ledger"]:::specialized
+        fordham_creator["Fordham Creator<br/>materials + dashboard"]:::specialized
+        fordham_voice["Fordham Voice<br/>FlOO$ suit"]:::specialized
+    end
+
+    fordham_steward --> fordham_onboarding
+    fordham_steward --> fordham_transaction
+    fordham_steward --> fordham_creator
+    fordham_steward --> fordham_voice
+    agent_zero -.-> fordham_steward
 
     %% MCP / orchestration links
     agent_zero --> archon
@@ -271,6 +287,11 @@ Every registered agent mapped to its subsystem, class, type, tier, and NATS part
 | Subsystem | Agent | Class | Type | Tier | Evo Stage | NATS Pub | NATS Sub |
 |-----------|-------|-------|------|------|-----------|----------|----------|
 | **Core** | Agent Zero | Standard | Agent/API | 6 | Mega | `agent.tool.executed.v1` | `mesh.node.announce.v1` |
+| **Fordham Community** | Fordham Steward | Specialized | Agent/API | 6 | Stage 1 | `room.session.updated.v1` | `room.session.updated.v1` |
+| **Fordham Community** | Fordham Onboarding | Specialized | Agent/Worker | 6 | Stage 1 | `fordham.roll.updated.v1`, `chit.signed.v1` | `fordham.onboarding.request.v1` |
+| **Fordham Community** | Fordham Transaction | Specialized | Agent/Worker | 6 | Stage 1 | `fordham.ledger.entry.v1`, `fordham.surplus.updated.v1` | `fordham.dues.received.v1` |
+| **Fordham Community** | Fordham Creator | Specialized | Agent/Media | 6 | Stage 1 | `fordham.artifact.published.v1` | `fordham.dashboard.request.v1` |
+| **Fordham Community** | Fordham Voice | Specialized | Agent/Media | 6 | Stage 1 | `fordham.voice.delivered.v1`, `voice.synth.request.v1` | `tokenism.prosodic.bpm.v1` |
 | **Archon Nexus** | Archon | Standard | Agent/LLM | 6 | Stage 2 | — | — |
 | **BoTZ Ship** | BoTZ Gateway | Standard | Agent/Worker | 6 | Stage 1 | `botz.workitem.assigned.v1`, `botz.work.available.v1` | `botz.heartbeat.v1`, `botz.register.v1`, `botz.work.claimed.v1` |
 | **ClaWZ Discord** | ClaWZ | Standard | Agent/API | 6 | Stage 1 | — | — |
