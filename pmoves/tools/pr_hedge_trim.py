@@ -36,7 +36,22 @@ ACTIONABLE_TOKENS = (
     "invalid",
     "incompatible",
 )
-NITPICK_TOKENS = ("nitpick", "nit:", "nits", "style-only")
+# CodeRabbit tags Nitpick findings with 🧹; that TYPE marker is authoritative over
+# incidental keyword matches (a "🧹 Nitpick: foo is missing a prefix" is a nitpick,
+# not an actionable "missing" hit).
+NITPICK_TOKENS = ("🧹", "nitpick", "nit:", "nits", "style-only")
+# Explicit high-severity markers from the review bots — an authoritative "this is a real
+# issue" signal that must NOT fall through to the nitpick default:
+#   CodeRabbit: ⚠️ Potential issue, 🔴 Critical, 🟠 Major
+#   Codex:      P0/P1/P2 Badge (rendered as image alt-text in the comment body)
+ACTIONABLE_MARKERS = (
+    "potential issue",
+    "🔴",
+    "🟠",
+    "p0 badge",
+    "p1 badge",
+    "p2 badge",
+)
 DESIGN_TOKENS = (
     "intentional",
     "by design",
@@ -224,15 +239,25 @@ def classify_comment(body: str, *, is_bot: bool = True) -> str:
             default to actionable.
     """
     text = body.lower()
+    # 1. An author reply explicitly calling it a false positive wins.
     if any(token in text for token in FALSE_POSITIVE_TOKENS):
         return "false-positive"
-    if any(token in text for token in DESIGN_TOKENS):
-        return "design-decision"
+    # 2. High-severity explicit markers win FIRST — a Codex P1/P2 badge or CodeRabbit
+    #    🔴 Critical / 🟠 Major / ⚠️ Potential issue is actionable even if its PROSE
+    #    mentions the word "nitpick" (Codex #1985 P2: badges before broad nitpick words).
+    if any(token in text for token in ACTIONABLE_MARKERS):
+        return "actionable"
+    # 3. Then CodeRabbit's 🧹 Nitpick TYPE marker — authoritative over the keyword
+    #    heuristics below, so a "🧹 Nitpick: x is missing a prefix" stays a nitpick and
+    #    is not swept up by the "missing"/"must" actionable keywords.
     if any(token in text for token in NITPICK_TOKENS):
         return "nitpick"
+    # 4. Fall back to keyword heuristics.
+    if any(token in text for token in DESIGN_TOKENS):
+        return "design-decision"
     if any(token in text for token in ACTIONABLE_TOKENS):
         return "actionable"
-    # Default: unclassified comments from bots are nitpick, from humans are actionable
+    # Default: unclassified comments from bots are nitpick, from humans are actionable.
     return "nitpick" if is_bot else "actionable"
 
 

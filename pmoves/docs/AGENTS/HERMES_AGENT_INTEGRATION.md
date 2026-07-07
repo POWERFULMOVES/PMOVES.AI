@@ -552,6 +552,16 @@ hermes --profile pmoves-hermes skills install https://raw.githubusercontent.com/
 
 ## Provider Credential Mapping & Model Routing
 
+> **Rev 4 (2026-07-03, cloud-hybrid inversion):** cloud coding plans are the
+> ORCHESTRATOR tier; local models are autonomous WORKER SIBLINGS selected via
+> the dynamic model plane (model-registry :8110 / Supabase, CHIT-signed
+> candidates, gpu-orchestrator :8200) — never pinned in config. Canonical env
+> names: `Z_AI_API_KEY`, `MOONSHOT_API_KEY` (alias KIMI_API_KEY),
+> `ALIBABA_PRO_CODING_PLAN` (aliases ALIBABA/DASHSCOPE), `KILOCODE_API_KEY`,
+> `OLLAMA_API_KEY`, `HF_TOKEN`. All routing goes through TensorZero functions
+> `pmoves_orchestrator_*` / `pmoves_worker_*`. The table below is the original
+> Elder-Melchor local-first framing, retained for history.
+
 Elder-Melchor has multiple active subscriptions that feed the provider hierarchy.
 All credentials are injected via CHIT secrets funnel (never committed).
 
