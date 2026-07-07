@@ -2,9 +2,23 @@
 
 NVIDIA DGX Spark (GB10 Blackwell) — Model Selection, Fine-Tuning, Routing & Migration
 
-**Date:** 2026-05-08
+**Date:** 2026-05-08 (updated 2026-07-07)
 **Hardware:** NVIDIA DGX Spark — GB10 Blackwell SoC, 128GB LPDDR5X unified memory
-**Topology:** TOPOLOGY_MODE=standalone sidecar, Ollama on host.docker.internal:11434
+**Topology:** TOPOLOGY_MODE=docked, Ollama on host.docker.internal:11434, TensorZero gateway active
+
+---
+
+## 0. Deployed Models (2026-07-07)
+
+| Model | Size | Role | Status |
+|---|---|---|---|
+| `qwen3.5:35b-a3b-q8_0` | 36GB | Primary reasoning engine | ✅ Deployed |
+| `nemotron-3-super:120b` | 80GB | Heavy inference, deep analysis | ✅ Deployed |
+| `qwen3:30b-a3b-q4_K_M` | 17GB | Code generation, tool use | ✅ Deployed |
+| `hermes3:8b` | 4GB | Fast agent tasks | ✅ Deployed |
+| `llama3.2:3b` | 1GB | Lightweight classification | ✅ Deployed |
+| `nomic-embed-text` | 0.6GB | Embeddings | ✅ Deployed |
+| `qwen2.5-coder:32b` | ~19GB | Code specialist | ✅ Deployed |
 
 ---
 
