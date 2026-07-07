@@ -1331,6 +1331,11 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 	@echo "Backend services should NOT be on pmoves-net (except UIs)"
 	@docker ps --format "table {{.Names}}\t{{.Networks}}" 2>/dev/null | grep pmoves-net | grep -v "supabase\|archon\|agent-zero" || echo "✅ No unexpected services on pmoves-net"
 
+.PHONY: validate-agents
+validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check
+	@echo "🔍 Validating agent registry ↔ teams coupling (pydantic gate)..."
+	@python $(CURDIR)/scripts/validate_agent_registry.py
+
 # -------- PMOVES.YT docs helpers ----------
 .PHONY: yt-docs-sync yt-docs-catalog-smoke
 
