@@ -1032,7 +1032,10 @@ services:
     volumes:
     - ../PMOVES-supabase/docker/volumes/functions:/home/deno/functions:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sSf http://localhost:9000/health || exit 1"]
+      # The edge-runtime image ships NO curl/wget, and /health answers 401 under
+      # VERIFY_JWT=true — an HTTP-status probe can never pass here. bash IS in the
+      # image, so prove liveness with a /dev/tcp connect to the serving port.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000"]
       interval: 20s
       timeout: 5s
       retries: 3
