@@ -106,6 +106,33 @@ curl -sf --max-time 12 https://api.github.com/zen >/dev/null \
   || { tailscale set --exit-node= ; echo "reverted — exit node unreachable"; }
 ```
 
+### Docker hosts MUST install the routing shim (or all container egress dies)
+
+Selecting an exit node on a node that runs Docker silently kills **all container egress**
+(host traffic keeps working — that's the trap). Replies de-NAT'd back to container
+addresses hit Tailscale's policy rule (`5270: from all lookup 52`), which has no route to
+the local bridges, so they leave via `tailscale0` instead of reaching the container. First
+hit: Knuckles/B850 2026-07-07 — `supabase-edge-functions` crash-looped 291× on Deno imports
+while `pmoves-kvm4-2` was selected; every container timed out on every destination.
+
+```bash
+# one-time, per Docker+Tailscale node (idempotent; no-op while no exit node is selected):
+sudo bash deploy/provision/install-docker-tailscale-routing.sh
+# verify: rule 5269 sits just before Tailscale's 5270
+ip rule show | grep -E "^52(69|70):"
+```
+
+Container **outbound** traffic still egresses through the exit node (verify from a
+container: `docker run --rm curlimages/curl -s https://ipinfo.io/json` → should show the
+KVM). `hostinger-kvm-setup.sh` installs this automatically on freshly provisioned nodes.
+Refs: [tailscale/tailscale#13367](https://github.com/tailscale/tailscale/issues/13367),
+[blog.thms.uk/2026/06/docker-tailscale-exit-node](https://blog.thms.uk/2026/06/docker-tailscale-exit-node).
+
+> **Caveat:** the rule sends *everything* destined for `172.16.0.0/12` to the main table on
+> Docker hosts. If a tailnet subnet router ever advertises a LAN inside that range (none does
+> today — gateway kits use `192.168.x`), Docker hosts with this shim will silently bypass it.
+> Pick LAN CIDRs outside `172.16/12` for future subnet routers, or narrow the rule per-node.
+
 ### Auto / recommended exit node (scales with the fleet)
 
 Instead of pinning every client to a specific node, let Tailscale pick the lowest-latency

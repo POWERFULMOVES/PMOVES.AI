@@ -345,6 +345,25 @@ EOF
     else
         log_warn "Tailscale connection pending — may need admin approval"
     fi
+
+    install_docker_tailscale_routing
+}
+
+# Docker + exit-node coexistence: without this rule, selecting an exit node on
+# a Docker host kills all container egress (replies to container subnets get
+# routed into Tailscale's table 52 instead of back to the bridge). No-op when
+# no exit node is selected, so install it on every Docker+Tailscale node.
+# First hit: Knuckles/B850 2026-07-07 (edge-functions 291-restart loop).
+install_docker_tailscale_routing() {
+    local unit_src="$SCRIPT_DIR/docker-tailscale-routing.service"
+    if [ ! -f "$unit_src" ]; then
+        log_warn "docker-tailscale-routing.service not found next to this script — skipping"
+        return 0
+    fi
+    install -m 644 "$unit_src" /etc/systemd/system/docker-tailscale-routing.service
+    systemctl daemon-reload
+    systemctl enable --now docker-tailscale-routing.service
+    log_info "docker-tailscale-routing active (ip rule 5269: docker subnets -> main table)"
 }
 
 # Step 4: GitHub Actions runner

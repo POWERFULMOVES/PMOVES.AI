@@ -93,6 +93,7 @@ The router knows every connected device (DHCP leases). That count **is** the pil
 | Route stuck "pending" (clients online but LAN unreachable / no door-count) | committed ACL does not auto-approve LAN CIDRs — the `<router-LAN>/24` subnet route needs a one-time manual approval | admin console → Machines → the router → **Approve subnet** (or add a local uncommitted ACL overlay `{"<router-LAN>/24": ["tag:gateway"]}`). Egress still works while pending — only LAN reachability/door-count is blocked |
 | Slow / high latency | router↔KVM path is DERP-relayed | enable UPnP on the router WAN; pick the closest fast KVM |
 | Works then drops | uplink flaps (Starlink/tether) | expected; the tunnel re-establishes — kit stays on router, not clients |
+| Docker containers on a fleet node lose ALL egress when its exit node is on (host traffic fine) | container-subnet replies routed into Tailscale table 52 instead of back to the bridge | `sudo bash deploy/provision/install-docker-tailscale-routing.sh` (see TAILSCALE_EXIT_NODE_RUNBOOK.md § Docker hosts) |
 
 ## Related
 - `pmoves/configs/tailscale-acl-policy.json` (`tag:gateway`), `deploy-tailscale-acl.yml`
