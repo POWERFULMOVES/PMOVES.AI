@@ -18,18 +18,42 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
 if [ -f "$ENVF" ]; then
-  # Parse env_file format (KEY=VALUE) safely — do NOT `source` it: env.shared is
-  # Docker Compose env_file format with unquoted values that would break `. file`.
+  # env.shared is Docker Compose env_file format: unquoted values, and some are
+  # ALIAS lines like SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}. Two hazards:
+  #   1. We can't `source` it raw — unquoted values break `. file`.
+  #   2. We must NOT export values verbatim — that leaks the literal string
+  #      "${SERVICE_ROLE_KEY}" into the MCP --apiKey, so an alias-backed MCP
+  #      starts unauthorized even though the canonical key is present (Codex #1987 P2).
+  # Mirror pmoves/scripts/with-env.sh: build a sanitized assignment file
+  # (single-quote plain values; pass ${...}-bearing lines through for shell
+  # expansion), then source it with auto-export so aliases resolve against the
+  # canonical keys defined earlier in the same file.
+  set +H 2>/dev/null || true   # tolerate '!' in values (no history expansion)
+  tmpf=$(mktemp)
   n=0
   while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"                       # normalize CRLF
     case "$line" in ''|\#*) continue;; esac
+    case "$line" in *=*) : ;; *) continue;; esac
     key=${line%%=*}
     val=${line#*=}
-    # trim surrounding whitespace on the key; leave the value verbatim
     key=$(printf '%s' "$key" | tr -d '[:space:]')
     [ -z "$key" ] && continue
-    export "$key=$val" 2>/dev/null && n=$((n+1))
+    val="${val#"${val%%[![:space:]]*}"}"       # trim leading whitespace on value
+    if [ "${val#*'${'}" != "$val" ]; then
+      printf '%s=%s\n' "$key" "$val" >> "$tmpf" # let the shell expand ${...}
+    else
+      esc="${val//\'/\'\\\'\'}"                 # escape single quotes: ' -> '\''
+      printf "%s='%s'\n" "$key" "$esc" >> "$tmpf"
+    fi
+    n=$((n+1))
   done < "$ENVF"
+  set -a; set +u                               # auto-export; tolerate forward refs
+  # shellcheck source=/dev/null
+  . "$tmpf"
+  set +a; set -u
+  rm -f "$tmpf"
+  set -H 2>/dev/null || true
   echo "[claude-pmoves] loaded $n vars from $ENVF" >&2
 else
   echo "[claude-pmoves] WARN: $ENVF not found — MCP creds may be missing." >&2
