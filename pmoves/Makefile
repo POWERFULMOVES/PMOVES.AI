@@ -1427,6 +1427,31 @@ archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARC
 up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 	@$(DC) up -d archon
 
+# Native Archon: run Archon's OWN compose (server + mcp + frontend) against local
+# Supabase, fed by pipeline-emitted env.shared. Replaces the broken hand-rolled
+# archon*.submodule.yml wrapper. Frontend :3737, MCP :8051, server :8181.
+ARCHON_NATIVE_DIR := $(CURDIR)/../PMOVES-Archon
+# SUPABASE_URL is injected as a shell-env override scoped to THIS compose only
+# (compose precedence: shell env > --env-file). It is deliberately absent from the
+# global env.shared so it never clobbers the in-compose ${SUPABASE_URL:-http://supabase-kong:8000}
+# default other services use (Codex #1984 P1). host.docker.internal reaches the
+# host-published Kong gateway from Archon's standalone compose network.
+ARCHON_NATIVE_SUPABASE_URL ?= http://host.docker.internal:8000
+ARCHON_NATIVE_DC := SUPABASE_URL=$(ARCHON_NATIVE_SUPABASE_URL) docker compose --env-file $(CURDIR)/env.shared \
+	--project-directory $(ARCHON_NATIVE_DIR) -f $(ARCHON_NATIVE_DIR)/docker-compose.yml
+
+.PHONY: archon-native-config up-archon-native down-archon-native
+# secrets-runtime-hydrate fills SUPABASE_SERVICE_KEY from the freshest canonical
+# source (live Supabase container's SERVICE_ROLE_KEY) before Archon reads it.
+archon-native-config: secrets-runtime-hydrate ## Render native Archon config + confirm Supabase env is populated
+	@$(ARCHON_NATIVE_DC) config 2>/dev/null | grep -E "SUPABASE_URL|SUPABASE_SERVICE_KEY" | sed -E 's/(KEY: ).{12}.*/\1<set>/' | sort -u
+
+up-archon-native: secrets-runtime-hydrate ## Build+start native Archon (server+mcp+frontend) on local Supabase
+	@$(ARCHON_NATIVE_DC) up --build -d
+
+down-archon-native: ## Stop native Archon stack
+	@$(ARCHON_NATIVE_DC) down
+
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
