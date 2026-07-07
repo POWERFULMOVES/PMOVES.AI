@@ -20,6 +20,10 @@ teams:
       - botz_gateway      # Port 8054 — Work item distribution
       - gateway_agent     # Port 8100 — MCP tool orchestration
       - consciousness_service  # CGP consciousness mapper
+      - botz_architect    # BoTZ skill architect (registry topology.team=orchestration)
+      - botz_builder      # BoTZ skill builder
+      - botz_auditor      # BoTZ skill auditor
+      - space_agent       # Port 3010 — spatial/canvas agent
 
   research:
     name: "Research & Knowledge"
@@ -37,6 +41,7 @@ teams:
       - dox               # Document intelligence
       - open_notebook     # Knowledge base (SurrealDB)
       - cipher_memory     # Port 8105 — Knowledge graph memory
+      - notebooklm_agent  # NotebookLM source-grounded research (registry topology.team=research)
 
   media:
     name: "Media & Voice"
@@ -60,6 +65,7 @@ teams:
       - remotion_renderer # Port 8107 — A2UI Remotion video rendering
       - podcast_producer  # Port 8110 — Podcast RSS feed generation + multi-episode TTS
       - youtube_publisher # Port 8111 — YouTube upload + metadata + thumbnail generation
+      - cipher_beats_analyst  # audio beats/CGP analyst (registry topology.team=media)
 
   data:
     name: "Data & Storage"

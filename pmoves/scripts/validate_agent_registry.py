@@ -53,10 +53,12 @@ def kebab_to_snake(name: str) -> str:
 # --- Ratchet baseline -------------------------------------------------------
 # Pre-existing origin/main coupling drift. Allowed so the gate is green today;
 # NEW entries outside these sets fail. Reconcile these separately (do NOT add).
+# Reconciled 2026-07-07: botz_architect/builder/auditor + space_agent -> orchestration,
+# cipher_beats_analyst -> media, notebooklm_agent -> research (each per its own
+# registry topology.team). Remaining have no declared team (operator assignment needed).
 BASELINE_UNTEAMED = frozenset({
-    "a0_plugins", "autoresearch", "botz_architect", "botz_auditor",
-    "botz_builder", "cipher_beats_analyst", "clawz", "hermes_agent",
-    "notebooklm_agent", "pmoves_ci_bot", "pr_hedge_trim", "space_agent",
+    "a0_plugins", "autoresearch", "clawz", "hermes_agent",
+    "pmoves_ci_bot", "pr_hedge_trim",
 })
 BASELINE_UNREGISTERED = frozenset({
     "container_agent", "nemoclaw", "nemotron_claw", "podcast_producer",
