@@ -1,16 +1,33 @@
 # HERMES Agent Profile: B850 / RDNA4 (PMOVES-Knuckles)
 # Hardware: Dual AMD R9700 64GB VRAM total, ROCm 7.1
 # Node: pmoves-b850 (alias rdna4)
-# Role: Linux container host + ROCm dual-GPU inference
-# Last updated: 2026-06-04
+# Role: Linux container host + ROCm dual-GPU inference (worker tier)
+# Last updated: 2026-07-03 (cloud-hybrid rev 4 — TZ-first, registry lanes)
+#
+# NO local model IDs live in this file. Local worker models are selected via
+# the dynamic model plane (model-registry :8110 / Supabase, CHIT-signed
+# candidates) and reached through TensorZero lane functions. See
+# docs/superpowers/specs/2026-07-02-hermes-agent-zero-provider-standup-design.md
 
 model:
-  default: "ollama/hermes3:8b"
-  provider: "ollama"
-  base_url: "http://localhost:11434"
-  fallback:
-    provider: "openrouter"
-    model: "nousresearch/hermes-3"
+  default: "tensorzero::function_name::pmoves_orchestrator_coding"
+  provider: tensorzero
+
+providers:
+  tensorzero:
+    name: tensorzero
+    base_url: "http://127.0.0.1:3030/openai/v1"
+    api_key: "none"
+    api_mode: chat_completions
+    default_model: "tensorzero::function_name::pmoves_orchestrator_coding"
+    context_length: 128000
+    models:
+      - "tensorzero::function_name::pmoves_orchestrator_coding"
+      - "tensorzero::function_name::pmoves_orchestrator_chat"
+      - "tensorzero::function_name::pmoves_worker_glm"
+      - "tensorzero::function_name::pmoves_worker_qwen"
+      - "tensorzero::function_name::pmoves_worker_hermes"
+      - "tensorzero::function_name::pmoves_worker_kimi"
 
 agent:
   max_turns: 50
@@ -47,8 +64,8 @@ memory:
   provider: sqlite
 
 delegation:
-  model: "ollama/hermes3:8b"
-  provider: ollama
+  model: "tensorzero::function_name::pmoves_worker_hermes"
+  provider: tensorzero
   max_concurrent_children: 2
   max_iterations: 50
 
@@ -60,7 +77,7 @@ gateway:
     - telegram
 
 nats:
-  url: "nats://pmoves-nats:4222"
+  url: "${NATS_URL}"   # authenticated form via secrets funnel — never hardcoded
   subjects:
     publish:
       - hermes.gateway.launched.v1
@@ -90,22 +107,11 @@ security:
   approvals:
     mode: smart
 
-# ROCm-specific environment
+# ROCm-specific environment (serving backends, not model picks)
 rocm:
   version: "7.1"
   visible_devices: "0,1"
-  backend: ollama-rocm
-  gguf_row_split: true
-
-local_models:
-  ollama:
-    - hermes3:8b
-  huggingface:
-    - repo: "google/gemma-embedding-exp-03-07"
-      name: gemma4-embed
-      local_dir: "~/.cache/huggingface/gemma4-embed"
-      backend: sentence-transformers
-    - repo: "unsloth/Hermes-3-Llama-3.1-8B"
-      name: unsloth-hermes-8b-gguf
-      local_dir: "~/.cache/huggingface/unsloth-hermes-8b"
-      backend: llama-cpp-rocm
+  backends:
+    - ollama            # host-native; requires OLLAMA_HOST override for container reach
+    - llama-cpp-rocm    # gfx1201 fork, :8090 (8080 is Agent Zero's)
+    - vllm              # via vllm-orchestrator dynamic TZ registration

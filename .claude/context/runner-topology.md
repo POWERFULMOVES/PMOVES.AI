@@ -1,19 +1,26 @@
 # Runner & Topology Context (Condensed)
 
 > Quick-reference for agents. Full details: `pmoves/docs/operations/TOPOLOGY.md`
+> "Runner" means TWO fabrics — keep them distinct:
+> **(A) CI runner fabric** — GitHub Actions self-hosted runners executing workflows.
+> **(B) Model runner fabric** — inference endpoints (Ollama / llama.cpp / vLLM) that agents execute against, routed by TensorZero and announced via `mesh.node.announce.v1` → `node-registry` (:8115, Supabase-backed).
 
 ## Nodes
 
-| Node | Role | Key Services | Runner |
-|------|------|-------------|--------|
-| **Z890** | Production ai-lab node, GPU (RTX 3090 Ti); workstation co-located with dev workflow | All (local Docker Compose) | `self-hosted, ai-lab, gpu, cuda` |
-| **B850 "Knuckles"** (= R9700 Workstation pre-Phase-C) | Heavyweight ROCm Inference target; **current state: 9850X3D / 32GB / 1× R9700 / Ubuntu 24.04.4 / /dev/kfd present / hostname `pmoves-b850-ai-top`**. Hosts the Claude Code dev shell. | All (local Docker Compose, ROCm install operator-pending) | `self-hosted, ai-lab` (target: `+gpu, rocm, rdna4`) |
-| **5090** | Primary GPU (pending) | Future inference | (pending) |
-| **4090 Laptop (PMOVES-4090)** | Mobile relay / PR triage node; Claude Code dev shell | Docker Desktop (WSL2) | `pmoves-ai-lab-win`: `self-hosted, X64, ai-lab, Windows, 4090` (native Windows service) + `pmoves-4090-runner-*`: `self-hosted, ai-lab, Linux, X64` (2× Docker containers via `make gha-runner-4090-up`) |
-| **KVM4-1** | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent; outbound exit for `pmoves-yt` stack | `self-hosted, vps, kvm4, production` |
-| **KVM4-2** | Data/Storage | Supabase, NATS, Qdrant, Neo4j, Meilisearch, MinIO, monitoring | `self-hosted, vps, kvm4, production` |
-| **KVM2** | Reverse Proxy / RustDesk Relay | nginx (SSL termination), RustDesk hbbs/hbbr | `self-hosted, vps, kvm2, backup` |
-| **Cloudflare** | Edge | DNS, CI Worker | — |
+| Node | Role | Key Services | CI Runner | Model Runner |
+|------|------|-------------|-----------|--------------|
+| **B850 "Knuckles"** | Primary dev host (Claude Code shell) + heavyweight ROCm inference; 9850X3D / dual AMD R9700 (RDNA4 gfx1201) 64GB VRAM / ROCm 7.1 / Ubuntu 24.04 / hostname `pmoves-b850-ai-top` | All (local Docker Compose; data tier live) | `self-hosted, ai-lab` (target: `+gpu, rocm, rdna4`) | `llama-server` :8090 (llama.cpp-HIP fork `tlee933/llama.cpp-rdna4-gfx1201` — stock Ollama lacks gfx1201 kernels) + Ollama :11434 |
+| **SPARK (DGX GB10)** | ARM64 CI + 70B+/NVFP4 inference; Grace-Blackwell 128GB unified; only NVFP4-capable node | Agent Zero sidecar, shape-worker | `pmoves-spark-runner`: `self-hosted, spark, Linux, ARM64` at `/opt/actions-runner-spark` | Ollama ARM64-CUDA :11434 (`ollama_spark` TZ provider) |
+| **Z890** | Windows workstation, ai-lab lane (GTX 1650 4GB per 2026-06-04 live scan — earlier "3090 Ti" spec was wrong) | Local Docker Compose | `self-hosted, ai-lab, gpu, cuda` | hermes3:8b-class small models only |
+| **5090** | Primary GPU (pending standup) | Future inference | (pending) | (pending) |
+| **4090 Laptop (PMOVES-4090)** | Mobile relay / PR triage; Claude Code dev shell | Docker Desktop (WSL2) | `pmoves-ai-lab-win`: `self-hosted, X64, ai-lab, Windows, 4090` (native) + `pmoves-4090-runner-*`: `self-hosted, ai-lab, Linux, X64` (2× containers via `make gha-runner-4090-up`) | Ollama Cloud backend (no heavy local VRAM budget) |
+| **KVM4-1** | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent (:8111) | `self-hosted, vps, kvm4, production` | TensorZero routing plane |
+| **KVM4-2** | Data/Storage | Supabase, NATS, Qdrant, Neo4j, Meilisearch, MinIO, monitoring | `self-hosted, vps, kvm4, production` | — |
+| **KVM2** | Reverse Proxy / RustDesk Relay | nginx (SSL), RustDesk hbbs/hbbr | `self-hosted, vps, kvm2, backup` | — |
+| **cloudstartup** | Staging deploys | staging stack | `self-hosted, cloudstartup, staging` | — |
+| **Cloudflare** | Edge — DNS, tunnel, R2, CI-orchestration Worker (build ROUTING only, not execution; `ci.pmoves.ai` routes currently commented out in `wrangler.toml`) | `pmoves-ci-orchestrator` Worker | — | Workers AI = **planned** fallback inference tier, not wired |
+
+**Container-managed CI lanes** (`pmoves/tools/local_cert_runners.py`, `myoung34/github-runner` images, `RUNNER_ALLOW_RUNNER_REUSE=true`): `pmoves-ai-lab-runner` (ai-lab,gpu), `pmoves-vps-runner` (vps), `pmoves-hotfix-runner` (hotfix). Token cascade: `GITHUB_PAT` → `gh auth token` (never `GH_PAT_PUBLISH` — wrong scope).
 
 **4090 Docker Runner Prerequisites** (for `make gha-runner-4090-up`):
 1. `docker login` — Docker Hub auth required to pull `myoung34/github-runner:ubuntu-jammy`
@@ -33,6 +40,16 @@ The egress path is transparent to event consumers — no new NATS subjects
 are introduced. See `.claude/context/nats-subjects.md` for the subject
 catalog; `ingest.*.v1` flows through normally when egress is active.
 
+## Model runner announcement plane
+
+```text
+node (mesh-agent) → mesh.node.announce.v1 (15s heartbeat) → node-registry :8115 → Supabase
+                                                            (REST: POST /api/v1/nodes/query — requires_gpu/min_tier/online_only)
+Model catalog: model-registry :8110 (Supabase; signed candidates via /api/model-candidates)
+GPU lifecycle: gpu-orchestrator :8200 (load/unload/optimize, VRAM tracking, ollama+vllm clients)
+Routing: TensorZero :3030 (cloud coding plans = orchestrator tier; local siblings = worker tier)
+```
+
 ## Route: Public → Services
 
 ```text
@@ -42,7 +59,8 @@ Internet → Cloudflare DNS → KVM2 (nginx/SSL) → KVM4-1 (API) or KVM4-2 (dat
 ## Route: CI/CD
 
 ```text
-GitHub event → CF Worker (analyzes files) → ai-lab (GPU) / vps (Docker) / ubuntu-latest (light)
+GitHub event → CF Worker (analyzes files; routes only, execution stays on runners)
+            → ai-lab (GPU) / vps (Docker) / hotfix / spark (ARM64) / cloudstartup (staging) / ubuntu-latest (light)
 ```
 
 ## Agent Teams (11 teams, 62 agents)
@@ -75,12 +93,14 @@ GitHub event → CF Worker (analyzes files) → ai-lab (GPU) / vps (Docker) / ub
 | `nats.pmoves.ai` | KVM4-2 | DNS only |
 | `minio.pmoves.ai` | KVM4-2 | DNS only |
 | `headscale.pmoves.ai` | KVM2 | DNS only |
-| `ci.pmoves.ai` | CF Worker | Yes |
+| `ci.pmoves.ai` | CF Worker | Yes (routes commented out in `wrangler.toml` — coded, not confirmed live) |
 
 ## Key Files
 
 - `pmoves/configs/agent-teams.yaml` — Team definitions
 - `pmoves/config/agent_registry.yaml` — Full agent registry
+- `pmoves/tools/local_cert_runners.py` — Container CI lanes (ai-lab/vps/hotfix)
 - `deploy/cloudflare/worker.js` — CI routing logic
 - `deploy/scripts/deploy-vps.sh` — VPS deployment
 - `pmoves/docs/operations/WORKFLOW_RUNNER_MAP.md` — All 19 workflows mapped
+- `pmoves/docs/infrastructure/DISTRIBUTED_COMPUTE_SERVICES.md` — node-registry / distributed compute
