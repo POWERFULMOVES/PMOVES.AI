@@ -93,13 +93,19 @@ get_auth_key() {
         return 1
     fi
 
-    # Save to env.shared
-    if [[ -f "pmoves/env.shared" ]]; then
-        if ! grep -q "TAILSCALE_AUTHKEY" pmoves/env.shared; then
-            echo "" >> pmoves/env.shared
-            echo "# Tailscale mesh network for multi-host service discovery" >> pmoves/env.shared
-            echo "TAILSCALE_AUTHKEY=$TAILSCALE_AUTHKEY" >> pmoves/env.shared
-            log_success "Auth key saved to pmoves/env.shared"
+    # Save to env.shared — anchor to the script's location, NOT the CWD.
+    # `make mesh-setup` runs with CWD=pmoves/, where a relative
+    # "pmoves/env.shared" silently creates a stray pmoves/pmoves/env.shared.
+    local env_shared
+    env_shared="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/env.shared"
+    if [[ -f "$env_shared" ]]; then
+        if ! grep -q "TAILSCALE_AUTHKEY" "$env_shared"; then
+            {
+                echo ""
+                echo "# Tailscale mesh network for multi-host service discovery"
+                echo "TAILSCALE_AUTHKEY=$TAILSCALE_AUTHKEY"
+            } >> "$env_shared"
+            log_success "Auth key saved to $env_shared"
         fi
     fi
 

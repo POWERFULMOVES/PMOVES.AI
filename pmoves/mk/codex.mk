@@ -110,7 +110,12 @@ secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files fro
 	@echo "→ Reading CHIT bundle from $(CHIT_EXPORT_PATH)"
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
-secrets-funnel: ## Portable secrets flow: local hydrate -> CHIT export -> manifest sync -> audit gates (FORCE=1 to overwrite stale)
+.PHONY: env-shared-repair
+env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH values that break Docker Compose env-file parsing (idempotent, writes .bak on change)
+	@$(CODEX_PY) tools/fix_env_shared_multiline.py
+
+secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> audit gates (FORCE=1 to overwrite stale)
+	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
 	@$(CODEX_PY) tools/credential_urlencoder.py
