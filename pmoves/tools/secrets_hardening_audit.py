@@ -290,11 +290,17 @@ def main() -> int:
     #    (closed #1988, untracked in #1992). This CI-safe check fails hard on any
     #    tracked secret-env file so the leak class is caught automatically going
     #    forward. `.example` templates are meant to be tracked and are exempt.
+    # `:(glob)` magic keeps `*` from crossing `/`, so these match only top-level
+    # generated secret files under pmoves/ — not example templates nested under
+    # pmoves/examples/**/*.env (a separate category). `env.shared.*` catches the
+    # .generated / .pre-funnel snapshots (the pre-funnel snapshot is a real leak
+    # Codex flagged on #1996); the .example exemption below keeps templates safe.
     tracked_pathspecs = [
-        "pmoves/env.shared",
-        "pmoves/env.shared.generated",
-        "pmoves/env.tier-*",
-        "pmoves/.env.generated",
+        ":(glob)pmoves/env.shared",
+        ":(glob)pmoves/env.shared.*",
+        ":(glob)pmoves/env.tier-*",
+        ":(glob)pmoves/.env",
+        ":(glob)pmoves/.env.*",
     ]
     try:
         tracked = subprocess.run(
