@@ -2339,6 +2339,161 @@ agents:
       compose_profile: agents
     description: "NotebookLM integration agent for source-grounded research, document querying, and Audio Overview generation via MCP."
 
+  # --- Fordham Hill community room agents (runtime-minted by Archon) ---------
+  # Room: fordham.room.community (stage rehearsal). Agent-facing kebab ids
+  # (fordham-steward, ...) map here via kebab->snake. All carry the pilot
+  # invariant set: DRAFT-REQUIRES-LEGAL-REVIEW on any dollar/vote/governance
+  # claim, transparency/auditable-records-only, no accusations.
+  fordham_steward:
+    name: "Fordham Steward"
+    class: specialized
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["room.session.updated.v1"]
+      subscribes: ["room.session.updated.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_completion]
+    topology:
+      node_affinity: [kvm4-1, z890, powerfulmoves]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Fordham room host/concierge; routes resident intent to the 4 specialists. No money/vote authority. Runtime-minted by Archon."
+
+  fordham_onboarding:
+    name: "Fordham Onboarding"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.roll.updated.v1", "fleet.enroll.token.v1", "chit.signed.v1"]
+      subscribes: ["fordham.onboarding.request.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, kvm2]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Enroll residents onto the mesh + the eligible-voter roll (record-only; consent-required; roll is 1-of-N, DRAFT-legal)."
+
+  fordham_transaction:
+    name: "Fordham Transaction"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.ledger.entry.v1", "fordham.surplus.updated.v1", "chit.signed.v1"]
+      subscribes: ["fordham.dues.received.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Pooled dues / Firefly co-op ledger / surplus. Deterministic-tools-only money path; never invents the adopted rate. All figures DRAFT-legal-accounting-review."
+
+  fordham_creator:
+    name: "Fordham Creator"
+    class: specialized
+    primary_type: agent
+    secondary_type: media
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.artifact.published.v1"]
+      subscribes: ["fordham.dashboard.request.v1", "fordham.ledger.entry.v1", "fordham.roll.updated.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Resident materials + pilot dashboard. Presents figures verbatim with a DRAFT watermark; never recomputes; preserves the proven/modeled/scaffolded honesty key."
+
+  fordham_voice:
+    name: "Fordham Voice"
+    class: specialized
+    primary_type: agent
+    secondary_type: media
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["voice.synth.request.v1", "fordham.voice.delivered.v1"]
+      subscribes: ["fordham.dashboard.request.v1", "tokenism.prosodic.bpm.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Accessible spoken interaction (FlOO$ suit via persona-bind + shift-from-bpm). Every spoken figure carries an audible draft/pending-legal disclaimer. Collaborates with 5090-voice.room.studio."
+
 
 # ── MCP Server Registry ─────────────────────────────────────────────────────
 # Root-level MCP servers that can be bound into room manifests as skills.

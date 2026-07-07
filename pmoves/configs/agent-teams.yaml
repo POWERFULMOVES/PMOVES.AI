@@ -179,6 +179,22 @@ teams:
       - tracing_specialist      # Jaeger distributed tracing
       - llm_observability       # TensorZero LLM performance
 
+  fordham_community:
+    name: "Fordham Hill Community"
+    description: "Community mesh cost-pooling + co-op self-governance pilot: onboarding, pooled-dues ledger, resident materials/dashboard, accessible voice. Agents runtime-minted by Archon for room fordham.room.community. DRAFT - REQUIRES LEGAL REVIEW."
+    node_affinity: [kvm4-1, kvm4-2, kvm2, z890, powerfulmoves]
+    ci_runner: vps
+    compose_profiles: [agents, tier-agent]
+    agents:
+      - fordham_steward       # room coordinator / host (manifest owner: fordham-steward)
+      - fordham_onboarding    # mesh enrollment + eligible-voter roll (record-only)
+      - fordham_transaction   # pooled dues / Firefly co-op ledger / surplus (deterministic-tools-only)
+      - fordham_creator       # resident materials + pilot dashboard
+      - fordham_voice         # accessible spoken interaction (FlOO$ suit)
+
+# Validation: enforced by the pydantic gate `make -C pmoves validate-agents`
+# (pmoves/scripts/validate_agent_registry.py); CI: .github/workflows/validate-agents-config.yml.
+# The snippet below is the original informal rule, kept for reference.
 # Validation: all agents from agent_registry.yaml must appear in exactly one team
 # Run: python -c "
 # import yaml
