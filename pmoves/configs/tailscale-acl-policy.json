@@ -18,7 +18,11 @@
     "tag:lab": ["autogroup:admin"],
     "tag:exit": ["autogroup:admin"],
     "tag:partner": ["autogroup:admin"],
-    "tag:guest": ["autogroup:admin"]
+    "tag:guest": ["autogroup:admin"],
+    // Travel-router / subnet gateways (GL.iNet Slate). Advertise a LAN subnet + use a
+    // KVM exit node; the routes auto-approver + exit-consume rule below let their WiFi
+    // clients reach the internet through the exit node.
+    "tag:gateway": ["autogroup:admin"]
   },
 
   "acls": [
@@ -46,13 +50,14 @@
       "src": ["tag:guest"],
       "dst": ["tag:gpu:8081"]
     },
-    // Exit node consume: pmoves + lab only. tag:partner and tag:guest intentionally
-    // excluded - partner is limited to 3030/8080/8081 and guest to 8081 per the
-    // RUSTDESK_SELF_HOSTED.md role matrix; full internet egress would be a privilege
-    // escalation vs the documented role limits.
+    // Exit node consume: pmoves + lab + gateway. tag:gateway = travel-router subnet
+    // gateways whose LAN clients egress to the internet via a KVM exit node. Traffic
+    // from an advertised subnet is attributed to the gateway node's identity, so
+    // WITHOUT tag:gateway here the clients connect but get NO internet. tag:partner
+    // and tag:guest stay excluded per the RUSTDESK_SELF_HOSTED.md role matrix.
     {
       "action": "accept",
-      "src": ["tag:pmoves", "tag:lab"],
+      "src": ["tag:pmoves", "tag:lab", "tag:gateway"],
       "dst": ["autogroup:internet:*"]
     },
     // DGX Spark: Ollama inference + NIM API.
@@ -140,6 +145,11 @@
     "routes": {
       "0.0.0.0/0": ["tag:exit"],
       "::/0": ["tag:exit"]
+      // NOTE: a tag:gateway travel-router's LAN subnet route is auto-approvable here,
+      // but the literal CIDR is kept OUT of the repo per the no-LAN-IPs policy. Add
+      // it in the admin console (Machines -> router -> approve subnet), or maintain a
+      // local, uncommitted ACL overlay. tag:gateway is already granted autogroup:internet
+      // above, which is what lets its clients egress once the route is approved.
     }
   }
 }
