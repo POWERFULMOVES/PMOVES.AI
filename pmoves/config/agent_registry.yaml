@@ -2524,7 +2524,8 @@ agents:
       team: infra
       ci_runner: vps
       compose_profile: agents
-    description: "NeMo-guardrailed enterprise agent (NVIDIA NeMo Guardrails). Jetson/edge-GPU hybrid (Kilo Code + Agent Zero subordinate); enterprise config + wiring — NVIDIA users may prefer it over the vanilla assistant."
+    source: "pmoves/configs/agent-profiles/nemoclaw.yaml"
+    description: "Enterprise NeMo-guardrailed agent (NVIDIA NeMo Guardrails). Kilo Code CLI + Agent Zero subordinate hybrid; runs natively on Jetson Orin edge nodes, local Nemotron inference via Ollama, NATS-only health (mesh.gpu.status.v1). Config: pmoves/configs/agent-profiles/nemoclaw.yaml. Generic enterprise agent — NVIDIA users may prefer NeMo Claw over the vanilla assistant."
 
   nemotron_claw:
     name: "Nemotron Claw"
@@ -2554,7 +2555,8 @@ agents:
       team: evolution
       ci_runner: ai-lab
       compose_profile: gpu
-    description: "Nemotron/NIM-based guardrailed enterprise agent for beefy NVIDIA GPU local reasoning. Enterprise config + wiring."
+    source: "pmoves/configs/agent-profiles/nemotron_claw.yaml"
+    description: "Enterprise Nemotron/NIM-guardrailed agent for beefy-GPU local reasoning + agentic coding (NVIDIA NIM nemotron-super-49b at :8000, TensorZero fallback, HTTP health). Runs on 5090/z890-class nodes. Config: pmoves/configs/agent-profiles/nemotron_claw.yaml."
 
   container_agent:
     name: "Container Agent"
@@ -2584,14 +2586,15 @@ agents:
       team: infra
       ci_runner: vps
       compose_profile: agents
-    description: "Docker networking diagnostics + sidecar bridge."
+    source: "pmoves/services/container-agent/app.py"
+    description: "Real per-node Docker-networking diagnostics sidecar: /healthz, /diagnostic (local-service + upstream-route + DNS checks), /metrics (Prometheus). Source: pmoves/services/container-agent/app.py; deployed on z890 (pmoves/docker-compose.z890.yml, bound 127.0.0.1:8111)."
 
   podcast_producer:
     name: "Podcast Producer"
     class: standard
     primary_type: media
     secondary_type: worker
-    port: 8110
+    port: null   # skill-only; 8110 is claimed by model-registry
     health: "/healthz"
     layers: [L2, L4]
     evolution_stage: stage_1
@@ -2614,14 +2617,15 @@ agents:
       team: media
       ci_runner: ai-lab
       compose_profile: yt
-    description: "Podcast RSS feed generation + multi-episode TTS."
+    source: "pmoves/skills/podcast-publish/manifest.yaml"
+    description: "Aspirational / skill-only (no service or compose yet): TTS-segment stitching → RSS feed → MinIO upload. Defined in pmoves/skills/podcast-publish/manifest.yaml. NOTE: the 8110 in agent-teams.yaml is actually claimed by model-registry — not a live port for this."
 
   remotion_renderer:
     name: "Remotion Renderer"
     class: standard
     primary_type: media
     secondary_type: ui
-    port: 8107
+    port: null   # headless render; no dedicated compose port
     health: "/healthz"
     layers: [L2, L5]
     evolution_stage: stage_1
@@ -2644,14 +2648,15 @@ agents:
       team: media
       ci_runner: ai-lab
       compose_profile: gpu
-    description: "A2UI Remotion video rendering."
+    source: "pmoves/services/a2ui-renderer/"
+    description: "A2UI Remotion provenance rendering — headless, invoked via render:provenance:* npm scripts (not a long-running HTTP daemon). Source: pmoves/services/a2ui-renderer/. NOTE: no dedicated compose port (8105/8107 are contested by cipher-api/consciousness)."
 
   youtube_publisher:
     name: "YouTube Publisher"
     class: standard
     primary_type: media
     secondary_type: worker
-    port: 8111
+    port: null   # skill-only; 8111 is the real gateway-agent/container-agent port
     health: "/healthz"
     layers: [L2, L4]
     evolution_stage: stage_1
@@ -2674,7 +2679,8 @@ agents:
       team: media
       ci_runner: ai-lab
       compose_profile: yt
-    description: "YouTube upload + metadata + thumbnail generation."
+    source: "pmoves/skills/youtube-upload/manifest.yaml"
+    description: "Aspirational / skill-only (no service or compose yet): YouTube Data API v3 upload + metadata + thumbnail, depends on minio/presign. Defined in pmoves/skills/youtube-upload/manifest.yaml. NOTE: 8111 is the real gateway-agent/container-agent port — not a live port for this."
 
 
 # ── MCP Server Registry ─────────────────────────────────────────────────────
