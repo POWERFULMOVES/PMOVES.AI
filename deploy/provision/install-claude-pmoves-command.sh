@@ -40,12 +40,24 @@ install_into() {
   echo "  updated: $rc"
 }
 
-# Install into both common rc files; create ~/.bashrc if neither exists yet.
+# Resolve the rc file for the user's LOGIN shell so a fresh (rc-less) shell of
+# that shell still gets the function — e.g. a zsh account with a legacy ~/.bashrc
+# but no ~/.zshrc, where updating only the existing file would leave zsh sessions
+# unable to run claude-pmoves despite the installer reporting success (Codex #1991 P2).
+case "$(basename "${SHELL:-bash}")" in
+  zsh) active_rc="$HOME/.zshrc" ;;
+  *)   active_rc="$HOME/.bashrc" ;;
+esac
+
+# Update every rc file that already exists (so both shells stay in sync)...
 installed=0
 for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
   if [ -f "$rc" ]; then install_into "$rc"; installed=1; fi
 done
-if [ "$installed" -eq 0 ]; then install_into "$HOME/.bashrc"; fi
+# ...then guarantee the login shell's rc gets it. The -f guard skips this when the
+# loop already updated an existing rc, and only fires to CREATE the login shell's
+# rc when it is absent — which is exactly the gap the old code missed.
+if [ ! -f "$active_rc" ]; then install_into "$active_rc"; installed=1; fi
 
 echo ""
 echo "Installed 'claude-pmoves' -> $launcher"
