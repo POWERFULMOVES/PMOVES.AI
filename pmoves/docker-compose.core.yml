@@ -477,7 +477,7 @@ services:
     volumes:
     - ../PMOVES-supabase/docker/volumes/functions:/home/deno/functions:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sSf http://localhost:9000/health || exit 1"]
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/9000' || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 3
