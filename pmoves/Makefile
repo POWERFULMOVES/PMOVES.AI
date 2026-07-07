@@ -1427,6 +1427,23 @@ archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARC
 up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 	@$(DC) up -d archon
 
+# Native Archon: run Archon's OWN compose (server + mcp + frontend) against local
+# Supabase, fed by pipeline-emitted env.shared. Replaces the broken hand-rolled
+# archon*.submodule.yml wrapper. Frontend :3737, MCP :8051, server :8181.
+ARCHON_NATIVE_DIR := $(CURDIR)/../PMOVES-Archon
+ARCHON_NATIVE_DC := docker compose --env-file $(CURDIR)/env.shared \
+	--project-directory $(ARCHON_NATIVE_DIR) -f $(ARCHON_NATIVE_DIR)/docker-compose.yml
+
+.PHONY: archon-native-config up-archon-native down-archon-native
+archon-native-config: ensure-env-shared ## Render native Archon config + confirm Supabase env is populated
+	@$(ARCHON_NATIVE_DC) config 2>/dev/null | grep -E "SUPABASE_URL|SUPABASE_SERVICE_KEY" | sed -E 's/(KEY: ).{12}.*/\1<set>/' | sort -u
+
+up-archon-native: ensure-env-shared ## Build+start native Archon (server+mcp+frontend) on local Supabase
+	@$(ARCHON_NATIVE_DC) up --build -d
+
+down-archon-native: ## Stop native Archon stack
+	@$(ARCHON_NATIVE_DC) down
+
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
