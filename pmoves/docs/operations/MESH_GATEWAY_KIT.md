@@ -42,12 +42,17 @@ Refs: Tailscale KB [1019 subnets](https://tailscale.com/kb/1019/subnets),
 ## One-time tailnet setup (operator, once)
 
 1. **ACL** — merge the `tag:gateway` policy (`pmoves/configs/tailscale-acl-policy.json`):
-   tagOwner `tag:gateway`, add it to the exit-consume rule (`→ autogroup:internet:*`), and
-   `autoApprovers.routes {"<router-LAN>/24": ["tag:gateway"]}`. Applies via
-   `deploy-tailscale-acl.yml` on merge. **Do not edit the live ACL via API — gitops overwrites it.**
+   tagOwner `tag:gateway` and add it to the exit-consume rule (`→ autogroup:internet:*`).
+   Applies via `deploy-tailscale-acl.yml` on merge. **Do not edit the live ACL via API — gitops overwrites it.**
+   Note: the committed `autoApprovers.routes` auto-approves only the `tag:exit` default routes
+   (`0.0.0.0/0` / `::/0`). The router's `<router-LAN>/24` subnet route is **not** auto-approved —
+   the literal CIDR is kept out of the repo per the no-LAN-IPs policy. Approve it once in step 2,
+   or maintain a local, uncommitted ACL overlay that adds `{"<router-LAN>/24": ["tag:gateway"]}`.
 2. **Tag the router `tag:gateway`** — admin console → Machines → the router → Edit ACL tags
-   (or `tailscale up --advertise-tags=tag:gateway` if the router exposes the CLI). Once tagged,
-   its advertised `<router-LAN>/24` **auto-approves** (no manual approval).
+   (or `tailscale up --advertise-tags=tag:gateway` if the router exposes the CLI). Tagging grants
+   its clients `autogroup:internet` egress, but its advertised `<router-LAN>/24` **still needs a
+   one-time subnet-route approval** (Machines → the router → Approve subnet) — the committed ACL
+   does not auto-approve LAN CIDRs. Approve it once; it persists.
 
 ## Per-kit setup (repeatable — this is the shareable part)
 
@@ -56,7 +61,9 @@ On the GL.iNet admin (`the GL.iNet admin page (its default gateway)`):
 2. **Applications → Tailscale** → turn on, log in to the tailnet (approve the device).
 3. **Exit Node → `pmoves-kvm4-1`** — routes the router *and its WiFi clients* through that KVM.
 4. **Allow Remote Access LAN** (advertises `<router-LAN>/24`) — optional but enables door-count
-   visibility + tailnet reachability of clients. Auto-approves because the router is `tag:gateway`.
+   visibility + tailnet reachability of clients. Needs the one-time subnet-route approval from
+   setup step 2 (Machines → the router → Approve subnet) — it is **not** auto-approved. Client
+   egress through the exit node works without it; only LAN reachability/door-count needs the route.
 5. **Set the WiFi SSID/password** you'll share.
 
 Client side: **just join the WiFi.** No app, no login. Verify egress on a phone:
@@ -83,7 +90,7 @@ The router knows every connected device (DHCP leases). That count **is** the pil
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Clients connect, no internet | ACL doesn't grant the gateway `autogroup:internet` | merge the `tag:gateway` ACL + tag the router |
-| Route stuck "pending" | router not tagged / ACL not merged | tag `tag:gateway`; confirm autoApprover merged |
+| Route stuck "pending" (clients online but LAN unreachable / no door-count) | committed ACL does not auto-approve LAN CIDRs — the `<router-LAN>/24` subnet route needs a one-time manual approval | admin console → Machines → the router → **Approve subnet** (or add a local uncommitted ACL overlay `{"<router-LAN>/24": ["tag:gateway"]}`). Egress still works while pending — only LAN reachability/door-count is blocked |
 | Slow / high latency | router↔KVM path is DERP-relayed | enable UPnP on the router WAN; pick the closest fast KVM |
 | Works then drops | uplink flaps (Starlink/tether) | expected; the tunnel re-establishes — kit stays on router, not clients |
 
