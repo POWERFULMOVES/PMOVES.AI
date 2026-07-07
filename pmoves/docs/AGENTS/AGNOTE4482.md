@@ -1333,3 +1333,30 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 - Branch Cleanup: none (docs-only lane)
 
 <!-- GRAPHITI_MARK: MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK::2026-06-23 -->
+
+## SPARK Node Full Bring-Up Session (2026-07-07)
+
+### Work Performed
+- Fixed vector crash loop: proxy vars (`HTTP_PROXY`/`HTTPS_PROXY`) unsetting via entrypoint override, IPv4 healthcheck `127.0.0.1:9001`, LOGFLARE placeholder token (PR #1990).
+- Created 6 NATS JetStream streams via mesh-agent nats-py: `AGENTZERO`, `MESH_GPU`, `CONTENT_PROVENANCE`, `GEOMETRY_CGP`, `BOTZ_COORDINATION`, `TOKENISM_ATTRIBUTION`.
+- Deployed spark-shape-worker on `pmoves_bus`, healthy, subscribed to `mesh.gpu.inference.result.v1`.
+- Pulled 7 models to Ollama: `qwen3.5:35b-a3b-q8_0` (36GB), `nemotron-3-super:120b` (80GB), `qwen3:30b-a3b-q4_K_M` (17GB), `hermes3:8b`, `llama3.2:3b`, `nomic-embed-text`, `qwen2.5-coder:32b` (~19GB).
+- Deployed HF MCP server on :8096, healthy, NATS connected. Fixed `ModelFilter` import removal.
+- Fixed Docker NAT: `daemon.json` `default-runtime=nvidia` bypasses runc iptables. `SPARK_NAT_FIX.sh` adds MASQUERADE rules.
+- Created `pmoves_public` network for edge-functions egress (PR #1990).
+- Fixed channel-monitor DB password: container had `dev-db-password-placeholder` instead of actual PG credentials. Recreated via `make channel-monitor-up`.
+- Applied autoMode fleet config with `PMOVES_NODE_ID=spark`.
+- Installed claude-pmoves launcher (PRs #1987 + #1991).
+- Wired 10 MCP servers in `.claude/mcp.json`.
+- Synced PMOVES repo to `origin/main` (`2b5a40ea4`).
+- Fixed NATS password mismatch: env.shared had a stale default instead of the actual NATS server password. Corrected env.shared; credential rotated.
+- Shape worker E2E test PASSED: `mesh.gpu.inference.result.v1` → `content.lexicon.shaped.v1` + `mesh.shape.handshake.v1`.
+
+### Fleet Status: 41 containers healthy
+
+### Agent ACK
+- Agent: `AGENT-ZERO-0 (SPARK)`
+- Signature: `ACK::SPARK::FULL-BRINGUP-2026-07-07`
+- Timestamp: `2026-07-07T16:06:00Z`
+
+<!-- GRAPHITI_MARK: SPARK::FULL-BRINGUP-2026-07-07::2026-07-07 -->
