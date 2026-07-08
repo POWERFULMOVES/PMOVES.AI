@@ -29,6 +29,32 @@ label of `direct_ipv4` / `direct_ipv6` / `derp` / `peer_relay_*`):
 > `tailscale metrics write <file>` emits node-exporter textfile format directly.
 > Preview with `tailscale metrics print`.
 
+A **second writer** rides the same rail: `exit-node-observer.sh --prom` drops
+`pmoves_exit_*` (mesh peers online, exit-advertised, tailscale0 throughput, load,
+mem, monthly-bw-cap headroom) into the same textfile dir — the pilot/capacity view
+that complements the native network-health metrics above.
+
+---
+
+## 0. One-command install (both writers)
+
+`deploy/provision/install-exit-node-obs.sh` installs node_exporter + the textfile
+collector and enables **both** writers' systemd timers, idempotently. Deploy it via
+the sanctioned make target (ships the installer + observer over SSH):
+
+```bash
+make -C pmoves exit-node-obs-install NODE=pmoves-kvm4-2            # KVM4 (16 TB cap)
+make -C pmoves exit-node-obs-install NODE=pmoves-kvm2 BW_CAP_TB=8  # KVM2 (8 TB cap)
+```
+
+The installer runs a **disk preflight (>=2 GB free on `/`)** and aborts otherwise —
+a full root FS is exactly what took a KVM4 exit node's service stack down after a
+reboot, so obs must not be layered onto a node that's already out of space. Reclaim
+first (targeted `make -C pmoves volume-reset SERVICE=<name>` + `docker builder prune`
+— **never** `docker volume prune`, per PR #1868), then install.
+
+Sections 1–4 below are the manual equivalent of what the installer does.
+
 ---
 
 ## 1. Prerequisites (per node)

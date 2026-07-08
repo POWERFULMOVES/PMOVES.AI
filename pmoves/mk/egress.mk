@@ -126,3 +126,18 @@ EXIT_OBS := ../deploy/provision/exit-node-observer.sh
 exit-node-observe: ## Run the on-VPS observer on a node: make exit-node-observe NODE=pmoves-kvm4-1 [FMT=--json|--prom]
 	@cat $(EXIT_OBS) | ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes root@$(or $(NODE),pmoves-kvm4-1) \
 		'cat > /tmp/exit-node-observer.sh && bash /tmp/exit-node-observer.sh $(or $(FMT),human)'
+
+# CONTINUOUS obs: install node_exporter + textfile collector + both metric-writer
+# timers (native tailscale metrics + the pmoves observer) so Grafana is actually fed.
+# Runbook + unit files: pmoves/monitoring/prometheus/tailscale-textfile-collector.md
+OBS_INSTALL := ../deploy/provision/install-exit-node-obs.sh
+
+.PHONY: exit-node-obs-install
+exit-node-obs-install: ## Deploy continuous exit-node obs to a node: make exit-node-obs-install NODE=pmoves-kvm4-2 [BW_CAP_TB=8]
+	@node="$(or $(NODE),pmoves-kvm4-2)"; \
+	echo "[obs-install] staging installer + observer on $$node ..."; \
+	ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes root@$$node 'mkdir -p /opt/pmoves-obs-stage'; \
+	scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes \
+		$(OBS_INSTALL) $(EXIT_OBS) root@$$node:/opt/pmoves-obs-stage/; \
+	ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes root@$$node \
+		'chmod +x /opt/pmoves-obs-stage/*.sh && BW_CAP_TB=$(or $(BW_CAP_TB),16) bash /opt/pmoves-obs-stage/install-exit-node-obs.sh'
