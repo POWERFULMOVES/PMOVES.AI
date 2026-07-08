@@ -1,7 +1,7 @@
 # PMOVES.AI Repository Deep Analysis
 
 > **Repository:** `POWERFULMOVES/PMOVES.AI` (GitHub)  
-> **Analyzed:** 2025-07  
+> **Analyzed:** 2026-07-09  
 > **Method:** Direct GitHub MCP file reads + directory exploration  
 > **Files Read:** AGNOTE4482.md, README.md, AGENTS.md, LIVING_DOCS_INDEX.md, folders.md, ROSTER.md, TAXONOMY.md, 5-Year Financial Model, SITREP, agent_registry.yaml, agent_signatures.yaml, model-suits/ directory, pmoves/docs/AGENTS/ directory listing, CATACLYSM_STUDIOS_INC/ L1-L5 directories  
 
@@ -16,7 +16,7 @@ PMOVES.AI is a **massive, multi-agent orchestration platform** structured as a s
 | Metric | Value | Source |
 |--------|-------|--------|
 | Gitlinked submodules | 50 | AGNOTE4482.md "Big Ball 5090" section |
-| Registered agents | 91 across 13 teams | `pmoves/config/agent_registry.yaml` |
+| Registered agents | 91 across 11 teams | `pmoves/config/agent_registry.yaml` |
 | PMOVES-canonical agents | 15 | `pmoves/config/agent_signatures.yaml` |
 | AGENTS documentation files | 67 `.md` files in `pmoves/docs/AGENTS/` | AGNOTE4482.md self-review audit |
 | Model suit configurations | 16 YAML files in `pmoves/configs/model-suits/` | Directory listing |
@@ -41,7 +41,7 @@ The MOF architecture (documented in `pmoves/docs/architecture/PMOVES_MOF_ARCHITE
 
 The MOF thesis manifests operationally as **rooms on a stage** (`pmoves/docs/ROOMS_ON_A_STAGE.md`). P7 (Pinokio 7) is the room-aware stage manager:
 
-- **5 active rooms**: `z890-infra` (live), `4090-field` (live), `5090-voice` (live), `5090-kilocode` (rehearsal), `fordham-community` (rehearsal)
+- **5 rooms: 3 live (z890-infra, 4090-field, 5090-voice), 2 rehearsal (5090-kilocode, fordham-community)**
 - **Stage lifecycle**: `rehearsal` → `live` → `review` → `archive`
 - **Suits**: Runtime/persona bindings layered onto rooms (upstream Agent Zero baseline, PMOVES hardened overlays, voice/theme/persona styling)
 - **Room catalog**: `pmoves/config/rooms/catalog.json` is the canonical seed catalog
@@ -64,9 +64,9 @@ The Grand Convergence document (`PMOVES_GRAND_CONVERGENCE.md`, PR #1379) unifies
 
 ### By the Numbers
 
-The agent fleet consists of **91 registered agents across 13 functional teams**, verified as of the Fordham Room + Agent-Config Convergence Audit (2026-07-07, `AGNOTE4482.md`). A pydantic validation gate (`validate_agent_registry.py` + `make validate-agents`) was created and ratcheted from 12 unteamed + 6 unregistered down to **zero drift: registry 91 == 91 team agents**.
+The agent fleet consists of **91 registered agents across 11 functional teams**, verified as of the Fordham Room + Agent-Config Convergence Audit (2026-07-07, `AGNOTE4482.md`). A pydantic validation gate (`validate_agent_registry.py` + `make validate-agents`) was created and ratcheted from 12 unteamed + 6 unregistered down to **zero drift: registry 91 == 91 team agents**.
 
-### 13 Functional Teams (from `agent_registry.yaml`)
+### 11 Functional Teams (from `agent_registry.yaml`)
 
 The teams span the full operational surface:
 
@@ -449,7 +449,7 @@ The `5090-voice` room is the primary voice production environment, hosting:
 | 2 | 91-agent fleet with zero registry drift | Complete | P0 |
 | 3 | CHIT signoff checklist 37/37 complete | Complete | P0 |
 | 4 | Consciousness service production ready (port 8106) | Complete | P0 |
-| 5 | 5 rooms active (4 live, 2 rehearsal, 1 community) | Complete | P0 |
+| 5 | 5 rooms: 3 live (z890, 4090, 5090-voice), 2 rehearsal (5090-kilocode, fordham-community) | Complete | P0 |
 | 6 | Fordham Hill community room in rehearsal | In Progress | P1 |
 | 7 | Semantic cache specified but not implemented | Gap | P2 |
 | 8 | Hermes Agent live but awaiting real API keys | In Progress | P1 |
