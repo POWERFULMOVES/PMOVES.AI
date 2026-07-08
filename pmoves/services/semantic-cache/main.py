@@ -229,13 +229,13 @@ async def chat_completions(request: Request) -> Response:
 
     try:
         body: dict[str, Any] = await request.json()
-    except Exception as exc:
-        logger.error("[%s] Invalid JSON in request body: %s", request_id, exc)
+    except Exception:
+        logger.exception("[%s] Invalid JSON in request body", request_id)
         return JSONResponse(
             status_code=400,
             content={
                 "error": {
-                    "message": f"Invalid JSON: {exc}",
+                    "message": "Invalid JSON in request body",
                     "type": "invalid_request_error",
                     "code": "invalid_json",
                 }
@@ -445,13 +445,13 @@ async def embeddings(request: Request) -> Response:
     request_id = _generate_request_id()
     try:
         body: dict[str, Any] = await request.json()
-    except Exception as exc:
-        logger.error("[%s] Invalid JSON in embeddings request: %s", request_id, exc)
+    except Exception:
+        logger.exception("[%s] Invalid JSON in embeddings request", request_id)
         return JSONResponse(
             status_code=400,
             content={
                 "error": {
-                    "message": f"Invalid JSON: {exc}",
+                    "message": "Invalid JSON in request body",
                     "type": "invalid_request_error",
                     "code": "invalid_json",
                 }
@@ -505,10 +505,11 @@ async def health() -> dict[str, Any]:
             "status": "ok",
             "model": hirag_model,
         }
-    except Exception as exc:
+    except Exception:
+        logger.exception("Health check failed for Hi-RAG component")
         health_status["components"]["hirag"] = {
             "status": "error",
-            "detail": str(exc),
+            "detail": "Hi-RAG health check failed",
         }
 
     # Cipher
@@ -525,10 +526,11 @@ async def health() -> dict[str, Any]:
             "entries": entry_count,
         }
         health_status["cache_entries"] = entry_count
-    except Exception as exc:
+    except Exception:
+        logger.exception("Health check failed for cache component")
         health_status["components"]["cache"] = {
             "status": "error",
-            "detail": str(exc),
+            "detail": "Cache health check failed",
         }
         health_status["cache_entries"] = -1
 
@@ -737,27 +739,27 @@ async def _forward_passthrough(
                 }
             },
         )
-    except httpx.HTTPError as exc:
+    except httpx.HTTPError:
         tensorzero_forward_errors_total.labels(error_type="http_error").inc()
-        logger.error("[%s] TensorZero HTTP error: %s", rid, exc)
+        logger.exception("[%s] TensorZero HTTP error", rid)
         return JSONResponse(
             status_code=502,
             content={
                 "error": {
-                    "message": f"Bad gateway: {exc}",
+                    "message": "Bad gateway",
                     "type": "proxy_error",
                     "code": "tensorzero_http_error",
                 }
             },
         )
-    except Exception as exc:
+    except Exception:
         tensorzero_forward_errors_total.labels(error_type="unknown").inc()
-        logger.error("[%s] TensorZero forward failed: %s", rid, exc)
+        logger.exception("[%s] TensorZero forward failed", rid)
         return JSONResponse(
             status_code=502,
             content={
                 "error": {
-                    "message": f"Service unavailable: {exc}",
+                    "message": "Service unavailable",
                     "type": "proxy_error",
                     "code": "tensorzero_unavailable",
                 }
@@ -842,6 +844,7 @@ async def _forward_streaming(
 # Response construction helpers
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _build_cached_response(
     cached: dict[str, Any],
     original_body: dict[str, Any],
@@ -888,6 +891,7 @@ def _build_cached_response(
 # ═══════════════════════════════════════════════════════════════════════════
 # Cacheability filter
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def _is_cacheable(body: dict[str, Any]) -> bool:
     """
@@ -947,6 +951,7 @@ def _extract_query_text(body: dict[str, Any]) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 # Utility helpers
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def _generate_request_id() -> str:
     """
