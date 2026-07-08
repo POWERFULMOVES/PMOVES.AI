@@ -3,6 +3,8 @@
 **Generated:** July 2026
 **Data Status:** Narrative compiled from milestone tracking (AGNOTE4482). Commit/PR/line metrics require live GitHub API refresh.
 
+> **Note:** API calls use pagination. For repos with >100 results, add `--paginate` flag to `gh` CLI commands or iterate through `response.pages` in PyGithub.
+
 ---
 
 ## 1. Executive Summary
@@ -50,6 +52,8 @@ Over the 20-week period from February 18 to July 8, 2026, the `POWERFULMOVES/PMO
 ## 3. Pull Request Summary Table
 
 > **All PR data below requires live API refresh.** Structure shown for backfill.
+
+> **Note:** API calls use pagination. For repos with >100 results, add `--paginate` flag to `gh` CLI commands or iterate through `response.pages` in PyGithub.
 
 | PR # | Title | Status | Merged/Closed Date | Initiative |
 |:---|:---|:---|:---|:---|
@@ -158,6 +162,8 @@ TAC Topology Audit and Room Catalog Audit established the foundational inventory
 ## 8. Key Metrics
 
 > **This section requires live GitHub API data.** Run the following queries to populate:
+
+> **Note:** API calls use pagination. For repos with >100 results, add `--paginate` flag to `gh` CLI commands or iterate through `response.pages` in PyGithub.
 
 | Metric | Value | Source |
 |:---|:---|:---|
