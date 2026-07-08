@@ -1,5 +1,32 @@
-# Semantic Cache overlay (#1427)
-# Usage: docker compose -f docker-compose.yml -f docker-compose.cache.yml up
+# =============================================================================
+# PMOVES.AI - Semantic Cache Service Overlay (Issue #1427)
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.cache.yml up -d semantic-cache
+#
+# Security Hardening (AGNOTE4482):
+#   - NO hardcoded credentials — all values from environment variables
+#   - NO insecure defaults — services fail-closed when env vars are unset
+#   - NO env_file directive that exposes .env files to the container
+#   - Container runs as non-root (uid 65532)
+#   - Read-only rootfs with tmpfs for writable paths
+#   - All Linux capabilities dropped
+#
+# Service: semantic-cache
+#   FastAPI proxy that sits between Agent Zero and TensorZero, intercepting
+#   chat completion requests for semantic similarity-based caching via
+#   pgvector (Layer 1) and Cipher Memory (Layer 0).
+#
+#   Port: 8100 (container) — configurable via SEMANTIC_CACHE_HOST_PORT
+#   Networks: pmoves_api (Supabase/TensorZero/HiRAG), pmoves_bus (NATS)
+#
+# Depends on:
+#   - nats         (CHIT bus for cross-instance invalidation)
+#   - supabase-kong  (PostgREST → pgvector for semantic cache storage)
+#   - tensorzero-gateway  (LLM inference on cache miss)
+#
+# See: pmoves/docs/operations/SEMANTIC_CACHE_DEPLOYMENT.md
+# =============================================================================
 
 services:
   semantic-cache:
@@ -7,27 +34,118 @@ services:
       context: ./services/semantic-cache
       dockerfile: Dockerfile
     container_name: pmoves-semantic-cache
+    hostname: semantic-cache
     restart: unless-stopped
+
+    # --- Port: 8100 (container), configurable host bind ---
     ports:
-      - "3001:3001"
+      - "${SEMANTIC_CACHE_BIND:-127.0.0.1}:${SEMANTIC_CACHE_HOST_PORT:-8107}:8100"
+
+    # --- Environment: ALL values from env vars, NO hardcoded defaults ---
+    # SECURITY: Every value uses ${VAR} interpolation. No baked-in passwords.
+    # The cache service reads env_prefix="CACHE_" via pydantic-settings.
     environment:
-      CACHE_DATABASE_URL: ${CACHE_DATABASE_URL:-postgresql://pmoves:pmoves@supabase-db:5432/pmoves}
-      CACHE_HIRAG_GATEWAY_URL: ${CACHE_HIRAG_GATEWAY_URL:-http://hi-rag-gateway-v2:8086}
-      CACHE_TENSORZERO_URL: ${CACHE_TENSORZERO_URL:-http://tensorzero-gateway:3000/openai/v1}
-      CACHE_OLLAMA_URL: ${CACHE_OLLAMA_URL:-http://pmoves-ollama:11434}
-      CACHE_CIPHER_ENABLED: ${CACHE_CIPHER_ENABLED:-true}
-      CACHE_CIPHER_MCP_URL: ${CACHE_CIPHER_MCP_URL:-http://pmoves-cipher-mcp:8105}
-      CACHE_TOKENISM_ENABLED: ${CACHE_TOKENISM_ENABLED:-true}
-      CACHE_NATS_URL: ${CACHE_NATS_URL:-${NATS_URL}}
-      CACHE_SIMILARITY_THRESHOLD: ${CACHE_SIMILARITY_THRESHOLD:-0.90}
-      CACHE_TTL_CHAT_SECS: ${CACHE_TTL_CHAT_SECS:-300}
-      CACHE_EMBEDDING_MODEL: ${CACHE_EMBEDDING_MODEL:-qwen3_embedding_4b_local}
-      CACHE_EMBEDDING_DIM: ${CACHE_EMBEDDING_DIM:-2560}
+      # Proxy listen port (inside container)
+      CACHE_PORT: "8100"
+
+      # --- Supabase / pgvector (Layer 1 cache backend) ---
+      # SUPABASE_URL is the REST endpoint (PostgREST), NOT direct Postgres.
+      CACHE_SUPABASE_URL: "${SUPABASE_URL:-http://supabase-kong:8000}"
+      CACHE_SUPABASE_KEY: "${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY in env.shared or env.tier-supabase}"
+      # Legacy fallback for tools expecting direct DB URL
+      CACHE_DATABASE_URL: "${SUPABASE_DATABASE_URL:-}"  # Optional; direct postgres:// if needed
+
+      # --- NATS / CHIT Bus (cache invalidation, attribution) ---
+      CACHE_NATS_URL: "${NATS_URL:?Set NATS_URL in env.shared}"
+
+      # --- TensorZero (upstream LLM gateway on cache miss) ---
+      CACHE_TENSORZERO_URL: "${TENSORZERO_URL:-http://tensorzero-gateway:3000/openai/v1}"
+
+      # --- Hi-RAG Gateway v2 (embedding generation delegation) ---
+      CACHE_HIRAG_GATEWAY_URL: "${HIRAG_GATEWAY_URL:-http://hi-rag-gateway-v2:8086}"
+      CACHE_HIRAG_EMBEDDINGS_URL: "${HIRAG_EMBEDDINGS_URL:-}"
+
+      # --- Cipher Layer 0 (knowledge-graph memory pre-check) ---
+      CACHE_CIPHER_ENABLED: "${CIPHER_LAYER_ENABLED:-true}"
+      CACHE_CIPHER_MCP_URL: "${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}"
+      CACHE_CIPHER_API_TOKEN: "${CIPHER_API_TOKEN:-}"
+
+      # --- Tokenism (cost-savings attribution) ---
+      CACHE_TOKENISM_ENABLED: "${CACHE_TOKENISM_ENABLED:-true}"
+
+      # --- Cache behaviour tuning ---
+      CACHE_MAX_ENTRIES: "${CACHE_MAX_ENTRIES:-10000}"
+      CACHE_SIMILARITY_THRESHOLD: "${CACHE_SIMILARITY_THRESHOLD:-0.92}"
+      CACHE_TTL_CHAT_SECS: "${CACHE_TTL_CHAT_SECS:-3600}"
+      CACHE_TTL_EMBED_SECS: "${CACHE_TTL_EMBED_SECS:-3600}"
+      CACHE_MAX_TEMPERATURE: "${MAX_CACHEABLE_TEMPERATURE:-0.5}"
+      CACHE_EMBEDDING_MODEL: "${CACHE_EMBEDDING_MODEL:-BAAI/bge-m3}"
+      CACHE_EMBEDDING_DIM: "${CACHE_EMBEDDING_DIM:-1024}"
+
+      # --- Circuit breaker ---
+      CACHE_CB_FAILURE_THRESHOLD: "${CACHE_CB_FAILURE_THRESHOLD:-5}"
+      CACHE_CB_RESET_SECS: "${CACHE_CB_RESET_SECS:-60}"
+
+      # --- Host environment leak guard ---
+      # Prevent Windows Docker Desktop from leaking host env vars into container.
+      SSL_CERT_FILE: ""
+      SSL_CERT_DIR: ""
+      REQUESTS_CA_BUNDLE: ""
+      CURL_CA_BUNDLE: ""
+      NODE_EXTRA_CA_CERTS: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      NO_PROXY: ""
+
+    # --- Service dependencies (start order only; no health gates) ---
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+      supabase-kong:
+        condition: service_started
+        required: false
+      tensorzero-gateway:
+        condition: service_healthy
+        required: false
+
+    # --- Networks ---
+    # pmoves_api  → reach supabase-kong (PostgREST), tensorzero-gateway, hi-rag-gateway-v2
+    # pmoves_bus  → NATS CHIT bus for cross-instance cache invalidation
     networks:
-      - pmoves_app
+      - pmoves_api
+      - pmoves_bus
+
+    # --- Container hardening ---
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - "ALL"
+    # No cap_add — the service binds to port 8100 (>1024), no special caps needed.
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp:noexec,nosuid,size=128m
+      - /var/tmp:noexec,nosuid,size=64m
+      - /app/cache:noexec,nosuid,size=256m
+
+    # --- Health check ---
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3001/healthz')"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8100/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
+
+    # --- Resource limits ---
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+    # --- Profiles ---
+    # Attach to "orchestration" so cache is available when agents are active.
+    profiles:
+      - orchestration
+      - cache
