@@ -1,0 +1,28 @@
+# =============================================================================
+# Prometheus Scrape Configuration — PMOVES.AI Monitoring Stack
+# =============================================================================
+# This file defines scrape targets for the Prometheus instance in the
+# pmoves_monitoring tier. Targets must be reachable on the pmoves_monitoring
+# network (or via the gateway services on pmoves_api).
+#
+# Security: All scrape endpoints are expected to serve /metrics over HTTP
+# on internal networks only. No TLS is configured for intra-stack comms.
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+# ---------------------------------------------------------------------------
+# Semantic Cache — Issue #1427
+# ---------------------------------------------------------------------------
+# FastAPI proxy that provides cache-hit/miss counters, latency histograms,
+# and LRU eviction metrics at /metrics.
+scrape_configs:
+  - job_name: 'semantic-cache'
+    static_configs:
+      - targets: ['semantic-cache:8100']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 5s
