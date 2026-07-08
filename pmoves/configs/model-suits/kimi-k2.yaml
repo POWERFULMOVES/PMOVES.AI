@@ -1,0 +1,149 @@
+# ============================================================
+# KIMI-K2 Model Suit
+# Role: Long-context, Chinese-language specialist
+# Best for: Research, coding, agentic tasks with Chinese content
+# Provider: Moonshot AI
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: kimi-k2
+  provider: moonshot_ai
+  base_url: "https://api.moonshot.cn/v1"
+  api_key_env: MOONSHOT_API_KEY
+  legacy_api_key_env: KIMI_API_KEY
+  legacy_sunset_date: "2026-10-01"
+  
+  architecture:
+    type: moe
+    total_params: "1T"
+    active_params: "32B"
+    num_experts: 384
+    selected_experts: 8
+    shared_experts: 1
+    attention: MLA
+    layers: 61
+    hidden_size: 7168
+    heads: 64
+    vocab_size: 160000
+    
+  context:
+    max_window: 256000
+    base_window: 128000
+    effective_window: 200000
+    working_window: 64000
+    
+  defaults:
+    temperature: 0.7
+    top_p: 0.95
+    min_p: 0.01
+    max_tokens: 4096
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    expert_topk: 8
+    
+  variants:
+    k2-instruct:
+      context_window: 128000
+      description: "General-purpose chat and tool use"
+      
+    k2-0905:
+      context_window: 256000
+      description: "Extended context for large documents"
+      
+    k2-thinking:
+      context_window: 256000
+      temperature: 1.0
+      description: "Deep reasoning with chain-of-thought"
+      
+    k2.5:
+      context_window: 256000
+      multimodal: true
+      vision_encoder: MoonViT
+      description: "Multimodal with agent swarm"
+      
+    k2.6:
+      context_window: 256000
+      description: "Enhanced reasoning"
+      
+    k2.7-code:
+      context_window: 256000
+      description: "Code-specialized"
+      
+    dev-72b:
+      type: dense
+      base: qwen2.5-72b
+      context_window: 128000
+      description: "Coding-focused derivative"
+      
+    linear:
+      total_params: "48B"
+      active_params: "3B"
+      attention: KDA
+      context_window: 128000
+      description: "Efficient with Kimi Delta Attention"
+  
+  harness_mappings:
+    long_context_research:
+      model_variant: k2-0905
+      temperature: 0.3
+      top_p: 0.90
+      min_p: 0.01
+      max_tokens: 8192
+      system_prompt: directive_researcher
+      
+    chinese_language:
+      model_variant: k2-instruct
+      temperature: 0.5
+      top_p: 0.93
+      min_p: 0.01
+      max_tokens: 4096
+      chinese_optimized: true
+      system_prompt: directive_cultural_aware
+      
+    agentic_coding:
+      model_variant: dev-72b
+      temperature: 0.7
+      top_p: 0.95
+      min_p: 0.01
+      max_tokens: 16384
+      system_prompt: directive_engineer
+      
+    deep_reasoning:
+      model_variant: k2-thinking
+      temperature: 1.0
+      top_p: 0.95
+      min_p: 0.01
+      max_tokens: 8192
+      system_prompt: directive_reasoner
+      
+    voice_synthesis:
+      model_variant: k2-instruct
+      temperature: 0.8
+      top_p: 0.95
+      min_p: 0.01
+      max_tokens: 512
+      frequency_penalty: 0.3
+      presence_penalty: 0.15
+      system_prompt: conversational_emotive
+
+  cgp_state_vector:
+    delta: 0.45
+    Hz: 0.12
+    kappa: 1.3
+    A: 0.45
+    F: 0.06
+    
+  tensorzero:
+    function: pmoves_worker_kimi
+    
+  provider_cascade:
+    position: 5
+    trigger: "long_context > 100K OR chinese_language OR complex_coding"
+    
+  ollama_cloud:
+    model: "kimi-k2:1t-cloud"
+    registry: "unsloth/Kimi-Dev-72B-GGUF"
+    
+  fallback_to: glm-4.7
+  priority: 5
