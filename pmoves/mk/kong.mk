@@ -21,7 +21,7 @@ MODEL_SUITS_DIR := pmoves/configs/model-suits
 # Targets
 # ---------------------------------------------------------------------------
 
-.PHONY: kong-seed-routes kong-prune-routes kong-list-routes kong-reset-routes kong-health
+.PHONY: kong-seed-routes kong-prune-routes kong-list-routes kong-reset-routes kong-health kong-list-services kong-help
 
 ## Seed Kong routes from model suits (idempotent)
 kong-seed-routes: $(SEEDER_SCRIPT)
@@ -43,11 +43,18 @@ kong-sync: $(SEEDER_SCRIPT)
 	@echo "[KONG] Syncing routes (seed + prune) ..."
 	python3 $(SEEDER_SCRIPT) --kong-url $(KONG_ADMIN_URL) --model-suits-dir $(MODEL_SUITS_DIR) --prune
 
-## List all Kong routes via Admin API
+## List all Kong routes via Admin API (handles pagination)
 kong-list-routes:
 	@echo "[KONG] Listing all routes ..."
-	@curl -s $(KONG_ADMIN_URL)/routes | python3 -m json.tool 2>/dev/null || \
-		echo "ERROR: Kong Admin API not reachable at $(KONG_ADMIN_URL)"
+	@python3 -c "import sys, json, urllib.request; \
+		url = '$(KONG_ADMIN_URL)/routes'; \
+		all_data = []; \
+		while url: \
+			data = json.loads(urllib.request.urlopen(url, timeout=10).read().decode()); \
+			all_data.extend(data.get('data', [])); \
+			url = data.get('next'); \
+		json.dump({'data': all_data}, sys.stdout, indent=2)"
+	@echo ""
 
 ## List all Kong services
 kong-list-services:
@@ -56,6 +63,8 @@ kong-list-services:
 		echo "ERROR: Kong Admin API not reachable at $(KONG_ADMIN_URL)"
 
 ## Delete all auto-seeded routes and re-seed (DANGER)
+## WARNING: Race condition -- routes may be re-created between delete and seed
+## if another process intervenes. Use kong-sync for safe atomic updates.
 kong-reset-routes: $(SEEDER_SCRIPT)
 	@echo "[KONG] DANGER: This will delete all auto-seeded routes and re-create them."
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
