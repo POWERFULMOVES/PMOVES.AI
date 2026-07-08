@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -281,6 +282,49 @@ def main() -> int:
                         str(runtime_path.relative_to(REPO_ROOT)),
                     )
                 )
+
+    # 9) Secret env files must NEVER be git-tracked. They are generated locally by
+    #    secrets_sync and are gitignored — but git keeps tracking files added before
+    #    an ignore rule was introduced, which is exactly how pmoves/env.tier-media
+    #    leaked a live MinIO secret + a real Supabase service-role key into history
+    #    (closed #1988, untracked in #1992). This CI-safe check fails hard on any
+    #    tracked secret-env file so the leak class is caught automatically going
+    #    forward. `.example` templates are meant to be tracked and are exempt.
+    # `:(glob)` magic keeps `*` from crossing `/`, so these match only top-level
+    # generated secret files under pmoves/ — not example templates nested under
+    # pmoves/examples/**/*.env (a separate category). `env.shared.*` catches the
+    # .generated / .pre-funnel snapshots (the pre-funnel snapshot is a real leak
+    # Codex flagged on #1996); the .example exemption below keeps templates safe.
+    tracked_pathspecs = [
+        ":(glob)pmoves/env.shared",
+        ":(glob)pmoves/env.shared.*",
+        ":(glob)pmoves/env.tier-*",
+        ":(glob)pmoves/.env",
+        ":(glob)pmoves/.env.*",
+    ]
+    try:
+        tracked = subprocess.run(
+            ["git", "ls-files", "--", *tracked_pathspecs],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.splitlines()
+    except OSError:
+        tracked = []  # git unavailable (non-repo context) — skip this check
+    for rel in tracked:
+        rel = rel.strip().replace("\\", "/")
+        if not rel or rel.endswith(".example"):
+            continue  # .example templates are supposed to be tracked
+        findings.append(
+            Finding(
+                "ERROR",
+                f"Secret env file is git-tracked (must be gitignored + local-only): {rel}. "
+                "Fix: `git rm --cached` it, then rotate any exposed keys "
+                "(pmoves/docs/handoffs/SECRET_ROTATION_RUNBOOK.md).",
+                rel,
+            )
+        )
 
     if findings:
         errors = [f for f in findings if f.level == "ERROR"]

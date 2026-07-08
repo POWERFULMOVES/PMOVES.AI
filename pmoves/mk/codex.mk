@@ -37,7 +37,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-rotate a0-plugins-check a0-plugins-check-remote
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-rotate secrets-untrack a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -110,7 +110,12 @@ secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files fro
 	@echo "→ Reading CHIT bundle from $(CHIT_EXPORT_PATH)"
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
-secrets-funnel: ## Portable secrets flow: local hydrate -> CHIT export -> manifest sync -> audit gates (FORCE=1 to overwrite stale)
+.PHONY: env-shared-repair
+env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH values that break Docker Compose env-file parsing (idempotent, writes .bak on change)
+	@$(CODEX_PY) tools/fix_env_shared_multiline.py
+
+secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> audit gates (FORCE=1 to overwrite stale)
+	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
 	@$(CODEX_PY) tools/credential_urlencoder.py
@@ -129,6 +134,10 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@$(MAKE) --no-print-directory secrets-funnel
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
+
+secrets-untrack: ## Untrack a leaked generated secret env file (git rm --cached; then commit + rotate). Usage: make secrets-untrack FILE=pmoves/env.shared.pre-funnel [DRY_RUN=1]
+	$(if $(strip $(FILE)),,$(error Usage: make -C pmoves secrets-untrack FILE=<repo-relative generated env path> [DRY_RUN=1]. Only untracks a gitignored generated-secret file (env.shared*/env.tier-*); the audit gate (secrets_hardening_audit.py #9) lists them.))
+	@$(CODEX_PY) tools/secrets_untrack.py --file "$(FILE)" $(if $(DRY_RUN),--dry-run)
 
 a0-plugins-check: ## Validate local Agent0 plugin catalog manifests (structure + field constraints)
 	@$(CODEX_PY) tools/a0_plugins_check.py --catalog-root integrations/agent0-plugins/catalog

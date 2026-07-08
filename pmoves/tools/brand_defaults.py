@@ -169,6 +169,17 @@ def _ensure_channel_monitor_google_alias(text: str) -> str:
     return text
 
 
+# NOTE: SUPABASE_SERVICE_KEY (Archon's alias for SERVICE_ROLE_KEY) is intentionally
+# NOT seeded here. This function runs in `ensure-env-shared`, BEFORE
+# `secrets-runtime-hydrate`. Writing the standardized key here — while it may still
+# be the template demo JWT or a stale local value — produces a non-placeholder that
+# hydration then refuses to overwrite (without FORCE=1), so Archon boots on a stale
+# key and 401s (Codex #1984 P1). Ownership belongs to runtime_secrets_hydrate.py,
+# which selects the freshest canonical source (the live Supabase container's
+# SERVICE_ROLE_KEY). SUPABASE_URL is likewise not seeded globally — the Makefile
+# injects it scoped to the Archon-native compose (see up-archon-native).
+
+
 def _ensure_integration_credentials(text: str) -> str:
     """Auto-generate credentials for Firefly III, n8n, and Wger if missing."""
     # Firefly III APP_KEY: Laravel requires 'base64:' + 32 random bytes base64-encoded
@@ -452,6 +463,10 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     # alias, the placeholder lingers in env.shared even after a successful sync
     # and the OAuth flow refuses to start.
     text = _ensure_channel_monitor_google_alias(text)
+
+    # Archon (native compose) SUPABASE_SERVICE_KEY is hydrated post-funnel by
+    # secrets-runtime-hydrate (freshest canonical source), NOT aliased here —
+    # a pre-hydration copy would block that fresh key (Codex #1984 P1).
 
     # Identity defaults: operator email cascades to Supabase, n8n, Wger.
     text = _ensure_identity_defaults(text)

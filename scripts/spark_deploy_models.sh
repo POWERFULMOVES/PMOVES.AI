@@ -15,7 +15,7 @@ DRY_RUN=false
 # P0 models — primary brain + coding specialist
 P0_MODELS=(
   "qwen3.5:35b-a3b-q4_K_M"    # MoE 3B active, ~20GB, 15-25 tok/s — Agent Zero brain
-  "qwen2.5-coder:32b-q4_K_M"  # 32B, ~18GB, 12-20 tok/s — MCP forms, code gen
+  "qwen2.5-coder:32b"  # 32B, ~19GB, 12-20 tok/s — MCP forms, code gen
 )
 
 # P1 models — quality + general

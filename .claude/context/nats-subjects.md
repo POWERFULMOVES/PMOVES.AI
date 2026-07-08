@@ -1012,6 +1012,60 @@ Example: `ingest.transcript.ready.v1`
 - **Purpose:** Development debugging messages
 - **Usage:** Ad-hoc debugging during development
 
+## Fordham Hill Community Room Subjects
+
+> **Source:** `fordham.room.community` (stage `rehearsal`, PR #1993). The 4 dedicated
+> agents (onboarding / transaction / creator / voice) + the `fordham-steward` coordinator.
+> Every dollar/vote/governance payload is **DRAFT — REQUIRES LEGAL REVIEW**; transparency /
+> auditable records only, never accusations. Two subjects are marked **DRAFT** — not yet
+> emitted; run `pmoves-nats-subject-audit` before their publishers go live.
+
+**`fordham.onboarding.request.v1`**
+- **Direction:** Published by the room UI / steward → Consumed by `fordham-onboarding`
+- **Purpose:** Request to enroll a resident onto the mesh + eligible-voter roll (record-only; consent required)
+
+**`fordham.roll.updated.v1`**
+- **Direction:** Published by `fordham-onboarding` → Consumed by `fordham-creator` (read-only), roster tooling
+- **Purpose:** A resident was recorded on the eligible-voter roll (roll is 1-of-N today; DRAFT-legal)
+
+**`fordham.dues.received.v1`**
+- **Direction:** Published by dues intake → Consumed by `fordham-transaction`
+- **Purpose:** A pooled member due was received; triggers a deterministic Firefly co-op ledger entry
+
+**`fordham.ledger.entry.v1`**
+- **Direction:** Published by `fordham-transaction` → Consumed by `fordham-creator` (read-only)
+- **Purpose:** A double-entry co-op ledger posting. All figures MODELED/illustrative until an ADOPTED RATE is set
+
+**`fordham.surplus.updated.v1`**
+- **Direction:** Published by `fordham-transaction` → Consumed by dashboard/creator
+- **Purpose:** Community surplus recomputed (the saved dollars the capacity lane frees). DRAFT-legal-accounting
+
+**`fordham.dashboard.request.v1`**
+- **Direction:** Published by the room → Consumed by `fordham-creator` + `fordham-voice`
+- **Purpose:** Request to (re)generate the pilot dashboard or a spoken read-out of its state
+
+**`fordham.artifact.published.v1`**
+- **Direction:** Published by `fordham-creator` → Consumed by the room / notebook
+- **Purpose:** A resident-facing material or dashboard snapshot was published (DRAFT watermark carried on every figure)
+
+**`fordham.voice.delivered.v1`**
+- **Direction:** Published by `fordham-voice` → Consumed by the room
+- **Purpose:** A spoken summary was delivered (with an audible draft/pending-legal disclaimer on any figure)
+
+**`fleet.enroll.token.v1`** — **DRAFT (not yet emitted)**
+- **Direction:** Published by `fordham-onboarding` (`fleet:enroll`) → Consumed by fleet/audit subscribers
+- **Purpose:** A CHIT-signed device enrollment token for a resident joining the mesh. Complements the existing
+  `fleet.enrollment.created.v1` (RustDesk/Tailscale) — this is the room-scoped mesh-join variant
+
+**`voice.synth.request.v1`** — **DRAFT (not yet emitted)**
+- **Direction:** Published by `fordham-voice` → Consumed by Flute-Gateway / Ultimate-TTS
+- **Purpose:** Request prosodic voice synthesis for a resident-facing spoken read-out (FlOO$ suit)
+
+**Shared subjects this room reuses** (defined elsewhere, listed for traceability):
+`room.session.updated.v1` (room events) · `chit.signed.v1` (enrollment/dues/trail receipts) ·
+`vote.signed.v1` (governance receipts — **SCAFFOLDED**, gated `enabled:false` in rehearsal) ·
+`tokenism.prosodic.bpm.v1` (voice prosody, see Voice & Prosodic Subjects).
+
 ## Subject Wildcards
 
 NATS supports wildcards for subscriptions:

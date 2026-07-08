@@ -1474,13 +1474,13 @@ model_name = "glm-5.1"
 api_key_location = "env::Z_AI_API_KEY"
 
 [models.registry_worker_qwen]
-routing = ["bootstrap_parent"]
+routing = ["local_active"]
 
-[models.registry_worker_qwen.providers.bootstrap_parent]
+[models.registry_worker_qwen.providers.local_active]
 type = "openai"
-api_base = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-model_name = "qwen3-coder-plus"
-api_key_location = "env::ALIBABA_PRO_CODING_PLAN"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-coder:30b"
+api_key_location = "none"
 
 [models.registry_worker_hermes]
 routing = ["bootstrap_parent"]

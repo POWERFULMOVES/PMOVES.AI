@@ -1,0 +1,360 @@
+{
+  "room_id": "fordham.room.community",
+  "version": "1.0.0",
+  "display_name": "Fordham Hill Community Room",
+  "description": "Community cost-pooling + self-governance pilot room: mesh capacity A/B, pooled-dues ledger, contribution attribution, and tamper-evident resident voting on one lattice. Stage: rehearsal. DRAFT - REQUIRES LEGAL REVIEW.",
+  "agent_id": "fordham-steward",
+  "alter": "fordham-community",
+  "room_type": "hybrid",
+  "owner_mode": "shared",
+  "shell": {
+    "theme": {
+      "theme_id": "community-commons",
+      "accent_color": "#0E7490",
+      "skin": "commons-lattice",
+      "icon": "house"
+    },
+    "layout": {
+      "default_route": "/dashboard/fordham",
+      "panels": [
+        { "panel_id": "resident-chat", "kind": "chat", "position": "left", "size": 24, "pinned": true },
+        { "panel_id": "pilot-notebook", "kind": "notebook", "position": "center", "size": 40, "pinned": true },
+        { "panel_id": "pilot-metrics", "kind": "controls", "position": "right", "size": 24, "pinned": true },
+        { "panel_id": "voice-stage", "kind": "media", "position": "bottom", "size": 12, "pinned": false }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "notebook-workbench",
+      "kind": "notebook",
+      "route": "/notebook-workbench",
+      "provider": "pmoves-notebook-workbench",
+      "action_namespace": "notebook",
+      "capabilities": ["threads", "entries", "pages", "snapshots", "search"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "pilot-dashboard",
+      "kind": "dashboard",
+      "route": "/dashboard/fordham",
+      "provider": "pmoves-ui",
+      "action_namespace": "pilot",
+      "capabilities": ["capacity-ab", "dues-ledger", "surplus-tracker", "contribution-attribution", "honesty-ledger"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "voter-roll",
+      "kind": "notebook",
+      "route": "/dashboard/fordham/roll",
+      "provider": "pmoves-ui",
+      "action_namespace": "governance",
+      "capabilities": ["enrollment", "eligible-voter-roll", "committee-on-elders", "consent-capture"],
+      "pinned": false,
+      "status": "planned"
+    },
+    {
+      "app_id": "ballot-box",
+      "kind": "dashboard",
+      "route": "/dashboard/fordham/governance",
+      "provider": "pmoves-ui",
+      "action_namespace": "governance",
+      "capabilities": ["quorum-status", "vote-receipt", "audit-trail"],
+      "pinned": false,
+      "status": "planned"
+    },
+    {
+      "app_id": "voice-console",
+      "kind": "media",
+      "route": "/dashboard/voice",
+      "provider": "pmoves-ui",
+      "action_namespace": "voice",
+      "capabilities": ["tts", "prosody", "persona-suit", "spoken-summary", "accessible-readout"],
+      "pinned": false,
+      "status": "active"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "fordham-pilot",
+    "thread_ref": "convergence-lanes",
+    "default_page": "honesty-ledger",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": ["entries", "pages", "threads", "snapshots"],
+      "artifact_prefix": "rooms/fordham-community"
+    }
+  },
+  "persona": {
+    "signature_ref": "fordham-steward",
+    "voice": "plain-spoken",
+    "glyph": "⌂",
+    "resonance": ["cost-pooling", "community-mesh", "self-governance", "accessible-voice"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "capacity-ab-probe",
+      "skill_id": "mesh-egress-ab",
+      "room_id": "fordham.room.community",
+      "display_name": "Mesh Capacity A/B",
+      "intent": ["capacity", "measurement", "planning"],
+      "activation": {
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["run the capacity A/B", "measure this exit node", "map homes onto capacity"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "pilot-dashboard", "target": "toolbar", "route": "/dashboard/fordham" },
+      "execution": { "mode": "workflow", "run_as": "worker", "stream": "events", "max_steps": 8 },
+      "context": {
+        "sources": ["open-apps", "room-state", "user-intent"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "room-state", "delivery": "replace", "path": "capacity/ab-latest", "artifact_type": "json" },
+        { "target": "notebook-entry", "delivery": "append", "path": "threads/convergence-lanes", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 600, "fail_open": true, "one_active_run": true },
+      "enabled": true,
+      "tags": ["capacity", "mesh", "measured"]
+    },
+    {
+      "binding_id": "voice-suit-bind",
+      "skill_id": "persona-bind",
+      "room_id": "fordham.room.community",
+      "display_name": "FlOO$ Voice Suit",
+      "intent": ["voice", "persona", "accessibility"],
+      "activation": {
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["read this out loud", "bind the voice suit", "speak the summary"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "voice-console", "target": "composer", "route": "/dashboard/voice" },
+      "execution": { "mode": "inline", "run_as": "agent", "stream": "status", "max_steps": 4 },
+      "context": {
+        "sources": ["notebook-selection", "persona", "room-state", "user-intent"],
+        "include_last_turns": 6,
+        "notebook_writeback": false,
+        "artifact_types": ["audio", "text"]
+      },
+      "outputs": [
+        { "target": "artifact-store", "delivery": "append", "path": "voice/spoken-summaries", "artifact_type": "audio" },
+        { "target": "chat-response", "delivery": "notify", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 300, "fail_open": true, "one_active_run": true },
+      "enabled": true,
+      "tags": ["voice", "floos", "accessible"]
+    },
+    {
+      "binding_id": "voice-prosody-bpm",
+      "skill_id": "shift-from-bpm",
+      "room_id": "fordham.room.community",
+      "display_name": "Accessible BPM Prosody",
+      "intent": ["voice", "prosody", "accessibility"],
+      "activation": {
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["slow it down", "read it slowly", "set the pace"],
+        "requires_selection": true
+      },
+      "surface": { "app_id": "voice-console", "target": "composer", "route": "/dashboard/voice" },
+      "execution": { "mode": "inline", "run_as": "agent", "stream": "status", "max_steps": 3 },
+      "context": {
+        "sources": ["notebook-selection", "persona", "room-state"],
+        "include_last_turns": 2,
+        "notebook_writeback": false,
+        "artifact_types": ["json", "text"]
+      },
+      "outputs": [
+        { "target": "nats-event", "delivery": "emit", "subject": "tokenism.prosodic.bpm.v1", "artifact_type": "json" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 120, "fail_open": true, "one_active_run": false },
+      "enabled": true,
+      "tags": ["voice", "prosody", "elders-accessible"]
+    },
+    {
+      "binding_id": "committee-analytics",
+      "skill_id": "claude-d3js",
+      "room_id": "fordham.room.community",
+      "display_name": "Committee Analytics Viz",
+      "intent": ["creator", "visualization", "dashboard"],
+      "activation": {
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["chart the capacity", "visualize the surplus", "draw the attribution"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "pilot-dashboard", "target": "panel", "route": "/dashboard/fordham" },
+      "execution": { "mode": "inline", "run_as": "agent", "stream": "status", "max_steps": 5 },
+      "context": {
+        "sources": ["open-apps", "room-state", "notebook-thread"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "artifact-store", "delivery": "append", "path": "dashboard/committee-viz", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 300, "fail_open": true, "one_active_run": true },
+      "enabled": true,
+      "tags": ["creator", "viz", "modeled-draft"]
+    },
+    {
+      "binding_id": "durable-memory",
+      "skill_id": "pmoves-cipher-memory",
+      "room_id": "fordham.room.community",
+      "display_name": "Community Durable Memory",
+      "intent": ["memory", "recall", "continuity"],
+      "activation": {
+        "invocation_mode": "ambient",
+        "trigger_phrases": ["remember this", "what did we decide"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "notebook-workbench", "target": "background", "route": "/notebook-workbench" },
+      "execution": { "mode": "background", "run_as": "room-service", "stream": "none", "max_steps": 3 },
+      "context": {
+        "sources": ["notebook-thread", "room-state", "persona"],
+        "include_last_turns": 8,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "notebook-page", "delivery": "append", "path": "pages/community-memory", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 120, "fail_open": true, "one_active_run": false },
+      "enabled": true,
+      "tags": ["memory", "cipher", "continuity"]
+    },
+    {
+      "binding_id": "enroll-roll-receipt",
+      "skill_id": "pmoves-chit-sign",
+      "room_id": "fordham.room.community",
+      "display_name": "Enrollment Roll Receipt",
+      "intent": ["onboarding", "receipt", "roll"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["enroll this resident", "sign the enrollment", "add to the roll"],
+        "requires_selection": true
+      },
+      "surface": { "app_id": "voter-roll", "target": "composer", "route": "/dashboard/fordham/roll" },
+      "execution": { "mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 5 },
+      "context": {
+        "sources": ["notebook-thread", "room-state", "user-intent"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "nats-event", "delivery": "emit", "subject": "chit.signed.v1", "artifact_type": "json" },
+        { "target": "notebook-entry", "delivery": "append", "path": "pages/eligible-roll", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": true, "max_runtime_sec": 240, "fail_open": false, "one_active_run": true },
+      "enabled": true,
+      "tags": ["onboarding", "roll", "consent-required", "draft-legal-review"]
+    },
+    {
+      "binding_id": "dues-ledger-receipt",
+      "skill_id": "pmoves-chit-sign",
+      "room_id": "fordham.room.community",
+      "display_name": "Dues & Surplus Receipt",
+      "intent": ["transaction", "receipt", "ledger"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["post the dues", "sign the ledger entry", "record the surplus"],
+        "requires_selection": true
+      },
+      "surface": { "app_id": "pilot-dashboard", "target": "toolbar", "route": "/dashboard/fordham" },
+      "execution": { "mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 5 },
+      "context": {
+        "sources": ["notebook-thread", "room-state", "user-intent"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "nats-event", "delivery": "emit", "subject": "chit.signed.v1", "artifact_type": "json" },
+        { "target": "notebook-entry", "delivery": "append", "path": "pages/coop-ledger", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": true, "max_runtime_sec": 240, "fail_open": false, "one_active_run": true },
+      "enabled": true,
+      "tags": ["transaction", "firefly", "draft-legal-accounting-review"]
+    },
+    {
+      "binding_id": "ballot-receipt",
+      "skill_id": "pmoves-chit-sign",
+      "room_id": "fordham.room.community",
+      "display_name": "Vote Receipt (SCAFFOLDED — DRAFT/LEGAL)",
+      "intent": ["governance", "receipt", "audit"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["record the vote receipt", "sign the ballot"],
+        "requires_selection": true
+      },
+      "surface": { "app_id": "ballot-box", "target": "panel", "route": "/dashboard/fordham/governance" },
+      "execution": { "mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 5 },
+      "context": {
+        "sources": ["notebook-thread", "graphiti-trail", "room-state", "user-intent"],
+        "include_last_turns": 4,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "nats-event", "delivery": "emit", "subject": "vote.signed.v1", "artifact_type": "json" },
+        { "target": "notebook-entry", "delivery": "append", "path": "pages/honesty-ledger", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": true, "max_runtime_sec": 240, "fail_open": false, "one_active_run": true },
+      "enabled": false,
+      "tags": ["governance", "receipt", "scaffolded", "draft-legal-review", "rehearsal-gated"]
+    }
+  ],
+  "team_refs": ["fordham_community", "orchestration", "media", "data", "research"],
+  "service_refs": ["nats", "supabase", "agent-zero", "archon", "cipher-memory", "tokenism-simulator", "flute-gateway", "firefly-iii"],
+  "launcher_refs": ["up-agents", "up-supabase", "up-voice", "up-cipher", "pilot-dashboard-serve"],
+  "policies": {
+    "model_routing": "hybrid",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "room.session.updated.v1",
+        "chit.signed.v1",
+        "vote.signed.v1",
+        "agent.graphiti.signed.v1",
+        "tokenism.prosodic.bpm.v1",
+        "fordham.roll.updated.v1",
+        "fordham.dues.received.v1",
+        "fordham.ledger.entry.v1",
+        "fordham.surplus.updated.v1",
+        "fordham.dashboard.request.v1",
+        "fordham.artifact.published.v1",
+        "fordham.voice.delivered.v1",
+        "fleet.enroll.token.v1",
+        "voice.synth.request.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "Community Pilot",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/health"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-07-07T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "docs/superpowers/specs/2026-07-07-fordham-hill-room-design.md",
+      "pmoves/docs/pilots/fordham-hill/README.md",
+      "pmoves/docs/pilots/fordham-hill/01-capacity-comparison.md",
+      "pmoves/docs/pilots/fordham-hill/02-wealth-community-statements.md",
+      "pmoves/docs/pilots/fordham-hill/03-tokenism-pooled-mesh-sim.md",
+      "pmoves/docs/pilots/fordham-hill/04-governance-bylaws-scaffold.md"
+    ]
+  }
+}

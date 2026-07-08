@@ -32,20 +32,36 @@ That document is the working parity contract for:
 - ✅ Content provenance streams: `pmoves/nats/content_provenance_streams.yaml` (3 consumers)
 - ✅ Model deploy script: `scripts/spark_deploy_models.sh` (--dry-run supported)
 - ✅ Supply chain hardening applied (2026-05-14): see `research/SUPPLY_CHAIN_HARDENING_PLAN_2026-05-14.md`
+- ✅ NATS JetStream streams DEPLOYED (2026-07-07): 6 streams active — AGENTZERO, MESH_GPU, CONTENT_PROVENANCE, GEOMETRY_CGP, BOTZ_COORDINATION, TOKENISM_ATTRIBUTION
+- ✅ `content.*` shaping/provenance subjects DEPLOYED (2026-07-07): via init_streams.sh sidecar
+- ✅ Spark shape worker DEPLOYED (2026-07-07): `pmoves/services/spark-shape-worker/` — healthy, subscribed to `mesh.gpu.inference.result.v1`
+- ✅ Models DEPLOYED on Ollama (2026-07-07): qwen3.5:35b-a3b-q8_0 (36GB), nemotron-3-super:120b (80GB), qwen3:30b-a3b-q4_K_M (17GB), hermes3:8b (4GB), llama3.2:3b (1GB), nomic-embed-text
+- ✅ HF MCP server DEPLOYED (2026-07-07): healthy on :8096, NATS connected, ModelFilter import fixed
+- ✅ Docker NAT fix applied (2026-07-07): SPARK_NAT_FIX.sh — iptables MASQUERADE for custom bridge networks
+- ✅ Vector crash loop fixed (2026-07-07): proxy vars unset + IPv4 healthcheck + LOGFLARE token placeholder (PR #1990)
+- ✅ pmoves_public network created (2026-07-07): edge-functions egress bridge (PR #1990)
+- ✅ autoMode fleet config applied (2026-07-07): PMOVES_NODE_ID=spark in settings.local.json
+- ✅ claude-pmoves launcher installed (2026-07-07): PRs #1987 + #1991
+- ✅ 10 MCP servers wired (2026-07-07): cipher, docker, hostinger, tailscale, nats-fleet, cloudflare, 4090-web, huggingface, supabase, supabase-db
+- ✅ PMOVES repo synced to origin/main (2026-07-07): commit 2b5a40ea4
+- ✅ Channel-monitor DB fix COMPLETE (2026-07-07): recreated via `make channel-monitor-up` — healthy, scanning YouTube channels
+- ✅ qwen2.5-coder:32b pull COMPLETE (2026-07-07): 19.9GB deployed
+- ✅ Shape worker E2E test PASSED (2026-07-07): published to `mesh.gpu.inference.result.v1`, received both `content.lexicon.shaped.v1` and `mesh.shape.handshake.v1`
+- ✅ NATS password fix (2026-07-07): env.shared had `pmoves` — corrected to actual NATS server password, shape worker recreated
+- ✅ claude-pmoves launcher verified (2026-07-07): loads 368 vars from env.shared, launches Claude Code
 - ⏳ Flare model namespace TODO
-- ⏳ NATS JetStream streams (defined, not deployed) — Phase 2
-- ⏳ `content.*` shaping/provenance subjects (defined, not deployed) — Phase 3
 - ⏳ raw-content -> shaped-content -> attested-content -> HiRAG gate not wired yet — Phase 3
 - ⏳ Hyperdimensions replay of shaped lexicon scenes not wired yet — Phase 4
+- ⏳ Build HF agent + HF research agent services (backlog)
 
 ## Phase Progress
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 0 | Housekeeping (sync, docs, hardening) | ✅ Complete (2026-05-14) |
-| 1 | Model deployment (P0: Qwen3.5-35B-A3B + Qwen2.5-Coder-32B) | ⏳ Script ready, awaiting host execution |
-| 2 | NATS mesh.gpu.* stream deployment | ⏳ YAML ready, awaiting JetStream |
-| 3 | Content shaping pipeline (raw→shaped→attested→HiRAG) | ⏳ Streams defined, wiring needed |
+| 1 | Model deployment (P0: Qwen3.5-35B-A3B + Qwen2.5-Coder-32B) | ✅ Complete (2026-07-07): 7 models deployed |
+| 2 | NATS mesh.gpu.* stream deployment | ✅ Complete (2026-07-07): 6 JetStream streams active |
+| 3 | Content shaping pipeline (raw→shaped→attested→HiRAG) | 🔄 Shape worker deployed, E2E test passed |
 | 4 | Hyperdimensions replay + lexicon control surface | ⏳ Backlog |
 
 ## Expanded Role

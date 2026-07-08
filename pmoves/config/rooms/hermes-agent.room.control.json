@@ -5,7 +5,7 @@
   "description": "Cross-platform gateway control room for Hermes Agent (NousResearch) integration. Manages profiles, skills, cron jobs, gateway instances, and NATS bridge telemetry. Stage: rehearsal.",
   "agent_id": "hermes-agent",
   "alter": "hermes-agent",
-  "room_type": "gateway",
+  "room_type": "operator",
   "owner_mode": "alter",
   "shell": {
     "theme": {
@@ -19,14 +19,14 @@
       "panels": [
         {
           "panel_id": "hermes-gateway-main",
-          "kind": "webview",
+          "kind": "custom",
           "position": "left",
           "size": 45,
           "pinned": true
         },
         {
           "panel_id": "hermes-terminal-panel",
-          "kind": "terminal",
+          "kind": "custom",
           "position": "right",
           "size": 35,
           "pinned": true
@@ -44,7 +44,7 @@
   "apps": [
     {
       "app_id": "hermes-gateway-webui",
-      "kind": "webview",
+      "kind": "browser",
       "route": "/hermes/gateway",
       "provider": "hermes-agent-local",
       "action_namespace": "hermes_agent",
@@ -55,17 +55,11 @@
         "delegation",
         "memory"
       ],
-      "config": {
-        "port": 7700,
-        "profile": "pmoves-hermes",
-        "start_script": "hermes gateway run",
-        "health_endpoint": "/api/health"
-      },
       "pinned": true
     },
     {
       "app_id": "hermes-mcp-bridge",
-      "kind": "api",
+      "kind": "custom",
       "route": "/hermes/mcp",
       "provider": "hermes-mcp",
       "action_namespace": "mcp_bridge",
@@ -74,11 +68,6 @@
         "tool-discovery",
         "nats-relay"
       ],
-      "config": {
-        "mcp_command": "hermes mcp serve",
-        "nats_subject_prefix": "hermes.mcp",
-        "profile": "pmoves-hermes"
-      },
       "pinned": true
     },
     {
@@ -92,16 +81,11 @@
         "curator",
         "publish"
       ],
-      "config": {
-        "skill_namespace": "pmoves",
-        "hub_source": "https://github.com/POWERFULMOVES/hermes-skills-pmoves",
-        "auto_curate": true
-      },
       "pinned": false
     },
     {
       "app_id": "openshell-gateway",
-      "kind": "gateway",
+      "kind": "custom",
       "route": "/hermes/openshell",
       "provider": "hermes-agent-local",
       "action_namespace": "openshell_policy",
@@ -111,11 +95,6 @@
         "secret-mask",
         "multi-user"
       ],
-      "config": {
-        "policy_file": "config/openshell-policy.yaml",
-        "masking_enabled": true,
-        "audit_log": "logs/openshell-audit.log"
-      },
       "pinned": false
     }
   ],
@@ -125,7 +104,7 @@
     "thread_ref": "hermes-log",
     "default_page": "hermes-status",
     "sync": {
-      "mode": "session-only",
+      "mode": "mirrored",
       "writeback_targets": [
         "entries"
       ],
@@ -179,8 +158,7 @@
       "context": {
         "sources": [
           "room-state",
-          "persona",
-          "nats-events"
+          "persona"
         ],
         "include_last_turns": 3,
         "notebook_writeback": true,
@@ -196,8 +174,8 @@
           "artifact_type": "text"
         },
         {
-          "target": "nats-publish",
-          "delivery": "event",
+          "target": "nats-event",
+          "delivery": "emit",
           "artifact_type": "json",
           "subject": "hermes.gateway.launched.v1"
         }
@@ -216,16 +194,6 @@
       ]
     }
   ],
-  "p7": {
-    "launch_subject": "p7.nats.launch",
-    "session_subject": "p7.nats.session",
-    "stage": "rehearsal",
-    "suits": [
-      "hermes-gateway",
-      "mcp-bridge",
-      "skill-curator"
-    ]
-  },
   "team_refs": [
     "orchestration",
     "gateway",
@@ -241,7 +209,7 @@
     "hermes-agent"
   ],
   "policies": {
-    "model_routing": "local",
+    "model_routing": "native",
     "publish": {
       "allow_nats_emit": true,
       "allow_external_publish": false,
@@ -272,82 +240,8 @@
       "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
       "pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md",
       ".claude/skills/hermes-agent-integration/SKILL.md",
-      ".claude/agents/hermes-agent.md"
+      ".claude/agents/hermes-agent.md",
+      "pmoves/config/rooms/hermes-agent.room.control.extras.json"
     ]
-  },
-  "sandbox_policy": {
-    "enabled": true,
-    "description": "OpenShell-inspired policy-based egress controls for agent sandboxes",
-    "egress_rules": [
-      {
-        "service": "telegram",
-        "allowed": true,
-        "scope": "bot_api_only"
-      },
-      {
-        "service": "discord",
-        "allowed": true,
-        "scope": "bot_api_only"
-      },
-      {
-        "service": "slack",
-        "allowed": true,
-        "scope": "webhook_api_only"
-      },
-      {
-        "service": "github",
-        "allowed": true,
-        "scope": "api_only"
-      },
-      {
-        "service": "nats",
-        "allowed": true,
-        "scope": "internal_mesh_only"
-      },
-      {
-        "service": "openrouter",
-        "allowed": true,
-        "scope": "inference_only"
-      },
-      {
-        "service": "ollama",
-        "allowed": true,
-        "scope": "localhost_only"
-      },
-      {
-        "service": "web",
-        "allowed": true,
-        "scope": "search_and_extract"
-      }
-    ],
-    "forbidden_patterns": [
-      "*.internal.pmoves.ai",
-      "127.0.0.1:*",
-      "localhost:*"
-    ],
-    "masking": {
-      "enabled": true,
-      "description": "Environment variable masking -- secrets hidden inside sandbox, substituted at egress",
-      "variables": [
-        "GITHUB_TOKEN",
-        "NATS_AUTH_TOKEN",
-        "OPENROUTER_API_KEY",
-        "ELEVENLABS_API_KEY",
-        "DISCORD_BOT_TOKEN",
-        "TELEGRAM_BOT_TOKEN"
-      ]
-    }
-  },
-  "multi_user": {
-    "enabled": true,
-    "description": "Alice/Bob-style per-user sandbox instances inspired by NousResearch OpenShell demo",
-    "onboard_script": "scripts/hermes-onboard-user.sh",
-    "max_users_per_node": 10,
-    "user_isolation": {
-      "skills": "per_user",
-      "memory": "per_user",
-      "sandbox": "per_user",
-      "env_vars": "per_user"
-    }
   }
 }

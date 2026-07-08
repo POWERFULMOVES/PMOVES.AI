@@ -6,9 +6,12 @@
 **Status**: Planning — models not yet available on Ollama registry
 
 > **Context**: This document covers the **next-generation model deployment strategy** for DGX Spark,
-> complementing the existing deployment doc at `pmoves/docs/SPARK_MODEL_STRATEGY.md` which covers
-> current P0/P1 models (Qwen3.5-35B, Qwen2.5-Coder-32B). This document plans for GLM-5.1, Qwen3.6,
-> Gemma4, and Nemotron-3 as they become available.
+> complementing the existing deployment doc at `pmoves/docs/SPARK_MODEL_STRATEGY.md`.
+>
+> **2026-07-07 Update**: The following models are now DEPLOYED on Spark Ollama:
+> qwen3.5:35b-a3b-q8_0 (36GB), nemotron-3-super:120b (80GB), qwen3:30b-a3b-q4_K_M (17GB),
+> hermes3:8b (4GB), llama3.2:3b (1GB), nomic-embed-text, qwen2.5-coder:32b (19GB).
+> GLM-5.1/Qwen3.6/Gemma4 remain future candidates pending GGUF availability.
 
 ---
 

@@ -19,8 +19,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     build: ./services/media-video
     restart: unless-stopped
@@ -160,8 +158,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     build:
       context: ../PMOVES-transcribe-and-fetch
@@ -220,8 +216,6 @@ services:
       cap_add:
       - NET_BIND_SERVICE
       read_only: true
-      security_opt:
-      - no-new-privileges:true
       tmpfs:
       - /tmp:noexec,nosuid,size=64m
       - /var/tmp:noexec,nosuid,size=64m
@@ -296,7 +290,7 @@ services:
     image: ${FLUTE_GATEWAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-flute-gateway:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:***@nats:4222
     - PORT=8055
     - NATS_URL=${NATS_URL}
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
@@ -473,8 +467,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0@sha256:e23e6499890325d31f3454cdc83f7a613a2423c8a9e167bbafea0b0e3c27d7c6}
     restart: unless-stopped
@@ -589,8 +581,6 @@ services:
         limits:
           cpus: '4.0'
           memory: 8G
-    security_opt:
-    - no-new-privileges:true
     cap_drop:
     - ALL
     profiles:
@@ -675,7 +665,7 @@ services:
     restart: unless-stopped
     <<: *tier-worker-hardened
     environment:
-      # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
+      # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:***@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
