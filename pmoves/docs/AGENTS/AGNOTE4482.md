@@ -1334,6 +1334,28 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 
 <!-- GRAPHITI_MARK: MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK::2026-06-23 -->
 
+## Fordham Room + Agent-Config Convergence Audit Record (2026-07-07)
+
+### Work Performed
+- **Fordham Hill community room** landed (`fordham.room.community`, stage `rehearsal`) from a 5-agent design fan-out + contract-conformance critic; reconciled to a schema-valid manifest (`Draft202012Validator`: 0 errors) — 5 apps, 8 skill bindings, vote path gated `enabled:false`. Plus 5 Archon mint specs + a 5090 collaboration field brief. (PR #1993)
+- **Pydantic validation gate** for the agent registry↔teams coupling (`validate_agent_registry.py` + `make validate-agents` + CI `validate-agents-config.yml`). Ratchet baseline started at 12 unteamed + 6 unregistered, then **fully reconciled to zero drift** — registry **91 == 91** team agents. NeMo/Nemotron enterprise agents registered generically (no UNFCU branding; the branded edition stays on its private branches).
+- **Room validator** made report-all (no longer crashes on the first invalid manifest) — surfaced two pre-existing invalid rooms whose legitimate extension fields the strict schema rejects (see Owner Decisions).
+- **NATS + descriptions**: registered the `fordham.*` subject family + 2 DRAFT subjects; made registry descriptions specific + `source:`-linked; corrected wrong ports on skill-only/headless agents.
+- **Topology diagrams refreshed**: `runner-topology.md` (13 teams / 91 agents), `ROOMS_ON_A_STAGE.md` (7 rooms incl. fordham), `PMOVES_AGENT_TOPOLOGY.md` (91-agent header + Fordham cluster in the master diagram + assignment-table rows).
+- **PR review**: #1994 (SPARK NATS bring-up) — flagged a P2 partial-password leak in a committed AGNOTE (redact + rotate).
+
+### Owner Decisions
+- The room schema (`pmoves/contracts/schemas/room/room.manifest.v1.schema.json`) is guard-protected. Extending it to allow the legitimate `p7` / app `config` / `sandbox_policy` / `multi_user` fields (so `demo` + `hermes-agent` validate WITHOUT data loss) needs operator approval — the alternative (conforming the rooms) destroys real config and is not recommended.
+- Fordham launch-mint gates remain: `creator_id` resolution + `fordham-steward` signature in `agent_signatures.yaml`; Archon confirmed up/healthy on 4090.
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::FORDHAM-ROOM-CONFIG-CONVERGENCE`
+- Timestamp: `2026-07-07`
+- Branch: `feat/fordham-room-community` (PR #1993)
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::FORDHAM-ROOM-CONFIG-CONVERGENCE::2026-07-07 -->
+
 ## SPARK Node Full Bring-Up Session (2026-07-07)
 
 ### Work Performed

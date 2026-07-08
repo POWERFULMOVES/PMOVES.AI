@@ -2295,7 +2295,7 @@ agents:
       cipher_categories: []
     topology:
       node_affinity: [ai-lab]
-      team: ci
+      team: automation
       ci_runner: ai-lab
       compose_profile: null
     signing_card_id: "00000000-0000-4000-8000-000000000035"
@@ -2376,6 +2376,349 @@ agents:
       ci_runner: ai-lab
       compose_profile: agents
     description: "NotebookLM integration agent for source-grounded research, document querying, and Audio Overview generation via MCP."
+
+  # --- Fordham Hill community room agents (runtime-minted by Archon) ---------
+  # Room: fordham.room.community (stage rehearsal). Agent-facing kebab ids
+  # (fordham-steward, ...) map here via kebab->snake. All carry the pilot
+  # invariant set: DRAFT-REQUIRES-LEGAL-REVIEW on any dollar/vote/governance
+  # claim, transparency/auditable-records-only, no accusations.
+  fordham_steward:
+    name: "Fordham Steward"
+    class: specialized
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["room.session.updated.v1"]
+      subscribes: ["room.session.updated.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_completion]
+    topology:
+      node_affinity: [kvm4-1, z890, powerfulmoves]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Fordham room host/concierge; routes resident intent to the 4 specialists. No money/vote authority. Runtime-minted by Archon."
+
+  fordham_onboarding:
+    name: "Fordham Onboarding"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.roll.updated.v1", "fleet.enroll.token.v1", "chit.signed.v1"]
+      subscribes: ["fordham.onboarding.request.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, kvm2]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Enroll residents onto the mesh + the eligible-voter roll (record-only; consent-required; roll is 1-of-N, DRAFT-legal)."
+
+  fordham_transaction:
+    name: "Fordham Transaction"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.ledger.entry.v1", "fordham.surplus.updated.v1", "chit.signed.v1"]
+      subscribes: ["fordham.dues.received.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Pooled dues / Firefly co-op ledger / surplus. Deterministic-tools-only money path; never invents the adopted rate. All figures DRAFT-legal-accounting-review."
+
+  fordham_creator:
+    name: "Fordham Creator"
+    class: specialized
+    primary_type: agent
+    secondary_type: media
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.artifact.published.v1"]
+      subscribes: ["fordham.dashboard.request.v1", "fordham.ledger.entry.v1", "fordham.roll.updated.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Resident materials + pilot dashboard. Presents figures verbatim with a DRAFT watermark; never recomputes; preserves the proven/modeled/scaffolded honesty key."
+
+  fordham_voice:
+    name: "Fordham Voice"
+    class: specialized
+    primary_type: agent
+    secondary_type: media
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["voice.synth.request.v1", "fordham.voice.delivered.v1"]
+      subscribes: ["fordham.dashboard.request.v1", "tokenism.prosodic.bpm.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Accessible spoken interaction (FlOO$ suit via persona-bind + shift-from-bpm). Every spoken figure carries an audible draft/pending-legal disclaimer. Collaborates with 5090-voice.room.studio."
+
+
+  # --- Enterprise + media/infra agents (registry entries completing the teams coupling) ---
+  nemoclaw:
+    name: "NeMo Claw"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null   # NATS-only health (mesh.gpu.status.v1) — no HTTP endpoint on Jetson edge
+    layers: [L1, L3]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [jetson, spark, z890]
+      team: infra
+      ci_runner: vps
+      compose_profile: agents
+    source: "pmoves/configs/agent-profiles/nemoclaw.yaml"
+    description: "Enterprise NeMo-guardrailed agent (NVIDIA NeMo Guardrails). Kilo Code CLI + Agent Zero subordinate hybrid; runs natively on Jetson Orin edge nodes, local Nemotron inference via Ollama, NATS-only health (mesh.gpu.status.v1). Config: pmoves/configs/agent-profiles/nemoclaw.yaml. Generic enterprise agent — NVIDIA users may prefer NeMo Claw over the vanilla assistant."
+
+  nemotron_claw:
+    name: "Nemotron Claw"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: "/healthz"
+    layers: [L1, L3]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: evolution
+      ci_runner: ai-lab
+      compose_profile: gpu
+    source: "pmoves/configs/agent-profiles/nemotron_claw.yaml"
+    description: "Enterprise Nemotron/NIM-guardrailed agent for beefy-GPU local reasoning + agentic coding (NVIDIA NIM nemotron-super-49b at :8000, TensorZero fallback, HTTP health). Runs on 5090/z890-class nodes. Config: pmoves/configs/agent-profiles/nemotron_claw.yaml."
+
+  container_agent:
+    name: "Container Agent"
+    class: utility
+    primary_type: agent
+    secondary_type: worker
+    port: 8111   # z890-bound 127.0.0.1:8111 (docker-compose.z890.yml); matches agent-teams.yaml annotation
+    health: "/healthz"
+    layers: [L0, L2]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm2, jetson]
+      team: infra
+      ci_runner: vps
+      compose_profile: agents
+    source: "pmoves/services/container-agent/app.py"
+    description: "Real per-node Docker-networking diagnostics sidecar: /healthz, /diagnostic (local-service + upstream-route + DNS checks), /metrics (Prometheus). Source: pmoves/services/container-agent/app.py; deployed on z890 (pmoves/docker-compose.z890.yml, bound 127.0.0.1:8111)."
+
+  podcast_producer:
+    name: "Podcast Producer"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: null   # skill-only; 8110 is claimed by model-registry
+    health: null   # no HTTP service (skill-only) — /healthz would be unreachable
+    layers: [L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: yt
+    source: "pmoves/skills/podcast-publish/manifest.yaml"
+    description: "Aspirational / skill-only (no service or compose yet): TTS-segment stitching → RSS feed → MinIO upload. Defined in pmoves/skills/podcast-publish/manifest.yaml. NOTE: the 8110 in agent-teams.yaml is actually claimed by model-registry — not a live port for this."
+
+  remotion_renderer:
+    name: "Remotion Renderer"
+    class: standard
+    primary_type: media
+    secondary_type: ui
+    port: null   # headless render; no dedicated compose port
+    health: null   # headless render, no HTTP daemon — /healthz would be unreachable
+    layers: [L2, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: gpu
+    source: "pmoves/services/a2ui-renderer/"
+    description: "A2UI Remotion provenance rendering — headless, invoked via render:provenance:* npm scripts (not a long-running HTTP daemon). Source: pmoves/services/a2ui-renderer/. NOTE: no dedicated compose port (8105/8107 are contested by cipher-api/consciousness)."
+
+  youtube_publisher:
+    name: "YouTube Publisher"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: null   # skill-only; 8111 is the real gateway-agent/container-agent port
+    health: null   # no HTTP service (skill-only) — /healthz would be unreachable
+    layers: [L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: yt
+    source: "pmoves/skills/youtube-upload/manifest.yaml"
+    description: "Aspirational / skill-only (no service or compose yet): YouTube Data API v3 upload + metadata + thumbnail, depends on minio/presign. Defined in pmoves/skills/youtube-upload/manifest.yaml. NOTE: 8111 is the real gateway-agent/container-agent port — not a live port for this."
 
 
 # ── MCP Server Registry ─────────────────────────────────────────────────────

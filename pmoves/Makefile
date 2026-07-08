@@ -1331,6 +1331,15 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 	@echo "Backend services should NOT be on pmoves-net (except UIs)"
 	@docker ps --format "table {{.Names}}\t{{.Networks}}" 2>/dev/null | grep pmoves-net | grep -v "supabase\|archon\|agent-zero" || echo "✅ No unexpected services on pmoves-net"
 
+.PHONY: validate-agents
+validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check
+	@echo "🔍 Validating agent registry ↔ teams coupling (pydantic gate)..."
+	@# Workflow-only deps — the script imports pyyaml + pydantic, which aren't in the
+	@# base env. Mirror the CI gate (validate-agents-config.yml) so a fresh local
+	@# checkout can run this target without a ModuleNotFoundError (Codex #1993 P2).
+	@python -m pip install --quiet "pydantic>=2" pyyaml
+	@python $(CURDIR)/scripts/validate_agent_registry.py
+
 # -------- PMOVES.YT docs helpers ----------
 .PHONY: yt-docs-sync yt-docs-catalog-smoke
 
