@@ -3983,6 +3983,7 @@ services:
     - "${WGER_BIND:-0.0.0.0}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
 
+
   wger-nats-bridge:
     <<: *tier-api-hardened
     build: ./services/wger-nats-bridge
@@ -3992,36 +3993,10 @@ services:
     - NATS_URL=${NATS_URL}
     - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:-}
     - WGER_POLL_INTERVAL=${WGER_POLL_INTERVAL:-60}
+    depends_on:
+      nats:
+        condition: service_healthy
     profiles: ["health", "wger"]
-    networks:
-      pmoves_api:
-      pmoves_bus:
-    depends_on:
-      nats:
-        condition: service_healthy
-    networks:
-    - pmoves_api
-    - pmoves_bus
-    - pmoves_data
-    - pmoves_monitoring  # Prometheus scrape access for /metrics
-    depends_on:
-      wger-db:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    volumes:
-    - wger-static:/home/wger/static
-    - wger-media:/home/wger/media
-    - wger-prometheus:/tmp/prometheus
-    # NOTE: wger uses /api/v2/health/ natively, not PMOVES-standard /healthz
-    # healthcheck aligned to wger's native path; /healthz shim deferred to PMOVES image overlay
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/health/', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
-
   wger-db:
     <<: *tier-data-hardened
     image: postgres:15-alpine
