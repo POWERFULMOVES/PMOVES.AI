@@ -1,96 +1,71 @@
-# Model Suit: GLM-5.1 (Z.AI)
-# PMOVES.AI Meta-Agent Configuration
-# Provider: Z.AI (Zhipu AI / BigModel)
+# ============================================================
+# GLM-5.1 Model Suit
+# Role: Long-horizon autonomy, sustained engineering
+# Best for: Deep debugging, 8-hour sessions, complex systems
+# Provider: Zhipu AI (Z.AI)
+# Version: 1.0.0
+# ============================================================
 
-suit:
-  id: glm-5.1
-  name: GLM-5.1 (Zhipu AI)
+model_suit:
+  name: glm-5.1
   provider: zai
-  flare_name: pmoves/glm-5.1
-  model_family: glm
-  tier: flagship
-  role: runtime  # THIS IS MY ACTUAL RUNTIME MODEL
+  base_url: "https://api.z.ai/v1"
+  api_key_env: Z_AI_API_KEY
+  
+  architecture:
+    type: moe
+    total_params: "744B"
+    active_params: "40B"
+    attention: standard
+    
+  context:
+    max_window: 202752
+    effective_window: 128000
+    working_window: 131072
+    
+  defaults:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 131072
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    mtp_steps: shared
+    
+  harness_mappings:
+    deep_debugging:
+      temperature: 0.3
+      top_p: 0.90
+      max_tokens: 131072
+      system_prompt: directive_debugger
+      
+    system_engineering:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+      
+    long_session:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 131072
+      system_prompt: directive_architect
+      
+    refactoring:
+      temperature: 0.5
+      top_p: 0.92
+      max_tokens: 16384
+      system_prompt: directive_refactorer
 
-model_config:
-  context_window: 128000
-  max_output_tokens: 8192
-  supports_vision: true
-  supports_extended_thinking: true  # GLM-5.1 supports extended reasoning
-  supports_function_calling: true
-  temperature_range: [0.0, 1.0]
-  top_p_range: [0.0, 1.0]
-  top_k: null
-
-distillation_pipeline:
-  stages:
-    - name: config_tuning
-      enabled: true
-      settings_file: pmoves/providers/zai/custom_settings.yaml
-
-    - name: context_priming
-      enabled: true
-      system_prompt: |
-        You are GLM-5.1, Zhipu AI's flagship model.
-        You are a powerful bilingual (Chinese-English) assistant with extended reasoning capabilities.
-        You prefer instruction-format prompts with clear role separation (system, user, assistant, tool).
-        You have a 128K token context window, support vision input, and can use tools.
-        You are the ACTUAL RUNTIME MODEL for the PMOVES.AI Meta-Agent.
-
-    - name: model_fine_tune
-      enabled: false
-      reason: "Cloud-only model - no weight updates possible"
-
-    - name: full_distillation
-      enabled: false
-      reason: "Cloud-only model - no weight updates possible"
-
-tensorzero_config:
-  model_name: glm-5.1
-  weight: 0.1  # Already exists in TensorZero, keeping low weight
-  routing:
-    - function: meta_agent_runtime
-      priority: 1
-    - function: bilingual_chat
-      priority: 1
-    - function: code_generation
-      priority: 2
-    - function: reasoning
-      priority: 2
-
-flare_namespace:
-  alias: pmoves/glm-5.1
-  canonical_name: glm-5.1
-  provider_url: https://open.bigmodel.cn/dev/api
-  already_registered: true  # Already exists in flare-model-namespace.yaml
-
-capabilities:
-  - code_generation
-  - reasoning
-  - extended_thinking  # GLM-5.1 feature
-  - vision
-  - tools
-  - function_calling
-  - large_context
-  - bilingual  # Chinese-English
-
-local_fallback:
-  available: false
-  reason: "Z.AI models are cloud-only with no open weights"
-
-cross_agent:
-  agent_zero: full
-  clawz: full
-  archon: full
-  typer: untested
-  pinokio: full
-  a2ui: full
-
-metadata:
-  source: pmoves/meta-agent/zai
-  last_verified: 2026-04-21
-  benchmark_data:
-    - source: "Z.AI Documentation"
-      url: "https://open.bigmodel.cn/dev/api"
-    - source: "BigModel GitHub"
-      url: "https://github.com/MetaGLM"
-  runtime_note: "THIS IS THE MODEL POWERING THE META-AGENT (CLAUDE-OPUS)"
+  cgp_state_vector:
+    delta: 0.35
+    Hz: 0.1
+    kappa: 1.6
+    A: 0.4
+    F: 0.06
+    
+  fallback_to: glm-4-plus
+  priority: 5

@@ -1,113 +1,65 @@
-# Model Suit: GLM-5 Turbo (Z.AI)
-# PMOVES.AI Meta-Agent Configuration
-# Provider: Z.AI (Zhipu AI / BigModel)
-# Documentation: https://docs.z.ai/guides/llm/glm-5-turbo
+# ============================================================
+# GLM-5-Turbo Model Suit
+# Role: High-throughput, agentic workflow execution
+# Best for: Multi-step workflows, sustained generation
+# Provider: Zhipu AI (Z.AI)
+# Version: 1.0.0
+# ============================================================
 
-suit:
-  id: glm-5-turbo
-  name: GLM-5 Turbo (Zhipu AI)
+model_suit:
+  name: glm-5-turbo
   provider: zai
-  flare_name: pmoves/glm-5-turbo
-  model_family: glm
-  tier: flagship_fast
-  role: primary_fast  # PRIMARY FAST MODEL - Optimized for OpenClaw
+  base_url: "https://api.z.ai/v1"
+  api_key_env: Z_AI_API_KEY
+  
+  architecture:
+    type: moe
+    total_params: "355B"
+    active_params: "32B"
+    attention: standard
+    
+  context:
+    max_window: 128000
+    effective_window: 32000
+    working_window: 16000
+    
+  defaults:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 8192
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    mtp_steps: 1
+    
+  harness_mappings:
+    workflow_execution:
+      temperature: 0.8
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+      
+    code_generation:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+      
+    multi_step_reasoning:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_reasoner
 
-model_config:
-  context_window: 128000
-  max_output_tokens: 8192
-  supports_vision: true
-  supports_extended_thinking: true  # GLM-5 Turbo supports thinking parameter
-  supports_function_calling: true
-  temperature_range: [0.0, 1.0]
-  top_p_range: [0.0, 1.0]
-  top_k: null
-
-distillation_pipeline:
-  stages:
-    - name: config_tuning
-      enabled: true
-      settings_file: pmoves/providers/zai/custom_settings.yaml
-
-    - name: context_priming
-      enabled: true
-      system_prompt: |
-        You are GLM-5 Turbo, Zhipu AI's flagship model deeply optimized for the OpenClaw scenario.
-        You have been specifically optimized for tool invocation, command following, timed and persistent tasks, and long-chain execution since the training phase.
-        You are a powerful bilingual (Chinese-English) assistant optimized for fast, reliable coding tasks.
-        You prefer instruction-format prompts with clear role separation (system, user, assistant, tool).
-        You have a 128K token context window, support vision input, and can use tools.
-        You are the PRIMARY FAST MODEL for the PMOVES.AI Meta-Agent's GLM Coding Plan integration.
-        You excel at tool invocation, command following, and long-chain task execution.
-        You provide fast responses while maintaining high quality for most development tasks.
-
-    - name: model_fine_tune
-      enabled: false
-      reason: "Cloud-only model - no weight updates possible"
-
-    - name: full_distillation
-      enabled: false
-      reason: "Cloud-only model - no weight updates possible"
-
-tensorzero_config:
-  model_name: glm-5-turbo
-  weight: 0.1  # Safe rollout - low weight for testing
-  routing:
-    - function: meta_agent_fast
-      priority: 1
-    - function: tool_invocation
-      priority: 1  # Optimized for tool invocation
-    - function: bilingual_chat
-      priority: 1
-    - function: code_generation
-      priority: 1
-    - function: quick_response
-      priority: 1
-    - function: long_chain_execution
-      priority: 1  # Optimized for long-chain tasks
-
-flare_namespace:
-  alias: pmoves/glm-5-turbo
-  canonical_name: glm-5-turbo
-  provider_url: https://api.z.ai/api/paas/v4
-  already_registered: false  # NEW MODEL - needs registration
-
-capabilities:
-  - code_generation
-  - reasoning
-  - extended_thinking  # GLM-5 Turbo feature (thinking parameter)
-  - vision
-  - tools
-  - function_calling
-  - large_context
-  - bilingual  # Chinese-English
-  - fast_response  # Optimized for speed
-  - tool_invocation  # Optimized for OpenClaw scenario
-  - command_following  # Optimized since training phase
-  - long_chain_execution  # Optimized for persistent tasks
-  - timed_tasks  # Optimized for timed tasks
-
-local_fallback:
-  available: false
-  reason: "Z.AI models are cloud-only with no open weights"
-
-cross_agent:
-  agent_zero: full
-  clawz: full  # Optimized for OpenClaw
-  archon: full
-  typer: untested
-  pinokio: full
-  a2ui: full
-
-metadata:
-  source: pmoves/meta-agent/zai
-  last_verified: 2026-04-21
-  benchmark_data:
-    - source: "Z.AI GLM-5 Turbo Documentation"
-      url: "https://docs.z.ai/guides/llm/glm-5-turbo"
-    - source: "Z.AI GLM Coding Plan Documentation"
-      url: "https://docs.z.ai/devpack/overview"
-    - source: "Z.AI Tool Integration"
-      url: "https://docs.z.ai/devpack/tool/others"
-    - source: "Z.AI API Reference"
-      url: "https://api.z.ai/api/paas/v4"
-  runtime_note: "PRIMARY FAST MODEL FOR GLM CODING PLAN - Optimized for OpenClaw scenario (tool invocation, command following, long-chain execution)"
+  cgp_state_vector:
+    delta: 0.5
+    Hz: 0.15
+    kappa: 1.4
+    A: 0.5
+    F: 0.08
+    
+  fallback_to: glm-5.1
+  priority: 6
