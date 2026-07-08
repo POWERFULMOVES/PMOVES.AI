@@ -84,20 +84,23 @@ def _chit_attest(payload: dict, passphrase: str) -> dict:
 
 
 def _build_accepted_packet(attested: dict) -> dict:
-    """Build HiRAG accepted packet from attested shaped packet."""
-    return {
-        "id": f"hirag-accept-{attested.get('attestation', {}).get('id', str(uuid.uuid4())[:8])}",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+    """Build HiRAG accepted packet preserving all content contract fields."""
+    packet = {
+        "id": attested.get("id", f"hirag-accept-{attested.get('attestation', {}).get('id', str(uuid.uuid4())[:8])}"),
+        "timestamp": attested.get("timestamp", datetime.now(timezone.utc).isoformat()),
         "source": {
             "agent": "shape-attestation-bridge",
-            "shaped_id": attested.get("id", ""),
+            "original_source": attested.get("source", {}),
         },
-        "content": attested.get("content", {}),
-        "lexicon": attested.get("lexicon", {}),
         "attestation": attested.get("attestation", {}),
         "hirag_namespace": os.environ.get("HIRAG_NAMESPACE", "default"),
         "status": "accepted",
     }
+    # Preserve all content contract fields from the shaped packet
+    for key in ("content", "lexicon", "anchors", "semantic_density", "noise_score", "metadata"):
+        if key in attested:
+            packet[key] = attested[key]
+    return packet
 
 
 async def main():

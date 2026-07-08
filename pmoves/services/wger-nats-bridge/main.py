@@ -151,8 +151,9 @@ class WgerNatsBridge:
             await self._publish("health.metrics.updated.v1", {
                 "id": "health-metrics-" + str(int(time.time())),
                 "timestamp": ts,
-                "source": {"agent": "wger-nats-bridge", "endpoint": "weightentry"},
-                "data": {"count": len(new_weights), "entries": [{"weight": w.get("weight"), "date": w.get("date")} for w in new_weights[-5:]]},
+                "namespace": "wger",
+                "source": {"agent": "wger-nats-bridge", "type": "weightentry"},
+                "metrics": [{"weight": w.get("weight"), "date": w.get("date")} for w in new_weights[-5:]],
             })
             self.watermark["weight"] = max(w.get("id", 0) for w in new_weights)
 
