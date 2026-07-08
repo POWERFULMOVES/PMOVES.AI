@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+import socket
 import sys
 import urllib.error
 import urllib.request
@@ -36,7 +37,7 @@ MODEL_SUITS_DIR = PMOVES / "configs" / "model-suits"
 # ---------------------------------------------------------------------------
 # Logging (never emits API key values)
 # ---------------------------------------------------------------------------
-LOG = logging.getLogger("kong_route_seeder")
+log = logging.getLogger("kong_route_seeder")
 
 
 class _RedactingLoggerAdapter(logging.LoggerAdapter):
@@ -74,13 +75,13 @@ def _setup_logging(level: int = logging.INFO) -> None:
     handler = logging.StreamHandler(sys.stderr)
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     handler.setFormatter(fmt)
-    LOG.setLevel(level)
-    LOG.addHandler(handler)
+    log.setLevel(level)
+    log.addHandler(handler)
 
 
 def get_redacting_logger() -> _RedactingLoggerAdapter:
     """Return a LoggerAdapter that redacts secrets at format time."""
-    return _RedactingLoggerAdapter(LOG, {})
+    return _RedactingLoggerAdapter(log, {})
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +102,7 @@ class KongAdminClient:
         req = urllib.request.Request(url, data=data, method=method)
         req.add_header("Content-Type", "application/json")
         if self.dry_run and method in ("POST", "PUT", "PATCH", "DELETE"):
-            LOG.info("[DRY-RUN] %s %s  body=%s", method, url, _redact_payload(payload))
+            log.info("[DRY-RUN] %s %s  body=%s", method, url, _redact_payload(payload))
             return None
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -109,21 +110,23 @@ class KongAdminClient:
                 return json.loads(body) if body else None
         except urllib.error.HTTPError as exc:
             if exc.code == 409:
-                LOG.debug("Exists (409): %s %s", method, url)
+                log.debug("Exists (409): %s %s", method, url)
                 return None
             if exc.code == 404 and method == "DELETE":
-                LOG.debug("Not found for delete (404): %s", url)
+                log.debug("Not found for delete (404): %s", url)
                 return None
             error_body = exc.read().decode("utf-8") if exc.fp else ""
-            LOG.error("Kong API error: %s %s -> %s: %s", method, url, exc.code, error_body)
+            log.error("Kong API error: %s %s -> %s: %s", method, url, exc.code, error_body)
             raise
 
     def list_all(self, resource: str) -> list[dict[str, Any]]:
         """Paginated GET /{resource}."""
+        from urllib.parse import urljoin
+
         results: list[dict[str, Any]] = []
         next_url = f"/{resource}"
         while next_url:
-            url = f"{self.base}{next_url}"
+            url = urljoin(self.base, next_url)
             try:
                 with urllib.request.urlopen(url, timeout=15) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
@@ -131,7 +134,7 @@ class KongAdminClient:
                     next_url = data.get("next")
             except urllib.error.HTTPError as exc:
                 error_body = exc.read().decode("utf-8") if exc.fp else ""
-                LOG.error(
+                log.error(
                     "Failed to list %s: HTTP %s - %s", resource, exc.code, error_body
                 )
                 if exc.code >= 500:
@@ -185,16 +188,26 @@ class KongAdminClient:
         return self._request("PUT", f"/plugins/{plugin_id}", payload)
 
     def delete_service_cascade(self, name: str) -> None:
-        routes = self.list_all("routes")
-        for route in routes:
-            svc = route.get("service")
-            if svc and svc.get("name") == name:
-                self._request("DELETE", f"/routes/{route['name']}")
-        plugins = self.list_all("plugins")
-        for plugin in plugins:
-            svc = plugin.get("service")
-            if svc and svc.get("name") == name:
-                self._request("DELETE", f"/plugins/{plugin['id']}")
+        """Delete a service and all associated routes and plugins.
+
+        Pre-filters routes and plugins by service name to avoid redundant
+        iteration.  Complexity is O(R + P) per call where R is total routes
+        and P is total plugins; call in batch when deleting many services.
+        """
+        all_routes = self.list_all("routes")
+        matching_routes = [
+            r for r in all_routes if r.get("service", {}).get("name") == name
+        ]
+        for route in matching_routes:
+            self._request("DELETE", f"/routes/{route['name']}")
+
+        all_plugins = self.list_all("plugins")
+        matching_plugins = [
+            p for p in all_plugins if p.get("service", {}).get("name") == name
+        ]
+        for plugin in matching_plugins:
+            self._request("DELETE", f"/plugins/{plugin['id']}")
+
         self._request("DELETE", f"/services/{name}")
 
     def delete_route(self, name: str) -> None:
@@ -207,8 +220,8 @@ class KongAdminClient:
         try:
             with urllib.request.urlopen(f"{self.base}/status", timeout=5) as resp:
                 return resp.status == 200
-        except Exception as exc:
-            LOG.debug("Kong health check failed: %s", exc)
+        except (urllib.error.URLError, socket.timeout) as exc:
+            log.debug("Kong health check failed: %s", exc)
             return False
 
 
@@ -232,22 +245,22 @@ def _parse_model_suits(directory: Path) -> list[dict[str, Any]]:
     """
     suits: list[dict[str, Any]] = []
     if not directory.exists():
-        LOG.error("Model suits directory not found: %s", directory)
+        log.error("Model suits directory not found: %s", directory)
         return suits
 
     for path in sorted(directory.glob("*.yaml")):
         try:
-            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            LOG.warning("Skipping %s: %s", path.name, exc)
+            log.warning("Skipping %s: %s", path.name, exc)
             continue
 
-        if not isinstance(raw, dict):
+        if not isinstance(doc, dict):
             continue
 
         # Schema 1: model_suit top-level (GLM family)
-        if "model_suit" in raw and isinstance(raw["model_suit"], dict):
-            ms = raw["model_suit"]
+        if "model_suit" in doc and isinstance(doc["model_suit"], dict):
+            ms = doc["model_suit"]
             suits.append(
                 {
                     "name": ms.get("name", path.stem),
@@ -260,16 +273,16 @@ def _parse_model_suits(directory: Path) -> list[dict[str, Any]]:
             continue
 
         # Schema 2: suit top-level with nested model_config (KIMI, MiniMax)
-        if "suit" in raw and isinstance(raw["suit"], dict):
-            suit = raw["suit"]
-            mc = raw.get("model_config") or {}
+        if "suit" in doc and isinstance(doc["suit"], dict):
+            suit = doc["suit"]
+            mc = doc.get("model_config") or {}
             base_url = mc.get("api_base", "")
             if not base_url:
-                tzc = raw.get("tensorzero_config") or {}
+                tzc = doc.get("tensorzero_config") or {}
                 base_url = tzc.get("api_base", "")
             api_key_env = mc.get("api_key_env", "")
             if not api_key_env:
-                tp = raw.get("token_plan") or {}
+                tp = doc.get("token_plan") or {}
                 api_key_env = tp.get("api_key_env", "")
             suits.append(
                 {
@@ -283,9 +296,9 @@ def _parse_model_suits(directory: Path) -> list[dict[str, Any]]:
             )
             continue
 
-        LOG.debug("Unrecognised schema in %s -- skipping", path.name)
+        log.debug("Unrecognised schema in %s -- skipping", path.name)
 
-    LOG.info("Parsed %d model suits from %s", len(suits), directory)
+    log.info("Parsed %d model suits from %s", len(suits), directory)
     return suits
 
 
@@ -325,7 +338,19 @@ def _provider_to_host(provider: str, base_url: str) -> str:
 
 
 def _slugify(name: str) -> str:
-    return name.lower().replace(" ", "-").replace(".", "-").replace("_", "-")
+    """Convert a name to a URL-safe slug, handling a broad range of special characters."""
+    slug = name.lower()
+    for char in (
+        " ", ".", "_", ":", "/", "\\", "@", "#", "%", "&", "?",
+        "*", "+", "=", "<", ">", "{", "}", "[", "]", "|", "^",
+        "~", "$", "`", '"', "'",
+    ):
+        slug = slug.replace(char, "-")
+    # Collapse multiple consecutive hyphens
+    slug = re.sub(r"-+", "-", slug)
+    # Strip leading/trailing hyphens
+    slug = slug.strip("-")
+    return slug
 
 
 def seed_routes(kong: KongAdminClient, suits: list[dict[str, Any]]) -> dict[str, Any]:
@@ -355,7 +380,7 @@ def seed_routes(kong: KongAdminClient, suits: list[dict[str, Any]]) -> dict[str,
             tags=["auto-seeded", f"provider:{info['provider']}"],
         )
         created_services += 1
-        LOG.info("Service: %s -> %s", svc_name, upstream_url)
+        log.info("Service: %s -> %s", svc_name, upstream_url)
 
         upstream_name = f"{svc_name}-upstream"
         kong.upsert_upstream(
@@ -386,7 +411,7 @@ def seed_routes(kong: KongAdminClient, suits: list[dict[str, Any]]) -> dict[str,
             )
             created_routes += 1
             service_route_map[svc_name].append(route_name)
-            LOG.info("  Route: %s -> %s", route_name, route_path)
+            log.info("  Route: %s -> %s", route_name, route_path)
 
         kong.upsert_plugin(
             plugin_name="key-auth",
@@ -398,7 +423,7 @@ def seed_routes(kong: KongAdminClient, suits: list[dict[str, Any]]) -> dict[str,
             },
         )
         created_plugins += 1
-        LOG.info("  Plugin: key-auth on service %s", svc_name)
+        log.info("  Plugin: key-auth on service %s", svc_name)
 
     return {
         "services_created": created_services,
@@ -423,9 +448,9 @@ def prune_stale_routes(
             model_slug = route_name[len("route-"):]
             if model_slug not in current_models:
                 if kong.dry_run:
-                    LOG.info("[DRY-RUN] Would prune stale route: %s", route_name)
+                    log.info("[DRY-RUN] Would prune stale route: %s", route_name)
                 else:
-                    LOG.info("Pruning stale route: %s", route_name)
+                    log.info("Pruning stale route: %s", route_name)
                     kong.delete_route(route_name)
                 deleted += 1
     return deleted
@@ -445,25 +470,25 @@ def main() -> int:
 
     kong = KongAdminClient(args.kong_url, dry_run=args.dry_run)
     if not kong.health():
-        LOG.error("Kong Admin API at %s is not reachable. Is Kong running?", args.kong_url)
+        log.error("Kong Admin API at %s is not reachable. Is Kong running?", args.kong_url)
         return 1
-    LOG.info("Kong Admin API: %s (healthy)", args.kong_url)
+    log.info("Kong Admin API: %s (healthy)", args.kong_url)
 
     suits = _parse_model_suits(args.model_suits_dir)
     if not suits:
-        LOG.error("No model suits found in %s", args.model_suits_dir)
+        log.error("No model suits found in %s", args.model_suits_dir)
         return 1
 
     suits_with_missing_url = [s for s in suits if not s.get("base_url")]
     suits_with_missing_key_env = [s for s in suits if not s.get("api_key_env")]
     if suits_with_missing_url:
-        LOG.warning(
+        log.warning(
             "%d model suit(s) missing base_url (will use fallback hosts): %s",
             len(suits_with_missing_url),
             ", ".join(s["source_file"] for s in suits_with_missing_url),
         )
     if suits_with_missing_key_env:
-        LOG.warning(
+        log.warning(
             "%d model suit(s) missing api_key_env (provider credentials may not be set): %s",
             len(suits_with_missing_key_env),
             ", ".join(s["source_file"] for s in suits_with_missing_key_env),
@@ -484,14 +509,14 @@ def main() -> int:
     summary["providers"] = providers
     summary["model_suits_parsed"] = len(suits)
 
-    LOG.info(
+    log.info(
         "Seeding complete: %d services, %d routes, %d plugins",
         summary["services_created"],
         summary["routes_created"],
         summary["plugins_created"],
     )
     if summary["routes_pruned"]:
-        LOG.info("Pruned %d stale routes", summary["routes_pruned"])
+        log.info("Pruned %d stale routes", summary["routes_pruned"])
 
     if args.json_summary:
         safe_summary = {k: v for k, v in summary.items() if k != "service_route_map"}
