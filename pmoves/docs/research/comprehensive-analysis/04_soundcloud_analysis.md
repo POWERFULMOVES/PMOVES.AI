@@ -169,6 +169,8 @@
 
 ### Genre Distribution Analysis
 
+> **Note:** Percentages reflect overlapping genre tags assigned by SoundCloud. A single track may carry multiple genre labels. Totals exceed 100% due to multi-labeling.
+
 ```
 Hip-hop & Rap / Hiphop:     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~  ~40 tracks (49%)
 R&B & Soul:                 ~~~~~~~~~~~~  ~20 tracks (24%)
