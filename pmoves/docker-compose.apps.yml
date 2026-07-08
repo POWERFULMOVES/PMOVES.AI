@@ -19,8 +19,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     restart: unless-stopped
@@ -58,8 +56,6 @@ services:
       - FOWNER
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: postgres:15-alpine
     restart: unless-stopped
@@ -109,8 +105,6 @@ services:
       cap_add:
       - NET_BIND_SERVICE
       read_only: true
-      security_opt:
-      - no-new-privileges:true
       tmpfs:
       - /tmp:noexec,nosuid,size=64m
       - /var/tmp:noexec,nosuid,size=64m

@@ -325,8 +325,6 @@ x-tier-supabase-hardened:
   - FOWNER
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-supabase-hardened-ro:
   env_file:
@@ -337,8 +335,6 @@ x-tier-supabase-hardened-ro:
   cap_add:
   - NET_BIND_SERVICE
   read_only: true
-  security_opt:
-  - no-new-privileges:true
   tmpfs:
   - /tmp:noexec,nosuid,size=64m
   - /var/tmp:noexec,nosuid,size=64m
@@ -354,8 +350,6 @@ x-tier-agent-hardened:
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-agent-hardened-ro:
   env_file:
@@ -366,8 +360,6 @@ x-tier-agent-hardened-ro:
   cap_add:
   - NET_BIND_SERVICE
   read_only: true
-  security_opt:
-  - no-new-privileges:true
   tmpfs:
   - /tmp:noexec,nosuid,size=64m
   - /var/tmp:noexec,nosuid,size=64m
@@ -383,8 +375,6 @@ x-tier-agent-hardened-rw:
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-llm-hardened:
   env_file:
@@ -397,8 +387,6 @@ x-tier-llm-hardened:
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-worker-hardened:
   env_file:
@@ -411,8 +399,6 @@ x-tier-worker-hardened:
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-api-hardened:
   env_file:
@@ -425,8 +411,6 @@ x-tier-api-hardened:
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-data-hardened:
   env_file:
@@ -441,8 +425,6 @@ x-tier-data-hardened:
   - FOWNER
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-media-hardened:
   env_file:
@@ -465,8 +447,6 @@ x-tier-ui-hardened:
   cap_add:
   - NET_BIND_SERVICE
   read_only: true
-  security_opt:
-  - no-new-privileges:true
   tmpfs:
   - /tmp:noexec,nosuid,size=64m
   - /var/tmp:noexec,nosuid,size=64m
@@ -482,8 +462,6 @@ x-tier-api-hardened-gpu:
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 # PMOVES.AI production compose project
 name: pmoves

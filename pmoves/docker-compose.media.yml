@@ -158,8 +158,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     build:
       context: ../PMOVES-transcribe-and-fetch
@@ -218,8 +216,6 @@ services:
       cap_add:
       - NET_BIND_SERVICE
       read_only: true
-      security_opt:
-      - no-new-privileges:true
       tmpfs:
       - /tmp:noexec,nosuid,size=64m
       - /var/tmp:noexec,nosuid,size=64m
@@ -471,8 +467,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0@sha256:e23e6499890325d31f3454cdc83f7a613a2423c8a9e167bbafea0b0e3c27d7c6}
     restart: unless-stopped
