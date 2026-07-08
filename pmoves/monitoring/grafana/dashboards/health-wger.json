@@ -1,0 +1,50 @@
+{
+  "annotations": {"list": []},
+  "title": "PMOVES Health (wger)",
+  "uid": "wger-health",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "panels": [
+    {
+      "title": "Service Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [{"expr": "up{job=\"wger\"}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]}}
+    },
+    {
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+      "targets": [{"expr": "sum(rate(http_requests_total{job=\"wger\"}[5m]))", "refId": "A"}]
+    },
+    {
+      "title": "P95 Latency",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 18, "y": 0},
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"wger\"}[5m])) by (le))", "refId": "A"}]
+    },
+    {
+      "title": "NATS Publish Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{"expr": "sum(rate(wger_nats_publish_total[5m]))", "refId": "A"}]
+    },
+    {
+      "title": "CHIT Signatures",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+      "targets": [{"expr": "sum(wger_chit_signed_total)", "refId": "A"}]
+    },
+    {
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 18, "y": 8},
+      "targets": [{"expr": "sum(rate(http_requests_total{job=\"wger\",status=~\"5..\"}[5m]))", "refId": "A"}]
+    }
+  ],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "30s"
+}
