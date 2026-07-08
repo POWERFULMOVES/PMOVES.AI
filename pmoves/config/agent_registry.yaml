@@ -1197,8 +1197,12 @@ agents:
     layers: [L0]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1452,9 +1456,9 @@ agents:
     evolution_stage: base
     nats:
       publishes:
-        - "finance.transactions.ingested.v1"    # planned
-        - "finance.budget.alert.v1"             # planned
-        - "finance.monthly.summary.v1"          # planned
+        - "finance.transactions.ingested.v1"    
+        - "finance.budget.alert.v1"             
+        - "finance.monthly.summary.v1"          
       subscribes: []
     chit_toggles:
       delta_sensitive: false
@@ -1485,9 +1489,9 @@ agents:
     evolution_stage: base
     nats:
       publishes:
-        - "health.metrics.updated.v1"           # planned
-        - "health.workout.completed.v1"         # planned
-        - "health.weekly.summary.v1"            # planned
+        - "health.metrics.updated.v1"           
+        - "health.workout.completed.v1"         
+        - "health.weekly.summary.v1"            
       subscribes: []
     chit_toggles:
       delta_sensitive: false
