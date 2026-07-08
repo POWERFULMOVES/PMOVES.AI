@@ -1,0 +1,161 @@
+name: build-nats-workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pmoves/services/shape-attestation-bridge/**
+      - pmoves/services/decoded-consumer/**
+      - pmoves/services/bpm-encoder-worker/**
+      - .github/workflows/build-nats-workers.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  NAMESPACE: powerfulmoves
+  IMAGE_TAG: pmoves-latest
+
+jobs:
+  detect-changed:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        with:
+          egress-policy: audit
+          allowed-endpoints:
+            github.com:443
+            api.github.com:443
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build service matrix
+        id: set-matrix
+        run: |
+          python3 - <<'EOF'
+          import json, os
+
+          services = ["shape-attestation-bridge", "decoded-consumer", "bpm-encoder-worker"]
+          include = []
+
+          # On workflow_dispatch, build all services that have a Dockerfile
+          if "${{ github.event_name }}" == "workflow_dispatch":
+              for svc in services:
+                  import pathlib
+                  dockerfile = pathlib.Path(f"pmoves/services/{svc}/Dockerfile")
+                  if dockerfile.exists():
+                      include.append({"service": svc})
+          else:
+              # On push, detect which services changed
+              import subprocess
+              result = subprocess.run(
+                  ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+                  capture_output=True, text=True
+              )
+              changed = set(result.stdout.strip().split("\n"))
+              for svc in services:
+                  import pathlib
+                  dockerfile = pathlib.Path(f"pmoves/services/{svc}/Dockerfile")
+                  svc_prefix = f"pmoves/services/{svc}/"
+                  if dockerfile.exists() and any(f.startswith(svc_prefix) for f in changed):
+                      include.append({"service": svc})
+
+          matrix = {"include": include} if include else {"include": [{"service": "__none__"}]}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"matrix={json.dumps(matrix)}\n")
+          print(f"Matrix: {json.dumps(matrix)}")
+          EOF
+
+  build:
+    needs: detect-changed
+    if: needs.detect-changed.outputs.matrix != ''
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJson(needs.detect-changed.outputs.matrix) }}
+    steps:
+      - name: Skip placeholder
+        if: matrix.service == '__none__'
+        run: echo "No changed services to build" && exit 0
+
+      - name: Harden Runner
+        if: matrix.service != '__none_'
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        with:
+          egress-policy: audit
+          allowed-endpoints:
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            archive.ubuntu.com:80
+            security.ubuntu.com:80
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: matrix.service != '__none_'
+
+      - name: Set up QEMU (multi-arch)
+        if: matrix.service != '__none_'
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba59b3f373 # v3
+
+      - name: Set up Docker Buildx
+        if: matrix.service != '__none_'
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+
+      - name: Generate GitHub App token
+        if: matrix.service != '__none_'
+        id: app_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          permission-packages: write
+
+      - name: Login to GHCR
+        if: matrix.service != '__none_'
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ steps.app_token.outputs.token && 'x-access-token' || github.actor }}
+          password: ${{ steps.app_token.outputs.token || secrets.GHCR_TOKEN }}
+
+      - name: Build & push multi-arch image
+        if: matrix.service != '__none_'
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: pmoves/services/${{ matrix.service }}
+          file: pmoves/services/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=pmoves-${{ matrix.service }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}:buildcache,mode=max
+
+      - name: Generate artifact attestation
+        if: matrix.service != '__none_'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+        continue-on-error: true
