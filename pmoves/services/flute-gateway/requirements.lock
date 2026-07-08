@@ -3,15 +3,21 @@
 annotated-doc==0.0.4 \
     --hash=sha256:571ac1dc6991c450b25a9c2d84a3705e2ae7a53467b5d111c24fa8baabbed320 \
     --hash=sha256:fbcda96e87e9c92ad167c2e53839e57503ecfda18804ea28102353485033faa4
-    # via fastapi
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   fastapi
 annotated-types==0.7.0 \
     --hash=sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53 \
     --hash=sha256:aff07c09a53a08bc8cfccb9c85b05f1aa9a2a6f23728d790723543408344ce89
-    # via pydantic
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   pydantic
 anyio==4.12.0 \
     --hash=sha256:73c693b567b0c55130c104d0b43a9baf3aa6a31fc6110116509f27bf75e21ec0 \
     --hash=sha256:dad2376a628f98eeca4881fc56cd06affd18f659b17a747d3ff0307ced94b1bb
     # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   google-genai
     #   httpx
     #   starlette
     #   watchfiles
@@ -19,8 +25,10 @@ certifi==2025.11.12 \
     --hash=sha256:97de8790030bbd5c2d96b7ec782fc2f7820ef8dba6db909ccf95449f2d062d4b \
     --hash=sha256:d8ab5478f2ecd78af242878415affce761ca6bc54a22a27e026d7c25357c3316
     # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
     #   httpcore
     #   httpx
+    #   requests
 cffi==2.0.0 \
     --hash=sha256:00bdf7acc5f795150faa6957054fbbca2439db2f775ce831222b66f192f03beb \
     --hash=sha256:07b271772c100085dd28b74fa0cd81c8fb1a3ba18b21e03d7c27f3436a10606b \
@@ -106,11 +114,110 @@ cffi==2.0.0 \
     --hash=sha256:fc33c5141b55ed366cfaad382df24fe7dcbc686de5be719b207bb248e3053dc5 \
     --hash=sha256:fc7de24befaeae77ba923797c7c87834c73648a05a4bde34b3b7e5588973a453 \
     --hash=sha256:fe562eb1a64e67dd297ccc4f5addea2501664954f2692b69a76449ec7913ecbf
-    # via cryptography
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   cryptography
+charset-normalizer==3.4.9 \
+    --hash=sha256:0327fcd59a935777d83410750c50600ee9571af2846f71ce40f25b13da1ef380 \
+    --hash=sha256:03d07803992c6c7bbc976327f34b18b6160327fc81cb82c9d504720ac0be3b62 \
+    --hash=sha256:04ce310cb89c15df659582aee80a0603788732a5e017d5bd5c81158106ce249c \
+    --hash=sha256:0d861473f743244d349b50f850d10eb87aeb22bbdcc8e64f79273c94af5a8226 \
+    --hash=sha256:0e94703ec9684807f20cfb5eed95c70f67f2a8f21ad620146d7b5a13677b93e5 \
+    --hash=sha256:0fa1aec2d32bcc03c8fa0f6f1712caad1adc38509f31142112e5c9daf5b9c833 \
+    --hash=sha256:16b65ea0f2465b6fb52aa22de5eca612aa964ddfec00a912e26f4656cbef890b \
+    --hash=sha256:16d10d789dd9bcca1173c95af82c58433122564b7bc39385124be735a35cbe99 \
+    --hash=sha256:19ac87f93086ce37b86e098888555c4b4bc48102279bae3350098c0ed664b501 \
+    --hash=sha256:1d22856ffbe153a602df38e4a5464f0b748a54002e0d69ac6d2ad0a197cc99ec \
+    --hash=sha256:21e764fd1e70b6a3e205a0e46f3051701f98a8cb3fad66eeb80e48bb502f8698 \
+    --hash=sha256:231ddcbb35e2ff8973e1365db41fe0572662893b99a05deb183b68ad4c0c8bd4 \
+    --hash=sha256:253a4a220747e8b5faf57ec320c4f5efb0cef05f647420bf267143ec15dba10a \
+    --hash=sha256:280081916dc341820640489a66e4696049401ef1cf6dd672f672e70ad915aca3 \
+    --hash=sha256:2a441ea71902098ffe78c5abe6c494f44160b4af614ed16c3d9a3b1d17fd8ee2 \
+    --hash=sha256:304b13570067b2547562e308af560b3963857b1fa90bd6afd978130130fe2d6a \
+    --hash=sha256:32286a2c8d167e897177b673176c1e3e00d4057caf5d2b64eef9a3666b03018e \
+    --hash=sha256:33bdcc2a32c0a0e861f60841a512c8acc658c87c2ac59d89e3a46dacf7d866e4 \
+    --hash=sha256:375b83ed0aecfce76c16d198fbc21f3b11b337d68662bea0a995046682a11419 \
+    --hash=sha256:3c09a49d6cde137258beb3d551994a2927fd35ad5cf96aed573f61bbd67c5f84 \
+    --hash=sha256:3d92613ec25e43b05f042302531ec0f00b8445190e43325880cbd6ab7c2581da \
+    --hash=sha256:40a126142a56b2dfc0aacbad1de8310cbf60da7656db0e6b16eebd48e3e93519 \
+    --hash=sha256:416c229f77e5ea25b3dfd4b582f8d73d7e43c22320302b9ab128a2d3a0b38efe \
+    --hash=sha256:432786d3561e69aeeae6c7e8648964ce0ad05736120135601f87ac26b9c83381 \
+    --hash=sha256:43b9e366a31fdd1c87d0eb08f579b4a82b723ea54338f040d6b4e518a026ea29 \
+    --hash=sha256:440eede837960000d74978f0eba527be106b5b9aee0daf779d395276ed0b0614 \
+    --hash=sha256:45b0cc4e3556cd875e09102988d1ab8356c998b596c9fced84547c8138b487a0 \
+    --hash=sha256:476743fe6dfe14a2da12e3ac79125dc84a3b2cf8094369a47a1529b0cd8549fe \
+    --hash=sha256:4773092f8019072343a7447203308b176e10199920eb02d6195e81bbb3274c29 \
+    --hash=sha256:4b3dac63058cc36820b0dd072f89898604e2d39686fe05321729d00d8ac185a0 \
+    --hash=sha256:4d1c96a7a18b9690a4d46df09e3e3382406ae3213727cd1019ebade1c4a81917 \
+    --hash=sha256:51307f5c71007673a2bf8232ad973483d281e74cb99c8c5a990af1eefa6277d9 \
+    --hash=sha256:51447e9aa2684679af07ca5021c3db526e0284347ebf4ffcec1154c3350cfe32 \
+    --hash=sha256:58150c9f9b9a552505912d182ccdf26f6396fb6094816ceebcbb20eecabaed94 \
+    --hash=sha256:5b10cd92fc5c498b35a8635df6d5a100207f88b63a4dc1de7ef9a548e1e2cd63 \
+    --hash=sha256:5e226f6218febc71f6c1fc2fafb91c226f75bdc1d8fb12d66823716e891608fd \
+    --hash=sha256:609b3ba8fcc0fb5ab7af00719d0fb6ad0cb518e48e7712d12fd68f1327951198 \
+    --hash=sha256:60f44ade2cf573dad7a277e6f8ca9a51a21dda572b13bd7d8539bb3cd5dbedde \
+    --hash=sha256:611057cc5d5c0afc743ba8be6bd828c17e0aaa8643f9d0a9b9bb7dea80eb8012 \
+    --hash=sha256:6366a16e1a25018694d6a5d784d09b046edc9eac40ea2b54065c3052672516a1 \
+    --hash=sha256:65a7ff3f705e57d392f7261b6d0550fe137c3019477431f1c355e0db0a7d3e15 \
+    --hash=sha256:673611bbd43f0810bec0b0f028ddeaaa501190339cac411f347ac76917c3ae7b \
+    --hash=sha256:67830fc78e67501f47bb950471b2dcb9b35b140084429318e862895a8e89c993 \
+    --hash=sha256:68ce9f4d6b26d5ccbf7fd4459bf75f74a0a146677ebba80597df60cbdb20e6f4 \
+    --hash=sha256:68e5f26a1ad57ded6d1cfb85331d1c1a195314756471d97758c48498bb4dcdf5 \
+    --hash=sha256:69b157c5d3292bcd443faca052f3096f637f1e074b98212a933c074ae23dc3b8 \
+    --hash=sha256:75286256590a6320cf106a0d28970d3560aad9ee09aa7b34fb40524792436d35 \
+    --hash=sha256:78841cccf1af7b40f6f716338d50c0902dbe88d9f800b3c973b7a9a0a693a642 \
+    --hash=sha256:78fa18e436a1a0e58dbd7e02fc4473f3f32cceb12df9dfca542d075961c307d2 \
+    --hash=sha256:79580094b00d1789d1f93ea55bc43cb2f611910c72235b7657f3482ddcc1b22d \
+    --hash=sha256:7b86a2b16095d250c6f58b3d9b2eee6f4147754344f3dab0922f7c9bf7d226c9 \
+    --hash=sha256:83aed2c10721ddd90f68140685391b50811a880af20654c59af6b6c66c40513c \
+    --hash=sha256:84fd18bcc17526fc2b3c1af7d2b9217d32c9c04448c16ec693b9b4f1985c3d33 \
+    --hash=sha256:871ff67ea1aad4dfd91736464934d56b32dac49f9fbe16cddba36198a7b3a0db \
+    --hash=sha256:898f0e9068ca27d37f8e83a5b962821df851532e6c4a7d615c1c033f9da6eedf \
+    --hash=sha256:8a79d9f4d8001473a30c163556b3c3bfebec837495a412dde78b51672f6134f9 \
+    --hash=sha256:8c041122946b7ba21bb32c45b1aa57b1be35527690aeb3c5c234521085632eee \
+    --hash=sha256:90c44bc373b7687f6948b693cceaea1348ae0975d7474746559494468e3c1d84 \
+    --hash=sha256:9104ed0bd76a429d46f9ec0dbc9b08ad1d2dcdf2b00a5a0daa1c145329b35b44 \
+    --hash=sha256:920079c3f7456fa213e0829ed2073aaa727fd39d889ead5b4f35d0de5460d04f \
+    --hash=sha256:93d59d504b230e83c7a843251681959a0b6a9cd76f6e146ce1b8a80eb8739af9 \
+    --hash=sha256:9b2aff1c7b3884512b9512c3eaadd9bab39fb45042ffaaa1dd08ff2b9f8109d9 \
+    --hash=sha256:9b8e0f3107e2200b76f6054de99016eac3ee6762713587b36baaa7e4bd2ae177 \
+    --hash=sha256:9bb41182d93ea91f60b4bc8fbf4c820c69ef8a12ab2d917f3f1834f1acad07e8 \
+    --hash=sha256:9cdef90ae47919cae358d8ab15797a800ed41da7aba5d72419fb510729e2ed4b \
+    --hash=sha256:a1786910334ed46ab1dd73222f2cd1e05c2c3bb39f6dddb4f8b36fc382058a39 \
+    --hash=sha256:a4cfde78a9f2880208d16a93b795726a3017d5977e08d1e162a7a31322479c41 \
+    --hash=sha256:a4fbdde9dd4a9ce5fd52c2b3a347bb50cc89483ef783f1cb00d408c13f7a96c0 \
+    --hash=sha256:aa99adc8f081b475a12843953db36831eaf83ec33eb46a90629ca6a5de45a616 \
+    --hash=sha256:ac351b3b8014eead140e77e9717e2992c6bbe30b63bc3422422eb84865412e3d \
+    --hash=sha256:ad41ba96094304aa090f5a30cb6e4fb3b3f1c264c523394b4c39bbacc4dc92ba \
+    --hash=sha256:b5314963fce9b0b12743891de876e724997864ee22aa496f903f426c7e2fa5b2 \
+    --hash=sha256:bcf74c1df76758a395bf0af608c04c82257523f55c9868b334f06270d0f2112b \
+    --hash=sha256:bd47ba7fc3ca94896759ea0109775132d3e7ab921fbf54038e1bab2e46c313c9 \
+    --hash=sha256:c0323c9daef75ef2e5083624b4585018a0c9d5e3b40f607eed81a311270b934b \
+    --hash=sha256:c1225416b463483160e4af85d5fc3a9690ccb53fd4b1865a6437825f5ede3209 \
+    --hash=sha256:c1c948747b03be832dceed96ca815cef7360de9aa19d37c730f8e3f6101aca48 \
+    --hash=sha256:c25fe15c70c59eb7c5ce8c06a1f3fa1da0ecc5ea1e7a5922c40fd2fa9b0d5046 \
+    --hash=sha256:cc1b0fff8ead343dae06305f954eb8468ba0ec1a97881f42489d198e4ce3c632 \
+    --hash=sha256:cd6280cf040f233bd7d3407b743b4b4c74f70e8e1c4199cb112a62c941c0772a \
+    --hash=sha256:cd6c3d4b783c556fa00bf540854e42f135e2f256abd29669fcd0da0f2dec79c2 \
+    --hash=sha256:d4d6fcde76f94f5cb9e43e9e9a61f16dacefd228cbbf6f1a09bd9b219a92f1a1 \
+    --hash=sha256:ddf4af30b417d9fe16481e9b81c27ab2a7cde1ff7ba3e85653b02db7d145dc7b \
+    --hash=sha256:df115d4d83168fdf2cae48ef1ff6d1cb4c466364e30861b37121de0f3bf1b990 \
+    --hash=sha256:df7276909358e5635ae203673ab7e509ddd224225a8d6b0790bf13eb2bde1cc5 \
+    --hash=sha256:e4fd89cc178bced6ad29cb3e6dd4aa63fa5017c3524dbd0b25998fb64a87cc8b \
+    --hash=sha256:e9701d0049d92c16703a42771b98d560b95248949f23f8cf7b4eddd201814fb9 \
+    --hash=sha256:ee2f2a527e3c1a6e6411eb4209642e138b544a2d72fe5d0d76daf77b24063534 \
+    --hash=sha256:f7fb7d750cfa0a070d2c24e831fd3481019a60dd317ea2b39acbcebc08b6ed81 \
+    --hash=sha256:f840ed6d8ecba8255df8c42b87fadeda98ddfc6eeec05e2dc66e26d46dd6f58a \
+    --hash=sha256:f86c6358749bd4fda175388691e3ba8c46e24c5347d0afd20f9b7edfc9faf07d \
+    --hash=sha256:fa36ec09ef71d158186bc79e359ff5fdd6e7996fe8ab638f00d6b93139ba4fcf \
+    --hash=sha256:fe2c7201c642b7c308f1675355ad7ff7b66acfe3541625efe5a3ad38f29d6115
+    # via requests
 click==8.3.1 \
     --hash=sha256:12ff4785d337a1bb490bb7e9c2b1ee5da3112e94a8622f26a6c77f5d2fc6842a \
     --hash=sha256:981153a64e25f12d547d3426c367a4857371575ee7ad18df2a6183ab0545b2a6
-    # via uvicorn
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   uvicorn
 cryptography==46.0.3 \
     --hash=sha256:00a5e7e87938e5ff9ff5447ab086a5706a957137e6e433841e9d24f38a065217 \
     --hash=sha256:01ca9ff2885f3acc98c29f1860552e37f6d7c7d013d7334ff2a9de43a449315d \
@@ -166,39 +273,62 @@ cryptography==46.0.3 \
     --hash=sha256:e7aec276d68421f9574040c26e2a7c3771060bc0cff408bae1dcb19d3ab1e63c \
     --hash=sha256:ef639cb3372f69ec44915fafcd6698b6cc78fbe0c2ea41be867f6ed612811963 \
     --hash=sha256:f260d0d41e9b4da1ed1e0f1ce571f97fe370b152ab18778e9e8f67d6af432018
-    # via pyjwt
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   google-auth
+    #   pyjwt
 deprecation==2.1.0 \
     --hash=sha256:72b3bde64e5d778694b0cf68178aed03d15e15477116add3fb773e581f9518ff \
     --hash=sha256:a10811591210e1fb0e768a8c25517cabeabcba6f0bf96564f8ff45189f90b14a
     # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
     #   postgrest
     #   storage3
+distro==1.9.0 \
+    --hash=sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed \
+    --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
+    # via google-genai
 exceptiongroup==1.3.1 \
     --hash=sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219 \
     --hash=sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598
-    # via anyio
+    # via -r pmoves/services/flute-gateway/requirements.lock
 fastapi==0.124.4 \
     --hash=sha256:0e9422e8d6b797515f33f500309f6e1c98ee4e85563ba0f2debb282df6343763 \
     --hash=sha256:6d1e703698443ccb89e50abe4893f3c84d9d6689c0cf1ca4fad6d3c15cf69f15
+    # via -r pmoves/services/flute-gateway/requirements.lock
+google-auth==2.55.2 \
+    --hash=sha256:97ae7790ff740f2bc9db60eb864a7804f4ac19f5f02c38b3d942f2fea6e9b9ae \
+    --hash=sha256:d715f265f2cafc6a5f1bf0dc19870d20e3119f6f6682785a250bce3d03d38a3b
+    # via google-genai
+google-genai==2.10.0 \
+    --hash=sha256:77912cd558cd7dfd5b75c25fd1c609e78d7954dde583331104022a46ea90f9ee \
+    --hash=sha256:d5350311567ae660c24cbc1752aee4b3d660f89c0106d2dcd2a69978c35afe1e
     # via -r pmoves/services/flute-gateway/requirements.txt
 h11==0.16.0 \
     --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \
     --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
     # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
     #   httpcore
     #   uvicorn
 h2==4.3.0 \
     --hash=sha256:6c59efe4323fa18b47a632221a1888bd7fde6249819beda254aeca909f221bf1 \
     --hash=sha256:c438f029a25f7945c69e0ccf0fb951dc3f73a5f6412981daee861431b70e2bdd
-    # via httpx
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   httpx
 hpack==4.1.0 \
     --hash=sha256:157ac792668d995c657d93111f46b4535ed114f0c9c8d672271bbec7eae1b496 \
     --hash=sha256:ec5eca154f7056aa06f196a557655c5b009b382873ac8d1e66e79e87535f1dca
-    # via h2
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   h2
 httpcore==1.0.9 \
     --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55 \
     --hash=sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8
-    # via httpx
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   httpx
 httptools==0.7.1 \
     --hash=sha256:04c6c0e6c5fb0739c5b8a9eb046d298650a0ff38cf42537fc372b28dc7e4472c \
     --hash=sha256:0d92b10dbf0b3da4823cde6a96d18e6ae358a9daa741c71448975f6a2c339cad \
@@ -243,12 +373,13 @@ httptools==0.7.1 \
     --hash=sha256:f25bbaf1235e27704f1a7b86cd3304eabc04f569c828101d94a0e605ef7205a5 \
     --hash=sha256:f65744d7a8bdb4bda5e1fa23e4ba16832860606fcc09d674d56e425e991539ec \
     --hash=sha256:f72fdbae2dbc6e68b8239defb48e6a5937b12218e6ffc2c7846cc37befa84362
-    # via uvicorn
+    # via -r pmoves/services/flute-gateway/requirements.lock
 httpx==0.28.1 \
     --hash=sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
     # via
-    #   -r pmoves/services/flute-gateway/requirements.txt
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   google-genai
     #   postgrest
     #   storage3
     #   supabase
@@ -257,13 +388,17 @@ httpx==0.28.1 \
 hyperframe==6.1.0 \
     --hash=sha256:b03380493a519fce58ea5af42e4a42317bf9bd425596f7a0835ffce80f1a42e5 \
     --hash=sha256:f630908a00854a7adeabd6382b43923a4c4cd4b821fcb527e6ab9e15382a3b08
-    # via h2
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   h2
 idna==3.11 \
     --hash=sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea \
     --hash=sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902
     # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
     #   anyio
     #   httpx
+    #   requests
     #   yarl
 multidict==6.7.0 \
     --hash=sha256:03ca744319864e92721195fa28c7a3b2bc7b686246b35e4078c1e4d0eb5466d3 \
@@ -412,22 +547,28 @@ multidict==6.7.0 \
     --hash=sha256:fb287618b9c7aa3bf8d825f02d9201b2f13078a5ed3b293c8f4d953917d84d5e \
     --hash=sha256:fbafe31d191dfa7c4c51f7a6149c9fb7e914dcf9ffead27dcfd9f1ae382b3885 \
     --hash=sha256:fbd18dc82d7bf274b37aa48d664534330af744e03bccf696d6f4c6042e7d19e7
-    # via yarl
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   yarl
 nats-py==2.12.0 \
     --hash=sha256:2981ca4b63b8266c855573fa7871b1be741f1889fd429ee657e5ffc0971a38a1
-    # via -r pmoves/services/flute-gateway/requirements.txt
+    # via -r pmoves/services/flute-gateway/requirements.lock
 packaging==25.0 \
     --hash=sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484 \
     --hash=sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f
-    # via deprecation
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   deprecation
 postgrest==2.25.1 \
     --hash=sha256:73fcf2acfc0724702c0487224e3a1fdb888f7bfd9644eeb225a94d91be0920f9 \
     --hash=sha256:8fb7944c613022398ff1e643621c232b170d363a7333b9dd316360ab37dc5b4e
-    # via supabase
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   supabase
 prometheus-client==0.23.1 \
     --hash=sha256:6ae8f9081eaaaf153a2e959d2e6c4f4fb57b12ef76c8c7980202f1e57b48b2ce \
     --hash=sha256:dd1913e6e76b59cfe44e7a4b83e01afc9873c1bdfd2ed8739f1e76aeca115f99
-    # via -r pmoves/services/flute-gateway/requirements.txt
+    # via -r pmoves/services/flute-gateway/requirements.lock
 propcache==0.4.1 \
     --hash=sha256:0002004213ee1f36cfb3f9a42b5066100c44276b9b72b4e1504cddd3d692e86e \
     --hash=sha256:0013cb6f8dde4b2a2f66903b8ba740bdfe378c943c4377a200551ceb27f379e4 \
@@ -551,16 +692,30 @@ propcache==0.4.1 \
     --hash=sha256:fd2dbc472da1f772a4dae4fa24be938a6c544671a912e30529984dd80400cd88 \
     --hash=sha256:fd6f30fdcf9ae2a70abd34da54f18da086160e4d7d9251f81f3da0ff84fc5a48 \
     --hash=sha256:fe49d0a85038f36ba9e3ffafa1103e61170b28e95b16622e11be0a0ea07c6781
-    # via yarl
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   yarl
+pyasn1==0.6.3 \
+    --hash=sha256:697a8ecd6d98891189184ca1fa05d1bb00e2f84b5977c481452050549c8a72cf \
+    --hash=sha256:a80184d120f0864a52a073acc6fc642847d0be408e7c7252f31390c0f4eadcde
+    # via pyasn1-modules
+pyasn1-modules==0.4.2 \
+    --hash=sha256:29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a \
+    --hash=sha256:677091de870a80aae844b1ca6134f54652fa2c8c5a52aa396440ac3106e941e6
+    # via google-auth
 pycparser==2.23 \
     --hash=sha256:78816d4f24add8f10a06d6f05b4d424ad9e96cfebf68a4ddc99c65c0720d00c2 \
     --hash=sha256:e5c6e8d3fbad53479cab09ac03729e0a9faf2bee3db8208a550daf5af81a5934
-    # via cffi
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   cffi
 pydantic==2.12.5 \
     --hash=sha256:4d351024c75c0f085a9febbb665ce8c0c6ec5d30e903bdb6394b7ede26aebb49 \
     --hash=sha256:e561593fccf61e8a20fc46dfc2dfe075b8be7d0188df33f221ad1f0139180f9d
     # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
     #   fastapi
+    #   google-genai
     #   postgrest
     #   realtime
     #   storage3
@@ -687,19 +842,23 @@ pydantic-core==2.41.5 \
     --hash=sha256:f41a7489d32336dbf2199c8c0a215390a751c5b014c2c1c5366e817202e9cdf7 \
     --hash=sha256:f41eb9797986d6ebac5e8edff36d5cef9de40def462311b3eb3eeded1431e425 \
     --hash=sha256:f547144f2966e1e16ae626d8ce72b4cfa0caedc7fa28052001c94fb2fcaa1c52
-    # via pydantic
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   pydantic
 pyjwt==2.10.1 \
     --hash=sha256:3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953 \
     --hash=sha256:dcdd193e30abefd5debf142f9adfcdd2b58004e644f25406ffaebd50bd98dacb
-    # via supabase-auth
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   supabase-auth
 python-dotenv==1.2.1 \
     --hash=sha256:42667e897e16ab0d66954af0e60a9caa94f0fd4ecf3aaf6d2d260eec1aa36ad6 \
     --hash=sha256:b81ee9561e9ca4004139c6cbba3a238c32b03e4894671e181b671e8cb8425d61
-    # via uvicorn
+    # via -r pmoves/services/flute-gateway/requirements.lock
 python-multipart==0.0.20 \
     --hash=sha256:8a62d3a8335e06589fe01f2a3e178cdcc632f3fbe0d492ad9ee0ec35aab1f104 \
     --hash=sha256:8dd0cab45b8e23064ae09147625994d090fa46f5b0d1e13af944c331a7fa9d13
-    # via -r pmoves/services/flute-gateway/requirements.txt
+    # via -r pmoves/services/flute-gateway/requirements.lock
 pyyaml==6.0.3 \
     --hash=sha256:00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c \
     --hash=sha256:0150219816b6a1fa26fb4699fb7daa9caf09eb1999f3b70fb6e786805e80375a \
@@ -774,60 +933,86 @@ pyyaml==6.0.3 \
     --hash=sha256:f7057c9a337546edc7973c0d3ba84ddcdf0daa14533c2065749c9075001090e6 \
     --hash=sha256:fa160448684b4e94d80416c0fa4aac48967a969efe22931448d853ada8baf926 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
-    # via uvicorn
+    # via -r pmoves/services/flute-gateway/requirements.lock
 realtime==2.25.1 \
     --hash=sha256:0ecd710c37dc42ccb01be5eb25146b249a2b73668da22fd93eae776869db57b6 \
     --hash=sha256:3af1da47391cc0da947b4f3850f8e0403ec9be0988c14c2fa3fe66a9458251be
-    # via supabase
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   supabase
+requests==2.34.2 \
+    --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
+    --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
+    # via
+    #   google-auth
+    #   google-genai
+sniffio==1.3.1 \
+    --hash=sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2 \
+    --hash=sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc
+    # via google-genai
 starlette==0.50.0 \
     --hash=sha256:9e5391843ec9b6e472eed1365a78c8098cfceb7a74bfd4d6b1c0c0095efb3bca \
     --hash=sha256:a2a17b22203254bcbc2e1f926d2d55f3f9497f769416b3190768befe598fa3ca
-    # via fastapi
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   fastapi
 storage3==2.25.1 \
     --hash=sha256:85e2439a5a092965b991ee018a510c3c1a3404b1e029813eca241f5a6bdd6296 \
     --hash=sha256:eb445dcaa3a6ead1c0b27d7d06bf9074592a1fdc07e57c648a69a9bf5057d7a0
-    # via supabase
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   supabase
 strenum==0.4.15 \
     --hash=sha256:878fb5ab705442070e4dd1929bb5e2249511c0bcf2b0eeacf3bcd80875c82eff \
     --hash=sha256:a30cda4af7cc6b5bf52c8055bc4bf4b2b6b14a93b574626da33df53cf7740659
     # via
-    #   postgrest
+    #   -r pmoves/services/flute-gateway/requirements.lock
     #   supabase-functions
 supabase==2.25.1 \
     --hash=sha256:dd6663b6e63c93b12df999da6746127f948581302e86578454812d57328aea92 \
     --hash=sha256:ddb209761ac741b6a474b2e125c77875490dfeeac29ca4fa6730df396f06eac0
-    # via -r pmoves/services/flute-gateway/requirements.txt
+    # via -r pmoves/services/flute-gateway/requirements.lock
 supabase-auth==2.25.1 \
     --hash=sha256:978168ba28cba87f2c56b80ce596bcebabd51fe51816fc0007e9bedae22cc0ee \
     --hash=sha256:cf18c9b0a92c986e53d4e3db2911d86b2688d1fc63f51f933d8315147d4d7118
-    # via supabase
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   supabase
 supabase-functions==2.25.1 \
     --hash=sha256:6c8c47e29cafede051550a607fac750db4335382fd916d06239fa16be6afadbe \
     --hash=sha256:8ba549a2e3d12a95f46438ad8474e15394dcc7abd05fc5b73b134eda712d096d
-    # via supabase
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   supabase
+tenacity==9.1.4 \
+    --hash=sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55 \
+    --hash=sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a
+    # via google-genai
 typing-extensions==4.15.0 \
     --hash=sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466 \
     --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548
     # via
-    #   anyio
-    #   cryptography
-    #   exceptiongroup
+    #   -r pmoves/services/flute-gateway/requirements.lock
     #   fastapi
-    #   multidict
+    #   google-genai
     #   pydantic
     #   pydantic-core
     #   realtime
-    #   starlette
     #   typing-inspection
-    #   uvicorn
 typing-inspection==0.4.2 \
     --hash=sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7 \
     --hash=sha256:ba561c48a67c5958007083d386c3295464928b01faa735ab8547c5692e87f464
-    # via pydantic
+    # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   pydantic
+urllib3==2.7.0 \
+    --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
+    --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
+    # via requests
 uvicorn==0.38.0 \
     --hash=sha256:48c0afd214ceb59340075b4a052ea1ee91c16fbc2a9b1469cca0e54566977b02 \
     --hash=sha256:fd97093bdd120a2609fc0d3afe931d4d4ad688b6e75f0f929fde1bc36fe0e91d
-    # via -r pmoves/services/flute-gateway/requirements.txt
+    # via -r pmoves/services/flute-gateway/requirements.lock
 uvloop==0.22.1 \
     --hash=sha256:017bd46f9e7b78e81606329d07141d3da446f8798c6baeec124260e22c262772 \
     --hash=sha256:0530a5fbad9c9e4ee3f2b33b148c6a64d47bbad8000ea63704fa8260f4cf728e \
@@ -878,7 +1063,7 @@ uvloop==0.22.1 \
     --hash=sha256:ea721dd3203b809039fcc2983f14608dae82b212288b346e0bfe46ec2fab0b7c \
     --hash=sha256:ef6f0d4cc8a9fa1f6a910230cd53545d9a14479311e87e3cb225495952eb672c \
     --hash=sha256:fe94b4564e865d968414598eea1a6de60adba0c040ba4ed05ac1300de402cd42
-    # via uvicorn
+    # via -r pmoves/services/flute-gateway/requirements.lock
 watchfiles==1.1.1 \
     --hash=sha256:00485f441d183717038ed2e887a7c868154f216877653121068107b227a2f64c \
     --hash=sha256:03fa0f5237118a0c5e496185cafa92878568b652a2e9a9382a5151b1a0380a43 \
@@ -989,7 +1174,7 @@ watchfiles==1.1.1 \
     --hash=sha256:f57b396167a2565a4e8b5e56a5a1c537571733992b226f4f1197d79e94cf0ae5 \
     --hash=sha256:f8979280bdafff686ba5e4d8f97840f929a87ed9cdf133cbbd42f7766774d2aa \
     --hash=sha256:f9a2ae5c91cecc9edd47e041a930490c31c3afb1f5e6d71de3dc671bfaca02bf
-    # via uvicorn
+    # via -r pmoves/services/flute-gateway/requirements.lock
 websockets==15.0.1 \
     --hash=sha256:0701bc3cfcb9164d04a14b149fd74be7347a530ad3bbf15ab2c678a2cd3dd9a2 \
     --hash=sha256:0a34631031a8f05657e8e90903e656959234f3a04552259458aac0b0f9ae6fd9 \
@@ -1061,9 +1246,9 @@ websockets==15.0.1 \
     --hash=sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f \
     --hash=sha256:fcd5cf9e305d7b8338754470cf69cf81f420459dbae8a3b40cee57417f4614a7
     # via
-    #   -r pmoves/services/flute-gateway/requirements.txt
+    #   -r pmoves/services/flute-gateway/requirements.lock
+    #   google-genai
     #   realtime
-    #   uvicorn
 yarl==1.22.0 \
     --hash=sha256:01e73b85a5434f89fc4fe27dcda2aff08ddf35e4d47bbbea3bdcd25321af538a \
     --hash=sha256:029866bde8d7b0878b9c160e72305bbf0a7342bcd20b9999381704ae03308dc8 \
@@ -1196,6 +1381,7 @@ yarl==1.22.0 \
     --hash=sha256:f87ac53513d22240c7d59203f25cc3beac1e574c6cd681bbfd321987b69f95fd \
     --hash=sha256:ff86011bd159a9d2dfc89c34cfd8aff12875980e3bd6a39ff097887520e60249
     # via
+    #   -r pmoves/services/flute-gateway/requirements.lock
     #   postgrest
     #   storage3
     #   supabase-functions
