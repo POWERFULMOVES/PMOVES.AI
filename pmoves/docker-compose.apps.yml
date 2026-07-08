@@ -36,7 +36,7 @@ services:
     - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:?set WGER_ADMIN_PASSWORD in env.tier-api}
       # PMOVES integration
     - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
-    - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+    - WGER_USE_GUNICORN=${WGER_USE_GUNICORN:-True}
       # NOTE: /metrics available on port 8000 via ENABLE_OBSERVABILITY;
       # pmoves_monitoring network added below for Prometheus scrape access
     ports:
