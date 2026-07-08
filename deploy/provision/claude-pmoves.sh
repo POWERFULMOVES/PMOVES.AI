@@ -18,6 +18,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
 if [ -f "$ENVF" ]; then
+  # Blocklist: vars that control Claude SDK/session behavior and should NEVER be
+  # sourced by the launcher. These are user's personal billing/config, not fleet MCP creds.
+  # Sourcing them forces API billing (ANTHROPIC_API_KEY) or clobbers session state.
+  blocklist='^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|CLAUDECODE|CLAUDE_CODE_|CLAUDE_SESSION_)$'
+
   # env.shared is Docker Compose env_file format: unquoted values, and some are
   # ALIAS lines like SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}. Two hazards:
   #   1. We can't `source` it raw — unquoted values break `. file`.
@@ -39,6 +44,10 @@ if [ -f "$ENVF" ]; then
     val=${line#*=}
     key=$(printf '%s' "$key" | tr -d '[:space:]')
     [ -z "$key" ] && continue
+    # Skip blocklisted keys (these control Claude SDK/session, not MCP)
+    if [[ "$key" =~ $blocklist ]]; then
+      continue
+    fi
     val="${val#"${val%%[![:space:]]*}"}"       # trim leading whitespace on value
     if [ "${val#*'${'}" != "$val" ]; then
       printf '%s=%s\n' "$key" "$val" >> "$tmpf" # let the shell expand ${...}
