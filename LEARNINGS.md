@@ -409,10 +409,10 @@ if hub_cache.exists():
 ```python
 # BAD - Unterminated string literals that LOOK correct visually
 lines = [
-    "# =============================================================================
+    "# ============================================================================
     "# PMOVES.AI Local Model Stack - TensorZero Configuration",
     "# Auto-generated from Hugging Face model catalog",
-    "# =============================================================================",
+    "# ============================================================================",
     "",
 ]
 ```
@@ -423,10 +423,10 @@ lines = [
 ```python
 # GOOD - Each list element is a complete, terminated string
 lines = [
-    "# =============================================================================",
+    "# ============================================================================",
     "# PMOVES.AI Local Model Stack - TensorZero Configuration",
     "# Auto-generated from Hugging Face model catalog",
-    "# =============================================================================",
+    "# ============================================================================",
     "",
 ]
 ```
@@ -564,3 +564,90 @@ For questions about these learnings or PMOVES.AI development standards:
 **Generated:** 2025-02-07
 **Tools Used:** CodeRabbit, PR Review Toolkit, Claude Code CLI
 **Reviewers:** comment-analyzer, silent-failure-hunter, coderabbit:code-reviewer
+
+---
+
+## PR Review Learnings: Comprehensive Ecosystem Analysis + P0 Workstreams
+
+**PR:** #2018 — Research: Comprehensive Ecosystem Analysis & Configuration Suite + P0 Workstreams
+**Date:** 2026-07-09
+**Review Scope:** 50+ files, 4 specialized review agents (secrets auditor, known roads auditor, CodeRabbit reviewer, CodeQL scanner)
+
+### New Security Patterns Discovered
+
+#### 1. CLI Argument Credential Exposure (CRITICAL)
+**Pattern:** Passing secrets as CLI arguments (`--value sk-xxx`) exposes them in `ps aux` and process listings.
+**Fix:** Use temporary files with `0o600` permissions or environment variables.
+**Code Pattern:**
+```python
+# ANTI-PATTERN
+subprocess.run(["cli", "--value", api_key])  # VISIBLE IN ps aux
+
+# CORRECT
+fd, path = tempfile.mkstemp(suffix=".env")
+os.write(fd, f"KEY={api_key}\n".encode())
+os.close(fd)
+os.chmod(path, 0o600)
+subprocess.run(["cli", "--from-file", path])
+finally: os.unlink(path)
+```
+
+#### 2. Plaintext Fallback in Secrets Pipeline (CRITICAL)
+**Pattern:** Falling back to plaintext storage when encryption tooling is unavailable creates a false sense of security.
+**Fix:** Fail securely — require encryption tooling or fail with a clear error.
+**Rule:** If CHIT CLI is unavailable, do NOT write plaintext JSON claiming "CHIT-encrypted storage."
+
+#### 3. Logger Filter In-Place Mutation (CRITICAL)
+**Pattern:** Mutating `record.msg` in a `logging.Filter` poisons the LogRecord for ALL handlers globally.
+**Fix:** Use `logging.LoggerAdapter` with format-then-redact pattern.
+**Code Pattern:**
+```python
+# ANTI-PATTERN — mutates globally
+class BadFilter(logging.Filter):
+    def filter(self, record):
+        record.msg = re.sub(...)  # ← poisons all handlers
+
+# CORRECT — redacts at format time
+class RedactingAdapter(logging.LoggerAdapter):
+    def process(self, msg, kwargs):
+        msg = REDACT_RE.sub('***', str(msg))
+        return msg, kwargs
+```
+
+#### 4. Deprecated Alias Value Migration
+**Pattern:** When a deprecated alias (e.g., `KIMI_API_KEY`) has a value, discarding it loses the secret.
+**Fix:** Auto-migrate the value to the canonical name (`MOONSHOT_API_KEY`).
+**Rule:** Always preserve values during deprecation transitions.
+
+#### 5. Missing Source Files in Secrets Discovery
+**Pattern:** Hardcoding a short list of env files misses keys stored in project-specific files.
+**Fix:** Discover all env files in the project: `local.env`, `.env.local`, `env.shared`, `env.tier-*`.
+
+### Operational Patterns Discovered
+
+#### 6. Kong DB-Mode Route Seeding
+**Pattern:** Kong in DB mode starts with zero routes on fresh bring-up.
+**Fix:** Build an idempotent route seeder that parses model suit YAMLs and generates Kong Admin API calls.
+**Tool:** `pmoves/tools/kong_route_seeder.py` with `--dry-run`, `--prune`, `--json-summary` flags.
+
+#### 7. Known Roads Registry
+**Pattern:** Documented gaps ("Known Roads") accumulate without tracking resolution status.
+**Fix:** Maintain a Known Road Registry with: ID, description, status (OPEN/PARTIAL/RESOLVED), deliverable that resolved it, verifier command, priority.
+
+#### 8. Review Workflow Discipline
+**Pattern:** Single-pass code review misses cross-cutting issues (security, ops, architecture).
+**Fix:** Run 4 parallel review agents: security auditor, ecosystem auditor, code quality reviewer, static security scanner. Address findings in severity order: CRITICAL → Major → Minor → Nitpick.
+
+### Updated PR Review Checklist
+
+Before submitting PRs:
+- [ ] No secrets passed via CLI arguments
+- [ ] No plaintext fallbacks for encrypted storage
+- [ ] LoggerAdapter used for redaction (not Filter mutation)
+- [ ] All project env files included in secrets discovery
+- [ ] Deprecated aliases migrate values to canonical names
+- [ ] Kong routes idempotent (PUT not POST for upserts)
+- [ ] Error bodies logged with HTTP status codes
+- [ ] Container hardening: uid 65532, read_only, cap_drop ALL
+- [ ] Health check endpoint at /healthz (not /health)
+- [ ] GRAPHITI_MARK footer on all deliverables
