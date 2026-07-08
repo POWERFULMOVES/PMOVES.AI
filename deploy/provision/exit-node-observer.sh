@@ -79,6 +79,13 @@ case "$MODE" in
       echo "pmoves_exit_load1 $LOAD1"
       echo "pmoves_exit_mem_used_pct $MEM_PCT"
       echo "pmoves_exit_mullvad_up $MLV_UP"
+      # capacity headroom — BW_CAP_TB drives this gauge (KVM4=16, KVM2=8).
+      echo "pmoves_exit_bw_cap_gb $BW_CAP_GB"
+      # bw_used only when vnstat returned a numeric value (else omit, not "n/a").
+      case "$BW_USED_GB" in
+        ''|*[!0-9.]*) ;;
+        *) echo "pmoves_exit_bw_used_gb $BW_USED_GB" ;;
+      esac
     } > "$F.tmp" && mv "$F.tmp" "$F"
     echo "wrote $F"
     ;;
