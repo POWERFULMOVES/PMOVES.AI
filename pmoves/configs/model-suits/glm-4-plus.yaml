@@ -8,9 +8,9 @@
 
 model_suit:
   name: glm-4-plus
-  provider: zhipu_ai
+  provider: zai
   base_url: "https://api.z.ai/v1"
-  api_key_env: ZAI_API_KEY
+  api_key_env: Z_AI_API_KEY
   
   architecture:
     type: moe
