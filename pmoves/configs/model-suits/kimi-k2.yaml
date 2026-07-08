@@ -145,5 +145,5 @@ model_suit:
     model: "kimi-k2:1t-cloud"
     registry: "unsloth/Kimi-Dev-72B-GGUF"
     
-  fallback_to: glm-4.7
+  fallback_to: openrouter
   priority: 5
