@@ -31,12 +31,12 @@ Security:
     - Redaction pattern: sk-xx...xx (first 5 + last 4 chars shown)
     - Validation failures are logged with key name only
     - CHIT_PASSPHRASE is read from environment (not args)
+    - Key values are NEVER passed as CLI arguments (always via secure channel)
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import subprocess
@@ -75,6 +75,7 @@ KEY_VALIDATORS: dict[str, str] = {
     "OLLAMA_API_KEY": r"^.{8,}$",  # Ollama Pro: any string, min 8 chars
     "HF_TOKEN": r"^hf_[a-zA-Z0-9]{34}$",  # HF: hf_ + 34 alphanum
     "MINIMAX_API_KEY": r"^.{8,}$",  # MiniMax: any string, min 8 chars
+    "MINIMAX_TOKEN_PLAN_API_KEY": r"^.{8,}$",  # MiniMax Token Plan: any string, min 8 chars
     "OPENROUTER_API_KEY": r"^sk-or-[a-zA-Z0-9-]{20,}$",  # OpenRouter: sk-or- prefix
     "OPENAI_API_KEY": r"^sk-(?:proj-)?[a-zA-Z0-9]{20,}$",  # OpenAI: sk- or sk-proj-
     "ANTHROPIC_API_KEY": r"^sk-ant-[a-zA-Z0-9-]{10,}$",  # Anthropic: sk-ant- prefix
@@ -107,7 +108,10 @@ DEPRECATED_ALIASES: dict[str, tuple[str, str]] = {
 KEY_SOURCE_FILES = [
     "local.env",
     "pmoves/.env.local",
+    "pmoves/env.shared",
     "pmoves/env.tier-llm",
+    "pmoves/env.tier-agent",
+    "pmoves/env.tier-supabase",
     ".env",
 ]
 
@@ -146,7 +150,7 @@ class KeyEntry:
         """True if the key has a real value (not empty, not sentinel)."""
         if not self.value or self.value.strip() == "":
             return False
-        if self.value.strip() in ("unset-pending-key", "local-disabled", "PLACEHOLDER"):
+        if self.value.strip().lower() in ("unset-pending-key", "local-disabled", "placeholder"):
             return False
         return True
 
@@ -261,13 +265,23 @@ def validate_key(name: str, value: str, logger: RedactingLogger) -> KeyEntry:
         canonical, sunset = DEPRECATED_ALIASES[name]
         entry.canonical_name = canonical
         entry.sunset_date = sunset
-        entry.status = KeyStatus.DEPRECATED_ALIAS
-        entry.error_message = (
-            f"'{name}' is a deprecated alias for '{canonical}' (sunset: {sunset}). "
-            f"Use '{canonical}' instead."
-        )
-        logger.warn(f"Key '{name}' is deprecated. Use '{canonical}' (sunset: {sunset})")
-        return entry
+        entry.error_message = f"'{name}' deprecated, use '{canonical}' (sunset: {sunset})"
+
+        if value and value.strip():
+            # CRITICAL-4: Auto-migrate -- create canonical entry with same value
+            logger.info(f"Migrating '{name}' -> '{canonical}' (sunset: {sunset})")
+            entry.name = canonical
+            entry.canonical_name = name  # Track the original alias name
+            entry.sunset_date = sunset
+            # The value is preserved; fall through to normal validation below
+        else:
+            # Empty deprecated alias -- mark as needing fill
+            entry.status = KeyStatus.EMPTY
+            logger.warn(
+                f"Key '{name}' is deprecated alias for '{canonical}' (sunset: {sunset}) "
+                f"but has no value. Use '{canonical}' instead."
+            )
+            return entry
 
     # Check for empty value
     if not value or value.strip() == "":
@@ -275,20 +289,21 @@ def validate_key(name: str, value: str, logger: RedactingLogger) -> KeyEntry:
         entry.error_message = "Key is empty or not set"
         return entry
 
-    # Check for sentinel values
-    if value.strip() in ("unset-pending-key", "local-disabled", "PLACEHOLDER"):
+    # Check for sentinel values (case-insensitive per BONUS fix)
+    sentinel_lower = value.strip().lower()
+    if sentinel_lower in ("unset-pending-key", "local-disabled", "placeholder"):
         entry.status = KeyStatus.PENDING_FILL
         entry.error_message = f"Key has sentinel value '{value.strip()}'"
         return entry
 
     # Validate format
-    pattern = KEY_VALIDATORS.get(name, ".*")
+    pattern = KEY_VALIDATORS.get(entry.name, ".*")
     entry.validation_pattern = pattern
     if pattern and not re.match(pattern, value.strip()):
         entry.status = KeyStatus.INVALID_FORMAT
         entry.error_message = f"Value does not match expected pattern: {pattern}"
         logger.warn(
-            f"Key '{name}' format validation failed (pattern: {pattern}). "
+            f"Key '{entry.name}' format validation failed (pattern: {pattern}). "
             f"Value redacted: {entry.redacted_value}"
         )
         return entry
@@ -341,7 +356,6 @@ def inject_into_chit(
     logger: RedactingLogger,
 ) -> bool:
     """Inject validated keys into CHIT-encrypted storage."""
-    chit_path = Path(CHIT_ENV_CGP)
 
     # Filter to only valid, populated entries
     valid_entries = [e for e in entries if e.status == KeyStatus.VALID and e.is_populated]
@@ -364,8 +378,13 @@ def inject_into_chit(
     # Check if CHIT tooling is available
     chit_cli = Path("pmoves/tools/chit_cli.py")
     if not chit_cli.exists():
-        logger.warn(f"CHIT CLI not found at {chit_cli}. Falling back to env.cgp.json append.")
-        return _inject_via_env_cgp(valid_entries, passphrase, logger)
+        # CRITICAL-2: Removed plaintext fallback -- fail securely
+        logger.error(
+            "CHIT CLI not found at %s. Cannot proceed with key injection. "
+            "Install CHIT tooling or ensure chit_cli.py is available.",
+            chit_cli,
+        )
+        return False
 
     return _inject_via_chit_cli(valid_entries, passphrase, logger)
 
@@ -375,19 +394,37 @@ def _inject_via_chit_cli(
     passphrase: str,
     logger: RedactingLogger,
 ) -> bool:
-    """Inject keys using the CHIT CLI tool."""
+    """Inject keys using the CHIT CLI tool.
+
+    CRITICAL-1: Key values are NEVER passed as CLI arguments.
+    Values are written to a temporary file with 0o600 permissions
+    and passed via --from-file or env var.
+    """
     for entry in entries:
+        temp_path = None
         try:
+            # Write key=value to a temp file with 0o600 permissions
+            fd, temp_path = tempfile.mkstemp(suffix=".env", prefix="chit_key_")
+            try:
+                os.write(fd, f"{entry.name}={entry.value}\n".encode("utf-8"))
+            finally:
+                os.close(fd)
+
+            # Restrict permissions: owner read/write only
+            os.chmod(temp_path, 0o600)
+
             env = os.environ.copy()
             env["CHIT_PASSPHRASE"] = passphrase
 
+            # Pass the key value via --from-file instead of --value
+            # to prevent exposure in process listings (ps aux)
             result = subprocess.run(
                 [
                     sys.executable,
                     "pmoves/tools/chit_cli.py",
                     "--action", "set",
                     "--key", entry.name,
-                    "--value", entry.value,
+                    "--from-file", temp_path,
                 ],
                 capture_output=True,
                 text=True,
@@ -404,71 +441,20 @@ def _inject_via_chit_cli(
             logger.error(f"CHIT CLI timeout for {entry.name}")
         except Exception as e:
             logger.error(f"CHIT CLI error for {entry.name}: {e}")
-
-    return True
-
-
-def _inject_via_env_cgp(
-    entries: list[KeyEntry],
-    passphrase: str,
-    logger: RedactingLogger,
-) -> bool:
-    """Fallback: inject keys directly into env.cgp.json."""
-    chit_path = Path(CHIT_ENV_CGP)
-
-    # Read existing CGP data
-    cgp_data: dict[str, Any] = {}
-    if chit_path.exists():
-        try:
-            with open(chit_path, "r", encoding="utf-8") as f:
-                cgp_data = json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            logger.warn(f"Could not read existing CGP: {e}. Starting fresh.")
-            cgp_data = {"version": 1, "entries": [], "metadata": {}}
-
-    # Ensure entries list exists
-    if "entries" not in cgp_data:
-        cgp_data["entries"] = []
-
-    # Build entry lookup by ID
-    existing_ids = {e.get("id"): e for e in cgp_data["entries"] if isinstance(e, dict)}
-
-    for entry in entries:
-        entry_id = entry.name.lower()
-        cgp_entry = {
-            "id": entry_id,
-            "source": {"type": "manual", "label": entry.name, "date": datetime.now(timezone.utc).isoformat()},
-            "targets": [
-                {"file": ".env.generated", "key": entry.name},
-                {"file": "env.tier-llm", "key": entry.name},
-            ],
-            "required": entry.name in AGNOTE4482_CRITICAL_KEYS,
-        }
-
-        if entry_id in existing_ids:
-            # Update existing entry
-            existing_ids[entry_id].update(cgp_entry)
-        else:
-            cgp_data["entries"].append(cgp_entry)
-
-        logger.success(f"CGP entry upserted: {entry.name}")
-
-    # Write updated CGP
-    try:
-        chit_path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, dir=chit_path.parent
-        ) as tf:
-            json.dump(cgp_data, tf, indent=2)
-            temp_path = tf.name
-
-        # Atomic rename
-        os.replace(temp_path, chit_path)
-        logger.info(f"CGP data written to {chit_path}")
-
-    except IOError as e:
-        logger.error(f"Failed to write CGP: {e}")
-        return False
+        finally:
+            # Securely clean up the temp file
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    # Overwrite with zeros before unlinking (defense in depth)
+                    try:
+                        file_size = os.path.getsize(temp_path)
+                        with open(temp_path, "wb") as f:
+                            f.write(b"\x00" * file_size)
+                    except OSError:
+                        pass
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
 
     return True
 
@@ -482,6 +468,7 @@ def verify_chit_storage(
     logger: RedactingLogger,
 ) -> list[KeyEntry]:
     """Verify that CHIT storage contains all expected keys."""
+    import json
     chit_path = Path(CHIT_ENV_CGP)
     results: list[KeyEntry] = []
 
