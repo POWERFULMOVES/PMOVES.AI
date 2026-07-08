@@ -1758,7 +1758,7 @@ services:
     build: ./services/spark-shape-worker
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SPARK_SHAPE_SECRET=${SPARK_SHAPE_SECRET:-}
     - MESH_PASSPHRASE=${MESH_PASSPHRASE:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
@@ -1799,7 +1799,7 @@ services:
       dockerfile: services/pdf-ingest/Dockerfile
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:***@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=false
     - PDF_DEFAULT_BUCKET=${PDF_DEFAULT_BUCKET:-assets}
@@ -2083,7 +2083,7 @@ services:
       - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.tier-media has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-media has credentials: nats://nats:***@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
@@ -2521,7 +2521,7 @@ services:
       retries: 5
       start_period: 120s
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
-  # Auth: nats://nats:pmoves@nats:4222 | Monitoring: :8222/varz
+  # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
   nats:
     <<: *tier-data-hardened
@@ -2537,7 +2537,7 @@ services:
     - ${NATS_PASSWORD}
     restart: unless-stopped
     ports:
-    # NATS is the mesh-wide event bus — credential-guarded (nats:pmoves@),
+    # NATS is the mesh-wide event bus — credential-guarded (nats:***@),
     # so 0.0.0.0 default is intentional to allow Tailscale mesh peers to connect.
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
     - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
@@ -2599,7 +2599,7 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8080
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
@@ -2739,7 +2739,7 @@ services:
     restart: unless-stopped
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+      # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - PORT=8091
     - ENVIRONMENT=${ENVIRONMENT:-production}
     - ARCHON_ENV=${ARCHON_ENV:-production}
@@ -2864,7 +2864,7 @@ services:
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     depends_on: [nats]
@@ -3032,7 +3032,7 @@ services:
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
     - PORT=9224
@@ -3072,7 +3072,7 @@ services:
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL}
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
     - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
     - DEEPRESEARCH_TENSORZERO_BASE_URL=${DEEPRESEARCH_TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
@@ -3205,7 +3205,7 @@ services:
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on:
       nats:
@@ -3545,7 +3545,7 @@ services:
     image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - PORT=8113
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
@@ -3620,7 +3620,7 @@ services:
     image: ${FLUTE_GATEWAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-flute-gateway:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:***@nats:4222
     - PORT=8055
     - NATS_URL=${NATS_URL}
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
@@ -3686,7 +3686,7 @@ services:
     restart: unless-stopped
     <<: *tier-agent-hardened-ro
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
     - TOKENISM_PORT=${TOKENISM_PORT:-8100}
     - FLASK_ENV=${FLASK_ENV:-production}
@@ -3701,7 +3701,7 @@ services:
     - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
     - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
     - CHIT_ENABLED=${CHIT_ENABLED:-true}
-    - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:pmoves@nats:4222}
+    - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-${NATS_URL}}
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
@@ -4039,7 +4039,7 @@ services:
     restart: unless-stopped
     <<: *tier-worker-hardened
     environment:
-      # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
+      # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:***@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}

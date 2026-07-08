@@ -132,7 +132,7 @@ services:
       - /var/tmp:noexec,nosuid,size=64m
 
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
     - TOKENISM_PORT=${TOKENISM_PORT:-8100}
     - FLASK_ENV=${FLASK_ENV:-production}
@@ -147,7 +147,7 @@ services:
     - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
     - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
     - CHIT_ENABLED=${CHIT_ENABLED:-true}
-    - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:pmoves@nats:4222}
+    - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-${NATS_URL}}
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]

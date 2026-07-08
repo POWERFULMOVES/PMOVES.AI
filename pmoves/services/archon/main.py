@@ -618,15 +618,22 @@ async def _pmoves_healthcheck():
             # hit a known table so 404 on `/` or bare `/rest/v1` does not
             # falsely mark the stack unhealthy.
             is_supabase_cli = host in {"host.docker.internal", "127.0.0.1", "localhost"} and port == 65421
-            is_kong_gateway = host == "supabase_kong_pmoves.ai" and port == 8000
+            is_kong_gateway = ("kong" in host) and port == 8000
             if is_supabase_cli or is_kong_gateway:
                 target = f"{base}/rest/v1/archon_settings?select=*"
         except Exception:
             target = base
 
+        # Build auth headers for Kong gateway probes (requires apikey header).
+        health_headers = {}
+        _svc_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SERVICE_ROLE_KEY") or ""
+        if _svc_key:
+            health_headers["apikey"] = _svc_key
+            health_headers["Authorization"] = f"Bearer {_svc_key}"
+
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
-                r = await client.get(target)
+                r = await client.get(target, headers=health_headers)
                 code = r.status_code
                 # Treat 200 and 400-series schema errors as "reachable"; only 5xx/000 mark unhealthy.
                 if 200 <= code < 300:
