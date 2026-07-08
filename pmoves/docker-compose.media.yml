@@ -19,8 +19,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     build: ./services/media-video
     restart: unless-stopped

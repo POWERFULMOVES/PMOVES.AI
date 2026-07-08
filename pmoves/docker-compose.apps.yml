@@ -164,8 +164,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: ${PMOVES_YT_IMAGE:-}
     build:
