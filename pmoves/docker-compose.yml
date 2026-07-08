@@ -663,7 +663,7 @@ services:
           memory: 512M
   supabase-postgrest:
     <<: *tier-supabase-hardened-ro
-    image: postgrest/postgrest:v14.3
+    image: postgrest/postgrest:v14.12
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -709,7 +709,7 @@ services:
           memory: 512M
   supabase-kong:
     <<: *tier-supabase-hardened
-    image: kong:3.7.1
+    image: kong/kong:3.9.1
     profiles:
     - supabase-local
     environment:
@@ -740,7 +740,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
-    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
+    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -773,7 +773,7 @@ services:
           memory: 512M
   supabase-realtime:
     <<: *tier-supabase-hardened
-    image: supabase/realtime:v2.72.0
+    image: supabase/realtime:v2.102.3
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -799,6 +799,7 @@ services:
     # JWT secret (must match gotrue) - standard variable name
     - API_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:-${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}}
+    - METRICS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -827,7 +828,7 @@ services:
           memory: 512M
   supabase-storage:
     <<: *tier-supabase-hardened
-    image: supabase/storage-api:v1.37.1
+    image: supabase/storage-api:v1.60.4
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -888,7 +889,7 @@ services:
   supabase-studio:
     <<: *tier-supabase-hardened
     # Pinned 2025-02-04: Latest stable from Supabase
-    image: supabase/studio:2026.02.04-sha-fba1944
+    image: supabase/studio:2026.06.03-sha-0bca601
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -983,7 +984,7 @@ services:
           memory: 256M
   supabase-meta:
     <<: *tier-supabase-hardened-ro
-    image: supabase/postgres-meta:v0.95.2
+    image: supabase/postgres-meta:v0.96.6
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -1017,7 +1018,7 @@ services:
           memory: 512M
   supabase-edge-functions:
     <<: *tier-supabase-hardened
-    image: supabase/edge-runtime:v1.70.0
+    image: supabase/edge-runtime:v1.74.0
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -1145,7 +1146,7 @@ services:
           memory: 512M
   supabase-pooler:
     <<: *tier-supabase-hardened
-    image: supabase/supavisor:2.7.4
+    image: supabase/supavisor:2.9.5
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -1157,9 +1158,9 @@ services:
     - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - CLUSTER_POSTGRES=true
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
+    - METRICS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
     - API_JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
-    - METRICS_JWT_SECRET=${JWT_SECRET}
     - REGION=local
     - ERL_AFLAGS=-proto_dist inet_tcp
     - POOLER_TENANT_ID=${POOLER_TENANT_ID:-default-tenant}
