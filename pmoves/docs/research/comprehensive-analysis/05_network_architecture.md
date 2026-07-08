@@ -10,14 +10,14 @@
 
 ## 1. Executive Summary
 
-This document specifies the **field-deployed network architecture** for the PMOVES.AI agent orchestration platform, centered on the `z890-claude` control agent as the primary decision-making node. The design connects a **4-room Intel Z890 control station** to **3 KVM-based compute nodes** in Milwaukee, WI via **Starlink satellite internet** as the primary 4GL (4th Generation Long-range) link, with a **GL.iNet Slate 7 (AX) travel router** providing local Zero Trust gateway services and failover mesh networking.
+This document specifies the **field-deployed network architecture** for the PMOVES.AI agent orchestration platform, centered on the `z890-claude` control agent as the primary decision-making node. The design connects a **4-room Intel Z890 control station** to **3 KVM-based compute nodes** on Hostinger VPS via **Starlink satellite internet** as the primary 4GL (4th Generation Long-range) link, with a **GL.iNet Slate 7 (AX) travel router** providing local Zero Trust gateway services and failover mesh networking.
 
-**Total estimated deployment cost: $3,123.86** (one-time hardware) + $327/mo (Starlink + VPS)
+**Total estimated deployment cost: $850.92 one-time + $297/mo** (Starlink + VPS)
 
 **Key architectural decisions:**
 - Starlink as primary WAN (not backup) — 4th generation long-range link
 - Slate 7 as Zero Trust gateway with WireGuard mesh to all nodes
-- 3 KVM nodes for distributed compute (not just one) — fault tolerance
+- 3 KVM nodes on Hostinger VPS (cloud layer), connected via Tailscale mesh to the Starlink field gateway (outbound-only). No inbound connections through Starlink — all node access via Tailscale authenticated tunnel.
 - Tailscale as overlay mesh for agent-to-agent communication
 - No local field gateway PC — z890-claude handles all coordination remotely
 
@@ -54,7 +54,7 @@ This document specifies the **field-deployed network architecture** for the PMOV
               │                   │                   │
     ┌─────────▼────────┐ ┌───────▼────────┐ ┌──────▼──────┐
     │  KVM Node 1      │ │  KVM Node 2    │ │  KVM Node 3 │
-    │  Milwaukee       │ │  Milwaukee     │ │  Milwaukee  │
+    │  Hostinger VPS   │ │  Hostinger VPS │ │  Hostinger  │
     │  10.0.1.11       │ │  10.0.1.12     │ │  10.0.1.13  │
     │  Compute         │ │  Compute       │ │  Compute    │
     │  4 vCPU / 8GB    │ │  4 vCPU / 8GB  │ │  4 vCPU /8GB│
@@ -254,8 +254,8 @@ AllowedIPs = 10.0.1.100/32
 
 | Attribute | Specification (per node) |
 |-----------|------------------------|
-| **Provider** | Hetzner Cloud (or Contabo / Vultr Milwaukee) |
-| **Plan** | CPX21 (4 vCPU, 8GB RAM, 160GB NVMe) |
+| **Provider** | Hostinger VPS (cloud layer) |
+| **Plan** | KVM 2 (4 vCPU, 8GB RAM, 100GB NVMe) |
 | **Cost** | $59/mo per node × 3 = $177/mo |
 | **OS** | Ubuntu 24.04 LTS |
 | **Static IP** | 10.0.1.11, 10.0.1.12, 10.0.1.13 |
@@ -533,10 +533,8 @@ ping 192.168.1.100    # z890-claude (if online)
 ### 6.2 Phase 2: KVM Node Provisioning (Day 2)
 
 ```bash
-# 1. Provision 3 KVM instances (Hetzner Cloud)
-hcloud server create --name kvm-1 --type cpx21 --image ubuntu-24.04
-hcloud server create --name kvm-2 --type cpx21 --image ubuntu-24.04
-hcloud server create --name kvm-3 --type cpx21 --image ubuntu-24.04
+# 1. Provision 3 KVM instances (Hostinger VPS)
+# Use Hostinger control panel or API to create 3 KVM 2 instances
 
 # 2. Base configuration (ansible playbook)
 ansible-playbook -i inventory/field.yml playbooks/kvm-base.yml
@@ -632,9 +630,9 @@ docker stop agent-runtime  # on KVM 1
 | Item | Qty | Unit Cost | Monthly | Vendor |
 |------|-----|-----------|---------|--------|
 | Starlink service | 1 | $120.00 | $120.00 | Starlink |
-| Hetzner CPX21 (KVM 1) | 1 | $59.00 | $59.00 | Hetzner |
-| Hetzner CPX21 (KVM 2) | 1 | $59.00 | $59.00 | Hetzner |
-| Hetzner CPX21 (KVM 3) | 1 | $59.00 | $59.00 | Hetzner |
+| Hostinger KVM 2 (KVM 1) | 1 | $59.00 | $59.00 | Hostinger |
+| Hostinger KVM 2 (KVM 2) | 1 | $59.00 | $59.00 | Hostinger |
+| Hostinger KVM 2 (KVM 3) | 1 | $59.00 | $59.00 | Hostinger |
 | Tailscale (free tier) | 1 | $0.00 | $0.00 | Tailscale |
 | DNS (Cloudflare free) | 1 | $0.00 | $0.00 | Cloudflare |
 | **Monthly Subtotal** | | | **$297.00** | |
@@ -651,7 +649,7 @@ docker stop agent-runtime  # on KVM 1
 ### 7.4 Cost Optimization Notes
 
 - **Tailscale free tier:** Supports up to 20 users and 100 devices — sufficient for Phase 3
-- **Hetzner vs Contabo:** Contabo offers 4 vCPU / 8GB for ~$6.99/mo but with less reliable network. Hetzner recommended for production.
+- **Hostinger vs other providers:** Hostinger offers competitive pricing with reliable network for VPS workloads
 - **Starlink vs terrestrial:** If Milwaukee location has reliable fiber, Starlink can become backup and save $120/mo
 - **KVM node scaling:** Can reduce to 2 nodes for development (saves $59/mo), but 3 minimum for production quorum
 
@@ -710,7 +708,7 @@ docker stop agent-runtime  # on KVM 1
 |------|-----------|-------------|-----------|
 | CHIT trail | Real-time | Supabase (cloud) + local replica | 7 years |
 | Agent configs | On change | Git repository | Infinite |
-| Node state | Hourly | S3-compatible (Hetzner Object Storage) | 30 days |
+| Node state | Hourly | S3-compatible (Hostinger Object Storage) | 30 days |
 | Model weights | On update | Local NVMe + cloud mirror | Versioned |
 
 ### 9.3 Disaster Recovery Runbook
@@ -748,7 +746,7 @@ RTO: 2 hours (full restoration)
 
 | Vendor | Service | Plan | Price | URL | API/CLI |
 |--------|---------|------|-------|-----|---------|
-| Hetzner | Cloud VPS | CPX21 | $59/mo | hetzner.com | hcloud CLI |
+| Hostinger | Cloud VPS | KVM 2 | $59/mo | hostinger.com | hPanel API |
 | Starlink | Satellite Internet | Residential | $120/mo | starlink.com | Starlink API |
 | Tailscale | Mesh VPN | Free | $0 | tailscale.com | tailscale CLI |
 | Cloudflare | DNS | Free | $0 | cloudflare.com | CF API |
