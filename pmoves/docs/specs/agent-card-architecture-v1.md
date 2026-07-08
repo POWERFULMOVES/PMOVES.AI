@@ -153,8 +153,7 @@ Agent Card (JSON)
     "properties": {
       "name": {
         "type": "string",
-        "description": "Model suit identifier",
-        "enum": ["glm-4-air", "glm-4-flash", "glm-4-plus", "glm-4.7", "glm-5-turbo", "glm-5.1", "kimi-k2", "claude-sonnet", "claude-opus"]
+        "description": "Model suit identifier"
       },
       "provider": {
         "type": "string",
@@ -253,8 +252,7 @@ Agent Card (JSON)
     "properties": {
       "name": {
         "type": "string",
-        "description": "Harness identifier",
-        "enum": ["voice_synthesis", "documentation", "code_generation", "code_review", "debugging", "monitoring", "quick_chat", "complex_analysis", "architecture_planning", "workflow_execution", "long_session", "refactoring", "long_context_research", "chinese_language", "deep_reasoning"]
+        "description": "Harness identifier. Built-in values: voice_synthesis, documentation, code_generation, code_review, debugging, monitoring, quick_chat, complex_analysis, architecture_planning, workflow_execution, long_session, refactoring, long_context_research, chinese_language, deep_reasoning. Custom harness names beyond this set are supported via the harness_registry extension point — see Section 4.2."
       },
       "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
       "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -458,7 +456,7 @@ cgp_state_vector:
 
 ### 4.2 Custom Harness Definition
 
-Agents can define custom harnesses:
+Agents can define custom harnesses beyond the built-in set. The `HarnessMapping.name` field accepts any string value — custom harness names are supported via the **harness_registry extension point** (see Section 7.1). Built-in harness names are recommended for consistency, but the schema does not restrict custom values.
 
 ```json
 {
@@ -912,13 +910,14 @@ three_body_governance:
 
 ### 7.1 Agent Registry Integration
 
-Agent Cards are the canonical source of truth for the agent registry:
+The agent registry serves as the **central index** that references Agent Cards by their unique `agent_id`. Each registry entry points to its corresponding Agent Card — the Card is the identity artifact; the registry is the lookup mechanism.
 
 ```yaml
 # pmoves/config/agent_registry.yaml
 registry:
   schema_version: "agent-card-v1"
   validation: "strict"
+  description: "Registry is the index; Agent Cards are the source-of-truth identity artifacts"
   
   agents:
     - agent_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
@@ -933,6 +932,8 @@ registry:
       last_validation: "2026-07-09T12:00:00Z"
       status: "valid"
 ```
+
+**Design principle:** The Agent Card JSON is the **source of truth** for an agent's identity and capabilities. The registry is the **index** that enables lookup and discovery. Updates flow Card → registry (card is validated, then registry is updated to point to the new card version). Custom harnesses are registered via the `harness_registry` extension point — see `pmoves/config/harness_registry.yaml` for the canonical list of non-built-in harnesses.
 
 ### 7.2 CHIT Trail Integration
 
