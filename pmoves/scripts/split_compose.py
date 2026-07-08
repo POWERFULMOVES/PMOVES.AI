@@ -234,7 +234,14 @@ def main():
         overlay_services = yaml.map()
         for svc_name in svc_names:
             if svc_name in services:
-                overlay_services[svc_name] = services[svc_name]
+                svc = services[svc_name]
+                # Strip security_opt to prevent duplicate list items when
+                # overlays are merged with docker-compose.yml (Compose v2
+                # appends list items, causing rejection on duplicate entries).
+                if 'security_opt' in svc:
+                    svc = svc.copy()
+                    del svc['security_opt']
+                overlay_services[svc_name] = svc
                 total += 1
             else:
                 print(f"  WARNING: Service '{svc_name}' not found in source, skipping")

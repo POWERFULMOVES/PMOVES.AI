@@ -581,8 +581,6 @@ services:
         limits:
           cpus: '4.0'
           memory: 8G
-    security_opt:
-    - no-new-privileges:true
     cap_drop:
     - ALL
     profiles:
