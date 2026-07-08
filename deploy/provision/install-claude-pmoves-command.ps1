@@ -4,7 +4,7 @@
 # Makes `claude-pmoves` a bare command in PowerShell on THIS node, so you can
 # type `claude-pmoves` from any directory instead of the full launcher path.
 #
-# Portable: run once per node with the pmoves repo installed —
+# Portable: run once per node with the pmoves repo installed:
 #   powershell -ExecutionPolicy Bypass -File deploy\provision\install-claude-pmoves-command.ps1
 # It resolves the repo root from its own location (no hard-coded paths) and
 # writes an idempotent function block into BOTH the Windows PowerShell (5.1) and
@@ -48,9 +48,24 @@ foreach ($profilePath in $targets) {
     if ($content.Length -gt 0) { $content += "`r`n`r`n" }
     $content += $block + "`r`n"
     Set-Content -Path $profilePath -Value $content -Encoding UTF8
-    Write-Host "  updated: $profilePath"
+    Write-Host "  profile: $profilePath"
 }
 
-Write-Host ""
+# PATH shim - bulletproof across every shell. A profile function does NOT load in
+# Windows PowerShell 5.1 when the execution policy is Restricted/AllSigned, so the
+# primary mechanism is a .cmd on PATH. %LOCALAPPDATA%\Microsoft\WindowsApps is
+# user-writable and on PATH by default on Win10/11.
+$shimDir = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
+if (Test-Path $shimDir) {
+    $shim = Join-Path $shimDir 'claude-pmoves.cmd'
+    $q = [char]34
+    $lines = @('@echo off', ('call ' + $q + $cmd + $q + ' %*'))
+    Set-Content -Path $shim -Value $lines -Encoding ASCII
+    Write-Host "  path shim: $shim"
+} else {
+    Write-Warning "  $shimDir not present - PATH shim skipped (profile function still installed)."
+}
+
+Write-Host ''
 Write-Host "Installed 'claude-pmoves' -> $cmd"
-Write-Host "Open a NEW PowerShell (or run: . `$PROFILE) then just type:  claude-pmoves"
+Write-Host 'Works in any NEW shell (PATH shim). In an existing session, open a new shell.'
