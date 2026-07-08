@@ -5,8 +5,8 @@
 #   docker compose -f docker-compose.yml -f docker-compose.cache.yml up -d semantic-cache
 #
 # Security Hardening (AGNOTE4482):
-#   - NO hardcoded credentials — all values from environment variables
-#   - NO insecure defaults — services fail-closed when env vars are unset
+#   - NO hardcoded credentials -- all values from environment variables
+#   - NO insecure defaults -- services fail-closed when env vars are unset
 #   - NO env_file directive that exposes .env files to the container
 #   - Container runs as non-root (uid 65532)
 #   - Read-only rootfs with tmpfs for writable paths
@@ -17,12 +17,12 @@
 #   chat completion requests for semantic similarity-based caching via
 #   pgvector (Layer 1) and Cipher Memory (Layer 0).
 #
-#   Port: 8100 (container) — configurable via SEMANTIC_CACHE_HOST_PORT
+#   Port: 8100 (container) -- configurable via SEMANTIC_CACHE_HOST_PORT
 #   Networks: pmoves_api (Supabase/TensorZero/HiRAG), pmoves_bus (NATS)
 #
 # Depends on:
 #   - nats         (CHIT bus for cross-instance invalidation)
-#   - supabase-kong  (PostgREST → pgvector for semantic cache storage)
+#   - supabase-kong  (PostgREST --> pgvector for semantic cache storage)
 #   - tensorzero-gateway  (LLM inference on cache miss)
 #
 # See: pmoves/docs/operations/SEMANTIC_CACHE_DEPLOYMENT.md
@@ -88,16 +88,21 @@ services:
 
       # --- Host environment leak guard ---
       # Prevent Windows Docker Desktop from leaking host env vars into container.
+      # These vars are explicitly cleared to ensure the cache service does not
+      # inherit CA bundles, proxy settings, or Node certificates from the host.
       SSL_CERT_FILE: ""
       SSL_CERT_DIR: ""
       REQUESTS_CA_BUNDLE: ""
-      CURL_CA_BUNDLE: ""
+      CURL_CA_BUNDLE: ""  # Cleared: Windows Docker Desktop leaks host CA bundle
       NODE_EXTRA_CA_CERTS: ""
       HTTP_PROXY: ""
       HTTPS_PROXY: ""
       NO_PROXY: ""
 
     # --- Service dependencies (start order only; no health gates) ---
+    # NOTE: required: false is intentional. NATS is used for cross-instance
+    # cache invalidation. If NATS is unavailable, the cache still serves hits
+    # from local storage; invalidation events are simply dropped.
     depends_on:
       nats:
         condition: service_healthy
@@ -110,8 +115,8 @@ services:
         required: false
 
     # --- Networks ---
-    # pmoves_api  → reach supabase-kong (PostgREST), tensorzero-gateway, hi-rag-gateway-v2
-    # pmoves_bus  → NATS CHIT bus for cross-instance cache invalidation
+    # pmoves_api  --> reach supabase-kong (PostgREST), tensorzero-gateway, hi-rag-gateway-v2
+    # pmoves_bus  --> NATS CHIT bus for cross-instance cache invalidation
     networks:
       - pmoves_api
       - pmoves_bus
@@ -121,7 +126,7 @@ services:
     read_only: true
     cap_drop:
       - "ALL"
-    # No cap_add — the service binds to port 8100 (>1024), no special caps needed.
+    # No cap_add -- the service binds to port 8100 (>1024), no special caps needed.
     security_opt:
       - "no-new-privileges:true"
     tmpfs:
