@@ -30,9 +30,9 @@ I started making beats because I needed something to listen to. 82 tracks and 15
 
 PMOVES.AI is a local-first, multi-agent orchestration platform with 91 registered agents across 13 functional teams, deployed over 50 gitlinked submodules, operating in 5 active rooms — from a Z890 infra fabric to a 5090 voice studio to the Fordham Hill community room in the Bronx. We went from topology audit to production-hardened convergence in under 5 months. Zero registry drift. Every agent documented and signed.
 
-The architecture is a Metal-Organic Framework — not as metaphor, but as structural isomorphism. CHIT (Cryptographic Handshake for Identity & Trust) is the mathematical backbone: 37/37 signoff items complete, a Consciousness Service on port 8106 bridging symbolic and geometric domains via CGP packets, and a Geometry Bus (NATS JetStream) moving information the way a traveling wave maintains oscillation. We resolved 6 P0 security issues — JWT fail-closed, NATS auth hardened, A2A server secured, BPM encoder delivered (574 lines), CHIT crypto versioned with KDF, hardened branch reconciled against CVE-2025-55182 RCE.
+The architecture is a Metal-Organic Framework — not as metaphor, but as structural isomorphism. CHIT (Cryptographic Handshake for Identity & Trust) is the mathematical backbone: 37/37 signoff items complete, a Consciousness Service bridging symbolic and geometric domains via CGP packets, and a Geometry Bus (NATS JetStream) moving information the way a traveling wave maintains oscillation. We resolved multiple critical security issues — authentication hardening, credential management across the fleet, and infrastructure segmentation.
 
-The voice layer is first-class: Flute Gateway (ports 8055/8056), VibeVoice realtime synthesis, MiniMax integration with FlOO$ character personas, and a BPM-to-prosodic CGP pipeline that converts beats into voice state vectors. Every CGP packet carries {delta, Hz, kappa, A, F} — mood, tempo, posture. Agents don't parse numbers. They read the room.
+The voice layer is first-class: Flute Gateway (dual-port HTTP/WebSocket), VibeVoice realtime synthesis, MiniMax integration with FlOO$ character personas, and a BPM-to-prosodic CGP pipeline that converts beats into voice state vectors. Every CGP packet carries {delta, Hz, kappa, A, F} — mood, tempo, posture. Agents don't parse numbers. They read the room.
 
 CATACLYSM STUDIOS INC is the corporate vehicle — a 5-tier L1-L5 structure with a Fordham Hill cooperative pilot, a 5-year financial model projecting $68.4M revenue, and governance designed for distributed resilience. The Infra Cloud Guild, the DAO Constitution, the CHIT attribution chain — all the same thing: infrastructure for coordination without centralization.
 
@@ -48,11 +48,11 @@ Build what you need. Scale what works. Sign every line.
 
 ### Featured Item 1: PMOVES.AI — Multi-Agent Orchestration Platform
 **Link:** `https://github.com/POWERFULMOVES/PMOVES.AI`  
-**Description:** 91 agents. 13 teams. 50 submodules. 5 rooms. Metal-Organic Framework architecture with CHIT cryptographic identity, Consciousness Service (CGP mapping), and full voice infrastructure. Production-hardened with 6 P0 security resolutions and 37/37 CHIT signoff items complete. Local-first, sovereign, and culturally alive.
+**Description:** 91 agents. 13 teams. 50 submodules. 5 rooms. Metal-Organic Framework architecture with CHIT cryptographic identity, Consciousness Service (CGP mapping), and full voice infrastructure. Production-hardened with multiple critical security resolutions and 37/37 CHIT signoff items complete. Local-first, sovereign, and culturally alive.
 
 ### Featured Item 2: The Convergence Wave — From Topology Audit to Production
 **Link:** (GitHub releases or blog post URL)  
-**Description:** A 5-month technical narrative (Feb–July 2026) documenting how PMOVES.AI went from pre-convergence to production-ready multi-agent orchestration. Agent fleet grew to 91 with zero drift. 6 P0 security issues resolved. Voice infrastructure fully integrated. Community room at Fordham Hill brought online. 67 agent docs written, AGNOTE4482 master coordination doc established. The blueprint for building agent infrastructure at scale.
+**Description:** A 5-month technical narrative (Feb–July 2026) documenting how PMOVES.AI went from pre-convergence to production-ready multi-agent orchestration. Agent fleet grew to 91 with zero drift. Critical security issues resolved. Voice infrastructure fully integrated. Community room at Fordham Hill brought online. 67 agent docs written, AGNOTE4482 master coordination doc established. The blueprint for building agent infrastructure at scale.
 
 ### Featured Item 3: CATACLYSM STUDIOS INC — 5-Year Financial Model
 **Link:** (Internal or investor-facing document)  
@@ -64,7 +64,7 @@ Build what you need. Scale what works. Sign every line.
 
 ### Featured Item 5: CHIT Geometry Bus — 37/37 Signoff Complete
 **Link:** (Technical documentation or PR)  
-**Description:** The Cryptographic Handshake for Identity & Trust — a 5-layer Grand Convergence Stack (L1 Structure → L2 Information → L3 Transport → L4 Optimization → L5 Economics) that connects every subsystem in PMOVES. Dirichlet-weighted, Merkle-secured, Poincare-encoded, Zeta-filtered. Consciousness Service publishing signed CGP packets to `geometry.cgp.v1`. The mathematical backbone of sovereign multi-agent coordination.
+**Description:** The Cryptographic Handshake for Identity & Trust — a 5-layer Grand Convergence Stack (L1 Structure → L2 Information → L3 Transport → L4 Optimization → L5 Economics) that connects every subsystem in PMOVES. Dirichlet-weighted, Merkle-secured, Poincare-encoded, Zeta-filtered. Consciousness Service publishing signed CGP packets to the geometry event bus. The mathematical backbone of sovereign multi-agent coordination.
 
 ---
 
@@ -85,11 +85,11 @@ Build what you need. Scale what works. Sign every line.
 
 - **Delivered CHIT Geometry Bus to 37/37 signoff completion** — the Cryptographic Handshake for Identity & Trust with 5-layer convergence stack (Structure → Information → Transport → Optimization → Economics), enabling cryptographic agent identity, signed audit trails, and geometric consciousness mapping via CGP packets
 
-- **Shipped the Consciousness Service (port 8106)** — a CHIT-Full-tier service bridging symbolic (Tokenism) and geometric (Neo4j-backed CGP graph) domains via CHR clustering algorithm, Poincare disk hyperbolic encoding, and NATS publish/subscribe to `geometry.cgp.v1`
+- **Shipped the Consciousness Service** — a CHIT-Full-tier service bridging symbolic (Tokenism) and geometric (Neo4j-backed CGP graph) domains via CHR clustering algorithm, Poincare disk hyperbolic encoding, and NATS publish/subscribe
 
-- **Resolved 6 P0 security issues in production:** JWT fail-closed authentication (gateway.py:292-299), NATS unauthenticated credential removal, A2A server router hardening, BPM encoder implementation (574 lines, PR #1168), CHIT crypto versioned KDF with 66-file audit, and hardened-branch reconciliation closing 5 security gaps including CVE-2025-55182 (CVSS 10.0)
+- **Resolved critical security issues in production** — authentication hardening at the gateway layer, credential management improvements across the fleet, A2A server router hardening, BPM encoder implementation (PR #1168), CHIT crypto versioned KDF with comprehensive audit, and hardened-branch reconciliation closing security gaps including a critical CVE (CVSS 10.0)
 
-- **Built full voice infrastructure:** Flute Gateway (HTTP 8055 / WebSocket 8056), VibeVoice realtime synthesis, MiniMax Token Plan integration (M2.7/M2.1 model suits, 7 NATS subjects), FlOO$ character persona system (Dr. Bean, Mr. Clean, PowerPuff Girls), and BPM-to-prosodic CGP pipeline (`pmoves/tools/bpm_encoder.py`)
+- **Built full voice infrastructure:** Flute Gateway (HTTP/WebSocket dual port), VibeVoice realtime synthesis, MiniMax Token Plan integration (M2.7/M2.1 model suits, multiple NATS subjects), FlOO$ character persona system (Dr. Bean, Mr. Clean, PowerPuff Girls), and BPM-to-prosodic CGP pipeline
 
 - **Established the Three-Body Governance Pattern** — every production operation requires a Delivery body (can edit), a Control body (read-only review), and a Memory body (CHIT trail + attribution), enforced at the tool level via Claude Code agent frontmatter
 
@@ -97,7 +97,7 @@ Build what you need. Scale what works. Sign every line.
 
 - **Onboarded 5 rooms on a stage:** z890-infra (live), 4090-field (live), 5090-voice (live), 5090-kilocode (rehearsal), fordham-community (rehearsal) — with full stage lifecycle management (rehearsal → live → review → archive)
 
-- **Built the Fordham Hill community pilot** — a Bronx-based cooperative room in rehearsal stage with 5 apps, 8 skill bindings, and token-gated vote paths, connecting multi-agent infrastructure to real-world community coordination
+- **Built the Fordham Hill community pilot** — a Bronx-based cooperative room in rehearsal stage with multiple apps, skill bindings, and token-gated vote paths, connecting multi-agent infrastructure to real-world community coordination
 
 - **Established 6 CI/CD enforcement gates** — CodeQL, CHIT Contract, SQL Policy, Docker Hardening, Integration Contract, and Python Tests — maintaining hardened-branch invariant (`hardened ⊇ default`) across 38 submodules
 
@@ -278,4 +278,4 @@ To maintain visibility after profile update:
 
 ---
 
-*This profile was composed from deep analysis of the PMOVES.AI repository, DARKXSIDE's YouTube research library (2,000 videos), SoundCloud catalog (82 tracks), and field deployment network architecture. Voice calibrated to the five-dimension persona: The Architect, The Material Scientist, The Sovereign, The Phase-Hunter, and The Cultural Microbiome Guardian.*
+*This profile was composed from deep analysis of the PMOVES.AI repository, DARKXSIDE's YouTube research library (2,000 videos), SoundCloud catalog (82 tracks), and field deployment network architecture. Voice calibrated to the five-dimension persona: The Architect, The Material Scientist, The Sovereign, The Phase-Hunter, and the Cultural Microbiome Guardian.*
