@@ -36,7 +36,12 @@ Security:
 
 from __future__ import annotations
 
+# ---------------------------------------------------------------------------
+# stdlib imports (PEP 8 ordering: stdlib, third-party, local)
+# ---------------------------------------------------------------------------
 import argparse
+import getpass
+import json
 import os
 import re
 import subprocess
@@ -47,6 +52,31 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
+
+
+# ---------------------------------------------------------------------------
+# Module exports
+# ---------------------------------------------------------------------------
+__all__ = [
+    "AGNOTE4482_CRITICAL_KEYS",
+    "CHIT_ENV_CGP",
+    "CHIT_PASSPHRASE_ENV_VARS",
+    "DEPRECATED_ALIASES",
+    "KEY_SOURCE_FILES",
+    "KEY_VALIDATORS",
+    "KeyEntry",
+    "KeyStatus",
+    "RedactingLogger",
+    "find_key_sources",
+    "get_chit_passphrase",
+    "inject_into_chit",
+    "parse_env_file",
+    "print_report",
+    "redact_env_line",
+    "validate_all_keys",
+    "validate_key",
+    "verify_chit_storage",
+]
 
 
 # ============================================================================
@@ -73,14 +103,14 @@ KEY_VALIDATORS: dict[str, str] = {
     "ALIBABA_PRO_CODING_PLAN": r"^sk-[a-f0-9]{32}$",  # DashScope: sk- + 32 hex
     "KILOCODE_API_KEY": r"^.{8,}$",  # KiloCode: any string, min 8 chars
     "OLLAMA_API_KEY": r"^.{8,}$",  # Ollama Pro: any string, min 8 chars
-    "HF_TOKEN": r"^hf_[a-zA-Z0-9]{34}$",  # HF: hf_ + 34 alphanum
+    "HF_TOKEN": r"^hf_[A-Za-z0-9]{30,40}$",  # HF: hf_ + 30-40 alphanum
     "MINIMAX_API_KEY": r"^.{8,}$",  # MiniMax: any string, min 8 chars
     "MINIMAX_TOKEN_PLAN_API_KEY": r"^.{8,}$",  # MiniMax Token Plan: any string, min 8 chars
     "OPENROUTER_API_KEY": r"^sk-or-[a-zA-Z0-9-]{20,}$",  # OpenRouter: sk-or- prefix
     "OPENAI_API_KEY": r"^sk-(?:proj-)?[a-zA-Z0-9]{20,}$",  # OpenAI: sk- or sk-proj-
     "ANTHROPIC_API_KEY": r"^sk-ant-[a-zA-Z0-9-]{10,}$",  # Anthropic: sk-ant- prefix
     "GEMINI_API_KEY": r"^.{8,}$",  # Gemini: any string, min 8 chars
-    "GROQ_API_KEY": r"^gsk_[a-zA-Z0-9]{31}$",  # Groq: gsk_ + 31 alphanum
+    "GROQ_API_KEY": r"^gsk_[A-Za-z0-9]{28,36}$",  # Groq: gsk_ + 28-36 alphanum
     "MISTRAL_API_KEY": r"^.{8,}$",  # Mistral: any string, min 8 chars
     "DEEPSEEK_API_KEY": r"^sk-[a-zA-Z0-9]{20,}$",  # DeepSeek: sk- prefix
     "XAI_API_KEY": r"^.{8,}$",  # xAI: any string, min 8 chars
@@ -127,7 +157,7 @@ CHIT_PASSPHRASE_ENV_VARS = ["CHIT_PASSPHRASE", "CHIT_PROD_PASSPHRASE"]
 class KeyStatus(Enum):
     MISSING = "missing"           # Key not found in any source
     EMPTY = "empty"               # Key found but value is empty
-    PENDING_FILL = "pending-fill" # Value is the sentinel "unset-pending-key"
+    PENDING_FILL = "pending-fill"  # Value is the sentinel "unset-pending-key"
     VALID = "valid"               # Key found, non-empty, format valid
     INVALID_FORMAT = "invalid-format"  # Key found but format check failed
     DEPRECATED_ALIAS = "deprecated-alias"  # Key uses deprecated alias name
@@ -182,19 +212,39 @@ class RedactingLogger:
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-        self.redaction_patterns: list[str] = []
+        self._redaction_patterns: list[str] = []
+        self._redaction_regex: re.Pattern[str] | None = None
+
+    def _build_redaction_regex(self) -> re.Pattern[str] | None:
+        """Build a regex with word boundaries for all registered secrets."""
+        if not self._redaction_patterns:
+            return None
+        # Escape each pattern and join with word boundaries
+        escaped = [re.escape(p) for p in self._redaction_patterns if len(p) > 4]
+        if not escaped:
+            return None
+        # Use word boundaries to avoid false positive partial matches
+        pattern = r"(?:^|\b|\W)(" + "|".join(escaped) + r")(?:\b|\W|$)"
+        try:
+            return re.compile(pattern)
+        except re.error:
+            # Fallback: if the combined pattern is too large, use simple replacement
+            return None
 
     def _redact(self, message: str) -> str:
-        """Redact any known key values from the message."""
-        # Replace any assignment patterns
-        for pattern in self.redaction_patterns:
-            message = message.replace(pattern, "***REDACTED***")
+        """Redact any known key values from the message using regex word boundaries."""
+        if self._redaction_regex is None:
+            self._redaction_regex = self._build_redaction_regex()
+        if self._redaction_regex:
+            message = self._redaction_regex.sub("***REDACTED***", message)
         return message
 
     def register_value(self, value: str) -> None:
         """Register a secret value for redaction."""
         if value and len(value) > 4:
-            self.redaction_patterns.append(value)
+            self._redaction_patterns.append(value)
+            # Invalidate cached regex so it's rebuilt on next _redact call
+            self._redaction_regex = None
 
     def info(self, message: str) -> None:
         print(f"[INFO]  {self._redact(message)}", file=sys.stdout)
@@ -227,26 +277,77 @@ def find_key_sources(logger: RedactingLogger) -> dict[str, str]:
             found[str(path)] = filename
     return found
 
+
+def _is_multiline_value(lines: list[str], start_idx: int) -> tuple[bool, int, str]:
+    """Check if a value starts a multi-line quoted string.
+
+    Returns (is_multiline, end_idx, full_line) where end_idx is the line
+    index where the multi-line value ends (inclusive).
+    """
+    line = lines[start_idx]
+    key, sep, value = line.partition("=")
+    if sep != "=":
+        return False, start_idx, line
+
+    key = key.strip()
+    value = value.strip()
+
+    # Check for opening quote without closing quote on same line
+    if (value.startswith('"') and not value.endswith('"')) or \
+       (value.startswith("'") and not value.endswith("'")):
+        quote_char = value[0]
+        parts = [value[1:]]  # Strip opening quote
+        idx = start_idx + 1
+        while idx < len(lines):
+            next_line = lines[idx].rstrip("\n\r")
+            if next_line.endswith(quote_char):
+                parts.append(next_line[:-1])  # Strip closing quote
+                return True, idx, key + "=" + "\n".join(parts)
+            parts.append(next_line)
+            idx += 1
+        # Unterminated quote -- return what we have
+        return True, idx - 1, key + "=" + "\n".join(parts)
+
+    return False, start_idx, line
+
+
 def parse_env_file(filepath: str, logger: RedactingLogger) -> dict[str, str]:
-    """Parse an env file and return key-value pairs. Values are registered for redaction."""
+    """Parse an env file and return key-value pairs. Supports multi-line values.
+
+    Values are registered for redaction.
+    """
     env_vars: dict[str, str] = {}
     path = Path(filepath)
     if not path.exists():
         return env_vars
 
     with open(path, "r", encoding="utf-8") as f:
-        for line_no, line in enumerate(f, 1):
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            env_vars[key] = value
-            if any(k in key for k in ["_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD"]):
-                logger.register_value(value)
+        lines = f.readlines()
+
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx].strip()
+        if not line or line.startswith("#"):
+            idx += 1
+            continue
+        if "=" not in line:
+            idx += 1
+            continue
+
+        # Check for multi-line values
+        is_multi, end_idx, raw_line = _is_multiline_value(lines, idx)
+        if is_multi:
+            idx = end_idx + 1
+        else:
+            idx += 1
+            raw_line = line
+
+        key, _, value = raw_line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        env_vars[key] = value
+        if any(k in key for k in ["_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD"]):
+            logger.register_value(value)
 
     logger.info(f"Parsed {len(env_vars)} vars from {filepath}")
     return env_vars
@@ -268,7 +369,7 @@ def validate_key(name: str, value: str, logger: RedactingLogger) -> KeyEntry:
         entry.error_message = f"'{name}' deprecated, use '{canonical}' (sunset: {sunset})"
 
         if value and value.strip():
-            # CRITICAL-4: Auto-migrate -- create canonical entry with same value
+            # Auto-migrate -- create canonical entry with same value
             logger.info(f"Migrating '{name}' -> '{canonical}' (sunset: {sunset})")
             entry.name = canonical
             entry.canonical_name = name  # Track the original alias name
@@ -289,7 +390,7 @@ def validate_key(name: str, value: str, logger: RedactingLogger) -> KeyEntry:
         entry.error_message = "Key is empty or not set"
         return entry
 
-    # Check for sentinel values (case-insensitive per BONUS fix)
+    # Check for sentinel values (case-insensitive)
     sentinel_lower = value.strip().lower()
     if sentinel_lower in ("unset-pending-key", "local-disabled", "placeholder"):
         entry.status = KeyStatus.PENDING_FILL
@@ -336,15 +437,24 @@ def validate_all_keys(
 # ============================================================================
 
 def get_chit_passphrase(logger: RedactingLogger) -> Optional[str]:
-    """Get CHIT passphrase from environment."""
+    """Get CHIT passphrase from environment, with interactive fallback."""
     for var_name in CHIT_PASSPHRASE_ENV_VARS:
         passphrase = os.environ.get(var_name)
         if passphrase:
             logger.debug(f"Found CHIT passphrase in {var_name}")
             return passphrase
+
+    # Fallback: prompt interactively
+    try:
+        passphrase = getpass.getpass("CHIT passphrase: ")
+        if passphrase:
+            return passphrase
+    except (EOFError, KeyboardInterrupt):
+        pass
+
     logger.error(
         "No CHIT passphrase found. Set CHIT_PASSPHRASE or CHIT_PROD_PASSPHRASE "
-        "environment variable."
+        "environment variable, or run interactively."
     )
     return None
 
@@ -378,7 +488,6 @@ def inject_into_chit(
     # Check if CHIT tooling is available
     chit_cli = Path("pmoves/tools/chit_cli.py")
     if not chit_cli.exists():
-        # CRITICAL-2: Removed plaintext fallback -- fail securely
         logger.error(
             "CHIT CLI not found at %s. Cannot proceed with key injection. "
             "Install CHIT tooling or ensure chit_cli.py is available.",
@@ -396,7 +505,7 @@ def _inject_via_chit_cli(
 ) -> bool:
     """Inject keys using the CHIT CLI tool.
 
-    CRITICAL-1: Key values are NEVER passed as CLI arguments.
+    Key values are NEVER passed as CLI arguments.
     Values are written to a temporary file with 0o600 permissions
     and passed via --from-file or env var.
     """
@@ -468,7 +577,6 @@ def verify_chit_storage(
     logger: RedactingLogger,
 ) -> list[KeyEntry]:
     """Verify that CHIT storage contains all expected keys."""
-    import json
     chit_path = Path(CHIT_ENV_CGP)
     results: list[KeyEntry] = []
 
@@ -526,7 +634,7 @@ def print_report(
     """Print a formatted report of key validation results."""
     print("\n" + "=" * 70)
     print(f"  {title}")
-    print(f"  Generated: {datetime.now(timezone.utc).isoformat()}")
+    print(f"  Generated: {datetime.now(tz=timezone.utc).isoformat()}")
     print("=" * 70)
 
     # Group by status
