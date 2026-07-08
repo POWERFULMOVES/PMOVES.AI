@@ -1,5 +1,5 @@
 # Rooms on a Stage — Model Overview
-_Last updated: 2026-05-17_
+_Last updated: 2026-07-07_
 
 ## What This Is
 
@@ -17,6 +17,11 @@ Rooms are the entrypoints through which users (human or agent) access the platfo
 | **4090 Field Control** | Review, triage, notebook-backed analysis | 4090-claude | live |
 | **5090 Voice Studio** | TTS, media pipelines, audition workflows | 5090-claude | live |
 | **5090 KiloCode GLM Workstation** | GPU inference specialist, GLM Coding Plan | 5090-kilocode | rehearsal |
+| **PMOVES Demo Room** | One-click Agent Zero + 4090 Claude claws + HERMES assist | 4090-claude | rehearsal |
+| **HERMES Agent Control** | Cross-platform gateway: profiles, skills, cron, NATS bridge | hermes-agent | rehearsal |
+| **Fordham Hill Community** | Cost-pooling mesh + co-op self-governance pilot (onboarding / transaction / creator / voice) | fordham-steward | rehearsal |
+
+_Catalog: `pmoves/config/rooms/catalog.json` (7 rooms). All 4 node rooms typically `live`; demo / hermes / fordham are `rehearsal`._
 
 Planned rooms (from the prospectus frame):
 - **foyer** — first P7 screen, room selection

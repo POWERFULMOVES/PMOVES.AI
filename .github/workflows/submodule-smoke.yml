@@ -128,7 +128,7 @@ jobs:
           echo "Running strict smoke targets..."
           echo ""
 
-          if make smoke-core test-smoke 2>&1 | tee /tmp/verify-output.txt; then
+          if make smoke test 2>&1 | tee /tmp/verify-output.txt; then
             echo "result=pass" >> "$GITHUB_OUTPUT"
           else
             echo "result=fail" >> "$GITHUB_OUTPUT"

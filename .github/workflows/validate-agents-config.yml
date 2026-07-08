@@ -1,0 +1,45 @@
+name: Validate Agents Config
+
+# Hard gate: the agent registry <-> teams coupling and naming conventions must
+# hold on every PR that touches them. Ratchets pre-existing legacy drift
+# (baselined in the validator) so it is green today but blocks NEW drift.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/config/agent_registry.yaml"
+      - "pmoves/configs/agent-teams.yaml"
+      - "pmoves/config/rooms/**"
+      - "pmoves/scripts/validate_agent_registry.py"
+      - ".github/workflows/validate-agents-config.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  validate-agents-config:
+    name: validate-agents-config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install validator deps
+        run: python -m pip install --quiet "pydantic>=2" pyyaml
+
+      - name: Registry ↔ teams coupling gate (pydantic)
+        run: python pmoves/scripts/validate_agent_registry.py -v

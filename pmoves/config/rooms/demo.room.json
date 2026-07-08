@@ -19,14 +19,14 @@
       "panels": [
         {
           "panel_id": "agent-zero-main",
-          "kind": "webview",
+          "kind": "custom",
           "position": "left",
           "size": 40,
           "pinned": true
         },
         {
           "panel_id": "claude-code-panel",
-          "kind": "terminal",
+          "kind": "custom",
           "position": "right",
           "size": 40,
           "pinned": true
@@ -44,29 +44,30 @@
   "apps": [
     {
       "app_id": "agent-zero-webui",
-      "kind": "webview",
+      "kind": "browser",
       "route": "/demo/agent-zero",
       "provider": "agent-zero-local",
       "action_namespace": "agent_zero",
-      "capabilities": ["tasks", "chat", "tool-use", "memory"],
-      "config": {
-        "port": 8080,
-        "model": "hermes-v4-8b",
-        "start_script": "pbnj/pinokio/api/pmoves-pbnj/demo.js"
-      },
+      "capabilities": [
+        "tasks",
+        "chat",
+        "tool-use",
+        "memory"
+      ],
       "pinned": true
     },
     {
       "app_id": "claude-code-session",
-      "kind": "terminal",
+      "kind": "custom",
       "route": "/demo/claude-code",
       "provider": "claude-code",
       "action_namespace": "claude_code",
-      "capabilities": ["edit", "bash", "read", "skills"],
-      "config": {
-        "node": "4090-claude",
-        "skills": "auto"
-      },
+      "capabilities": [
+        "edit",
+        "bash",
+        "read",
+        "skills"
+      ],
       "pinned": true
     },
     {
@@ -75,12 +76,11 @@
       "route": "/demo/hermes",
       "provider": "ollama",
       "action_namespace": "hermes",
-      "capabilities": ["reasoning", "instruction", "code-review"],
-      "config": {
-        "model": "hermes3:8b",
-        "role": "assist",
-        "system_prompt": "You are HERMES — reasoning backbone for the PMOVES demo. Provide analytical support to Agent Zero and Claude Code."
-      },
+      "capabilities": [
+        "reasoning",
+        "instruction",
+        "code-review"
+      ],
       "pinned": false
     }
   ],
@@ -90,16 +90,23 @@
     "thread_ref": "demo-log",
     "default_page": "demo-status",
     "sync": {
-      "mode": "session-only",
-      "writeback_targets": ["entries"],
+      "mode": "mirrored",
+      "writeback_targets": [
+        "entries"
+      ],
       "artifact_prefix": "rooms/demo"
     }
   },
   "persona": {
     "signature_ref": "4090-claude",
     "voice": "energetic",
-    "glyph": "✦",
-    "resonance": ["demo-ready", "agent-relay", "hermes-assist", "show-mode"]
+    "glyph": "\u2726",
+    "resonance": [
+      "demo-ready",
+      "agent-relay",
+      "hermes-assist",
+      "show-mode"
+    ]
   },
   "skill_bindings": [
     {
@@ -107,10 +114,18 @@
       "skill_id": "demo-room",
       "room_id": "demo.room.rehearsal",
       "display_name": "Launch Demo Room",
-      "intent": ["demo", "launch", "showcase"],
+      "intent": [
+        "demo",
+        "launch",
+        "showcase"
+      ],
       "activation": {
         "invocation_mode": "explicit",
-        "trigger_phrases": ["launch demo", "start demo room", "show demo"],
+        "trigger_phrases": [
+          "launch demo",
+          "start demo room",
+          "show demo"
+        ],
         "requires_selection": false
       },
       "surface": {
@@ -125,10 +140,15 @@
         "max_steps": 5
       },
       "context": {
-        "sources": ["room-state", "persona"],
+        "sources": [
+          "room-state",
+          "persona"
+        ],
         "include_last_turns": 2,
         "notebook_writeback": true,
-        "artifact_types": ["text"]
+        "artifact_types": [
+          "text"
+        ]
       },
       "outputs": [
         {
@@ -144,24 +164,35 @@
         "one_active_run": true
       },
       "enabled": true,
-      "tags": ["demo", "launch"]
+      "tags": [
+        "demo",
+        "launch"
+      ]
     }
   ],
-  "p7": {
-    "launch_subject": "p7.nats.launch",
-    "session_subject": "p7.nats.session",
-    "stage": "rehearsal",
-    "suits": ["agent-zero-local", "4090-claws", "hermes-v4"]
-  },
-  "team_refs": ["orchestration", "demo"],
-  "service_refs": ["agent-zero", "ollama", "nats", "cipher-memory"],
-  "launcher_refs": ["demo"],
+  "team_refs": [
+    "orchestration",
+    "demo"
+  ],
+  "service_refs": [
+    "agent-zero",
+    "ollama",
+    "nats",
+    "cipher-memory"
+  ],
+  "launcher_refs": [
+    "demo"
+  ],
   "policies": {
-    "model_routing": "local",
+    "model_routing": "native",
     "publish": {
       "allow_nats_emit": true,
       "allow_external_publish": false,
-      "allowed_subjects": ["p7.nats.launch", "p7.nats.session", "room.session.updated.v1"]
+      "allowed_subjects": [
+        "p7.nats.launch",
+        "p7.nats.session",
+        "room.session.updated.v1"
+      ]
     },
     "memory": {
       "graphiti": false,
@@ -180,7 +211,8 @@
     "related_docs": [
       "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
       "pbnj/pinokio/api/pmoves-pbnj/demo.js",
-      ".claude/skills/demo-room/SKILL.md"
+      ".claude/skills/demo-room/SKILL.md",
+      "pmoves/config/rooms/demo.room.extras.json"
     ]
   }
 }

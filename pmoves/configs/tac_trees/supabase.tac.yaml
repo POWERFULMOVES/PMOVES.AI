@@ -1,0 +1,134 @@
+# TAC Tree: Supabase (foundational data service) assurance
+# Guards the key-consistency + single-runtime + data-safety invariants whose
+# violation caused the "Archon workaround" (a standalone Supabase minting its own
+# keys -> 401). Remediation path: pmoves/docs/operations/SUPABASE_SAFE_RESTART_RUNBOOK.md
+
+name: "Supabase Data-Service Assurance"
+version: "1.0.0"
+description: "Assure Supabase key consistency, single authoritative runtime, data-volume safety, and official-aligned restart practice across the multi-node fleet"
+
+root:
+  id: supabase
+  task: "Supabase foundational data-service review"
+  context: "pmoves/docs/operations/SUPABASE_SAFE_RESTART_RUNBOOK.md + pmoves/env.shared.example + running compose project 'supabase'"
+  agent_hint: codex
+  children:
+    - id: supabase.keys
+      task: "One authoritative, consistent key set (no drift)"
+      context: "official: generate-keys.sh + add-new-auth-keys.sh; keys machine-emitted via pipeline"
+      agent_hint: codex
+      children:
+        - id: supabase.keys.gen
+          task: "Official key-generation scripts present"
+          action:
+            type: grep
+            target: "pmoves/scripts/supabase/generate-keys.sh"
+            pattern: "JWT|SERVICE_ROLE|SECRET"
+            expect: "generate-keys.sh emits the secret/JWT key set"
+          context: "Official self-hosting uses generate-keys.sh (secrets) + add-new-auth-keys.sh (asymmetric JWT signing pair)"
+          agent_hint: codex
+
+        - id: supabase.keys.archon-alias
+          task: "Archon SUPABASE_SERVICE_KEY hydrated from the freshest canonical key (no pre-hydration copies)"
+          action:
+            type: grep
+            target: "pmoves/tools/runtime_secrets_hydrate.py"
+            pattern: "SUPABASE_SERVICE_KEY"
+            expect: "runtime hydration aliases SUPABASE_SERVICE_KEY <- live SERVICE_ROLE_KEY, one-way"
+          context: "Alias derived post-hydration from the freshest canonical source; NOT written pre-hydration in brand_defaults (would block the fresh key — Codex #1984 P1)"
+          agent_hint: codex
+
+        - id: supabase.keys.machine-emitted
+          task: "Supabase keys declared in the env template (machine-emitted, never hand-edited)"
+          action:
+            type: grep
+            target: "pmoves/env.shared.example"
+            pattern: "SERVICE_ROLE_KEY|SUPABASE_SERVICE_KEY|ANON_KEY"
+            expect: "keys declared in env.shared.example; values emitted by the pipeline"
+          context: "reference_pmoves_secrets_pipeline: env.shared is a machine-emitted artifact"
+          agent_hint: codex
+
+    - id: supabase.runtime
+      task: "Single authoritative runtime — no rogue/standalone stack"
+      context: "supa-runtime-guard must PASS on every node; the 'supabase' standalone project is the drift smell"
+      agent_hint: codex
+      children:
+        - id: supabase.runtime.guard
+          task: "Runtime guard target exists (detects CLI-vs-compose / standalone drift)"
+          action:
+            type: grep
+            target: "pmoves/Makefile"
+            pattern: "supa-runtime-guard"
+            expect: "supa-runtime-guard target present"
+          context: "PASS = one runtime; a standalone -p supabase stack with its own keys is the failure mode"
+          agent_hint: codex
+
+        - id: supabase.runtime.doctor
+          task: "Env doctor target exists (layered-env key conflict detection)"
+          action:
+            type: grep
+            target: "pmoves/Makefile"
+            pattern: "supa-env-doctor"
+            expect: "supa-env-doctor target present"
+          context: "Run before wiring any new Supabase client"
+          agent_hint: codex
+
+    - id: supabase.data
+      task: "Data-volume safety + official restart practice"
+      context: "supabase-db-data is source of truth; recreate (not restart) picks up config"
+      agent_hint: codex
+      children:
+        - id: supabase.data.volume
+          task: "Runbook forbids deleting the data volume"
+          action:
+            type: grep
+            target: "pmoves/docs/operations/SUPABASE_SAFE_RESTART_RUNBOOK.md"
+            pattern: "Never.*down -v|supabase-db-data"
+            expect: "runbook names supabase-db-data as source of truth; forbids down -v / reset"
+          context: "Only reset.sh / down -v deletes volumes/db/data (official)"
+          agent_hint: codex
+
+        - id: supabase.data.recreate
+          task: "Runbook uses force-recreate, not plain restart (official)"
+          action:
+            type: grep
+            target: "pmoves/docs/operations/SUPABASE_SAFE_RESTART_RUNBOOK.md"
+            pattern: "force-recreate|recreate, not restart"
+            expect: "runbook: plain restart does not pick up config changes; force-recreate required"
+          context: "Official: 'a plain docker compose restart is not sufficient'"
+          agent_hint: codex
+
+    - id: supabase.runbook
+      task: "Safe-restart runbook exists, official-aligned, dependency-aware"
+      action:
+        type: grep
+        target: "pmoves/docs/operations/SUPABASE_SAFE_RESTART_RUNBOOK.md"
+        pattern: "Topology|Dependents|Multi-node consistency"
+        expect: "runbook maps topology + dependents (blast radius) + multi-node rule"
+      context: "Data-service restarts must be runbook-guided with dependencies listed"
+      agent_hint: codex
+
+    - id: supabase.dependents
+      task: "Dependents consume the same authoritative key set"
+      context: "Archon, Cipher, Wealth, n8n, agents read SUPABASE_URL/keys from the same env lineage"
+      agent_hint: codex
+      children:
+        - id: supabase.dependents.archon
+          task: "Native Archon reads pipeline-emitted Supabase env (not a per-client .env)"
+          action:
+            type: grep
+            target: "pmoves/Makefile"
+            pattern: "up-archon-native|ARCHON_NATIVE_DC"
+            expect: "up-archon-native runs Archon's own compose with --env-file env.shared"
+          context: "Archon 401 was the drift symptom; native target feeds it the authoritative key set"
+          agent_hint: codex
+
+        - id: supabase.dependents.enumerated
+          task: "Supabase dependents enumerable from compose (topology derivable)"
+          action:
+            type: grep
+            target: "pmoves/docs/operations/SUPABASE_SAFE_RESTART_RUNBOOK.md"
+            pattern: "grep -lE .*SUPABASE_URL"
+            expect: "runbook gives the command to re-derive the dependents list"
+          context: "Topology clear: dependents = compose files referencing SUPABASE_URL/keys"
+          agent_hint: codex

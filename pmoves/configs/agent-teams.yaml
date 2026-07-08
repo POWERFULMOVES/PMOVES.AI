@@ -20,6 +20,12 @@ teams:
       - botz_gateway      # Port 8054 — Work item distribution
       - gateway_agent     # Port 8100 — MCP tool orchestration
       - consciousness_service  # CGP consciousness mapper
+      - botz_architect    # BoTZ skill architect (registry topology.team=orchestration)
+      - botz_builder      # BoTZ skill builder
+      - botz_auditor      # BoTZ skill auditor
+      - space_agent       # Port 3010 — spatial/canvas agent
+      - a0_plugins        # Agent Zero community plugin index + validation CI
+      - hermes_agent      # HERMES gateway/reasoning agent (hermes-agent.room.control)
 
   research:
     name: "Research & Knowledge"
@@ -37,6 +43,8 @@ teams:
       - dox               # Document intelligence
       - open_notebook     # Knowledge base (SurrealDB)
       - cipher_memory     # Port 8105 — Knowledge graph memory
+      - notebooklm_agent  # NotebookLM source-grounded research (registry topology.team=research)
+      - autoresearch      # Autonomous ML training/experiment loop
 
   media:
     name: "Media & Voice"
@@ -60,6 +68,7 @@ teams:
       - remotion_renderer # Port 8107 — A2UI Remotion video rendering
       - podcast_producer  # Port 8110 — Podcast RSS feed generation + multi-episode TTS
       - youtube_publisher # Port 8111 — YouTube upload + metadata + thumbnail generation
+      - cipher_beats_analyst  # audio beats/CGP analyst (registry topology.team=media)
 
   data:
     name: "Data & Storage"
@@ -103,6 +112,9 @@ teams:
       - publisher_discord  # Port 8094 — Discord notifications
       - render_webhook    # Port 8085 — ComfyUI callback handler
       - presign           # Port 8088 — MinIO URL presigner
+      - clawz             # Multi-channel messaging gateway (OpenClaw, 25+ platforms)
+      - pmoves_ci_bot     # CI automation bot
+      - pr_hedge_trim     # PR review-thread trimmer
 
   evolution:
     name: "Evolution & CHIT"
@@ -179,6 +191,22 @@ teams:
       - tracing_specialist      # Jaeger distributed tracing
       - llm_observability       # TensorZero LLM performance
 
+  fordham_community:
+    name: "Fordham Hill Community"
+    description: "Community mesh cost-pooling + co-op self-governance pilot: onboarding, pooled-dues ledger, resident materials/dashboard, accessible voice. Agents runtime-minted by Archon for room fordham.room.community. DRAFT - REQUIRES LEGAL REVIEW."
+    node_affinity: [kvm4-1, kvm4-2, kvm2, z890, powerfulmoves]
+    ci_runner: vps
+    compose_profiles: [agents, tier-agent]
+    agents:
+      - fordham_steward       # room coordinator / host (manifest owner: fordham-steward)
+      - fordham_onboarding    # mesh enrollment + eligible-voter roll (record-only)
+      - fordham_transaction   # pooled dues / Firefly co-op ledger / surplus (deterministic-tools-only)
+      - fordham_creator       # resident materials + pilot dashboard
+      - fordham_voice         # accessible spoken interaction (FlOO$ suit)
+
+# Validation: enforced by the pydantic gate `make -C pmoves validate-agents`
+# (pmoves/scripts/validate_agent_registry.py); CI: .github/workflows/validate-agents-config.yml.
+# The snippet below is the original informal rule, kept for reference.
 # Validation: all agents from agent_registry.yaml must appear in exactly one team
 # Run: python -c "
 # import yaml

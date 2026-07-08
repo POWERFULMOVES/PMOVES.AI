@@ -8,7 +8,7 @@
 ##############################################################################
 services:
   wger:
-    <<:
+    <<: &tier-api-hardened
       env_file:
       - env.shared
       - env.tier-api
@@ -19,8 +19,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     restart: unless-stopped
@@ -44,29 +42,6 @@ services:
     ports:
     - "${WGER_BIND:-0.0.0.0}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
-    networks:
-    - pmoves_api
-    - pmoves_bus
-    - pmoves_data
-    - pmoves_monitoring  # Prometheus scrape access for /metrics
-    depends_on:
-      wger-db:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    volumes:
-    - wger-static:/home/wger/static
-    - wger-media:/home/wger/media
-    - wger-prometheus:/tmp/prometheus
-    # NOTE: wger uses /api/v2/health/ natively, not PMOVES-standard /healthz
-    # healthcheck aligned to wger's native path; /healthz shim deferred to PMOVES image overlay
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/health/', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
-
   wger-db:
     <<:
       env_file:
@@ -81,8 +56,6 @@ services:
       - FOWNER
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: postgres:15-alpine
     restart: unless-stopped
@@ -109,6 +82,19 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+  wger-nats-bridge:
+    <<: *tier-api-hardened
+    build: ./services/wger-nats-bridge
+    restart: unless-stopped
+    environment:
+    - WGER_API_URL=http://wger:8000
+    - NATS_URL=${NATS_URL}
+    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:-}
+    - WGER_POLL_INTERVAL=${WGER_POLL_INTERVAL:-60}
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["health", "wger"]
   botz-gateway:
     <<:
       env_file:
@@ -119,8 +105,6 @@ services:
       cap_add:
       - NET_BIND_SERVICE
       read_only: true
-      security_opt:
-      - no-new-privileges:true
       tmpfs:
       - /tmp:noexec,nosuid,size=64m
       - /var/tmp:noexec,nosuid,size=64m
@@ -174,8 +158,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: ${PMOVES_YT_IMAGE:-}
     build:
@@ -185,7 +167,7 @@ services:
       - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.tier-media has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-media has credentials: nats://nats:***@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}

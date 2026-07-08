@@ -30,6 +30,7 @@ EXPECTED_SCRAPE_TARGETS = {
     "extract-worker",
     "pmoves-yt",
     "agent-zero",
+    "wger",
 }
 
 

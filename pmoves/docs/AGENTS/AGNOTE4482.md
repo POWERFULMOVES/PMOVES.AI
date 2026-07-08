@@ -1333,3 +1333,52 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 - Branch Cleanup: none (docs-only lane)
 
 <!-- GRAPHITI_MARK: MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK::2026-06-23 -->
+
+## Fordham Room + Agent-Config Convergence Audit Record (2026-07-07)
+
+### Work Performed
+- **Fordham Hill community room** landed (`fordham.room.community`, stage `rehearsal`) from a 5-agent design fan-out + contract-conformance critic; reconciled to a schema-valid manifest (`Draft202012Validator`: 0 errors) — 5 apps, 8 skill bindings, vote path gated `enabled:false`. Plus 5 Archon mint specs + a 5090 collaboration field brief. (PR #1993)
+- **Pydantic validation gate** for the agent registry↔teams coupling (`validate_agent_registry.py` + `make validate-agents` + CI `validate-agents-config.yml`). Ratchet baseline started at 12 unteamed + 6 unregistered, then **fully reconciled to zero drift** — registry **91 == 91** team agents. NeMo/Nemotron enterprise agents registered generically (no UNFCU branding; the branded edition stays on its private branches).
+- **Room validator** made report-all (no longer crashes on the first invalid manifest) — surfaced two pre-existing invalid rooms whose legitimate extension fields the strict schema rejects (see Owner Decisions).
+- **NATS + descriptions**: registered the `fordham.*` subject family + 2 DRAFT subjects; made registry descriptions specific + `source:`-linked; corrected wrong ports on skill-only/headless agents.
+- **Topology diagrams refreshed**: `runner-topology.md` (13 teams / 91 agents), `ROOMS_ON_A_STAGE.md` (7 rooms incl. fordham), `PMOVES_AGENT_TOPOLOGY.md` (91-agent header + Fordham cluster in the master diagram + assignment-table rows).
+- **PR review**: #1994 (SPARK NATS bring-up) — flagged a P2 partial-password leak in a committed AGNOTE (redact + rotate).
+
+### Owner Decisions
+- The room schema (`pmoves/contracts/schemas/room/room.manifest.v1.schema.json`) is guard-protected. Extending it to allow the legitimate `p7` / app `config` / `sandbox_policy` / `multi_user` fields (so `demo` + `hermes-agent` validate WITHOUT data loss) needs operator approval — the alternative (conforming the rooms) destroys real config and is not recommended.
+- Fordham launch-mint gates remain: `creator_id` resolution + `fordham-steward` signature in `agent_signatures.yaml`; Archon confirmed up/healthy on 4090.
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::FORDHAM-ROOM-CONFIG-CONVERGENCE`
+- Timestamp: `2026-07-07`
+- Branch: `feat/fordham-room-community` (PR #1993)
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::FORDHAM-ROOM-CONFIG-CONVERGENCE::2026-07-07 -->
+
+## SPARK Node Full Bring-Up Session (2026-07-07)
+
+### Work Performed
+- Fixed vector crash loop: proxy vars (`HTTP_PROXY`/`HTTPS_PROXY`) unsetting via entrypoint override, IPv4 healthcheck `127.0.0.1:9001`, LOGFLARE placeholder token (PR #1990).
+- Created 6 NATS JetStream streams via mesh-agent nats-py: `AGENTZERO`, `MESH_GPU`, `CONTENT_PROVENANCE`, `GEOMETRY_CGP`, `BOTZ_COORDINATION`, `TOKENISM_ATTRIBUTION`.
+- Deployed spark-shape-worker on `pmoves_bus`, healthy, subscribed to `mesh.gpu.inference.result.v1`.
+- Pulled 7 models to Ollama: `qwen3.5:35b-a3b-q8_0` (36GB), `nemotron-3-super:120b` (80GB), `qwen3:30b-a3b-q4_K_M` (17GB), `hermes3:8b`, `llama3.2:3b`, `nomic-embed-text`, `qwen2.5-coder:32b` (~19GB).
+- Deployed HF MCP server on :8096, healthy, NATS connected. Fixed `ModelFilter` import removal.
+- Fixed Docker NAT: `daemon.json` `default-runtime=nvidia` bypasses runc iptables. `SPARK_NAT_FIX.sh` adds MASQUERADE rules.
+- Created `pmoves_public` network for edge-functions egress (PR #1990).
+- Fixed channel-monitor DB password: container had `dev-db-password-placeholder` instead of actual PG credentials. Recreated via `make channel-monitor-up`.
+- Applied autoMode fleet config with `PMOVES_NODE_ID=spark`.
+- Installed claude-pmoves launcher (PRs #1987 + #1991).
+- Wired 10 MCP servers in `.claude/mcp.json`.
+- Synced PMOVES repo to `origin/main` (`2b5a40ea4`).
+- Fixed NATS password mismatch: env.shared had a stale default instead of the actual NATS server password. Corrected env.shared; credential rotated.
+- Shape worker E2E test PASSED: `mesh.gpu.inference.result.v1` → `content.lexicon.shaped.v1` + `mesh.shape.handshake.v1`.
+
+### Fleet Status: 41 containers healthy
+
+### Agent ACK
+- Agent: `AGENT-ZERO-0 (SPARK)`
+- Signature: `ACK::SPARK::FULL-BRINGUP-2026-07-07`
+- Timestamp: `2026-07-07T16:06:00Z`
+
+<!-- GRAPHITI_MARK: SPARK::FULL-BRINGUP-2026-07-07::2026-07-07 -->
