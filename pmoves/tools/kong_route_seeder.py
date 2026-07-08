@@ -18,6 +18,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -38,36 +39,48 @@ MODEL_SUITS_DIR = PMOVES / "configs" / "model-suits"
 LOG = logging.getLogger("kong_route_seeder")
 
 
-class _SecretsFilter(logging.Filter):
-    """Drops log records that contain probable API key values."""
+class _RedactingLoggerAdapter(logging.LoggerAdapter):
+    """Redacts secrets from log messages at format time.
 
-    _SENSITIVE = ("api_key", "apikey", "api-key", "_key", "secret", "token", "password")
+    Avoids mutating the underlying LogRecord (which would affect all
+    handlers globally).  Instead, redaction happens in ``process()`` so
+    the redacted string is what ultimately reaches the formatter.
+    """
 
-    def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        lowered = msg.lower()
-        for trigger in self._SENSITIVE:
-            if trigger in lowered and "=" in lowered:
-                import re as _re
+    _SENSITIVE_RE = re.compile(
+        r"((?:api[_-]?key|apikey|secret|token|password|auth)[^=]*)=\S+",
+        re.IGNORECASE,
+    )
 
-                record.msg = _re.sub(
-                    rf"({trigger}[^=]*)=\S+", r"\1=***REDACTED***", record.msg
-                )
-                if record.args:
-                    record.args = tuple(
-                        _re.sub(rf"({trigger}[^=]*)=\S+", r"\1=***REDACTED***", str(a))
-                        for a in record.args
-                    )
-        return True
+    def process(self, msg, kwargs):
+        msg = self._SENSITIVE_RE.sub(r"\1=***REDACTED***", str(msg))
+        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+            kwargs["extra"] = self._redact_dict(kwargs["extra"])
+        return msg, kwargs
+
+    def _redact_dict(self, d: dict[str, Any]) -> dict[str, Any]:
+        redacted: dict[str, Any] = {}
+        for k, v in d.items():
+            if isinstance(v, dict):
+                redacted[k] = self._redact_dict(v)
+            elif any(s in k.lower() for s in ("key", "secret", "token", "password")):
+                redacted[k] = "***REDACTED***"
+            else:
+                redacted[k] = v
+        return redacted
 
 
 def _setup_logging(level: int = logging.INFO) -> None:
     handler = logging.StreamHandler(sys.stderr)
-    handler.addFilter(_SecretsFilter())
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     handler.setFormatter(fmt)
     LOG.setLevel(level)
     LOG.addHandler(handler)
+
+
+def get_redacting_logger() -> _RedactingLoggerAdapter:
+    """Return a LoggerAdapter that redacts secrets at format time."""
+    return _RedactingLoggerAdapter(LOG, {})
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +130,13 @@ class KongAdminClient:
                     results.extend(data.get("data", []))
                     next_url = data.get("next")
             except urllib.error.HTTPError as exc:
-                LOG.error("Failed to list %s: %s", resource, exc)
-                break
+                error_body = exc.read().decode("utf-8") if exc.fp else ""
+                LOG.error(
+                    "Failed to list %s: HTTP %s - %s", resource, exc.code, error_body
+                )
+                if exc.code >= 500:
+                    raise  # Server errors are critical
+                break  # Client errors (404, etc.) are expected
         return results
 
     def upsert_service(self, name: str, url: str, **extra: Any) -> dict[str, Any] | None:
@@ -152,6 +170,11 @@ class KongAdminClient:
         route_name: str | None = None,
         config: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
+        """Idempotently create or update a plugin using PUT.
+
+        Uses a deterministic plugin ID so repeated calls are true upserts.
+        """
+        plugin_id = f"{plugin_name}-{service_name or route_name or 'global'}"
         payload: dict[str, Any] = {"name": plugin_name}
         if service_name:
             payload["service"] = {"name": service_name}
@@ -159,7 +182,7 @@ class KongAdminClient:
             payload["route"] = {"name": route_name}
         if config:
             payload["config"] = config
-        return self._request("POST", "/plugins", payload)
+        return self._request("PUT", f"/plugins/{plugin_id}", payload)
 
     def delete_service_cascade(self, name: str) -> None:
         routes = self.list_all("routes")
