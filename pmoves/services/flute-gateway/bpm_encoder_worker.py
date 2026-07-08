@@ -29,6 +29,18 @@ from nats.aio.client import Client as NATS
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+
+def _load_secret(key: str, default: str = "") -> str:
+    """Read secret from env or *_FILE mount (Docker secret convention)."""
+    val = os.environ.get(key)
+    if val:
+        return val
+    file_path = os.environ.get(f"{key}_FILE")
+    if file_path and os.path.exists(file_path):
+        with open(file_path, encoding="utf-8") as fh:
+            return fh.read().strip()
+    return default
+
 BOUNDARY_BPM = {
     "SENTENCE": 60,
     "CLAUSE": 90,
@@ -41,7 +53,7 @@ _BOUNDARY_RE = re.compile(r'[.!?;,:]\s*')
 
 
 def _resolve_nats_url() -> str:
-    url = os.environ.get("NATS_URL", "")
+    url = _load_secret("NATS_URL")
     if url:
         return url
     host = os.environ.get("NATS_HOST", "nats")
@@ -57,7 +69,8 @@ def _redact_url(url: str) -> str:
     try:
         parsed = urlparse(url)
         if parsed.password:
-            return url.replace(parsed.password, "***")
+            netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
+            return url.replace(parsed.netloc, netloc)
     except Exception:
         pass
     return url
@@ -99,6 +112,11 @@ def _encode_prosodic_profile(text: str) -> dict:
                 "end_char": b["position"],
             })
         prev_pos = b["position"] + 1
+    # Capture trailing text after last boundary
+    if prev_pos < len(text):
+        trailing = text[prev_pos:].strip()
+        if trailing:
+            chunks.append({"text": trailing, "boundary": "NONE", "bpm": BOUNDARY_BPM["NONE"], "start_char": prev_pos, "end_char": len(text)})
     avg_bpm = sum(c["bpm"] for c in chunks) / len(chunks) if chunks else BOUNDARY_BPM["NONE"]
     return {"chunks": chunks, "avg_bpm": round(avg_bpm, 1), "total_chunks": len(chunks)}
 
@@ -139,7 +157,7 @@ def _build_cgp_packet(profile: dict, source: dict) -> dict:
             }
         ],
     }
-    secret = os.environ.get("BPM_ENCODER_SECRET", "")
+    secret = _load_secret("BPM_ENCODER_SECRET")
     if secret:
         canonical = json.dumps(packet, sort_keys=True, separators=(",", ":"))
         sig = hmac.new(secret.encode(), canonical.encode(), hashlib.sha256).hexdigest()

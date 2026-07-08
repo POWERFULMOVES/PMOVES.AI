@@ -2,8 +2,9 @@
 # Runtime: Run as a standalone sidecar container or systemd service alongside flute-gateway.
 """Geometry Decoded Consumer — subscribes to geometry.packet.decoded.v1.
 
-Consumes decoded CGP packets published by cgp_consumer.py and routes geometry
-data to downstream integrations (cymatic visualizer, persona broadcast, matrix monitor).
+Consumes decoded CGP packets published by cgp_consumer.py, validates packet
+structure, and logs geometry data summaries for observability. Future versions
+will route data to downstream integrations (cymatic visualizer, persona broadcast).
 
 This closes the lane-3 gap: cgp_consumer publishes decoded packets to
 geometry.packet.decoded.v1, but nothing consumed that subject.
@@ -24,12 +25,21 @@ from nats.aio.client import Client as NATS
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-_STRICT_MODE = bool(os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE"))
+def _load_secret(key: str, default: str = "") -> str:
+    """Read secret from env or *_FILE mount (Docker secret convention)."""
+    val = os.environ.get(key)
+    if val:
+        return val
+    file_path = os.environ.get(f"{key}_FILE")
+    if file_path and os.path.exists(file_path):
+        with open(file_path, encoding="utf-8") as fh:
+            return fh.read().strip()
+    return default
 
 
 def _resolve_nats_url() -> str:
     """Resolve NATS connection URL from env vars with component fallback."""
-    url = os.environ.get("NATS_URL", "")
+    url = _load_secret("NATS_URL")
     if url:
         return url
     host = os.environ.get("NATS_HOST", "nats")
@@ -46,7 +56,8 @@ def _redact_url(url: str) -> str:
     try:
         parsed = urlparse(url)
         if parsed.password:
-            return url.replace(parsed.password, "***")
+            netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
+            return url.replace(parsed.netloc, netloc)
     except Exception:
         pass
     return url
@@ -104,7 +115,7 @@ async def main():
                 cp_keys,
             )
 
-            # Route to downstream subjects based on geometry content
+            # Log geometry data for observability (future: route to downstream subjects)
             for node in super_nodes:
                 node_id = node.get("id", "unknown")
                 constellations = node.get("constellations", [])
