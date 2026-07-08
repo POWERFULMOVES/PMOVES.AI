@@ -66,7 +66,9 @@ log "installed observer -> $OBS_DIR/exit-node-observer.sh"
 
 # --- 3. systemd units — two writers, atomic writes, minute cadence -----------
 # Writer A: native Tailscale client metrics (path-labelled direct/derp/peer_relay).
-cat > /etc/systemd/system/tailscale-metrics.service <<'UNIT'
+# Unquoted heredoc so ${TEXTFILE_DIR} bakes in at install time — the unit must
+# write into the SAME dir node_exporter scrapes, not the hardcoded default.
+cat > /etc/systemd/system/tailscale-metrics.service <<UNIT
 [Unit]
 Description=Write Tailscale client metrics to node_exporter textfile collector
 After=tailscaled.service
@@ -74,8 +76,8 @@ Wants=tailscaled.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/tailscale metrics write /var/lib/node_exporter/textfile_collector/.tailscaled.prom.tmp
-ExecStartPost=/bin/mv /var/lib/node_exporter/textfile_collector/.tailscaled.prom.tmp /var/lib/node_exporter/textfile_collector/tailscaled.prom
+ExecStart=/usr/bin/tailscale metrics write ${TEXTFILE_DIR}/.tailscaled.prom.tmp
+ExecStartPost=/bin/mv ${TEXTFILE_DIR}/.tailscaled.prom.tmp ${TEXTFILE_DIR}/tailscaled.prom
 UMask=0022
 UNIT
 
