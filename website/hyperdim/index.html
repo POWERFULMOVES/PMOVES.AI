@@ -243,6 +243,51 @@
 
                 <hr class="section-divider">
 
+                <hr class="section-divider">
+
+                <div class="section">
+                    <div class="section-header" id="replayHeader">
+                        <span class="section-caret" id="replayCaret">▶</span>
+                        <span class="section-title">Replay</span>
+                    </div>
+                    <div class="section-body" id="replayBody" style="display: none;">
+                        <!-- Tier 1: Timeline Scrubber -->
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="replayTimeline">Timeline Scrubber</label>
+                                <div class="replay-timeline-container">
+                                    <input type="range" id="replayTimeline" min="0" max="0" value="0" step="1">
+                                    <span class="replay-frame-counter" id="replayFrameCounter">0 / 0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group-inline replay-controls">
+                                <button id="replayPlay" title="Play/pause timeline">▶</button>
+                                <button id="replayStop" title="Stop and reset">⏹</button>
+                                <select id="replaySource" title="Replay source">
+                                    <option value="saves">All Saves</option>
+                                    <option value="recorded">Recorded</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- Tier 2: State Recording -->
+                        <div class="control-row">
+                            <div class="control-group-inline replay-record-controls">
+                                <button id="replayRecord" title="Capture current geometry state">● Record Frame</button>
+                                <button id="replayClear" title="Clear recorded frames" disabled>✕ Clear</button>
+                            </div>
+                        </div>
+                        <!-- Tier 3: Video Export -->
+                        <div class="control-row">
+                            <div class="control-group-inline replay-export-controls">
+                                <button id="replayExport" title="Export timeline as video" disabled>⬇ Export Video</button>
+                                <span class="replay-export-status" id="replayExportStatus"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <div id="sidebar-footer">
@@ -2124,6 +2169,226 @@ function surface(input) {
                 camTweenStart = performance.now();
                 isCameraTweening = true;
             });
+
+            // --- Replay System (Tier 1-3) ---
+            const replayTimeline = document.getElementById('replayTimeline');
+            const replayFrameCounter = document.getElementById('replayFrameCounter');
+            const replayPlayBtn = document.getElementById('replayPlay');
+            const replayStopBtn = document.getElementById('replayStop');
+            const replaySourceSelect = document.getElementById('replaySource');
+            const replayRecordBtn = document.getElementById('replayRecord');
+            const replayClearBtn = document.getElementById('replayClear');
+            const replayExportBtn = document.getElementById('replayExport');
+            const replayExportStatus = document.getElementById('replayExportStatus');
+            const replayHeader = document.getElementById('replayHeader');
+            const replayBody = document.getElementById('replayBody');
+            const replayCaret = document.getElementById('replayCaret');
+
+            // Replay state
+            let replayFrames = []; // Array of config snapshots
+            let replaySavesCache = []; // Cached save configs from saves/
+            let replayPlaying = false;
+            let replayPlayInterval = null;
+            const REPLAY_FPS = 2; // frames per second for auto-play (saves transition slowly)
+            const REPLAY_INTERVAL_MS = 1000 / REPLAY_FPS;
+
+            function updateReplayControls() {
+                const count = replayFrames.length;
+                replayTimeline.max = String(Math.max(0, count - 1));
+                replayFrameCounter.textContent = (count > 0 ? parseInt(replayTimeline.value) + 1 : 0) + ' / ' + count;
+                replayClearBtn.disabled = count === 0;
+                replayExportBtn.disabled = count < 2;
+            }
+
+            // Tier 1: Load all saves as replay frames
+            async function loadSavesAsFrames() {
+                if (replaySavesCache.length > 0) {
+                    replayFrames = replaySavesCache;
+                    updateReplayControls();
+                    return;
+                }
+                try {
+                    const res = await fetch('saves/_list.json');
+                    if (!res.ok) throw new Error('Failed to load saves list');
+                    const list = await res.json();
+                    const configs = [];
+                    for (const item of list) {
+                        if (!item || !item.file) continue;
+                        try {
+                            const cfgRes = await fetch('saves/' + item.file);
+                            if (!cfgRes.ok) continue;
+                            const cfg = await cfgRes.json();
+                            cfg._label = item.name || item.file;
+                            cfg._file = item.file;
+                            configs.push(cfg);
+                        } catch (e) {
+                            console.warn('Failed to load save for replay:', item.file, e);
+                        }
+                    }
+                    replaySavesCache = configs;
+                    replayFrames = configs;
+                    updateReplayControls();
+                } catch (err) {
+                    console.error('Replay: failed to load saves:', err);
+                }
+            }
+
+            function applyReplayFrame(index) {
+                if (index < 0 || index >= replayFrames.length) return;
+                const cfg = replayFrames[index];
+                applyConfig(cfg);
+                if (cfg.surface && cfg.surface.code) {
+                    editor.setValue(cfg.surface.code);
+                    applySurface();
+                }
+            }
+
+            replayTimeline.addEventListener('input', () => {
+                const idx = parseInt(replayTimeline.value);
+                applyReplayFrame(idx);
+                updateReplayControls();
+            });
+
+            function replayPlay() {
+                if (replayPlaying || replayFrames.length === 0) return;
+                replayPlaying = true;
+                replayPlayBtn.textContent = '⏸';
+                let idx = parseInt(replayTimeline.value);
+                replayPlayInterval = setInterval(() => {
+                    idx = (idx + 1) % replayFrames.length;
+                    replayTimeline.value = String(idx);
+                    applyReplayFrame(idx);
+                    updateReplayControls();
+                }, REPLAY_INTERVAL_MS);
+            }
+
+            function replayPause() {
+                replayPlaying = false;
+                replayPlayBtn.textContent = '▶';
+                if (replayPlayInterval) {
+                    clearInterval(replayPlayInterval);
+                    replayPlayInterval = null;
+                }
+            }
+
+            replayPlayBtn.addEventListener('click', () => {
+                if (replayPlaying) {
+                    replayPause();
+                } else {
+                    replayPlay();
+                }
+            });
+
+            replayStopBtn.addEventListener('click', () => {
+                replayPause();
+                replayTimeline.value = '0';
+                if (replayFrames.length > 0) {
+                    applyReplayFrame(0);
+                }
+                updateReplayControls();
+            });
+
+            // Tier 2: State Recording
+            let recordedFrames = [];
+
+            replayRecordBtn.addEventListener('click', () => {
+                const cfg = collectCurrentConfig();
+                cfg._label = 'Frame ' + (recordedFrames.length + 1);
+                cfg._recorded = true;
+                recordedFrames.push(cfg);
+                if (replaySourceSelect.value === 'recorded') {
+                    replayFrames = recordedFrames;
+                    replayTimeline.max = String(Math.max(0, replayFrames.length - 1));
+                    replayTimeline.value = String(replayFrames.length - 1);
+                }
+                updateReplayControls();
+            });
+
+            replayClearBtn.addEventListener('click', () => {
+                recordedFrames = [];
+                replayFrames = [];
+                replayTimeline.value = '0';
+                replayTimeline.max = '0';
+                updateReplayControls();
+            });
+
+            // Source switching
+            replaySourceSelect.addEventListener('change', async () => {
+                replayPause();
+                if (replaySourceSelect.value === 'saves') {
+                    await loadSavesAsFrames();
+                } else {
+                    replayFrames = recordedFrames;
+                    replayTimeline.value = '0';
+                    updateReplayControls();
+                }
+            });
+
+            // Tier 3: Video Export via MediaRecorder
+            replayExportBtn.addEventListener('click', async () => {
+                if (replayFrames.length < 2) return;
+                replayExportBtn.disabled = true;
+                replayExportStatus.textContent = 'Recording...';
+
+                try {
+                    const canvas = renderer.domElement;
+                    const stream = canvas.captureStream(30);
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+                        ? 'video/webm;codecs=vp9'
+                        : 'video/webm';
+                    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8000000 });
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
+                    recorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'hyperdim-replay-' + Date.now() + '.webm';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        replayExportBtn.disabled = false;
+                        replayExportStatus.textContent = 'Done!';
+                        setTimeout(() => { replayExportStatus.textContent = ''; }, 3000);
+                    };
+
+                    recorder.start();
+                    const frameDelay = 500; // ms per frame during export
+                    for (let i = 0; i < replayFrames.length; i++) {
+                        replayTimeline.value = String(i);
+                        applyReplayFrame(i);
+                        updateReplayControls();
+                        // Wait for frame to render
+                        await new Promise(resolve => setTimeout(resolve, frameDelay));
+                    }
+                    recorder.stop();
+                } catch (err) {
+                    console.error('Video export failed:', err);
+                    replayExportStatus.textContent = 'Export failed';
+                    replayExportBtn.disabled = false;
+                    setTimeout(() => { replayExportStatus.textContent = ''; }, 3000);
+                }
+            });
+
+            // Replay section toggle
+            if (replayHeader) {
+                replayHeader.addEventListener('click', () => {
+                    const isHidden = replayBody.style.display === 'none';
+                    replayBody.style.display = isHidden ? '' : 'none';
+                    replayCaret.textContent = isHidden ? '▼' : '▶';
+                    // Lazy-load saves when opened
+                    if (isHidden && replaySourceSelect.value === 'saves' && replayFrames.length === 0) {
+                        loadSavesAsFrames();
+                    }
+                });
+            }
+
+            // Initialize replay controls
+            updateReplayControls();
 
             const urlParams = new URLSearchParams(window.location.search);
             const presetQuery = urlParams.get('preset');
