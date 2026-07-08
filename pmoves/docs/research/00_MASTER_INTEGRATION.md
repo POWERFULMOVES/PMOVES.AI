@@ -33,10 +33,10 @@
 | 4 | **SoundCloud Music Analysis** | GREEN | `04_soundcloud_analysis.md` | 638 |
 | 5 | **Network Architecture** | GREEN | `05_network_architecture.md` | 1,684 |
 | 6 | **LinkedIn Profile** | GREEN | `06_linkedin_profile.md` | 281 |
-| 7 | **Agent Card Architecture** | GREEN | `07_agent_card_architecture.md` | 3,663 |
+| 7 | **Agent Card Architecture** | GREEN | `agent-card-architecture-v1.md` | 3,663 |
 | 8 | **DARKXSIDE Persona** | GREEN | `08_darkxside_persona.md` | 903 |
-| 9 | **Semantic Cache Validation** | RED (CONDITIONAL FAIL) | `09_semantic_cache_validation.md` | 581 |
-| 10 | **GLM/KIMI Configurations** | GREEN | `10_glm_kimi_configs.md` | 2,702 |
+| 9 | **Semantic Cache Validation** | RED (CONDITIONAL FAIL) | `semantic-cache-validation-report.md` | 581 |
+| 10 | **GLM/KIMI Configurations** | GREEN | `glm-kimi-configuration-suite.md` | 2,702 |
 
 **Overall Project Health:** 8 GREEN | 1 YELLOW | 1 RED
 
@@ -164,10 +164,10 @@ All recommended actions sorted by **Impact x Effort** (highest ROI first).
 | 4 | 04_soundcloud_analysis.md | 638 | GREEN | 82-track catalog, BPM-prosodic bridge, CLI-as-score |
 | 5 | 05_network_architecture.md | 1,684 | GREEN | Full topology spec, cost estimate ($3,123), vendor catalog |
 | 6 | 06_linkedin_profile.md | 281 | GREEN | 220-char headline, 2,600-char about, skills, recommendations |
-| 7 | 07_agent_card_architecture.md | 3,663 | GREEN | JSON Schema v1.0, 7-layer architecture, 3 examples, Phase 3 |
+| 7 | agent-card-architecture-v1.md | 3,663 | GREEN | JSON Schema v1.0, 7-layer architecture, 3 examples, Phase 3 |
 | 8 | 08_darkxside_persona.md | 903 | GREEN | 7 resonance anchors, 5 dimensions, 6 design artifacts |
-| 9 | 09_semantic_cache_validation.md | 581 | RED | CONDITIONAL FAIL verdict, remediation roadmap, risk matrix |
-| 10 | 10_glm_kimi_configs.md | 2,702 | GREEN | Full spec, hub/spoke, KIMI 8 variants, BGE-M3 hybrid |
+| 9 | semantic-cache-validation-report.md | 581 | RED | CONDITIONAL FAIL verdict, remediation roadmap, risk matrix |
+| 10 | glm-kimi-configuration-suite.md | 2,702 | GREEN | Full spec, hub/spoke, KIMI 8 variants, BGE-M3 hybrid |
 
 ### Model Suit YAML Files Delivered (7)
 
