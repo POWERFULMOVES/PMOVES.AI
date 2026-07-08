@@ -177,7 +177,7 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pr-skill-reminder.sh\"",
-            "timeout": 3
+            "timeout": 10
           }
         ]
       },
@@ -187,7 +187,7 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/env-known-roads-reminder.sh\"",
-            "timeout": 3
+            "timeout": 10
           }
         ]
       },
@@ -197,7 +197,7 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-keyword-surfacer.sh\"",
-            "timeout": 3
+            "timeout": 10
           }
         ]
       }
@@ -237,9 +237,9 @@
     "feature-dev@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
-    "github@claude-plugins-official": false,
+    "github@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
-    "supabase@claude-plugins-official": false,
+    "supabase@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,

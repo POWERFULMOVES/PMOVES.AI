@@ -85,7 +85,7 @@ KNOWN_ROAD=<domain>:<reason>
 
 | Part | Values | Meaning |
 |---|---|---|
-| `<domain>` | `compose` (extensible) | which `readOnlyPath` class is opened |
+| `<domain>` | `compose`, `contracts` (extensible) | which `readOnlyPath` class is opened |
 | `<reason>` | `handoff:<filename>` | the brief at `pmoves/docs/handoffs/<filename>` must exist on disk |
 | | `pr:<number>` / `issue:<number>` | references a tracked PR / issue |
 
@@ -95,11 +95,21 @@ KNOWN_ROAD=compose:handoff:z890-compose-base-network-tier-anchors.md
 ```
 Set it in the shell that launches Claude Code, or in `.claude/settings.json` `env` for the duration of the work. **Never bake it into committed settings** — it is per-task, not ambient.
 
+**Example** — updating an auto-generated interface contract under a tracked PR:
+```bash
+KNOWN_ROAD=contracts:pr:1993
+```
+Opens `pmoves/contracts/**` + `pmoves/docs/PMOVESCHIT/contracts/**` for that edit (e.g. extending `room.manifest.v1.schema.json`); the recorded trail line looks like:
+```json
+{"agent":"4090-claude","domain":"contracts","file":"pmoves/contracts/schemas/room/room.manifest.v1.schema.json","reason":"pr:1993","session":"…","tool":"Edit","ts":"2026-07-07T00:00:00Z"}
+```
+Requires the `contracts` predicate in `known_roads.py` (added separately — the agent classifier blocks self-modification of the guard, so an operator lands the predicate).
+
 **Provability guarantees:**
 - A bare value (`1`, `true`, arbitrary string) is **not** a Known Road — the edit stays blocked.
 - `handoff:` reasons are checked against the filesystem; a missing brief is rejected.
 - Every granted bypass appends a line to `.claude/hooks/damage-control/known-roads.jsonl` — append-only, git-tracked (`merge=union`), machine-parseable. **Fail-closed:** if the trail line cannot be written, the bypass is denied (an unrecorded bypass is not provable).
-- Scope is narrow: `compose:` opens *only* `pmoves/docker-compose*.yml`. Migrations, contracts, secrets stay blocked regardless.
+- Scope is narrow: `compose:` opens *only* `pmoves/docker-compose*.yml`; `contracts:` opens *only* `pmoves/contracts/**` + `pmoves/docs/PMOVESCHIT/contracts/**`. Migrations and secrets stay blocked regardless.
 
 **Extending to a new domain:** add a predicate to `DOMAIN_PATTERNS` in `known_roads.py`. Parse / provability / trail logic is shared — only the per-domain file matcher changes. Codex mirrors `known_roads.py` for cross-agent parity.
 
