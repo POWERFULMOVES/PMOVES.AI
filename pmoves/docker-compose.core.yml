@@ -79,8 +79,6 @@ services:
     restart: "no"
     cap_drop: ["ALL"]
     read_only: true
-    security_opt:
-    - no-new-privileges:true
     tmpfs:
     - /tmp:size=16m,noexec,nosuid
     deploy:
@@ -753,8 +751,6 @@ services:
     - NET_BIND_SERVICE
     - CHOWN
     - SETGID
-    security_opt:
-    - no-new-privileges:true
     ports:
     - ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
     networks:
@@ -819,8 +815,6 @@ services:
     - FOWNER
     - SETGID
     - SETUID
-    security_opt:
-    - no-new-privileges:true
     restart: unless-stopped
     environment:
     - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
