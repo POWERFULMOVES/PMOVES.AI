@@ -502,8 +502,6 @@ x-tier-media-hardened: &tier-media-hardened
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-ui-hardened: &tier-ui-hardened
   env_file:
