@@ -36,7 +36,7 @@ services:
     - ${NATS_PASSWORD}
     restart: unless-stopped
     ports:
-    # NATS is the mesh-wide event bus — credential-guarded (nats:pmoves@),
+    # NATS is the mesh-wide event bus — credential-guarded (nats:***@),
     # so 0.0.0.0 default is intentional to allow Tailscale mesh peers to connect.
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
     - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222

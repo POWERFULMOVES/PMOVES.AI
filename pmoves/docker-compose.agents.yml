@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8080
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
@@ -168,7 +168,7 @@ services:
     restart: unless-stopped
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+      # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - PORT=8091
     - ENVIRONMENT=${ENVIRONMENT:-production}
     - ARCHON_ENV=${ARCHON_ENV:-production}
@@ -653,7 +653,7 @@ services:
       retries: 5
       start_period: 120s
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
-  # Auth: nats://nats:pmoves@nats:4222 | Monitoring: :8222/varz
+  # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
   mesh-agent:
     <<: &tier-agent-hardened-ro
@@ -674,7 +674,7 @@ services:
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     depends_on: [nats]
@@ -765,7 +765,7 @@ services:
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
     - PORT=9224
@@ -892,7 +892,7 @@ services:
     image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - PORT=8113
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}

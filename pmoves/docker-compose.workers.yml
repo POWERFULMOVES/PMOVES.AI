@@ -83,7 +83,7 @@ services:
     build: ./services/spark-shape-worker
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SPARK_SHAPE_SECRET=${SPARK_SHAPE_SECRET:-}
     - MESH_PASSPHRASE=${MESH_PASSPHRASE:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
@@ -124,7 +124,7 @@ services:
       dockerfile: services/pdf-ingest/Dockerfile
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:***@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=false
     - PDF_DEFAULT_BUCKET=${PDF_DEFAULT_BUCKET:-assets}
@@ -276,7 +276,7 @@ services:
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL}
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
     - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
     - DEEPRESEARCH_TENSORZERO_BASE_URL=${DEEPRESEARCH_TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
@@ -454,7 +454,7 @@ services:
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on:
       nats:
