@@ -340,7 +340,7 @@ main() {
 
     # Retrieval & Knowledge Services
     print_section "Retrieval & Knowledge Services"
-    test_http_endpoint "Hi-RAG v2 (CPU)" "http://localhost:8086/health" "200" "default"
+    test_http_endpoint "Hi-RAG v2 (CPU)" "http://localhost:8086/hirag/admin/stats" "200" "default"
     test_http_endpoint "Hi-RAG v1 (CPU)" "http://localhost:8089/health" "200" "legacy"
     test_http_endpoint "DeepResearch" "http://localhost:8098/healthz" "200" "orchestration"
     test_http_endpoint "SupaSerch" "http://localhost:8099/healthz" "200" "orchestration"
@@ -371,7 +371,7 @@ main() {
     # Monitoring Stack
     print_section "Monitoring Stack"
     test_http_endpoint "Prometheus" "http://localhost:9090/-/healthy" "200" "monitoring"
-    test_http_endpoint "Grafana" "http://localhost:3000/api/health" "200" "monitoring"
+    test_http_endpoint "Grafana" "http://localhost:${GRAFANA_HOST_PORT:-3002}/api/health" "200" "monitoring"
     test_http_endpoint "Loki" "http://localhost:3100/ready" "200" "monitoring"
 
     # Integration Tests (connectivity between services)
