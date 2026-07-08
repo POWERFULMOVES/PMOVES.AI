@@ -16,7 +16,7 @@
 
 The PMOVES.AI Semantic Cache specification is **exceptionally well-designed** and addresses all critical caching concerns comprehensively. However, the **implementation has a critical failure mode**: the three most important files (`main.py`, `metrics.py`, `test_semantic_cache.py`) are rendered as broken `§§include()` directives pointing to `/tmp/` paths, making the service **non-startable in production**.
 
-The supporting infrastructure modules (`cache_store.py`, `circuit_breaker.py`, `config.py`, `hirag_client.py`, `cipher_layer.py`, `tokenism.py`, `Dockerfile`, `docker-compose.cache.yml`, and the SQL migration) are all **well-implemented and production-ready**. The problem is isolated to the entry point and observability layer.
+The supporting infrastructure modules (`cache_store.py`, `circuit_breaker.py`, `config.py`, `hirag_client.py`, `cipher_layer.py`, `tokenism.py`, `Dockerfile`, and the SQL migration) are **well-implemented and production-ready**. The `docker-compose.cache.yml` file requires credential review before deployment (see Security Concerns). The problem is isolated to the entry point and observability layer.
 
 | Dimension | Grade | Status |
 |---|---|---|
@@ -356,7 +356,7 @@ CREATE POLICY cache_service_write ON llm_semantic_cache
 | **NATS JetStream** | Tokenism publisher only | Partial (publishes but doesn't subscribe) | Gap |
 | **Ollama fallback** | Direct embedding fallback | YES (`hirag_client.py`) | None |
 | **BGE-M3 hybrid caching** | Dense+Sparse+ColBERT fusion | **NOT IMPLEMENTED** | **MEDIUM** |
-| **Docker compose overlay** | `docker-compose.cache.yml` | YES | None |
+| **Docker compose overlay** | `docker-compose.cache.yml` | REVIEW | Hardcoded credentials — see Section 11 |
 | **Makefile targets** | `cache-up`, `cache-down`, `cache-stats` | **NOT FOUND** | **LOW** |
 
 ### Critical Gaps Summary
@@ -487,7 +487,7 @@ Week 3:
 | `pmoves/services/semantic-cache/tokenism.py` | 72 | GOOD | NATS cost attribution publisher |
 | `pmoves/services/semantic-cache/Dockerfile` | 26 | GOOD | Container image (non-root, healthcheck) |
 | `pmoves/services/semantic-cache/requirements.txt` | 9 | GOOD | Dependencies |
-| `pmoves/docker-compose.cache.yml` | 33 | GOOD (with caveats) | Compose overlay |
+| `pmoves/docker-compose.cache.yml` | 33 | REVIEW | Compose overlay — hardcoded credentials, see Section 11 |
 | `pmoves/supabase/migrations/20260702000000_semantic_cache.sql` | 102 | GOOD | Database schema + HNSW + RPC |
 | `pmoves/tests/smoke/test_semantic_cache.py` | 1 | **BROKEN** | Smoke tests (include directive) |
 
