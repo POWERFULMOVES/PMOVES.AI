@@ -2721,6 +2721,69 @@ agents:
     description: "Aspirational / skill-only (no service or compose yet): YouTube Data API v3 upload + metadata + thumbnail, depends on minio/presign. Defined in pmoves/skills/youtube-upload/manifest.yaml. NOTE: 8111 is the real gateway-agent/container-agent port — not a live port for this."
 
 
+  # --- HF Agent services (model patrol + research evaluation) ---
+
+  hf_agent:
+    name: "HF Agent"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: 8201
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["hf.model.discovered.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_poll_cycle
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
+    description: "Autonomous HuggingFace model patrol — polls for new models matching criteria and publishes discovery events to NATS"
+
+  hf_research_agent:
+    name: "HF Research Agent"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: 8202
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["hf.model.evaluated.v1"]
+      subscribes: ["hf.model.discovered.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_evaluation
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
+    description: "HuggingFace model evaluation worker — subscribes to discovery events, evaluates models against benchmark criteria, publishes evaluation results"
+
+
 # ── MCP Server Registry ─────────────────────────────────────────────────────
 # Root-level MCP servers that can be bound into room manifests as skills.
 # Endpoints are resolved at runtime via env.shared; status reflects compose
