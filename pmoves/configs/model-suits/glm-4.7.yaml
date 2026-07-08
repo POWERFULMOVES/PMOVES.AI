@@ -8,9 +8,9 @@
 
 model_suit:
   name: glm-4.7
-  provider: zhipu_ai
+  provider: zai
   base_url: "https://api.z.ai/v1"
-  api_key_env: ZAI_API_KEY
+  api_key_env: Z_AI_API_KEY
   
   architecture:
     type: moe
@@ -67,5 +67,5 @@ model_suit:
     A: 0.35
     F: 0.04
     
-  fallback_to: glm-4-plus
+  fallback_to: glm-4-flash
   priority: 8
