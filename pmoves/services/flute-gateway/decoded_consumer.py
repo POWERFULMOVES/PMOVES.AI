@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Runtime: Run as a standalone sidecar container or systemd service alongside flute-gateway.
 """Geometry Decoded Consumer — subscribes to geometry.packet.decoded.v1.
 
 Consumes decoded CGP packets published by cgp_consumer.py and routes geometry
@@ -65,7 +66,7 @@ async def main():
         await nc.connect(nats_url, connect_timeout=10)
         logger.info("Connected to NATS at %s", _redact_url(nats_url))
     except Exception as e:
-        logger.error("Failed to connect to NATS: %s", e)
+        logger.error("Failed to connect to NATS: %s", type(e).__name__)
         return
 
     subscribe_subject = os.environ.get("FLUTE_DECODED_SUBJECT", "geometry.packet.decoded.v1")

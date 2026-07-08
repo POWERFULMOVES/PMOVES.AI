@@ -440,7 +440,7 @@ agents:
       node_affinity: [kvm4-1, z890]
       team: evolution
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     description: "Centralized LLM gateway for all model providers"
 
   flute_gateway:
@@ -806,7 +806,7 @@ agents:
       node_affinity: [kvm4-1, z890]
       team: automation
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "MinIO URL presigner for short-lived download URLs"
 
   render_webhook:
@@ -857,7 +857,7 @@ agents:
       node_affinity: [5090, z890]
       team: media
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     description: "Jellyfin metadata webhook and helper"
 
   mai_ui:
@@ -883,7 +883,7 @@ agents:
       node_affinity: [z890, 5090]
       team: ui
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Main user interface"
 
   crush:
@@ -915,7 +915,7 @@ agents:
       node_affinity: [z890, 5090]
       team: ui
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Terminal AI coding assistant — the gateway where model and user begin their journey"
 
   cipher_memory:
@@ -949,7 +949,7 @@ agents:
       node_affinity: [kvm4-1, kvm4-2, z890]
       team: research
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "Knowledge-graph memory for agents (Neo4j backend). Also serves as the resilience backbone — stores agent_plan, agent_checkpoint, and agent_completion snapshots for all agents."
 
   hyperdimensions:
@@ -975,7 +975,7 @@ agents:
       node_affinity: [z890, 5090]
       team: ui
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Geometry visualization surface and control plane (L2.5)"
 
   vps_fleet_manager:
@@ -1004,7 +1004,7 @@ agents:
       node_affinity: [kvm4-1, kvm2]
       team: infra
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "Hostinger KVM fleet orchestration — deploy, status, restart via MCP tools"
 
   pr_hedge_trim:
@@ -1047,8 +1047,12 @@ agents:
     layers: [L0, L2]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1059,7 +1063,7 @@ agents:
       node_affinity: [kvm4-2, z890]
       team: data
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "JetStream-enabled event broker — the nervous system"
 
   supabase:
@@ -1072,8 +1076,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1097,8 +1105,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1109,7 +1121,7 @@ agents:
       node_affinity: [kvm4-2, z890]
       team: data
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "Vector embeddings for semantic search"
 
   neo4j:
@@ -1122,8 +1134,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1134,7 +1150,7 @@ agents:
       node_affinity: [kvm4-2, z890]
       team: data
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "Knowledge graph storage"
 
   meilisearch:
@@ -1147,8 +1163,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1159,7 +1179,7 @@ agents:
       node_affinity: [kvm4-2, z890]
       team: data
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "Full-text keyword search"
 
   minio:
@@ -1172,8 +1192,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1184,7 +1208,7 @@ agents:
       node_affinity: [kvm4-2, z890]
       team: data
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "S3-compatible object storage"
 
   prometheus:
@@ -1226,8 +1250,12 @@ agents:
     layers: [L0]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1251,8 +1279,12 @@ agents:
     layers: [L0]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1317,7 +1349,7 @@ agents:
       node_affinity: [kvm4-1, kvm4-2, z890]
       team: research
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "Knowledge base / note-taking integration (SurrealDB)"
 
   consciousness_service:
@@ -1342,7 +1374,7 @@ agents:
       node_affinity: [kvm4-1, z890, 5090]
       team: orchestration
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     description: "CGP consciousness mapper — geometric cognitive processing"
 
   n8n:
@@ -1367,7 +1399,7 @@ agents:
       node_affinity: [kvm4-1, z890]
       team: automation
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "Workflow automation — glue for multi-step processes"
 
   headscale:
@@ -1392,7 +1424,7 @@ agents:
       node_affinity: [kvm4-1, kvm2]
       team: infra
       ci_runner: vps
-      compose_profile: "wger"
+      compose_profile: null
     description: "Network coordination — mesh VPN overlay"
 
   rustdesk:
@@ -1417,7 +1449,7 @@ agents:
       node_affinity: [z890, 5090]
       team: ui
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Remote desktop — self-hosted remote access"
 
   invidious:
@@ -1442,7 +1474,7 @@ agents:
       node_affinity: [z890, 5090]
       team: ui
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Privacy-focused video frontend"
 
   wealth:
@@ -1456,10 +1488,11 @@ agents:
     evolution_stage: base
     nats:
       publishes:
-        - "finance.transactions.ingested.v1"    
-        - "finance.budget.alert.v1"             
-        - "finance.monthly.summary.v1"          
-      subscribes: []
+        - "finance.transactions.ingested.v1"
+        - "finance.budget.alert.v1"
+        - "finance.monthly.summary.v1"
+      subscribes:
+        - "mesh.node.announce.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1475,7 +1508,7 @@ agents:
       node_affinity: [z890]
       team: life
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Finance management — tongue-in-cheek wealth tracking"
 
   health:
@@ -1484,15 +1517,16 @@ agents:
     primary_type: ui
     secondary_type: data
     port: 8000
-    health: /api/v2/
+    health: "/api/v2/"
     layers: [L0]
     evolution_stage: base
     nats:
       publishes:
-        - "health.metrics.updated.v1"           
-        - "health.workout.completed.v1"         
-        - "health.weekly.summary.v1"            
-      subscribes: []
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "health.weekly.summary.v1"
+      subscribes:
+        - "mesh.node.announce.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1573,7 +1607,7 @@ agents:
       node_affinity: [5090, z890]
       team: evolution
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     description: "Shape-attribution engine for swarm consensus (CHIT L3)"
 
   # --- Agents added in v1.4.0 (12 new agents) ---
@@ -1601,7 +1635,7 @@ agents:
       node_affinity: [z890, 5090]
       team: ui
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Research UI surface — artifact-to-UI prototyping"
 
   agentgym:
@@ -1627,7 +1661,7 @@ agents:
       node_affinity: [cloud]
       team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Agent training gymnasium — environment suite for RL evaluation"
 
   agentgym_rl:
@@ -1653,7 +1687,7 @@ agents:
       node_affinity: [cloud]
       team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Reinforcement learning extension for AgentGym"
 
   creator:
@@ -1679,7 +1713,7 @@ agents:
       node_affinity: [5090, z890]
       team: media
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     description: "Media creation pipeline — ComfyUI + render orchestration"
 
   llama_lab:
@@ -1705,7 +1739,7 @@ agents:
       node_affinity: [5090, z890]
       team: evolution
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     description: "LLM benchmarking and throughput testing laboratory"
 
   surf:
@@ -1731,7 +1765,7 @@ agents:
       node_affinity: [cloud]
       team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "E2B browser automation agent — web interaction sandbox"
 
   e2b_danger_room:
@@ -1757,7 +1791,7 @@ agents:
       node_affinity: [cloud]
       team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Sandboxed code execution environment for untrusted workloads"
 
   e2b_desktop:
@@ -1783,7 +1817,7 @@ agents:
       node_affinity: [cloud]
       team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Desktop sandbox environment for GUI-based agent tasks"
 
   danger_infra:
@@ -1809,7 +1843,7 @@ agents:
       node_affinity: [cloud]
       team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "E2B infrastructure provisioning and sandbox orchestration"
 
   e2b_spells:
@@ -1835,7 +1869,7 @@ agents:
       node_affinity: [cloud]
       team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "Pre-built sandbox templates and execution recipes"
 
   autoresearch:
@@ -1952,7 +1986,7 @@ agents:
       node_affinity: [5090, z890]
       team: media
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     description: "Standalone transcription and content fetching utility"
 
   jellyfin_ai:
@@ -1978,7 +2012,7 @@ agents:
       node_affinity: [5090, z890]
       team: media
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     description: "AI-enhanced media management with Jellyfin integration"
 
   pmoves_e2b_mcp_server:
@@ -2004,7 +2038,7 @@ agents:
       node_affinity: [z890]
       team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     description: "MCP bridge for E2B sandboxed code execution"
 
   metrics_specialist:
@@ -2224,7 +2258,7 @@ agents:
       node_affinity: [z890, 5090]      # CPU/IO bound — run on either node
       team: media
       ci_runner: ubuntu-latest
-      compose_profile: "wger"
+      compose_profile: null
     tool_path: "pmoves/tools/analyze_beats.py"
     runtime: "uv run"
     pinokio_skill: "pbnj/pinokio/api/pmoves-cipher-beats/SKILL.md"
@@ -2263,7 +2297,7 @@ agents:
       node_affinity: [ai-lab]
       team: ci
       ci_runner: ai-lab
-      compose_profile: "wger"
+      compose_profile: null
     signing_card_id: "00000000-0000-4000-8000-000000000035"
     description: |
       CI emitter identity for §9.4 branch lifecycle trail (AGNOTE4482 Layer 4).

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Runtime: Run as a standalone sidecar alongside spark-shape-worker or flute-gateway.
 """BPM Encoder Worker — subscribes to mesh.gpu.inference.result.v1.
 
 Encodes prosodic BPM profiles from GPU inference results and publishes
@@ -153,7 +154,7 @@ async def main():
         await nc.connect(nats_url, connect_timeout=10)
         logger.info("Connected to NATS at %s", _redact_url(nats_url))
     except Exception as e:
-        logger.error("Failed to connect to NATS: %s", e)
+        logger.error("Failed to connect to NATS: %s", type(e).__name__)
         return
 
     sub_subject = os.environ.get("BPM_ENCODER_SUBSCRIBE_SUBJECT", "mesh.gpu.inference.result.v1")
