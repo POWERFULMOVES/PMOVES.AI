@@ -8,9 +8,9 @@
 
 model_suit:
   name: glm-4-air
-  provider: zhipu_ai
+  provider: zai
   base_url: "https://api.z.ai/v1"
-  api_key_env: ZAI_API_KEY
+  api_key_env: Z_AI_API_KEY
   
   architecture:
     type: dense
@@ -83,5 +83,5 @@ model_suit:
     A: 0.4
     F: 0.05
     
-  fallback_to: glm-4-flash
+  fallback_to: kimi-k2
   priority: 10
