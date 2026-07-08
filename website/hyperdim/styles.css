@@ -539,3 +539,89 @@ body {
 .learn-more-content a:hover {
     text-decoration: underline;
 }
+
+/* --- Replay Section --- */
+
+.replay-timeline-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.replay-timeline-container input[type="range"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.replay-frame-counter {
+    font-size: 0.8rem;
+    color: #aaa;
+    white-space: nowrap;
+    min-width: 50px;
+    text-align: right;
+}
+
+.replay-controls {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.replay-controls button,
+.replay-record-controls button,
+.replay-export-controls button {
+    background: #444;
+    color: #eee;
+    border: 1px solid #666;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.replay-controls button:hover,
+.replay-record-controls button:hover,
+.replay-export-controls button:hover {
+    background: #555;
+}
+
+.replay-controls button:active,
+.replay-record-controls button:active,
+.replay-export-controls button:active {
+    background: #666;
+    transform: translateY(1px);
+}
+
+.replay-controls button:disabled,
+.replay-record-controls button:disabled,
+.replay-export-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.replay-record-controls {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.replay-export-controls {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.replay-export-status {
+    font-size: 0.8rem;
+    color: #58a6ff;
+}
+
+.replay-controls select {
+    background: #333;
+    border: 1px solid #444;
+    color: white;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
