@@ -117,6 +117,7 @@ SERVICE_GROUPS = {
     "apps": [
         "wger",
         "wger-db",
+        "wger-nats-bridge",
         "botz-gateway",
         "pmoves-yt",
     ],

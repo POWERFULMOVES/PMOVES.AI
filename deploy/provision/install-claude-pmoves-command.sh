@@ -59,6 +59,17 @@ done
 # rc when it is absent — which is exactly the gap the old code missed.
 if [ ! -f "$active_rc" ]; then install_into "$active_rc"; installed=1; fi
 
+# PATH symlink — robust for shells that don't source the rc (non-login/-i, etc.).
+# ~/.local/bin is the XDG user bin; on many distros it is already on PATH.
+bindir="$HOME/.local/bin"
+mkdir -p "$bindir"
+ln -sf "$launcher" "$bindir/claude-pmoves"
+echo "  path symlink: $bindir/claude-pmoves"
+case ":${PATH}:" in
+  *":$bindir:"*) : ;;
+  *) echo "  NOTE: $bindir is not on PATH — add it, or use the rc function above." ;;
+esac
+
 echo ""
 echo "Installed 'claude-pmoves' -> $launcher"
 echo "Run:  source ~/.bashrc   (or open a new shell)   then just type:  claude-pmoves"

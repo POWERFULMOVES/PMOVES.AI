@@ -1,0 +1,24 @@
+[Unit]
+Description=Route Docker subnets via main table so exit-node return traffic reaches containers
+# Without this rule, selecting a Tailscale exit node on a Docker host silently
+# kills ALL container egress: replies de-NAT'd back to 172.x container addresses
+# hit Tailscale's policy rule (priority 5270 -> table 52), which has no route to
+# the local bridges, so they exit tailscale0 instead of reaching the container.
+# Priority 5269 evaluates just before Tailscale's rule; container OUTBOUND
+# traffic still flows through the exit node. Harmless when no exit node is
+# selected (destination 172.16/12 would use the main table anyway).
+# Refs: https://blog.thms.uk/2026/06/docker-tailscale-exit-node
+#       https://github.com/tailscale/tailscale/issues/13367
+Documentation=https://github.com/tailscale/tailscale/issues/13367
+After=network-online.target tailscaled.service docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/sbin/ip rule del to 172.16.0.0/12 lookup main priority 5269
+ExecStart=/sbin/ip rule add to 172.16.0.0/12 lookup main priority 5269
+ExecStop=-/sbin/ip rule del to 172.16.0.0/12 lookup main priority 5269
+
+[Install]
+WantedBy=multi-user.target

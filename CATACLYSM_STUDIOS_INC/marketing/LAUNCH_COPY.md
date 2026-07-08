@@ -19,14 +19,14 @@ Here's the problem: every major AI provider *promises* they won't keep your data
 
 Here's what we built instead — Cataclysm Studios Inc. / PMOVES.AI:
 
-→ **Zero-retention by architecture, not policy.** Every request runs inside a Firecracker microVM. 150 ms boot. Destroyed after the response. There is no storage layer to leak, subpoena, or monetize. The UN and NGOs don't need a promise — they need a proof. We ship the proof.
+→ **Zero-retention by architecture, not policy.** Every request runs inside a Firecracker microVM. 150 ms boot. Destroyed after the response. Your request data never lands in a storage layer to leak, subpoena, or monetize. The UN and NGOs don't need a promise — they need a proof. We ship the proof.
 
 → **Voice agents that work through walls and across miles** — not through a cell tower, not through your ISP. Sub-1 GHz Wi-Fi HaLow mesh on the OpenMANET 902-928 MHz band. A rural clinic, a post-hurricane shelter, a Bronx housing co-op — same radio layer, no centralized dependency.
 
 → **Hybrid RAG + multi-agent orchestration** (Hi-RAG v2: vectors + graph + full-text + cross-encoder rerank. Agent Zero + ClawZ on top). Not a demo. Production code, running tonight.
 
 Who this is for:
-- **Enterprise / NGO:** Zero-retention tier. UNFCU is our Y2 flagship. Proposal shipping this week.
+- **Enterprise / NGO:** Zero-retention tier. UNFCU is our lead Y2 enterprise target. Proposal shipping this week.
 - **Communities:** Fordham Hill, Bronx — $1K/family/year cooperative model. 100 communities in 5 years.
 - **Disaster response:** St. Maarten post-hurricane blueprint. 50 sites in 5 years.
 - **Creators & operators:** DARKXSIDE'S SCHOOL OF POWERFULMOVES + Cloudflare School. Free. Built as I build.
@@ -54,7 +54,7 @@ PMOVES.AI runs every request inside a Firecracker microVM. 150 ms to boot, micro
 Sub-1 GHz Wi-Fi HaLow (OpenMANET, 902-928 MHz) gives you voice agents through walls and miles of range. No cell tower, no ISP. A community owns its own radio layer. A disaster zone doesn't wait for Verizon to restore service. The network is the product.
 
 **Slide 4 — Who We Serve**
-Enterprise / UN / NGO: zero-retention tier (UNFCU Y2 flagship).
+Enterprise / UN / NGO: zero-retention tier (UNFCU — lead Y2 target).
 Communities: Bronx Fordham Hill cooperative at $1K/family/year.
 Disaster: St. Maarten hurricane-recovery blueprint.
 Creators: free schools on YouTube + Discord.
@@ -226,11 +226,11 @@ Four months ago I told you I was building something. Today it's live.
 
 **PMOVES.AI** is a community-owned AI and mesh-network stack. It does three things no centralized provider can:
 
-1. **Zero-retention by architecture.** Every request runs inside a Firecracker microVM. Boots in 150 milliseconds, is destroyed after your response. There is no storage layer. No policy footnote. No quarterly review of the privacy promise. It's architectural, not aspirational.
+1. **Zero-retention by architecture.** Every request runs inside a Firecracker microVM. Boots in 150 milliseconds, is destroyed after your response. Your request data never touches a storage layer. No policy footnote. No quarterly review of the privacy promise. It's architectural, not aspirational.
 
 2. **Voice agents through walls, miles of range.** Sub-1 GHz Wi-Fi HaLow mesh on OpenMANET 902-928 MHz. A rural clinic, a post-hurricane shelter, a Bronx housing co-op — all run on the same radio layer, none of them dependent on a cell tower.
 
-3. **Community-owned economics.** Fordham Hill Bronx pilot is $1K per family per year. St. Maarten disaster blueprint is built for replication. UNFCU is our Y2 flagship enterprise client. 5-year targets: 100 communities, 50 disaster sites, 60 medical missions.
+3. **Community-owned economics.** Fordham Hill Bronx pilot is $1K per family per year. St. Maarten disaster blueprint is built for replication. UNFCU is our lead Y2 enterprise prospect. 5-year targets: 100 communities, 50 disaster sites, 60 medical missions.
 
 **What changes for you today:**
 
@@ -265,12 +265,12 @@ Hi `[journalist name]` —
 
 DARKXSIDE, founder of Cataclysm Studios Inc., is publicly launching **PMOVES.AI** on `[launch date]` after a four-month private build. Sending this under embargo in case it fits a lane you're tracking.
 
-**The short version:** PMOVES.AI is the first AI platform where zero data retention is an architectural property, not a privacy policy. Every inference request spawns a Firecracker microVM that boots in 150 ms, serves the request, and is destroyed. There is no storage layer to subpoena or leak. Paired with a sub-1 GHz Wi-Fi HaLow mesh (OpenMANET, 902-928 MHz), it runs voice agents through walls and across miles without cell towers or ISP dependency.
+**The short version:** PMOVES.AI is the first AI platform where zero data retention is an architectural property, not a privacy policy. Every inference request spawns a Firecracker microVM that boots in 150 ms, serves the request, and is destroyed. Your request data never lands in a storage layer to subpoena or leak. Paired with a sub-1 GHz Wi-Fi HaLow mesh (OpenMANET, 902-928 MHz), it runs voice agents through walls and across miles without cell towers or ISP dependency.
 
 **Three angles worth pursuing:**
 
 1. **Community-owned AI infrastructure vs. the centralized-provider model** — the Fordham Hill Bronx cooperative pilot is operational (public registration opens after pilot review); St. Maarten disaster-response blueprint is next.
-2. **Zero-retention as enterprise moat** — UNFCU is the flagship Y2 enterprise client. Proposal going out this week.
+2. **Zero-retention as enterprise moat** — UNFCU is our lead Y2 enterprise prospect. Proposal going out this week.
 3. **Voice-agent range demo** — through-walls / miles-of-range is filmable in under an hour. Mobile demo unit available.
 
 **Founder bio:** DARKXSIDE is a solo founder and builder who documents his full engineering process publicly on YouTube (Cloudflare School, SCHOOL OF POWERFULMOVES). Cataclysm Studios Inc. is his production studio.

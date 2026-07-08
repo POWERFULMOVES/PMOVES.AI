@@ -2827,11 +2827,11 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 .PHONY: up-cipher
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
-	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8096}"
+	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
 
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
-	@curl -sf http://localhost:$${CIPHER_PORT:-8096}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
+	@curl -sf http://localhost:$${CIPHER_PORT:-8105}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
 
 .PHONY: spark-health
 spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK

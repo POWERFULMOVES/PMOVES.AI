@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
     environment:
       - PORT=8115
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - NATS_URL=${NATS_URL}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
       - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
@@ -67,7 +67,7 @@ services:
       start_period: 15s
     restart: unless-stopped
     environment:
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - NATS_URL=${NATS_URL}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
       - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
