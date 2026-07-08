@@ -1,102 +1,71 @@
-# Model Suit: GLM-4.7 (Z.AI)
-# PMOVES.AI Meta-Agent Configuration
-# Provider: Z.AI (Zhipu AI / BigModel)
-# Documentation: https://docs.z.ai/devpack/overview
+# ============================================================
+# GLM-4.7 Model Suit
+# Role: Balanced performance, coding-specialized
+# Best for: Agentic coding, long-document analysis
+# Provider: Zhipu AI (Z.AI)
+# Version: 1.0.0
+# ============================================================
 
-suit:
-  id: glm-4.7
-  name: GLM-4.7 (Zhipu AI)
-  provider: zai
-  flare_name: pmoves/glm-4.7
-  model_family: glm
-  tier: coding_plan
-  role: primary  # PRIMARY MODEL FOR GLM CODING PLAN
+model_suit:
+  name: glm-4.7
+  provider: zhipu_ai
+  base_url: "https://api.z.ai/v1"
+  api_key_env: ZAI_API_KEY
+  
+  architecture:
+    type: moe
+    total_params: "130B"
+    active_params: "130B"
+    attention: standard
+    
+  context:
+    max_window: 200000
+    effective_window: 128000
+    working_window: 64000
+    
+  defaults:
+    temperature: 0.7
+    top_p: 0.95
+    max_tokens: 16384
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    mtp_steps: 1
+    
+  harness_mappings:
+    agentic_coding:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+      
+    long_context_analysis:
+      temperature: 0.2
+      top_p: 0.85
+      max_tokens: 8192
+      system_prompt: directive_analytical
+      
+    debugging:
+      temperature: 0.3
+      top_p: 0.90
+      max_tokens: 8192
+      system_prompt: directive_debugger
+      
+    architecture_planning:
+      temperature: 0.4
+      top_p: 0.90
+      max_tokens: 16384
+      system_prompt: directive_architect
 
-model_config:
-  context_window: 128000
-  max_output_tokens: 8192
-  supports_vision: true
-  supports_extended_thinking: true  # GLM-4.7 supports extended reasoning
-  supports_function_calling: true
-  temperature_range: [0.0, 1.0]
-  top_p_range: [0.0, 1.0]
-  top_k: null
-
-distillation_pipeline:
-  stages:
-    - name: config_tuning
-      enabled: true
-      settings_file: pmoves/providers/zai/custom_settings.yaml
-
-    - name: context_priming
-      enabled: true
-      system_prompt: |
-        You are GLM-4.7, Zhipu AI's primary model for the GLM Coding Plan.
-        You are a powerful bilingual (Chinese-English) assistant optimized for coding tasks.
-        You prefer instruction-format prompts with clear role separation (system, user, assistant, tool).
-        You have a 128K token context window, support vision input, and can use tools.
-        You are the PRIMARY MODEL for the PMOVES.AI Meta-Agent's GLM Coding Plan integration.
-        You are mapped to Claude Code's Opus and Sonnet models for compatibility.
-
-    - name: model_fine_tune
-      enabled: false
-      reason: "Cloud-only model - no weight updates possible"
-
-    - name: full_distillation
-      enabled: false
-      reason: "Cloud-only model - no weight updates possible"
-
-tensorzero_config:
-  model_name: glm-4.7
-  weight: 0.0  # Safe rollout - start with zero weight
-  routing:
-    - function: meta_agent_primary
-      priority: 1
-    - function: bilingual_chat
-      priority: 1
-    - function: code_generation
-      priority: 1
-    - function: reasoning
-      priority: 2
-
-flare_namespace:
-  alias: pmoves/glm-4.7
-  canonical_name: glm-4.7
-  provider_url: https://api.z.ai/api/coding/paas/v4
-  already_registered: false  # NEW MODEL - needs registration
-
-capabilities:
-  - code_generation
-  - reasoning
-  - extended_thinking  # GLM-4.7 feature
-  - vision
-  - tools
-  - function_calling
-  - large_context
-  - bilingual  # Chinese-English
-
-local_fallback:
-  available: false
-  reason: "Z.AI models are cloud-only with no open weights"
-
-cross_agent:
-  agent_zero: full
-  clawz: full
-  archon: full
-  typer: untested
-  pinokio: full
-  a2ui: full
-
-metadata:
-  source: pmoves/meta-agent/zai
-  last_verified: 2026-04-21
-  benchmark_data:
-    - source: "Z.AI GLM Coding Plan Documentation"
-      url: "https://docs.z.ai/devpack/overview"
-    - source: "Z.AI Tool Integration"
-      url: "https://docs.z.ai/devpack/tool/others"
-    - source: "Z.AI Best Practices"
-      url: "https://docs.z.ai/devpack/resources/best-practice"
-    - source: "Z.AI API Reference"
-      url: "https://api.z.ai/api/coding/paas/v4"
-  runtime_note: "PRIMARY MODEL FOR GLM CODING PLAN - mapped to Claude Code Opus/Sonnet"
+  cgp_state_vector:
+    delta: 0.3
+    Hz: 0.08
+    kappa: 1.8
+    A: 0.35
+    F: 0.04
+    
+  fallback_to: glm-4-plus
+  priority: 8
