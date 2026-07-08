@@ -21,8 +21,6 @@ services:
       - FOWNER
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: redis:7.4.1-alpine
     profiles: ["juicefs"]

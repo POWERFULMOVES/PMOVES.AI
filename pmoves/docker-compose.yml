@@ -372,8 +372,6 @@ x-tier-supabase-hardened: &tier-supabase-hardened
   - FOWNER
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-supabase-hardened-ro: &tier-supabase-hardened-ro
   env_file:
@@ -384,8 +382,6 @@ x-tier-supabase-hardened-ro: &tier-supabase-hardened-ro
   cap_add:
   - NET_BIND_SERVICE
   read_only: true
-  security_opt:
-  - no-new-privileges:true
   tmpfs:
   - /tmp:noexec,nosuid,size=64m
   - /var/tmp:noexec,nosuid,size=64m
@@ -401,8 +397,6 @@ x-tier-agent-hardened: &tier-agent-hardened
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-agent-hardened-ro: &tier-agent-hardened-ro
   env_file:
@@ -413,8 +407,6 @@ x-tier-agent-hardened-ro: &tier-agent-hardened-ro
   cap_add:
   - NET_BIND_SERVICE
   read_only: true
-  security_opt:
-  - no-new-privileges:true
   tmpfs:
   - /tmp:noexec,nosuid,size=64m
   - /var/tmp:noexec,nosuid,size=64m
@@ -430,8 +422,6 @@ x-tier-agent-hardened-rw: &tier-agent-hardened-rw
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-llm-hardened: &tier-llm-hardened
   env_file:
@@ -444,8 +434,6 @@ x-tier-llm-hardened: &tier-llm-hardened
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-worker-hardened: &tier-worker-hardened
   env_file:
@@ -458,8 +446,6 @@ x-tier-worker-hardened: &tier-worker-hardened
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-api-hardened: &tier-api-hardened
   env_file:
@@ -472,8 +458,6 @@ x-tier-api-hardened: &tier-api-hardened
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-data-hardened: &tier-data-hardened
   env_file:
@@ -488,8 +472,6 @@ x-tier-data-hardened: &tier-data-hardened
   - FOWNER
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 x-tier-media-hardened: &tier-media-hardened
   env_file:
@@ -512,8 +494,6 @@ x-tier-ui-hardened: &tier-ui-hardened
   cap_add:
   - NET_BIND_SERVICE
   read_only: true
-  security_opt:
-  - no-new-privileges:true
   tmpfs:
   - /tmp:noexec,nosuid,size=64m
   - /var/tmp:noexec,nosuid,size=64m
@@ -529,8 +509,6 @@ x-tier-api-hardened-gpu: &tier-api-hardened-gpu
   - CHOWN
   - SETGID
   - SETUID
-  security_opt:
-  - no-new-privileges:true
 
 # PMOVES.AI production compose project
 name: pmoves

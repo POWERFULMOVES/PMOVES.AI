@@ -19,8 +19,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     build: ./services/extract-worker
     restart: unless-stopped
@@ -266,8 +264,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     build:
       context: .
@@ -324,8 +320,6 @@ services:
       cap_add:
       - NET_BIND_SERVICE
       read_only: true
-      security_opt:
-      - no-new-privileges:true
       tmpfs:
       - /tmp:noexec,nosuid,size=64m
       - /var/tmp:noexec,nosuid,size=64m
@@ -491,8 +485,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     build:
       context: .

@@ -21,8 +21,6 @@ services:
       - FOWNER
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
     image: nats:2.11.8-alpine
@@ -104,8 +102,6 @@ services:
       - FOWNER
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: supabase/postgres:17.6.1.108
     restart: unless-stopped
@@ -327,8 +323,6 @@ services:
       cap_add:
       - NET_BIND_SERVICE
       read_only: true
-      security_opt:
-      - no-new-privileges:true
       tmpfs:
       - /tmp:noexec,nosuid,size=64m
       - /var/tmp:noexec,nosuid,size=64m
@@ -924,8 +918,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     image: clickhouse/clickhouse-server:24.12-alpine
     restart: unless-stopped
@@ -1137,8 +1129,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      security_opt:
-      - no-new-privileges:true
 
     build:
       context: ./services/clap-embed
