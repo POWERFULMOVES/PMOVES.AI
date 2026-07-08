@@ -8,9 +8,9 @@
 
 model_suit:
   name: glm-5.1
-  provider: zhipu_ai
+  provider: zai
   base_url: "https://api.z.ai/v1"
-  api_key_env: ZAI_API_KEY
+  api_key_env: Z_AI_API_KEY
   
   architecture:
     type: moe
@@ -21,7 +21,7 @@ model_suit:
   context:
     max_window: 202752
     effective_window: 128000
-    working_window: 64000
+    working_window: 131072
     
   defaults:
     temperature: 1.0
@@ -67,5 +67,5 @@ model_suit:
     A: 0.4
     F: 0.06
     
-  fallback_to: glm-5-turbo
+  fallback_to: glm-4-plus
   priority: 5
