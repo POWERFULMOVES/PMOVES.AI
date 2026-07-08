@@ -180,6 +180,8 @@
 
 ## 2. THEMATIC CLUSTERING OF PLAYLIST CONTENT
 
+> **Note:** Percentages reflect overlapping thematic tags — videos may belong to multiple clusters simultaneously. Total exceeds 100% due to multi-tagging.
+
 ### CLUSTER A: AI Agent Architectures & Multi-Agent Systems (~25% of playlist)
 **Representative Videos:**
 - "Next-Gen Self-Evolving AI Agents (ATDP)" — Discover AI
@@ -275,7 +277,7 @@
 - "The Richest Country Is Pretty Mid Now" — Benn Jordan
 - "Every Business The Government WANTS You To Start" — Sherman - My CPA Coach
 - "BRICS Countries Don't Want Westerners Anymore" — Nomad Capitalist
-- "He open-sourced a $30k AI trading terminal, 21k stars on github" — Bitwise AI
+- "He open-sourced a $30k AI trading terminal, 21k stars on GitHub" — Bitwise AI
 - "Alibaba Building AI Data Centers In Europe for Data Sovereignty" — Eli the Computer Guy
 
 **Signals:** Sophisticated understanding of macroeconomics, monetary policy, and decentralized finance. Interest in alternative financial infrastructure (SBA loans for business creation, crypto/stables for value transfer, tokenization). The BRICS + Alibaba data sovereignty videos signal awareness of geopolitical shifts in tech power. The "cheap money ending" video suggests awareness of macro cycles and their impact on tech funding. This maps to PMOVES's business model interest — building sustainable infrastructure during transition periods.
@@ -290,7 +292,7 @@
 - "they're calling us terrorists now" — SomeOrdinaryGamers
 - "SOCIETAL COLLAPSE: US Reading Test SCORES PLUNGE" — Breaking Points
 - "America Is Blocking Chinese EVs...I Flew to China to Find Out Why" — Rich Rebuilds
-- "bUt wE cAn'T lEt cHinA WiN tHe AI aRmS rAcE!!" — How Money Works
+- "bUt wE cAn"T lEt cHinA WiN tHe AI aRmS rAcE!!" — How Money Works
 - "The Internet's Hidden 3D Model of the World" — Bilawal Sidhu
 - "Private DIY Servers Are 'Illegal Black Markets of Piracy'" — Gamers Nexus
 - "Harbor Freight's Most Disruptive Release Yet" — The Den of Tools
@@ -629,6 +631,7 @@ These comments (not from DARKXSIDE but on a video in their playlist) reveal the 
 - **Thematic clustering:** Emergent categories derived from title/content analysis, not pre-defined
 - **Confidence level:** HIGH for major themes ( clusters A-C), MEDIUM for nuanced philosophical positions, MEDIUM-HIGH for communication style preferences
 - **Limitations:** Cannot access video transcripts for full content analysis; relying on titles, descriptions, chapters, and comments. Playlist may have evolved since analysis date.
+- **Percentage note:** Percentages reflect overlapping thematic tags — videos may belong to multiple clusters simultaneously. Total exceeds 100% due to multi-tagging.
 
 ---
 
