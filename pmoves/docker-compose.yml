@@ -4651,3 +4651,20 @@ networks:
   pmoves_external:
     external: true
     name: pmoves_external
+
+  wger-nats-bridge:
+    <<: *tier-api-hardened
+    build: ./services/wger-nats-bridge
+    restart: unless-stopped
+    environment:
+    - WGER_API_URL=http://wger:8000
+    - NATS_URL=${NATS_URL}
+    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:-}
+    - WGER_POLL_INTERVAL=${WGER_POLL_INTERVAL:-60}
+    profiles: ["health", "wger"]
+    networks:
+      pmoves_api:
+      pmoves_bus:
+    depends_on:
+      nats:
+        condition: service_healthy
