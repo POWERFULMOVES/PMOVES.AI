@@ -387,3 +387,26 @@ cards:
       color: "#047857"
       voice: analytical
       role: agent
+
+  # ---- Community Room Stewards ----
+  - card_id: "00000000-0000-4000-8000-000000000038"
+    agent_id: fordham-steward
+    active: true
+    role: community_steward
+    ml:
+      primary_method: ssh
+      ssh_fingerprint: null  # Pending operator ssh-keygen
+    h:
+      agent_id: "fordham-steward"
+      display_name: "Fordham Steward"
+      glyph: "⌂"              # ⌂ House — community home
+      color: "#0E7490"             # Cyan-700 — matches fordham room accent
+      voice: companion
+      role: community_steward
+      archetype: community_manager
+      vote_weight: 1.0
+      governance_scope: fordham.room.community
+    metadata:
+      created: "2026-07-09"
+      interim: false
+      notes: "Community steward for Fordham Hill pilot. SSH fingerprint pending operator action."

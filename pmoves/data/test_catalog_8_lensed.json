@@ -1,0 +1,322 @@
+[
+  {
+    "id": "item-001",
+    "title": "Multi-Agent Reinforcement Learning for Distributed Systems",
+    "source": "arxiv",
+    "url": "https://arxiv.org/abs/2401.12345",
+    "lenses": {
+      "multi_agent_orchestration": 0.75,
+      "ai_memory_systems": 0.52,
+      "consciousness_embodiment": 0.30,
+      "local_first_sovereignty": 0.15,
+      "cultural_microbiome": 0.10
+    },
+    "chit_signature": {
+      "delta": 0.0000,
+      "Hz": 78.02,
+      "kappa": 0.5159,
+      "A": 0.3640,
+      "F": "orchestrator"
+    },
+    "media_resonance": {
+      "youtube_matches": ["vid-0950", "vid-0117", "vid-1389"],
+      "soundcloud_matches": ["track-064", "track-014"],
+      "resonance_score": 0.3105
+    },
+    "grounded": {
+      "grounded": true,
+      "confidence": 0.6213,
+      "checks": {
+        "above_typical": true,
+        "not_trivial": true,
+        "resonance_ok": true,
+        "has_form": true
+      }
+    },
+    "ingestion_metadata": {
+      "timestamp": "2026-07-09T00:00:00Z",
+      "pipeline_version": "1.1",
+      "processing_stage": "complete"
+    }
+  },
+  {
+    "id": "item-002",
+    "title": "GraphRAG: Knowledge Graphs for Retrieval-Augmented Generation",
+    "source": "arxiv",
+    "url": "https://arxiv.org/abs/2403.67890",
+    "lenses": {
+      "multi_agent_orchestration": 0.35,
+      "ai_memory_systems": 0.75,
+      "consciousness_embodiment": 0.45,
+      "local_first_sovereignty": 0.55,
+      "cultural_microbiome": 0.20
+    },
+    "chit_signature": {
+      "delta": 0.0000,
+      "Hz": 77.43,
+      "kappa": 0.6291,
+      "A": 0.4600,
+      "F": "memory_weaver"
+    },
+    "media_resonance": {
+      "youtube_matches": ["vid-0423", "vid-0494"],
+      "soundcloud_matches": [],
+      "resonance_score": 0.3388
+    },
+    "grounded": {
+      "grounded": true,
+      "confidence": 0.6525,
+      "checks": {
+        "above_typical": true,
+        "not_trivial": true,
+        "resonance_ok": true,
+        "has_form": true
+      }
+    },
+    "ingestion_metadata": {
+      "timestamp": "2026-07-09T00:00:00Z",
+      "pipeline_version": "1.1",
+      "processing_stage": "complete"
+    }
+  },
+  {
+    "id": "item-003",
+    "title": "The Unruh Effect and Observer-Dependent Reality in Quantum Systems",
+    "source": "arxiv",
+    "url": "https://arxiv.org/abs/2402.54321",
+    "lenses": {
+      "multi_agent_orchestration": 0.35,
+      "ai_memory_systems": 0.30,
+      "consciousness_embodiment": 0.75,
+      "local_first_sovereignty": 0.12,
+      "cultural_microbiome": 0.08
+    },
+    "chit_signature": {
+      "delta": 0.0418,
+      "Hz": 73.21,
+      "kappa": 0.5235,
+      "A": 0.3200,
+      "F": "phase_hunter"
+    },
+    "media_resonance": {
+      "youtube_matches": ["vid-0084", "vid-0151", "vid-0530"],
+      "soundcloud_matches": [],
+      "resonance_score": 0.2571
+    },
+    "grounded": {
+      "grounded": true,
+      "confidence": 0.6068,
+      "checks": {
+        "above_typical": true,
+        "not_trivial": true,
+        "resonance_ok": true,
+        "has_form": true
+      }
+    },
+    "ingestion_metadata": {
+      "timestamp": "2026-07-09T00:00:00Z",
+      "pipeline_version": "1.1",
+      "processing_stage": "complete"
+    }
+  },
+  {
+    "id": "item-004",
+    "title": "Running LLMs on Consumer Hardware: A Practical Guide",
+    "source": "github",
+    "url": "https://github.com/user/local-llm-guide",
+    "lenses": {
+      "multi_agent_orchestration": 0.25,
+      "ai_memory_systems": 0.20,
+      "consciousness_embodiment": 0.15,
+      "local_first_sovereignty": 0.75,
+      "cultural_microbiome": 0.40
+    },
+    "chit_signature": {
+      "delta": 0.0000,
+      "Hz": 82.34,
+      "kappa": 0.5664,
+      "A": 0.3500,
+      "F": "sovereign"
+    },
+    "media_resonance": {
+      "youtube_matches": ["vid-0875", "vid-1172", "vid-1844", "vid-1965"],
+      "soundcloud_matches": ["track-014"],
+      "resonance_score": 0.2379
+    },
+    "grounded": {
+      "grounded": true,
+      "confidence": 0.6096,
+      "checks": {
+        "above_typical": true,
+        "not_trivial": true,
+        "resonance_ok": true,
+        "has_form": true
+      }
+    },
+    "ingestion_metadata": {
+      "timestamp": "2026-07-09T00:00:00Z",
+      "pipeline_version": "1.1",
+      "processing_stage": "complete"
+    }
+  },
+  {
+    "id": "item-005",
+    "title": "Cultural Microbiome: Community-Resilient Knowledge Systems",
+    "source": "web",
+    "url": "https://darkxside.substack.com/cultural-microbiome",
+    "lenses": {
+      "multi_agent_orchestration": 0.40,
+      "ai_memory_systems": 0.22,
+      "consciousness_embodiment": 0.18,
+      "local_first_sovereignty": 0.50,
+      "cultural_microbiome": 0.75
+    },
+    "chit_signature": {
+      "delta": 0.0000,
+      "Hz": 80.51,
+      "kappa": 0.5874,
+      "A": 0.4100,
+      "F": "culture_seed"
+    },
+    "media_resonance": {
+      "youtube_matches": ["vid-0986", "vid-1574", "vid-0069", "vid-1386"],
+      "soundcloud_matches": ["track-018", "track-009"],
+      "resonance_score": 0.2525
+    },
+    "grounded": {
+      "grounded": true,
+      "confidence": 0.6182,
+      "checks": {
+        "above_typical": true,
+        "not_trivial": true,
+        "resonance_ok": true,
+        "has_form": true
+      }
+    },
+    "ingestion_metadata": {
+      "timestamp": "2026-07-09T00:00:00Z",
+      "pipeline_version": "1.1",
+      "processing_stage": "complete"
+    }
+  },
+  {
+    "id": "item-006",
+    "title": "SIRIUSSADHAPPYMIX — Dual-State Consciousness Audio",
+    "source": "soundcloud",
+    "url": "https://soundcloud.com/darkxside/siriussadhappymix",
+    "lenses": {
+      "multi_agent_orchestration": 0.15,
+      "ai_memory_systems": 0.12,
+      "consciousness_embodiment": 0.78,
+      "local_first_sovereignty": 0.20,
+      "cultural_microbiome": 0.72
+    },
+    "chit_signature": {
+      "delta": 0.1419,
+      "Hz": 74.24,
+      "kappa": 0.4152,
+      "A": 0.3940,
+      "F": "dual_state"
+    },
+    "media_resonance": {
+      "youtube_matches": ["vid-1742"],
+      "soundcloud_matches": ["track-039", "track-018"],
+      "resonance_score": 0.2883
+    },
+    "grounded": {
+      "grounded": true,
+      "confidence": 0.6035,
+      "checks": {
+        "above_typical": true,
+        "not_trivial": true,
+        "resonance_ok": true,
+        "has_form": true
+      }
+    },
+    "ingestion_metadata": {
+      "timestamp": "2026-07-09T00:00:00Z",
+      "pipeline_version": "1.1",
+      "processing_stage": "complete"
+    }
+  },
+  {
+    "id": "item-007",
+    "title": "PMOVES.AI: Metal-Organic Framework for Distributed Intelligence",
+    "source": "github",
+    "url": "https://github.com/POWERFULMOVES/PMOVES.AI",
+    "lenses": {
+      "multi_agent_orchestration": 0.85,
+      "ai_memory_systems": 0.72,
+      "consciousness_embodiment": 0.65,
+      "local_first_sovereignty": 0.78,
+      "cultural_microbiome": 0.60
+    },
+    "chit_signature": {
+      "delta": 0.0000,
+      "Hz": 78.71,
+      "kappa": 0.8216,
+      "A": 0.7200,
+      "F": "grounded"
+    },
+    "media_resonance": {
+      "youtube_matches": ["vid-1091", "vid-0836"],
+      "soundcloud_matches": [],
+      "resonance_score": 0.4390
+    },
+    "grounded": {
+      "grounded": true,
+      "confidence": 0.7510,
+      "checks": {
+        "above_typical": true,
+        "not_trivial": true,
+        "resonance_ok": true,
+        "has_form": true
+      }
+    },
+    "ingestion_metadata": {
+      "timestamp": "2026-07-09T00:00:00Z",
+      "pipeline_version": "1.1",
+      "processing_stage": "complete"
+    }
+  },
+  {
+    "id": "item-008",
+    "title": "SaaS Pricing Optimization: A Data-Driven Approach",
+    "source": "web",
+    "url": "https://example.com/saas-pricing",
+    "lenses": {
+      "multi_agent_orchestration": 0.05,
+      "ai_memory_systems": 0.02,
+      "consciousness_embodiment": 0.01,
+      "local_first_sovereignty": 0.03,
+      "cultural_microbiome": 0.02
+    },
+    "chit_signature": {
+      "delta": 0.0000,
+      "Hz": 81.54,
+      "kappa": 0.9729,
+      "A": 0.0260,
+      "F": "dual_state"
+    },
+    "media_resonance": {
+      "youtube_matches": [],
+      "soundcloud_matches": [],
+      "resonance_score": 0.0500
+    },
+    "grounded": {
+      "grounded": false,
+      "confidence": 0.0130,
+      "checks": {
+        "above_typical": false,
+        "not_trivial": false,
+        "resonance_ok": false,
+        "has_form": true
+      }
+    },
+    "ingestion_metadata": {
+      "timestamp": "2026-07-09T00:00:00Z",
+      "pipeline_version": "1.1",
+      "processing_stage": "complete"
+    }
+  }
+]
