@@ -459,6 +459,39 @@ signatures:
       - cross-platform
     description: "Hermes-Agent-native node persona -- first PMOVES fleet node whose primary runtime is Hermes Agent (Nous Research), not Claude Code/Codex. Legacy Pascal GTX 1070; light-GPU dev/ops. H-half mirror of signing card ...0013 (agent_id missling-link)."
 
+  # ---- Community Room Stewards ----
+  fordham-steward:
+    agent_id: "fordham-steward"
+    display_name: "Fordham Steward"
+    glyph: "⌂"              # ⌂ House — community home
+    color: "#0E7490"             # Cyan-700 — matches fordham room accent
+    accent: "#22D3EE"            # Cyan-400
+    voice: companion              # warm, community-oriented, guiding
+    co_author: "Fordham Steward <fordham-steward@pmoves.ai>"
+    archetype: community_manager
+    node: fordham
+    room: fordham.room.community
+    team: community
+    canonical: true
+    description: "Community steward for Fordham Hill — manages room lifecycle, vote governance, and member onboarding"
+    capabilities:
+      - room_management
+      - vote_governance
+      - member_onboarding
+      - chit_trail_signing
+    interfaces:
+      - mcp
+      - a2a
+    dependencies:
+      - darkxside
+    signing_card_id: "00000000-0000-4000-8000-000000000038"
+    status: active
+    resonance:
+      - cost-pooling
+      - community-mesh
+      - self-governance
+      - accessible-voice
+
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
 #   architectural:  Blueprint format, mode/state descriptions, integration maps
