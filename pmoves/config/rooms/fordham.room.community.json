@@ -7,6 +7,14 @@
   "alter": "fordham-community",
   "room_type": "hybrid",
   "owner_mode": "shared",
+  "meta": {
+    "chit": {
+      "card_id": "00000000-0000-4000-8000-000000000001",
+      "creator_id": "darkxside",
+      "interim": true,
+      "transition_to": "fordham-steward"
+    }
+  },
   "shell": {
     "theme": {
       "theme_id": "community-commons",
