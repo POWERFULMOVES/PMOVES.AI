@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import logging
 import os
 import re
 import subprocess
@@ -61,7 +62,9 @@ __all__ = [
     "KeyEntry",
     "KeyStatus",
     "ProviderCatalog",
-    "SecretsFunnel",
+    "discover_keys_from_env",
+    "validate_all",
+    "inject_into_chit",
     "main",
 ]
 
@@ -91,7 +94,6 @@ SENTINEL_VALUES = frozenset({
     "null",
     "none",
     "todo",
-    "",
 })
 
 # Deprecated aliases -> (canonical_name, sunset_date)
@@ -211,7 +213,8 @@ class _RedactingLoggerAdapter(logging.LoggerAdapter):
         return redacted
 
 
-def _setup_logging(verbose: bool = False) -> logging.Logger:
+def _setup_logging(verbose: bool = False) -> None:
+    """Configure module logging with redacting handler."""
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     fmt = logging.Formatter("[%(name)s] %(levelname)s %(message)s")
@@ -219,10 +222,9 @@ def _setup_logging(verbose: bool = False) -> logging.Logger:
     root = logging.getLogger("secrets_funnel")
     root.addHandler(handler)
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
-    return _RedactingLoggerAdapter(root, {})
 
 
-log = logging.getLogger("secrets_funnel")
+log = _RedactingLoggerAdapter(logging.getLogger("secrets_funnel"), {})
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +236,7 @@ class ProviderCatalog:
     and how they map to model suits and TensorZero functions."""
 
     # Key -> (provider_display, model_suits, tensorzero_functions)
+    # Model suits are synced with pmoves/configs/model-suits/*.yaml on main branch.
     KEY_PROVIDERS: dict[str, tuple[str, list[str], list[str]]] = {
         "Z_AI_API_KEY": (
             "Zhipu AI (Z.AI)",
@@ -247,47 +250,47 @@ class ProviderCatalog:
         ),
         "ALIBABA_PRO_CODING_PLAN": (
             "Alibaba (Qwen)",
-            ["qwen-coder-plus", "qwen-max"],
+            [],  # No matching model-suit YAMLs on main branch
             ["pmoves_worker_qwen"],
         ),
         "KILOCODE_API_KEY": (
             "KiloCode",
-            ["kilocode-default"],
+            [],  # No model-suit YAML
             ["pmoves_worker_kilocode"],
         ),
         "OLLAMA_API_KEY": (
             "Ollama Cloud",
-            ["ollama-local", "ollama-cloud"],
+            [],  # No model-suit YAML
             ["pmoves_worker_ollama"],
         ),
         "HF_TOKEN": (
             "HuggingFace",
-            ["hf-mistral", "hf-llama"],
+            [],  # No model-suit YAML
             ["pmoves_worker_hf"],
         ),
         "MINIMAX_API_KEY": (
             "MiniMax",
-            ["minimax-m2.7", "minimax-m2.1"],
+            [],  # No matching model-suit YAMLs on main branch
             ["pmoves_worker_minimax"],
         ),
         "OPENROUTER_API_KEY": (
             "OpenRouter",
-            ["openrouter-universal"],
+            [],  # No model-suit YAML
             ["pmoves_worker_openrouter"],
         ),
         "GROQ_API_KEY": (
             "Groq",
-            ["groq-llama3", "groq-mixtral"],
+            [],  # No model-suit YAML
             ["pmoves_worker_groq"],
         ),
         "NVIDIA_API_KEY": (
             "NVIDIA",
-            ["nemotron-4", "nemotron-h100"],
+            ["nemotron-3-super"],  # Synced with nemotron-3-super.yaml
             ["pmoves_worker_nemotron"],
         ),
         "MCP_SERVER_TOKEN": (
             "MCP Server (A2A)",
-            ["mcp-a2a-bridge"],
+            [],  # No model-suit YAML
             ["pmoves_mcp_server"],
         ),
     }
@@ -546,49 +549,39 @@ def _get_chit_passphrase() -> Optional[str]:
 
 
 def _inject_single_key(name: str, value: str, passphrase: str) -> bool:
-    """Inject a single key into CHIT-encrypted storage.
-
-    SECURITY: Key value is NEVER passed as a CLI argument.
-    We use a temporary file with 0o600 permissions and --from-file.
-    """
+    """Inject a single key into CHIT-encrypted storage."""
     fd: Optional[int] = None
     tmp_path: Optional[str] = None
 
     try:
-        # Create temp file with restricted permissions (0o600)
         fd, tmp_path = tempfile.mkstemp(suffix=".env", prefix="chit_key_")
         os.chmod(tmp_path, 0o600)
 
-        # Write key=value to temp file
         with os.fdopen(fd, "w") as f:
             f.write(f"{name}={value}\n")
-        fd = None  # fdopen closed it
+        fd = None
 
-        # Build CHIT CLI command -- NEVER pass value as CLI arg
         chit_cli = PMOVES_ROOT / "tools" / "chit_cli.py"
-        if chit_cli.exists():
-            # Use CHIT CLI with --from-file
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(chit_cli),
-                    "--action", "set",
-                    "--key", name,
-                    "--from-file", tmp_path,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
+        if not chit_cli.exists():
+            log.error(
+                "CHIT CLI not found at %s. Cannot inject %s. "
+                "Install CHIT tooling or set CHIT_PASSPHRASE for direct encryption.",
+                chit_cli, name,
             )
-        else:
-            # Fallback: use env.cgp.json directly
-            result = _inject_via_env_cgp(name, value, passphrase)
-            if result:
-                log.info("Injected %s via env.cgp.json (CHIT CLI not found)", name)
-                return True
-            else:
-                log.error("Failed to inject %s: CHIT CLI not found and env.cgp.json failed", name)
-                return False
+            return False
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(chit_cli),
+                "--action", "set",
+                "--key", name,
+                "--from-file", tmp_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
         if result.returncode == 0:
             log.info("Injected %s into CHIT storage", name)
@@ -600,53 +593,18 @@ def _inject_single_key(name: str, value: str, passphrase: str) -> bool:
     except subprocess.TimeoutExpired:
         log.error("CHIT CLI timeout for %s", name)
         return False
-    except Exception as exc:
-        log.error("Failed to inject %s: %s", name, exc)
+    except Exception:
+        log.exception("Failed to inject %s", name)
         return False
     finally:
-        # Secure cleanup: wipe and delete temp file
         if tmp_path and os.path.exists(tmp_path):
             try:
-                # Overwrite with zeros before deleting
                 size = os.path.getsize(tmp_path)
                 with open(tmp_path, "wb") as f:
                     f.write(b"\x00" * size)
                 os.unlink(tmp_path)
             except Exception:
                 pass
-
-
-def _inject_via_env_cgp(name: str, value: str, passphrase: str) -> bool:
-    """Fallback injection via env.cgp.json file.
-
-    This is a temporary fallback when CHIT CLI is not available.
-    The file should be CHIT-encrypted in production.
-    """
-    env_cgp_path = PMOVES_ROOT / "env.cgp.json"
-
-    try:
-        data: dict[str, Any] = {}
-        if env_cgp_path.exists():
-            data = json.loads(env_cgp_path.read_text())
-
-        data[name] = {
-            "value": "***encrypted***",  # Placeholder -- real impl uses CHIT encryption
-            "injected_at": datetime.now(tz=timezone.utc).isoformat(),
-            "method": "env_cgp_fallback",
-        }
-
-        # NOTE: This is NOT production-ready encryption.
-        # In production, this must use CHIT passphrase for AES-256-GCM.
-        env_cgp_path.write_text(json.dumps(data, indent=2))
-        log.warning(
-            "WARNING: %s injected via plaintext env.cgp.json fallback. "
-            "Install CHIT CLI for proper encryption.",
-            name,
-        )
-        return True
-    except Exception as exc:
-        log.error("env.cgp.json fallback failed for %s: %s", name, exc)
-        return False
 
 
 # ---------------------------------------------------------------------------
@@ -756,7 +714,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logger = _setup_logging(args.verbose)
+    _setup_logging(args.verbose)  # Don't assign to unused variable
 
     # --verify mode
     if args.verify:
