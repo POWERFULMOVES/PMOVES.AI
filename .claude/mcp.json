@@ -28,9 +28,12 @@
         "--rm",
         "-i",
         "--mount",
-        "type=bind,src=//var/run/docker.sock,dst=/var/run/docker.sock",
+        "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock",
         "mcp/docker"
-      ]
+      ],
+      "env": {
+        "MSYS_NO_PATHCONV": "1"
+      }
     },
     "hostinger-mcp": {
       "command": "npx",
