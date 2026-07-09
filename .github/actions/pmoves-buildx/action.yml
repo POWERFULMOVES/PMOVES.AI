@@ -1,0 +1,60 @@
+# pmoves-buildx — the canonical, GC-bounded BuildKit builder for self-hosted runners
+# =============================================================================
+# Single source of truth for how PMOVES self-hosted runners (ai-lab / kvm4 / kvm2
+# / spark) set up Buildx. Replaces bare `docker/setup-buildx-action` calls so the
+# builder is:
+#   1. REUSED, not recreated per run  -> `name: pmoves-shared`
+#      (setup-buildx-action reuses a builder that already exists with that name).
+#   2. STATE-PRESERVING on cleanup     -> `keep-state: true`
+#      (persistent runners keep the builder + cache between jobs).
+#   3. SELF-BOUNDED via BuildKit GC     -> `buildkitd-config-inline` gc policy
+#      (BuildKit prunes cache periodically to stay under maxUsedSpace, so the
+#       `buildx_buildkit_<name>_state` volume can never grow unbounded).
+#
+# This is the ROOT fix for the leak that filled kvm4-1 to 100%: without a fixed
+# name each run created a fresh docker-container builder whose multi-GB state
+# volume was never reclaimed. The nightly runner-maintenance sweep (orphan
+# `buildx_buildkit_builder-*_state` volumes) remains the belt-and-suspenders for
+# any builders left by cancelled jobs.
+#
+# Docs: docker.com/build/cache/garbage-collection (reservedSpace/maxUsedSpace/
+# keepDuration), github.com/docker/setup-buildx-action (name/keep-state/
+# buildkitd-config-inline). Inputs let a caller override the cap per node size.
+
+name: PMOVES Buildx (GC-bounded, reused)
+description: Set up a reused, GC-bounded BuildKit builder on a PMOVES self-hosted runner.
+
+inputs:
+  builder-name:
+    description: Fixed builder name to reuse across runs.
+    required: false
+    default: pmoves-shared
+  max-used-space:
+    description: BuildKit gc maxUsedSpace — hard cap on builder cache before GC prunes.
+    required: false
+    default: "30GB"
+  reserved-space:
+    description: BuildKit gc reservedSpace — cache kept even under pressure.
+    required: false
+    default: "5GB"
+  keep-duration:
+    description: BuildKit gc keepDuration — max age of a cache record before it is eligible for GC.
+    required: false
+    default: "168h"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Buildx (reused, GC-bounded)
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+      with:
+        name: ${{ inputs.builder-name }}
+        # Reuse the named builder if it already exists; keep its state on cleanup.
+        keep-state: true
+        buildkitd-config-inline: |
+          [worker.oci]
+            gc = true
+            [[worker.oci.gcpolicy]]
+              reservedSpace = "${{ inputs.reserved-space }}"
+              maxUsedSpace = "${{ inputs.max-used-space }}"
+              keepDuration = "${{ inputs.keep-duration }}"
