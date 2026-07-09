@@ -12,7 +12,9 @@
       "card_id": "00000000-0000-4000-8000-000000000001",
       "creator_id": "darkxside",
       "interim": true,
-      "transition_to": "fordham-steward"
+      "transition_to": "fordham-steward",
+      "transition_date": "2026-07-16",
+      "steward_card_id": "00000000-0000-4000-8000-000000000038"
     }
   },
   "shell": {
