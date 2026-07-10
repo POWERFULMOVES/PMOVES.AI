@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { HomeRoomLauncher, type HomeRoomOption } from '@/components/home/HomeRoomLauncher';
 import { SystemHubSection } from '@/components/hub/SystemHubSection';
-import { loadRooms } from '@/lib/rooms';
+import { loadPublicRooms } from '@/lib/rooms';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    POWERFULMOVES Landing Page — Megaman × Transformers
@@ -367,7 +367,7 @@ function Footer() {
 
 async function loadHomeRoomOptions(): Promise<HomeRoomOption[]> {
   try {
-    const rooms = await loadRooms();
+    const rooms = await loadPublicRooms();
     return rooms.map((room) => ({
       roomId: room.room_id,
       displayName: room.display_name,
