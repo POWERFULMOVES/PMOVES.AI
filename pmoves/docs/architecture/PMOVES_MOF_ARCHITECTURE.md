@@ -17,6 +17,20 @@ This is not metaphor. It is a structural isomorphism between the physics of poro
 
 This document specifies that isomorphism as architecture.
 
+## Implementation Status — Vision vs. Committed Reality
+
+> **Read this before the thesis above is taken literally.** This document specifies the *design vision*. Several of its most striking claims are **design targets, not current behavior** — code audits (PR #606, PR #2020, and the July 2026 architecture review) confirm the mechanical reality below. Marking the gap is deliberate: PMOVES is built substance-first, and the theory grew *through* implementation, so the spec deliberately runs ahead of the code.
+
+| Claim in this doc | Current committed reality |
+|---|---|
+| **Meta-agents vs. standard agents** as a strict, never-cross-evaluated typology | *Aspirational.* `agent_type` is a display string only (`services/agent-zero/.../schema.py`); no class hierarchy, no split routing, no separate telemetry — all agents share one `AgentCard`. PMOVES is **capacity-class, not expertise-lane** ("every node is a pore," every agent has a voice), so read the typology as soft capacity roles, not a caste. |
+| **TensorZero performs dynamic, real-time impedance matching** | *Aspirational.* TensorZero currently runs as a **static gateway** — one model assigned at init, hardcoded weights/fallback chains, no runtime task-complexity analysis. It provides provider unification + observability today; adaptive routing is the target. |
+| **CHIT signed-trail crypto / "git-backed rollback with cryptographic verification" / self-stabilizing autoregulation** | *Aspirational.* The current `pmoves.chit` module is a **base16 secrets encoder** — no HMAC signed-trail validation, no skill desorption/rollback, no autoregulation loop. The CGP crypto spec (HMAC-SHA256, AES-GCM, PBKDF2) is designed but ~75% wired (PR #606). |
+| **"Nobel Prize in Chemistry 2023 … MOFs"** | *Factual fix:* the **2025** Chemistry Nobel recognized metal-organic frameworks (Kitagawa, Robson, Yaghi); 2023 was quantum dots. Corrected in-text below. |
+| **"7,000 m²/g," "training speedup," "this is not metaphor / structural isomorphism"** | These are **analogies / design theses**, not benchmarked PMOVES metrics — generative framing, not measured claims. |
+
+**CHIT naming:** canonical term is **Cymatic-Holographic Information Transfer**; "Compressed Hierarchical Information Transfer" is an accurate *facet* (CHIT compresses at the signing/encode moment). Both are true — one system seen from two moments in the pipeline.
+
 ---
 
 ## Component Mapping
@@ -59,7 +73,7 @@ TensorZero is PMOVES' melon. Different LLMs have different capability profiles (
 
 In squeeze film levitation, no external controller maintains the gap. As air accumulates, pressure rises until it supports the transducer's weight. Outflow matches inflow. The system finds its own balance through the physics of the gap.
 
-CHIT (Cymatic Holographic Information Theory) provides this self-stabilizing mechanism for PMOVES. Signed agent trails — cryptographic verification that an agent's output matches its expected execution pattern — create a closed-loop correction without a supervisor.
+CHIT (Cymatic-Holographic Information Transfer) provides this self-stabilizing mechanism for PMOVES *by design* (see Implementation Status — the signed-trail autoregulation below is a design target; the current module is a secrets encoder). Signed agent trails — cryptographic verification that an agent's output matches its expected execution pattern — create a closed-loop correction without a supervisor.
 
 **Structural role**: Self-stabilizing equilibrium through signed trail autoregulation.
 
@@ -279,7 +293,7 @@ The smaller the model (the heavier the vase, relative to its own strength), the 
 
 ### The Nobel Framing
 
-The Nobel Prize in Chemistry 2023 was awarded for the discovery and synthesis of Metal-Organic Frameworks — materials whose extraordinary properties emerge not from any single atom but from the *architecture* of the framework itself. The surface area, the pore selectivity, the reversible adsorption — these are properties of the *structure*, not the *components*.
+The Nobel Prize in Chemistry 2025 was awarded for the discovery and synthesis of Metal-Organic Frameworks (Kitagawa, Robson, Yaghi; the 2023 prize was for quantum dots) — materials whose extraordinary properties emerge not from any single atom but from the *architecture* of the framework itself. The surface area, the pore selectivity, the reversible adsorption — these are properties of the *structure*, not the *components*.
 
 PMOVES applies the same first principle to machine intelligence: **collective capability emerges from framework architecture, not from individual model size**.
 

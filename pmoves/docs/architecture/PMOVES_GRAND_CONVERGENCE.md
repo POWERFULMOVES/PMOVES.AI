@@ -326,7 +326,7 @@ Anything is possible — not as motivational slogan, but as engineering principl
 
 ## 6. The Nobel Framing (Extended)
 
-The Nobel Prize in Chemistry 2023 was awarded for MOF discovery and synthesis — materials whose extraordinary properties emerge from *architecture*, not components. PMOVES extends this first principle across five disciplines:
+The Nobel Prize in Chemistry 2025 was awarded for MOF discovery and synthesis (Kitagawa, Robson, Yaghi; the 2023 prize was for quantum dots) — materials whose extraordinary properties emerge from *architecture*, not components. PMOVES extends this first principle across five disciplines:
 
 ### Physics: Unruh-Like Information Creation
 
@@ -334,7 +334,7 @@ An accelerated observer in vacuum creates observable reality from nothing. PMOVE
 
 ### Chemistry: MOF Principles Applied to Information Architecture
 
-The 2023 Nobel chemistry applies to molecules. PMOVES applies the same principles to *information*: tunable pore geometry (agent context design), high internal surface area (Neo4j graph density), reversible adsorption (CHIT versioned rollback), selective permeability (pore size policies), and post-synthetic modification (runtime reconfiguration). The claim is that these principles are not specific to molecular materials — they are *general principles of porous architecture* that apply wherever a structured medium with internal gaps processes something that flows.
+The 2025 Nobel chemistry applies to molecules. PMOVES applies the same principles to *information*: tunable pore geometry (agent context design), high internal surface area (Neo4j graph density), reversible adsorption (CHIT versioned rollback), selective permeability (pore size policies), and post-synthetic modification (runtime reconfiguration). The claim is that these principles are not specific to molecular materials — they are *general principles of porous architecture* that apply wherever a structured medium with internal gaps processes something that flows.
 
 ### Economics: Gap-Size Flow Restriction as Price Mechanism
 
