@@ -612,18 +612,27 @@ service_runners:
 #   nodes:        [slug, ...]         — eligible fleet nodes (hardware fits)
 #   preferred:    slug                — best-fit default when several are up
 #
-# Fleet node legend (verified topology 2026-07-10 — corrects stale "Z890 24GB"):
+# Fleet node legend. A node's presence in a `nodes:` list is class-eligibility;
+# the resolver + Pinokio 8 `{{vram}}` still gate on actual detected VRAM at
+# runtime, so these lists must never be the sole guard. VERIFY per-node hardware
+# with an ON-node probe (nvidia-smi / node-4090-probe / glances) — never assert a
+# node's GPU from a doc line (a runner-topology.md line wrongly claimed z890 was a
+# GTX 1650; on-node nvidia-smi 2026-07-10 proved it is a 3090 Ti — see below).
 #   CPU-only VPS (no GPU):  kvm4-1, kvm4-2, kvm2  (Hostinger)
-#   CUDA GPU:  spark (128GB unified, ARM64-CUDA, always-on),
-#              5090 (32GB x86-CUDA, pending standup),
-#              4090 (16GB laptop — burst only, no heavy VRAM budget),
-#              z890 (GTX 1650 4GB — too small for 1.2GB+ TTS; CPU-only for voice)
-#   ROCm GPU:  b850 "Knuckles" (dual R9700 64GB RDNA4) — AMD; CUDA TTS engines
-#              do NOT run here unported, so b850 serves voice on CPU only.
+#   CUDA GPU:  spark (~128GB unified, ARM64-CUDA, always-on),
+#              5090 (~32GB x86-CUDA, pending standup),
+#              z890 (RTX 3090 Ti 24GB, sm_86 Ampere — VERIFIED 2026-07-10 via
+#                    on-node nvidia-smi; live now, so a real GPU fallback while
+#                    5090 stands up. The "GTX 1650" doc line was a DIFFERENT node),
+#              4090 (~16GB laptop — burst only, no heavy VRAM budget)
+#   ROCm GPU:  b850 "Knuckles" (dual R9700 64GB RDNA4) — AMD; most CUDA TTS
+#              engines don't run on ROCm unported, so b850 serves voice on CPU
+#              here (revisit if a ROCm TTS path is validated).
 #
 # Design intent: only the two CPU-viable engines (kokoro, kitten_tts) route to
 # the KVMs — this is what makes "agents talking on GPU-less nodes" real (the
-# kokoro-tts CPU deploy unit, services/kokoro-tts). Everything else is GPU-bound.
+# kokoro-tts CPU deploy unit, services/kokoro-tts). GPU engines list the verified
+# CUDA nodes (spark/5090/z890/4090); z890's 24GB fits every engine below.
 #
 # DB-LATER (see #32): a future `pmoves_core.voice_profiles.host_affinity` jsonb
 # column can OVERRIDE a specific voice's node when it must differ from its
@@ -634,17 +643,19 @@ host_affinity:
   kitten_tts:   { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, b850, z890, 4090, spark], preferred: kvm4-2 }
   kokoro:       { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, b850, z890, 4090, spark], preferred: kvm4-2 }
 
-  # --- CUDA GPU engines: gated by VRAM; spark (128GB) + 5090 (32GB) are the real hosts ---
-  higgs:        { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, 4090], preferred: 5090 }
-  indextts:     { requires: cuda, min_vram_mb: 1200, nodes: [5090, spark, 4090], preferred: 5090 }
-  fish:         { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, 4090], preferred: 5090 }
-  chatterbox_turbo: { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, 4090], preferred: 5090 }
-  f5_tts:       { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, 4090], preferred: 5090 }
-  fish_s2:      { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark], preferred: 5090 }
-  voxcpm:       { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark], preferred: 5090 }
-  chatterbox:   { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark], preferred: 5090 }
-  chatterbox_multilingual: { requires: cuda, min_vram_mb: 2500, nodes: [5090, spark], preferred: 5090 }
-  qwen:         { requires: cuda, min_vram_mb: 2500, nodes: [5090, spark], preferred: 5090 }
-  # --- Heavy CUDA (3GB+): prefer spark's 128GB headroom ---
-  indextts2:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, 5090], preferred: spark }
-  vibevoice:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, 5090], preferred: spark }
+  # --- CUDA GPU engines: gated by VRAM. spark (128GB) + 5090 (32GB) are the
+  #     primary hosts; z890 (3090 Ti 24GB, VERIFIED) is a live real-GPU fallback
+  #     — its 24GB fits every engine below, incl. the 3GB heavy ones. ---
+  higgs:        { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, z890, 4090], preferred: 5090 }
+  indextts:     { requires: cuda, min_vram_mb: 1200, nodes: [5090, spark, z890, 4090], preferred: 5090 }
+  fish:         { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, z890, 4090], preferred: 5090 }
+  chatterbox_turbo: { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, z890, 4090], preferred: 5090 }
+  f5_tts:       { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, z890, 4090], preferred: 5090 }
+  fish_s2:      { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, z890], preferred: 5090 }
+  voxcpm:       { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, z890], preferred: 5090 }
+  chatterbox:   { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, z890], preferred: 5090 }
+  chatterbox_multilingual: { requires: cuda, min_vram_mb: 2500, nodes: [5090, spark, z890], preferred: 5090 }
+  qwen:         { requires: cuda, min_vram_mb: 2500, nodes: [5090, spark, z890], preferred: 5090 }
+  # --- Heavy CUDA (3GB+): prefer spark's 128GB headroom; z890 24GB also fits ---
+  indextts2:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, 5090, z890], preferred: spark }
+  vibevoice:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, 5090, z890], preferred: spark }
