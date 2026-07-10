@@ -144,10 +144,13 @@ Refs: [tailscale/tailscale#13367](https://github.com/tailscale/tailscale/issues/
 Instead of pinning every client to a specific node, let Tailscale pick the lowest-latency
 exit node — so adding kvm4-3/kvm4-N for new users requires **no client reconfiguration**:
 ```bash
-tailscale exit-node suggest          # prints the recommended node (latency/location)
-tailscale set --exit-node=<ID|name>  # apply the suggestion
+tailscale exit-node suggest          # prints the recommended node (one-shot, no failover)
+tailscale set --exit-node=auto:any   # track the suggestion + auto-switch on node/network change
 tailscale exit-node list             # all advertised+approved exit nodes
 ```
+`auto:any` is the reliability mode: it follows the current suggestion and **automatically
+re-selects** when exit nodes or network conditions change. A bare `suggest` + `set --exit-node=<name>`
+only pins the recommendation at that instant, so a rebooting KVM would strand the client.
 (Requires a Standard+ plan.) This is the client-side complement to the server-side
 `tag:exit` autoApprover: new nodes self-approve, clients self-select.
 
@@ -301,6 +304,8 @@ curl -sf https://api.ipify.org   # expect the selected exit KVM's DC public IP, 
 2. **Admin-API MCP creds:** wire `TAILSCALE_API_KEY` / `TAILSCALE_TAILNET` (manifest edit,
    operator-direct — see the credential-wiring section above) so route/tag ops run via MCP.
 
-**Client-side reliability (recommended for pilot clients):** prefer `tailscale exit-node suggest`
-over pinning a specific node, so a rebooting KVM can't strand a client on its local uplink —
-the client self-selects the next healthy exit node. Pair with the safe-flip auto-revert pattern above.
+**Client-side reliability (recommended for pilot clients):** set `tailscale set --exit-node=auto:any`
+rather than pinning a specific node **or** applying a one-shot `suggest` — `auto:any` tracks the
+suggestion and auto-switches when a node reboots or conditions change, so a rebooting KVM can't
+strand a client on its local uplink. (`exit-node suggest` alone only prints a recommendation; it
+does not configure ongoing failover.) Pair with the safe-flip auto-revert pattern above.
