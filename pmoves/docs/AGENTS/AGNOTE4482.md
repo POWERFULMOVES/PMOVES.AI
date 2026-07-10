@@ -1395,6 +1395,11 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 - No 522-commit rebase was warranted; a targeted 2-commit PR (env doc fix + this signoff) captures the entire real delta. The stale branch is preserved, not deleted.
 - Bring-up of `notebooklm-agent` requires the three `GOOGLE_*` secrets provisioned via the standard secrets pipeline (env.shared → tier funnel), then `docker compose --profile agents up notebooklm-agent`.
 
+### Tandem-Review Findings (functional status — honest signoff)
+Two read-only reviewers ran in tandem; folded into PR #2025 provenance.
+- **notebooklm-agent (Google path) = STUB-ONLY.** The MCP plumbing is real (`@modelcontextprotocol/sdk`, Docker/compose/registry wiring, clean `tsc` build, `src`↔`dist` in sync), but both exposed tools return **hardcoded placeholder strings** — `notebooklm_list_notebooks` / `notebooklm_query` in `pmoves/services/notebooklm-agent/src/index.ts:88-108` have `// TODO: Implement actual NotebookLM undocumented API call` and make **no HTTP call**. NotebookLM has **no official public API**, so a real implementation would require a reverse-engineered endpoint. Standing up the container succeeds but yields **no functional NotebookLM capability**. This signoff records the *infrastructure* landing, not a working integration.
+- **Open Notebook (OSS self-host) = the real, sovereign lane** — MIT-licensed (commercial-OK), pinned fork `ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest` (`PMOVES-Open-Notebook @ 0533c8a`, branch `PMOVES.AI-Edition-Hardened`), TensorZero-routed. Deployable today in password-auth/trusted-mesh mode. Open gaps tracked separately: shared-secret auth (JWT spec-only), no wired healthcheck, split SurrealDB/duplicate-container compose topology, stale status doc.
+
 ### Files Changed
 | File | Change |
 |------|--------|
