@@ -156,6 +156,13 @@ layer; P7 is the cross-node orchestrator. They stack; none replaces another.*
 
 ## 4. Proposed adoption plan (phased)
 
+> **Dependencies (this ADR references two in-flight surfaces).** Phase 0 assumes
+> both have merged to `main` first: the `host_affinity` contract in
+> `tts-engine-capabilities.yaml` (**PR #2037** — `requires`/`min_vram_mb`/`nodes`/
+> `preferred` per engine) and the `services/kokoro-tts` deploy unit (**PR #2024**).
+> Neither exists on `main` at the time of writing; do not start the Phase 0 spike
+> until they land, or it will target a missing config schema + service directory.
+
 1. **Phase 0 — GPU-var launcher spike (highest ROI).** Write one Pinokio 8
    launcher for an existing PMOVES service that must run on mixed hardware — the
    **kokoro-tts CPU unit** (`services/kokoro-tts`, PR #2024) is the ideal first
