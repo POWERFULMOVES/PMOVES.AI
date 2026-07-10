@@ -64,3 +64,6 @@ data/spark/
 /usr/
 
 .codex/
+
+# Local smoke-test artifacts (kokoro-smoke / omnivoice-smoke write sample WAVs here).
+/out/
