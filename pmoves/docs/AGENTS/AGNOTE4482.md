@@ -1401,6 +1401,7 @@ Two read-only reviewers ran in tandem; folded into PR #2025 provenance.
 - **Open Notebook (OSS self-host) = the real, sovereign lane** — MIT-licensed (commercial-OK), pinned fork `ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest` (`PMOVES-Open-Notebook @ 0533c8a`, branch `PMOVES.AI-Edition-Hardened`), TensorZero-routed. Deployable today in password-auth/trusted-mesh mode. Open gaps tracked separately: shared-secret auth (JWT spec-only), no wired healthcheck, split SurrealDB/duplicate-container compose topology, stale status doc.
 
 ### Files Changed
+
 | File | Change |
 |------|--------|
 | `pmoves/env.shared.example` | Google Universal OAuth placeholders documented |
