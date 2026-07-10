@@ -181,6 +181,12 @@ layer; P7 is the cross-node orchestrator. They stack; none replaces another.*
 - **Windows/WSL2 nodes** (Z890, 4090): confirm Pinokio 8 GPU detection reports the
   right `{{gpu_target}}` under WSL2 (the 4090 laptop has "no heavy VRAM budget" —
   `{{vram}}` gating should keep heavy engines off it automatically).
+- **Z890 GPU verified 2026-07-10 as RTX 3090 Ti 24GB** (on-node `nvidia-smi`) —
+  the runner-topology.md "GTX 1650 4GB" line was a *different* node and is wrong.
+  This is exactly the case that proves the GPU-var thesis: a doc line mis-stated the
+  hardware and would have mis-routed voice; Pinokio 8's `{{vram}}`/`{{gpu_model}}`
+  (or an on-node probe) is the source of truth. `host_affinity` (#2037) now lists
+  z890 as a live 24GB CUDA fallback. Fix the stale runner-topology.md line separately.
 - **AMD/ROCm coverage:** verify `{{gpu_target}} === 'gfx1201'` is detected on B850
   and that Pinokio's conda-forge base doesn't fight the ROCm 7.1 / HIP fork.
 - **No internet tunnel by design:** confirmed — do not expect Pinokio 8 to provide
