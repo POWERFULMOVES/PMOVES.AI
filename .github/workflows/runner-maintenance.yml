@@ -51,6 +51,17 @@ jobs:
           # Prune BuildKit cache older than 48h
           docker builder prune -af --filter "until=48h" || true
 
+          # Reclaim orphaned BuildKit builder-state volumes. `docker system prune`
+          # skips volumes and `docker builder prune` only clears cache INSIDE builders,
+          # so the per-run `buildx_buildkit_builder-*_state` volumes that
+          # setup-buildx-action leaks (one per build, never `buildx rm`'d) accumulate
+          # unbounded — this is what filled kvm4-1 to 100%. The pattern is scoped to
+          # `buildx_buildkit_*` so it can NEVER match a `pmoves_*` data volume, and any
+          # volume still attached to an in-flight builder fails the rm and is safely
+          # skipped — so this is targeted reclaim, NOT the banned `docker volume prune`.
+          docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
+
           for workdir in /opt/actions-runner*/_work; do
             [ -d "$workdir" ] || continue
             find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
@@ -80,6 +91,17 @@ jobs:
 
           docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
+
+          # Reclaim orphaned BuildKit builder-state volumes. `docker system prune`
+          # skips volumes and `docker builder prune` only clears cache INSIDE builders,
+          # so the per-run `buildx_buildkit_builder-*_state` volumes that
+          # setup-buildx-action leaks (one per build, never `buildx rm`'d) accumulate
+          # unbounded — this is what filled kvm4-1 to 100%. The pattern is scoped to
+          # `buildx_buildkit_*` so it can NEVER match a `pmoves_*` data volume, and any
+          # volume still attached to an in-flight builder fails the rm and is safely
+          # skipped — so this is targeted reclaim, NOT the banned `docker volume prune`.
+          docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
 
           for workdir in /opt/actions-runner*/_work; do
             [ -d "$workdir" ] || continue
@@ -111,6 +133,17 @@ jobs:
           docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
+          # Reclaim orphaned BuildKit builder-state volumes. `docker system prune`
+          # skips volumes and `docker builder prune` only clears cache INSIDE builders,
+          # so the per-run `buildx_buildkit_builder-*_state` volumes that
+          # setup-buildx-action leaks (one per build, never `buildx rm`'d) accumulate
+          # unbounded — this is what filled kvm4-1 to 100%. The pattern is scoped to
+          # `buildx_buildkit_*` so it can NEVER match a `pmoves_*` data volume, and any
+          # volume still attached to an in-flight builder fails the rm and is safely
+          # skipped — so this is targeted reclaim, NOT the banned `docker volume prune`.
+          docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
+
           for workdir in /opt/actions-runner-kvm4*/_work; do
             [ -d "$workdir" ] || continue
             find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
@@ -140,6 +173,17 @@ jobs:
 
           docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
+
+          # Reclaim orphaned BuildKit builder-state volumes. `docker system prune`
+          # skips volumes and `docker builder prune` only clears cache INSIDE builders,
+          # so the per-run `buildx_buildkit_builder-*_state` volumes that
+          # setup-buildx-action leaks (one per build, never `buildx rm`'d) accumulate
+          # unbounded — this is what filled kvm4-1 to 100%. The pattern is scoped to
+          # `buildx_buildkit_*` so it can NEVER match a `pmoves_*` data volume, and any
+          # volume still attached to an in-flight builder fails the rm and is safely
+          # skipped — so this is targeted reclaim, NOT the banned `docker volume prune`.
+          docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
 
           for workdir in /opt/actions-runner-kvm2*/_work; do
             [ -d "$workdir" ] || continue
