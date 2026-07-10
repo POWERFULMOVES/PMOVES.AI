@@ -80,6 +80,28 @@ class TestValidateAll:
         assert validated["Z_AI_API_KEY"].status == KeyStatus.ACTIVE
         assert "ZAI_API_KEY" not in validated
 
+    def test_active_canonical_wins_over_set_alias(self):
+        # Review P2: alias must never clobber a canonical key that is set,
+        # regardless of dict/iteration order.
+        new = "hf_" + "n" * 34
+        entries = {
+            "HUGGINGFACE_TOKEN": _entry("HUGGINGFACE_TOKEN", "hf_" + "o" * 34),
+            "HF_TOKEN": _entry("HF_TOKEN", new),
+        }
+        validated = validate_all(entries)
+        assert validated["HF_TOKEN"].value == new
+        assert "HUGGINGFACE_TOKEN" not in validated
+
+    def test_set_alias_fills_in_when_canonical_is_placeholder(self):
+        alias_val = "hf_" + "p" * 34
+        entries = {
+            "HF_TOKEN": _entry("HF_TOKEN", "unset-pending-key"),
+            "HUGGINGFACE_TOKEN": _entry("HUGGINGFACE_TOKEN", alias_val),
+        }
+        validated = validate_all(entries)
+        assert validated["HF_TOKEN"].status == KeyStatus.ACTIVE
+        assert validated["HF_TOKEN"].value == alias_val
+
 
 # ---------------------------------------------------------------------------
 # Discovery

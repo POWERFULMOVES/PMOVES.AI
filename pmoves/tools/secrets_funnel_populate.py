@@ -220,8 +220,11 @@ class _RedactingLoggerAdapter(logging.LoggerAdapter):
 
 
 def _setup_logging(verbose: bool = False) -> None:
-    """Configure module logging with redacting handler."""
-    handler = logging.StreamHandler(sys.stdout)
+    """Configure module logging with redacting handler.
+
+    Logs go to stderr so stdout stays clean for --json-output consumers.
+    """
+    handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     fmt = logging.Formatter("[%(name)s] %(levelname)s %(message)s")
     handler.setFormatter(fmt)
@@ -416,9 +419,21 @@ def validate_all(entries: Dict[str, KeyEntry]) -> Dict[str, KeyEntry]:
     """Validate all discovered keys, plus check for missing expected keys."""
     validated: Dict[str, KeyEntry] = {}
 
-    # Validate discovered keys (aliases may migrate to canonical names)
-    for entry in entries.values():
+    # Validate canonical names first so a migrated alias can never clobber a
+    # canonical key that is itself ACTIVE — when both are set, the canonical
+    # value wins and the alias is ignored (it may hold a stale rotation).
+    ordered = sorted(
+        entries.items(), key=lambda kv: kv[0] in DEPRECATED_ALIASES
+    )
+    for original_name, entry in ordered:
         result = validate_key(entry)
+        existing = validated.get(result.name)
+        if existing is not None and existing.status == KeyStatus.ACTIVE:
+            log.warning(
+                "Ignoring '%s' — canonical '%s' is already set from %s",
+                original_name, result.name, existing.source_file or "source",
+            )
+            continue
         validated[result.name] = result
 
     # Check for expected keys that weren't discovered
