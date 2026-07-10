@@ -1,0 +1,34 @@
+# Kokoro CPU TTS — self-contained image (Apache-2.0 Kokoro-82M baked in, CPU-only).
+# Build context = THIS directory (app.py has no services.common import).
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    KOKORO_MODEL_DIR=/models
+
+WORKDIR /app
+
+# espeak-ng: g2p/phonemization backend kokoro-onnx uses; curl for model fetch + healthcheck.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        espeak-ng \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Fetch the pinned Kokoro model (Apache-2.0) + voices so the image is
+# self-contained and offline-capable. Pinned release: model-files-v1.0.
+ARG KOKORO_MODEL_URL=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
+ARG KOKORO_VOICES_URL=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
+RUN mkdir -p /models \
+    && curl -fSL "$KOKORO_MODEL_URL"  -o /models/kokoro-v1.0.onnx \
+    && curl -fSL "$KOKORO_VOICES_URL" -o /models/voices-v1.0.bin
+
+COPY app.py .
+
+EXPOSE 8004
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
+    CMD curl -fsS http://localhost:8004/healthz || exit 1
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8004"]
