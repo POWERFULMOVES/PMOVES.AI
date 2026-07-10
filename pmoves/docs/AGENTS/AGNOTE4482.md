@@ -1382,3 +1382,28 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 - Timestamp: `2026-07-07T16:06:00Z`
 
 <!-- GRAPHITI_MARK: SPARK::FULL-BRINGUP-2026-07-07::2026-07-07 -->
+
+## NotebookLM MCP Agent Integration — Reconciliation Signoff (2026-07-09)
+
+### Work Performed
+- Reconciled the stale `feat/notebooklm-mcp-integration` branch (522 behind `main`) against current `main` before merge. `git cherry` + direct file comparison showed the integration had **already landed on `main`** via other PRs — the branch was ~95% redundant.
+- Already on `main` (byte-identical to branch): service scaffold `pmoves/services/notebooklm-agent/` (Node/TS MCP, `@modelcontextprotocol/sdk`), registry entry `notebooklm_agent` in `pmoves/config/agent_registry.yaml`, MCP toolset `pmoves/config/mcp/notebooklm-agent.yaml`, and the `notebooklm-agent` service block in `pmoves/docker-compose.agents.yml` (profile `agents`).
+- Closed the one **true remaining delta**: the compose block consumes `${GOOGLE_CLIENT_ID}` / `${GOOGLE_CLIENT_SECRET}` / `${GOOGLE_REFRESH_TOKEN}` but those keys were undocumented in `pmoves/env.shared.example`. Added a Google Universal OAuth section documenting them (distinct from `CHANNEL_MONITOR_GOOGLE_*` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_*`).
+- Ran in tandem with an Open Notebook (OSS self-host) bring-up review — the sovereign/privacy-mesh counterpart to this Google-cloud OAuth path.
+
+### Reconciliation Findings
+- No 522-commit rebase was warranted; a targeted 2-commit PR (env doc fix + this signoff) captures the entire real delta. The stale branch is preserved, not deleted.
+- Bring-up of `notebooklm-agent` requires the three `GOOGLE_*` secrets provisioned via the standard secrets pipeline (env.shared → tier funnel), then `docker compose --profile agents up notebooklm-agent`.
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `pmoves/env.shared.example` | Google Universal OAuth placeholders documented |
+| `pmoves/docs/AGENTS/AGNOTE4482.md` | this reconciliation signoff |
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::NOTEBOOKLM-AGENT-INTEGRATION-SIGNOFF`
+- Timestamp: `2026-07-09`
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::NOTEBOOKLM-AGENT-INTEGRATION-SIGNOFF::2026-07-09 -->
