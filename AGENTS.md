@@ -89,6 +89,13 @@ All make targets live in `pmoves/Makefile`. Run with `make -C pmoves <target>`.
 - Production secrets in GitHub Actions secrets and team vault
 - Onboarding: `docs/SECRETS_ONBOARDING.md`
 
+**The canonical secrets pipeline is `make -C pmoves secrets-funnel`.** It is the only
+supported path into CHIT storage, and it is defined in `pmoves/mk/codex.mk` — **not** in
+`pmoves/Makefile`. A grep of the root Makefile alone will not find it. Before adding any
+secrets tooling, run `grep -rn 'secrets-funnel' pmoves/Makefile pmoves/mk/` and
+`make -C pmoves help`. A duplicate funnel has been written twice by agents who checked only
+the root Makefile and concluded the target did not exist.
+
 ## Submodule Workflow
 - Consult `.claude/context/submodules.md` and `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/README.md` before submodule changes
 - Work in the submodule directory, land the commit there, then update the PMOVES.AI gitlink
