@@ -1,58 +1,72 @@
 #!/usr/bin/env python3
 """
-Secrets Funnel Populate -- Provider Key Injection Pipeline
+Secrets Funnel Populate -- Provider Key Validation + Delivery
 
-Reads provider API keys from local.env, validates formats against
-provider_catalog.yaml patterns, and injects into CHIT-encrypted storage.
+Validates provider API keys and delivers them into the SANCTIONED secrets
+pipeline. This tool never writes CGP bundles or tier env files itself --
+delivery rides the existing funnel:
 
-NEVER logs actual key values. All output uses redaction patterns.
+    <filled receipt template> --import-file--> local.env
+    local.env --`make -C pmoves secrets-funnel`--> env.shared
+             --chit-export--> CHIT bundle --secrets-funnel-sync--> tier envs
+
+Ground truth (do not re-invent):
+  - local.env is the canonical operator entry point. Resolution order is
+    pmoves/secrets/local.env (project-local, written by the
+    sync-secrets-local.yml runner), else <host-config>/pmoves/secrets/local.env
+    -- the same file `make -C pmoves secrets-funnel` hydrates env.shared from
+    (tools/secrets_local_hydrate.py).
+  - The CHIT bundle written by `make chit-export` lives at the USER-SCOPED
+    path <host-config>/pmoves/chit/env.cgp.json (mk/codex.mk CHIT_EXPORT_PATH),
+    not inside the repository.
+  - CGP is base16 ENCODING, not encryption (see pmoves/chit/__init__.py).
+    Nothing in this tool claims cryptographic protection; real encryption
+    lives in pmoves/tools/chit_security.py.
 
 Usage:
-    # Dry run (validate + show what would be injected, no changes)
-    python secrets_funnel_populate.py --dry-run
+    # Validate keys currently visible to the funnel (report only)
+    python pmoves/tools/secrets_funnel_populate.py --validate-only
 
-    # Validate keys and inject into CHIT
-    python secrets_funnel_populate.py
+    # Merge a filled KEY_RECEIPT_FORM template into local.env
+    # (values are never printed; the source file should be shredded after)
+    python pmoves/tools/secrets_funnel_populate.py --import-file /path/to/filled.env
 
-    # Verify CHIT storage has all expected keys
-    python secrets_funnel_populate.py --verify
+    # Show what an import would change without writing
+    python pmoves/tools/secrets_funnel_populate.py --import-file /path/to/filled.env --dry-run
 
-    # Show only validation report (no injection)
-    python secrets_funnel_populate.py --validate-only
-
-Pipeline:
-    local.env -> validation -> CHIT encryption -> env.cgp.json
-    ^                                        |
-    |                                        v
-    +------- make secrets-funnel <------------+
+    # Verify the exported CHIT bundle carries the expected provider keys
+    python pmoves/tools/secrets_funnel_populate.py --verify
 
 Security:
     - Key values are NEVER printed to stdout/stderr
     - Redaction pattern: sk-xx...xx (first 5 + last 4 chars shown)
     - Validation failures are logged with key name only
-    - CHIT_PASSPHRASE is read from environment (not args)
-    - Key values are NEVER passed as CLI arguments (always via secure channel)
+    - Key values are NEVER passed as CLI arguments (file-based import only)
+    - local.env is written with 0600 permissions
 """
 
 from __future__ import annotations
 
-# ---------------------------------------------------------------------------
-# stdlib imports (PEP 8 ordering: stdlib, third-party, local)
-# ---------------------------------------------------------------------------
 import argparse
-import getpass
-import json
 import logging
 import os
 import re
-import subprocess
+import stat
 import sys
-import tempfile
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
+
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from pmoves.tools._secrets_common import (  # noqa: E402
+    host_config_dir,
+    local_env_path,
+    parse_env_file,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -62,9 +76,10 @@ __all__ = [
     "KeyEntry",
     "KeyStatus",
     "ProviderCatalog",
-    "discover_keys_from_env",
+    "discover_keys",
     "validate_all",
-    "inject_into_chit",
+    "merge_into_local_env",
+    "verify_bundle",
     "main",
 ]
 
@@ -72,18 +87,6 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PMOVES_ROOT = Path(__file__).resolve().parents[1]
-
-# All env files to search for keys (in priority order)
-KEY_SOURCE_FILES = [
-    "local.env",
-    "pmoves/.env.local",
-    "pmoves/env.shared",
-    "pmoves/env.tier-llm",
-    "pmoves/env.tier-agent",
-    "pmoves/env.tier-supabase",
-    ".env",
-]
 
 # Sentinel values that indicate "not set"
 SENTINEL_VALUES = frozenset({
@@ -94,6 +97,7 @@ SENTINEL_VALUES = frozenset({
     "null",
     "none",
     "todo",
+    "changeme",
 })
 
 # Deprecated aliases -> (canonical_name, sunset_date)
@@ -135,6 +139,11 @@ KEY_VALIDATORS = {
 }
 
 
+def default_bundle_path() -> Path:
+    """User-scoped CHIT bundle path, mirroring mk/codex.mk CHIT_EXPORT_PATH."""
+    return host_config_dir() / "chit" / "env.cgp.json"
+
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -145,7 +154,6 @@ class KeyStatus(str, Enum):
     EMPTY = "empty"
     INVALID = "invalid"
     DEPRECATED_ALIAS = "deprecated_alias"
-    EXPIRED = "expired"
     UNKNOWN = "unknown"
 
 
@@ -194,9 +202,7 @@ class _RedactingLoggerAdapter(logging.LoggerAdapter):
     )
 
     def process(self, msg: str, kwargs: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        import re as _re
-
-        msg = _re.sub(self._SENSITIVE_RE, r"\1=***REDACTED***", str(msg))
+        msg = re.sub(self._SENSITIVE_RE, r"\1=***REDACTED***", str(msg))
         if "extra" in kwargs and isinstance(kwargs["extra"], dict):
             kwargs["extra"] = self._redact_dict(kwargs["extra"])
         return msg, kwargs
@@ -307,94 +313,33 @@ class ProviderCatalog:
 
 
 # ---------------------------------------------------------------------------
-# Env file discovery
+# Key discovery
 # ---------------------------------------------------------------------------
 
-def discover_keys_from_env(
-    root_dir: Path,
-    source_files: Optional[list[str]] = None,
-) -> dict[str, KeyEntry]:
-    """Scan all configured env files for provider keys.
+def discover_keys(source: Path) -> Dict[str, KeyEntry]:
+    """Read provider keys from a single dotenv-style source file.
 
-    Returns a dict of key_name -> KeyEntry. Values are redacted in logs.
+    The source is either the canonical local.env or an operator-filled
+    receipt template. Generated pipeline OUTPUTS (env.shared, env.tier-*)
+    are deliberately NOT read here -- feeding outputs back in as inputs
+    is circular and masks a stale local.env.
     """
-    files = source_files or KEY_SOURCE_FILES
-    entries: dict[str, KeyEntry] = {}
+    entries: Dict[str, KeyEntry] = {}
+    if not source.exists():
+        log.debug("Source file not found: %s", source)
+        return entries
 
-    for rel_path in files:
-        env_file = root_dir / rel_path
-        if not env_file.exists():
-            log.debug("Env file not found: %s", env_file)
+    log.info("Scanning %s for provider keys ...", source)
+    for key_name, value in parse_env_file(source).items():
+        if not _is_provider_key(key_name):
             continue
-
-        log.info("Scanning %s for keys ...", rel_path)
-        parsed = _parse_env_file(env_file)
-
-        for key_name, value in parsed.items():
-            # Skip non-provider keys
-            if not _is_provider_key(key_name):
-                continue
-
-            # Skip if we already have this key from a higher-priority file
-            if key_name in entries and entries[key_name].is_set():
-                continue
-
-            entry = KeyEntry(
-                name=key_name,
-                value=value,
-                source_file=rel_path,
-                validator=KEY_VALIDATORS.get(key_name),
-            )
-            entries[key_name] = entry
-
+        entries[key_name] = KeyEntry(
+            name=key_name,
+            value=value,
+            source_file=str(source),
+            validator=KEY_VALIDATORS.get(key_name),
+        )
     return entries
-
-
-def _parse_env_file(path: Path) -> dict[str, str]:
-    """Parse a .env-style file, returning key-value pairs.
-
-    Handles:
-    - Standard KEY=value
-    - KEY="quoted value"
-    - KEY='single quoted'
-    - Comments (# or ;)
-    - Empty lines
-    - Multi-line values (basic)
-    """
-    result: dict[str, str] = {}
-    lines = path.read_text(encoding="utf-8").splitlines()
-
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-
-        # Skip empty lines and comments
-        if not line or line.startswith("#") or line.startswith(";"):
-            i += 1
-            continue
-
-        # Handle multi-line values (basic: lines ending with \)
-        full_line = line
-        while full_line.endswith("\\") and i + 1 < len(lines):
-            i += 1
-            full_line = full_line[:-1] + lines[i].strip()
-
-        # Parse KEY=value
-        if "=" in full_line:
-            key, _, value = full_line.partition("=")
-            key = key.strip()
-            value = value.strip()
-
-            # Remove surrounding quotes
-            if (value.startswith('"') and value.endswith('"')) or \
-               (value.startswith("'") and value.endswith("'")):
-                value = value[1:-1]
-
-            result[key] = value
-
-        i += 1
-
-    return result
 
 
 def _is_provider_key(name: str) -> bool:
@@ -413,7 +358,6 @@ def validate_key(entry: KeyEntry) -> KeyEntry:
     - Empty/sentinel detection
     - Deprecated alias migration
     - Regex format validation
-    - Provider-specific rules
     """
     name = entry.name
     value = entry.value
@@ -468,13 +412,14 @@ def validate_key(entry: KeyEntry) -> KeyEntry:
     return entry
 
 
-def validate_all(entries: dict[str, KeyEntry]) -> dict[str, KeyEntry]:
+def validate_all(entries: Dict[str, KeyEntry]) -> Dict[str, KeyEntry]:
     """Validate all discovered keys, plus check for missing expected keys."""
-    validated: dict[str, KeyEntry] = {}
+    validated: Dict[str, KeyEntry] = {}
 
-    # Validate discovered keys
-    for name, entry in entries.items():
-        validated[name] = validate_key(entry)
+    # Validate discovered keys (aliases may migrate to canonical names)
+    for entry in entries.values():
+        result = validate_key(entry)
+        validated[result.name] = result
 
     # Check for expected keys that weren't discovered
     for expected in ProviderCatalog.all_expected_keys():
@@ -482,136 +427,85 @@ def validate_all(entries: dict[str, KeyEntry]) -> dict[str, KeyEntry]:
             validated[expected] = KeyEntry(
                 name=expected,
                 status=KeyStatus.MISSING,
-                error_message=f"{expected} not found in any env file",
+                error_message=f"{expected} not found in source file",
             )
 
     return validated
 
 
 # ---------------------------------------------------------------------------
-# CHIT injection
+# Delivery: merge into local.env (the funnel's sanctioned entry point)
 # ---------------------------------------------------------------------------
 
-def inject_into_chit(
-    entries: dict[str, KeyEntry],
+def merge_into_local_env(
+    entries: Dict[str, KeyEntry],
+    local_env: Optional[Path] = None,
     dry_run: bool = False,
-) -> dict[str, bool]:
-    """Inject validated keys into CHIT-encrypted storage.
+) -> Dict[str, bool]:
+    """Merge ACTIVE keys into local.env, preserving all other lines.
 
-    Returns a dict of key_name -> success (bool).
+    local.env is what `make -C pmoves secrets-funnel` hydrates env.shared
+    from (tools/secrets_local_hydrate.py). We only ever add or update the
+    provider keys handled by this tool; unknown lines pass through verbatim.
+
+    Returns key_name -> written (bool). Skipped (non-ACTIVE) keys are False.
     """
-    results: dict[str, bool] = {}
-    passphrase = _get_chit_passphrase()
+    target = local_env or local_env_path()
+    results: Dict[str, bool] = {}
 
-    if not passphrase:
-        log.error(
-            "CHIT_PASSPHRASE not set. Cannot inject keys. "
-            "Set it as an environment variable or use voice activation."
-        )
-        return {name: False for name in entries}
+    active = {k: e for k, e in entries.items() if e.status == KeyStatus.ACTIVE}
+    for name in entries:
+        results[name] = name in active
+    if not active:
+        log.warning("No ACTIVE keys to merge into %s", target)
+        return results
 
-    for name, entry in entries.items():
-        if entry.status != KeyStatus.ACTIVE:
-            log.debug("Skipping %s (status: %s)", name, entry.status.value)
-            results[name] = False
-            continue
+    if dry_run:
+        for name in sorted(active):
+            log.info("[DRY-RUN] Would merge %s into %s", name, target)
+        return results
 
-        if dry_run:
-            log.info("[DRY-RUN] Would inject %s into CHIT", name)
-            results[name] = True
-            continue
+    existing_lines: list[str] = []
+    if target.exists():
+        existing_lines = target.read_text(encoding="utf-8", errors="ignore").splitlines()
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
 
-        success = _inject_single_key(name, entry.value, passphrase)
-        results[name] = success
+    remaining = dict(active)
+    out_lines: list[str] = []
+    for raw in existing_lines:
+        line = raw.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key = line.partition("=")[0].strip()
+            if key in remaining:
+                out_lines.append(f"{key}={remaining.pop(key).value}")
+                continue
+            # A deprecated alias line is superseded by its canonical entry
+            if key in DEPRECATED_ALIASES and DEPRECATED_ALIASES[key][0] in active:
+                log.info("Dropping superseded alias line '%s' from local.env", key)
+                continue
+        out_lines.append(raw)
 
+    for name in sorted(remaining):
+        out_lines.append(f"{name}={remaining[name].value}")
+
+    target.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+
+    for name in sorted(active):
+        log.info("Merged %s into %s", name, target)
+    log.info(
+        "Next step: run `make -C pmoves secrets-funnel` to hydrate env.shared, "
+        "export the CHIT bundle, and regenerate tier env files."
+    )
     return results
-
-
-def _get_chit_passphrase() -> Optional[str]:
-    """Get CHIT passphrase from environment or interactive prompt."""
-    passphrase = os.environ.get("CHIT_PASSPHRASE")
-    if passphrase:
-        return passphrase
-
-    # Try voice-activated passphrase file (if exists)
-    voice_file = Path.home() / ".pmoves" / "chit_passphrase"
-    if voice_file.exists():
-        return voice_file.read_text().strip()
-
-    # Interactive fallback
-    if sys.stdin.isatty():
-        try:
-            return getpass.getpass("CHIT passphrase: ")
-        except (EOFError, KeyboardInterrupt):
-            return None
-
-    return None
-
-
-def _inject_single_key(name: str, value: str, passphrase: str) -> bool:
-    """Inject a single key into CHIT-encrypted storage."""
-    fd: Optional[int] = None
-    tmp_path: Optional[str] = None
-
-    try:
-        fd, tmp_path = tempfile.mkstemp(suffix=".env", prefix="chit_key_")
-        os.chmod(tmp_path, 0o600)
-
-        with os.fdopen(fd, "w") as f:
-            f.write(f"{name}={value}\n")
-        fd = None
-
-        chit_cli = PMOVES_ROOT / "tools" / "chit_cli.py"
-        if not chit_cli.exists():
-            log.error(
-                "CHIT CLI not found at %s. Cannot inject %s. "
-                "Install CHIT tooling or set CHIT_PASSPHRASE for direct encryption.",
-                chit_cli, name,
-            )
-            return False
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(chit_cli),
-                "--action", "set",
-                "--key", name,
-                "--from-file", tmp_path,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode == 0:
-            log.info("Injected %s into CHIT storage", name)
-            return True
-        else:
-            log.error("CHIT CLI failed for %s: %s", name, result.stderr[:200])
-            return False
-
-    except subprocess.TimeoutExpired:
-        log.error("CHIT CLI timeout for %s", name)
-        return False
-    except Exception:
-        log.exception("Failed to inject %s", name)
-        return False
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                size = os.path.getsize(tmp_path)
-                with open(tmp_path, "wb") as f:
-                    f.write(b"\x00" * size)
-                os.unlink(tmp_path)
-            except Exception:
-                pass
 
 
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
 
-def print_report(entries: dict[str, KeyEntry]) -> None:
+def print_report(entries: Dict[str, KeyEntry]) -> None:
     """Print a formatted validation report (no key values exposed)."""
     print("\n" + "=" * 70)
     print("  PMOVES Provider Key Validation Report")
@@ -649,26 +543,43 @@ def print_report(entries: dict[str, KeyEntry]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Verification
+# Verification (reads the real, user-scoped CGP bundle)
 # ---------------------------------------------------------------------------
 
-def verify_chit_storage(expected_keys: list[str]) -> dict[str, bool]:
-    """Verify that CHIT storage contains all expected keys.
+def verify_bundle(
+    expected_keys: list[str],
+    bundle_path: Optional[Path] = None,
+) -> Dict[str, bool]:
+    """Verify the exported CHIT bundle carries the expected keys with
+    non-sentinel values.
 
-    Returns key_name -> present (bool).
+    The bundle is the user-scoped CGP written by `make chit-export`
+    (mk/codex.mk CHIT_EXPORT_PATH) and must be decoded with the pmoves.chit
+    codec -- it is a structured CGP payload, not flat KEY=value JSON.
+
+    Returns key_name -> present-and-set (bool).
     """
-    env_cgp_path = PMOVES_ROOT / "env.cgp.json"
-    results: dict[str, bool] = {}
+    from pmoves.chit import decode_secret_map, load_cgp
 
-    data: dict[str, Any] = {}
-    if env_cgp_path.exists():
-        try:
-            data = json.loads(env_cgp_path.read_text())
-        except json.JSONDecodeError:
-            log.error("env.cgp.json is corrupted")
+    path = bundle_path or default_bundle_path()
+    results: Dict[str, bool] = {key: False for key in expected_keys}
+
+    if not path.exists():
+        log.error(
+            "No CHIT bundle at %s -- run `make -C pmoves chit-export` "
+            "(or the full `make -C pmoves secrets-funnel`) first.", path,
+        )
+        return results
+
+    try:
+        secret_map = decode_secret_map(load_cgp(str(path)))
+    except Exception:
+        log.exception("Failed to decode CHIT bundle at %s", path)
+        return results
 
     for key in expected_keys:
-        results[key] = key in data
+        value = (secret_map.get(key) or "").strip()
+        results[key] = bool(value) and value.lower() not in SENTINEL_VALUES
 
     return results
 
@@ -679,28 +590,43 @@ def verify_chit_storage(expected_keys: list[str]) -> dict[str, bool]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="PMOVES Secrets Funnel -- Provider Key Injection Pipeline",
+        description="PMOVES Secrets Funnel -- Provider Key Validation + Delivery",
     )
     parser.add_argument(
-        "--root-dir",
+        "--import-file",
         type=Path,
-        default=Path.cwd(),
-        help="PMOVES repository root directory (default: cwd)",
+        default=None,
+        help=(
+            "Filled receipt template (dotenv format) to validate and merge "
+            "into local.env. Shred the file after a successful merge."
+        ),
+    )
+    parser.add_argument(
+        "--local-env",
+        type=Path,
+        default=None,
+        help="Override the local.env path (default: project-local, else host config dir)",
+    )
+    parser.add_argument(
+        "--bundle",
+        type=Path,
+        default=None,
+        help="Override the CHIT bundle path for --verify (default: host config dir)",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Validate keys but do not inject into CHIT",
+        help="Validate and show what --import-file would merge, without writing",
     )
     parser.add_argument(
         "--verify",
         action="store_true",
-        help="Verify CHIT storage has all expected keys",
+        help="Verify the exported CHIT bundle has the expected keys set",
     )
     parser.add_argument(
         "--validate-only",
         action="store_true",
-        help="Show validation report without injection or verification",
+        help="Show validation report for the current local.env, no writes",
     )
     parser.add_argument(
         "--json-output",
@@ -714,65 +640,35 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    _setup_logging(args.verbose)  # Don't assign to unused variable
+    _setup_logging(args.verbose)
 
-    # --verify mode
+    # --verify mode: read the real bundle
     if args.verify:
         expected = ProviderCatalog.all_expected_keys()
-        results = verify_chit_storage(expected)
+        results = verify_bundle(expected, bundle_path=args.bundle)
         ok = sum(1 for v in results.values() if v)
-        print(f"CHIT verification: {ok}/{len(expected)} keys present")
+        print(f"CHIT bundle verification: {ok}/{len(expected)} keys set")
         for key, present in sorted(results.items()):
             status = "OK" if present else "MISSING"
             print(f"  [{status}] {key}")
         return 0 if all(results.values()) else 1
 
-    # Discover keys from env files
-    log.info("Discovering keys from env files ...")
-    entries = discover_keys_from_env(args.root_dir)
-    log.info("Discovered %d potential keys", len(entries))
-
-    # Validate
+    # Discover + validate
+    source = args.import_file or args.local_env or local_env_path()
+    entries = discover_keys(source)
+    log.info("Discovered %d potential keys in %s", len(entries), source)
     validated = validate_all(entries)
-
-    # --validate-only mode
-    if args.validate_only:
-        print_report(validated)
-        return 0
-
-    # Print report
     print_report(validated)
 
-    # Check if we have critical issues
-    critical_issues = [
-        e for e in validated.values()
-        if e.status in (KeyStatus.MISSING, KeyStatus.INVALID)
-    ]
-    if critical_issues:
-        log.warning(
-            "Found %d critical issues. Fix before injecting.",
-            len(critical_issues),
+    results: Dict[str, bool] = {}
+    if args.import_file and not args.validate_only:
+        results = merge_into_local_env(
+            validated,
+            local_env=args.local_env,
+            dry_run=args.dry_run,
         )
-        # Continue anyway -- non-critical keys can still be injected
-
-    # Inject into CHIT
-    active_entries = {
-        k: v for k, v in validated.items()
-        if v.status == KeyStatus.ACTIVE
-    }
-
-    if not active_entries:
-        log.error("No active keys to inject. Populate local.env first.")
-        return 1
-
-    log.info("Injecting %d active keys into CHIT ...", len(active_entries))
-    results = inject_into_chit(active_entries, dry_run=args.dry_run)
-
-    ok = sum(1 for v in results.values() if v)
-    log.info(
-        "Injection complete: %d/%d succeeded",
-        ok, len(results),
-    )
+        merged = sum(1 for v in results.values() if v)
+        log.info("Merge complete: %d/%d keys delivered to local.env", merged, len(results))
 
     if args.json_output:
         import json as _json
@@ -786,17 +682,23 @@ def main(argv: list[str] | None = None) -> int:
                 }
                 for k, v in sorted(validated.items())
             },
-            "injection": results,
+            "merge": results,
             "summary": {
                 "total": len(validated),
-                "active": len(active_entries),
-                "injected": ok,
-                "failed": len(results) - ok,
+                "active": sum(1 for v in validated.values() if v.status == KeyStatus.ACTIVE),
+                "merged": sum(1 for v in results.values() if v),
             },
         }
         print(_json.dumps(output, indent=2))
 
-    return 0 if all(results.values()) else 1
+    if args.validate_only or not args.import_file:
+        return 0
+    # Exit nonzero only if an ACTIVE key failed to merge
+    failed_active = [
+        k for k, v in validated.items()
+        if v.status == KeyStatus.ACTIVE and not results.get(k, False)
+    ]
+    return 1 if failed_active else 0
 
 
 if __name__ == "__main__":
