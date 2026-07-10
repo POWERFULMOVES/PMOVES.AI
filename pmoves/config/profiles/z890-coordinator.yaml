@@ -7,7 +7,9 @@ description: >
 hardware:
   cpu:
     vendor: Intel
-    model: Intel Core Ultra 7 265K
+    # Detected spelling (with (R)/(TM) markers) so profile_loader's substring
+    # match `cpu_model in cpu` selects this profile via `pmoves mini profile detect`.
+    model: Intel(R) Core(TM) Ultra 7 265K
     cores: 20
     threads: 20
   gpu:
