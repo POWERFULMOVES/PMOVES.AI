@@ -87,12 +87,11 @@
 ## Action Items
 
 - [ ] DARKXSIDE: Fill `KEY_RECEIPT_FORM.md` with actual key values
-- [ ] DevOps: Run `python pmoves/tools/secrets_funnel_populate.py --validate-only`
-- [ ] DevOps: Run `python pmoves/tools/secrets_funnel_populate.py --dry-run`
-- [ ] DevOps: Run `python pmoves/tools/secrets_funnel_populate.py`
-- [ ] DevOps: Run `python pmoves/tools/secrets_funnel_populate.py --verify`
+- [ ] DevOps: Inspect (read-only) `python pmoves/tools/provider_key_inventory.py`
+- [ ] DevOps: Inject via canonical funnel `make -C pmoves secrets-funnel`
+- [ ] DevOps: Verify vault `python pmoves/tools/provider_key_inventory.py --verify`
 - [ ] DARKXSIDE: Confirm all 8 critical keys resolve correctly
-- [ ] DARKXSIDE: Delete `local.env` after successful injection
+- [ ] DARKXSIDE: Delete `pmoves/secrets/local.env` after successful injection
 - [ ] Schedule: Key rotation reminder for 2026-10-01 (sunset aliases)
 
 ---

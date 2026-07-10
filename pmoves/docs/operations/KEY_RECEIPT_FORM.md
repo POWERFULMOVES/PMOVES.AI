@@ -110,14 +110,19 @@ MCP_SERVER_TOKEN=
 
 After filling the template above:
 
-1. Save as `local.env` in the repository root
-2. Run: `python pmoves/tools/secrets_funnel_populate.py --validate-only`
-3. Review the validation report
-4. Run: `python pmoves/tools/secrets_funnel_populate.py --dry-run`
-5. If dry-run looks correct: `python pmoves/tools/secrets_funnel_populate.py`
-6. Verify: `python pmoves/tools/secrets_funnel_populate.py --verify`
-7. **DELETE `local.env` after successful injection**
-8. Shred the filled template
+1. Save as `pmoves/secrets/local.env` (the path `secrets-local-hydrate` reads)
+2. Inspect what was found — read-only, writes nothing:
+   `python pmoves/tools/provider_key_inventory.py`
+3. Review the validation report; fix any `INVALID` entries before continuing
+4. Inject via the **canonical funnel** — this is the only supported path:
+   `make -C pmoves secrets-funnel`
+5. Verify the vault took every key:
+   `python pmoves/tools/provider_key_inventory.py --verify`
+6. **DELETE `pmoves/secrets/local.env` after successful injection**
+7. Shred the filled template
+
+> `provider_key_inventory.py` never writes secrets. Only `make -C pmoves secrets-funnel`
+> injects into CHIT storage. See [`pmoves/mk/codex.mk`](../../mk/codex.mk).
 
 ---
 

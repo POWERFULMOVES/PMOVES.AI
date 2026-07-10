@@ -150,6 +150,17 @@ help: ## Show available make targets and descriptions
 	@$(PYTHON) tools/make_help.py $(MAKEFILE_LIST) || python3 tools/make_help.py $(MAKEFILE_LIST) || py -3 tools/make_help.py $(MAKEFILE_LIST)
 
 # Target modules (Phase 2 Makefile refactor).
+#
+# KNOWN ROAD: most targets do NOT live in this file. Grepping only pmoves/Makefile
+# will make an existing target look missing and invite a duplicate implementation.
+# Always search the includes too:  grep -rn '^<target>:' pmoves/Makefile pmoves/mk/
+#
+#   secrets-funnel, secrets-funnel-sync, chit-export, chit-manifest-sync  -> mk/codex.mk
+#   env-bootstrap-lite                                                    -> mk/preflight.mk
+#   gha-runner-ctl-*                                                      -> mk/infra.mk
+#   yt-egress-*                                                           -> mk/egress.mk
+#
+# `make -C pmoves help` enumerates every target across all includes.
 include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk

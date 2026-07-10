@@ -1,37 +1,42 @@
 #!/usr/bin/env python3
 """
-Secrets Funnel Populate -- Provider Key Injection Pipeline
+Provider Key Inventory -- read-only validation and CGP vault verification
 
-Reads provider API keys from local.env, validates formats against
-provider_catalog.yaml patterns, and injects into CHIT-encrypted storage.
+Scans the configured env files for provider API keys, validates their formats,
+and reports status. Separately, verifies that the CGP vault exported by the
+canonical secrets funnel holds a non-empty value for every expected key.
+
+This tool is READ-ONLY. It does not write env files and it does not inject
+secrets. Injection is owned by the canonical funnel:
+
+    make -C pmoves secrets-funnel
+
+which is defined in pmoves/mk/codex.mk and included by pmoves/Makefile. That
+funnel runs secrets-local-hydrate -> secrets-runtime-hydrate ->
+credential_urlencoder -> secrets-funnel-sync -> secrets-audit -> tooling-audit,
+and it is the only supported path to CHIT storage.
 
 NEVER logs actual key values. All output uses redaction patterns.
 
 Usage:
-    # Dry run (validate + show what would be injected, no changes)
-    python secrets_funnel_populate.py --dry-run
+    # Validation report (default)
+    python provider_key_inventory.py
 
-    # Validate keys and inject into CHIT
-    python secrets_funnel_populate.py
+    # Machine-readable report; no key values exposed
+    python provider_key_inventory.py --json-output
 
-    # Verify CHIT storage has all expected keys
-    python secrets_funnel_populate.py --verify
+    # Verify the CGP vault holds every expected key
+    python provider_key_inventory.py --verify
 
-    # Show only validation report (no injection)
-    python secrets_funnel_populate.py --validate-only
-
-Pipeline:
-    local.env -> validation -> CHIT encryption -> env.cgp.json
-    ^                                        |
-    |                                        v
-    +------- make secrets-funnel <------------+
+Exit codes:
+    0  all discovered keys valid / vault complete
+    1  one or more keys MISSING or INVALID / vault incomplete
 
 Security:
     - Key values are NEVER printed to stdout/stderr
     - Redaction pattern: sk-xx...xx (first 5 + last 4 chars shown)
     - Validation failures are logged with key name only
-    - CHIT_PASSPHRASE is read from environment (not args)
-    - Key values are NEVER passed as CLI arguments (always via secure channel)
+    - Key values are NEVER passed as CLI arguments
 """
 
 from __future__ import annotations
@@ -40,16 +45,12 @@ from __future__ import annotations
 # stdlib imports (PEP 8 ordering: stdlib, third-party, local)
 # ---------------------------------------------------------------------------
 import argparse
-import getpass
 import json
 import logging
 import os
 import re
-import subprocess
 import sys
-import tempfile
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -64,7 +65,9 @@ __all__ = [
     "ProviderCatalog",
     "discover_keys_from_env",
     "validate_all",
-    "inject_into_chit",
+    "verify_chit_storage",
+    "resolve_cgp_path",
+    "chit_injection_guidance",
     "main",
 ]
 
@@ -215,16 +218,17 @@ class _RedactingLoggerAdapter(logging.LoggerAdapter):
 
 def _setup_logging(verbose: bool = False) -> None:
     """Configure module logging with redacting handler."""
-    handler = logging.StreamHandler(sys.stdout)
+    # stderr, not stdout: --json-output must stay machine-parseable.
+    handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     fmt = logging.Formatter("[%(name)s] %(levelname)s %(message)s")
     handler.setFormatter(fmt)
-    root = logging.getLogger("secrets_funnel")
+    root = logging.getLogger("provider_key_inventory")
     root.addHandler(handler)
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
 
 
-log = _RedactingLoggerAdapter(logging.getLogger("secrets_funnel"), {})
+log = _RedactingLoggerAdapter(logging.getLogger("provider_key_inventory"), {})
 
 
 # ---------------------------------------------------------------------------
@@ -489,122 +493,28 @@ def validate_all(entries: dict[str, KeyEntry]) -> dict[str, KeyEntry]:
 
 
 # ---------------------------------------------------------------------------
-# CHIT injection
+# CHIT injection -- intentionally NOT implemented here
 # ---------------------------------------------------------------------------
 
-def inject_into_chit(
-    entries: dict[str, KeyEntry],
-    dry_run: bool = False,
-) -> dict[str, bool]:
-    """Inject validated keys into CHIT-encrypted storage.
+CANONICAL_FUNNEL_CMD = "make -C pmoves secrets-funnel"
 
-    Returns a dict of key_name -> success (bool).
+
+def chit_injection_guidance() -> str:
+    """Return the canonical way to inject provider keys into CHIT storage.
+
+    This module is read-only by design. Injection belongs to the canonical
+    secrets funnel defined in pmoves/mk/codex.mk (included by pmoves/Makefile),
+    which runs: secrets-local-hydrate -> secrets-runtime-hydrate ->
+    credential_urlencoder -> secrets-funnel-sync -> secrets-audit -> tooling-audit.
+
+    An earlier revision of this file shelled out to pmoves/tools/chit_cli.py,
+    which has never existed in this repository. That path always failed.
     """
-    results: dict[str, bool] = {}
-    passphrase = _get_chit_passphrase()
-
-    if not passphrase:
-        log.error(
-            "CHIT_PASSPHRASE not set. Cannot inject keys. "
-            "Set it as an environment variable or use voice activation."
-        )
-        return {name: False for name in entries}
-
-    for name, entry in entries.items():
-        if entry.status != KeyStatus.ACTIVE:
-            log.debug("Skipping %s (status: %s)", name, entry.status.value)
-            results[name] = False
-            continue
-
-        if dry_run:
-            log.info("[DRY-RUN] Would inject %s into CHIT", name)
-            results[name] = True
-            continue
-
-        success = _inject_single_key(name, entry.value, passphrase)
-        results[name] = success
-
-    return results
-
-
-def _get_chit_passphrase() -> Optional[str]:
-    """Get CHIT passphrase from environment or interactive prompt."""
-    passphrase = os.environ.get("CHIT_PASSPHRASE")
-    if passphrase:
-        return passphrase
-
-    # Try voice-activated passphrase file (if exists)
-    voice_file = Path.home() / ".pmoves" / "chit_passphrase"
-    if voice_file.exists():
-        return voice_file.read_text().strip()
-
-    # Interactive fallback
-    if sys.stdin.isatty():
-        try:
-            return getpass.getpass("CHIT passphrase: ")
-        except (EOFError, KeyboardInterrupt):
-            return None
-
-    return None
-
-
-def _inject_single_key(name: str, value: str, passphrase: str) -> bool:
-    """Inject a single key into CHIT-encrypted storage."""
-    fd: Optional[int] = None
-    tmp_path: Optional[str] = None
-
-    try:
-        fd, tmp_path = tempfile.mkstemp(suffix=".env", prefix="chit_key_")
-        os.chmod(tmp_path, 0o600)
-
-        with os.fdopen(fd, "w") as f:
-            f.write(f"{name}={value}\n")
-        fd = None
-
-        chit_cli = PMOVES_ROOT / "tools" / "chit_cli.py"
-        if not chit_cli.exists():
-            log.error(
-                "CHIT CLI not found at %s. Cannot inject %s. "
-                "Install CHIT tooling or set CHIT_PASSPHRASE for direct encryption.",
-                chit_cli, name,
-            )
-            return False
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(chit_cli),
-                "--action", "set",
-                "--key", name,
-                "--from-file", tmp_path,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode == 0:
-            log.info("Injected %s into CHIT storage", name)
-            return True
-        else:
-            log.error("CHIT CLI failed for %s: %s", name, result.stderr[:200])
-            return False
-
-    except subprocess.TimeoutExpired:
-        log.error("CHIT CLI timeout for %s", name)
-        return False
-    except Exception:
-        log.exception("Failed to inject %s", name)
-        return False
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                size = os.path.getsize(tmp_path)
-                with open(tmp_path, "wb") as f:
-                    f.write(b"\x00" * size)
-                os.unlink(tmp_path)
-            except Exception:
-                pass
+    return (
+        "\nThis tool is read-only; it does not write secrets.\n"
+        "To apply provider keys, run the canonical funnel:\n"
+        f"\n    {CANONICAL_FUNNEL_CMD}\n"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -652,25 +562,54 @@ def print_report(entries: dict[str, KeyEntry]) -> None:
 # Verification
 # ---------------------------------------------------------------------------
 
-def verify_chit_storage(expected_keys: list[str]) -> dict[str, bool]:
-    """Verify that CHIT storage contains all expected keys.
+def resolve_cgp_path() -> Path:
+    """Resolve the CGP vault the canonical funnel exports to.
 
-    Returns key_name -> present (bool).
+    Mirrors CHIT_EXPORT_PATH in pmoves/mk/codex.mk: %APPDATA% on Windows,
+    $XDG_CONFIG_HOME (else ~/.config) elsewhere. Falls back to the repo-local
+    copy under pmoves/data/chit/ when the exported vault is absent.
     """
-    env_cgp_path = PMOVES_ROOT / "env.cgp.json"
-    results: dict[str, bool] = {}
+    override = os.environ.get("CHIT_EXPORT_PATH")
+    if override:
+        return Path(override).expanduser()
 
-    data: dict[str, Any] = {}
-    if env_cgp_path.exists():
+    if os.name == "nt":
+        base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+    else:
+        base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+
+    exported = Path(base) / "pmoves" / "chit" / "env.cgp.json"
+    if exported.exists():
+        return exported
+    return PMOVES_ROOT / "data" / "chit" / "env.cgp.json"
+
+
+def verify_chit_storage(expected_keys: list[str]) -> dict[str, bool]:
+    """Verify the CGP vault holds a non-empty value for each expected key.
+
+    The CGP schema is {"points": [{"label": ..., "value": ...}]}. Keys are
+    never top-level members of the document, so a membership test against the
+    parsed dict always reports every key missing.
+    """
+    cgp_path = resolve_cgp_path()
+    present: dict[str, str] = {}
+
+    if not cgp_path.exists():
+        log.error("CGP vault not found: %s", cgp_path)
+    else:
         try:
-            data = json.loads(env_cgp_path.read_text())
+            data: dict[str, Any] = json.loads(cgp_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            log.error("env.cgp.json is corrupted")
+            log.error("CGP vault is corrupted: %s", cgp_path)
+            data = {}
 
-    for key in expected_keys:
-        results[key] = key in data
+        for point in data.get("points", []):
+            label = point.get("label")
+            if label:
+                present[label] = point.get("value") or ""
 
-    return results
+    return {key: bool(present.get(key, "").strip()) for key in expected_keys}
+
 
 
 # ---------------------------------------------------------------------------
@@ -679,7 +618,11 @@ def verify_chit_storage(expected_keys: list[str]) -> dict[str, bool]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="PMOVES Secrets Funnel -- Provider Key Injection Pipeline",
+        description=(
+            "PMOVES Provider Key Inventory -- read-only validation and vault verification. "
+            "This tool never writes secrets."
+        ),
+        epilog=f"Injection is owned by the canonical funnel: {CANONICAL_FUNNEL_CMD}",
     )
     parser.add_argument(
         "--root-dir",
@@ -688,19 +631,14 @@ def main(argv: list[str] | None = None) -> int:
         help="PMOVES repository root directory (default: cwd)",
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Validate keys but do not inject into CHIT",
-    )
-    parser.add_argument(
         "--verify",
         action="store_true",
-        help="Verify CHIT storage has all expected keys",
+        help="Verify the CGP vault holds a non-empty value for every expected key",
     )
     parser.add_argument(
         "--validate-only",
         action="store_true",
-        help="Show validation report without injection or verification",
+        help="Deprecated alias for the default behaviour (kept for compatibility)",
     )
     parser.add_argument(
         "--json-output",
@@ -714,69 +652,31 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    _setup_logging(args.verbose)  # Don't assign to unused variable
+    _setup_logging(args.verbose)
 
-    # --verify mode
     if args.verify:
         expected = ProviderCatalog.all_expected_keys()
         results = verify_chit_storage(expected)
         ok = sum(1 for v in results.values() if v)
-        print(f"CHIT verification: {ok}/{len(expected)} keys present")
+        print(f"CGP vault verification: {ok}/{len(expected)} keys present ({resolve_cgp_path()})")
         for key, present in sorted(results.items()):
-            status = "OK" if present else "MISSING"
-            print(f"  [{status}] {key}")
+            print(f"  [{'OK' if present else 'MISSING'}] {key}")
         return 0 if all(results.values()) else 1
 
-    # Discover keys from env files
     log.info("Discovering keys from env files ...")
     entries = discover_keys_from_env(args.root_dir)
     log.info("Discovered %d potential keys", len(entries))
 
-    # Validate
     validated = validate_all(entries)
 
-    # --validate-only mode
-    if args.validate_only:
-        print_report(validated)
-        return 0
-
-    # Print report
-    print_report(validated)
-
-    # Check if we have critical issues
-    critical_issues = [
+    unhealthy = [
         e for e in validated.values()
         if e.status in (KeyStatus.MISSING, KeyStatus.INVALID)
     ]
-    if critical_issues:
-        log.warning(
-            "Found %d critical issues. Fix before injecting.",
-            len(critical_issues),
-        )
-        # Continue anyway -- non-critical keys can still be injected
-
-    # Inject into CHIT
-    active_entries = {
-        k: v for k, v in validated.items()
-        if v.status == KeyStatus.ACTIVE
-    }
-
-    if not active_entries:
-        log.error("No active keys to inject. Populate local.env first.")
-        return 1
-
-    log.info("Injecting %d active keys into CHIT ...", len(active_entries))
-    results = inject_into_chit(active_entries, dry_run=args.dry_run)
-
-    ok = sum(1 for v in results.values() if v)
-    log.info(
-        "Injection complete: %d/%d succeeded",
-        ok, len(results),
-    )
 
     if args.json_output:
-        import json as _json
         output = {
+            "cgp_vault": str(resolve_cgp_path()),
             "validation": {
                 k: {
                     "status": v.status.value,
@@ -786,17 +686,19 @@ def main(argv: list[str] | None = None) -> int:
                 }
                 for k, v in sorted(validated.items())
             },
-            "injection": results,
             "summary": {
                 "total": len(validated),
-                "active": len(active_entries),
-                "injected": ok,
-                "failed": len(results) - ok,
+                "active": sum(1 for v in validated.values() if v.status == KeyStatus.ACTIVE),
+                "unhealthy": len(unhealthy),
             },
+            "inject_with": CANONICAL_FUNNEL_CMD,
         }
-        print(_json.dumps(output, indent=2))
+        print(json.dumps(output, indent=2))
+    else:
+        print_report(validated)
+        print(chit_injection_guidance())
 
-    return 0 if all(results.values()) else 1
+    return 1 if unhealthy else 0
 
 
 if __name__ == "__main__":
