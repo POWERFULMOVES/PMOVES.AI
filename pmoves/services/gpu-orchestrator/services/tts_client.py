@@ -23,7 +23,6 @@ class TtsClient:
         # Known TTS engines and their estimated VRAM usage
         self.engine_vram_estimates = {
             "kokoro": 2048,
-            "f5-tts": 3072,
             "voxcpm": 2560,
             "kitten-tts": 1536,
             "melo-tts": 1024,

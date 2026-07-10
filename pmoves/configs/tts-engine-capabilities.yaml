@@ -112,6 +112,7 @@ engines:
   # Category: voice-cloning — Reference-audio based voice cloning
   # ═══════════════════════════════════════════════════════════════════
 
+  # DEPRECATED (CC-BY-NC-4.0) — removed from live routing; see fix/f5-tts-license-repoint
   f5_tts:
     name: F5-TTS
     category: voice-cloning
@@ -142,7 +143,7 @@ engines:
     vram_estimate_mb: 2000
     prosodic_technique: reference-audio-cloning
     best_for: "High-quality cloning, GRAMS narration, beat-sync"
-    persona_default: archon-narrator
+    persona_default: archon-narrator  # DEPRECATED value; archon-narrator now routes to voxcpm (see Persona <-> Engine Mapping below)
 
   fish:
     name: Fish Speech S1
@@ -535,8 +536,8 @@ engines:
 # |-----------------------|---------------------|---------------------------------------------------|
 # | pmoves-crush          | kitten_tts          | voice preset (ultra-fast, minimal knobs)           |
 # | agent-zero-default    | kokoro              | speed + punctuation engineering                    |
-# | archon-narrator       | f5_tts              | speed + voice cloning + cross_fade                 |
-# | grams-narrator        | f5_tts              | speed + voice cloning + cross_fade                 |
+# | archon-narrator       | voxcpm              | cfg_value + inference_timesteps + voice cloning    |
+# | grams-narrator        | voxcpm              | cfg_value + inference_timesteps + voice cloning    |
 # | clawz-reveal          | indextts2           | 8-dim emotion vectors + emo_alpha + temperature    |
 # | agent-card-voice      | fish_s2             | temperature + top_p + voice cloning                |
 # | multilingual-agent    | chatterbox_turbo    | exaggeration + temperature + cfg_weight            |
@@ -578,10 +579,10 @@ service_runners:
       latency_target_ms: 500
 
   on_demand:
-    - engine: f5_tts
+    - engine: voxcpm
       role: narrator
       persona: grams-narrator
-      use_case: "Story narration, documentation read-aloud, beat-sync"
+      use_case: "Story narration, documentation read-aloud (beat-sync dropped — voxcpm has no native tempo knob, see tts-engine-expressions.yaml bpm_sync NOTE)"
 
     - engine: higgs
       role: streaming

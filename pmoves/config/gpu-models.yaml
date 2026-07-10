@@ -311,12 +311,6 @@ models:
     description: "Kokoro TTS - Japanese/English"
     priority_default: 4
 
-  - id: "f5-tts"
-    provider: tts
-    vram_mb: 3072
-    description: "F5-TTS - High quality synthesis"
-    priority_default: 4
-
   - id: "voxcpm"
     provider: tts
     vram_mb: 2560

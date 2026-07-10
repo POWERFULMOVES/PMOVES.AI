@@ -138,26 +138,24 @@ intents:
   # ───────────────────────────────────────────────────────────────────
   clone:
     description: "Voice cloning from reference audio"
-    primary: f5_tts
+    primary: voxcpm
     gradio_endpoint: /generate_unified_tts
     params:
-      f5_speed: 1.0
-      f5_cross_fade: 0.15
-      f5_remove_silence: false
+      voxcpm_cfg_value: 2.0
+      voxcpm_inference_timesteps: 10
+      voxcpm_normalize: true
+      voxcpm_denoise: true
     modifiers:
+      high_quality:
+        voxcpm_inference_timesteps: 20
       fast:
-        f5_speed: 1.3
-      slow:
-        f5_speed: 0.8
-      tight:
-        f5_cross_fade: 0.05
-        f5_remove_silence: true
+        voxcpm_inference_timesteps: 5
     requires: [ref_audio]
-    fallback: fish_s2
+    fallback: chatterbox
     fallback_params:
-      fish_s2_temperature: 0.8
-      fish_s2_top_p: 0.8
-      fish_s2_repetition_penalty: 1.1
+      chatterbox_exaggeration: 0.5
+      chatterbox_temperature: 0.8
+      chatterbox_cfg_weight: 0.5
 
   # ───────────────────────────────────────────────────────────────────
   # MULTILINGUAL: Multi-language synthesis (17 languages max)
@@ -271,27 +269,32 @@ intents:
   # ───────────────────────────────────────────────────────────────────
   bpm_sync:
     description: "Beat-synchronized synthesis for music/DJ workflows"
-    primary: f5_tts
+    # NOTE: voxcpm has no native tempo knob; beat-sync tempo is a TODO
+    # (ffmpeg atempo or a permissive engine w/ speed) — operator decision pending.
+    primary: voxcpm
     gradio_endpoint: /generate_unified_tts
     params:
-      f5_speed: 1.0
-      f5_cross_fade: 0.1
-      f5_remove_silence: true
+      voxcpm_cfg_value: 2.0
+      voxcpm_inference_timesteps: 10
+      voxcpm_normalize: true
+      voxcpm_denoise: true
     modifiers:
-      fast_tempo:
-        f5_speed: 1.4
-        f5_cross_fade: 0.05
-      slow_groove:
-        f5_speed: 0.75
-        f5_cross_fade: 0.2
+      # fast_tempo/slow_groove no longer map to a native speed knob on voxcpm.
+      # Retained as named modifiers for callers; footnoted pending the tempo
+      # TODO above (ffmpeg atempo post-process or a permissive speed-capable
+      # engine substitution).
+      fast_tempo: {}
+      slow_groove: {}
     cross_ref: "chit:bpm"
     fallback: kokoro
     fallback_params:
       kokoro_speed: 1.0
     notes: >
       Use /chit:bpm to encode prosodic BPM markers into text first,
-      then synthesize with this intent. F5-TTS speed + cross_fade
-      control enables precise beat alignment.
+      then synthesize with this intent. voxcpm has no native tempo/speed
+      control — beat alignment currently relies on the kokoro fallback's
+      kokoro_speed, or a post-process tempo step (TODO, operator decision
+      pending; see NOTE above).
 
 # ─────────────────────────────────────────────────────────────────────
 # Engine Coverage Summary

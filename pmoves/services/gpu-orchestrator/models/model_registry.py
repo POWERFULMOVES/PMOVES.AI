@@ -83,7 +83,6 @@ class ModelRegistry:
             ModelDefinition("codellama:7b", "ollama", 4096, "Code Llama 7B"),
             # TTS models
             ModelDefinition("kokoro", "tts", 2048, "Kokoro TTS engine"),
-            ModelDefinition("f5-tts", "tts", 3072, "F5-TTS engine"),
             ModelDefinition("voxcpm", "tts", 2560, "VoxCPM engine"),
             # vLLM models
             ModelDefinition("default", "vllm", 16384, "Default vLLM model"),
