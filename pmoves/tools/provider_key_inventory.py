@@ -77,8 +77,12 @@ __all__ = [
 # ---------------------------------------------------------------------------
 PMOVES_ROOT = Path(__file__).resolve().parents[1]
 
-# All env files to search for keys (in priority order)
+# All env files to search for keys (in priority order).
+# pmoves/secrets/local.env is the path secrets-local-hydrate reads and the one
+# KEY_RECEIPT_FORM.md tells operators to create; it must be scanned first or the
+# documented inspect-then-inject sequence reports freshly supplied keys missing.
 KEY_SOURCE_FILES = [
+    "pmoves/secrets/local.env",
     "local.env",
     "pmoves/.env.local",
     "pmoves/env.shared",
@@ -597,16 +601,32 @@ def verify_chit_storage(expected_keys: list[str]) -> dict[str, bool]:
     if not cgp_path.exists():
         log.error("CGP vault not found: %s", cgp_path)
     else:
+        data: Any = None
         try:
-            data: dict[str, Any] = json.loads(cgp_path.read_text(encoding="utf-8"))
+            data = json.loads(cgp_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             log.error("CGP vault is corrupted: %s", cgp_path)
+
+        # A corrupted vault may still be valid JSON of the wrong shape
+        # (a list, a scalar, or {"points": null}). Degrade, never raise.
+        if not isinstance(data, dict):
+            if data is not None:
+                log.error("CGP vault is not a JSON object: %s", cgp_path)
             data = {}
 
-        for point in data.get("points", []):
+        points = data.get("points")
+        if not isinstance(points, list):
+            if points is not None:
+                log.error("CGP vault 'points' is not a list: %s", cgp_path)
+            points = []
+
+        for point in points:
+            if not isinstance(point, dict):
+                continue
             label = point.get("label")
             if label:
-                present[label] = point.get("value") or ""
+                value = point.get("value")
+                present[label] = value if isinstance(value, str) else ""
 
     return {key: bool(present.get(key, "").strip()) for key in expected_keys}
 
