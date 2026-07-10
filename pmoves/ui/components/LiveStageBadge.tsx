@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
  * Showtime "live" indicator (DL-3.2). When the stage is live, the app sets
@@ -8,9 +8,31 @@ import { useEffect, useState } from "react";
  * state as a small pill whose ✦ signature mark intensifies (glows) via the
  * `pm-live-mark` utility — the mark NEVER changes color (stays `--pm-signature`).
  *
- * SSR-safe: `document` is read only inside an effect, so the first (server +
- * hydration) render assumes `false` when the `live` prop is omitted.
+ * SSR-safe and reactive: the stage is an external mutable store (a DOM dataset
+ * attribute), so we read it via useSyncExternalStore. The server snapshot is
+ * `false`, so the first (server + hydration) render assumes not-live when the
+ * `live` prop is omitted, and the badge updates if `data-stage` changes later.
  */
+function subscribeStage(onChange: () => void): () => void {
+  if (typeof document === "undefined") {
+    return () => {};
+  }
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-stage"],
+  });
+  return () => observer.disconnect();
+}
+
+function getStageLiveSnapshot(): boolean {
+  return document.documentElement.dataset.stage === "live";
+}
+
+function getStageLiveServerSnapshot(): boolean {
+  return false;
+}
+
 export function LiveStageBadge({
   live,
   className = "",
@@ -18,12 +40,11 @@ export function LiveStageBadge({
   live?: boolean;
   className?: string;
 }) {
-  const [derivedLive, setDerivedLive] = useState(false);
-
-  useEffect(() => {
-    if (live !== undefined) return;
-    setDerivedLive(document.documentElement.dataset.stage === "live");
-  }, [live]);
+  const derivedLive = useSyncExternalStore(
+    subscribeStage,
+    getStageLiveSnapshot,
+    getStageLiveServerSnapshot,
+  );
 
   const isLive = live ?? derivedLive;
 
