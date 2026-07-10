@@ -6,7 +6,7 @@
 >
 > **Finalized decisions (see §Resolved Design Decisions for detail):**
 > 1. **Studio access → gated behind Tailscale mesh.** JWT-minting (`supabase.pmoves.ai`) is not left on the public edge — reachable only from the tailnet. (Operator decision; privacy-mesh-only.)
-> 2. **Sunset → 14-day dual, then JWT-only + remove password.** Spec default confirmed.
+> 2. **Sunset → 14-day dual, then remove the *human* password.** After the window, the human `OPEN_NOTEBOOK_PASSWORD` is removed and user-auth is JWT-only — but the service-role `OPEN_NOTEBOOK_API_TOKEN` (decoupled from the password) is still accepted for the 3 machine callers. See "Terminal auth state" under §Sunset timeline.
 > 3. **Login UX → Studio copy-paste now; `pmoves auth login` CLI as a follow-up.** Ship JWT auth without blocking on the CLI.
 > 4. **`OPEN_NOTEBOOK_API_TOKEN` → kept as a service-role credential.** The 3 machine callers stay token-based; only the human/UI path moves to user-JWT.
 
@@ -310,7 +310,8 @@ Routers MUST NOT crash if `request.state.user` is `None` — that's the password
 |------|---------|----------|
 | Middleware unit tests | `pytest PMOVES-Open-Notebook/tests/test_supabase_jwt_middleware.py` | All 3 modes (jwt/dual/password) tested + all 4 `JWTValidationError` subclass branches |
 | Dual-auth integration | Operator with old password works; operator with new JWT works; both in same compose-up | Both auth paths succeed; `request.state.user` set only on JWT path |
-| JWT-only mode | Set `OPEN_NOTEBOOK_AUTH_MODE=jwt`, password is rejected | 401 with `error_description="invalid token"` |
+| JWT-only mode (human) | Set `OPEN_NOTEBOOK_AUTH_MODE=jwt`; human `OPEN_NOTEBOOK_PASSWORD` is rejected | 401 `error_description="invalid token"` |
+| Service token survives jwt mode | In `jwt` mode, send the service-role `OPEN_NOTEBOOK_API_TOKEN` (decoupled from the human password) | 200 — machine callers (notebook-sync/deepresearch/showtime) keep working; `request.state.user` is a service identity (`role="service_role"`) |
 | Refresh hint | Send expired JWT, check response header | `WWW-Authenticate: Bearer error="invalid_token", error_description="token expired"` |
 | 401-CORS preserved | Send bad JWT from frontend origin | Response includes CORS headers (existing `custom_http_exception_handler` covers this) |
 
@@ -321,15 +322,19 @@ Routers MUST NOT crash if `request.state.user` is `None` — that's the password
 ### Operator JWT acquisition
 
 ```
-1. Open Supabase Studio: https://supabase.pmoves.local
-2. Sign in with operator credentials (DARKXSIDE / others)
-3. Settings → API → "anon" or "service_role" key
-   (For Open Notebook UI, use the user-scoped JWT from `/auth/v1/token?grant_type=password`
-   not the long-lived anon key, so requests are scoped to user identity.)
-4. Copy the JWT
-5. Open Notebook UI login: paste JWT as the password value
-6. Tokens last ~1h by default; UI should auto-refresh via `pmoves_auth.refresh_session`
-   if a refresh_token is held client-side
+0. Connect to the tailnet — Studio is Tailscale-gated (supabase.pmoves.ai is NOT reachable off-mesh)
+1. Open Supabase Studio: https://supabase.pmoves.ai        # corrected — was supabase.pmoves.local
+2. Sign in with operator credentials (DARKXSIDE / others) via Supabase Auth + Google OAuth
+3. Acquire a USER-SCOPED JWT (aud=authenticated) — NOT the anon / service_role key:
+     POST /auth/v1/token?grant_type=password  (email + password)
+       → returns access_token (the JWT, ~1h) + refresh_token
+   The long-lived anon/service_role keys are the WRONG credential here: they are not
+   user-scoped, and the middleware treats a service_role token as a *service* identity,
+   not a user (see "Service token survives jwt mode" gate above).
+4. Copy the access_token (the JWT)
+5. Open Notebook UI login: paste the JWT as the token value
+6. Tokens last ~1h; the UI auto-refreshes via `pmoves_auth.refresh_session` using the
+   held refresh_token (stored as an HTTP-only cookie — see Resolved Design Decision #2)
 ```
 
 ### Compose env diff (after Phase B lands)
@@ -349,9 +354,19 @@ Routers MUST NOT crash if `request.state.user` is `None` — that's the password
 | When | Action | Outcome |
 |------|--------|---------|
 | Phase B merge + 0 days | Default `OPEN_NOTEBOOK_AUTH_MODE=dual` | Existing password sessions keep working; JWT sessions start working |
-| Phase B merge + 14 days | Operator-led: flip env to `OPEN_NOTEBOOK_AUTH_MODE=jwt` on each node | JWT-only; password rejected |
-| Phase B merge + 30 days | Remove `PasswordAuthMiddleware` class + `OPEN_NOTEBOOK_PASSWORD` env requirement | Code cleanup; doc updates |
+| Phase B merge + 14 days | Operator-led: flip env to `OPEN_NOTEBOOK_AUTH_MODE=jwt` on each node | User-auth JWT-only; **human `OPEN_NOTEBOOK_PASSWORD` rejected, service-role `OPEN_NOTEBOOK_API_TOKEN` still accepted** (the 3 machine callers are unaffected) |
+| Phase B merge + 30 days | Remove `PasswordAuthMiddleware` + the human `OPEN_NOTEBOOK_PASSWORD` env requirement — **KEEP `OPEN_NOTEBOOK_API_TOKEN` as the service credential** | Code cleanup; doc updates |
 | Phase B merge + 30 days | Sunset `refresh-boot-jwt.sh` band-aid | Replaced by `pmoves_auth.refresh_session()` SDK call |
+
+> **Terminal auth state (post-sunset) — resolves the "JWT-only vs service token" tension.**
+> "JWT-only" applies to the **human/UI** path only. The service-role `OPEN_NOTEBOOK_API_TOKEN` is
+> **decoupled from** the retired human `OPEN_NOTEBOOK_PASSWORD` and remains a first-class accepted
+> credential in every mode (`dual` and `jwt`). Phase B's `SupabaseJWTMiddleware` therefore checks, in
+> `jwt` mode: (1) `verify_jwt(token)` → user identity; else (2) constant-time compare against
+> `OPEN_NOTEBOOK_API_TOKEN` → service identity (`role="service_role"`, `request.state.user` = service
+> principal); else 401. This keeps notebook-sync / deepresearch / showtime-api working forever without
+> a JWT, while the human shared-secret is fully removed. Migrating those 3 callers to *rotating*
+> service-role JWTs stays out of scope (future, optional).
 
 ## Cross-Node Reviewers
 
@@ -373,7 +388,7 @@ Every pre-code Open Item is now closed — by verified code facts (tandem verifi
 3. **Supabase Studio access → GATE BEHIND TAILSCALE MESH.** *(Operator decision — this was the open security risk.)* Verified: `supabase.pmoves.ai` is currently a **public Cloudflare-DNS subdomain** with no gating in front of Studio (`.claude/context/self-hosted-defaults.md:20,26,41`), i.e. whoever reaches it can attempt sign-in and, with Studio access, mint JWTs for any user. Resolution: JWT-minting endpoint is reachable **only from the tailnet** (privacy-mesh-only), closing the weak point without new SSO infra. Implementation = Tailscale-serve / ACL restriction on the Studio route (mesh-gateway lane). MissingLinc still sweeps for residual `OPEN_NOTEBOOK_PASSWORD` values post-Phase-C.
 4. **CHIT integration → UNCHANGED (no CHIT).** Confirmed still correct: `PMOVES-Open-Notebook/CLAUDE.md` § CHIT = "No CHIT integration (by design)"; JWT identity does not trigger it.
 5. **i18n on JWT error messages → REQUIRED in Phase B.** Verified: `getApiErrorMessage()` (`PMOVES-Open-Notebook/frontend/src/lib/utils/error-handler.ts:59-77`) has an `ERROR_MAP` with password-era keys but **no** entries for `"token expired"` / `"invalid token"` (falls through to raw untranslated string). Phase B adds i18n keys `apiErrors.tokenExpired` / `apiErrors.invalidToken` alongside the middleware.
-6. **Service-to-service auth → dual-auth bridge is MANDATORY, service token retained.** *(Code-verified, non-negotiable default.)* The 3 callers in #1 have no JWT/refresh logic; a hard flip to `OPEN_NOTEBOOK_AUTH_MODE=jwt` would break all three (`verify_jwt()` → `JWTMalformedError` on a static string). `OPEN_NOTEBOOK_AUTH_MODE=dual` (default) is the only safe migration state; the service-role token path stays open past the human-password sunset. Migrating the 3 callers to rotating service-role JWTs is explicitly **out of scope** for this finalization (future, if desired).
+6. **Service-to-service auth → service token is a first-class credential in ALL modes; dual-auth bridges the human migration.** *(Code-verified, non-negotiable.)* The 3 callers in #1 have no JWT/refresh logic. Rather than let a `jwt`-mode flip break them, the service-role `OPEN_NOTEBOOK_API_TOKEN` is **decoupled from the human `OPEN_NOTEBOOK_PASSWORD`** and accepted in **every** mode — including terminal `jwt` mode — via an explicit constant-time service-token branch (see "Terminal auth state" under §Sunset timeline). So `dual` bridges the *human* password→JWT migration, while machine callers keep the token path indefinitely. Migrating the 3 callers to rotating service-role JWTs is explicitly **out of scope** for this finalization (future, if desired).
 
 ### Implementation-ready follow-ups (verified, separable from the auth phases)
 
