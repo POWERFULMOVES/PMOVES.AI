@@ -1,1 +1,149 @@
-IyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQojIEtJTUktSzIgTW9kZWwgU3VpdAojIFJvbGU6IExvbmctY29udGV4dCwgQ2hpbmVzZS1sYW5ndWFnZSBzcGVjaWFsaXN0CiMgQmVzdCBmb3I6IFJlc2VhcmNoLCBjb2RpbmcsIGFnZW50aWMgdGFza3Mgd2l0aCBDaGluZXNlIGNvbnRlbnQKIyBQcm92aWRlcjogTW9vbnNob3QgQUkKIyBWZXJzaW9uOiAxLjAuMAojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09Cgptb2RlbF9zdWl0OgogIG5hbWU6IGtpbWktazIKICBwcm92aWRlcjogbW9vbnNob3RfYWkKICBiYXNlX3VybDogImh0dHBzOi8vYXBpLm1vb25zaG90LmNuL3YxIgogIGFwaV9rZXlfZW52OiBNT09OU0hPVF9BUElfS0VZCiAgbGVnYWN5X2FwaV9rZXlfZW52OiBLSU1JX0FQS19LRVkKICBsZWdhY3lfc3Vuc2V0X2RhdGU6ICIyMDI2LTEwLTAxIgogIAogIGFyY2hpdGVjdHVyZToKICAgIHR5cGU6IG1vZQogICAgdG90YWxfcGFyYW1zOiAiMVQiCiAgICBhY3RpdmVfcGFyYW1zOiAiMzJCIgogICAgbnVtX2V4cGVydHM6IDM4NAogICAgc2VsZWN0ZWRfZXhwZXJ0czogOAogICAgc2hhcmVkX2V4cGVydHM6IDEKICAgIGF0dGVudGlvbjogTUxBCiAgICBsYXllcnM6IDYxCiAgICBoaWRkZW5fc2l6ZTogNzE2OAogICAgaGVhZHM6IDY0CiAgICB2b2NhYl9zaXplOiAxNjAwMDAKICAgIAogIGNvbnRleHQ6CiAgICBtYXhfd2luZG93OiAyNTYwMDAKICAgIGJhc2Vfd2luZG93OiAxMjgwMDAKICAgIGVmZmVjdGl2ZV93aW5kb3c6IDIwMDAwMAogICAgd29ya2luZ193aW5kb3c6IDY0MDAwCiAgICAKICBkZWZhdWx0czoKICAgIHRlbXBlcmF0dXJlOiAwLjcKICAgIHRvcF9wOiAwLjk1CiAgICBtaW5fcDogMC4wMQogICAgbWF4X3Rva2VuczogNDA5NgogICAgZnJlcXVlbmN5X3BlbmFsdHk6IDAuMAogICAgcHJlc2VuY2VfcGVuYWx0eTogMC4wCiAgICBleHBlcnRfdG9wazogOAogICAgCiAgdmFyaWFudHM6CiAgICBraW1pLWsyLWluc3RydWN0OgogICAgICBjb250ZXh0X3dpbmRvdzogMTI4MDAwCiAgICAgIGRlc2NyaXB0aW9uOiAiR2VuZXJhbC1wdXJwb3NlIGNoYXQgYW5kIHRvb2wgdXNlIgogICAgICAKICAgIGtpbWktazItMDkwNToKICAgICAgY29udGV4dF93aW5kb3c6IDI1NjAwMAogICAgICBkZXNjcmlwdGlvbjogIkV4dGVuZGVkIGNvbnRleHQgZm9yIGxhcmdlIGRvY3VtZW50cyIKICAgICAgCiAgICBraW1pLWsyLXRoaW5raW5nOgogICAgICBjb250ZXh0X3dpbmRvdzogMjU2MDAwCiAgICAgIHRlbXBlcmF0dXJlOiAxLjAKICAgICAgZGVzY3JpcHRpb246ICJEZWVwIHJlYXNvbmluZyB3aXRoIGNoYWluLW9mLXRob3VnaHQiCiAgICAgIAogICAga2ltaS1rMi41OgogICAgICBjb250ZXh0X3dpbmRvdzogMjU2MDAwCiAgICAgIG11bHRpbW9kYWw6IHRydWUKICAgICAgdmlzaW9uX2VuY29kZXI6IE1vb25WaVQKICAgICAgZGVzY3JpcHRpb246ICJNdWx0aW1vZGFsIHdpdGggYWdlbnQgc3dhcm0iCiAgICAgIAogICAga2ltaS1rMi42OgogICAgICBjb250ZXh0X3dpbmRvdzogMjU2MDAwCiAgICAgIGRlc2NyaXB0aW9uOiAiRW5oYW5jZWQgcmVhc29uaW5nIgogICAgICAKICAgIGtpbWktazIuNy1jb2RlOgogICAgICBjb250ZXh0X3dpbmRvdzogMjU2MDAwCiAgICAgIGRlc2NyaXB0aW9uOiAiQ29kZS1zcGVjaWFsaXplZCIKICAgICAgCiAgICBraW1pLWRldi03MmI6CiAgICAgIHR5cGU6IGRlbnNlCiAgICAgIGJhc2U6IHF3ZW4yLjUtNzJiCiAgICAgIGNvbnRleHRfd2luZG93OiAxMjgwMDAKICAgICAgZGVzY3JpcHRpb246ICJDb2RpbmctZm9jdXNlZCBkZXJpdmF0aXZlIgogICAgICAKICAgIGtpbWktbGluZWFyOgogICAgICB0b3RhbF9wYXJhbXM6ICI0OEIiCiAgICAgIGFjdGl2ZV9wYXJhbXM6ICIzQiIKICAgICAgYXR0ZW50aW9uOiBLUEEKICAgICAgY29udGV4dF93aW5kb3c6IDEyODAwMAogICAgICBkZXNjcmlwdGlvbjogIkVmZmljaWVudCB3aXRoIEtpbWkgRGVsdGEgQXR0ZW50aW9uIgogIAogIGhhcm5lc3NfbWFwcGluZ3M6CiAgICBsb25nX2NvbnRleHRfcmVzZWFyY2g6CiAgICAgIG1vZGVsX3ZhcmlhbnQ6IGtpbWktazItMDkwNQogICAgICB0ZW1wZXJhdHVyZTogMC4zCiAgICAgIHRvcF9wOiAwLjkwCiAgICAgIG1pbl9wOiAwLjAxCiAgICAgIG1heF90b2tlbnM6IDgxOTIKICAgICAgc3lzdGVtX3Byb21wdDogZGlyZWN0aXZlX3Jlc2VhcmNoZXIKICAgICAgCiAgICBjaGluZXNlX2xhbmd1YWdlOgogICAgICBtb2RlbF92YXJpYW50OiBraW1pLWsyLWluc3RydWN0CiAgICAgIHRlbXBlcmF0dXJlOiAwLjUKICAgICAgdG9wX3A6IDAuOTMKICAgICAgbWluX3A6IDAuMDEKICAgICAgbWF4X3Rva2VuczogNDA5NgogICAgICBjaGluZXNlX29wdGltaXplZDogdHJ1ZQogICAgICBzeXN0ZW1fcHJvbXB0OiBkaXJlY3RpdmVfY3VsdHVyYWxfYXdhcmUKICAgICAgCiAgICBhZ2VudGljX2NvZGluZzoKICAgICAgbW9kZWxfdmFyaWFudDoga2ltaS1kZXYtNzJiCiAgICAgIHRlbXBlcmF0dXJlOiAwLjcKICAgICAgdG9wX3A6IDAuOTUKICAgICAgbWluX3A6IDAuMDEKICAgICAgbWF4X3Rva2VuczogMTYzODQKICAgICAgc3lzdGVtX3Byb21wdDogZGlyZWN0aXZlX2VuZ2luZWVyCiAgICAgIAogICAgZGVlcF9yZWFzb25pbmc6CiAgICAgIG1vZGVsX3ZhcmlhbnQ6IGtpbWktazItdGhpbmtpbmcKICAgICAgdGVtcGVyYXR1cmU6IDEuMAogICAgICB0b3BfcDogMC45NQogICAgICBtaW5fcDogMC4wMQogICAgICBtYXhfdG9rZW5zOiA4MTkyCiAgICAgIHN5c3RlbV9wcm9tcHQ6IGRpcmVjdGl2ZV9yZWFzb25lcgogICAgICAKICAgIHZvaWNlX3N5bnRoZXNpczoKICAgICAgbW9kZWxfdmFyaWFudDoga2ltaS1rMi1pbnN0cnVjdAogICAgICB0ZW1wZXJhdHVyZTogMC44CiAgICAgIHRvcF9wOiAwLjk1CiAgICAgIG1pbl9wOiAwLjAxCiAgICAgIG1heF90b2tlbnM6IDUxMgogICAgICBmcmVxdWVuY3lfcGVuYWx0eTogMC4zCiAgICAgIHByZXNlbmNlX3BlbmFsdHk6IDAuMTUKICAgICAgc3lzdGVtX3Byb21wdDogY29udmVyc2F0aW9uYWxfZW1vdGl2ZQoKICBjZ3Bfc3RhdGVfdmVjdG9yOgogICAgZGVsdGE6IDAuNDUKICAgIEh6OiAwLjEyCiAgICBrYXBwYTogMS4zCiAgICBBOiAwLjQ1CiAgICBGOiAwLjA2CiAgICAKICB0ZW5zb3J6ZXJvOgogICAgZnVuY3Rpb246IHBtb3Zlc193b3JrZXJfa2ltaQogICAgCiAgcHJvdmlkZXJfY2FzY2FkZToKICAgIHBvc2l0aW9uOiA1CiAgICB0cmlnZ2VyOiAibG9uZ19jb250ZXh0ID4gMTAwSyBPUiBjaGluZXNlX2xhbmd1YWdlIE9SIENvbXBsZXhfY29kaW5nIgogICAgCiAgb2xsYW1hX2Nsb3VkOgogICAgbW9kZWw6ICJraW1pLWsyOjF0LWNsb3VkIgogICAgcmVnaXN0cnk6ICJ1bnNsb3RoL0tpbWktRGV2LTcyQi1HR1VGIgogICAgCiAgZmFsbGJhY2tfdG86IG9wZW5yb3V0ZXIKICBwcmlvcml0eTogNQo=
+# =============================================================================
+# KIMI-K2 Model Suit
+# Role: Long-context, Chinese-language specialist
+# Best for: Research, coding, agentic tasks with Chinese content
+# Provider: Moonshot AI
+# Version: 1.0.0
+# =============================================================================
+
+model_suit:
+  name: kimi-k2
+  provider: moonshot_ai
+  base_url: "https://api.moonshot.cn/v1"
+  api_key_env: MOONSHOT_API_KEY
+  legacy_api_key_env: KIMI_API_KEY
+  legacy_sunset_date: "2026-10-01"
+  
+  architecture:
+    type: moe
+    total_params: "1T"
+    active_params: "32B"
+    num_experts: 384
+    selected_experts: 8
+    shared_experts: 1
+    attention: MLA
+    layers: 61
+    hidden_size: 7168
+    heads: 64
+    vocab_size: 160000
+    
+  context:
+    max_window: 256000
+    base_window: 128000
+    effective_window: 200000
+    working_window: 64000
+    
+  defaults:
+    temperature: 0.7
+    top_p: 0.95
+    min_p: 0.01
+    max_tokens: 4096
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    expert_topk: 8
+    
+  variants:
+    kimi-k2-instruct:
+      context_window: 128000
+      description: "General-purpose chat and tool use"
+      
+    kimi-k2-0905:
+      context_window: 256000
+      description: "Extended context for large documents"
+      
+    kimi-k2-thinking:
+      context_window: 256000
+      temperature: 1.0
+      description: "Deep reasoning with chain-of-thought"
+      
+    kimi-k2.5:
+      context_window: 256000
+      multimodal: true
+      vision_encoder: MoonViT
+      description: "Multimodal with agent swarm"
+      
+    kimi-k2.6:
+      context_window: 256000
+      description: "Enhanced reasoning"
+      
+    kimi-k2.7-code:
+      context_window: 256000
+      description: "Code-specialized"
+      
+    kimi-dev-72b:
+      type: dense
+      base: qwen2.5-72b
+      context_window: 128000
+      description: "Coding-focused derivative"
+      
+    kimi-linear:
+      total_params: "48B"
+      active_params: "3B"
+      attention: KPA
+      context_window: 128000
+      description: "Efficient with Kimi Delta Attention"
+  
+  harness_mappings:
+    long_context_research:
+      model_variant: kimi-k2-0905
+      temperature: 0.3
+      top_p: 0.90
+      min_p: 0.01
+      max_tokens: 8192
+      system_prompt: directive_researcher
+      
+    chinese_language:
+      model_variant: kimi-k2-instruct
+      temperature: 0.5
+      top_p: 0.93
+      min_p: 0.01
+      max_tokens: 4096
+      chinese_optimized: true
+      system_prompt: directive_cultural_aware
+      
+    agentic_coding:
+      model_variant: kimi-dev-72b
+      temperature: 0.7
+      top_p: 0.95
+      min_p: 0.01
+      max_tokens: 16384
+      system_prompt: directive_engineer
+      
+    deep_reasoning:
+      model_variant: kimi-k2-thinking
+      temperature: 1.0
+      top_p: 0.95
+      min_p: 0.01
+      max_tokens: 8192
+      system_prompt: directive_reasoner
+      
+    voice_synthesis:
+      model_variant: kimi-k2-instruct
+      temperature: 0.8
+      top_p: 0.95
+      min_p: 0.01
+      max_tokens: 512
+      frequency_penalty: 0.3
+      presence_penalty: 0.15
+      system_prompt: conversational_emotive
+
+  cgp_state_vector:
+    delta: 0.45
+    Hz: 0.12
+    kappa: 1.3
+    A: 0.45
+    F: 0.06
+    
+  tensorzero:
+    function: pmoves_worker_kimi
+    
+  provider_cascade:
+    position: 5
+    trigger: "long_context > 100K OR chinese_language OR Complex_coding"
+    
+  ollama_cloud:
+    model: "kimi-k2:1t-cloud"
+    registry: "unsloth/Kimi-Dev-72B-GGUF"
+    
+  fallback_to: openrouter
+  priority: 5
