@@ -23,6 +23,7 @@ import hmac
 import io
 import logging
 import os
+import threading
 from typing import Optional
 
 import soundfile as sf
@@ -42,17 +43,28 @@ TOKEN = os.getenv("KOKORO_TOKEN", "")
 
 app = FastAPI(title="Kokoro CPU TTS", version="1.0.0")
 _kokoro = None  # lazy singleton — kept out of import time so /healthz answers pre-load
+_kokoro_lock = threading.Lock()  # sync handlers run in a threadpool → guard the lazy init
+_load_error: Optional[str] = None  # last load failure, surfaced by /healthz as a hard 503
 
 
 def _get_kokoro():
-    global _kokoro
+    global _kokoro, _load_error
     if _kokoro is None:
-        from kokoro_onnx import Kokoro  # lazy import: heavy, and lets healthz work while loading
+        # Double-checked lock: sync def handlers execute in Starlette's threadpool, so two
+        # concurrent first requests could otherwise both construct Kokoro. Recheck under lock.
+        with _kokoro_lock:
+            if _kokoro is None:
+                from kokoro_onnx import Kokoro  # lazy import: heavy, lets healthz work while loading
 
-        if not (os.path.exists(MODEL_PATH) and os.path.exists(VOICES_PATH)):
-            raise RuntimeError(f"Kokoro model files missing: {MODEL_PATH} / {VOICES_PATH}")
-        logger.info("loading Kokoro model from %s", MODEL_PATH)
-        _kokoro = Kokoro(MODEL_PATH, VOICES_PATH)
+                try:
+                    if not (os.path.exists(MODEL_PATH) and os.path.exists(VOICES_PATH)):
+                        raise RuntimeError(f"Kokoro model files missing: {MODEL_PATH} / {VOICES_PATH}")
+                    logger.info("loading Kokoro model from %s", MODEL_PATH)
+                    _kokoro = Kokoro(MODEL_PATH, VOICES_PATH)
+                    _load_error = None
+                except Exception as exc:  # noqa: BLE001 — record then re-raise; init stays retryable
+                    _load_error = str(exc)
+                    raise
     return _kokoro
 
 
@@ -71,9 +83,11 @@ def _voice_names(kok) -> list[str]:
 
 
 class SynthesizeRequest(BaseModel):
-    text: str = Field(..., min_length=1)
+    # Bound text + speed: on a CPU-only, thread-capped KVM an unbounded payload can
+    # monopolize a worker (DoS), and speed<=0 would be passed straight into kokoro.create().
+    text: str = Field(..., min_length=1, max_length=2000)
     voice: Optional[str] = None
-    speed: float = 1.0
+    speed: float = Field(default=1.0, gt=0, le=3.0)
     lang: Optional[str] = None
 
 
@@ -107,14 +121,16 @@ def synthesize(req: SynthesizeRequest, x_kokoro_token: Optional[str] = Header(de
             speed=req.speed,
             lang=req.lang or DEFAULT_LANG,
         )
+        # Encode inside the try so a WAV-encoding failure returns the same 500 contract
+        # rather than an unstructured framework error.
+        buf = io.BytesIO()
+        sf.write(buf, samples, sample_rate, format="WAV", subtype="PCM_16")
     except RuntimeError as exc:  # model not loaded / files missing
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("synthesis failed")
         raise HTTPException(status_code=500, detail=f"synthesis failed: {exc}") from exc
 
-    buf = io.BytesIO()
-    sf.write(buf, samples, sample_rate, format="WAV", subtype="PCM_16")
     return Response(content=buf.getvalue(), media_type="audio/wav")
 
 
@@ -130,6 +146,20 @@ def voices():
 @app.get("/healthz")
 def healthz():
     loaded = _kokoro is not None
+    # Fail closed: a permanent load failure (missing/corrupt model, bad kokoro_onnx) must
+    # return a non-2xx so the Docker `curl -fsS /healthz` probe marks the container unhealthy
+    # instead of reporting "loading" forever while /synthesize keeps 503-ing.
+    if not loaded and _load_error:
+        return JSONResponse(
+            {
+                "status": "error",
+                "model_loaded": False,
+                "error": _load_error,
+                "model_path": MODEL_PATH,
+                "default_voice": DEFAULT_VOICE,
+            },
+            status_code=503,
+        )
     return JSONResponse(
         {
             "status": "ok" if loaded else "loading",

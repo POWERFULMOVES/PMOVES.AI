@@ -18,9 +18,11 @@ services:
     image: ${KOKORO_IMAGE:-pmoves-kokoro-tts:latest}
     restart: unless-stopped
     ports:
-      # 0.0.0.0 so an in-stack consumer (flute-gateway) can reach it; gate with
-      # KOKORO_TOKEN, or set KOKORO_BIND=127.0.0.1 on exposed nodes.
-      - "${KOKORO_BIND:-0.0.0.0}:${KOKORO_HOST_PORT:-8004}:8004"
+      # Safe by default: publish only to loopback. In-stack consumers (flute-gateway)
+      # reach this over the compose network by service name and never need this host
+      # publish. For cross-node exposure, explicitly opt in: KOKORO_BIND=0.0.0.0 AND set
+      # KOKORO_TOKEN (the service serves /synthesize unauthenticated when the token is empty).
+      - "${KOKORO_BIND:-127.0.0.1}:${KOKORO_HOST_PORT:-8004}:8004"
     environment:
       - KOKORO_TOKEN=${KOKORO_TOKEN:-}
       - KOKORO_DEFAULT_VOICE=${KOKORO_DEFAULT_VOICE:-af_heart}

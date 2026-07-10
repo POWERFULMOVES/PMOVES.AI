@@ -27,8 +27,11 @@ export KOKORO_MODEL_SHA256=$(curl -fsSL https://github.com/thewh1teagle/kokoro-o
 export KOKORO_VOICES_SHA256=$(curl -fsSL https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin | sha256sum | cut -d' ' -f1)
 ```
 
-Pin them in CI once verified. Auth: set **`KOKORO_TOKEN`** (or bind `127.0.0.1`) —
-the service logs a WARNING and serves `/synthesize` unauthenticated if the token is empty.
+Pin them in CI once verified. **Binding is safe by default:** the host port publishes to
+`127.0.0.1` only. In-stack consumers (flute-gateway) reach the service over the compose
+network by name and need no host publish. For cross-node exposure, set `KOKORO_BIND=0.0.0.0`
+**and** `KOKORO_TOKEN` — the service logs a WARNING and serves `/synthesize` unauthenticated
+if the token is empty.
 
 ## Run
 

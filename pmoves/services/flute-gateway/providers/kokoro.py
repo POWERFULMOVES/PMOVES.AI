@@ -18,6 +18,8 @@ from typing import Any, AsyncIterator, Dict, Optional
 
 import httpx
 
+from services.common.env import get_secret
+
 from .base import VoiceProvider
 
 logger = logging.getLogger(__name__)
@@ -43,7 +45,8 @@ class KokoroProvider(VoiceProvider):
         self.synthesize_endpoint = f"{self.base_url}/synthesize"
         self.health_endpoint = f"{self.base_url}/healthz"
         self._timeout = float(os.getenv("KOKORO_TIMEOUT_SEC", "60"))
-        self._token = os.getenv("KOKORO_TOKEN", "")
+        # Central helper honors the shared KOKORO_TOKEN_FILE path (no plaintext-only fallback).
+        self._token = get_secret("KOKORO_TOKEN", "") or ""
 
     def _headers(self) -> Dict[str, str]:
         return {"X-Kokoro-Token": self._token} if self._token else {}
@@ -97,11 +100,18 @@ class KokoroProvider(VoiceProvider):
         )
 
     async def health_check(self) -> bool:
-        """True if the kokoro-tts service /healthz responds 200."""
+        """True only if kokoro-tts /healthz reports the model actually loaded.
+
+        /healthz returns 200 with `status: loading` before warm-up completes, so a bare
+        status-code check would route synthesis to an instance that still 503s. Gate on the
+        `model_loaded` body flag so the gateway only dispatches to a ready backend.
+        """
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(self.health_endpoint)
-                return resp.status_code == 200
-        except httpx.HTTPError as exc:
+                if resp.status_code != 200:
+                    return False
+                return bool(resp.json().get("model_loaded"))
+        except (httpx.HTTPError, ValueError) as exc:
             logger.warning("Kokoro health check failed: %s", exc)
             return False
