@@ -181,31 +181,22 @@ For a multi-tenant, growing tailnet prefer an **OAuth client** (scopes `devices`
 
 ### Credential wiring (operator-direct — the manifest is zero-access to agents)
 
-`pmoves/chit/secrets_manifest.yaml` is in the damage-control `zeroAccessPaths`
-(`.claude/hooks/damage-control/patterns.yaml`) — **no agent (Edit/Write/Bash) can touch
-it and there is no Known-Road bypass**; it is operator-owned. The MCP env vars are not yet
-declared there (only `tailscale_authkey` is), which is why `TAILSCALE_API_KEY` never lands
-in `.env.generated` even though it's a GitHub secret. **Operator applies this directly:**
+**Do NOT hand-edit `pmoves/chit/secrets_manifest.yaml`.** It is a MACHINE-EMITTED
+artifact (damage-control `zeroAccessPaths`; no agent can touch it, and there is no
+Known-Road bypass) — it is *regenerated from code*, never hand-populated. Tier routing
+for a secret lives in the `TIER_MAPPING` dict in **`pmoves/tools/generate_chit_v2.py`**
+(a secret → tier map), and the manifest + `.env.generated` are emitted from it. Editing
+the manifest directly is the anti-pattern (operator has corrected this repeatedly).
 
-1. Add to `pmoves/chit/secrets_manifest.yaml` (next to `tailscale_authkey`):
-   ```yaml
-   - id: tailscale_api_key
-     source: { type: cgp, label: TAILSCALE_API_KEY }
-     targets:
-     - { file: .env.generated, key: TAILSCALE_API_KEY }
-     - { file: env.shared.generated, key: TAILSCALE_API_KEY }
-     - { file: env.tier-agent, key: TAILSCALE_API_KEY }
-     required: false
-   - id: tailscale_tailnet
-     source: { type: cgp, label: TAILSCALE_TAILNET }
-     targets:
-     - { file: .env.generated, key: TAILSCALE_TAILNET }
-     - { file: env.shared.generated, key: TAILSCALE_TAILNET }
-     - { file: env.tier-agent, key: TAILSCALE_TAILNET }
-     required: false
+1. Add the secret to the `TIER_MAPPING` dict in `pmoves/tools/generate_chit_v2.py`
+   (next to `"TAILSCALE_AUTHKEY": "agent"`) — this is **agent-runnable code**:
+   ```python
+   "TAILSCALE_API_KEY": "agent",
+   "TAILSCALE_TAILNET": "agent",
    ```
-   (Mirrors the working `hostinger_api_token`/`tailscale_authkey` pattern — `.env.generated`
-   is the file the MCP launch env sources, same path that makes the hostinger MCP live.)
+   Tier `"agent"` routes to `env.tier-agent` + `.env.generated` (the file the MCP launch
+   env sources — same path that makes the hostinger MCP live). Regenerating then emits the
+   manifest entry automatically. (Landed in `fix/tailscale-api-key-tier-map`.)
 2. Ensure both are in GitHub Secrets (`TAILSCALE_API_KEY` reportedly present; add
    `TAILSCALE_TAILNET` — value is the tailnet name or `-` for the key's default).
 3. Refresh + distribute through the CHIT pipeline (these targets ARE agent-runnable):
