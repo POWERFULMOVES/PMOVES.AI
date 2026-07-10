@@ -14,7 +14,10 @@ name: Suit Release Policy Gate
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
+    # `edited` so a PR-body update (adding "Release Note: ...") re-evaluates the
+    # gate — reruns replay the ORIGINAL event payload, so without this the body
+    # check can never be satisfied after the fact.
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   check-suit-release-notes:
@@ -27,8 +30,14 @@ jobs:
       - name: Detect suit-related changes
         id: detect
         run: |
-          BASE="${{ github.event.pull_request.base.sha }}"
+          # event.pull_request.base.sha can be a STALE snapshot of the base
+          # branch, so a two-dot diff against it sweeps in unrelated commits
+          # that landed on main after the fork point (false positives — e.g.
+          # PR #2031 was flagged for a profile file it never touched). Diff
+          # from the merge-base so only the PR's own changes are considered.
           HEAD="${{ github.event.pull_request.head.sha }}"
+          BASE=$(git merge-base "${{ github.event.pull_request.base.sha }}" "$HEAD" 2>/dev/null \
+            || git merge-base "origin/${{ github.event.pull_request.base.ref }}" "$HEAD")
 
           SUIT_PATHS=(
             "pmoves/config/profiles/"
@@ -81,8 +90,10 @@ jobs:
           fi
 
           # Check 2: New or modified RELEASE_NOTES file in docs/
-          BASE="${{ github.event.pull_request.base.sha }}"
+          # (merge-base for the same stale-base.sha reason as the detect step)
           HEAD="${{ github.event.pull_request.head.sha }}"
+          BASE=$(git merge-base "${{ github.event.pull_request.base.sha }}" "$HEAD" 2>/dev/null \
+            || git merge-base "origin/${{ github.event.pull_request.base.ref }}" "$HEAD")
           RN_CHANGES=$(git diff --name-only "$BASE" "$HEAD" -- "docs/RELEASE_NOTES_*" 2>/dev/null)
           if [ -n "$RN_CHANGES" ]; then
             echo "✓ Release notes file modified: $RN_CHANGES"

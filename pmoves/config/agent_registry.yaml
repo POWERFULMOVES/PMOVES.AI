@@ -2355,7 +2355,11 @@ agents:
     port: null
     health: null
     layers: [L0, L2, L4]
-    evolution_stage: stage_1
+    # PARKED (2026-07-09, tandem review): MCP/OAuth plumbing is real, but both tools
+    # (notebooklm_list_notebooks, notebooklm_query) are stub placeholders — NotebookLM
+    # has no public API. Not deployable as functional capability. Use the Open Notebook
+    # self-host lane for real notebook capability. See AGNOTE4482 signoff + PR #2025.
+    evolution_stage: parked
     nats:
       publishes: []
       subscribes: []
@@ -2375,7 +2379,7 @@ agents:
       team: research
       ci_runner: ai-lab
       compose_profile: agents
-    description: "NotebookLM integration agent for source-grounded research, document querying, and Audio Overview generation via MCP."
+    description: "PARKED stub. NotebookLM MCP/OAuth scaffold only — notebooklm_list_notebooks/notebooklm_query return placeholder strings (NotebookLM has no public API). Real notebook capability lives in the Open Notebook self-host lane."
 
   # --- Fordham Hill community room agents (runtime-minted by Archon) ---------
   # Room: fordham.room.community (stage rehearsal). Agent-facing kebab ids
