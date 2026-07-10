@@ -209,11 +209,14 @@ def resolve_engine_host(
     if available_nodes is None:
         selected = preferred
     else:
-        up = set(available_nodes)
-        if preferred in up:
+        # Node ids are strings (kvm4-2, spark, z890), but bare numeric slugs
+        # like 5090/4090 parse as ints in YAML — normalize both sides to str
+        # so membership never silently fails on a numeric node.
+        up = {str(n) for n in available_nodes}
+        if preferred is not None and str(preferred) in up:
             selected = preferred
         else:
-            selected = next((n for n in eligible if n in up), None)
+            selected = next((n for n in eligible if str(n) in up), None)
 
     result = dict(affinity)
     result["selected"] = selected

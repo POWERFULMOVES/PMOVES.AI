@@ -640,22 +640,22 @@ service_runners:
 # seed shape (one row per engine). Config is authoritative until that lands.
 host_affinity:
   # --- CPU-viable: run anywhere, preferred on a cheap KVM (agents-talking goal) ---
-  kitten_tts:   { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, b850, z890, 4090, spark], preferred: kvm4-2 }
-  kokoro:       { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, b850, z890, 4090, spark], preferred: kvm4-2 }
+  kitten_tts:   { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, b850, z890, "4090", spark], preferred: kvm4-2 }
+  kokoro:       { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, b850, z890, "4090", spark], preferred: kvm4-2 }
 
   # --- CUDA GPU engines: gated by VRAM. spark (128GB) + 5090 (32GB) are the
   #     primary hosts; z890 (3090 Ti 24GB, VERIFIED) is a live real-GPU fallback
   #     — its 24GB fits every engine below, incl. the 3GB heavy ones. ---
-  higgs:        { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, z890, 4090], preferred: 5090 }
-  indextts:     { requires: cuda, min_vram_mb: 1200, nodes: [5090, spark, z890, 4090], preferred: 5090 }
-  fish:         { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, z890, 4090], preferred: 5090 }
-  chatterbox_turbo: { requires: cuda, min_vram_mb: 1500, nodes: [5090, spark, z890, 4090], preferred: 5090 }
-  f5_tts:       { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, z890, 4090], preferred: 5090 }
-  fish_s2:      { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, z890], preferred: 5090 }
-  voxcpm:       { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, z890], preferred: 5090 }
-  chatterbox:   { requires: cuda, min_vram_mb: 2000, nodes: [5090, spark, z890], preferred: 5090 }
-  chatterbox_multilingual: { requires: cuda, min_vram_mb: 2500, nodes: [5090, spark, z890], preferred: 5090 }
-  qwen:         { requires: cuda, min_vram_mb: 2500, nodes: [5090, spark, z890], preferred: 5090 }
+  higgs:        { requires: cuda, min_vram_mb: 1500, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  indextts:     { requires: cuda, min_vram_mb: 1200, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  fish:         { requires: cuda, min_vram_mb: 1500, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  chatterbox_turbo: { requires: cuda, min_vram_mb: 1500, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  f5_tts:       { requires: cuda, min_vram_mb: 2000, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  fish_s2:      { requires: cuda, min_vram_mb: 2000, nodes: ["5090", spark, z890], preferred: "5090" }
+  voxcpm:       { requires: cuda, min_vram_mb: 2000, nodes: ["5090", spark, z890], preferred: "5090" }
+  chatterbox:   { requires: cuda, min_vram_mb: 2000, nodes: ["5090", spark, z890], preferred: "5090" }
+  chatterbox_multilingual: { requires: cuda, min_vram_mb: 2500, nodes: ["5090", spark, z890], preferred: "5090" }
+  qwen:         { requires: cuda, min_vram_mb: 2500, nodes: ["5090", spark, z890], preferred: "5090" }
   # --- Heavy CUDA (3GB+): prefer spark's 128GB headroom; z890 24GB also fits ---
-  indextts2:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, 5090, z890], preferred: spark }
-  vibevoice:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, 5090, z890], preferred: spark }
+  indextts2:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, "5090", z890], preferred: spark }
+  vibevoice:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, "5090", z890], preferred: spark }

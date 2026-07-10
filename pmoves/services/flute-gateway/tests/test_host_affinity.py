@@ -65,6 +65,15 @@ def test_gpu_engines_never_route_to_kvms(cap_data):
         )
 
 
+def test_all_node_ids_are_strings(cap_data):
+    """Numeric slugs like 5090/4090 must be quoted — bare YAML ints break the
+    str membership check in resolve_engine_host()."""
+    for engine, row in cap_data["host_affinity"].items():
+        for node in row["nodes"]:
+            assert isinstance(node, str), f"{engine}: node {node!r} is not a str (quote it in YAML)"
+        assert isinstance(row["preferred"], str), f"{engine}: preferred {row['preferred']!r} is not a str"
+
+
 # --- Resolver behaviour (guarded import — skip if gateway deps unavailable) ---
 
 _parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -101,3 +110,17 @@ def test_resolver_none_when_no_eligible_node_up():
 @pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
 def test_resolver_unknown_engine_returns_none():
     assert ps.resolve_engine_host("no_such_engine") is None
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_resolver_numeric_node_slug_matches_as_string():
+    # higgs prefers the numeric-slug node "5090"; it must resolve when up.
+    res = ps.resolve_engine_host("higgs", available_nodes=["5090"])
+    assert res["selected"] == "5090"
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_resolver_tolerates_int_available_node():
+    # Defense-in-depth: an int node id from a caller still matches the string slug.
+    res = ps.resolve_engine_host("higgs", available_nodes=[5090])
+    assert str(res["selected"]) == "5090"
