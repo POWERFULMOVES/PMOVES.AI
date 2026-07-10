@@ -64,3 +64,6 @@ data/spark/
 /usr/
 
 .codex/
+
+# voice_cast_on_sign.py generated audio artifacts (Phase 0 expressive voice)
+/out/
