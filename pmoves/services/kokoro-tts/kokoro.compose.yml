@@ -10,6 +10,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.kokoro
+      args:
+        # REQUIRED — pin the model asset digests (fail-closed integrity check).
+        # Compute once from the release assets (sha256sum) and set in env/CI.
+        KOKORO_MODEL_SHA256: ${KOKORO_MODEL_SHA256:-}
+        KOKORO_VOICES_SHA256: ${KOKORO_VOICES_SHA256:-}
     image: ${KOKORO_IMAGE:-pmoves-kokoro-tts:latest}
     restart: unless-stopped
     ports:

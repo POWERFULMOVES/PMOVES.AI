@@ -16,10 +16,24 @@ standalone, self-contained, CPU-only container.
   consumed downstream (flute-gateway → Discord webhook / Cast device), never
   played on the VPS.
 
+## Model integrity (required)
+
+The build **fails closed** without pinned model digests — a supply-chain guard so a
+swapped upstream asset can't slip into the image. Compute the sha256 of each release
+asset once and export them (store in env/CI):
+
+```bash
+export KOKORO_MODEL_SHA256=$(curl -fsSL https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx | sha256sum | cut -d' ' -f1)
+export KOKORO_VOICES_SHA256=$(curl -fsSL https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin | sha256sum | cut -d' ' -f1)
+```
+
+Pin them in CI once verified. Auth: set **`KOKORO_TOKEN`** (or bind `127.0.0.1`) —
+the service logs a WARNING and serves `/synthesize` unauthenticated if the token is empty.
+
 ## Run
 
 ```bash
-# CPU-only; model is baked into the image at build.
+# CPU-only; model is baked into the image at build. Requires the SHA256 vars above.
 docker compose -f services/kokoro-tts/kokoro.compose.yml --profile voice up -d kokoro-tts
 
 curl -fsS localhost:8004/healthz

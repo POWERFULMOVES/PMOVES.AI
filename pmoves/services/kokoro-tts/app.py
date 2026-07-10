@@ -19,6 +19,7 @@ so the image is self-contained + offline-capable.
 """
 from __future__ import annotations
 
+import hmac
 import io
 import logging
 import os
@@ -78,6 +79,11 @@ class SynthesizeRequest(BaseModel):
 
 @app.on_event("startup")
 def _warm() -> None:
+    if not TOKEN:
+        logger.warning(
+            "KOKORO_TOKEN is not set — /synthesize is UNAUTHENTICATED. Set KOKORO_TOKEN, "
+            "or bind the service to 127.0.0.1 (KOKORO_BIND) on any exposed node."
+        )
     try:
         _get_kokoro()
     except Exception as exc:  # noqa: BLE001 — don't crash the container; /healthz reports it
@@ -85,7 +91,8 @@ def _warm() -> None:
 
 
 def _check_token(supplied: Optional[str]) -> None:
-    if TOKEN and supplied != TOKEN:
+    # Constant-time compare to avoid a timing side-channel on the shared secret.
+    if TOKEN and not hmac.compare_digest(supplied or "", TOKEN):
         raise HTTPException(status_code=401, detail="invalid or missing X-Kokoro-Token")
 
 
