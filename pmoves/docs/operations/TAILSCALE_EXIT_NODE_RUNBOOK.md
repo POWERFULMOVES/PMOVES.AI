@@ -179,38 +179,35 @@ It connects once these env vars are present (FOLLOW-UP — credential wiring):
 For a multi-tenant, growing tailnet prefer an **OAuth client** (scopes `devices`,
 `routes`) over a personal access token — it doesn't expire and is auditable.
 
-### Credential wiring (operator-direct — the manifest is zero-access to agents)
+### Credential wiring (how the tailscale MCP actually gets its env)
 
-**Do NOT hand-edit `pmoves/chit/secrets_manifest.yaml`.** It is a MACHINE-EMITTED
-artifact (damage-control `zeroAccessPaths`; no agent can touch it, and there is no
-Known-Road bypass) — it is *regenerated from code*, never hand-populated. Tier routing
-for a secret lives in the `TIER_MAPPING` dict in **`pmoves/tools/generate_chit_v2.py`**
-(a secret → tier map), and the manifest + `.env.generated` are emitted from it. Editing
-the manifest directly is the anti-pattern (operator has corrected this repeatedly).
+The tailscale MCP is a **local `npx` server launched by Claude Code**, not a fleet
+container. `.claude/mcp.json` interpolates `${TAILSCALE_API_KEY}` / `${TAILSCALE_TAILNET}`
+from **Claude Code's own launch environment** — the same `${VAR}` channel that already
+makes the hostinger / cloudflare / huggingface MCPs live. This is a *plain env-bundle*
+path, **not** the CHIT manifest/tier path:
 
-1. Add the secret to the `TIER_MAPPING` dict in `pmoves/tools/generate_chit_v2.py`
-   (next to `"TAILSCALE_AUTHKEY": "agent"`) — this is **agent-runnable code**:
-   ```python
-   "TAILSCALE_API_KEY": "agent",
-   "TAILSCALE_TAILNET": "agent",
-   ```
-   Tier `"agent"` routes to `env.tier-agent` + `.env.generated` (the file the MCP launch
-   env sources — same path that makes the hostinger MCP live). Regenerating then emits the
-   manifest entry automatically. (Landed in `fix/tailscale-api-key-tier-map`.)
-2. Ensure both are in GitHub Secrets (`TAILSCALE_API_KEY` reportedly present; add
-   `TAILSCALE_TAILNET` — value is the tailnet name or `-` for the key's default).
-3. Refresh + distribute through the CHIT pipeline (these targets ARE agent-runnable):
-   ```bash
-   gh workflow run sync-secrets-local.yml --repo POWERFULMOVES/PMOVES.AI -f output_format=cgp
-   make -C pmoves secrets-funnel        # decode CGP → .env.generated + tiers
-   make -C pmoves env-check             # validate cross-tier consistency
-   ```
-4. Restart Claude Code (and the own MCP gateway, `make mcp-4090-gateway-start`, if it
-   serves the tailscale MCP) so the launch env re-reads `.env.generated`.
-5. Verify the MCP connected, then approve the kvm4-1/kvm4-2 exit routes via the MCP.
+- The CHIT manifest (`pmoves/chit/secrets_manifest.yaml`) and `TIER_MAPPING` in
+  `generate_chit_v2.py` only tier secrets that already exist as **manifest entries**;
+  `generate_chit_v2.py` iterates existing `manifest["entries"]` and never *creates* one.
+  Adding a `TIER_MAPPING` row for a label that isn't a manifest entry is **inert** — it
+  emits nothing. (This is why an earlier tier-map attempt didn't wire the MCP.)
+- Both keys are already declared in `pmoves/env.shared.example`
+  (`TAILSCALE_API_KEY=` + `TAILSCALE_TAILNET=tailcad9b4.ts.net`, with a `${TAILSCALE_TAILNET}`
+  note pointing at `.claude/mcp.json`). No repo edit is needed to *declare* them.
 
-`TAILSCALE_TAILNET` is not secret (`-` works); if preferred, hardcode it in
-`.claude/mcp.json`'s `tailscale.env` instead of routing it through the manifest.
+So the remaining wiring is **operator-lane, value-only**:
+
+1. Put the values in the launch env the operator starts Claude Code with — via the
+   runtime `env.shared` bundle (populated by the operator's secret channel;
+   `TAILSCALE_API_KEY` from GitHub Secrets, `TAILSCALE_TAILNET` = the tailnet name,
+   already `tailcad9b4.ts.net` in the template) or by exporting them in the shell/OS
+   user environment before launch.
+2. **Restart Claude Code** so the MCP launch env re-reads those `${VAR}` values.
+3. Verify the tailscale MCP connected, then approve the kvm4-1/kvm4-2 exit routes via it.
+
+`TAILSCALE_TAILNET` is not secret; if preferred, hardcode it directly in
+`.claude/mcp.json`'s `tailscale.env` block instead of sourcing it from the launch env.
 
 ---
 

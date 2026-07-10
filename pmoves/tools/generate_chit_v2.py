@@ -91,8 +91,6 @@ TIER_MAPPING = {
     "VALID_API_KEYS": "agent",
     "WGER_API_TOKEN": "agent",
     "TAILSCALE_AUTHKEY": "agent",
-    "TAILSCALE_API_KEY": "agent",
-    "TAILSCALE_TAILNET": "agent",
     "TELEGRAM_BOT_TOKEN": "agent",
     "CLAUDE_SESSION_CHANNEL_ID": "agent",
     "HOSTINGER_API_TOKEN": "agent",
