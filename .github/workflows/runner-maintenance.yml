@@ -60,7 +60,7 @@ jobs:
           # volume still attached to an in-flight builder fails the rm and is safely
           # skipped — so this is targeted reclaim, NOT the banned `docker volume prune`.
           docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
-            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
 
           for workdir in /opt/actions-runner*/_work; do
             [ -d "$workdir" ] || continue
@@ -101,7 +101,7 @@ jobs:
           # volume still attached to an in-flight builder fails the rm and is safely
           # skipped — so this is targeted reclaim, NOT the banned `docker volume prune`.
           docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
-            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
 
           for workdir in /opt/actions-runner*/_work; do
             [ -d "$workdir" ] || continue
@@ -142,7 +142,7 @@ jobs:
           # volume still attached to an in-flight builder fails the rm and is safely
           # skipped — so this is targeted reclaim, NOT the banned `docker volume prune`.
           docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
-            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
 
           for workdir in /opt/actions-runner-kvm4*/_work; do
             [ -d "$workdir" ] || continue
@@ -183,7 +183,7 @@ jobs:
           # volume still attached to an in-flight builder fails the rm and is safely
           # skipped — so this is targeted reclaim, NOT the banned `docker volume prune`.
           docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
-            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
 
           for workdir in /opt/actions-runner-kvm2*/_work; do
             [ -d "$workdir" ] || continue
