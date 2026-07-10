@@ -2687,9 +2687,10 @@ up-voice: ## Start voice stack: Flute-Gateway + VibeVoice CPU fallback + Voice-R
 	@echo "Starting voice stack (Flute + VibeVoice + Voice-Relay)..."
 	@docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) \
 		-f docker-compose.base.yml \
+		-f docker-compose.core.yml \
 		-f docker-compose.media.yml \
 		-f docker-compose.voice.yml \
-		--profile media --profile voice \
+		--profile supabase-local --profile media --profile voice \
 		up -d flute-gateway vibevoice voice-relay
 	@echo ""
 	@$(MAKE) --no-print-directory voice-health
