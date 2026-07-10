@@ -6,10 +6,10 @@ description: >
   monitoring stack, and development toolchain.
 hardware:
   cpu:
-    vendor: AMD
-    model: Ryzen 9 8945HS
+    vendor: Intel
+    model: Intel Core Ultra 7 265K
     cores: 20
-    threads: 32
+    threads: 20
   gpu:
     type: none  # Z890 delegates GPU work to 5090/4090 via Tailscale mesh
     models: []
@@ -98,6 +98,6 @@ external_ports:
   nats: 4222
   nats_monitoring: 8222
   supabase_kong: 8000
-  supabase_studio: 3000
+  supabase_studio: 54323
   grafana: 3000
   prometheus: 9090
