@@ -2,7 +2,13 @@
 
 > Architecture spec for replacing Open Notebook's bare-password `PasswordAuthMiddleware` with Supabase-JWT validation via a new `pmoves_auth` Python package in PMOVES-supabase. Closes the operator-visible auth gap: Open Notebook UI currently prompts for a password but expected a JWT against the PMOVES Supabase user pool. **Doc-only spec.** Runtime code lands in three follow-on PRs (one per phase) after §1 + §7 signoff per `AGNOTE4482_SIGNOFF_CHECKLIST.md` (Village Rule).
 
-> **Status:** Integration spec. No runtime code in this PR.
+> **Status:** **DESIGN FINALIZED (2026-07-10).** All Open Items resolved (code-verified facts + operator decisions below); ready for Phase A implementation. Runtime code still lands in the three phase PRs. Finalization provenance: tandem review + verification pass (4090-CLAUDE), operator decisions (DARKXSIDE 2026-07-10).
+>
+> **Finalized decisions (see §Resolved Design Decisions for detail):**
+> 1. **Studio access → gated behind Tailscale mesh.** JWT-minting (`supabase.pmoves.ai`) is not left on the public edge — reachable only from the tailnet. (Operator decision; privacy-mesh-only.)
+> 2. **Sunset → 14-day dual, then JWT-only + remove password.** Spec default confirmed.
+> 3. **Login UX → Studio copy-paste now; `pmoves auth login` CLI as a follow-up.** Ship JWT auth without blocking on the CLI.
+> 4. **`OPEN_NOTEBOOK_API_TOKEN` → kept as a service-role credential.** The 3 machine callers stay token-based; only the human/UI path moves to user-JWT.
 
 ## Operator-visible symptom (the trigger)
 
@@ -353,19 +359,27 @@ This spec lands on `main` after signoff. Code PRs (Phase A in PMOVES-supabase, P
 
 | Reviewer | Concern | Specifics |
 |----------|---------|-----------|
-| **4090-CLAUDE** | Supabase + JWT intersection | Confirm `SUPABASE_JWT_SECRET` is the right secret to import (not the anon-key); confirm Supabase Studio at `supabase.pmoves.local` is the operator-facing JWT endpoint vs alternative paths |
+| **4090-CLAUDE** | Supabase + JWT intersection | ✅ **RESOLVED (2026-07-10).** `SUPABASE_JWT_SECRET=${JWT_SECRET}` is the correct GoTrue HS256 signing secret, distinct from `SUPABASE_ANON_KEY` (`env.shared.example:137,144`). Operator-facing Studio is `https://supabase.pmoves.ai` (KVM4-2 Kong `:8000`, per `.claude/context/self-hosted-defaults.md:41,51`), **not** `supabase.pmoves.local` — spec corrected below. |
 | **Z890-CLAUDE (submodule sync)** | Phase A lands in PMOVES-supabase submodule; Phase B lands in PMOVES-Open-Notebook submodule | Submodule pin promotion sequencing — Phase A pin must merge before Phase B pin |
 | **MissingLinc** (when minted) | Auth audit / forensic data analysis | The token-vs-JWT cutover surfaces credential-leak risk if old `OPEN_NOTEBOOK_PASSWORD` env values are checked into env.tier-* files; MissingLinc should sweep for residual password values after Phase C |
-| **DARKXSIDE** | Operator UX + sunset timeline | (a) 14-day dual-auth window — acceptable or longer/shorter? (b) JWT acquisition flow via Supabase Studio — is that the desired path or should there be a `pmoves auth login` CLI command? (c) Should `OPEN_NOTEBOOK_AUTH_MODE=password` survive as a documented fallback or be removed in Phase C cleanup? |
+| **DARKXSIDE** | Operator UX + sunset timeline | ✅ **RESOLVED (2026-07-10).** (a) 14-day dual-auth window **accepted** → then JWT-only + remove password. (b) **Studio copy-paste now**, `pmoves auth login` CLI as a follow-up (not a Phase-C blocker). (c) `OPEN_NOTEBOOK_AUTH_MODE=password` **removed** in Phase C cleanup (not retained as permanent fallback). |
 
-## Open Items (post-spec, pre-code)
+## Resolved Design Decisions (finalized 2026-07-10)
 
-1. **`OPEN_NOTEBOOK_API_TOKEN` semantic** — Currently aliased to `OPEN_NOTEBOOK_PASSWORD` (per docker-compose:31-32). After Phase B, the API token might still serve a different purpose: machine-to-machine non-user-scoped access (e.g., notebook-sync service). Decision deferred: keep as a separate service-role JWT vs deprecate alongside password.
-2. **JWT refresh-token storage** — Open Notebook frontend needs to hold a refresh token to auto-refresh expired access tokens. Storage options: `localStorage` (XSS risk), HTTP-only cookie (CSRF risk + needs same-origin), in-memory (lost on tab close). Phase B implementation lane decides.
-3. **Supabase Studio access for operators** — currently behind PMOVES SSO? If not, this becomes the new auth weak point (whoever has Studio access can issue JWTs for any user). MissingLinc audit lane should sweep this.
-4. **CHIT integration** — Per `PMOVES-Open-Notebook/CLAUDE.md` § CHIT, Open Notebook is "No CHIT integration (by design)" today. JWT-based identity does NOT trigger CHIT integration; this stays the same.
-5. **i18n on error messages** — `getApiErrorMessage()` frontend helper expects descriptive error messages. New JWT-specific error messages must have i18n keys added.
-6. **Service-to-service auth** — Notebook-sync and DeepResearch currently talk to Open Notebook with `OPEN_NOTEBOOK_API_TOKEN`. After Phase B, they need either a service-role JWT (rotates) or to keep the api_token path open. Phase B should NOT break service-to-service auth without an explicit plan.
+Every pre-code Open Item is now closed — by verified code facts (tandem verification pass, cited) or operator decision (DARKXSIDE). Order preserved from the original Open Items list.
+
+1. **`OPEN_NOTEBOOK_API_TOKEN` semantic → KEEP as a service-role credential.** *(Operator decision.)* Verified: exactly **3 machine callers** send it as a static bearer today — `pmoves/services/notebook-sync/sync.py:529`, `pmoves/services/deepresearch/worker.py:541`, `pmoves/services/showtime-api/notebook_client.py:31`. Machine-to-machine stays token-based (or a long-lived service-role JWT); only the human/UI path moves to user-JWT. Phase B must **not** break these — they keep the token path (see #6). Deprecating the human `password` (Phase C) does **not** remove `OPEN_NOTEBOOK_API_TOKEN`.
+2. **JWT refresh-token storage → HTTP-only cookie (recommended default; Phase B impl lane owns final call).** Verified: the frontend today stores the *password itself* as `token` in `localStorage` via Zustand `persist` (`PMOVES-Open-Notebook/frontend/src/lib/stores/auth-store.ts:94,212-216`) with **zero refresh-token infrastructure** — so Phase B builds this from scratch and is unconstrained by legacy. Given the existing localStorage-XSS exposure, prefer a same-origin HTTP-only cookie for the refresh token; keep the short-lived access token in-memory.
+3. **Supabase Studio access → GATE BEHIND TAILSCALE MESH.** *(Operator decision — this was the open security risk.)* Verified: `supabase.pmoves.ai` is currently a **public Cloudflare-DNS subdomain** with no gating in front of Studio (`.claude/context/self-hosted-defaults.md:20,26,41`), i.e. whoever reaches it can attempt sign-in and, with Studio access, mint JWTs for any user. Resolution: JWT-minting endpoint is reachable **only from the tailnet** (privacy-mesh-only), closing the weak point without new SSO infra. Implementation = Tailscale-serve / ACL restriction on the Studio route (mesh-gateway lane). MissingLinc still sweeps for residual `OPEN_NOTEBOOK_PASSWORD` values post-Phase-C.
+4. **CHIT integration → UNCHANGED (no CHIT).** Confirmed still correct: `PMOVES-Open-Notebook/CLAUDE.md` § CHIT = "No CHIT integration (by design)"; JWT identity does not trigger it.
+5. **i18n on JWT error messages → REQUIRED in Phase B.** Verified: `getApiErrorMessage()` (`PMOVES-Open-Notebook/frontend/src/lib/utils/error-handler.ts:59-77`) has an `ERROR_MAP` with password-era keys but **no** entries for `"token expired"` / `"invalid token"` (falls through to raw untranslated string). Phase B adds i18n keys `apiErrors.tokenExpired` / `apiErrors.invalidToken` alongside the middleware.
+6. **Service-to-service auth → dual-auth bridge is MANDATORY, service token retained.** *(Code-verified, non-negotiable default.)* The 3 callers in #1 have no JWT/refresh logic; a hard flip to `OPEN_NOTEBOOK_AUTH_MODE=jwt` would break all three (`verify_jwt()` → `JWTMalformedError` on a static string). `OPEN_NOTEBOOK_AUTH_MODE=dual` (default) is the only safe migration state; the service-role token path stays open past the human-password sunset. Migrating the 3 callers to rotating service-role JWTs is explicitly **out of scope** for this finalization (future, if desired).
+
+### Implementation-ready follow-ups (verified, separable from the auth phases)
+
+These are code-fact tech-debt items surfaced by the tandem review — fixable unilaterally, no further design input:
+- **Topology de-duplication (P1).** `open-notebook` (`pmoves/docker-compose.open-notebook.yml:14-69`) and `open-notebook-ext` (`pmoves/docker-compose.external.yml:119-148`) are **literal duplicates** colliding on host ports `8503`/`5055`; SurrealDB (`open-notebook-surrealdb-ext`) is defined only in `external.yml`, so `make up-open-notebook` alone can't reach it. Pick one canonical compose owner (recommend `docker-compose.open-notebook.yml` — it's what the Make target + docs point at) and either co-locate SurrealDB there or make the target depend on it; retire the `-ext` duplicate.
+- **Healthcheck wiring (P0-ops).** The fork exposes `/healthz` (`PMOVES-Open-Notebook/api/main.py:298`, auth-excluded), but **neither** compose service wires a Docker `healthcheck:` — add one so `depends_on: service_healthy` and `docker compose ps` work.
 
 ## Cross-Links
 
@@ -389,10 +403,14 @@ This spec lands on `main` after signoff. Code PRs (Phase A in PMOVES-supabase, P
 - `PMOVES-supabase/**/pmoves_auth*` — glob returns zero matches (package does not exist)
 - `[[project_pmoves_auth_gap]]` memory — describes the same gap, 64 days old
 
-**Missing (flagged in §Open Items):**
-- Supabase Studio URL on the actual fleet (assumed `supabase.pmoves.local` — needs DARKXSIDE confirmation)
-- Whether Supabase Studio access is gated behind PMOVES SSO (MissingLinc-class audit question)
-- Phase B frontend refresh-token storage decision (Phase B implementation lane)
-- Service-to-service auth model after Phase B (notebook-sync, DeepResearch — backwards-compat strategy)
+**Resolved at finalization (2026-07-10) — see §Resolved Design Decisions:**
+- Supabase Studio URL confirmed `https://supabase.pmoves.ai` (was assumed `.local`); **decision: gate behind Tailscale mesh** (closes the public-edge weak point).
+- Phase B refresh-token storage → HTTP-only cookie recommended; verified no legacy refresh infra to constrain it.
+- Service-to-service auth → 3 callers enumerated + verified; **service-role token retained, dual-auth bridge mandatory**.
+
+**Still deferred (by design, not blocking):**
+- Migrating the 3 machine callers from static token → rotating service-role JWT (future, optional).
+- MissingLinc residual-`OPEN_NOTEBOOK_PASSWORD` sweep runs post-Phase-C.
 
 <!-- GRAPHITI_MARK: Z890→5090-CLAUDE::OPEN-NOTEBOOK-JWT-AUTH-SPEC::2026-05-21 -->
+<!-- GRAPHITI_MARK: 4090-CLAUDE::OPEN-NOTEBOOK-JWT-AUTH-DESIGN-FINALIZED::2026-07-10 -->
