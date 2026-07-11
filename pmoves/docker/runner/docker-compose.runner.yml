@@ -46,6 +46,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/pmoves-runner-1:/tmp/pmoves-runner
+      - ${HOME}/.config/pmoves:/root/.config/pmoves
     environment:
       <<: *runner-env
       # PAT (auto re-registers) OR a pre-minted registration token (RUNNER_TOKEN).
@@ -59,6 +60,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/pmoves-runner-2:/tmp/pmoves-runner
+      - ${HOME}/.config/pmoves:/root/.config/pmoves
     environment:
       <<: *runner-env
       # PAT (auto re-registers) OR a pre-minted registration token (RUNNER_TOKEN).
