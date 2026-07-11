@@ -1,5 +1,10 @@
 id: notebooklm-agent
 name: NotebookLM MCP Agent
+# STATUS: parked-stub (2026-07-09 tandem review). The MCP/OAuth scaffold is real but the
+# two tools below return placeholder strings — NotebookLM has no public API, so this is not
+# a functional integration. Do NOT wire into the live gateway toolset expecting results.
+# Real notebook capability = the Open Notebook self-host lane. See AGNOTE4482 + PR #2025.
+status: parked-stub
 description: Integrates NotebookLM and Google Services via Universal OAuth to provide source-grounded research, document querying, and Notebook management.
 required_commands:
   - docker
