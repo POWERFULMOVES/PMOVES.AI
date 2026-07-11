@@ -110,6 +110,12 @@ p  { margin: 0 0 1rem; color: var(--c-ink-dim); }
   color: var(--c-ink);
 }
 .brand-mark { color: var(--c-accent); font-size: 1.1em; }
+/* DL-3.3 — Showtime live flip: persona boot sets data-stage="live" on <html>
+   when the stage goes green (showtime.all_green.v1). Accent-driven, so a
+   resolved persona glows in its own color. */
+:root[data-stage="live"] .brand-mark {
+  text-shadow: 0 0 10px var(--c-accent), 0 0 22px var(--c-accent);
+}
 .brand-word { }
 .brand-dim { color: var(--c-ink-mute); font-weight: 600; }
 
