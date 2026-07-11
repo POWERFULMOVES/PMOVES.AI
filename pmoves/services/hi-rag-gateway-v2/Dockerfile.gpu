@@ -46,6 +46,8 @@ RUN python3 -m pip install laion-clap==1.1.4
 COPY libs /app/libs
 COPY services/hi-rag-gateway-v2 /app/
 COPY services/common /app/services/common
+COPY tools/__init__.py /app/tools/__init__.py
+COPY tools/chit_security.py /app/tools/chit_security.py
 
 # Make wait-for-deps.sh executable
 RUN chmod +x /app/scripts/wait-for-deps.sh

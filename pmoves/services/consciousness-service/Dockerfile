@@ -12,14 +12,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first (cache layer)
-COPY requirements.txt requirements.lock .
+COPY services/consciousness-service/requirements.txt services/consciousness-service/requirements.lock .
 RUN pip install --no-cache-dir -r requirements.lock
 
 # Copy application code
-COPY *.py ./
+COPY services/consciousness-service/*.py ./
 
-# Copy pmoves tools (chit_security, geometry_decoder) via volume mount or copy
-# These are expected to be available at runtime via /app/pmoves/tools
+# PMOVES namespace + shared tools (imported as pmoves.tools.*)
+RUN mkdir -p /app/pmoves \
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+COPY tools/__init__.py /app/pmoves/tools/__init__.py
+COPY tools/zeta_filter.py /app/pmoves/tools/zeta_filter.py
 
 # Set ownership
 RUN chown -R pmoves:pmoves /app

@@ -134,6 +134,9 @@ This guide aggregates the entry points that keep local environments consistent a
 - `make -C pmoves surf-up` / `surf-down` → start/stop the PMOVES-surf Next.js dev server on `SURF_PORT` (default 3000). Requires `E2B_API_KEY` and `OPENAI_API_KEY`.
 - `make -C pmoves danger-room-desktop-up` / `danger-room-desktop-down` → validate `E2B_API_KEY`, print E2B Desktop example launch commands, and start a PMOVES template preview if `PMOVES-E2B-Danger-Room-Desktop/PMOVES-E2B-Danger-Room-Deskdesktop/main.py` exists.
 
+## Service Packaging Audit
+- `make -C pmoves validate-service-tools-packaging` → verifies that every service Dockerfile copies the `pmoves.tools` files its code imports, preventing `ModuleNotFoundError` regressions in container images.
+
 ## Persistent Data Layout (`pmoves/data/`)
 The repository keeps opinionated `gitkeep` stubs so local volumes land in predictable places when Docker mounts bind into the workspace. Buckets and databases still live in Docker volumes; this hierarchy houses agent-specific state that benefits from git-backed defaults:
 

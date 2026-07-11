@@ -1,13 +1,26 @@
 # PMOVES gateway service Dockerfile
+# Build context: repo root (pmoves/)
+# Usage: docker build -f services/gateway/Dockerfile -t pmoves-gateway:latest .
 FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0
 
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
-COPY requirements.txt requirements.lock ./
+COPY services/gateway/requirements.txt services/gateway/requirements.lock ./
 RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
-COPY . .
+# PMOVES package namespace + shared libraries
+COPY pmoves/__init__.py /app/pmoves/__init__.py
+COPY services/__init__.py /app/pmoves/services/__init__.py
+COPY services/common /app/pmoves/services/common
+COPY services/gateway /app/pmoves/services/gateway
+
+# PMOVES shared tools (imported by gateway as pmoves.tools.*)
+COPY tools/__init__.py /app/pmoves/tools/__init__.py
+COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
+COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
 
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \
