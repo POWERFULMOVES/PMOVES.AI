@@ -205,11 +205,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# DL-3.3 adds the CF-site origins (?agent= persona demo + live flip): the
+# deployed Pages origin, the future custom domain, and the local preview (:8000).
 _cors_origins = [
     o.strip()
     for o in os.environ.get(
         "SHOWTIME_CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,http://localhost:4482,http://localhost:9225",
+        "http://localhost:3000,http://localhost:3001,http://localhost:4482,http://localhost:9225"
+        ",http://localhost:8000,https://pmoves-ai.pages.dev,https://pmoves.ai",
     ).split(",")
     if o.strip()
 ]
