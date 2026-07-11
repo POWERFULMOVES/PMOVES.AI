@@ -48,7 +48,7 @@
     {
       "app_id": "tokenism-simulator",
       "kind": "browser",
-      "route": "/demo/tokenism",
+      "route": "/dashboard/tokenism",
       "provider": "tokenism-simulator",
       "action_namespace": "tokenism",
       "capabilities": [
@@ -72,7 +72,7 @@
         "budgets",
         "export-csv"
       ],
-      "pinned": true,
+      "pinned": false,
       "status": "planned"
     }
   ],
@@ -112,7 +112,7 @@
       "surface": {
         "app_id": "tokenism-simulator",
         "target": "toolbar",
-        "route": "/demo/tokenism"
+        "route": "/dashboard/tokenism"
       },
       "execution": {
         "mode": "workflow",
