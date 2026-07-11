@@ -1,4 +1,6 @@
 import importlib.util
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -59,3 +61,27 @@ def test_unknown_rule_holds_fail_closed():
     v = floor.check({"title": "totally clean public text"})
     assert v.clean is False
     assert "some-future-rule-we-dont-implement" in v.tripped
+
+
+def test_load_floor_reads_rules_and_terms(tmp_path, monkeypatch):
+    manifest = tmp_path / "room.json"
+    manifest.write_text(json.dumps({
+        "policies": {"publish": {"egress_redaction_floor": {
+            "rules": ["operator-pii-protected", "no-literal-lan-or-tailscale-ips"]}}}
+    }), encoding="utf-8")
+    monkeypatch.setenv("EGRESS_PROTECTED_TERMS", "shaela, hunnibear")
+    monkeypatch.delenv("EGRESS_PROTECTED_TERMS_FILE", raising=False)
+
+    floor = egress_floor.load_floor(str(manifest))
+    assert floor.rules == ["operator-pii-protected", "no-literal-lan-or-tailscale-ips"]
+    v = floor.check({"title": "ping shaela"})
+    assert v.clean is False
+
+
+def test_load_floor_unconfigured_terms_is_none(tmp_path, monkeypatch):
+    manifest = tmp_path / "room.json"
+    manifest.write_text(json.dumps({"policies": {"publish": {"egress_redaction_floor": {"rules": []}}}}), encoding="utf-8")
+    monkeypatch.delenv("EGRESS_PROTECTED_TERMS", raising=False)
+    monkeypatch.delenv("EGRESS_PROTECTED_TERMS_FILE", raising=False)
+    floor = egress_floor.load_floor(str(manifest))
+    assert floor.protected_terms is None

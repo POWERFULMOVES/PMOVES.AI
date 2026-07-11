@@ -6,6 +6,8 @@ plug in by implementing the Floor protocol.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Protocol
@@ -79,3 +81,36 @@ class BlockAndHoldFloor:
                 # silently pass. Add a detector branch above to make it live.
                 tripped.append(rule)
         return Verdict(clean=(len(tripped) == 0), tripped=tripped)
+
+
+def _read_rules(manifest_path: str) -> List[str]:
+    with open(manifest_path, "r", encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    floor = (
+        manifest.get("policies", {}).get("publish", {}).get("egress_redaction_floor", {})
+    )
+    rules = floor.get("rules")
+    return list(rules) if isinstance(rules, list) else []
+
+
+def _read_terms(terms_env: str, terms_file_env: str) -> Optional[List[str]]:
+    raw = os.environ.get(terms_env)
+    if raw is None:
+        path = os.environ.get(terms_file_env)
+        if path and os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as fh:
+                raw = fh.read()
+    if raw is None:
+        return None  # unconfigured -> fail-closed
+    return [t.strip() for t in re.split(r"[,\n]", raw) if t.strip()]
+
+
+def load_floor(
+    manifest_path: str,
+    terms_env: str = "EGRESS_PROTECTED_TERMS",
+    terms_file_env: str = "EGRESS_PROTECTED_TERMS_FILE",
+) -> BlockAndHoldFloor:
+    return BlockAndHoldFloor(
+        rules=_read_rules(manifest_path),
+        protected_terms=_read_terms(terms_env, terms_file_env),
+    )
