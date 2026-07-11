@@ -52,3 +52,10 @@ def test_unconfigured_denylist_holds_fail_closed():
     v = BlockAndHoldFloor(rules=RULES, protected_terms=None).check({"title": "anything"})
     assert v.clean is False
     assert any("pii" in t for t in v.tripped)
+
+
+def test_unknown_rule_holds_fail_closed():
+    floor = BlockAndHoldFloor(rules=["some-future-rule-we-dont-implement"], protected_terms=[])
+    v = floor.check({"title": "totally clean public text"})
+    assert v.clean is False
+    assert "some-future-rule-we-dont-implement" in v.tripped

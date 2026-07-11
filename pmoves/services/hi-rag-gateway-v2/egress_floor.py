@@ -72,5 +72,10 @@ class BlockAndHoldFloor:
                     tripped.append(rule)  # fail-closed: cannot verify
                 elif any(term in low for term in self.protected_terms):
                     tripped.append(rule)
-            # unknown rules are ignored (forward-compatible); add detectors as needed
+            else:
+                # Unknown rule: no detector can prove the item clean against it,
+                # so HOLD. rules are config-driven (room manifest, Task 2) — a
+                # typo'd or not-yet-implemented rule name must fail closed, never
+                # silently pass. Add a detector branch above to make it live.
+                tripped.append(rule)
         return Verdict(clean=(len(tripped) == 0), tripped=tripped)
