@@ -31,8 +31,13 @@
 #   - Inline <style> and <script> disallowed here — the marketing page ships external files only.
 #   - TODO(founder): when Cloudflare Web Analytics is enabled, add
 #     https://static.cloudflareinsights.com to script-src and the matching connect-src host.
+# connect-src includes LOOPBACK-ONLY origins for the DL-3.3 persona demo
+# (?agent= resolves accents via the local BoTZ Gateway :8054; Showtime :9225
+# drives the live flip). These are the *visitor's* loopback — harmless for the
+# public, functional on-net. persona-theme.js additionally restricts ?gw=
+# overrides to loopback, so no remote host can ever be fetched.
 /
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self' data:; connect-src 'self'; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self' data:; connect-src 'self' http://localhost:8054 http://127.0.0.1:8054 http://localhost:9225 http://127.0.0.1:9225; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; upgrade-insecure-requests
 
 # --- Hyperdimensions WebGL viewer (sandboxed to its own path) ---
 # Self-contained webtoy: three.js (unpkg importmap), CodeMirror + math.js (cdnjs), an inline

@@ -7,6 +7,9 @@
   "alter": "5090-voice",
   "room_type": "creator",
   "owner_mode": "alter",
+  "access": {
+    "visibility": "unlisted"
+  },
   "shell": {
     "theme": {
       "theme_id": "voice-studio",
