@@ -6,7 +6,9 @@ set -euo pipefail
 : "${VIBEVOICE_PORT:=3000}"
 : "${VIBEVOICE_DEVICE:=auto}"
 
-MODEL_PATH="${VIBEVOICE_MODEL_DIR}/VibeVoice-Realtime-0.5B"
+# Cache dir tracks the model ID basename so changing VIBEVOICE_MODEL_ID uses a
+# fresh dir instead of silently reusing the previous model's cache (Codex P2).
+MODEL_PATH="${VIBEVOICE_MODEL_DIR}/${VIBEVOICE_MODEL_ID##*/}"
 
 resolved_device="cpu"
 if [ "${VIBEVOICE_DEVICE}" = "cuda" ] || [ "${VIBEVOICE_DEVICE}" = "auto" ]; then
@@ -39,7 +41,11 @@ PY
   fi
 fi
 
-if [ "${VIBEVOICE_DEVICE}" != "auto" ]; then
+# Honor an explicit non-cuda device (cpu, mps, ...) verbatim. cuda and auto are
+# resolved by the probe above (with a cpu fallback) -- do NOT override cuda back
+# on top of that fallback, or an explicit `--device cuda` crashes when CUDA is
+# unusable instead of degrading to cpu (CodeRabbit Major).
+if [ "${VIBEVOICE_DEVICE}" != "auto" ] && [ "${VIBEVOICE_DEVICE}" != "cuda" ]; then
   resolved_device="${VIBEVOICE_DEVICE}"
 fi
 
@@ -53,7 +59,9 @@ from huggingface_hub import snapshot_download
 
 model_id = os.environ.get("VIBEVOICE_MODEL_ID", "microsoft/VibeVoice-Realtime-0.5B")
 base = Path(os.environ.get("VIBEVOICE_MODEL_DIR", "/models"))
-target = base / "VibeVoice-Realtime-0.5B"
+# Match MODEL_PATH in the shell wrapper: cache dir = model-id basename, so
+# switching VIBEVOICE_MODEL_ID re-downloads instead of reusing a stale cache.
+target = base / model_id.split("/")[-1]
 
 target.mkdir(parents=True, exist_ok=True)
 has_files = any(target.iterdir())
