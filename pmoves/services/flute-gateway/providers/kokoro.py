@@ -34,12 +34,15 @@ class KokoroProvider(VoiceProvider):
 
     DEFAULT_VOICE = "af_heart"
 
-    def __init__(self, base_url: str = "http://host.docker.internal:8004"):
+    def __init__(self, base_url: str = "http://kokoro-tts:8004"):
         """Initialize.
 
         Args:
-            base_url: kokoro-tts service base URL. Defaults to host.docker.internal:8004
-                so an in-container flute-gateway reaches a host- or sibling-hosted service.
+            base_url: kokoro-tts service base URL. Defaults to the compose service
+                name (in-stack consumers reach it over the compose network). A
+                host-hosted service needs an explicit base_url — note that
+                host.docker.internal is NOT resolvable inside Linux containers
+                without an `--add-host host.docker.internal:host-gateway` entry.
         """
         super().__init__(base_url.rstrip("/"))
         self.synthesize_endpoint = f"{self.base_url}/synthesize"

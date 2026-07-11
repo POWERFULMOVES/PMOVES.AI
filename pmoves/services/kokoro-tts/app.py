@@ -39,6 +39,11 @@ MODEL_PATH = os.getenv("KOKORO_MODEL_PATH", os.path.join(MODEL_DIR, "kokoro-v1.0
 VOICES_PATH = os.getenv("KOKORO_VOICES_PATH", os.path.join(MODEL_DIR, "voices-v1.0.bin"))
 DEFAULT_VOICE = os.getenv("KOKORO_DEFAULT_VOICE", "af_heart")
 DEFAULT_LANG = os.getenv("KOKORO_DEFAULT_LANG", "en-us")
+# NOTE: the token must arrive as a LITERAL env var (secrets-funnel materializes
+# it). This server has no *_FILE support — the build context is this service dir
+# alone, so it can't import services.common.get_secret like the gateway-side
+# provider does. Distributing only KOKORO_TOKEN_FILE would leave the server
+# unauthenticated while the client believes auth is on.
 TOKEN = os.getenv("KOKORO_TOKEN", "")
 
 app = FastAPI(title="Kokoro CPU TTS", version="1.0.0")

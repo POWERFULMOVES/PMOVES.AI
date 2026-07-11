@@ -29,6 +29,14 @@ services:
       - KOKORO_DEFAULT_LANG=${KOKORO_DEFAULT_LANG:-en-us}
       # Cap CPU threads so a 4vCPU KVM stays responsive under other load.
       - OMP_NUM_THREADS=${KOKORO_THREADS:-2}
+    # Hard ceiling alongside the thread cap: co-located on kvm4 with
+    # voice-relay + cast-tts-gateway, so a synth storm or onnxruntime leak
+    # must not starve the siblings.
+    deploy:
+      resources:
+        limits:
+          cpus: ${KOKORO_CPUS:-2.0}
+          memory: ${KOKORO_MEM_LIMIT:-2G}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8004/healthz"]
       interval: 30s
