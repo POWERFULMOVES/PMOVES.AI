@@ -65,6 +65,23 @@ def test_gpu_engines_never_route_to_kvms(cap_data):
         )
 
 
+def test_all_nodes_exist_in_fleet_registries(cap_data):
+    """Every configured slug must be a real fleet node — operator_nodes.yaml
+    node_ids plus the CPU-only Hostinger KVMs. Guards against drift like
+    'b850' (hardware name) vs 'knuckles' (registry node_id): a slug matching
+    no registry means registry-fed resolution silently never routes there."""
+    op_path = Path(__file__).resolve().parents[3] / "config" / "operator_nodes.yaml"
+    with open(op_path, encoding="utf-8") as f:
+        op_data = yaml.safe_load(f)
+    known = {str(n["node_id"]) for n in op_data["nodes"]} | _KVM_NODES
+    for engine, row in cap_data["host_affinity"].items():
+        unknown = {str(n) for n in row["nodes"]} - known
+        assert not unknown, (
+            f"{engine}: node slugs {sorted(unknown)} match no fleet registry "
+            f"(operator_nodes.yaml node_ids + KVMs = {sorted(known)})"
+        )
+
+
 def test_all_node_ids_are_strings(cap_data):
     """Numeric slugs like 5090/4090 must be quoted — bare YAML ints break the
     str membership check in resolve_engine_host()."""

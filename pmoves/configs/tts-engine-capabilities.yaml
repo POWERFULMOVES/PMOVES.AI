@@ -625,9 +625,11 @@ service_runners:
 #                    on-node nvidia-smi; live now, so a real GPU fallback while
 #                    5090 stands up. The "GTX 1650" doc line was a DIFFERENT node),
 #              4090 (~16GB laptop — burst only, no heavy VRAM budget)
-#   ROCm GPU:  b850 "Knuckles" (dual R9700 64GB RDNA4) — AMD; most CUDA TTS
-#              engines don't run on ROCm unported, so b850 serves voice on CPU
-#              here (revisit if a ROCm TTS path is validated).
+#   ROCm GPU:  knuckles (B850 rig, dual R9700 64GB RDNA4) — AMD; most CUDA TTS
+#              engines don't run on ROCm unported, so knuckles serves voice on
+#              CPU here (revisit if a ROCm TTS path is validated). Slug MUST be
+#              "knuckles" per operator_nodes.yaml node_id — bare "b850" matches
+#              no fleet registry, so registry-fed resolution would skip the node.
 #
 # Design intent: only the two CPU-viable engines (kokoro, kitten_tts) route to
 # the KVMs — this is what makes "agents talking on GPU-less nodes" real (the
@@ -640,8 +642,8 @@ service_runners:
 # seed shape (one row per engine). Config is authoritative until that lands.
 host_affinity:
   # --- CPU-viable: run anywhere, preferred on a cheap KVM (agents-talking goal) ---
-  kitten_tts:   { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, b850, z890, "4090", spark], preferred: kvm4-2 }
-  kokoro:       { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, b850, z890, "4090", spark], preferred: kvm4-2 }
+  kitten_tts:   { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, knuckles, z890, "4090", spark], preferred: kvm4-2 }
+  kokoro:       { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, knuckles, z890, "4090", spark], preferred: kvm4-2 }
 
   # --- CUDA GPU engines: gated by VRAM. spark (128GB) + 5090 (32GB) are the
   #     primary hosts; z890 (3090 Ti 24GB, VERIFIED) is a live real-GPU fallback
