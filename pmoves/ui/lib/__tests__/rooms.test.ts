@@ -1,4 +1,11 @@
-import { getRoomConfigDir, loadRoom, loadRoomCatalog, loadRooms } from '../rooms';
+import {
+  getRoomConfigDir,
+  isPublicRoom,
+  loadPublicRooms,
+  loadRoom,
+  loadRoomCatalog,
+  loadRooms,
+} from '../rooms';
 
 describe('room catalog loader', () => {
   it('resolves the seeded room catalog directory', () => {
@@ -37,5 +44,45 @@ describe('room catalog loader', () => {
 
   it('returns null for unknown rooms', async () => {
     await expect(loadRoom('missing-room')).resolves.toBeNull();
+  });
+});
+
+describe('room visibility curation ("show rooms, not all")', () => {
+  it('every seeded manifest declares access.visibility explicitly', async () => {
+    const rooms = await loadRooms();
+    for (const room of rooms) {
+      expect(room.manifest.access?.visibility).toBeDefined();
+    }
+  });
+
+  it('the unauthenticated launcher lists only audience-facing rooms', async () => {
+    const publicRooms = await loadPublicRooms();
+    const publicIds = publicRooms.map((room) => room.room_id).sort();
+
+    expect(publicIds).toEqual(
+      expect.arrayContaining(['demo.room.rehearsal', 'fordham.room.community', 'tokenism.room.exchange'])
+    );
+
+    // Operator/control rooms must never surface publicly.
+    for (const hiddenId of [
+      '4090-field.room.control',
+      'z890-infra.room.fabric',
+      'hermes-agent.room.control',
+      '5090-kilocode.room.studio',
+      '5090-voice.room.studio',
+      'darkxsides.room',
+    ]) {
+      expect(publicIds).not.toContain(hiddenId);
+    }
+  });
+
+  it('isPublicRoom respects unlisted visibility even without owner_only', async () => {
+    const fieldRoom = await loadRoom('4090-field.room.control');
+    expect(fieldRoom).toBeDefined();
+    expect(isPublicRoom(fieldRoom!)).toBe(false);
+
+    const demoRoom = await loadRoom('demo.room.rehearsal');
+    expect(demoRoom).toBeDefined();
+    expect(isPublicRoom(demoRoom!)).toBe(true);
   });
 });

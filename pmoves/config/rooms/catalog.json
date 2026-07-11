@@ -64,6 +64,14 @@
       "display_name": "DARKXSIDES",
       "manifest": "darkxsides.room.json",
       "summary": "Private, owner-only persona room (co-creator + witness -> eventual digital twin). Uncensored/unrestricted authentic expression; houses the dedicated publish-gate surfaced in Open Notebook, with a fail-closed public-egress redaction floor."
+    },
+    {
+      "room_id": "tokenism.room.exchange",
+      "agent_id": "5090-claude",
+      "alter": "5090-tokenism",
+      "display_name": "ToKenism Exchange",
+      "manifest": "tokenism.room.exchange.json",
+      "summary": "Token-economy simulation floor: business-idea scenarios in the ToKenism simulator, exported to the PMOVES-Wealth ledger. Public face of the L5 Economics layer."
     }
   ]
 }
