@@ -11,13 +11,17 @@ CHIT_MANIFEST_SOURCE ?= pmoves/chit/secrets_manifest_v2.yaml
 CHIT_MANIFEST_DEST ?= pmoves/chit/secrets_manifest.yaml
 SECRETS_ALLOW_MISSING ?= 1
 SECRETS_FUNNEL_BOOT_USER ?= 0
-ifeq ($(OS),Windows_NT)
-CODEX_PY ?= py -3
-else
-CODEX_PY ?= $(PYTHON)
-endif
 CODEX_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 CODEX_VENV_UNIX ?= .venv-pmoves/bin/python
+# Prefer the project venv when it exists — the bare interpreter routinely
+# lacks pyyaml, which fails secrets-funnel-sync/secrets_sync.py on otherwise
+# healthy nodes (recurring papercut: Knuckles 2026-07-02, -10, -11). The
+# fallback interpreter is only for nodes that never bootstrapped the venv.
+ifeq ($(OS),Windows_NT)
+CODEX_PY ?= $(if $(wildcard $(CODEX_VENV_WIN)),$(CODEX_VENV_WIN),py -3)
+else
+CODEX_PY ?= $(if $(wildcard $(CODEX_VENV_UNIX)),$(CODEX_VENV_UNIX),$(PYTHON))
+endif
 
 ifeq ($(CHIT_NO_CLEARTEXT),1)
 CHIT_ENCODE_FLAGS := --no-cleartext
