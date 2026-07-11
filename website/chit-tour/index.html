@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>CHIT — A Visual Tour of the PMOVES.AI Geometric Information Layer</title>
+  <meta name="description" content="An interactive, source-grounded visual explainer for CHIT, the Geometry Bus, the MOF architecture, and the PMOVES Agent Taxonomy." />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='none' stroke='%237C3AED' stroke-width='2'/><circle cx='16' cy='16' r='6' fill='%237C3AED'/><circle cx='25' cy='10' r='2.5' fill='%230D9488'/></svg>" />
+  <script src="vendor/d3.v7.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" aria-label="Section navigation">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-label="CHIT logo">
+        <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".4"/>
+        <circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="16" cy="16" r="2.4" fill="currentColor"/>
+        <circle cx="25.5" cy="10" r="1.8" fill="var(--accent, #0D9488)"/>
+        <line x1="16" y1="16" x2="25.5" y2="10" stroke="currentColor" stroke-width="1" opacity=".5"/>
+      </svg>
+      <div>
+        <div class="brand-name">CHIT</div>
+        <div class="brand-sub">PMOVES.AI · visual tour</div>
+      </div>
+    </div>
+
+    <nav><ol class="nav" id="nav">
+      <li><a data-target="overview" class="active"><span class="num">01</span> Overview</a></li>
+      <li><a data-target="what-is"><span class="num">02</span> What is CHIT</a></li>
+      <li><a data-target="pillars"><span class="num">03</span> Five Pillars</a></li>
+      <li><a data-target="bus"><span class="num">04</span> Geometry Bus</a></li>
+      <li><a data-target="mof"><span class="num">05</span> MOF Architecture</a></li>
+      <li><a data-target="taxonomy"><span class="num">06</span> Agent Taxonomy</a></li>
+      <li><a data-target="evolution"><span class="num">07</span> Evolution &amp; Layers</a></li>
+      <li><a data-target="poincare"><span class="num">08</span> Poincaré Disk</a></li>
+      <li><a data-target="skills"><span class="num">09</span> Skills</a></li>
+      <li><a data-target="tokenomics"><span class="num">10</span> Tokenomics</a></li>
+      <li><a data-target="tour"><span class="num">11</span> The Tour</a></li>
+      <li><a data-target="coverage"><span class="num">12</span> Source Coverage</a></li>
+    </ol></nav>
+
+    <div class="sidebar-footer">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span id="theme-label">Light theme</span>
+      </button>
+      <a class="repo-link" href="https://github.com/POWERFULMOVES/PMOVES.AI" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.18a10.95 10.95 0 0 1 5.74 0c2.19-1.49 3.15-1.18 3.15-1.18.62 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.68.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+        <span>POWERFULMOVES/PMOVES.AI</span>
+      </a>
+    </div>
+  </aside>
+
+  <main>
+    <!-- ===== HERO / OVERVIEW ===== -->
+    <header id="overview" class="hero">
+      <div class="hero-inner">
+        <div class="eyebrow">A source-grounded visual explainer</div>
+        <h1>CHIT is the <em>organic linker</em><br/>of the PMOVES.AI Metal-Organic Framework.</h1>
+        <p class="lede">
+          PMOVES.AI describes itself as a <span class="hl">Metal-Organic Framework for distributed machine intelligence</span>.
+          Inside that framework, <span class="hl">CHIT</span> — <em>Cymatic Holographic Information Theory</em> — describes meaning as geometry rather than token streams. The same letters name a second, lower-level sense: <em>Compressed Hierarchical Information Transfer</em>, the signing mechanism that stamps every adopted skill (see §02). Together they bind the lattice of agents into a self-stabilizing whole. This dashboard is a tour through the docs that define it.
+        </p>
+        <div class="pillrow">
+          <span class="pill"><span class="dot"></span> chit.cgp.v1.0 — production CGP spec</span>
+          <span class="pill amber"><span class="dot"></span> 76 agents · 4 classes · 7 types</span>
+          <span class="pill"><span class="dot"></span> 7 layers (L0–L5 + L2.5) · 5 canonical planes</span>
+          <span class="pill amber"><span class="dot"></span> Built from <span class="mono u-ml-4">PMOVESCHIT/*</span> + <span class="mono">AGENTS/*</span></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===== KPI strip ===== -->
+    <section class="section" aria-label="At a glance">
+      <div class="kpi-strip">
+        <div class="kpi"><div class="label">Five Pillars</div><div class="value">5<small>math foundations</small></div></div>
+        <div class="kpi"><div class="label">Agent Classes</div><div class="value">4<small>by prefix</small></div></div>
+        <div class="kpi"><div class="label">Service Types</div><div class="value">7<small>tiers</small></div></div>
+        <div class="kpi"><div class="label">Stack Layers</div><div class="value">L0–L5<small>+ L2.5</small></div></div>
+        <div class="kpi"><div class="label">Agents (registry)</div><div class="value">76<small>taxonomy v1.5.0</small></div></div>
+      </div>
+    </section>
+
+    <!-- ===== WHAT IS CHIT ===== -->
+    <section id="what-is" class="section">
+      <div class="eyebrow">02 · Definition</div>
+      <h2>What CHIT is, in one paragraph</h2>
+      <p class="lede">
+        CHIT — <em>Cymatic Holographic Information Theory</em> — describes meaning as <span class="hl">geometry</span> instead of long token streams; its sibling sense, <em>Compressed Hierarchical Information Transfer</em>, is the signing mechanism that stamps each packet.
+        A small "shape packet" — the <span class="mono">CGP</span> — carries the directions, densities, and hierarchies of a thought.
+        Given a shared embedding model and codebook, the receiver reconstructs the meaning from the shape alone.
+        Less ambiguity, less context drift, fewer tokens per message.
+      </p>
+
+      <div class="grid c3">
+        <div class="card">
+          <div class="meta">Encoding</div>
+          <h3>Embed → Harvest → Measure → Package</h3>
+          <p>Run every unit through an embedding model. The CHR (Constellation Harvest Regularization) algorithm discovers K anchor directions and assigns each point. For each constellation, project all points onto the anchor and bin into a histogram — the spectrum.</p>
+          <a class="src" target="_blank" rel="noopener" data-src="whatIsChit"></a>
+        </div>
+        <div class="card">
+          <div class="meta">Wire format</div>
+          <h3>The CGP packet</h3>
+          <p><span class="mono">super_nodes[]</span> ▸ <span class="mono">constellations[]</span> with <span class="mono">anchor</span> (direction), <span class="mono">spectrum</span> (energy), <span class="mono">radial_minmax</span> (range), and optional <span class="mono">points[]</span>. Production version is <span class="mono">chit.cgp.v1.0</span>.</p>
+          <a class="src" target="_blank" rel="noopener" data-src="cgpSpec"></a>
+        </div>
+        <div class="card">
+          <div class="meta">Decoding</div>
+          <h3>Exact &amp; geometry-only modes</h3>
+          <p>If raw text rides inside <span class="mono">points[].text</span>, the decoder reads it. Otherwise, it projects every codebook entry onto the anchor, matches the resulting distribution to the spectrum, and returns the best matches — the shape alone is enough.</p>
+          <a class="src" target="_blank" rel="noopener" data-src="whatIsChit"></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PILLARS ===== -->
+    <section id="pillars" class="section">
+      <div class="eyebrow">03 · Mathematical foundations</div>
+      <h2>Five pillars hold up CHIT</h2>
+      <p class="lede">You don't need the math to use CHIT, but each pillar exists in code and is independently auditable. Hover for the reference implementation path.</p>
+      <div class="grid c3" id="pillars-grid"></div>
+    </section>
+
+    <!-- ===== GEOMETRY BUS ===== -->
+    <section id="bus" class="section">
+      <div class="eyebrow">04 · How CHIT moves</div>
+      <h2>The Geometry Bus</h2>
+      <p class="lede">
+        CGPs ride NATS JetStream on the <span class="mono">GEOMETRY_CGP</span> stream — at-least-once delivery with 30 days of replay.
+        Producers publish to <span class="mono">tokenism.cgp.ready.v1</span>; consumers subscribe and react.
+        ShapeStore is both consumer and persistence: it ingests every CGP, computes a Shape ID (truncated SHA-256), and writes it to disk.
+        <span class="hl">Drag a node to explore.</span>
+      </p>
+
+      <div class="viz-card u-mb-24">
+        <div class="viz-head">
+          <h3>Producers ▸ NATS ▸ Consumers</h3>
+          <div class="legend" id="bus-legend"></div>
+        </div>
+        <div class="viz-body">
+          <svg id="bus-graph" viewBox="0 0 1200 560" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Force-directed graph of the Geometry Bus topology"></svg>
+        </div>
+      </div>
+
+      <h3 class="u-h-sub-a">Key NATS subjects</h3>
+      <table class="table" id="nats-table">
+        <thead><tr><th>Subject</th><th>Direction</th><th>Purpose</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ===== MOF ARCHITECTURE ===== -->
+    <section id="mof" class="section">
+      <div class="eyebrow">05 · The grand metaphor</div>
+      <h2>PMOVES is a Metal-Organic Framework</h2>
+      <p class="lede">
+        Six PMOVES subsystems map one-to-one onto MOF structural elements.
+        The framework's <span class="hl">crystalline lattice</span> (Agent Zero) is bound by an
+        <span class="hl">organic linker</span> (CHIT) into a porous structure through which agents flow,
+        adsorb peer execution patterns, and desorb when conditions change.
+        Source: <span class="mono">PMOVES_MOF_ARCHITECTURE.md</span>, v1.0.0.
+      </p>
+
+      <div class="mof-stack" id="mof-stack"></div>
+
+      <h3 class="u-h-sub-36">Seven design principles</h3>
+      <div class="grid c4" id="principles-grid"></div>
+
+      <div class="card card-primary-tint">
+        <div class="meta">The gap-size formula</div>
+        <h3 class="u-font-mono">narrowing_gap × 0.5 → flow_resistance × 0.25 → skill_transfer × 4.0</h3>
+        <p>
+          Halve the context distance between agents → flow resistance drops by a factor of four → skill transfer per cycle quadruples.
+          This is why investing in shared observability for small models yields disproportionate returns.
+        </p>
+        <a class="src" target="_blank" rel="noopener" data-src="mof"></a>
+      </div>
+    </section>
+
+    <!-- ===== AGENT TAXONOMY ===== -->
+    <section id="taxonomy" class="section">
+      <div class="eyebrow">06 · The roster</div>
+      <h2>Agent Taxonomy: classes, types, planes</h2>
+      <p class="lede">
+        Agents are named by prefix (class) and behave by service type. Like Pokémon, every agent has a primary type and an optional secondary type
+        that produces synergies through NATS. The five canonical planes — Control, Context, Execution, Observation, Safety —
+        determine what an agent <em>does</em>; the layers L0–L5 determine how deep it reaches.
+      </p>
+
+      <h3 class="u-h-sub-8">Four classes</h3>
+      <div class="grid c4 u-mb-36" id="classes-grid"></div>
+
+      <h3 class="u-h-sub-8">Seven service types</h3>
+      <div class="grid c4 u-mb-24" id="types-grid"></div>
+
+      <h3 class="u-h-sub-32">Roster (subset of 76 agents)</h3>
+      <table class="table" id="roster-table">
+        <thead><tr><th>Agent</th><th>Class</th><th>Primary</th><th>Secondary</th><th>Tier</th><th>Stage</th><th>Layers</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h3 class="u-h-sub-32">Five canonical planes</h3>
+      <table class="table" id="planes-table">
+        <thead><tr><th>Plane</th><th>Function</th><th>Active agents</th><th>Layers</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ===== EVOLUTION & LAYERS ===== -->
+    <section id="evolution" class="section">
+      <div class="eyebrow">07 · How agents level up</div>
+      <h2>Evolution &amp; the layer stack</h2>
+      <p class="lede">
+        Agents evolve by gaining layer coverage, CHIT integration, and NATS connectivity. Evolution is not linear — agents can gain capabilities in any order.
+      </p>
+
+      <div class="grid c2 u-mb-24">
+        <div class="viz-card">
+          <div class="viz-head"><h3>Layer stack (L0–L5)</h3></div>
+          <table class="table" id="layers-table">
+            <thead><tr><th>Layer</th><th>Name</th><th>Description</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="viz-card">
+          <div class="viz-head"><h3>Evolution stages</h3></div>
+          <table class="table" id="stages-table">
+            <thead><tr><th>Stage</th><th>Requirements</th><th>Example</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== POINCARE DISK ===== -->
+    <section id="poincare" class="section">
+      <div class="eyebrow">08 · Hierarchical capacity</div>
+      <h2>Why hyperbolic? The Poincaré disk</h2>
+      <p class="lede">
+        Pillar 2 of CHIT is hyperbolic geometry with curvature <span class="mono">K = −1</span>. Distance grows exponentially toward the boundary,
+        giving <span class="mono">O(log n)</span> tree distortion — a natural fit for the agent taxonomy and for nested CHIT constellations.
+        This disk renders 76 agents grouped by class, illustrating the kind of layout
+        <span class="mono">Pmoves-hyperdimensions</span> produces in production.
+      </p>
+
+      <div class="viz-card">
+        <div class="viz-head">
+          <h3>Poincaré disk · 76 agents grouped by class</h3>
+          <div class="legend">
+            <span class="u-c-legendary">● Legendary</span>
+            <span class="u-c-standard">● Standard</span>
+            <span class="u-c-specialized">● Specialized</span>
+            <span class="u-c-utility">● Utility</span>
+          </div>
+        </div>
+        <div class="viz-body">
+          <canvas id="poincare-canvas"></canvas>
+        </div>
+      </div>
+      <p class="u-caption u-mt-10">
+        ▸ source: pmoves/docs/PMOVESCHIT/01_WHAT_IS_CHIT.md (Pillar 2) · pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md (76 agents v1.5.0)
+      </p>
+    </section>
+
+    <!-- ===== SKILLS ===== -->
+    <section id="skills" class="section">
+      <div class="eyebrow">09 · How operators work the framework</div>
+      <h2>Skill bundles</h2>
+      <p class="lede">
+        Five named skills define the standard operator workflow. Operators prefer
+        <span class="kbd">open-chat+scout</span> while requirements are uncertain, then switch to
+        <span class="kbd">focus</span> for implementation and validation. Never finalize without concrete command evidence.
+      </p>
+      <div class="grid c3" id="skills-grid"></div>
+    </section>
+
+    <!-- ===== TOKENOMICS ===== -->
+    <section id="tokenomics" class="section">
+      <div class="eyebrow">10 · CHIT as the economic coordination layer</div>
+      <h2>Tokenomics: where the geometry pays off</h2>
+      <p class="lede">
+        CHIT is a coordination protocol — and coordination has a unit economics. The PMOVES projection bundle
+        models five-year cumulative profit, breakeven, scenario expected value, and Docker-style container
+        replication for community micro-businesses that ride on the same
+        <span class="mono">tokenism.cgp.*</span> NATS subjects as the rest of the framework.
+        Below: four projection lenses, each grounded in a single CSV in the
+        <span class="mono">CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections</span> directory.
+      </p>
+
+      <!-- KPI strip from the rolled-up 5Y / community projections -->
+      <div class="kpi-strip toke-kpis-4" id="toke-kpis"></div>
+
+      <!-- 5Y cumulative profit -->
+      <div class="viz-card u-mb-24">
+        <div class="viz-head">
+          <h3>Cumulative net profit, 2025 – 2029 · per business archetype</h3>
+          <div class="legend" id="toke-cum-legend"></div>
+        </div>
+        <div class="viz-body">
+          <svg id="toke-cumulative" viewBox="0 0 1200 460" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Line chart of cumulative net profit per business model 2025 to 2029"></svg>
+        </div>
+        <div class="viz-foot">
+          <span>▸ source: <a class="src" target="_blank" rel="noopener" data-src="tokenomicsProjections"></a></span>
+          <span class="mono">success_prob shown as a dashed envelope around each line</span>
+        </div>
+      </div>
+
+      <!-- Breakeven (horizontal range bars) + Scenario expected value (small multiples) -->
+      <div class="grid c2 u-mb-24">
+        <div class="viz-card">
+          <div class="viz-head"><h3>Months to breakeven · optimistic → conservative</h3></div>
+          <div class="viz-body">
+            <svg id="toke-breakeven" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Range chart of breakeven months for each business model"></svg>
+          </div>
+          <div class="viz-foot">
+            <span>▸ source: <a class="src" target="_blank" rel="noopener" data-src="tokenomicsBreakeven"></a></span>
+          </div>
+        </div>
+        <div class="viz-card">
+          <div class="viz-head"><h3>Risk-weighted expected value · per scenario</h3></div>
+          <div class="viz-body">
+            <svg id="toke-scenarios" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Stacked bars of scenario expected value per business model"></svg>
+          </div>
+          <div class="viz-foot">
+            <span>▸ source: <a class="src" target="_blank" rel="noopener" data-src="tokenomicsScenarios"></a></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Docker container scaling -->
+      <div class="viz-card u-mb-24">
+        <div class="viz-head">
+          <h3>Container ROI vs. replication scale · the Docker-style argument</h3>
+          <div class="legend" id="toke-container-legend"></div>
+        </div>
+        <div class="viz-body">
+          <svg id="toke-containers" viewBox="0 0 1200 380" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Line chart of ROI percent vs replication scale per container type"></svg>
+        </div>
+        <div class="viz-foot">
+          <span>▸ source: <a class="src" target="_blank" rel="noopener" data-src="containerScaling"></a></span>
+          <span class="mono">scale = number of identical container instances (1×, 3×, 5×, 10×)</span>
+        </div>
+      </div>
+
+      <!-- Community impact -->
+      <h3 class="u-h-sub-28">Community economic impact · three participation rates</h3>
+      <table class="table" id="toke-community-table">
+        <thead><tr><th>Scenario</th><th class="num">Participants</th><th class="num">Total invest</th><th class="num">Annual income lift</th><th class="num">×Multiplier</th><th class="num">Total impact</th><th class="num">Community ROI</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="u-caption u-mt-8">
+        ▸ source: <a class="src" target="_blank" rel="noopener" data-src="communityImpact"></a>
+      </p>
+
+      <!-- CHIT linkage -->
+      <h3 class="u-h-sub-36">Where CHIT plugs into the unit economics</h3>
+      <p class="lede u-mb-14">
+        Each tokenomics primitive maps to a specific CHIT pillar and a NATS subject already in production on the
+        Geometry Bus. CHIT is what turns four independent projection spreadsheets into a single,
+        signed, replicable economic protocol.
+      </p>
+      <table class="table" id="toke-link-table">
+        <thead><tr><th>Tokenomics primitive</th><th>CHIT role</th><th>Carrier</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <!-- Phase rollout + assumptions -->
+      <div class="grid c2 u-mt-28">
+        <div>
+          <h3 class="u-h-sub-top">Implementation phases · 24-month rollout</h3>
+          <table class="table" id="toke-phases-table">
+            <thead><tr><th>Phase</th><th>Lead container</th><th class="num">Invest</th><th class="num">Cumulative</th><th class="num">Residents</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="u-caption u-mt-8">
+            ▸ source: <a class="src" target="_blank" rel="noopener" data-src="implPhases"></a>
+          </p>
+        </div>
+        <div class="card card-accent-tint">
+          <div class="meta">Assumptions &amp; caveats</div>
+          <h3 class="u-font-grotesk">What the projections do <em>not</em> say</h3>
+          <ul class="u-caveat-list">
+            <li>The projections are <b>model-derived</b>, not booked revenue. Treat them as upper-bound capacity, not forecasts.</li>
+            <li>Four "community-token" archetypes (Pre-Order, Creative, Local Food, AI Tutoring, Digital Art, Urban Ag) share the <b>identical</b> 5-year curve in the source CSV. Charts collapse them into a single line; the duplication is a property of the source data.</li>
+            <li>Success probability is a single static value per model — there is no Monte Carlo distribution in the source CSVs.</li>
+            <li>The 2.24× local multiplier in the community-impact table is <b>assumed constant</b> across participation rates. It is not derived per-row.</li>
+            <li>No discount rate is applied to cumulative profit — figures are nominal dollars.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TOUR ===== -->
+    <section id="tour" class="section">
+      <div class="eyebrow">11 · End-to-end narrative</div>
+      <h2>The ten-step tour</h2>
+      <p class="lede">A linear walkthrough that ties every piece together — from "information has shape" to "the framework is the intelligence."</p>
+      <div class="tour" id="tour-list"></div>
+    </section>
+
+    <!-- ===== COVERAGE ===== -->
+    <section id="coverage" class="section">
+      <div class="coverage" id="coverage-section">
+        <div class="eyebrow">12 · Provenance</div>
+        <h2>Source coverage &amp; assumptions <span class="badge">Read me</span></h2>
+        <p class="lede u-mt-10">
+          Every claim in this dashboard is grounded in a specific repo file. Where the docs are silent, we say so here rather than fill the gap.
+        </p>
+        <ol id="coverage-list"></ol>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div>Built from <a href="https://github.com/POWERFULMOVES/PMOVES.AI" target="_blank" rel="noopener">POWERFULMOVES/PMOVES.AI</a> documentation. The framework is the intelligence.</div>
+    </footer>
+  </main>
+</div>
+
+<div class="tip" id="tooltip" role="status" aria-live="polite"></div>
+
+<script src="data.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
