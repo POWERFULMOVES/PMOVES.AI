@@ -7,6 +7,9 @@
   "alter": "5090-kilocode",
   "room_type": "builder",
   "owner_mode": "shared",
+  "access": {
+    "visibility": "unlisted"
+  },
   "shell": {
     "theme": {
       "theme_id": "kilocode-glm",
