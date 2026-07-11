@@ -2686,11 +2686,18 @@ voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Vo
 
 up-voice: ## Start voice stack: Flute-Gateway + VibeVoice CPU fallback + Voice-Relay
 	@echo "Starting voice stack (Flute + VibeVoice + Voice-Relay)..."
+# --profile supabase-local must stay UNCONDITIONAL (also in SUPABASE_RUNTIME=cli):
+# --profile media enables cast-tts-gateway, whose depends_on needs supabase-kong
+# DEFINED or the whole parse fails ("invalid compose project"). Defining is not
+# starting: `up -d <named>` starts only the named services + their depends_on
+# closure ({flute-gateway, vibevoice, voice-relay, nats}), so no supabase
+# containers spawn alongside a CLI supabase stack.
 	@docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) \
 		-f docker-compose.base.yml \
+		-f docker-compose.core.yml \
 		-f docker-compose.media.yml \
 		-f docker-compose.voice.yml \
-		--profile media --profile voice \
+		--profile supabase-local --profile media --profile voice \
 		up -d flute-gateway vibevoice voice-relay
 	@echo ""
 	@$(MAKE) --no-print-directory voice-health
