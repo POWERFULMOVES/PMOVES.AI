@@ -24,12 +24,14 @@ CHIT (Compressed Hierarchical Information Transfer) is PMOVES' cryptographic sig
 ### 1. Set Your Passphrase
 
 ```bash
-# Required for signing (export in your shell)
+# Required for signed entries (export in your current shell only)
 export CHIT_PASSPHRASE="your-secret-passphrase"
-
-# Or set persistently (dev only - not for production!)
-echo 'export CHIT_PASSPHRASE="your-passphrase"' >> ~/.bashrc
 ```
+
+Do **not** persist the passphrase to `~/.bashrc` or any file. If it is unset,
+`sign-trail` still records the entry **unsigned** — repo policy is "signing is
+optional locally"; production passphrases are operator-held (voice-activated),
+never stored on disk.
 
 ### 2. Sign a Trail Entry
 
@@ -39,15 +41,23 @@ After completing work (code changes, documentation, infrastructure):
 make -C pmoves sign-trail \
   SUMMARY="Fixed CHIT verification in Consciousness service" \
   AGENT="B850-CLAUDE" \
-  BRANCH="feat/p0-chit-completion" \
-  PR="[2073]"
+  PHASE="P0 CHIT Completion"
 ```
+
+The target accepts `AGENT`, `SUMMARY`, `PHASE`, and `ARGS` (extra flags passed
+through to `pmoves/tools/sign_trail.py`, e.g. `ARGS='--alter ... --resonance ...'`).
+Branch/PR context belongs in your register entry (see Patterns below), not in
+make variables — unknown variables are silently ignored.
 
 This:
 1. Creates a CHIT payload with your metadata
-2. Signs it with your passphrase
-3. Appends to `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+2. Signs it with your passphrase (or records it unsigned when none is set)
+3. Writes the signed payload to `pmoves/docs/logs/graphiti_signed_latest.json`
 4. Emits to NATS `chit.signed.v1` (when wired)
+
+Note: `sign-trail` does **not** append to `AGNOTE4482PHI.t1.md` — the Active
+Claim Register entry is written separately (manually or via the
+`pmoves-chit-sign` skill), referencing the signature.
 
 ### 3. Sign Before Merging
 
@@ -56,21 +66,21 @@ Always sign before creating a PR or merging to main:
 ```bash
 # After committing changes
 make -C pmoves sign-trail \
-  SUMMARY="Completed CHIT signing for Evo Controller" \
+  SUMMARY="Completed CHIT signing for Evo Controller - ready for review" \
   AGENT="B850-CLAUDE" \
-  BRANCH="feat/p0-chit-completion" \
-  STATUS="ready-for-review"
+  PHASE="P0 CHIT Completion"
 ```
 
-### 4. Verify a Signature
+### 4. Verify a CGP Packet
 
-To verify someone else's signed entry:
+To validate a CHIT Geometry Packet (e.g. a handoff artifact):
 
 ```bash
-make -C pmoves chit-verify \
-  AGENT="Z890-CLAUDE" \
-  SIGNATURE="<signature-from-trail>"
+python -m pmoves.tools.chit_security_validator path/to/packet.cgp.json --strict
 ```
+
+Programmatic signature verification lives in `pmoves.tools.chit_security`
+(`verify_cgp(cgp, passphrase)`).
 
 ---
 
@@ -140,8 +150,7 @@ git commit -m "fix(consciousness): add CHIT signing verification"
 # 2. Sign trail
 make -C pmoves sign-trail \
   SUMMARY="Added CHIT verification to Consciousness health endpoint" \
-  AGENT="B850-CLAUDE" \
-  BRANCH="fix/consciousness-chit"
+  AGENT="B850-CLAUDE"
 
 # 3. Create PR
 gh pr create --title "fix(consciousness): CHIT verification" \
@@ -162,9 +171,7 @@ make -C pmoves test
 make -C pmoves sign-trail \
   SUMMARY="Evo Controller CHIT signing complete - implementation, tests, docs" \
   AGENT="B850-CLAUDE" \
-  BRANCH="feat/p0-chit-completion" \
-  PR="[2073]" \
-  SCOPE="Consciousness CHIT, Evo CHIT, verification tests"
+  PHASE="P0 CHIT Completion"
 
 # 4. Create draft PR for review
 gh pr create --draft --title "feat(p0): CHIT Completion - Consciousness/Evo"
@@ -184,8 +191,7 @@ make -C pmoves up
 make -C pmoves sign-trail \
   SUMMARY="Added CHIT verification to Gateway service compose config" \
   AGENT="B850-CLAUDE" \
-  BRANCH="infra/chit-gateway" \
-  SCOPE="docker-compose, gateway service"
+  PHASE="infra"
 ```
 
 ---
@@ -196,8 +202,9 @@ make -C pmoves sign-trail \
 
 ```bash
 export CHIT_PASSPHRASE="your-passphrase"
-# Or use unsigned mode for dev (not production!)
-make -C pmoves sign-trail SUMMARY="..." AGENT="..." UNSIGNED=true
+# Or just run without it — entries are recorded unsigned in local dev
+# (repo policy: "signing is optional locally"; required in production)
+make -C pmoves sign-trail SUMMARY="..." AGENT="..."
 ```
 
 ### "Signature verification failed"
@@ -208,8 +215,8 @@ Possible causes:
 3. Clock skew between systems
 
 ```bash
-# Check your signature
-make -C pmoves chit-verify SIGNATURE="<your-sig>"
+# Validate the CGP packet carrying the signature
+python -m pmoves.tools.chit_security_validator path/to/packet.cgp.json --strict
 
 # Re-sign with correct passphrase
 export CHIT_PASSPHRASE="correct-passphrase"
@@ -227,8 +234,8 @@ File is locked by another agent:
 
 NATS connection issue:
 ```bash
-# Check NATS health
-curl -s http://localhost:4222/varz | jq '.server_id'
+# Check NATS health (monitoring port 8222; 4222 is the client protocol port)
+curl -s http://localhost:8222/varz | jq '.server_id'
 
 # Verify credentials
 echo $NATS_URL  # Should be nats://user:pass@host:port
@@ -243,7 +250,7 @@ echo $NATS_URL  # Should be nats://user:pass@host:port
 | Target | Purpose |
 |--------|---------|
 | `make -C pmoves sign-trail` | Sign a trail entry |
-| `make -C pmoves chit-verify` | Verify a signature |
+| `python -m pmoves.tools.chit_security_validator <cgp.json> --strict` | Validate/verify a CGP packet |
 | `make -C pmoves chit-export` | Export secrets as CGP |
 | `make -C pmoves chit-manifest-sync` | Sync v1 manifest from v2 |
 | `make -C pmoves secrets-funnel` | Run full secrets pipeline |
@@ -338,13 +345,13 @@ CHIT is the "self-stabilizing equilibrium" — closed-loop correction through:
 
 ```bash
 # Sign a trail entry
-make -C pmoves sign-trail SUMMARY="..." AGENT="..." BRANCH="..."
+make -C pmoves sign-trail SUMMARY="..." AGENT="..." PHASE="..."
 
 # Export secrets securely
 make -C pmoves chit-export CHIT_NO_CLEARTEXT=1
 
-# Verify a signature
-make -C pmoves chit-verify SIGNATURE="..."
+# Validate a CGP packet (signature check included)
+python -m pmoves.tools.chit_security_validator packet.cgp.json --strict
 
 # Decode CHIT packet
 python -m pmoves.tools.chit_decode_secrets --cgp packet.json
