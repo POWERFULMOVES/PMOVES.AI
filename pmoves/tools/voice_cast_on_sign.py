@@ -15,14 +15,22 @@ Pipeline per message:
     2. ``text = payload["summary"]`` (already <=200 chars per sign_trail.py).
     3. ``voice_persona_bridge.resolve(payload)`` -> intent + persona_id
        (FlOO$ suit mapping, e.g. mr-clean -> dramatic/chatterbox).
-    4. Deterministic health check against Flute-Gateway; if the expressive
-       engines are unavailable, fall back to intent="narrate" (kokoro CPU
-       floor) so the pipeline stays audible even without GPU.
-    5. POST to Flute-Gateway ``/v1/voice/synthesize/audio`` -> WAV bytes.
+    4. Deterministic health check against Flute-Gateway. If it's unreachable,
+       OR reachable but no expressive provider (ultimate_tts/omnivoice) is
+       healthy, fall back to the STANDALONE Kokoro CPU-floor deploy unit
+       (``pmoves/services/kokoro-tts``, #2024) at ``KOKORO_URL`` -- a
+       genuinely independent process, not a route through the same
+       Flute-Gateway/ultimate_tts stack that just failed (5090-CLAUDE
+       pair-review PR #2048, finding #4).
+    5. POST to Flute-Gateway ``/v1/voice/synthesize/audio`` (expressive path)
+       or the Kokoro deploy unit's ``POST /synthesize`` (CPU-floor path) ->
+       WAV bytes.
     6. Optional ffmpeg atempo tempo recovery (bpm/tempo field or
        intent=bpm_sync) -- expressive engines lack native tempo control.
     7. Write ``pmoves/out/voice_cast_<ts>.wav`` and attempt host playback
-       (both best-effort; never crash the daemon).
+       (both best-effort; never crash the daemon). The intermediate
+       ``*_tempo.wav`` (if tempo recovery ran) is cleaned up after playback;
+       the primary cast WAV is left in place (gitignored ``/out/``).
 
 Modeled on ``pmoves/tools/voice_follow_cast_agent.py`` (NATS URL resolution,
 subscribe/handler/daemon-loop structure).
@@ -30,9 +38,16 @@ subscribe/handler/daemon-loop structure).
 CLI:
     python pmoves/tools/voice_cast_on_sign.py --subjects agent.graphiti.signed.v1
 
-Config via env:
-    NATS_URL / VOICE_CAST_NATS_URL -- NATS connection URL
+Config via env (see VOICE_CAST_ON_SIGN.md for the full reference):
+    NATS_URL / VOICE_CAST_NATS_URL -- NATS connection URL (host default:
+                                       localhost -- the Docker-internal `nats`
+                                       hostname only resolves inside the
+                                       compose network; containers should pass
+                                       NATS_URL explicitly)
     FLUTE_GATEWAY_URL              -- default http://localhost:8055
+    FLUTE_API_KEY                  -- X-API-Key for the Flute-Gateway synth endpoint
+    KOKORO_URL                     -- standalone Kokoro CPU-floor unit, default http://localhost:8004
+    KOKORO_TOKEN                   -- X-Kokoro-Token for the Kokoro unit (optional)
 """
 
 from __future__ import annotations
@@ -45,6 +60,7 @@ import shutil
 import subprocess
 import sys
 import time
+import wave
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -62,8 +78,14 @@ _PMOVES_ROOT = _TOOLS_DIR.parent
 _OUT_DIR = _PMOVES_ROOT / "out"
 
 DEFAULT_SUBJECTS = ["agent.graphiti.signed.v1"]  # raw signature.v1 subject, NOT the multi-consumer chit.signed.v1
-DEFAULT_NATS_URL = "nats://nats:pmoves@nats:4222"
+# Host default -- this daemon is designed to run on the host (see module docstring),
+# and the Docker-internal hostname `nats` only resolves inside the compose network
+# (fails opaquely from a host shell). Containers running this inside the compose
+# network must pass NATS_URL=nats://nats:pmoves@nats:4222 explicitly (5090-CLAUDE
+# pair-review PR #2048, finding #6).
+DEFAULT_NATS_URL = "nats://nats:pmoves@localhost:4222"
 FALLBACK_INTENT = "narrate"  # kokoro CPU floor -- always available without GPU
+DEFAULT_KOKORO_URL = "http://localhost:8004"  # standalone Kokoro CPU-floor deploy unit (#2024)
 # Baseline tempo reference (BPM "moderato"/phrase level per shift-from-bpm skill).
 _BPM_BASELINE = 120.0
 _ATEMPO_MIN, _ATEMPO_MAX = 0.5, 2.0
@@ -77,7 +99,8 @@ def _env(name: str, default: str) -> str:
 def _resolve_nats_url() -> str:
     """Resolve NATS URL for host-run service.
 
-    Handles Docker-internal URLs by translating them to host-accessible URLs.
+    Handles Docker-internal URLs by translating them to host-accessible URLs
+    (DEFAULT_NATS_URL now targets localhost -- see the constant's comment).
     Same pattern as ``voice_follow_cast_agent._resolve_nats_url()``.
     """
     explicit = os.getenv("VOICE_CAST_NATS_URL")
@@ -155,8 +178,32 @@ def _apply_atempo(in_path: Path, ratio: float) -> Optional[Path]:
         return None
 
 
+def _estimate_wav_seconds(path: Path, default: float = 3.0) -> float:
+    """Best-effort WAV duration (frames / rate). Returns ``default`` on any error.
+
+    Used to size the delay before cleaning up an intermediate atempo temp file
+    -- playback below is fire-and-forget (SND_ASYNC / Popen), so we must not
+    delete the file before the player has finished reading it.
+    """
+    try:
+        with wave.open(str(path), "rb") as wf:
+            frames = wf.getnframes()
+            rate = wf.getframerate() or 1
+            return frames / float(rate)
+    except Exception:
+        return default
+
+
 def _play_audio(path: Path) -> None:
-    """Best-effort host playback. Never raises -- a silent failure is fine."""
+    """Best-effort host playback. Never raises -- a silent failure is fine.
+
+    NOTE: playback is fire-and-forget (winsound SND_ASYNC / subprocess.Popen) --
+    it does not block the daemon, but that also means rapid successive signed
+    trails can overlap audibly. A simple guard (await playback completion, or a
+    lock serializing casts) would fix this; left as-is for Phase 0 since it's a
+    nice-to-have, not a correctness issue (5090-CLAUDE pair-review PR #2048,
+    finding #7).
+    """
     try:
         if sys.platform.startswith("win"):
             import winsound
@@ -183,7 +230,7 @@ def _play_audio(path: Path) -> None:
 class VoiceCastOnSign:
     """Subscribes to signed CHIT trails and casts them as expressive speech."""
 
-    def __init__(self, nats_url: str, flute_gateway_url: str) -> None:
+    def __init__(self, nats_url: str, flute_gateway_url: str, kokoro_url: str) -> None:
         self.nats_url = nats_url
         self.flute_gateway_url = flute_gateway_url.rstrip("/")
         self.nc: Optional[NATS] = None
@@ -192,6 +239,11 @@ class VoiceCastOnSign:
         # FLUTE_API_KEY is unset). Send it when present, else calls 401 silently
         # (5090-CLAUDE pair-review PR #2048, finding #3).
         self.api_key = _env("FLUTE_API_KEY", "")
+        # Standalone Kokoro CPU-floor deploy unit (#2024) -- the genuinely
+        # independent fallback when Flute-Gateway/ultimate_tts is unreachable
+        # or unhealthy (5090-CLAUDE pair-review PR #2048, finding #4).
+        self.kokoro_url = kokoro_url.rstrip("/")
+        self.kokoro_token = _env("KOKORO_TOKEN", "")
 
     async def _check_flute_health(self, client: httpx.AsyncClient) -> Optional[Dict[str, Any]]:
         """Deterministic health check. Returns the /healthz JSON, or None if unreachable.
@@ -236,6 +288,37 @@ class VoiceCastOnSign:
             sys.stderr.write(f"[voice-cast-on-sign] Flute-Gateway synthesis error: {exc}\n")
         return None
 
+    async def _synthesize_kokoro_fallback(
+        self, client: httpx.AsyncClient, text: str
+    ) -> Optional[bytes]:
+        """POST directly to the standalone Kokoro CPU-floor deploy unit (#2024).
+
+        Genuinely independent of Flute-Gateway/ultimate_tts -- a separate
+        process (``pmoves/services/kokoro-tts``, port 8004 by default) that
+        stays up even when the GPU-hosted expressive stack is down. Used when
+        the Flute-Gateway health check fails OR reports no expressive
+        provider healthy (5090-CLAUDE pair-review PR #2048, finding #4).
+        Best-effort: never raises.
+        """
+        url = f"{self.kokoro_url}/synthesize"
+        headers = {"X-Kokoro-Token": self.kokoro_token} if self.kokoro_token else {}
+        try:
+            resp = await client.post(
+                url,
+                json={"text": text, "voice": "af_heart"},
+                headers=headers,
+                timeout=60.0,
+            )
+            if resp.status_code == 200:
+                return resp.content
+            sys.stderr.write(
+                f"[voice-cast-on-sign] Kokoro CPU-floor synth failed: "
+                f"HTTP {resp.status_code} — {resp.text[:200]}\n"
+            )
+        except Exception as exc:
+            sys.stderr.write(f"[voice-cast-on-sign] Kokoro CPU-floor synth error: {exc}\n")
+        return None
+
     async def handle_signed_trail(self, msg) -> None:
         """Handle a chit.signed.v1 message end-to-end. Never raises."""
         try:
@@ -277,24 +360,40 @@ class VoiceCastOnSign:
 
         async with httpx.AsyncClient() as client:
             health = await self._check_flute_health(client)
-            if health is None:
-                sys.stderr.write(
-                    "[voice-cast-on-sign] Flute-Gateway unreachable -- skipping this "
-                    "utterance (deterministic health check, daemon stays up)\n"
-                )
-                return
+            wav_bytes: Optional[bytes] = None
+            used_intent = intent
 
-            providers = health.get("providers", {}) if isinstance(health, dict) else {}
-            expressive_ready = bool(providers.get("ultimate_tts") or providers.get("omnivoice"))
-            if not expressive_ready:
-                sys.stderr.write(
-                    "[voice-cast-on-sign] No expressive TTS provider healthy -- "
-                    f"falling back to intent={FALLBACK_INTENT!r} (kokoro CPU floor)\n"
+            if health is not None:
+                providers = health.get("providers", {}) if isinstance(health, dict) else {}
+                expressive_ready = bool(
+                    providers.get("ultimate_tts") or providers.get("omnivoice")
                 )
-                intent = FALLBACK_INTENT
+                if expressive_ready:
+                    wav_bytes = await self._synthesize(client, text, intent, persona_id)
+                else:
+                    sys.stderr.write(
+                        "[voice-cast-on-sign] No expressive TTS provider healthy -- "
+                        "falling back to the standalone Kokoro CPU floor\n"
+                    )
+            else:
+                sys.stderr.write(
+                    "[voice-cast-on-sign] Flute-Gateway unreachable -- falling back to "
+                    "the standalone Kokoro CPU floor (deterministic health check, "
+                    "daemon stays up)\n"
+                )
 
-            wav_bytes = await self._synthesize(client, text, intent, persona_id)
+            if wav_bytes is None:
+                # Genuinely independent CPU floor -- a separate deploy unit (#2024),
+                # NOT a route back through the Flute-Gateway/ultimate_tts stack that
+                # just failed (5090-CLAUDE pair-review PR #2048, finding #4).
+                used_intent = FALLBACK_INTENT
+                wav_bytes = await self._synthesize_kokoro_fallback(client, text)
+
             if not wav_bytes:
+                sys.stderr.write(
+                    "[voice-cast-on-sign] No synthesis path available (Flute-Gateway "
+                    "and Kokoro CPU floor both failed) -- skipping this utterance\n"
+                )
                 return
 
             _OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -308,8 +407,9 @@ class VoiceCastOnSign:
             sys.stderr.write(f"[voice-cast-on-sign] Saved {out_path}\n")
 
             # Optional ffmpeg atempo tempo recovery (best-effort).
-            ratio = _compute_atempo_ratio(payload, intent)
+            ratio = _compute_atempo_ratio(payload, used_intent)
             play_path = out_path
+            tempo_path: Optional[Path] = None
             if ratio is not None and abs(ratio - 1.0) > 1e-3:
                 tempo_path = _apply_atempo(out_path, ratio)
                 if tempo_path is not None:
@@ -317,12 +417,35 @@ class VoiceCastOnSign:
 
             _play_audio(play_path)
 
+            if tempo_path is not None:
+                asyncio.create_task(self._cleanup_tempo_file(tempo_path))
+
+    @staticmethod
+    async def _cleanup_tempo_file(tempo_path: Path) -> None:
+        """Unlink the intermediate atempo temp file once playback has likely
+        finished (best-effort cleanup nit, 5090-CLAUDE pair-review PR #2048).
+
+        Playback is fire-and-forget (winsound SND_ASYNC / subprocess.Popen), so
+        deleting immediately after ``_play_audio`` returns would race the player
+        reading the file. Wait roughly the clip's own duration (+ buffer) first.
+        The primary cast WAV is intentionally left in place (gitignored /out/).
+        """
+        delay = _estimate_wav_seconds(tempo_path) + 2.0
+        await asyncio.sleep(delay)
+        try:
+            tempo_path.unlink(missing_ok=True)
+        except Exception as exc:
+            sys.stderr.write(
+                f"[voice-cast-on-sign] Failed to remove temp tempo file {tempo_path}: {exc}\n"
+            )
+
     async def run(self, subjects: list[str]) -> None:
         self.nc = NATS()
         await self.nc.connect(self.nats_url)
         sys.stderr.write(f"[voice-cast-on-sign] connected to {self.nats_url}\n")
         sys.stderr.write(f"[voice-cast-on-sign] subjects: {', '.join(subjects)}\n")
         sys.stderr.write(f"[voice-cast-on-sign] flute_gateway: {self.flute_gateway_url}\n")
+        sys.stderr.write(f"[voice-cast-on-sign] kokoro_fallback: {self.kokoro_url}\n")
 
         self.running = True
 
@@ -346,8 +469,11 @@ class VoiceCastOnSign:
 async def main_async(subjects: list[str]) -> None:
     nats_url = _resolve_nats_url()
     flute_gateway_url = _env("FLUTE_GATEWAY_URL", "http://localhost:8055")
+    kokoro_url = _env("KOKORO_URL", DEFAULT_KOKORO_URL)
 
-    agent = VoiceCastOnSign(nats_url=nats_url, flute_gateway_url=flute_gateway_url)
+    agent = VoiceCastOnSign(
+        nats_url=nats_url, flute_gateway_url=flute_gateway_url, kokoro_url=kokoro_url
+    )
     await agent.run(subjects)
 
 
