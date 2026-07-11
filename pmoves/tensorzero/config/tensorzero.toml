@@ -1479,7 +1479,10 @@ routing = ["local_active"]
 [models.registry_worker_qwen.providers.local_active]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
-model_name = "qwen3-coder:30b"
+# qwen3.5:35b-a3b (q4_K_M GGUF, 24GB, MoE 3B-active): current-gen open worker,
+# replaces stale qwen3-coder:30b (never pulled on 5090). Needs ollama >= 0.31.
+# NOTE: the smaller -int4 tag is an MLX quant — macOS-only (412 on Linux).
+model_name = "qwen3.5:35b-a3b"
 api_key_location = "none"
 
 [models.registry_worker_hermes]
