@@ -90,7 +90,8 @@ services:
     # a pinned MCP_SERVER_TOKEN is STILL bridged to Agent Zero's setting (Codex
     # #1977: AZ reads A0_SET_* not the plain env var, so the pin must be mapped);
     # unset → empty, no hard-fail, Agent Zero auto-generates at startup.
-    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:-}
+    # Per issue #2056: AGENT_ZERO_MCP_TOKEN is the fleet-canonical credential.
+    - A0_SET_mcp_server_token=${AGENT_ZERO_MCP_TOKEN:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=

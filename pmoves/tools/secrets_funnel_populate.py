@@ -134,7 +134,9 @@ KEY_VALIDATORS = {
     "GROQ_API_KEY": re.compile(r"^gsk_[A-Za-z0-9]{28,36}$"),
     # NVIDIA
     "NVIDIA_API_KEY": re.compile(r"^nvapi-[a-zA-Z0-9]{32,}$"),
-    # MCP Server Token
+    # Agent Zero MCP Token (fleet-canonical)
+    "AGENT_ZERO_MCP_TOKEN": re.compile(r"^.{20,}$"),
+    # MCP Server Token (legacy, use AGENT_ZERO_MCP_TOKEN)
     "MCP_SERVER_TOKEN": re.compile(r"^.{20,}$"),
 }
 
@@ -297,8 +299,13 @@ class ProviderCatalog:
             ["nemotron-3-super"],  # Synced with nemotron-3-super.yaml
             ["pmoves_worker_nemotron"],
         ),
+        "AGENT_ZERO_MCP_TOKEN": (
+            "Agent Zero MCP (fleet-canonical)",
+            [],  # No model-suit YAML
+            ["pmoves_mcp_agent_zero"],
+        ),
         "MCP_SERVER_TOKEN": (
-            "MCP Server (A2A)",
+            "MCP Server (A2A, legacy)",
             [],  # No model-suit YAML
             ["pmoves_mcp_server"],
         ),
