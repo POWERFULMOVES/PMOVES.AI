@@ -130,6 +130,7 @@ providers:
     api_base: "https://api.moonshot.ai/v1"
     tz_type: openai
     tier: llm
+    coding_stack: kimi_coding_plan
     models:
       chat_moonshot:
         model_name: "moonshot-v1-32k"
@@ -144,6 +145,20 @@ providers:
             role: secondary
             weight: 0.0
         strength_ref: moonshot-v1-32k
+        vram_mb: 0
+      chat_kimi_k2_7_code:
+        model_name: "kimi-k2.7-code"
+        tz_model_key: chat_kimi_k2_7_code
+        serves:
+          - function: coding_kimi
+            variant_name: cloud_kimi_k2_7_code
+            role: primary
+            weight: 1.0
+          - function: agent_zero
+            variant_name: hosted_kimi_k2_7
+            role: secondary
+            weight: 0.0
+        strength_ref: null
         vram_mb: 0
 
   # ---------------------------------------------------------------------------
