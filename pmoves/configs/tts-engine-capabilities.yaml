@@ -7,6 +7,8 @@
 #   name:                  Display name (matches Gradio dropdown label)
 #   category:              preset-voices | voice-cloning | emotion-control | multilingual | podcast
 #   voice_cloning:         Whether the engine supports reference-audio voice cloning
+#   license:               SPDX-ish license identifier for the upstream model weights (see license_policy below)
+#   upstream:               Hugging Face / GitHub URL of the engine's authors (attribution + traffic)
 #   expressive_dimensions: Machine-readable knob map — every tunable parameter agents can set
 #   languages:             Supported language codes
 #   latency_tier:          ultra-fast | fast | medium | slow
@@ -16,6 +18,38 @@
 #   persona_default:       Default voice-persona slug (links to voice-personas.md)
 #   ref_audio:             Reference audio requirements (for cloning engines)
 #   synth_endpoint:        "unified" (default) or "separate" (e.g., VibeVoice)
+
+# ═══════════════════════════════════════════════════════════════════
+# License Policy — Self-Host Transparency, Not Gatekeeping
+# ═══════════════════════════════════════════════════════════════════
+#
+# This registry orchestrates SELF-HOSTED engines; the repo ships routing
+# config, not model weights. Each operator runs engines on their own
+# servers under the engine's own license.
+#
+#   - Private / community self-host: run under the engine's terms.
+#   - Commercial redistribution of a license-restricted engine: reach out
+#     to partner with the upstream author (PMOVES amplifies + credits
+#     upstream — win-win, non-extractive, never strip attribution).
+#
+# We keep EVERY engine available, including CC-BY-NC / custom-EULA ones —
+# this file makes each engine's license VISIBLE so a cloner or commercial
+# builder can decide for themselves, and so PMOVES can drive traffic to,
+# and partner with, the upstream authors.
+#
+# Verify each engine's current license on its upstream card before a
+# commercial build — licenses change between checkpoints/releases.
+license_policy:
+  summary: >
+    PMOVES ships self-host routing config, not model weights. Each operator
+    self-hosts the listed engines under that engine's own license terms.
+    Community/private self-host: run under the engine's terms as-is.
+    Commercial redistribution of a license-restricted engine: contact the
+    upstream author to partner (PMOVES amplifies + credits upstream —
+    non-extractive, win-win). All engines stay listed regardless of license
+    — transparency over removal. Verify current license on the upstream
+    card before any commercial build; license terms can change per release.
+  last_verified: "2026-07-10"
 
 engines:
 
@@ -27,6 +61,8 @@ engines:
     name: KittenTTS
     category: preset-voices
     voice_cloning: false
+    license: Apache-2.0
+    upstream: https://huggingface.co/KittenML/kitten-tts-nano-0.1
     voices:
       - expr-voice-2-m
       - expr-voice-2-f
@@ -53,6 +89,8 @@ engines:
     name: Kokoro TTS
     category: preset-voices
     voice_cloning: false
+    license: Apache-2.0
+    upstream: https://huggingface.co/hexgrad/Kokoro-82M
     voices: [af_heart, af_sarah, am_adam, am_michael, bf_emma, bm_lewis]
     expressive_dimensions:
       kokoro_voice:
@@ -75,6 +113,8 @@ engines:
     name: Higgs Audio
     category: preset-voices
     voice_cloning: false
+    license: "Custom EULA (Boson AI community license, license:other on HF) — VERIFY per checkpoint"
+    upstream: https://huggingface.co/bosonai
     expressive_dimensions:
       higgs_voice_preset:
         type: enum
@@ -116,6 +156,8 @@ engines:
     name: F5-TTS
     category: voice-cloning
     voice_cloning: true
+    license: "CC-BY-NC-4.0 (NON-COMMERCIAL)"
+    upstream: https://huggingface.co/SWivid/F5-TTS
     models: [F5-TTS Base, F5-TTS v1 Base, F5-TTS French, F5-TTS German, F5-TTS Japanese, F5-TTS Spanish]
     expressive_dimensions:
       f5_speed:
@@ -148,6 +190,8 @@ engines:
     name: Fish Speech S1
     category: voice-cloning
     voice_cloning: true
+    license: "CC-BY-NC-SA-4.0 (fishaudio) — VERIFY per checkpoint"
+    upstream: https://huggingface.co/fishaudio
     expressive_dimensions:
       fish_temperature:
         type: float
@@ -184,6 +228,8 @@ engines:
     name: Fish Speech S2 Pro
     category: voice-cloning
     voice_cloning: true
+    license: "CC-BY-NC-SA-4.0 (fishaudio, e.g. OpenAudio-S1) — VERIFY per checkpoint"
+    upstream: https://huggingface.co/fishaudio
     expressive_dimensions:
       fish_s2_temperature:
         type: float
@@ -220,6 +266,8 @@ engines:
     name: VoxCPM
     category: voice-cloning
     voice_cloning: true
+    license: Apache-2.0
+    upstream: https://huggingface.co/openbmb/VoxCPM-0.5B
     expressive_dimensions:
       voxcpm_cfg_value:
         type: float
@@ -253,6 +301,8 @@ engines:
     name: IndexTTS
     category: voice-cloning
     voice_cloning: true
+    license: Apache-2.0
+    upstream: https://huggingface.co/IndexTeam/Index-TTS
     expressive_dimensions:
       indextts_temperature:
         type: float
@@ -277,6 +327,8 @@ engines:
     name: IndexTTS2
     category: emotion-control
     voice_cloning: true
+    license: "No OSI license tag on HF — custom bilibili Model Use License (non-commercial-leaning) — VERIFY before commercial use"
+    upstream: https://huggingface.co/IndexTeam/IndexTTS-2
     expressive_dimensions:
       indextts2_emotion_mode:
         type: enum
@@ -352,6 +404,8 @@ engines:
     name: ChatterboxTTS
     category: multilingual
     voice_cloning: true
+    license: MIT
+    upstream: https://huggingface.co/ResembleAI/chatterbox
     expressive_dimensions:
       chatterbox_exaggeration:
         type: float
@@ -387,6 +441,8 @@ engines:
     name: Chatterbox Turbo
     category: multilingual
     voice_cloning: true
+    license: MIT
+    upstream: https://huggingface.co/ResembleAI/chatterbox-turbo
     expressive_dimensions:
       chatterbox_turbo_exaggeration:
         type: float
@@ -417,6 +473,8 @@ engines:
     name: Chatterbox Multilingual
     category: multilingual
     voice_cloning: true
+    license: MIT
+    upstream: https://huggingface.co/ResembleAI/chatterbox
     expressive_dimensions:
       chatterbox_mtl_language:
         type: enum
@@ -452,6 +510,8 @@ engines:
     name: Qwen Voice Design
     category: multilingual
     voice_cloning: true
+    license: Apache-2.0
+    upstream: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
     models:
       base: [Base 1.7B, Base 0.5B]
       clone: [Clone 1.7B, Clone 0.5B]
@@ -499,6 +559,8 @@ engines:
     name: VibeVoice
     category: podcast
     voice_cloning: true
+    license: MIT
+    upstream: https://huggingface.co/microsoft/VibeVoice-1.5B
     synth_endpoint: separate  # Uses generate_vibevoice_podcast, NOT unified endpoint
     expressive_dimensions: {}  # Multi-speaker podcast — dimensions controlled per-speaker in podcast script
     ref_audio:
