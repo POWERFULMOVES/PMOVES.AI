@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from pmoves.services.common.env import get_secret
+from services.common.env import get_secret
 from typing import Any, Dict
 from nats.aio.client import Client as NATS
 from chit_signing import verify_cgp
