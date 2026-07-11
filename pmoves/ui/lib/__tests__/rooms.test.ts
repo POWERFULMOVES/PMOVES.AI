@@ -59,7 +59,9 @@ describe('room visibility curation ("show rooms, not all")', () => {
     const publicRooms = await loadPublicRooms();
     const publicIds = publicRooms.map((room) => room.room_id).sort();
 
-    expect(publicIds).toEqual(expect.arrayContaining(['demo.room.rehearsal', 'fordham.room.community']));
+    expect(publicIds).toEqual(
+      expect.arrayContaining(['demo.room.rehearsal', 'fordham.room.community', 'tokenism.room.exchange'])
+    );
 
     // Operator/control rooms must never surface publicly.
     for (const hiddenId of [

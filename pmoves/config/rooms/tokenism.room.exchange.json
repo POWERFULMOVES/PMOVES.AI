@@ -1,0 +1,201 @@
+{
+  "room_id": "tokenism.room.exchange",
+  "version": "1.0.0",
+  "display_name": "ToKenism Exchange",
+  "description": "Token-economy simulation floor: run business-idea scenarios in the ToKenism simulator, then export the results into PMOVES-Wealth (Firefly III) as browsable ledgers. The audience-facing face of the L5 Economics layer.",
+  "agent_id": "5090-claude",
+  "alter": "5090-tokenism",
+  "room_type": "exchange",
+  "owner_mode": "alter",
+  "access": {
+    "visibility": "public"
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "tokenism-mint",
+      "accent_color": "#00FFCC",
+      "skin": "geometry-lattice",
+      "icon": "coins"
+    },
+    "layout": {
+      "default_route": "/dashboard/tokenism",
+      "panels": [
+        {
+          "panel_id": "simulator-main",
+          "kind": "custom",
+          "position": "left",
+          "size": 55,
+          "pinned": true
+        },
+        {
+          "panel_id": "wealth-ledger",
+          "kind": "browser",
+          "position": "right",
+          "size": 45,
+          "pinned": true
+        },
+        {
+          "panel_id": "scenario-notebook",
+          "kind": "custom",
+          "position": "bottom",
+          "size": 25,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "tokenism-simulator",
+      "kind": "browser",
+      "route": "/demo/tokenism",
+      "provider": "tokenism-simulator",
+      "action_namespace": "tokenism",
+      "capabilities": [
+        "simulate",
+        "scenario",
+        "calibrate",
+        "chit-sign"
+      ],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "wealth-ledger",
+      "kind": "browser",
+      "route": "/demo/wealth",
+      "provider": "firefly-iii",
+      "action_namespace": "wealth",
+      "capabilities": [
+        "accounts",
+        "transactions",
+        "budgets",
+        "export-csv"
+      ],
+      "pinned": true,
+      "status": "planned"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "tokenism-demo",
+    "thread_ref": "business-idea-tests",
+    "default_page": "scenario-log",
+    "sync": {
+      "mode": "mirrored",
+      "writeback_targets": [
+        "entries"
+      ],
+      "artifact_prefix": "rooms/tokenism"
+    }
+  },
+  "persona": {
+    "signature_ref": "5090-claude",
+    "voice": "measured",
+    "glyph": "♫",
+    "resonance": [
+      "real-mint",
+      "scenario-testing",
+      "calibration",
+      "geometry-bus"
+    ]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "tokenism-run-scenario",
+      "display_name": "Run Business-Idea Scenario",
+      "intent": [
+        "simulate",
+        "test business idea",
+        "projection"
+      ],
+      "surface": {
+        "app_id": "tokenism-simulator",
+        "target": "toolbar",
+        "route": "/demo/tokenism"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 8
+      },
+      "enabled": true,
+      "tags": [
+        "tokenism",
+        "scenario",
+        "demo"
+      ]
+    },
+    {
+      "binding_id": "tokenism-export-to-wealth",
+      "display_name": "Export Simulation to Wealth Ledger",
+      "intent": [
+        "export",
+        "wealth",
+        "firefly"
+      ],
+      "surface": {
+        "app_id": "wealth-ledger",
+        "target": "toolbar",
+        "route": "/demo/wealth"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 5
+      },
+      "enabled": false,
+      "tags": [
+        "tokenism",
+        "wealth",
+        "export",
+        "dry-run-default"
+      ]
+    }
+  ],
+  "team_refs": [
+    "economics"
+  ],
+  "service_refs": [
+    "tokenism-simulator",
+    "firefly",
+    "open-notebook",
+    "nats"
+  ],
+  "launcher_refs": [],
+  "policies": {
+    "model_routing": "hybrid",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "p7.nats.launch",
+        "p7.nats.session",
+        "room.session.updated.v1",
+        "tokenism.export.result.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": false,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "ToKenism Exchange",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/healthz"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-07-11T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/TAC/TAC_TOKENISM.md",
+      "pmoves/docs/TAC/TAC_WEALTH.md",
+      "PMOVES-ToKenism-Multi/integrations/firefly/README.md"
+    ]
+  }
+}
