@@ -4,6 +4,7 @@
 
 # Unix line endings for code, configs, docs
 *.sh text eol=lf
+*.patch text eol=lf
 *.py text eol=lf
 *.md text eol=lf
 *.json text eol=lf
