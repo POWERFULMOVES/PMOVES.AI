@@ -2640,10 +2640,13 @@ services:
     # ${MCP_SERVER_TOKEN:?...} hard-require made *every* compose invocation on the
     # shared file fail interpolation on nodes without the var — blocking bring-up
     # of unrelated services (hit on Knuckles 2026-07-06). Use ${...:-} not :? —
-    # a pinned MCP_SERVER_TOKEN is STILL bridged to Agent Zero's setting (Codex
-    # #1977: AZ reads A0_SET_* not the plain env var, so the pin must be mapped);
-    # unset → empty, no hard-fail, Agent Zero auto-generates at startup.
-    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:-}
+    # the pinned token is STILL bridged to Agent Zero's setting (Codex #1977:
+    # AZ reads A0_SET_* not the plain env var; and interpolation resolves from
+    # the PROJECT env / env.shared, never from sibling `environment:` entries).
+    # Fleet-canonical AGENT_ZERO_MCP_TOKEN (issue #2056) wins, legacy
+    # MCP_SERVER_TOKEN project-env is the fallback; both unset → empty, no
+    # hard-fail, Agent Zero auto-generates at startup.
+    - A0_SET_mcp_server_token=${AGENT_ZERO_MCP_TOKEN:-${MCP_SERVER_TOKEN:-}}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
