@@ -74,17 +74,17 @@ services:
     - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
     - A0_SET_chat_model_provider=openai
     # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
-    - A0_SET_chat_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_chat_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
     - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_util_model_provider=openai
-    - A0_SET_util_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_util_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
     - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_embed_model_provider=openai
     # Embed wrapper does NOT add openai/ prefix — must include it here
     - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
     - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_browser_model_provider=openai
-    - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_browser_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_a2a_server_enabled=true
     # A0_SET_mcp_server_token: soft default (CANONICAL_NAMES.md §5). The previous
