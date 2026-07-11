@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
-from pmoves.services.common.env import get_secret
+from services.common.env import get_secret
 from pathlib import Path
 from typing import Any, Optional
 
