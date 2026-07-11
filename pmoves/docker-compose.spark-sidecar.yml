@@ -114,8 +114,8 @@ services:
     - A0_SET_embed_model_provider=openai
     - A0_SET_embed_model_name=${SPARK_EMBED_MODEL:-nomic-embed-text}
     - A0_SET_embed_model_api_base=http://pmoves-ollama:11434/v1
-    # Pass through Moonshot key when using Kimi (set in env.spark-sidecar or host env)
-    - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+    # Moonshot key for Kimi mode must be set in env.spark-sidecar (loaded via env_file: above),
+    # not here, because an explicit environment: entry with an empty default would override it.
     # A2A enabled
     - A0_SET_a2a_server_enabled=true
     - A0_SET_mcp_server_token=
