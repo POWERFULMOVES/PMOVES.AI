@@ -65,5 +65,6 @@ data/spark/
 
 .codex/
 
-# Local smoke-test artifacts (kokoro-smoke / omnivoice-smoke write sample WAVs here).
+# Local audio artifacts: smoke tests (kokoro-smoke / omnivoice-smoke sample
+# WAVs) + voice_cast_on_sign.py generated audio (Phase 0 expressive voice).
 /out/
