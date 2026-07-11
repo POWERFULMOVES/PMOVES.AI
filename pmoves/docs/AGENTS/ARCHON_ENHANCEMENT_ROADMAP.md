@@ -4,11 +4,19 @@
 **Status:** Active — P0 lanes claimed by B850-CLAUDE (see Active Claim Register)
 **Research Sources:** Industry best practices + PMOVES SITREP/BOOTSTRAP context
 
-**Lane state (2026-07-11):** CHIT Signing Tutorial ✅ shipped (PR #2078). Remaining
-P0 lanes have pre-created worktrees under `.claude/worktrees/` (`p0-chit-completion`,
-`p0-agent-roles`, `p0-evaluation-gates`, `p0-pr-triage`, `p0-archon-guide`), all
-branched from main with no commits yet. CHIT Completion scoping from the GLM
-session: Consciousness (8106) ~85% signed, Evo Controller (8113) 0%, A2UI (9224)
+**Lane state (2026-07-11):** CHIT Signing Tutorial ✅ shipped (PR #2078). The five
+remaining P0 lanes are **local session state only** — `.claude/worktrees/` is
+git-ignored and these branches were not pushed, so they are not reproducible from a
+clean checkout. To recreate them on any node, run from the repo root:
+
+```bash
+for lane in p0-chit-completion p0-agent-roles p0-evaluation-gates p0-pr-triage p0-archon-guide; do
+  git worktree add -b "$lane" ".claude/worktrees/$lane" origin/main
+done
+```
+
+(Each is branched from `main` with no commits yet.) CHIT Completion scoping from the
+GLM session: Consciousness (8106) ~85% signed, Evo Controller (8113) 0%, A2UI (9224)
 is a consumer.
 
 ---
