@@ -46,6 +46,12 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/pmoves-runner-1:/tmp/pmoves-runner
+      # sync-secrets-local.yml's "Copy secrets to host config dir" step resolves
+      # the config dir INSIDE the runner (image runs as root -> /root/.config/pmoves).
+      # Without this mount the CHIT bundle is stranded in the container and the
+      # host funnel never sees it (issue #2053). Linux Pattern-A nodes only;
+      # Windows nodes use the Pattern-B artifact-pull path instead.
+      - ${HOME}/.config/pmoves:/root/.config/pmoves
     environment:
       <<: *runner-env
       # PAT (auto re-registers) OR a pre-minted registration token (RUNNER_TOKEN).
@@ -59,6 +65,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/pmoves-runner-2:/tmp/pmoves-runner
+      # Same host config-dir mount as runner-1 (issue #2053, see comment there).
+      - ${HOME}/.config/pmoves:/root/.config/pmoves
     environment:
       <<: *runner-env
       # PAT (auto re-registers) OR a pre-minted registration token (RUNNER_TOKEN).
