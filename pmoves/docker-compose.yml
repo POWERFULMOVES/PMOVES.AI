@@ -2595,6 +2595,10 @@ services:
     # A2A protocol — Agent-to-Agent interoperability (AGNOTE4482 Item 2)
     - A2A_DISCOVERY_PUBLIC=${A2A_DISCOVERY_PUBLIC:-false}
     - A2A_TASKS_PUBLIC=${A2A_TASKS_PUBLIC:-false}
+    # Inbound-MCP credential. Fleet-canonical AGENT_ZERO_MCP_TOKEN (Prod env
+    # secret via secrets-funnel, issue #2056) pins the token A0 would otherwise
+    # derive per-instance; empty default preserves the derive-on-unset behavior.
+    - MCP_SERVER_TOKEN=${AGENT_ZERO_MCP_TOKEN:-}
     # PMOVES.Notes plugin (baked into the image at usr/plugins/pmoves_notes).
     # Defaults match the plugin's own fallbacks; set explicitly so a token can be
     # supplied and the plugin can be toggled off without rebuilding.
