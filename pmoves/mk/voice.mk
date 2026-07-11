@@ -97,21 +97,24 @@ VOICE_CAST_PID  := out/.voice-cast.pid
 VOICE_CAST_LOG  := out/voice-cast.log
 # 127.0.0.1 (not localhost): on Windows `localhost` resolves to IPv6 ::1 first, but
 # Docker publishes nats :4222 on IPv4 only -> an IPv6 connect hangs/times out.
+# Default matches the compose nats-1 launch args (--user nats --pass pmoves). Override
+# for a differently-credentialed NATS: make voice-cast-up VOICE_CAST_NATS=nats://u:p@127.0.0.1:PORT
 VOICE_CAST_NATS ?= nats://nats:pmoves@127.0.0.1:4222
 
 voice-cast-deps: ## Ensure host python deps (nats-py, httpx) for the CHIT-sign voice subscriber
-	@python -c "import nats"  2>/dev/null || python -m pip install --quiet --disable-pip-version-check nats-py
-	@python -c "import httpx" 2>/dev/null || python -m pip install --quiet --disable-pip-version-check httpx
+	@$(PRECHECK_PY) -c "import nats"  2>/dev/null || $(PRECHECK_PY) -m pip install --quiet --disable-pip-version-check nats-py
+	@$(PRECHECK_PY) -c "import httpx" 2>/dev/null || $(PRECHECK_PY) -m pip install --quiet --disable-pip-version-check httpx
 
 voice-cast-up: voice-cast-deps ## Start the CHIT-sign -> expressive voice subscriber (Phase 0; reads FLUTE_API_KEY from the running flute-gateway)
 	@mkdir -p out
 	@if [ -f $(VOICE_CAST_PID) ] && kill -0 $$(cat $(VOICE_CAST_PID)) 2>/dev/null; then \
 	  echo "voice-cast-on-sign already running (pid $$(cat $(VOICE_CAST_PID)))"; exit 0; fi
 	@key="$$(docker exec pmoves-flute-gateway-1 printenv FLUTE_API_KEY 2>/dev/null)"; \
+	 [ -n "$$key" ] || echo "  [warn] FLUTE_API_KEY empty -- is pmoves-flute-gateway-1 running? synth calls will 401 (subscriber will self-heal to the kokoro floor)"; \
 	 VOICE_CAST_NATS_URL="$(VOICE_CAST_NATS)" \
-	 FLUTE_GATEWAY_URL="http://localhost:8055" \
+	 FLUTE_GATEWAY_URL="http://127.0.0.1:8055" \
 	 FLUTE_API_KEY="$$key" \
-	 nohup python tools/voice_cast_on_sign.py > $(VOICE_CAST_LOG) 2>&1 & echo $$! > $(VOICE_CAST_PID)
+	 nohup $(PRECHECK_PY) tools/voice_cast_on_sign.py > $(VOICE_CAST_LOG) 2>&1 & echo $$! > $(VOICE_CAST_PID)
 	@sleep 3; echo "voice-cast-on-sign started (pid $$(cat $(VOICE_CAST_PID))) -- log: pmoves/$(VOICE_CAST_LOG)"; \
 	 grep -q "connected to" $(VOICE_CAST_LOG) 2>/dev/null && echo "  NATS connected [OK]" || { echo "  [warn] not connected yet -- tail:"; tail -3 $(VOICE_CAST_LOG); }
 
@@ -122,7 +125,7 @@ voice-cast-smoke: voice-cast-deps ## Fire a CHIT sign (mr-clean) and confirm an 
 	@echo "Publishing a signed CHIT trail (agent.graphiti.signed.v1)..."
 	@before="$$(ls -1 out/voice_cast_*.wav 2>/dev/null | wc -l)"; \
 	 CHIT_SIGN_PUBLISH=1 NATS_URL="$(VOICE_CAST_NATS)" PYTHONPATH="$(CURDIR)/.." \
-	   python tools/sign_trail.py --agent-id 4090-claude --alter mr-clean \
+	   $(PRECHECK_PY) tools/sign_trail.py --agent-id 4090-claude --alter mr-clean \
 	   --summary "Powerful moves. The CHIT sign is now my voice." --phase "Phase 0" >/dev/null || true; \
 	 echo "  waiting for the cast..."; \
 	 for i in $$(seq 1 25); do \
