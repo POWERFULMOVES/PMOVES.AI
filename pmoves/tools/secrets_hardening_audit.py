@@ -32,6 +32,10 @@ def candidate_files() -> Iterable[Path]:
             continue
         if ".git" in path.parts:
             continue
+        # Linked worktrees under .claude/worktrees are full repo copies; auditing
+        # them double-counts every finding against files this checkout owns.
+        if "worktrees" in path.parts and ".claude" in path.parts:
+            continue
         if path.suffix.lower() not in allowed:
             continue
         yield path
