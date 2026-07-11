@@ -62,6 +62,14 @@ export interface RoomManifest {
   alter?: string;
   room_type?: string;
   owner_mode?: string;
+  access?: {
+    visibility?: 'public' | 'private' | 'unlisted';
+    owner_only?: boolean;
+    invite_list?: string[];
+    content_rating?: 'standard' | 'uncensored';
+    exclude_from_public_catalog?: boolean;
+    rating_note?: string;
+  };
   shell: {
     theme: {
       theme_id: string;
@@ -183,6 +191,29 @@ export async function loadRooms(roomConfigDir = DEFAULT_ROOM_CONFIG_DIR): Promis
   );
 
   return rooms.sort((left, right) => left.display_name.localeCompare(right.display_name));
+}
+
+/**
+ * A room is public (safe for an unauthenticated launcher) unless its manifest
+ * marks it private/unlisted or opts out of the public catalog. Private persona
+ * rooms (e.g. darkxsides.room) must never surface on the shared home page.
+ */
+export function isPublicRoom(room: RoomDefinition): boolean {
+  const access = room.manifest.access;
+  if (!access) return true;
+  if (access.exclude_from_public_catalog === true) return false;
+  if (access.owner_only === true) return false;
+  if (access.visibility === 'private' || access.visibility === 'unlisted') return false;
+  return true;
+}
+
+/**
+ * Rooms safe to show on the unauthenticated home-page launcher. Authenticated
+ * surfaces (owner dashboard) may still use loadRooms() to see everything.
+ */
+export async function loadPublicRooms(roomConfigDir = DEFAULT_ROOM_CONFIG_DIR): Promise<RoomDefinition[]> {
+  const rooms = await loadRooms(roomConfigDir);
+  return rooms.filter(isPublicRoom);
 }
 
 export async function loadRoom(roomId: string, roomConfigDir = DEFAULT_ROOM_CONFIG_DIR): Promise<RoomDefinition | null> {
