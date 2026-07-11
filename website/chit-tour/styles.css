@@ -441,38 +441,3 @@ footer.foot { padding: 28px 56px 40px; color: var(--text-faint); font-size: 12px
 
 /* assumptions / caveats list */
 .u-caveat-list { font-size: 13.5px; color: var(--text-muted); padding-left: 18px; margin: 8px 0 0; line-height: 1.6; }
-
-/* Honesty chip: marks projection-model visualizations vs measured actuals */
-.chip-projection {
-  display: inline-block;
-  margin-left: 10px;
-  padding: 2px 8px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  vertical-align: middle;
-  border: 1px solid var(--pm-signature-soft, #FB7185);
-  color: var(--pm-signature-soft, #FB7185);
-  border-radius: 3px;
-}
-
-/* pillar-lab controls */
-.mini-btn {
-  font: inherit; font-size: 12px; padding: 3px 10px; margin: 2px 4px 2px 0;
-  background: transparent; color: var(--pm-signature-soft, #FB7185);
-  border: 1px solid var(--pm-signature-soft, #FB7185); border-radius: 3px; cursor: pointer;
-}
-.mini-btn:hover { background: rgba(251, 113, 133, 0.12); }
-
-/* digestibility strips: plain-words layer above each pillar lab */
-.digest-strip {
-  margin: 0 0 14px 0; padding: 10px 12px;
-  border-left: 3px solid var(--pm-signature-soft, #FB7185);
-  background: rgba(124, 58, 237, 0.06);
-  font-size: 13.5px; line-height: 1.55;
-}
-.digest-strip > div { margin: 3px 0; }
-.digest-k {
-  display: inline-block; min-width: 232px; font-weight: 600;
-  letter-spacing: 0.02em; color: var(--pm-signature-soft, #FB7185);
-}
-@media (max-width: 720px) { .digest-k { display: block; min-width: 0; } }

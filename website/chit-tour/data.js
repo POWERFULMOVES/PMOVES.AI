@@ -1,9 +1,6 @@
 // data.js — All data is grounded in PMOVES.AI repo docs.
 // Path references shown in UI link to the source files in the repo.
 
-// AGENT_ROSTER + NATS_SUBJECTS are LIVE — generated from the agent registry
-// into data.generated.js (loaded first). Regenerate: make -C pmoves chit-tour-data
-
 const SOURCES = {
   whatIsChit: "pmoves/docs/PMOVESCHIT/01_WHAT_IS_CHIT.md",
   glossary: "pmoves/docs/PMOVESCHIT/00_GLOSSARY.md",
@@ -30,23 +27,6 @@ const SOURCES = {
   containerScaling: "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/Containerized Micro Business Model_ Docker-Like Sc/micro_business_container_scaling.csv",
   communityImpact: "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/Community Wealth Building Through Diverse Resident/community_economic_impact.csv",
   implPhases: "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/Containerized Micro Business Model_ Docker-Like Sc/implementation_phases_timeline.csv",
-  // ToKenism Multi simulation engine sources
-  simulator: "PMOVES-ToKenism-Multi/pmoves_backend/simulator.py",
-  scenarios: "PMOVES-ToKenism-Multi/pmoves_backend/scenarios.py",
-  simMathModel: "PMOVES-ToKenism-Multi/pmoves-nextjs/src/lib/simulation/final-math-model.ts",
-  simEngine: "PMOVES-ToKenism-Multi/pmoves-nextjs/src/lib/simulation/index.ts",
-  simPresetScenarios: "PMOVES-ToKenism-Multi/pmoves-nextjs/src/lib/simulation/utils.ts",
-  shapeAttribution: "PMOVES-ToKenism-Multi/integrations/contracts/chit/shape-attribution.ts",
-  dirichletWeights: "PMOVES-ToKenism-Multi/integrations/contracts/chit/dirichlet-weights.ts",
-  hyperbolicEncoder: "PMOVES-ToKenism-Multi/integrations/contracts/chit/hyperbolic-encoder.ts",
-  swarmAttribution: "PMOVES-ToKenism-Multi/integrations/contracts/chit/swarm-attribution.ts",
-  tokenismUI: "PMOVES-ToKenism-Multi/pmoves-nextjs/",
-  shuttleActuals: "CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections/data/Docker-Style Scalable Community Business Container/shuttle_actuals_2026-07.csv",
-  stakeholderBrief: "Cataclysm_Studios_PMOVES_DAO_Stakeholder_Brief.docx",
-  evRfaGcew: "C:/Users/russe/Downloads/SEAP/gcew-ev-rfa-qa-06-16-2026.pdf",
-  evRfaOjet: "C:/Users/russe/Downloads/SEAP/ojet-ev-rfa-06-05-2026.pdf",
-  mwbeCert: "C:/Users/russe/Downloads/SEAP/MWBEDOCS.pdf",
-  coopVideo: "https://youtu.be/Cb6xjJf42_c",
 };
 
 const REPO_BASE = "https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/";
@@ -231,6 +211,26 @@ const AGENT_TYPES = [
 ];
 
 // --- Roster (subset from §2 Type Chart) used for the type-graph ---
+const AGENT_ROSTER = [
+  { name: "Agent Zero", cls: "Standard", primary: "Agent", secondary: "API", tier: 6, stage: "Mega", layers: 7 },
+  { name: "Archon", cls: "Standard", primary: "Agent", secondary: "LLM", tier: 6, stage: "Stage 2", layers: 6 },
+  { name: "Hi-RAG v2", cls: "Standard", primary: "Worker", secondary: "Data", tier: 4, stage: "Stage 2", layers: 5 },
+  { name: "DeepResearch", cls: "Standard", primary: "LLM", secondary: "Worker", tier: 3, stage: "Stage 1", layers: 4 },
+  { name: "SupaSerch", cls: "Standard", primary: "Agent", secondary: "LLM", tier: 6, stage: "Stage 2", layers: 5 },
+  { name: "PMOVES.YT", cls: "Standard", primary: "Media", secondary: "Worker", tier: 5, stage: "Stage 1", layers: 4 },
+  { name: "Flute-Gateway", cls: "Standard", primary: "API", secondary: "Media", tier: 2, stage: "Stage 1", layers: 4 },
+  { name: "TensorZero Gateway", cls: "Standard", primary: "API", secondary: "LLM", tier: 2, stage: "Stage 1", layers: 3 },
+  { name: "ClaWZ", cls: "Standard", primary: "Agent", secondary: "API", tier: 6, stage: "Stage 1", layers: 4 },
+  { name: "Cipher Memory", cls: "Specialized", primary: "Data", secondary: "Agent", tier: 1, stage: "Base", layers: 2 },
+  { name: "Hyperdimensions", cls: "Specialized", primary: "UI", secondary: "Data", tier: 7, stage: "Base", layers: 2 },
+  { name: "Extract Worker", cls: "Standard", primary: "Worker", secondary: "Data", tier: 4, stage: "Stage 1", layers: 4 },
+  { name: "EvoSwarm Controller", cls: "Standard", primary: "Worker", secondary: "Agent", tier: 4, stage: "Stage 1", layers: 4 },
+  { name: "Swarm Attribution", cls: "Specialized", primary: "Worker", secondary: "Data", tier: 4, stage: "Stage 1", layers: 4 },
+  { name: "Mesh Agent", cls: "Standard", primary: "Agent", secondary: "Data", tier: 6, stage: "Stage 1", layers: 4 },
+  { name: "Channel Monitor", cls: "Standard", primary: "Worker", secondary: "Media", tier: 4, stage: "Base", layers: 2 },
+  { name: "BoTZ Gateway", cls: "Standard", primary: "Agent", secondary: "Worker", tier: 6, stage: "Stage 1", layers: 4 },
+  { name: "MAI-UI", cls: "Standard", primary: "UI", secondary: "Agent", tier: 7, stage: "Stage 1", layers: 3 },
+];
 
 // --- Evolution stages (§4) ---
 const EVOLUTION_STAGES = [
@@ -355,28 +355,29 @@ const TOUR_STEPS = [
 ];
 
 // --- NATS subjects table ---
+const NATS_SUBJECTS = [
+  { subject: "tokenism.cgp.ready.v1", dir: "Pub → Hi-RAG, Discord, ShapeStore", purpose: "Generic CGP packet ready" },
+  { subject: "tokenism.cgp.weekly.v1", dir: "Pub → Discord, Hi-RAG", purpose: "Weekly ToKenism attribution export" },
+  { subject: "tokenism.attribution.recorded.v1", dir: "Pub → Discord, analytics", purpose: "Real-time attribution notification" },
+  { subject: "tokenism.geometry.event.v1", dir: "Pub → Hi-RAG", purpose: "Voice/modality attribution events" },
+  { subject: "tokenism.swarm.population.v1", dir: "Pub → analytics, Discord", purpose: "EVO SWARM population state" },
+  { subject: "geometry.cgp.v1", dir: "Pub → Hi-RAG (Supabase RT)", purpose: "CGP via Supabase Realtime" },
+  { subject: "geometry.event.v1", dir: "Pub → ShapeStore", purpose: "Raw geometry events" },
+  { subject: "geometry.swarm.meta.v1", dir: "Pub → Hi-RAG", purpose: "Decoder pack metadata for swarm" },
+];
 
 // --- assumptions / coverage ---
 const COVERAGE_NOTES = [
-  "The CHIT two-meaning split used throughout this tour — concept = 'Cymatic Holographic Information Theory', mechanism = 'Compressed Hierarchical Information Transfer' — is BRAND-OWNER CANON (DARKXSIDE, 2026-06-09): the deliberate reconciliation of 7 historically conflicting expansions found across the docs. The PMOVESCHIT source files still carry the older single expansion 'Cymatic-Holographic Information Transfer' pending the fleet-wide doc sweep; where this tour states the split, that is the canon speaking, not the cited file.",
-  "Agent count currency: the live registry (agent_registry.yaml) holds 96 agents; PMOVES_AGENT_CLASS_TAXONOMY.md v1.5.0 still says 76 — the doc lags the registry. Where this tour shows counts, the registry wins (counted 2026-07-26).",
-  "Version currency: the CGP spec is v1.0 production-ready (CGP_v1.0_SPECIFICATION.md, 2026-02-08), but documented example payloads in geometry-nats-subjects.md still show chit.cgp.v0.1/v0.2 traffic — the spec is ahead of the recorded examples, not the other way around.",
-  "Pillar 1 (Dirichlet attribution): the fair-share math. Source: dirichlet-weights.ts. α_i += amount × concentrationK (additive, smoothingAlpha=0.1 floor, decay half-life=12 weeks). Weights sum to 1.0 — verified to 1e-10 tolerance. The interactive lab samples Dir(α) live in your browser with Marsaglia–Tsang gammas. What it proves: contribution-keyed shares that never zero anyone out and always sum to exactly 100%.",
-  "Pillar 2 (Hyperbolic geometry): the capacity math. Source: hyperbolic-encoder.ts + 01_WHAT_IS_CHIT.md (K=−1). getHyperbolicEncoding() maps Dirichlet weights to Poincaré disk points — higher attribution = closer to origin (conf = 1 − radius). The 3D Poincaré disk in §08 computes a real Sarkar embedding of the 96-agent tree client-side. What it proves: exponentially-growing hierarchies fit in finite space — every domain's subtree has room without crowding anyone else.",
-  "Pillar 3 (Merkle tamper-evidence): the proof math. Source: shape-attribution.ts (621 lines). Every attribution record ({address, action, amount, week, category}) is hashed with SHA-256, combined pairwise into a Merkle root. verifyProof(leafHash, {root, path, pathIndices}) checks inclusion. The interactive lab lets you tamper a leaf and watch the proof fail. What it proves: nobody — including the operator — can alter a contribution record after it's committed without breaking the root.",
-  "Pillar 4 (Zeta spectral filter): the signal math. Source: zeta-filter.ts. Filter weights w_n = decay^n / ln(γ_n) over the first N non-trivial Riemann zeta zeros — universal mathematical constants nobody chose. Applied as circular convolution on CGP spectra. What it proves: the 'what counts as signal' parameter is fixed by constants of nature, not a tunable knob anyone can quietly turn.",
-  "Pillar 5 (Swarm fitness): the allocation judge. Source: swarm-attribution.ts. fitness = 0.6·giniScore + 0.2·povertyScore + 0.1·wealthScore + 0.05·participationScore + 0.025·spendingScore + 0.025·savingsScore. Honesty: participationScore is always 1.0 (a bug — numerator equals denominator). Swarm-attribution.ts is the scorer + tracker only; mutation/selection/crossover is described target architecture, not shipped code. What it proves: whatever proposes shares, the scoring standard is public and fixed.",
-  "Shape attribution API (shape-attribution.ts): 7 action types (token_received, spending, group_contribution, staking, voting, loyalty_earned, reward_claimed). Full pipeline: recordAction() → Dirichlet weight → Merkle tree → exportCGP() as chit.cgp.v1.0 on the Geometry Bus. The foundation exists; convergence detection (shared attribution for independent identical contributions via hyperbolic distance) is the next layer.",
-  "ToKenism Multi simulator (simulator.py + pmoves-nextjs/): agent-based model, 50 members, 156 weeks. Scenario A (traditional) vs B (cooperative). Test suite hard-asserts B>A wealth + Gini_B<Gini_A across all 14 presets. Closed-form model: final-math-model.ts (92.9/100 validation score). The interactive Tokenism UI at localhost:3000 has 11 preset scenarios, sensitivity analysis, mathematical-model documentation, and comparison dashboards.",
-  "Tokenomics projections: formulaic extrapolations with assumed success probabilities (0.40–0.75), not booked revenue. Six archetypes share byte-identical 5-year curves. The Ioniq 5 ($24,440, July 2026) is the only real-world asset datapoint — PMOVES mobile fleet infrastructure qualifying for GCEW/OJET EV grants. Cataclysm Studios holds MWBE and SDVOB certifications for NYC/NYS procurement set-asides.",
+  "Definitions and terminology are taken verbatim from pmoves/docs/PMOVESCHIT/00_GLOSSARY.md and 01_WHAT_IS_CHIT.md (CHIT, CGP, CHR, EVO SWARM, Five Pillars, GEOMETRY BUS, Poincaré Disk).",
   "MOF mappings, the Seven Design Principles, the gap-size formula, and meta-agent vs. standard-agent typology come from pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md (canonical reference, v1.0.0).",
   "Agent classes (Legendary/Standard/Specialized/Utility), 7 service types, evolution stages, CHIT toggles, and the dual-type table come from pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md (v1.5.0, 76 agents).",
   "Layer model L0–L5 (+ L2.5) and the 5 canonical planes come from pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md §3 (canonical); PMOVES_UNIFIED_AGENT_TAXONOMY.md is a deprecated historical reference.",
   "GEOMETRY BUS topology, NATS subjects, producer/consumer split, and the 30-day JetStream retention come from pmoves/docs/PMOVESCHIT/02_GEOMETRY_BUS.md.",
   "Skill bundles come from pmoves/docs/AGENTS/PmovesSKillZ.md (five skills: bringup-audit, secrets-chit-funnel, submodule-parity, persona-grounding, multimodal-verifier).",
+  "Remotion + PreTeXt + Living Docs references come from pmoves/docs/CREATOR_PIPELINE.md (A2UI Renderer, @chenglou/pretext, POWERFULMOVES/Pmoves-pretext fork).",
   "AGNOTE4482.md was treated as situational/log context, not a definitional source. Definitive CHIT and taxonomy claims are taken from PMOVESCHIT/* and AGENTS/* docs.",
-  "The agent roster shown in the type graph is a representative subset (~18 of 96 agents). The single source of truth is pmoves/config/agent_registry.yaml. Numeric layer counts shown in the roster are read from the §3 Agent Layer Coverage Map.",
-  "Visualisations: the D3 force graph is a hand-curated topology derived from the Geometry Bus diagram and §5 Connection Topology. The Three.js Poincaré disk computes a real Sarkar embedding of the live registry — coordinates are computed client-side from agent_registry.yaml, not hand-placed.",
+  "The agent roster shown in the type graph is a representative subset (~18 of 76 agents). The single source of truth is pmoves/config/agent_registry.yaml. Numeric layer counts shown in the roster are read from the §3 Agent Layer Coverage Map.",
+  "Visualisations: the D3 force graph is a hand-curated topology derived from the Geometry Bus diagram and §5 Connection Topology. The Three.js Poincaré disk is illustrative — it shows hyperbolic-disk hierarchy semantics from Pillar 2; coordinates are not a literal export of Pmoves-hyperdimensions/saves/agent_topology.json.",
 ];
 
 // =============================================================================
@@ -524,443 +525,3 @@ const CHIT_TOKENOMICS_LINK = [
   { primitive: "Attribution settlement",  chitRole: "Merkle proofs (Pillar 3) make every weekly attribution export tamper-evident before payout.",      agent: "tokenism.cgp.weekly.v1 → Discord/analytics" },
   { primitive: "Risk-adjusted scoring",   chitRole: "Zeta spectral filter (Pillar 4) separates persistent revenue signals from one-off spikes.",        agent: "EVO SWARM consensus" },
 ];
-// REAL agent taxonomy tree — extracted verbatim from pmoves/config/agent_registry.yaml
-// (taxonomy_version 1.5.0, 96 agents, extracted 2026-07-26). NOT hand-curated.
-const AGENT_TREE = {
- "taxonomyVersion": "1.5.0",
- "agentCount": 96,
- "source": "pmoves/config/agent_registry.yaml",
- "extractedUtc": "2026-07-26",
- "tree": {
-  "standard": {
-   "agent": [
-    {
-     "id": "agent_zero",
-     "name": "Agent Zero"
-    },
-    {
-     "id": "kilocode_glm",
-     "name": "KiloCode GLM"
-    },
-    {
-     "id": "space_agent",
-     "name": "PMOVES Space-Agent"
-    },
-    {
-     "id": "archon",
-     "name": "Archon"
-    },
-    {
-     "id": "supaserch",
-     "name": "SupaSerch"
-    },
-    {
-     "id": "botz_gateway",
-     "name": "BoTZ Gateway"
-    },
-    {
-     "id": "botz_architect",
-     "name": "BoTZ Architect"
-    },
-    {
-     "id": "botz_builder",
-     "name": "BoTZ Builder"
-    },
-    {
-     "id": "botz_auditor",
-     "name": "BoTZ Auditor"
-    },
-    {
-     "id": "gateway_agent",
-     "name": "Gateway Agent"
-    },
-    {
-     "id": "p7_room_orchestrator",
-     "name": "P7 Room Orchestrator"
-    },
-    {
-     "id": "mesh_agent",
-     "name": "Mesh Agent"
-    },
-    {
-     "id": "agentgym",
-     "name": "AgentGym"
-    },
-    {
-     "id": "e2b_danger_room",
-     "name": "E2B Danger Room"
-    },
-    {
-     "id": "notebooklm_agent",
-     "name": "NotebookLM Agent"
-    }
-   ],
-   "worker": [
-    {
-     "id": "hirag_v2",
-     "name": "Hi-RAG v2"
-    },
-    {
-     "id": "extract_worker",
-     "name": "Extract Worker"
-    },
-    {
-     "id": "channel_monitor",
-     "name": "Channel Monitor"
-    },
-    {
-     "id": "notebook_sync",
-     "name": "Notebook Sync"
-    },
-    {
-     "id": "pdf_ingest",
-     "name": "PDF Ingest"
-    },
-    {
-     "id": "publisher_discord",
-     "name": "Publisher-Discord"
-    },
-    {
-     "id": "langextract",
-     "name": "LangExtract"
-    },
-    {
-     "id": "dox",
-     "name": "DoX"
-    },
-    {
-     "id": "evoswarm_controller",
-     "name": "EvoSwarm Controller"
-    }
-   ],
-   "llm": [
-    {
-     "id": "deep_research",
-     "name": "DeepResearch"
-    }
-   ],
-   "api": [
-    {
-     "id": "tensorzero",
-     "name": "TensorZero Gateway"
-    },
-    {
-     "id": "flute_gateway",
-     "name": "Flute-Gateway"
-    }
-   ],
-   "media": [
-    {
-     "id": "cast_tts_gateway",
-     "name": "Cast TTS Gateway"
-    },
-    {
-     "id": "pmoves_yt",
-     "name": "PMOVES.YT"
-    },
-    {
-     "id": "ffmpeg_whisper",
-     "name": "FFmpeg-Whisper"
-    },
-    {
-     "id": "media_video",
-     "name": "Media-Video Analyzer"
-    },
-    {
-     "id": "media_audio",
-     "name": "Media-Audio Analyzer"
-    },
-    {
-     "id": "ultimate_tts",
-     "name": "Ultimate-TTS-Studio"
-    },
-    {
-     "id": "creator",
-     "name": "Creator"
-    },
-    {
-     "id": "podcast_producer",
-     "name": "Podcast Producer"
-    },
-    {
-     "id": "remotion_renderer",
-     "name": "Remotion Renderer"
-    },
-    {
-     "id": "youtube_publisher",
-     "name": "YouTube Publisher"
-    }
-   ],
-   "ui": [
-    {
-     "id": "mai_ui",
-     "name": "MAI-UI"
-    },
-    {
-     "id": "crush",
-     "name": "Crush"
-    },
-    {
-     "id": "a2ui",
-     "name": "A2UI"
-    },
-    {
-     "id": "e2b_desktop",
-     "name": "E2B Desktop"
-    },
-    {
-     "id": "clawz",
-     "name": "ClawZ (OpenClaw)"
-    }
-   ],
-   "data": [
-    {
-     "id": "open_notebook",
-     "name": "Open Notebook"
-    }
-   ]
-  },
-  "specialized": {
-   "agent": [
-    {
-     "id": "darkxside_persona",
-     "name": "DARKXSIDE Persona"
-    },
-    {
-     "id": "consciousness_service",
-     "name": "Consciousness Service"
-    },
-    {
-     "id": "agentgym_rl",
-     "name": "AgentGym RL"
-    },
-    {
-     "id": "fordham_steward",
-     "name": "Fordham Steward"
-    },
-    {
-     "id": "fordham_onboarding",
-     "name": "Fordham Onboarding"
-    },
-    {
-     "id": "fordham_transaction",
-     "name": "Fordham Transaction"
-    },
-    {
-     "id": "fordham_creator",
-     "name": "Fordham Creator"
-    },
-    {
-     "id": "fordham_voice",
-     "name": "Fordham Voice"
-    },
-    {
-     "id": "nemoclaw",
-     "name": "NeMo Claw"
-    },
-    {
-     "id": "nemotron_claw",
-     "name": "Nemotron Claw"
-    },
-    {
-     "id": "hf_agent",
-     "name": "HF Agent"
-    },
-    {
-     "id": "hf_research_agent",
-     "name": "HF Research Agent"
-    }
-   ],
-   "media": [
-    {
-     "id": "jellyfin_bridge",
-     "name": "Jellyfin Bridge"
-    },
-    {
-     "id": "transcribe_and_fetch",
-     "name": "Transcribe and Fetch"
-    },
-    {
-     "id": "jellyfin_ai",
-     "name": "Jellyfin AI Media Stack"
-    },
-    {
-     "id": "cipher_beats_analyst",
-     "name": "Cipher Beats Analyst"
-    }
-   ],
-   "data": [
-    {
-     "id": "cipher_memory",
-     "name": "Cipher Memory"
-    },
-    {
-     "id": "metrics_specialist",
-     "name": "Prometheus Metrics Specialist"
-    },
-    {
-     "id": "logs_specialist",
-     "name": "Loki Logs Specialist"
-    },
-    {
-     "id": "tracing_specialist",
-     "name": "Jaeger Tracing Specialist"
-    }
-   ],
-   "ui": [
-    {
-     "id": "hyperdimensions",
-     "name": "Hyperdimensions"
-    },
-    {
-     "id": "wealth",
-     "name": "Wealth (Firefly III)"
-    },
-    {
-     "id": "health",
-     "name": "Health (wger)"
-    },
-    {
-     "id": "dashboard_specialist",
-     "name": "Grafana Dashboard Specialist"
-    }
-   ],
-   "worker": [
-    {
-     "id": "swarm_attribution",
-     "name": "Swarm Attribution"
-    }
-   ],
-   "llm": [
-    {
-     "id": "llama_lab",
-     "name": "Llama Throughput Lab"
-    },
-    {
-     "id": "autoresearch",
-     "name": "autoresearch"
-    },
-    {
-     "id": "llm_observability",
-     "name": "TensorZero LLM Observability Specialist"
-    }
-   ]
-  },
-  "utility": {
-   "api": [
-    {
-     "id": "presign",
-     "name": "Presign"
-    },
-    {
-     "id": "render_webhook",
-     "name": "Render Webhook"
-    },
-    {
-     "id": "vps_fleet_manager",
-     "name": "VPS Fleet Manager"
-    }
-   ],
-   "worker": [
-    {
-     "id": "pr_hedge_trim",
-     "name": "PR Hedge Trim"
-    },
-    {
-     "id": "n8n",
-     "name": "n8n"
-    },
-    {
-     "id": "danger_infra",
-     "name": "Danger Infra"
-    }
-   ],
-   "data": [
-    {
-     "id": "nats",
-     "name": "NATS"
-    },
-    {
-     "id": "supabase",
-     "name": "Supabase"
-    },
-    {
-     "id": "qdrant",
-     "name": "Qdrant"
-    },
-    {
-     "id": "neo4j",
-     "name": "Neo4j"
-    },
-    {
-     "id": "meilisearch",
-     "name": "Meilisearch"
-    },
-    {
-     "id": "minio",
-     "name": "MinIO"
-    },
-    {
-     "id": "prometheus",
-     "name": "Prometheus"
-    },
-    {
-     "id": "loki",
-     "name": "Loki"
-    },
-    {
-     "id": "headscale",
-     "name": "Headscale"
-    }
-   ],
-   "ui": [
-    {
-     "id": "grafana",
-     "name": "Grafana"
-    },
-    {
-     "id": "rustdesk",
-     "name": "RustDesk"
-    },
-    {
-     "id": "invidious",
-     "name": "Invidious"
-    }
-   ],
-   "agent": [
-    {
-     "id": "surf",
-     "name": "Surf"
-    },
-    {
-     "id": "e2b_spells",
-     "name": "E2B Spells"
-    },
-    {
-     "id": "a0_plugins",
-     "name": "a0-plugins"
-    },
-    {
-     "id": "pmoves_e2b_mcp_server",
-     "name": "E2B MCP Server"
-    },
-    {
-     "id": "hermes_agent",
-     "name": "HERMES Agent"
-    },
-    {
-     "id": "container_agent",
-     "name": "Container Agent"
-    }
-   ]
-  },
-  "ci": {
-   "ci": [
-    {
-     "id": "pmoves_ci_bot",
-     "name": "PMOVES CI Bot"
-    }
-   ]
-  }
- }
-};
