@@ -81,6 +81,7 @@ chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bund
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
+	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \

@@ -34,7 +34,10 @@ def candidate_files() -> Iterable[Path]:
             continue
         # Linked worktrees under .claude/worktrees are full repo copies; auditing
         # them double-counts every finding against files this checkout owns.
-        if "worktrees" in path.parts and ".claude" in path.parts:
+        # Match the ordered adjacent subtree so unrelated paths that merely
+        # contain both components elsewhere are still audited (no blind spot).
+        parts = path.parts
+        if any(parts[i : i + 2] == (".claude", "worktrees") for i in range(len(parts) - 1)):
             continue
         if path.suffix.lower() not in allowed:
             continue
