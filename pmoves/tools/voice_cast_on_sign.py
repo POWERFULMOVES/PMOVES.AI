@@ -2,10 +2,13 @@
 """
 voice_cast_on_sign.py -- CHIT-sign-triggered expressive voice (Phase 0).
 
-The ONLY listener on ``chit.signed.v1``. An agent's normal CHIT trail-sign
-(``pmoves/tools/sign_trail.py`` with ``CHIT_SIGN_PUBLISH=1``) becomes an
-audible, persona-shaped utterance -- with NO speak tool call anywhere in the
-pipeline. See ``pmoves/tools/VOICE_CAST_ON_SIGN.md`` for the full flow.
+Listens on ``agent.graphiti.signed.v1`` (the canonical RAW signature.v1
+subject -- NOT the multi-consumer ``chit.signed.v1`` production channel). An
+agent's normal CHIT trail-sign (``pmoves/tools/sign_trail.py`` with
+``CHIT_SIGN_PUBLISH=1``) becomes an audible, persona-shaped utterance -- with
+NO speak tool call anywhere in the pipeline. A payload discriminator (glyph +
+agent_id) ensures only genuine signature.v1 payloads are voice-cast, never a
+stray envelope. See ``pmoves/tools/VOICE_CAST_ON_SIGN.md`` for the full flow.
 
 Pipeline per message:
     1. JSON-decode the ``agent.graphiti.signed.v1`` payload.
@@ -25,7 +28,7 @@ Modeled on ``pmoves/tools/voice_follow_cast_agent.py`` (NATS URL resolution,
 subscribe/handler/daemon-loop structure).
 
 CLI:
-    python pmoves/tools/voice_cast_on_sign.py --subjects chit.signed.v1
+    python pmoves/tools/voice_cast_on_sign.py --subjects agent.graphiti.signed.v1
 
 Config via env:
     NATS_URL / VOICE_CAST_NATS_URL -- NATS connection URL
@@ -58,7 +61,7 @@ from voice_persona_bridge import resolve as resolve_persona  # noqa: E402
 _PMOVES_ROOT = _TOOLS_DIR.parent
 _OUT_DIR = _PMOVES_ROOT / "out"
 
-DEFAULT_SUBJECTS = ["chit.signed.v1"]
+DEFAULT_SUBJECTS = ["agent.graphiti.signed.v1"]  # raw signature.v1 subject, NOT the multi-consumer chit.signed.v1
 DEFAULT_NATS_URL = "nats://nats:pmoves@nats:4222"
 FALLBACK_INTENT = "narrate"  # kokoro CPU floor -- always available without GPU
 # Baseline tempo reference (BPM "moderato"/phrase level per shift-from-bpm skill).
@@ -185,6 +188,10 @@ class VoiceCastOnSign:
         self.flute_gateway_url = flute_gateway_url.rstrip("/")
         self.nc: Optional[NATS] = None
         self.running = False
+        # Synth endpoint sits behind verify_api_key on fleet nodes (skips only when
+        # FLUTE_API_KEY is unset). Send it when present, else calls 401 silently
+        # (5090-CLAUDE pair-review PR #2048, finding #3).
+        self.api_key = _env("FLUTE_API_KEY", "")
 
     async def _check_flute_health(self, client: httpx.AsyncClient) -> Optional[Dict[str, Any]]:
         """Deterministic health check. Returns the /healthz JSON, or None if unreachable.
@@ -210,14 +217,21 @@ class VoiceCastOnSign:
         body: Dict[str, Any] = {"text": text, "intent": intent}
         if persona_id:
             body["persona_id"] = persona_id
+        headers = {"X-API-Key": self.api_key} if self.api_key else {}
         try:
-            resp = await client.post(url, json=body, timeout=60.0)
+            resp = await client.post(url, json=body, headers=headers, timeout=60.0)
             if resp.status_code == 200:
                 return resp.content
-            sys.stderr.write(
-                f"[voice-cast-on-sign] Flute-Gateway synthesis failed: "
-                f"HTTP {resp.status_code} — {resp.text[:200]}\n"
-            )
+            if resp.status_code == 401:
+                sys.stderr.write(
+                    "[voice-cast-on-sign] Flute-Gateway 401 Unauthorized — set FLUTE_API_KEY "
+                    "(the synth endpoint is behind verify_api_key on fleet nodes)\n"
+                )
+            else:
+                sys.stderr.write(
+                    f"[voice-cast-on-sign] Flute-Gateway synthesis failed: "
+                    f"HTTP {resp.status_code} — {resp.text[:200]}\n"
+                )
         except Exception as exc:
             sys.stderr.write(f"[voice-cast-on-sign] Flute-Gateway synthesis error: {exc}\n")
         return None
@@ -231,6 +245,16 @@ class VoiceCastOnSign:
             return
 
         if not isinstance(payload, dict):
+            return
+
+        # Defense-in-depth: only voice-cast genuine signature.v1 payloads. Even on
+        # the dedicated agent.graphiti.signed.v1 subject, refuse to speak a stray
+        # envelope (e.g. Fordham dues/enrollment/mint receipts) that merely carries
+        # a 'summary' field (5090-CLAUDE pair-review PR #2048, finding #2).
+        if not (payload.get("glyph") and payload.get("agent_id")):
+            sys.stderr.write(
+                "[voice-cast-on-sign] Not a signature.v1 payload (no glyph/agent_id) -- skipping\n"
+            )
             return
 
         text = payload.get("summary")
