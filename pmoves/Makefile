@@ -4180,3 +4180,7 @@ design-vendor-check: ## Fail if the vendored ui/lib/persona/*.js drifted from ca
 			|| { echo "❌ pmoves/ui/lib/persona drifted — run 'make -C pmoves design-vendor' and commit"; exit 1; }; \
 	done
 	@echo "✅ ui/lib/persona matches design/ source"
+
+.PHONY: kimi
+kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
+	@kimi --config-file "$(CURDIR)/../.kimi/config.toml" --mcp-config-file "$(CURDIR)/../.kimi/mcp.json"

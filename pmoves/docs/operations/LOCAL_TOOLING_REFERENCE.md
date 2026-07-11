@@ -120,6 +120,11 @@ This guide aggregates the entry points that keep local environments consistent a
 - `make -C pmoves compose-split-check` → drift gate; fails if overlays are out of sync.
 - A tracked pre-commit hook is available at `.githooks/pre-commit`. Enable it with `git config core.hooksPath .githooks` and it will auto-regenerate the overlays whenever `pmoves/docker-compose.yml` is staged.
 
+## Kimi Code CLI (PMOVES-KIMI)
+- `make -C pmoves kimi` → launch Kimi Code CLI with the PMOVES project config (`.kimi/config.toml`) and MCP set (`.kimi/mcp.json`). This loads local model aliases (`pmoves/qwen3.5-35b`, `pmoves/hermes-v4-8b`, etc.) and wires cipher, docker, e2b, nats-fleet, supabase, and huggingface MCP servers.
+- Required environment variables for full MCP functionality: `MOONSHOT_API_KEY` (remote Kimi models), `E2B_API_KEY` (sandbox execution), `NATS_URL` (fleet messaging), `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY` (PostgREST), `HF_TOKEN` (HuggingFace higher rate limits).
+- Bootstrap context is auto-loaded from `.kimi/AGENTS.md`. Existing `.claude/skills/` are cross-loaded into Kimi because `merge_all_available_skills` is enabled in `.kimi/config.toml`.
+
 ## Persistent Data Layout (`pmoves/data/`)
 The repository keeps opinionated `gitkeep` stubs so local volumes land in predictable places when Docker mounts bind into the workspace. Buckets and databases still live in Docker volumes; this hierarchy houses agent-specific state that benefits from git-backed defaults:
 
