@@ -27,12 +27,13 @@ def handle_gate_event(payload: dict, floor) -> Optional[dict]:
 
     try:
         verdict = floor.check(payload)
+        clean = bool(verdict.clean)
     except Exception:
-        logger.exception("gate-hold: floor raised (fail-closed)")
+        logger.exception("gate-hold: floor raised or returned malformed verdict (fail-closed)")
         return None
 
-    if not verdict.clean:
-        logger.warning("gate-hold: egress floor tripped %s for %s", verdict.tripped, artifact_uri)
+    if not clean:
+        logger.warning("gate-hold: egress floor tripped %s for %s", getattr(verdict, "tripped", "?"), artifact_uri)
         return None
 
     approval = {"artifact_uri": artifact_uri, "title": title}

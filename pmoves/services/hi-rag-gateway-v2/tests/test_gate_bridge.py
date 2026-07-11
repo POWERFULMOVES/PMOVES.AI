@@ -56,3 +56,17 @@ def test_floor_exception_holds_fail_closed():
         def check(self, item):
             raise RuntimeError("detector blew up")
     assert gate_bridge.handle_gate_event(_event(), Boom()) is None
+
+
+def test_malformed_verdict_holds_fail_closed():
+    class BadFloor:
+        def check(self, item):
+            return object()  # no .clean attribute
+    assert gate_bridge.handle_gate_event(_event(), BadFloor()) is None
+
+
+def test_none_verdict_holds_fail_closed():
+    class NoneFloor:
+        def check(self, item):
+            return None
+    assert gate_bridge.handle_gate_event(_event(), NoneFloor()) is None
