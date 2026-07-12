@@ -1652,6 +1652,26 @@ nats server report connections
   persistent audit subscriber, `make -C pmoves nats-agent-inbox`, or an equivalent
   MCP/NATS bridge before it can be treated as online.
 
+**`village.gate.result.v1`**
+- **Direction:** Staged by `pmoves/tools/village_gate.py` (CI + local `make village-gate`) → Consumed by monitoring / signoff audit lane
+- **Purpose:** P0 Evaluation Gates — verdict of the automated evaluator gate that runs
+  quality-threshold checks (`pmoves/configs/village_gate_thresholds.yaml`) before
+  AGNOTE4482 Village Rule signoff. The envelope is written into the verdict JSON
+  (`pmoves/docs/logs/village_gate_latest.json`) as a STAGED publish — emit via
+  `pmoves-nats-mcp` when wired, same staged pattern as the archon mint commands.
+- **Payload:**
+  ```json
+  {
+    "gate": "village-gate",
+    "hard_pass": true,
+    "failed_checks": [],
+    "advisory_failures": ["docs-freshness"]
+  }
+  ```
+- **Notes:** Status STAGED (no live CI publisher yet — mirrors the pre-#1462 state of
+  `branch.<path-segments>.trail.v1`). Prometheus exposure is via textfile-collector
+  exposition (`--prom-textfile`), not a pushgateway.
+
 ## Agent Zero Task Coordination Subjects
 
 > **Source:** Z890 gap analysis (2026-03-15). Previously undocumented.

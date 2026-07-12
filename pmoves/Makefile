@@ -1925,6 +1925,10 @@ smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemm
 manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visibility; ARGS='--cgp <path>' to point at the user-scoped bundle)
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing $(ARGS)
 
+.PHONY: village-gate
+village-gate: ## Run the Village Gate evaluator (quality thresholds before Village Rule signoff; ARGS='--strict-tools' in CI)
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/village_gate.py $(ARGS)
+
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
 
