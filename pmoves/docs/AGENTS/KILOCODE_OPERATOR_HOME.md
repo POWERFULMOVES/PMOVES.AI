@@ -60,7 +60,48 @@ Use the `/claim` command or write directly to `AGNOTE4482PHI.t1.md`:
   Three-body: delivery=KILOCODE-GLM, control=DARKXSIDE, memory=this trail.
 ```
 
+### Working
+
+During implementation, update progress in PR comments and the AGNOTE board:
+
+1. If CI fails, compare the failure against `main` before calling it branch-specific.
+2. Keep changes atomic — if you find adjacent cleanups, open a follow-up; don't expand the current claim.
+3. Post progress updates to the PR with current blocker state.
+
+### Handoff (Cross-Agent Lane Transition)
+
+When handing off to another agent (Claude, Codex, etc.), emit a KRISS KROSS handshake block AND export a CHIT payload. **All cross-agent handoffs must be posted as CHIT payload references, never plaintext secrets.**
+
+Required handoff fields (8 fields, mandatory):
+
+```text
+graphiti_mark:    <trail identifier>
+branch:           <git branch name>
+pr_numbers:       [#<n>]
+scope:            <work scope description>
+risks:            <known risks>
+next_actions:     <next steps for receiving agent>
+chit_artifact_path: <CHIT payload reference — never plaintext>
+agent_signature:  <signed ACK block>
+```
+
+Export CHIT payload with no cleartext before handoff:
+
+```bash
+make -C pmoves chit-export CHIT_NO_CLEARTEXT=1
+make -C pmoves chit-manifest-sync
+make -C pmoves secrets-funnel-sync
+```
+
+Optional CLI path:
+
+```bash
+python -m pmoves.tools.mini_cli secrets encode --no-cleartext
+```
+
 ### Releasing Work
+
+After work is complete and handoff (if any) is done, write RELEASE entry and clear the claim:
 
 ```text
 <ISO-8601-timestamp> RELEASE `KILOCODE-GLM` scope: <description>.
@@ -69,7 +110,15 @@ Use the `/claim` command or write directly to `AGNOTE4482PHI.t1.md`:
   agent_signature: `ACK::KILOCODE-GLM::<SCOPE>-RELEASE`.
 ```
 
+Then sign the trail:
+
+```bash
+make -C pmoves sign-trail SUMMARY="<summary>" AGENT="kilocode" PHASE="<phase>"
+```
+
 ### Trail Signing
+
+Sign the trail for session-end provenance. Signing is optional locally (unsigned if `CHIT_PASSPHRASE` unset) but never skipped for session-end:
 
 ```bash
 make -C pmoves sign-trail SUMMARY="<summary>" AGENT="kilocode" PHASE="<phase>"
