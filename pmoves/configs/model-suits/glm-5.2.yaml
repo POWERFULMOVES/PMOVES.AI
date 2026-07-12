@@ -20,21 +20,22 @@ model_suit:
     attention: standard
 
   context:
-    max_window: 128000
-    effective_window: 128000
-    working_window: 32000
+    max_window: 1000000
+    effective_window: 500000
+    working_window: 262144
 
   defaults:
     temperature: 1.0
     top_p: 0.95
-    max_tokens: 8192
+    max_tokens: 131072
     frequency_penalty: 0.0
     presence_penalty: 0.0
 
   advanced:
     tool_call_parser: glm47
     enable_thinking: true
-    mtp_steps: 1
+    reasoning_effort: max
+    mtp_steps: shared
 
   harness_mappings:
     blueprint_implementation:

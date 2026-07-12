@@ -79,7 +79,7 @@ tensorzero:
   orchestrator_function: pmoves_orchestrator_coding
   variants:
     - name: cloud_zai_glm52
-      model: chat_ollama_cloud_default
+      model: chat_zai_glm52
       weight: 0.8
     - name: cloud_zai_glm5_turbo
       model: chat_zai_glm5_turbo

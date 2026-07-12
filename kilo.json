@@ -66,7 +66,7 @@
     },
     "pmoves-cipher": {
       "type": "remote",
-      "url": "http://localhost:8105/sse",
+      "url": "http://localhost:8105/mcp/sse",
       "headers": { "Authorization": "Bearer ${CIPHER_API_TOKEN}" }
     },
     "tailscale": {
