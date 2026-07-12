@@ -66,6 +66,10 @@ class TestSignatureGateWithoutKey:
 
 
 class TestSignatureGateNonDict:
-    def test_non_dict_payload_passes(self):
-        assert bridge.cgp_passes_signature_gate([1, 2, 3]) == (True, "")
-        assert bridge.cgp_passes_signature_gate("raw") == (True, "")
+    def test_non_dict_payload_passes_in_dev_mode(self):
+        assert bridge.cgp_passes_signature_gate([1, 2, 3]) == (True, "non-dict")
+        assert bridge.cgp_passes_signature_gate("raw") == (True, "non-dict")
+
+    def test_non_dict_payload_rejected_fail_closed(self, monkeypatch):
+        monkeypatch.setenv("CHIT_REQUIRE_SIGNATURE", "true")
+        assert bridge.cgp_passes_signature_gate([1, 2, 3]) == (False, "non-dict")

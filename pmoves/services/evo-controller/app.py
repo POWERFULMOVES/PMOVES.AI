@@ -240,10 +240,11 @@ class EvoSwarmController:
         """Verify CHIT signatures on inbound CGPs before they feed fitness.
 
         Tampered packets (invalid signature) are ALWAYS dropped. Unsigned
-        packets pass through in dev mode but are dropped when
-        CHIT_REQUIRE_SIGNATURE is set. Without a key (or the canonical
-        wrappers), verification is impossible: dev mode passes everything
-        through unchanged; fail-closed mode drops everything.
+        packets (including non-dict payloads, which cannot carry a signature)
+        pass through in dev mode but are dropped when CHIT_REQUIRE_SIGNATURE
+        is set. Without a key (or the canonical wrappers), verification is
+        impossible: dev mode passes everything through unchanged; fail-closed
+        mode drops everything.
         """
         key = _chit_signing_key()
         require = _chit_signature_required()
@@ -261,7 +262,9 @@ class EvoSwarmController:
         unsigned = invalid = 0
         for cgp in cgps:
             if not isinstance(cgp, dict):
-                kept.append(cgp)
+                unsigned += 1
+                if not require:
+                    kept.append(cgp)
                 continue
             if "sig" not in cgp:
                 unsigned += 1

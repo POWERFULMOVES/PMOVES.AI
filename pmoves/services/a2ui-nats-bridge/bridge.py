@@ -80,14 +80,15 @@ def cgp_passes_signature_gate(payload: Any) -> tuple[bool, str]:
     """Decide whether a geometry payload may be forwarded to WebSocket clients.
 
     Returns (passes, reject_reason). Rules:
-    - non-dict payloads pass (nothing to verify);
+    - non-dict payloads carry no verifiable signature: they pass in dev mode
+      and are rejected fail-closed ("non-dict");
     - with a key: invalid signatures are ALWAYS rejected ("invalid");
       unsigned payloads pass in dev mode, rejected fail-closed ("unsigned");
     - without a key (or wrappers): everything passes in dev mode, everything
       is rejected fail-closed ("unverifiable").
     """
     if not isinstance(payload, dict):
-        return True, ""
+        return (not _chit_signature_required()), "non-dict"
     key = _chit_signing_key()
     require = _chit_signature_required()
     if not (CHIT_AVAILABLE and key):

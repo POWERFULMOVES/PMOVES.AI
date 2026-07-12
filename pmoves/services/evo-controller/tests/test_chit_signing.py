@@ -120,6 +120,11 @@ class TestFilterVerifiedCgps:
         monkeypatch.setenv("CHIT_REQUIRE_SIGNATURE", "true")
         assert make_controller()._filter_verified_cgps([{"namespace": "pmoves"}]) == []
 
-    def test_non_dict_entries_pass_through(self, monkeypatch):
+    def test_non_dict_entries_pass_through_in_dev_mode(self, monkeypatch):
         monkeypatch.setenv("CHIT_PASSPHRASE", PASSPHRASE)
         assert make_controller()._filter_verified_cgps([None]) == [None]
+
+    def test_non_dict_entries_dropped_fail_closed(self, monkeypatch):
+        monkeypatch.setenv("CHIT_PASSPHRASE", PASSPHRASE)
+        monkeypatch.setenv("CHIT_REQUIRE_SIGNATURE", "true")
+        assert make_controller()._filter_verified_cgps([None]) == []
