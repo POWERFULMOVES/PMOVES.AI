@@ -765,9 +765,9 @@ Each developer skill has a natural node-owner from lane history + service knowle
 rg -n '[a-z]+:[a-z]' .claude/skills/*/SKILL.md --glob '!*.py'
 ```
 
-## Model-Suit YAML Schema — Kong Seeder Gap
+## Model-Suit YAML Schema — Kong Seeder Gap (Resolved PR #2105)
 
-**Known issue:** `kong_route_seeder.py:_parse_model_suits()` expects `model_id`/`provider` at top-level or nested under `model:`. All 17 model suits in `pmoves/configs/model-suits/` use one of three incompatible nestings (`model_suit:`, `suit:`, or top-level `name`). **0 of 17 files parse.** The seeder silently skips non-matching files with no warning.
+**Resolved:** `kong_route_seeder.py:_parse_model_suits()` now understands all 3 nesting patterns via fallback chain. `kong.mk` is wired into the Makefile. Previously 0 of 17 files parsed; now all parse correctly.
 
 **Three schema patterns exist (none compatible with the seeder):**
 - `model_suit:` nesting — 8 files (all GLM + Kimi suits)
@@ -776,9 +776,9 @@ rg -n '[a-z]+:[a-z]' .claude/skills/*/SKILL.md --glob '!*.py'
 
 **Additionally:** `pmoves/mk/kong.mk` is never included by `pmoves/Makefile`, so `make kong-seed-routes` is dead code. Lane: fix the seeder to understand all 3 nestings + wire the include.
 
-## Crush Configurator — Z.AI Direct Provider Gap
+## Crush Configurator — Z.AI Direct Provider Gap (Resolved PR #2105)
 
-**Known issue:** `crush_configurator.py` emits TensorZero as the sole provider. `crush setup` does NOT produce a working Z.AI config. The live config on this node (`~/.config/crush/crush.json`) is hand-maintained with a direct Z.AI Coding Plan provider.
+**Resolved:** `crush_configurator.py` now emits Z.AI Coding Plan alongside TensorZero when `Z_AI_API_KEY` is present. When TensorZero is unreachable, Z.AI becomes the primary provider so `crush setup` produces a working GLM-5.2 config on any node.
 
 **Z.AI Coding Plan endpoint:** `https://api.z.ai/api/coding/paas/v4` (env: `Z_AI_API_KEY`)
 **Coding Plan keys are endpoint-locked** — they get 401 on `/api/paas/v4/` and vice versa.

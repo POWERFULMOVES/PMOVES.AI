@@ -8,7 +8,7 @@
 
 ## Lane A: Kong Route Seeder Schema Fix
 
-**Status:** OPEN — unclaimed
+**Status:** CLAIMED — fixed in PR #2105
 **Type:** Control-body fix (config tooling, no runtime impact)
 **Effort:** Low (single-file change + Makefile include + unit test)
 **Risk:** Zero — seeder has never successfully run; fixing it can't break anything
@@ -42,7 +42,7 @@ make kong-seed-routes  # should now work
 
 ## Lane B: Crush Configurator Z.AI Direct Provider
 
-**Status:** OPEN — recommended for Crush (◇) or any terminal-gateway agent
+**Status:** CLAIMED — fixed in PR #2105
 **Type:** Delivery-body feature (additive, no existing behavior changed)
 **Effort:** Low-Medium (~50 lines across 2 files)
 **Risk:** Low — Z.AI provider auto-disabled when `Z_AI_API_KEY` absent

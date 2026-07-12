@@ -299,40 +299,47 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
     """
     env_cache = {path: _load_env_file(path) for path in ENV_CANDIDATES}
 
-    # TensorZero is the ONLY provider
     base_url_env = _lookup_env("TENSORZERO_BASE_URL", env_cache) or "http://localhost:3030"
     base_url = f"{base_url_env.rstrip('/')}/v1"
 
+    providers_dict: Dict[str, object] = {}
+    available_specs: Dict[str, ProviderSpec] = {}
+    provider_models: Dict[str, List[ModelSpec]] = {}
+
     # Fetch models dynamically from TensorZero
     models = _fetch_tensorzero_models()
+    tensorzero_reachable = bool(models) and any(
+        m.id not in ("qwen3_8b", "claude-sonnet-4-5") for m in models
+    )
 
-    # Find large and small models from dynamic list
-    large_models = [m for m in models if m.role == "large"]
-    small_models = [m for m in models if m.role == "small"]
-    default_large = large_models[0].id if large_models else "claude-sonnet-4-5"
-    default_small = small_models[0].id if small_models else "qwen3_8b"
+    # Only add TensorZero provider if the gateway is actually reachable
+    # (not returning fallback defaults). When TensorZero is down and
+    # Z_AI_API_KEY is present, Z.AI becomes the primary provider.
+    if tensorzero_reachable:
+        # Find large and small models from dynamic list
+        large_models = [m for m in models if m.role == "large"]
+        small_models = [m for m in models if m.role == "small"]
+        default_large = large_models[0].id if large_models else "claude-sonnet-4-5"
+        default_small = small_models[0].id if small_models else "qwen3_8b"
 
-    providers_dict: Dict[str, object] = {
-        "tensorzero": {
+        providers_dict["tensorzero"] = {
             "name": "TensorZero Gateway",
             "base_url": base_url,
             "type": "openai",
             "models": [model.to_dict() for model in models],
         }
-    }
 
-    tensorzero_spec = ProviderSpec(
-        id="tensorzero",
-        name="TensorZero Gateway",
-        base_url=base_url,
-        type="openai",
-        models=models,
-        default_large=default_large,
-        default_small=default_small,
-    )
-
-    available_specs = {"tensorzero": tensorzero_spec}
-    provider_models = {"tensorzero": models}
+        tensorzero_spec = ProviderSpec(
+            id="tensorzero",
+            name="TensorZero Gateway",
+            base_url=base_url,
+            type="openai",
+            models=models,
+            default_large=default_large,
+            default_small=default_small,
+        )
+        available_specs["tensorzero"] = tensorzero_spec
+        provider_models["tensorzero"] = models
 
     # Conditionally add Z.AI direct provider when API key is present
     zai_key = _lookup_env("Z_AI_API_KEY", env_cache)
