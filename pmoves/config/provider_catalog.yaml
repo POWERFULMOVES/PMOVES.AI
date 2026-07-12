@@ -433,6 +433,29 @@ providers:
         notes: "Multimodal coding model — vision + text, frontend recreation, GUI exploration, visual debugging"
         multimodal: true
         input_modalities: ["text", "image", "video", "file"]
+      chat_zai_glm52:
+        model_name: "glm-5.2"
+        tz_model_key: chat_zai_glm52
+        serves:
+          - function: coding_glm
+            variant_name: cloud_zai_glm52
+            role: primary
+            weight: 0.9
+          - function: orchestrator
+            variant_name: primary_cloud_glm52
+            role: primary
+            weight: 0.8
+          - function: agent_zero
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.7
+          - function: deepresearch
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.6
+        strength_ref: glm-5.2
+        vram_mb: 0
+        notes: "Flagship 1M-context model — large-scale implementation, automated research, long-horizon coding agent scenarios"
 
   # ---------------------------------------------------------------------------
   # GLM / BigModel.cn — GLM family (General endpoint, separate key)
