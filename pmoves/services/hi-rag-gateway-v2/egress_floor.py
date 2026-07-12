@@ -36,17 +36,41 @@ class Floor(Protocol):
 
 
 def _item_text(item: dict) -> str:
+    """Recursively collect every string reachable in `item`.
+
+    The floor must scan the WHOLE item, not a hand-picked key list — the
+    bridge's passthrough set (see gate_bridge._PASSTHROUGH) can grow, and the
+    floor must never again be narrower than what the bridge emits. This walks
+    dict values and list/tuple elements at any depth, stringifying scalar
+    int/float/bool leaves too. Items are JSON-decoded so cycles are not
+    expected, but a `seen` id-set guards against them defensively.
+    """
     parts: List[str] = []
-    for key in ("title", "description", "text"):
-        val = item.get(key)
+    seen: set = set()
+
+    def _walk(val: object) -> None:
         if isinstance(val, str):
             parts.append(val)
-    tags = item.get("tags")
-    if isinstance(tags, (list, tuple)):
-        parts.extend(str(t) for t in tags)
-    meta = item.get("meta")
-    if isinstance(meta, dict):
-        parts.extend(str(v) for v in meta.values() if isinstance(v, (str, int, float)))
+        elif isinstance(val, bool):
+            parts.append(str(val))
+        elif isinstance(val, (int, float)):
+            parts.append(str(val))
+        elif isinstance(val, dict):
+            obj_id = id(val)
+            if obj_id in seen:
+                return
+            seen.add(obj_id)
+            for v in val.values():
+                _walk(v)
+        elif isinstance(val, (list, tuple)):
+            obj_id = id(val)
+            if obj_id in seen:
+                return
+            seen.add(obj_id)
+            for v in val:
+                _walk(v)
+
+    _walk(item)
     return "\n".join(parts)
 
 

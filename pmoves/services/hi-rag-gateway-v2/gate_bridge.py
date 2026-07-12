@@ -70,11 +70,13 @@ async def _dispatch(msg_data: bytes, floor, publish) -> bool:
 async def publish_gate_worker(nats_url: str, room_manifest_path: str, backoff: float = 5.0) -> None:
     """Mirror of _content_provenance_worker: subscribe GATE_SUBJECT, run _dispatch."""
     import asyncio
+    import contextlib
     import nats  # local import keeps module NATS-free for tests
     from egress_floor import load_floor
 
     floor = load_floor(room_manifest_path)
     while True:
+        nc = None
         try:
             nc = await nats.connect(servers=[nats_url])
 
@@ -90,3 +92,9 @@ async def publish_gate_worker(nats_url: str, room_manifest_path: str, backoff: f
         except Exception:
             logger.exception("pub-gate bridge error; retry in %.1fs", backoff)
             await asyncio.sleep(backoff)
+        finally:
+            if nc is not None:
+                with contextlib.suppress(Exception):
+                    await nc.drain()
+                with contextlib.suppress(Exception):
+                    await nc.close()

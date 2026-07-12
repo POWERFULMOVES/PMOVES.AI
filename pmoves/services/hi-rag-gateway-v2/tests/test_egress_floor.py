@@ -1,10 +1,7 @@
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
-
-import pytest
 
 _spec = importlib.util.spec_from_file_location(
     "egress_floor", Path(__file__).resolve().parents[1] / "egress_floor.py"
@@ -85,3 +82,30 @@ def test_load_floor_unconfigured_terms_is_none(tmp_path, monkeypatch):
     monkeypatch.delenv("EGRESS_PROTECTED_TERMS_FILE", raising=False)
     floor = egress_floor.load_floor(str(manifest))
     assert floor.protected_terms is None
+
+
+def test_namespace_with_lan_or_tailscale_ip_trips():
+    v = _floor([]).check({"title": "x", "namespace": "tailnet-100.101.7.9"})
+    assert v.clean is False
+    assert "no-literal-lan-or-tailscale-ips" in v.tripped
+
+
+def test_namespace_with_protected_term_trips():
+    v = _floor(["shaela"]).check({"title": "x", "namespace": "shaela-private"})
+    assert v.clean is False
+
+
+def test_nested_meta_dict_with_lan_ip_trips():
+    v = _floor([]).check({"title": "x", "meta": {"contact": {"ip": "192.168.1.5"}}})
+    assert v.clean is False
+
+
+def test_nested_meta_dict_with_protected_term_trips():
+    v = _floor(["shaela"]).check({"title": "x", "meta": {"contact": {"name": "shaela"}}})
+    assert v.clean is False
+
+
+def test_clean_item_with_benign_namespace_and_nested_meta_passes():
+    v = _floor([]).check({"title": "Public update", "namespace": "public", "meta": {"k": {"v": "all clear"}}})
+    assert v.clean is True
+    assert v.tripped == []
