@@ -779,11 +779,16 @@ providers:
       chat_kilocode:
         model_name: "kilo-auto/balanced"   # Kilo plan-routed lane (provider picks model)
         tz_model_key: chat_kilocode
+        model_suit: kilo-auto-balanced      # pmoves/configs/model-suits/kilo-auto-balanced.yaml
         serves:
           - function: pmoves_orchestrator_coding
             variant_name: cloud_kilocode
             role: secondary
-            weight: 0.0
+            weight: 0.3
+          - function: coding_kilocode
+            variant_name: cloud_kilocode
+            role: secondary
+            weight: 0.3
         strength_ref: null
         vram_mb: 0
 
