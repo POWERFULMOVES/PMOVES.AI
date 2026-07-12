@@ -78,7 +78,7 @@ Important context documents are indexed by Hi-RAG v2 for Cipher access:
 - `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` — Agent type system
 - `plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md` — Integration architecture
 
-Query via Cipher: `GET http://localhost:8105/api/memory/search?q=...&limit=1`
+Query via Cipher MCP: `http://localhost:8105/mcp/sse` (SSE endpoint, matches `.claude/mcp.json`). Use MCP tools `pmoves_cipher_search`, `pmoves_cipher_store`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`. NOTE: the legacy `/api/memory/search` REST path does not exist — use the MCP SSE transport only (per `.claude/CATALOG.md`).
 
 ## Agent Taxonomy
 
