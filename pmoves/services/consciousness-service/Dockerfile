@@ -23,6 +23,11 @@ RUN mkdir -p /app/pmoves \
     && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
 COPY tools/__init__.py /app/pmoves/tools/__init__.py
 COPY tools/zeta_filter.py /app/pmoves/tools/zeta_filter.py
+# cgp_mapper imports pmoves.chit (CGP_SPEC_VERSION) unconditionally, and
+# chr_algorithm prefers the canonical pmoves.tools.chit_security signer.
+COPY chit/__init__.py /app/pmoves/chit/__init__.py
+COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
+COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
 
 # Set ownership
 RUN chown -R pmoves:pmoves /app
