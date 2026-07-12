@@ -1,0 +1,85 @@
+# ============================================================
+# GLM-5.2 Model Suit
+# Role: Flagship long-horizon coding agent, 1M context
+# Best for: Large-scale implementation, automated research,
+#           performance optimization, sustained engineering
+# Provider: Zhipu AI (Z.AI) — Coding Plan
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: glm-5.2
+  provider: zai
+  base_url: "https://api.z.ai/api/coding/paas/v4"
+  api_key_env: Z_AI_API_KEY
+
+  architecture:
+    type: moe
+    total_params: "744B+"
+    active_params: "40B+"
+    attention: standard
+
+  context:
+    max_window: 1000000
+    effective_window: 500000
+    working_window: 262144
+
+  defaults:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 131072
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    reasoning_effort: max
+    mtp_steps: shared
+
+  harness_mappings:
+    large_scale_implementation:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 131072
+      system_prompt: directive_architect
+
+    deep_debugging:
+      temperature: 0.3
+      top_p: 0.90
+      max_tokens: 131072
+      system_prompt: directive_debugger
+
+    system_engineering:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+
+    long_session:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 131072
+      system_prompt: directive_architect
+
+    refactoring:
+      temperature: 0.5
+      top_p: 0.92
+      max_tokens: 32768
+      system_prompt: directive_refactorer
+
+    automated_research:
+      temperature: 0.8
+      top_p: 0.97
+      max_tokens: 65536
+      system_prompt: directive_reasoner
+
+  cgp_state_vector:
+    delta: 0.30
+    Hz: 0.08
+    kappa: 1.8
+    A: 0.35
+    F: 0.05
+
+  fallback_to: glm-5.1
+  priority: 4
