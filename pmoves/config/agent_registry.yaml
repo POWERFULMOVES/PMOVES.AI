@@ -69,6 +69,38 @@ types:
   agent:  { tier: 6, element: "Psychic",  color: "#9370DB" }
   ui:     { tier: 7, element: "Light",    color: "#F5F5F5" }
 
+# Role classes — ORCHESTRATION roles (P0 Agent Role Consolidation,
+# ARCHON_ENHANCEMENT_ROADMAP §2). Orthogonal to `types` (service tiers) and
+# `classes` (naming prefixes): role_class says what an agent does in a
+# multi-agent workflow, not where it runs or what it's named.
+#
+# NAMING COLLISION GUARD: the `worker` ROLE below is unrelated to the
+# `worker` TYPE (tier 4) above. Never conflate them; the type system is
+# untouched by this addition.
+#
+# The trio maps onto the AGNOTE4482 Three-Body enforcement surface
+# (.claude/agents/{delivery,control,memory}-agent.md disallowedTools):
+# planner and reviewer are the pre-work and post-work faces of the Control
+# Body; worker is the Delivery Body; the Memory Body is orthogonal
+# (cross-cutting CHIT/Cipher custody, not a workflow role).
+role_classes:
+  planner:
+    three_body: control
+    phase: pre-work
+    description: "Decomposes intent into scoped work: specs, plans, lane claims. Read-heavy; produces no production edits."
+  worker:
+    three_body: delivery
+    phase: execution
+    description: "Implements the plan: code, fixes, docs, deploys. The only role_class that writes production changes."
+  reviewer:
+    three_body: control
+    phase: post-work
+    description: "Verifies and gates: review, evaluation gates, merge sequencing, Village Rule signoff. Never edits what it reviews."
+
+# Optional per-agent key: `role_class: planner|worker|reviewer` on any
+# entry below or in .claude/agents/*.md frontmatter. Absence = unclassified
+# (legacy), never an error.
+
 # Agent entries
 agents:
   agent_zero:
