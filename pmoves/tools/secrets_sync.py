@@ -12,6 +12,7 @@ from typing import Dict, List, Mapping, Sequence
 import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
+from pmoves.tools.secrets_self_generated import fill_self_generated
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_ROOT.parent
@@ -261,6 +262,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         cgp_path = Path(args.cgp).expanduser().resolve()
 
     secrets = decode_secret_map(load_cgp(cgp_path))
+    # Funnel-side guard: fill self-generated secrets (Supabase anon/service_role
+    # JWTs derived from JWT_SECRET) so they project without operator input and
+    # are never emitted as placeholders. Never overwrites an existing value.
+    secrets = fill_self_generated(secrets)
 
     # Filter entries if --keys is specified (selective rotation)
     if args.keys:
