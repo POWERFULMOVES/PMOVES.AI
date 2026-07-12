@@ -47,11 +47,63 @@ logging.basicConfig(
 )
 logger = logging.getLogger("a2ui-nats-bridge")
 
+# CHIT signature gate (consumer edge) — canonical verification via
+# services.common (single source of truth: pmoves.tools.chit_security).
+# The bridge is the last hop before geometry reaches the frontend; when a
+# signing key is available, tampered packets are dropped here. Unsigned
+# packets pass through unless CHIT_REQUIRE_SIGNATURE flips fail-closed.
+# Images that do not package the wrappers degrade to the historical
+# trust-passthrough behavior (dev mode).
+try:
+    from services.common.geometry_decoder import verify_cgp
+    CHIT_AVAILABLE = True
+except ImportError:
+    CHIT_AVAILABLE = False
+
+
+def _chit_signing_key() -> str:
+    """Canonical signing-key chain; empty string = dev mode (no verification)."""
+    return os.getenv("CHIT_SIGNING_KEY") or os.getenv("CHIT_PASSPHRASE", "")
+
+
+def _chit_signature_required() -> bool:
+    """Fail-closed switch — same env contract as gateway/Hi-RAG consumers."""
+    return os.getenv("CHIT_REQUIRE_SIGNATURE", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def cgp_passes_signature_gate(payload: Any) -> tuple[bool, str]:
+    """Decide whether a geometry payload may be forwarded to WebSocket clients.
+
+    Returns (passes, reject_reason). Rules:
+    - non-dict payloads pass (nothing to verify);
+    - with a key: invalid signatures are ALWAYS rejected ("invalid");
+      unsigned payloads pass in dev mode, rejected fail-closed ("unsigned");
+    - without a key (or wrappers): everything passes in dev mode, everything
+      is rejected fail-closed ("unverifiable").
+    """
+    if not isinstance(payload, dict):
+        return True, ""
+    key = _chit_signing_key()
+    require = _chit_signature_required()
+    if not (CHIT_AVAILABLE and key):
+        return (not require), "unverifiable"
+    if "sig" not in payload:
+        return (not require), "unsigned"
+    if verify_cgp(payload, passphrase=key):
+        return True, ""
+    return False, "invalid"
+
 # Prometheus Metrics
 a2ui_events_published = Counter("a2ui_events_published_total", "A2UI events published to NATS", ["event_type"])
 a2ui_events_received = Counter("a2ui_events_received_total", "Events received from A2UI agents")
 a2ui_events_forwarded = Counter("a2ui_events_forwarded_total", "A2UI events forwarded to WebSocket clients")
 geometry_events_forwarded = Counter("a2ui_geometry_events_forwarded_total", "Geometry CGP events forwarded to WebSocket clients")
+geometry_events_rejected = Counter("a2ui_geometry_events_rejected_total", "Geometry CGP events dropped by the CHIT signature gate", ["reason"])
 active_websockets = Gauge("a2ui_active_websockets", "Active WebSocket connections")
 nats_connected = Gauge("a2ui_nats_connected", "NATS connection status")
 
@@ -494,6 +546,14 @@ async def client_websocket(websocket: WebSocket):
         """
         try:
             payload = json.loads(msg.data.decode())
+            passes, reject_reason = cgp_passes_signature_gate(payload)
+            if not passes:
+                geometry_events_rejected.labels(reason=reject_reason).inc()
+                logger.warning(
+                    f"Dropped geometry message from {msg.subject}: "
+                    f"CHIT signature gate rejected it ({reject_reason})"
+                )
+                return
             envelope = {
                 "room": GEOMETRY_WS_ROOM,
                 "subject": msg.subject,

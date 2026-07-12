@@ -23,7 +23,14 @@ from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATE
 from pydantic import BaseModel, Field
 
 from cgp_mapper import CGPMapper
-from chr_algorithm import CHRConfig, CHRResult, chr_result_to_cgp, run_chr
+from chr_algorithm import (
+    CHRConfig,
+    CHRResult,
+    chit_signature_required,
+    chr_result_to_cgp,
+    get_chit_signing_key,
+    run_chr,
+)
 from persona_gate import PersonaGateService
 
 # Configure logging
@@ -37,9 +44,19 @@ logger = logging.getLogger(__name__)
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "consciousness-service")
 SERVICE_PORT = int(os.environ.get("SERVICE_PORT", "8106"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
-CHIT_PASSPHRASE = os.environ.get("CHIT_PROD_PASSPHRASE", "")
+# Canonical key chain (CHIT_SIGNING_KEY > CHIT_PASSPHRASE) with the legacy
+# CHIT_PROD_PASSPHRASE name still honored — see chr_algorithm.get_chit_signing_key.
+CHIT_PASSPHRASE = get_chit_signing_key()
 if not CHIT_PASSPHRASE:
-    logger.warning("CHIT_PROD_PASSPHRASE not set — CGP signing disabled")
+    if chit_signature_required():
+        raise RuntimeError(
+            "CHIT_REQUIRE_SIGNATURE is set but no signing key is available "
+            "(set CHIT_SIGNING_KEY or CHIT_PASSPHRASE)"
+        )
+    logger.warning(
+        "No CHIT signing key set (CHIT_SIGNING_KEY/CHIT_PASSPHRASE) — "
+        "CGP signing disabled (dev mode)"
+    )
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://supabase-kong:8000")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
