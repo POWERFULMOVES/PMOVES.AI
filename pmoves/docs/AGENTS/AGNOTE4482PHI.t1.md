@@ -35,6 +35,22 @@ frontmatter cannot bypass their body's tool constraints.
 - Rule: all cross-agent handoffs are posted as CHIT payload references, never plaintext secrets.
 - **Tool restriction:** `disallowedTools: Write, Edit, EnterPlanMode` — uses Cipher/CHIT skills only.
 
+### Role-class crosswalk (P0 Agent Role Consolidation)
+
+The community `planner / worker / reviewer` trio maps onto the Three-Body
+enforcement surface rather than replacing it (`role_classes:` in
+`pmoves/config/agent_registry.yaml`):
+
+| role_class | Body | Phase | Enforced by |
+|-----------|------|-------|-------------|
+| planner | Control | pre-work | read-only planning agents (built-in `Plan`) |
+| worker | Delivery | execution | `delivery-agent.md`, `hermes-agent.md` (`role_class: worker`) |
+| reviewer | Control | post-work | `control-agent.md`, `chit-pr-audit-agent.md` (`role_class: reviewer`) |
+
+The Memory Body is orthogonal — cross-cutting custody, not a workflow phase;
+`memory-agent` intentionally carries no `role_class`. The `worker` role_class
+is unrelated to the `worker` service TYPE (tier 4) in the registry.
+
 ## Collision-Avoidance Protocol
 1. Claim: agent writes `CLAIM` entry with branch + scope + TTL.
 2. Work: agent updates progress in PR comments and this note.
