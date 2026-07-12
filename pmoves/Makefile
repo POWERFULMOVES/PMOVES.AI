@@ -4208,4 +4208,13 @@ stage-data-check: stage-data ## Fail if committed website/stage/data drifted fro
 
 .PHONY: kimi
 kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
-	@kimi --config-file "$(CURDIR)/../.kimi/config.toml" --mcp-config-file "$(CURDIR)/../.kimi/mcp.json"
+	@if [ ! -f "$(CURDIR)/../.kimi/config.toml" ]; then \
+	  echo "[!] Kimi config not found: $(CURDIR)/../.kimi/config.toml"; exit 1; \
+	fi
+	@if [ -f "$(CURDIR)/../.kimi/mcp.json" ]; then \
+	  kimi --config-file "$(CURDIR)/../.kimi/config.toml" --mcp-config-file "$(CURDIR)/../.kimi/mcp.json"; \
+	else \
+	  echo "[!] Warning: $(CURDIR)/../.kimi/mcp.json not found; launching Kimi without MCP config."; \
+	  echo "    Run 'make -C pmoves mcp-spark-connect' to generate it from Docker MCP Toolkit."; \
+	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
+	fi

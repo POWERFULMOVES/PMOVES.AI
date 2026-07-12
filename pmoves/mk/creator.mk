@@ -45,6 +45,7 @@ endif
 # ---------- PMOVES-surf ----------
 
 surf-up: ## Start PMOVES-surf Next.js dev server
+	@$(LOAD_ENV_SHARED) 2>/dev/null || true
 	@if [ -z "$${E2B_API_KEY:-}" ]; then \
 	  echo "[!] E2B_API_KEY is required. Export it or add it to env.shared."; exit 1; \
 	fi
@@ -88,6 +89,7 @@ surf-down: ## Stop the PMOVES-surf dev server
 # if the user has staged one under PMOVES-E2B-Danger-Room-Deskdesktop/.
 
 danger-room-desktop-up: ## Validate E2B key and print/start Danger Room Desktop
+	@$(LOAD_ENV_SHARED) 2>/dev/null || true
 	@if [ -z "$${E2B_API_KEY:-}" ]; then \
 	  echo "[!] E2B_API_KEY is required. Export it or add it to env.shared."; exit 1; \
 	fi
@@ -97,7 +99,7 @@ danger-room-desktop-up: ## Validate E2B key and print/start Danger Room Desktop
 	@if [ -f $(DR_DESKTOP_DIR)/PMOVES-E2B-Danger-Room-Deskdesktop/main.py ]; then \
 	  echo "[*] PMOVES template found; starting preview in background..."; \
 	  cd $(DR_DESKTOP_DIR)/PMOVES-E2B-Danger-Room-Deskdesktop && \
-	    (python main.py &) && \
+	    python main.py & \
 	    echo $$! > $(DR_DESKTOP_PIDFILE); \
 	  echo "[+] Danger Room Desktop preview started. PID file: $(DR_DESKTOP_PIDFILE)"; \
 	else \

@@ -132,6 +132,9 @@ services:
     - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
     - TOKENISM_PORT=${TOKENISM_PORT:-8100}
     - FLASK_ENV=${FLASK_ENV:-production}
+    # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
     - NATS_URL=${NATS_URL}
     - NATS_CLIENT_NAME=tokenism-simulator

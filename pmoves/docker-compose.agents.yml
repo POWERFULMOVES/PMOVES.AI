@@ -770,6 +770,9 @@ services:
     - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
     - PORT=9224
+    # CHIT fail-closed verification gate (house pattern, mirrors hi-rag-gateway*)
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports:
     - ${A2UI_BIND:-0.0.0.0}:9224:9224
     depends_on:
@@ -863,6 +866,8 @@ services:
     - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8106}
     - NATS_URL=${NATS_URL}
     - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     - PYTHONUNBUFFERED=1
@@ -897,6 +902,9 @@ services:
     - PORT=8113
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
+    # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
     - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
     - NATS_URL=${NATS_URL}

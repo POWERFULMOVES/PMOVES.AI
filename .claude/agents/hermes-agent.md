@@ -1,5 +1,6 @@
 ---
 name: hermes-agent
+role_class: worker
 description: >
   HERMES Agent (NousResearch) integration agent for PMOVES.AI.
   Operates as a cross-platform gateway, skill orchestrator, and subagent delegator.
