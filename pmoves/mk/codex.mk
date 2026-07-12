@@ -80,6 +80,13 @@ chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bund
 	@$(CODEX_PY) tools/chit_encode_secrets.py --env-file "$(CHIT_EXPORT_ENV)" --out "$(CHIT_EXPORT_PATH)" $(CHIT_ENCODE_FLAGS)
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
+chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
+	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@runner="$(CODEX_PY)"; \
+	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
+	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
+	$$runner tools/chit_manifest_register.py $(ARGS)
+
 chit-manifest-sync: ## Sync v1 CHIT manifest from v2 (file/key targets + alias hints)
 	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
 	@runner="$(CODEX_PY)"; \
