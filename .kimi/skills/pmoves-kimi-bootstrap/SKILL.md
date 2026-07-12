@@ -48,4 +48,13 @@ kimi mcp test pmoves-cipher
 
 # Sign a trail entry
 CHIT_PASSPHRASE=... make -C pmoves sign-trail AGENT=kimi SUMMARY="..."
+
+# Browser / computer use (E2B Surf)
+make -C pmoves surf-up   # needs E2B_API_KEY + OPENAI_API_KEY
+
+# Danger Room desktop sandbox
+make -C pmoves danger-room-desktop-up   # needs E2B_API_KEY
+
+# Build a container with Danger Room theme fanfare
+make -C pmoves danger-room-build IMAGE=agent-zero
 ```

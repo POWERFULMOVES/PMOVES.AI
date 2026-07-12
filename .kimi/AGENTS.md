@@ -41,6 +41,9 @@ This loads `.kimi/config.toml` and `.kimi/mcp.json` explicitly so your session u
 | CHIT-sign provenance | `make -C pmoves sign-trail SUMMARY=... AGENT=...` |
 | Refresh living docs | `make -C pmoves docs-reconcile` |
 | Launch this bootstrap | `make -C pmoves kimi` |
+| Browser / computer use | `make -C pmoves surf-up` (needs `E2B_API_KEY` + `OPENAI_API_KEY`) |
+| Danger Room desktop | `make -C pmoves danger-room-desktop-up` (needs `E2B_API_KEY`) |
+| Build with fanfare | `make -C pmoves danger-room-build IMAGE=<image>` |
 
 Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When a damage-control hook converts a raw `docker` / `netsh` / `gh workflow run` command to an `ask` prompt, that means a Make target already exists — use it.
 
