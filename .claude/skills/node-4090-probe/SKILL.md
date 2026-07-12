@@ -1,5 +1,5 @@
 ---
-name: 4090:probe
+name: node-4090-probe
 description: >
   Run the W0 Substrate hardware probe on the 4090 node.
   Windows: deploy/provision/glances-autodetect.ps1

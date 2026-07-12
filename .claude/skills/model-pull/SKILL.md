@@ -1,5 +1,5 @@
 ---
-name: model:pull
+name: model-pull
 description: >
   Pull local inference models (Hermes V4, Qwen3 embed, Gemma 4 multimodal, NeMo Omni,
   Unsloth GGUF variants) via Ollama or HuggingFace CLI. Node-aware routing: ≥70B → SPARK

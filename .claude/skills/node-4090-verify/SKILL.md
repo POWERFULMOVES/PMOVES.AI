@@ -1,5 +1,5 @@
 ---
-name: 4090:verify
+name: node-4090-verify
 description: >
   Verify the 4090 node's W0 substrate artifacts landed correctly on main.
   Checks: node-4090-probe SKILL.md has no BLOCKED notices,

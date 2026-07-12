@@ -1,5 +1,5 @@
 ---
-name: 4090:field-brief
+name: field-brief
 description: >
   Template a KiloCode implementation brief at .kilo/command/<name>.md.
   Generates the required sections: ## Arguments, ## Implementation,

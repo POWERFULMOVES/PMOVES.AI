@@ -1,5 +1,5 @@
 ---
-name: shift:from-bpm
+name: shift-from-bpm
 description: >
   Single-shot beats-to-voice pipeline. Encodes text at a target BPM into a
   CGP v0.2 prosodic packet and publishes to tokenism.prosodic.bpm.v1.

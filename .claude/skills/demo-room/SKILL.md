@@ -1,5 +1,5 @@
 ---
-name: demo:room
+name: demo-room
 description: >
   Launch the PMOVES Demo Room: starts Agent Zero locally, loads 4090 Claude Code claws (skills),
   and surfaces HERMES V4 as the reasoning assist. Publishes p7.nats.launch to trigger the P7

@@ -1,5 +1,5 @@
 ---
-name: 4090:sitrep
+name: node-4090-sitrep
 description: >
   Full situation report for the 4090 laptop node: git status, active worktrees,
   GPU (nvidia-smi), NATS health (port 8222), running containers, and open PRs.

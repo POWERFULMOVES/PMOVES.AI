@@ -1,5 +1,5 @@
 ---
-name: shift:listen
+name: shift-listen
 description: >
   Start beats_to_voice.py in NATS push-listen mode on this node.
   Subscribes to voice.agent.response.v1, publishes CGP v0.2 prosodic packets

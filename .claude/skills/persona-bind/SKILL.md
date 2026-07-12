@@ -1,5 +1,5 @@
 ---
-name: persona:bind
+name: persona-bind
 description: >
   Bind a FlOO$ character suit to the session voice pipeline.
   Sets BEATS_VOICE env var and documents CGP control_plane.param_surface
