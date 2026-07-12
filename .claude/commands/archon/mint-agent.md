@@ -57,6 +57,7 @@ Contract for the future `archon:create-agent` MCP tool:
   "input": {
     "agent_name": "<agent-name>",
     "role": "<role>",
+    "role_class": "<planner|worker|reviewer|null — omit/null when unclassified>",
     "room_id": "<room>",
     "owning_persona": "<owning-persona>",
     "creator_id": "<supabase auth.users.id from Step 0>",
