@@ -1407,6 +1407,34 @@ temperature = 0.1
 type = "chat_completion"
 model = "qwen35_9b"
 
+# KiloCode GLM Coding Plan (KiloCode plan-routed + GLM fallback)
+# Dedicated function for KiloCode VS Code agent on 5090.
+# Uses KiloCode's own kilo-auto/balanced as primary with GLM-5.2/Turbo fallback.
+[functions.coding_kilocode]
+type = "chat"
+
+[functions.coding_kilocode.variants.cloud_kilocode]
+type = "chat_completion"
+model = "chat_kilocode"
+weight = 0.7
+temperature = 0.1
+
+[functions.coding_kilocode.variants.cloud_zai_glm52]
+type = "chat_completion"
+model = "chat_ollama_cloud_default"
+weight = 0.5
+temperature = 0.1
+
+[functions.coding_kilocode.variants.cloud_zai_glm5_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.3
+temperature = 0.1
+
+[functions.coding_kilocode.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
 # MiniMax Token Plan (cloud primary, local fallback)
 [functions.coding_minimax]
 type = "chat"
@@ -1564,7 +1592,7 @@ type = "chat_completion"
 model = "chat_kilocode"
 temperature = 0.2
 max_tokens = 8192
-weight = 0.0
+weight = 0.3
 
 [functions.pmoves_orchestrator_coding.variants.cloud_ollama_default]
 type = "chat_completion"
