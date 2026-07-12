@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import nats
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field
@@ -379,8 +379,8 @@ async def run_chr_endpoint(request: CHRRequest):
 @app.post("/chr/from-supabase")
 async def run_chr_from_supabase(
     namespace: str = "pmoves.consciousness",
-    K: int = Field(default=8, ge=2, le=100, description="Number of constellations (2-100)"),
-    limit: int = Field(default=500, ge=1, le=10000, description="Max theories to fetch (1-10000)"),
+    K: int = Query(default=8, ge=2, le=100, description="Number of constellations (2-100)"),
+    limit: int = Query(default=500, ge=1, le=10000, description="Max theories to fetch (1-10000)"),
     publish: bool = True,
 ):
     """
