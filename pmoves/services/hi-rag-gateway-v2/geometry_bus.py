@@ -152,6 +152,7 @@ _content_provenance_task: Optional[asyncio.Task] = None
 _content_provenance_stop: Optional[asyncio.Event] = None
 _content_provenance_nc = None
 _geometry_cgp_task: Optional[asyncio.Task] = None
+_pub_gate_task: Optional[asyncio.Task] = None
 _geometry_cgp_stop: Optional[asyncio.Event] = None
 _geometry_cgp_nc = None
 _latest_provenance_lock = threading.RLock()
@@ -991,6 +992,7 @@ async def lifespan(app: FastAPI):
     global _geometry_realtime_task, _geometry_swarm_task, _geometry_swarm_stop
     global _content_provenance_task, _content_provenance_stop
     global _geometry_cgp_task, _geometry_cgp_stop
+    global _pub_gate_task
 
     # Startup
     if shape_store is None:
@@ -1018,6 +1020,22 @@ async def lifespan(app: FastAPI):
     if _geometry_cgp_task is None and NATS_URL and hasattr(nats, "connect"):
         _geometry_cgp_task = asyncio.create_task(subscribe_geometry_cgp())
         logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", NATS_URL)
+
+    # Pub-gate bridge — env-gated; behavior-identical when PUBLISH_GATE_BRIDGE unset.
+    if (
+        _pub_gate_task is None
+        and os.environ.get("PUBLISH_GATE_BRIDGE", "").lower() in ("1", "true", "yes", "on")
+        and NATS_URL
+        and hasattr(nats, "connect")
+    ):
+        from gate_bridge import publish_gate_worker
+        # geometry_bus.py: pmoves/services/hi-rag-gateway-v2/ -> parents[2] == pmoves
+        room_manifest = os.environ.get(
+            "PUB_GATE_ROOM_MANIFEST",
+            str(Path(__file__).resolve().parents[2] / "config/rooms/darkxsides.room.json"),
+        )
+        _pub_gate_task = asyncio.create_task(publish_gate_worker(NATS_URL, room_manifest))
+        logger.info("pub-gate bridge started (subject=geometry.publish.gate.v1)")
 
     yield
 
@@ -1051,3 +1069,8 @@ async def lifespan(app: FastAPI):
             await _geometry_cgp_task
         _geometry_cgp_task = None
     _geometry_cgp_stop = None
+    if _pub_gate_task is not None:
+        _pub_gate_task.cancel()
+        with contextlib.suppress(Exception):
+            await _pub_gate_task
+        _pub_gate_task = None

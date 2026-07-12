@@ -1,4 +1,5 @@
 import importlib.util
+import json as _json
 import sys
 from pathlib import Path
 
@@ -99,3 +100,26 @@ def test_approval_and_gate_event_conform_to_schemas():
 
     topics = json.loads((contracts / "topics.json").read_text(encoding="utf-8"))
     assert "geometry.publish.gate.v1" in json.dumps(topics)
+
+
+import asyncio
+
+
+def test_dispatch_publishes_approval_on_clean():
+    published = []
+    async def _pub(subject, data):
+        published.append((subject, data))
+    ev = _event()
+    ok = asyncio.run(gate_bridge._dispatch(_json.dumps(ev).encode(), _floor(), _pub))
+    assert ok is True
+    assert published and published[0][0] == "content.publish.approved.v1"
+
+
+def test_dispatch_holds_on_dirty():
+    published = []
+    async def _pub(subject, data):
+        published.append((subject, data))
+    ev = _event(description="ip 10.0.0.5")
+    ok = asyncio.run(gate_bridge._dispatch(_json.dumps(ev).encode(), _floor(), _pub))
+    assert ok is False
+    assert published == []
