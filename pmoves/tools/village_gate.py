@@ -118,6 +118,12 @@ def check_ruff_budget(params: Dict[str, Any]) -> Dict[str, float]:
     paths = [str(REPO_ROOT / p) for p in params.get("paths", [])]
     argv = _ruff_argv() + ["check", *paths, "--output-format", "json", "--exit-zero"]
     proc = subprocess.run(argv, capture_output=True, text=True, cwd=REPO_ROOT, timeout=300)
+    # With --exit-zero, a non-zero exit means ruff ITSELF failed (bad config,
+    # incompatible version) — that must be a gate error, never "0 violations".
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"ruff failed to run (exit {proc.returncode}): {proc.stderr.strip()[:300]}"
+        )
     try:
         findings = json.loads(proc.stdout or "[]")
     except json.JSONDecodeError as exc:

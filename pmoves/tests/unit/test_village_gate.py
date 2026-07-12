@@ -61,6 +61,17 @@ class TestAdapters:
         assert vg.check_command_exit({"command": ["true"]}) == {"exit_code": 0.0}
         assert vg.check_command_exit({"command": ["false"]}) == {"exit_code": 1.0}
 
+    def test_ruff_tool_failure_is_gate_error_not_zero_violations(self, monkeypatch):
+        class FakeProc:
+            returncode = 2
+            stdout = ""
+            stderr = "ruff: bad config"
+
+        monkeypatch.setattr(vg, "_ruff_argv", lambda: ["ruff"])
+        monkeypatch.setattr(vg.subprocess, "run", lambda *a, **k: FakeProc())
+        with pytest.raises(RuntimeError, match="ruff failed to run"):
+            vg.check_ruff_budget({"paths": ["pmoves/tools"]})
+
 
 def config_with(check: dict) -> dict:
     return {"version": 1, "checks": [check]}
