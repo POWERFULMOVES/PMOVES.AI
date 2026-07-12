@@ -4198,6 +4198,18 @@ design-vendor-check: ## Fail if the vendored ui/lib/persona/ or website/persona/
 	done
 	@echo "✅ ui/lib/persona + website/persona match design/ source"
 
+.PHONY: stage-data stage-data-check
+
+stage-data: ## Bake website/stage/data/public-rooms.json (A2UI surface) from public room manifests
+	cd design && uv run --no-project python stage_data.py
+
+stage-data-check: stage-data ## Fail if committed website/stage/data drifted from the room manifests
+	@# intent-to-add so a brand-new baked file can't pass the gate silently.
+	@git add --intent-to-add ../website/stage/data 2>/dev/null || true
+	@git diff --exit-code -- ../website/stage/data \
+		|| { echo "❌ website/stage/data drifted — run 'make -C pmoves stage-data' and commit"; exit 1; }
+	@echo "✅ website/stage/data matches room manifests"
+
 .PHONY: kimi
 kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	@if [ ! -f "$(CURDIR)/../.kimi/config.toml" ]; then \
