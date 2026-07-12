@@ -1,0 +1,103 @@
+# KiloCode GLM Agent Profile
+# PMOVES.AI KiloCode GLM Edition
+#
+# Runs on 5090 (primary) alongside Claude Code and Codex.
+# Uses GLM-5.2 via Z.AI coding plan as primary model.
+# Operates under POWERFULMOVES identity with DARKXSIDE as COCREATOR witness.
+
+name: kilocode_glm
+role: kilocode-glm-claw
+description: "KiloCode GLM claw for blueprint-first feature implementation via GLM-5.2 coding plan, MCP integration, and VS Code-native development on the 5090 GPU node"
+
+node_affinity:
+  - 5090  # Primary - GPU node, VS Code workstation
+  - laptop-4090  # Portable - for mobile/field work
+  - z890  # Fallback - when 5090 unavailable
+
+model:
+  provider: zai
+  model: glm-5.2
+  endpoint: https://api.z.ai/api/coding/paas/v4
+  api_key_env: Z_AI_API_KEY
+  fallback_model: glm-5-turbo
+  fallback_endpoint: https://api.z.ai/api/coding/paas/v4
+  small_model: glm-4-air
+
+# KiloCode also has its own plan-routed lane
+kilocode_plan:
+  enabled: true
+  api_key_env: KILOCODE_API_KEY
+  endpoint: https://api.kilocode.ai/api/openrouter
+  model: kilo-auto/balanced
+
+capabilities:
+  - blueprint_first_implementation
+  - mcp_integration
+  - gpu_model_serving_coordination
+  - chit_cgp_encoding
+  - geometry_bus_operations
+  - agent_framework_development
+  - multi_agent_coordination
+  - vs_code_native_development
+
+nats:
+  url: nats://nats:pmoves@nats:4222
+  subscribe:
+    - mesh.gpu.status.v1
+    - mesh.gpu.model.loaded.v1
+    - claw.task.assign.v1
+    - botz.workitem.claimed.v1
+  publish:
+    - mesh.gpu.status.v1
+    - graphiti.signed.v1
+
+# Three-Body Doctrine
+three_body:
+  default_role: delivery
+  cocreator: darkxside
+  trail_attribution: "DARKXSIDE x POWERFULMOVES on 5090"
+
+exec_permissions:
+  - python3
+  - curl
+  - git
+  - make
+  - nats
+  - docker
+  - nvidia-smi
+  - ollama
+
+health:
+  endpoint: http://localhost:3030/health
+  heartbeat_subject: kilocode.agent.status.v1
+  heartbeat_interval_seconds: 30
+
+# TensorZero routing
+tensorzero:
+  gateway: http://localhost:3030
+  primary_function: coding_glm
+  orchestrator_function: pmoves_orchestrator_coding
+  variants:
+    - name: cloud_zai_glm52
+      model: chat_zai_glm52
+      weight: 0.8
+    - name: cloud_zai_glm5_turbo
+      model: chat_zai_glm5_turbo
+      weight: 0.6
+    - name: cloud_kilocode
+      model: chat_kilocode
+      weight: 0.3
+
+# Local GPU services
+gpu_services:
+  ollama: http://localhost:11434
+  hi_rag_gpu: http://localhost:8087
+
+# Remote services via Tailscale (Z890 hub)
+remote_services:
+  agent_zero: "http://${TS_Z890}:8080"
+  archon: "http://${TS_Z890}:8091"
+  tensorzero: "http://${TS_Z890}:3030"
+  nats: "nats://${TS_Z890}:4222"
+  cipher_memory: "http://${TS_Z890}:8105/sse"
+  ollama_z890: "http://${TS_Z890}:11434"

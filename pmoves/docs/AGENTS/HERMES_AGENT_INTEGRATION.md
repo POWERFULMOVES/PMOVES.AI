@@ -568,7 +568,7 @@ All credentials are injected via CHIT secrets funnel (never committed).
 | Tier | Provider | Plan | Credential Env Var | Model | Use Case |
 |------|----------|------|-------------------|-------|----------|
 | 1 | Ollama (local) | Self-hosted | `OLLAMA_BASE_URL` | `hermes3:8b` | Always try first. Q4/CPU offload if GTX 1650 OOM |
-| 2 | Z.AI | Coding Plan | `ZAI_API_KEY` | `zai-coding` | Complex code gen, refactoring, agentic coding |
+| 2 | Z.AI | Coding Plan | `Z_AI_API_KEY` | `glm-5.2` | Complex code gen, refactoring, agentic coding |
 | 2 | Kimi | Allegro Coding Plan | `KIMI_API_KEY` | `kimi-k2.6` | Long-context reasoning, multi-file, Chinese |
 | 2 | MiniMax | Token Plan | `MINIMAX_API_KEY` | `minimax-text-01` | Creative writing, dialogue, multi-modal |
 | 2 | Alibaba | Coding Plan | `ALIBABA_API_KEY` | `qwen-coder` | Code completion, unit tests, Chinese coding |
@@ -585,14 +585,14 @@ Ollama local > Z.AI ≈ Kimi ≈ MiniMax ≈ Alibaba > OpenRouter > Codex/Claude
 ```
 
 ### Pool Rotation
-- `ZAI_API_KEYS` (comma-separated) -- round-robin for Z.AI Coding Plan
+- `Z_AI_API_KEYS` (comma-separated) -- round-robin for Z.AI Coding Plan
 - `OPENROUTER_API_KEYS` (comma-separated) -- round-robin for OpenRouter
 
 ### Docker MCP Toolkit
 This instance has Docker Desktop + WSL2 integration:
 - `DOCKER_HOST=tcp://localhost:2375`
 - Container image: `nikolaik/python-nodejs:python3.11-nodejs20`
-- Forwarded env vars: `ZAI_API_KEY`, `KIMI_API_KEY`, `OPENROUTER_API_KEY`
+- Forwarded env vars: `Z_AI_API_KEY`, `KIMI_API_KEY`, `OPENROUTER_API_KEY`
 - **Review after PRs**: Add custom MCP servers (n8n, ComfyUI, Hi-RAG gateway, etc.)
 
 ### HuggingFace / Unsloth Follow-Up (Post-PR)

@@ -377,6 +377,33 @@ providers:
         strength_ref: glm-5-turbo
         vram_mb: 0
         notes: "OpenClaw-native model — optimized for tool calling, long chains, scheduled tasks, and agentic workflows"
+      chat_zai_glm52:
+        model_name: "glm-5.2"
+        tz_model_key: chat_zai_glm52
+        serves:
+          - function: agent_zero
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.8
+          - function: coding_glm
+            variant_name: cloud_zai_glm52
+            role: primary
+            weight: 0.9
+          - function: coding_kilocode
+            variant_name: cloud_zai_glm52
+            role: secondary
+            weight: 0.5
+          - function: archon_work_orders
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.7
+          - function: archon_code_review
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.6
+        strength_ref: glm-5.2
+        vram_mb: 0
+        notes: "Latest GLM model — primary coding + reasoning via Z.AI coding endpoint"
       chat_zai_glm5v_turbo:
         model_name: "glm-5v-turbo"
         tz_model_key: chat_zai_glm5v_turbo
