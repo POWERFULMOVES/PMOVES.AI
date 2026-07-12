@@ -27,7 +27,11 @@ services:
       DB_PASSWORD: ${FIREFLY_DB_PASSWORD:-fireflypass}
       TRUSTED_PROXIES: "*"
     ports:
-      - "8080:8080"
+      # Keep in sync with the LIVE deploy unit (pmoves/docker-compose.external.yml,
+      # brought up via `make -C pmoves up-external`): host ${FIREFLY_PORT:-8075},
+      # container 8080. Spec G3 (tokenism-wealth demo wiring) reconciled this
+      # duplicate — do not reintroduce a hardcoded 8080 host port or a new var.
+      - "${FIREFLY_PORT:-8075}:8080"
     networks: [pmoves]
     profiles: ["firefly"]
 
