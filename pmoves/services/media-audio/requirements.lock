@@ -192,6 +192,8 @@ pooch==1.9.0
     # via librosa
 postgrest==0.13.2
     # via supabase
+prometheus-client==0.25.0
+    # via -r services/media-audio/requirements.txt
 psutil==7.2.2
     # via accelerate
 pycparser==3.0
