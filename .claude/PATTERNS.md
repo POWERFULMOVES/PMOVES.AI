@@ -750,3 +750,46 @@ Each developer skill has a natural node-owner from lane history + service knowle
 | **Doc steward** | 5090 + Z890 | `pmoves-living-docs-refresh`, `pmoves-submodule-fleet` | LIVING_DOCS_INDEX freshness, submodule README sync |
 
 > Skill discovery is filesystem-based — adding `.claude/skills/<slug>/SKILL.md` auto-registers the skill in any active Claude session without restart. Use `git checkout <branch> -- .claude/skills` during PR review to live-validate.
+
+## Skill Frontmatter Validation (Crush + Claude Code)
+
+**Rule:** The `name:` field in YAML frontmatter must be alphanumeric-with-hyphens only, matching the directory name. No colons, no leading/trailing/consecutive hyphens.
+
+**Common failure:** Skills migrated from Claude Code slash-command conventions (`/4090:probe`, `/shift:listen`) carry colon-separated names that Crush's validator rejects. The fix is mechanical: replace `:` with `-` and ensure the name matches the directory.
+
+**Body-text sweep required:** When renaming a skill, also update all references in headings (`#`), usage examples (`/skill:name`), cross-references ("See `other:skill`"), and TAC tree YAMLs. Grep the old colon pattern across the entire repo after any frontmatter rename.
+
+**Verification command:**
+```bash
+# Find any remaining colon-separated skill names
+rg -n '[a-z]+:[a-z]' .claude/skills/*/SKILL.md --glob '!*.py'
+```
+
+## Model-Suit YAML Schema — Kong Seeder Gap
+
+**Known issue:** `kong_route_seeder.py:_parse_model_suits()` expects `model_id`/`provider` at top-level or nested under `model:`. All 17 model suits in `pmoves/configs/model-suits/` use one of three incompatible nestings (`model_suit:`, `suit:`, or top-level `name`). **0 of 17 files parse.** The seeder silently skips non-matching files with no warning.
+
+**Three schema patterns exist (none compatible with the seeder):**
+- `model_suit:` nesting — 8 files (all GLM + Kimi suits)
+- `suit:` nesting — 5 files (Claude + MiniMax suits)
+- Top-level `name`/`provider` — 4 files (Ollama + OpenRouter suits)
+
+**Additionally:** `pmoves/mk/kong.mk` is never included by `pmoves/Makefile`, so `make kong-seed-routes` is dead code. Lane: fix the seeder to understand all 3 nestings + wire the include.
+
+## Crush Configurator — Z.AI Direct Provider Gap
+
+**Known issue:** `crush_configurator.py` emits TensorZero as the sole provider. `crush setup` does NOT produce a working Z.AI config. The live config on this node (`~/.config/crush/crush.json`) is hand-maintained with a direct Z.AI Coding Plan provider.
+
+**Z.AI Coding Plan endpoint:** `https://api.z.ai/api/coding/paas/v4` (env: `Z_AI_API_KEY`)
+**Coding Plan keys are endpoint-locked** — they get 401 on `/api/paas/v4/` and vice versa.
+
+**Fix lane:** Add a `ZAI_SPEC` ProviderSpec (~40 lines), emit Z.AI alongside TensorZero when `Z_AI_API_KEY` is present, add `"glm"` to role-inference patterns. Also add `chat_zai_glm52` to `provider_catalog.yaml` (currently GLM-5.2 only listed under `ollama_cloud`).
+
+## Review Comment Verification Protocol
+
+**Before fixing any review comment (including nitpicks):**
+1. Read the actual code referenced — don't trust the description
+2. Determine if the finding is a regression (introduced by this PR) or pre-existing
+3. If pre-existing: reply with evidence, resolve as out-of-scope, open a separate lane
+4. Cross-check automated findings against each other (CodeRabbit catches body-text drift, Codex catches contract/schema issues — they're complementary, not redundant)
+5. After fixing the flagged issue, grep for the same pattern across adjacent files — reviewers sample, you exhaust
