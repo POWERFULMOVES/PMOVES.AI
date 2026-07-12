@@ -31,8 +31,9 @@ as our interactive coding bestie alongside the PMOVES stack.
 
 The generated configuration:
 
-- Prefers models whose API keys are present in `.env.generated` / `.env.local`
-  (OpenAI, Anthropic, Gemini, DeepSeek, Ollama fallback).
+- **Provider: Z.AI Coding Plan** (`https://api.z.ai/api/coding/paas/v4`) — GLM-5.2
+  (large) and GLM-5-Turbo (small). Both providers pinned to the coding plan
+  endpoint. API key via `Z_AI_API_KEY` env or inline in the config.
 - Registers MCP stubs for the upcoming `pmoves-mini` stdio server, Docker MCP, and
   the n8n HTTP bridge. Entries are auto-disabled until their binaries or API keys
   are detected.
