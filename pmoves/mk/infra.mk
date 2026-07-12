@@ -435,6 +435,21 @@ safe-opening-audit: ## Audit reachable surfaces for the bind->auth coupling (Saf
 	@$(PYTHON) tools/safe_opening_audit.py
 	@echo "=== Safe-opening audit complete ==="
 
+# ── Pub-Gate Bridge (PR B) ────────────────────────────────────────────
+# Operator demo for the hi-rag-gateway-v2 gate->publish bridge. Publishes a
+# test geometry.publish.gate.v1 event; a clean item flows through the
+# fail-closed egress floor to content.publish.approved.v1. Needs NATS
+# reachable at $NATS_URL. See pmoves/services/hi-rag-gateway-v2/PUB_GATE_BRIDGE.md
+gate-emit: ## Publish a test geometry.publish.gate.v1 event (ARTIFACT=s3://.. TITLE=..)
+	@if [ -z "$(ARTIFACT)" ] || [ -z "$(TITLE)" ]; then \
+		echo "ERROR: ARTIFACT and TITLE are required."; \
+		echo "Usage:  make -C pmoves gate-emit ARTIFACT=s3://pmoves/reports/r1.md TITLE=\"Report 1\""; \
+		exit 1; \
+	fi
+	@$(PYTHON) tools/gate_emit.py --artifact "$(ARTIFACT)" --title "$(TITLE)" $(if $(APPROVED_BY),--approved-by "$(APPROVED_BY)",)
+
+.PHONY: gate-emit
+
 # ── Branch Management ─────────────────────────────────────────────────
 branch-audit: ## List stale remote branches with age and merge status
 	@$(CODEX_PY) tools/branch_cleanup.py
