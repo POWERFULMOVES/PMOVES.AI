@@ -1,3 +1,6 @@
+> **STATUS: SHIPPED** — PR #1425 merged. This command is retained for reference.
+> The BPM encoder now publishes to `tokenism.prosodic.bpm.v1` via `--publish` flag.
+
 Wire `bpm_encoder.py` to publish CGP v0.2 packets directly to NATS on `tokenism.prosodic.bpm.v1`.
 
 ## Lane
