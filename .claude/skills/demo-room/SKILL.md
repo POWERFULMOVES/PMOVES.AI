@@ -3,11 +3,11 @@ name: demo-room
 description: >
   Launch the PMOVES Demo Room: starts Agent Zero locally, loads 4090 Claude Code claws (skills),
   and surfaces HERMES V4 as the reasoning assist. Publishes p7.nats.launch to trigger the P7
-  room-aware stage manager. Use /demo:room to enter demo mode from any node.
+  room-aware stage manager. Use /demo-room to enter demo mode from any node.
 disable-model-invocation: true
 ---
 
-# demo:room
+# demo-room
 
 Launch the PMOVES demo room from 4090 Claude Code.
 

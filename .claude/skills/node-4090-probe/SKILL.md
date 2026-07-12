@@ -8,7 +8,7 @@ description: >
   Pipe through json-to-profile.py to write pmoves/config/profiles/<node>.yaml.
 ---
 
-# 4090:probe — W0 Substrate Hardware Probe
+# node-4090-probe — W0 Substrate Hardware Probe
 
 Runs the W0 Substrate hardware probe to capture the 4090 node's system
 profile: GPU, CPU, NIC stats (including collision counters), Unifi network

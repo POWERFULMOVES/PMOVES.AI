@@ -8,7 +8,7 @@ description: >
 disable-model-invocation: true
 ---
 
-# shift:listen — NATS Push-Mode Voice Listener
+# shift-listen — NATS Push-Mode Voice Listener
 
 Starts the Shift Crew voice pipeline in reactive push mode. Subscribes to
 `voice.agent.response.v1` and publishes CGP v0.2 packets to
@@ -75,4 +75,4 @@ uv run python -m pmoves.tools.beats_to_voice listen \
 - Daemon — runs in foreground until `Ctrl+C`
 - `disable-model-invocation: true` — user must start this explicitly (side-effect: launches process)
 - See `pmoves/tools/beats_to_voice.py` for full CLI reference
-- See `shift:from-bpm` for single-shot (non-daemon) pipeline
+- See `shift-from-bpm` for single-shot (non-daemon) pipeline

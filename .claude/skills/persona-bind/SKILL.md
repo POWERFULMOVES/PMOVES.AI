@@ -7,7 +7,7 @@ description: >
   powerpuff-bubbles (coordination), powerpuff-blossom (joy), powerpuff-buttercup (action).
 ---
 
-# persona:bind — FlOO$ Character Suit Activation
+# persona-bind — FlOO$ Character Suit Activation
 
 Activates a FlOO$ character suit for the Shift Crew voice pipeline. Each
 persona maps to specific BPM bias, speaking rate, temperature, and
@@ -96,5 +96,5 @@ unset BEATS_VOICE
 - For persistent binding, add `export BEATS_VOICE=<persona>` to your shell profile
 - CGP packets without `BEATS_VOICE` use default prosodic params (auto-BPM)
 - See W6-P5 persona architecture review (Issue #1412) for deeper persona system design
-- See `shift:from-bpm` to run the pipeline with the bound persona
+- See `shift-from-bpm` to run the pipeline with the bound persona
 - See `chit:floos` for CHIT-level FlOO$ packet operations

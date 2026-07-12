@@ -5,11 +5,11 @@ description: >
   Unsloth GGUF variants) via Ollama or HuggingFace CLI. Node-aware routing: ≥70B → SPARK
   only; 8B → any node with Ollama; embedding models → Z890/RDNA4/Spark; multimodal (text/image/audio in, text out)
   → Spark/5090/4090; NeMo Omni → Spark only.
-  Use /model:pull <model-id> or describe what you want to pull.
+  Use /model-pull <model-id> or describe what you want to pull.
 disable-model-invocation: true
 ---
 
-# model:pull
+# model-pull
 
 Pull models from the Phase D catalog into local Ollama or HuggingFace cache.
 

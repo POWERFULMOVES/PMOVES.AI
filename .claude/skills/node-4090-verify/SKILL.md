@@ -7,7 +7,7 @@ description: >
   Run after any W0 PR merge. For secrets health, use deploy:secrets-funnel.
 ---
 
-# 4090:verify — W0 Substrate Artifact Check
+# node-4090-verify — W0 Substrate Artifact Check
 
 Confirms the three W0 substrate deliverables are correctly on main after
 a PR merge. Scoped to artifact state only — secrets funnel is a separate

@@ -7,7 +7,7 @@ description: >
   KiloCode (GLM-5.1 on 5090) implements → trail signed on completion.
 ---
 
-# 4090:field-brief — KiloCode Field Brief Templater
+# field-brief — KiloCode Field Brief Templater
 
 Creates a `.kilo/command/<name>.md` brief that KiloCode (GLM-5.1) on the
 5090 node can pick up and implement. Follows the Three-Body delegation
