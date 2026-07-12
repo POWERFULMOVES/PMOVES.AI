@@ -6,6 +6,18 @@
 # Security-critical paths require approval from @powerfulmoves
 /pmoves/services/*/Dockerfile @powerfulmoves
 /pmoves/docker-compose*.yml @powerfulmoves
+
+# CHIT-aware service source — Control-Body review auto-request
+# (chit-pr-audit-agent watch surface; keep in sync with .github/labeler.yml)
+/pmoves/services/tokenism-simulator/ @powerfulmoves
+/pmoves/services/hi-rag-gateway-v2/ @powerfulmoves
+/pmoves/services/hi-rag-gateway/ @powerfulmoves
+/pmoves/services/consciousness-service/ @powerfulmoves
+/pmoves/services/evo-controller/ @powerfulmoves
+/pmoves/services/a2ui-nats-bridge/ @powerfulmoves
+/pmoves/services/agentgym-rl-coordinator/ @powerfulmoves
+/pmoves/services/gateway/ @powerfulmoves
+/pmoves/services/common/ @powerfulmoves
 /pmoves/env.shared @powerfulmoves
 /deploy/k8s/ @powerfulmoves
 /.github/workflows/ @powerfulmoves
