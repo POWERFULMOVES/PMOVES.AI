@@ -45,18 +45,18 @@ endif
 # ---------- PMOVES-surf ----------
 
 surf-up: ## Start PMOVES-surf Next.js dev server
-	@$(LOAD_ENV_SHARED) 2>/dev/null || true
-	@if [ -z "$${E2B_API_KEY:-}" ]; then \
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	if [ -z "$${E2B_API_KEY:-}" ]; then \
 	  echo "[!] E2B_API_KEY is required. Export it or add it to env.shared."; exit 1; \
-	fi
-	@if [ -z "$${OPENAI_API_KEY:-}" ]; then \
+	fi; \
+	if [ -z "$${OPENAI_API_KEY:-}" ]; then \
 	  echo "[!] OPENAI_API_KEY is required. Export it or add it to env.shared."; exit 1; \
-	fi
-	@if [ -f $(SURF_PIDFILE) ] && kill -0 "$$(cat $(SURF_PIDFILE))" 2>/dev/null; then \
+	fi; \
+	if [ -f $(SURF_PIDFILE) ] && kill -0 "$$(cat $(SURF_PIDFILE))" 2>/dev/null; then \
 	  echo "[+] PMOVES-surf already running (pid $$(cat $(SURF_PIDFILE)))"; exit 0; \
-	fi
-	@echo "[*] Starting PMOVES-surf on http://localhost:$(SURF_PORT) ..."
-	@cd $(SURF_DIR) && \
+	fi; \
+	echo "[*] Starting PMOVES-surf on http://localhost:$(SURF_PORT) ..."; \
+	cd $(SURF_DIR) && \
 	  if [ ! -d node_modules ]; then \
 	    echo "[*] Installing Surf dependencies (npm install)..."; \
 	    npm install; \
@@ -66,8 +66,8 @@ surf-up: ## Start PMOVES-surf Next.js dev server
 	    echo "OPENAI_API_KEY=$${OPENAI_API_KEY}" >> .env.local && \
 	    PORT=$(SURF_PORT) npm run dev \
 	  ) & \
-	  echo $$! > $(SURF_PIDFILE)
-	@echo "[+] PMOVES-surf started. PID file: $(SURF_PIDFILE)"
+	  echo $$! > $(SURF_PIDFILE); \
+	echo "[+] PMOVES-surf started. PID file: $(SURF_PIDFILE)"
 
 surf-down: ## Stop the PMOVES-surf dev server
 	@if [ -f $(SURF_PIDFILE) ]; then \
@@ -89,18 +89,18 @@ surf-down: ## Stop the PMOVES-surf dev server
 # if the user has staged one under PMOVES-E2B-Danger-Room-Deskdesktop/.
 
 danger-room-desktop-up: ## Validate E2B key and print/start Danger Room Desktop
-	@$(LOAD_ENV_SHARED) 2>/dev/null || true
-	@if [ -z "$${E2B_API_KEY:-}" ]; then \
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	if [ -z "$${E2B_API_KEY:-}" ]; then \
 	  echo "[!] E2B_API_KEY is required. Export it or add it to env.shared."; exit 1; \
-	fi
-	@echo "[*] Danger Room Desktop ready. Quick starts:"
-	@echo "      Python: cd $(DR_DESKTOP_DIR)/examples/basic-python && python main.py"
-	@echo "      JS:     cd $(DR_DESKTOP_DIR)/examples/basic-javascript && npm install && npm start"
-	@if [ -f $(DR_DESKTOP_DIR)/PMOVES-E2B-Danger-Room-Deskdesktop/main.py ]; then \
+	fi; \
+	echo "[*] Danger Room Desktop ready. Quick starts:"; \
+	echo "      Python: cd $(DR_DESKTOP_DIR)/examples/basic-python && python main.py"; \
+	echo "      JS:     cd $(DR_DESKTOP_DIR)/examples/basic-javascript && npm install && npm start"; \
+	if [ -f $(DR_DESKTOP_DIR)/PMOVES-E2B-Danger-Room-Deskdesktop/main.py ]; then \
 	  echo "[*] PMOVES template found; starting preview in background..."; \
-	  cd $(DR_DESKTOP_DIR)/PMOVES-E2B-Danger-Room-Deskdesktop && \
-	    python main.py & \
-	    echo $$! > $(DR_DESKTOP_PIDFILE); \
+	  cd $(DR_DESKTOP_DIR)/PMOVES-E2B-Danger-Room-Deskdesktop || exit 1; \
+	  python main.py & \
+	  echo $$! > $(DR_DESKTOP_PIDFILE); \
 	  echo "[+] Danger Room Desktop preview started. PID file: $(DR_DESKTOP_PIDFILE)"; \
 	else \
 	  echo "[!] No PMOVES template entrypoint found. Run one of the examples above."; \
