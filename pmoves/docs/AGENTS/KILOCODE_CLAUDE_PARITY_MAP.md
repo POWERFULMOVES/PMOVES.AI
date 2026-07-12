@@ -114,13 +114,13 @@
 
 KiloCode GLM defaults to **Delivery Body**:
 
-```
+```text
 Three-body: delivery=KILOCODE-GLM, control=DARKXSIDE, memory=this trail.
 ```
 
 When KiloCode is the only active agent on a branch, it may temporarily serve all three roles but must declare this:
 
-```
+```text
 Three-body: delivery+control=KILOCODE-GLM (solo), memory=this trail.
 ```
 

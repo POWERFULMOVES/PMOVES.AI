@@ -43,7 +43,7 @@ capabilities:
   - vs_code_native_development
 
 nats:
-  url: "nats://nats:pmoves@nats:4222"
+  url: "${NATS_URL}"  # Set via env var — see pmoves/env.shared.example
   subscribe:
     - botz.workitem.claimed.v1
     - mesh.gpu.model.loaded.v1

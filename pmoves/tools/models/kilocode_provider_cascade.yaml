@@ -38,7 +38,7 @@ coding_plan:
   # Fallback strategy
   fallback:
     on_primary_unavailable: switch_to_kilocode_plan
-    on_quota_exhausted: switch_to_local_ollama
+    on_quota_exhausted: switch_to_kilocode_plan
     fallback_provider: kilocode
     fallback_model: kilo-auto/balanced
     local_fallback_model: qwen3.5:9b

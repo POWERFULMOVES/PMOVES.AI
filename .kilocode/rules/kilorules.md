@@ -78,7 +78,7 @@ Important context documents are indexed by Hi-RAG v2 for Cipher access:
 - `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` — Agent type system
 - `plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md` — Integration architecture
 
-Query via Cipher: `POST http://localhost:8105/api/memory/search?q=...`
+Query via Cipher: `GET http://localhost:8105/api/memory/search?q=...&limit=1`
 
 ## Agent Taxonomy
 
