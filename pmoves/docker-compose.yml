@@ -3008,7 +3008,9 @@ services:
 
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro
-    build: ./services/a2ui-nats-bridge
+    build:
+      context: .
+      dockerfile: services/a2ui-nats-bridge/Dockerfile
     image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
     container_name: pmoves-a2ui-nats-bridge
     hostname: a2ui-nats-bridge
