@@ -52,7 +52,7 @@ customModes:
       - .claude/CLAUDE.md — production service catalog with all ports and APIs
       - .claude/context/nats-subjects.md — NATS subject ownership matrix
       - .claude/context/geometry-nats-subjects.md — GEOMETRY BUS subjects
-      - pmoves/config/agent_registry.yaml — 46 agents with classes, types, layers, CHIT toggles
+      - pmoves/config/agent_registry.yaml — 91 agents with classes, types, layers, CHIT toggles
       - pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md — type effectiveness and evolution
       - plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md — integration architecture
 

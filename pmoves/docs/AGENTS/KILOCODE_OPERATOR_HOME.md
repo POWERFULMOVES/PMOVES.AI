@@ -52,7 +52,7 @@ Read these in order on a cold start:
 
 Use the `/claim` command or write directly to `AGNOTE4482PHI.t1.md`:
 
-```
+```text
 <ISO-8601-timestamp> CLAIM `KILOCODE-GLM` scope: <description>.
   branch: `<name>`. pr_numbers: [#<n>].
   risks: <risks>.
@@ -62,7 +62,7 @@ Use the `/claim` command or write directly to `AGNOTE4482PHI.t1.md`:
 
 ### Releasing Work
 
-```
+```text
 <ISO-8601-timestamp> RELEASE `KILOCODE-GLM` scope: <description>.
   branch: `<name>`. pr_numbers: [#<n>].
   next_actions: <actions>.
