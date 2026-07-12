@@ -43,20 +43,32 @@ def _parse_compose_build() -> Dict[str, Dict[str, str]]:
         return {}
 
     text = COMPOSE_FILE.read_text()
-    # Split into top-level service blocks.  A service starts at column 0 with
-    # ``name:`` and continues until the next top-level key or end of file.
+    # Compose services are nested under the top-level ``services:`` key, so
+    # split on service names at exactly one indent level (2 spaces) INSIDE
+    # that section — splitting on column-0 keys would collapse every service
+    # into a single ``services`` block and skip all context checks.
     blocks: Dict[str, str] = {}
+    in_services = False
     current_name: str | None = None
     current_lines: List[str] = []
+    service_key_re = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*(#.*)?$")
     for line in text.splitlines(keepends=True):
-        if not line.strip() or line.startswith("#"):
-            if current_name is not None:
-                current_lines.append(line)
-            continue
-        if not line[:1].isspace():
+        stripped = line.strip()
+        if not line[:1].isspace() and stripped and not stripped.startswith("#"):
+            # A new top-level key ends the services section.
             if current_name is not None:
                 blocks[current_name] = "".join(current_lines)
-            current_name = line.split(":", 1)[0].strip()
+                current_name = None
+                current_lines = []
+            in_services = stripped.split(":", 1)[0] == "services"
+            continue
+        if not in_services:
+            continue
+        match = service_key_re.match(line)
+        if match:
+            if current_name is not None:
+                blocks[current_name] = "".join(current_lines)
+            current_name = match.group(1)
             current_lines = [line]
             continue
         if current_name is not None:

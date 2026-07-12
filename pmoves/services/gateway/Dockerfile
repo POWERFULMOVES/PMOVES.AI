@@ -12,7 +12,7 @@ COPY services/gateway/requirements.txt services/gateway/requirements.lock ./
 RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
 # PMOVES package namespace + shared libraries
-COPY pmoves/__init__.py /app/pmoves/__init__.py
+COPY __init__.py /app/pmoves/__init__.py
 COPY services/__init__.py /app/pmoves/services/__init__.py
 COPY services/common /app/pmoves/services/common
 COPY services/gateway /app/pmoves/services/gateway
