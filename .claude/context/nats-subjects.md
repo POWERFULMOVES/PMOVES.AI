@@ -718,6 +718,10 @@ Example: `ingest.transcript.ready.v1`
 - **Direction:** Published by Tokenism Simulator -> Consumed by Tokenism calibration observers
 - **Purpose:** Calibration output for simulation/evaluation feedback
 
+**`tokenism.export.result.v1`**
+- **Direction:** Published by the ToKenism→Firefly exporter (`PMOVES-ToKenism-Multi/integrations/firefly/export_sim_to_firefly.ts` with `--nats`; HTTP wrapper planned per `docs/superpowers/specs/2026-07-11-tokenism-wealth-demo-wiring.md` G1) -> Consumed by monitoring; pre-authorized in the `tokenism.room.exchange` room manifest publish allow-list
+- **Purpose:** Result of exporting a simulation run into the PMOVES-Wealth (Firefly III) ledger — account/transaction counts, dry-run flag, report refs
+
 **`tokenism.prosodic.bpm.v1`**
 - **Direction:** Published by Flute-Gateway prosodic parser
 - **Purpose:** BPM-encoded prosodic timeline events for CHIT voice attribution

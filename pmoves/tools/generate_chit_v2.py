@@ -49,6 +49,15 @@ TIER_MAPPING = {
     "FIREWORKS_AI_API_KEY": "llm",
     "OLLAMA_BASE_URL": "llm",
     "TENSORZERO_API_KEY": "llm",
+    "Z_AI_API_KEY": "llm",
+    "HF_TOKEN": "llm",
+    "KILOCODE_API_KEY": "llm",
+    "OLLAMA_API_KEY": "llm",
+    "MOONSHOT_API_KEY": "llm",
+    "MINIMAX_API_KEY": "llm",
+    "ALIBABA_PRO_CODING_PLAN": "llm",
+    "NVIDIA_API_KEY": "llm",
+    "DASHSCOPE_API_KEY": "llm",
 
     # Tier 4: Media (media processing)
     "JELLYFIN_API_KEY": "media",
@@ -65,6 +74,8 @@ TIER_MAPPING = {
 
     # Tier 5: Agent (service coordination)
     "AGENT_ZERO_EVENTS_TOKEN": "agent",
+    "AGENT_ZERO_MCP_TOKEN": "agent",
+    "MCP_SERVER_TOKEN": "agent",
     "DISCORD_AVATAR_URL": "agent",
     "DISCORD_USERNAME": "agent",
     "DISCORD_WEBHOOK_URL": "agent",

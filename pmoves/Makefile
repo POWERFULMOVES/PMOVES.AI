@@ -1922,8 +1922,8 @@ smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemm
 	  echo "   Agent Zero: nvidia_nim NOT registered"; \
 	fi
 
-manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visibility)
-	@$(PYTHON) tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing || python tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing || py -3 tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing
+manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visibility; ARGS='--cgp <path>' to point at the user-scoped bundle)
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing $(ARGS)
 
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
@@ -4169,18 +4169,26 @@ design-test-js: ## Run the pmoves/design JS unit tests (node --test, no npm deps
 
 .PHONY: design-vendor design-vendor-check
 
-design-vendor: ## Resync the vendored design engine into ui/lib/persona/ from canonical design/
+design-vendor: ## Resync the vendored design engine into ui/lib/persona/ + ../website/persona/ from canonical design/
 	@for f in persona-theme persona-resolver theme-provider showtime-live; do \
 		cp design/$$f.js ui/lib/persona/$$f.js; \
 	done
-	@echo "✅ ui/lib/persona resynced from design/"
+	@mkdir -p ../website/persona
+	@for f in persona-theme persona-resolver showtime-live surface-cf; do \
+		cp design/$$f.js ../website/persona/$$f.js; \
+	done
+	@echo "✅ ui/lib/persona + website/persona resynced from design/"
 
-design-vendor-check: ## Fail if the vendored ui/lib/persona/*.js drifted from canonical design/
+design-vendor-check: ## Fail if the vendored ui/lib/persona/ or website/persona/ engine drifted from canonical design/
 	@for f in persona-theme persona-resolver theme-provider showtime-live; do \
 		diff -q design/$$f.js ui/lib/persona/$$f.js \
 			|| { echo "❌ pmoves/ui/lib/persona drifted — run 'make -C pmoves design-vendor' and commit"; exit 1; }; \
 	done
-	@echo "✅ ui/lib/persona matches design/ source"
+	@for f in persona-theme persona-resolver showtime-live surface-cf; do \
+		diff -q design/$$f.js ../website/persona/$$f.js \
+			|| { echo "❌ website/persona drifted — run 'make -C pmoves design-vendor' and commit"; exit 1; }; \
+	done
+	@echo "✅ ui/lib/persona + website/persona match design/ source"
 
 .PHONY: kimi
 kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
