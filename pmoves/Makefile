@@ -176,6 +176,7 @@ include mk/mcp-toolkit.mk
 include mk/mcp-toolkit-4090.mk
 include mk/mcp-toolkit-spark.mk
 include mk/unsloth.mk
+include mk/creator.mk
 include mk/voice.mk
 
 # ----------------------------------------------------------------------------
@@ -4188,3 +4189,7 @@ design-vendor-check: ## Fail if the vendored ui/lib/persona/ or website/persona/
 			|| { echo "❌ website/persona drifted — run 'make -C pmoves design-vendor' and commit"; exit 1; }; \
 	done
 	@echo "✅ ui/lib/persona + website/persona match design/ source"
+
+.PHONY: kimi
+kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
+	@kimi --config-file "$(CURDIR)/../.kimi/config.toml" --mcp-config-file "$(CURDIR)/../.kimi/mcp.json"
