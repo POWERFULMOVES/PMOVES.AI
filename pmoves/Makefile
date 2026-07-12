@@ -4069,6 +4069,10 @@ compose-split-check: ## Drift gate: fail if committed overlays differ from regen
 	    exit 1; \
 	  fi
 
+.PHONY: validate-service-tools-packaging
+validate-service-tools-packaging: ## Audit that services importing pmoves.tools copy them into Docker images
+	@$(PYTHON) $(CURDIR)/scripts/validate_service_tools_packaging.py
+
 OVERLAY_BASE    := -f docker-compose.base.yml
 OVERLAY_CORE    := -f docker-compose.core.yml
 OVERLAY_AGENTS  := -f docker-compose.agents.yml

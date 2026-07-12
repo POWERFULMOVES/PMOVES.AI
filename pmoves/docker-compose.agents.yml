@@ -853,8 +853,8 @@ services:
           memory: 256M
   consciousness-service:
     build:
-      context: ./services/consciousness-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/consciousness-service/Dockerfile
     image: ${CONSCIOUSNESS_IMAGE:-ghcr.io/powerfulmoves/pmoves-consciousness:pmoves-latest}
     restart: unless-stopped
     <<: *tier-agent-hardened-ro

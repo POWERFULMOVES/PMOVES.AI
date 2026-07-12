@@ -110,8 +110,8 @@ services:
           memory: 512M
   tokenism-simulator:
     build:
-      context: ./services/tokenism-simulator
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/tokenism-simulator/Dockerfile
     image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
     restart: unless-stopped
     <<:
