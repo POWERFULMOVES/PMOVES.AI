@@ -1,0 +1,117 @@
+# KiloCode GLM Agent Profile
+# PMOVES.AI KiloCode GLM Edition
+#
+# Runs on 5090 (primary) alongside Claude Code and Codex.
+# Primary model: GLM-5-Turbo via Z.AI Coding Plan
+# Direct lane: kilo-auto/balanced via KiloCode API
+# DARKXSIDE ✦ witnesses all operations.
+
+name: kilocode_glm
+role: kilocode-glm-claw
+description: "KiloCode GLM claw for blueprint-first feature implementation via GLM-5-Turbo coding plan. VS Code native, MCP-integrated, GPU-aware. Three-Body Delivery Body on 5090 node."
+
+node_affinity:
+  - 5090  # Primary — GPU inference specialist
+  - laptop-4090  # Portable — mobile field work
+  - z890  # Fallback — when 5090 unavailable
+
+model:
+  provider: zai
+  model: glm-5-turbo
+  endpoint: "https://api.z.ai/api/coding/paas/v4"
+  fallback_model: glm-5.1
+  small_model: glm-4-air
+  vision_model: glm-5v-turbo
+  api_key_env: Z_AI_API_KEY
+
+# Direct KiloCode plan-routed lane (orchestration overflow)
+kilocode_direct:
+  provider: kilocode
+  model: kilo-auto/balanced
+  endpoint: "https://api.kilocode.ai/api/openrouter"
+  api_key_env: KILOCODE_API_KEY
+
+capabilities:
+  - blueprint_first_implementation
+  - mcp_integration_development
+  - gpu_model_serving_coordination
+  - chit_cgp_encoding
+  - geometry_bus_operations
+  - multi_agent_coordination
+  - collision_avoidance_protocol
+  - trail_signing
+  - vs_code_native_development
+
+nats:
+  url: "nats://nats:pmoves@nats:4222"
+  subscribe:
+    - botz.workitem.claimed.v1
+    - mesh.gpu.model.loaded.v1
+    - claw.task.assign.v1
+  publish:
+    - claw.task.complete.v1
+    - agent.graphiti.signed.v1
+    - mesh.gpu.status.v1
+
+# Three-Body Pattern
+three_body:
+  default_role: delivery  # KiloCode is a Delivery Body agent
+  control_agent: darkxside  # DARKXSIDE ✦ witnesses
+  memory_agent: cipher      # Cipher Memory stores patterns
+  protocol: "CLAIM → WORK → HANDOFF → RELEASE per AGNOTE4482PHI.t1"
+
+# Multi-Agent Context (5090 Node)
+multi_agent:
+  node: 5090
+  siblings:
+    - agent: claude-opus
+      tool: "Claude Code CLI"
+      role: analysis_and_field_briefs
+    - agent: codex
+      tool: "Codex CLI"
+      role: terse_code_generation
+  collision_avoidance: "AGNOTE4482PHI.t1 claim/release protocol"
+  coordination: "KRISS KROSS Accord handshake blocks"
+
+exec_permissions:
+  - python3
+  - curl
+  - git
+  - make
+  - nats
+  - docker
+  - nvidia-smi
+  - ollama
+  - node
+  - npx
+
+health:
+  tensorzero: "http://localhost:3030/health"
+  ollama: "http://localhost:11434/api/tags"
+  cipher: "http://localhost:8105/health"
+  heartbeat_subject: kilocode.agent.status.v1
+  heartbeat_interval_seconds: 60
+
+# DARKXSIDE Co-Creation
+cocreator:
+  identity: darkxside
+  glyph: "✦"
+  color: "#E11D48"
+  role: "COCREATOR witness — observes, attests, signs trail"
+  attribution: "DARKXSIDE x POWERFULMOVES on 5090"
+
+# TensorZero routing hints
+tensorzero:
+  gateway_url: "http://localhost:3030"
+  primary_function: coding_glm
+  secondary_function: coding_kilocode
+  variants:
+    - name: cloud_zai_turbo
+      model: chat_zai_glm5_turbo
+      weight: 0.8
+    - name: cloud_kilocode
+      model: chat_kilocode
+      weight: 0.3
+    - name: cloud_zai_glm51
+      model: chat_zai_glm51
+      weight: 0.2

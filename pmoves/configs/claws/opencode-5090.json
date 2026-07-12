@@ -49,12 +49,18 @@
       "pmoves-architect",
       "pmoves-ask",
       "pmoves-debug",
-      "pmoves-review"
+      "pmoves-review",
+      "pmoves-frontend",
+      "pmoves-portal",
+      "pmoves-crush",
+      "pmoves-glm",
+      "pmoves-cocreate",
+      "pmoves-minimax"
     ]
   },
   "modelOverrides": {
-    "primary": "claude-opus-4-6",
-    "fallback": "claude-sonnet-4-6"
+    "primary": "zai/glm-5-turbo",
+    "fallback": "zai/glm-5.1"
   },
   "node": {
     "identity": "5090",

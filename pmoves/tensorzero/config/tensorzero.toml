@@ -1564,7 +1564,7 @@ type = "chat_completion"
 model = "chat_kilocode"
 temperature = 0.2
 max_tokens = 8192
-weight = 0.0
+weight = 0.3
 
 [functions.pmoves_orchestrator_coding.variants.cloud_ollama_default]
 type = "chat_completion"
@@ -1596,6 +1596,32 @@ model = "chat_zai_glm51"
 temperature = 0.7
 max_tokens = 8192
 weight = 0.0
+
+# --- KiloCode coding function (GLM-backed with KiloCode direct overflow) ---
+
+[functions.coding_kilocode]
+type = "chat"
+
+[functions.coding_kilocode.variants.cloud_zai_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.8
+
+[functions.coding_kilocode.variants.cloud_kilocode]
+type = "chat_completion"
+model = "chat_kilocode"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.3
+
+[functions.coding_kilocode.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.2
 
 # --- Worker functions: registry lane aliases ONLY (no-hardcoded-models gate) ---
 

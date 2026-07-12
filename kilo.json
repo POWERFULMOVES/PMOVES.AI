@@ -18,12 +18,10 @@
         "apiKey": "${Z_AI_API_KEY}"
       },
       "models": {
-        "glm-5-turbo": { "name": "GLM-5 Turbo" },
-        "glm-5.1": { "name": "GLM-5.1" },
-        "glm-4.7": { "name": "GLM-4.7" },
-        "glm-4.6": { "name": "GLM-4.6" },
-        "glm-4.6v": { "name": "GLM-4.6V (Vision)" },
-        "glm-4-air": { "name": "GLM-4 Air (Fast)" }
+        "glm-5-turbo": { "name": "GLM-5 Turbo (Agentic)" },
+        "glm-5.1": { "name": "GLM-5.1 (Long-Horizon)" },
+        "glm-5v-turbo": { "name": "GLM-5V Turbo (Vision+Coding)" },
+        "glm-4-air": { "name": "GLM-4 Air (Fast/Edge)" }
       },
       "whitelist": ["glm-*"]
     },
@@ -66,24 +64,47 @@
     },
     "docker": {
       "type": "local",
-      "command": ["mcp-docker"],
+      "command": ["docker", "run", "--rm", "-i", "--mount", "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock", "mcp/docker"],
       "environment": {}
+    },
+    "pmoves-cipher": {
+      "type": "remote",
+      "url": "http://localhost:8105/mcp/sse",
+      "headers": { "Authorization": "Bearer ${CIPHER_API_TOKEN}" }
+    },
+    "tailscale": {
+      "type": "local",
+      "command": ["npx", "-y", "tailscale-mcp@latest"],
+      "environment": {
+        "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}"
+      }
+    },
+    "huggingface": {
+      "type": "local",
+      "command": ["npx", "-y", "@anthropic-ai/huggingface-mcp@latest"],
+      "environment": {
+        "HF_API_KEY": "${HF_TOKEN}"
+      }
     }
   },
   "skills": {
     "paths": [".kilocode/skills"],
     "urls": []
   },
-    "permission": {
+  "permission": {
     "bash": "allow",
     "edit": {
       "**": "allow"
     },
     "read": "allow",
+    "browser": "allow",
     "zai-vision_*": "allow",
     "zai-web-search_*": "allow",
     "zai-web-reader_*": "allow",
     "zai-zread_*": "allow",
-    "docker_*": "allow"
+    "docker_*": "allow",
+    "pmoves-cipher_*": "allow",
+    "tailscale_*": "allow",
+    "huggingface_*": "allow"
   }
 }

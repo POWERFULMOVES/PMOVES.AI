@@ -78,18 +78,18 @@ Important context documents are indexed by Hi-RAG v2 for Cipher access:
 - `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` — Agent type system
 - `plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md` — Integration architecture
 
-Query via Cipher: `POST http://localhost:8096/api/memory/search?q=...`
+Query via Cipher: `POST http://localhost:8105/api/memory/search?q=...`
 
 ## Agent Taxonomy
 
 PMOVES.AI uses a structured agent classification system:
-- **Registry:** `pmoves/config/agent_registry.yaml` — canonical definitions for all 46 agents
+- **Registry:** `pmoves/config/agent_registry.yaml` — canonical definitions (91 agents per latest validation)
 - **Taxonomy:** `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` — 4 classes, 7 types, evolution paths
 - **Signatures:** `pmoves/config/agent_signatures.yaml` — agent identity and capability signatures
 
 ## Mode-Type Mapping
 
-KiloCode modes map to PMOVES service tiers and agent types. See `.kilocodemodes` at repo root for the 8 configured modes:
+KiloCode modes map to PMOVES service tiers and agent types. See `.kilocodemodes` at repo root for the 11 configured modes:
 
 | Mode | Agent Types | Service Tiers |
 |------|------------|---------------|
@@ -101,6 +101,9 @@ KiloCode modes map to PMOVES service tiers and agent types. See `.kilocodemodes`
 | `pmoves-frontend` | UI | 7 |
 | `pmoves-portal` | Agent + Geometry | 6 + L2.5 |
 | `pmoves-crush` | UI + Agent | 7 + 6 |
+| `pmoves-glm` | Worker + LLM | 3-4 |
+| `pmoves-cocreate` | Agent + Creative | 6 + L2.5 |
+| `pmoves-minimax` | Agent + Fast Inference | 6 + 3 |
 
 ## Integration Plan
 
