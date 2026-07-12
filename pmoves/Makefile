@@ -178,6 +178,7 @@ include mk/mcp-toolkit-spark.mk
 include mk/unsloth.mk
 include mk/creator.mk
 include mk/voice.mk
+include mk/kong.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
