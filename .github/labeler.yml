@@ -19,6 +19,17 @@ chit-aware:
           - "pmoves/services/agentgym-rl-coordinator/**"
           - "pmoves/services/common/**"
           - "pmoves/services/gateway/**"
+          # CHIT producers/consumers per CHIT_INTEGRATION_STATUS.md (full doc
+          # surface, not just the audit agent's port list — review #2098 P2)
+          - "pmoves/services/agent-zero/**"
+          - "pmoves/services/pmoves-yt/**"
+          - "pmoves/services/pmoves_yt/**"
+          - "pmoves/services/deepresearch/**"
+          - "pmoves/services/supaserch/**"
+          - "pmoves/services/flute-gateway/**"
+          - "pmoves/services/cast-tts-gateway/**"
+          - "pmoves/services/extract-worker/**"
+          - "pmoves/services/ffmpeg-whisper/**"
           - "pmoves/tools/chit_*.py"
           - "pmoves/chit/**"
 
