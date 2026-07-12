@@ -31,9 +31,11 @@ as our interactive coding bestie alongside the PMOVES stack.
 
 The generated configuration:
 
-- **Provider: Z.AI Coding Plan** (`https://api.z.ai/api/coding/paas/v4`) — GLM-5.2
-  (large) and GLM-5-Turbo (small). Both providers pinned to the coding plan
-  endpoint. API key via `Z_AI_API_KEY` env or inline in the config.
+The generated configuration uses TensorZero as the sole provider, routing all
+LLM calls through `http://localhost:3030/v1`. For direct Z.AI Coding Plan
+usage (GLM-5.2 large / GLM-5-Turbo small at `https://api.z.ai/api/coding/paas/v4`),
+populate `~/.config/crush/crush.json` manually with the `Z_AI_API_KEY` env var
+or inline key — see the live config on this node for the working pattern.
 - Registers MCP stubs for the upcoming `pmoves-mini` stdio server, Docker MCP, and
   the n8n HTTP bridge. Entries are auto-disabled until their binaries or API keys
   are detected.
