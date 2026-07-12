@@ -70,3 +70,32 @@ def test_none_verdict_holds_fail_closed():
         def check(self, item):
             return None
     assert gate_bridge.handle_gate_event(_event(), NoneFloor()) is None
+
+
+def test_approval_and_gate_event_conform_to_schemas():
+    import json
+
+    # test file: pmoves/services/hi-rag-gateway-v2/tests/ -> parents[3] == pmoves
+    contracts = Path(__file__).resolve().parents[3] / "contracts"
+    gate_schema = json.loads(
+        (contracts / "schemas/geometry/publish.gate.v1.schema.json").read_text(encoding="utf-8")
+    )
+    approved_schema = json.loads(
+        (contracts / "schemas/content/publish.approved.v1.schema.json").read_text(encoding="utf-8")
+    )
+    try:
+        import jsonschema
+    except ImportError:
+        import pytest
+
+        pytest.skip("jsonschema not installed")
+
+    gate_event = _event()
+    jsonschema.validate(gate_event, gate_schema)  # the emitted intent conforms
+
+    approval = gate_bridge.handle_gate_event(gate_event, _floor())
+    assert approval is not None
+    jsonschema.validate(approval, approved_schema)  # the bridge output conforms
+
+    topics = json.loads((contracts / "topics.json").read_text(encoding="utf-8"))
+    assert "geometry.publish.gate.v1" in json.dumps(topics)
