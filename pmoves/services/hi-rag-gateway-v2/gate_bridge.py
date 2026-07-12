@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Optional
 
 logger = logging.getLogger("hirag.gate_bridge")
@@ -70,6 +69,7 @@ async def _dispatch(msg_data: bytes, floor, publish) -> bool:
 
 async def publish_gate_worker(nats_url: str, room_manifest_path: str, backoff: float = 5.0) -> None:
     """Mirror of _content_provenance_worker: subscribe GATE_SUBJECT, run _dispatch."""
+    import asyncio
     import nats  # local import keeps module NATS-free for tests
     from egress_floor import load_floor
 
@@ -84,9 +84,9 @@ async def publish_gate_worker(nats_url: str, room_manifest_path: str, backoff: f
             await nc.subscribe(GATE_SUBJECT, cb=_handler)
             logger.info("pub-gate bridge listening on %s", GATE_SUBJECT)
             # keep the task alive
-            import asyncio as _asyncio
-            await _asyncio.Event().wait()
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            break
         except Exception:
             logger.exception("pub-gate bridge error; retry in %.1fs", backoff)
-            import asyncio as _asyncio
-            await _asyncio.sleep(backoff)
+            await asyncio.sleep(backoff)
