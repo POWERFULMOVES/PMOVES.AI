@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | **Service** | Wealth (Firefly III) |
-| **Port** | 8080 (`FIREFLY_PORT`, compose: `docker-compose.firefly.yml`) |
+| **Port** | host `${FIREFLY_PORT:-8075}` → container 8080 (live: `docker-compose.external.yml` via `make up-external`; duplicate `compose/docker-compose.firefly.yml` aligned per spec G3) |
 | **Health** | **MISSING** — needs `/healthz` endpoint |
 | **Submodule** | `PMOVES-Wealth` |
 | **Docker Profile** | `firefly` |
