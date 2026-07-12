@@ -14,7 +14,7 @@ from typing import Optional
 import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 # Prometheus metrics
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
@@ -61,8 +61,10 @@ def check_gpu_available() -> dict:
             }
         else:
             return {"available": False, "reason": "CUDA not available"}
-    except Exception as e:
-        return {"available": False, "reason": str(e)}
+    except Exception:
+        # CodeQL: never expose exception details to clients — log server-side.
+        logger.exception("GPU availability check failed")
+        return {"available": False, "reason": "gpu check failed (see service logs)"}
 
 
 @app.get("/healthz")
@@ -99,7 +101,7 @@ async def root():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
-    return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 # Stub endpoints for future implementation

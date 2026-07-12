@@ -24,7 +24,14 @@ COPY requirements.txt requirements.lock ./
 # Install from lockfile for reproducible builds (includes hash validation)
 # Security: PyTorch extra-index-url required for CUDA packages (+cu124 variants)
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.lock
+    # amd64 uses the x86-resolved lock (reproducible); arm64/Jetson
+    # falls back to marker-aware requirements.txt — the lock hard-pins
+    # torch+cu124 wheels that do not exist for arm64 (review #2071 P2).
+    if [ "$(uname -m)" = "x86_64" ]; then \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.lock; \
+    else \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt; \
+    fi
 COPY . ./
 
 # Security: Run as non-root user (GPU services need video group)
