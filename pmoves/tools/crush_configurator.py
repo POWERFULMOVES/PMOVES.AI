@@ -15,6 +15,9 @@ ENV_CANDIDATES = [
     PROJECT_ROOT / "env.shared.generated",
     PROJECT_ROOT / ".env",
     PROJECT_ROOT / "env.shared",
+    PROJECT_ROOT / "pmoves" / "env.shared",
+    PROJECT_ROOT / "pmoves" / "env.tier-llm",
+    PROJECT_ROOT / "pmoves" / "env.tier-llm.generated",
 ]
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "crush" / "crush.json"
 
