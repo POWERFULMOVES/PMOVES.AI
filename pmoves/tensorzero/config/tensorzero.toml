@@ -307,6 +307,18 @@ api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5-turbo"
 api_key_location = "env::Z_AI_API_KEY"
 
+# --- GLM-5.2 (Latest GLM — primary coding + reasoning via Z.AI coding endpoint) ---
+# Serves agent_zero, coding_glm, coding_kilocode, archon functions.
+# Also available via Ollama Cloud as chat_ollama_cloud_default (glm-5.2 at ollama.com/v1).
+[models.chat_zai_glm52]
+routing = ["zai_glm52"]
+
+[models.chat_zai_glm52.providers.zai_glm52]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.2"
+api_key_location = "env::Z_AI_API_KEY"
+
 # --- GLM-5V-Turbo (Vision + coding — frontend recreation, GUI exploration, visual debugging) ---
 # Synced from provider_catalog.yaml: serves coding_glm (w=0.4) + vl_sentinel (w=0.7)
 [models.chat_zai_glm5v_turbo]
@@ -873,6 +885,14 @@ model = "chat_zai_glm5v_turbo"
 weight = 0.3
 temperature = 0.1
 
+# GLM-5.2 — latest GLM model (coding + reasoning via Z.AI coding endpoint)
+# Primary cloud model for orchestration when coding plan is active.
+[functions.agent_zero.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.8
+temperature = 0.1
+
 # --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
 # SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
 # Nemotron tag verified via /api/tags (nemotron-3-super:120b). R9700 variants remain 0.0.
@@ -1093,6 +1113,13 @@ model = "chat_together"
 type = "chat_completion"
 model = "chat_gemini_pro"
 
+# GLM-5.2 — Z.AI coding plan for work order generation
+[functions.archon_work_orders.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.7
+temperature = 0.2
+
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]
 type = "chat"
@@ -1108,6 +1135,13 @@ model = "chat_openrouter"
 [functions.archon_code_review.variants.hosted_alibaba_qwen]
 type = "chat_completion"
 model = "chat_alibaba_qwen"
+
+# GLM-5.2 — Z.AI coding plan for code review
+[functions.archon_code_review.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.6
+temperature = 0.1
 
 # --- Hi-RAG Reranking Function -----------------------------------------------
 [functions.hirag_rerank]
@@ -1403,6 +1437,13 @@ type = "chat_completion"
 model = "chat_zai_glm"
 temperature = 0.1
 
+# GLM-5.2 — latest GLM, highest priority for coding plan
+[functions.coding_glm.variants.cloud_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.9
+temperature = 0.1
+
 [functions.coding_glm.variants.local_qwen35_9b]
 type = "chat_completion"
 model = "qwen35_9b"
@@ -1421,7 +1462,7 @@ temperature = 0.1
 
 [functions.coding_kilocode.variants.cloud_zai_glm52]
 type = "chat_completion"
-model = "chat_ollama_cloud_default"
+model = "chat_zai_glm52"
 weight = 0.5
 temperature = 0.1
 
