@@ -1,0 +1,57 @@
+# Village Gate — automated evaluator gate before Village Rule signoff
+# (P0 Evaluation Gates, ARCHON_ENHANCEMENT_ROADMAP §2).
+#
+# Runs the declarative quality-threshold checks in
+# pmoves/configs/village_gate_thresholds.yaml via pmoves/tools/village_gate.py
+# and uploads the verdict (JSON + Prometheus textfile exposition) as machine
+# evidence for the AGNOTE4482 signoff checklist.
+#
+# NOT yet a required status check: adding `village-gate` to branch protection
+# is a deliberate operator step (branch-protection-sync preserves existing
+# contexts; a required gate must also pass on dependabot/App PRs or it
+# deadlocks the fork-sync automation). GitHub-hosted on purpose — required
+# gates must not depend on self-hosted runner availability.
+
+name: Village Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: village-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  village-gate:
+    name: village-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install gate dependencies
+        run: pip install --quiet pyyaml ruff
+
+      - name: Run Village Gate
+        run: |
+          PYTHONPATH="$PWD" python pmoves/tools/village_gate.py \
+            --strict-tools \
+            --prom-textfile village_gate.prom
+
+      - name: Upload verdict artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: village-gate-verdict
+          path: |
+            pmoves/docs/logs/village_gate_latest.json
+            village_gate.prom
+          retention-days: 30
