@@ -4225,11 +4225,14 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
 
-.PHONY: claude kilo codex-pmoves
-claude: ## Launch Claude Code with PMOVES delivery-agent context
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves
+claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 	@bash $(CURDIR)/scripts/claude-pmoves.sh delivery-agent
 
-kilo: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
+kimi-pmoves: ## Launch Kimi Code CLI with PMOVES project config and MCP
+	@bash $(CURDIR)/scripts/kimi-pmoves.sh
+
+kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
 	@bash $(CURDIR)/scripts/kilo-pmoves.sh 5090
 
 codex-pmoves: ## Launch Codex CLI with PMOVES context
