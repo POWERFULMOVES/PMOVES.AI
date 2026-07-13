@@ -4223,3 +4223,13 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  echo "    Run 'make -C pmoves mcp-spark-connect' to generate it from Docker MCP Toolkit."; \
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
+
+.PHONY: claude kilo codex-pmoves
+claude: ## Launch Claude Code with PMOVES delivery-agent context
+	@bash $(CURDIR)/scripts/claude-pmoves.sh delivery-agent
+
+kilo: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
+	@bash $(CURDIR)/scripts/kilo-pmoves.sh 5090
+
+codex-pmoves: ## Launch Codex CLI with PMOVES context
+	@bash $(CURDIR)/scripts/codex-pmoves.sh
