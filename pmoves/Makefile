@@ -177,6 +177,7 @@ include mk/mcp-toolkit-4090.mk
 include mk/mcp-toolkit-spark.mk
 include mk/unsloth.mk
 include mk/creator.mk
+include mk/kilo.mk
 include mk/voice.mk
 include mk/kong.mk
 

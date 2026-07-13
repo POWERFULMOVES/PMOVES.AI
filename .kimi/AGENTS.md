@@ -44,6 +44,8 @@ This loads `.kimi/config.toml` and `.kimi/mcp.json` explicitly so your session u
 | Browser / computer use | `make -C pmoves surf-up` (needs `E2B_API_KEY` + `OPENAI_API_KEY`) |
 | Danger Room desktop | `make -C pmoves danger-room-desktop-up` (needs `E2B_API_KEY`) |
 | Build with fanfare | `make -C pmoves danger-room-build IMAGE=<image>` |
+| Launch KiloCode GLM | `make -C pmoves kilo` (opens VS Code; needs KiloCode extension) |
+| KiloCode operator home | `pmoves/docs/AGENTS/KILOCODE_OPERATOR_HOME.md` |
 
 Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When a damage-control hook converts a raw `docker` / `netsh` / `gh workflow run` command to an `ask` prompt, that means a Make target already exists — use it.
 
