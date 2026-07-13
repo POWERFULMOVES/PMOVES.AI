@@ -66,19 +66,19 @@
     },
     "pmoves-cipher": {
       "type": "remote",
-      "url": "http://localhost:8105/mcp/sse",
+      "url": "http://${TS_Z890}:8105/mcp/sse",
       "headers": { "Authorization": "Bearer ${CIPHER_API_TOKEN}" }
     },
     "tailscale": {
       "type": "local",
-      "command": ["npx", "-y", "tailscale-mcp@2026.4.10-1"],
+      "command": ["npx", "-y", "tailscale-mcp@latest"],
       "environment": {
         "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}"
       }
     },
     "huggingface": {
       "type": "local",
-      "command": ["npx", "-y", "@llmindset/hf-mcp-server"],
+      "command": ["npx", "-y", "@llmindset/hf-mcp-server@0.3.30"],
       "environment": {
         "HF_TOKEN": "${HF_TOKEN}"
       }
