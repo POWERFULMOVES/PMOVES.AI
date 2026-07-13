@@ -143,11 +143,27 @@ root:
             toolsets default = web, terminal, file, messaging, cronjob, delegation,
             model = openrouter/nous-hermes or local ollama fallback.
             NATS MCP server wired to pmoves-nats:4222.
-          status: planned
+          status: done   # 2026-07-12: default profile configured with fallback_providers + credential_pool_strategies
+          owner: hermes-agent
+
+        - id: hermes.integration.profile.node_elder_melchor
+          task: "elder-melchor node profile (THIS NODE — Ageless Beauty practice)"
+          context: |
+            Hardware: Intel Core i7-9750H 6C/12T, GTX 1650 4GB, 32GB RAM, Windows 10.
+            Cloud-first model routing: Z.AI primary, local GPU for embeddings only.
+            Config aligned to Hermes v0.18.2 schema on 2026-07-12:
+            - fallback_providers: kimi → minimax-oauth → openrouter → ollama-cloud
+            - credential_pool_strategies: zai fill_first, openrouter round_robin
+            - privacy.redact_pii: true (HIPAA)
+            - Profile .env: GLM_API_KEY, KIMI_API_KEY, OLLAMA_API_KEY populated
+            - Config version: v33 (migrated)
+            - hermes doctor: all checks passed
+            See: pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md §v0.18.2 Config Alignment
+          status: done
           owner: hermes-agent
 
         - id: hermes.integration.profile.node_z890
-          task: "z890 node profile (THIS NODE)"
+          task: "z890 node profile"
           context: |
             Hardware: RTX 3090 Ti 24GB, Windows 11 Pro, 20C/32GB RAM.
             Terminal backend: local (bash via git-bash; PowerShell fallback disabled).
@@ -605,6 +621,56 @@ post_pr_ageless_beauty:
       action: "Configure 'Ageless Beauty, activate' wake word for hands-free charting"
       assignee: elder-melchor
       note: "Uses local STT (faster-whisper base) + voice activation gate"
+
+
+# ============================================================
+# v0.18.2 CONFIG ALIGNMENT (2026-07-12)
+# ============================================================
+# Hermes Agent v0.18.2 config schema alignment for Elder-Melchor.
+# Profile config rewritten from custom PMOVES keys to standard
+# Hermes v0.18.2 keys (fallback_providers, credential_pool_strategies).
+# See: pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md §v0.18.2 Config Alignment
+
+v0182_config_alignment:
+  summary: "Align pmoves-hermes-elder profile to Hermes v0.18.2 config schema"
+  date: "2026-07-12"
+  owner: hermes-agent
+  changes:
+    - id: v0182-1
+      action: "Migrate config version v0 → v33 via hermes config migrate"
+      status: done
+    - id: v0182-2
+      action: "Set fallback_providers: kimi → minimax-oauth → openrouter → ollama-cloud"
+      status: done
+    - id: v0182-3
+      action: "Set credential_pool_strategies: zai fill_first, openrouter round_robin"
+      status: done
+    - id: v0182-4
+      action: "Populate profile .env with real API keys (GLM_API_KEY, KIMI_API_KEY, OLLAMA_API_KEY)"
+      status: done
+    - id: v0182-5
+      action: "Enable privacy.redact_pii: true (HIPAA-aware)"
+      status: done
+    - id: v0182-6
+      action: "Activate pmoves-hermes-elder as default profile"
+      status: done
+    - id: v0182-7
+      action: "Verify with hermes doctor — all checks passed"
+      status: done
+
+kilo_provider_integration:
+  summary: "Kilo Gateway built-in provider (kilocode) for PMOVES-crush integration"
+  date: "2026-07-12"
+  owner: hermes-agent
+  findings:
+    - "Kilo Gateway (api.kilo.ai/api/gateway) is a built-in Hermes v0.18.2 provider"
+    - "Provider key: kilocode, env var: KILOCODE_API_KEY"
+    - "Configure via: hermes model → Kilo Code, or add as fallback_providers entry"
+    - "Kilo offers 500+ models via single key, including auto-balanced routing"
+    - "PMOVES-crush integration can use Kilo without custom code"
+    - "No KILOCODE_API_KEY on Elder-Melchor yet — add when subscription activated"
+  status: planned
+  blocked_by: "KILOCODE_API_KEY from Kilo subscription"
 
 
 # ============================================================
