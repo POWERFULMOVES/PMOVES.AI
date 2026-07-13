@@ -20,7 +20,19 @@ from typing import Any
 import nats
 from nats.aio.client import Client as NATS
 from aiohttp import web
-from huggingface_hub import HfApi, ModelFilter
+
+try:  # huggingface_hub >= 1.0 removed ModelFilter; list_models takes kwargs directly
+    from huggingface_hub import HfApi
+    _HAS_MODEL_FILTER = False
+except ImportError:  # pragma: no cover
+    HfApi = None  # type: ignore[misc,assignment]
+    _HAS_MODEL_FILTER = False
+
+try:
+    from huggingface_hub import ModelFilter  # type: ignore[import-not-found]
+    _HAS_MODEL_FILTER = True
+except ImportError:
+    ModelFilter = None  # type: ignore[assignment,misc]
 
 
 def _load_secret(key: str, default: str = "") -> str:
@@ -98,6 +110,31 @@ class HFAgent:
 
     # ── Discovery ────────────────────────────────────────────────────────────
 
+    def _build_list_models_kwargs(self) -> dict[str, Any]:
+        """Construct kwargs for HfApi.list_models across huggingface_hub versions.
+
+        huggingface_hub <1.0 used a ``ModelFilter`` object; >=1.0 takes the
+        filter parameters as direct keyword arguments. This shim normalises
+        both so the poll loop survives library upgrades.
+        """
+        task = HF_TASK_FILTER or None
+        tags = HF_TAGS or None
+        author = HF_AUTHOR or None
+
+        if _HAS_MODEL_FILTER:
+            mf = ModelFilter(task=task, tags=tags, author=author)
+            return {"filter": mf}
+
+        # huggingface_hub >= 1.0: task → pipeline_tag, tags → filter list
+        kwargs: dict[str, Any] = {}
+        if task:
+            kwargs["pipeline_tag"] = task
+        if tags:
+            kwargs["filter"] = tags
+        if author:
+            kwargs["author"] = author
+        return kwargs
+
     def _discover_models(self) -> list[dict[str, Any]]:
         """Query HuggingFace for models matching configured criteria.
 
@@ -105,16 +142,15 @@ class HFAgent:
         """
         models: list[dict[str, Any]] = []
         try:
-            model_filter = ModelFilter(
-                task=HF_TASK_FILTER or None,
-                tags=HF_TAGS or None,
-                author=HF_AUTHOR or None,
-            )
+            list_kwargs = self._build_list_models_kwargs()
+            # ``direction`` is only accepted by the legacy API; the new API
+            # derives sort order from the ``sort`` argument.
+            if _HAS_MODEL_FILTER:
+                list_kwargs["direction"] = HF_DIRECTION
             results = self._api.list_models(
-                filter=model_filter,
                 sort=HF_SORT,
-                direction=HF_DIRECTION,
                 limit=HF_LIMIT,
+                **list_kwargs,
             )
             for model_info in results:
                 model_id = getattr(model_info, "id", str(model_info))

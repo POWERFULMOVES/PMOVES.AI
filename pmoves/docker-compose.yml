@@ -2983,6 +2983,79 @@ services:
       retries: 3
       start_period: 10s
 
+  # Tier: agent (HF Agent - autonomous HuggingFace model patrol)
+  # Publishes hf.model.discovered.v1 when new models match configured criteria.
+  # Polls HF Hub on HF_POLL_INTERVAL (default 300s). Requires HF_TOKEN for API
+  # rate-limit relief (anon also works at lower throughput).
+  hf-agent:
+    <<: *tier-agent-hardened-rw
+    build: ./services/hf-agent
+    image: ${HF_AGENT_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-agent:pmoves-latest}
+    container_name: pmoves-hf-agent
+    hostname: hf-agent
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - HF_AGENT_PORT=8201
+    - HF_TOKEN=${HF_TOKEN:-}
+    - HF_TOKEN_FILE=/run/secrets/hf_token
+    - HF_POLL_INTERVAL=${HF_POLL_INTERVAL:-300}
+    - HF_TASK_FILTER=${HF_TASK_FILTER:-text-generation}
+    - HF_TAGS=${HF_TAGS:-}
+    - HF_AUTHOR=${HF_AUTHOR:-}
+    - HF_LIMIT=${HF_LIMIT:-50}
+    ports:
+    - ${HF_AGENT_BIND:-0.0.0.0}:${HF_AGENT_PORT:-8201}:8201
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8201/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Tier: agent (HF Research Agent - model evaluation worker)
+  # Subscribes to hf.model.discovered.v1 from hf-agent, evaluates each model
+  # against benchmark criteria (downloads / likes / tags), publishes results
+  # to hf.model.evaluated.v1. Pass/fail threshold via HF_MIN_SCORE (default 50).
+  hf-research-agent:
+    <<: *tier-agent-hardened-ro
+    build: ./services/hf-research-agent
+    image: ${HF_RESEARCH_AGENT_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-research-agent:pmoves-latest}
+    container_name: pmoves-hf-research-agent
+    hostname: hf-research-agent
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - HF_RESEARCH_PORT=8202
+    - HF_MIN_DOWNLOADS=${HF_MIN_DOWNLOADS:-100}
+    - HF_MIN_LIKES=${HF_MIN_LIKES:-10}
+    - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-}
+    - HF_AVOID_TAGS=${HF_AVOID_TAGS:-}
+    ports:
+    - ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      hf-agent:
+        condition: service_started
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8202/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
     deploy:
       resources:

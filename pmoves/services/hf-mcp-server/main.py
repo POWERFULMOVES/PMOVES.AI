@@ -38,7 +38,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from huggingface_hub import (
     HfApi,
-    ModelFilter,
     hf_hub_download,
     snapshot_download,
 )
