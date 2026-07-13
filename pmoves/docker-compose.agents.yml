@@ -739,6 +739,11 @@ services:
           cpus: '1.0'
           memory: 512M
   notebooklm-agent:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
     build:
       context: ./services/notebooklm-agent
       dockerfile: Dockerfile
@@ -749,12 +754,6 @@ services:
     - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_external]
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro
     build:
@@ -931,6 +930,8 @@ services:
           cpus: '1.0'
           memory: 512M
   hf-agent:
+    # HF Agent — autonomous HuggingFace model patrol. Publishes
+    # hf.model.discovered.v1. Polls HF Hub on HF_POLL_INTERVAL (default 300s).
     <<:
       env_file:
       - env.shared
@@ -973,12 +974,17 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
-  # Tier: agent (HF Research Agent - model evaluation worker)
-  # Subscribes to hf.model.discovered.v1 from hf-agent, evaluates each model
-  # against benchmark criteria (downloads / likes / tags), publishes results
-  # to hf.model.evaluated.v1. Pass/fail threshold via HF_MIN_SCORE (default 50).
   hf-research-agent:
+    # HF Research Agent — model evaluation worker. Subscribes to
+    # hf.model.discovered.v1, evaluates against benchmark criteria
+    # (downloads / likes / tags), publishes hf.model.evaluated.v1.
+    # Pass/fail threshold via HF_MIN_SCORE (default 50).
     <<: *tier-agent-hardened-ro
     build: ./services/hf-research-agent
     image: ${HF_RESEARCH_AGENT_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-research-agent:pmoves-latest}
@@ -990,6 +996,7 @@ services:
     - HF_RESEARCH_PORT=8202
     - HF_MIN_DOWNLOADS=${HF_MIN_DOWNLOADS:-100}
     - HF_MIN_LIKES=${HF_MIN_LIKES:-10}
+    - HF_MIN_SCORE=${HF_MIN_SCORE:-50}
     - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-}
     - HF_AVOID_TAGS=${HF_AVOID_TAGS:-}
     ports:
@@ -1010,9 +1017,4 @@ services:
       retries: 3
       start_period: 30s
 
-  # Tier: agent (A2UI NATS bridge - geometry bus integration)
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
+  # Tier: agent (NotebookLM Agent - Google NotebookLM integration)

@@ -111,7 +111,7 @@ def fetch_clickhouse_rows(query: str, limit: int = 10000) -> List[Dict[str, Any]
                 params={"user": ch_user, "password": ch_pass},
             )
             resp.raise_for_status()
-    except (httpx.ConnectError, httpx.HTTPStatusError) as exc:
+    except (httpx.TransportError, httpx.HTTPStatusError) as exc:
         logger.warning("ClickHouse unreachable at %s — returning empty (%s)", ch_url, exc)
         return []
 

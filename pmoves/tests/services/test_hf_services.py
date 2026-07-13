@@ -53,9 +53,9 @@ _hf_research_skip_reason: str | None = None
 _hf_mcp_skip_reason: str | None = None
 
 try:
-    pytest.importorskip("nats")
+    import nats  # noqa: F401 — guards hf-agent import; pytest.importorskip raises BaseException
     hf_agent_mod = _load_module("hf-agent", "pmoves_test_hf_agent")
-except Exception as exc:  # pragma: no cover — skip if huggingface_hub too old
+except Exception as exc:  # pragma: no cover
     hf_agent_mod = None
     _hf_agent_skip_reason = f"{type(exc).__name__}: {exc}"
 
