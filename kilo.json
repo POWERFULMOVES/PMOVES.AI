@@ -78,7 +78,7 @@
     },
     "huggingface": {
       "type": "local",
-      "command": ["npx", "-y", "@llmindset/hf-mcp-server"],
+      "command": ["npx", "-y", "@llmindset/hf-mcp-server@0.3.20"],
       "environment": {
         "HF_TOKEN": "${HF_TOKEN}"
       }
