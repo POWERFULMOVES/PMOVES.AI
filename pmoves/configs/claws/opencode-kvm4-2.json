@@ -3,7 +3,7 @@
   "mcpServers": {
     "pmoves-cipher": {
       "type": "sse",
-      "url": "http://cipher-memory:8105/sse",
+      "url": "http://cipher-memory:8105/mcp/sse",
       "description": "Agent memory (Neo4j knowledge graph)"
     }
   },
