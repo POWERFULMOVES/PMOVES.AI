@@ -14,7 +14,7 @@ KiloCode GLM is the VS Code-native agent on the 5090 GPU node. It operates along
 
 ## Provider Configuration
 
-Per official Z.AI documentation (docs.z.ai/devpack/using5.1):
+Per official Z.AI documentation (docs.z.ai/guides/llm/glm-5.2):
 
 - **Coding API Endpoint:** `https://api.z.ai/api/coding/paas/v4` (dedicated, NOT general API)
 - **Primary Model:** `glm-5.2` — latest GLM model, served via Ollama Cloud and Z.AI coding plan (contextWindow=~128K)
