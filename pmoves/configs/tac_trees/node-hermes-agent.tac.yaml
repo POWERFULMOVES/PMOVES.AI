@@ -154,7 +154,7 @@ root:
             Config aligned to Hermes v0.18.2 schema on 2026-07-12:
             - fallback_providers: kimi → minimax-oauth → openrouter → ollama-cloud
             - credential_pool_strategies: zai fill_first, openrouter round_robin
-            - privacy.redact_pii: true (HIPAA)
+            - privacy.redact_pii: true (HIPAA-aware — PII redaction, not full compliance)
             - Profile .env: GLM_API_KEY, KIMI_API_KEY, OLLAMA_API_KEY populated
             - Config version: v33 (migrated)
             - hermes doctor: all checks passed

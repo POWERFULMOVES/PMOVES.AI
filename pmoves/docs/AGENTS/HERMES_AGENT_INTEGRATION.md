@@ -730,19 +730,19 @@ values (`YOUR_ZAI_KEY_HERE`) instead of real API keys. Config version was v0
 | `fallback_providers` | `[]` (empty) | 4-tier cascade: kimi → minimax-oauth → openrouter → ollama-cloud |
 | `credential_pool_strategies` | `alibaba: fill_first` | zai, kimi-coding (fill_first), openrouter (round_robin), alibaba |
 | Profile .env keys | Placeholders | Real GLM_API_KEY, KIMI_API_KEY, DEEPSEEK_API_KEY, OLLAMA_API_KEY |
-| `privacy.redact_pii` | false | true (HIPAA-aware) |
-| `hermes doctor` | 3 issues | All checks passed |
+| `privacy.redact_pii` | false | true (HIPAA-aware — PII redaction for patient data) |
+| `hermes doctor` | 3 issues | All checks passed (reported status — see `hermes doctor` output) |
 
 ### Default Profile Fallback Chain
 
-```
+```text
 Primary:   glm-5.2 (via ollama-cloud)
 Fallbacks: zai-coding → kimi-k2.7-code → minimax-text-01 → nousresearch/hermes-3 → hermes3:8b
 ```
 
 ### pmoves-hermes-elder Profile Fallback Chain
 
-```
+```text
 Primary:   zai-coding (via zai)
 Fallbacks: kimi-k2.7-code → minimax-text-01 → nousresearch/hermes-3 → hermes3:8b
 ```
@@ -756,7 +756,8 @@ provider. Both are now set in the profile .env with the same value.
 |-------------|---------------------|----------|
 | `ZAI_API_KEY` | `GLM_API_KEY` | zai |
 | `KIMI_API_KEY` | `KIMI_API_KEY` | kimi-coding |
-| `MINIMAX_API_KEY` | (OAuth — `minimax-oauth`) | minimax |
+| `MINIMAX_API_KEY` | `MINIMAX_API_KEY` | minimax (API key) |
+| — | `minimax-oauth` (browser OAuth) | minimax-oauth (separate provider) |
 | `OPENROUTER_API_KEY` | `OPENROUTER_API_KEY` | openrouter |
 | — | `OLLAMA_API_KEY` | ollama-cloud |
 
