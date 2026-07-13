@@ -124,7 +124,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 
 | Server | Transport | Required env | Source path | Notes |
 |--------|-----------|--------------|-------------|-------|
-| `pmoves-cipher` | SSE `localhost:8105/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
+| `pmoves-cipher` | SSE `localhost:8105/mcp/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
 | `pmoves-nats-fleet` | stdio | `NATS_URL` (declared inline) | `pmoves-nats-mcp/nats_mcp/server.py` | Publishes/subscribes to the fleet hub at KVM4-2. No env.shared dependency. |
 | `docker` | stdio (image `mcp/docker`) | none | Docker socket | Container inspect/exec on the local Docker daemon |
 | `hostinger-mcp` | stdio (npm pkg `hostinger-api-mcp@0.2.1`) | `HOSTINGER_API_KEY` | npm package | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |
