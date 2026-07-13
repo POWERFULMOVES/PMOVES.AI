@@ -77,11 +77,9 @@
       }
     },
     "huggingface": {
-      "type": "local",
-      "command": ["npx", "-y", "@llmindset/hf-mcp-server"],
-      "environment": {
-        "HF_TOKEN": "${HF_TOKEN}"
-      }
+      "type": "remote",
+      "url": "https://huggingface.co/mcp",
+      "headers": { "Authorization": "Bearer ${HF_TOKEN}" }
     },
     "docker": {
       "type": "local",
