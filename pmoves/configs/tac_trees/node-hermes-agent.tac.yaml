@@ -633,7 +633,7 @@ submodule_fleet:
       branch: "PMOVES.AI-Edition-Hardened"
       use: "Practice billing, insurance claims, financial dashboard"
       hipaa: true
-      
+
     - submodule: "PMOVES-n8n"
       tier: "Workflow"
       git: "https://github.com/POWERFULMOVES/PMOVES-n8n.git"
@@ -765,3 +765,43 @@ revised_scope_hermes_config_first:
       status: PENDING
       goal: "Start HERMES gateway on elder-melchor, verify health"
       blocked_by: "CHIT secrets populated (OpenRouter, ZAI, etc.)"
+
+
+# ============================================================
+# DOCKER MCP TOOLKIT (2026-07-12)
+# ============================================================
+# Docker MCP Gateway connecting Hermes Agent to external MCP servers
+# via stdio transport. 167 tools discovered across 3 servers.
+
+docker_mcp_toolkit:
+  summary: "Docker MCP Toolkit integration for Hermes Agent on Elder-Melchor"
+  date: "2026-07-12"
+  owner: hermes-agent
+  status: done
+  config:
+    docker_mcp_config: "~/.docker/mcp/config.yaml"
+    servers_enabled:
+      - github-official      # 36 tools — PMOVES repo operations, PR management
+      - hostinger-mcp-server  # 78 tools — VPS, domain, hosting for Ageless Beauty
+      - hugging-face          # 8 tools — model search, paper search, space search
+      - markitdown            # document conversion
+    total_tools_discovered: 167
+    transport: stdio
+  hermes_mcp_config:
+    command: "docker"
+    args: ["mcp", "gateway", "run", "--servers", "github-official,hostinger-mcp-server,hugging-face"]
+    enabled: true
+    timeout_seconds: 60
+    connection_time_ms: 28359
+  use_cases:
+    - "GitHub: create PRs, list issues, search code, manage branches from Hermes chat"
+    - "Hostinger: manage VPS, domains, DNS for agelessbeauty.pmoves.ai"
+    - "HuggingFace: search models, find papers, discover Spaces for fleet research"
+  notes: |
+    Docker MCP Gateway connects Hermes to 3 MCP servers via stdio transport.
+    Gateway takes ~6s to read config + pull images on first connect.
+    MCP timeout set to 60s (default 40s too short for cold start).
+    Credentials via Docker Desktop secrets API:
+    - GITHUB_PERSONAL_ACCESS_TOKEN (from gh auth)
+    - APITOKEN (Hostinger — needs Docker Desktop secrets)
+    - HF_TOKEN (HuggingFace — needs Docker Desktop secrets)
