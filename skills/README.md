@@ -35,6 +35,17 @@ How each skill becomes available to a Claude Code session:
 - **`PMOVES-agent-sandbox-skill/`** — same activation path as fork-repository-skill.
 - **`Pmoves-claude-d3js-skill/`** — Claude Code skill for D3.js visualization; activate via the skill registry.
 
+## KiloCode skills
+
+The constellation above is for **Claude Code** skill submodules under `skills/` and `.claude/skills/`.
+
+KiloCode GLM skills live in a separate native directory: `.kilocode/skills/`. These are not git submodules; they are tracked directly in the monorepo so KiloCode can load them via `kilo.json`:
+
+- `.kilocode/skills/kilocode-bringup-audit/` — tiered bring-up/health validation
+- `.kilocode/skills/kilocode-agent-trails/` — AGENT TRAILS roguelike navigation
+
+Future KiloCode skill forks can be added here if they need to be shared across repos; for now the native `.kilocode/skills/` path is the canonical location.
+
 ## Cross-references
 
 - Root `CLAUDE.md` — keystone, points here as Tier-2 constellation
@@ -42,3 +53,4 @@ How each skill becomes available to a Claude Code session:
 - `.claude/context/submodules.md` — comprehensive submodule registry (pending the proposal in `pmoves/docs/proposals/`)
 - `PMOVES-agents.md/` — sibling Tier-2 always-relevant submodule for AGENTS.md format reference
 - `pmoves/configs/submodule_skill_registry.json` — context-tag injection registry; new skill submodules should be registered here once they have CLAUDE.md files
+- `pmoves/docs/AGENTS/KILOCODE_OPERATOR_HOME.md` — KiloCode cold-start runbook
