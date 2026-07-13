@@ -789,7 +789,7 @@ docker_mcp_toolkit:
     transport: stdio
   hermes_mcp_config:
     command: "docker"
-    args: ["mcp", "gateway", "run", "--servers", "github-official,hostinger-mcp-server,hugging-face"]
+    args: ["mcp", "gateway", "run", "--servers", "github-official,hostinger-mcp-server,hugging-face,markitdown"]
     enabled: true
     timeout_seconds: 60
     connection_time_ms: 28359
