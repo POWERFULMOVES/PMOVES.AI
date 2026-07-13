@@ -82,13 +82,6 @@
       "environment": {
         "HF_TOKEN": "${HF_TOKEN}"
       }
-    },
-    "docker": {
-      "type": "local",
-      "command": ["docker", "run", "--rm", "-i", "--mount", "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock", "mcp/docker"],
-      "environment": {
-        "MSYS_NO_PATHCONV": "1"
-      }
     }
   },
   "skills": {
@@ -107,7 +100,6 @@
     "zai-zread_*": "allow",
     "pmoves-cipher_*": "allow",
     "tailscale_*": "allow",
-    "huggingface_*": "allow",
-    "docker_*": "allow"
+    "huggingface_*": "allow"
   }
 }
