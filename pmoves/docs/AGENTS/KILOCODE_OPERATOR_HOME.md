@@ -27,7 +27,7 @@ Read these in order on a cold start:
 2. **Service map:** `.claude/CLAUDE.md` + `.claude/CATALOG.md`
 3. **Submodule map:** `.claude/context/submodules.md`
 4. **Skills:** `.kilocode/skills/` + `skills/README.md`
-5. **Memory path:** Cipher Memory at `http://localhost:8105/sse` (or `http://${TS_Z890}:8105/sse` remote)
+5. **Memory path:** Cipher Memory at `http://localhost:8105/mcp/sse` (or `http://${TS_Z890}:8105/mcp/sse` remote)
 6. **Coordination:** `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (Active Claim Register)
 
 ---
@@ -206,7 +206,7 @@ All trail entries must carry:
 | Archon | `http://${TS_Z890}:8091` | Agent service |
 | TensorZero | `http://${TS_Z890}:3030` | LLM gateway |
 | NATS | `nats://${TS_Z890}:4222` | Message bus |
-| Cipher Memory | `http://${TS_Z890}:8105/sse` | Agent memory (MCP SSE) |
+| Cipher Memory | `http://${TS_Z890}:8105/mcp/sse` | Agent memory (MCP SSE) |
 | Ollama (Z890) | `http://${TS_Z890}:11434` | Z890 model serving |
 
 ---
