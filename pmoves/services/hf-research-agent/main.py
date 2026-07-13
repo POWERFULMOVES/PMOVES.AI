@@ -51,6 +51,7 @@ SERVER_PORT = int(os.environ.get("HF_RESEARCH_PORT", "8202"))
 # Evaluation criteria (env-configurable)
 MIN_DOWNLOADS = int(os.environ.get("HF_MIN_DOWNLOADS", "100"))
 MIN_LIKES = int(os.environ.get("HF_MIN_LIKES", "10"))
+MIN_SCORE = int(os.environ.get("HF_MIN_SCORE", "50"))
 PREFERRED_TAGS_RAW = os.environ.get("HF_PREFERRED_TAGS", "")
 PREFERRED_TAGS = {t.strip().lower() for t in PREFERRED_TAGS_RAW.split(",") if t.strip()}
 AVOID_TAGS_RAW = os.environ.get("HF_AVOID_TAGS", "")
@@ -147,7 +148,7 @@ class HFResearchAgent:
             score = max(0, score - penalty)
             reasons.append(f"avoid tags match (-{penalty}): {sorted(matched_avoid)}")
 
-        passed = score >= 50
+        passed = score >= MIN_SCORE
         return {
             "model_id": model_id,
             "score": score,

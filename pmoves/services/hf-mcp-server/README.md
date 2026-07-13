@@ -56,7 +56,11 @@ Model Context Protocol (MCP) server for Hugging Face Hub integration with PMOVES
 ### Docker Compose
 
 ```bash
-docker-compose -f pmoves/docker-compose/hf-mcp-server.yml up -d
+# Standalone (HF MCP server only)
+docker compose -f pmoves/docker-compose/hf-mcp-server.yml up -d
+
+# Or as part of the full agents profile
+docker compose -f pmoves/docker-compose.yml --profile agents --profile research up -d hf-mcp-server
 ```
 
 ### Direct API Usage
@@ -144,7 +148,8 @@ python main.py
 ## Testing
 
 ```bash
-pytest tests/
+# From repo root — runs against in-memory state, no live HF/NATS needed
+pytest pmoves/tests/services/test_hf_services.py -v
 ```
 
 ## License

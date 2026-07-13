@@ -134,3 +134,50 @@ rename, `rg '<old_pattern>' <scope>` and fix every match.
 `pmoves/configs/model-suits/` has 17 YAMLs using 3 different nesting conventions
 (`model_suit:`, `suit:`, top-level). Any new parser must handle all three or
 explicitly declare which it supports.
+
+---
+
+## Post-Handoff Verification (SPARK-KIMI, 2026-07-13)
+
+> **GRAPHITI_MARK:** SPARK-KIMI::LANE-C-VERIFICATION::2026-07-13
+
+Reviewed all 5 sub-lanes against current `main` state. The handoff above was
+**partially stale** — significant work had already landed that the handoff
+didn't capture.
+
+### Corrected Sub-Lane Status
+
+| Sub-Lane | Handoff Claim | Actual State (2026-07-13) |
+|----------|---------------|---------------------------|
+| **C1** (hf-agent service) | "No service code exists" | **ALREADY EXISTS** — full implementation at `pmoves/services/hf-agent/main.py` (238 lines, spark-shape-worker pattern, NATS pub `hf.model.discovered.v1`). Handoff used `hf_agent` (underscore); actual path is `hf-agent` (hyphen). |
+| **C2** (hf-research-agent service) | "No service code exists" | **ALREADY EXISTS** — full implementation at `pmoves/services/hf-research-agent/main.py` (242 lines, sub `hf.model.discovered.v1`, pub `hf.model.evaluated.v1`, scoring rubric). |
+| **C3** (dataset publication) | "Never run" | Script + config exist and work. Dry-run verified: gracefully skips when Supabase/ClickHouse unreachable. **Real publish needs HF_TOKEN + live data sources.** |
+| **C4** (hf-mcp-server tests) | "tests missing" | **Was missing — now delivered** (19 tests, all passing). |
+| **C5** (huggingface-skills sync) | "drift ea6ec9a6 → 221f5f78" | **ALREADY DONE** — submodule at `0190417b4`, past the target SHA. |
+
+### Real Gaps Found & Fixed
+
+1. **hf-agent + hf-research-agent not wired into docker-compose.yml** — code existed but no compose stanza. Added both under `["agents", "research"]` profiles with proper `tier-agent-hardened` anchors, NATS depends_on, healthchecks, and HF_TOKEN secrets wiring.
+2. **`ModelFilter` import broken with huggingface_hub ≥ 1.0** — `ModelFilter` was removed in huggingface_hub 1.x. Both `hf-agent/main.py` and `hf-mcp-server/main.py` imported it. Fixed: hf-agent now has a version-compat shim (`_build_list_models_kwargs()`); hf-mcp-server had an unused import removed.
+3. **`publish_dataset.py` ClickHouse path crashed on connection refused** — Supabase path degraded gracefully but ClickHouse path raised. Fixed: both paths now return empty + warning.
+4. **hf-mcp-server README referenced stale compose path** and missing CLAUDE.md — both fixed.
+
+### Delivered
+
+- `pmoves/docker-compose.yml` — +73 lines (hf-agent + hf-research-agent stanzas)
+- `pmoves/services/hf-agent/main.py` — ModelFilter compat shim
+- `pmoves/services/hf-mcp-server/main.py` — remove unused ModelFilter import
+- `pmoves/services/hf-mcp-server/CLAUDE.md` — new operator doc
+- `pmoves/services/hf-mcp-server/README.md` — compose + test path fixes
+- `pmoves/scripts/publish_dataset.py` — ClickHouse graceful degradation
+- `pmoves/tests/services/test_hf_services.py` — 19 tests (all passing)
+
+### Remaining for SPARK-KIMI
+
+- **Live dataset publish (C3 real run):** needs Supabase + ClickHouse + HF_TOKEN all live on the same node. Run `make hf-publish-datasets` when SPARK has full data stack up.
+- **hf-mcp-server port conflict awareness:** port 8096 collides with Headscale in services-catalog.md. SPARK runs Headscale elsewhere; verify no collision before `docker compose --profile research up`.
+
+### Agent ACK
+- Agent: `SPARK-KIMI`
+- Signature: `ACK::SPARK-KIMI::LANE-C-VERIFICATION-AND-COMPOSE-WIRING`
+- Timestamp: 2026-07-13
