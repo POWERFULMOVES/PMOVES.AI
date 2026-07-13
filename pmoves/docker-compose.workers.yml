@@ -675,12 +675,10 @@ services:
       retries: 3
       start_period: 10s
 
-  # Tier: agent (A2UI NATS bridge - geometry bus integration)
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
+  # Tier: agent (HF Agent - autonomous HuggingFace model patrol)
+  # Publishes hf.model.discovered.v1 when new models match configured criteria.
+  # Polls HF Hub on HF_POLL_INTERVAL (default 300s). Requires HF_TOKEN for API
+  # rate-limit relief (anon also works at lower throughput).
   github-branch-naming:
     build:
       context: ./services/github-branch-naming
