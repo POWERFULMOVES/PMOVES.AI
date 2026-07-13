@@ -27,7 +27,7 @@ Read these in order on a cold start:
 2. **Service map:** `.claude/CLAUDE.md` + `.claude/CATALOG.md`
 3. **Submodule map:** `.claude/context/submodules.md`
 4. **Skills:** `.kilocode/skills/` + `skills/README.md`
-5. **Memory path:** Cipher Memory at `http://localhost:8105/mcp/sse` (or `http://${TS_Z890}:8105/mcp/sse` remote)
+5. **Memory path:** Cipher Memory at `http://localhost:8105/sse` (or `http://${TS_Z890}:8105/sse` remote)
 6. **Coordination:** `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (Active Claim Register)
 
 ---
