@@ -120,8 +120,8 @@ git stash pop
 ## Signatures
 - `ACK::CODEX-GPT5::KRISS-KROSS-ACCORD::2026-02-24`
 - `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24` (SIGNED)
-- `ACK::KILOCODE-GLM::KRISS-KROSS-ACCORD::2026-07-11` (SIGNED)
+- `ACK::KILOCODE-GLM::KRISS-KROSS-ACCORD::2026-07-12` (SIGNED)
 
 Claude signature evidence: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (`ACK::CLAUDE-OPUS::PHI-4482-T1::KRISS-KROSS-RAIL-SPLIT`).
 
-KiloCode signature evidence: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (`ACK::KILOCODE-GLM::CLAW-CONFIG` — PR #1151, 2026-03-27). KiloCode GLM ▲ operates as Delivery Body on the 5090 node alongside Claude and Codex. DARKXSIDE ✦ witnesses all claim transitions.
+KiloCode signature evidence: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (`ACK::KILOCODE-GLM::CLAW-CONFIG` — PR #1151, first claim/release cycle 2026-03-27). KiloCode GLM ▲ operates as the third agent on the 5090 node alongside Claude ◆ and Codex ■. DARKXSIDE ✦ attests to all three agents' trail integrity per `KRISS_KROSS_ACK.md`.

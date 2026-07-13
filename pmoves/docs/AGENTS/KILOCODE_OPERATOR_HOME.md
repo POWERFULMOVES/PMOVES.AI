@@ -1,150 +1,204 @@
-# KiloCode Operator Home (PMOVES)
-_Last updated: 2026-07-11_
+# KiloCode Operator Home
 
-This is the KiloCode-first operations guide for PMOVES.AI. It mirrors the mature
-Claude and Codex setups, but keeps KiloCode workflows blueprint-first and VS Code-native.
+> **Cold-start runbook for KiloCode GLM on the 5090 node.**
+> Mirror of `CODEX_OPERATOR_HOME.md` — the canonical model for non-Claude agent integration.
 
-KiloCode GLM (glyph ▲, color #059669) is the third agentic interface on the 5090 node,
-alongside Claude Code and Codex. It uses GLM-5.2 via Z.AI coding plan as primary model.
+**Glyph:** ▲ (Triangle) | **Color:** #059669 (Emerald) | **Voice:** architectural
+**Node:** pmoves-5090 (GPU inference specialist)
+**Model:** GLM-5-Turbo via Z.AI Coding Plan (`zai/glm-5-turbo`, fallback `glm-5.1`)
+**Co-author:** KiloCode <noreply@kilocode.ai>
+
+---
 
 ## Identity
 
-| Property | Value |
-|----------|-------|
-| Glyph | ▲ (Triangle) |
-| Color | #059669 (Emerald) |
-| Accent | #34D399 |
-| Voice | architectural — blueprint-first, mode-driven |
-| Node | pmoves-5090 (desktop-9950xd) |
-| Model | GLM-5.2 (zai/glm-5.2, fallback glm-5-turbo) |
-| COCREATOR | DARKXSIDE ✦ |
+KiloCode GLM is the VS Code-native agent on the 5090 GPU node. It operates alongside Claude Code and Codex on the same machine, sharing the Tailscale mesh and GPU resources.
 
-## Runtime signaling
+**Three-Body role:** Delivery Body (implementation lane)
+**COCREATOR witness:** DARKXSIDE ✦ — all trail entries carry dual attribution: `DARKXSIDE x POWERFULMOVES on 5090`
 
-- Use `pmoves-glm` mode for blueprint-first implementation.
-- Use `pmoves-code` mode for general service development.
-- Use `pmoves-architect` mode for system design and orchestration planning.
-- Use `pmoves-cocreate` mode for DARKXSIDE creative co-authorship.
-- See all 11 modes in `.kilocodemodes`.
+---
 
-## KRISS KROSS lane roles
+## Ecosystem Traversal Order
 
-- `KiloCode GLM` lead mode: blueprint-first implementation, MCP integration, GPU model serving.
-- `Claude` in KiloCode-led windows: analysis, review, field brief authoring.
-- `Codex` in KiloCode-led windows: terse code generation, integration tasks.
-- Use overlay handoff rules from `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` when scopes intersect.
-- KiloCode signed: `ACK::KILOCODE-GLM::KRISS-KROSS-ACCORD::2026-07-11`
+Read these in order on a cold start:
 
-## Three-Body Declaration
+1. **Operator lane:** this file + `.kilo/agent/kilocode-glm.md`
+2. **Service map:** `.claude/CLAUDE.md` + `.claude/CATALOG.md`
+3. **Submodule map:** `.claude/context/submodules.md`
+4. **Skills:** `.kilocode/skills/` + `skills/README.md`
+5. **Memory path:** Cipher Memory at `http://localhost:8105/mcp/sse` (or `http://${TS_Z890}:8105/mcp/sse` remote)
+6. **Coordination:** `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (Active Claim Register)
 
-KiloCode defaults to **Delivery Body** (execution lane):
+---
+
+## Runtime Protocol
+
+### Starting a Session
+
+1. **Check active claims** in `AGNOTE4482PHI.t1.md` — never edit a branch with an open claim from another agent
+2. **Disclose Emperor-CHIT-Humility** — state what you have vs. what's missing (Cipher MCP, A2A, Known Roads, CHIT passphrase)
+3. **Verify node identity** — confirm you're on 5090 with GPU access:
+   ```bash
+   nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader
+   ollama list
+   ```
+4. **Check TensorZero health:**
+   ```bash
+   curl -sf http://localhost:3030/health
+   ```
+
+### Claiming Work
+
+Use the `/claim` command or write directly to `AGNOTE4482PHI.t1.md`:
+
+```text
+<ISO-8601-timestamp> CLAIM `KILOCODE-GLM` scope: <description>.
+  branch: `<name>`. pr_numbers: [#<n>].
+  risks: <risks>.
+  agent_signature: `ACK::KILOCODE-GLM::<SCOPE>`.
+  Three-body: delivery=KILOCODE-GLM, control=DARKXSIDE, memory=this trail.
 ```
-Three-body: delivery=KILOCODE-GLM, control=DARKXSIDE, memory=this trail.
+
+### Working
+
+During implementation, update progress in PR comments and the AGNOTE board:
+
+1. If CI fails, compare the failure against `main` before calling it branch-specific.
+2. Keep changes atomic — if you find adjacent cleanups, open a follow-up; don't expand the current claim.
+3. Post progress updates to the PR with current blocker state.
+
+### Handoff (Cross-Agent Lane Transition)
+
+When handing off to another agent (Claude, Codex, etc.), emit a KRISS KROSS handshake block AND export a CHIT payload. **All cross-agent handoffs must be posted as CHIT payload references, never plaintext secrets.**
+
+Required handoff fields (8 fields, mandatory):
+
+```text
+graphiti_mark:    <trail identifier>
+branch:           <git branch name>
+pr_numbers:       [#<n>]
+scope:            <work scope description>
+risks:            <known risks>
+next_actions:     <next steps for receiving agent>
+chit_artifact_path: <CHIT payload reference — never plaintext>
+agent_signature:  <signed ACK block>
 ```
 
-All trail entries carry dual attribution: `▲ KiloCode GLM` + `✦ DARKXSIDE`.
-Source line: `DARKXSIDE x POWERFULMOVES on 5090`.
+Export CHIT payload with no cleartext before handoff:
 
-## Bootstrap
+```bash
+make -C pmoves chit-export CHIT_NO_CLEARTEXT=1
+make -C pmoves chit-manifest-sync
+make -C pmoves secrets-funnel-sync
+```
 
-1. Verify coding plan key is set: `echo $Z_AI_API_KEY`
-2. Start VS Code with KiloCode extension
-3. Default agent: `kilocode-glm` (set in `kilo.json`)
-4. Default model: `zai/glm-5.2` (with `glm-5-turbo` fallback)
-5. Open this runbook for reference
+Optional CLI path:
 
-## Ecosystem traversal
+```bash
+python -m pmoves.tools.mini_cli secrets encode --no-cleartext
+```
 
-KiloCode should traverse the existing PMOVES surfaces in this order:
+### Releasing Work
 
-1. Operator lane: this runbook
-2. Service map: `.claude/CLAUDE.md`
-3. Submodule map: `.claude/context/submodules.md`
-4. Model routing: `pmoves/tools/models/kilocode_provider_cascade.yaml`
-5. Agent profile: `pmoves/configs/agent-profiles/kilocode_glm.yaml`
-6. Memory path: Cipher MCP at `http://localhost:8105/sse`
-7. Persona + voice path: `pmoves/docs/AGENTS/PERSONAS.md`
+After work is complete and handoff (if any) is done, write RELEASE entry and clear the claim:
+
+```text
+<ISO-8601-timestamp> RELEASE `KILOCODE-GLM` scope: <description>.
+  branch: `<name>`. pr_numbers: [#<n>].
+  next_actions: <actions>.
+  agent_signature: `ACK::KILOCODE-GLM::<SCOPE>-RELEASE`.
+```
+
+Then sign the trail:
+
+```bash
+make -C pmoves sign-trail SUMMARY="<summary>" AGENT="kilocode" PHASE="<phase>"
+```
+
+### Trail Signing
+
+Sign the trail for session-end provenance. Signing is optional locally (unsigned if `CHIT_PASSPHRASE` unset) but never skipped for session-end:
+
+```bash
+make -C pmoves sign-trail SUMMARY="<summary>" AGENT="kilocode" PHASE="<phase>"
+```
+
+---
+
+## Multi-Agent Coordination
+
+### 5090 Node Siblings
+
+| Agent | Tool | Mode | Role |
+|-------|------|------|------|
+| **KiloCode GLM** ▲ | VS Code + KiloCode | `pmoves-glm` | Blueprint-first implementation |
+| **Claude Code** ◆ | Claude CLI | `claude-opus`/`claude-sonnet` | Analysis, architecture, field briefs |
+| **Codex** ■ | Codex CLI | `never-approve` | Terse code generation, integration |
+
+### KRISS KROSS Handshake
+
+For cross-agent lane transitions, emit:
+
+```text
+KRISS-KROSS-HANDSHAKE
+from_agent=kilocode-glm
+to_agent=<destination>
+branch=<branch>
+scope=<scope>
+collision_risk=low|medium|high
+fallback_mode=ff|overlay|three_way
+graphiti_ref=<trail-ref>
+chit_ref=<chit-ref>
+```
+
+### DARKXSIDE Witness
+
+All trail entries must carry:
+- `▲ KiloCode GLM` as implementer
+- `✦ DARKXSIDE` as witness
+- Source line: `DARKXSIDE x POWERFULMOVES on 5090`
+
+---
+
+## Model Configuration
+
+| Model | Role | Context | Provider |
+|-------|------|---------|----------|
+| `glm-5-turbo` | Primary — agentic, tool-calling | 128K/32K eff | Z.AI Coding Plan |
+| `glm-5.1` | Fallback — long-horizon | 204K/128K eff | Z.AI Coding Plan |
+| `glm-4-air` | Edge — fast/cheap | 32K | Z.AI Coding Plan |
+| `glm-5v-turbo` | Vision + coding | 128K | Z.AI Coding Plan |
+| `kilo-auto/balanced` | Overflow — plan-routed | Variable | KiloCode API |
+
+### TensorZero Routing
+
+| Function | Primary Variant | Weight |
+|----------|----------------|--------|
+| `coding_glm` | `cloud_zai_turbo` | 0.8 |
+| `coding_kilocode` | `cloud_zai_turbo` | 0.8 |
+| `agent_zero` | `hosted_zai_turbo` | 0.6 |
+| `pmoves_orchestrator_coding` | `cloud_zai_glm51` | 1.0 |
+| `pmoves_orchestrator_coding` | `cloud_kilocode` | 0.3 |
+
+---
 
 ## MCP Servers
 
-| Server | Type | Purpose |
-|--------|------|---------|
-| `zai-vision` | local | GLM-5V-Turbo vision analysis, OCR, UI-to-code |
-| `zai-web-search` | remote | LLM-optimized web search |
-| `zai-web-reader` | remote | Full webpage content extraction |
-| `zai-zread` | remote | GitHub repo search and file reading |
-| `pmoves-cipher` | remote | Agent memory (Neo4j knowledge graph) |
-| `tailscale` | local | Tailnet inventory, stale-node cleanup, ACL ops |
-| `huggingface` | local | HF model/dataset/spaces search |
-| `docker` | local | Container inspection via Docker socket |
+| Server | Purpose | Configured In |
+|--------|---------|---------------|
+| `zai-vision` | GLM vision analysis, OCR, UI-to-code | `kilo.json` |
+| `zai-web-search` | LLM-optimized web search | `kilo.json` |
+| `zai-web-reader` | URL content extraction | `kilo.json` |
+| `zai-zread` | GitHub repo search/reading | `kilo.json` |
+| `docker` | Container management | `kilo.json` |
+| `pmoves-cipher` | Persistent agent memory (Neo4j) | `kilo.json` |
+| `tailscale` | Tailnet inventory, node cleanup, ACL | `kilo.json` |
+| `huggingface` | Model/dataset/spaces search | `kilo.json` |
 
-## Z.AI MCP Server Rate Limits
+---
 
-Per Z.AI documentation (`.kilo/command/zai-mcp.md`):
-
-| Server | Rate Limit | Window |
-|--------|-----------|--------|
-| Web Search | 30 requests/min | rolling |
-| Web Reader | 30 requests/min | rolling |
-| Zread | 30 requests/min | rolling |
-| Vision | 10 requests/min | rolling (heavier compute) |
-
-## Provider Configuration
-
-### Primary: Z.AI Coding Plan
-- **Endpoint:** `https://api.z.ai/api/coding/paas/v4`
-- **API Key:** `${Z_AI_API_KEY}`
-- **Models:** glm-5.2 (primary), glm-5-turbo (agentic), glm-5.1 (reasoning), glm-5v-turbo (vision), glm-4-air (fast)
-
-### Secondary: KiloCode Plan
-- **Endpoint:** `https://api.kilocode.ai/api/openrouter`
-- **API Key:** `${KILOCODE_API_KEY}`
-- **Model:** `kilo-auto/balanced` (provider picks model)
-
-### Tertiary: Ollama Cloud
-- **Endpoint:** `https://ollama.com/v1`
-- **API Key:** `${OLLAMA_API_KEY}`
-- **Model:** `glm-5.2`
-
-### TensorZero Routing
-- **Gateway:** `http://localhost:3030`
-- **Primary function:** `coding_glm` (weight 0.8 for GLM-5-Turbo)
-- **KiloCode function:** `coding_kilocode` (weight 0.7 for kilo-auto/balanced)
-- **Orchestrator:** `pmoves_orchestrator_coding` (weight 0.3 for kilo-auto/balanced)
-
-## Health Commands
-
-```bash
-# GPU status
-nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader
-
-# Local models
-ollama list
-
-# Container status
-docker ps --format "table {{.Names}}\t{{.Status}}"
-
-# Remote services (via Tailscale)
-curl -sf http://${TS_Z890}:8080/healthz  # Agent Zero
-curl -sf http://${TS_Z890}:3030/health   # TensorZero
-curl -sf http://${TS_Z890}:8105/health   # Cipher Memory
-
-# Z.AI coding plan check
-curl -s https://api.z.ai/api/coding/paas/v4/models \
-  -H "Authorization: Bearer $Z_AI_API_KEY"
-```
-
-## Local Stack
-
-| Tool | Purpose |
-|------|---------|
-| Ollama (GPU) | Local model serving — large models, TTS, embeddings |
-| Docker | Container management for PMOVES services |
-| CUDA / nvidia-smi | GPU compute and monitoring |
-| GLM coding plan | Primary model (zai/glm-5.2, fallback glm-5-turbo) |
-| Tailscale | Mesh networking to Z890 and fleet nodes |
-
-## Z890 Services (via Tailscale)
+## Z890 Remote Services (via Tailscale)
 
 | Service | URL | Purpose |
 |---------|-----|---------|
@@ -152,36 +206,56 @@ curl -s https://api.z.ai/api/coding/paas/v4/models \
 | Archon | `http://${TS_Z890}:8091` | Agent service |
 | TensorZero | `http://${TS_Z890}:3030` | LLM gateway |
 | NATS | `nats://${TS_Z890}:4222` | Message bus |
-| Cipher Memory | `http://${TS_Z890}:8105/sse` | Agent memory (MCP SSE) |
+| Cipher Memory | `http://${TS_Z890}:8105/mcp/sse` | Agent memory (MCP SSE) |
 | Ollama (Z890) | `http://${TS_Z890}:11434` | Z890 model serving |
 
-## Claim/Release Protocol
+---
 
-Before any edit to a shared branch:
+## Health Commands
 
-1. **Check** Active Claim Register in `AGNOTE4482PHI.t1.md`
-2. **CLAIM** with branch + scope + TTL
-3. **Work** and update progress in PR comments
-4. **RELEASE** with next_actions and signed ACK
+```bash
+# GPU
+nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader
 
+# Local models
+ollama list
+
+# Containers
+docker ps --format "table {{.Names}}\t{{.Status}}"
+
+# Remote services (via Tailscale)
+curl -sf http://${TS_Z890}:8080/healthz   # Agent Zero
+curl -sf http://${TS_Z890}:3030/health    # TensorZero
+curl -sf http://${TS_Z890}:8105/health    # Cipher Memory
+
+# Fleet
+make -C pmoves fleet-status
 ```
-<ISO-8601> CLAIM `KILOCODE-GLM` scope: <description>.
-  branch: `<name>`. pr_numbers: [#<n>].
-  agent_signature: `ACK::KILOCODE-GLM::<SCOPE>`.
-  Three-body: delivery=KILOCODE-GLM, control=DARKXSIDE, memory=this trail.
-```
 
-## References
+---
 
-- `pmoves/config/agent_signatures.yaml` — glyph ▲, color #059669
-- `pmoves/tools/models/kilocode_provider_cascade.yaml` — provider cascade
-- `pmoves/configs/agent-profiles/kilocode_glm.yaml` — agent profile
-- `pmoves/configs/model-suits/glm-5.2.yaml` — model suit
-- `pmoves/configs/claws/opencode-5090.json` — KiloCode node config
-- `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` — claim/release protocol
-- `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` — collision-safe traversal
-- `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md` — DARKXSIDE attestation
-- `pmoves/docs/AGENTS/DARKXSIDE_SIGNATURE.md` — COCREATOR witness
-- `pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md` — workstream assignments
+## Reference Files
 
-<!-- GRAPHITI_MARK: KILOCODE-GLM::OPERATOR-HOME::2026-07-11 -->
+| File | Purpose |
+|------|---------|
+| `.kilo/agent/kilocode-glm.md` | Agent identity definition |
+| `pmoves/config/agent_signatures.yaml` | Glyph ▲, color #059669 (line ~36) |
+| `pmoves/configs/claws/opencode-5090.json` | KiloCode node config |
+| `pmoves/configs/claws/scopes/5090.json` | Exec approvals and MCP servers |
+| `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` | Claim/release protocol |
+| `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` | Collision-safe traversal |
+| `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md` | DARKXSIDE attestation |
+| `pmoves/docs/AGENTS/DARKXSIDE_SIGNATURE.md` | COCREATOR witness protocol |
+| `pmoves/tools/models/kilocode_provider_cascade.yaml` | Provider cascade |
+| `pmoves/configs/model-suits/glm-5-turbo.yaml` | GLM-5-Turbo suit |
+| `pmoves/configs/agent-profiles/kilocode_glm.yaml` | Agent profile |
+| `pmoves/docs/AGENTS/KILOCODE_CLAUDE_PARITY_MAP.md` | Command parity map |
+
+---
+
+## ACK
+
+- Agent: `KILOCODE-GLM`
+- Signature: `ACK::KILOCODE-GLM::OPERATOR-HOME`
+- Timestamp: 2026-07-12
+- DARKXSIDE ✦ witness

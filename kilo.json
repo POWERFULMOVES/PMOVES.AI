@@ -71,7 +71,7 @@
     },
     "tailscale": {
       "type": "local",
-      "command": ["npx", "-y", "tailscale-mcp@latest"],
+      "command": ["npx", "-y", "tailscale-mcp@2026.4.10-1"],
       "environment": {
         "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}"
       }
@@ -81,13 +81,6 @@
       "command": ["npx", "-y", "@llmindset/hf-mcp-server@0.3.30"],
       "environment": {
         "HF_TOKEN": "${HF_TOKEN}"
-      }
-    },
-    "docker": {
-      "type": "local",
-      "command": ["docker", "run", "--rm", "-i", "--mount", "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock", "mcp/docker"],
-      "environment": {
-        "MSYS_NO_PATHCONV": "1"
       }
     }
   },
@@ -107,7 +100,6 @@
     "zai-zread_*": "allow",
     "pmoves-cipher_*": "allow",
     "tailscale_*": "allow",
-    "huggingface_*": "allow",
-    "docker_*": "allow"
+    "huggingface_*": "allow"
   }
 }
