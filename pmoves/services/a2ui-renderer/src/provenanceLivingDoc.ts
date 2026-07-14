@@ -81,6 +81,27 @@ export const SKIN_PALETTE: ProvenancePalette = {
 
 const DEFAULT_PALETTE: ProvenancePalette = ARMOR_PALETTE;
 
+// DL-3.3 — persona-adaptive palette patch. Gateway theme shape from
+// GET /v1/agent/theme/{id}: { color, accent, glyph, ... }. Accent family only:
+// background/panel/ink stay with the base palette (spec D3) so a persona can
+// tint a provenance doc without inventing a whole new surface.
+export interface PersonaAccentTheme {
+  color?: string;
+  accent?: string;
+}
+
+export function personaPalette(
+  theme: PersonaAccentTheme | null | undefined,
+  base: ProvenancePalette = ARMOR_PALETTE
+): ProvenancePalette {
+  if (!theme || typeof theme !== 'object') return { ...base };
+  return {
+    ...base,
+    ...(theme.color ? { accent: theme.color } : {}),
+    ...(theme.accent ? { accentSoft: theme.accent } : {}),
+  };
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }

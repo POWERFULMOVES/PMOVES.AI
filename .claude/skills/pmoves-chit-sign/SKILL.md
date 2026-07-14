@@ -24,7 +24,7 @@ The NATS leg is **staged but not auto-published** until the `pmoves-nats-mcp` se
 ## Procedural steps (Claude follows this in order)
 
 1. **Gather the payload.** Identify the artifact being signed: PR number, commit SHA, branch, file paths touched, summary one-liner. Confirm no plaintext secrets are inside the payload — only references (paths, IDs).
-2. **Call `/chit:sign-trail`.** Pass the payload object as the slash command's input. Capture the returned signature, trail-id, and timestamp.
+2. **Call `/chit:sign-trail` or the Make target.** The slash command is the preferred interface when wired. As a fallback, run `make -C pmoves sign-trail AGENT="<agent>" SUMMARY="<summary>" PHASE="<phase>"` from the repo root with `CHIT_PASSPHRASE` exported. Capture the returned signature, trail-id, and timestamp.
 3. **Capture the signature.** Record `signature`, `trail_id`, and `signed_at` in your working notes so the next steps can reference them verbatim.
 4. **Append to AGNOTE4482PHI.t1.md.** Open `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`, locate the Active Claim Register, and append a row of the form:
    ```

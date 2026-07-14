@@ -8,8 +8,9 @@
 #   - /            → strict marketing policy
 #   - /hyperdim/*  → looser policy the WebGL viewer needs (eval + cdnjs/unpkg)
 #   - /embeds/beats-constellation/* → stricter canvas-embed policy (no eval, no CDN hosts)
-# CSP only affects document responses; the document routes are /, /hyperdim/*, and
-# /embeds/beats-constellation/*
+#   - /stage/*     → strict A2UI surface policy (vendored bundle, no eval, no inline)
+# CSP only affects document responses; the document routes are /, /hyperdim/*,
+# /embeds/beats-constellation/*, and /stage/*
 # (everything else in _redirects is a 30x redirect or an off-site link).
 
 /*
@@ -31,8 +32,13 @@
 #   - Inline <style> and <script> disallowed here — the marketing page ships external files only.
 #   - TODO(founder): when Cloudflare Web Analytics is enabled, add
 #     https://static.cloudflareinsights.com to script-src and the matching connect-src host.
+# connect-src includes LOOPBACK-ONLY origins for the DL-3.3 persona demo
+# (?agent= resolves accents via the local BoTZ Gateway :8054; Showtime :9225
+# drives the live flip). These are the *visitor's* loopback — harmless for the
+# public, functional on-net. persona-theme.js additionally restricts ?gw=
+# overrides to loopback, so no remote host can ever be fetched.
 /
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self' data:; connect-src 'self'; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self' data:; connect-src 'self' http://localhost:8054 http://127.0.0.1:8054 http://localhost:9225 http://127.0.0.1:9225; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; upgrade-insecure-requests
 
 # --- Hyperdimensions WebGL viewer (sandboxed to its own path) ---
 # Self-contained webtoy: three.js (unpkg importmap), CodeMirror + math.js (cdnjs), an inline
@@ -48,6 +54,16 @@
 # NO 'unsafe-eval' and no CDN hosts, so it's tighter than /hyperdim/*.
 /embeds/beats-constellation/*
   Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; object-src 'none'
+
+# --- Stage (A2UI rooms-on-a-stage, DL-4.1) ---
+# Vendored @a2ui/lit bundle (no CDN, no eval — verified in stage/vendor/README.md).
+# Component styles use constructable stylesheets (CSP-exempt), but the theme's
+# additionalStyles land as style="" attributes via Lit styleMap — measured under
+# this exact policy, strict style-src blanks the card surfaces. So ONLY the
+# attribute channel is opened (style-src-attr); style-src stays 'self', meaning
+# no <style> injection and no external sheets. script-src stays strict 'self'.
+/stage/*
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'
 
 # --- Long-cache static assets ---
 /assets/*

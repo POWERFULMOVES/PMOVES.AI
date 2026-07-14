@@ -1,0 +1,75 @@
+# ============================================================
+# GLM-5.2 Model Suit
+# Role: Latest GLM model — primary coding + reasoning
+# Best for: Blueprint-first implementation, agentic workflows,
+#           tool calling, VS Code-native development
+# Provider: Zhipu AI (Z.AI) via coding plan + Ollama Cloud
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: glm-5.2
+  provider: zai
+  base_url: "https://api.z.ai/api/coding/paas/v4"
+  api_key_env: Z_AI_API_KEY
+
+  architecture:
+    type: moe
+    total_params: "TBD"
+    active_params: "TBD"
+    attention: standard
+
+  context:
+    max_window: 1000000
+    effective_window: 500000
+    working_window: 262144
+
+  defaults:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 131072
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    reasoning_effort: max
+    mtp_steps: shared
+
+  harness_mappings:
+    blueprint_implementation:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+
+    agentic_workflow:
+      temperature: 0.8
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+
+    multi_step_reasoning:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_reasoner
+
+    code_review:
+      temperature: 0.3
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_analyst
+
+  cgp_state_vector:
+    delta: 0.4
+    Hz: 0.12
+    kappa: 1.5
+    A: 0.6
+    F: 0.07
+
+  fallback_to: glm-5-turbo
+  priority: 4
+  # GLM-5.2 is higher priority than GLM-5-Turbo (priority 6)
+  # and GLM-5.1 (priority 5) — it is the latest model

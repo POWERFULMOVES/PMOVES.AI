@@ -101,6 +101,12 @@ Each green check should represent:
    [x] No orphan branches exist in the claim register (CLAIMED >7 days with no PR and no CHIT trail activity → ORPHANED). <!-- 14 orphan branches from closed PRs already deleted in prior cleanup. stale-branch-sweep.yml workflow active. Verified 2026-05-02 SIDECAR-SPARK. -->
 - [x] CHIT trail is recorded for branch lifecycle events (creation, PR link, merge, deletion) on NATS subject `branch.<path-segments>.trail.v1`, where `<path-segments>` is the branch name with `/` replaced by `.` (e.g. `feat/w6-bpm-nats` → `branch.feat.w6-bpm-nats.trail.v1`). Layer 1 emit primitive: `pmoves/services/common/branch_trail.py` (PR #1437). Layer 4 GH Actions workflow: `.github/workflows/branch-trail-emit.yml`. <!-- §9.4 CLOSED. 5090 runner online, CHIT_SIGNING_KEY secret set, HMAC payload observed on NATS by operator. PR #1462 merged 2026-05-12. Signed by pmoves-ci-bot (card 0035). -->
 
+### 10. Automated evaluator gate (Village Gate)
+
+- [x] An automated evaluator gate runs quality-threshold checks on every PR before Village Rule signoff. <!-- .github/workflows/village-gate.yml → make -C pmoves village-gate → pmoves/tools/village_gate.py; thresholds in pmoves/configs/village_gate_thresholds.yaml (P0 Evaluation Gates, ARCHON_ENHANCEMENT_ROADMAP §2) -->
+- [x] Signoff cites machine evidence: the gate's verdict JSON (`pmoves/docs/logs/village_gate_latest.json`, uploaded as the `village-gate-verdict` CI artifact) including a staged `village.gate.result.v1` envelope and Prometheus textfile exposition. <!-- Reviewers reference the PR's village-gate run in their Signoff Ledger row instead of re-deriving quality state -->
+- [ ] `village-gate` added to required status checks in branch protection. <!-- OPERATOR STEP — deliberate: required gates must also pass on dependabot/App PRs (fork-sync self-merge) and must stay GitHub-hosted; flip once the gate has a green track record -->
+
 ---
 
 ## Signoff Ledger

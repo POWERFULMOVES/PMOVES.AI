@@ -123,7 +123,7 @@
     "name": "a2ui-nats-bridge",
     "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
     "ref": "main",
-    "context": "pmoves/services/a2ui-nats-bridge",
+    "context": "pmoves",
     "dockerfile": "pmoves/services/a2ui-nats-bridge/Dockerfile",
     "image_name": "pmoves-a2ui-nats-bridge",
     "build_args": "",

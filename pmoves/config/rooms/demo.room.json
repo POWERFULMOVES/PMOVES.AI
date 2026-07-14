@@ -7,6 +7,9 @@
   "alter": "4090-demo",
   "room_type": "builder",
   "owner_mode": "alter",
+  "access": {
+    "visibility": "public"
+  },
   "shell": {
     "theme": {
       "theme_id": "demo-stage",

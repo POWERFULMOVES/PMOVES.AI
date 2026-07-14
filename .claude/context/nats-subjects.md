@@ -111,7 +111,7 @@ Example: `ingest.transcript.ready.v1`
 ## Cipher Memory Subjects
 
 **`cipher.memory.stored.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring, observability
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring, observability
 - **Purpose:** Notify that a memory was stored in Cipher
 - **Payload:**
   ```json
@@ -125,7 +125,7 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Observability dashboards, Discord Publisher (optional)
 
 **`cipher.memory.searched.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring
 - **Purpose:** Notify that a memory search was performed
 - **Payload:**
   ```json
@@ -140,7 +140,7 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Observability dashboards
 
 **`cipher.reasoning.stored.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring
 - **Purpose:** Notify that a reasoning trace was stored
 - **Payload:**
   ```json
@@ -717,6 +717,10 @@ Example: `ingest.transcript.ready.v1`
 **`tokenism.calibration.result.v1`**
 - **Direction:** Published by Tokenism Simulator -> Consumed by Tokenism calibration observers
 - **Purpose:** Calibration output for simulation/evaluation feedback
+
+**`tokenism.export.result.v1`**
+- **Direction:** Published by the ToKenism→Firefly exporter (`PMOVES-ToKenism-Multi/integrations/firefly/export_sim_to_firefly.ts` with `--nats`; HTTP wrapper planned per `docs/superpowers/specs/2026-07-11-tokenism-wealth-demo-wiring.md` G1) -> Consumed by monitoring; pre-authorized in the `tokenism.room.exchange` room manifest publish allow-list
+- **Purpose:** Result of exporting a simulation run into the PMOVES-Wealth (Firefly III) ledger — account/transaction counts, dry-run flag, report refs
 
 **`tokenism.prosodic.bpm.v1`**
 - **Direction:** Published by Flute-Gateway prosodic parser
@@ -1647,6 +1651,26 @@ nats server report connections
   or `chit`. Branch trail publish remains CI-owned; live branch/CHIT receive needs a
   persistent audit subscriber, `make -C pmoves nats-agent-inbox`, or an equivalent
   MCP/NATS bridge before it can be treated as online.
+
+**`village.gate.result.v1`**
+- **Direction:** Staged by `pmoves/tools/village_gate.py` (CI + local `make village-gate`) → Consumed by monitoring / signoff audit lane
+- **Purpose:** P0 Evaluation Gates — verdict of the automated evaluator gate that runs
+  quality-threshold checks (`pmoves/configs/village_gate_thresholds.yaml`) before
+  AGNOTE4482 Village Rule signoff. The envelope is written into the verdict JSON
+  (`pmoves/docs/logs/village_gate_latest.json`) as a STAGED publish — emit via
+  `pmoves-nats-mcp` when wired, same staged pattern as the archon mint commands.
+- **Payload:**
+  ```json
+  {
+    "gate": "village-gate",
+    "hard_pass": true,
+    "failed_checks": [],
+    "advisory_failures": ["docs-freshness"]
+  }
+  ```
+- **Notes:** Status STAGED (no live CI publisher yet — mirrors the pre-#1462 state of
+  `branch.<path-segments>.trail.v1`). Prometheus exposure is via textfile-collector
+  exposition (`--prom-textfile`), not a pushgateway.
 
 ## Agent Zero Task Coordination Subjects
 
