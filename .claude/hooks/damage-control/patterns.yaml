@@ -1118,6 +1118,14 @@ readOnlyPaths:
   - "*.known-road-active"
 
   # ---------------------------------------------------------------------------
+  # DOCKERFILES - Require Known Road grant for edits (service Dockerfiles
+  # affect container builds, security posture, and supply chain)
+  # ---------------------------------------------------------------------------
+  - "Dockerfile"
+  - "Dockerfile.*"
+  - ".dockerignore"
+
+  # ---------------------------------------------------------------------------
   # MINIFIED/COMPILED FILES - Generated, don't edit
   # ---------------------------------------------------------------------------
   - "*.min.js"
