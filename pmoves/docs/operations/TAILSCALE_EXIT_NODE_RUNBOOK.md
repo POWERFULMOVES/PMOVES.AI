@@ -8,17 +8,23 @@
 > Companion: `YT_EGRESS_RUNBOOK.md` (YT-stack-specific egress via `pmoves-kvm4-1`),
 > `.claude/context/runner-topology.md` (Phase 9Q), `pmoves/mk/egress.mk`.
 
-## Tailnet + exit-node inventory (2026-06-15)
+## Tailnet + exit-node inventory (verified live 2026-07-10)
 
 Tailnet: `tailcad9b4.ts.net`. ACL: `pmoves/configs/tailscale-acl-policy.json`
-(has `autoApprovers.exitNode: ["tag:exit"]`).
+(has `autoApprovers.exitNode: ["tag:exit"]`). Reference nodes by MagicDNS hostname, never
+public IP (repo no-IPs policy) — `tailscale exit-node list` resolves the current addresses.
 
-| Tailscale node | Hostinger hostname | Public IP | Exit node | Notes |
-|---|---|---|---|---|
-| `pmoves-kvm2`   | PMOVES.AI.CLOUD.KVMII  | 167.88.38.57 | ✅ approved (untagged, hand-approved) | reverse-proxy / RustDesk relay; KVM 2 / 8 GB |
-| `pmoves-kvm4-1` | PMOVES.AI.CLOUD1.KVMIV | 31.97.42.207 | ❌ enable | designated Phase-9Q egress; API gateway; KVM 4 / 16 GB |
-| `pmoves-kvm4-2` | PMOVES.AI.CLOUD2.KVMIV | 167.88.39.80 | ❌ enable | data/storage; KVM 4 / 16 GB |
-| `pmoves-4090`   | (this laptop)          | —            | client → kvm2 | egress set to `pmoves-kvm2` 2026-06-15 (verified) |
+Verified from `pmoves-4090` on 2026-07-10 via `tailscale exit-node list` +
+`tailscale status`: all three KVMs are **tagged (`tag:exit`), advertised, and approved**,
+and a live `curl` egress check confirmed the 4090's traffic exits through the selected node
+(egress IP == the exit KVM's DC address, direct WireGuard path, not DERP).
+
+| Tailscale node | Hostinger hostname | Exit node | Notes |
+|---|---|---|---|
+| `pmoves-kvm2`   | PMOVES.AI.CLOUD.KVMII  | ✅ approved + advertising | reverse-proxy / RustDesk relay; KVM 2 / 8 GB |
+| `pmoves-kvm4-1` | PMOVES.AI.CLOUD1.KVMIV | ✅ approved + **active** (4090's current egress) | designated Phase-9Q egress; API gateway; KVM 4 / 16 GB |
+| `pmoves-kvm4-2` | PMOVES.AI.CLOUD2.KVMIV | ✅ approved + advertising (pilot exit) | data/storage; KVM 4 / 16 GB |
+| `pmoves-4090`   | (this laptop)          | client → `pmoves-kvm4-1` | egress verified 2026-07-10; can auto-select via `exit-node suggest` |
 
 **Two planes — do not conflate:**
 1. **Advertise** (node-local): the node *offers* itself as an exit node
@@ -46,7 +52,7 @@ scales to "as many exit nodes as the tailnet can support."
 
 **Per exit node (vps-deployer agent, or operator `!`):**
 ```bash
-# kvm4-1 (31.97.42.207) and kvm4-2 (167.88.39.80)
+# pmoves-kvm4-1 and pmoves-kvm4-2 (reference by MagicDNS hostname, not IP)
 # (0) PREREQUISITE — enable kernel IP forwarding, or the node "advertises" but drops
 #     all routed traffic (control plane OK, data plane dead). Linux exit nodes REQUIRE this:
 echo 'net.ipv4.ip_forward = 1'            | sudo tee -a /etc/sysctl.d/99-tailscale.conf
@@ -138,10 +144,13 @@ Refs: [tailscale/tailscale#13367](https://github.com/tailscale/tailscale/issues/
 Instead of pinning every client to a specific node, let Tailscale pick the lowest-latency
 exit node — so adding kvm4-3/kvm4-N for new users requires **no client reconfiguration**:
 ```bash
-tailscale exit-node suggest          # prints the recommended node (latency/location)
-tailscale set --exit-node=<ID|name>  # apply the suggestion
+tailscale exit-node suggest          # prints the recommended node (one-shot, no failover)
+tailscale set --exit-node=auto:any   # track the suggestion + auto-switch on node/network change
 tailscale exit-node list             # all advertised+approved exit nodes
 ```
+`auto:any` is the reliability mode: it follows the current suggestion and **automatically
+re-selects** when exit nodes or network conditions change. A bare `suggest` + `set --exit-node=<name>`
+only pins the recommendation at that instant, so a rebooting KVM would strand the client.
 (Requires a Standard+ plan.) This is the client-side complement to the server-side
 `tag:exit` autoApprover: new nodes self-approve, clients self-select.
 
@@ -260,23 +269,31 @@ rendezvous/relay — no public port-forward needed when every client is on the t
 # exit-node advertisers visible from any tailnet member:
 tailscale status --json | python -c "import sys,json;d=json.load(sys.stdin);[print(p['HostName'],'exitOption=',p.get('ExitNodeOption')) for p in ({**{'self':d['Self']},**d.get('Peer',{})}).values() if 'kvm' in p.get('HostName','').lower()]"
 # a client actually using an exit node — egress IP should be the KVM's public IP:
-curl -sf https://api.ipify.org   # expect 31.97.42.207 / 167.88.39.80 / 167.88.38.57
+curl -sf https://api.ipify.org   # expect the selected exit KVM's DC public IP, NOT your local uplink IP
 ```
 
 ---
 
-## Handoff (2026-06-15)
+## Handoff (verified 2026-07-10)
 
-**Done this session:**
-- `pmoves-4090` egress flipped through `pmoves-kvm2` (verified Starlink→KVM IP change, auto-revert safety).
-- `pmoves-kvm4-1` + `pmoves-kvm4-2`: IP-forwarding enabled + `--advertise-exit-node` set, driven
-  over **Tailscale SSH** from the 4090 (operator authed the SSH check). `kvm4-1` **approved → live**;
-  `kvm4-2` advertised, **pending one console approve** (untagged → not auto-approved).
+**Verified live this session** (`pmoves-4090`, read-only — `exit-node list` + `status` + egress `curl`):
+- All three KVMs are **`tag:exit`-tagged, advertised, and approved** — they appear in
+  `tailscale exit-node list` (which only lists approved advertisers). The 2026-06-15
+  "`kvm4-2` pending one console approve" is **resolved**; kvm4-2 now self-approves via the
+  `tag:exit` autoApprover.
+- `pmoves-4090` is egressing through `pmoves-kvm4-1` **right now** — proven end-to-end:
+  `curl https://api.ipify.org` returned kvm4-1's DC IP (not the Starlink uplink), over a
+  **direct** WireGuard path (`tailscale ping` = ~13ms, not via DERP). Exit data plane is live.
 
-**Remaining:**
-1. Approve `pmoves-kvm4-2` exit route (console, 1 click) — or wire `TAILSCALE_API_KEY` for the MCP to do it.
-2. (Optional, designated egress) re-point `pmoves-4090` + site clients to `pmoves-kvm4-1`; keep kvm2 fallback.
-   Or adopt **auto exit-node** (`tailscale exit-node suggest`) so clients self-select.
-3. **Scale path for new users' exit nodes:** mint a `tag:exit` reusable authkey + wire
+**Remaining (both operator-lane — zero-access secrets manifest):**
+1. **Scale path for new users' exit nodes:** mint a `tag:exit` reusable authkey + wire
    `TAILSCALE_EXIT_AUTHKEY` via `secrets-funnel`, then bring nodes up tagged → they advertise +
    **auto-approve** (no console clicks). This is the durable onboarding road as the tailnet grows.
+2. **Admin-API MCP creds:** wire `TAILSCALE_API_KEY` / `TAILSCALE_TAILNET` (manifest edit,
+   operator-direct — see the credential-wiring section above) so route/tag ops run via MCP.
+
+**Client-side reliability (recommended for pilot clients):** set `tailscale set --exit-node=auto:any`
+rather than pinning a specific node **or** applying a one-shot `suggest` — `auto:any` tracks the
+suggestion and auto-switches when a node reboots or conditions change, so a rebooting KVM can't
+strand a client on its local uplink. (`exit-node suggest` alone only prints a recommendation; it
+does not configure ongoing failover.) Pair with the safe-flip auto-revert pattern above.
