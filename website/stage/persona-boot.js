@@ -26,4 +26,10 @@ if (persona) {
     onState: (stage) => applyStage(stage),
     onError: () => {},
   });
+
+  // Initial reconciliation: if Showtime is already live when this page loads,
+  // the polling loop may not fire (no new frame/SSE event in steady state).
+  fetch("/health/all").then(r => r.ok ? r.json() : null).then(state => {
+    if (state && state.status === "all_green") applyStage("live");
+  }).catch(() => {});
 }
