@@ -9,8 +9,8 @@
 | Field | Value |
 |-------|-------|
 | **Service** | Cipher Memory (a.k.a. `cipher-api`) |
-| **Current gitlink** | `1c9b2851` on `Pmoves-cipher` fork `main` |
-| **Fleet rule status** | ⚠️ **VIOLATION** — `.gitmodules` tracks `branch = main`, should track `PMOVES.AI-Edition-Hardened` |
+| **Current gitlink** | `e8843482` on `Pmoves-cipher` fork `PMOVES.AI-Edition-Hardened` (migrated from `main` in PR #2116) |
+| **Fleet rule status** | ✅ **COMPLIANT** — `.gitmodules` tracks `branch = PMOVES.AI-Edition-Hardened` (migrated in PR #2116) |
 | **Host port** | `8105` (host-published from container `:3000`) |
 | **Container port** | `3000` (internal listener) |
 | **Health** | `GET /health` (NOT `/healthz`) |
@@ -51,7 +51,7 @@ These are **incompatible theses**. The re-fork decision is which thesis PMOVES a
 
 ## Current State (Ground Truth — what actually ships today)
 
-Verified 2026-07-13 against live gitlink `1c9b2851`:
+Verified 2026-07-14 against live gitlink `e8843482`:
 
 ### What works
 - **Native MCP-over-SSE** at `:8105/mcp/sse` — Claude Code connects directly (`.claude/mcp.json:4-7`)
@@ -71,9 +71,9 @@ Verified 2026-07-13 against live gitlink `1c9b2851`:
   - `PMOVES-Archon/external/PMOVES-BoTZ/features/cipher/pmoves_cipher/`
   - `pmoves/integrations/archon/external/PMOVES-BoTZ/features/cipher/pmoves_cipher/` (×2 variants)
 
-### Fleet rule violations
-1. `Pmoves-cipher` gitlink tracks `branch = main` — should track `PMOVES.AI-Edition-Hardened` (only fork in the audited set that violates this).
-2. `PMOVES.AI-Edition-Hardened` branch on fork has only 2 commits vs main's 6 — parallel re-implementations, not a proper hardening overlay.
+### Fleet rule status (resolved in PR #2116)
+1. ~~`Pmoves-cipher` gitlink tracks `branch = main`~~ → **FIXED**: `.gitmodules` now tracks `PMOVES.AI-Edition-Hardened`.
+2. ~~`PMOVES.AI-Edition-Hardened` branch on fork has only 2 commits~~ → **FIXED**: fresh re-fork from `campfirein/byterover-cli@1052ac1a` (v3.16.1) with A1-Shim overlay.
 3. GitHub reports **278 vulnerabilities (9 critical)** on the old fork default branch — closure planned via clean re-fork (Phase 1 executed; upstream replaced, vulnerabilities no longer reachable from active branches).
 
 ## PMOVES Memory Topology (all 5 surfaces)
