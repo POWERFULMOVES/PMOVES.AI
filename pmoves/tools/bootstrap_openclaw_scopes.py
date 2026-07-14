@@ -43,7 +43,7 @@ SCOPE_CONFIG: Dict[str, Tuple[str, str]] = {
     "kvm4-2": ("full", "fleet"),
     "nemotron-claw": ("full", "fleet"),
     "nemoclaw": ("edge", "fleet"),
-    "kvm2": ("edge", "fleet"),
+    "kvm2": ("full", "fleet"),
 }
 
 # MCP keys included per tier.
