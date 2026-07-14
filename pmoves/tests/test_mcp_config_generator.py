@@ -21,6 +21,7 @@ def sample_inventory(tmp_path: Path) -> Path:
                 "defaults": {
                     "cipher_local_url": "http://localhost:8105/mcp/sse",
                     "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
+                    "agent_zero_local_url": "http://localhost:8080/mcp",
                     "agent_zero_fleet_url": "http://${TS_Z890}:8080/mcp",
                 },
                 "groups": {
@@ -31,15 +32,25 @@ def sample_inventory(tmp_path: Path) -> Path:
                                 "description": "Cipher memory",
                                 "transport": "sse",
                                 "endpoint": "fleet",
-                                "url": "http://${TS_Z890}:8105/mcp/sse",
+                                "endpoint_prefix": "cipher",
                                 "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+                            },
+                            {
+                                "key": "pmoves-cipher-local",
+                                "description": "Local cipher memory",
+                                "transport": "sse",
+                                "endpoint": "local",
+                                "endpoint_prefix": "cipher",
+                                "url": "http://localhost:8105/mcp/sse",
+                                "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+                                "clients": ["hermes"],
                             },
                             {
                                 "key": "agent-zero",
                                 "description": "Agent Zero",
                                 "transport": "http",
                                 "endpoint": "fleet",
-                                "url": "http://${TS_Z890}:8080/mcp",
+                                "endpoint_prefix": "agent_zero",
                             },
                             {
                                 "key": "pmoves-nats-fleet",
@@ -172,3 +183,205 @@ def test_deep_merge_args_replaces_list() -> None:
     overlay = {"args": ["-y", "new-package"]}
     merged = gen._deep_merge(base, overlay)
     assert merged["args"] == ["-y", "new-package"]
+
+
+def test_endpoint_fleet_resolves_fleet_urls(sample_inventory: Path) -> None:
+    inventory = gen.load_inventory(sample_inventory)
+    rendered = gen.generate_for_client("opencode", inventory=inventory, endpoint="fleet")
+    assert rendered["mcpServers"]["pmoves-cipher"]["url"] == "http://${TS_Z890}:8105/mcp/sse"
+    assert rendered["mcpServers"]["agent-zero"]["url"] == "http://${TS_Z890}:8080/mcp"
+
+
+def test_endpoint_local_resolves_local_urls(sample_inventory: Path) -> None:
+    inventory = gen.load_inventory(sample_inventory)
+    rendered = gen.generate_for_client("opencode", inventory=inventory, endpoint="local")
+    assert rendered["mcpServers"]["pmoves-cipher"]["url"] == "http://localhost:8105/mcp/sse"
+    assert rendered["mcpServers"]["agent-zero"]["url"] == "http://localhost:8080/mcp"
+
+
+def test_hermes_local_cipher_keeps_explicit_url(sample_inventory: Path) -> None:
+    inventory = gen.load_inventory(sample_inventory)
+    rendered = gen.generate_for_client("hermes", inventory=inventory, endpoint="fleet")
+    servers = rendered["mcp_servers"]
+    assert servers["pmoves-cipher-local"]["url"] == "http://localhost:8105/mcp/sse"
+
+
+@pytest.fixture
+def scope_inventory(tmp_path: Path) -> Path:
+    """Full inventory usable by OpenClaw scope tests (full + edge tiers)."""
+    path = tmp_path / "mcp_inventory.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "defaults": {
+                    "cipher_local_url": "http://localhost:8105/mcp/sse",
+                    "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
+                    "agent_zero_local_url": "http://localhost:8080/mcp",
+                    "agent_zero_fleet_url": "http://${TS_Z890}:8080/mcp",
+                },
+                "groups": {
+                    "core_pmoves": {
+                        "servers": [
+                            {
+                                "key": "pmoves-cipher",
+                                "description": "Cipher memory",
+                                "transport": "sse",
+                                "endpoint": "fleet",
+                                "endpoint_prefix": "cipher",
+                                "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+                            },
+                            {
+                                "key": "agent-zero",
+                                "description": "Agent Zero",
+                                "transport": "http",
+                                "endpoint": "fleet",
+                                "endpoint_prefix": "agent_zero",
+                            },
+                            {
+                                "key": "pmoves-nats-fleet",
+                                "description": "NATS",
+                                "transport": "stdio",
+                                "command": "uv",
+                                "args": ["run", "nats_mcp.server"],
+                                "env": {"NATS_URL": "${NATS_URL}"},
+                            },
+                            {
+                                "key": "pmoves-supabase",
+                                "description": "Supabase",
+                                "transport": "stdio",
+                                "command": "npx",
+                                "args": ["-y", "@supabase/mcp-server-postgrest"],
+                            },
+                            {
+                                "key": "supabase-db",
+                                "description": "Supabase DB",
+                                "transport": "stdio",
+                                "command": "uvx",
+                                "args": ["postgres-mcp"],
+                                "env": {"DATABASE_URI": "${SUPABASE_DB_URI}"},
+                            },
+                            {
+                                "key": "huggingface",
+                                "description": "HuggingFace",
+                                "transport": "stdio",
+                                "command": "npx",
+                                "args": ["-y", "@llmindset/hf-mcp-server"],
+                                "env": {"HF_TOKEN": "${HF_TOKEN}"},
+                            },
+                            {
+                                "key": "tailscale",
+                                "description": "Tailscale",
+                                "transport": "stdio",
+                                "command": "npx",
+                                "args": ["-y", "tailscale-mcp"],
+                                "env": {
+                                    "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",
+                                    "TAILSCALE_TAILNET": "${TAILSCALE_TAILNET}",
+                                },
+                            },
+                        ]
+                    },
+                    "docker_toolkit": {
+                        "servers": [
+                            {
+                                "key": "pmoves-docker-gateway",
+                                "description": "Docker gateway",
+                                "transport": "stdio",
+                                "command": "docker",
+                                "args": ["mcp", "gateway", "run", "--profile", "pmoves_5090_web"],
+                            }
+                        ]
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_openclaw_scope_bootstrap_preserves_non_pmoves(
+    tmp_path: Path, scope_inventory: Path
+) -> None:
+    from pmoves.tools import bootstrap_openclaw_scopes as scopes
+
+    scopes_dir = tmp_path / "scopes"
+    scopes_dir.mkdir()
+    scope_path = scopes_dir / "4090.json"
+    scope_path.write_text(
+        json.dumps(
+            {
+                "identity": {"node": "4090"},
+                "mcp_servers": {
+                    "gpu-mesh": {"type": "nats", "url": "nats://example:4222"},
+                    "pmoves-cipher": {"type": "sse", "url": "http://old/sse"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    orig_dir = scopes.SCOPES_DIR
+    try:
+        scopes.SCOPES_DIR = scopes_dir
+        scopes.INVENTORY_PATH = scope_inventory
+        scopes.main([])
+    finally:
+        scopes.SCOPES_DIR = orig_dir
+
+    data = json.loads(scope_path.read_text(encoding="utf-8"))
+    servers = data["mcp_servers"]
+    assert "gpu-mesh" in servers, "scope-specific non-PMOVES MCP should be preserved"
+    assert servers["pmoves-cipher"]["url"] == "http://${TS_Z890}:8105/mcp/sse"
+    assert "agent-zero" in servers
+    assert "pmoves-docker-gateway" in servers
+
+
+def test_openclaw_scope_bootstrap_edge_tier(
+    tmp_path: Path, scope_inventory: Path
+) -> None:
+    from pmoves.tools import bootstrap_openclaw_scopes as scopes
+
+    scopes_dir = tmp_path / "scopes"
+    scopes_dir.mkdir()
+    scope_path = scopes_dir / "nemoclaw.json"
+    scope_path.write_text(
+        json.dumps({"identity": {"node": "jetson"}, "mcp_servers": {}}),
+        encoding="utf-8",
+    )
+
+    orig_dir = scopes.SCOPES_DIR
+    try:
+        scopes.SCOPES_DIR = scopes_dir
+        scopes.INVENTORY_PATH = scope_inventory
+        scopes.main([])
+    finally:
+        scopes.SCOPES_DIR = orig_dir
+
+    data = json.loads(scope_path.read_text(encoding="utf-8"))
+    servers = data["mcp_servers"]
+    assert set(servers.keys()) == {"pmoves-cipher", "agent-zero", "tailscale"}
+
+
+def test_openclaw_scope_check_passes_for_canonical(
+    tmp_path: Path, scope_inventory: Path
+) -> None:
+    from pmoves.tools import bootstrap_openclaw_scopes as scopes
+
+    scopes_dir = tmp_path / "scopes"
+    scopes_dir.mkdir()
+    scope_path = scopes_dir / "4090.json"
+    scope_path.write_text(
+        json.dumps({"identity": {"node": "4090"}, "mcp_servers": {}}),
+        encoding="utf-8",
+    )
+
+    orig_dir = scopes.SCOPES_DIR
+    try:
+        scopes.SCOPES_DIR = scopes_dir
+        scopes.INVENTORY_PATH = scope_inventory
+        scopes.main([])
+        assert scopes.main(["--check"]) == 0
+    finally:
+        scopes.SCOPES_DIR = orig_dir
