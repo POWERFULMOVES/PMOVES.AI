@@ -47,8 +47,8 @@ New units: `website/stage/` (index.html, stage.css, surface JSON, `vendor/a2ui-l
 ## CSP posture (`/stage/*` block)
 
 - `script-src 'self'` — bundle vendored; no CDN, no eval. Verify at build that the `@a2ui/lit` production bundle needs neither (Lit itself does not).
-- Styles: Lit uses constructable stylesheets (`adoptedStyleSheets`) in shadow roots, which CSP `style-src` does not block in modern browsers. Target `style-src-elem 'self'`; if renderer fallbacks inject inline styles at runtime, narrow to `style-src-attr 'unsafe-inline'` exactly like `/chit-tour/*` — measured, not assumed.
-- `connect-src 'self'` + the loopback gateway origins (same list as `/` after DL-3.3).
+- Styles: Lit uses constructable stylesheets (`adoptedStyleSheets`) in shadow roots, which CSP `style-src` does not block in modern browsers. Target `style-src-elem 'self'`; if renderer fallbacks inject `<style>`/`<link>` nodes at runtime, use `style-src-elem` (not `style-src-attr`) for the inline exception — injected style elements are controlled by `style-src-elem`, not `style-src-attr`. Narrow with a nonce/hash where feasible.
+- `connect-src 'self'` + the loopback gateway origins (same list as `/` after DL-3.3). **DL-4.4 note:** when live A2UI NATS Bridge surfaces are added on `:9224`, `connect-src` for `/stage/*` must also include `ws://localhost:9224 ws://127.0.0.1:9224`.
 
 ## Phasing
 
