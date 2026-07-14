@@ -111,7 +111,7 @@ Example: `ingest.transcript.ready.v1`
 ## Cipher Memory Subjects
 
 **`cipher.memory.stored.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring, observability
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring, observability
 - **Purpose:** Notify that a memory was stored in Cipher
 - **Payload:**
   ```json
@@ -125,7 +125,7 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Observability dashboards, Discord Publisher (optional)
 
 **`cipher.memory.searched.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring
 - **Purpose:** Notify that a memory search was performed
 - **Payload:**
   ```json
@@ -140,7 +140,7 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Observability dashboards
 
 **`cipher.reasoning.stored.v1`**
-- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Direction:** Published by cipher-api (PMOVES shim `src/pmoves/nats-emitter.ts`) → Consumed by monitoring
 - **Purpose:** Notify that a reasoning trace was stored
 - **Payload:**
   ```json
