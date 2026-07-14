@@ -13,10 +13,12 @@
 # Branch Strategy:
 #   Most submodules track PMOVES.AI-Edition-Hardened branch
 #   Exceptions tracking main:
-#     - E2B/infra tier: E2B-Danger-Room, Danger-infra, Pipecat, MAI-UI, Headscale, cipher
+#     - E2B/infra tier: E2B-Danger-Room, Danger-infra, Pipecat, MAI-UI, Headscale
 #       (independent release cadence from hardened fleet)
 #     - Tooling: ClawZ, skills/* (5 forks — Pmoves-skills, awesome-agent-skills,
 #       fork-repository-skill, agent-sandbox-skill, claude-d3js-skill)
+#   Note: Pmoves-cipher was migrated from main → PMOVES.AI-Edition-Hardened
+#     on 2026-07-13 (PR #2116, A1-Shim re-fork from campfirein/byterover-cli upstream).
 #   Exception tracking PMOVES.AI-Edition-Hardened-DoX:
 #     - PMOVES-DoX (nested Agent Zero MCP tool for standalone mode)
 #
@@ -284,7 +286,7 @@
 [submodule "Pmoves-cipher"]
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "pmoves/integrations/archon"]
 	path = pmoves/integrations/archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
