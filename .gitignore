@@ -276,11 +276,12 @@ NUL
 .a0proj/
 
 # Kilocode plugin — ignore bootstrap artifacts, keep tracked content
-# .kilo/ has agent/ + command/; .kilocode/ has rules/ + skills/
+# .kilo/ has agent/ + command/ + hooks/; .kilocode/ has rules/ + skills/
 # Pattern: ignore the whole dir, negate the tracked subdirs (future-proofs new artifact types)
 .kilo/*
 !.kilo/agent/
 !.kilo/command/
+!.kilo/hooks/
 .kilocode/*
 !.kilocode/rules/
 !.kilocode/skills/
