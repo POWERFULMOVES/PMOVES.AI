@@ -182,6 +182,8 @@ pmoves/design/
 >
 > _DL-3.2 landed 2026-07-04: Notebook (`pmoves/ui`) adoption — design engine vendored to `ui/lib/persona/` (drift-guarded by `design-vendor-check`) + `PersonaStageController`/`LiveStageBadge` mounted in `NotebookWorkbenchView`; `watchShowtime` gained a `/health/all` poll fallback (spec D4); Notebook origin `:4482` added to `showtime-api` + `botz-gateway` CORS. Slice 3.3 (CF `--c-*`, A2UI `ProvenancePalette`) pending._
 
+> _DL-3.3 landed 2026-07-11: surface-specific resolvers — CF site: `design/surface-cf.js` (canonical, node-tested) maps gateway themes onto the site's inlined `--c-accent`/`--c-accent-2` layer, vendored to `website/persona/` under the extended `design-vendor-check` gate; `?agent=` boot module + Showtime live-flip (`data-stage` brand-mark glow); root CSP `connect-src` gains loopback-only gateway origins. A2UI: `personaPalette(theme, base)` accent-family patch on `ProvenancePalette` (background/ink stay with the base, spec D3). DL-3 complete._
+
 Each phase = its own plan → reviewed PR. DL-1 is the next plan to write.
 
 ---

@@ -22,11 +22,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 # ---------------------------------------------------------------------------
-# Resolve project root (pmoves/) so sibling imports work when invoked from
-# Make or hooks without PYTHONPATH gymnastics.
+# Resolve project root (repo root) and pmoves root so both `pmoves.tools.*`
+# and legacy `tools.*` imports work when invoked directly or from Make/hooks.
 # ---------------------------------------------------------------------------
 _TOOLS_DIR = Path(__file__).resolve().parent
 _PMOVES_ROOT = _TOOLS_DIR.parent
+_REPO_ROOT = _PMOVES_ROOT.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 if str(_PMOVES_ROOT) not in sys.path:
     sys.path.insert(0, str(_PMOVES_ROOT))
 

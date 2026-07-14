@@ -1,5 +1,6 @@
 ---
 name: chit-pr-audit-agent
+role_class: reviewer
 description: Control-body gate that audits PRs touching CHIT-aware service ports for required CHIT signature references in the diff. Example — invoked by `control-agent` before issuing ACK on a PR that modifies ports 8086/8087/8103/8106/8113/9224.
 tools: Read, Grep, Glob, Bash
 ---

@@ -1,5 +1,6 @@
 ---
 name: control-agent
+role_class: reviewer
 description: Review and governance agent for PR review, merge sequencing, and risk controls. Maps to AGNOTE4482 Three-Body Control Body.
 tools: Read, Grep, Glob, Bash, Agent(researcher)
 disallowedTools: Write, Edit, EnterPlanMode

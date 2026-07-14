@@ -33,6 +33,7 @@ Ask the operator for:
 
 - `agent-name` — kebab-case, unique under `PMOVES-agents.md/` (e.g. `geometry-curator`).
 - `role` — short capability summary (e.g. "Validates CHIT-CGP geometry payloads before publish").
+- `role-class` — optional orchestration role, one of `planner | worker | reviewer` (see `role_classes:` in `pmoves/config/agent_registry.yaml`; maps onto the AGNOTE4482 Three-Body surface — planner/reviewer→Control, worker→Delivery). Omit for cross-cutting or memory-custody agents.
 - `room` — one of the entries in `pmoves/config/rooms/catalog.json` (`4090-field.room.control`, `5090-voice.room.studio`, `5090-kilocode.room.studio`, `z890-infra.room.fabric`, `demo.room.rehearsal`, `hermes-agent.room.control`).
 - `owning-persona` — the human or higher-tier agent accountable. Default to the authenticated creator's Google email from Step 0; only override if a higher-tier agent (e.g. `delivery-agent`) is the actual owner.
 - `coding-agent?` — boolean. If true, also scaffold a `.claude/agents/<agent-name>.md` definition.
@@ -56,6 +57,7 @@ Contract for the future `archon:create-agent` MCP tool:
   "input": {
     "agent_name": "<agent-name>",
     "role": "<role>",
+    "role_class": "<planner|worker|reviewer|null — omit/null when unclassified>",
     "room_id": "<room>",
     "owning_persona": "<owning-persona>",
     "creator_id": "<supabase auth.users.id from Step 0>",
@@ -94,6 +96,7 @@ Write `PMOVES-agents.md/<agent-name>.md` using this template:
 ---
 name: <agent-name>
 role: <role>
+role_class: <role-class, omit line if unclassified>
 room: <room>
 owning_persona: <owning-persona>
 creator_id: <supabase auth.users.id from Step 0>

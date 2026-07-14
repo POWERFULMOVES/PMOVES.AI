@@ -37,6 +37,7 @@ PY
 COPY services/hi-rag-gateway-v2/ ./
 # Include local scripts for seeding and startup
 COPY services/hi-rag-gateway-v2/scripts /app/scripts
+COPY tools/__init__.py /app/tools/__init__.py
 COPY tools/chit_security.py /app/tools/chit_security.py
 
 # Make wait-for-deps.sh executable

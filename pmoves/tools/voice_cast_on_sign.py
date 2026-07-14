@@ -83,7 +83,7 @@ DEFAULT_SUBJECTS = ["agent.graphiti.signed.v1"]  # raw signature.v1 subject, NOT
 # (fails opaquely from a host shell). Containers running this inside the compose
 # network must pass NATS_URL=nats://nats:pmoves@nats:4222 explicitly (5090-CLAUDE
 # pair-review PR #2048, finding #6).
-DEFAULT_NATS_URL = "nats://nats:pmoves@localhost:4222"
+DEFAULT_NATS_URL = "nats://nats:pmoves@127.0.0.1:4222"
 FALLBACK_INTENT = "narrate"  # kokoro CPU floor -- always available without GPU
 DEFAULT_KOKORO_URL = "http://localhost:8004"  # standalone Kokoro CPU-floor deploy unit (#2024)
 # Baseline tempo reference (BPM "moderato"/phrase level per shift-from-bpm skill).
@@ -100,8 +100,9 @@ def _resolve_nats_url() -> str:
     """Resolve NATS URL for host-run service.
 
     Handles Docker-internal URLs by translating them to host-accessible URLs
-    (DEFAULT_NATS_URL now targets localhost -- see the constant's comment).
-    Same pattern as ``voice_follow_cast_agent._resolve_nats_url()``.
+    (DEFAULT_NATS_URL targets 127.0.0.1 -- the docker `nats` hostname doesn't
+    resolve on the host, and `localhost` may resolve to ::1 while NATS binds
+    IPv4 only). Same pattern as ``voice_follow_cast_agent._resolve_nats_url()``.
     """
     explicit = os.getenv("VOICE_CAST_NATS_URL")
     if explicit and explicit.strip():

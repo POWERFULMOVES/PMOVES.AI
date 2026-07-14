@@ -241,6 +241,33 @@ def _parse_model_suits(model_suits_dir: Path) -> list[dict[str, Any]]:
             api_base = doc.get("api_base") or doc.get("model", {}).get("api_base")
             api_key_env = doc.get("api_key_env_var") or doc.get("model", {}).get("api_key_env_var")
 
+            ms = doc.get("model_suit", {}) or {}
+            st = doc.get("suit", {}) or {}
+            model_id = (
+                model_id
+                or ms.get("name")
+                or st.get("id")
+                or st.get("name")
+                or doc.get("name")
+            )
+            provider = (
+                provider
+                or ms.get("provider")
+                or st.get("provider")
+            )
+            api_base = (
+                api_base
+                or ms.get("base_url")
+                or st.get("base_url")
+                or doc.get("model_config", {}).get("endpoint")
+            )
+            api_key_env = (
+                api_key_env
+                or ms.get("api_key_env")
+                or st.get("api_key_env")
+                or doc.get("model_config", {}).get("api_key_env")
+            )
+
             if model_id and provider:
                 suits.append(
                     {
@@ -250,6 +277,12 @@ def _parse_model_suits(model_suits_dir: Path) -> list[dict[str, Any]]:
                         "api_base": api_base or _infer_api_base(provider),
                         "api_key_env": api_key_env or _infer_key_env(provider),
                     }
+                )
+            else:
+                log.warning(
+                    "Skipping %s: could not resolve model_id/provider "
+                    "(checked top-level, model:, model_suit:, suit:, name)",
+                    yaml_file.name,
                 )
         except yaml.YAMLError as exc:
             log.warning("Failed to parse %s: %s", yaml_file.name, exc)
@@ -270,6 +303,9 @@ def _infer_api_base(provider: str) -> str:
         "alibaba": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "ollama": "http://localhost:11434/v1",
+        "ollama_spark": "http://localhost:11434/v1",
+        "ollama_local": "http://localhost:11434/v1",
+        "ollama_cloud": "https://ollama.com/v1",
         "groq": "https://api.groq.com/openai/v1",
         "nvidia": "https://integrate.api.nvidia.com/v1",
         "nemotron": "https://integrate.api.nvidia.com/v1",
@@ -291,6 +327,10 @@ def _infer_key_env(provider: str) -> str:
         "alibaba": "ALIBABA_PRO_CODING_PLAN",
         "qwen": "ALIBABA_PRO_CODING_PLAN",
         "ollama": "OLLAMA_API_KEY",
+        "ollama_spark": "OLLAMA_API_KEY",
+        "ollama_local": "OLLAMA_API_KEY",
+        "ollama_cloud": "OLLAMA_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
         "groq": "GROQ_API_KEY",
         "nvidia": "NVIDIA_API_KEY",
         "nemotron": "NVIDIA_API_KEY",

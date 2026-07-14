@@ -78,11 +78,33 @@ def _is_schema_target(normalized_fwd: str) -> bool:
     return "contracts" in parts and "schemas" in parts
 
 
+def _is_topic_target(normalized_fwd: str) -> bool:
+    """topic domain: the PMOVES NATS subject registry pmoves/contracts/topics.json.
+
+    topics.json is readOnly because a change to the subject contract ripples to
+    every publisher/subscriber and the shared `events.publish` topic validator.
+    It is NOT a *.schema.json, so the schema domain does not cover it; this domain
+    opens ONLY that one file under a `contracts` segment in a PMOVES-owned tree,
+    and — like schema — still requires a provable reason (pr:/issue:/handoff:).
+    """
+    basename = os.path.basename(normalized_fwd).lower()
+    if basename != "topics.json":
+        return False
+    parts = normalized_fwd.lower().split("/")
+    if not any(
+        p == "pmoves" or p.startswith("pmoves-") or p.startswith("pmoves.")
+        for p in parts
+    ):
+        return False
+    return "contracts" in parts
+
+
 # domain name -> predicate(normalized_forward_slash_path) -> bool
 # Extend here to open a new readOnlyPath class to Known Roads.
 DOMAIN_PATTERNS: Dict[str, Callable[[str], bool]] = {
     "compose": _is_compose_target,
     "schema": _is_schema_target,
+    "topic": _is_topic_target,
 }
 
 _REASON_RE = re.compile(r"^(handoff:[^/\\]+|pr:[0-9]+|issue:[0-9]+)$")

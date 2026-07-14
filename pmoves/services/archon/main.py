@@ -626,7 +626,7 @@ async def _pmoves_healthcheck():
 
         # Build auth headers for Kong gateway probes (requires apikey header).
         health_headers = {}
-        _svc_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SERVICE_ROLE_KEY") or ""
+        _svc_key = get_secret("SUPABASE_SERVICE_ROLE_KEY") or get_secret("SERVICE_ROLE_KEY") or ""
         if _svc_key:
             health_headers["apikey"] = _svc_key
             health_headers["Authorization"] = f"Bearer {_svc_key}"

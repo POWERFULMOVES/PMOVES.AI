@@ -109,6 +109,34 @@ This guide aggregates the entry points that keep local environments consistent a
 - `make smoke` (Bash) / `scripts/smoke.ps1` (PowerShell) → end-to-end health check of data services, render webhook, Agent Zero, and geometry bus. See `docs/SMOKETESTS.md` for expected output.
 - `make update-service-docs` → runs `pmoves/scripts/update_service_logs.py` to snapshot the most recent commits (use `ARGS="--limit N"`) and detected version metadata for each service with a companion documentation folder. The helper writes `UPDATE_NOTES.md` to `pmoves/docs/services/<service>/`; pass `ARGS="--dry-run"` to preview or `ARGS="--services agent-zero render-webhook"` to scope the refresh.
 
+## CHIT / Graphiti Signing
+- `make -C pmoves sign-trail AGENT=claude-opus SUMMARY="..."` → signs a Graphiti trail entry with HMAC and writes the latest payload to `pmoves/docs/logs/graphiti_signed_latest.json`. Requires `CHIT_PASSPHRASE` (or `CHIT_SIGNING_KEY`) in the environment.
+- Direct invocation from the repo root also works: `CHIT_PASSPHRASE="..." python pmoves/tools/sign_trail.py --agent-id claude-opus --summary "..."`.
+- Troubleshooting: `ModuleNotFoundError: No module named 'pmoves.tools'` means `pmoves/tools/__init__.py` is missing. The file must exist so that services, tests, and containers can import `pmoves.tools.chit_common` / `pmoves.tools.chit_security`.
+
+## Compose Split Overlays
+- `pmoves/docker-compose.yml` is the single source of truth. The files `docker-compose.{base,core,agents,media,ui,workers,apps}.yml` are generated from it.
+- `make -C pmoves compose-split` → regenerate the overlays.
+- `make -C pmoves compose-split-check` → drift gate; fails if overlays are out of sync.
+- A tracked pre-commit hook is available at `.githooks/pre-commit`. Enable it with `git config core.hooksPath .githooks` and it will auto-regenerate the overlays whenever `pmoves/docker-compose.yml` is staged.
+
+## Kimi Code CLI (PMOVES-KIMI)
+- `make -C pmoves kimi` → launch Kimi Code CLI with the PMOVES project config (`.kimi/config.toml`) and MCP set (`.kimi/mcp.json`). This loads local model aliases (`pmoves/qwen3.5-35b`, `pmoves/hermes-v4-8b`, etc.) and wires cipher, docker, e2b, nats-fleet, supabase, and huggingface MCP servers.
+- Required environment variables for full MCP functionality: `MOONSHOT_API_KEY` (remote Kimi models), `E2B_API_KEY` (sandbox execution), `NATS_URL` (fleet messaging), `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY` (PostgREST), `HF_TOKEN` (HuggingFace higher rate limits).
+- Bootstrap context is auto-loaded from `.kimi/AGENTS.md`. Existing `.claude/skills/` are cross-loaded into Kimi because `merge_all_available_skills` is enabled in `.kimi/config.toml`.
+
+## Creator / Danger Room
+- `make -C pmoves danger-room-build-theme` → play the Danger Room build theme. Audio source order:
+  1. `DANGER_ROOM_THEME_URL` (HTTP(S) URL or local file path) if set.
+  2. Flute Gateway TTS using `DANGER_ROOM_THEME_TEXT`, `DANGER_ROOM_THEME_PROVIDER`, `DANGER_ROOM_THEME_ENGINE` (defaults: `ultimate_tts` / `kitten_tts`).
+  3. Fallback spoken announcement if the gateway is unreachable.
+- `make -C pmoves danger-room-build IMAGE=agent-zero` → wrap `ghcr-build-one` with theme fanfare before/after the build. Best-effort: a missing audio player or gateway will not fail the build.
+- `make -C pmoves surf-up` / `surf-down` → start/stop the PMOVES-surf Next.js dev server on `SURF_PORT` (default 3000). Requires `E2B_API_KEY` and `OPENAI_API_KEY`.
+- `make -C pmoves danger-room-desktop-up` / `danger-room-desktop-down` → validate `E2B_API_KEY`, print E2B Desktop example launch commands, and start a PMOVES template preview if `PMOVES-E2B-Danger-Room-Desktop/PMOVES-E2B-Danger-Room-Deskdesktop/main.py` exists.
+
+## Service Packaging Audit
+- `make -C pmoves validate-service-tools-packaging` → verifies that every service Dockerfile copies the `pmoves.tools` files its code imports, preventing `ModuleNotFoundError` regressions in container images.
+
 ## Persistent Data Layout (`pmoves/data/`)
 The repository keeps opinionated `gitkeep` stubs so local volumes land in predictable places when Docker mounts bind into the workspace. Buckets and databases still live in Docker volumes; this hierarchy houses agent-specific state that benefits from git-backed defaults:
 

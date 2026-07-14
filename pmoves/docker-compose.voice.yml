@@ -6,7 +6,7 @@ services:
       args:
         - VIBEVOICE_GIT_REMOTE=${VIBEVOICE_GIT_REMOTE:-https://github.com/microsoft/VibeVoice.git}
         - VIBEVOICE_GIT_REF=${VIBEVOICE_GIT_REF:-main}
-    image: pmoves/vibevoice-realtime:dev
+    image: ${VIBEVOICE_IMAGE:-ghcr.io/powerfulmoves/pmoves-vibevoice-realtime:pmoves-latest}
     container_name: pmoves-vibevoice
     restart: unless-stopped
     environment:
