@@ -2809,13 +2809,23 @@ services:
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
     - PMOVES_HOST=0.0.0.0
+    - OLLAMA_URL=http://pmoves-ollama:11434
+    - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
+    - TENSORZERO_URL=http://tensorzero-gateway:3030
+    - QDRANT_URL=http://qdrant:6333
+    - QDRANT_API_KEY=${QDRANT__API_KEY:-}
+    - QDRANT_COLLECTION=pmoves_cipher_memory
+    - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
+    - EMBEDDING_DIM=2560
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
       nats:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     profiles: ["agents"]
-    networks: [pmoves_app, pmoves_bus, pmoves_external]
+    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "node", "-e", "const http=require('http');http.get('http://127.0.0.1:8105/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 30s
