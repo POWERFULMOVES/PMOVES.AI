@@ -871,7 +871,7 @@ bootstrap-data: ## Umbrella: Supabase SQL + Neo4j seeds + Qdrant/Meili demo data
 	@echo "   💡 Run 'make smoke' to verify installation"
 
 .PHONY: first-run
-first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo data
+first-run: ## Guided first-run: env setup, Supabase, core services, agents, MCPs, demo data
 	@echo "🚀 PMOVES First-Run Bootstrap"
 	@echo "================================"
 	@echo ""
@@ -883,6 +883,8 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo
 	@echo "  ✓ Start core services (data tier, workers)"
 	@echo "  ✓ Start agents (Agent Zero, Archon)"
 	@echo "  ✓ Run auth bootstrap (mode=$(AUTH_BOOTSTRAP_MODE), email=$(SUPABASE_BOOT_USER_EMAIL))"
+	@echo "  ✓ Bootstrap Docker MCP Toolkit profile"
+	@echo "  ✓ Register native PMOVES MCP servers (Claude/Kimi/KiloCode configs)"
 	@echo "  ✓ Seed Agent Zero MCP servers"
 	@echo ""
 	@$(MAKE) --no-print-directory check-tools
@@ -892,6 +894,8 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo
 	@$(MAKE) --no-print-directory up
 	@$(MAKE) --no-print-directory up-agents-ui
 	@$(MAKE) --no-print-directory auth-bootstrap
+	@$(MAKE) --no-print-directory mcp-toolkit-bootstrap || true
+	@$(MAKE) --no-print-directory mcp-config-bootstrap
 	@$(MAKE) --no-print-directory a0-mcp-seed
 	@echo ""
 	@echo "✅ First-run complete!"
