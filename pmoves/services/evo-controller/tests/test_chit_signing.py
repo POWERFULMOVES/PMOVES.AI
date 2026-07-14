@@ -77,6 +77,17 @@ class TestPublishSwarmMeta:
         assert verify_cgp(payload, passphrase=PASSPHRASE) is True
 
     @pytest.mark.asyncio
+    async def test_payload_signed_when_passphrase_file_present(self, capture_publish, monkeypatch, tmp_path):
+        secret_file = tmp_path / "chit-passphrase"
+        secret_file.write_text(PASSPHRASE)
+        monkeypatch.setenv("CHIT_PASSPHRASE_FILE", str(secret_file))
+        await make_controller()._publish_swarm_meta({"namespace": "pmoves", "status": "draft"})
+        assert len(capture_publish) == 1
+        payload = capture_publish[0]["body"]["payload"]
+        assert "sig" in payload
+        assert verify_cgp(payload, passphrase=PASSPHRASE) is True
+
+    @pytest.mark.asyncio
     async def test_unsigned_dev_mode_when_no_key(self, capture_publish, caplog):
         await make_controller()._publish_swarm_meta({"namespace": "pmoves"})
         assert len(capture_publish) == 1
