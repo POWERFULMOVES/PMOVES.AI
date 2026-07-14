@@ -42,6 +42,7 @@ SCOPE_CONFIG: Dict[str, Tuple[str, str]] = {
     "kvm4-1": ("full", "fleet"),
     "kvm4-2": ("full", "fleet"),
     "nemotron-claw": ("full", "fleet"),
+    "spark": ("full", "fleet"),
     "nemoclaw": ("edge", "fleet"),
     "kvm2": ("full", "fleet"),
 }

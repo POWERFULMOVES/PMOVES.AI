@@ -330,16 +330,6 @@ api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5v-turbo"
 api_key_location = "env::Z_AI_API_KEY"
 
-# --- GLM-5.2 (Flagship — 1M context, long-horizon coding agent scenarios) ---
-# Synced from provider_catalog.yaml: serves coding_glm (w=0.9) + orchestrator (w=0.8)
-[models.chat_zai_glm52]
-routing = ["zai_glm52"]
-
-[models.chat_zai_glm52.providers.zai_glm52]
-type = "openai"
-api_base = "https://api.z.ai/api/coding/paas/v4"
-model_name = "glm-5.2"
-api_key_location = "env::Z_AI_API_KEY"
 
 # --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
 [models.coding_qwen3_coder_30b_local]
@@ -1482,6 +1472,14 @@ type = "chat_completion"
 model = "chat_zai_glm5_turbo"
 weight = 0.3
 temperature = 0.1
+max_tokens = 8192
+
+[functions.coding_kilocode.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+weight = 0.2
+temperature = 0.2
+max_tokens = 8192
 
 [functions.coding_kilocode.variants.local_qwen35_9b]
 type = "chat_completion"
@@ -1684,31 +1682,6 @@ temperature = 0.7
 max_tokens = 8192
 weight = 0.0
 
-# --- KiloCode coding function (GLM-backed with KiloCode direct overflow) ---
-
-[functions.coding_kilocode]
-type = "chat"
-
-[functions.coding_kilocode.variants.cloud_zai_turbo]
-type = "chat_completion"
-model = "chat_zai_glm5_turbo"
-temperature = 0.2
-max_tokens = 8192
-weight = 0.8
-
-[functions.coding_kilocode.variants.cloud_kilocode]
-type = "chat_completion"
-model = "chat_kilocode"
-temperature = 0.2
-max_tokens = 8192
-weight = 0.3
-
-[functions.coding_kilocode.variants.cloud_zai_glm51]
-type = "chat_completion"
-model = "chat_zai_glm51"
-temperature = 0.2
-max_tokens = 8192
-weight = 0.2
 
 # --- Worker functions: registry lane aliases ONLY (no-hardcoded-models gate) ---
 
