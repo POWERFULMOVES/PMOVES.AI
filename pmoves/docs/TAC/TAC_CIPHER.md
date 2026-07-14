@@ -425,17 +425,17 @@ ByteRover (the new cipher upstream) is the scalable evolution of Karpathy's LLM 
 - [ ] Document the 2560d contract in TAC + CATALOG (correct any 3072d drift)
 - [ ] **Research follow-up (Phase 10):** evaluate ByteRover Context Tree + AKL for PMOVES agent memory enhancement
 
-### Phase 5 — Re-implement 6 PMOVES features against new arch
+### Phase 5 — Re-implement 6 PMOVES features against new arch ✅ DONE
 Each was originally a cherry-pick candidate; under A1-Shim they become new commits against the new architecture.
 
-| Feature | Old target | New arch integration point | Effort |
-|---------|-----------|---------------------------|--------|
-| Bearer auth middleware | Express middleware | Shim's own middleware layer | Small |
-| A2A discovery auth-gate | `/.well-known/agent-card.json` route | Shim route or ByteRover daemon config | Small |
-| Ollama embedding backend | LLM provider registry | **Sub-decision A:** Qdrant sidecar uses Ollama directly. **B:** N/A | Medium / N/A |
-| `/api/memory` CRUD routes | Express routes | Shim routes → `MemoryManager` | Medium |
-| Build fixes (node-gyp, pnpm) | `package.json` | Likely obsolete on new arch — verify, close if so | Trivial |
-| Integration dossier | Doc-only | Refresh against new arch | Trivial |
+| Feature | Status | Detail |
+|---------|--------|--------|
+| ✅ Bearer auth middleware | DONE (Phase 2) | `auth.ts` — CIPHER_API_TOKEN, dev-skip |
+| ✅ A2A discovery auth-gate | DONE | `a2a.ts` — `/.well-known/agent.json` with Bearer auth |
+| ✅ Ollama embedding backend | DONE | `embedding.ts` — Ollama fallback when TensorZero unreachable |
+| ✅ `/api/memory` CRUD routes | DONE (Phase 2) | `memory-routes.ts` → MemoryManager |
+| ✅ Build fixes (node-gyp, pnpm) | OBSOLETE | ByteRover uses tsc, no node-gyp, no pnpm workspace |
+| ✅ Integration dossier | DONE | `PMOVES.AI_INTEGRATION.md` v2.0 refreshed |
 
 ### Phase 6 — Compose + gitlink promotion
 - [ ] Update `docker-compose.yml` cipher-api stanza: build from new fork, expose shim ports
