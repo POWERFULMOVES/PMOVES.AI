@@ -178,6 +178,12 @@
     "geometry.swarm.meta.v1": {
       "schema": "schemas/geometry/swarm.meta.v1.schema.json"
     },
+    "geometry.publish.gate.v1": {
+      "schema": "schemas/geometry/publish.gate.v1.schema.json",
+      "description": "Gate-open intent for a queued publishable artifact; consumed by the hi-rag-gateway pub-gate bridge which enforces the egress floor and emits content.publish.approved.v1.",
+      "publisher": ["hyperdimensions-ui", "pub-gate-notebook", "operator-cli"],
+      "subscriber": ["hi-rag-gateway-v2"]
+    },
     "model.fitness.recorded.v1": {
       "schema": "schemas/model/fitness.recorded.v1.schema.json",
       "description": "Normalized model fitness score from TensorZero telemetry and optional Pinokio/Unsloth eval metrics."
