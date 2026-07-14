@@ -1,0 +1,33 @@
+# Docker Compose Override — Elder-Melchor Minimal Stack
+# Usage: docker compose -f pmoves/docker-compose.yml -f pmoves/docker-compose.elder-melchor.yml --profile agents up -d neo4j nats
+#
+# This override provides minimal services for local Cipher + memory:
+# - Neo4j (knowledge graph)
+# - NATS (event bus)
+# - No Supabase, TensorZero, Hi-RAG, monitoring, or agents required
+#
+# Pair with: node Pmoves-cipher/dist/src/app/index.cjs --mode mcp (stdio, launched by Hermes)
+
+version: "3.9"
+
+services:
+  neo4j:
+    # Override to use lighter resource limits for Elder-Melchor (32GB RAM, GTX 1650)
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-pmoves2026}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=1G
+      - NEO4J_server_memory_pagecache_size=512m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+    profiles: [""]
+    # No profile gate — always starts with base stack
+
+  nats:
+    # Lightweight — already tiny, just ensure it starts without profile deps
+    command: ["-js", "-m", "8222", "--user", "nats", "--pass", "pmoves"]
+    profiles: [""]
