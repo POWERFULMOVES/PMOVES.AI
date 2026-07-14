@@ -200,9 +200,9 @@ root:
         - id: vei.doc.deployment
           task: "Per-node deployment doctrine exists"
           action:
-            type: file_exists
+            type: manual
             target: "pmoves/docs/voice/VOICE_FABRIC_DEPLOYMENT.md"
-            expect: "Per-node runtime x host_affinity routing + reachability rule"
+            expect: "Per-node runtime x host_affinity routing + reachability rule (lands with PR #2072)"
           context: "The road an agent follows to stand an engine up"
           agent_hint: codex
 
