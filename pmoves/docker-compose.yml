@@ -2615,8 +2615,8 @@ services:
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}"}}}'
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -2800,42 +2800,30 @@ services:
     <<: *tier-agent-hardened
     build:
       context: ../Pmoves-cipher
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.pmoves
     restart: unless-stopped
     environment:
-    - CIPHER_API_PREFIX=
     - NODE_ENV=production
-    - NEO4J_URI=bolt://neo4j:7687
-    - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
     - NATS_URL=${NATS_URL}
-    - OLLAMA_BASE_URL=http://pmoves-ollama:11434
-    - DOCKED_MODE=${DOCKED_MODE:-true}
-    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
-    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
-    command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
+    - PMOVES_STORAGE_DIR=/data/cipher
+    - PMOVES_PORT=8105
+    - PMOVES_HOST=0.0.0.0
     ports:
-    # Default to localhost-only — cipher is now on pmoves_external (host-publishable),
-    # so a 0.0.0.0 default would expose the API/SSE on all interfaces with an empty
-    # CIPHER_API_TOKEN. Operators override CIPHER_BIND for intentional LAN exposure.
-    - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:3000"
+    - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
-      neo4j:
-        condition: service_healthy
       nats:
         condition: service_healthy
     profiles: ["agents"]
-    # pmoves_external (non-internal) lets the host-side MCP client reach cipher's
-    # SSE on 127.0.0.1:8105 — pmoves_app/data/bus are internal:true and cannot
-    # publish host ports. CIPHER_BIND defaults to 127.0.0.1 (localhost-only inbound).
-    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
+    networks: [pmoves_app, pmoves_bus, pmoves_external]
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      test: ["CMD", "node", "-e", "const http=require('http');http.get('http://127.0.0.1:8105/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    volumes:
+    - cipher-data:/data/cipher
 
     deploy:
       resources:
@@ -4613,6 +4601,7 @@ services:
           memory: 256M
 volumes:
   neo4j-data: {}
+  cipher-data: {}
   qdrant-data: {}
   meilisearch-data: {}
   minio-data: {}

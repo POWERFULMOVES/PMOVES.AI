@@ -153,12 +153,12 @@ The key: **store with one phrasing, search with another**. When Cipher is fully 
 - `pmoves_cipher_store_reasoning` — multi-step reasoning traces
 - `pmoves_cipher_reasoning_patterns` — reusable reasoning patterns
 
-> **Known issue (3-layer gap, 2026-04-01):**
-> - **Layer 1 (skills):** Fixed — skills now use MCP-first with local MEMORY.md fallback
-> - **Layer 2 (MCP client):** `pmoves-cipher-mcp/cipher_mcp/client.py` calls `POST /api/memory` and `GET /api/memory/search` — endpoints that don't exist
-> - **Layer 3 (cipher-api):** `Pmoves-cipher/src/app/api/server.ts` registers `/api/message`, `/api/sessions`, `/api/mcp`, etc. but NO `/api/memory` routes
-> - **Working path today:** Local MEMORY.md only. Skills auto-fallback when health check or MCP call fails.
-> - **Fix:** Implement `/api/memory` CRUD routes in `Pmoves-cipher` submodule (separate PR)
+> **Known issue (3-layer gap, 2026-04-01) — RESOLVED 2026-07-13:**
+> - **Layer 1 (skills):** Fixed — skills use MCP-first with local MEMORY.md fallback
+> - **Layer 2 (MCP client):** The `pmoves-cipher-mcp/cipher_mcp/client.py` REST calls were originally reported as broken — that finding was based on a **stale vendored copy** at `PMOVES-BoTZ/features/cipher/pmoves_cipher/` (predated PR #5). The **live gitlink** (`1c9b2851`) DID register `/api/memory` routes (PR #5 by B850-CLAUDE, 2026-07-01).
+> - **Layer 3 (cipher-api):** Routes exist on the live gitlink. The A1-Shim re-fork (2026-07-13, PR #2116) re-implemented them on the new ByteRover v3.16.1 architecture via `src/pmoves/memory-routes.ts`. All 8 contracts smoke-tested green.
+> - **Working path today:** Direct SSE at `:8105/mcp/sse` (Claude Code, Agent Zero) + REST `/api/memory` CRUD (semantic-cache, analyze_beats). Python bridge disabled since 2026-05-15.
+> - **Full context:** `pmoves/docs/TAC/TAC_CIPHER.md` §Current State + §A1-Shim Workorder
 
 ## Cross-Node Context Gap
 
