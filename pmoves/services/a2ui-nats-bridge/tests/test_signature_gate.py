@@ -65,6 +65,17 @@ class TestSignatureGateWithoutKey:
         assert bridge.cgp_passes_signature_gate({"spec": "chit.cgp.v0.2"}) == (False, "unverifiable")
 
 
+class TestSignatureGateWithFile:
+    def test_valid_signature_forwarded_from_file(self, monkeypatch, tmp_path):
+        secret_file = tmp_path / "chit-passphrase"
+        secret_file.write_text(PASSPHRASE)
+        monkeypatch.delenv("CHIT_PASSPHRASE", raising=False)
+        monkeypatch.delenv("CHIT_SIGNING_KEY", raising=False)
+        monkeypatch.setenv("CHIT_PASSPHRASE_FILE", str(secret_file))
+        signed = sign_cgp({"spec": "chit.cgp.v0.2", "n": 1}, passphrase=PASSPHRASE)
+        assert bridge.cgp_passes_signature_gate(signed) == (True, "")
+
+
 class TestSignatureGateNonDict:
     def test_non_dict_payload_passes_in_dev_mode(self):
         assert bridge.cgp_passes_signature_gate([1, 2, 3]) == (True, "non-dict")

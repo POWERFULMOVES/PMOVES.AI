@@ -17,6 +17,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 from services.common.geometry_params import get_decoder_pack
 from services.common.hrm_sidecar import HrmDecoderController
+from services.common.env import get_secret
 from sentence_transformers import SentenceTransformer
 try:
     from sentence_transformers import CrossEncoder  # for optional rerank
@@ -164,7 +165,7 @@ _hrm_controller = HrmDecoderController(get_decoder_pack)
 
 # --- CHIT security and decode flags ---
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower() == "true"
-CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
+CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE", "")
 CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower() == "true"
 CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_dataset.jsonl")
 CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"

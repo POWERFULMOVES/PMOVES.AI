@@ -61,9 +61,15 @@ except ImportError:
     CHIT_AVAILABLE = False
 
 
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
+
+
 def _chit_signing_key() -> str:
     """Canonical signing-key chain; empty string = dev mode (no verification)."""
-    return os.getenv("CHIT_SIGNING_KEY") or os.getenv("CHIT_PASSPHRASE", "")
+    return get_secret("CHIT_SIGNING_KEY") or get_secret("CHIT_PASSPHRASE", "") or ""
 
 
 def _chit_signature_required() -> bool:
