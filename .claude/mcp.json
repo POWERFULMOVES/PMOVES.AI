@@ -9,6 +9,11 @@
         "Authorization": "Bearer ${CIPHER_API_TOKEN}"
       }
     },
+    "agent-zero": {
+      "_purpose": "Agent Zero orchestrator for cross-agent task dispatch and memory operations.",
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
+    },
     "_pmoves-cipher-legacy-python-wrapper": {
       "_disabled": "Replaced 2026-05-15 with direct SSE to Cipher's native MCP endpoint. The Python wrapper called non-existent /api/memory routes. Kept here commented for rollback; remove in follow-up after SSE validated for 2 weeks.",
       "command": "uv",

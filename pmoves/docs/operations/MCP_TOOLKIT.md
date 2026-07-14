@@ -220,20 +220,20 @@ Upstream Docker docs note: **"E2B sandboxes now include direct access to the Doc
 
 | Target | What it does |
 |---|---|
-| `make mcp-toolkit-bootstrap` | Verifies `docker mcp` CLI present, pulls `pmoves_5090_web` profile from OCI, imports it. Idempotent. Per-node. |
+| `make mcp-toolkit-bootstrap` | Verifies `docker mcp` CLI present, pulls `pmoves_5090_web` profile from OCI, imports it. Also writes Kimi + KiloCode configs for the native PMOVES MCP stack. Idempotent. Per-node. |
 | `make mcp-toolkit-secrets-sync` | Reads `pmoves/env.shared` (override via `PMOVES_TIER_FILE`), populates `docker-pass`-style Toolkit secrets non-interactively. Skips OAuth-style servers (see § 5). |
 | `make mcp-toolkit-status` | `docker mcp profile ls && docker mcp client ls && docker mcp secret ls` + gateway PID — single-shot health. |
 | `make mcp-toolkit-gateway-start` | Run gateway in SSE on a network port (background). See § 6 for security model. |
 | `make mcp-toolkit-gateway-stop` | Graceful stop + force-kill fallback. |
 | `make mcp-toolkit-gateway-tail` | `tail -f` the gateway log. |
-| Target | What it does | Added by |
-|---|---|---|
-| `make mcp-toolkit-bootstrap` | Verifies `docker mcp` CLI present, pulls `pmoves_5090_web` profile from OCI, imports it. Idempotent. Per-node. | PR #1553 |
-| `make mcp-toolkit-secrets-sync` | Reads `pmoves/env.shared` (override via `PMOVES_TIER_FILE`), populates `docker-pass`-style Toolkit secrets non-interactively. Skips OAuth-style servers (see § 5). | PR #1553 |
-| `make mcp-toolkit-connect` | Pre-flights CLI + profile presence, backs up pre-existing `.mcp.json` and `.claude/mcp.json`, runs `docker mcp client connect claude-code --profile $(PROFILE)`. Override profile: `PROFILE=<name>`. Writes a project-scoped `.mcp.json` (gitignored, host-specific env paths). | This PR (Lane A) |
-| `make mcp-toolkit-status` | `docker mcp profile ls && docker mcp client ls && docker mcp secret ls` — single-shot health. | PR #1553 |
+| `make mcp-toolkit-connect` | Pre-flights CLI + profile presence, backs up pre-existing `.mcp.json` and `.claude/mcp.json`, runs `docker mcp client connect claude-code --profile $(PROFILE)`. Override profile: `PROFILE=<name>`. Writes a project-scoped `.mcp.json` (gitignored, host-specific env paths). |
+| `make mcp-config-bootstrap` | Writes Kimi + KiloCode `.kimi/mcp.json` and `kilo.json`, plus all `pmoves/configs/claws/opencode-*.json` node configs, from the canonical inventory (`pmoves/config/mcp_inventory.json`). Safe to re-run. |
+| `make mcp-bootstrap` | Umbrella: Toolkit profile + native PMOVES MCP configs. Runs even when Docker Toolkit is unavailable. |
+| `make mcp-bootstrap-check` | Validates the imported Toolkit profile, generated configs, and key presence. |
+| `make hermes-crush-bootstrap` | Updates Hermes Agent `~/.hermes/profiles/pmoves-hermes/config.yaml` and Crush CLI `~/.config/crush/crush.json` MCP sections from the inventory. |
+| `make opencode-bootstrap` | Updates all `pmoves/configs/claws/opencode-*.json` node configs with canonical PMOVES MCPs (preserves existing zai/docker entries). |
 
-Targets live in `pmoves/Makefile`. Scripts live in `pmoves/scripts/mcp-toolkit-*.sh`.
+Targets live in `pmoves/Makefile` (included from `pmoves/mk/mcp-toolkit.mk`). Scripts live in `pmoves/scripts/mcp-toolkit-*.sh` and `pmoves/scripts/bootstrap-hermes-crush.sh`.
 
 ---
 

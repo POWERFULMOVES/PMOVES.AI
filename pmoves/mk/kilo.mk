@@ -53,21 +53,13 @@ kilo-health: ## Probe KiloCode GLM dependency health (TensorZero, Ollama, Cipher
 
 kilo-parity-check: ## Report parity gaps between KiloCode GLM and Kimi/Codex/Claude lanes
 	@echo "[*] KiloCode GLM parity check ..."
-	@gaps=0; blocked=0; \
+	@gaps=0; \
 	_check() { \
 	  name="$$1"; path="$$2"; \
 	  if [ -e "$$path" ]; then \
 	    echo "  ✅ $$name"; \
 	  else \
 	    echo "  ❌ $$name  (expected $$path)"; gaps=$$((gaps+1)); \
-	  fi; \
-	}; \
-	_check_blocked() { \
-	  name="$$1"; path="$$2"; reason="$$3"; \
-	  if [ -e "$$path" ]; then \
-	    echo "  ✅ $$name"; \
-	  else \
-	    echo "  ⚠️  $$name  (blocked by platform — $$reason)"; blocked=$$((blocked+1)); \
 	  fi; \
 	}; \
 	_check "KiloCode config" "$(KILO_JSON)"; \
@@ -79,12 +71,6 @@ kilo-parity-check: ## Report parity gaps between KiloCode GLM and Kimi/Codex/Cla
 	_check "KiloCode persona playbook" "$(REPO_ROOT)/pmoves/docs/AGENTS/KILOCODE_PERSONA_STYLE_PLAYBOOK.md"; \
 	_check "KiloCode bringup-audit skill" "$(REPO_ROOT)/.kilocode/skills/kilocode-bringup-audit/SKILL.md"; \
 	_check "KiloCode agent-trails skill" "$(REPO_ROOT)/.kilocode/skills/kilocode-agent-trails/SKILL.md"; \
-	echo ""; \
-	echo "  Damage-Control Hooks (Issue #2120):"; \
-	_check "  Damage-control patterns" "$(REPO_ROOT)/.kilo/hooks/damage-control/patterns.yaml"; \
-	_check "  Damage-control README" "$(REPO_ROOT)/.kilo/hooks/damage-control/README.md"; \
-	_check_blocked "  Hook implementation" "$(REPO_ROOT)/.kilo/hooks/pre-tool.sh" "awaiting KiloCode/OpenCode hook API"; \
-	echo ""; \
 	_check "Agent registry entry" "$(REPO_ROOT)/pmoves/config/agent_registry.yaml"; \
 	if grep -q '^  kilocode_glm:' "$(REPO_ROOT)/pmoves/config/agent_registry.yaml" 2>/dev/null; then \
 	  echo "  ✅ kilocode_glm registry entry"; \
@@ -96,13 +82,7 @@ kilo-parity-check: ## Report parity gaps between KiloCode GLM and Kimi/Codex/Cla
 	else \
 	  echo "  ❌ KiloCode cross-linked in .kimi/AGENTS.md"; gaps=$$((gaps+1)); \
 	fi; \
-	echo ""; \
-	if [ $$blocked -gt 0 ]; then \
-	  echo "[*] Results: $$gaps gap(s) found, $$blocked item(s) blocked by platform (expected)"; \
-	else \
-	  echo "[*] Results: $$gaps gap(s) found"; \
-	fi; \
-	if [ $$blocked -gt 0 ]; then \
-	  echo "[!] Hook implementation blocked — see .kilo/hooks/damage-control/README.md for activation plan"; \
-	fi; \
+	mcp_gaps=$$(PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.kilo_parity_mcp_check); \
+	gaps=$$((gaps + mcp_gaps)); \
+	echo "[*] Results: $$gaps gap(s) found"; \
 	exit $$gaps
