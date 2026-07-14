@@ -1208,8 +1208,8 @@ restart-tensorzero: ## Restart TensorZero LLM gateway
 .PHONY: down-agents
 down-agents: ## Stop agent services
 	@echo "🤖 Stopping agents..."
-	@$(DC) stop $(AGENT_SERVICES) archon-ui >/dev/null 2>&1 || true
-	@$(DC) rm -f $(AGENT_SERVICES) archon-ui >/dev/null 2>&1 || true
+	@$(DC) stop $(AGENT_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(AGENT_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-workers
 down-workers: ## Stop worker services
@@ -1814,8 +1814,7 @@ STACK_FILES ?= \
 	-f docker-compose.yml \
 	-f docker-compose.comfyui.yml \
 	-f docker-compose.ultimate-tts-studio.yml \
-	-f docker-compose.archon.submodule.yml \
-	-f docker-compose.archon-ui.submodule.yml
+	-f docker-compose.archon.submodule.yml
 
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
@@ -2870,12 +2869,12 @@ agents-headless-smoke: ## Check Agent Zero and Archon headless services
 
 .PHONY: up-agents-published
 up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images where available
-	@$(DC) -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord
+	@$(DC) -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon deepresearch supaserch mesh-agent publisher-discord
 	@echo "✔ Agents started (published images where available). For production, use PULL=always and pin *_IMAGE tags."
 
 .PHONY: up-agents-ui
 up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use PUBLISHED_AGENTS=1 for images)
-	@$(DC) --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
+	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch supaserch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started (submodule). Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
 .PHONY: a0-mcp-seed a0-mcp-show
@@ -2894,7 +2893,7 @@ archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTT
 	if [ "$$code" = "000" ]; then echo "✖ archon-mcp not reachable on :8051" && exit 1; else echo "✔ archon-mcp HTTP $$code"; fi
 
 .PHONY: archon-ui-smoke
-archon-ui-smoke: ## Verify Archon API and UI endpoints are reachable (200)
+archon-ui-smoke: ## Verify consolidated Archon service API/UI endpoints are reachable (200)
 	@api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); ui=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3737 || true); \
 	if [ "$$api" != "200" ]; then echo "✖ archon API /healthz => $$api" && exit 1; fi; \
 	if [ "$$ui" != "200" ]; then echo "✖ archon UI / => $$ui" && exit 1; fi; \
@@ -3173,11 +3172,11 @@ agents-integrations-pull: ## Pull latest from your forks
 	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || true
 
 build-agents-integrations: ## Build agent images from your forks
-	@$(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon archon-ui
+	@$(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon
 
 
 up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRATIONS_WORKSPACE))
-	@$(DC) -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
+	@$(DC) -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
 	@echo "✔ Agents started from integrations workspace. Workspace: $(INTEGRATIONS_WORKSPACE)"
 
 .PHONY: up-n8n n8n-sync-submodule-flows n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-sync-supabase-registry n8n-bootstrap n8n-export-repo-flows

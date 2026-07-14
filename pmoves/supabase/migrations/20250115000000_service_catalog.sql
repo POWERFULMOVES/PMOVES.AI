@@ -108,14 +108,13 @@ INSERT INTO pmoves_core.service_catalog (slug, name, description, health_check_u
 
   -- Agent Tier
   ('agent-zero', 'Agent Zero', 'Control-plane orchestrator with embedded agent runtime', 'http://agent-zero:8080/healthz', 8080, 'AGENT_ZERO_URL', 'agent', '{"agent": true, "orchestration": true, "mcp": true}'::jsonb, '{"ui_port": 8081, "mcp_path": "/mcp/*"}'::jsonb),
-  ('archon', 'Archon', 'Supabase-driven agent service with prompt management', 'http://archon:8091/healthz', 8091, 'ARCHON_URL', 'agent', '{"agent": true, "supabase": true, "prompts": true}'::jsonb, '{"mcp_port": 8051, "agents_port": 8052}'::jsonb),
+  ('archon', 'Archon', 'Supabase-driven agent service with prompt management', 'http://archon:8091/healthz', 8091, 'ARCHON_URL', 'agent', '{"agent": true, "supabase": true, "prompts": true, "ui": true}'::jsonb, '{"mcp_port": 8051, "agents_port": 8052, "ui_port": 3737}'::jsonb),
   ('deepresearch', 'DeepResearch', 'LLM-based research planner', 'http://deepresearch:8098/healthz', 8098, 'DEEPRESEARCH_URL', 'agent', '{"agent": true, "research": true, "planning": true}'::jsonb, '{"provider": "alibaba-tongyi", "timeout": 600}'::jsonb),
   ('supaserch', 'SupaSerch', 'Multimodal holographic deep research orchestrator', 'http://supaserch:8099/metrics', 8099, 'SUPASERCH_URL', 'agent', '{"agent": true, "research": true, "multimodal": true}'::jsonb, '{"nats_subject": "supaserch.request.v1"}'::jsonb),
   ('mesh-agent', 'Mesh Agent', 'Distributed node announcer for multi-host orchestration', 'http://mesh-agent:8096/healthz', 8096, 'MESH_AGENT_URL', 'agent', '{"agent": true, "orchestration": true, "multi_host": true}'::jsonb, '{"announce_interval": 15}'::jsonb),
 
   -- UI Tier
   ('pmoves-ui', 'PMOVES Central UI', 'Main dashboard and user interface', 'http://pmoves-ui:4482', 4482, 'PMOVES_UI_URL', 'ui', '{"ui": true, "dashboard": true, "nextjs": true}'::jsonb, '{}'::jsonb),
-  ('archon-ui', 'Archon UI', 'Agent form and prompt management interface', 'http://archon:3737', 3737, 'ARCHON_UI_URL', 'ui', '{"ui": true, "agent": true, "forms": true}'::jsonb, '{"embedded": true}'::jsonb),
   ('tokenism-ui', 'Tokenism UI', 'Geometry/CHIT protocol visualization and testing', 'http://tokenism-ui:8504', 8504, 'TOKENISM_UI_URL', 'ui', '{"ui": true, "geometry": true, "chit": true}'::jsonb, '{"profile": "data"}'::jsonb)
 
 ON CONFLICT (slug) DO NOTHING;

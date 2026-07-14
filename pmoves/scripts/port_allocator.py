@@ -47,8 +47,7 @@ DEFAULT_PORTS = {
     # Agent & Orchestration
     "agent-zero": 8080,
     "agent-zero-ui": 8081,
-    "archon": 8091,
-    "archon-ui": 3737,
+    "archon": 8091,  # 3737 is the consolidated UI port (mapped to same container)
     "mesh-agent": 0,  # No HTTP interface
     "service-registry": 8100,
 

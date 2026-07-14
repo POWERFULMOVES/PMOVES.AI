@@ -77,7 +77,6 @@
   "seeded_default_env_keys": [
     "AGENT_ZERO_IMAGE",
     "ARCHON_IMAGE",
-    "ARCHON_UI_IMAGE",
     "DEEPRESEARCH_IMAGE",
     "SUPASERCH_IMAGE",
     "ULTIMATE_TTS_STUDIO_IMAGE",

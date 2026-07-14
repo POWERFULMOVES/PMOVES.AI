@@ -10,11 +10,10 @@ Checks:
    - NATS URL auth is checked across the running project
 
 2) Archon topology acknowledgement:
-   - archon-ui and archon containers exist/running
-   - archon-ui has host port 3737 published
-   - archon API has host port 8091 published
-   - archon-ui and archon share a docker network
-   - archon API (/healthz) and archon-ui (/) are reachable
+   - archon container exists/running
+   - archon has host port 8091 published
+   - archon has host port 3737 published for the consolidated UI
+   - archon API (/healthz) and UI (/) are reachable
 
 3) CHIT sync acknowledgement:
    - v1 CHIT manifest is in sync with v2 source
@@ -572,11 +571,8 @@ def _check_project_topology(
 def _check_archon_topology(
     inspections: Mapping[str, Mapping[str, object]], *, warnings: List[str], errors: List[str]
 ) -> None:
-    archon_ui_hit = _find_container_by_service(inspections, "archon-ui")
     archon_hit = _find_container_by_service(inspections, "archon")
 
-    if not archon_ui_hit:
-        warnings.append("archon-ui container is not running (headless deployment?)")
     if not archon_hit:
         errors.append("archon container is not running")
         return
@@ -586,32 +582,18 @@ def _check_archon_topology(
     if not _ports_published(archon_info, 8091):
         errors.append(f"{archon} is missing host publish for 8091/tcp")
 
+    if not _ports_published(archon_info, 3737):
+        errors.append(f"{archon} is missing host publish for 3737/tcp")
+
     archon_code = _http_code("http://localhost:8091/healthz", retries=2, delay_s=1.0)
     if archon_code != 200:
         errors.append(f"archon API health check failed: http://localhost:8091/healthz => {archon_code}")
 
-    if archon_ui_hit:
-        archon_ui, ui_info = archon_ui_hit
-
-        if not _ports_published(ui_info, 3737):
-            errors.append(f"{archon_ui} is missing host publish for 3737/tcp")
-
-        ui_nets = set(_container_networks(ui_info))
-        archon_nets = set(_container_networks(archon_info))
-        if not (ui_nets & archon_nets):
-            errors.append("archon-ui and archon do not share any docker network")
-
-        if "pmoves_external" not in ui_nets:
-            warnings.append(
-                "archon-ui is not attached to pmoves_external; host reachability may break on internal api networks"
-            )
-
-        # First request can fail while Vite preview initializes.
-        ui_host_port = _published_host_port(ui_info, 3737) or "3737"
-        ui_url = f"http://localhost:{ui_host_port}/"
-        ui_code = _http_code(ui_url, retries=6, delay_s=2.0)
-        if ui_code != 200:
-            errors.append(f"archon-ui health check failed: {ui_url} => {ui_code}")
+    ui_host_port = _published_host_port(archon_info, 3737) or "3737"
+    ui_url = f"http://localhost:{ui_host_port}/"
+    ui_code = _http_code(ui_url, retries=6, delay_s=2.0)
+    if ui_code != 200:
+        errors.append(f"archon UI health check failed: {ui_url} => {ui_code}")
 
 
 def _check_chit_sync(

@@ -2770,6 +2770,9 @@ services:
     - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')
     ports:
     - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_PORT:-8091}:8091
+    # Canonical UI port — the PMOVES archon image builds upstream static assets
+    # and serves them from the same HTTP server (see services/archon/main.py).
+    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_UI_PORT:-3737}:8091
     - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_MCP_PORT:-8051}:8051
     - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_WS_PORT:-8052}:8052
     networks:

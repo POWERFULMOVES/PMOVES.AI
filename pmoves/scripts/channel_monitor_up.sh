@@ -30,7 +30,6 @@ DC_CMD=(
   -f docker-compose.comfyui.yml
   -f docker-compose.ultimate-tts-studio.yml
   -f docker-compose.archon.submodule.yml
-  -f docker-compose.archon-ui.submodule.yml
 )
 
 runtime="${SUPABASE_RUNTIME:-compose}"

@@ -79,7 +79,6 @@ AGENT_TIER_SERVICES: frozenset[str] = frozenset(
     {
         "agent-zero",
         "archon",
-        "archon-ui",
         "botz-gateway",
         "supaserch",
         "evo-controller",

@@ -66,10 +66,6 @@
       "pmoves_bus",
       "pmoves_external"
     ],
-    "archon-ui": [
-      "pmoves_api",
-      "pmoves_external"
-    ],
     "channel-monitor": [
       "pmoves_app",
       "pmoves_bus",
@@ -120,9 +116,7 @@
       80
     ],
     "archon": [
-      8091
-    ],
-    "archon-ui": [
+      8091,
       3737
     ],
     "channel-monitor": [

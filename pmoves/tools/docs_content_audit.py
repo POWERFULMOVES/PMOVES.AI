@@ -68,7 +68,7 @@ KNOWN_PORTS: Dict[str, int] = {
     "agent-zero-api": 8080,
     "agent-zero-ui": 8081,
     "archon-api": 8091,
-    "archon-ui": 3737,
+    "archon-ui": 3737,  # consolidated into archon service
     "hirag-v2-cpu": 8086,
     "hirag-v2-gpu": 8087,
     "hirag-v1-cpu": 8089,
