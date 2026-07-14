@@ -176,7 +176,10 @@ include mk/mcp-toolkit.mk
 include mk/mcp-toolkit-4090.mk
 include mk/mcp-toolkit-spark.mk
 include mk/unsloth.mk
+include mk/creator.mk
+include mk/kilo.mk
 include mk/voice.mk
+include mk/kong.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -1923,6 +1926,10 @@ smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemm
 
 manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visibility; ARGS='--cgp <path>' to point at the user-scoped bundle)
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing $(ARGS)
+
+.PHONY: village-gate
+village-gate: ## Run the Village Gate evaluator (quality thresholds before Village Rule signoff; ARGS='--strict-tools' in CI)
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/village_gate.py $(ARGS)
 
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
@@ -4068,6 +4075,10 @@ compose-split-check: ## Drift gate: fail if committed overlays differ from regen
 	    exit 1; \
 	  fi
 
+.PHONY: validate-service-tools-packaging
+validate-service-tools-packaging: ## Audit that services importing pmoves.tools copy them into Docker images
+	@$(PYTHON) $(CURDIR)/scripts/validate_service_tools_packaging.py
+
 OVERLAY_BASE    := -f docker-compose.base.yml
 OVERLAY_CORE    := -f docker-compose.core.yml
 OVERLAY_AGENTS  := -f docker-compose.agents.yml
@@ -4188,3 +4199,41 @@ design-vendor-check: ## Fail if the vendored ui/lib/persona/ or website/persona/
 			|| { echo "❌ website/persona drifted — run 'make -C pmoves design-vendor' and commit"; exit 1; }; \
 	done
 	@echo "✅ ui/lib/persona + website/persona match design/ source"
+
+.PHONY: stage-data stage-data-check
+
+stage-data: ## Bake website/stage/data/public-rooms.json (A2UI surface) from public room manifests
+	cd design && uv run --no-project python stage_data.py
+
+stage-data-check: stage-data ## Fail if committed website/stage/data drifted from the room manifests
+	@# intent-to-add so a brand-new baked file can't pass the gate silently.
+	@git add --intent-to-add ../website/stage/data 2>/dev/null || true
+	@git diff --exit-code -- ../website/stage/data \
+		|| { echo "❌ website/stage/data drifted — run 'make -C pmoves stage-data' and commit"; exit 1; }
+	@echo "✅ website/stage/data matches room manifests"
+
+.PHONY: kimi
+kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
+	@if [ ! -f "$(CURDIR)/../.kimi/config.toml" ]; then \
+	  echo "[!] Kimi config not found: $(CURDIR)/../.kimi/config.toml"; exit 1; \
+	fi
+	@if [ -f "$(CURDIR)/../.kimi/mcp.json" ]; then \
+	  kimi --config-file "$(CURDIR)/../.kimi/config.toml" --mcp-config-file "$(CURDIR)/../.kimi/mcp.json"; \
+	else \
+	  echo "[!] Warning: $(CURDIR)/../.kimi/mcp.json not found; launching Kimi without MCP config."; \
+	  echo "    Run 'make -C pmoves mcp-spark-connect' to generate it from Docker MCP Toolkit."; \
+	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
+	fi
+
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves
+claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
+	@bash $(CURDIR)/scripts/claude-pmoves.sh delivery-agent
+
+kimi-pmoves: ## Launch Kimi Code CLI with PMOVES project config and MCP
+	@bash $(CURDIR)/scripts/kimi-pmoves.sh
+
+kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
+	@bash $(CURDIR)/scripts/kilo-pmoves.sh 5090
+
+codex-pmoves: ## Launch Codex CLI with PMOVES context
+	@bash $(CURDIR)/scripts/codex-pmoves.sh

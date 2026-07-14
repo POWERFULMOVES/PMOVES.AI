@@ -1,0 +1,124 @@
+/* DL-4.1 stage surface — PMOVES armor tokens (values from
+ * pmoves/design/build/tokens.pmoves-armor.css; keep in sync via DL token roll).
+ * ✦ --pm-signature is DARKXSIDE's reserved accent — never overridden. */
+
+:root {
+  --pm-accent: #7C3AED;
+  --pm-accent-2: #0D9488;
+  --pm-accent-soft: #A78BFA;
+  --pm-bg: #050508;
+  --pm-bg-tint: #0a0a12;
+  --pm-border-strong: rgba(255, 255, 255, 0.15);
+  --pm-border-subtle: rgba(255, 255, 255, 0.08);
+  --pm-font-body: 'Exo 2', system-ui, sans-serif;
+  --pm-font-display: 'Orbitron', 'Exo 2', system-ui, sans-serif;
+  --pm-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --pm-ink: #f8f8f8;
+  --pm-ink-dim: #a0a0a8;
+  --pm-ink-mute: #606068;
+  --pm-radius: 14px;
+  --pm-signature: #E11D48;
+  --pm-space-lg: 24px;
+  --pm-space-md: 16px;
+  --pm-space-sm: 8px;
+  --pm-space-xl: 40px;
+  --pm-surface: #12121a;
+}
+
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/orbitron-v35-latin-wght.woff2') format('woff2');
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--pm-bg);
+  color: var(--pm-ink);
+  font-family: var(--pm-font-body);
+  line-height: 1.6;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--pm-surface);
+  color: var(--pm-ink);
+  padding: var(--pm-space-sm) var(--pm-space-md);
+}
+.skip-link:focus { left: 0; z-index: 10; }
+
+.stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--pm-space-md) var(--pm-space-lg);
+  border-bottom: 1px solid var(--pm-border-subtle);
+  background: var(--pm-bg-tint);
+}
+
+.stage-home {
+  color: var(--pm-accent-soft);
+  text-decoration: none;
+  font-family: var(--pm-font-display);
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+.stage-home:hover { color: var(--pm-ink); }
+
+/* ✦ signature glyph — reserved, never restyled by persona/room accents */
+.stage-signature { color: var(--pm-signature); }
+
+.stage-main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--pm-space-xl) var(--pm-space-lg);
+}
+
+.stage-title {
+  font-family: var(--pm-font-display);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  margin: 0 0 var(--pm-space-sm);
+  color: var(--pm-ink);
+}
+
+.stage-lede {
+  color: var(--pm-ink-dim);
+  max-width: 64ch;
+  margin: 0 0 var(--pm-space-xl);
+}
+.stage-lede a { color: var(--pm-accent-soft); }
+.stage-lede strong { color: var(--pm-ink); }
+
+/* A2UI surfaces mount here. Shadow DOM internals inherit color/font from this
+ * subtree; the Card surface treatment comes from the theme's additionalStyles
+ * in stage.js. Layout of the surface roots is ours. */
+.stage-surfaces {
+  display: grid;
+  gap: var(--pm-space-lg);
+}
+
+.stage-surfaces a2ui-surface {
+  display: block;
+  width: 100%;
+}
+
+.stage-footer {
+  border-top: 1px solid var(--pm-border-subtle);
+  margin-top: var(--pm-space-xl);
+  padding: var(--pm-space-md) var(--pm-space-lg);
+  color: var(--pm-ink-mute);
+  font-size: 0.85rem;
+}
+.stage-footer code {
+  font-family: var(--pm-font-mono);
+  color: var(--pm-ink-dim);
+}

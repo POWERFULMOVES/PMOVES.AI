@@ -1,5 +1,5 @@
 ---
-name: 4090:sitrep
+name: node-4090-sitrep
 description: >
   Full situation report for the 4090 laptop node: git status, active worktrees,
   GPU (nvidia-smi), NATS health (port 8222), running containers, and open PRs.
@@ -7,7 +7,7 @@ description: >
   CLAIM/RELEASE in AGNOTE4482PHI.t1.md.
 ---
 
-# 4090:sitrep — Node Situation Report
+# node-4090-sitrep — Node Situation Report
 
 Runs the 4090 node health check and outputs a formatted AGNOTE4482 audit
 record. Use this before making a CLAIM or RELEASE in `AGNOTE4482PHI.t1.md`.
@@ -63,10 +63,10 @@ git worktree list | wc -l
 
 ## CLAIM/RELEASE Workflow
 
-1. Run `4090:sitrep` → paste output block into `AGNOTE4482PHI.t1.md`
+1. Run `node-4090-sitrep` → paste output block into `AGNOTE4482PHI.t1.md`
 2. Add CLAIM entry with task description
 3. Do work
-4. Run `4090:sitrep` again → paste as verification
+4. Run `node-4090-sitrep` again → paste as verification
 5. Add RELEASE entry
 
 ## Notes

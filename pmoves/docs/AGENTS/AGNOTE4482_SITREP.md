@@ -72,6 +72,7 @@ Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md se
 | HERMES Agent Integration | 2026-06-04 | `pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md` | Full NousResearch Hermes Agent integration: room manifest, TAC tree, 6 node profiles (Z890, 5090, 4090, Spark, B850/RDNA4, KVM), agent registry/signature updates, operator skill, Three-Body agent definition. Local model mesh with Spark 70B primary. |
 | Z890 Main-Infra Pass | 2026-06-04 | `AGNOTE4482PHI.t1.md` §Z890 Main-Infra Pass | SPARK-drafted PR cluster merged, CI-wide sha-pin outage fixed (#1698), `chit_manifest_merge.py` tooling (#1706/7), gateway port 8111 alignment → VPS deploy green |
 | Z890 Fleet Fork-Sync + Governance | 2026-06-09→11 | `AGNOTE4482PHI.t1.md` §Fleet Fork-Sync Campaign | **All fork-sync drift cleared** (auto-tier + high-ahead Agent-Zero/hyperdimensions/Wealth + CRITICAL-huge ClawZ 8354c/Creator); **branch-protection automation** (31 forks protected, App Administration:RW validated, `branch-protection-sync.yml`); **supabase CRITICAL sync** (#1761 + TAC #1768, Kong gate passed); **Archon CI green** (lint #19 + E2E #20); space-agent public+protected |
+| HERMES v0.18.2 Config Alignment | 2026-07-12 | `HERMES_AGENT_INTEGRATION.md` §v0.18.2 Config Alignment | Elder-Melchor profile rewritten to v0.18.2 schema: `fallback_providers` cascade (kimi → minimax-oauth → openrouter → ollama-cloud), `credential_pool_strategies`, PII redaction (HIPAA), config migrated v0→v33, profile .env keys populated, `hermes doctor` all checks passed. Kilo Gateway (`kilocode`) confirmed as built-in provider for PMOVES-crush. Upstream PRs reviewed: #20893, #20920, #20876, #63168, #62871. |
 
 > ~~**⚠️ AGNOTE4482.md section gaps:** Supply Chain, SPARK Prep, and CHIT Hardening were backfilled 2026-05-17.~~ All SITREP wave index entries now have corresponding §-sections.
 
@@ -152,12 +153,12 @@ The key: **store with one phrasing, search with another**. When Cipher is fully 
 - `pmoves_cipher_store_reasoning` — multi-step reasoning traces
 - `pmoves_cipher_reasoning_patterns` — reusable reasoning patterns
 
-> **Known issue (3-layer gap, 2026-04-01):**
-> - **Layer 1 (skills):** Fixed — skills now use MCP-first with local MEMORY.md fallback
-> - **Layer 2 (MCP client):** `pmoves-cipher-mcp/cipher_mcp/client.py` calls `POST /api/memory` and `GET /api/memory/search` — endpoints that don't exist
-> - **Layer 3 (cipher-api):** `Pmoves-cipher/src/app/api/server.ts` registers `/api/message`, `/api/sessions`, `/api/mcp`, etc. but NO `/api/memory` routes
-> - **Working path today:** Local MEMORY.md only. Skills auto-fallback when health check or MCP call fails.
-> - **Fix:** Implement `/api/memory` CRUD routes in `Pmoves-cipher` submodule (separate PR)
+> **Known issue (3-layer gap, 2026-04-01) — RESOLVED 2026-07-13:**
+> - **Layer 1 (skills):** Fixed — skills use MCP-first with local MEMORY.md fallback
+> - **Layer 2 (MCP client):** The `pmoves-cipher-mcp/cipher_mcp/client.py` REST calls were originally reported as broken — that finding was based on a **stale vendored copy** at `PMOVES-BoTZ/features/cipher/pmoves_cipher/` (predated PR #5). The **live gitlink** (`1c9b2851`) DID register `/api/memory` routes (PR #5 by B850-CLAUDE, 2026-07-01).
+> - **Layer 3 (cipher-api):** Routes exist on the live gitlink. The A1-Shim re-fork (2026-07-13, PR #2116) re-implemented them on the new ByteRover v3.16.1 architecture via `src/pmoves/memory-routes.ts`. All 8 contracts smoke-tested green.
+> - **Working path today:** Direct SSE at `:8105/mcp/sse` (Claude Code, Agent Zero) + REST `/api/memory` CRUD (semantic-cache, analyze_beats). Python bridge disabled since 2026-05-15.
+> - **Full context:** `pmoves/docs/TAC/TAC_CIPHER.md` §Current State + §A1-Shim Workorder
 
 ## Cross-Node Context Gap
 

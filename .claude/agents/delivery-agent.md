@@ -1,5 +1,6 @@
 ---
 name: delivery-agent
+role_class: worker
 description: Implementation agent for code changes, fixes, and feature work. Maps to AGNOTE4482 Three-Body Delivery Body.
 tools: Read, Write, Edit, Bash, Grep, Glob, Agent(delivery-agent, researcher), Skill
 disallowedTools: EnterPlanMode

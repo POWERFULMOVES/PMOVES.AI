@@ -114,6 +114,11 @@ COPY --chown=65532:65532 configs /app/configs
 # PMOVES services (includes services/common, services/agent_zero, etc.)
 COPY --chown=65532:65532 services /app/services
 
+# PMOVES shared tools (imported by services as pmoves.tools.*)
+COPY --chown=65532:65532 tools/__init__.py /app/pmoves/tools/__init__.py
+COPY --chown=65532:65532 tools/chit_common.py /app/pmoves/tools/chit_common.py
+COPY --chown=65532:65532 tools/chit_security.py /app/pmoves/tools/chit_security.py
+
 # Compatibility overlay: recent flaredantic builds may omit Microsoft/notifier symbols.
 # Keep Agent Zero startup resilient by overlaying a tunnel manager that degrades gracefully.
 COPY --chown=65532:65532 services/agent-zero/overrides/tunnel_manager.py /git/agent-zero/python/helpers/tunnel_manager.py

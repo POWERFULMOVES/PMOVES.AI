@@ -1,0 +1,75 @@
+# Village Gate — declarative quality thresholds (P0 Evaluation Gates,
+# ARCHON_ENHANCEMENT_ROADMAP §2).
+#
+# Evaluated by pmoves/tools/village_gate.py (make -C pmoves village-gate).
+# Threshold rules use the same {metric: {min|max}} shape as
+# services/retrieval-eval/eval_utils.evaluate_thresholds.
+#
+# severity:
+#   hard     — failing check fails the gate (non-zero exit)
+#   advisory — reported in the verdict + summary, never fails the gate
+#
+# Ratchet policy: budgets are set from measured baselines with slack
+# (2026-07-12: ruff=1032 violations, dockerfile USER=65/73=0.89). Tighten
+# them in follow-up PRs as debt is paid down; never loosen without a
+# register entry explaining why.
+
+version: 1
+checks:
+  - id: workflows-yaml-valid
+    kind: yaml_valid
+    enabled: true
+    severity: hard
+    params:
+      globs:
+        - ".github/workflows/*.yml"
+        - ".github/workflows/*.yaml"
+    threshold:
+      invalid_count: { max: 0 }
+
+  - id: compose-yaml-valid
+    kind: yaml_valid
+    enabled: true
+    severity: hard
+    params:
+      globs:
+        - "pmoves/docker-compose*.yml"
+    threshold:
+      invalid_count: { max: 0 }
+
+  - id: ruff-budget
+    kind: ruff_budget
+    enabled: true
+    severity: hard
+    params:
+      paths: ["pmoves/tools", "pmoves/services"]
+    threshold:
+      violations: { max: 1100 }
+
+  - id: dockerfile-user-coverage
+    kind: dockerfile_user_coverage
+    enabled: true
+    severity: hard
+    params:
+      root: "pmoves/services"
+    threshold:
+      user_fraction: { min: 0.85 }
+
+  - id: docs-freshness
+    kind: command_exit
+    enabled: true
+    severity: advisory   # Dashboard is known-stale (935 commits, pre-existing)
+    params:
+      command: ["make", "-C", "pmoves", "docs-reconcile-check"]
+    threshold:
+      exit_code: { max: 0 }
+
+  - id: coverage-floor
+    kind: command_metric
+    enabled: false   # ratchet target — enable once a baseline is agreed
+    severity: hard
+    params:
+      command: ["true"]
+      metric_regex: "TOTAL.+?(\\d+)%"
+    threshold:
+      coverage_percent: { min: 0 }

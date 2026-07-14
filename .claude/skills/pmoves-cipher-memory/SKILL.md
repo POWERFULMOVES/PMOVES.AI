@@ -1,3 +1,8 @@
+---
+name: pmoves-cipher-memory
+description: Enable persistent memory across Claude Code sessions for PMOVES.AI development.
+---
+
 # PMOVES Cipher Memory Skill
 
 **Purpose**: Enable persistent memory across Claude Code sessions for PMOVES.AI development.
