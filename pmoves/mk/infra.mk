@@ -329,6 +329,9 @@ RUNNER_COMPOSE := docker/runner/docker-compose.runner.yml
 RUNNER_PROJECT := pmoves-runners-$(RUNNER_NODE)
 
 gha-runner-up: ## Start cross-node ai-lab Docker runners (RUNNER_NODE=z890|4090|5090|…)
+	@echo "Pre-creating host config dirs (user-owned) for the runner bind mount..."
+	@mkdir -p "$$HOME/.config/pmoves/chit" "$$HOME/.config/pmoves/secrets" && \
+	  chmod 700 "$$HOME/.config/pmoves" "$$HOME/.config/pmoves/chit" "$$HOME/.config/pmoves/secrets"
 	@echo "Resolving runner credential for node '$(RUNNER_NODE)'..."
 	@_pat="$(call _runner_pat)"; \
 	if [ -n "$$_pat" ] && GH_TOKEN="$$_pat" gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners >/dev/null 2>&1; then \

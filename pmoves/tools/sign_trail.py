@@ -22,11 +22,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 # ---------------------------------------------------------------------------
-# Resolve project root (pmoves/) so sibling imports work when invoked from
-# Make or hooks without PYTHONPATH gymnastics.
+# Resolve project root (repo root) and pmoves root so both `pmoves.tools.*`
+# and legacy `tools.*` imports work when invoked directly or from Make/hooks.
 # ---------------------------------------------------------------------------
 _TOOLS_DIR = Path(__file__).resolve().parent
 _PMOVES_ROOT = _TOOLS_DIR.parent
+_REPO_ROOT = _PMOVES_ROOT.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 if str(_PMOVES_ROOT) not in sys.path:
     sys.path.insert(0, str(_PMOVES_ROOT))
 
@@ -41,6 +44,15 @@ _SCHEMA_PATH = (
     _PMOVES_ROOT / "contracts" / "schemas" / "agent-graphiti" / "signature.v1.schema.json"
 )
 _LOG_PATH = _PMOVES_ROOT / "docs" / "logs" / "graphiti_signed_latest.json"
+
+# Phase 0 (CHIT-sign-triggered expressive voice): subject the signed trail is
+# published to when CHIT_SIGN_PUBLISH=1. Consumed by voice_cast_on_sign.py.
+# NOTE: this is the canonical RAW signature.v1 subject (nats-subjects.md:441) —
+# NOT chit.signed.v1, which is a live multi-consumer channel (Consciousness 8106,
+# Tokenism 8103, Evo 8113, Fordham receipts) carrying the pmoves-chit-sign
+# {schema,tier} envelope. Publishing the raw payload there would collide two
+# shapes on one subject (5090-CLAUDE pair-review PR #2048, finding #1).
+_SIGN_PUBLISH_SUBJECT = "agent.graphiti.signed.v1"
 
 # Fallback glyph/color when agent_signatures.yaml is unavailable
 _FALLBACK = {"glyph": "\u25C6", "color": "#7C3AED", "accent": "#A78BFA", "voice": "analytical"}
@@ -254,6 +266,59 @@ def _write_log(payload: Dict[str, Any]) -> None:
         json.dump(payload, fh, indent=2)
 
 
+def _publish_signed_trail(payload: Dict[str, Any]) -> None:
+    """Best-effort NATS publish of the signed trail to ``chit.signed.v1``.
+
+    Phase 0 (CHIT-sign-triggered expressive voice, no speak tool call): the
+    normal CHIT trail-sign becomes the trigger for ``voice_cast_on_sign.py``.
+
+    Gated on BOTH ``CHIT_SIGN_PUBLISH=1`` and ``NATS_URL`` being set — a no-op
+    (immediate return) otherwise, so existing signing behavior is completely
+    unchanged when the env vars are absent. Uses the same lazy-import async
+    ``nats-py`` pattern as ``beats_to_voice._nats_publish_cgp`` (optional dep;
+    a missing/unreachable NATS server never breaks signing — failures are
+    logged to stderr and swallowed).
+    """
+    if os.environ.get("CHIT_SIGN_PUBLISH") != "1":
+        return
+    nats_url = os.environ.get("NATS_URL")
+    if not nats_url:
+        return
+
+    try:
+        import asyncio
+
+        async def _publish() -> None:
+            import nats as natspy  # optional dep — lazy import, same pattern as beats_to_voice.py
+
+            # Fail fast: this is a fire-and-forget trigger publish, not a
+            # long-lived connection. Disable reconnect looping so an
+            # unreachable NATS server surfaces (and is swallowed) in a few
+            # seconds instead of retrying for minutes.
+            nc = await natspy.connect(
+                nats_url,
+                connect_timeout=2,
+                allow_reconnect=False,
+                max_reconnect_attempts=1,
+            )
+            try:
+                await nc.publish(
+                    _SIGN_PUBLISH_SUBJECT, json.dumps(payload).encode("utf-8")
+                )
+                await nc.flush(timeout=2)
+            finally:
+                await nc.close()
+
+        asyncio.run(asyncio.wait_for(_publish(), timeout=10))
+        print(
+            f"[info] published signed trail to {_SIGN_PUBLISH_SUBJECT}",
+            file=sys.stderr,
+        )
+    except Exception as exc:
+        # Best-effort: NATS being down/misconfigured must never break signing.
+        print(f"[warn] CHIT_SIGN_PUBLISH publish skipped: {exc}", file=sys.stderr)
+
+
 def main() -> None:
     """CLI entry point for signing a Graphiti trail entry."""
     parser = argparse.ArgumentParser(
@@ -321,6 +386,11 @@ def main() -> None:
     # Write log artifact
     if not args.no_log:
         _write_log(payload)
+
+    # Phase 0: env-gated NATS publish trigger for CHIT-sign-driven expressive
+    # voice. No-op unless CHIT_SIGN_PUBLISH=1 and NATS_URL are both set;
+    # runs regardless of --no-log so the trigger works standalone too.
+    _publish_signed_trail(payload)
 
     # Print to stdout for downstream piping
     print(json.dumps(payload, indent=2))

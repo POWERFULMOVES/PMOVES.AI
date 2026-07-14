@@ -7,6 +7,9 @@
   "alter": "4090-field",
   "room_type": "scout",
   "owner_mode": "alter",
+  "access": {
+    "visibility": "unlisted"
+  },
   "shell": {
     "theme": {
       "theme_id": "field-control",

@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from pmoves.services.common.chakra import CHAKRA_BANDS, chakra_to_band
+from services.common.chakra import CHAKRA_BANDS, chakra_to_band
 
 from .types import BoundaryType, ProsodicChunk
 

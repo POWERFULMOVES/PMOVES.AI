@@ -24,6 +24,7 @@ RUN mkdir -p /app/pmoves/services /app/pmoves/tools /app/pmoves/config /app/pmov
 COPY --chown=pmoves:pmoves __init__.py /app/pmoves/__init__.py
 COPY --chown=pmoves:pmoves services/__init__.py /app/pmoves/services/__init__.py
 COPY --chown=pmoves:pmoves services/common /app/pmoves/services/common
+COPY --chown=pmoves:pmoves tools/__init__.py /app/pmoves/tools/__init__.py
 COPY --chown=pmoves:pmoves tools/chit_security.py /app/pmoves/tools/chit_security.py
 COPY --chown=pmoves:pmoves tools/chit_common.py /app/pmoves/tools/chit_common.py
 COPY --chown=pmoves:pmoves config/agent_signatures.yaml config/agent_registry.yaml config/signing_identity_cards.yaml /app/pmoves/config/

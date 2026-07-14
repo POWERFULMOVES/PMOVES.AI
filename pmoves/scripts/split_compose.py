@@ -64,6 +64,8 @@ SERVICE_GROUPS = {
         "nats-echo-res",
         "consciousness-service",
         "evo-controller",
+        "hf-agent",
+        "hf-research-agent",
     ],
     "media": [
         "media-video",

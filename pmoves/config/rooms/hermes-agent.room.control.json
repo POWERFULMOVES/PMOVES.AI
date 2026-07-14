@@ -7,6 +7,9 @@
   "alter": "hermes-agent",
   "room_type": "operator",
   "owner_mode": "alter",
+  "access": {
+    "visibility": "unlisted"
+  },
   "shell": {
     "theme": {
       "theme_id": "hermes-stage",

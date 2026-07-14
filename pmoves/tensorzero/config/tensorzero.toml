@@ -213,6 +213,15 @@ api_base = "https://api.moonshot.ai/v1"
 model_name = "moonshot-v1-32k"
 api_key_location = "env::MOONSHOT_API_KEY"
 
+[models.chat_kimi_k2_7_code]
+routing = ["moonshot_primary"]
+
+[models.chat_kimi_k2_7_code.providers.moonshot_primary]
+type = "openai"
+api_base = "https://api.moonshot.ai/v1"
+model_name = "kimi-k2.7-code"
+api_key_location = "env::MOONSHOT_API_KEY"
+
 [models.chat_openrouter]
 routing = ["openrouter_primary"]
 
@@ -298,6 +307,18 @@ api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5-turbo"
 api_key_location = "env::Z_AI_API_KEY"
 
+# --- GLM-5.2 (Latest GLM — primary coding + reasoning via Z.AI coding endpoint) ---
+# Serves agent_zero, coding_glm, coding_kilocode, archon functions.
+# Also available via Ollama Cloud as chat_ollama_cloud_default (glm-5.2 at ollama.com/v1).
+[models.chat_zai_glm52]
+routing = ["zai_glm52"]
+
+[models.chat_zai_glm52.providers.zai_glm52]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.2"
+api_key_location = "env::Z_AI_API_KEY"
+
 # --- GLM-5V-Turbo (Vision + coding — frontend recreation, GUI exploration, visual debugging) ---
 # Synced from provider_catalog.yaml: serves coding_glm (w=0.4) + vl_sentinel (w=0.7)
 [models.chat_zai_glm5v_turbo]
@@ -307,6 +328,17 @@ routing = ["zai_glm5v_turbo"]
 type = "openai"
 api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5v-turbo"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM-5.2 (Flagship — 1M context, long-horizon coding agent scenarios) ---
+# Synced from provider_catalog.yaml: serves coding_glm (w=0.9) + orchestrator (w=0.8)
+[models.chat_zai_glm52]
+routing = ["zai_glm52"]
+
+[models.chat_zai_glm52.providers.zai_glm52]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.2"
 api_key_location = "env::Z_AI_API_KEY"
 
 # --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
@@ -864,6 +896,14 @@ model = "chat_zai_glm5v_turbo"
 weight = 0.3
 temperature = 0.1
 
+# GLM-5.2 — latest GLM model (coding + reasoning via Z.AI coding endpoint)
+# Primary cloud model for orchestration when coding plan is active.
+[functions.agent_zero.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.8
+temperature = 0.1
+
 # --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
 # SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
 # Nemotron tag verified via /api/tags (nemotron-3-super:120b). R9700 variants remain 0.0.
@@ -890,6 +930,22 @@ weight = 0.0
 type = "chat_completion"
 model = "llamacpp_rdna4_gemma4_26b_dual"
 weight = 0.0
+
+# Kimi K2.7-code — available through agent_zero but inactive by default
+[functions.agent_zero.variants.hosted_kimi_k2_7]
+type = "chat_completion"
+model = "chat_kimi_k2_7_code"
+weight = 0.0
+
+[functions.coding_kimi]
+type = "chat"
+
+[functions.coding_kimi.variants.cloud_kimi_k2_7_code]
+type = "chat_completion"
+model = "chat_kimi_k2_7_code"
+weight = 1.0
+temperature = 0.2
+max_tokens = 8192
 
 [functions.langextract]
 type = "chat"
@@ -1068,6 +1124,13 @@ model = "chat_together"
 type = "chat_completion"
 model = "chat_gemini_pro"
 
+# GLM-5.2 — Z.AI coding plan for work order generation
+[functions.archon_work_orders.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.7
+temperature = 0.2
+
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]
 type = "chat"
@@ -1083,6 +1146,13 @@ model = "chat_openrouter"
 [functions.archon_code_review.variants.hosted_alibaba_qwen]
 type = "chat_completion"
 model = "chat_alibaba_qwen"
+
+# GLM-5.2 — Z.AI coding plan for code review
+[functions.archon_code_review.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.6
+temperature = 0.1
 
 # --- Hi-RAG Reranking Function -----------------------------------------------
 [functions.hirag_rerank]
@@ -1378,7 +1448,42 @@ type = "chat_completion"
 model = "chat_zai_glm"
 temperature = 0.1
 
+# GLM-5.2 — flagship, highest priority for coding plan
+[functions.coding_glm.variants.cloud_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.9
+temperature = 0.1
+
 [functions.coding_glm.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+# KiloCode GLM Coding Plan (KiloCode plan-routed + GLM fallback)
+# Dedicated function for KiloCode VS Code agent on 5090.
+# Uses KiloCode's own kilo-auto/balanced as primary with GLM-5.2/Turbo fallback.
+[functions.coding_kilocode]
+type = "chat"
+
+[functions.coding_kilocode.variants.cloud_kilocode]
+type = "chat_completion"
+model = "chat_kilocode"
+weight = 0.7
+temperature = 0.1
+
+[functions.coding_kilocode.variants.cloud_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.5
+temperature = 0.1
+
+[functions.coding_kilocode.variants.cloud_zai_glm5_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.3
+temperature = 0.1
+
+[functions.coding_kilocode.variants.local_qwen35_9b]
 type = "chat_completion"
 model = "qwen35_9b"
 
@@ -1479,7 +1584,10 @@ routing = ["local_active"]
 [models.registry_worker_qwen.providers.local_active]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
-model_name = "qwen3-coder:30b"
+# qwen3.5:35b-a3b (q4_K_M GGUF, 24GB, MoE 3B-active): current-gen open worker,
+# replaces stale qwen3-coder:30b (never pulled on 5090). Needs ollama >= 0.31.
+# NOTE: the smaller -int4 tag is an MLX quant — macOS-only (412 on Linux).
+model_name = "qwen3.5:35b-a3b"
 api_key_location = "none"
 
 [models.registry_worker_hermes]
@@ -1517,6 +1625,13 @@ temperature = 0.2
 max_tokens = 8192
 weight = 1.0
 
+[functions.pmoves_orchestrator_coding.variants.cloud_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+temperature = 0.2
+max_tokens = 131072
+weight = 0.9
+
 [functions.pmoves_orchestrator_coding.variants.cloud_kimi]
 type = "chat_completion"
 model = "chat_moonshot"
@@ -1536,7 +1651,7 @@ type = "chat_completion"
 model = "chat_kilocode"
 temperature = 0.2
 max_tokens = 8192
-weight = 0.0
+weight = 0.3
 
 [functions.pmoves_orchestrator_coding.variants.cloud_ollama_default]
 type = "chat_completion"
@@ -1568,6 +1683,32 @@ model = "chat_zai_glm51"
 temperature = 0.7
 max_tokens = 8192
 weight = 0.0
+
+# --- KiloCode coding function (GLM-backed with KiloCode direct overflow) ---
+
+[functions.coding_kilocode]
+type = "chat"
+
+[functions.coding_kilocode.variants.cloud_zai_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.8
+
+[functions.coding_kilocode.variants.cloud_kilocode]
+type = "chat_completion"
+model = "chat_kilocode"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.3
+
+[functions.coding_kilocode.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.2
 
 # --- Worker functions: registry lane aliases ONLY (no-hardcoded-models gate) ---
 

@@ -82,6 +82,6 @@ def test_provenance_payload_to_hyperdimensions_save_emits_live_surface_config(pr
     assert save["version"] == 1
     assert "function surface" in save["surface"]["code"]
     names = {item["name"] for item in save["extraParameters"]}
-    assert {"delta", "kappa", "hz", "fitness", "attribution", "spectrum", "lineage"} <= names
+    assert {"delta", "kappa", "hz", "fitness", "attribution", "publish_gate", "spectrum", "lineage"} <= names
     assert save["meta"]["source_topic"] == "content.hirag.accepted.v1"
     assert save["meta"]["shape_id"] == "shape-abc123"

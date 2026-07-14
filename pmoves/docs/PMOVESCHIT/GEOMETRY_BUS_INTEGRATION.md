@@ -367,6 +367,22 @@ function buildCGP(result: ServiceResult, requestId: string): CGPDocument {
 | `geometry.swarm.meta.v1` | Decoder pack metadata | SwarmMeta document |
 | `geometry.cgp.v1` | CGP via Supabase Realtime | CGP document |
 | `geometry.event.v1` | Raw geometry events | Any CGP |
+| `geometry.publish.gate.v1` | Publish-gate state change for a content item on the L2.5 control plane | `{ item, publish_gate: 0.0\|1.0, mode: "manual"\|"village-rules-auto", approved_by }` |
+
+### The `publish_gate` dimension
+
+`publish_gate` is a **dedicated** dimension of the provenance geometry state vector
+(see `provenance_geometry.py`), **separate from `attribution`** — attribution is
+economic credit-weighting; `publish_gate` is publish authorization. Range `[0.0, 1.0]`,
+default `0.0` (held/closed). It does not oscillate (`runtime=0.0`): it is a state, not
+an animated axis. Each `content.hirag.accepted.v1` item carries its own gate value.
+
+Opening the gate for an item (moving `publish_gate` → `1.0` on the Hyperdimensions
+control plane, e.g. from `darkxsides.room`) publishes `geometry.publish.gate.v1`. The
+control-plane → approval **bridge** (a downstream PR) enforces the room's fail-closed
+`egress_redaction_floor` and then emits `content.publish.approved.v1`, which the
+publisher (`pmoves/services/publisher/publisher.py`) already holds on. `mode`
+distinguishes operator-manual approval from village-rules-auto release.
 
 ### Monitoring Commands
 

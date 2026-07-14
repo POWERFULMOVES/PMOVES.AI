@@ -19,14 +19,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
-COPY requirements.txt .
+COPY services/tokenism-simulator/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY services/tokenism-simulator/. .
+
+# PMOVES namespace + shared tools (imported as pmoves.tools.*)
+RUN mkdir -p /app/pmoves \
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+COPY tools/__init__.py /app/pmoves/tools/__init__.py
+COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
+COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
 
 # Create non-root user for PMOVES hardening
 RUN useradd -m -u 1001 pmoves && \

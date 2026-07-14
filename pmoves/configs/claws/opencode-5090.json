@@ -3,7 +3,7 @@
   "mcpServers": {
     "pmoves-cipher": {
       "type": "sse",
-      "url": "http://${TS_Z890}:8105/sse",
+      "url": "http://${TS_Z890}:8105/mcp/sse",
       "description": "Agent memory (Neo4j knowledge graph) via Tailscale"
     },
     "agent-zero": {
@@ -49,12 +49,18 @@
       "pmoves-architect",
       "pmoves-ask",
       "pmoves-debug",
-      "pmoves-review"
+      "pmoves-review",
+      "pmoves-frontend",
+      "pmoves-portal",
+      "pmoves-crush",
+      "pmoves-glm",
+      "pmoves-cocreate",
+      "pmoves-minimax"
     ]
   },
   "modelOverrides": {
-    "primary": "claude-opus-4-6",
-    "fallback": "claude-sonnet-4-6"
+    "primary": "zai/glm-5.2",
+    "fallback": "zai/glm-5-turbo"
   },
   "node": {
     "identity": "5090",

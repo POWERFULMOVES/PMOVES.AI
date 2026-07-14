@@ -27,7 +27,7 @@ Usage:
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Tuple, Map
+from typing import List, Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
 

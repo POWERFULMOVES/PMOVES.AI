@@ -29,6 +29,7 @@ class Entry:
     label: str
     required: bool
     targets: Sequence[Target]
+    aliases: Sequence[str] = ()
 
 
 def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
@@ -70,6 +71,13 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
         if not isinstance(label, str):
             raise ValueError(f"Entry {entry_id} missing source label")
 
+        aliases_raw = source.get("aliases", [])
+        aliases = (
+            [a for a in aliases_raw if isinstance(a, str)]
+            if isinstance(aliases_raw, list)
+            else []
+        )
+
         targets_data = item.get("targets")
         if isinstance(targets_data, list) and targets_data:
             targets = [_parse_target(t) for t in targets_data]
@@ -79,7 +87,9 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
             raise ValueError(f"Entry {entry_id} has no targets")
 
         required = bool(item.get("required", True))
-        entries.append(Entry(id=entry_id, label=label, required=required, targets=targets))
+        entries.append(
+            Entry(id=entry_id, label=label, required=required, targets=targets, aliases=aliases)
+        )
 
     return cgp_path, entries
 
@@ -107,11 +117,17 @@ def build_outputs(
     outputs: Dict[str, Dict[str, str]] = defaultdict(dict)
     missing: List[str] = []
     for entry in entries:
-        if entry.label not in secrets:
+        source_key = entry.label
+        if source_key not in secrets:
+            # Honor legacy aliases: an operator may supply a deprecated name
+            # (e.g. MCP_SERVER_TOKEN) that maps to a canonical label. Emit the
+            # canonical target keys from whichever alias value is present.
+            source_key = next((a for a in entry.aliases if a in secrets), None)
+        if source_key is None:
             if entry.required:
                 missing.append(entry.label)
             continue
-        value = secrets[entry.label]
+        value = secrets[source_key]
         for target in entry.targets:
             outputs[target.file][target.key] = value
     if missing and strict:
