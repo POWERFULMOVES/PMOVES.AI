@@ -52,6 +52,7 @@ class ServerSpec:
     timeout: Optional[int] = None
     clients: Optional[List[str]] = None
     endpoint: Optional[str] = None
+    endpoint_prefix: Optional[str] = None
 
     def supports_client(self, client: str) -> bool:
         if self.clients is None:
@@ -143,12 +144,18 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
                 timeout=server.get("timeout"),
                 clients=server.get("clients"),
                 endpoint=server.get("endpoint"),
+                endpoint_prefix=server.get("endpoint_prefix"),
             )
             if not spec.supports_client(client):
                 continue
             # Resolve endpoint-specific URL defaults for groups that define them.
-            if spec.endpoint and spec.url is None:
-                key = f"{spec.key.split('-')[0]}_{spec.endpoint}_url"
+            # The caller's endpoint preference overrides the server's default so
+            # the same server key can be rendered for fleet (Tailscale) or local
+            # (localhost) consumers without duplicating inventory entries.
+            target_endpoint = endpoint or spec.endpoint
+            if target_endpoint and spec.url is None:
+                prefix = spec.endpoint_prefix or spec.key.split("-")[0]
+                key = f"{prefix}_{target_endpoint}_url"
                 if key in defaults:
                     spec.url = defaults[key]
             specs.append(spec)

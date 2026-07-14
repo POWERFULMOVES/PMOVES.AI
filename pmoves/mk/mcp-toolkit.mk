@@ -9,7 +9,7 @@
 
 .PHONY: mcp-toolkit-bootstrap mcp-toolkit-secrets-sync mcp-toolkit-status mcp-toolkit-connect mcp-toolkit-help
 .PHONY: mcp-toolkit-gateway-start mcp-toolkit-gateway-stop mcp-toolkit-gateway-tail mcp-toolkit-verify
-.PHONY: mcp-core-bootstrap mcp-config-bootstrap mcp-bootstrap mcp-bootstrap-check hermes-crush-bootstrap opencode-bootstrap
+.PHONY: mcp-core-bootstrap mcp-config-bootstrap mcp-bootstrap mcp-bootstrap-check hermes-crush-bootstrap opencode-bootstrap openclaw-scope-bootstrap openclaw-scope-check
 
 mcp-toolkit-help: ## Show Docker MCP Toolkit + PMOVES MCP bootstrap targets
 	@echo "Docker MCP Toolkit + PMOVES MCP targets:"
@@ -34,6 +34,8 @@ mcp-toolkit-help: ## Show Docker MCP Toolkit + PMOVES MCP bootstrap targets
 	@echo "  mcp-bootstrap-check       Validate imported profile + generated configs + reachability"
 	@echo "  hermes-crush-bootstrap    Update Hermes Agent and Crush CLI MCP configs"
 	@echo "  opencode-bootstrap        Update all pmoves/configs/claws/opencode-*.json MCP configs"
+	@echo "  openclaw-scope-bootstrap  Update all pmoves/configs/claws/scopes/*.json MCP configs"
+	@echo "  openclaw-scope-check      Validate scope MCP configs against tier expectations"
 	@echo "  mcp-toolkit-help          This message"
 	@echo
 	@echo "Full guide: pmoves/docs/operations/MCP_TOOLKIT.md"
@@ -87,13 +89,20 @@ mcp-toolkit-verify: ## End-to-end MCP Toolkit fixture (5 phases — see tools/ve
 
 mcp-core-bootstrap: mcp-config-bootstrap ## Alias: register native PMOVES MCP servers (writes Kimi + KiloCode configs)
 
-mcp-config-bootstrap: ## Write Kimi + KiloCode + OpenCode MCP configs from canonical inventory
+mcp-config-bootstrap: ## Write Kimi + KiloCode + OpenCode + OpenClaw scope MCP configs from canonical inventory
 	@PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.mcp_config_generator --client kimi
 	@PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.mcp_config_generator --client kilocode
 	@$(MAKE) --no-print-directory opencode-bootstrap
+	@$(MAKE) --no-print-directory openclaw-scope-bootstrap
 
 opencode-bootstrap: ## Update all pmoves/configs/claws/opencode-*.json MCP configs
 	@PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.bootstrap_opencode
+
+openclaw-scope-bootstrap: ## Update all pmoves/configs/claws/scopes/*.json MCP configs
+	@PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.bootstrap_openclaw_scopes
+
+openclaw-scope-check: ## Validate OpenClaw scope MCP configs against tier expectations
+	@PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.bootstrap_openclaw_scopes --check
 
 mcp-bootstrap: ## Umbrella: Docker Toolkit profile + native PMOVES MCP servers + agent configs
 	@$(MAKE) --no-print-directory mcp-toolkit-bootstrap || true
