@@ -1,8 +1,8 @@
 # TAC Tree: Cipher Memory
 
-> **STATUS: A1-Shim APPROVED by DARKXSIDE 2026-07-13** — REST compat layer on new ByteRover upstream.
+> **STATUS: A1-Shim — Phases 1-3, 7-9 EXECUTED by CRUSH-GLM52 (PR #2116). Phase 4-6 pending.** REST compat layer on new ByteRover upstream.
 > See [§Decision Matrix](#decision-matrix--path-selection) for the full path comparison + [§A1-Shim Workorder](#a1-shim-workorder) for execution phases.
-> **Last refreshed:** 2026-07-13 (CRUSH-GLM52, upstream re-fork research — 4-agent fan-out + operator decision).
+> **Last refreshed:** 2026-07-14 (CRUSH-GLM52, A1-Shim implementation — Phases 1-3 + 7-9 delivered).
 
 ## Service Identity
 
@@ -74,7 +74,7 @@ Verified 2026-07-13 against live gitlink `1c9b2851`:
 ### Fleet rule violations
 1. `Pmoves-cipher` gitlink tracks `branch = main` — should track `PMOVES.AI-Edition-Hardened` (only fork in the audited set that violates this).
 2. `PMOVES.AI-Edition-Hardened` branch on fork has only 2 commits vs main's 6 — parallel re-implementations, not a proper hardening overlay.
-3. GitHub reports **278 vulnerabilities (9 critical)** on the old fork default branch — all closed by a clean re-fork.
+3. GitHub reports **278 vulnerabilities (9 critical)** on the old fork default branch — closure planned via clean re-fork (Phase 1 executed; upstream replaced, vulnerabilities no longer reachable from active branches).
 
 ## PMOVES Memory Topology (all 5 surfaces)
 
@@ -125,7 +125,7 @@ Re-fork from upstream `main`. Add a thin PMOVES REST shim (`/api/memory`, `/api/
 | **REST callers broken** | 0 (semantic-cache, analyze_beats, gateway-agent all keep working) |
 | **MCP callers broken** | 0 (Claude Code, Agent Zero keep SSE endpoints) |
 | **Embedding/semantic search** | ✅ Preserved via PMOVES sidecar |
-| **NATS events** | Optional re-wire (currently dead anyway) |
+| **NATS events** | Preserved — 4 subjects wired (`cipher.memory.stored.v1`, `.searched.v1`, `cipher.reasoning.stored.v1`, `services.announce.v1`). NATS is a core dependency, not optional. |
 | **Bridge fate** | Stays disabled (already dead); delete in follow-up |
 | **Effort** | Medium — shim layer + embedding sidecar + re-implement 6 PMOVES features against new arch |
 | **Reversible?** | ✅ Yes — shim can be removed later if A3-Full becomes attractive |
