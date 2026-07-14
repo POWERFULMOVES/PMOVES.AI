@@ -468,7 +468,9 @@ services:
       - SETGID
       - SETUID
 
-    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0@sha256:e23e6499890325d31f3454cdc83f7a613a2423c8a9e167bbafea0b0e3c27d7c6}
+    # 0.31.2: minimum runtime for the qwen3.5 MoE family (Gated DeltaNet hybrid
+    # layout) — 0.18.0 refuses the manifest with 412 "requires a newer version".
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.31.2@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a}
     restart: unless-stopped
     environment:
     - OLLAMA_HOST=0.0.0.0:11434

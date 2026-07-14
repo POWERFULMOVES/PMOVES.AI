@@ -91,26 +91,35 @@ def fetch_supabase_rows(
 
 
 def fetch_clickhouse_rows(query: str, limit: int = 10000) -> List[Dict[str, Any]]:
-    """Fetch rows from ClickHouse via HTTP interface."""
+    """Fetch rows from ClickHouse via HTTP interface.
+
+    Returns an empty list (with a warning) when ClickHouse is unreachable,
+    matching the graceful-degradation behaviour of :func:`fetch_supabase_rows`.
+    """
     ch_url = os.environ.get("CLICKHOUSE_URL", "http://localhost:8123")
     ch_user = os.environ.get("CLICKHOUSE_USER", "tensorzero")
     ch_pass = os.environ.get("CLICKHOUSE_PASSWORD", "")
 
     full_query = f"{query.strip().rstrip(';')} LIMIT {limit} FORMAT JSONEachRow"
 
-    with httpx.Client(timeout=60.0) as client:
-        resp = client.post(
-            ch_url,
-            content=full_query,
-            headers={"Content-Type": "text/plain"},
-            params={"user": ch_user, "password": ch_pass},
-        )
-        resp.raise_for_status()
-        rows = []
-        for line in resp.text.strip().split("\n"):
-            if line:
-                rows.append(json.loads(line))
-        return rows
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(
+                ch_url,
+                content=full_query,
+                headers={"Content-Type": "text/plain"},
+                params={"user": ch_user, "password": ch_pass},
+            )
+            resp.raise_for_status()
+    except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+        logger.warning("ClickHouse unreachable at %s — returning empty (%s)", ch_url, exc)
+        return []
+
+    rows = []
+    for line in resp.text.strip().split("\n"):
+        if line:
+            rows.append(json.loads(line))
+    return rows
 
 
 # ---------------------------------------------------------------------------

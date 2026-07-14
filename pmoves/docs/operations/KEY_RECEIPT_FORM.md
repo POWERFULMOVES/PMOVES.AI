@@ -86,20 +86,17 @@
 
 ## Key Value Template (COPY THIS SECTION, FILL, THEN DELETE)
 
+> **As of 2026-07-11 every inventory key is held in GitHub Secrets** (see
+> `PROVIDER_KEY_CHECKLIST.md` § Status Summary) — there is currently nothing
+> to fill here. Keys are delivered per node by dispatching
+> `sync-secrets-local.yml` with `targets=<node>`. Use this form only when a
+> FUTURE provider key is added to the inventory before it reaches GitHub
+> Secrets, listing that key in the template below.
+
 ```
 === COPY BELOW THIS LINE === DO NOT COMMIT FILLED VALUES ===
 
-Z_AI_API_KEY=
-MOONSHOT_API_KEY=
-ALIBABA_PRO_CODING_PLAN=
-KILOCODE_API_KEY=
-OLLAMA_API_KEY=
-HF_TOKEN=
-MINIMAX_API_KEY=
-OPENROUTER_API_KEY=
-GROQ_API_KEY=
-NVIDIA_API_KEY=
-MCP_SERVER_TOKEN=
+NEW_PROVIDER_KEY_NAME=
 
 === COPY ABOVE THIS LINE === DO NOT COMMIT FILLED VALUES ===
 ```
@@ -108,16 +105,22 @@ MCP_SERVER_TOKEN=
 
 ## Injection Procedure
 
-After filling the template above:
+After filling the template above, save it OUTSIDE the repository (e.g.
+`~/filled-keys.env`) and deliver it through the sanctioned funnel:
 
-1. Save as `local.env` in the repository root
-2. Run: `python pmoves/tools/secrets_funnel_populate.py --validate-only`
-3. Review the validation report
-4. Run: `python pmoves/tools/secrets_funnel_populate.py --dry-run`
-5. If dry-run looks correct: `python pmoves/tools/secrets_funnel_populate.py`
-6. Verify: `python pmoves/tools/secrets_funnel_populate.py --verify`
-7. **DELETE `local.env` after successful injection**
-8. Shred the filled template
+1. Validate the template:
+   `python pmoves/tools/secrets_funnel_populate.py --import-file ~/filled-keys.env --dry-run`
+2. Review the validation report (values are never printed)
+3. Merge into `local.env` (project-local `pmoves/secrets/local.env`, else the
+   host config dir — the same file the funnel hydrates from):
+   `python pmoves/tools/secrets_funnel_populate.py --import-file ~/filled-keys.env`
+4. Run the funnel to hydrate `env.shared`, export the CHIT bundle, and
+   regenerate tier env files: `make -C pmoves secrets-funnel`
+5. Verify the exported bundle: `python pmoves/tools/secrets_funnel_populate.py --verify`
+6. **Shred the filled template** (`shred -u ~/filled-keys.env`); `local.env`
+   itself stays — it is the funnel's standing per-node overlay source (0600)
+7. If a key also needs to reach other nodes, add it to GitHub Secrets and the
+   `sync-secrets-local.yml` env map instead of copying files between machines
 
 ---
 

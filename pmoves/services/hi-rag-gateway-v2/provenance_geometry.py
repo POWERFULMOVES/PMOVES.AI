@@ -287,12 +287,18 @@ def provenance_payload_state_vector(
         0.05,
         1.0,
     )
+    # publish_gate: dedicated publish-authorization dimension, SEPARATE from
+    # attribution (which is economic credit-weighting). 0.0 = held/closed (default),
+    # 1.0 = released/open. Set per content item by the Hyperdimensions control
+    # plane; opening it is what authorizes emit of content.publish.approved.v1.
+    publish_gate = _clamp(_coerce_float(payload.get("publish_gate"), 0.0) or 0.0, 0.0, 1.0)
     return {
         "delta": round(delta, 4),
         "kappa": round(kappa, 4),
         "Hz": round(hz, 4),
         "F": round(fitness, 4),
         "A": round(attribution, 4),
+        "publish_gate": round(publish_gate, 4),
         "spectrum": round(_clamp(mean_weight, 0.0, 1.0), 4),
         "lineage": round(lineage, 4),
         "dispersion": round(_clamp(dispersion, 0.0, 1.0), 4),
@@ -468,6 +474,9 @@ def provenance_payload_to_hyperdimensions_save(payload: Dict[str, Any]) -> Dict[
             _param("hz", state["Hz"], minimum=0.05, maximum=0.95, runtime=6.0),
             _param("fitness", state["F"], minimum=0.05, maximum=1.0, runtime=10.0),
             _param("attribution", state["A"], minimum=0.05, maximum=1.0, runtime=12.0),
+            # Discrete publish gate (runtime=0.0 → does NOT oscillate; it is a
+            # held/released state set by the control plane, not an animated axis).
+            _param("publish_gate", state["publish_gate"], minimum=0.0, maximum=1.0, runtime=0.0),
             _param("spectrum", state["spectrum"], minimum=0.05, maximum=1.0, runtime=7.0),
             _param("lineage", state["lineage"], minimum=0.0, maximum=1.0, runtime=9.0),
         ],

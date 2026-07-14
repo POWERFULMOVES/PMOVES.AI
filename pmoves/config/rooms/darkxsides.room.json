@@ -1,0 +1,265 @@
+{
+  "room_id": "darkxsides.room",
+  "version": "1.0.0",
+  "display_name": "DARKXSIDES",
+  "description": "Private, owner-only room. A window into the mind of the Founder where the DARKXSIDE persona resides \u2014 co-creator and witness, eventual digital twin. Uncensored/unrestricted: real, not corporate-speak-pretty-CHIT. Houses the dedicated publish-gate, surfaced in Open Notebook.",
+  "agent_id": "darkxside-persona",
+  "alter": "darkxside",
+  "room_type": "creator",
+  "owner_mode": "alter",
+  "access": {
+    "visibility": "private",
+    "owner_only": true,
+    "invite_list": [],
+    "content_rating": "uncensored",
+    "rating_note": "Unrestricted expression inside the room. NOT a porn flag \u2014 content is authentic/real. Public egress is governed separately by policies.publish.egress_redaction_floor."
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "darkxside-mind",
+      "accent_color": "#7C1FA2",
+      "skin": "founder-mind",
+      "icon": "mask"
+    },
+    "layout": {
+      "default_route": "/darkxside/mind",
+      "panels": [
+        {
+          "panel_id": "persona-chat",
+          "kind": "chat",
+          "position": "left",
+          "size": 30,
+          "pinned": true
+        },
+        {
+          "panel_id": "hyperdimensions-manifold",
+          "kind": "custom",
+          "position": "center",
+          "size": 40,
+          "pinned": true
+        },
+        {
+          "panel_id": "pub-gate-notebook",
+          "kind": "notebook",
+          "position": "right",
+          "size": 30,
+          "pinned": true
+        }
+      ]
+    }
+  },
+  "persona": {
+    "signature_ref": "darkxside-persona",
+    "role": [
+      "co-creator",
+      "witness"
+    ],
+    "voice": "authentic",
+    "register": [
+      "uncensored",
+      "signifying",
+      "poetic",
+      "bronx"
+    ],
+    "glyph": "\u25c8",
+    "resonance": [
+      "founder-mind",
+      "shape-attribution",
+      "reverse-curse-lexicon",
+      "creator-pipeline",
+      "digital-twin"
+    ],
+    "twin_target": "operator"
+  },
+  "apps": [
+    {
+      "app_id": "persona-console",
+      "kind": "chat",
+      "route": "/darkxside/mind",
+      "provider": "pmoves-ui",
+      "action_namespace": "persona",
+      "capabilities": [
+        "uncensored-dialogue",
+        "reflection",
+        "witness-log"
+      ],
+      "pinned": true
+    },
+    {
+      "app_id": "hyperdimensions-viewer",
+      "kind": "custom",
+      "route": "/hyperdimensions/app",
+      "provider": "hi-rag-gateway-v2",
+      "action_namespace": "geometry",
+      "capabilities": [
+        "manifold-view",
+        "state-vector",
+        "publish-gate-knob"
+      ],
+      "pinned": true
+    },
+    {
+      "app_id": "pub-gate-notebook",
+      "kind": "notebook",
+      "route": "/notebook/darkxside",
+      "provider": "open-notebook",
+      "action_namespace": "pubgate",
+      "capabilities": [
+        "queued-content",
+        "gate-state",
+        "approve",
+        "hold",
+        "attribution-view"
+      ],
+      "pinned": true
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "darkxside",
+    "thread_ref": "pub-gate-queue",
+    "default_page": "gate",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": [
+        "entries",
+        "pages",
+        "threads"
+      ],
+      "artifact_prefix": "rooms/darkxside"
+    }
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "pub-gate-approve",
+      "skill_id": "pmoves-publish-gate",
+      "room_id": "darkxsides.room",
+      "display_name": "Publish Gate \u2014 Approve / Hold",
+      "intent": [
+        "publish",
+        "approve",
+        "gate",
+        "release"
+      ],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": [
+          "open the gate for",
+          "approve this post",
+          "hold this",
+          "release to discord",
+          "release to linkedin"
+        ],
+        "requires_selection": true
+      },
+      "surface": {
+        "app_id": "pub-gate-notebook",
+        "target": "canvas",
+        "route": "/notebook/darkxside"
+      },
+      "execution": {
+        "mode": "panel",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 3
+      },
+      "context": {
+        "sources": [
+          "room-state",
+          "notebook-thread",
+          "persona"
+        ],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": [
+          "text",
+          "json"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "content.publish.approved.v1",
+          "artifact_type": "json"
+        },
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/gate-log",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 120,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": [
+        "publish",
+        "gate",
+        "chit",
+        "attribution"
+      ]
+    }
+  ],
+  "policies": {
+    "model_routing": "tensorzero",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "gate_param": "publish_gate",
+      "gate_mode": "manual",
+      "allowed_subjects": [
+        "content.publish.approved.v1"
+      ],
+      "egress_redaction_floor": {
+        "enforce_on": "public-egress",
+        "rules": [
+          "kids-always-redacted",
+          "shaela-private",
+          "no-literal-lan-or-tailscale-ips"
+        ],
+        "fail_closed": true,
+        "note": "Room is uncensored INTERNALLY; anything crossing to a PUBLIC surface passes this floor regardless of room rating. Cannot be bypassed by opening the gate."
+      }
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "team_refs": [
+    "orchestration",
+    "memory",
+    "creator"
+  ],
+  "service_refs": [
+    "hi-rag-gateway-v2",
+    "open-notebook",
+    "publisher",
+    "publisher-discord",
+    "nats",
+    "tokenism"
+  ],
+  "launcher_refs": [
+    "up-agents",
+    "up-open-notebook"
+  ],
+  "telemetry": {
+    "graphiti_phase": "DARKXSIDE Mind",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/hyperdimensions/provenance/view"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-07-10T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md"
+    ]
+  }
+}

@@ -34,6 +34,53 @@ model_bundles:
   - llama3.3-70b-q4km           # Quality-critical orchestration, ~40GB
   # P2 — Future evaluation (NVFP4 when Ollama supports SM_110)
   # - nemotron-3-super-nvfp4    # 120B-A12B NVFP4 — requires NVFP4 support on GB10
+
+# Which coding agent stacks this node supports
+# Mirrors laptop-4090 with SPARK-appropriate local fallbacks
+coding_stacks:
+  claude_code:
+    cloud_primary: anthropic
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_claude_fallback
+  codex_openai:
+    cloud_primary: openai
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_codex
+  glm_coding_plan:
+    cloud_primary: zai
+    cloud_model: glm-5-turbo
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_glm
+  minimax_token_plan:
+    cloud_primary: minimax
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_minimax
+  alibaba_coding_plan:
+    cloud_primary: alibaba
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_alibaba
+  kimi_coding_plan:
+    cloud_primary: moonshot
+    cloud_model: kimi-k2.7-code
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_kimi
+
+# VRAM budget (128 GB unified, 8 GB system reserve = 120 GB usable)
+vram_budget:
+  total_mb: 131072
+  system_reserve_mb: 8192
+  usable_mb: 122880
+  max_concurrent_models: 4
+  idle_timeout_seconds: 300
+  always_resident:
+    - model: qwen3-embedding:8b
+      vram_mb: 4700
+      reason: "HiRAG, extract-worker, cipher-memory embeddings"
+  co_residency_groups:
+    coding_focus:
+      models: [qwen3.5:35b-a3b-q4_K_M, qwen3-embedding:8b]
+      total_mb: 30000
+
 services:
   - mesh-agent                  # Node announcer (NATS every 15s)
   - fleet-agent                 # Fleet watcher / audit participant

@@ -158,7 +158,14 @@
 **NATS Subjects:**
 - `geometry.>` (subscribe - wildcard)
 
-**Gap:** Consumer-only, no CGP production
+**CHIT (2026-07 P0 completion):** consumer-edge signature gate in
+`geometry_handler` via `cgp_passes_signature_gate()` (canonical
+`services.common.geometry_decoder.verify_cgp`): tampered packets always
+dropped when a key is set; unsigned dropped under `CHIT_REQUIRE_SIGNATURE`;
+rejections counted in `a2ui_geometry_events_rejected_total`. Tests:
+`tests/test_signature_gate.py`.
+
+**Gap:** Consumer-only, no CGP production (by design — UI edge)
 
 ---
 
@@ -201,19 +208,32 @@
 ---
 
 ### 10. Consciousness Service
-**Port:** 8096
-**Role:** Persona theory-to-geometry mapping
+**Port:** 8106
+**Role:** CHR clustering + persona theory-to-geometry mapping
 **Key Files:**
+- `pmoves/services/consciousness-service/main.py` (CHR pipeline + NATS publisher)
+- `pmoves/services/consciousness-service/chr_algorithm.py` (canonical CHIT signing)
 - `pmoves/services/consciousness-service/cgp_mapper.py`
 - `pmoves/services/consciousness-service/persona_gate.py`
 
 **NATS Subjects:**
+- `geometry.cgp.v1` (publish — signed CHR CGP)
+- `tokenism.cgp.ready.v1` (publish)
 - `persona.publish.result.v1` (publish)
 
+**CHIT (2026-07 P0 completion):** signs via the canonical
+`pmoves.tools.chit_security.sign_cgp` (aligned standalone fallback kept for
+images without `pmoves.tools`); key chain `CHIT_SIGNING_KEY` >
+`CHIT_PASSPHRASE` (legacy `CHIT_PROD_PASSPHRASE` still honored);
+`CHIT_REQUIRE_SIGNATURE` fail-closed; `cgp_mapper.publish_to_hirag` signs at
+the publish boundary. Tests: `tests/test_chit_signing.py` (incl.
+fallback-parity against the canonical signer).
+
 **Gap:**
-- CGP mapper exists but CHR pipeline not connected
 - No theory proponent database integration
 - No consciousness landscape visualization
+- Neo4j signature persistence (CLAUDE.md step 3) deferred — service holds no
+  Neo4j client; graph persistence happens downstream via Hi-RAG
 
 ---
 
@@ -224,6 +244,14 @@
 
 **NATS Subjects:**
 - `geometry.swarm.meta.v1` (publish, subscribe)
+
+**CHIT (2026-07 P0 completion):** signs the `geometry.swarm.meta.v1` payload
+before publish (via Agent Zero events API) and verifies inbound CGP
+signatures in `_filter_verified_cgps` (tampered always dropped; unsigned
+dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
+`services.common.geometry_decoder` wrappers; `/config` exposes
+`chit_signing_enabled`/`chit_signature_required`. Tests:
+`tests/test_chit_signing.py`.
 
 **Gap:** Fitness landscape geometry incomplete
 

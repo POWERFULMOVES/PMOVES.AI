@@ -13,16 +13,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
+# Security: Force weights_only=True for torch.load() (prevents arbitrary code execution)
+ENV TORCH_FORCE_WEIGHTS_ONLY_LOAD=1
 
 RUN pip install --no-cache-dir --upgrade pip
 
-# With build context at pmoves/ root
-COPY services/common /app/services/common
-COPY services/media-audio/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-# services/common requires jsonschema (installed separately to avoid hash conflict)
-RUN pip install --no-cache-dir jsonschema>=4.0.0
-COPY services/media-audio/ ./
+# Build context is ./services/media-audio (service directory)
+# Security: Reproducible builds from lockfile
+COPY requirements.txt requirements.lock ./
+# Install from lockfile for reproducible builds (includes hash validation)
+# Security: PyTorch extra-index-url required for CUDA packages (+cu124 variants)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    # amd64 uses the x86-resolved lock (reproducible); arm64/Jetson
+    # falls back to marker-aware requirements.txt — the lock hard-pins
+    # torch+cu124 wheels that do not exist for arm64 (review #2071 P2).
+    if [ "$(uname -m)" = "x86_64" ]; then \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.lock; \
+    else \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt; \
+    fi
+COPY . ./
 
 # Security: Run as non-root user (GPU services need video group)
 RUN groupadd -r pmoves --gid=65532 && \

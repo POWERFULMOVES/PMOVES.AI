@@ -258,7 +258,7 @@ def _provider_lane(provider_name: str, provider_type: str) -> str:
         return "ollama_cloud"
     if "cloudflare" in name:
         return "cloudflare_free"
-    if any(token in name for token in ("glm", "zai", "alibaba", "claude", "codex", "coding_plan")):
+    if any(token in name for token in ("glm", "zai", "alibaba", "claude", "codex", "coding_plan", "kilocode")):
         return "coding_plan"
     if ptype in {"ollama", "vllm", "tts"}:
         return "local"

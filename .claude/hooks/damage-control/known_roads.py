@@ -56,10 +56,55 @@ def _is_compose_target(normalized_fwd: str) -> bool:
     )
 
 
+def _is_schema_target(normalized_fwd: str) -> bool:
+    """schema domain: a PMOVES contract schema under pmoves/contracts/schemas/.
+
+    Contract schemas are readOnly because a change ripples to every consumer;
+    the guard comment on that path is "never modify without versioning". This
+    domain opens ONLY *.schema.json files under a `contracts/schemas` segment in
+    a PMOVES-owned tree, and — like compose — still requires a provable reason
+    (pr:/issue:/handoff:). It widens *which* schema files can be opened under a
+    recorded, versioned justification, not the bar to open them.
+    """
+    basename = os.path.basename(normalized_fwd).lower()
+    if not basename.endswith(".schema.json"):
+        return False
+    parts = normalized_fwd.lower().split("/")
+    if not any(
+        p == "pmoves" or p.startswith("pmoves-") or p.startswith("pmoves.")
+        for p in parts
+    ):
+        return False
+    return "contracts" in parts and "schemas" in parts
+
+
+def _is_topic_target(normalized_fwd: str) -> bool:
+    """topic domain: the PMOVES NATS subject registry pmoves/contracts/topics.json.
+
+    topics.json is readOnly because a change to the subject contract ripples to
+    every publisher/subscriber and the shared `events.publish` topic validator.
+    It is NOT a *.schema.json, so the schema domain does not cover it; this domain
+    opens ONLY that one file under a `contracts` segment in a PMOVES-owned tree,
+    and — like schema — still requires a provable reason (pr:/issue:/handoff:).
+    """
+    basename = os.path.basename(normalized_fwd).lower()
+    if basename != "topics.json":
+        return False
+    parts = normalized_fwd.lower().split("/")
+    if not any(
+        p == "pmoves" or p.startswith("pmoves-") or p.startswith("pmoves.")
+        for p in parts
+    ):
+        return False
+    return "contracts" in parts
+
+
 # domain name -> predicate(normalized_forward_slash_path) -> bool
 # Extend here to open a new readOnlyPath class to Known Roads.
 DOMAIN_PATTERNS: Dict[str, Callable[[str], bool]] = {
     "compose": _is_compose_target,
+    "schema": _is_schema_target,
+    "topic": _is_topic_target,
 }
 
 _REASON_RE = re.compile(r"^(handoff:[^/\\]+|pr:[0-9]+|issue:[0-9]+)$")
@@ -116,16 +161,47 @@ def _record(tool: str, file_path: str, domain: str, reason: str) -> bool:
         return False
 
 
+def _grant_file() -> Path:
+    """Local, git-ignored file grant path — an operator-writable equivalent of the
+    KNOWN_ROAD env var for clients that cannot inject env into hook subprocesses
+    mid-session. One line: `<domain>:<reason>`."""
+    return _project_dir() / ".claude" / "hooks" / "damage-control" / ".known-road-active"
+
+
+def _active_grant() -> str:
+    """The active Known Road grant: KNOWN_ROAD env var first, else the file grant.
+
+    The env var is fixed in the launching process env and cannot be set mid-session
+    in some clients, so a file grant (operator-written, e.g.
+    `echo 'schema:handoff:x.md' > .claude/hooks/damage-control/.known-road-active`)
+    is honored as an equivalent, operator-controlled authorization. The SAME rules
+    apply downstream: the domain predicate must match AND the reason must be provable,
+    and every granted use records to known-roads.jsonl."""
+    env = os.environ.get("KNOWN_ROAD", "").strip()
+    if env:
+        return env
+    try:
+        gf = _grant_file()
+        if gf.is_file():
+            for line in gf.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    return line
+    except OSError:
+        pass
+    return ""
+
+
 def evaluate_known_road(tool: str, file_path: str, normalized_fwd: str) -> Tuple[bool, str]:
-    """Evaluate the KNOWN_ROAD env var for this edit/write.
+    """Evaluate the active Known Road grant (KNOWN_ROAD env var or file grant) for this edit/write.
 
     Returns (allowed, detail):
       (True,  detail)  bypass granted — caller should allow the operation
-      (False, "")      KNOWN_ROAD does not apply here — caller proceeds with normal checks
+      (False, "")      no grant applies here — caller proceeds with normal checks
       (False, detail)  the file IS in the declared domain but the Known Road is invalid —
                        caller should block, surfacing `detail` as the reason
     """
-    raw = os.environ.get("KNOWN_ROAD", "").strip()
+    raw = _active_grant()
     if not raw or ":" not in raw:
         return False, ""
 

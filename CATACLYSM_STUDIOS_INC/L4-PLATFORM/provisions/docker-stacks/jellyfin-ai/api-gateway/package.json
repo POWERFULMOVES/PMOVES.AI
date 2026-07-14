@@ -16,7 +16,7 @@
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.3",
-    "morgan": "^1.10.0",
+    "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "neo4j-driver": "^5.15.0",
     "redis": "^4.6.10",

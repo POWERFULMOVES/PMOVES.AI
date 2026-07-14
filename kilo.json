@@ -1,7 +1,7 @@
 {
   "$schema": "https://kilo.ai/schemas/project.json",
   "default_agent": "kilocode-glm",
-  "model": "zai/glm-5-turbo",
+  "model": "zai/glm-5.2",
   "small_model": "zai/glm-4-air",
   "instructions": [
     ".claude/CLAUDE.md",
@@ -18,11 +18,11 @@
         "apiKey": "${Z_AI_API_KEY}"
       },
       "models": {
-        "glm-5-turbo": { "name": "GLM-5 Turbo" },
-        "glm-5.1": { "name": "GLM-5.1" },
-        "glm-4.7": { "name": "GLM-4.7" },
-        "glm-4.6": { "name": "GLM-4.6" },
-        "glm-4.6v": { "name": "GLM-4.6V (Vision)" },
+        "glm-5.2": { "name": "GLM-5.2 (Latest)" },
+        "glm-5-turbo": { "name": "GLM-5 Turbo (Agentic)" },
+        "glm-5.1": { "name": "GLM-5.1 (Reasoning)" },
+        "glm-5v-turbo": { "name": "GLM-5V Turbo (Vision+Coding)" },
+        "glm-4.7": { "name": "GLM-4.7 (Balanced Coding)" },
         "glm-4-air": { "name": "GLM-4 Air (Fast)" }
       },
       "whitelist": ["glm-*"]
@@ -64,17 +64,31 @@
       "url": "https://api.z.ai/api/mcp/zread/mcp",
       "headers": { "Authorization": "Bearer ${Z_AI_API_KEY}" }
     },
-    "docker": {
+    "pmoves-cipher": {
+      "type": "remote",
+      "url": "http://${TS_Z890}:8105/mcp/sse",
+      "headers": { "Authorization": "Bearer ${CIPHER_API_TOKEN}" }
+    },
+    "tailscale": {
       "type": "local",
-      "command": ["mcp-docker"],
-      "environment": {}
+      "command": ["npx", "-y", "tailscale-mcp@2026.4.10-1"],
+      "environment": {
+        "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}"
+      }
+    },
+    "huggingface": {
+      "type": "local",
+      "command": ["npx", "-y", "@llmindset/hf-mcp-server@0.3.30"],
+      "environment": {
+        "HF_TOKEN": "${HF_TOKEN}"
+      }
     }
   },
   "skills": {
     "paths": [".kilocode/skills"],
     "urls": []
   },
-    "permission": {
+  "permission": {
     "bash": "allow",
     "edit": {
       "**": "allow"
@@ -84,6 +98,8 @@
     "zai-web-search_*": "allow",
     "zai-web-reader_*": "allow",
     "zai-zread_*": "allow",
-    "docker_*": "allow"
+    "pmoves-cipher_*": "allow",
+    "tailscale_*": "allow",
+    "huggingface_*": "allow"
   }
 }
