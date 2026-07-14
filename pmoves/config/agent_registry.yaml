@@ -69,6 +69,38 @@ types:
   agent:  { tier: 6, element: "Psychic",  color: "#9370DB" }
   ui:     { tier: 7, element: "Light",    color: "#F5F5F5" }
 
+# Role classes — ORCHESTRATION roles (P0 Agent Role Consolidation,
+# ARCHON_ENHANCEMENT_ROADMAP §2). Orthogonal to `types` (service tiers) and
+# `classes` (naming prefixes): role_class says what an agent does in a
+# multi-agent workflow, not where it runs or what it's named.
+#
+# NAMING COLLISION GUARD: the `worker` ROLE below is unrelated to the
+# `worker` TYPE (tier 4) above. Never conflate them; the type system is
+# untouched by this addition.
+#
+# The trio maps onto the AGNOTE4482 Three-Body enforcement surface
+# (.claude/agents/{delivery,control,memory}-agent.md disallowedTools):
+# planner and reviewer are the pre-work and post-work faces of the Control
+# Body; worker is the Delivery Body; the Memory Body is orthogonal
+# (cross-cutting CHIT/Cipher custody, not a workflow role).
+role_classes:
+  planner:
+    three_body: control
+    phase: pre-work
+    description: "Decomposes intent into scoped work: specs, plans, lane claims. Read-heavy; produces no production edits."
+  worker:
+    three_body: delivery
+    phase: execution
+    description: "Implements the plan: code, fixes, docs, deploys. The only role_class that writes production changes."
+  reviewer:
+    three_body: control
+    phase: post-work
+    description: "Verifies and gates: review, evaluation gates, merge sequencing, Village Rule signoff. Never edits what it reviews."
+
+# Optional per-agent key: `role_class: planner|worker|reviewer` on any
+# entry below or in .claude/agents/*.md frontmatter. Absence = unclassified
+# (legacy), never an error.
+
 # Agent entries
 agents:
   agent_zero:
@@ -102,6 +134,44 @@ agents:
       ci_runner: ai-lab
       compose_profile: agents
     description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
+
+  kilocode_glm:
+    name: "KiloCode GLM"
+    class: standard
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "kilocode"
+    nats:
+      publishes:
+        - claw.task.complete.v1
+        - agent.graphiti.signed.v1
+        - mesh.gpu.status.v1
+      subscribes:
+        - botz.workitem.claimed.v1
+        - mesh.gpu.model.loaded.v1
+        - claw.task.assign.v1
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [5090, laptop-4090, z890]
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "VS Code-native GLM-5-Turbo delivery agent via KiloCode. Blueprint-first implementation, MCP-integrated, DARKXSIDE witness."
 
   space_agent:
     name: "PMOVES Space-Agent"
@@ -2880,6 +2950,37 @@ mcp_servers:
       table: pmoves_core.voice_profiles
       by: name
     status: "planned"
+
+  kilocode_glm:
+    name: "KiloCode GLM"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: 3030
+    health: "/health"
+    layers: [L0, L3, L4, L5]
+    evolution_stage: stage_2
+    signature: "kilocode"           # glyph ▲, color #059669 — see agent_signatures.yaml
+    nats:
+      publishes: ["claw.task.complete.v1", "agent.graphiti.signed.v1", "mesh.gpu.status.v1"]
+      subscribes: ["botz.workitem.claimed.v1", "mesh.gpu.model.loaded.v1", "claw.task.assign.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [5090, laptop-4090, z890]
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "VS Code-native agent — blueprint-first feature implementation via GLM coding plan. Three-Body Delivery Body on 5090 node. DARKXSIDE COCREATOR witness."
 
 # ── A2A Server Registry ─────────────────────────────────────────────────────
 a2a_servers:

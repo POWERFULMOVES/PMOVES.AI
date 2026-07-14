@@ -21,6 +21,8 @@ import httpx
 
 from pmoves.chit import CGP_SPEC_VERSION
 
+from chr_algorithm import chit_signature_required, get_chit_signing_key, sign_cgp
+
 # Zeta filter for spectral analysis
 try:
     from pmoves.tools.zeta_filter import (
@@ -270,7 +272,23 @@ class CGPMapper:
 
         Returns:
             Response from Hi-RAG v2 API
+
+        Raises:
+            RuntimeError: If CHIT_REQUIRE_SIGNATURE is set and no signing key is available
         """
+        # CHIT-sign at the publish boundary (single choke point for
+        # /cgp/publish, /cgp/batch and batch_publish). Empty key = dev mode,
+        # unsigned with a warning, unless fail-closed is switched on.
+        signing_key = get_chit_signing_key()
+        if signing_key:
+            packet = sign_cgp(packet, passphrase=signing_key)
+        elif chit_signature_required():
+            raise RuntimeError(
+                "CHIT_REQUIRE_SIGNATURE is set but no signing key is available "
+                "(set CHIT_SIGNING_KEY or CHIT_PASSPHRASE)"
+            )
+        else:
+            logger.warning("No CHIT signing key set — publishing CGP unsigned (dev mode)")
         try:
             response = await self.client.post(
                 GEOMETRY_EVENT_ENDPOINT,

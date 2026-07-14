@@ -675,12 +675,6 @@ services:
       retries: 3
       start_period: 10s
 
-  # Tier: agent (A2UI NATS bridge - geometry bus integration)
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
   github-branch-naming:
     build:
       context: ./services/github-branch-naming

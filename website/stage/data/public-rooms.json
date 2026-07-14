@@ -1,0 +1,231 @@
+[
+  {
+    "beginRendering": {
+      "surfaceId": "stage-rooms",
+      "root": "stage_root"
+    }
+  },
+  {
+    "surfaceUpdate": {
+      "surfaceId": "stage-rooms",
+      "components": [
+        {
+          "id": "room0_title",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "\u2302 Fordham Hill Community Room"
+              },
+              "usageHint": "h3"
+            }
+          }
+        },
+        {
+          "id": "room0_meta",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "hybrid \u00b7 fordham-steward / fordham-community"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room0_desc",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Community cost-pooling + self-governance pilot room: mesh capacity A/B, pooled-dues ledger, contribution attribution, and tamper-evident resident voting on one lattice. Stage: rehearsal. DRAFT - REQUIRES LEGAL REVIEW."
+              }
+            }
+          }
+        },
+        {
+          "id": "room0_apps",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Apps: notebook-workbench \u00b7 pilot-dashboard \u00b7 voter-roll (planned) \u00b7 ballot-box (planned) \u00b7 voice-console"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room0_column",
+          "component": {
+            "Column": {
+              "children": {
+                "explicitList": [
+                  "room0_title",
+                  "room0_meta",
+                  "room0_desc",
+                  "room0_apps"
+                ]
+              },
+              "alignment": "start"
+            }
+          }
+        },
+        {
+          "id": "room0_card",
+          "component": {
+            "Card": {
+              "child": "room0_column"
+            }
+          }
+        },
+        {
+          "id": "room1_title",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "\u2726 PMOVES Demo Room"
+              },
+              "usageHint": "h3"
+            }
+          }
+        },
+        {
+          "id": "room1_meta",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "builder \u00b7 4090-claude / 4090-demo"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room1_desc",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal."
+              }
+            }
+          }
+        },
+        {
+          "id": "room1_apps",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Apps: agent-zero-webui \u00b7 claude-code-session \u00b7 hermes-assist"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room1_column",
+          "component": {
+            "Column": {
+              "children": {
+                "explicitList": [
+                  "room1_title",
+                  "room1_meta",
+                  "room1_desc",
+                  "room1_apps"
+                ]
+              },
+              "alignment": "start"
+            }
+          }
+        },
+        {
+          "id": "room1_card",
+          "component": {
+            "Card": {
+              "child": "room1_column"
+            }
+          }
+        },
+        {
+          "id": "room2_title",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "\u266b ToKenism Exchange"
+              },
+              "usageHint": "h3"
+            }
+          }
+        },
+        {
+          "id": "room2_meta",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "exchange \u00b7 5090-claude / 5090-tokenism"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room2_desc",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Token-economy simulation floor: run business-idea scenarios in the ToKenism simulator, then export the results into PMOVES-Wealth (Firefly III) as browsable ledgers. The audience-facing face of the L5 Economics layer."
+              }
+            }
+          }
+        },
+        {
+          "id": "room2_apps",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Apps: tokenism-simulator \u00b7 wealth-ledger (planned)"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room2_column",
+          "component": {
+            "Column": {
+              "children": {
+                "explicitList": [
+                  "room2_title",
+                  "room2_meta",
+                  "room2_desc",
+                  "room2_apps"
+                ]
+              },
+              "alignment": "start"
+            }
+          }
+        },
+        {
+          "id": "room2_card",
+          "component": {
+            "Card": {
+              "child": "room2_column"
+            }
+          }
+        },
+        {
+          "id": "stage_root",
+          "component": {
+            "Column": {
+              "children": {
+                "explicitList": [
+                  "room0_card",
+                  "room1_card",
+                  "room2_card"
+                ]
+              },
+              "alignment": "stretch"
+            }
+          }
+        }
+      ]
+    }
+  }
+]

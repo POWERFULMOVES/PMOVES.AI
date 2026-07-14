@@ -1,5 +1,5 @@
 ---
-name: 4090:verify
+name: node-4090-verify
 description: >
   Verify the 4090 node's W0 substrate artifacts landed correctly on main.
   Checks: node-4090-probe SKILL.md has no BLOCKED notices,
@@ -7,7 +7,7 @@ description: >
   Run after any W0 PR merge. For secrets health, use deploy:secrets-funnel.
 ---
 
-# 4090:verify — W0 Substrate Artifact Check
+# node-4090-verify — W0 Substrate Artifact Check
 
 Confirms the three W0 substrate deliverables are correctly on main after
 a PR merge. Scoped to artifact state only — secrets funnel is a separate

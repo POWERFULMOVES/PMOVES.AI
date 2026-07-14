@@ -167,11 +167,14 @@ app = FastAPI(
 # CORS — the persona-adaptive preview (5090 DL-3) fetches /v1/agent/theme/* and
 # /v1/agent/whoami cross-origin. Explicit allow-list (never "*"), env-overridable;
 # mirrors showtime-api's SHOWTIME_CORS_ORIGINS pattern. Same-lane consistency.
+# DL-3.3 adds the CF-site origins (?agent= persona demo): the deployed Pages
+# origin, the future custom domain, and the documented local preview (:8000).
 _cors_origins = [
     o.strip()
     for o in os.environ.get(
         "BOTZ_GATEWAY_CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,http://localhost:4482,http://localhost:9225",
+        "http://localhost:3000,http://localhost:3001,http://localhost:4482,http://localhost:9225"
+        ",http://localhost:8000,https://pmoves-ai.pages.dev,https://pmoves.ai",
     ).split(",")
     if o.strip()
 ]

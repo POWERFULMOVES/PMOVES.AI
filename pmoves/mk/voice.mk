@@ -83,3 +83,58 @@ omnivoice-smoke: ## Reuse omnivoice-build+up, then synthesize a sample WAV to ou
 
 .PHONY: kokoro-digests kokoro-build kokoro-up kokoro-down kokoro-logs kokoro-smoke \
         omnivoice-smoke
+
+# ---------------------------------------------------------------------------
+# CHIT-sign -> expressive voice loop (Phase 0). tools/voice_cast_on_sign.py
+# subscribes to agent.graphiti.signed.v1 and turns an agent's normal
+# sign_trail (CHIT_SIGN_PUBLISH=1) into an audible, persona-shaped utterance via
+# Flute-Gateway -- NO speak tool call. Runs on the HOST (winsound/aplay playback;
+# the daemon translates Docker-internal NATS URLs back to localhost, so it must
+# not run inside the compose network). Requires the voice stack up (make up-voice)
+# and nats-1 host-published on 4222 (auth nats:pmoves).
+# ---------------------------------------------------------------------------
+VOICE_CAST_PID  := out/.voice-cast.pid
+VOICE_CAST_LOG  := out/voice-cast.log
+# 127.0.0.1 (not localhost): on Windows `localhost` resolves to IPv6 ::1 first, but
+# Docker publishes nats :4222 on IPv4 only -> an IPv6 connect hangs/times out.
+# Default matches the compose nats-1 launch args (--user nats --pass pmoves). Override
+# for a differently-credentialed NATS: make voice-cast-up VOICE_CAST_NATS=nats://u:p@127.0.0.1:PORT
+VOICE_CAST_NATS ?= nats://nats:pmoves@127.0.0.1:4222
+
+voice-cast-deps: ## Ensure host python deps (nats-py, httpx) for the CHIT-sign voice subscriber
+	@$(PRECHECK_PY) -c "import nats"  2>/dev/null || $(PRECHECK_PY) -m pip install --quiet --disable-pip-version-check nats-py
+	@$(PRECHECK_PY) -c "import httpx" 2>/dev/null || $(PRECHECK_PY) -m pip install --quiet --disable-pip-version-check httpx
+
+voice-cast-up: voice-cast-deps ## Start the CHIT-sign -> expressive voice subscriber (Phase 0; reads FLUTE_API_KEY from the running flute-gateway)
+	@mkdir -p out
+	@if [ -f $(VOICE_CAST_PID) ] && kill -0 $$(cat $(VOICE_CAST_PID)) 2>/dev/null; then \
+	  echo "voice-cast-on-sign already running (pid $$(cat $(VOICE_CAST_PID)))"; exit 0; fi
+	@key="$$(docker exec pmoves-flute-gateway-1 printenv FLUTE_API_KEY 2>/dev/null)"; \
+	 [ -n "$$key" ] || echo "  [warn] FLUTE_API_KEY empty -- is pmoves-flute-gateway-1 running? synth calls will 401 (subscriber will self-heal to the kokoro floor)"; \
+	 VOICE_CAST_NATS_URL="$(VOICE_CAST_NATS)" \
+	 FLUTE_GATEWAY_URL="http://127.0.0.1:8055" \
+	 FLUTE_API_KEY="$$key" \
+	 nohup $(PRECHECK_PY) tools/voice_cast_on_sign.py > $(VOICE_CAST_LOG) 2>&1 & echo $$! > $(VOICE_CAST_PID)
+	@sleep 3; echo "voice-cast-on-sign started (pid $$(cat $(VOICE_CAST_PID))) -- log: pmoves/$(VOICE_CAST_LOG)"; \
+	 grep -q "connected to" $(VOICE_CAST_LOG) 2>/dev/null && echo "  NATS connected [OK]" || { echo "  [warn] not connected yet -- tail:"; tail -3 $(VOICE_CAST_LOG); }
+
+voice-cast-down: ## Stop the CHIT-sign voice subscriber
+	@if [ -f $(VOICE_CAST_PID) ]; then kill $$(cat $(VOICE_CAST_PID)) 2>/dev/null; rm -f $(VOICE_CAST_PID); echo "voice-cast-on-sign stopped"; else echo "voice-cast-on-sign not running"; fi
+
+voice-cast-smoke: voice-cast-deps ## Fire a CHIT sign (mr-clean) and confirm an expressive utterance is cast to out/
+	@echo "Publishing a signed CHIT trail (agent.graphiti.signed.v1)..."
+	@before="$$(ls -1 out/voice_cast_*.wav 2>/dev/null | wc -l)"; \
+	 CHIT_SIGN_PUBLISH=1 NATS_URL="$(VOICE_CAST_NATS)" PYTHONPATH="$(CURDIR)/.." \
+	   $(PRECHECK_PY) tools/sign_trail.py --agent-id 4090-claude --alter mr-clean \
+	   --summary "Powerful moves. The CHIT sign is now my voice." --phase "Phase 0" >/dev/null || true; \
+	 echo "  waiting for the cast..."; \
+	 for i in $$(seq 1 25); do \
+	   after="$$(ls -1 out/voice_cast_*.wav 2>/dev/null | wc -l)"; \
+	   if [ "$$after" -gt "$$before" ]; then \
+	     f="$$(ls -t out/voice_cast_*.wav | head -1)"; \
+	     echo "[OK] cast: pmoves/$$f ($$(wc -c < $$f) bytes) -- play it to hear the CHIT sign as expressive voice"; exit 0; fi; \
+	   sleep 1; \
+	 done; \
+	 echo "[warn] no new cast WAV after 25s -- check pmoves/$(VOICE_CAST_LOG)"; tail -8 $(VOICE_CAST_LOG) 2>/dev/null; exit 1
+
+.PHONY: voice-cast-deps voice-cast-up voice-cast-down voice-cast-smoke

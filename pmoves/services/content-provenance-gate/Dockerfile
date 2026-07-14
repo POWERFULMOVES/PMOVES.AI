@@ -14,6 +14,7 @@ COPY contracts /app/contracts
 COPY services/__init__.py /app/services/__init__.py
 COPY services/common /app/services/common
 COPY services/content-provenance-gate /app/services/content-provenance-gate
+COPY tools/__init__.py /app/tools/__init__.py
 COPY tools/chit_encode_hook.py /app/tools/chit_encode_hook.py
 
 RUN groupadd -r pmoves --gid=65532 \
