@@ -1,8 +1,19 @@
 # BoTZ Gateway Deployment Plan — KVM4-1 VPS
 
 > **For:** VPS operators and fleet coordinators.
-> **Status:** PLANNED — ready for deployment when KVM4-1 is accessible.
+> **Status:** READY — VPS inventory retrieved via Hostinger MCP, IPs confirmed.
 > **Date:** 2026-07-14
+> **VPS:** KVM4-1 (`PMOVES.AI.CLOUD1.KVMIV`) — IP `31.97.42.207`, 4C/16GB/200GB, Ubuntu 24.04
+
+## VPS Fleet Inventory (verified 2026-07-14 via Hostinger API)
+
+| VPS | Hostname | IP | Plan | CPU/RAM/Disk | Role |
+|-----|----------|-----|------|--------------|------|
+| KVM4-1 | PMOVES.AI.CLOUD1.KVMIV | 31.97.42.207 | KVM 4 | 4C/16GB/200GB | **BoTZ Gateway** (target) |
+| KVM4-2 | PMOVES.AI.CLOUD2.KVMIV | 167.88.39.80 | KVM 4 | 4C/16GB/200GB | Data/storage tier |
+| KVM2 | PMOVES.AI.CLOUD.KVMII | 167.88.38.57 | KVM 2 | 2C/8GB/100GB | Exit proxy, RustDesk relay |
+
+All three VPS are **running**, co-located in datacenter 17, Ubuntu 24.04 LTS.
 
 ## Architecture
 
