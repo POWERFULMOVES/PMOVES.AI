@@ -71,6 +71,34 @@ Every CHIT trail entry written by `pmoves/tools/sign_trail.py` will (after Phase
 
 If no active card exists for the agent_id, the signing tool emits a stderr warning and (in mandatory mode) refuses to sign. This makes "agent without a card" a visible audit failure, not a silent gap.
 
+## How to sign a trail entry
+
+Use the Makefile target (preferred — it sets the correct `PYTHONPATH`):
+
+```bash
+CHIT_PASSPHRASE="..." make -C pmoves sign-trail AGENT=claude-opus SUMMARY="Completed X"
+```
+
+Environment defaults:
+- `AGENT` defaults to `claude-opus`
+- `PHASE` defaults to `Phase H`
+- `SUMMARY` defaults to `Trail entry signed`
+
+Direct invocation from the repo root also works now that `pmoves/tools/__init__.py` exists:
+
+```bash
+CHIT_PASSPHRASE="..." python pmoves/tools/sign_trail.py \
+  --agent-id claude-opus \
+  --summary "Completed X" \
+  --phase "Phase H"
+```
+
+### Troubleshooting
+
+- **`ModuleNotFoundError: No module named 'pmoves.tools'`**
+  - Ensure `pmoves/tools/__init__.py` exists. Without it, `pmoves.tools` is not a real Python package and imports from services/tests fail.
+  - If running the script directly, invoke it from the repo root or use `make -C pmoves sign-trail` so `PYTHONPATH` is set correctly.
+
 ## How to rotate
 
 Cards are append-only — never delete. To rotate (e.g., new SSH key after the old one's compromise window):

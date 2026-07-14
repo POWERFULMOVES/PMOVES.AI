@@ -4,11 +4,14 @@
 
 # Unix line endings for code, configs, docs
 *.sh text eol=lf
+*.patch text eol=lf
 *.py text eol=lf
 *.md text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+# .mjs today = vendored ESM bundles (website/stage/vendor) — keep byte-stable vs build output
+*.mjs text eol=lf
 Makefile text eol=lf
 Dockerfile text eol=lf
 

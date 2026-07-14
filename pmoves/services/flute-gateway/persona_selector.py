@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
-from pmoves.services.common.env import get_secret
+from services.common.env import get_secret
 from pathlib import Path
 from typing import Any, Optional
 
@@ -31,11 +31,12 @@ if not _CONFIG_DIR.exists():
 
 _EXPRESSION_MAP: dict[str, dict[str, Any]] = {}
 _CAPABILITY_MAP: dict[str, dict[str, Any]] = {}
+_HOST_AFFINITY: dict[str, dict[str, Any]] = {}
 
 
 def _load_configs() -> None:
-    """Load expression and capability YAML configs."""
-    global _EXPRESSION_MAP, _CAPABILITY_MAP
+    """Load expression, capability, and host-affinity YAML configs."""
+    global _EXPRESSION_MAP, _CAPABILITY_MAP, _HOST_AFFINITY
 
     expr_path = _CONFIG_DIR / "tts-engine-expressions.yaml"
     if expr_path.exists():
@@ -50,7 +51,13 @@ def _load_configs() -> None:
             data = yaml.safe_load(f)
         engines = data.get("engines", {})
         _CAPABILITY_MAP = engines if isinstance(engines, dict) else {}
-        logger.info("Loaded %d engine capabilities from %s", len(_CAPABILITY_MAP), cap_path)
+        # host_affinity: engine -> {requires, min_vram_mb?, nodes, preferred}
+        affinity = data.get("host_affinity", {})
+        _HOST_AFFINITY = affinity if isinstance(affinity, dict) else {}
+        logger.info(
+            "Loaded %d engine capabilities + %d host-affinity rows from %s",
+            len(_CAPABILITY_MAP), len(_HOST_AFFINITY), cap_path,
+        )
 
 
 # Load on import
@@ -162,3 +169,60 @@ def get_available_intents() -> list[str]:
 def get_intent_config(intent: str) -> Optional[dict[str, Any]]:
     """Return the full config for an intent, or None if not found."""
     return _EXPRESSION_MAP.get(intent)
+
+
+# ---------------------------------------------------------------------------
+# Host affinity — resolve which fleet node should run a given engine
+# ---------------------------------------------------------------------------
+
+def resolve_engine_host(
+    engine: str,
+    available_nodes: Optional[list[str]] = None,
+) -> Optional[dict[str, Any]]:
+    """Resolve which fleet node should run ``engine`` (persona → engine → NODE).
+
+    Reads the ``host_affinity`` table from ``tts-engine-capabilities.yaml``.
+    Node affinity is a property of the engine's hardware needs (CPU-viable vs
+    GPU/VRAM), not of any single voice — so this is keyed by engine, and a
+    future ``voice_profiles.host_affinity`` DB column would override per-voice.
+
+    Args:
+        engine: Engine id (e.g. ``kokoro``, ``f5_tts``).
+        available_nodes: Optional list of nodes currently up. When given, the
+            selected node is the preferred node if it's available, else the
+            first eligible node that is available; ``None`` if none are up.
+            When omitted, ``selected`` is simply the configured ``preferred``.
+
+    Returns:
+        ``{requires, min_vram_mb?, nodes, preferred, selected}`` for the engine,
+        or ``None`` if the engine has no host-affinity entry (caller decides a
+        fallback rather than this module inventing one).
+    """
+    affinity = _HOST_AFFINITY.get(engine)
+    if not isinstance(affinity, dict):
+        logger.debug("No host_affinity entry for engine=%s", engine)
+        return None
+
+    eligible = list(affinity.get("nodes") or [])
+    preferred = affinity.get("preferred")
+
+    if available_nodes is None:
+        selected = preferred
+    else:
+        # Node ids are strings (kvm4-2, spark, z890), but bare numeric slugs
+        # like 5090/4090 parse as ints in YAML — normalize both sides to str
+        # so membership never silently fails on a numeric node.
+        up = {str(n) for n in available_nodes}
+        if preferred is not None and str(preferred) in up:
+            selected = preferred
+        else:
+            selected = next((n for n in eligible if str(n) in up), None)
+
+    result = dict(affinity)
+    result["selected"] = selected
+    return result
+
+
+def get_host_affinity_map() -> dict[str, dict[str, Any]]:
+    """Return the full engine → host-affinity routing table (read-only copy)."""
+    return {engine: dict(rows) for engine, rows in _HOST_AFFINITY.items()}

@@ -90,6 +90,34 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | **Agent** | 6 | Psychic | Orchestration, planning, delegation | Complexity, coordination overhead | Purple |
 | **UI** | 7 | Light | Visualization, interaction, feedback | Client-side, state management | White |
 
+### Role Classes (orchestration roles) — v1.6.0 addition
+
+`role_class` is a **third, orthogonal axis** introduced by the P0 Agent Role
+Consolidation (ARCHON_ENHANCEMENT_ROADMAP §2), defined in
+`pmoves/config/agent_registry.yaml` under `role_classes:`. It answers *what
+the agent does in a multi-agent workflow* — distinct from **type** (*which
+service tier it runs in*) and **class** (*naming prefix*).
+
+| role_class | Three-Body mapping | Phase | Summary |
+|-----------|--------------------|-------|---------|
+| `planner` | Control Body | pre-work | Decomposes intent into specs/plans/claims; read-heavy, no production edits. The built-in `Plan` agent type is the reference planner. |
+| `worker` | Delivery Body | execution | Implements the plan; the only role_class that writes production changes (`delivery-agent`, `hermes-agent`). |
+| `reviewer` | Control Body | post-work | Verifies and gates: review, evaluation gates, Village Rule signoff (`control-agent`, `chit-pr-audit-agent`). |
+
+The Memory Body is **orthogonal** to the trio — CHIT/Cipher custody is
+cross-cutting, not a workflow phase, so `memory-agent` carries no
+`role_class`. Absence of the key means *unclassified (legacy)*, never an
+error.
+
+> ⚠️ **Naming collision guard:** the `worker` *role_class* is unrelated to
+> the `worker` *type* (tier 4, Electric) above. `Hi-RAG v2` is a
+> worker-**type** service; `delivery-agent` is a worker-**role**. The type
+> system is untouched by this addition — never conflate the two.
+
+Declared in two places (both additive): `agent_registry.yaml` entries may set
+`role_class:`, and `.claude/agents/*.md` frontmatter may carry the same key
+(ignored by the Claude Code dispatcher, read by taxonomy tooling).
+
 ### Type Chart: Agent Roster
 
 | Agent | Class | Primary Type | Secondary Type | Tier |

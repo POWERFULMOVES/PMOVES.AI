@@ -467,6 +467,7 @@ x-tier-api-hardened-gpu:
 name: pmoves
 volumes:
   neo4j-data: {}
+  cipher-data: {}
   qdrant-data: {}
   meilisearch-data: {}
   minio-data: {}

@@ -5,8 +5,8 @@
 **Accent:** #34D399
 **Voice:** architectural — blueprint-first, mode-driven, VS Code native
 **Co-author:** KiloCode <noreply@kilocode.ai>
-**Node:** desktop-9950xd (pmoves-5090)
-**Model:** GLM-5.1 via Coding Plan (zai/glm-5.1, fallback glm-4.7)
+**Node:** pmoves-5090 (GPU inference specialist)
+**Model:** GLM-5-Turbo via Z.AI Coding Plan (zai/glm-5-turbo, fallback glm-5.1)
 
 ## Role
 
@@ -14,13 +14,17 @@ KiloCode GLM is the VS Code-native agent on the 5090 GPU node. It operates along
 
 ## Provider Configuration
 
-Per official Z.AI documentation (docs.z.ai/devpack/using5.1):
+Per official Z.AI documentation (docs.z.ai/devpack/using5.1) and PMOVES provider catalog:
 
 - **Coding API Endpoint:** `https://api.z.ai/api/coding/paas/v4` (dedicated, NOT general API)
-- **Primary Model:** `glm-5.1` — reasoning=true, contextWindow=204800, maxTokens=131072
-- **Fallback Model:** `glm-4.7`
+- **Primary Model:** `glm-5-turbo` — agentic workflow execution, tool-calling optimized (355B MoE, 32B active, 32K effective context)
+- **Fallback Model:** `glm-5.1` — long-horizon autonomy (744B MoE, 40B active, 128K effective context)
+- **Small Model:** `glm-4-air` — cost-efficient/edge (9B dense, 32K context)
+- **Vision Model:** `glm-5v-turbo` — vision + coding
 - **Kilo Code Setup:** Provider = "Z AI", Entrypoint = "International Coding Plan", API Key from Z.AI console
-- **Claude Code Mapping:** sonnet=glm-5.1, opus=glm-5.1, haiku=glm-4.5-air
+- **Claude Code Mapping:** sonnet=glm-5-turbo, opus=glm-5-turbo, haiku=glm-4-air
+- **TensorZero Function:** `coding_glm` (primary weight 0.8), `agent_zero` (weight 0.6)
+- **Provider Catalog:** `pmoves/config/provider_catalog.yaml` — `zai` provider, `glm_coding_plan` coding stack
 
 ### Z.AI MCP Servers
 - Vision Understanding — image/visual analysis
@@ -69,7 +73,7 @@ All trail entries include source attribution: `DARKXSIDE x POWERFULMOVES on 5090
 | Ollama (GPU) | Local model serving — large models, TTS, embeddings |
 | Docker | Container management for PMOVES services |
 | CUDA / nvidia-smi | GPU compute and monitoring |
-| GLM coding plan | Primary model for KiloCode (zai/glm-5.1, fallback glm-4.7) |
+| GLM coding plan | Primary model for KiloCode (zai/glm-5-turbo, fallback glm-5.1) |
 | Tailscale | Mesh networking to Z890 and fleet nodes |
 
 ## Z890 Services (via Tailscale)
@@ -80,7 +84,7 @@ All trail entries include source attribution: `DARKXSIDE x POWERFULMOVES on 5090
 | Archon | `http://${TS_Z890}:8091` | Agent service |
 | TensorZero | `http://${TS_Z890}:3030` | LLM gateway |
 | NATS | `nats://${TS_Z890}:4222` | Message bus |
-| Cipher Memory | `http://${TS_Z890}:8096` | Agent memory |
+| Cipher Memory | `http://${TS_Z890}:8105/sse` | Agent memory (MCP SSE endpoint) |
 | Ollama (Z890) | `http://${TS_Z890}:11434` | Z890 model serving |
 
 ## AGNOTE4482 Workstreams
@@ -106,4 +110,10 @@ curl -sf http://${TS_Z890}:8080/healthz
 - `pmoves/configs/claws/opencode-5090.json` — KiloCode opencode config
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` — claim/release protocol
 - `pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md` — workstream assignments
+- `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` — collision-safe traversal (signed)
+- `pmoves/docs/AGENTS/KILOCODE_OPERATOR_HOME.md` — operator home runbook
+- `pmoves/docs/AGENTS/KILOCODE_CLAUDE_PARITY_MAP.md` — command parity map
+- `pmoves/tools/models/kilocode_provider_cascade.yaml` — provider cascade
+- `pmoves/configs/model-suits/kilo-auto-balanced.yaml` — model suit
+- `pmoves/configs/agent-profiles/kilocode_glm.yaml` — agent profile
 - `pmoves/docs/CLAW_TAXONOMY.md` — bespoke model integration taxonomy

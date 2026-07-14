@@ -134,7 +134,11 @@ KEY_VALIDATORS = {
     "GROQ_API_KEY": re.compile(r"^gsk_[A-Za-z0-9]{28,36}$"),
     # NVIDIA
     "NVIDIA_API_KEY": re.compile(r"^nvapi-[a-zA-Z0-9]{32,}$"),
-    # MCP Server Token
+    # Agent Zero inbound-MCP credential. Fleet-canonical name is
+    # AGENT_ZERO_MCP_TOKEN (Prod env secret, issue #2056); MCP_SERVER_TOKEN is
+    # the container-side env var Agent Zero itself reads (DoX maps one to the
+    # other), kept here so either spelling in a source file validates.
+    "AGENT_ZERO_MCP_TOKEN": re.compile(r"^.{20,}$"),
     "MCP_SERVER_TOKEN": re.compile(r"^.{20,}$"),
 }
 
@@ -297,8 +301,8 @@ class ProviderCatalog:
             ["nemotron-3-super"],  # Synced with nemotron-3-super.yaml
             ["pmoves_worker_nemotron"],
         ),
-        "MCP_SERVER_TOKEN": (
-            "MCP Server (A2A)",
+        "AGENT_ZERO_MCP_TOKEN": (
+            "Agent Zero MCP (A2A)",
             [],  # No model-suit YAML
             ["pmoves_mcp_server"],
         ),

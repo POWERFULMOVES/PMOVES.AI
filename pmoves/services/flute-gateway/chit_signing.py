@@ -20,7 +20,7 @@ import hashlib
 import hmac
 import json
 import logging
-from pmoves.services.common.env import get_secret
+from services.common.env import get_secret
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)

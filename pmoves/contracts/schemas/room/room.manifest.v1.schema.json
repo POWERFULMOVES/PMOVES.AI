@@ -50,6 +50,19 @@
       "enum": ["primary", "alter", "shared", "ephemeral"],
       "description": "Identity mode for the room session"
     },
+    "access": {
+      "type": "object",
+      "description": "Room privacy and content posture. Governs the room INTERNALLY; public egress is enforced separately by policies.publish.egress_redaction_floor.",
+      "properties": {
+        "visibility": { "type": "string", "enum": ["public", "private", "unlisted"] },
+        "owner_only": { "type": "boolean" },
+        "invite_list": { "type": "array", "items": { "type": "string" } },
+        "content_rating": { "type": "string", "enum": ["standard", "uncensored"], "description": "'uncensored' means unrestricted authentic expression inside the room — not a pornography flag." },
+        "exclude_from_public_catalog": { "type": "boolean" },
+        "rating_note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
     "shell": {
       "type": "object",
       "required": ["theme", "layout"],
@@ -212,6 +225,20 @@
         "voice": {
           "type": "string"
         },
+        "role": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Persona roles within the room (e.g. co-creator, witness)"
+        },
+        "register": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Voice register cues (e.g. uncensored, signifying, poetic)"
+        },
+        "twin_target": {
+          "type": "string",
+          "description": "Identity this persona is a digital twin of, if any"
+        },
         "glyph": {
           "type": "string",
           "maxLength": 2
@@ -256,6 +283,25 @@
               "items": {
                 "type": "string"
               }
+            },
+            "gate_param": {
+              "type": "string",
+              "description": "Name of the geometry-state param that gates external publish (e.g. publish_gate)."
+            },
+            "gate_mode": {
+              "type": "string",
+              "enum": ["manual", "village-rules-auto"]
+            },
+            "egress_redaction_floor": {
+              "type": "object",
+              "description": "Fail-closed redaction applied to ALL public egress regardless of room rating. Cannot be bypassed by opening the gate.",
+              "properties": {
+                "enforce_on": { "type": "string" },
+                "rules": { "type": "array", "items": { "type": "string" } },
+                "fail_closed": { "type": "boolean" },
+                "note": { "type": "string" }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false

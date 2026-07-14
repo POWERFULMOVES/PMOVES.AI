@@ -113,7 +113,7 @@
 /* DARKXSIDE "skin" theme — set data-theme="darkxside-skin" on <html> to swap the
    unified `--pm-*` tokens to the warm crimson persona. Mirrors the deltas in
    pmoves/design/build/tokens.darkxside-skin.css. New components should consume
-   `--pm-*`; existing --cata-*/--void usages migrate in a follow-up. */
+   `--pm-*`; existing `--cata-` and `--void` usages migrate in a follow-up. */
 :root[data-theme="darkxside-skin"] {
   --pm-accent: #E11D48;          /* darkxside ✦ crimson leads */
   --pm-accent-2: #7C3AED;        /* violet secondary */

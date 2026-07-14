@@ -1107,6 +1107,17 @@ readOnlyPaths:
   - "*.lockb"
 
   # ---------------------------------------------------------------------------
+  # KNOWN ROADS FILE-GRANT - must be operator-written OUT-OF-BAND
+  # ---------------------------------------------------------------------------
+  # The live Known Road grant (.known-road-active) authorizes readOnly bypasses.
+  # If an agent could write it, the agent could self-authorize its own bypass
+  # (defeating the human-authorizes half of the model). Blocking agent writes
+  # forces the grant to be set out-of-band (operator, separate terminal). The
+  # damage-control hook still READS it internally; only agent tool WRITES are
+  # blocked.
+  - "*.known-road-active"
+
+  # ---------------------------------------------------------------------------
   # MINIFIED/COMPILED FILES - Generated, don't edit
   # ---------------------------------------------------------------------------
   - "*.min.js"

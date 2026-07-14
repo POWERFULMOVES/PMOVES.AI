@@ -56,6 +56,22 @@
       "display_name": "Fordham Hill Community Room",
       "manifest": "fordham.room.community.json",
       "summary": "Community cost-pooling + self-governance pilot room: mesh capacity A/B, pooled-dues/Firefly ledger, contribution attribution, and tamper-evident resident voting on one lattice. Stage: rehearsal. DRAFT - REQUIRES LEGAL REVIEW."
+    },
+    {
+      "room_id": "darkxsides.room",
+      "agent_id": "darkxside-persona",
+      "alter": "darkxside",
+      "display_name": "DARKXSIDES",
+      "manifest": "darkxsides.room.json",
+      "summary": "Private, owner-only persona room (co-creator + witness -> eventual digital twin). Uncensored/unrestricted authentic expression; houses the dedicated publish-gate surfaced in Open Notebook, with a fail-closed public-egress redaction floor."
+    },
+    {
+      "room_id": "tokenism.room.exchange",
+      "agent_id": "5090-claude",
+      "alter": "5090-tokenism",
+      "display_name": "ToKenism Exchange",
+      "manifest": "tokenism.room.exchange.json",
+      "summary": "Token-economy simulation floor: business-idea scenarios in the ToKenism simulator, exported to the PMOVES-Wealth ledger. Public face of the L5 Economics layer."
     }
   ]
 }

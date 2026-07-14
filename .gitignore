@@ -306,3 +306,9 @@ update.finished
 
 # Generated from Pmoves-hyperdimensions submodule via make pmoves-ai-sync-hyperdim
 website/hyperdim/
+
+# Known Roads live file-grant (operator-written, never commit)
+.claude/hooks/damage-control/.known-road-active
+pmoves/docs/logs/village_gate_latest.json
+crush.json
+*.crush

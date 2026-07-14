@@ -86,18 +86,17 @@
 
 ## Key Value Template (COPY THIS SECTION, FILL, THEN DELETE)
 
-> Fill only the keys that are NOT already in GitHub Secrets (see
-> `PROVIDER_KEY_CHECKLIST.md` § Status Summary — as of 2026-07-10 that is
-> `MOONSHOT_API_KEY`, `KILOCODE_API_KEY`, and a locally-minted
-> `MCP_SERVER_TOKEN`). Keys already held in GitHub Secrets are delivered per
-> node by dispatching `sync-secrets-local.yml` — do not re-enter them here.
+> **As of 2026-07-11 every inventory key is held in GitHub Secrets** (see
+> `PROVIDER_KEY_CHECKLIST.md` § Status Summary) — there is currently nothing
+> to fill here. Keys are delivered per node by dispatching
+> `sync-secrets-local.yml` with `targets=<node>`. Use this form only when a
+> FUTURE provider key is added to the inventory before it reaches GitHub
+> Secrets, listing that key in the template below.
 
 ```
 === COPY BELOW THIS LINE === DO NOT COMMIT FILLED VALUES ===
 
-MOONSHOT_API_KEY=
-KILOCODE_API_KEY=
-MCP_SERVER_TOKEN=
+NEW_PROVIDER_KEY_NAME=
 
 === COPY ABOVE THIS LINE === DO NOT COMMIT FILLED VALUES ===
 ```

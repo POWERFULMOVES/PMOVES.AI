@@ -20,8 +20,8 @@ metadata:
   total_agents: 62
   total_skills: 126
   total_skill_md_files: 6
-  # +7 from feat/shift-crew-4090-skills (PR #1536): shift:listen, shift:from-bpm,
-  # persona:bind, 4090:sitrep, 4090:field-brief, 4090:probe, agentgym:run
+  # +7 from feat/shift-crew-4090-skills (PR #1536): shift-listen, shift-from-bpm,
+  # persona-bind, node-4090-sitrep, field-brief, node-4090-probe, agentgym-run
   p7_apps_with_skill_md:
     - pmoves-services (infrastructure)
     - pmoves-remote (mesh access)
@@ -345,7 +345,7 @@ root:
             - Suit 2: 4090-claws (Claude Code skills auto-loaded)
             - Suit 3: hermes-v4 (HERMES V4 reasoning assist)
             Launcher: pbnj/pinokio/api/pmoves-pbnj/demo.js
-            Skill: .claude/skills/demo-room/SKILL.md (/demo:room)
+            Skill: .claude/skills/demo-room/SKILL.md (/demo-room)
             NATS trigger: p7.nats.launch {"room":"demo.room.rehearsal"}
           status: in_progress
           owner: 4090-claude
@@ -367,7 +367,7 @@ root:
             hermes-v4-70b: pmoves/hermes-v4-70b → ollama hermes3:70b (Spark only)
             Unsloth GGUF variants available on HuggingFace.
             Use case: reasoning, instruction, Agent Zero subordinate, demo room.
-            Pull skill: /model:pull hermes-v4-8b
+            Pull skill: /model-pull hermes-v4-8b
           status: planned
 
         - id: p7.lifecycle.model_catalog_d.gemma4_embed

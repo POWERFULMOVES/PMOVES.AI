@@ -25,6 +25,10 @@ RUN mkdir -p /app/pmoves \
     && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
 COPY chit /app/pmoves/chit
 
+# PMOVES shared tools (imported as tools.chit_security)
+COPY tools/__init__.py /app/tools/__init__.py
+COPY tools/chit_security.py /app/tools/chit_security.py
+
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \

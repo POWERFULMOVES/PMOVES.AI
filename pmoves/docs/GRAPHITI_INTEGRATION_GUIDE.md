@@ -171,28 +171,38 @@ async def complete_task(task_id: str, result: str):
 
 ### Using subprocess (No Python Import)
 
-For services that can't import PMOVES Python modules:
+For services that can't import PMOVES Python modules, use the Makefile target from the repo root:
 
 ```python
 import subprocess
 import json
 import os
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]  # adjust to your layout
 
 def sign_trail_subprocess(summary: str, agent_id: str = "claude-opus") -> dict:
-    env = os.environ.copy()
     result = subprocess.run(
         [
-            "python", "pmoves/tools/sign_trail.py",
-            "--agent-id", agent_id,
-            "--summary", summary,
-            "--phase", "Phase H",
+            "make", "-C", str(REPO_ROOT / "pmoves"),
+            "sign-trail",
+            f"AGENT={agent_id}",
+            f"SUMMARY={summary}",
+            "PHASE=Phase H",
         ],
         capture_output=True,
         text=True,
-        env=env,
-        timeout=10,
+        env=os.environ.copy(),
+        timeout=30,
     )
     return json.loads(result.stdout)
+```
+
+If you must call the script directly, set `PYTHONPATH` to the repo root and invoke it from the repo root:
+
+```bash
+PYTHONPATH=/path/to/PMOVES.AI CHIT_PASSPHRASE="..." \
+  python pmoves/tools/sign_trail.py --agent-id claude-opus --summary "Completed X"
 ```
 
 ---
