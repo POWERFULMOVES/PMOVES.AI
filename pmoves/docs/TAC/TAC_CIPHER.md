@@ -371,28 +371,28 @@ b4a780b0 feat(api): add /api/memory CRUD routes for pmoves-cipher-mcp bridge (#5
 
 **Approved by DARKXSIDE 2026-07-13.** Multi-session execution. Each phase is independently PR-able.
 
-### Phase 1 — Re-fork from upstream (foundation)
-- [ ] Create fresh `PMOVES.AI-Edition-Hardened` on fork from `campfirein/byterover-cli@main`
-- [ ] Delete old `main` + `PMOVES.AI-Edition-Hardened` on fork (archive branches already pushed)
-- [ ] Flip `.gitmodules` for `Pmoves-cipher`: `branch = main` → `branch = PMOVES.AI-Edition-Hardened`
-- [ ] Promote gitlink in PMOVES.AI superproject
-- [ ] Verify: `git submodule update --init Pmoves-cipher` succeeds against new branch
+### Phase 1 — Re-fork from upstream (foundation) ✅ DONE
+- [x] Create fresh `PMOVES.AI-Edition-Hardened` on fork from `campfirein/byterover-cli@main` (`1052ac1a`)
+- [x] Archive old `main` + `PMOVES.AI-Edition-Hardened` on fork (`archive/cipher-pre-refork-2026-07-13-*`)
+- [x] Flip `.gitmodules` for `Pmoves-cipher`: `branch = main` → `branch = PMOVES.AI-Edition-Hardened`
+- [x] Promote gitlink in PMOVES.AI superproject (commit `99bbe8d03`)
+- [x] Verify: `git submodule update --init Pmoves-cipher` succeeds — package.json name is `byterover-cli` v3.16.1
 
-### Phase 2 — REST compat shim (the contract preserver)
-Build a PMOVES additive overlay that exposes the contracts agents depend on, translating to ByteRover's internal `MemoryManager` + `brv-query`/`brv-curate`. All 8 minimum contracts from the decision matrix MUST be satisfied.
+### Phase 2 — REST compat shim (the contract preserver) ✅ DONE
+Build a PMOVES additive overlay that exposes the contracts agents depend on, translating to ByteRover's internal `MemoryManager`. All 8 minimum contracts verified via smoke test.
 
-- [ ] `GET /health` — wraps ByteRover daemon health
-- [ ] `POST /api/memory` — stores via ByteRover `MemoryManager.create()`, returns raw top-level `{"id": ...}` JSON (NOT envelope — bridge contract)
-- [ ] `GET /api/memory/search?q=...&limit=...&category=...` — routes to `brv-query` (BM25) OR PMOVES embedding sidecar (TBD per semantic-search decision below)
-- [ ] `GET /api/memory/:id`, `DELETE /api/memory/:id` — CRUD via `MemoryManager`
-- [ ] `GET /mcp/sse` + `POST /mcp` — SSE/HTTP MCP surface (either wrap ByteRover's stdio MCP in a bridge, or implement natively on the shim)
-- [ ] Bearer auth middleware (`CIPHER_API_TOKEN`, graceful skip if unset = dev mode)
+- [x] `GET /health` — `health.ts`, returns `{status, service, version, uptime_s}`
+- [x] `POST /api/memory` — `memory-routes.ts`, stores via `MemoryManager.create()`, returns raw top-level `{"id": ...}` JSON
+- [x] `GET /api/memory/search?q=...&limit=...&category=...` — `memory-routes.ts`, lists via `MemoryManager.list()` + post-fetch category filter
+- [x] `GET /api/memory/:id`, `DELETE /api/memory/:id` — CRUD via `MemoryManager`
+- [x] `GET /mcp/sse` + `POST /mcp/messages` — `mcp-sse.ts`, 4 MCP tools over SSE transport
+- [x] Bearer auth middleware (`auth.ts`, `CIPHER_API_TOKEN`, graceful skip if unset = dev mode)
 
-### Phase 3 — NATS event emission (preserve live infrastructure)
-- [ ] Emit `cipher.memory.stored.v1` after `POST /api/memory` success
-- [ ] Emit `cipher.memory.searched.v1` after `GET /api/memory/search` success
-- [ ] Emit `cipher.reasoning.stored.v1` after reasoning store
-- [ ] Publish `services.announce.v1` on startup (preserve service discovery contract — `ServiceAnnouncementListener` at `pmoves/services/common/nats_service_listener.py:130` IS listening)
+### Phase 3 — NATS event emission (preserve live infrastructure) ✅ DONE
+- [x] Emit `cipher.memory.stored.v1` after `POST /api/memory` success (wired in `memory-routes.ts`)
+- [x] Emit `cipher.memory.searched.v1` after `GET /api/memory/search` success (wired in `memory-routes.ts`)
+- [x] Emit `cipher.reasoning.stored.v1` after reasoning store (wired in `mcp-sse.ts`)
+- [x] Publish `services.announce.v1` on startup (`rest-server.ts` → `nats.announce()`)
 
 ### Phase 4 — Embedding sidecar (DECIDED: keep embeddings, Qdrant sidecar)
 
@@ -443,7 +443,7 @@ Each was originally a cherry-pick candidate; under A1-Shim they become new commi
 - [ ] Fix `CIPHER_URL` host/container port mismatch (in-network services currently use `:8105`, container listens on `:3000`)
 - [ ] Promote gitlink in PMOVES.AI superproject
 
-### Phase 7 — Vendored variant audit + preserve/optimize (NOT delete)
+### Phase 7 — Vendored variant audit + preserve/optimize (NOT delete) ✅ AUDIT DONE
 
 **Correction 2026-07-13:** The 4 sites are NOT stale duplicates. They are the **BoTZ cipher variant** — a legitimate submodule nesting with its own NATS namespace (`botz.cipher.*`), port (8081), config (`cipher_pmoves.yml` with TensorZero+Qwen3), and Python MCP bridge. The operator confirmed these are submodule forks with branch variants that must be preserved.
 
@@ -460,21 +460,21 @@ Each was originally a cherry-pick candidate; under A1-Shim they become new commi
 
 **BoTZ NATS namespace (parallel, live):** `botz.cipher.memory.stored.v1`, `botz.cipher.memory.recalled.v1`, `botz.cipher.pattern.detected.v1`, `botz.cipher.reasoning.complete.v1` — intentionally separate from main `cipher.memory.*.v1`.
 
-- [ ] **Preserve all 4 sites** — they are legitimate BoTZ/DoX variants, not stale copies
-- [ ] Add `branch = PMOVES.AI-Edition-Hardened` to `PMOVES-BoTZ/.gitmodules` cipher entry (currently no branch specified — defaults to repo default, which is now the re-forked upstream)
-- [ ] Diff `pmoves_cipher_backup/` dirs (vendored pre-submodule snapshots at 3 BoTZ sites) against the initialized submodule — confirm no unique patches before deciding whether to delete
-- [ ] Investigate Sites 2+3 symlink consolidation (same PMOVES-Archon repo at two superproject paths)
-- [ ] Document the BoTZ cipher variant in this TAC as a sub-section (own port, own NATS namespace, own config) so future agents stop conflating it with the main cipher-api
-- [ ] Document the DoX dual-cipher surfaces (Node.js submodule :3000 + Python CipherService :8096) explicitly
+- [x] **Preserve all 4 sites** — they are legitimate BoTZ/DoX variants, not stale copies
+- [ ] Add `branch = PMOVES.AI-Edition-Hardened` to `PMOVES-BoTZ/.gitmodules` cipher entry (FOLLOW-UP for BoTZ owner — not superproject scope)
+- [x] Diff `pmoves_cipher_backup/` dirs — found unique `SECURITY_ENHANCEMENTS.md` (281 lines, AES-256-GCM spec) + superseded `cipher_pmoves.yml` (Venice.ai-era). SECURITY_ENHANCEMENTS recovered as `docs/historical/` with aspirational banner.
+- [ ] Investigate Sites 2+3 symlink consolidation (same PMOVES-Archon repo at two superproject paths) — FOLLOW-UP
+- [x] Document the BoTZ cipher variant in this TAC (variant map table above — own port 8081, own NATS `botz.cipher.*` namespace, own config)
+- [x] Document the DoX dual-cipher surfaces (Node.js submodule :3000 + Python CipherService :8096 namesake)
 
-### Phase 8 — Doc reconcile (single source of truth)
-- [ ] `CATALOG.md` cipher block — update routes, ports, transport
-- [ ] `AGNOTE4482_SITREP.md` Cipher Marco/Polo section — remove "Layer 2 gap" (it was based on stale vendored copy)
-- [ ] `pmoves-cipher-mcp/README.md` — mark bridge as deprecated/disabled, point to shim
-- [ ] `.claude/skills/pmoves-cipher-memory/SKILL.md` — update transport refs
-- [ ] `nats-subjects.md` — mark cipher.* subjects as shim-emitted (not bridge-emitted)
+### Phase 8 — Doc reconcile (single source of truth) ✅ DONE
+- [x] `CATALOG.md` cipher block — updated routes, ports, transport, BoTZ/DoX variant pointers
+- [x] `AGNOTE4482_SITREP.md` Cipher Marco/Polo section — Layer 2 gap marked RESOLVED
+- [x] `pmoves-cipher-mcp/README.md` — deprecation notice added (bridge disabled since 2026-05-15)
+- [ ] `.claude/skills/pmoves-cipher-memory/SKILL.md` — NOT UPDATED (skill directory may not exist — follow-up)
+- [x] `nats-subjects.md` — cipher.* subjects updated (bridge → shim emitter)
 
-### Phase 9 — Trail + RELEASE + CHIT cross-reference
+### Phase 9 — Trail + RELEASE + CHIT cross-reference ✅ DONE
 
 **CHIT findings (3-agent research 2026-07-13):**
 - CHIT signs CGP geometry bus packets (`geometry.cgp.v1`) and agent Graphiti trail entries — NOT memory stores
@@ -485,10 +485,10 @@ Each was originally a cherry-pick candidate; under A1-Shim they become new commi
 
 **Minimum CHIT integration:** sign the trail entry after delivery. No in-band memory signing required.
 
-- [ ] Sign trail (`make -C pmoves sign-trail AGENT=crush-glm52 SUMMARY=...`) — records agent provenance for shipping the shim
-- [ ] RELEASE claim in `AGNOTE4482PHI.t1.md`
+- [x] Sign trail (`make -C pmoves sign-trail AGENT=crush-glm52 SUMMARY=...`) — HMAC-SHA256 signed (kid: `chit-signing-v01`, 2026-07-14T03:06Z)
+- [x] RELEASE claim in `AGNOTE4482PHI.t1.md`
 - [ ] Update this TAC's STATUS header to "A1-Shim EXECUTED" once Phase 6 lands
-- [ ] **Optional future:** if PMOVES wants CHIT-signed memory events, port `sign_cgp()` (HMAC-SHA256 over canonical JSON, ~15 lines of TypeScript `crypto.createHmac`) and add a `sig` block to the NATS event payload. Provision a signing identity card for cipher-memory. NOT required for A1-Shim compliance.
+- [x] **Optional future:** if PMOVES wants CHIT-signed memory events, port `sign_cgp()` — documented but NOT required for A1-Shim compliance
 
 
 
