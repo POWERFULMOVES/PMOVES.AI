@@ -405,10 +405,25 @@ Research findings (3-agent fan-out 2026-07-13):
 - **Multimodal stays in dedicated services:** CLAP (:8108, 512d audio), CLIP (inline image ranking in Hi-RAG geometry route). Sidecar is text-only.
 - **Dimension landmines:** (1) docs sometimes cite 3072d for Qwen3-4B — actual is 2560d; (2) `QDRANT_RECREATE_ON_DIM_MISMATCH=true` defaults in some compose files could destroy collections — pin to `false` for the sidecar.
 
+**ByteRover Context Tree research (video R-5_2nsF_ZM, Cole Medin, 2026-07-14):**
+ByteRover (the new cipher upstream) is the scalable evolution of Karpathy's LLM Wiki pattern. Key architecture for PMOVES memory design:
+- **Context Tree:** `Domain > Topic > Subtopic > Entry` — each entry is a markdown file with Relations / Concept / Narrative / Snippets / Lifecycle metadata. Replaces flat category-based memory with hierarchical knowledge graph.
+- **Adaptive Knowledge Lifecycle (AKL):** importance score (0-100, +3 per access, +5 per update, 0.995 daily decay), maturity tiers (`draft` → `validated` ≥65 → `core` ≥85, with hysteresis demotion), recency decay (21-day half-life).
+- **5-Tier Progressive Retrieval:** T0 exact cache (~0ms) → T1 fuzzy cache (~50ms) → T2 MiniSearch BM25 (~100ms) → T3 single LLM call (<5s) → T4 full agentic loop (8-15s). Most queries resolve <100ms without LLM calls.
+- **LLM-curated operations:** ADD/UPDATE/UPSERT/MERGE/DELETE with reason audit trail + per-operation status feedback.
+- **Benchmarks:** 96.1% LoCoMo (state-of-the-art), 92.8% LongMemEval-S.
+
+**PMOVES implication:** The Context Tree + AKL model could enhance how PMOVES agents store memory BEYOND the current flat category enum (`code_pattern`/`decision`/`context`/...). Future Phase 10 (post-A1-Shim) could explore:
+- Mapping PMOVES categories to Context Tree domains (`patterns/`, `decisions/`, `architecture/`)
+- Adopting AKL importance scoring on agent memories (forget stale memories)
+- Bridging ByteRover's `brv-curate`/`brv-query` tools to the PMOVES mesh via the shim
+- This is NOT Phase 4 scope — it's a research follow-up. Phase 4 stays focused on the Qdrant embedding sidecar for the existing contract.
+
 - [ ] Add embedding sidecar to `src/pmoves/` — on `POST /api/memory`, embed content via TensorZero and store in Qdrant `pmoves_cipher_memory`; on `GET /api/memory/search`, do vector similarity query (with BM25 fallback if TensorZero/Qdrant unreachable)
 - [ ] Provision `pmoves_cipher_memory` collection (2560d, COSINE) — follow `pmoves/scripts/provision_qdrant_pmoves_chunks_qwen3.py` pattern
 - [ ] Set `QDRANT_RECREATE_ON_DIM_MISMATCH=false` in the cipher-api compose env
 - [ ] Document the 2560d contract in TAC + CATALOG (correct any 3072d drift)
+- [ ] **Research follow-up (Phase 10):** evaluate ByteRover Context Tree + AKL for PMOVES agent memory enhancement
 
 ### Phase 5 — Re-implement 6 PMOVES features against new arch
 Each was originally a cherry-pick candidate; under A1-Shim they become new commits against the new architecture.
