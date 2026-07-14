@@ -1,5 +1,5 @@
 ---
-name: agentgym:run
+name: agentgym-run
 description: >
   Launch an AgentGym RL training session on this node using the 4090 field
   runner config (pmoves/configs/agentgym/field-runner-4090.yaml).
@@ -11,7 +11,7 @@ description: >
 disable-model-invocation: true
 ---
 
-# agentgym:run — AgentGym RL Field Runner (4090)
+# agentgym-run — AgentGym RL Field Runner (4090)
 
 Launches an AgentGym reinforcement learning session using the 4090 node configuration.
 

@@ -135,6 +135,44 @@ agents:
       compose_profile: agents
     description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
 
+  kilocode_glm:
+    name: "KiloCode GLM"
+    class: standard
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "kilocode"
+    nats:
+      publishes:
+        - claw.task.complete.v1
+        - agent.graphiti.signed.v1
+        - mesh.gpu.status.v1
+      subscribes:
+        - botz.workitem.claimed.v1
+        - mesh.gpu.model.loaded.v1
+        - claw.task.assign.v1
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [5090, laptop-4090, z890]
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "VS Code-native GLM-5-Turbo delivery agent via KiloCode. Blueprint-first implementation, MCP-integrated, DARKXSIDE witness."
+
   space_agent:
     name: "PMOVES Space-Agent"
     class: standard
@@ -2912,6 +2950,37 @@ mcp_servers:
       table: pmoves_core.voice_profiles
       by: name
     status: "planned"
+
+  kilocode_glm:
+    name: "KiloCode GLM"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: 3030
+    health: "/health"
+    layers: [L0, L3, L4, L5]
+    evolution_stage: stage_2
+    signature: "kilocode"           # glyph ▲, color #059669 — see agent_signatures.yaml
+    nats:
+      publishes: ["claw.task.complete.v1", "agent.graphiti.signed.v1", "mesh.gpu.status.v1"]
+      subscribes: ["botz.workitem.claimed.v1", "mesh.gpu.model.loaded.v1", "claw.task.assign.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [5090, laptop-4090, z890]
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "VS Code-native agent — blueprint-first feature implementation via GLM coding plan. Three-Body Delivery Body on 5090 node. DARKXSIDE COCREATOR witness."
 
 # ── A2A Server Registry ─────────────────────────────────────────────────────
 a2a_servers:

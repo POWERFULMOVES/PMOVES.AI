@@ -1,13 +1,13 @@
 ---
-name: shift:from-bpm
+name: shift-from-bpm
 description: >
   Single-shot beats-to-voice pipeline. Encodes text at a target BPM into a
   CGP v0.2 prosodic packet and publishes to tokenism.prosodic.bpm.v1.
   BPM values: 60 (sentence/largo), 80 (breath/adagio), 90 (clause/andante),
-  120 (phrase/moderato), 150 (none/presto). Use shift:listen for daemon mode.
+  120 (phrase/moderato), 150 (none/presto). Use shift-listen for daemon mode.
 ---
 
-# shift:from-bpm — Single-Shot Beats-to-Voice
+# shift-from-bpm — Single-Shot Beats-to-Voice
 
 Runs the Shift Crew pipeline once: encode text at a target BPM, build a
 CGP v0.2 packet, publish to NATS, optionally synthesize via Flute Gateway.
@@ -57,7 +57,7 @@ uv run python -m pmoves.tools.bpm_encoder --stdin \
 | `mr-clean` | 120 | 1.1 | 0.1 |
 | `default` | auto | 1.0 | 0.7 |
 
-Set with: `BEATS_VOICE=dr-bean` or use `persona:bind` skill first.
+Set with: `BEATS_VOICE=dr-bean` or use `persona-bind` skill first.
 
 ## NATS Output
 
@@ -77,6 +77,6 @@ Published to: `tokenism.prosodic.bpm.v1`
 ## Notes
 
 - Requires NATS to be reachable (graceful fail if not)
-- Use `persona:bind` first to set voice persona for the session
-- See `shift:listen` for continuous daemon mode
+- Use `persona-bind` first to set voice persona for the session
+- See `shift-listen` for continuous daemon mode
 - See `chit:bpm` skill for BPM-only CHIT operations

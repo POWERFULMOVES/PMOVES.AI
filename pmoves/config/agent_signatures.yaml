@@ -56,9 +56,13 @@ signatures:
         accent: "#A7F3D0"
         voice: architectural
         description: "KiloCode on GLM coding plan — 5090 GPU node, DARKXSIDE co-creation"
-        model: "zai/glm-5-turbo"
+        model: "zai/glm-5.2"
+        fallback_model: "zai/glm-5-turbo"
         node: "5090"
         cocreator: "darkxside"
+        tensorzero_function: "coding_kilocode"
+        provider_cascade: "pmoves/tools/models/kilocode_provider_cascade.yaml"
+        agent_profile: "pmoves/configs/agent-profiles/kilocode_glm.yaml"
 
   codex:
     agent_id: "codex"

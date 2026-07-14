@@ -1,0 +1,60 @@
+# ============================================================
+# KiloCode Plan-Routed Model Suit
+# # Role: Orchestration overflow via KiloCode plan-routed lane
+# Best for: When GLM coding plan quota is exhausted, or for
+#   provider-routed inference where KiloCode picks the model
+# Provider: KiloCode (api.kilocode.ai)
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: kilo-auto/balanced
+  provider: kilocode
+  base_url: "https://api.kilocode.ai/api/openrouter"
+  api_key_env: KILOCODE_API_KEY
+
+  architecture:
+    type: moe  # Provider-routed — underlying architecture varies
+    total_params: "variable"
+    active_params: "variable"
+    attention: standard
+
+  context:
+    max_window: 128000
+    effective_window: 32000
+    working_window: 16000
+
+  defaults:
+    temperature: 0.7
+    top_p: 0.95
+    max_tokens: 8192
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+
+  advanced:
+    tool_call_parser: openai
+    enable_thinking: false
+    mtp_steps: 1
+
+  harness_mappings:
+    orchestration_overflow:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+
+    plan_routed_coding:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+
+  cgp_state_vector:
+    delta: 0.4
+    Hz: 0.12
+    kappa: 1.2
+    A: 0.4
+    F: 0.06
+
+  fallback_to: glm-5-turbo
+  priority: 8

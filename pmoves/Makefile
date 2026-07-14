@@ -177,7 +177,9 @@ include mk/mcp-toolkit-4090.mk
 include mk/mcp-toolkit-spark.mk
 include mk/unsloth.mk
 include mk/creator.mk
+include mk/kilo.mk
 include mk/voice.mk
+include mk/kong.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -4222,3 +4224,16 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  echo "    Run 'make -C pmoves mcp-spark-connect' to generate it from Docker MCP Toolkit."; \
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
+
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves
+claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
+	@bash $(CURDIR)/scripts/claude-pmoves.sh delivery-agent
+
+kimi-pmoves: ## Launch Kimi Code CLI with PMOVES project config and MCP
+	@bash $(CURDIR)/scripts/kimi-pmoves.sh
+
+kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
+	@bash $(CURDIR)/scripts/kilo-pmoves.sh 5090
+
+codex-pmoves: ## Launch Codex CLI with PMOVES context
+	@bash $(CURDIR)/scripts/codex-pmoves.sh
