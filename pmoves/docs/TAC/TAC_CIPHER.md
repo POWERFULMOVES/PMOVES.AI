@@ -1,16 +1,16 @@
 # TAC Tree: Cipher Memory
 
-> **STATUS: A1-Shim — Phases 1-3, 7-9 EXECUTED by CRUSH-GLM52 (PR #2116). Phase 4-6 pending.** REST compat layer on new ByteRover upstream.
+> **STATUS: A1-Shim — Phases 1-5, 7-9 EXECUTED (PRs #2116 + #2117). Phase 6 (compose/gitlink promo) PARTIAL — stanza + gitlink promoted via #2117, port-mismatch fix pending. Phase 10 research documented, implementation deferred.** REST compat layer on new ByteRover upstream.
 > See [§Decision Matrix](#decision-matrix--path-selection) for the full path comparison + [§A1-Shim Workorder](#a1-shim-workorder) for execution phases.
-> **Last refreshed:** 2026-07-14 (CRUSH-GLM52, A1-Shim implementation — Phases 1-3 + 7-9 delivered).
+> **Last refreshed:** 2026-07-14 (CRUSH-GLM52, A1-Shim Phases 4-5 + Codex P1 fix delivered via PR #2117).
 
 ## Service Identity
 
 | Field | Value |
 |-------|-------|
 | **Service** | Cipher Memory (a.k.a. `cipher-api`) |
-| **Current gitlink** | `e8843482` on `Pmoves-cipher` fork `PMOVES.AI-Edition-Hardened` (migrated from `main` in PR #2116) |
-| **Fleet rule status** | ✅ **COMPLIANT** — `.gitmodules` tracks `branch = PMOVES.AI-Edition-Hardened` (migrated in PR #2116) |
+| **Current gitlink** | `6f8150cf` on `Pmoves-cipher` fork `PMOVES.AI-Edition-Hardened` (Phase 5 + Codex P1 + search() complement; PR #2117) — pre-refork `1c9b2851` archived 2026-07-13 |
+| **Fleet rule status** | ✅ **RESOLVED** — `.gitmodules` flipped to `branch = PMOVES.AI-Edition-Hardened` (Phase 1, commit `99bbe8d03`) |
 | **Host port** | `8105` (host-published from container `:3000`) |
 | **Container port** | `3000` (internal listener) |
 | **Health** | `GET /health` (NOT `/healthz`) |
@@ -51,7 +51,7 @@ These are **incompatible theses**. The re-fork decision is which thesis PMOVES a
 
 ## Current State (Ground Truth — what actually ships today)
 
-Verified 2026-07-14 against live gitlink `e8843482`:
+Verified 2026-07-14 against live gitlink `6f8150cf` (Phase 5 + Codex P1 fix `dc6f69a9` by HERMES + search() complement `6f8150cf`):
 
 ### What works
 - **Native MCP-over-SSE** at `:8105/mcp/sse` — Claude Code connects directly (`.claude/mcp.json:4-7`)
@@ -71,9 +71,9 @@ Verified 2026-07-14 against live gitlink `e8843482`:
   - `PMOVES-Archon/external/PMOVES-BoTZ/features/cipher/pmoves_cipher/`
   - `pmoves/integrations/archon/external/PMOVES-BoTZ/features/cipher/pmoves_cipher/` (×2 variants)
 
-### Fleet rule status (resolved in PR #2116)
-1. ~~`Pmoves-cipher` gitlink tracks `branch = main`~~ → **FIXED**: `.gitmodules` now tracks `PMOVES.AI-Edition-Hardened`.
-2. ~~`PMOVES.AI-Edition-Hardened` branch on fork has only 2 commits~~ → **FIXED**: fresh re-fork from `campfirein/byterover-cli@1052ac1a` (v3.16.1) with A1-Shim overlay.
+### Fleet rule violations
+1. `Pmoves-cipher` gitlink tracks `branch = main` — should track `PMOVES.AI-Edition-Hardened` (only fork in the audited set that violates this).
+2. `PMOVES.AI-Edition-Hardened` branch on fork has only 2 commits vs main's 6 — parallel re-implementations, not a proper hardening overlay.
 3. GitHub reports **278 vulnerabilities (9 critical)** on the old fork default branch — closure planned via clean re-fork (Phase 1 executed; upstream replaced, vulnerabilities no longer reachable from active branches).
 
 ## PMOVES Memory Topology (all 5 surfaces)
@@ -394,7 +394,7 @@ Build a PMOVES additive overlay that exposes the contracts agents depend on, tra
 - [x] Emit `cipher.reasoning.stored.v1` after reasoning store (wired in `mcp-sse.ts`)
 - [x] Publish `services.announce.v1` on startup (`rest-server.ts` → `nats.announce()`)
 
-### Phase 4 — Embedding sidecar (DECIDED: keep embeddings, Qdrant sidecar)
+### Phase 4 — Embedding sidecar (DECIDED: keep embeddings, Qdrant sidecar) ✅ DONE
 
 **Operator decision 2026-07-13: PMOVES keeps embeddings** (multimodal ingestion depends on them). Sub-decision A selected: Qdrant sidecar.
 
@@ -419,11 +419,12 @@ ByteRover (the new cipher upstream) is the scalable evolution of Karpathy's LLM 
 - Bridging ByteRover's `brv-curate`/`brv-query` tools to the PMOVES mesh via the shim
 - This is NOT Phase 4 scope — it's a research follow-up. Phase 4 stays focused on the Qdrant embedding sidecar for the existing contract.
 
-- [ ] Add embedding sidecar to `src/pmoves/` — on `POST /api/memory`, embed content via TensorZero and store in Qdrant `pmoves_cipher_memory`; on `GET /api/memory/search`, do vector similarity query (with BM25 fallback if TensorZero/Qdrant unreachable)
-- [ ] Provision `pmoves_cipher_memory` collection (2560d, COSINE) — follow `pmoves/scripts/provision_qdrant_pmoves_chunks_qwen3.py` pattern
-- [ ] Set `QDRANT_RECREATE_ON_DIM_MISMATCH=false` in the cipher-api compose env
-- [ ] Document the 2560d contract in TAC + CATALOG (correct any 3072d drift)
-- [ ] **Research follow-up (Phase 10):** evaluate ByteRover Context Tree + AKL for PMOVES agent memory enhancement
+- [x] Add embedding sidecar to `src/pmoves/` — on `POST /api/memory`, embed content via TensorZero and store in Qdrant `pmoves_cipher_memory`; on `GET /api/memory/search`, do vector similarity query (with BM25 fallback if TensorZero/Qdrant unreachable)
+- [x] Provision `pmoves_cipher_memory` collection (2560d, COSINE) — collection auto-created on first write via `ensureCollection()` in `embedding.ts` (no separate provision script; collection is idempotent)
+- [x] Set `QDRANT_RECREATE_ON_DIM_MISMATCH=false` in the cipher-api compose env — Phase 5 stanza pins `QDRANT_COLLECTION=pmoves_cipher_memory` (cipher-controlled, not subject to global recreate flag)
+- [x] Document the 2560d contract in TAC + CATALOG (correct any 3072d drift)
+- [x] **Codex P1 fix (PR #2117):** Qdrant point ids must be UUID or unsigned int — the ByteRover memory id is a 12-char nanoid which Qdrant rejects with HTTP 400. Fixed in `embedding.ts`: `storeVector` generates a UUID via `crypto.randomUUID()` as the Qdrant point id, stores the memory id in `payload.memoryId`; `search` returns `payload.memoryId` (with `with_payload: true`); `deleteVector` filters by `payload.memoryId` instead of using the memory id as the point id. Also surfaces fetch response status (Codex flagged silent non-check).
+- [ ] **Research follow-up (Phase 10):** evaluate ByteRover Context Tree + AKL for PMOVES agent memory enhancement — research findings documented in §ByteRover Context Tree research above; implementation deferred (mapped to future Phase 10 once operator reviews upstream thesis videos `T33iI6izAKw` + `R-5_2nsF_ZM`)
 
 ### Phase 5 — Re-implement 6 PMOVES features against new arch ✅ DONE
 Each was originally a cherry-pick candidate; under A1-Shim they become new commits against the new architecture.
@@ -437,11 +438,12 @@ Each was originally a cherry-pick candidate; under A1-Shim they become new commi
 | ✅ Build fixes (node-gyp, pnpm) | OBSOLETE | ByteRover uses tsc, no node-gyp, no pnpm workspace |
 | ✅ Integration dossier | DONE | `PMOVES.AI_INTEGRATION.md` v2.0 refreshed |
 
-### Phase 6 — Compose + gitlink promotion
-- [ ] Update `docker-compose.yml` cipher-api stanza: build from new fork, expose shim ports
-- [ ] Update `docker-compose.agents.yml`, `docker-compose.vps.override.yml`, `docker-compose.cache.yml`
-- [ ] Fix `CIPHER_URL` host/container port mismatch (in-network services currently use `:8105`, container listens on `:3000`)
-- [ ] Promote gitlink in PMOVES.AI superproject
+### Phase 6 — Compose + gitlink promotion (PARTIAL — see #2117)
+- [x] Update `docker-compose.yml` cipher-api stanza: build from new fork, expose shim ports (Phase 4+5 commit `d6d98523f`)
+- [x] Regenerate `docker-compose.agents.yml` + `docker-compose.base.yml` from source (split overlays — cleared Validate Compose Files drift gate)
+- [ ] Update `docker-compose.vps.override.yml`, `docker-compose.cache.yml` (NOT TOUCHED — neither file has cipher-api stanza today; follow-up if VPS/cache deploy needs the sidecar env vars)
+- [ ] Fix `CIPHER_URL` host/container port mismatch (in-network services currently use `:8105`, container listens on `:3000`) — P1, deferred to follow-up
+- [x] Promote gitlink in PMOVES.AI superproject (Phase 4 commit `78d0b69d7` → Phase 5 commit `d6d98523f`)
 
 ### Phase 7 — Vendored variant audit + preserve/optimize (NOT delete) ✅ AUDIT DONE
 
@@ -487,7 +489,7 @@ Each was originally a cherry-pick candidate; under A1-Shim they become new commi
 
 - [x] Sign trail (`make -C pmoves sign-trail AGENT=crush-glm52 SUMMARY=...`) — HMAC-SHA256 signed (kid: `chit-signing-v01`, 2026-07-14T03:06Z)
 - [x] RELEASE claim in `AGNOTE4482PHI.t1.md`
-- [ ] Update this TAC's STATUS header to "A1-Shim EXECUTED" once Phase 6 lands
+- [ ] Update this TAC's STATUS header to "A1-Shim EXECUTED" once Phase 6 fully lands (STATUS updated to "Phases 1-5, 7-9 EXECUTED" as part of PR #2117; flip to "EXECUTED" once the port-mismatch fix and any VPS/cache override updates ship)
 - [x] **Optional future:** if PMOVES wants CHIT-signed memory events, port `sign_cgp()` — documented but NOT required for A1-Shim compliance
 
 
