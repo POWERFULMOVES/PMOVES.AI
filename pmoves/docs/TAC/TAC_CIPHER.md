@@ -394,12 +394,21 @@ Build a PMOVES additive overlay that exposes the contracts agents depend on, tra
 - [ ] Emit `cipher.reasoning.stored.v1` after reasoning store
 - [ ] Publish `services.announce.v1` on startup (preserve service discovery contract — `ServiceAnnouncementListener` at `pmoves/services/common/nats_service_listener.py:130` IS listening)
 
-### Phase 4 — Embedding sidecar (the semantic-search decision)
-ByteRover eliminated embeddings in favor of BM25. PMOVES's Marco/Polo pattern depends on semantic similarity across phrasings. A1-Shim needs a sub-decision: keep embeddings or accept BM25-only?
+### Phase 4 — Embedding sidecar (DECIDED: keep embeddings, Qdrant sidecar)
 
-- [ ] **Sub-decision A:** Thin Qdrant sidecar — shim indexes memories into Qdrant on `POST /api/memory`, queries Qdrant on `GET /api/memory/search`, falls back to ByteRover BM25 on miss. Preserves Marco/Polo.
-- [ ] **Sub-decision B:** Accept BM25-only. Drop the embedding sidecar. Document the tradeoff (lost semantic recall) in the TAC. Lower effort, lower capability.
-- [ ] Whatever is chosen, document it in this TAC as a sub-section.
+**Operator decision 2026-07-13: PMOVES keeps embeddings** (multimodal ingestion depends on them). Sub-decision A selected: Qdrant sidecar.
+
+Research findings (3-agent fan-out 2026-07-13):
+- **LongBow is documentation-only** — never integrated. `LONGBOW_INTEGRATION.md` + `LONGBOW_COMPARATIVE_ANALYSIS.md` describe a planned vector DB + learned router, but Qdrant (:6333) is the de facto vector layer today.
+- **Primary embedder:** Qwen3-Embedding-4B @ **2560d** via TensorZero `http://tensorzero-gateway:3030/openai/v1/embeddings` (NOT `/v1/embeddings` — 404s). Model payload: `{"model": "tensorzero::embedding_model_name::qwen3_embedding_4b_local"}`.
+- **Shared Qdrant, separate collections:** `pmoves_chunks_qwen3` (2560d, Hi-RAG/extract-worker), `pmoves_chunks` (384d legacy). Cipher sidecar uses a NEW collection `pmoves_cipher_memory` (2560d, COSINE) — NOT the Hi-RAG collection (would pollute document recall with conversational memory).
+- **Multimodal stays in dedicated services:** CLAP (:8108, 512d audio), CLIP (inline image ranking in Hi-RAG geometry route). Sidecar is text-only.
+- **Dimension landmines:** (1) docs sometimes cite 3072d for Qwen3-4B — actual is 2560d; (2) `QDRANT_RECREATE_ON_DIM_MISMATCH=true` defaults in some compose files could destroy collections — pin to `false` for the sidecar.
+
+- [ ] Add embedding sidecar to `src/pmoves/` — on `POST /api/memory`, embed content via TensorZero and store in Qdrant `pmoves_cipher_memory`; on `GET /api/memory/search`, do vector similarity query (with BM25 fallback if TensorZero/Qdrant unreachable)
+- [ ] Provision `pmoves_cipher_memory` collection (2560d, COSINE) — follow `pmoves/scripts/provision_qdrant_pmoves_chunks_qwen3.py` pattern
+- [ ] Set `QDRANT_RECREATE_ON_DIM_MISMATCH=false` in the cipher-api compose env
+- [ ] Document the 2560d contract in TAC + CATALOG (correct any 3072d drift)
 
 ### Phase 5 — Re-implement 6 PMOVES features against new arch
 Each was originally a cherry-pick candidate; under A1-Shim they become new commits against the new architecture.
@@ -419,11 +428,29 @@ Each was originally a cherry-pick candidate; under A1-Shim they become new commi
 - [ ] Fix `CIPHER_URL` host/container port mismatch (in-network services currently use `:8105`, container listens on `:3000`)
 - [ ] Promote gitlink in PMOVES.AI superproject
 
-### Phase 7 — Stale vendored copy cleanup
-- [ ] Delete `PMOVES-BoTZ/features/cipher/pmoves_cipher/` (pre-PR-#5, lacks `/api/memory`)
-- [ ] Delete `PMOVES-Archon/external/PMOVES-BoTZ/features/cipher/pmoves_cipher/`
-- [ ] Delete `pmoves/integrations/archon/external/PMOVES-BoTZ/features/cipher/pmoves_cipher/` (both variants)
-- [ ] Replace with TAC_CIPHER.md cross-link so agents don't get confused again
+### Phase 7 — Vendored variant audit + preserve/optimize (NOT delete)
+
+**Correction 2026-07-13:** The 4 sites are NOT stale duplicates. They are the **BoTZ cipher variant** — a legitimate submodule nesting with its own NATS namespace (`botz.cipher.*`), port (8081), config (`cipher_pmoves.yml` with TensorZero+Qwen3), and Python MCP bridge. The operator confirmed these are submodule forks with branch variants that must be preserved.
+
+**Variant map (3-agent research fan-out 2026-07-13):**
+
+| Site | Path | Type | Branch | Status |
+|------|------|------|--------|--------|
+| 1 | `PMOVES-BoTZ/features/cipher/pmoves_cipher/` | nested submodule | (no branch specified) | UNINITIALIZED (empty) |
+| 2 | `PMOVES-Archon/external/PMOVES-BoTZ/.../pmoves_cipher/` | 3-level nested submodule | (inherits BoTZ) | INIT @ `51eea546` (OLD cipher v0.3.0) |
+| 3 | `pmoves/integrations/archon/external/PMOVES-BoTZ/.../pmoves_cipher/` | 4-level nested submodule | (inherits Archon→BoTZ) | INIT @ `51eea546` (SAME as Site 2) |
+| 4 | `PMOVES-DoX/external/PMOVES-BoTZ/.../pmoves_cipher/` | nested submodule | `PMOVES.AI-Edition-Hardened` (via DoX BoTZ) | UNINITIALIZED (empty) |
+
+**DoX also has a NATIVE Python CipherService** at `PMOVES-DoX/backend/app/services/cipher_service.py` (port 8096, team workspace memory with RLS, in-memory dicts + DoX DB). This is a NAMESAKE — separate impl, NOT the cipher submodule.
+
+**BoTZ NATS namespace (parallel, live):** `botz.cipher.memory.stored.v1`, `botz.cipher.memory.recalled.v1`, `botz.cipher.pattern.detected.v1`, `botz.cipher.reasoning.complete.v1` — intentionally separate from main `cipher.memory.*.v1`.
+
+- [ ] **Preserve all 4 sites** — they are legitimate BoTZ/DoX variants, not stale copies
+- [ ] Add `branch = PMOVES.AI-Edition-Hardened` to `PMOVES-BoTZ/.gitmodules` cipher entry (currently no branch specified — defaults to repo default, which is now the re-forked upstream)
+- [ ] Diff `pmoves_cipher_backup/` dirs (vendored pre-submodule snapshots at 3 BoTZ sites) against the initialized submodule — confirm no unique patches before deciding whether to delete
+- [ ] Investigate Sites 2+3 symlink consolidation (same PMOVES-Archon repo at two superproject paths)
+- [ ] Document the BoTZ cipher variant in this TAC as a sub-section (own port, own NATS namespace, own config) so future agents stop conflating it with the main cipher-api
+- [ ] Document the DoX dual-cipher surfaces (Node.js submodule :3000 + Python CipherService :8096) explicitly
 
 ### Phase 8 — Doc reconcile (single source of truth)
 - [ ] `CATALOG.md` cipher block — update routes, ports, transport
@@ -432,10 +459,21 @@ Each was originally a cherry-pick candidate; under A1-Shim they become new commi
 - [ ] `.claude/skills/pmoves-cipher-memory/SKILL.md` — update transport refs
 - [ ] `nats-subjects.md` — mark cipher.* subjects as shim-emitted (not bridge-emitted)
 
-### Phase 9 — Trail + RELEASE
-- [ ] Sign trail (`make -C pmoves sign-trail AGENT=crush-glm52 SUMMARY=...`)
+### Phase 9 — Trail + RELEASE + CHIT cross-reference
+
+**CHIT findings (3-agent research 2026-07-13):**
+- CHIT signs CGP geometry bus packets (`geometry.cgp.v1`) and agent Graphiti trail entries — NOT memory stores
+- Memory stores are unsigned today; no consumer verifies signatures on cipher memory; no gate would reject unsigned memories
+- ByteRover's `Memory` type has NO provenance fields; CHIT on memory would be a purely additive overlay on the NATS event payload (not required for compliance)
+- The semantic-cache uses CHIT/NATS for cache invalidation (`cache.invalidate.*` subjects) — NOT for verifying cipher responses
+- No signing identity card exists for cipher-memory (24 cards in `signing_identity_cards.yaml`, none for cipher)
+
+**Minimum CHIT integration:** sign the trail entry after delivery. No in-band memory signing required.
+
+- [ ] Sign trail (`make -C pmoves sign-trail AGENT=crush-glm52 SUMMARY=...`) — records agent provenance for shipping the shim
 - [ ] RELEASE claim in `AGNOTE4482PHI.t1.md`
 - [ ] Update this TAC's STATUS header to "A1-Shim EXECUTED" once Phase 6 lands
+- [ ] **Optional future:** if PMOVES wants CHIT-signed memory events, port `sign_cgp()` (HMAC-SHA256 over canonical JSON, ~15 lines of TypeScript `crypto.createHmac`) and add a `sig` block to the NATS event payload. Provision a signing identity card for cipher-memory. NOT required for A1-Shim compliance.
 
 
 
