@@ -33,27 +33,33 @@ def _get_signing_key() -> str:
 
     Priority:
     1. CHIT_SIGNING_KEY  (recommended — separate key for signing)
-    2. CHIT_PASSPHRASE   (legacy fallback — same key for signing + encryption)
-    3. CHIT_SIGNING_KEY_FILE  (file path containing the key)
+    2. CHIT_SIGNING_KEY_FILE  (file path containing the key)
+    3. CHIT_PASSPHRASE   (legacy fallback — same key for signing + encryption)
     4. CHIT_PASSPHRASE_FILE   (file path containing the passphrase)
 
     Raises:
         RuntimeError: if none of the above are set.
     """
+    val = None
+    source = None
     for key in ("CHIT_SIGNING_KEY", "CHIT_PASSPHRASE"):
-        val = os.environ.get(key)
-        if val:
+        v = os.environ.get(key)
+        if v:
+            val = v
+            source = key
             break
         file_path = os.environ.get(f"{key}_FILE")
         if file_path:
             p = Path(file_path)
             if p.is_file():
-                val = p.read_text(encoding="utf-8").strip()
-                if val:
+                content = p.read_text(encoding="utf-8").strip()
+                if content:
+                    val = content
+                    source = f"{key}_FILE"
                     break
-    else:
+    if not val:
         raise RuntimeError("CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var (or _FILE) is required")
-    if not os.environ.get("CHIT_SIGNING_KEY") and os.environ.get("CHIT_PASSPHRASE"):
+    if source == "CHIT_PASSPHRASE":
         logger.warning(
             "Using CHIT_PASSPHRASE for signing — recommend setting CHIT_SIGNING_KEY "
             "separately for key separation"
