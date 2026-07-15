@@ -1,6 +1,47 @@
 {
-  "$schema": "KiloCode opencode.json \u2014 NemoClaw Edge GPU Node (Jetson)",
-  "mcpServers": {
+  "identity": {
+    "node": "spark",
+    "role": "gpu-inference",
+    "description": "DGX Spark \u2014 GB10 Grace-Blackwell primary inference node",
+    "hostname": "pmoves-spark"
+  },
+  "openclaw_overrides": {
+    "agents.defaults.model.primary": "claude-sonnet-4",
+    "tools.profile": "full",
+    "tools.exec.ask": "auto",
+    "channels": {}
+  },
+  "exec_approvals": {
+    "main": {
+      "allowlist": [
+        {
+          "pattern": "/usr/bin/docker",
+          "note": "Docker container management"
+        },
+        {
+          "pattern": "/usr/bin/make",
+          "note": "Make targets"
+        },
+        {
+          "pattern": "/usr/bin/git",
+          "note": "Git operations"
+        },
+        {
+          "pattern": "/usr/bin/curl",
+          "note": "Health checks and API calls"
+        },
+        {
+          "pattern": "/usr/bin/python3",
+          "note": "Python runtime"
+        },
+        {
+          "pattern": "/usr/bin/nvidia-smi",
+          "note": "GPU monitoring"
+        }
+      ]
+    }
+  },
+  "mcp_servers": {
     "pmoves-cipher": {
       "description": "Agent memory (Neo4j knowledge graph)",
       "type": "sse",
@@ -89,33 +130,6 @@
       ]
     }
   },
-  "modes": {
-    "default": "pmoves-code",
-    "available": [
-      "pmoves-code",
-      "pmoves-debug"
-    ]
-  },
-  "modelOverrides": {
-    "primary": "nemotron",
-    "provider": "ollama",
-    "endpoint": "http://localhost:11434"
-  },
-  "node": {
-    "identity": "nemoclaw",
-    "role": "edge-gpu",
-    "services": [
-      "ollama:11434"
-    ]
-  },
-  "nats": {
-    "subscribe": [
-      "mesh.gpu.command.v1"
-    ],
-    "publish": [
-      "mesh.gpu.status.v1",
-      "mesh.gpu.model.loaded.v1",
-      "mesh.gpu.model.unloaded.v1"
-    ]
-  }
+  "damage_control_hooks": true,
+  "sign_trail": true
 }

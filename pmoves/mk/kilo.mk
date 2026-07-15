@@ -97,12 +97,12 @@ kilo-parity-check: ## Report parity gaps between KiloCode GLM and Kimi/Codex/Cla
 	  echo "  ❌ KiloCode cross-linked in .kimi/AGENTS.md"; gaps=$$((gaps+1)); \
 	fi; \
 	echo ""; \
+	mcp_gaps=$$(PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.kilo_parity_mcp_check); \
+	gaps=$$((gaps + mcp_gaps)); \
 	if [ $$blocked -gt 0 ]; then \
 	  echo "[*] Results: $$gaps gap(s) found, $$blocked item(s) blocked by platform (expected)"; \
 	else \
 	  echo "[*] Results: $$gaps gap(s) found"; \
 	fi; \
-	if [ $$blocked -gt 0 ]; then \
-	  echo "[!] Hook implementation blocked — see .kilo/hooks/damage-control/README.md for activation plan"; \
-	fi; \
+	exit $$gaps
 	exit $$gaps
