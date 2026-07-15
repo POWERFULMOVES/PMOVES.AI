@@ -91,38 +91,44 @@ COMPONENT_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "pm-timeline": {
         "required": ["events"],
-        "optional": [],
+        "optional": ["emptyMessage"],
         "shape": {
             "events": list,  # array of {ts, title, body, icon}
+            "emptyMessage": str,
         },
     },
     "pm-voice-clip": {
         "required": ["src", "title"],
-        "optional": ["duration", "transcript"],
+        "optional": ["duration", "transcript", "speaker"],
         "shape": {
             "src": str,  # URL
             "title": str,
             "duration": (str, int, float),
             "transcript": str,
+            "speaker": str,
         },
     },
     "pm-image": {
         "required": ["src", "alt"],
-        "optional": ["caption", "credit"],
+        "optional": ["caption", "credit", "aspectRatio"],
+        "enum": {
+            "aspectRatio": ["1/1", "4/3", "3/2", "16/9", "21/9", "2/3", "9/16"],
+        },
         "shape": {
             "src": str,  # URL
             "alt": str,
             "caption": str,
             "credit": str,
+            "aspectRatio": str,
         },
     },
     "pm-quote-block": {
         "required": ["quote", "attribution"],
-        "optional": ["role"],
+        "optional": ["attributionRole"],
         "shape": {
             "quote": str,
             "attribution": str,
-            "role": str,
+            "attributionRole": str,
         },
     },
 }

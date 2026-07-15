@@ -8,17 +8,17 @@ The library of agent-composable UI surfaces. Per [A2UI v0.1 spec](../contracts/a
 
 ## Initial registry (v0.1)
 
+All 7 v0.1 components are shipped:
+
 | Component | Category | Status | File |
 |-----------|----------|--------|------|
 | `<pm-space-agent-card>` | space | shipped | [`pm-space-agent-card/`](./pm-space-agent-card/) |
 | `<pm-project-card>` | project | shipped | [`pm-project-card/`](./pm-project-card/) |
 | `<pm-metric-tile>` | metric | shipped | [`pm-metric-tile/`](./pm-metric-tile/) |
-| `<pm-timeline>` | flow | **planned (v0.1)** | (TBD) |
-| `<pm-voice-clip>` | media | **planned (v0.1)** | (TBD) |
-| `<pm-image>` | media | **planned (v0.1)** | (TBD) |
-| `<pm-quote-block>` | text | **planned (v0.1)** | (TBD) |
-
-The first 3 ship in this lane (Mavis-5090). The remaining 4 follow as small follow-up lanes.
+| `<pm-timeline>` | flow | shipped | [`pm-timeline/`](./pm-timeline/) |
+| `<pm-voice-clip>` | media | shipped | [`pm-voice-clip/`](./pm-voice-clip/) |
+| `<pm-image>` | media | shipped | [`pm-image/`](./pm-image/) |
+| `<pm-quote-block>` | text | shipped | [`pm-quote-block/`](./pm-quote-block/) |
 
 ## How to use
 
