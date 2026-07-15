@@ -1030,6 +1030,17 @@ up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 	@$(MAKE) --no-print-directory wait-data
 	@echo "✅ Data tier ready"
 
+.PHONY: reset-data-tier
+reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreate with current credentials
+	@echo "⚠️  This will DELETE all data-tier volumes (Neo4j, Qdrant, Meilisearch, MinIO)."
+	@echo "⚠️  Press Ctrl+C to abort. Continuing in 3 seconds..."
+	@sleep 3
+	@$(DC) stop $(DATA_SERVICES) 2>/dev/null || true
+	@$(DC) rm -f $(DATA_SERVICES) 2>/dev/null || true
+	@docker volume rm $(PROJECT)_neo4j-data $(PROJECT)_qdrant-data $(PROJECT)_meilisearch-data $(PROJECT)_minio-data 2>/dev/null || true
+	@$(MAKE) --no-print-directory up-data-tier
+	@echo "✅ Data tier reset with current env.tier-data credentials"
+
 .PHONY: up-minio
 up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@echo "📦 Starting MinIO..."

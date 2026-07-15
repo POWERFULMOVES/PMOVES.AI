@@ -2576,14 +2576,6 @@ services:
     build:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
-    # The upstream Agent Zero entrypoint calls chpasswd and expects root. Keep
-    # the hardened tier for everything else, but run the container as root so
-    # the inner runtime can initialize. Volumes remain host-mounted.
-    # DAC_OVERRIDE is required because /a0 is populated at runtime from
-    # /git/agent-zero and host-mounted data dirs are owned by the host user.
-    user: "0:0"
-    cap_add:
-    - DAC_OVERRIDE
     restart: unless-stopped
     environment:
     - PORT=8080
