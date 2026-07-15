@@ -32,6 +32,9 @@ SUPPORTED_COMPONENTS = frozenset({
     "pm-image",
     "pm-quote-block",
     "pm-haptic",
+    # v0.2 stateful components (DRAFT)
+    "pm-toast",
+    "pm-ballot",
 })
 
 
@@ -141,6 +144,34 @@ COMPONENT_SCHEMAS: dict[str, dict[str, Any]] = {
             "dataSource": str,  # NATS subject or HTTP URL
             "enabled": bool,
             "respectReducedMotion": bool,
+        },
+    },
+    # ---- v0.2 stateful components (DRAFT) ----
+    "pm-toast": {
+        "required": [],
+        "optional": ["variant", "timeout", "position"],
+        "enum": {
+            "variant": ["success", "error", "warning", "info"],
+        },
+        "shape": {
+            "variant": str,
+            "timeout": (int, float),  # ms; 0 = no auto-dismiss
+            "position": str,
+        },
+    },
+    "pm-ballot": {
+        "required": ["ballotId", "title", "options", "eligibleVoters"],
+        "optional": ["description", "quorum", "closesAt", "voterId", "dataStateSource"],
+        "shape": {
+            "ballotId": str,
+            "title": str,
+            "description": str,
+            "options": list,  # [{id, label}, ...]
+            "eligibleVoters": int,
+            "quorum": (int, float),  # 0-1 fraction
+            "closesAt": str,  # ISO 8601
+            "voterId": str,
+            "dataStateSource": str,
         },
     },
 }

@@ -17,3 +17,7 @@ import './pm-voice-clip/pm-voice-clip.js';
 import './pm-image/pm-image.js';
 import './pm-quote-block/pm-quote-block.js';
 import './pm-haptic/pm-haptic.js';  // no visible DOM, haptic output only
+
+// v0.2 stateful components (DRAFT)
+import './pm-toast/pm-toast.js';
+import './pm-ballot/pm-ballot.js';
