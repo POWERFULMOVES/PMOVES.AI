@@ -122,8 +122,9 @@ This guide aggregates the entry points that keep local environments consistent a
 
 ## Kimi Code CLI (PMOVES-KIMI)
 - `make -C pmoves kimi` → launch Kimi Code CLI with the PMOVES project config (`.kimi/config.toml`) and MCP set (`.kimi/mcp.json`). This loads local model aliases (`pmoves/qwen3.5-35b`, `pmoves/hermes-v4-8b`, etc.) and wires cipher, docker, e2b, nats-fleet, supabase, and huggingface MCP servers.
-- Required environment variables for full MCP functionality: `MOONSHOT_API_KEY` (remote Kimi models), `E2B_API_KEY` (sandbox execution), `NATS_URL` (fleet messaging), `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY` (PostgREST), `HF_TOKEN` (HuggingFace higher rate limits).
-- Bootstrap context is auto-loaded from `.kimi/AGENTS.md`. Existing `.claude/skills/` are cross-loaded into Kimi because `merge_all_available_skills` is enabled in `.kimi/config.toml`.
+- Required environment variables for full MCP functionality: `E2B_API_KEY` (sandbox execution), `NATS_URL` (fleet messaging), `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY` (PostgREST), `HF_TOKEN` (HuggingFace higher rate limits).
+- **Optional** — Remote Kimi models: `MOONSHOT_API_KEY` (enables `kimi-for-coding` / `kimi-k2.7-code`). Local Ollama MCP sessions do not require it.
+- Bootstrap context is auto-loaded from `.kimi/AGENTS.md`. Skills are scoped to `.kimi/skills/` only (`merge_all_available_skills = false` in `.kimi/config.toml`).
 
 ## Creator / Danger Room
 - `make -C pmoves danger-room-build-theme` → play the Danger Room build theme. Audio source order:
