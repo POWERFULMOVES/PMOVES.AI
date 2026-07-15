@@ -36,22 +36,40 @@
 ## Bootstrap Sequence
 
 1. **Install Crush** — see upstream [Charm Crush](https://github.com/charmbracelet/crush) README
-2. **Generate config**:
+2. **Install LSP servers** (optional but recommended for IDE-like diagnostics):
    ```bash
-   python3 -m pmoves.tools.mini_cli crush setup
+   npm install -g pyright typescript-language-server
+   pip install ruff
    ```
-3. **Verify Graphiti paths** are in `crush.json`:
+3. **Run fleet bootstrap** (generates config, resolves CHIT passphrase, tests signing):
+   ```bash
+   make -C pmoves crush-bootstrap
+   ```
+   This script:
+   - Resolves `CHIT_PASSPHRASE` from secrets funnel tier files, `local.env`, or env var
+   - Generates `~/.config/crush/crush.json` with providers + MCP servers
+   - Tests trail signing end-to-end
+   - Reports status with next steps
+
+   **Manual CHIT passphrase** (if secrets funnel not provisioned):
+   ```bash
+   export CHIT_PASSPHRASE="your-passphrase"
+   # OR set a file path:
+   export CHIT_PASSPHRASE_FILE="/path/to/passphrase"
+   ```
+
+4. **Verify Graphiti paths** are in `crush.json`:
    ```bash
    python3 -c "
    import json
    config = json.load(open('crush.json', encoding='utf-8'))
-   paths = config['options']['context_paths']
+   paths = config.get('options', {}).get('context_paths', [])
    graphiti = [p for p in paths if 'AGENT_TRAIL' in p or 'GRAPHITI' in p or 'agent_signatures' in p]
    print(f'Graphiti context paths ({len(graphiti)}):')
    for p in graphiti: print(f'  {p}')
    "
    ```
-4. **Launch Crush** in the repo root:
+5. **Launch Crush** in the repo root:
    ```bash
    crush
    ```
@@ -96,6 +114,72 @@ When Crush completes significant work, write a graphiti block in `docs/AGENT_TRA
 | **Hi-RAG v2** (`localhost:8086`) | Knowledge retrieval, semantic search |
 | **TensorZero** (`localhost:3030/v1`) | All LLM calls route through here |
 | **NATS** (`localhost:4222`) | Event-driven coordination |
+
+## CHIT Trail Signing
+
+Crush signs trail entries using the same CHIT infrastructure as all PMOVES agents.
+
+**Passphrase resolution** (automatic, no manual export needed):
+1. `CHIT_SIGNING_KEY` env var (recommended)
+2. `CHIT_PASSPHRASE` env var
+3. `CHIT_SIGNING_KEY_FILE` / `CHIT_PASSPHRASE_FILE` (file path containing the key)
+4. `pmoves/env.tier-*` files (populated by `make secrets-funnel`)
+
+When no passphrase is found, signing silently degrades to unsigned (acceptable in dev).
+
+**Sign a trail entry:**
+```bash
+make -C pmoves sign-trail AGENT=crush-knuckles SUMMARY="Completed fleet work" PHASE="session"
+```
+
+**Fleet bootstrap** (resolves passphrase + generates config + tests signing):
+```bash
+make -C pmoves crush-bootstrap
+```
+
+## Fleet Deployment
+
+### Prerequisites per Node
+
+| Requirement | Install | Purpose |
+|-------------|---------|---------|
+| **Crush CLI** | [Charm Crush](https://github.com/charmbracelet/crush) | Agent harness |
+| **Node.js 18+** | nvm / package manager | Z.AI MCP server (`npx`) |
+| **Python 3.11+** | system / miniforge | PMOVES tools |
+| **pyright** | `npm install -g pyright` | Python LSP |
+| **typescript-language-server** | `npm install -g typescript-language-server` | TypeScript LSP |
+| **ruff** | `pip install ruff` | Python linter/formatter |
+| **PyYAML** | `pip install pyyaml` | Hermes YAML merge |
+| **gopls** (optional) | Go runtime required | Go LSP (non-blocking for Python/TS repos) |
+
+### Deployment Steps (any fleet node)
+
+```bash
+# 1. Pull latest main
+cd ~/pinokio/api/PMOVES.AI && git pull origin main
+
+# 2. Provision secrets (one-time, or after rotation)
+make -C pmoves secrets-funnel
+
+# 3. Bootstrap Crush (config + CHIT + signing test)
+make -C pmoves crush-bootstrap
+
+# 4. Launch Crush
+crush
+```
+
+### Verify Deployment
+
+```bash
+# Check LSP servers
+which pyright typescript-language-server ruff
+
+# Check CHIT signing
+make -C pmoves sign-trail AGENT=crush-$(hostname -s) SUMMARY="bootstrap verify" PHASE="deploy" --no-log
+
+# Check MCP connectivity
+# (visible in Crush startup output or crush_info)
+```
 
 ## Priority File References
 
