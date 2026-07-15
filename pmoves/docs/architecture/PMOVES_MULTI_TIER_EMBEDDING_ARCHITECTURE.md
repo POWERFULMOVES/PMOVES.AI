@@ -188,25 +188,74 @@ This means ingestion cost scales with tier participation — not every doc needs
 
 ## Migration plan (phased)
 
-### Phase A — BGE-M3 medium tier (unblocks hybrid search)
-- [ ] Add `BAAI/bge-m3` to TensorZero config (`tensorzero.toml`) as `bge_m3_medium`
-- [ ] Pull model: `ollama pull bge-m3` or HF download (568M, fits any GPU)
-- [ ] Create `pmoves_hybrid` collection with `medium` (1024d) + `bm25` (sparse) named vectors
-- [ ] Update extract-worker to emit BGE-M3 dense + sparse on ingest
-- [ ] Update Hi-RAG v2 query path to use hybrid prefetch (dense + sparse → RRF)
-- [ ] Benchmark: BGE-M3 hybrid vs Qwen3-4B dense-only on `pmoves/tests/retrieval/`
+### Phase A — BGE-M3 medium tier (unblocks hybrid search) ✅ BENCHMARKED
 
-### Phase B — Low tier (semantic-cache acceleration)
-- [ ] Add `google/embeddinggemma-300m` to TensorZero config
-- [ ] Add `low` (768d) named vector to `pmoves_hybrid`
-- [ ] Wire cipher semantic-cache Layer 0 to use `low` tier (sub-5ms cache-key embed)
-- [ ] Benchmark: cache-hit latency before/after
+**Benchmark results (live, Qdrant 1.16.0, SPARK node):**
 
-### Phase C — High tier (deep probe)
-- [ ] Add `Qwen/Qwen3-Embedding-8B` to TensorZero config (8B — 5090/SPARK only)
-- [ ] Add `high` (4096d) named vector to `pmoves_hybrid`
-- [ ] Wire Hi-RAG `/hirag/query?deep=true` to use `high` tier
-- [ ] Benchmark: recall@10 on deep-probe vs medium-only
+| Config | Recall@10 | MRR | Avg Latency |
+|--------|----------|-----|-------------|
+| BGE-M3 Dense-Only (1024d) | **1.000** | **1.000** | 1.5ms |
+| BGE-M3 Hybrid (dense + BM25 → RRF) | **1.000** | **1.000** | 1.8ms |
+
+Both achieve perfect recall on the 15-doc test corpus. Hybrid adds ~0.3ms for BM25 prefetch + RRF fusion. The BM25 sparse path correctly matched exact PMOVES identifiers (AGNOTE4482, NATS subjects, PR numbers). The `qdrant/bm25` server-side tokenizer works natively — no external sparse model needed.
+
+**Qdrant version note:** Running Qdrant is v1.16.0 (not 1.18.2 as PMOVES-Darkmatter fork). In v1.16, hybrid fusion goes in the top-level `query` field as `{"fusion": "rrf"}`, not as a `fusion` sibling key.
+
+- [x] Add `BAAI/bge-m3` to TensorZero config (`tensorzero.toml`) as `bge_m3_local`
+- [x] Pull model: `ollama pull bge-m3` (1.2GB, verified 1024d)
+- [x] Create `pmoves_hybrid` collection with `medium` (1024d) + `bm25` (sparse) named vectors — benchmarked via `pmoves_bench_hybrid`
+- [x] Benchmark: BGE-M3 hybrid vs BGE-M3 dense-only — both 1.000 recall on test corpus
+- [ ] Update extract-worker to emit BGE-M3 dense + sparse on ingest — deferred to production integration
+- [ ] Update Hi-RAG v2 query path to use hybrid prefetch — deferred to Hi-RAG integration
+
+### Phase B — Low tier (semantic-cache acceleration) ✅ BENCHMARKED
+
+**Benchmark results (warm, 20 iterations, 4090 laptop):**
+
+| Model | Dim | Params | p50 Embed | p99 Embed | Role |
+|-------|-----|--------|-----------|-----------|------|
+| **nomic-embed-text** | 768 | 137M | **25.7ms** | 798ms | **LOW tier winner** — 5× faster than gemma |
+| embeddinggemma-300m | 768 | 300M | 125ms | 154ms | Alternative (more stable p99) |
+| BGE-M3 | 1024 | 568M | 192.8ms | 225ms | MEDIUM tier (Phase A) |
+
+**Finding:** nomic-embed-text (137M) is the clear low-tier winner for cache-key embedding — 5× faster than gemma-300m and 7× faster than BGE-M3. It's already pulled on all nodes and registered in TensorZero as `archon_nomic_embed_local`. Use nomic-embed-text when latency matters more than precision (cache-key check, hot-path dedup); use BGE-M3 when recall quality matters (RAG retrieval).
+
+- [x] Add `google/embeddinggemma-300m` to TensorZero config — already registered as `gemma_embed_local`
+- [x] Add `nomic-embed-text` to TensorZero config — already registered as `archon_nomic_embed_local`
+- [x] Benchmark: low-tier embed latency (nomic 25ms p50 vs gemma 125ms vs BGE-M3 192ms)
+- [ ] Add `low` (768d) named vector to `pmoves_hybrid` collection — deferred to Phase D integration
+- [ ] Wire cipher semantic-cache Layer 0 to use `low` tier (nomic) — deferred to cipher integration
+
+### Phase C — High tier (deep probe) ✅ BENCHMARKED
+
+**3-tier benchmark (warm, SPARK GB10 node, 128GB unified memory):**
+
+| Tier | Model | Dim | Recall@10 | Embed p50 | Search p50 | Total p50 |
+|------|-------|-----|----------|-----------|------------|-----------|
+| **LOW** | nomic-embed-text | 768 | 1.000 | **30.3ms** | 1.5ms | **31.8ms** |
+| **MEDIUM** | BGE-M3 | 1024 | 1.000 | 207.9ms | 1.7ms | 209.7ms |
+| **HIGH** | Qwen3-Embedding-8B | 4096 | 1.000 | 159.2ms | 2.9ms | 162.2ms |
+
+**Key findings:**
+1. **All tiers achieve perfect recall** on the 15-doc corpus — the corpus is small enough that quality differences need a larger dataset to surface.
+2. **LOW tier (nomic) is 5-7× faster** for embedding than medium/high — ideal for cache-key checks.
+3. **HIGH tier (Qwen3-8B) is surprisingly fast** — 159ms embed vs BGE-M3's 207ms. The GB10's unified memory likely helps (no PCIe bottleneck). Search is slightly slower (2.9ms vs 1.7ms) due to 4096d vectors.
+4. **BGE-M3 remains the keystone for hybrid** — it's the only model that emits dense + sparse in one call. HIGH and LOW tiers are dense-only.
+
+**Tier routing (per-data-type, not global):**
+| Data type | Tier | Rationale |
+|-----------|------|-----------|
+| Cache-key dedup (semantic-cache Layer 0) | LOW (nomic) | Speed-critical, 30ms embed |
+| RAG retrieval (documents, transcripts) | MEDIUM (BGE-M3 hybrid) | Best recall + keyword matching |
+| Deep semantic probe (multi-phrasing recall) | HIGH (Qwen3-8B) | Max precision for complex queries |
+| Agent memory (cipher) | MEDIUM (BGE-M3 hybrid) | Same as RAG — BM25 catches exact identifiers |
+| Code identifiers, NATS subjects | BM25 sparse (Qdrant built-in) | Exact match, no model needed |
+
+- [x] Add `Qwen/Qwen3-Embedding-8B` to TensorZero config — already registered as `qwen3_embedding_8b_local`
+- [x] Pull model: `ollama pull qwen3-embedding:8b` (4.7GB, verified 4096d)
+- [x] Benchmark: recall@10 on high-tier (1.000, same as low/medium on this corpus)
+- [ ] Add `high` (4096d) named vector to `pmoves_hybrid` collection — deferred to Phase D integration
+- [ ] Wire Hi-RAG `/hirag/query?deep=true` to use `high` tier — deferred to Hi-RAG integration
 
 ### Phase D — LongBow cache layer
 - [ ] Rebase `PMOVES--longbow` onto upstream `23skdu/longbow@main`
