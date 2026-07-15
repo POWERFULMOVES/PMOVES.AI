@@ -1169,6 +1169,13 @@ def mcp_setup(tool_id: str) -> None:
         typer.echo(f"  - {step}")
 
 
+@mcp_app.command("serve", help="Run the PMOVES mini MCP stdio server for LLM agents.")
+def mcp_serve() -> None:
+    import asyncio
+    from pmoves.tools.mcp_server import main as mcp_main
+    asyncio.run(mcp_main())
+
+
 @automations_app.command("list", help="List n8n automations and channels.")
 def automations_list() -> None:
     automations = automation_loader.load_automations()
