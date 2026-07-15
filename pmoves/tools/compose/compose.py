@@ -31,6 +31,7 @@ SUPPORTED_COMPONENTS = frozenset({
     "pm-voice-clip",
     "pm-image",
     "pm-quote-block",
+    "pm-haptic",
 })
 
 
@@ -129,6 +130,17 @@ COMPONENT_SCHEMAS: dict[str, dict[str, Any]] = {
             "quote": str,
             "attribution": str,
             "attributionRole": str,
+        },
+    },
+    "pm-haptic": {
+        "required": [],  # all props are optional; component can be empty
+        "optional": ["pattern", "bpm", "dataSource", "enabled", "respectReducedMotion"],
+        "shape": {
+            "pattern": str,  # CSV of ms, e.g. "100,50,100,50,100"
+            "bpm": (int, float),  # auto-derive pattern
+            "dataSource": str,  # NATS subject or HTTP URL
+            "enabled": bool,
+            "respectReducedMotion": bool,
         },
     },
 }

@@ -8,7 +8,7 @@ The library of agent-composable UI surfaces. Per [A2UI v0.1 spec](../contracts/a
 
 ## Initial registry (v0.1)
 
-All 7 v0.1 components are shipped:
+8 v0.1 components are shipped (7 visual + 1 haptic):
 
 | Component | Category | Status | File |
 |-----------|----------|--------|------|
@@ -19,6 +19,7 @@ All 7 v0.1 components are shipped:
 | `<pm-voice-clip>` | media | shipped | [`pm-voice-clip/`](./pm-voice-clip/) |
 | `<pm-image>` | media | shipped | [`pm-image/`](./pm-image/) |
 | `<pm-quote-block>` | text | shipped | [`pm-quote-block/`](./pm-quote-block/) |
+| `<pm-haptic>` | sensory | shipped | [`pm-haptic/`](./pm-haptic/) |
 
 ## How to use
 
