@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-quote-block&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .stack {
+      display: grid;
+      gap: 16px;
+      max-width: 720px;
+    }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-quote-block&gt; — v0.1 demo</h1>
+
+  <div class="stack">
+    <pm-quote-block
+      quote="When the cell tower goes down in St. Maarten, the block goes dark. When the mesh node goes down, the block fixes it."
+      attribution="DARKXSIDE"
+      attribution-role="Founder, PMOVES.AI"
+    ></pm-quote-block>
+
+    <pm-quote-block
+      quote="We're not building a service. We're building a system the block can run."
+      attribution="Fordham Hill pilot resident"
+      attribution-role="Cooperative member"
+    ></pm-quote-block>
+
+    <pm-quote-block
+      quote="The AI that forgets — by design."
+    ></pm-quote-block>
+  </div>
+
+  <script type="module" src="./pm-quote-block.js"></script>
+</body>
+</html>

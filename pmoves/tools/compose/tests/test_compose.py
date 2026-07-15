@@ -210,13 +210,31 @@ def test_fordham_hill_fixture_composes_clean():
     assert warnings == [], f"Fordham Hill fixture has warnings: {warnings}"
     page = compose_tenant_page(cfg)
     assert page["a2uiVersion"] == A2UI_VERSION
-    # 3 agents + 2 projects + 3 metrics = 8 components + pageMeta + pageHeader
-    assert len(page["messages"]) == 10
-    # Verify all 8 components are present
+    # The fixture exercises ALL 7 v0.1 component types. The exact message
+    # count is len(components) + 2 (pageMeta + pageHeader). We assert on
+    # component-type presence rather than exact totals so adding more
+    # surfaces to the fixture doesn't break this test.
     component_types = [m["component"] for m in page["messages"] if m["type"] == "createComponent"]
-    assert component_types.count("pm-space-agent-card") == 3
-    assert component_types.count("pm-project-card") == 2
-    assert component_types.count("pm-metric-tile") == 3
+    expected_components = {
+        "pm-quote-block": 2,
+        "pm-image": 1,
+        "pm-space-agent-card": 4,
+        "pm-project-card": 3,
+        "pm-metric-tile": 4,
+        "pm-timeline": 1,
+        "pm-voice-clip": 1,
+    }
+    for name, expected_count in expected_components.items():
+        actual = component_types.count(name)
+        assert actual == expected_count, f"{name}: expected {expected_count}, got {actual}"
+    # All 7 v0.1 component types must be represented
+    assert set(component_types) == set(expected_components.keys()), \
+        f"missing or extra component types: {set(component_types) ^ set(expected_components.keys())}"
+    # pageMeta + pageHeader
+    assert sum(1 for m in page["messages"] if m["type"] == "pageMeta") == 1
+    assert sum(1 for m in page["messages"] if m["type"] == "pageHeader") == 1
+    # Total = components + 2
+    assert len(page["messages"]) == len(component_types) + 2
 
 
 # ---- to_json ----

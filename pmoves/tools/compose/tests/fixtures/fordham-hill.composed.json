@@ -1,12 +1,28 @@
 {
+  "a2uiVersion": "0.1",
   "tenant": {
     "id": "fordham-hill",
     "name": "Fordham Hill Community Room",
     "theme": "armor",
     "tagline": "Community cost-pooling + self-governance pilot room"
   },
-  "components": [
+  "messages": [
     {
+      "type": "pageMeta",
+      "tenant": {
+        "id": "fordham-hill",
+        "name": "Fordham Hill Community Room",
+        "theme": "armor",
+        "tagline": "Community cost-pooling + self-governance pilot room"
+      }
+    },
+    {
+      "type": "pageHeader",
+      "title": "Fordham Hill Community Room",
+      "tagline": "Community cost-pooling + self-governance pilot room"
+    },
+    {
+      "type": "createComponent",
       "component": "pm-quote-block",
       "props": {
         "quote": "When the mesh node goes down, the block fixes it. When the cell tower goes down, we wait.",
@@ -15,6 +31,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-image",
       "props": {
         "src": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800",
@@ -24,6 +41,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-space-agent-card",
       "props": {
         "agentName": "DARKXSIDE",
@@ -33,6 +51,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-space-agent-card",
       "props": {
         "agentName": "CLAUDE-OPUS",
@@ -42,6 +61,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-space-agent-card",
       "props": {
         "agentName": "B850-CLAUDE",
@@ -51,6 +71,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-space-agent-card",
       "props": {
         "agentName": "4090-CLAUDE",
@@ -60,28 +81,44 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-project-card",
       "props": {
         "title": "Mesh pilot: Fordham Hill",
         "description": "50-family mesh + private AI. Voice that goes through walls. Community-owned infrastructure, cooperative-priced.",
         "status": "live",
-        "tags": ["mesh", "voice", "tenancy"],
+        "tags": [
+          "mesh",
+          "voice",
+          "tenancy"
+        ],
         "links": [
-          { "label": "Capability brief", "href": "#brief" },
-          { "label": "Discord", "href": "#discord" }
+          {
+            "label": "Capability brief",
+            "href": "#brief"
+          },
+          {
+            "label": "Discord",
+            "href": "#discord"
+          }
         ]
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-project-card",
       "props": {
         "title": "Pooled-dues ledger",
         "description": "Cooperative cost-pooling with tamper-evident resident voting. Tokenism settlement lane.",
         "status": "planned",
-        "tags": ["governance", "ledger"]
+        "tags": [
+          "governance",
+          "ledger"
+        ]
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-project-card",
       "props": {
         "title": "Pilot-1 (archived)",
@@ -90,6 +127,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
         "label": "Mesh uptime",
@@ -100,6 +138,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
         "label": "Active sessions",
@@ -108,6 +147,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
         "label": "Latency (p95)",
@@ -118,6 +158,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
         "label": "Families connected",
@@ -126,6 +167,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-timeline",
       "props": {
         "events": [
@@ -163,6 +205,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-voice-clip",
       "props": {
         "title": "DARKXSIDE: why mesh, why now",
@@ -173,6 +216,7 @@
       }
     },
     {
+      "type": "createComponent",
       "component": "pm-quote-block",
       "props": {
         "quote": "We started with five families and a question. Eight weeks later, 23 households are on the lattice and the block votes on its own infrastructure.",
