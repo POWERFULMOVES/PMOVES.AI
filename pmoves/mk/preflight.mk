@@ -182,8 +182,9 @@ bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/Bot
 		fi; \
 	}; \
 	trap cleanup EXIT INT TERM; \
-	PARALLEL=$${PARALLEL:-1} WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) --no-print-directory bringup-with-ui; \
-	RETRO_THEME=$${RETRO_THEME:-galaxy} $(MAKE) --no-print-directory flight-check-retro; \
+	$(MAKE) --no-print-directory up-obs && \
+	PARALLEL=$${PARALLEL:-1} WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) --no-print-directory bringup-with-ui && \
+	RETRO_THEME=$${RETRO_THEME:-galaxy} RETRO_FLAGS=--strict $(MAKE) --no-print-directory flight-check-retro && \
 	$(MAKE) --no-print-directory codex-health-quick || true; \
 	$(MAKE) --no-print-directory showtime-links || true; \
 	cleanup; \
@@ -210,7 +211,7 @@ smoke-showtime: ## Run smoke tests with live Showtime watcher (core + monitoring
 	if [ "$${SHOWTIME_SMOKE_GPU:-0}" = "1" ]; then \
 		GPU_SMOKE_STRICT="$${GPU_SMOKE_STRICT:-true}" $(MAKE) --no-print-directory smoke-gpu; \
 	fi; \
-	RETRO_THEME=$${RETRO_THEME:-galaxy} $(MAKE) --no-print-directory flight-check-retro; \
+	RETRO_THEME=$${RETRO_THEME:-galaxy} RETRO_FLAGS=--strict $(MAKE) --no-print-directory flight-check-retro; \
 	$(MAKE) --no-print-directory showtime-links-strict; \
 	cleanup; \
 	trap - EXIT INT TERM; \
