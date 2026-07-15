@@ -89,11 +89,12 @@
     <pm-voice-clip src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=" title="Test clip" duration="0:01"></pm-voice-clip>
     <pm-image src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjwvc3ZnPg==" alt="Test" caption="Test caption"></pm-image>
     <pm-quote-block quote="Test quote" attribution="Test" attribution-role="Tester"></pm-quote-block>
+    <pm-haptic pattern="100,50,100"></pm-haptic>
   </section>
 
   <!-- Inject components -->
   <script type="module">
-    // Import all v0.1 components (7 total)
+    // Import all v0.1 components (7 visual + 1 haptic)
     import '../web-components/pm-space-agent-card/pm-space-agent-card.js';
     import '../web-components/pm-project-card/pm-project-card.js';
     import '../web-components/pm-metric-tile/pm-metric-tile.js';
@@ -101,6 +102,7 @@
     import '../web-components/pm-voice-clip/pm-voice-clip.js';
     import '../web-components/pm-image/pm-image.js';
     import '../web-components/pm-quote-block/pm-quote-block.js';
+    import '../web-components/pm-haptic/pm-haptic.js';
 
     const out = (id, text, klass) => {
       const el = document.getElementById(id);
@@ -117,10 +119,11 @@
       'pm-voice-clip',
       'pm-image',
       'pm-quote-block',
+      'pm-haptic',
     ];
     const registered = expected.filter((n) => customElements.get(n));
     if (registered.length === expected.length) {
-      out('registry-out', `✓ All ${expected.length}/7 v0.1 components registered:\n  - ${registered.join('\n  - ')}`, 'pass');
+      out('registry-out', `✓ All ${expected.length}/8 v0.1 components registered:\n  - ${registered.join('\n  - ')}`, 'pass');
     } else {
       const missing = expected.filter((n) => !customElements.get(n));
       out('registry-out', `✗ Missing: ${missing.join(', ')}\n  Registered: ${registered.join(', ')}`, 'fail');
