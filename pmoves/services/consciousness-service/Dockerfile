@@ -29,6 +29,11 @@ COPY chit/__init__.py /app/pmoves/chit/__init__.py
 COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
 COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
 
+# services/common/env.py — CHIT passphrase + secret helpers (imported as services.common.env)
+RUN mkdir -p /app/services/common
+COPY services/common/__init__.py /app/services/common/__init__.py
+COPY services/common/env.py /app/services/common/env.py
+
 # Set ownership
 RUN chown -R pmoves:pmoves /app
 
