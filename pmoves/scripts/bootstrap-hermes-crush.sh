@@ -35,7 +35,7 @@ export PYTHONPATH="${REPO_ROOT}:${PYTHONPATH:-}"
 # ── Crush ────────────────────────────────────────────────────────────────────
 
 info "Updating Crush config: ${CRUSH_CONFIG}"
-python3 -m pmoves.tools.mcp_config_generator --client crush --output "${CRUSH_CONFIG}" || warn "Crush config update failed"
+python3 -m pmoves.tools.mcp_config_generator --client crush --output "${CRUSH_CONFIG}" || fail "Crush config update failed"
 
 # ── Hermes ───────────────────────────────────────────────────────────────────
 
@@ -54,8 +54,8 @@ inventory_path = Path("${REPO_ROOT}") / "pmoves" / "config" / "mcp_inventory.jso
 try:
     import yaml
 except Exception as exc:
-    print(f"WARN PyYAML not available; cannot merge Hermes YAML: {exc}", file=sys.stderr)
-    sys.exit(0)
+    print(f"FAIL PyYAML not available; cannot merge Hermes YAML: {exc}", file=sys.stderr)
+    sys.exit(1)
 
 # Import generator to reuse rendering logic.
 sys.path.insert(0, str(Path("${REPO_ROOT}") / "pmoves" / "tools"))

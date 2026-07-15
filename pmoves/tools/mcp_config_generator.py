@@ -71,10 +71,15 @@ def load_inventory(path: Optional[Path] = None) -> Dict[str, Any]:
     return data
 
 
-def _expand(value: str, env: Dict[str, str]) -> str:
-    """Expand ${VAR} and ${VAR:-default} placeholders from env then os.environ.
+def _expand(value: str, env: Dict[str, str], *, allow_os_environ: bool = True) -> str:
+    """Expand ${VAR} and ${VAR:-default} placeholders.
 
-    Supports nested default expressions such as ${VAR:-${OTHER:-fallback}}.
+    Resolution order: explicit ``env`` (from --set) first, then ``os.environ``
+    (only when *allow_os_environ* is True).
+
+    When *allow_os_environ* is False (tracked config generation), unresolved
+    placeholders are preserved as-is so secret values never leak into
+    committed files.
     """
     result: List[str] = []
     i = 0
@@ -105,7 +110,9 @@ def _expand(value: str, env: Dict[str, str]) -> str:
             var = inner
             default = ""
 
-        val = env.get(var) or os.environ.get(var)
+        val = env.get(var)
+        if not val and allow_os_environ:
+            val = os.environ.get(var)
         if val:
             result.append(val)
         elif default:
@@ -163,16 +170,16 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
     return specs
 
 
-def _render_env(env: Dict[str, str], context: Dict[str, str]) -> Dict[str, str]:
-    return {k: _expand(v, context) for k, v in env.items()}
+def _render_env(env: Dict[str, str], context: Dict[str, str], **kw: Any) -> Dict[str, str]:
+    return {k: _expand(v, context, **kw) for k, v in env.items()}
 
 
-def _render_headers(headers: Dict[str, str], context: Dict[str, str]) -> Dict[str, str]:
-    return {k: _expand(v, context) for k, v in headers.items()}
+def _render_headers(headers: Dict[str, str], context: Dict[str, str], **kw: Any) -> Dict[str, str]:
+    return {k: _expand(v, context, **kw) for k, v in headers.items()}
 
 
-def _render_args(args: List[str], context: Dict[str, str]) -> List[str]:
-    return [_expand(a, context) for a in args]
+def _render_args(args: List[str], context: Dict[str, str], **kw: Any) -> List[str]:
+    return [_expand(a, context, **kw) for a in args]
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +187,7 @@ def _render_args(args: List[str], context: Dict[str, str]) -> List[str]:
 # ---------------------------------------------------------------------------
 
 
-def render_claude_kimi(specs: List[ServerSpec], context: Dict[str, str]) -> Dict[str, Any]:
+def render_claude_kimi(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) -> Dict[str, Any]:
     """Render mcpServers block for Claude Code / Kimi Code CLI."""
     servers: Dict[str, Any] = {}
     for spec in specs:
@@ -189,15 +196,15 @@ def render_claude_kimi(specs: List[ServerSpec], context: Dict[str, str]) -> Dict
             entry["description"] = spec.description
         if spec.transport in ("sse", "http"):
             entry["type"] = spec.transport
-            entry["url"] = _expand(spec.url or "", context)
+            entry["url"] = _expand(spec.url or "", context, **kw)
             if spec.headers:
-                entry["headers"] = _render_headers(spec.headers, context)
+                entry["headers"] = _render_headers(spec.headers, context, **kw)
         elif spec.transport == "stdio":
             command, args = _split_command_args(spec.command or "", spec.args)
             entry["command"] = command
-            entry["args"] = _render_args(args, context)
+            entry["args"] = _render_args(args, context, **kw)
             if spec.env:
-                entry["env"] = _render_env(spec.env, context)
+                entry["env"] = _render_env(spec.env, context, **kw)
             if spec.timeout:
                 entry["timeout"] = spec.timeout
         else:
@@ -206,7 +213,7 @@ def render_claude_kimi(specs: List[ServerSpec], context: Dict[str, str]) -> Dict
     return {"mcpServers": servers}
 
 
-def render_kilocode(specs: List[ServerSpec], context: Dict[str, str]) -> Dict[str, Any]:
+def render_kilocode(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) -> Dict[str, Any]:
     """Render KiloCode mcp + permission blocks."""
     mcp: Dict[str, Any] = {}
     permissions: Dict[str, str] = {}
@@ -214,15 +221,15 @@ def render_kilocode(specs: List[ServerSpec], context: Dict[str, str]) -> Dict[st
         entry: Dict[str, Any] = {}
         if spec.transport in ("sse", "http"):
             entry["type"] = "remote"
-            entry["url"] = _expand(spec.url or "", context)
+            entry["url"] = _expand(spec.url or "", context, **kw)
             if spec.headers:
-                entry["headers"] = _render_headers(spec.headers, context)
+                entry["headers"] = _render_headers(spec.headers, context, **kw)
         elif spec.transport == "stdio":
             command, args = _split_command_args(spec.command or "", spec.args)
             entry["type"] = "local"
-            entry["command"] = [command, *_render_args(args, context)]
+            entry["command"] = [command, *_render_args(args, context, **kw)]
             if spec.env:
-                entry["environment"] = _render_env(spec.env, context)
+                entry["environment"] = _render_env(spec.env, context, **kw)
         else:
             continue
         mcp[spec.key] = entry
@@ -230,49 +237,49 @@ def render_kilocode(specs: List[ServerSpec], context: Dict[str, str]) -> Dict[st
     return {"mcp": mcp, "permission": permissions}
 
 
-def render_hermes(specs: List[ServerSpec], context: Dict[str, str]) -> Dict[str, Any]:
+def render_hermes(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) -> Dict[str, Any]:
     """Render Hermes Agent config.yaml mcp_servers block."""
     servers: Dict[str, Any] = {}
     for spec in specs:
         entry: Dict[str, Any] = {"enabled": True}
         if spec.transport in ("sse", "http"):
             entry["type"] = spec.transport
-            entry["url"] = _expand(spec.url or "", context)
+            entry["url"] = _expand(spec.url or "", context, **kw)
             if spec.headers:
-                entry["headers"] = _render_headers(spec.headers, context)
+                entry["headers"] = _render_headers(spec.headers, context, **kw)
         elif spec.transport == "stdio":
             command, args = _split_command_args(spec.command or "", spec.args)
             entry["type"] = "stdio"
             entry["command"] = command
-            entry["args"] = _render_args(args, context)
+            entry["args"] = _render_args(args, context, **kw)
             if spec.env:
-                entry["env"] = _render_env(spec.env, context)
+                entry["env"] = _render_env(spec.env, context, **kw)
         else:
             continue
         servers[spec.key] = entry
     return {"mcp_servers": servers}
 
 
-def render_crush(specs: List[ServerSpec], context: Dict[str, str]) -> Dict[str, Any]:
+def render_crush(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) -> Dict[str, Any]:
     """Render Crush CLI crush.json mcp block."""
     mcp: Dict[str, Any] = {}
     for spec in specs:
         entry: Dict[str, Any] = {}
         if spec.transport == "sse":
             entry["type"] = "sse"
-            entry["url"] = _expand(spec.url or "", context)
+            entry["url"] = _expand(spec.url or "", context, **kw)
             if spec.headers:
-                entry["headers"] = _render_headers(spec.headers, context)
+                entry["headers"] = _render_headers(spec.headers, context, **kw)
         elif spec.transport == "http":
             entry["type"] = "http"
-            entry["url"] = _expand(spec.url or "", context)
+            entry["url"] = _expand(spec.url or "", context, **kw)
             if spec.headers:
-                entry["headers"] = _render_headers(spec.headers, context)
+                entry["headers"] = _render_headers(spec.headers, context, **kw)
         elif spec.transport == "stdio":
             command, args = _split_command_args(spec.command or "", spec.args)
             entry["type"] = "stdio"
             entry["command"] = command
-            entry["args"] = _render_args(args, context)
+            entry["args"] = _render_args(args, context, **kw)
         else:
             continue
         if spec.timeout:
@@ -336,13 +343,14 @@ def generate_for_client(
     inventory: Optional[Dict[str, Any]] = None,
     endpoint: str = "fleet",
     context: Optional[Dict[str, str]] = None,
+    allow_os_environ: bool = True,
 ) -> Dict[str, Any]:
     inventory = inventory or load_inventory()
     context = context or {}
     if client not in RENDERERS:
         raise MCPConfigError(f"Unknown client: {client}")
     specs = _collect_servers(inventory, client, endpoint)
-    return RENDERERS[client](specs, context)
+    return RENDERERS[client](specs, context, allow_os_environ=allow_os_environ)
 
 
 def write_client_config(
@@ -353,6 +361,7 @@ def write_client_config(
     inventory: Optional[Dict[str, Any]] = None,
     endpoint: str = "fleet",
     context: Optional[Dict[str, str]] = None,
+    allow_os_environ: bool = True,
 ) -> Path:
     """Generate and write config for a single client.
 
@@ -362,19 +371,21 @@ def write_client_config(
     Hermes config.yaml because YAML round-tripping is left to the Hermes
     bootstrap script.
     """
-    rendered = generate_for_client(client, inventory=inventory, endpoint=endpoint, context=context)
+    rendered = generate_for_client(client, inventory=inventory, endpoint=endpoint, context=context,
+                                   allow_os_environ=allow_os_environ)
 
     if client == "hermes":
-        # Hermes is YAML; return the rendered snippet and let the bootstrap
-        # script merge it surgically. We do not overwrite the whole YAML file.
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
+        # Hermes is YAML; write a snippet file for the bootstrap script to merge.
+        # NEVER overwrite the real config.yaml directly.
+        snippet_path = output_path.with_suffix(".mcp_snippet.json") if output_path.suffix == ".yaml" else output_path
+        snippet_path.parent.mkdir(parents=True, exist_ok=True)
+        snippet_path.write_text(
             f"# PMOVES MCP servers (auto-generated by mcp_config_generator.py)\n"
             f"# Merge this into your Hermes config.yaml under the top-level `mcp_servers:` key.\n"
             + json.dumps(rendered, indent=2),
             encoding="utf-8",
         )
-        return output_path
+        return snippet_path
 
     if merge:
         _backup_once(output_path)
@@ -450,6 +461,17 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     clients = list(RENDERERS.keys()) if args.client == "all" else [args.client]
 
+    # Reject --client all with a single --output: each client would overwrite
+    # the same file, leaving only the last client's config.
+    if args.client == "all" and args.output and not args.output_dir:
+        print("ERROR: --client all requires --output-dir, not --output "
+              "(clients would overwrite each other)", file=sys.stderr)
+        return 2
+
+    # Determine whether this is a tracked-config write (repo-relative paths).
+    # Tracked configs must preserve ${VAR} placeholders, never expand secrets.
+    tracked_clients = {"claude", "kimi", "kilocode", "opencode"}
+
     for client in clients:
         output = args.output
         if output is None:
@@ -458,7 +480,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 output = DEFAULT_OUTPUTS[client]
 
-        rendered = generate_for_client(client, inventory=inventory, endpoint=args.endpoint, context=context)
+        is_tracked = client in tracked_clients and output.is_relative_to(PROJECT_ROOT)
+        rendered = generate_for_client(
+            client, inventory=inventory, endpoint=args.endpoint, context=context,
+            allow_os_environ=not is_tracked,
+        )
 
         if args.dry_run:
             print(f"# --- {client} -> {output} ---")
@@ -472,6 +498,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             inventory=inventory,
             endpoint=args.endpoint,
             context=context,
+            allow_os_environ=not is_tracked,
         )
         print(f"OK Wrote {client} MCP config to {written}")
 
