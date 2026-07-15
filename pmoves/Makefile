@@ -261,6 +261,11 @@ up-bots: ## Start bot services (BotZ gateway)
 	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway
 	@echo "✔ Bots up (botz-gateway)."
 
+.PHONY: rebuild-bots
+rebuild-bots: ## Rebuild + restart botz-gateway from current source (theme routes/CORS live here)
+	@$(DC) --profile data --profile workers --profile botz up -d --build botz-gateway
+	@echo "✔ botz-gateway rebuilt + restarted."
+
 # --- JuiceFS object-store PoC (replaces EOL MinIO; see docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md) ---
 # Scoped to base+juicefs overlays ONLY (not the monolith $(DC)): a full-monolith
 # `compose up` interpolates EVERY service's env, so unrelated ${VAR:?} guards
