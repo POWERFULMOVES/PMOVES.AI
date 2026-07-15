@@ -35,42 +35,42 @@ from dataclasses import dataclass, field
 # natural language. Designed to exercise both semantic and keyword paths.
 CORPUS = [
     # Identifiers / exact-match (BM25 should dominate)
-    {"id": "c1", "text": "AGNOTE4482 is the multi-agent convergence gateway for PMOVES.AI.", "category": "decision"},
-    {"id": "c2", "text": "cipher.memory.stored.v1 NATS subject is published after POST /api/memory.", "category": "code_pattern"},
-    {"id": "c3", "text": "PR #2117 merged the Qdrant embedding sidecar for cipher.", "category": "decision"},
-    {"id": "c4", "text": "QDRANT_RECREATE_ON_DIM_MISMATCH must be false in production.", "category": "code_pattern"},
-    {"id": "c5", "text": "TensorZero gateway listens on port 3030 with ClickHouse observability.", "category": "architecture"},
+    {"id": 1, "text": "AGNOTE4482 is the multi-agent convergence gateway for PMOVES.AI.", "category": "decision"},
+    {"id": 2, "text": "cipher.memory.stored.v1 NATS subject is published after POST /api/memory.", "category": "code_pattern"},
+    {"id": 3, "text": "PR #2117 merged the Qdrant embedding sidecar for cipher.", "category": "decision"},
+    {"id": 4, "text": "QDRANT_RECREATE_ON_DIM_MISMATCH must be false in production.", "category": "code_pattern"},
+    {"id": 5, "text": "TensorZero gateway listens on port 3030 with ClickHouse observability.", "category": "architecture"},
     # Semantic / paraphrased (dense should dominate)
-    {"id": "c6", "text": "The Three-Body Solution separates execution, governance, and memory concerns across agent roles.", "category": "architecture"},
-    {"id": "c7", "text": "Agent memory should persist across sessions so context isn't lost on restart.", "category": "decision"},
-    {"id": "c8", "text": "Hybrid search combines semantic similarity with keyword matching for better recall.", "category": "architecture"},
-    {"id": "c9", "text": "The embedding sidecar falls back to Ollama when TensorZero is unreachable.", "category": "code_pattern"},
-    {"id": "c10", "text": "Fail-open design means memory operations never crash due to infrastructure being down.", "category": "architecture"},
+    {"id": 6, "text": "The Three-Body Solution separates execution, governance, and memory concerns across agent roles.", "category": "architecture"},
+    {"id": 7, "text": "Agent memory should persist across sessions so context isn't lost on restart.", "category": "decision"},
+    {"id": 8, "text": "Hybrid search combines semantic similarity with keyword matching for better recall.", "category": "architecture"},
+    {"id": 9, "text": "The embedding sidecar falls back to Ollama when TensorZero is unreachable.", "category": "code_pattern"},
+    {"id": 10, "text": "Fail-open design means memory operations never crash due to infrastructure being down.", "category": "architecture"},
     # Mixed (both paths should contribute)
-    {"id": "c11", "text": "BGE-M3 model produces 1024-dimensional dense vectors and sparse BM25 representations.", "category": "architecture"},
-    {"id": "c12", "text": "RRF fusion with k=60 merges dense and sparse prefetch results.", "category": "code_pattern"},
-    {"id": "c13", "text": "The MOF architecture treats every node as a pore in the lattice, not an expertise silo.", "category": "architecture"},
-    {"id": "c14", "text": "CHIT signs geometry bus packets on the agent graphiti trail, not memory stores.", "category": "decision"},
-    {"id": "c15", "text": "Qwen3-Embedding-4B outputs 2560-dimensional vectors for semantic search.", "category": "code_pattern"},
+    {"id": 11, "text": "BGE-M3 model produces 1024-dimensional dense vectors and sparse BM25 representations.", "category": "architecture"},
+    {"id": 12, "text": "RRF fusion with k=60 merges dense and sparse prefetch results.", "category": "code_pattern"},
+    {"id": 13, "text": "The MOF architecture treats every node as a pore in the lattice, not an expertise silo.", "category": "architecture"},
+    {"id": 14, "text": "CHIT signs geometry bus packets on the agent graphiti trail, not memory stores.", "category": "decision"},
+    {"id": 15, "text": "Qwen3-Embedding-4B outputs 2560-dimensional vectors for semantic search.", "category": "code_pattern"},
 ]
 
 # Query set with expected relevant doc IDs (ground truth)
 QUERIES = [
     # Exact-keyword queries (BM25-favoring)
-    {"q": "AGNOTE4482", "relevant": ["c1"]},
-    {"q": "cipher.memory.stored.v1", "relevant": ["c2"]},
-    {"q": "QDRANT_RECREATE_ON_DIM_MISMATCH", "relevant": ["c4"]},
-    {"q": "port 3030", "relevant": ["c5"]},
-    {"q": "PR #2117", "relevant": ["c3"]},
+    {"q": "AGNOTE4482", "relevant": [1]},
+    {"q": "cipher.memory.stored.v1", "relevant": [2]},
+    {"q": "QDRANT_RECREATE_ON_DIM_MISMATCH", "relevant": [4]},
+    {"q": "port 3030", "relevant": [5]},
+    {"q": "PR #2117", "relevant": [3]},
     # Semantic queries (dense-favoring)
-    {"q": "how does agent memory survive restarts", "relevant": ["c7", "c10"]},
-    {"q": "what is the three-body agent pattern", "relevant": ["c6"]},
-    {"q": "combining keyword and semantic search", "relevant": ["c8", "c12"]},
-    {"q": "graceful degradation when services are down", "relevant": ["c9", "c10"]},
+    {"q": "how does agent memory survive restarts", "relevant": [7, 10]},
+    {"q": "what is the three-body agent pattern", "relevant": [6]},
+    {"q": "combining keyword and semantic search", "relevant": [8, 12]},
+    {"q": "graceful degradation when services are down", "relevant": [9, 10]},
     # Mixed queries
-    {"q": "BGE-M3 embedding dimensions", "relevant": ["c11", "c15"]},
-    {"q": "RRF fusion k parameter", "relevant": ["c12"]},
-    {"q": "CHIT signing geometry bus", "relevant": ["c14"]},
+    {"q": "BGE-M3 embedding dimensions", "relevant": [11, 15]},
+    {"q": "RRF fusion k parameter", "relevant": [12]},
+    {"q": "CHIT signing geometry bus", "relevant": [14]},
 ]
 
 
@@ -125,7 +125,7 @@ def create_hybrid_collection(qdrant_url: str, name: str, dim: int):
 
 
 def upsert_dense(qdrant_url: str, collection: str, points: list[dict]):
-    """Upsert points with unnamed dense vectors."""
+    """Upsert points. Detects whether collection uses named or unnamed vectors."""
     qdrant_call(qdrant_url, "PUT", f"/collections/{collection}/points?wait=true", {"points": points})
 
 
@@ -135,13 +135,24 @@ def upsert_hybrid(qdrant_url: str, collection: str, points: list[dict]):
 
 
 def search_dense(qdrant_url: str, collection: str, vector: list[float], limit: int = 10) -> list[dict]:
-    """Dense-only search."""
-    r = qdrant_call(qdrant_url, "POST", f"/collections/{collection}/points/search", {
-        "vector": vector,
-        "limit": limit,
-        "with_payload": True,
-    })
-    return r.get("result", [])
+    """Dense-only search. Uses /points/search for unnamed or /points/query for named."""
+    if "_hybrid" in collection or "_h" in collection:
+        # Named vector — use /points/query
+        r = qdrant_call(qdrant_url, "POST", f"/collections/{collection}/points/query", {
+            "query": vector,
+            "using": "dense",
+            "limit": limit,
+            "with_payload": True,
+        })
+        return r.get("result", {}).get("points", [])
+    else:
+        # Unnamed vector — use /points/search
+        r = qdrant_call(qdrant_url, "POST", f"/collections/{collection}/points/search", {
+            "vector": vector,
+            "limit": limit,
+            "with_payload": True,
+        })
+        return r.get("result", [])
 
 
 def search_hybrid(qdrant_url: str, collection: str, vector: list[float], query_text: str, limit: int = 10) -> list[dict]:
@@ -151,7 +162,7 @@ def search_hybrid(qdrant_url: str, collection: str, vector: list[float], query_t
             {"query": vector, "using": "dense", "limit": limit * 3},
             {"query": {"text": query_text, "model": "qdrant/bm25"}, "using": "bm25", "limit": limit * 3},
         ],
-        "fusion": {"rrf": {"k": 60}},
+        "query": {"fusion": "rrf"},
         "limit": limit,
         "with_payload": True,
     })
@@ -201,7 +212,7 @@ def run_benchmark(
         vec = tz_embed(tensorzero_url, embed_model, doc["text"])
         point = {
             "id": doc["id"],
-            "payload": {"text": doc["text"], "category": doc["category"], "doc_id": doc["id"]},
+            "payload": {"text": doc["text"], "category": doc["category"]},
         }
         if mode == "hybrid":
             point["vector"] = {
@@ -230,7 +241,7 @@ def run_benchmark(
             hits = search_dense(qdrant_url, collection, q_vec)
         latency_ms = (time.perf_counter() - t0) * 1000
 
-        retrieved = [h.get("payload", {}).get("doc_id", str(h.get("id", ""))) for h in hits]
+        retrieved = [h.get("id") for h in hits]
         rel = q["relevant"]
         r10 = recall_at_k(retrieved, rel)
         rr = mrr(retrieved, rel)
