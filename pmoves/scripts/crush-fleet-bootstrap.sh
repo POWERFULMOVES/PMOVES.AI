@@ -37,11 +37,17 @@ info "Starting Crush fleet bootstrap on node: ${CRUSH_NODE}"
 CHIT_PASS=""
 CHIT_SOURCE=""
 
-if [ -n "${CHIT_PASSPHRASE:-}" ]; then
+if [ -n "${CHIT_SIGNING_KEY:-}" ]; then
+  CHIT_PASS="${CHIT_SIGNING_KEY}"
+  CHIT_SOURCE="env-var:CHIT_SIGNING_KEY"
+elif [ -n "${CHIT_SIGNING_KEY_FILE:-}" ] && [ -f "${CHIT_SIGNING_KEY_FILE}" ]; then
+  CHIT_PASS=$(head -1 "${CHIT_SIGNING_KEY_FILE}" | sed 's/[[:space:]]*$//')
+  CHIT_SOURCE="file:${CHIT_SIGNING_KEY_FILE}"
+elif [ -n "${CHIT_PASSPHRASE:-}" ]; then
   CHIT_PASS="${CHIT_PASSPHRASE}"
-  CHIT_SOURCE="env-var"
+  CHIT_SOURCE="env-var:CHIT_PASSPHRASE"
 elif [ -n "${CHIT_PASSPHRASE_FILE:-}" ] && [ -f "${CHIT_PASSPHRASE_FILE}" ]; then
-  CHIT_PASS=$(cat "${CHIT_PASSPHRASE_FILE}" | tr -d '[:space:]')
+  CHIT_PASS=$(head -1 "${CHIT_PASSPHRASE_FILE}" | sed 's/[[:space:]]*$//')
   CHIT_SOURCE="file:${CHIT_PASSPHRASE_FILE}"
 else
   for tier_file in "${PMOVES_DIR}"/env.tier-*; do
@@ -76,7 +82,7 @@ fi
 
 # ── 2. Python Environment ────────────────────────────────────────────────────
 
-export PYTHONPATH="${REPO_ROOT}:${PYTHONPATH:-}"
+export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 if ! command -v python3 >/dev/null 2>&1; then
   fail "python3 not found on PATH"
@@ -94,6 +100,8 @@ ${PYTHON} -m pmoves.tools.mcp_config_generator --client crush --output "${CRUSH_
   || fail "Crush config generation failed"
 
 info "Running crush_configurator for provider/model setup..."
+CRUSH_CONFIG_DIR=$(dirname "${CRUSH_CONFIG}")
+mkdir -p "${CRUSH_CONFIG_DIR}"
 ${PYTHON} -m pmoves.tools.mini_cli crush setup 2>/dev/null \
   || warn "mini_cli crush setup not available (non-fatal)"
 
@@ -105,7 +113,7 @@ if [ -n "$CHIT_PASS" ]; then
       --agent-id "crush-${CRUSH_NODE}" \
       --summary "Fleet bootstrap signing test" \
       --phase "fleet-bootstrap" \
-      --skip-log 2>/dev/null; then
+      --no-log 2>/dev/null; then
     info "CHIT signing: OK (signed payload emitted)"
   else
     warn "CHIT signing test failed (non-fatal — unsigned mode is acceptable in dev)"
