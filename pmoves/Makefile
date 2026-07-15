@@ -843,7 +843,7 @@ seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 		echo "⚠️  Qdrant not running. Starting data tier..."; \
 		$(MAKE) --no-print-directory up-data-tier; \
 	fi
-	@$(DC) up -d --no-deps --build --recreate hi-rag-gateway-v2
+	@$(DC) up -d --no-deps --build --force-recreate hi-rag-gateway-v2
 	@sleep 5
 	@$(DC) exec -T hi-rag-gateway-v2 python /app/scripts/seed_local.py 2>/dev/null || \
 		$(DC) exec -T hi-rag-gateway-v2 python3 /app/scripts/seed_local.py 2>/dev/null || \
@@ -1661,6 +1661,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^NEO4J_AUTH=neo4j/.*|NEO4J_AUTH=neo4j/$${NEO4J_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		grep -q "^MEILI_API_KEY=" env.tier-data 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-data; \
 		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		echo "✓ Populated env.tier-data"; \
 	fi; \
@@ -1697,6 +1699,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=$${MINIO_SECRET_KEY:-minioadmin}|" env.tier-api; \
 		sed -i "s|^PRESIGN_SHARED_SECRET=.*|PRESIGN_SHARED_SECRET=$${PRESIGN_SHARED_SECRET:-$(shell openssl rand -hex 32)}|" env.tier-api; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		grep -q "^MEILI_API_KEY=" env.tier-api 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-api; \
 		echo "✓ Populated env.tier-api"; \
 	fi; \
 	if [ -f "env.tier-llm" ]; then \
@@ -3940,8 +3944,8 @@ neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_alia
 	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
 
 neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
-	@echo "→ Bootstrapping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j bootstrap
+	@echo "→ Bootstrapping Neo4j..."
+	@bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
 neo4j-status: ## Check Neo4j status from submodule
 	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
