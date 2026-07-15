@@ -692,6 +692,17 @@ api_base = "http://pmoves-ollama:11434/v1"
 model_name = "embeddinggemma:300m"
 api_key_location = "none"
 
+# BGE-M3 (568M, 1024d dense + sparse + ColBERT) — multi-tier embedding keystone.
+# Used by Hi-RAG hybrid search and the pmoves_hybrid collection. MIT license.
+[embedding_models.bge_m3_local]
+routing = ["ollama_local_embedding"]
+
+[embedding_models.bge_m3_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "bge-m3"
+api_key_location = "none"
+
 [embedding_models.archon_nomic_embed_local]
 routing = ["ollama_local_embedding"]
 
