@@ -30,6 +30,7 @@ DEFAULT_OUTPUTS = {
     "claude": PROJECT_ROOT / ".claude" / "mcp.json",
     "kimi": PROJECT_ROOT / ".kimi" / "mcp.json",
     "kilocode": PROJECT_ROOT / "kilo.json",
+    "opencode": PROJECT_ROOT / ".opencode" / "config.json",
     "hermes": Path.home() / ".hermes" / "profiles" / "pmoves-hermes" / "config.yaml",
     "crush": Path.home() / ".config" / "crush" / "crush.json",
 }
