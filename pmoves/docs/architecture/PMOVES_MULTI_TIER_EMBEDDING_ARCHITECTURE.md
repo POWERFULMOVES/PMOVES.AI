@@ -257,12 +257,13 @@ Both achieve perfect recall on the 15-doc test corpus. Hybrid adds ~0.3ms for BM
 - [ ] Add `high` (4096d) named vector to `pmoves_hybrid` collection — deferred to Phase D integration
 - [ ] Wire Hi-RAG `/hirag/query?deep=true` to use `high` tier — deferred to Hi-RAG integration
 
-### Phase D — LongBow cache layer
-- [ ] Rebase `PMOVES--longbow` onto upstream `23skdu/longbow@main`
-- [ ] Tag `v0.2.2-pmoves.1`, add as submodule
-- [ ] Compose stanza: LongBow :3000/:3001, warm-cache from Qdrant `pmoves_hybrid`
-- [ ] Wire Hi-RAG to check LongBow before Qdrant
-- [ ] Benchmark: p99 latency with/without cache
+### Phase D — LongBow cache layer ✅ COMPOSE-WIRED
+
+- [x] Rebase `PMOVES--longbow` onto upstream `23skdu/longbow@main` — done (synced to `9b1dc5be`, ARM64 AMX stub fix `0b0c4487`)
+- [x] Tag `v0.2.2-pmoves.1`, add as submodule — done (commit `294ea52f7`)
+- [x] Compose stanza: LongBow in `docker-compose.yml` (profile `data`), host ports `3100`/`3101`/`9190` (mapped from container `3000`/`3001`/`9090` to avoid PMOVES port conflicts), `pmoves_data` + `pmoves_api` networks, `longbow-data` volume, hardened anchor (`x-tier-data-hardened`)
+- [ ] Wire Hi-RAG to check LongBow before Qdrant — deferred to Hi-RAG integration
+- [ ] Benchmark: p99 latency with/without cache — deferred to live bring-up
 
 ### Phase E — PMOVES-Darkmatter customization (future)
 - [ ] Profile HNSW access patterns (agent memory vs document RAG)

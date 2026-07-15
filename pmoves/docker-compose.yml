@@ -1203,6 +1203,52 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+  longbow:
+    <<: *tier-data-hardened
+    build:
+      context: ../PMOVES--longbow
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    profiles: ["data"]
+    environment:
+    - LONGBOW_NODE_ID=${LONGBOW_NODE_ID:-pmoves-longbow-1}
+    - LONGBOW_LOG_LEVEL=${LONGBOW_LOG_LEVEL:-info}
+    - LONGBOW_LISTEN_ADDR=0.0.0.0:3000
+    - LONGBOW_META_ADDR=0.0.0.0:3001
+    - LONGBOW_METRICS_ADDR=0.0.0.0:9090
+    - LONGBOW_DATA_PATH=/data
+    - LONGBOW_MAX_MEMORY=${LONGBOW_MAX_MEMORY:-4294967296}
+    - LONGBOW_HNSW_M=${LONGBOW_HNSW_M:-16}
+    - LONGBOW_HNSW_EF_CONSTRUCTION=${LONGBOW_HNSW_EF_CONSTRUCTION:-200}
+    - LONGBOW_USE_HNSW2=true
+    - LONGBOW_STORAGE_ASYNC_FSYNC=true
+    - LONGBOW_SNAPSHOT_INTERVAL=${LONGBOW_SNAPSHOT_INTERVAL:-1h}
+    - LONGBOW_GRPC_MAX_RECV_MSG_SIZE=536870912
+    - LONGBOW_GRPC_MAX_SEND_MSG_SIZE=536870912
+    ports:
+    - "${LONGBOW_BIND:-127.0.0.1}:${LONGBOW_DATA_PORT:-3100}:3000"
+    - "${LONGBOW_BIND:-127.0.0.1}:${LONGBOW_META_PORT:-3101}:3001"
+    - "${LONGBOW_BIND:-127.0.0.1}:${LONGBOW_METRICS_PORT:-9190}:9090"
+    networks:
+    - pmoves_data
+    - pmoves_api
+    volumes:
+    - longbow-data:/data
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   meilisearch:
     <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.34.1
