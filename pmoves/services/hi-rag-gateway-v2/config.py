@@ -18,6 +18,11 @@ import ipaddress
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
+
 # --- Optional heavy dependencies (graceful degradation) ---
 try:
     import torch
@@ -294,7 +299,7 @@ QUERY_NAMESPACE_DEFAULT = os.environ.get("QUERY_NAMESPACE", "*")
 
 # --- CHIT / Geometry env vars ---
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower() == "true"
-CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
+CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE", "")
 CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower() == "true"
 CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"
 CHIT_DECODE_IMAGE = os.environ.get("CHIT_DECODE_IMAGE", "false").lower() == "true"

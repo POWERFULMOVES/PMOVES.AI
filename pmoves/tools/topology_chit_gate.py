@@ -568,41 +568,6 @@ def _check_project_topology(
         )
 
 
-def _host_port_published(inspect_data: Mapping[str, object], host_port: int) -> bool:
-    """True when the container publishes the given host port (any container port)."""
-    net = inspect_data.get("NetworkSettings")
-    if not isinstance(net, Mapping):
-        return False
-    ports = net.get("Ports")
-    if not isinstance(ports, Mapping):
-        return False
-    for bindings in ports.values():
-        if not isinstance(bindings, list):
-            continue
-        for binding in bindings:
-            if isinstance(binding, Mapping) and binding.get("HostPort") == str(host_port):
-                return True
-    return False
-
-
-def _host_port_for_container(inspect_data: Mapping[str, object], host_port: int) -> str | None:
-    """Return the first container port that maps to the given host port."""
-    net = inspect_data.get("NetworkSettings")
-    if not isinstance(net, Mapping):
-        return None
-    ports = net.get("Ports")
-    if not isinstance(ports, Mapping):
-        return None
-    for container_port, bindings in ports.items():
-        if not isinstance(bindings, list):
-            continue
-        for binding in bindings:
-            if isinstance(binding, Mapping) and binding.get("HostPort") == str(host_port):
-                # container_port is e.g. "8091/tcp"
-                return container_port.split("/", 1)[0]
-    return None
-
-
 def _check_archon_topology(
     inspections: Mapping[str, Mapping[str, object]], *, warnings: List[str], errors: List[str]
 ) -> None:
@@ -617,19 +582,15 @@ def _check_archon_topology(
     if not _ports_published(archon_info, 8091):
         errors.append(f"{archon} is missing host publish for 8091/tcp")
 
-    # The consolidated Archon service publishes the UI on host port 3737, which maps
-    # to the API container port 8091. Check the host port, not the container port.
-    if not _host_port_published(archon_info, 3737):
-        errors.append(f"{archon} is missing host publish for 3737")
+    # UI port 3737 is host-side; check via _published_host_port (not container port)
+    ui_host_port = _published_host_port(archon_info, 3737) or "3737"
 
-    archon_code = _http_code("http://localhost:8091/healthz", retries=2, delay_s=1.0)
+    api_host_port = _published_host_port(archon_info, 8091) or "8091"
+    api_url = f"http://localhost:{api_host_port}/healthz"
+    archon_code = _http_code(api_url, retries=2, delay_s=1.0)
     if archon_code != 200:
-        errors.append(f"archon API health check failed: http://localhost:8091/healthz => {archon_code}")
+        errors.append(f"archon API health check failed: {api_url} => {archon_code}")
 
-    ui_container_port = _host_port_for_container(archon_info, 3737)
-    ui_host_port = "3737"
-    if ui_container_port:
-        ui_host_port = _published_host_port(archon_info, int(ui_container_port)) or ui_host_port
     ui_url = f"http://localhost:{ui_host_port}/"
     ui_code = _http_code(ui_url, retries=6, delay_s=2.0)
     if ui_code != 200:

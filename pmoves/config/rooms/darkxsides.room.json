@@ -218,12 +218,12 @@
       "egress_redaction_floor": {
         "enforce_on": "public-egress",
         "rules": [
-          "kids-always-redacted",
-          "shaela-private",
+          "operator-pii-protected",
+          "collaborator-pii-protected",
           "no-literal-lan-or-tailscale-ips"
         ],
         "fail_closed": true,
-        "note": "Room is uncensored INTERNALLY; anything crossing to a PUBLIC surface passes this floor regardless of room rating. Cannot be bypassed by opening the gate."
+        "note": "Adults-only reflection space. The floor protects operator + collaborator PII and enforces operator final-say on egress — it is NOT a content-rating gate. Minor safety is handled by room separation (kids only ever in P7 Playground), not by scanning this room. Anything crossing to a PUBLIC surface passes this floor regardless of room rating; cannot be bypassed by opening the gate."
       }
     },
     "memory": {

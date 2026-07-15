@@ -22,7 +22,10 @@
 
   <header class="stage-header">
     <a class="stage-home" href="/">&larr; PMOVES.AI</a>
-    <span class="stage-signature" aria-hidden="true">&#10022;</span>
+    <span class="stage-header-right">
+      <span class="stage-badge" role="status" aria-live="polite">&#9679; LIVE</span>
+      <span class="stage-signature" aria-hidden="true">&#10022;</span>
+    </span>
   </header>
 
   <main id="main" class="stage-main">
@@ -36,6 +39,16 @@
       spawnable — this is the recommended opening cast.
     </p>
 
+    <nav class="stage-personas" aria-label="Persona theme switcher">
+      <span class="stage-personas-label">See the stage through an agent's colors:</span>
+      <a href="/stage/">armor</a>
+      <a href="/stage/?agent=5090-claude">5090-claude</a>
+      <a href="/stage/?agent=4090-claude">4090-claude</a>
+      <a href="/stage/?agent=fordham-steward">fordham-steward</a>
+      <a href="/stage/?agent=hermes-agent">hermes-agent</a>
+      <span class="stage-personas-note">(accents resolve via the on-net BoTZ registry; off-net visitors keep the armor palette)</span>
+    </nav>
+
     <section id="stage-surfaces" class="stage-surfaces" aria-label="Public rooms">
       <noscript>The stage needs JavaScript to render its A2UI surfaces.</noscript>
     </section>
@@ -46,5 +59,7 @@
   </footer>
 
   <script type="module" src="/stage/stage.js"></script>
+  <!-- DL-4.2: persona accents + Showtime live flip (?agent=<id>) — no-op without the query param -->
+  <script type="module" src="/stage/persona-boot.js"></script>
 </body>
 </html>

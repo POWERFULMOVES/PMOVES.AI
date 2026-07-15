@@ -319,6 +319,39 @@ def _publish_signed_trail(payload: Dict[str, Any]) -> None:
         print(f"[warn] CHIT_SIGN_PUBLISH publish skipped: {exc}", file=sys.stderr)
 
 
+def _resolve_chit_passphrase() -> Optional[str]:
+    """Resolve CHIT passphrase from env var, _FILE, or tier env files.
+
+    Priority:
+    1. CHIT_SIGNING_KEY env var
+    2. CHIT_PASSPHRASE env var
+    3. CHIT_SIGNING_KEY_FILE file contents
+    4. CHIT_PASSPHRASE_FILE file contents
+    5. Scan pmoves/env.tier-* files for CHIT_PASSPHRASE=
+    """
+    for key in ("CHIT_SIGNING_KEY", "CHIT_PASSPHRASE"):
+        val = os.environ.get(key)
+        if val:
+            return val
+        file_path = os.environ.get(f"{key}_FILE")
+        if file_path:
+            p = Path(file_path)
+            if p.is_file():
+                content = p.read_text(encoding="utf-8").strip()
+                if content:
+                    return content
+    for tier_file in _PMOVES_ROOT.glob("env.tier-*"):
+        try:
+            for line in tier_file.read_text(encoding="utf-8").splitlines():
+                if line.startswith("CHIT_PASSPHRASE="):
+                    val = line.split("=", 1)[1].strip()
+                    if val:
+                        return val
+        except Exception:
+            pass
+    return None
+
+
 def main() -> None:
     """CLI entry point for signing a Graphiti trail entry."""
     parser = argparse.ArgumentParser(
@@ -361,7 +394,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    passphrase = os.environ.get("CHIT_PASSPHRASE")
+    passphrase = _resolve_chit_passphrase()
 
     if args.stdin:
         raw = sys.stdin.read().strip()

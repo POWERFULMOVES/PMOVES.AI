@@ -330,6 +330,7 @@ api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5v-turbo"
 api_key_location = "env::Z_AI_API_KEY"
 
+
 # --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
 [models.coding_qwen3_coder_30b_local]
 routing = ["ollama_local"]
@@ -674,17 +675,6 @@ api_key_location = "none"
 
 [embedding_models.gemma_embed_local]
 routing = ["ollama_local_embedding"]
-# BGE-M3 (568M, 1024d dense + sparse + ColBERT) — multi-tier embedding keystone.
-# Used by Hi-RAG hybrid search and the pmoves_hybrid collection. MIT license.
-[embedding_models.bge_m3_local]
-routing = ["ollama_local_embedding"]
-
-[embedding_models.bge_m3_local.providers.ollama_local_embedding]
-type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
-model_name = "bge-m3"
-api_key_location = "none"
-
 
 [embedding_models.gemma_embed_local.providers.ollama_local_embedding]
 type = "openai"
@@ -1482,24 +1472,18 @@ type = "chat_completion"
 model = "chat_zai_glm5_turbo"
 weight = 0.3
 temperature = 0.1
-
-[functions.coding_kilocode.variants.local_qwen35_9b]
-type = "chat_completion"
-model = "qwen35_9b"
-
-[functions.coding_kilocode.variants.cloud_zai_turbo]
-type = "chat_completion"
-model = "chat_zai_glm5_turbo"
-temperature = 0.2
 max_tokens = 8192
-weight = 0.8
 
 [functions.coding_kilocode.variants.cloud_zai_glm51]
 type = "chat_completion"
 model = "chat_zai_glm51"
+weight = 0.2
 temperature = 0.2
 max_tokens = 8192
-weight = 0.2
+
+[functions.coding_kilocode.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
 
 # MiniMax Token Plan (cloud primary, local fallback)
 [functions.coding_minimax]
@@ -1697,6 +1681,7 @@ model = "chat_zai_glm51"
 temperature = 0.7
 max_tokens = 8192
 weight = 0.0
+
 
 # --- Worker functions: registry lane aliases ONLY (no-hardcoded-models gate) ---
 

@@ -72,8 +72,53 @@ html, body {
 }
 .stage-home:hover { color: var(--pm-ink); }
 
+.stage-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--pm-space-md);
+}
+
+/* Showtime badge: hidden until persona-boot sets <html data-stage="live"> */
+.stage-badge {
+  display: none;
+  font-family: var(--pm-font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  color: var(--pm-accent-soft);
+  border: 1px solid var(--pm-border-strong);
+  border-radius: var(--pm-radius);
+  padding: 2px 10px;
+}
+:root[data-stage="live"] .stage-badge { display: inline-block; }
+
 /* ✦ signature glyph — reserved, never restyled by persona/room accents */
 .stage-signature { color: var(--pm-signature); }
+
+.stage-personas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pm-space-sm);
+  margin: 0 0 var(--pm-space-lg);
+  font-size: 0.85rem;
+}
+.stage-personas-label { color: var(--pm-ink-dim); }
+.stage-personas a {
+  color: var(--pm-accent-soft);
+  text-decoration: none;
+  border: 1px solid var(--pm-border-subtle);
+  border-radius: var(--pm-radius);
+  padding: 2px 12px;
+}
+.stage-personas a:hover {
+  color: var(--pm-ink);
+  border-color: var(--pm-border-strong);
+}
+.stage-personas-note {
+  flex-basis: 100%;
+  color: var(--pm-ink-mute);
+  font-size: 0.75rem;
+}
 
 .stage-main {
   max-width: 880px;

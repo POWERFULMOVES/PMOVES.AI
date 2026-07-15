@@ -82,3 +82,19 @@ class TestNeo4jCHITSigner:
         assert cs.verify_neo4j_node({"id": "x"}) is True
         # Even garbage data passes when signing disabled
         assert cs.verify_neo4j_node({}) is True
+
+    def test_sign_verify_with_passphrase_file(self, monkeypatch, tmp_path):
+        """CHIT_PASSPHRASE_FILE is honored when CHIT_PASSPHRASE env var is absent."""
+        secret_file = tmp_path / "chit-passphrase"
+        secret_file.write_text("test-neo4j-file-key")
+        monkeypatch.setenv("CHIT_SIGN_NEO4J", "true")
+        monkeypatch.delenv("CHIT_PASSPHRASE", raising=False)
+        monkeypatch.delenv("CHIT_SIGNING_KEY", raising=False)
+        monkeypatch.setenv("CHIT_PASSPHRASE_FILE", str(secret_file))
+        import chit_signer as cs
+        importlib.reload(cs)
+
+        node_data = {"id": "asset-file", "label": "File"}
+        signed = cs.sign_neo4j_node(node_data)
+        assert "sig" in signed
+        assert cs.verify_neo4j_node(signed) is True

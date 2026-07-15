@@ -62,8 +62,12 @@
 # this exact policy, strict style-src blanks the card surfaces. So ONLY the
 # attribute channel is opened (style-src-attr); style-src stays 'self', meaning
 # no <style> injection and no external sheets. script-src stays strict 'self'.
+# connect-src includes the same LOOPBACK-ONLY origins as the root policy for the
+# DL-4.2 persona demo (?agent= → BoTZ Gateway :8054 accents; Showtime :9225 live
+# flip) — the *visitor's* loopback: harmless off-net, functional on-net, and
+# persona-theme.js restricts ?gw= overrides to loopback.
 /stage/*
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self' http://localhost:8054 http://127.0.0.1:8054 http://localhost:9225 http://127.0.0.1:9225; object-src 'none'
 
 # --- Long-cache static assets ---
 /assets/*

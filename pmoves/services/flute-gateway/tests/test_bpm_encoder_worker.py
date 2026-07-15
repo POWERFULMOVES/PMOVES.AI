@@ -25,8 +25,12 @@ def test_extract_text_fallback():
     assert _extract_text(payload) == "Direct string result."
 
 def test_extract_text_empty():
+    # An empty result dict has no response/text/output field, so extraction
+    # yields empty text (NOT the literal "{}"): _detect_boundaries("") then
+    # produces a single NONE boundary. Feeding "{}" downstream would encode
+    # braces as if they were speech.
     payload = {"result": {}}
-    assert _extract_text(payload) == "{}"
+    assert _extract_text(payload) == ""
 
 def test_detect_boundaries_sentences():
     text = "Hello world. How are you? I am fine!"

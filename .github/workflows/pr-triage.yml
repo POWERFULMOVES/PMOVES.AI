@@ -1,0 +1,94 @@
+# PR Triage — path-based labels + CHIT control-body routing
+# (P0 Automated PR Triage, ARCHON_ENHANCEMENT_ROADMAP §4).
+#
+# SECURITY: runs on pull_request_target so fork PRs get labeled too — the
+# token is therefore writable, so this workflow must NEVER check out or
+# execute PR head code (same stance as dependabot-auto-merge.yml). Both jobs
+# are metadata-only: actions/labeler reads changed-file NAMES via the API,
+# and the routing job posts a single advisory comment. Advisory only — the
+# blocking CHIT gate remains chit-contract.yml.
+
+name: PR Triage
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-triage-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: pr-triage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      all-labels: ${{ steps.labeler.outputs.all-labels }}
+    steps:
+      - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Ensure label taxonomy exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          create() { gh label create "$1" --repo "$REPO" --color "$2" --description "$3" --force; }
+          create chit-aware       "9370DB" "Touches a CHIT-aware service — control-body signature gate applies"
+          create compose          "FFD700" "Compose files / service Dockerfiles"
+          create secrets-pipeline "DC143C" "Secrets funnel / CHIT manifest tooling"
+          create workflows        "4169E1" "GitHub Actions workflows"
+          create docs             "00CED1" "Documentation"
+          create services         "8B4513" "Service source under pmoves/services/"
+          create config           "F5F5F5" "pmoves/config(s)/ changes"
+          create governance       "111111" "AGNOTE register / agent definitions / damage-control hooks"
+
+      - name: Apply path-based labels
+        id: labeler
+        uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
+        with:
+          configuration-path: .github/labeler.yml
+          sync-labels: true
+
+  chit-routing:
+    name: chit-routing-comment
+    needs: label
+    if: contains(needs.label.outputs.all-labels, 'chit-aware')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Post one routing comment (idempotent)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          marker='<!-- pr-triage: chit-routing -->'
+          if gh api "repos/$REPO/issues/$PR/comments" --paginate \
+               --jq '.[].body' | grep -qF "$marker"; then
+            echo "routing comment already present"
+            exit 0
+          fi
+          gh pr comment "$PR" --repo "$REPO" --body "$marker
+          ### 🔏 CHIT-aware change — control-body routing
+
+          This PR touches a CHIT-aware service (ports 8086/8087/8103/8106/8113/9224 surface). Before a Control-Body ACK:
+
+          - the diff (or PR body) should reference a CHIT signature trail — \`chit.signed.v1\`, a \`CHIT:\` trailer, or a \`make -C pmoves sign-trail\` entry;
+          - the \`chit-pr-audit-agent\` (\`.claude/agents/chit-pr-audit-agent.md\`) is the gate that grants/refuses ACK eligibility;
+          - signing quickstart: \`pmoves/docs/AGENTS/CHIT_SIGNING_TUTORIAL.md\`.
+
+          _Advisory routing only — the blocking contract check is **CHIT Contract**._"

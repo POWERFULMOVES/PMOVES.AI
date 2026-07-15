@@ -1,0 +1,80 @@
+# Path-based PR label taxonomy (P0 Automated PR Triage,
+# ARCHON_ENHANCEMENT_ROADMAP §4). Applied by .github/workflows/pr-triage.yml
+# via actions/labeler v6 — labels are bootstrapped by the workflow, so adding
+# a rule here is sufficient.
+#
+# chit-aware paths mirror the chit-pr-audit-agent's watch surface
+# (.claude/agents/chit-pr-audit-agent.md — ports 8086/8087/8103/8106/8113/9224
+# per pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md). Keep the two in sync.
+
+chit-aware:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pmoves/services/tokenism-simulator/**"
+          - "pmoves/services/hi-rag-gateway-v2/**"
+          - "pmoves/services/hi-rag-gateway/**"
+          - "pmoves/services/consciousness-service/**"
+          - "pmoves/services/evo-controller/**"
+          - "pmoves/services/a2ui-nats-bridge/**"
+          - "pmoves/services/agentgym-rl-coordinator/**"
+          - "pmoves/services/common/**"
+          - "pmoves/services/gateway/**"
+          # CHIT producers/consumers per CHIT_INTEGRATION_STATUS.md (full doc
+          # surface, not just the audit agent's port list — review #2098 P2)
+          - "pmoves/services/agent-zero/**"
+          - "pmoves/services/pmoves-yt/**"
+          - "pmoves/services/pmoves_yt/**"
+          - "pmoves/services/deepresearch/**"
+          - "pmoves/services/supaserch/**"
+          - "pmoves/services/flute-gateway/**"
+          - "pmoves/services/cast-tts-gateway/**"
+          - "pmoves/services/extract-worker/**"
+          - "pmoves/services/ffmpeg-whisper/**"
+          - "pmoves/tools/chit_*.py"
+          - "pmoves/chit/**"
+
+compose:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pmoves/docker-compose*.yml"
+          - "pmoves/services/*/Dockerfile*"
+          - "pmoves/docker/**"
+
+secrets-pipeline:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pmoves/chit/**"
+          - "pmoves/tools/secrets_*.py"
+          - "pmoves/tools/chit_manifest_*.py"
+          - ".github/workflows/sync-secrets-local.yml"
+
+workflows:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/actions/**"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+          - "pmoves/docs/**"
+
+services:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pmoves/services/**"
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pmoves/config/**"
+          - "pmoves/configs/**"
+
+governance:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pmoves/docs/AGENTS/AGNOTE4482*.md"
+          - ".claude/agents/**"
+          - ".claude/hooks/**"

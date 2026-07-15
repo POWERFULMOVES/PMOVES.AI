@@ -261,6 +261,11 @@ up-bots: ## Start bot services (BotZ gateway)
 	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway
 	@echo "✔ Bots up (botz-gateway)."
 
+.PHONY: rebuild-bots
+rebuild-bots: ## Rebuild + restart botz-gateway from current source (theme routes/CORS live here)
+	@$(DC) --profile data --profile workers --profile botz up -d --build botz-gateway
+	@echo "✔ botz-gateway rebuilt + restarted."
+
 # --- JuiceFS object-store PoC (replaces EOL MinIO; see docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md) ---
 # Scoped to base+juicefs overlays ONLY (not the monolith $(DC)): a full-monolith
 # `compose up` interpolates EVERY service's env, so unrelated ${VAR:?} guards
@@ -866,7 +871,7 @@ bootstrap-data: ## Umbrella: Supabase SQL + Neo4j seeds + Qdrant/Meili demo data
 	@echo "   💡 Run 'make smoke' to verify installation"
 
 .PHONY: first-run
-first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo data
+first-run: ## Guided first-run: env setup, Supabase, core services, agents, MCPs, demo data
 	@echo "🚀 PMOVES First-Run Bootstrap"
 	@echo "================================"
 	@echo ""
@@ -878,6 +883,8 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo
 	@echo "  ✓ Start core services (data tier, workers)"
 	@echo "  ✓ Start agents (Agent Zero, Archon)"
 	@echo "  ✓ Run auth bootstrap (mode=$(AUTH_BOOTSTRAP_MODE), email=$(SUPABASE_BOOT_USER_EMAIL))"
+	@echo "  ✓ Bootstrap Docker MCP Toolkit profile"
+	@echo "  ✓ Register native PMOVES MCP servers (Claude/Kimi/KiloCode configs)"
 	@echo "  ✓ Seed Agent Zero MCP servers"
 	@echo ""
 	@$(MAKE) --no-print-directory check-tools
@@ -887,6 +894,8 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo
 	@$(MAKE) --no-print-directory up
 	@$(MAKE) --no-print-directory up-agents-ui
 	@$(MAKE) --no-print-directory auth-bootstrap
+	@$(MAKE) --no-print-directory mcp-toolkit-bootstrap || true
+	@$(MAKE) --no-print-directory mcp-config-bootstrap
 	@$(MAKE) --no-print-directory a0-mcp-seed
 	@echo ""
 	@echo "✅ First-run complete!"

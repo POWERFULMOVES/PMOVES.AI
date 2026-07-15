@@ -5,13 +5,27 @@ as our interactive coding bestie alongside the PMOVES stack.
 
 ## Quick Start
 
+**Option A: Fleet bootstrap (recommended)** — generates config, resolves CHIT passphrase from secrets funnel, tests trail signing:
+
+```bash
+make -C pmoves crush-bootstrap
+crush
+```
+
+**Option B: Manual setup** — for nodes without secrets funnel:
+
 1. Install Crush (see upstream README for the package manager of your choice) and
    make sure it is on your `PATH`.
 2. Install the `typer` and `PyYAML` dependencies for the mini CLI (recommended via uv):
    ```bash
    uv pip install typer[all] PyYAML
    ```
-3. With both packages installed, prime the environment and provisioning bundle in one shot:
+3. Install LSP servers for IDE-like diagnostics:
+   ```bash
+   npm install -g pyright typescript-language-server
+   pip install ruff
+   ```
+4. With both packages installed, prime the environment and provisioning bundle in one shot:
    ```bash
    python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults
    ```
@@ -76,6 +90,18 @@ python3 -m pmoves.tools.mini_cli models pull --bundle ollama-high  # (future)
 - The `crush setup` command reads from `.env.generated` / `env.shared.generated`
   and only activates providers when the corresponding secrets exist.
 
+### Trail Signing
+
+Crush signs trail entries using `make -C pmoves sign-trail`. The CHIT passphrase
+is resolved automatically from:
+1. `CHIT_SIGNING_KEY` env var
+2. `CHIT_PASSPHRASE` env var
+3. `CHIT_SIGNING_KEY_FILE` / `CHIT_PASSPHRASE_FILE`
+4. `pmoves/env.tier-*` files (populated by `make secrets-funnel`)
+
+When no passphrase is found, signing degrades to unsigned (acceptable in dev).
+Run `make -C pmoves crush-bootstrap` to verify signing works end-to-end.
+
 ## n8n & Messaging Hooks
 
 The automation scanner available via
@@ -85,6 +111,7 @@ subcommand, making it easy to plug them into Crush prompts or MCP actions.
 
 ## Updating Configuration
 
+- **Fleet bootstrap** (recommended): `make -C pmoves crush-bootstrap`
 - Regenerate the config after rotating API keys or adding new secrets:
   `python3 -m pmoves.tools.mini_cli crush setup`
 - To preview the JSON without writing it, run:
@@ -134,4 +161,6 @@ including bootstrap sequence, trail-writing guide, and integration points.
 - Implement `pmoves mini mcp serve` so the Crush stdio MCP can call into the mini
   CLI.
 - Package the config generator as part of a future `pmoves` Python package.
-- Add a `crush` target to `Makefile` once the MCP bridge is battle-tested.
+- ~~Add a `crush` target to `Makefile`~~ — **Done**: `make -C pmoves crush-bootstrap`
+- Deploy Crush to SPARK node (handoff doc: `pmoves/docs/handoffs/SPARK_CRUSH_AWAKENING_2026-07-12.md`)
+- Install `gopls` on fleet nodes that work with Go codebases

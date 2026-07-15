@@ -169,6 +169,17 @@ class MCPSpec:
     config: Dict[str, object]
     required_commands: List[str] = field(default_factory=list)
     required_env: Optional[str] = None
+    required_envs: List[str] = field(default_factory=list)
+
+    def missing_envs(self, env_cache: Dict[Path, Dict[str, str]]) -> List[str]:
+        keys = list(self.required_envs)
+        if self.required_env:
+            keys.append(self.required_env)
+        return [
+            key
+            for key in keys
+            if not _lookup_env(key, env_cache)
+        ]
 
 
 MCP_SPECS: List[MCPSpec] = [
@@ -181,6 +192,129 @@ MCP_SPECS: List[MCPSpec] = [
             "timeout": 120,
         },
         required_commands=["pmoves-mini"],
+    ),
+    MCPSpec(
+        key="pmoves-cipher",
+        config={
+            "type": "sse",
+            "url": "http://${TS_Z890}:8105/mcp/sse",
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+            "timeout": 30,
+        },
+        required_env="CIPHER_API_TOKEN",
+    ),
+    MCPSpec(
+        key="pmoves-cipher-local",
+        config={
+            "type": "sse",
+            "url": "http://localhost:8105/mcp/sse",
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+            "timeout": 30,
+        },
+        required_env="CIPHER_API_TOKEN",
+    ),
+    MCPSpec(
+        key="agent-zero",
+        config={
+            "type": "http",
+            "url": "http://${TS_Z890}:8080/mcp",
+            "timeout": 30,
+        },
+    ),
+    MCPSpec(
+        key="pmoves-nats-fleet",
+        config={
+            "type": "stdio",
+            "command": "uv",
+            "args": [
+                "--directory",
+                "./pmoves-nats-mcp",
+                "run",
+                "python",
+                "-m",
+                "nats_mcp.server",
+            ],
+            "timeout": 60,
+        },
+        required_commands=["uv"],
+        required_env="NATS_URL",
+    ),
+    MCPSpec(
+        key="pmoves-supabase",
+        config={
+            "type": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@supabase/mcp-server-postgrest@0.1.1",
+                "--apiUrl",
+                "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
+                "--apiKey",
+                "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
+                "--schema",
+                "public",
+            ],
+            "timeout": 60,
+        },
+        required_commands=["npx"],
+    ),
+    MCPSpec(
+        key="supabase-db",
+        config={
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "postgres-mcp@0.3.0",
+                "--access-mode=unrestricted",
+            ],
+            "timeout": 60,
+        },
+        required_commands=["uvx"],
+        required_env="SUPABASE_DB_URI",
+    ),
+    MCPSpec(
+        key="huggingface",
+        config={
+            "type": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@llmindset/hf-mcp-server@0.3.30",
+            ],
+            "timeout": 60,
+        },
+        required_commands=["npx"],
+        required_env="HF_TOKEN",
+    ),
+    MCPSpec(
+        key="tailscale",
+        config={
+            "type": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "tailscale-mcp@2026.4.10-1",
+            ],
+            "timeout": 60,
+        },
+        required_commands=["npx"],
+        required_envs=["TAILSCALE_API_KEY", "TAILSCALE_TAILNET"],
+    ),
+    MCPSpec(
+        key="pmoves-docker-gateway",
+        config={
+            "type": "stdio",
+            "command": "docker",
+            "args": [
+                "mcp",
+                "gateway",
+                "run",
+                "--profile",
+                "pmoves_5090_web",
+            ],
+            "timeout": 60,
+        },
+        required_commands=["docker"],
     ),
     MCPSpec(
         key="docker",
@@ -371,7 +505,7 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         disabled = False
         if spec.required_commands and not all(shutil.which(cmd) for cmd in spec.required_commands):
             disabled = True
-        if spec.required_env and not _lookup_env(spec.required_env, env_cache):
+        if spec.missing_envs(env_cache):
             disabled = True
         if disabled:
             config["disabled"] = True

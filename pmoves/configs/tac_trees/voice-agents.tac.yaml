@@ -48,13 +48,13 @@ root:
           agent_hint: codex
 
         - id: va.tts-studio.start-js
-          task: "start.js uses correct URL capture pattern"
+          task: "TTS Studio launcher start.js present with URL capture pattern"
           action:
             type: grep
-            target: "D:/pinokio/api/Ultimate-TTS-Studio.git/start.js"
+            target: "PMOVES-Pinokio-Ultimate-TTS-Studio/start.js"
             pattern: 'input\.event\[1\]'
             expect: "URL captured via capture group [1], not [0]"
-          context: "CLAUDE.md Critical Pattern Lock compliance"
+          context: "Pinokio launcher start.js lives in the hardened submodule; grep asserts URL capture pattern is intact (regression guard)"
           agent_hint: codex
 
     # =========================================================================
