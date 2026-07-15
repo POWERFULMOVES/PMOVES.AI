@@ -36,73 +36,38 @@ git clone https://github.com/charmbracelet/crush ~/crush && cd ~/crush
 go build -o ~/.local/bin/crush .
 ```
 
-### Step 2: Replicate Crush Config
-Once PR #2105 merges, `crush setup` will auto-emit Z.AI when `Z_AI_API_KEY` is set.
-Until then, hand-configure:
-
+### Step 2: Install LSP Servers + Dependencies
 ```bash
-mkdir -p ~/.config/crush
-# Copy the working config from Knuckles (adapt API key via env)
-cat > ~/.config/crush/crush.json << 'JSON'
-{
-  "providers": {
-    "zai": {
-      "id": "zai",
-      "name": "ZAI Provider",
-      "base_url": "https://api.z.ai/api/coding/paas/v4",
-      "api_key": "${Z_AI_API_KEY}"
-    }
-  },
-  "models": {
-    "large": {"model": "glm-5.2", "provider": "zai", "max_tokens": 131072},
-    "small": {"model": "glm-5-turbo", "provider": "zai"}
-  },
-  "mcp": {
-    "zai-mcp-server": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@z_ai/mcp-server"],
-      "env": {"Z_AI_MODE": "ZAI", "Z_AI_API_KEY": "${Z_AI_API_KEY}"}
-    },
-    "web-search-prime": {
-      "type": "http",
-      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
-      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"}
-    },
-    "web-reader": {
-      "type": "http",
-      "url": "https://api.z.ai/api/mcp/web_reader/mcp",
-      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"}
-    },
-    "zread": {
-      "type": "http",
-      "url": "https://api.z.ai/api/mcp/zread/mcp",
-      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"}
-    }
-  },
-  "options": {
-    "context_paths": [
-      "CRUSH.md",
-      "AGENTS.md",
-      "CLAUDE.md",
-      ".claude/BOOTSTRAP.md",
-      "docs/AGENT_TRAIL.md",
-      "pmoves/docs/AGENTS/CRUSH_OPERATOR_HOME.md"
-    ]
-  }
-}
-JSON
+npm install -g pyright typescript-language-server
+pip install ruff pyyaml typer[all]
 ```
 
-### Step 3: Verify Skills Load
-After pulling main (with PR #2103 merged), all 35 skills should load green:
+### Step 3: Pull Main + Secrets Funnel + Bootstrap
 ```bash
 cd ~/pinokio/api/PMOVES.AI
 git pull origin main
-crush  # start crush, check for skill warnings
+
+# Provision secrets (CHIT passphrase, API keys from funnel)
+make -C pmoves secrets-funnel
+
+# Bootstrap Crush (auto-resolves CHIT passphrase, generates config, tests signing)
+make -C pmoves crush-bootstrap
 ```
 
-### Step 4: Write SPARK Trail Entry
+The `crush-bootstrap` target replaces the manual hand-config steps from the
+original handoff. It automatically:
+- Resolves `CHIT_PASSPHRASE` from `env.tier-data` (populated by secrets funnel)
+- Generates `~/.config/crush/crush.json` with Z.AI provider + PMOVES MCP servers
+- Tests trail signing end-to-end
+- Reports status
+
+### Step 4: Verify Skills Load
+After pulling main (with PR #2103 merged), all 35+ skills should load green:
+```bash
+crush  # start crush, check for skill warnings in startup output
+```
+
+### Step 5: Write SPARK Trail Entry
 SPARK's Crush instance should write its own awakening trail entry in
 `docs/AGENT_TRAIL.md` — second Crush instance in the fleet.
 
