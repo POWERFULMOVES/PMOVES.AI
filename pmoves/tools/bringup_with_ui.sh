@@ -233,11 +233,11 @@ if [ "${PUBLISHED_AGENTS:-0}" = "1" ]; then
     # races during compose service recreation.
     make down-agents >/dev/null 2>&1 || true
     docker compose -f docker-compose.agents.images.yml --profile agents stop \
-      agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
+      agent-zero archon deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
     docker compose -f docker-compose.agents.images.yml --profile agents rm -f \
-      agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
+      agent-zero archon deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
     docker rm -f \
-      pmoves-agent-zero-1 pmoves-archon-1 pmoves-archon-ui-1 \
+      pmoves-agent-zero-1 pmoves-archon-1 \
       pmoves-deepresearch-1 pmoves-supaserch-1 pmoves-mesh-agent-1 pmoves-publisher-discord-1 >/dev/null 2>&1 || true
     start_service "Agents + UIs (fallback)" "up-agents-ui" "true" || exit 1
   fi

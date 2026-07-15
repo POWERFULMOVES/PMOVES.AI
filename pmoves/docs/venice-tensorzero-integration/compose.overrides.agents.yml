@@ -15,14 +15,3 @@ services:
       - .env
       - .env.hirag.override
 
-  # Optional Archon web UI: replace image with your UI container if used
-  archon-ui:
-    image: ghcr.io/pmoves/archon-ui:latest # replace if different
-    restart: unless-stopped
-    env_file:
-      - .env
-      - .env.hirag.override
-    environment:
-      - OPENAI_COMPAT_BASE_URL=${OPENAI_COMPAT_BASE_URL:-http://tensorzero:3000}
-    ports: ["8099:8080"]
-    depends_on: [hi-rag-gateway-v2, tensorzero]
