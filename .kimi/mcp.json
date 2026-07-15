@@ -37,7 +37,7 @@
         "--apiUrl",
         "http://localhost:8000/rest/v1",
         "--apiKey",
-        "${SUPABASE_SERVICE_KEY}",
+        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
         "--schema",
         "public"
       ]

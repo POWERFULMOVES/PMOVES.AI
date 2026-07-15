@@ -29,6 +29,9 @@ if ! command -v python3 >/dev/null 2>&1; then
   fail "python3 not found on PATH"
 fi
 
+# Set PYTHONPATH so 'python3 -m pmoves.tools.*' resolves from the repo root
+export PYTHONPATH="${REPO_ROOT}:${PYTHONPATH:-}"
+
 # ── Crush ────────────────────────────────────────────────────────────────────
 
 info "Updating Crush config: ${CRUSH_CONFIG}"

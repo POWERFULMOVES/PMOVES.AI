@@ -53,6 +53,7 @@ class ServerSpec:
     clients: Optional[List[str]] = None
     endpoint: Optional[str] = None
     endpoint_prefix: Optional[str] = None
+    extra: Dict[str, Any] = field(default_factory=dict)  # pass-through fields (auth_token, tools, etc.)
 
     def supports_client(self, client: str) -> bool:
         if self.clients is None:
@@ -104,7 +105,7 @@ def _expand(value: str, env: Dict[str, str]) -> str:
             var = inner
             default = ""
 
-        val = env.get(var) or os.environ.get(var)
+        val = env.get(var)
         if val:
             result.append(val)
         elif default:
@@ -145,6 +146,11 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
                 clients=server.get("clients"),
                 endpoint=server.get("endpoint"),
                 endpoint_prefix=server.get("endpoint_prefix"),
+                # Capture unrecognized fields for pass-through (auth_token, tools, etc.)
+                extra={k: v for k, v in server.items()
+                       if k not in {"key", "description", "transport", "url", "command",
+                                    "args", "env", "headers", "timeout", "clients",
+                                    "endpoint", "endpoint_prefix"}},
             )
             if not spec.supports_client(client):
                 continue
@@ -248,11 +254,11 @@ def render_hermes(specs: List[ServerSpec], context: Dict[str, str]) -> Dict[str,
                 entry["env"] = _render_env(spec.env, context)
         else:
             continue
+        # Pass through extra fields (auth_token, tools, etc.) from inventory
+        for k, v in spec.extra.items():
+            entry[k] = _expand(v, context) if isinstance(v, str) else v
         servers[spec.key] = entry
     return {"mcp_servers": servers}
-
-
-def render_crush(specs: List[ServerSpec], context: Dict[str, str]) -> Dict[str, Any]:
     """Render Crush CLI crush.json mcp block."""
     mcp: Dict[str, Any] = {}
     for spec in specs:

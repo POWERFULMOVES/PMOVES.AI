@@ -130,7 +130,7 @@
       "command": "uvx",
       "args": [
         "postgres-mcp@0.3.0",
-        "--access-mode=unrestricted"
+        "--access-mode=schema"
       ],
       "env": {
         "DATABASE_URI": "${SUPABASE_DB_URI}"

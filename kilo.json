@@ -152,7 +152,7 @@
         "--apiUrl",
         "http://localhost:8000/rest/v1",
         "--apiKey",
-        "${SUPABASE_SERVICE_KEY}",
+        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
         "--schema",
         "public"
       ]
@@ -162,7 +162,7 @@
       "command": [
         "uvx",
         "postgres-mcp@0.3.0",
-        "--access-mode=unrestricted"
+        "--access-mode=schema"
       ],
       "environment": {
         "DATABASE_URI": "${SUPABASE_DB_URI}"
@@ -198,7 +198,7 @@
     "agent-zero_*": "allow",
     "pmoves-nats-fleet_*": "allow",
     "pmoves-supabase_*": "allow",
-    "supabase-db_*": "allow",
+    "supabase-db_*": "ask",
     "pmoves-docker-gateway-sse_*": "allow"
   }
 }
