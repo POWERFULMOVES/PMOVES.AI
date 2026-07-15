@@ -12,7 +12,7 @@ from typing import Dict, List, Mapping, Sequence
 import yaml
 
 from pmoves.chit.codec import decode_secret_map, load_cgp
-from pmoves.tools.secrets_self_generated import fill_self_generated
+from pmoves.tools.secrets_self_generated import fill_self_generated, SELF_GENERATED, _SUPABASE_JWT_KEYS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_ROOT.parent
@@ -270,9 +270,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Filter entries if --keys is specified (selective rotation)
     if args.keys:
         key_set = set(args.keys)
+        # Auto-expand JWT_SECRET rotation to include all derived JWT keys
+        # so derived values (anon/service_role) are regenerated in sync.
+        if "JWT_SECRET" in key_set:
+            key_set |= set(_SUPABASE_JWT_KEYS)
         entries = [e for e in entries if e.label in key_set]
 
     outputs, missing = build_outputs(secrets, entries, strict=False)
+    # Filter out self-generated secrets from the missing report — they are
+    # either derivable (handled by fill_self_generated) or generated elsewhere
+    # (e.g. POSTGRES_PASSWORD at db-init), so they are never operator gaps.
+    missing = [k for k in missing if k not in SELF_GENERATED]
     if missing:
         joined = ", ".join(sorted(missing))
         if args.allow_missing:

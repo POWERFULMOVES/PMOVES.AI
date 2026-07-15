@@ -33,6 +33,8 @@ import hmac
 import json
 from typing import Dict, Mapping
 
+from pmoves.tools._secrets_common import is_placeholder
+
 # Canonical Supabase JWT claims — MUST match scripts/supabase/generate-keys.sh.
 _JWT_ISS = "supabase-local"
 _JWT_IAT = 1641769200   # fixed timestamp for reproducibility (generate-keys.sh)
@@ -49,7 +51,7 @@ _SUPABASE_JWT_KEYS: dict[str, str] = {
 
 # Self-generated but NOT derivable in the funnel (minted at db-init, must match
 # the running database). Recognized so it is not reported as an operator gap.
-_GENERATED_ELSEWHERE: frozenset[str] = frozenset({"POSTGRES_PASSWORD"})
+_GENERATED_ELSEWHERE: frozenset[str] = frozenset({"POSTGRES_PASSWORD", "SUPABASE_DB_PASSWORD"})
 
 # Everything the funnel considers self-generated (for operator-missing reports).
 SELF_GENERATED: frozenset[str] = frozenset(_SUPABASE_JWT_KEYS) | _GENERATED_ELSEWHERE
@@ -94,11 +96,15 @@ def fill_self_generated(secrets: Mapping[str, str]) -> Dict[str, str]:
     """
     out: Dict[str, str] = dict(secrets)
     jwt_secret = (out.get("JWT_SECRET") or out.get("SUPABASE_JWT_SECRET") or "").strip()
-    if not jwt_secret:
+    if not jwt_secret or is_placeholder(jwt_secret):
         return out
 
+    # Mirror JWT_SECRET into SUPABASE_JWT_SECRET if missing (manifest requires both)
+    if not out.get("SUPABASE_JWT_SECRET") or is_placeholder(out.get("SUPABASE_JWT_SECRET")):
+        out["SUPABASE_JWT_SECRET"] = jwt_secret
+
     for label, role in _SUPABASE_JWT_KEYS.items():
-        if (out.get(label) or "").strip():
+        if not is_placeholder(out.get(label)):
             continue  # never overwrite an operator/DB-supplied value
         out[label] = derive_supabase_jwt(jwt_secret, role)
     return out
