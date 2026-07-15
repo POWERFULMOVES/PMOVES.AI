@@ -1,0 +1,82 @@
+{
+  "opened_at": "2026-07-15T16:08:00Z",
+  "opened_by": "Mavis-5090",
+  "stack": "a2ui-v0-v0.2-fordham-sintmaarten",
+  "base_branch": "main",
+  "worktree_branch": "feat/auto-20260714-9d8a9584",
+  "fork_common_ancestor": "7ae07bad21fb296d52737f602955f62193e10c30",
+  "main_at_open": "288e90c8fa044a0162386902a6f888ada827a4af",
+  "main_commits_ahead_of_fork": 30,
+  "branch_status_at_open": "30 commits behind main (push-as-is per DARKXSIDE; rebase is a merge-time decision, not a push-time decision)",
+  "prs": [
+    {
+      "number": 2132,
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2132",
+      "title": "A2UI v0.1 + Fordham Hill tenant (spec + 7 components + compose tool + conformance + tenant page)",
+      "head_branch": "feat/a2ui-v01-fordham-hill",
+      "head_sha": "f45687ea0f",
+      "commits": [
+        "2396aff5eb docs(website): baseline + brand asset family (playwright + axe-core + image_synthesize)",
+        "f97795a7b1 docs(agnote): CLAIM WEBSITE_AS_AGENT_CANVAS lane (DARKXSIDE leadership assignment)",
+        "6a8549dee1 docs(contracts): A2UI v0.1 spec - HTML5 Web Components, push+pull C/strict",
+        "b4e2a3a7be feat(a2ui): v0.1 first slice - spec + 3 components + compose tool + conformance",
+        "f45687ea0f feat(a2ui): complete v0.1 registry + Fordham Hill tenant page + tenant template"
+      ],
+      "commit_count": 5,
+      "body_file": "pmoves/docs/logs/pr_open/PR_1_v01_fordham_hill.body.md",
+      "status": "open",
+      "reviewer_targets": ["codex", "github-copilot"],
+      "learnings_path": "pmoves/docs/logs/pr_trim_2132_LEARNINGS.md"
+    },
+    {
+      "number": 2133,
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2133",
+      "title": "A2UI v0.2 design - <pm-haptic> v0.1 + v0.2 ballot extension spec (DRAFT)",
+      "head_branch": "feat/a2ui-v02-design",
+      "head_sha": "a9046e4b88",
+      "commits": [
+        "a2fc9d6fd4 feat(a2ui): ship <pm-haptic> v0.1 (Web Vibration API wrapper)",
+        "dd1e89fa6f docs(contracts): A2UI v0.2 ballot extension (DRAFT) - <pm-ballot> spec for Fordham governance",
+        "a9046e4b88 docs(agnote): RELEASE pm-haptic shipped + A2UI v0.2 ballot spec drafted"
+      ],
+      "commit_count": 3,
+      "body_file": "pmoves/docs/logs/pr_open/PR_2_v02_design.body.md",
+      "status": "open",
+      "reviewer_targets": ["codex", "github-copilot", "fordham-resident-legitimacy-review"],
+      "learnings_path": "pmoves/docs/logs/pr_trim_2133_LEARNINGS.md"
+    },
+    {
+      "number": 2134,
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2134",
+      "title": "A2UI v0.2 implementation - <pm-toast> + <pm-ballot> + St. Maarten tenant + v0.2 event wire + CF Pages deploy + review-style scaffolding",
+      "head_branch": "feat/a2ui-v02-impl-review-style",
+      "head_sha": "1a85215618",
+      "commits": [
+        "55c6f80e01 feat(a2ui): ship v0.2 - <pm-toast> + <pm-ballot> stateful components",
+        "43070b3590 feat(a2ui): St. Maarten tenant + v0.2 event wire + CF Pages deploy target",
+        "0c826336f9 docs(agnote): RELEASE parallel batch v0.2 - pm-toast + pm-ballot + St. Maarten tenant + event wire + CF Pages deploy",
+        "1a85215618 feat(review): learnings-first trim scaffolding - template + a2ui trail hook + meta-doc"
+      ],
+      "commit_count": 4,
+      "body_file": "pmoves/docs/logs/pr_open/PR_3_v02_impl_review_style.body.md",
+      "status": "open",
+      "reviewer_targets": ["codex", "github-copilot"],
+      "learnings_path": "pmoves/docs/logs/pr_trim_2134_LEARNINGS.md"
+    }
+  ],
+  "total_commits_across_stack": 12,
+  "pr_body_files": "pmoves/docs/logs/pr_open/",
+  "trim_strategy": "learnings-first (see pmoves/docs/templates/PR_LEARNINGS.template.md + pmoves/docs/operations/REVIEW_STYLE_2026-07-15.md)",
+  "next_action": "wait for review comments on #2132 / #2133 / #2134; for each PR: classify threads (5-class), bucket threads (4-bucket), apply fixes with conformance gate, fill LEARNINGS.md at the path above, sign trail with LEARNINGS.md as payload, resolve via GraphQL",
+  "agnote_links": [
+    "Mavis-5090::WEBSITE-AS-AGENT-CANVAS-CLAIM::2026-07-15",
+    "Mavis-5090::A2UI-V0.1-FIRST-SLICE-SHIPPED::2026-07-15",
+    "Mavis-5090::WEBSITE-AS-AGENT-CANVAS-PARALLEL-BUILD::2026-07-15",
+    "Mavis-5090::PM-HAPTIC-AND-V02-BALLOT-CLAIM::2026-07-15",
+    "Mavis-5090::PM-HAPTIC-AND-V02-BALLOT-DELIVERED::2026-07-15",
+    "Mavis-5090::PARALLEL-BATCH-V02-IMPLEMENTATION-CLAIM::2026-07-15",
+    "Mavis-5090::PARALLEL-BATCH-V02-IMPLEMENTATION-DELIVERED::2026-07-15",
+    "Mavis-5090::REVIEW-STYLE-AND-LEARNINGS-SCAFFOLD-CLAIM::2026-07-15",
+    "Mavis-5090::REVIEW-STYLE-AND-LEARNINGS-SCAFFOLD-DELIVERED::2026-07-15"
+  ]
+}
