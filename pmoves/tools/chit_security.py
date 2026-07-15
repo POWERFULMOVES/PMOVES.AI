@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import struct
+from pathlib import Path
 from typing import Any, Dict, List
 
 try:
@@ -28,24 +29,36 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _get_signing_key() -> str:
-    """Return the HMAC signing key from environment.
+    """Return the HMAC signing key from environment or file.
 
     Priority:
     1. CHIT_SIGNING_KEY  (recommended — separate key for signing)
     2. CHIT_PASSPHRASE   (legacy fallback — same key for signing + encryption)
+    3. CHIT_SIGNING_KEY_FILE  (file path containing the key)
+    4. CHIT_PASSPHRASE_FILE   (file path containing the passphrase)
 
     Raises:
-        RuntimeError: if neither env var is set.
+        RuntimeError: if none of the above are set.
     """
-    key = os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE", "")
-    if not key:
-        raise RuntimeError("CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var is required")
+    for key in ("CHIT_SIGNING_KEY", "CHIT_PASSPHRASE"):
+        val = os.environ.get(key)
+        if val:
+            break
+        file_path = os.environ.get(f"{key}_FILE")
+        if file_path:
+            p = Path(file_path)
+            if p.is_file():
+                val = p.read_text(encoding="utf-8").strip()
+                if val:
+                    break
+    else:
+        raise RuntimeError("CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var (or _FILE) is required")
     if not os.environ.get("CHIT_SIGNING_KEY") and os.environ.get("CHIT_PASSPHRASE"):
         logger.warning(
             "Using CHIT_PASSPHRASE for signing — recommend setting CHIT_SIGNING_KEY "
             "separately for key separation"
         )
-    return key
+    return val
 
 
 def _get_encryption_key() -> str:

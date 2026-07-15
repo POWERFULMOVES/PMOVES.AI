@@ -156,3 +156,9 @@ mcp-bootstrap-check: ## Validate imported profile, generated configs, and basic 
 
 hermes-crush-bootstrap: ## Update Hermes Agent and Crush CLI MCP configs from canonical inventory
 	@bash scripts/bootstrap-hermes-crush.sh
+
+crush-bootstrap: ## Full Crush fleet bootstrap: config + MCP + CHIT passphrase from secrets funnel
+	@echo "[CRUSH] Starting fleet bootstrap..."
+	@bash scripts/crush-fleet-bootstrap.sh
+
+.PHONY: crush-bootstrap
