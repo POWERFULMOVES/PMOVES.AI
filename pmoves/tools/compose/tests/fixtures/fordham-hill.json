@@ -1,0 +1,87 @@
+{
+  "tenant": {
+    "id": "fordham-hill",
+    "name": "Fordham Hill Community Room",
+    "theme": "armor",
+    "tagline": "Community cost-pooling + self-governance pilot"
+  },
+  "components": [
+    {
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "DARKXSIDE",
+        "agentRole": "operator",
+        "glyph": "✦",
+        "presence": "live"
+      }
+    },
+    {
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "CLAUDE-OPUS",
+        "agentRole": "analytical",
+        "glyph": "◆",
+        "presence": "live"
+      }
+    },
+    {
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "B850-CLAUDE",
+        "agentRole": "orchestrator",
+        "glyph": "◆",
+        "presence": "rehearsal"
+      }
+    },
+    {
+      "component": "pm-project-card",
+      "props": {
+        "title": "Mesh pilot: Fordham Hill",
+        "description": "50-family mesh + private AI. Voice that goes through walls. Community-owned infrastructure.",
+        "status": "live",
+        "tags": ["mesh", "voice", "tenancy"],
+        "links": [
+          { "label": "Capability brief", "href": "#brief" },
+          { "label": "Discord", "href": "#discord" }
+        ]
+      }
+    },
+    {
+      "component": "pm-project-card",
+      "props": {
+        "title": "Pooled-dues ledger (planned)",
+        "description": "Cooperative cost-pooling with tamper-evident resident voting. Tokenism settlement lane.",
+        "status": "planned",
+        "tags": ["governance", "ledger"]
+      }
+    },
+    {
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Mesh uptime",
+        "value": "99.4",
+        "unit": "%",
+        "trend": "up",
+        "format": "percent"
+      }
+    },
+    {
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Active sessions",
+        "value": "47",
+        "trend": "up"
+      }
+    },
+    {
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Latency (p95)",
+        "value": "142",
+        "unit": "ms",
+        "trend": "down",
+        "format": "duration"
+      }
+    }
+  ]
+}
