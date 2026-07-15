@@ -2,16 +2,90 @@
   "mcpServers": {
     "pmoves-cipher": {
       "type": "sse",
-      "url": "http://${TS_Z890}:8105/mcp/sse",
+      "url": "http://localhost:8105/mcp/sse",
       "headers": {
         "Authorization": "Bearer ${CIPHER_API_TOKEN}"
       },
-      "description": "Agent memory (Neo4j knowledge graph) via Tailscale"
+      "description": "Agent memory (Neo4j knowledge graph) via local Cipher SSE endpoint"
     },
     "agent-zero": {
       "type": "http",
-      "url": "http://${TS_Z890}:8080/mcp",
-      "description": "Agent Zero orchestrator via Tailscale"
+      "url": "http://localhost:8080/mcp",
+      "description": "Agent Zero orchestrator via local HTTP MCP endpoint"
+    },
+    "docker": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--mount",
+        "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock",
+        "mcp/docker"
+      ],
+      "env": {
+        "MSYS_NO_PATHCONV": "1"
+      },
+      "description": "Docker container inspection via local Docker socket"
+    },
+    "pmoves-docker-gateway": {
+      "type": "sse",
+      "url": "http://localhost:8090/sse",
+      "headers": {
+        "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
+      },
+      "description": "Full Docker MCP Toolkit gateway (start with: make -C pmoves mcp-toolkit-gateway-start). Bridges to botz-gateway."
+    },
+    "pmoves-nats-fleet": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./pmoves-nats-mcp",
+        "run",
+        "python",
+        "-m",
+        "nats_mcp.server"
+      ],
+      "env": {
+        "NATS_URL": "${NATS_URL:-nats://nats:pmoves@127.0.0.1:4222}"
+      },
+      "description": "Cross-node NATS publish/subscribe to the fleet hub"
+    },
+    "pmoves-e2b": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@e2b/mcp-server"
+      ],
+      "env": {
+        "E2B_API_KEY": "${E2B_API_KEY}"
+      },
+      "description": "E2B sandbox code execution via PMOVES forked E2B MCP (E2B_API_KEY from secrets funnel)"
+    },
+    "pmoves-supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-postgrest@0.1.1",
+        "--apiUrl",
+        "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
+        "--apiKey",
+        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
+        "--schema",
+        "public"
+      ],
+      "description": "Self-hosted PMOVES Supabase via PostgREST (NOT cloud)"
+    },
+    "huggingface": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@llmindset/hf-mcp-server"
+      ],
+      "env": {
+        "HF_TOKEN": "${HF_TOKEN}"
+      },
+      "description": "HuggingFace Hub model/dataset/space search + Gradio execution"
     }
   }
 }
