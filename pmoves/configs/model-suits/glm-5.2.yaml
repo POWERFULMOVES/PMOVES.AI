@@ -1,10 +1,12 @@
 # ============================================================
 # GLM-5.2 Model Suit
-# Role: Latest GLM model — primary coding + reasoning
-# Best for: Blueprint-first implementation, agentic workflows,
-#           tool calling, VS Code-native development
-# Provider: Zhipu AI (Z.AI) via coding plan + Ollama Cloud
-# Version: 1.0.0
+# Role: Flagship — 1M context, long-horizon coding agent
+# Best for: Large-scale implementation, automated research,
+#           deep debugging, sustained engineering, refactoring,
+#           blueprint-first implementation, agentic workflows
+# Provider: Zhipu AI (Z.AI) — Coding Plan
+# Endpoint: https://api.z.ai/api/coding/paas/v4
+# Version: 1.1.0
 # ============================================================
 
 model_suit:
@@ -15,8 +17,8 @@ model_suit:
 
   architecture:
     type: moe
-    total_params: "TBD"
-    active_params: "TBD"
+    total_params: "744B+"
+    active_params: "40B+"
     attention: standard
 
   context:
@@ -38,6 +40,18 @@ model_suit:
     mtp_steps: shared
 
   harness_mappings:
+    large_scale_implementation:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 131072
+      system_prompt: directive_architect
+
+    deep_debugging:
+      temperature: 0.3
+      top_p: 0.90
+      max_tokens: 131072
+      system_prompt: directive_debugger
+
     blueprint_implementation:
       temperature: 0.7
       top_p: 0.95
@@ -62,14 +76,24 @@ model_suit:
       max_tokens: 8192
       system_prompt: directive_analyst
 
-  cgp_state_vector:
-    delta: 0.4
-    Hz: 0.12
-    kappa: 1.5
-    A: 0.6
-    F: 0.07
+    automated_research:
+      temperature: 0.8
+      top_p: 0.97
+      max_tokens: 65536
+      system_prompt: directive_reasoner
 
-  fallback_to: glm-5-turbo
+    refactoring:
+      temperature: 0.5
+      top_p: 0.92
+      max_tokens: 32768
+      system_prompt: directive_refactorer
+
+  cgp_state_vector:
+    delta: 0.30
+    Hz: 0.08
+    kappa: 1.8
+    A: 0.35
+    F: 0.05
+
+  fallback_to: glm-5.1
   priority: 4
-  # GLM-5.2 is higher priority than GLM-5-Turbo (priority 6)
-  # and GLM-5.1 (priority 5) — it is the latest model
