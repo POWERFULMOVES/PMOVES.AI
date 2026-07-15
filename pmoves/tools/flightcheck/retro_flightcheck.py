@@ -17,6 +17,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -50,6 +51,7 @@ TOOLS = [
 
 PORTS = sorted({
     3000,
+    3737,
     4222,
     5432,
     6333,
@@ -60,6 +62,7 @@ PORTS = sorted({
     8078,
     8079,
     8080,
+    8081,
     8082,
     8083,
     8084,
@@ -77,6 +80,7 @@ PORTS = sorted({
 })
 PORT_MAP = {
     3000: "postgrest",
+    3737: "archon-ui",
     4222: "nats",
     5432: "postgres",
     6333: "qdrant",
@@ -86,7 +90,8 @@ PORT_MAP = {
     8077: "pmoves-yt",
     8078: "ffmpeg-whisper",
     8079: "media-video",
-    8080: "agent-zero",
+    8080: "agent-zero-api",
+    8081: "agent-zero-ui",
     8082: "media-audio",
     8083: "extract-worker",
     8084: "langextract",
@@ -95,7 +100,7 @@ PORT_MAP = {
     8087: "hi-rag-gateway-v2-gpu",
     8088: "presign",
     8090: "retrieval-eval",
-    8091: "archon",
+    8091: "archon-api",
     8092: "pdf-ingest",
     8093: "jellyfin-bridge",
     8094: "publisher-discord",
@@ -111,7 +116,10 @@ HTTP_HEALTH = [
     ("meilisearch", "http://localhost:7700/health", "json_ok_or_200"),
     ("postgrest", "http://localhost:3010", "http_200"),
     ("neo4j-ui", "http://localhost:7474", "http_200"),
-    ("agent-zero", "http://localhost:8080/healthz", "ok_true"),
+    ("agent-zero", "http://localhost:8080/healthz", "ok_true", True),
+    ("agent-zero-a2a", "http://localhost:8080/.well-known/agent-card.json", "http_200", True),
+    ("archon", "http://localhost:8091/healthz", "ok_true", True),
+    ("archon-ui", "http://localhost:3737", "http_200", True),
     ("extract-worker", "http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}/healthz", "ok_true"),
     ("media-audio", "http://localhost:8082/healthz", "ok_true"),
     ("media-video", "http://localhost:8079/healthz", "ok_true"),
@@ -121,11 +129,18 @@ HTTP_HEALTH = [
     ("pmoves-yt", "http://localhost:8077/healthz", "ok_true"),
     ("ffmpeg-whisper", "http://localhost:8078/healthz", "ok_true"),
     ("retrieval-eval", "http://localhost:8090/", "ok_true"),
-    ("archon", "http://localhost:8091/healthz", "ok_true"),
     ("pdf-ingest", "http://localhost:8092/healthz", "ok_true"),
     ("publisher-discord", "http://localhost:8094/healthz", "ok_true"),
     ("jellyfin-bridge", "http://localhost:8093/healthz", "ok_true"),
 ]
+
+# Names in HTTP_HEALTH that are required for a strict pass.
+CRITICAL_HTTP_NAMES = {
+    "agent-zero",
+    "agent-zero-a2a",
+    "archon",
+    "archon-ui",
+}
 
 THEMES = {
     "green": {
@@ -483,7 +498,10 @@ def check_http():
     table.add_column("url", style="bright_white")
     table.add_column("status")
     table.add_column("detail", style="bright_black")
-    for name, url, kind in HTTP_HEALTH:
+    failures = 0
+    critical_failures = 0
+    for entry in HTTP_HEALTH:
+        name, url, kind = entry[0], entry[1], entry[2]
         code, ct, body = _http_get(url)
         ok = False
         detail = ""
@@ -511,8 +529,13 @@ def check_http():
                         ok = False
             elif kind == "http_200":
                 ok = code == 200
+        if not ok:
+            failures += 1
+            if name in CRITICAL_HTTP_NAMES:
+                critical_failures += 1
         table.add_row(name, url, "PASS" if ok else "FAIL", detail)
     console.print(table)
+    return failures, critical_failures
 
 
 def check_env():
@@ -589,6 +612,7 @@ def main():
     parser.add_argument("--theme", choices=["green", "amber", "cb", "neon", "galaxy"], default="green")
     parser.add_argument("--beep", action="store_true")
     parser.add_argument("--no-boot", action="store_true", help="skip CRT boot animation in full mode")
+    parser.add_argument("--strict", action="store_true", help="exit non-zero if any HTTP health check fails")
     args = parser.parse_args()
 
     if args.quick:
@@ -605,11 +629,21 @@ def main():
         section("repo shape"); check_repo_shape()
         section("contracts"); check_contracts()
         section("ports"); check_ports()
-        section("http health"); check_http()
+        section("http health")
+        http_failures, http_critical_failures = check_http()
         section("environment"); check_env()
         section("docker", body=None); check_docker_services()
 
-    console.print(Panel(Text("ALL SYSTEMS READY", style="bold green"), border_style="green"))
+    if args.strict and http_critical_failures:
+        console.print(Panel(Text(f"DEGRADED — {http_critical_failures} critical HTTP health check(s) failed", style="bold red"), border_style="red"))
+        if args.beep:
+            chiptune_beep()
+        sys.exit(1)
+
+    if http_failures:
+        console.print(Panel(Text(f"DEGRADED — {http_failures} HTTP health check(s) failed", style="bold yellow"), border_style="yellow"))
+    else:
+        console.print(Panel(Text("ALL SYSTEMS READY", style="bold green"), border_style="green"))
     if args.beep:
         chiptune_beep()
 
