@@ -1,22 +1,22 @@
 // PMOVES tenant page renderer
-// Per A2UI v0.1 spec: takes a composed A2UI message stream, creates the
-// corresponding web components, applies persona theming.
+// Per A2UI v0.1 + v0.2 spec: takes a composed A2UI message stream, creates
+// the corresponding web components, applies persona theming, wires
+// v0.2 `on-<event>` attributes between components.
 //
 // Usage:
 //   import { renderTenant } from './tenant-renderer.js';
 //   await renderTenant('fordham-hill');
 //
 // The message stream is the output of `pmoves.tools.compose.compose_tenant_page`.
-// Components come from the A2UI v0.1 registry at /pmoves/web-components/.
+// Components come from the A2UI v0.1 + v0.2 registry at /pmoves/web-components/.
 
-const A2UI_VERSION = "0.1";  // must match pmoves/tools/compose/compose.py
+const A2UI_VERSION = "0.2";  // must match pmoves/tools/compose/compose.py
 
 let _registered = false;
+let _eventWires = [];  // v0.2: list of {source, event, target, method}
 
 async function ensureRegistered() {
   if (_registered) return;
-  // Dynamic import the registry (path is repo-relative when served from /).
-  // In a CF Pages deploy, the web-components folder is also at the repo root.
   await import('../../pmoves/web-components/register.js');
   _registered = true;
 }
@@ -29,6 +29,7 @@ function applyProps(el, props) {
   // is dropped, never written onto the live element.
   const declared = new Set(el.constructor.observedAttributes || []);
   for (const [key, value] of Object.entries(props || {})) {
+    if (key === 'id') continue; // applied at creation for v0.2 event-wire targeting
     const attr = key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
     if (!declared.has(attr)) {
       console.warn(`[a2ui] dropping undeclared prop "${key}" on <${el.localName}>`);
@@ -62,6 +63,49 @@ function applyHeader(header) {
   const taglineEl = document.getElementById('tenant-tagline');
   if (header.title) titleEl.textContent = header.title;
   if (header.tagline) taglineEl.textContent = header.tagline;
+}
+
+// v0.2 event wire (A2UI v0.2 §4.3):
+//   on-<event-name>="<component-id>:<method-name>"
+// Scans all elements for `on-*` attributes and wires them after all
+// components are mounted (so the target is guaranteed to exist).
+function wireEvents() {
+  _eventWires = [];
+  // Scan EVERY element in the surface (including those inside shadow roots
+  // we can't introspect — but `on-*` is an attribute we set, so it's on the
+  // host element).
+  const surface = document.getElementById('tenant-surface');
+  for (const el of surface.querySelectorAll('*')) {
+    for (const attr of el.getAttributeNames()) {
+      if (!attr.startsWith('on-')) continue;
+      if (attr === 'on-vote-cast' || attr === 'on-quorum-reached' || attr === 'on-ballot-closed') {
+        const event = attr.slice(3);  // 'vote-cast' etc.
+        const value = el.getAttribute(attr);
+        const [targetId, method] = value.split(':');
+        if (!targetId || !method) {
+          console.warn(`pm-renderer: malformed event wire "${attr}='${value}'" (want "id:method")`);
+          continue;
+        }
+        el.addEventListener(event, (ev) => {
+          const target = document.getElementById(targetId);
+          if (!target) {
+            console.warn(`pm-renderer: event target #${targetId} not found`);
+            return;
+          }
+          if (typeof target[method] !== 'function') {
+            console.warn(`pm-renderer: event target #${targetId}.${method} is not a function`);
+            return;
+          }
+          // Pass the event detail (or the first arg as a string) to the method.
+          const arg = ev.detail?.receipt
+            ? `${ev.detail.receipt.choice.toUpperCase()} — your receipt is signed.`
+            : JSON.stringify(ev.detail);
+          target[method](arg);
+        });
+        _eventWires.push({ source: el, event, targetId, method });
+      }
+    }
+  }
 }
 
 export async function renderTenant(tenantId) {
@@ -106,6 +150,8 @@ export async function renderTenant(tenantId) {
         continue;
       }
       const el = document.createElement(tag);
+      // Assign an id if the props include one (for v0.2 event-wire targeting)
+      if (msg.props && msg.props.id) el.id = msg.props.id;
       applyProps(el, msg.props);
       surface.appendChild(el);
     } else {
@@ -113,6 +159,9 @@ export async function renderTenant(tenantId) {
       // v0.1 silently ignores unknown message types.
     }
   }
+
+  // Wire v0.2 events AFTER all components are mounted.
+  wireEvents();
 }
 
 // Auto-run if loaded directly (no import) — the index.html uses import
