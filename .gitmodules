@@ -352,3 +352,6 @@
 	path = pmoves-hirag-mcp
 	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
 	branch = main
+[submodule "PMOVES--longbow"]
+	path = PMOVES--longbow
+	url = https://github.com/POWERFULMOVES/PMOVES--longbow.git
