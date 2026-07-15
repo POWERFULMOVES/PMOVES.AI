@@ -48,12 +48,13 @@ root:
           agent_hint: codex
 
         - id: va.tts-studio.start-js
-          task: "TTS Studio launcher start.js present (source of truth)"
+          task: "TTS Studio launcher start.js present with URL capture pattern"
           action:
-            type: file_exists
+            type: grep
             target: "PMOVES-Pinokio-Ultimate-TTS-Studio/start.js"
-            expect: "Pinokio launcher start.js lives in the hardened submodule"
-          context: "Retargeted from the stale D:/pinokio path to the PMOVES-Pinokio-Ultimate-TTS-Studio hardened submodule (source of truth); URL-capture pattern verified live, not grep-asserted here"
+            pattern: 'input\.event\[1\]'
+            expect: "URL captured via capture group [1], not [0]"
+          context: "Pinokio launcher start.js lives in the hardened submodule; grep asserts URL capture pattern is intact (regression guard)"
           agent_hint: codex
 
     # =========================================================================

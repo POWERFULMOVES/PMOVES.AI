@@ -34,6 +34,10 @@ a preferred node is used when up, else the first eligible node that is up, else 
 floor. The CHIT-sign→voice subscriber (`tools/voice_cast_on_sign.py`) POSTs to Flute-Gateway;
 Flute does the node selection. **Self-healing is the routing layer, not the engine.**
 
+> **Implementation status:** Host-affinity routing is the **target architecture**.
+> Until `resolve_engine_host()` is wired into the Flute-Gateway synthesis path, casts
+> target the single configured provider URL (`ULTIMATE_TTS_URL`/`OMNIVOICE_URL`).
+
 ## The reachability rule (localhost vs Docker)
 
 Pinokio's Gradio binds **`127.0.0.1:7860` only** (`demo.launch(share=False)` — no
