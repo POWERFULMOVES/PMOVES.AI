@@ -180,6 +180,8 @@ pmoves/services/a2ui-renderer/dist/
 pmoves/services/a2ui-renderer/node_modules/
 pmoves/packages/chit/dist/
 pmoves/packages/chit/node_modules/
+# A2UI tenant deploy staging (make deploy-tenant copies template + components here)
+.a2ui-stage/
 
 # =============================================================================
 # Cipher MCP Bridge

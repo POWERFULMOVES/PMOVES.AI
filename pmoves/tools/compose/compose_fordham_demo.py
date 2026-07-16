@@ -16,12 +16,14 @@ def compose_tenant(tenant_id, fixture_filename):
         (REPO_ROOT / f"pmoves/tools/compose/tests/fixtures/{fixture_filename}").read_text(encoding="utf-8")
     )
     page = compose_tenant_page(cfg)
+    # newline="\n" keeps output deterministic across platforms (Windows text
+    # mode would otherwise emit CRLF and churn the committed artifacts).
     out = REPO_ROOT / f"website/tenant-template/data/{tenant_id}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(to_json(page), encoding="utf-8")
+    out.write_text(to_json(page), encoding="utf-8", newline="\n")
     # Also save the canonical composed artifact under tests/fixtures
     canon = REPO_ROOT / f"pmoves/tools/compose/tests/fixtures/{tenant_id}.composed.json"
-    canon.write_text(to_json(page), encoding="utf-8")
+    canon.write_text(to_json(page), encoding="utf-8", newline="\n")
 
     print(f"\n[{tenant_id}] composed: {len(page['messages'])} messages")
     print(f"  components in: {len(cfg['components'])}")
@@ -31,6 +33,23 @@ def compose_tenant(tenant_id, fixture_filename):
     print(f"  written: {out}")
 
 
+# Tenants this composer knows how to build: tenant_id -> fixture filename.
+KNOWN_TENANTS = {
+    "fordham-hill": "fordham-hill.json",
+    "sint-maarten": "sint-maarten.json",
+}
+
+
 if __name__ == "__main__":
-    compose_tenant("fordham-hill", "fordham-hill.json")
-    compose_tenant("sint-maarten", "sint-maarten.json")
+    # Optional argv: a single tenant id to compose. With no argv, compose all
+    # known tenants (the original behavior).
+    requested = sys.argv[1] if len(sys.argv) > 1 else None
+    if requested is None:
+        for tenant_id, fixture in KNOWN_TENANTS.items():
+            compose_tenant(tenant_id, fixture)
+    elif requested in KNOWN_TENANTS:
+        compose_tenant(requested, KNOWN_TENANTS[requested])
+    else:
+        sys.exit(
+            f"unknown tenant {requested!r}; known: {sorted(KNOWN_TENANTS)}"
+        )

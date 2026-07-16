@@ -23,7 +23,16 @@ let _eventWires = [];  // v0.2: list of {source, event, target, method}
 
 async function ensureRegistered() {
   if (_registered) return;
-  await import('../../pmoves/web-components/register.js');
+  // Two contexts:
+  //  - Deployed (CF Pages root = website/tenant-template/): the deploy step
+  //    stages a copy of the components at ./components/, so import that first.
+  //  - Dev (served from the repo root): ./components/ doesn't exist, so fall
+  //    back to the in-repo path ../../pmoves/web-components/register.js.
+  try {
+    await import('./components/register.js');
+  } catch (_) {
+    await import('../../pmoves/web-components/register.js');
+  }
   _registered = true;
 }
 
