@@ -65,16 +65,22 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || BRANCH="unknown"
 # Convert feat/w0-pr4-ghost-detector → branch.feat.w0-pr4-ghost-detector.trail.v1
 SUBJECT="branch.$(echo "$BRANCH" | tr '/' '.').trail.v1"
 
-# Build payload
+# Build payload. Node comes from the actual host (was hardcoded "4090-claude",
+# which mislabeled trails emitted from any other machine).
+NODE="$(hostname 2>/dev/null | tr '[:upper:]' '[:lower:]')" || NODE=""
 TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))')"
-PAYLOAD="{\"event\":\"shift_crew_edit\",\"file\":\"$(basename "$FILE_PATH")\",\"branch\":\"$BRANCH\",\"node\":\"4090-claude\",\"ts\":\"$TIMESTAMP\"}"
+PAYLOAD="{\"event\":\"shift_crew_edit\",\"file\":\"$(basename "$FILE_PATH")\",\"branch\":\"$BRANCH\",\"node\":\"$NODE\",\"ts\":\"$TIMESTAMP\"}"
 
 # Attempt publish via nats CLI (prefer) or nats-py
 NATS_URL="${NATS_URL:-nats://nats:pmoves@localhost:4222}"
 
 if command -v nats >/dev/null 2>&1; then
-    echo "$PAYLOAD" | nats pub --server "$NATS_URL" "$SUBJECT" 2>/dev/null && \
-        printf '[shift-crew-trail] Published to %s\n' "$SUBJECT" >&2
+    # --timeout=2s bounds the connect/publish so an unreachable NATS can't
+    # hang the hook (parity with the nats-py connect_timeout=2 path below —
+    # without it this blocked PostToolUse indefinitely, measured >120s).
+    # No stderr on success either — Claude Code PostToolUse treats stderr as
+    # a hook error (REVIEW_STYLE_2026-07-15.md hook rules).
+    echo "$PAYLOAD" | nats pub --timeout=2s --server "$NATS_URL" "$SUBJECT" >/dev/null 2>&1 || true
 elif $PYTHON_CMD -c "import nats" 2>/dev/null; then
     $PYTHON_CMD -c "
 import asyncio, nats, json, os, sys
@@ -83,15 +89,34 @@ async def pub():
     url = os.environ.get('NATS_URL', 'nats://nats:pmoves@localhost:4222')
     subject = sys.argv[1]
     payload = sys.argv[2].encode()
+    # allow_reconnect=False: connect_timeout is PER ATTEMPT and the default
+    # reconnect loop retries for minutes — measured >120s of PostToolUse
+    # latency when 4222 was bound-but-unresponsive (Docker Desktop quirk).
+    nc = await nats.connect(url, connect_timeout=2, allow_reconnect=False)
+    await nc.publish(subject, payload)
+    await nc.drain()
+
+async def main():
     try:
-        nc = await nats.connect(url, connect_timeout=2)
-        await nc.publish(subject, payload)
-        await nc.drain()
+        # Hard ceiling regardless of where the client stalls.
+        await asyncio.wait_for(pub(), timeout=4)
     except Exception:
         pass  # Graceful skip
 
-asyncio.run(pub())
+asyncio.run(main())
 " "$SUBJECT" "$PAYLOAD" 2>/dev/null
+fi
+
+# Always write a local trail line as the durable record (whether or not the
+# NATS publish above succeeded). Append-only JSONL at
+# pmoves/docs/logs/shift_crew_branch_trail.jsonl. Mirrors a2ui-crew-trail.sh
+# (PR #2134), which pairs this durable write with its advisory NATS emit.
+PMOVES_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+LOG_DIR="${PMOVES_ROOT}/pmoves/docs/logs"
+LOG_FILE="${LOG_DIR}/shift_crew_branch_trail.jsonl"
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+if [ -d "$LOG_DIR" ]; then
+    echo "$PAYLOAD" >> "$LOG_FILE" 2>/dev/null || true
 fi
 
 exit 0
