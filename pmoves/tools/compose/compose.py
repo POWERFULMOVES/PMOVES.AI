@@ -20,9 +20,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-A2UI_VERSION = "0.1"
+# Stamped into every composed page as `a2uiVersion`. Must match the renderer's
+# A2UI_VERSION (website/tenant-template/tenant-renderer.js). Bumped to 0.2 now
+# that the compose set includes v0.2 stateful components (pm-toast, pm-ballot).
+A2UI_VERSION = "0.2"
 
-# v0.1 supported components (locked by a2ui-v0.1.md §10)
+# supported components (v0.1 locked by a2ui-v0.1.md §10; v0.2 adds pm-toast, pm-ballot)
 SUPPORTED_COMPONENTS = frozenset({
     "pm-space-agent-card",
     "pm-project-card",
