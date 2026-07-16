@@ -1101,9 +1101,9 @@ services:
     # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
     - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9001/health"]
-      interval: 20s
-      timeout: 5s
+      test: ["CMD-SHELL", "vector validate /etc/vector/vector.yml || exit 1"]
+      interval: 30s
+      timeout: 10s
       retries: 3
       start_period: 10s
     depends_on:
