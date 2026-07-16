@@ -12,6 +12,12 @@
 
 const A2UI_VERSION = "0.2";  // must match pmoves/tools/compose/compose.py
 
+// v0.2 event wires may only invoke methods on this allowlist. Without it,
+// `target[method](arg)` would let tenant JSON invoke ANY function-valued
+// property on any element by id (e.g. remove, click, a DOM API). Today the
+// only legitimate wired methods are pm-toast.show and pm-haptic.pulse.
+const ALLOWED_METHODS = new Set(['show', 'pulse']);
+
 let _registered = false;
 let _eventWires = [];  // v0.2: list of {source, event, target, method}
 
@@ -84,6 +90,10 @@ function wireEvents() {
         const [targetId, method] = value.split(':');
         if (!targetId || !method) {
           console.warn(`pm-renderer: malformed event wire "${attr}='${value}'" (want "id:method")`);
+          continue;
+        }
+        if (!ALLOWED_METHODS.has(method)) {
+          console.warn(`pm-renderer: method "${method}" is not allow-listed for event wiring; skipping "${attr}='${value}'"`);
           continue;
         }
         el.addEventListener(event, (ev) => {
