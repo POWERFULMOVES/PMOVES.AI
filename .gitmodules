@@ -209,7 +209,7 @@
 [submodule "PMOVES-crush"]
 	path = PMOVES-crush
 	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # LLM Gateway & Model Services
