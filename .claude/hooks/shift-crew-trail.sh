@@ -94,15 +94,4 @@ asyncio.run(pub())
 " "$SUBJECT" "$PAYLOAD" 2>/dev/null
 fi
 
-# Always write a local trail line as the durable record (whether or not the
-# NATS publish above succeeded). Append-only JSONL at
-# pmoves/docs/logs/shift_crew_branch_trail.jsonl. Mirrors a2ui-crew-trail.sh.
-PMOVES_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
-LOG_DIR="${PMOVES_ROOT}/pmoves/docs/logs"
-LOG_FILE="${LOG_DIR}/shift_crew_branch_trail.jsonl"
-mkdir -p "$LOG_DIR" 2>/dev/null || true
-if [ -d "$LOG_DIR" ]; then
-    echo "$PAYLOAD" >> "$LOG_FILE" 2>/dev/null || true
-fi
-
 exit 0
