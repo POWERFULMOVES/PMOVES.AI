@@ -112,14 +112,21 @@ async def pub():
     url = os.environ.get('NATS_URL', 'nats://nats:pmoves@localhost:4222')
     subject = sys.argv[1]
     payload = sys.argv[2].encode()
-    try:
-        nc = await nats.connect(url, connect_timeout=2)
-        await nc.publish(subject, payload)
-        await nc.drain()
-    except Exception:
-        pass  # Graceful skip
+    # allow_reconnect=False: connect_timeout is PER ATTEMPT and the default
+    # reconnect loop retries for minutes — measured >120s of PostToolUse
+    # latency on the shift-crew twin when 4222 was bound-but-unresponsive.
+    nc = await nats.connect(url, connect_timeout=2, allow_reconnect=False)
+    await nc.publish(subject, payload)
+    await nc.drain()
 
-asyncio.run(pub())
+async def main():
+    try:
+        # Hard ceiling regardless of where the client stalls.
+        await asyncio.wait_for(pub(), timeout=4)
+    except Exception:
+        sys.exit(1)  # Graceful skip; nonzero so PUBLISHED stays unset
+
+asyncio.run(main())
 " "$SUBJECT" "$PAYLOAD" >/dev/null 2>&1 && PUBLISHED=1
 fi
 
