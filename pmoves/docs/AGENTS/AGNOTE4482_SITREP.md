@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-06-11
+> **Last refreshed:** 2026-07-16 (Mavis-5090 refresh — A2UI wave + review-style tooling)
 
 ---
 
@@ -31,6 +31,48 @@ git worktree list  # am I in a worktree?
 Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
 
 **Forbidden**: `feature/` (use `feat/`), `pr/` (branches ≠ PRs), `p1/`–`p7/` (use workstream ID).
+
+
+## Latest Lane (2026-07-14 → 2026-07-16) — Mavis-5090
+
+**Active lane**: `WEBSITE_AS_AGENT_CANVAS` → `PR-REVIEW-TRIM-CYCLE`.
+
+**What it is**: the "CF Pages is a canvas PMOVES agents paint on" reframe. Every community PMOVES visits gets a living, A2UI-rendered, agent-composed CF Pages tenant. The substrate is HTML5 Web Components (no framework, framework-agnostic). The review-trim cycle is operator-gated: every thread becomes a LEARNINGS.md entry before any code moves.
+
+**Where the work is**:
+- Active branch: `feat/auto-20260714-9d8a9584` (15 commits ahead of `main`, 54 behind)
+- Open PRs: [#2132](https://github.com/POWERFULMOVES/PMOVES.AI/pull/2132) (A2UI v0.1 + Fordham Hill), [#2133](https://github.com/POWERFULMOVES/PMOVES.AI/pull/2133) (A2UI v0.2 design), [#2134](https://github.com/POWERFULMOVES/PMOVES.AI/pull/2134) (A2UI v0.2 impl + review-style scaffolding)
+- PR manifest: `pmoves/docs/logs/pr_open/pr_manifest_2026-07-15.json`
+- Reviewer detection: `pmoves/tools/pr_review_watcher.py` (A-mode, no polling, HTTP ETag)
+- Agent: `.claude/agents/pr-review-watcher.md` (5 operator gates, spawns pr-trimmer downstream)
+- Slash command: `/pr-review-watch` (modes: watch / triage / status / stop / quiet / dry-run)
+- Trim style: `pmoves/docs/operations/REVIEW_STYLE_2026-07-15.md` (the meta-doc for fresh local models)
+- LEARNINGS template: `pmoves/docs/templates/PR_LEARNINGS.template.md` (4 buckets: missed-signal / fix-pattern / wrong-suggestion / already-addressed)
+
+**What's blocked**: CodeRabbit rate limit cleared but #2134 hit 50-file limit; Codex's auto-trigger was a no-op (real reviews need `@codex review` comment per PR). Operator needs to start the watcher daemon: `make -C pmoves pr-review-watch-daemon PRS=2132,2133,2134`.
+
+**Claim/release rows** in `AGNOTE4482PHI.t1.md`:
+- `Mavis-5090::WEBSITE-AS-AGENT-CANVAS-CLAIM::2026-07-15`
+- `Mavis-5090::A2UI-V0.1-FIRST-SLICE-SHIPPED::2026-07-15`
+- `Mavis-5090::WEBSITE-AS-AGENT-CANVAS-PARALLEL-BUILD::2026-07-15`
+- `Mavis-5090::PM-HAPTIC-AND-V02-BALLOT-CLAIM::2026-07-15`
+- `Mavis-5090::PM-HAPTIC-AND-V02-BALLOT-DELIVERED::2026-07-15`
+- `Mavis-5090::PARALLEL-BATCH-V02-IMPLEMENTATION-CLAIM::2026-07-15`
+- `Mavis-5090::PARALLEL-BATCH-V02-IMPLEMENTATION-DELIVERED::2026-07-15`
+- `Mavis-5090::REVIEW-STYLE-AND-LEARNINGS-SCAFFOLD-CLAIM::2026-07-15`
+- `Mavis-5090::REVIEW-STYLE-AND-LEARNINGS-SCAFFOLD-DELIVERED::2026-07-15`
+- `Mavis-5090::PR-REVIEW-TRIM-CYCLE-CLAIM::2026-07-15`
+- `Mavis-5090::PR-REVIEW-WATCHER-A-MODE-DELIVERED::2026-07-15`
+- `Mavis-5090::PR-REVIEW-WATCHER-AGENT-CLAIM::2026-07-15`
+
+**Three-Body for this lane**:
+- Delivery = Mavis-5090 (this lane, MiniMax token plan)
+- Control = DARKXSIDE (operator at all 5 gates, visual sign-off on Fordham/St.Maarten tenants)
+- Memory = this trail + LEARNINGS.md artifacts + manifest + meta-doc
+
+**Coding-plan policy** (DARKXSIDE 2026-07-16): no direct API calls. Route through `gh` CLI, `nats` CLI / `nats-py`, Ollama Pro, `make -C pmoves sign-trail`. The 7 coding plans: MiniMax (me), GLM (KiloCode), Kimi, Ollama Pro, Alibaba/Qwen, Claude Code Max (Opus / pr-trimmer), ChatGPT Business.
+
+---
 
 
 ## What's Happening Right Now?
@@ -72,6 +114,7 @@ Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md se
 | HERMES Agent Integration | 2026-06-04 | `pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md` | Full NousResearch Hermes Agent integration: room manifest, TAC tree, 6 node profiles (Z890, 5090, 4090, Spark, B850/RDNA4, KVM), agent registry/signature updates, operator skill, Three-Body agent definition. Local model mesh with Spark 70B primary. |
 | Z890 Main-Infra Pass | 2026-06-04 | `AGNOTE4482PHI.t1.md` §Z890 Main-Infra Pass | SPARK-drafted PR cluster merged, CI-wide sha-pin outage fixed (#1698), `chit_manifest_merge.py` tooling (#1706/7), gateway port 8111 alignment → VPS deploy green |
 | Z890 Fleet Fork-Sync + Governance | 2026-06-09→11 | `AGNOTE4482PHI.t1.md` §Fleet Fork-Sync Campaign | **All fork-sync drift cleared** (auto-tier + high-ahead Agent-Zero/hyperdimensions/Wealth + CRITICAL-huge ClawZ 8354c/Creator); **branch-protection automation** (31 forks protected, App Administration:RW validated, `branch-protection-sync.yml`); **supabase CRITICAL sync** (#1761 + TAC #1768, Kong gate passed); **Archon CI green** (lint #19 + E2E #20); space-agent public+protected |
+| **WEBSITE_AS_AGENT_CANVAS Wave** | 2026-07-14→16 | `AGNOTE4482PHI.t1.md` §WEBSITE-AS-AGENT-CANVAS + §PR-REVIEW-TRIM-CYCLE + §REVIEW-STYLE-AND-LEARNINGS-SCAFFOLD | **Mavis-5090 architectural leadership assignment** (DARKXSIDE `the cf pages get pmoves` reframe). **A2UI v0.1**: HTML5 Web Components spec + 7 components (`<pm-space-agent-card>` `<pm-project-card>` `<pm-metric-tile>` `<pm-timeline>` `<pm-voice-clip>` `<pm-image>` `<pm-quote-block>`) + `compose_tenant_page()` Python tool (19/19 tests) + Fordham Hill tenant page live. **A2UI v0.2**: stateful surfaces, `<pm-toast>` + `<pm-ballot>` (CHIT-signed receipts, FNV-1a fallback), `<pm-haptic>` v0.1 (Web Vibration API), St. Maarten tenant (#2), v0.2 event wire, CF Pages deploy target. **3-PR stack opened**: #2132 / #2133 / #2134 (12 commits, 54 behind main). **Review-style tooling**: LEARNINGS template (4-bucket: missed-signal/fix-pattern/wrong-suggestion/already-addressed) + `.claude/hooks/a2ui-crew-trail.sh` (mirrors shift-crew-trail, NATS subject `branch.<b>.a2ui.trail.v1`) + meta-doc. **A-mode PR review watcher** (`pmoves/tools/pr_review_watcher.py`, HTTP ETag, no polling) + `pmoves/mk/pr-review.mk` (6 targets) + `.claude/agents/pr-review-watcher.md` (5 operator gates, spawns pr-trimmer) + `/pr-review-watch` slash. **Coding-plan policy** (no raw API). 10/10 conformance, 0 axe-core violations across 8 v0.1 + 2 v0.2 components. KiloCode picked up gems from this worktree (cross-agent discoverability proven). |
 
 > ~~**⚠️ AGNOTE4482.md section gaps:** Supply Chain, SPARK Prep, and CHIT Hardening were backfilled 2026-05-17.~~ All SITREP wave index entries now have corresponding §-sections.
 
@@ -110,7 +153,8 @@ Three-Body Solution from AGNOTE4482PHI.t1.md at the tool level:
 | `memory-agent` | Memory | No | Cipher/CHIT skills only |
 | `researcher` | — | No | Read-only, no sub-agents |
 | `test-runner` | — | No | Worktree-isolated, pytest only |
-| `pr-trimmer` | — | Yes | Worktree-isolated, PR review specialist |
+| `pr-trimmer` | Delivery | Yes | Worktree-isolated, opus, PR review specialist (the fix work) |
+| **`pr-review-watcher`** | **Reviewer** | **Yes** | **Worktree-isolated, haiku, A2UI-lane, 5 operator gates, spawns `pr-trimmer` downstream for the actual fix work. See "Latest Lane" above.** |
 
 Use: `claude --agent delivery-agent` or dispatch via `Agent({subagent_type: "delivery-agent"})`.
 
@@ -124,13 +168,22 @@ Use: `claude --agent delivery-agent` or dispatch via `Agent({subagent_type: "del
 | 4 | `.claude/agents/` | Agent definitions — Three-Body tool restrictions |
 | 5 | `.claude/CLAUDE.md` | Full service catalog (heavy — skim Production Services) |
 | 6 | `pmoves/docs/NEXT_STEPS.md` | Current sprint priorities |
+| 7 (A2UI lane) | `pmoves/contracts/a2ui-v0.1.md` | The A2UI v0.1 spec (HTML5 Web Components contract) |
+| 7 (A2UI lane) | `pmoves/contracts/a2ui-v0.2-ballot.md` | The A2UI v0.2 spec (stateful surfaces, ballot) |
+| 7 (A2UI lane) | `pmoves/docs/operations/REVIEW_STYLE_2026-07-15.md` | The review-trim meta-doc (cold-read for fresh local models) |
+| 7 (A2UI lane) | `pmoves/docs/templates/PR_LEARNINGS.template.md` | The LEARNINGS template (4-bucket structure) |
+| 7 (A2UI lane) | `pmoves/docs/logs/pr_open/pr_manifest_2026-07-15.json` | The open PR manifest (numbers, commits, head SHAs) |
 
-## Current Closeout Truth (2026-05-27)
+## Current Closeout Truth (2026-07-16)
 
-- Main includes PR #1633 (`fix: address PR 1603 review feedback`) and PR #1638 (`chore: advance transcribe submodule lfs cleanup`).
-- Dependabot PR #1561 (`sigstore/cosign-installer` 4.1.1 -> 4.1.2 pinned action bump) was reviewed and merged with green checks.
-- Tokenism settlement is still approval/deployment-gated, not production-live. The next artifact is `pmoves/docs/TOKENISM_PRODUCTION_ACTIVATION_PACK_2026-05-27.md`.
-- 5090 validation evidence lives in `pmoves/docs/operations/5090_CODEX_VALIDATION_2026-05-27.md`.
+- **Mavis-5090 A2UI lane is the active workstream.** 15 commits ahead of `main` on `feat/auto-20260714-9d8a9584`, 54 behind. 3 PRs open (#2132/#2133/#2134).
+- **A2UI v0.1** is functionally complete: 7 components + compose tool (19/19 tests) + Fordham Hill tenant page rendered live. Conformance 7/7, axe-core 0 violations, 21 rules passed.
+- **A2UI v0.2** is implementation-complete but the ballot spec is DRAFT pending Fordham resident legitimacy review. Conformance 10/10, 22 rules passed.
+- **PR-review-trim cycle** is set up end-to-end: A-mode watcher (`pr_review_watcher.py`), 5-gate operator workflow (`pr-review-watcher` agent), LEARNINGS.md template (4 buckets), make targets, slash command. **Reviews not yet arrived** — Codex auto-trigger was a no-op, CodeRabbit rate-limited #2132/#2133 and over-50-file on #2134. Operator needs to start the daemon and/or trigger real reviews.
+- **B-mode (NATS subscription to n8n webhook bridge)** is on hold pending KiloCode's n8n bring-up.
+- **Tokenism settlement** is still approval/deployment-gated, not production-live (unchanged from 2026-05-27).
+- **5090 validation evidence** from 2026-05-27 is still authoritative (`pmoves/docs/operations/5090_CODEX_VALIDATION_2026-05-27.md`).
+- KiloCode (GLM coding plan) is actively scanning local worktrees and found value in this worktree's lane — cross-agent discoverability proven, the "second home for agents" framing validated.
 
 ## Cipher Marco/Polo
 
