@@ -1,7 +1,8 @@
 # A2UI v0.2 — `<pm-ballot>` extension + stateful surfaces
 
-> **Status**: DRAFT (sketch) — `WEBSITE_AS_AGENT_CANVAS` lane
-> **Date**: 2026-07-15
+> **Status**: DRAFT (sketch, rev 2) — `WEBSITE_AS_AGENT_CANVAS` lane
+> **Date**: 2026-07-15 (rev 2: 2026-07-16 — receipt model reworked for ballot
+> secrecy after 5090-CLAUDE peer review; see §5.4–§5.5)
 > **Author**: Mavis-5090
 > **Target use case**: Fordham Hill Co-op governance — quorum, bylaw change votes, AG contact, forensic accounting request
 > **Supersedes**: nothing (additive to v0.1)
@@ -26,7 +27,7 @@ v0.1 explicitly forbids chained pull, stateful components, and event emission (p
 | **Chained pull** (one component's state drives another) | ✗ | ✓ explicit opt-in via `data-derive` |
 | **Stateful component** (component reads/writes tenant state) | ✗ | ✓ via `data-state-source` |
 | **Event emission** (component emits events to NATS) | ✗ | ✓ via `pm-event` slots |
-| **CHIT-signed payloads** (every state change is a signed trail entry) | n/a | ✓ automatic when `data-state-source` is set |
+| **CHIT-signed payloads** (every state change is a signed trail entry) | n/a | ✓ when the tenant has a registered CHIT signing card; unsigned **demo mode** otherwise (and the UI must say so — see §5.4) |
 
 ## 4. v0.2 contract extensions to v0.1
 
@@ -46,6 +47,10 @@ v0.1 explicitly forbids chained pull, stateful components, and event emission (p
 - The component ID is a `pm-id` attribute on the source component, OR the tag if no other instance exists
 - The dotted path is a JS property path on the source component's `state` getter
 - The subscription is one-shot on mount; v0.2 does NOT auto-re-render when the source's state changes (use a NATS data-source for live updates if needed)
+- **Freeze trap**: because it is one-shot, `data-derive` is WRONG for values
+  that are the point of watching live — e.g. a quorum-progress tile derived
+  from a ballot's tally freezes at its mount-time value. For live tallies,
+  rely on the ballot's own quorum bar or a `data-source` subscription.
 - This is the ONLY allowed chain in v0.2. Two-hop and deeper chains are forbidden (parking-lot for v0.3)
 
 ### 4.2 `data-state-source` (stateful component)
@@ -130,17 +135,26 @@ v0.1 explicitly forbids chained pull, stateful components, and event emission (p
   },
   "receipts": [
     {
-      "voterId": "unit-12a-bob-m",
-      "choice": "yes",
-      "ts": "2026-07-15T10:00:00Z",
       "receiptHash": "0xabc123...",
-      "signature": "..."
+      "ts": "2026-07-15T10:00:00Z",
+      "status": "counted"
     }
   ]
 }
 ```
 
-The full state is signed via CHIT every time a vote is cast. The signature chain is the audit trail.
+**The public state NEVER contains `voterId` or `choice`** — not in receipts,
+not anywhere. The state payload is what every rendering client pulls; a
+receipts array carrying `{voterId, choice}` pairs would publish how every
+resident voted (see §5.5). Per-voter data lives only with the state
+authority (the service that owns `data-state-source`), which needs it for
+one-vote-per-voter enforcement.
+
+The full state is signed via CHIT every time a vote is cast (when the tenant
+has a registered signing card — see §5.4). The signature chain over state
+mutations is the audit trail. Note the two chains are distinct: `prevHash`
+(§4.2) chains **state payloads**; `receiptHash` commits **one vote** and
+appears once in the receipts log.
 
 ### 5.3 ARIA
 
@@ -151,14 +165,69 @@ The full state is signed via CHIT every time a vote is cast. The signature chain
 - Live tally: `aria-live="polite"`
 - After vote cast: focus moves to the receipt section (a11y flow)
 
-### 5.4 Receipt model
+### 5.4 Receipt model (rev 2 — nonce commitment)
 
-Each vote generates a `receiptHash = sha256(ballotId + voterId + choice + ts)`. The receipt is shown to the voter immediately AND published to the CHIT trail. Any resident can verify their vote was counted by:
-1. Computing the expected hash from their inputs
-2. Looking up the receipt in the public CHIT trail
-3. Verifying the signature against the tenant's signing card
+Each vote generates a **blind commitment**:
 
-This is the "public, auditable" promise the PMOVES platform makes. The trail IS the record.
+```
+nonce       = 128 bits from crypto.getRandomValues, hex-encoded,
+              generated client-side and shown ONLY to the voter
+receiptHash = sha256(ballotId + "|" + voterId + "|" + choice + "|" + ts + "|" + nonce)
+```
+
+Rules:
+
+- The **voter keeps** `(choice, ts, nonce)` — that tuple is their receipt.
+  The UI presents it once, prominently, with "save this" framing.
+- **Only `receiptHash` + `ts` are published** to the receipts log / CHIT
+  trail. Without the nonce, the hash cannot be inverted — even though there
+  are only 3 choices and `ts` is public, the 128-bit nonce makes
+  enumeration infeasible. (The rev-1 scheme, `sha256(ballotId + voterId +
+  choice + ts)` with all four inputs public or guessable, was brute-forceable
+  per voter in milliseconds.)
+- The preimage is **`|`-delimited** so distinct input tuples can never
+  concatenate to the same string.
+- **Verification**: a resident recomputes the hash from their kept tuple and
+  finds it in the public log — proof their vote was counted, revealing
+  nothing to anyone else. Losing the nonce loses individual verifiability
+  (the vote still counts); this is the accepted trade for secrecy.
+- **One vote per voter**: the state authority rejects a second vote for a
+  `voterId` unless the tenant's re-vote policy allows supersede
+  (last-write-wins); a superseded receipt stays in the log with
+  `status: "superseded"` so the log is append-only.
+- **Signing, honestly named**: `receiptHash` is a *commitment*, not a
+  signature. The CHIT **signature** is applied by the state authority over
+  each appended state mutation, verifiable against the **tenant's CHIT
+  signing card** (registered via `chit_security` / `make -C pmoves
+  sign-trail` infrastructure). Until a tenant signing card is registered,
+  the ballot runs in **demo mode** and the UI MUST label receipts
+  "recorded (unsigned demo mode)" — never "CHIT-signed".
+
+This preserves the "public, auditable" promise — the trail IS the record —
+without publishing anyone's vote.
+
+### 5.5 Ballot secrecy & coercion resistance
+
+A co-op recall/bylaw ballot has real coercion stakes: neighbors, board
+members, landlord disputes, AG complaints. **Public auditability and secret
+ballot are in tension** (verifiability / secrecy / simplicity — pick two);
+v0.2 explicitly picks verifiability + secrecy via the nonce commitment and
+accepts the cost ("don't lose your receipt").
+
+Hard rules:
+
+1. The public state / trail never carries `(voterId, choice)` in any form,
+   including recomputable form (rev-1's hash was recomputable — that
+   counts as publishing the vote).
+2. Turnout visibility (who has voted, not how) is a **tenant policy
+   decision**, default OFF; if enabled it must be labeled on the ballot UI
+   before the resident votes.
+3. The state authority holds per-voter data and is the trust anchor for
+   dedup. v0.3's identity/attestation work (§7.1) should revisit whether
+   even the authority can be blinded (e.g. token-based eligibility).
+4. Any fallback that weakens the hash (e.g. a non-crypto hash on non-secure
+   contexts) MUST downgrade the UI language too — a checksum is not a
+   receipt (see PR #2134 implementation notes).
 
 ## 6. v0.2 sample: Fordham Hill governance page
 
@@ -196,9 +265,8 @@ This is the "public, auditable" promise the PMOVES platform makes. The trail IS 
     {
       "component": "pm-metric-tile",
       "props": {
-        "label": "Quorum progress",
-        "dataDerive": "pm-ballot[primary]:tally.quorumPercent",
-        "format": "percent"
+        "label": "Eligible voters",
+        "dataDerive": "pm-ballot[primary]:ballot.eligibleVoters"
       }
     },
     {
@@ -215,6 +283,12 @@ This is the "public, auditable" promise the PMOVES platform makes. The trail IS 
 
 Each Fordham resident opens the page, sees the proposal, casts a vote, gets a receipt. The trail is signed, public, and auditable. No corporate platform in the middle.
 
+> Sample notes: the `data-derive` tile binds `eligibleVoters` — a static
+> value, which is what one-shot derive is for. Live quorum progress comes
+> from the ballot's own `role="progressbar"` (§5.3); deriving it into a
+> tile would freeze at mount (§4.1 freeze trap — rev 1 of this sample did
+> exactly that).
+
 ## 7. Open questions (parking lot for v0.3)
 
 1. **Identity verification** — v0.2 takes `voterId` from the auth layer. v0.3 needs to spec the auth layer itself (likely a CHIT-signed attestation per resident).
@@ -228,7 +302,10 @@ Each Fordham resident opens the page, sees the proposal, casts a vote, gets a re
 
 - **Architect**: Mavis-5090 (this lane)
 - **Locked by**: DARKXSIDE — Fordham governance is the immediate use case
-- **Reviewers needed**: 5090-CLAUDE (DL continuity), B850-CLAUDE (CHIT pattern), at least one Fordham resident for legitimacy review
+- **Reviewers needed**: ~~5090-CLAUDE (DL continuity)~~ ✓ reviewed 2026-07-16
+  (rev 2: receipt model → nonce commitment, §5.5 secrecy rules, freeze-trap
+  fixes — see `pmoves/docs/logs/pr_trim_2133_LEARNINGS.md`), B850-CLAUDE
+  (CHIT pattern), at least one Fordham resident for legitimacy review
 - **Pattern credit**: rooms-on-a-stage eureka from the Mavis/Opus lineage
 
 `ACK::Mavis-5090::A2UI-V0.2-BALLOT-SPEC-DRAFT::2026-07-15`
