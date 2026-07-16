@@ -34,10 +34,10 @@
       "type": "createComponent",
       "component": "pm-image",
       "props": {
-        "src": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800",
-        "alt": "Mesh gateway antenna on a rooftop",
+        "src": "./assets/fordham-gateway.jpg",
+        "alt": "Mobile mesh node rig in a hard case, Fordham Hill pilot",
         "caption": "Fordham Hill pilot gateway, installed 2026-04",
-        "credit": "Photo: DARKXSIDE"
+        "credit": "Render: PMOVES (generated, pending sign-off)"
       }
     },
     {
@@ -208,10 +208,10 @@
       "type": "createComponent",
       "component": "pm-voice-clip",
       "props": {
-        "title": "DARKXSIDE: why mesh, why now",
+        "title": "DARKXSIDE: why mesh, why now (placeholder audio — final clip pending)",
         "speaker": "DARKXSIDE",
-        "duration": "2:14",
-        "src": "https://archive.org/download/testmp3testfile/mpthreetest.mp3",
+        "duration": "0:04",
+        "src": "./assets/placeholder-voice.mp3",
         "transcript": "So the question I keep getting is why bother with mesh when 5G exists. The answer is simple: 5G is not a right, it's a subscription. When the cell tower goes down in St. Maarten, the block goes dark. When the mesh node goes down, the block fixes it."
       }
     },
