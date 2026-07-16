@@ -273,3 +273,31 @@ watcher does the orchestration + the operator gates + the trail sign.
 - The agent is registered under the **Reviewer** body in the role-class
   crosswalk (per AGNOTE4482PHI.t1.md Three-Body Solution), since it
   reviews comments and produces the LEARNINGS artifact, not code.
+
+## Coding-plan policy (no direct API calls)
+
+DARKXSIDE (2026-07-16): *"we do not use api direct please review we using coding plans and local models"*.
+
+All data access in this agent routes through the **coding-plan wrappers**, never raw HTTP:
+
+| Need | Wrapper | NOT |
+|---|---|---|
+| GitHub PR data | `gh` CLI (subprocess / Bash tool) | raw `requests.get("https://api.github.com/...")` |
+| PR review threads | `gh api graphql` (Bash tool) | raw `curl https://api.github.com/graphql` |
+| PR notifications | `gh api /notifications` (subprocess) | direct `/notifications` HTTP |
+| NATS pub/sub | `nats` CLI or `nats-py` to localhost | direct AMQP/HTTP to brokers |
+| Local model inference | Ollama Pro at `localhost:11434` | direct model vendor API |
+| CHIT signing | `make -C pmoves sign-trail` | raw `crypto` calls outside the sign-trail pipeline |
+| PR conformance | `pmoves/contracts/a2ui-v0.1-conformance.test.html` harness | inline test rigs |
+
+PMOVES.AI integrations (per DARKXSIDE 2026-07-16):
+
+- **MiniMax token plan** — Mavis-5090 (this agent)
+- **GLM coding plan** — KiloCode
+- **Kimi coding plan** — Kimi-CLI
+- **Ollama Pro** — local models
+- **Alibaba coding plan** — Qwen-based agents
+- **Claude Code Max** — Opus (pr-trimmer downstream)
+- **ChatGPT Business sub** — GPT-based agents
+
+For each: route through the plan's wrapper, not raw HTTP.

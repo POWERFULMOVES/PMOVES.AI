@@ -74,7 +74,23 @@ from typing import Any
 
 # --- Constants ----------------------------------------------------------------
 
-GITHUB_API = "https://api.github.com"
+# All GitHub data access in this tool goes through the `gh` CLI subprocess
+# (the GitHub coding-plan wrapper). We do NOT make raw HTTP calls to
+# api.github.com — that bypasses the wrapper and breaks the policy.
+# DARKXSIDE (2026-07-16): "we do not use api direct ... we using coding
+# plans and local models".
+#
+# PMOVES.AI integrations (per DARKXSIDE 2026-07-16):
+#   - MiniMax token plan (Mavis-5090)         — me, this agent
+#   - GLM coding plan                         — KiloCode
+#   - Kimi coding plan                        — Kimi-CLI
+#   - Ollama Pro                              — local models
+#   - Alibaba coding plan                     — Qwen-based agents
+#   - Claude Code Max                         — Opus (pr-trimmer)
+#   - ChatGPT Business sub                    — GPT-based agents
+#
+# For each integration, route through the plan's wrapper, not raw HTTP.
+
 DEFAULT_NATS_SUBJECT = "chit.pr.review.detected.v1"
 NATS_REVIEW_SUBJECTS = [
     "github.webhook.review.submitted.v1",
