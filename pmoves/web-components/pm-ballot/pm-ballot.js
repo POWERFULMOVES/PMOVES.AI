@@ -37,7 +37,9 @@ class PmBallot extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._state = { tally: {}, receipts: [] };
+    this._state = { tally: {} };
+    // Public receipts, held back until close (see the `state` getter).
+    this._sealedReceipts = [];
     this._myChoice = null;
     this._castError = null;
     this._subscription = null;
@@ -93,7 +95,35 @@ class PmBallot extends HTMLElement {
   get voterId() { return this.getAttribute('voter-id') || null; }
   set voterId(v) { v ? this.setAttribute('voter-id', v) : this.removeAttribute('voter-id'); }
 
-  get state() { return this._state; }
+  // Published state (what `data-state-source` exposes to every client).
+  //
+  // Receipts are SEALED until the ballot closes. A 128-bit nonce hides the
+  // choice inside the hash, but it does nothing if a receipt is published in
+  // the same state update that increments its option's tally: an observer
+  // polling this getter diffs two snapshots, sees one new receipt and one
+  // bumped option, and re-links them without touching the hash. For a 47-unit
+  // co-op recall that reconstructs the whole ballot.
+  //
+  // Three things are required together, and each closes a different re-link:
+  //   1. seal until close      -> no live receipt/tally coincidence
+  //   2. no `ts` on the public receipt -> an observer who recorded the tally
+  //      timeline cannot re-link by timestamp after close (the voter keeps
+  //      the exact ts in their own tuple; presence-in-log is what verifies)
+  //   3. order by hash, not insertion -> position cannot re-link to the order
+  //      the live tally moved in
+  //
+  // Deviates from spec §5.4/§5.2, which publish {receiptHash, ts} live —
+  // raised as a spec amendment on PR #2133.
+  get state() {
+    const sealed = this._isOpen();
+    return {
+      ...this._state,
+      receipts: sealed
+        ? []
+        : this._sealedReceipts.slice().sort((a, b) => (a.receiptHash < b.receiptHash ? -1 : 1)),
+      receiptsSealed: sealed ? this._sealedReceipts.length : 0,
+    };
+  }
   get tally() { return this._state.tally || {}; }
   get myChoice() { return this._myChoice; }
 
@@ -111,14 +141,28 @@ class PmBallot extends HTMLElement {
     }
     const voterId = voterIdOverride || this.voterId || `anonymous-${Date.now()}`;
     const ts = new Date().toISOString();
-    const { hash: receiptHash, algo } = await this._hashReceipt(voterId, optionId, ts);
+    const nonce = this._nonce();
+    const { hash: receiptHash, algo } = await this._hashReceipt(voterId, optionId, ts, nonce);
 
-    const receipt = {
-      voterId, choice: optionId, ts, receiptHash, algo,
-      // v0.2: signature is a placeholder; real CHIT signing wires in via
-      // the data-state-source subscriber in production.
-      signature: `chit-stub:${receiptHash.slice(0, 16)}`,
+    // The voter's receipt. Held ONLY in this browser — it is the (choice, ts,
+    // nonce) tuple §5.4 tells the resident to keep. It is returned to the
+    // caller and rendered locally; it must never reach `_state`.
+    const voterReceipt = {
+      ballotId: this.ballotId, voterId, choice: optionId, ts, nonce, receiptHash, algo,
     };
+
+    // The public receipt. Carries no voterId and no choice — not even in
+    // recomputable form (§5.5 rule 1) — and no `ts`, which would let an
+    // observer re-link it to a tally increment (see the `state` getter).
+    //
+    // No `signature` key: the CHIT signature is applied by the state authority
+    // over each appended mutation, not minted client-side. A placeholder here
+    // was a prefix of receiptHash — derivable by anyone, authenticating
+    // nothing — and a field named `signature` invites a consumer to trust it.
+    // An absent field fails loudly; a fake one fails silently.
+    const publicReceipt = { receiptHash, status: 'cast' };
+    this._sealedReceipts.push(publicReceipt);
+
     this._state = {
       ...this._state,
       tally: {
@@ -126,16 +170,18 @@ class PmBallot extends HTMLElement {
         [optionId]: (this._state.tally[optionId] || 0) + 1,
         _total: (this._state.tally._total || 0) + 1,
       },
-      receipts: [...(this._state.receipts || []), receipt],
     };
-    this._myChoice = { optionId, receipt };
+    this._myChoice = { optionId, receipt: voterReceipt };
     this._render();
 
-    this._fire('vote-cast', { receipt, tally: this._state.tally });
+    // Event carries the PUBLIC receipt only: a pm-event wire (§4.3) routes
+    // this outward, and the voter's nonce/choice must not ride along.
+    this._fire('vote-cast', { receipt: publicReceipt, tally: this._state.tally });
     if (this._hasReachedQuorum()) {
       this._fire('quorum-reached', { tally: this._state.tally, quorum: this.quorumPercent() });
     }
-    return receipt;
+    // The voter's receipt goes to the caller, not to shared state.
+    return voterReceipt;
   }
 
   // ---- v0.2 event wire (pm-event slots §4.3) ----
@@ -185,14 +231,32 @@ class PmBallot extends HTMLElement {
     return (this._state.tally._total || 0) / this.eligibleVoters;
   }
 
-  // Receipt hash: sha256(ballotId + voterId + choice + ts) where a secure
-  // context is available; otherwise a non-cryptographic FNV-1a checksum.
-  // Returns { hash, algo } so the receipt UI can be honest about which was
-  // used. Uses the browser SubtleCrypto API on the secure path.
-  // TODO(v0.2 spec §5.4 rev): nonce-commitment receipts — mix a voter-held
-  // random nonce into the hash so public receipts don't reveal the vote.
-  async _hashReceipt(voterId, choice, ts) {
-    const input = `${this.ballotId}|${voterId}|${choice}|${ts}`;
+  // 128-bit voter-held nonce (§5.4). getRandomValues — unlike crypto.subtle —
+  // is available in non-secure contexts, so the nonce never silently degrades.
+  _nonce() {
+    const b = new Uint8Array(16);
+    (window.crypto || window.msCrypto).getRandomValues(b);
+    return Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Length-prefixed (netstring-style) encoding of the receipt preimage.
+  //
+  // §5.4 requires that distinct input tuples can never produce the same
+  // preimage. Plain `|`-joining does NOT give that: a `|` inside a field
+  // shifts the boundaries, so ('apt-4B|yes','no') and ('apt-4B','yes|no')
+  // collide. Prefixing each field with its length makes the parse unambiguous
+  // for ANY field content, so no caller has to remember to sanitize.
+  _preimage(ballotId, voterId, choice, ts, nonce) {
+    return [ballotId, voterId, choice, ts, nonce]
+      .map((f) => `${String(f).length}:${f}`)
+      .join('');
+  }
+
+  // Receipt hash: sha256 over the nonce commitment where a secure context is
+  // available; otherwise a non-cryptographic FNV-1a checksum. Returns
+  // { hash, algo } so the receipt UI can be honest about which ran.
+  async _hashReceipt(voterId, choice, ts, nonce) {
+    const input = this._preimage(this.ballotId, voterId, choice, ts, nonce);
     if (window.crypto && window.crypto.subtle) {
       const buf = new TextEncoder().encode(input);
       const digest = await window.crypto.subtle.digest('SHA-256', buf);
@@ -242,7 +306,10 @@ class PmBallot extends HTMLElement {
       this._render();
     }
     if (data && data.receipts) {
-      this._state = { ...this._state, receipts: data.receipts };
+      // Authority-published log lands in the sealed store; the `state` getter
+      // decides whether it is visible yet. Never assign to _state.receipts —
+      // that would bypass the seal.
+      this._sealedReceipts = data.receipts.slice();
       this._render();
     }
   }
@@ -321,7 +388,7 @@ class PmBallot extends HTMLElement {
     // secure context, or a non-cryptographic local checksum as fallback.
     const receiptNote = myChoice
       ? (myChoice.receipt.algo === 'sha256'
-        ? `Your vote is recorded (CHIT signature pending signing-card registration). Verify with: <code>sha256("${this._escapeText(this.ballotId)}|${this._escapeText(myChoice.receipt.voterId)}|${this._escapeText(myChoice.receipt.choice)}|${this._escapeText(myChoice.receipt.ts)}")</code></p>`
+        ? `Your vote is recorded (CHIT signature pending signing-card registration). <strong>Save your secret code above — it is shown once and only you have it.</strong> Without it your vote still counts, but you lose the ability to check it yourself. When the ballot closes, recompute your receipt from your saved code and find it in the published list — that proves your vote was counted without revealing to anyone how you voted.</p>`
         : `Your vote is recorded (CHIT signature pending signing-card registration). This receipt is a non-cryptographic local demo checksum (FNV-1a) because the page is not running in a secure context — it is not verifiable with sha256.</p>`)
       : '';
     const receiptHtml = myChoice ? `
@@ -331,6 +398,7 @@ class PmBallot extends HTMLElement {
           <dt>Choice</dt><dd>${this._escapeText(myChoice.optionId)}</dd>
           <dt>Time</dt><dd>${this._escapeText(myChoice.receipt.ts)}</dd>
           <dt>Receipt</dt><dd class="hash">${this._escapeText(myChoice.receipt.receiptHash)}</dd>
+          <dt>Your secret code</dt><dd class="hash nonce">${this._escapeText(myChoice.receipt.nonce || '')}</dd>
         </dl>
         <p class="receipt-note">${receiptNote}
       </div>
