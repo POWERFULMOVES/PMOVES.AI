@@ -39,6 +39,7 @@ class PmBallot extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this._state = { tally: {}, receipts: [] };
     this._myChoice = null;
+    this._castError = null;
     this._subscription = null;
     this._listeners = [];  // event-wire subscribers (e.g. <pm-toast>)
   }
@@ -97,8 +98,9 @@ class PmBallot extends HTMLElement {
   get myChoice() { return this._myChoice; }
 
   // Cast a vote. Generates a receipt, updates local state, fires the
-  // 'vote-cast' event (v0.2 §4.3).
-  castVote(optionId, voterIdOverride) {
+  // 'vote-cast' event (v0.2 §4.3). Async because _hashReceipt uses the
+  // (async) SubtleCrypto API.
+  async castVote(optionId, voterIdOverride) {
     if (!this._isOpen()) {
       this._fire('ballot-closed', { reason: 'closed-or-not-yet-open' });
       return null;
@@ -109,10 +111,10 @@ class PmBallot extends HTMLElement {
     }
     const voterId = voterIdOverride || this.voterId || `anonymous-${Date.now()}`;
     const ts = new Date().toISOString();
-    const receiptHash = this._hashReceipt(voterId, optionId, ts);
+    const { hash: receiptHash, algo } = await this._hashReceipt(voterId, optionId, ts);
 
     const receipt = {
-      voterId, choice: optionId, ts, receiptHash,
+      voterId, choice: optionId, ts, receiptHash, algo,
       // v0.2: signature is a placeholder; real CHIT signing wires in via
       // the data-state-source subscriber in production.
       signature: `chit-stub:${receiptHash.slice(0, 16)}`,
@@ -183,8 +185,12 @@ class PmBallot extends HTMLElement {
     return (this._state.tally._total || 0) / this.eligibleVoters;
   }
 
-  // Receipt hash: sha256(ballotId + voterId + choice + ts).
-  // Uses the browser SubtleCrypto API.
+  // Receipt hash: sha256(ballotId + voterId + choice + ts) where a secure
+  // context is available; otherwise a non-cryptographic FNV-1a checksum.
+  // Returns { hash, algo } so the receipt UI can be honest about which was
+  // used. Uses the browser SubtleCrypto API on the secure path.
+  // TODO(v0.2 spec §5.4 rev): nonce-commitment receipts — mix a voter-held
+  // random nonce into the hash so public receipts don't reveal the vote.
   async _hashReceipt(voterId, choice, ts) {
     const input = `${this.ballotId}|${voterId}|${choice}|${ts}`;
     if (window.crypto && window.crypto.subtle) {
@@ -192,15 +198,16 @@ class PmBallot extends HTMLElement {
       const digest = await window.crypto.subtle.digest('SHA-256', buf);
       const hex = Array.from(new Uint8Array(digest))
         .map((b) => b.toString(16).padStart(2, '0')).join('');
-      return `0x${hex}`;
+      return { hash: `0x${hex}`, algo: 'sha256' };
     }
-    // Fallback: FNV-1a (32-bit). Less secure but works without HTTPS.
+    // Fallback: FNV-1a (32-bit). Non-cryptographic, but works without a
+    // secure context (e.g. plain http:// or file://) for local demos.
     let h = 0x811c9dc5;
     for (let i = 0; i < input.length; i++) {
       h = (h ^ input.charCodeAt(i)) >>> 0;
       h = Math.imul(h, 0x01000193) >>> 0;
     }
-    return `0xfnv1a${h.toString(16).padStart(8, '0')}`;
+    return { hash: `0xfnv1a${h.toString(16).padStart(8, '0')}`, algo: 'fnv1a-32' };
   }
 
   _computeAriaLabel() {
@@ -309,7 +316,14 @@ class PmBallot extends HTMLElement {
       `;
     }).join('');
 
-    // Receipt display if user has voted
+    // Receipt display if user has voted. The verify instruction and trust
+    // language depend on which hash algorithm actually ran: sha256 in a
+    // secure context, or a non-cryptographic local checksum as fallback.
+    const receiptNote = myChoice
+      ? (myChoice.receipt.algo === 'sha256'
+        ? `Your vote is recorded (CHIT signature pending signing-card registration). Verify with: <code>sha256("${this._escapeText(this.ballotId)}|${this._escapeText(myChoice.receipt.voterId)}|${this._escapeText(myChoice.receipt.choice)}|${this._escapeText(myChoice.receipt.ts)}")</code></p>`
+        : `Your vote is recorded (CHIT signature pending signing-card registration). This receipt is a non-cryptographic local demo checksum (FNV-1a) because the page is not running in a secure context — it is not verifiable with sha256.</p>`)
+      : '';
     const receiptHtml = myChoice ? `
       <div class="receipt" role="status">
         <h4>Your vote was cast</h4>
@@ -318,7 +332,7 @@ class PmBallot extends HTMLElement {
           <dt>Time</dt><dd>${this._escapeText(myChoice.receipt.ts)}</dd>
           <dt>Receipt</dt><dd class="hash">${this._escapeText(myChoice.receipt.receiptHash)}</dd>
         </dl>
-        <p class="receipt-note">Your vote is signed and recorded in the public CHIT trail. Verify with: <code>sha256("${this._escapeText(this.ballotId)}|${this._escapeText(myChoice.receipt.voterId)}|${this._escapeText(myChoice.receipt.choice)}|${this._escapeText(myChoice.receipt.ts)}")</code></p>
+        <p class="receipt-note">${receiptNote}
       </div>
     ` : '';
 
@@ -385,6 +399,10 @@ class PmBallot extends HTMLElement {
           margin: 0;
         }
         p.status.status-closed { opacity: 0.7; }
+        p.status.status-error {
+          background: var(--pm-danger-bg, rgba(225, 29, 72, 0.12));
+          color: var(--pm-danger, #E11D48);
+        }
         .options {
           display: flex;
           flex-direction: column;
@@ -535,6 +553,7 @@ class PmBallot extends HTMLElement {
         <button type="button" class="cast" ${!open || !!myChoice ? 'disabled' : ''}>
           ${myChoice ? '✓ Vote cast' : open ? 'Cast vote' : 'Ballot closed'}
         </button>
+        ${this._castError ? `<p class="status status-error" role="alert">⚠ Could not cast vote: ${this._escapeText(this._castError)}</p>` : ''}
         ${quorumHtml}
         ${receiptHtml}
       </article>
@@ -556,8 +575,14 @@ class PmBallot extends HTMLElement {
       btn.addEventListener('click', () => {
         const selected = this.shadowRoot.querySelector('input[type="radio"]:checked');
         if (!selected) return;
-        // Fire and forget — castVote is async (uses crypto.subtle)
-        this.castVote(selected.value);
+        // castVote is async (uses crypto.subtle). Disable the button while it
+        // resolves and surface any failure inline rather than only to console.
+        btn.disabled = true;
+        this._castError = null;
+        this.castVote(selected.value).catch((err) => {
+          this._castError = err && err.message ? err.message : String(err);
+          this._render();
+        });
       });
     }
   }
