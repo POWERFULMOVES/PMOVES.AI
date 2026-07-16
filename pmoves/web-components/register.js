@@ -4,9 +4,10 @@
 // Usage in the renderer:
 //   import '/pmoves/web-components/register.js';
 //
-// Adding a new component to the registry? Just import it here —
-// customElements.define is idempotent (browsers throw on re-registration, but
-// we use a try/catch to make the import side-effect safe).
+// Adding a new component to the registry? Just import it here.
+// Re-registration is prevented by ES-module caching (each module body runs
+// once per realm) — customElements.define itself is NOT idempotent and
+// throws on a duplicate name, so never define the same tag outside its module.
 
 // v0.1 shipped components (7/7 complete)
 import './pm-space-agent-card/pm-space-agent-card.js';

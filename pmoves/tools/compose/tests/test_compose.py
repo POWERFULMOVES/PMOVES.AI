@@ -54,7 +54,7 @@ from compose import (  # type: ignore  # noqa: E402
 def test_compose_component_basic():
     msg = compose_component(
         "pm-space-agent-card",
-        {"agentName": "CLAUDE-OPUS", "role": "analytical", "presence": "live"},
+        {"agentName": "CLAUDE-OPUS", "agentRole": "analytical", "presence": "live"},
     )
     assert msg["type"] == "createComponent"
     assert msg["component"] == "pm-space-agent-card"
@@ -69,7 +69,7 @@ def test_compose_component_unsupported_raises():
 
 def test_compose_component_missing_required_raises():
     with pytest.raises(ValueError, match="missing required prop"):
-        compose_component("pm-space-agent-card", {"role": "analytical"})
+        compose_component("pm-space-agent-card", {"agentRole": "analytical"})
 
 
 def test_compose_component_invalid_enum_raises():
@@ -82,7 +82,7 @@ def test_compose_component_invalid_enum_raises():
 
 def test_compose_component_props_are_copied():
     """Mutating the returned props dict must not affect the input."""
-    original = {"agentName": "X", "role": "test"}
+    original = {"agentName": "X", "agentRole": "test"}
     msg = compose_component("pm-space-agent-card", original)
     msg["props"]["agentName"] = "mutated"
     assert original["agentName"] == "X"
@@ -132,7 +132,7 @@ def test_validate_tenant_config_missing_required_warns():
     cfg = {
         "tenant": {"id": "x", "name": "X"},
         "components": [
-            {"component": "pm-space-agent-card", "props": {"role": "test"}}
+            {"component": "pm-space-agent-card", "props": {"agentRole": "test"}}
         ],
     }
     warnings = validate_tenant_config(cfg)
