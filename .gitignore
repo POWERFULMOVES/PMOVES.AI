@@ -325,6 +325,8 @@ Hotroddark.webp
 pics/
 .superpowers/
 CHIT *.tour/
+CHIT \342\200\224*
+"CHIT \342\200\224 A Visual Tour of PMOVES.AI/"
 pmoves/env.shared.bak.*
 pmoves/pmoves/env.shared
 pmoves/.vscode/
