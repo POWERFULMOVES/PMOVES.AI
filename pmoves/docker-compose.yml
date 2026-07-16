@@ -2622,7 +2622,7 @@ services:
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/api/mcp/sse}
     - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
@@ -2827,6 +2827,7 @@ services:
     - QDRANT_COLLECTION=pmoves_cipher_memory
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
+    command: ["sh", "-c", "node dist/src/app/index.cjs --mode api --port 8105 --host 0.0.0.0 --agent memAgent/cipher.yml --mcp-transport-type sse"]
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
