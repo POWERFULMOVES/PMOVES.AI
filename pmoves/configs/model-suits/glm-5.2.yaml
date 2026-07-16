@@ -88,6 +88,34 @@ model_suit:
       max_tokens: 32768
       system_prompt: directive_refactorer
 
+    voice_synthesis:
+      temperature: 0.9
+      top_p: 0.95
+      max_tokens: 256
+      system_prompt: directive_companion
+      notes: "Short persona-shaped text for voice casting (<=200 chars per sign_trail constraint). Routed through Flute-Gateway /v1/voice/synthesize/audio or Kokoro CPU fallback."
+
+    expressive_voice_cast:
+      temperature: 0.8
+      top_p: 0.97
+      max_tokens: 512
+      system_prompt: directive_companion
+      notes: "CHIT-sign-triggered voice (Phase 0): agent.graphiti.signed.v1 → voice_cast_on_sign.py → persona resolution → Flute-Gateway expressive path (OmniVoice/UltimateTTS) or Kokoro CPU-floor fallback."
+
+    prosodic_bpm_encoding:
+      temperature: 0.4
+      top_p: 0.90
+      max_tokens: 1024
+      system_prompt: directive_reasoner
+      notes: "BPM/prosody parameter generation for bpm_encoder_worker. CGP v0.2 packets published to bpm.encoded.v1. Lower temperature for deterministic rhythmic structure."
+
+    persona_voice_resolution:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 256
+      system_prompt: directive_companion
+      notes: "FlOO$ persona → voice character mapping (e.g. mr-clean → dramatic/chatterbox). voice_persona_bridge.resolve() determines intent + persona_id for voice synthesis."
+
   cgp_state_vector:
     delta: 0.30
     Hz: 0.08
