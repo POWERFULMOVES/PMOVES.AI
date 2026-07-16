@@ -77,7 +77,7 @@ services:
       jaeger:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/13133 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
