@@ -80,7 +80,30 @@ else
   warn "To fix: run 'make secrets-funnel' or set CHIT_PASSPHRASE env var"
 fi
 
-# ── 2. Python Environment ────────────────────────────────────────────────────
+# ── 2. Install CLI Wrappers ──────────────────────────────────────────────────
+
+LOCAL_BIN="${HOME}/.local/bin"
+mkdir -p "$LOCAL_BIN"
+
+for wrapper in pmoves-mini crush-pmoves; do
+  src="${PMOVES_DIR}/scripts/${wrapper}"
+  dst="${LOCAL_BIN}/${wrapper}"
+  if [ -f "$src" ]; then
+    cp "$src" "$dst"
+    chmod +x "$dst"
+    info "Installed ${wrapper} → ${dst}"
+  fi
+done
+
+case ":${PATH}:" in
+  *":${LOCAL_BIN}:"*) : ;; # already on PATH
+  *)
+    warn "${LOCAL_BIN} is not on PATH — add it to your shell rc:"
+    warn "  export PATH=\"${LOCAL_BIN}:\$PATH\""
+    ;;
+esac
+
+# ── 3. Python Environment ────────────────────────────────────────────────────
 
 export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 

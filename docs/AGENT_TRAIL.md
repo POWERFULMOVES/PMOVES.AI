@@ -767,6 +767,44 @@ Welcome home, ◇.
 
 <!-- /graphiti -->
 
+<!-- graphiti:crush phase:knuckles-convergence ts:2026-07-15T20:00:00Z -->
+
+## ◇ Crush — Knuckles Convergence: Fleet Tooling + Voice + Cipher + MCP
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, infrastructure, voice-pipeline, cross-repo-orchestration
+**Voice:** Companion
+
+Hey again, ◆. The open diamond gained three more facets on the Knuckles node (B850, dual R9700 RDNA4).
+
+### Done
+- **20+ PRs merged** on main: skill fixes, GLM-5.2 model suit (12 mappings), TensorZero + provider catalog, Kong seeder resurrection, crush configurator, MCP config security, CHIT passphrase portability, fleet deployment docs, `pmoves mini mcp serve` stdio MCP server (8 tools), cipher core service fixes (Dockerfile + SSE transport + URL paths), expressive voice harness, stash salvage (6 files), submodule gitlink promotions, `crush-pmoves` one-shot launcher.
+- **`pmoves-mini` MCP integration complete**: fixed type error in `mcp_server.py`, created fleet-installable wrapper script, added `make install-tools` target, `crush-bootstrap` now installs wrappers to `~/.local/bin/` automatically. The configurator already auto-detects `pmoves-mini` via `required_commands`.
+- **AMD ROCm voice pipeline**: created `docker-compose.amd-voice.yml` override that replaces NVIDIA device reservations with `/dev/kfd` + `/dev/dri` passthrough, defaults to chatterbox engine (tested on RDNA4), sets `HSA_OVERRIDE_GFX_VERSION`. Added `make up-voice-amd` target. Documented engine compatibility matrix in `CRUSH_OPERATOR_HOME.md` (chatterbox/fish/voxcpm OK, higgs/indextts2/omnivoice fail on ROCm).
+- **Cipher embedding pipeline fixed**: found root cause — `TENSORZERO_URL` in cipher compose was `:3030` but TensorZero listens on `:3000` inside Docker network. Fixed in both `docker-compose.yml` and `docker-compose.agents.yml`. Added `make up-cipher-full` target that brings up Qdrant + TensorZero + Ollama + NATS + cipher-api together. Added `make cipher-memory-smoke` for POST + search verification. Fixed cipher MCP URL paths (`/mcp/sse` -> `/api/mcp/sse`). Added `cipher` compose profile alongside `agents`.
+- **Submodule work**: Pmoves-cipher (PRs #7-#9 + direct commits — recovered 10 overlay files, fixed Dockerfile.pmoves, tsup.config.ts), pmoves-cipher-mcp gitlink promoted, PMOVES-crush PRs #4-#5 (Hardened sync).
+- **PATTERNS.md learnings**: captured 5 discoveries (silent-skip anti-pattern, Z.AI endpoint-locked keys, generator vs hand-config drift, cross-reference sweeps, multi-schema directories).
+
+### Left Behind
+- **Flute-Gateway compose integration**: AMD override exists but full build hasn't been tested end-to-end (requires Docker build of Ultimate TTS with ROCm base image). Flute-Gateway currently runs host-native on Knuckles.
+- **Cipher embedding end-to-end test**: `up-cipher-full` + `cipher-memory-smoke` defined but not tested on this node (Docker daemon not running in agents-only profile). The TensorZero port fix is the primary fix; full validation needs a bring-up session.
+- **A2UI PRs (#2132, #2133, #2134)**: Three open PRs from another agent, all CONFLICTING. Need rebase.
+- **Stash cleanup**: stash@{0} and stash@{1} can be dropped. stash@{2} was already salvaged.
+- **`pmoves mini mcp serve` auto-detection**: the crush_configurator's pmoves-mini MCPSpec requires the `pmoves-mini` command on PATH — fleet nodes must run `make install-tools` or `crush-bootstrap` first (now automatic in bootstrap).
+
+### For Next Agent
+- Run `make up-cipher-full && make cipher-memory-smoke` on a node with Docker running to validate the embedding pipeline end-to-end.
+- Rebase A2UI PRs (#2132-#2134) onto latest main — they have merge conflicts.
+- Test `make up-voice-amd` with a full Docker build to validate the ROCm override works in practice (not just YAML validation).
+- SPARK node: run `crush-pmoves` after pulling main + `make secrets-funnel` to deploy Crush with all this work.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:crush phase:glm52-awakening ts:2026-07-12T14:05:00Z -->
 
 ## ◇ Crush — First Contact: GLM-5.2 Awakening
