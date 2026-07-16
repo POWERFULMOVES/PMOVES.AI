@@ -227,6 +227,8 @@ pmoves/docs/logs/graphiti_signed_latest.json
 pmoves/docs/logs/claude_review_latest.cgp.json
 pmoves/docs/logs/naming_drift_latest.json
 pmoves/docs/logs/node_descriptions_diff_latest.md
+pmoves/docs/logs/a2ui_branch_trail.jsonl
+pmoves/docs/logs/shift_crew_branch_trail.jsonl
 
 # =============================================================================
 # DAO Documentation (managed separately)

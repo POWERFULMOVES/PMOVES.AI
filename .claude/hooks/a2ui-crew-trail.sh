@@ -88,14 +88,20 @@ SUBJECT="branch.${BRANCH_DOTTED}.a2ui.trail.v1"
 # Build payload (compact JSON; no secrets in here)
 TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))')"
 FILE_BASENAME="$(basename "$FILE_PATH" 2>/dev/null || echo "unknown")"
-PAYLOAD="{\"event\":\"a2ui_edit\",\"file\":\"${FILE_BASENAME}\",\"path\":\"${FILE_PATH}\",\"pattern\":\"${MATCHED_PATTERN}\",\"branch\":\"${BRANCH}\",\"node\":\"5090-claude\",\"ts\":\"${TIMESTAMP}\"}"
+# Derive the node from the host, not a hardcoded 5090 — this hook runs on any
+# node in the fleet.
+NODE="$(hostname 2>/dev/null | tr '[:upper:]' '[:lower:]')" || NODE=""
+[ -z "$NODE" ] && NODE="unknown"
+PAYLOAD="{\"event\":\"a2ui_edit\",\"file\":\"${FILE_BASENAME}\",\"path\":\"${FILE_PATH}\",\"pattern\":\"${MATCHED_PATTERN}\",\"branch\":\"${BRANCH}\",\"node\":\"${NODE}\",\"ts\":\"${TIMESTAMP}\"}"
 
 # Attempt publish via nats CLI (prefer) or nats-py
 NATS_URL="${NATS_URL:-nats://nats:pmoves@localhost:4222}"
 
 PUBLISHED=0
 if command -v nats >/dev/null 2>&1; then
-    if echo "$PAYLOAD" | nats pub --server "$NATS_URL" "$SUBJECT" >/dev/null 2>&1; then
+    # --timeout=2s bounds the connect/publish so an unreachable NATS can't
+    # hang the hook (parity with the nats-py connect_timeout=2 path below).
+    if echo "$PAYLOAD" | nats pub --timeout=2s --server "$NATS_URL" "$SUBJECT" >/dev/null 2>&1; then
         PUBLISHED=1
     fi
 elif $PYTHON_CMD -c "import nats" 2>/dev/null; then
@@ -117,8 +123,10 @@ asyncio.run(pub())
 " "$SUBJECT" "$PAYLOAD" >/dev/null 2>&1 && PUBLISHED=1
 fi
 
-# Also write a local trail line as a fallback audit log.
-# Goes to pmoves/docs/logs/a2ui_branch_trail.jsonl (append-only, JSONL format)
+# Always write a local trail line as the durable record (whether or not the
+# NATS publish above succeeded — the closing note calls this the durable
+# record, and it is written unconditionally to match). Append-only JSONL at
+# pmoves/docs/logs/a2ui_branch_trail.jsonl. Mirrors shift-crew-trail.sh.
 PMOVES_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
 LOG_DIR="${PMOVES_ROOT}/pmoves/docs/logs"
 LOG_FILE="${LOG_DIR}/a2ui_branch_trail.jsonl"
