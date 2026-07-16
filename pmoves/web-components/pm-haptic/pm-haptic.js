@@ -52,7 +52,7 @@ class PmHaptic extends HTMLElement {
     }
 
     this._subscribeIfNeeded();
-    this._renderPulseOnNextFrame();
+    this._renderOnNextFrame();
   }
 
   disconnectedCallback() {
@@ -68,7 +68,7 @@ class PmHaptic extends HTMLElement {
 
   attributeChangedCallback() {
     if (this.isConnected) {
-      this._renderPulseOnNextFrame();
+      this._renderOnNextFrame();
       this._subscribeIfNeeded();
     }
   }
@@ -90,7 +90,7 @@ class PmHaptic extends HTMLElement {
   set respectReducedMotion(v) { this.setAttribute('respect-reduced-motion', v ? 'true' : 'false'); }
 
   _onAttributeChange() {
-    this._renderPulseOnNextFrame();
+    this._renderOnNextFrame();
     this._subscribeIfNeeded();
   }
 
@@ -117,14 +117,15 @@ class PmHaptic extends HTMLElement {
 
   // Trigger a single vibration pulse + visual indicator.
   pulse() {
+    // enabled=false is the master OFF switch (README: no vibration, no
+    // visual). Reduced-motion / missing hardware only skip the vibration —
+    // those users still get the visual indicator below.
+    if (!this.enabled) return;
     const pattern = this._computePattern();
     if (pattern.length === 0) return;
     if (this._shouldVibrate()) {
       navigator.vibrate(pattern);
     }
-    // Always render the visual indicator (even when vibration is skipped
-    // due to reduced-motion) — users on no-vibration hardware still get
-    // visible feedback.
     this._flash();
   }
 
@@ -154,7 +155,10 @@ class PmHaptic extends HTMLElement {
     this._indicator.classList.add('pulse');
   }
 
-  _renderPulseOnNextFrame() {
+  // Re-render on the next frame. Deliberately does NOT vibrate: browsers
+  // gate navigator.vibrate behind user activation, so mount/attribute
+  // changes only refresh the DOM — vibration fires via pulse()/startLoop().
+  _renderOnNextFrame() {
     if (!this.isConnected) return;
     requestAnimationFrame(() => this._render());
   }
@@ -199,6 +203,12 @@ class PmHaptic extends HTMLElement {
       this._unsubscribe();
       return;
     }
+    // attributeChangedCallback calls this on EVERY observed attribute change
+    // (including bpm updates arriving FROM the subscription) — without this
+    // guard each change leaked a fresh EventSource for the same subject.
+    if (this._subscription && this._subscribedSource === source) return;
+    this._unsubscribe();
+    this._subscribedSource = source;
     if (source.startsWith('http://') || source.startsWith('https://')) {
       this._subscription = this._fetchHttp(source);
     } else if (source.includes(':')) {
@@ -213,11 +223,16 @@ class PmHaptic extends HTMLElement {
       this._subscription.cancel();
     }
     this._subscription = null;
+    this._subscribedSource = null;
   }
 
   _applyData(data) {
     if (typeof data.bpm === 'number' && data.bpm > 0) {
+      const changed = data.bpm !== this.bpm;
       this.bpm = data.bpm;
+      // A running loop was created from the OLD bpm's interval — restart it
+      // so live data-source updates actually change the beat.
+      if (changed && this._pulseTimer) this.startLoop();
     }
   }
 

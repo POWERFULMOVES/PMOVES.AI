@@ -49,8 +49,8 @@ The component subscribes on mount. On each BPM update, it recomputes the pattern
 
 | Method | Description |
 |--------|-------------|
-| `pulse()` | Trigger one vibration with the current pattern. No-op if `enabled=false` or device unsupported. |
-| `startLoop()` | Start a recurring pulse at the current BPM. Calls `pulse()` once per beat. |
+| `pulse()` | Trigger one vibration with the current pattern. Full no-op if `enabled=false`. On unsupported hardware or `prefers-reduced-motion` the vibration is skipped but the visual indicator still flashes. |
+| `startLoop()` | Start a recurring pulse at the current BPM. Calls `pulse()` once per beat. Live `data-source` BPM updates restart the loop at the new tempo. |
 | `_stopLoop()` | Stop the loop. (Private API; v0.2 will add a public `stopLoop()` if peer agents request it.) |
 
 ## ARIA
