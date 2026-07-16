@@ -180,6 +180,7 @@ include mk/unsloth.mk
 include mk/creator.mk
 include mk/voice.mk
 include mk/kong.mk
+include mk/pr-review.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs

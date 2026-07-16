@@ -68,6 +68,13 @@
   "pr_body_files": "pmoves/docs/logs/pr_open/",
   "trim_strategy": "learnings-first (see pmoves/docs/templates/PR_LEARNINGS.template.md + pmoves/docs/operations/REVIEW_STYLE_2026-07-15.md)",
   "next_action": "wait for review comments on #2132 / #2133 / #2134; for each PR: classify threads (5-class), bucket threads (4-bucket), apply fixes with conformance gate, fill LEARNINGS.md at the path above, sign trail with LEARNINGS.md as payload, resolve via GraphQL",
+  "monitoring_strategy": {
+    "a_mode_now": "pmoves/tools/pr_review_watcher.py — listen for new PR notifications via ETag (no public webhook URL needed). Run as daemon with --prs 2132,2133,2134 --max-runtime 168h --log pmoves/docs/logs/pr_review_arrivals.jsonl --emit-nats. Three modes: notifications (default, ETag-based), pr-watch (per-PR review state diff), nats (B-mode).",
+    "b_mode_after_n8n": "Same tool with --mode nats. Subscribes to github.webhook.review.submitted.v1 + related subjects. n8n brings up the bridge; KiloCode is working on the bring-up per DARKXSIDE 2026-07-16.",
+    "log_path": "pmoves/docs/logs/pr_review_arrivals.jsonl",
+    "watcher_readme": "pmoves/tools/pr_review_watcher.README.md",
+    "outbound_nats_subject": "chit.pr.review.detected.v1"
+  },
   "agnote_links": [
     "Mavis-5090::WEBSITE-AS-AGENT-CANVAS-CLAIM::2026-07-15",
     "Mavis-5090::A2UI-V0.1-FIRST-SLICE-SHIPPED::2026-07-15",
