@@ -53,6 +53,7 @@ Define the contract for agent-composable UI surfaces in PMOVES. The substrate th
   - `media` (rich content) — e.g. `pm-image`, `pm-voice-clip`
   - `flow` (chronological) — e.g. `pm-timeline`
   - `text` (prose, quotes) — e.g. `pm-quote-block`
+  - `sensory` (non-visual output: haptic, audio cues) — e.g. `pm-haptic`
 - One component per file, named after the custom element
 
 ### 4.2 Implementation rules
