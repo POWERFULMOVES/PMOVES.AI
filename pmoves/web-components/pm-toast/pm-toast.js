@@ -58,7 +58,9 @@ class PmToast extends HTMLElement {
   show(message, variant, duration) {
     if (variant) this.variant = variant;
     if (duration !== undefined) this.timeout = duration;
-    this._body.textContent = message || this.textContent || '';
+    // Write only to the .text span — writing to _body (the container) would
+    // wipe the icon and dismiss button, breaking every show() after the first.
+    this._text.textContent = message || this.textContent || '';
     this._body.classList.add('visible');
     this.setAttribute('data-visible', 'true');
     this._resetTimer();
@@ -170,6 +172,7 @@ class PmToast extends HTMLElement {
       </div>
     `;
     this._body = this.shadowRoot.querySelector('.body');
+    this._text = this._body.querySelector('.text');
     this._body.querySelector('.close').addEventListener('click', () => this.hide());
   }
 }
