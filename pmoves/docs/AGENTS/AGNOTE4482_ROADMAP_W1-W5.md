@@ -89,7 +89,7 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 
 **Goal:** Expand agent signature system (glyphs, colors, voices) into a themed terminal experience across machines via BoTZ Gateway.
 
-**Owner:** Unclaimed — recommended: 4090-claude (Crush companion is on laptop)
+**Owner:** **KILOCODE-GLM** (reassigned from 5090-claude 2026-07-16) — botz_cli.py foundation + persona selector already shipped by 4090-claude; KiloCode GLM owns the CLI→Gateway live bridge.
 
 ### Existing Assets
 
@@ -157,7 +157,7 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 
 **Goal:** Build DARKXSIDE's School of POWERFUL MOVES — digital school/office/AI company on Discord.
 
-**Owner:** Unclaimed — recommended: 5090-claude (orchestration lead)
+**Owner:** **HERMES-AGENT** (reassigned from 5090-claude 2026-07-16) — publisher-discord container healthy, DISCORD_BOT_TOKEN live. Hermes Agent fleet presence (6 nodes, always-on) makes it the natural orchestrator for Discord classroom lifecycle. **Creator automation sublane** co-owned by KILOCODE-GLM (studio-board pipeline, approval flow, canonical publish lane).
 
 ### Existing Assets
 
@@ -487,9 +487,9 @@ All resolved. No blockers.
 |------------|-------|---------|--------|----|------------|--------|
 | W1 (partial: TTS mesh) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | — | — | main |
 | W1 (theming: render-card, theme API, alt sigs) | claude-opus | 2026-03-20 | SHIPPED | #1040, #1042 | — | main |
-| W1 (remaining: BoTZ CLI bridge) | 5090-claude | 2026-03-20 | CLAIMED — pending 5090 session | — | — | — |
+| W1 (remaining: BoTZ CLI bridge) | ~~5090-claude~~ **KILOCODE-GLM** | 2026-07-16 | **REASSIGNED** — botz_cli.py (456 lines) + W6-P3 persona selector already shipped by 4090; KiloCode GLM owns the CLI bridge: connect botz_cli.py to BoTZ Gateway live API, wire theme/persona/whoami commands to agent_signatures.yaml. Launch-critical for room/stage handoff. | — | — | — |
 | W2 (devcontainer + SKILL.md) | claude-opus | 2026-03-20 | SHIPPED | #1041 | — | main |
-| W3 (Discord classrooms) | 5090-claude | 2026-03-20 | CLAIMED — pending 5090 session | — | — | — |
+| W3 (Discord classrooms) | ~~5090-claude~~ **HERMES-AGENT** | 2026-07-16 | **REASSIGNED** — publisher-discord container healthy (MCP+REST validated), DISCORD_BOT_TOKEN live. Hermes Agent owns Discord org-setup: Cloudflare Worker for channel/role creation, classroom topology (#lecture-hall, #lab, #office-hours), room-to-Discord parity mapping. Hermes fleet presence (6 nodes) makes it the natural always-on orchestrator for Discord classroom lifecycle. | — | — | — |
 | W4 (partial: content stubs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | — | — | main |
 | W4 (beats pipeline runner) | claude-opus | 2026-03-20 | SHIPPED | #1039 | — | main |
 | W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | — | — | main |
@@ -512,9 +512,9 @@ All resolved. No blockers.
 | Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | — | — | feat/chit-integration-wave-1 |
 | Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | — | — | feat/chit-integration-wave-1 |
 | Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | — | — | feat/chit-integration-wave-1 |
-| W3/M2 (creator automation activation + Discord canonical lane audit) | codex-gpt5 | 2026-03-25 | RECOMMENDED — scan complete, pending implementation claim | — | — | — |
-| W3/M2 (studio-board status UX: approved -> published visibility) | codex-gpt5 | 2026-03-25 | RECOMMENDED — UI follow-through after canonical lane decision | — | — | — |
-| W2/W4 (rooms + stage prospectus alignment) | codex-gpt5 | 2026-03-28 | RECOMMENDED — docs update required after room manifest merge wave | — | — | — |
+| W3/M2 (creator automation activation + Discord canonical lane audit) | ~~codex-gpt5~~ **KILOCODE-GLM** | 2026-07-16 | **REASSIGNED** — KiloCode GLM owns creator pipeline: studio-board publish-state visibility, approval_poller → publisher-discord activation loop, canonical Discord publish lane decision (NATS subscriber vs n8n webhook relay). KiloCode's MCP integration + blueprint-first execution fits the pipeline wiring work. Launch-critical for content flow. | — | — | — |
+| W3/M2 (studio-board status UX: approved -> published visibility) | ~~codex-gpt5~~ **KILOCODE-GLM** | 2026-07-16 | **REASSIGNED** — co-owned with creator automation lane above. Studio-board publishState.ts mapper already shipped (#1135); KiloCode owns the UI follow-through. | — | — | — |
+| W2/W4 (rooms + stage prospectus alignment) | ~~codex-gpt5~~ **DARKXSIDE** (witness) + **CLAUDE-OPUS** (execution) | 2026-07-16 | **REASSIGNED** — DARKXSIDE owns prospectus vision (rooms on a stage — foyer/review-room/voice-room/media-room/war-room), Claude Opus owns docs alignment execution. Room catalog (#1136-#1143) already merged — this is now a language/consistency pass across AGNOTE/P7/website docs to make the prospectus read coherently. DARKXSIDE ✦ must approve final language. | — | — | — |
 | W2/W5 (Agent Zero upstream `v1.3` baseline vs PMOVES hardened suit gap report) | codex-gpt5 | 2026-03-28 | VERIFIED — upstream at `v1.3`, PMOVES pin still Mar 7 hardened commit | — | — | — |
 | Infra (PR review sweep: #1151, #1155, #1156) | 4090-claude | 2026-03-28 | SHIPPED — 74 threads resolved, 3 PRs merged | #1151, #1155, #1156 | — | main |
 | Infra (KiloCode claw config rebase + 18 CR fixes) | 4090-claude | 2026-03-28 | SHIPPED (merged 2026-03-30) | #1151 | — | feature/kilo-claw-config |
@@ -525,29 +525,27 @@ All resolved. No blockers.
 
 ## Recommended Next Steps (Post 2026-03-30 PR Sweep)
 
-### 5090-claude (GPU Inference Specialist)
+### KiloCode GLM (5090 GPU — Blueprint Implementation + W1/W3 Creator Lanes)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | Container rebuild: Flute-Gateway image bake | **P0** | Eliminates hot-patch dependency |
-| 2 | Qwen3-embedding:4b e2e validation (Ollama CUDA) | **P0** | New default from #1082 needs GPU verification |
-| 3 | Fish S2 Pro Flute timeout | P1 | Set `ULTIMATE_TTS_TIMEOUT_SEC=300` |
-| 4 | Pipecat WebSocket (8056) | P1 | Voice agent duplex loop |
-| 5 | W6-P2: bpm_encoder.py | P2 | Python port of musicMapping.ts |
+| 1 | W1: BoTZ CLI → Gateway live bridge | **P0** | botz_cli.py (456 lines) exists; connect theme/persona/whoami to live BoTZ Gateway API (:8054). Launch-critical. |
+| 2 | W3/M2: Creator automation activation | **P0** | Wire approval_poller → publisher-discord → Discord channel. Studio-board publishState.ts already shipped (#1135). |
+| 3 | W3/M2: Studio-board status UX | **P1** | approved → published visibility flow; co-owned with HERMES-AGENT Discord classroom topology. |
+| 4 | W6-P3: Voice binding verification | P2 | Persona→Flute prosodic — needs 5090 live Flute test. |
 
-### 4090-claude (Noise Reducer)
+### HERMES-AGENT (Fleet — Discord Classrooms + W3 Orchestrator)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | ~~PR #1082 merge + AGNOTE/TAC docs~~ | ~~P0~~ | RESOLVED — merged in CHIT Wave 1 |
-| 2 | Room catalog shipped (#1136, #1137, #1142, #1143) | **DONE** | Schema, home entry, dashboard routes, runtime taxonomy — all merged |
-| 3 | Profile ID normalization (`workstation_5090` alias) | **P1** | 16 files use `workstation_5090`, profile config is `desktop-9950xd` — alias file created |
-| 4 | Roadmap P0 cleanup + container rebuild manifest | **P1** | Clear stale blockers so z890/5090/codex sessions are productive |
-| 5 | P7 Agent Interpreter → 5090 TTS via Tailscale | P2 | UNBLOCKED since Step 7 |
-| 6 | W1: Agent Theming + Terminal | P2 | Roadmap claim |
-| 1 | ~~PR #1082 merge + AGNOTE/TAC docs~~ | ~~**P0**~~ | DONE — merged 2026-03-24, branch deleted |
-| 2 | P7 Agent Interpreter → 5090 TTS via Tailscale | **P1** | UNBLOCKED since Step 7 |
-| 3 | ~~W1: Agent Theming + Terminal~~ | ~~P2~~ | DONE — PRs #1065, #1101 merged, branch deleted |
-| 4 | PR #1158 review (Agent Zero v1.3 sync) | P1 | Z890's draft — review when ready |
-| 5 | W6-P3 voice binding verification | P2 | Persona selector shipped — verify with Flute |
+| 1 | W3: Cloudflare org-setup Worker | **P0** | `deploy/cloudflare/org-setup-worker.js` — Discord Bot API integration for channel/role/permission creation. |
+| 2 | W3: Classroom topology | **P0** | #lecture-hall, #lab, #office-hours, #showcase. Roles: Student → Contributor → Builder → Faculty → DARKXSIDE. |
+| 3 | W3: Room-to-Discord parity mapping | **P1** | Map foyer/review-room/voice-room/media-room/war-room to Discord channels. |
+| 4 | W3: Stage discipline | P2 | Channel status reflects rehearsal/live/review/archive. |
+
+### DARKXSIDE ✦ + Claude Opus (W2/W4 Prospectus Alignment)
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | W2/W4: Rooms + stage prospectus language alignment | **P0** | Make AGNOTE/P7/website docs read coherently around rooms-on-a-stage model. DARKXSIDE approves final language. Claude Opus executes docs changes. |
+| 2 | W4: cataclysmstudios.com immersive demo | **P1** | DARKXSIDE owns creative vision; multi-agent execution (BoTZ coordinates content, A2UI animates). |
 
 ### z890-claude (Infrastructure Coordinator)
 | # | Task | Priority | Notes |
