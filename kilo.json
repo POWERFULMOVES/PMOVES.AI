@@ -13,7 +13,7 @@
   "provider": {
     "zai": {
       "options": {
-        "baseURL": "https://api.z.ai/api/coding/paas/v4",
+        "baseURL": "https://api.z.ai/api/coding/paas/v4/",
         "timeout": 300000,
         "apiKey": "${Z_AI_API_KEY}"
       },
