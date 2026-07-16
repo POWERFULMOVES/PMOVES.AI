@@ -83,8 +83,8 @@ class PmProjectCard extends HTMLElement {
     const linksHtml = this.links
       .map((link) => {
         const label = this._escapeText(link.label || link.href || 'Link');
-        const href = this._escapeAttr(link.href || '#');
-        const external = (link.href || '').startsWith('http');
+        const href = this._escapeAttr(this._safeHref(link.href));
+        const external = /^https?:/i.test(link.href || '');
         return `<a class="link" href="${href}" ${external ? 'rel="noopener noreferrer" target="_blank"' : ''}>${label} →</a>`;
       })
       .join('');
@@ -204,6 +204,17 @@ class PmProjectCard extends HTMLElement {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+  }
+
+  _safeHref(href) {
+    // _escapeAttr stops attribute breakout but not scheme abuse — a
+    // javascript: href survives escaping and executes on click. Allow
+    // http(s), mailto, and scheme-less (relative/fragment) URLs only.
+    if (!href) return '#';
+    const v = String(href).trim();
+    if (/^(https?:|mailto:)/i.test(v)) return v;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return '#';
+    return v;
   }
 
   _escapeAttr(s) {

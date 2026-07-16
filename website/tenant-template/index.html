@@ -41,9 +41,11 @@
     // Wire up the tenant page: fetch the composed A2UI JSON, render via web components.
     import { renderTenant } from './tenant-renderer.js';
 
-    // ?tenant=<id> picks the page; default = fordham-hill (the pilot)
+    // ?tenant=<id> picks the page; default = fordham-hill (the pilot).
+    // Slug-only: a raw value here becomes a fetch path in the renderer.
     const params = new URLSearchParams(window.location.search);
-    const tenant = params.get('tenant') || 'fordham-hill';
+    const raw = params.get('tenant') || 'fordham-hill';
+    const tenant = /^[a-z0-9][a-z0-9-]*$/.test(raw) ? raw : 'fordham-hill';
     document.getElementById('raw-link').href = `./data/${tenant}.json`;
 
     renderTenant(tenant).catch((err) => {

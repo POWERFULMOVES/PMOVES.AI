@@ -22,12 +22,22 @@ async function ensureRegistered() {
 }
 
 function applyProps(el, props) {
+  // Only props the component declares via observedAttributes may be applied.
+  // The compose tool validates upstream, but composed JSON reaches this
+  // renderer without it — so the component contract is the runtime boundary.
+  // Anything undeclared (innerHTML, onclick, src on a non-registry element…)
+  // is dropped, never written onto the live element.
+  const declared = new Set(el.constructor.observedAttributes || []);
   for (const [key, value] of Object.entries(props || {})) {
+    const attr = key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+    if (!declared.has(attr)) {
+      console.warn(`[a2ui] dropping undeclared prop "${key}" on <${el.localName}>`);
+      continue;
+    }
     try {
       el[key] = value;
     } catch (_) {
       // Fall back to setAttribute (kebab-case) when the property isn't defined.
-      const attr = key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
       el.setAttribute(attr, String(value));
     }
   }
@@ -55,6 +65,11 @@ function applyHeader(header) {
 }
 
 export async function renderTenant(tenantId) {
+  // Tenant ids are slugs; anything else (../, absolute paths, %-escapes)
+  // would let ?tenant= fetch and render arbitrary same-origin JSON.
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(tenantId || '')) {
+    throw new Error(`invalid tenant id: ${tenantId}`);
+  }
   await ensureRegistered();
 
   const url = `./data/${tenantId}.json`;
@@ -83,7 +98,14 @@ export async function renderTenant(tenantId) {
     } else if (msg.type === 'pageHeader') {
       applyHeader(msg);
     } else if (msg.type === 'createComponent' && msg.component) {
-      const el = document.createElement(msg.component);
+      // Registry components only: a composed message must never be able to
+      // instantiate <script>, <iframe>, or any other non-A2UI element.
+      const tag = String(msg.component).toLowerCase();
+      if (!tag.startsWith('pm-') || !customElements.get(tag)) {
+        console.warn(`[a2ui] skipping non-registry component "${msg.component}"`);
+        continue;
+      }
+      const el = document.createElement(tag);
       applyProps(el, msg.props);
       surface.appendChild(el);
     } else {

@@ -35,7 +35,13 @@ class PmImage extends HTMLElement {
   get credit() { return this.getAttribute('credit') || ''; }
   set credit(v) { this.setAttribute('credit', v); }
 
-  get aspectRatio() { return this.getAttribute('aspect-ratio') || '16/9'; }
+  get aspectRatio() {
+    // Interpolated into the shadow <style> block — constrain to <int>/<int>
+    // (the spec §10 enum shape) so the value can never carry CSS/HTML out
+    // of that context. Invalid values fall back to the spec default.
+    const v = (this.getAttribute('aspect-ratio') || '').trim();
+    return /^\d{1,3}\/\d{1,3}$/.test(v) ? v : '16/9';
+  }
   set aspectRatio(v) { this.setAttribute('aspect-ratio', v); }
 
   _render() {
