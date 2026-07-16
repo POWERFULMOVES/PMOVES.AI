@@ -2414,6 +2414,10 @@ services:
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+    - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
     - ALPHA=${ALPHA:-0.7}
@@ -2463,6 +2467,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - HF_HOME=/data/huggingface
     gpus: all
     deploy:
       resources:
@@ -2490,6 +2495,8 @@ services:
     - pmoves_external  # Required for hub fallback and host-gateway Supabase routes
     extra_hosts:
     - host.docker.internal:host-gateway
+    volumes:
+    - hi-rag-gpu-hf-cache:/data/huggingface
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
       interval: 30s
@@ -4632,6 +4639,7 @@ volumes:
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
+  hi-rag-gpu-hf-cache: {}  # HuggingFace model cache for Qwen3-Reranker-4B (persists across restarts)
   comfy-watcher-output: {}
   comfy-watcher-state: {}
   llama-results: {}
