@@ -25,10 +25,10 @@
     {
       "component": "pm-image",
       "props": {
-        "src": "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800",
-        "alt": "Hurricane damage along a Caribbean coastline",
-        "caption": "Post-Irma recovery, Sint Maarten, 2017",
-        "credit": "Public domain (FEMA archive)"
+        "src": "./assets/sint-maarten-placeholder.svg",
+        "alt": "Placeholder mark for the Sint Maarten pilot, photo pending sign-off",
+        "caption": "Placeholder pending photo — Sint Maarten pilot",
+        "credit": "Placeholder (PMOVES, pending photo sign-off)"
       }
     },
     {
@@ -176,10 +176,10 @@
     {
       "component": "pm-voice-clip",
       "props": {
-        "title": "Pilot resident (in Dutch): 'We learned the hard way'",
+        "title": "Pilot resident (in Dutch): 'We learned the hard way' (placeholder audio — final clip pending)",
         "speaker": "SXM-RESCUE",
-        "duration": "1:38",
-        "src": "https://archive.org/download/testmp3testfile/mpthreetest.mp3",
+        "duration": "0:04",
+        "src": "./assets/sint-maarten-voice-placeholder.mp3",
         "transcript": "Na Irma duurde het elf dagen voordat we weer bereik hadden. Elf dagen zonder contact met de buitenwereld. Met de mesh knooppunten hopen we dat nooit meer mee te maken."
       }
     },
