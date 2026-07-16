@@ -314,3 +314,17 @@ website/hyperdim/
 pmoves/docs/logs/village_gate_latest.json
 crush.json
 *.crush
+
+# =============================================================================
+# Stray operator files (installers, scratch, brainstorm sessions, personal pics)
+# =============================================================================
+*.exe
+*.exe.bak
+Hermes-Setup.exe
+Hotroddark.webp
+pics/
+.superpowers/
+CHIT *.tour/
+pmoves/env.shared.bak.*
+pmoves/pmoves/env.shared
+pmoves/.vscode/

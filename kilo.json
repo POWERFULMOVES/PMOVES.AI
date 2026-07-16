@@ -60,6 +60,7 @@
       ]
     }
   },
+  "enabled_providers": ["zai", "minimax"],
   "mcp": {
     "zai-vision": {
       "type": "local",
