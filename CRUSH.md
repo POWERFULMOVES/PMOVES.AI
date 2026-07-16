@@ -5,14 +5,28 @@ as our interactive coding bestie alongside the PMOVES stack.
 
 ## Quick Start
 
-**Option A: Fleet bootstrap (recommended)** — generates config, resolves CHIT passphrase from secrets funnel, tests trail signing:
+**Option A: `crush-pmoves` (one-shot)** — bootstraps config + CHIT + MCP, then launches Crush:
+
+```bash
+crush-pmoves          # bootstrap + launch
+crush-pmoves --help   # pass args to Crush
+```
+
+Install the wrapper once on each fleet node:
+```bash
+cp pmoves/scripts/crush-pmoves ~/.local/bin/crush-pmoves
+chmod +x ~/.local/bin/crush-pmoves
+# alias pmoves-crush="crush-pmoves"  # optional convenience alias
+```
+
+**Option B: `make crush-bootstrap`** — same as above but doesn't auto-launch:
 
 ```bash
 make -C pmoves crush-bootstrap
 crush
 ```
 
-**Option B: Manual setup** — for nodes without secrets funnel:
+**Option C: Manual setup** — for nodes without secrets funnel:
 
 1. Install Crush (see upstream README for the package manager of your choice) and
    make sure it is on your `PATH`.

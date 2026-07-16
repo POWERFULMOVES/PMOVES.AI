@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# crush-pmoves — one-shot PMOVES-aware Crush launcher
+# Runs crush-bootstrap (config + CHIT + MCP) then launches Crush
+set -euo pipefail
+
+REPO_ROOT=""
+for candidate in \
+  "$(git rev-parse --show-toplevel 2>/dev/null)" \
+  "$HOME/pinokio/api/PMOVES.AI"; do
+  if [ -f "$candidate/pmoves/Makefile" ]; then
+    REPO_ROOT="$candidate"
+    break
+  fi
+done
+
+if [ -z "$REPO_ROOT" ]; then
+  echo "ERROR: Could not find PMOVES.AI repo root" >&2
+  exit 1
+fi
+
+echo "◇ crush-pmoves → bootstrapping from $REPO_ROOT"
+make -C "$REPO_ROOT/pmoves" crush-bootstrap
+
+echo ""
+echo "◇ Launching Crush..."
+exec crush "$@"
