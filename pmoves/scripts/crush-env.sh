@@ -3,11 +3,7 @@
 # Sources env.tier-* files in dependency order, resolving ${VAR} references.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${1:-${BASH_SOURCE[0]:-${0}}}")" 2>/dev/null && pwd)"
-if [ -z "$SCRIPT_DIR" ]; then
-  # Fallback: derive from repo root if we're being sourced from the repo
-  SCRIPT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/pmoves/scripts"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PMOVES_DIR="${REPO_ROOT}/pmoves"
 
