@@ -95,7 +95,7 @@ NODE="$(hostname 2>/dev/null | tr '[:upper:]' '[:lower:]')" || NODE=""
 PAYLOAD="{\"event\":\"a2ui_edit\",\"file\":\"${FILE_BASENAME}\",\"path\":\"${FILE_PATH}\",\"pattern\":\"${MATCHED_PATTERN}\",\"branch\":\"${BRANCH}\",\"node\":\"${NODE}\",\"ts\":\"${TIMESTAMP}\"}"
 
 # Attempt publish via nats CLI (prefer) or nats-py
-NATS_URL="${NATS_URL:-nats://nats:pmoves@localhost:4222}"
+NATS_URL="${NATS_URL:-nats://nats:pmoves@127.0.0.1:4222}"
 
 PUBLISHED=0
 if command -v nats >/dev/null 2>&1; then
@@ -109,12 +109,14 @@ elif $PYTHON_CMD -c "import nats" 2>/dev/null; then
 import asyncio, nats, os, sys
 
 async def pub():
-    url = os.environ.get('NATS_URL', 'nats://nats:pmoves@localhost:4222')
+    url = os.environ.get('NATS_URL', 'nats://nats:pmoves@127.0.0.1:4222')
     subject = sys.argv[1]
     payload = sys.argv[2].encode()
     # allow_reconnect=False: connect_timeout is PER ATTEMPT and the default
-    # reconnect loop retries for minutes — measured >120s of PostToolUse
-    # latency on the shift-crew twin when 4222 was bound-but-unresponsive.
+    # reconnect loop retries for minutes (measured >120s on the shift-crew
+    # twin). Root cause was Windows resolving localhost to ::1 first — the
+    # ::1 connect stalls ~2s, eating the whole per-attempt budget before
+    # IPv4 is tried; hence 127.0.0.1 literals above. Bounds stay as belt.
     nc = await nats.connect(url, connect_timeout=2, allow_reconnect=False)
     await nc.publish(subject, payload)
     await nc.drain()
