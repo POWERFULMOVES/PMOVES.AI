@@ -109,10 +109,12 @@
 
     // Listen for events fired by the ballot
     b.addEventListener('vote-cast', (ev) => {
-      logLine(`vote-cast: optionId=${ev.detail.receipt.choice} receiptHash=${ev.detail.receipt.receiptHash.slice(0, 18)}…`);
-      // Fire the event wire to the toast (renderer does this in production)
+      // The public receipt carries no choice by design — the demo must not
+      // invent one back, or it models the leak the component removed.
+      logLine(`vote-cast: receiptHash=${ev.detail.receipt.receiptHash.slice(0, 18)}… status=${ev.detail.receipt.status}`);
+      logLine(`  (detail.tally is ${ev.detail.tally === undefined ? 'absent — correct' : 'PRESENT — leak!'})`);
       if (typeof t.show === 'function') {
-        t.show(`Vote cast: ${ev.detail.receipt.choice.toUpperCase()} — your receipt is signed.`, 'success');
+        t.show('Your vote was recorded — see your receipt below.', 'success');
       }
     });
     b.addEventListener('quorum-reached', (ev) => {

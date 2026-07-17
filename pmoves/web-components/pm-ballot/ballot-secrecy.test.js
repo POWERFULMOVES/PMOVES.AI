@@ -194,6 +194,129 @@ function check(name, pass, detail) {
     `observer recovered "${correlated}" by diffing two state snapshots — nonce bypassed entirely`
   );
 
+  // --- 9. The 'vote-cast' event must not carry the tally -----------------
+  // The seal protects `state`; the event is a second, outward wire (§4.3). A
+  // receiptHash shipped beside the post-cast tally re-links them for any
+  // listener with no diffing at all — the key that just incremented IS the
+  // choice. Sealing state while emitting both here would be theatre.
+  const evLeak = await page.evaluate(async () => {
+    const b = document.getElementById('b');
+    const seen = [];
+    b.addEventListener('vote-cast', (e) => seen.push(e.detail));
+    b.removeAttribute('closes-at');
+    await b.castVote('retain-board', 'apt-12D');
+    const d = seen[0] || {};
+    return { hasTally: d.tally !== undefined, keys: Object.keys(d.receipt || {}).sort() };
+  });
+  check(
+    "the 'vote-cast' event does not carry the tally",
+    evLeak.hasTally === false,
+    'event ships {receiptHash, tally} together -> listener reads the vote with no effort'
+  );
+  check(
+    "the 'vote-cast' event receipt carries no choice/nonce",
+    JSON.stringify(evLeak.keys) === JSON.stringify(['receiptHash', 'status']),
+    `event receipt keys = ${JSON.stringify(evLeak.keys)}`
+  );
+
+  // --- 10. Seal is meaningful with a REAL future close --------------------
+  // The earlier "sealed while open" check passes even against a component that
+  // seals unconditionally, because the fixture has no closes-at. Assert against
+  // a genuinely open ballot, then assert the seal actually LIFTS.
+  const sealCycle = await page.evaluate(async () => {
+    const el = document.createElement('pm-ballot');
+    el.setAttribute('ballot-id', 'seal-cycle');
+    el.setAttribute('options', JSON.stringify([{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }]));
+    el.setAttribute('eligible-voters', '10');
+    el.setAttribute('closes-at', new Date(Date.now() + 864e5).toISOString());  // genuinely open
+    document.body.appendChild(el);
+    await el.castVote('yes', 'unit-1');
+    const whileOpen = el.state.receipts.length;
+    el.close();                                   // explicit lift condition
+    const afterClose = el.state.receipts.length;
+    return { whileOpen, afterClose };
+  });
+  check(
+    'receipts stay sealed while a genuinely-open ballot is running',
+    sealCycle.whileOpen === 0,
+    `${sealCycle.whileOpen} receipt(s) visible mid-ballot`
+  );
+  check(
+    'receipts actually publish once the ballot closes',
+    sealCycle.afterClose === 1,
+    `${sealCycle.afterClose} receipt(s) after close -> residents can never verify`
+  );
+
+  // --- 11. A malformed closes-at must not disenfranchise AND must not leak -
+  // The two consumers need OPPOSITE defaults. One shared boolean got both
+  // wrong at once: Date.now() < NaN is false -> voting closed, seal lifted.
+  const typo = await page.evaluate(async () => {
+    const el = document.createElement('pm-ballot');
+    el.setAttribute('ballot-id', 'typo');
+    el.setAttribute('options', JSON.stringify([{ id: 'yes', label: 'Y' }]));
+    el.setAttribute('eligible-voters', '10');
+    el.setAttribute('closes-at', new Date(Date.now() + 864e5).toISOString());  // valid, open
+    document.body.appendChild(el);
+
+    // Land a real receipt in the store FIRST. Without this the seal assertion
+    // is vacuous: a broken build blocks the vote, so there is no receipt to
+    // leak, and "published === 0" passes for the wrong reason.
+    await el.castVote('yes', 'unit-seed');
+    const seeded = el.state.receiptsSealed;
+
+    // NOW the author fumbles the date (day-first is an ordinary mistake).
+    el.setAttribute('closes-at', '15/08/2026 23:59');
+    const receipt = await el.castVote('yes', 'unit-2');
+    return { seeded, couldVote: !!receipt, published: el.state.receipts.length };
+  });
+  check(
+    'seed receipt is actually in the sealed store (guards the next assertion)',
+    typo.seeded >= 1,
+    `receiptsSealed = ${typo.seeded} -> the leak assertion below would be vacuous`
+  );
+  check(
+    'a typo in closes-at does not disenfranchise voters (fails OPEN)',
+    typo.couldVote === true,
+    'castVote returned null on an unparseable date -> every resident locked out by one typo'
+  );
+  check(
+    'a typo in closes-at does not unseal receipts (fails CLOSED)',
+    typo.published === 0,
+    `${typo.published} receipt(s) published because a date failed to parse -> votes leak on a typo`
+  );
+
+  // --- 12. No real hash available -> refuse the vote, do not downgrade ----
+  // Plain http:// (a co-op LAN at http://192.168.x.x) has no crypto.subtle. A
+  // 32-bit FNV commitment is collidable in under a second, so the receipt binds
+  // to nothing while the UI still claims it proves the vote was counted.
+  const insecure = await page.evaluate(async () => {
+    const el = document.createElement('pm-ballot');
+    el.setAttribute('ballot-id', 'insecure');
+    el.setAttribute('options', JSON.stringify([{ id: 'yes', label: 'Y' }]));
+    el.setAttribute('eligible-voters', '10');
+    document.body.appendChild(el);
+    const real = window.crypto.subtle;
+    Object.defineProperty(window.crypto, 'subtle', { value: undefined, configurable: true });
+    let receipt, warned;
+    try {
+      receipt = await el.castVote('yes', 'unit-3');
+      warned = /not served over a secure connection/i.test(el.shadowRoot.innerHTML);
+    } finally {
+      Object.defineProperty(window.crypto, 'subtle', { value: real, configurable: true });
+    }
+    return { cast: !!receipt, warned };
+  });
+  check(
+    'a ballot with no crypto.subtle refuses the vote instead of downgrading',
+    insecure.cast === false,
+    'vote cast with a 32-bit FNV checksum -> receipt is collidable and binds to nothing'
+  );
+  check(
+    'the insecure-context refusal is visible to the resident',
+    insecure.warned === true,
+    'no pre-cast warning rendered -> resident learns only after the vote is irrevocable'
+  );
+
   await browser.close();
   server.close();
 

@@ -31,6 +31,7 @@ class PmBallot extends HTMLElement {
       'ballot-id', 'title', 'description', 'options',
       'eligible-voters', 'quorum', 'closes-at',
       'voter-id', 'data-state-source', 'data-source',
+      'allow-insecure-demo-hash',
     ];
   }
 
@@ -42,6 +43,7 @@ class PmBallot extends HTMLElement {
     this._sealedReceipts = [];
     this._myChoice = null;
     this._castError = null;
+    this._forcedClosed = false;
     this._subscription = null;
     this._listeners = [];  // event-wire subscribers (e.g. <pm-toast>)
   }
@@ -115,7 +117,7 @@ class PmBallot extends HTMLElement {
   // Deviates from spec §5.4/§5.2, which publish {receiptHash, ts} live —
   // raised as a spec amendment on PR #2133.
   get state() {
-    const sealed = this._isOpen();
+    const sealed = this._isSealed();
     return {
       ...this._state,
       receipts: sealed
@@ -131,7 +133,21 @@ class PmBallot extends HTMLElement {
   // 'vote-cast' event (v0.2 §4.3). Async because _hashReceipt uses the
   // (async) SubtleCrypto API.
   async castVote(optionId, voterIdOverride) {
-    if (!this._isOpen()) {
+    // A ballot served over plain http:// (a co-op LAN at http://192.168.x.x is
+    // the realistic case) has no crypto.subtle, so the sha256 path is gone.
+    // getRandomValues still works, so a 128-bit nonce would be minted and then
+    // committed with a 32-bit FNV checksum — a colliding receipt is findable in
+    // under a second, meaning the commitment binds to nothing and the voter is
+    // told to verify with a hash that opens to more than one choice.
+    // Refuse rather than silently downgrade: the old code disclosed the
+    // downgrade in the receipt panel, i.e. only AFTER the vote was irrevocable.
+    if (!this._canHashSecurely() && !this.hasAttribute('allow-insecure-demo-hash')) {
+      this._castError = 'insecure-context';
+      this._render();
+      this._fire('ballot-unavailable', { reason: 'insecure-context' });
+      return null;
+    }
+    if (!this._isVotingOpen()) {
       this._fire('ballot-closed', { reason: 'closed-or-not-yet-open' });
       return null;
     }
@@ -174,11 +190,16 @@ class PmBallot extends HTMLElement {
     this._myChoice = { optionId, receipt: voterReceipt };
     this._render();
 
-    // Event carries the PUBLIC receipt only: a pm-event wire (§4.3) routes
-    // this outward, and the voter's nonce/choice must not ride along.
-    this._fire('vote-cast', { receipt: publicReceipt, tally: this._state.tally });
+    // Event carries the PUBLIC receipt ONLY — no nonce, no choice, and no tally.
+    // Shipping the post-cast tally beside the receiptHash re-links them for any
+    // listener: the key that just incremented IS the choice. That is the same
+    // correlation the `state` getter seals against, so emitting it here would
+    // re-open it on the outward wire (§4.3 routes this off-component).
+    // Consumers needing the aggregate read the `tally` getter, which carries no
+    // receipt and so cannot be correlated with one.
+    this._fire('vote-cast', { receipt: publicReceipt });
     if (this._hasReachedQuorum()) {
-      this._fire('quorum-reached', { tally: this._state.tally, quorum: this.quorumPercent() });
+      this._fire('quorum-reached', { quorum: this.quorumPercent() });
     }
     // The voter's receipt goes to the caller, not to shared state.
     return voterReceipt;
@@ -217,9 +238,48 @@ class PmBallot extends HTMLElement {
     }
   }
 
-  _isOpen() {
-    if (!this.closesAt) return true;
-    return Date.now() < new Date(this.closesAt).getTime();
+  // Close time in ms, or: null when unset, NaN when unparseable.
+  _closeTime() {
+    if (!this.closesAt) return null;
+    return new Date(this.closesAt).getTime();   // NaN if the author typo'd it
+  }
+
+  // Is this ballot accepting votes? FAILS OPEN on a config error.
+  // A malformed closes-at is an authoring mistake; disenfranchising every
+  // resident because of one is the worse failure. Surfaced visibly instead.
+  _isVotingOpen() {
+    if (this._forcedClosed) return false;
+    const t = this._closeTime();
+    if (t === null || Number.isNaN(t)) return true;
+    return Date.now() < t;
+  }
+
+  // Are receipts still sealed? FAILS CLOSED (sealed) on a config error.
+  // Publishing receipts early leaks votes irreversibly; staying sealed is
+  // merely inconvenient. Opposite default to _isVotingOpen by design — these
+  // two consumers previously shared one boolean, so one was always wrong:
+  // an unparseable date closed the voting AND lifted the seal simultaneously.
+  _isSealed() {
+    if (this._forcedClosed) return false;
+    const t = this._closeTime();
+    if (t === null || Number.isNaN(t)) return true;
+    return Date.now() < t;
+  }
+
+  // Explicit close, so the seal has a lift condition that does not depend on an
+  // optional attribute. Without this, a ballot authored with no closes-at (the
+  // spec's own §6 sample, and this component's test fixture) stays sealed
+  // forever and its receipts NEVER publish — residents could never verify.
+  close() {
+    this._forcedClosed = true;
+    this._render();
+  }
+
+  // True when the ballot can never publish receipts on its own. Rendered as a
+  // visible authoring error rather than silently swallowed.
+  _hasNoCloseCondition() {
+    const t = this._closeTime();
+    return !this._forcedClosed && (t === null || Number.isNaN(t));
   }
 
   _hasReachedQuorum() {
@@ -229,6 +289,12 @@ class PmBallot extends HTMLElement {
   quorumPercent() {
     if (this.eligibleVoters <= 0) return 0;
     return (this._state.tally._total || 0) / this.eligibleVoters;
+  }
+
+  // Is a real cryptographic hash available? crypto.subtle requires a secure
+  // context (https:, or http://localhost — but NOT http://192.168.x.x).
+  _canHashSecurely() {
+    return !!(window.crypto && window.crypto.subtle);
   }
 
   // 128-bit voter-held nonce (§5.4). getRandomValues — unlike crypto.subtle —
@@ -365,15 +431,34 @@ class PmBallot extends HTMLElement {
     const quorumPct = this.quorumPercent();
     const quorumTarget = this.quorum;
     const reachedQuorum = this._hasReachedQuorum();
-    const open = this._isOpen();
+    const open = this._isVotingOpen();
     const myChoice = this._myChoice;
+    // A ballot that cannot hash securely must not accept a vote at all, and the
+    // resident must learn that BEFORE they choose — not in the receipt panel
+    // after the button has already locked.
+    const insecure = !this._canHashSecurely() && !this.hasAttribute('allow-insecure-demo-hash');
+    // A ballot with no parseable close time can never publish its receipts, so
+    // no resident could ever verify. Surface it instead of sealing silently.
+    const noClose = this._hasNoCloseCondition();
+    const usable = open && !insecure;
+
+    // Blocking notices, rendered above the options so they are read first.
+    const noticeHtml = [
+      insecure ? `<p class="notice notice-error" role="alert"><strong>Voting is unavailable on this
+        connection.</strong> This page is not served over a secure connection (https), so your
+        browser cannot create a real cryptographic receipt. Casting a vote here would give you a
+        receipt that does not actually prove anything. Open this ballot over https and try again.</p>` : '',
+      noClose ? `<p class="notice notice-warn" role="alert"><strong>This ballot has no valid closing
+        time set.</strong> Receipts stay sealed until a ballot closes, so until this is fixed by
+        whoever published it, no one will be able to verify the result.</p>` : '',
+    ].join('');
 
     // Per-option rows
     const optionsHtml = options.map((opt) => {
       const count = tally[opt.id] || 0;
       const pct = total > 0 ? (count / total * 100).toFixed(0) : 0;
       const checked = myChoice?.optionId === opt.id;
-      const disabled = !open || !!myChoice;
+      const disabled = !usable || !!myChoice;
       return `
         <label class="option ${checked ? 'selected' : ''}" data-option-id="${this._escapeAttr(opt.id)}">
           <input type="radio" name="ballot-${this._escapeAttr(this.ballotId)}" value="${this._escapeAttr(opt.id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
@@ -521,6 +606,20 @@ class PmBallot extends HTMLElement {
           cursor: pointer;
         }
         button.cast:hover { background: var(--pm-accent-soft, #A78BFA); }
+        .notice {
+          margin: 0 0 12px; padding: 10px 12px; border-radius: 6px;
+          font-size: 0.9rem; line-height: 1.45;
+        }
+        .notice-error {
+          background: rgba(220, 38, 38, 0.12);
+          border: 1px solid rgba(220, 38, 38, 0.5);
+          color: var(--pm-color-text, inherit);
+        }
+        .notice-warn {
+          background: rgba(217, 119, 6, 0.12);
+          border: 1px solid rgba(217, 119, 6, 0.5);
+          color: var(--pm-color-text, inherit);
+        }
         button.cast:disabled {
           opacity: 0.5;
           cursor: not-allowed;
@@ -616,10 +715,11 @@ class PmBallot extends HTMLElement {
         </header>
         ${statusHtml}
         <form class="options" role="radiogroup" aria-label="Ballot options">
+          ${noticeHtml}
           ${optionsHtml}
         </form>
-        <button type="button" class="cast" ${!open || !!myChoice ? 'disabled' : ''}>
-          ${myChoice ? '✓ Vote cast' : open ? 'Cast vote' : 'Ballot closed'}
+        <button type="button" class="cast" ${!usable || !!myChoice ? 'disabled' : ''}>
+          ${myChoice ? '✓ Vote cast' : insecure ? 'Voting unavailable' : open ? 'Cast vote' : 'Ballot closed'}
         </button>
         ${this._castError ? `<p class="status status-error" role="alert">⚠ Could not cast vote: ${this._escapeText(this._castError)}</p>` : ''}
         ${quorumHtml}
