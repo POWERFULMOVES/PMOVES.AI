@@ -104,9 +104,14 @@ function wireEvents() {
             return;
           }
           // Pass the event detail (or the first arg as a string) to the method.
-          const arg = ev.detail?.receipt
-            ? `${ev.detail.receipt.choice.toUpperCase()} — your receipt is signed.`
-            : JSON.stringify(ev.detail);
+          // Receipt-shaped payloads are summarised by hash only. Never render
+          // the choice: this is a page-level surface, so it is shoulder-surfable
+          // and screenshot-able, and naming the option re-links a voter to their
+          // vote for anyone watching. Never JSON.stringify(ev.detail) either —
+          // that dumps whatever a future payload happens to carry.
+          const arg = ev.detail?.receipt?.receiptHash
+            ? `Your vote was recorded — receipt ${ev.detail.receipt.receiptHash.slice(0, 10)}…`
+            : (typeof ev.detail === 'string' ? ev.detail : 'Done.');
           target[method](arg);
         });
         _eventWires.push({ source: el, event, targetId, method });
