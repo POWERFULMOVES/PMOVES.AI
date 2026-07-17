@@ -33,6 +33,8 @@ services:
     # ROCm is wired via the /dev/kfd + /dev/dri passthrough below instead.
     deploy:
       resources:
+        reservations:
+          devices: []
         limits:
           memory: 16G
           cpus: '8.0'
@@ -54,5 +56,5 @@ services:
   flute-gateway:
     environment:
     - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-ultimate_tts}
-    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://ultimate-tts-studio:7861}
     - ULTIMATE_TTS_DEFAULT_ENGINE=${ULTIMATE_TTS_DEFAULT_ENGINE:-chatterbox}

@@ -90,6 +90,23 @@ already does the exact shape a resident signing card needs, with only the noun c
 So: **reuse the ClawZ pattern**, do not hand-roll. Private key stays on the resident's device; the
 roll publishes only the public key and its fingerprint.
 
+**But Ed25519 is authentication, not secrecy.** A resident-signed ballot tied to a published public
+key is attributable — it proves *who* voted and *that* the vote was not forged by the operator. It
+does **not** satisfy secret-ballot or receipt-freeness requirements (§4, §5.1). A signed ballot that
+a resident can later prove is *theirs* is a coercion instrument, not a protection against one. An
+unlinkable ballot protocol (mix-net, homomorphic tally, or BeleniosRF-style re-randomization) must
+sit between authentication and tabulation; Ed25519 authenticates the *eligibility to vote*, not the
+ballot itself. See §4 for the petition-vs-ballot split and §3 prior-art table for receipt-free
+schemes.
+
+Two more requirements this does not close:
+- **Key enrollment integrity** — the roll must be built through an authenticated enrollment process,
+  not operator-editable data. If the operator can add or swap public keys, the forgery problem
+  returns at the enrollment layer instead of the signing layer.
+- **Key revocation and recovery** — lost cards, compromised keys, and resident turnover require a
+  defined rotation path. The roll must support key replacement without breaking historical
+  verifiability.
+
 - `signing_identity_cards.yaml` already has the right *shape* — one card per signer, `ml` half for a
   key. Today the ml key fields are **null** ("h-only / pending-ml", audit advisory not fatal). That
   card model is the natural carrier; ClawZ supplies the key material it is missing.
@@ -106,8 +123,18 @@ roll publishes only the public key and its fingerprint.
 
 ## 3. Prior art — the tracking each spoke was missing
 
-Bespoke is fine. Untracked is not. Repo-wide greps: **Benaloh 0 files · ElectionGuard 0 ·
-"coercion resistance" 0 · Ostrom 0.** There was no voting-systems research behind any of this.
+Bespoke is fine. Untracked is not. Repo-wide greps (at revision `6b995805c`, 2026-07-17;
+`rg -l -i '<term>' --glob '*.{md,py,ts,js,yaml,yml}'` excluding `node_modules`):
+
+| Term | Files found |
+|------|-------------|
+| `Benaloh` | 1 — this document |
+| `ElectionGuard` | 1 — this document |
+| `coercion resistance` | 1 — this document |
+| `Ostrom` | 1 — this document |
+
+Prior to this document's creation, all four terms returned **0 files**. The only matches now are
+self-references in this section. There was no voting-systems research behind any of this.
 
 | Decision | Tracks to |
 |---|---|
@@ -267,7 +294,7 @@ Reconciliation for the A2UI lane:
 The bylaws corpus. It is the thing every co-op wants, no board wants to give up, and it carries no
 election-law risk — and it is the AG/lender artifact that *is* just documents.
 
-The chain is real, tested, and collection-aligned:
+The chain is implemented and collection-aligned (not yet smoke-tested end-to-end on a bylaws PDF;
 
 `pdf-ingest` (PyMuPDF, `pmoves/services/pdf-ingest/app.py:277`) → `extract-worker` `/ingest`
 (`worker.py:214`) → Qdrant + Meilisearch (`pmoves_chunks_qwen3`) → `hi-rag-gateway-v2`
