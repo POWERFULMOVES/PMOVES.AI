@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """BoTZ CLI — Agent Persona Selector + Identity Tool
 
+W1 BoTZ CLI Bridge: connects to live BoTZ Gateway API (:8054) for fleet-wide
+identity resolution, persona management, and theme rendering. Falls back to
+local agent_signatures.yaml when Gateway is unavailable.
+
 W6-P3 deliverable: CLI for selecting agent personas, resolving identity,
 applying terminal themes, planning, and auditing across PMOVES nodes.
 
 Usage:
     python pmoves/tools/botz_cli.py whoami
+    python pmoves/tools/botz_cli.py whoami --live          # fetch from Gateway API
     python pmoves/tools/botz_cli.py theme 4090-claude
+    python pmoves/tools/botz_cli.py theme kilocode --live  # live alter resolution
     python pmoves/tools/botz_cli.py persona list
+    python pmoves/tools/botz_cli.py persona list --live    # fleet-wide from Gateway
     python pmoves/tools/botz_cli.py persona select 4090-claude
+    python pmoves/tools/botz_cli.py session                # live session info from Gateway
+    python pmoves/tools/botz_cli.py instances              # live BoTZ instances
     python pmoves/tools/botz_cli.py plan -d "Add NATS wiring to Health service"
     python pmoves/tools/botz_cli.py audit -t pmoves/tools/provider_cascade.py
 
@@ -26,6 +35,8 @@ import socket
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.request import urlopen, Request
+from urllib.error import URLError
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -82,6 +93,39 @@ def _load_signatures() -> Dict[str, Any]:
     return data.get("signatures", {})
 
 
+# ---------------------------------------------------------------------------
+# BoTZ Gateway API client (W1 CLI Bridge)
+# ---------------------------------------------------------------------------
+_GATEWAY_TIMEOUT = 5  # seconds
+
+
+def _gateway_get(path: str, params: Optional[Dict[str, str]] = None) -> Optional[Dict]:
+    """GET from BoTZ Gateway API. Returns None if unavailable."""
+    url = f"{_BOTZ_GATEWAY_URL}{path}"
+    if params:
+        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        url = f"{url}?{qs}"
+    try:
+        req = Request(url, headers={"Accept": "application/json"})
+        with urlopen(req, timeout=_GATEWAY_TIMEOUT) as resp:
+            return json.loads(resp.read())
+    except (URLError, OSError, json.JSONDecodeError):
+        return None
+
+
+def _gateway_available() -> bool:
+    """Quick health check if Gateway is reachable."""
+    return _gateway_get("/healthz") is not None
+
+
+def _load_signatures_live() -> Dict[str, Any]:
+    """Load agent signatures from live Gateway API, fall back to local YAML."""
+    data = _gateway_get("/v1/agent/signatures")
+    if data and "signatures" in data:
+        return data["signatures"]
+    return _load_signatures()
+
+
 def _resolve_agent_id() -> tuple[str, str]:
     """Resolve current agent identity. Returns (agent_id, source)."""
     agent_id = os.environ.get("PMOVES_AGENT_ID")
@@ -114,8 +158,19 @@ def _alter_name(alter: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 def cmd_whoami(args: argparse.Namespace) -> int:
     """Resolve and display current agent identity."""
+    use_live = getattr(args, "live", False)
     agent_id, source = _resolve_agent_id()
-    sigs = _load_signatures()
+
+    if use_live:
+        # Try live Gateway resolution
+        live = _gateway_get("/v1/agent/whoami")
+        if live and live.get("agent_id") and live["agent_id"] != "unknown":
+            agent_id = live["agent_id"]
+            source = "gateway"
+        sigs = _load_signatures_live()
+    else:
+        sigs = _load_signatures()
+
     sig = sigs.get(agent_id, {})
 
     if args.json:
@@ -145,8 +200,20 @@ def cmd_whoami(args: argparse.Namespace) -> int:
 
 def cmd_theme(args: argparse.Namespace) -> int:
     """Display theme for a specific agent."""
-    sigs = _load_signatures()
-    sig = sigs.get(args.agent_id)
+    use_live = getattr(args, "live", False)
+
+    if use_live:
+        # Try live Gateway theme endpoint (includes alter resolution)
+        live = _gateway_get(f"/v1/agent/theme/{args.agent_id}")
+        if live:
+            sig = live
+            sigs = {args.agent_id: sig}  # wrap for uniform rendering
+        else:
+            sigs = _load_signatures_live()
+            sig = sigs.get(args.agent_id)
+    else:
+        sigs = _load_signatures()
+        sig = sigs.get(args.agent_id)
     if not sig:
         available = ", ".join(sorted(sigs.keys()))
         print(f"ERROR: Agent '{args.agent_id}' not found. Available: {available}", file=sys.stderr)
@@ -189,7 +256,8 @@ def cmd_theme(args: argparse.Namespace) -> int:
 
 def cmd_persona_list(args: argparse.Namespace) -> int:
     """List all available personas."""
-    sigs = _load_signatures()
+    use_live = getattr(args, "live", False)
+    sigs = _load_signatures_live() if use_live else _load_signatures()
     if not sigs:
         print("ERROR: No signatures loaded", file=sys.stderr)
         return 1
@@ -302,6 +370,125 @@ def cmd_persona_current(args: argparse.Namespace) -> int:
             name = sig.get("display_name", agent_id)
             print(f"{fg}{_BOLD}{glyph} {name}{_RST}  {_DIM}(via {source}){_RST}")
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Session command (live Gateway session info)
+# ---------------------------------------------------------------------------
+def cmd_session(args: argparse.Namespace) -> int:
+    """Show live BoTZ Gateway session info."""
+    if not _gateway_available():
+        print(f"{_DIM}BoTZ Gateway not reachable at {_BOTZ_GATEWAY_URL}{_RST}", file=sys.stderr)
+        return 1
+
+    data = _gateway_get("/v1/agent/whoami")
+    if not data:
+        print("ERROR: Gateway reachable but /v1/agent/whoami returned empty", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        agent_id = data.get("agent_id", "unknown")
+        theme = data.get("theme", {})
+        glyph = theme.get("glyph", "?")
+        color = theme.get("color", "#888")
+        voice = theme.get("voice", "unknown")
+        hostname = data.get("hostname", "?")
+        hint = data.get("hint", "")
+
+        fg = _fg(color)
+        print(f"{fg}{_BOLD}{glyph} Agent: {agent_id}{_RST}")
+        print(f"  {_DIM}hostname: {hostname}{_RST}")
+        print(f"  {_DIM}voice: {voice}{_RST}")
+        print(f"  {_DIM}color: {color}{_RST}")
+        if hint:
+            print(f"  {_DIM}hint: {hint}{_RST}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Instances command (live BoTZ instances)
+# ---------------------------------------------------------------------------
+def cmd_instances(args: argparse.Namespace) -> int:
+    """List live BoTZ instances from Gateway."""
+    data = _gateway_get("/v1/botz/instances")
+    if data is None:
+        print(f"{_DIM}BoTZ Gateway not reachable at {_BOTZ_GATEWAY_URL}{_RST}", file=sys.stderr)
+        return 1
+
+    instances = data if isinstance(data, list) else data.get("instances", data.get("data", []))
+    if not instances:
+        print(f"{_DIM}No BoTZ instances registered{_RST}")
+        return 0
+
+    if args.json:
+        print(json.dumps(instances, indent=2))
+    else:
+        print(f"{_BOLD}BoTZ Instances ({len(instances)}){_RST}")
+        print()
+        for inst in instances:
+            agent_id = inst.get("agent_id", inst.get("botz_id", "?"))
+            status = inst.get("status", "?")
+            hostname = inst.get("hostname", "?")
+            sigs = _load_signatures_live()
+            sig = sigs.get(agent_id, {})
+            fg = _fg(sig.get("color", "#888"))
+            glyph = sig.get("glyph", "?")
+            name = sig.get("display_name", agent_id)
+            icon = {"active": "●", "idle": "○", "offline": "✗"}.get(status, "?")
+            print(f"  {fg}{icon} {glyph} {name:<20}{_RST} {_DIM}({hostname}){_RST}")
+        print()
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Register command (register this node with BoTZ Gateway)
+# ---------------------------------------------------------------------------
+def cmd_register(args: argparse.Namespace) -> int:
+    """Register this agent/node with the BoTZ Gateway."""
+    agent_id, source = _resolve_agent_id()
+    if args.agent_id:
+        agent_id = args.agent_id
+
+    sigs = _load_signatures_live()
+    sig = sigs.get(agent_id, {})
+
+    payload = json.dumps({
+        "botz_name": sig.get("display_name", agent_id),
+        "instance_id": f"{agent_id}-{socket.gethostname()}",
+        "skill_level": "advanced",
+        "runner_host": socket.gethostname(),
+        "metadata": {
+            "agent_id": agent_id,
+            "glyph": sig.get("glyph", "?"),
+            "color": sig.get("color", "#888888"),
+            "voice": sig.get("voice", "unknown"),
+            "specialization": sig.get("specialization", ""),
+        },
+    }).encode()
+
+    try:
+        from urllib.request import Request as _Req
+        req = _Req(
+            f"{_BOTZ_GATEWAY_URL}/v1/botz/register",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(req, timeout=_GATEWAY_TIMEOUT) as resp:
+            result = json.loads(resp.read())
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            fg = _fg(sig.get("color", "#888"))
+            glyph = sig.get("glyph", "?")
+            name = sig.get("display_name", agent_id)
+            print(f"{fg}{_BOLD}{glyph} {name}{_RST} registered with BoTZ Gateway")
+        return 0
+    except Exception as e:
+        print(f"ERROR: Failed to register: {e}", file=sys.stderr)
+        return 1
 
 
 # ---------------------------------------------------------------------------
@@ -472,20 +659,33 @@ def main() -> int:
     json_parent.add_argument("--json", action="store_true", help="JSON output")
 
     # whoami
-    subparsers.add_parser("whoami", help="Resolve current agent identity", parents=[json_parent])
+    whoami_p = subparsers.add_parser("whoami", help="Resolve current agent identity", parents=[json_parent])
+    whoami_p.add_argument("--live", action="store_true", help="Fetch from live BoTZ Gateway API")
 
     # theme
     theme_p = subparsers.add_parser("theme", help="Display agent theme", parents=[json_parent])
     theme_p.add_argument("agent_id", help="Agent ID")
+    theme_p.add_argument("--live", action="store_true", help="Fetch from live BoTZ Gateway API (includes alter resolution)")
 
     # persona (with sub-subcommands)
     persona_p = subparsers.add_parser("persona", help="Manage agent personas")
     persona_sub = persona_p.add_subparsers(dest="persona_cmd")
-    persona_sub.add_parser("list", help="List all available personas", parents=[json_parent])
+    list_p = persona_sub.add_parser("list", help="List all available personas", parents=[json_parent])
+    list_p.add_argument("--live", action="store_true", help="Fetch from live BoTZ Gateway API")
     persona_sub.add_parser("current", help="Show current persona", parents=[json_parent])
     sel_p = persona_sub.add_parser("select", help="Select a persona", parents=[json_parent])
     sel_p.add_argument("agent_id", help="Agent ID to select")
     sel_p.add_argument("--export", action="store_true", help="Output shell export commands")
+
+    # session (live Gateway info)
+    subparsers.add_parser("session", help="Show live BoTZ Gateway session info", parents=[json_parent])
+
+    # instances (live BoTZ instances)
+    subparsers.add_parser("instances", help="List live BoTZ instances from Gateway", parents=[json_parent])
+
+    # register (register this agent with Gateway)
+    reg_p = subparsers.add_parser("register", help="Register this agent with BoTZ Gateway", parents=[json_parent])
+    reg_p.add_argument("--agent-id", help="Override agent ID (default: auto-resolve)")
 
     # plan (botz-architect)
     plan_p = subparsers.add_parser("plan", help="Create a structured plan (botz-architect)", parents=[json_parent])
@@ -505,6 +705,12 @@ def main() -> int:
         return cmd_plan(args)
     elif args.command == "audit":
         return cmd_audit(args)
+    elif args.command == "session":
+        return cmd_session(args)
+    elif args.command == "instances":
+        return cmd_instances(args)
+    elif args.command == "register":
+        return cmd_register(args)
     elif args.command == "persona":
         if args.persona_cmd == "list":
             return cmd_persona_list(args)
