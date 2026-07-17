@@ -150,15 +150,28 @@ So the built tokens are the design the board-facing docs say they replaced. Nota
 
 ---
 
+## Policy variables (woven in — "show where the chips land")
+
+Rather than pre-deciding the open decisions, the sweepable ones are **parameterized as config knobs** (default = current behavior) and measured by a **scenario-sweep harness** (PR #57) that reports Gini / top-holder concentration / D12 per setting. The knob library so far (submodule `PMOVES-ToKenism-Multi`, PRs #53–#59, all TDD-green + independently reviewed):
+
+| Knob | Model | Effect (measured) |
+|---|---|---|
+| `contributionMeasure` (`flat`/`income`/`foodBudget`) | coordinator | flat→Gini 0; income→Gini 0.38 (concentrates) |
+| `maxConcentration` | coordinator | bounds top share; e.g. cap 0.30 → Gini 0.13, floor ↑ |
+| `soulbound` | GroToken | GRO non-transferable when on ($WORK direction) |
+| `vendorLocked` | FoodUSD | spend-limited toward `$CRED`; escrow/refund exempt |
+
+D12 (every contributor non-zero) holds under all settings. The distribution itself is now commitment-first + Dirichlet (Gaussian retired, PR #55).
+
 ## Open decisions (operator)
 
 1. ~~**Canonical roster**~~ ✅ **RESOLVED 2026-07-17 — Path A** (built FoodUSD+GroToken canonical; trinity is the target redesign). Mapping table in "The core resolution" above.
-2. **LoyaltyPoints + RewardsPool** — keep / deprecate / spec? (RewardsPool re-couples reward to stake.)
+2. **LoyaltyPoints + RewardsPool** — keep / deprecate / spec? *(still open — a dedicated increment: needs staking activity in scenarios + GRO-minting plumbing to show effect; RewardsPool re-couples reward to stake, so the sweep will show it raising concentration.)*
 3. ~~**The one wire**~~ ✅ **DONE (PR #55)** — `processWeek` distributes GRO by kept-commitment Dirichlet attribution; Gaussian retired from the sim flow.
-4. **GroToken soulbound** — add SBT/transfer-restriction, or split a soul-bound credit token out?
-5. **Governance replacement** — build equal-weight Ballot + deterministic Tally + committee threshold-signing, or keep CoopGovernor strictly non-binding sim?
-6. **Supply + concentration** — ratify/remove the invented 1,000,000 cap; enforce Fordham <15% in code?
-7. **FoodUSD transferability** — keep free-transfer 1:1 USD or narrow toward spend-limited `$CRED`?
+4. ~~**GroToken soulbound**~~ 🎛️ **PARAMETERIZED (PR #56)** — `soulbound` knob on GroToken (default off = transferable). Toggle to make earned GRO non-transferable ($WORK direction). Left OPEN as a variable.
+5. **Governance replacement** — build equal-weight Ballot + deterministic Tally + committee threshold-signing, or keep CoopGovernor strictly non-binding sim? *(still open — larger build.)*
+6. ~~**Concentration cap**~~ 🎛️ **PARAMETERIZED (PR #58)** — `maxConcentration` knob (water-filling; bounds topShare, lowers Gini, raises the floor, D12 held). Supply-cap (invented 1,000,000) ratify/remove still open.
+7. ~~**FoodUSD transferability**~~ 🎛️ **PARAMETERIZED (PR #59)** — `vendorLocked` + `approvedVendors` knob (default free-transfer). Toggle to narrow toward the spend-limited `$CRED` model; internal escrow/refund exempt.
 8. **Commitment remediation** — define the broken-commitment dispute-cure economy.
 9. **Legal sequencing** — which gate first: NY co-op counsel or securities counsel? No binding vote / member-facing token until both clear.
 10. **Naming** — retire generic U-Credits/G-Tokens + sector variants as scaffolding, or spec them as a portability abstraction?
