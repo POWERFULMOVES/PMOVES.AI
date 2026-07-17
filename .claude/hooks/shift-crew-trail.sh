@@ -72,7 +72,10 @@ TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || python3 -c 'from datetim
 PAYLOAD="{\"event\":\"shift_crew_edit\",\"file\":\"$(basename "$FILE_PATH")\",\"branch\":\"$BRANCH\",\"node\":\"$NODE\",\"ts\":\"$TIMESTAMP\"}"
 
 # Attempt publish via nats CLI (prefer) or nats-py
-NATS_URL="${NATS_URL:-nats://nats:pmoves@localhost:4222}"
+# 127.0.0.1, not localhost: Windows resolves localhost to ::1 first and the
+# ::1 connect stalls ~2s before refusing — which eats nats-py's entire
+# per-attempt connect budget before it ever tries the working IPv4 path.
+NATS_URL="${NATS_URL:-nats://nats:pmoves@127.0.0.1:4222}"
 
 if command -v nats >/dev/null 2>&1; then
     # --timeout=2s bounds the connect/publish so an unreachable NATS can't
@@ -86,12 +89,13 @@ elif $PYTHON_CMD -c "import nats" 2>/dev/null; then
 import asyncio, nats, json, os, sys
 
 async def pub():
-    url = os.environ.get('NATS_URL', 'nats://nats:pmoves@localhost:4222')
+    url = os.environ.get('NATS_URL', 'nats://nats:pmoves@127.0.0.1:4222')
     subject = sys.argv[1]
     payload = sys.argv[2].encode()
     # allow_reconnect=False: connect_timeout is PER ATTEMPT and the default
     # reconnect loop retries for minutes — measured >120s of PostToolUse
-    # latency when 4222 was bound-but-unresponsive (Docker Desktop quirk).
+    # latency when each attempt failed (root cause was the localhost→::1
+    # stall, fixed above, but the bound stays as defense in depth).
     nc = await nats.connect(url, connect_timeout=2, allow_reconnect=False)
     await nc.publish(subject, payload)
     await nc.drain()
