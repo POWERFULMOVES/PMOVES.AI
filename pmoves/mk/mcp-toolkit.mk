@@ -33,6 +33,7 @@ mcp-toolkit-help: ## Show Docker MCP Toolkit + PMOVES MCP bootstrap targets
 	@echo "  mcp-bootstrap             Umbrella: Toolkit + core + config bootstrap"
 	@echo "  mcp-bootstrap-check       Validate imported profile + generated configs + reachability"
 	@echo "  hermes-crush-bootstrap    Update Hermes Agent and Crush CLI MCP configs"
+	@echo "  hermes-bootstrap          Full Hermes fleet bootstrap: profile + MCP + CHIT + Docker"
 	@echo "  opencode-bootstrap        Update all pmoves/configs/claws/opencode-*.json MCP configs"
 	@echo "  openclaw-scope-bootstrap  Update all pmoves/configs/claws/scopes/*.json MCP configs"
 	@echo "  openclaw-scope-check      Validate scope MCP configs against tier expectations"
@@ -161,4 +162,8 @@ crush-bootstrap: ## Full Crush fleet bootstrap: config + MCP + CHIT passphrase f
 	@echo "[CRUSH] Starting fleet bootstrap..."
 	@bash scripts/crush-fleet-bootstrap.sh
 
-.PHONY: crush-bootstrap
+hermes-bootstrap: ## Full Hermes fleet bootstrap: profile + MCP + CHIT + Docker verification
+	@echo "[HERMES] Starting fleet bootstrap..."
+	@bash scripts/hermes-fleet-bootstrap.sh
+
+.PHONY: crush-bootstrap hermes-bootstrap

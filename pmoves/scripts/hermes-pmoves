@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# hermes-pmoves — one-shot PMOVES-aware Hermes Agent launcher
+# Runs hermes-bootstrap (profile + MCP + CHIT + verification) then launches Hermes
+set -euo pipefail
+
+REPO_ROOT=""
+for candidate in \
+  "$(git rev-parse --show-toplevel 2>/dev/null)" \
+  "$HOME/pinokio/api/PMOVES.AI" \
+  "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; do
+  if [ -f "$candidate/pmoves/Makefile" ]; then
+    REPO_ROOT="$candidate"
+    break
+  fi
+done
+
+if [ -z "$REPO_ROOT" ]; then
+  echo "ERROR: Could not find PMOVES.AI repo root" >&2
+  exit 1
+fi
+
+# Default to the elder-melchor profile if no profile is set
+HERMES_PROFILE="${PMOVES_HERMES_PROFILE:-pmoves-hermes-elder}"
+
+echo "◇ hermes-pmoves → bootstrapping from $REPO_ROOT (profile: $HERMES_PROFILE)"
+PMOVES_HERMES_PROFILE="$HERMES_PROFILE" make -C "$REPO_ROOT/pmoves" hermes-bootstrap
+
+echo ""
+echo "◇ Launching Hermes..."
+exec hermes --profile "$HERMES_PROFILE" "$@"
