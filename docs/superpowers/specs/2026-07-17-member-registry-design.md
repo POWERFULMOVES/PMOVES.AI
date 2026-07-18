@@ -1,10 +1,10 @@
 # MemberRegistry — Design Spec (governance replacement, stage 3)
 
 **Date:** 2026-07-17
-**Status:** DRAFT — approved for implementation (stage 3 of the #5 governance-replacement arc)
+**Status:** IMPLEMENTED AND TESTED — merged in ToKenism PR #64 (`d17ea07b`); activation remains counsel- and operations-gated
 **Scope:** the committee-controlled eligibility layer ONLY. Real voter-card crypto, secret-ballot integration, and paper parity are later counsel-gated stages, out of scope here.
 **Where:** submodule `PMOVES-ToKenism-Multi/integrations/contracts/`.
-**Builds on:** stage 1 `EqualWeightGovernorModel` (this stage produces the roll it consumes). Honors `pmoves/docs/pilots/fordham-hill/08-voter-identity-key-custody.md` and `CATACLYSM_CROSSLINKS.md` (#5). DRAFT — counsel-gated before anything binding.
+**Builds on:** stage 1 `EqualWeightGovernorModel` (this stage produces the roll it consumes). Honors `pmoves/docs/pilots/fordham-hill/08-voter-identity-key-custody.md` and `CATACLYSM_CROSSLINKS.md` (#5). The model is implemented; any binding use remains counsel-gated.
 
 ## Problem
 
@@ -15,7 +15,7 @@ This stage adds `MemberRegistryModel`: a committee-controlled roll where **enrol
 ## Decisions (from brainstorming, approved)
 
 1. **Enrollment (and revocation) require k-of-n committee approval** — the anti-chokepoint design, reusing stage 1's M-of-N gate pattern. Not a single registrar.
-2. **Own committee + threshold** config (mirrors the governor's); constructor validates `1 <= committeeThreshold <= committeeSize` (the forge-hole lesson from stage 1's review).
+2. **Own committee + threshold** config (mirrors the governor's); constructor validates integer `committeeSize >= 2` and `2 <= committeeThreshold <= committeeSize` (the forge-hole lesson from stage 1's review).
 3. **Reuse `EligibleMember`** from `equalweight-governor-model.ts` so `roll()` output drops straight into `EqualWeightGovernor.setRoll()` (DRY; loose coupling — the caller wires `registry.roll()` → `governor.setRoll()`, no hard dependency between them at runtime).
 4. **Decoupled from tokens** — membership is residency/committee-issued, never derived from holdings/contribution.
 
@@ -31,7 +31,7 @@ import { EligibleMember } from './equalweight-governor-model';
 
 interface MemberRegistryConfig {
   committeeSize: number;       // n (default 3)
-  committeeThreshold: number;  // k (default 2; 1 <= k <= n; k >= 2 => no single party can enrol/revoke)
+  committeeThreshold: number;  // k (default 2; 2 <= k <= n)
 }
 
 interface MembershipCredential {
@@ -45,7 +45,7 @@ interface MembershipCredential {
 ### API
 
 ```
-setCommittee(memberIds: string[]): void         // the enrollment committee (distinct from the voter roll)
+setCommittee(memberIds: string[]): void         // exactly committeeSize distinct ids; else throws
 enrol(member: EligibleMember, approvers: string[]): MembershipCredential
   - M-of-N gate: approvers deduped, all in committee, count >= committeeThreshold; else throw
   - records the member as 'active'; returns the credential
@@ -57,7 +57,7 @@ roll(): EligibleMember[]                          // active members only → fee
 
 ## The M-of-N gate (anti-chokepoint property)
 
-Both `enrol` and `revoke` require ≥ `committeeThreshold` **distinct** committee approvers. With `committeeThreshold >= 2` (default), **no single party — including the operator — can add, remove, or forge a member.** The gate logic mirrors stage 1's `MockThresholdSigner`: dedupe approvers (a member approving twice counts once), reject any approver not on the committee, reject below-threshold. Constructor validates `1 <= committeeThreshold <= committeeSize` so a `committeeThreshold: 0` cannot bypass the gate.
+Both `enrol` and `revoke` require ≥ `committeeThreshold` **distinct** committee approvers. With `committeeThreshold >= 2`, **no single party — including the operator — can add, remove, or forge a member.** The gate logic mirrors stage 1's `MockThresholdSigner`: dedupe approvers (a member approving twice counts once), reject any approver not on the committee, reject below-threshold. Constructor validation rejects non-integer/undersized configurations, and `setCommittee` requires exactly `committeeSize` distinct IDs so configured *n* equals the installed committee.
 
 ## Testing (TDD, red-first)
 
@@ -68,6 +68,9 @@ Both `enrol` and `revoke` require ≥ `committeeThreshold` **distinct** committe
 5. **revoke of a non-member** — `revoke('0xNOBODY', ['0xC1','0xC2'])` throws.
 6. **roll() feeds the governor** — enrol A + B (with committee approval), `roll()` returns `[{id:'A'},{id:'B'}]` (order-insensitive), and passing it to `new EqualWeightGovernorModel().setRoll(registry.roll())` lets A and B vote (integration proof).
 7. **config validation** — `new MemberRegistryModel({ committeeThreshold: 0 })` throws; `{ committeeThreshold: 4, committeeSize: 3 }` throws.
+8. **integration count** — the Task-3 roll→governor case is counted in the expected suite total.
+9. **committee cardinality** — committees smaller or larger than configured `committeeSize` throw.
+10. **duplicate committee ID** — a committee with repeated member IDs throws even when its array length equals `committeeSize`.
 
 No changes to existing models; `EqualWeightGovernorModel` is imported (for `EligibleMember`) but not modified.
 

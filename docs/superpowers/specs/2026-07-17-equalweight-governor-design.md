@@ -1,10 +1,10 @@
 # EqualWeightGovernor — Design Spec (governance replacement, stage 1)
 
 **Date:** 2026-07-17
-**Status:** DRAFT — approved for implementation (stage 1 of the #5 governance-replacement arc)
+**Status:** IMPLEMENTED AND TESTED — merged in ToKenism PR #64 (`d17ea07b`); activation remains counsel- and operations-gated
 **Scope:** the tractable, sim/bridge first increment ONLY. Stages 2–5 (real threshold crypto, voter-card credentials, secret-ballot integration, paper parity) are later, heavier, counsel-gated lanes and are out of scope here.
 **Where:** submodule `PMOVES-ToKenism-Multi/integrations/contracts/` (alongside the other economic/governance models).
-**Boundaries:** honors `pmoves/docs/pilots/fordham-hill/08-voter-identity-key-custody.md` and `pmoves/docs/CATACLYSM_CROSSLINKS.md` (open decision #5). DRAFT — counsel-gated before anything binding/member-facing.
+**Boundaries:** honors `pmoves/docs/pilots/fordham-hill/08-voter-identity-key-custody.md` and `pmoves/docs/CATACLYSM_CROSSLINKS.md` (open decision #5). Implementation does not authorize binding or member-facing activation; those uses remain counsel-gated.
 
 ## Problem
 
@@ -72,19 +72,21 @@ interface TallySigner {
 ### API / data flow
 
 ```
-setRoll(members: EligibleMember[])          // the eligible membership (decoupled from tokens)
-setCommittee(memberIds: string[])           // the election committee (distinct from the roll)
-createProposal(id, title, closesAtWeek?)     // binary for/against
-castVote(proposalId, voter, support: boolean)
+setRoll(members: EligibleMember[])           // affects future proposals; duplicates throw
+setCommittee(memberIds: string[])            // exactly committeeSize distinct committee ids
+createProposal(id, title, closesAtWeek?)      // snapshots roll; duplicate id/deadline errors throw
+castVote(proposalId, voter, support: boolean, currentWeek?)
   - rejects a voter not on the roll
   - one vote per member (last-write-wins is out of scope; a second vote throws)
-tally(proposalId): TallyResult               // pure read of roll + votes; finalized:false
+  - requires/validates currentWeek when closesAtWeek exists; rejects late/finalized votes
+tally(proposalId): TallyResult                // pure read; returns frozen snapshot after finalize
 finalize(proposalId, approvers: string[]): TallyResult
   - the ONLY place a result becomes official
   - delegates the k-of-n check + attestation to the injected TallySigner
+  - persists an immutable finalized snapshot; later proposal mutations throw
 ```
 
-`castVote` and `tally` are pure reads over the roll and recorded votes. `finalize` is the sole path to an official, attested result.
+`castVote` mutates recorded proposal state; only `tally` is a pure read. `finalize` is the sole path to an official, attested result and freezes the returned tally.
 
 ## Voting basis + quorum semantics
 

@@ -76,14 +76,20 @@ So the built tokens are the design the board-facing docs say they replaced. Nota
 
 ## Governance
 
-**Built:** single-chamber **CoopGovernor** — quadratic vote cost `rawVotes²` charged against **GroVault voting power = √(staked GRO) × lock-multiplier**. Execution gated on flat `proposalThreshold` + `forVotes>againstVotes` + period-ended. One chairperson admin. This is **stake-weighted / plutocratic**.
+**Built:** single-chamber **CoopGovernor** — quadratic vote cost `rawVotes²` charged against **GroVault voting power = √(staked GRO) × lock-multiplier**. Execution gated on flat `proposalThreshold` + `forVotes>againstVotes` + period-ended. One chairperson admin. This is **stake-weighted / plutocratic** and remains non-binding simulation contrast.
 
-**Required (Fordham + refresh direction), NOT built:**
-- **Equal-weight** one-member/one-unit/per-share voting — stake/token weight MUST NEVER translate into vote weight.
-- **Quorum as a percentage of the eligible member roll** — not a flat count, not a percentage of staked voting power.
-- **Committee M-of-N threshold-signing** of the tally (FROST/Ed25519, non-operator committee) replacing single-operator **symmetric HMAC** (operator-forgeable — disqualifying for a contested recall).
+**Implemented in the ToKenism rehearsal model (merged submodule PR #64, `d17ea07b`):** configurable
+equal-weight member/unit/share tally; quorum as a percentage of a proposal-snapshotted eligibility roll;
+duplicate/deadline/finalization guards; exact distinct committee cardinality; Ed25519 multi-signature
+attestation with a minimum 2-of-N threshold; canonical safe-integer preimages; and exact
+approver/signature identity binding. This is executable model/test evidence, **not** a deployed election
+service or legal activation.
+
+**Still required before any Fordham activation:**
 - **Eligibility credential** (`voter-card.v1`), committee-issued, human-witnessed, **decoupled from Archon minting and the token structure**.
 - **Mode A (secret/adversarial)** vs **Mode B (attributable)** separation with a hard **key-unlinkability invariant**; residents authenticate eligibility only and never sign their choice; **paper ballot is a first-class equal path**.
+- An immutable complete ballot log, deterministic committee recomputation, voter inclusion proofs, and a reviewed receipt-freeness mechanism.
+- A deployed service/event contract, non-operator key ceremony, resident/accessibility review, counsel approval, and signed activation evidence. `vote.signed.v1` remains a disabled non-contractual scaffold.
 
 **Documented alternative (unbuilt):** bicameral two-house dual-consent (Token House `$CAT` + Citizen House `$WORK`). ⚠️ The "~500→~750 token" collusion simulation and the Constitution quorum numbers (20/25/60%) are **FABRICATED/unsourced** (Fordham `07` §3.1) and must not be cited as binding.
 
@@ -105,8 +111,9 @@ So the built tokens are the design the board-facing docs say they replaced. Nota
 |---|---|---|---|
 | `$CAT / $WORK / $CRED` trinity | Authoritative (newest DAO docs) | Zero code | **Specced-not-built (high)** |
 | Soul-bound reputation | Required | GRO freely transferable; no SBT | **Specced-not-built / contradiction (high)** |
-| Equal-weight vote + roll quorum | Required | Stake-weighted, flat threshold | **Specced-not-built / contradiction (high)** |
-| Committee threshold-signing | Required | Single-operator HMAC | **Specced-not-built (high)** |
+| Equal-weight vote + roll quorum | Required | Tested ToKenism model in PR #64; no deployed election service | **Model implemented / activation blocked** |
+| Committee threshold-signing | Required | Tested Ed25519 multisig model in PR #64; no key ceremony or service | **Model implemented / activation blocked** |
+| Eligibility, ballot-set proofs, paper parity, receipt-freeness | Required | No complete runtime path | **Specced-not-built (high)** |
 | Bicameral two-house passage | Required | Single-chamber | **Specced-not-built** |
 | ERC-1155 machine-time, OEE multiplier, <15% cap | Required (Fordham) | None | **Specced-not-built** |
 | Sector variants, Fame Coin | Documented | None | **Specced-not-built** |
@@ -124,11 +131,11 @@ So the built tokens are the design the board-facing docs say they replaced. Nota
 ## Contradictions to resolve
 
 1. **Token suite** (resolve first): documented `$CAT/$WORK/$CRED` vs built `FoodUSD+GroToken`. No mapping doc. Pick one canonical roster.
-2. **Governance basis** (disqualifying for pilot): stake-weighted CoopGovernor vs required equal-weight one-member-one-vote.
+2. **Governance basis:** stake-weighted CoopGovernor remains, while the equal-weight replacement exists only as a separate rehearsal model; no binding service is activated.
 3. **Soulbound:** GRO freely transferable vs required non-transferable reputation.
 4. **Distribution:** Gaussian random live vs required Dirichlet-by-attribution.
 5. **Fabricated evidence:** collusion simulation + quorum numbers are unsourced yet appear as MUST boundaries.
-6. **Signing primitive:** one HMAC underwriting both trails and ballots is operator-forgeable — self-contradiction inside the built package.
+6. **Signing primitive:** HMAC is retained for operator-controlled trails only; the Ed25519 committee model replaces it for tally attestation, but the production key ceremony and service are unbuilt.
 7. **Receipt/coercion:** verifiable individual receipt framed as protection vs shown to be a coercion tool.
 8. **Maturity claim:** "L5 production DAO" vs "unaudited Research Track / nothing built."
 9. **Built-vs-built:** `.sol` flat threshold vs TS model's (capital-weighted) quorum floor.
@@ -169,7 +176,7 @@ D12 (every contributor non-zero) holds under all settings. The distribution itse
 2. **LoyaltyPoints + RewardsPool** — keep / deprecate / spec? *(still open — a dedicated increment: needs staking activity in scenarios + GRO-minting plumbing to show effect; RewardsPool re-couples reward to stake, so the sweep will show it raising concentration.)*
 3. ~~**The one wire**~~ ✅ **DONE (PR #55)** — `processWeek` distributes GRO by kept-commitment Dirichlet attribution; Gaussian retired from the sim flow.
 4. ~~**GroToken soulbound**~~ 🎛️ **PARAMETERIZED (PR #56)** — `soulbound` knob on GroToken (default off = transferable). Toggle to make earned GRO non-transferable ($WORK direction). Left OPEN as a variable.
-5. **Governance replacement** — build equal-weight Ballot + deterministic Tally + committee threshold-signing, or keep CoopGovernor strictly non-binding sim? *(still open — larger build.)*
+5. **Governance replacement** — the bounded rehearsal model is implemented: the equal-weight deterministic tally and hardened Ed25519 committee-attestation model merged in ToKenism PR #64 (`d17ea07b`); CoopGovernor stays non-binding contrast. A complete ballot log/inclusion-proof path, paper parity, deployed service, committee ceremony, resident review, and counsel-gated binding activation remain open.
 6. ~~**Concentration cap**~~ 🎛️ **PARAMETERIZED (PR #58)** — `maxConcentration` knob (water-filling; bounds topShare, lowers Gini, raises the floor, D12 held). Supply-cap (invented 1,000,000) ratify/remove still open.
 7. ~~**FoodUSD transferability**~~ 🎛️ **PARAMETERIZED (PR #59)** — `vendorLocked` + `approvedVendors` knob (default free-transfer). Toggle to narrow toward the spend-limited `$CRED` model; internal escrow/refund exempt.
 8. **Commitment remediation** — define the broken-commitment dispute-cure economy.

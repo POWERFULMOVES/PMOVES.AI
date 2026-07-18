@@ -102,23 +102,23 @@ connected to anything that matters.** The plutocratic mechanism is connected. Th
 
 ## 5. Why B leads to A (the important half)
 
-The economic engine (Mode B — consensual, attributable formation) is *prior to* and *more important
-than* the ballot (Mode A). A group that has already **formed by agreed commitment and accrued real,
-attributed contribution** is, by construction, a roster of real participants with demonstrated standing.
-That roster **is** the eligible roll a quorum or union vote needs — "real quorum formed by real voters
-who reside," "real lemonade based on real demand." So building B correctly (this refresh) is what makes
-A legitimate and defensible: the eligibility of Mode A is a *read* of the commitments recorded in
-Mode B — while still honoring the invariant that the two modes' **keys stay unlinkable** and a contested
-secret ballot never runs in Mode B (see `08:§8`).
+The economic engine (Mode B — consensual, attributable formation) comes before the ballot (Mode A)
+as a way to demonstrate activity and standing. Its commitment and attribution records **do not prove
+residency, membership, or legal voting eligibility** and therefore are not the Mode-A eligible roll.
+Mode A requires an independently governed, committee-attested eligibility credential and roll. Mode-B
+records may inform a human eligibility review only through a privacy-preserving bridge that preserves
+the modes' **unlinkable keys**; they must never automatically admit or exclude a voter, and a contested
+secret ballot must never run in Mode B (see `08:§8`).
 
 ## 6. Real vs aspirational (honesty)
 
-Built today: the Dirichlet primitive; the tokenism sim service (:8103); FoodUSD + GroupPurchase escrow;
-Firefly calibration/export modules. **Not wired / aspirational:** Dirichlet→distribution (Gaussian
-today); soul-bound credit (doc-only, no SBT code); `shape.trace/profile.*` subjects (referenced, not in
-the catalog); live Firefly settlement execution; `RewardsPool`/`LoyaltyPoints` contracts (named, not
-built). The refresh is mostly **connecting and constraining what exists**, plus the new commitment
-primitive — not a green-field token launch.
+Built today: the Dirichlet primitive; the tokenism simulator on host `:8103` (`GET /healthz`), which
+publishes `tokenism.simulation.result.v1`; the cataloged `shape.trace.recorded.v1` and
+`shape.profile.updated.v1` contracts; FoodUSD + GroupPurchase escrow; and Firefly calibration/export
+modules. **Not wired / aspirational:** Dirichlet→distribution in every production path; soul-bound
+credit (doc-only, no SBT code); live Firefly settlement execution; and production activation of the
+governance rehearsal. The canonical mappings live in `.claude/context/nats-subjects.md`,
+`.claude/context/services-catalog.md`, and `pmoves/contracts/topics.json`.
 
 ## 7. Open decisions + legal
 

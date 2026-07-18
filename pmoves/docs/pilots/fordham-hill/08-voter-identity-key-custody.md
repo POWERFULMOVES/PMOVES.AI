@@ -41,7 +41,7 @@ decides who can vote, and the forgeable step is enrollment, not signing. The cor
 |-----------|-------------------------|-----------------------------------|
 | The operator / whoever runs the state authority | Add, drop, or alter ballots; manufacture a tally | No single party can sign a valid tally alone → **committee threshold key**, not one operator secret |
 | The operator, at *enrollment* | Bind a key it controls to a resident; deny/duplicate eligibility | Enrollment authority sits with a **non-operator committee**, human-witnessed, on an append-only committee-signed log |
-| A coercer (someone with power over a resident) | Compel a resident to prove how they voted | Receipt proves *that* a vote counted, never *how* → **residents never sign their choice**; verifiability comes from the nonce commitment |
+| A coercer (someone with power over a resident) | Compel a resident to prove how they voted | **Residents never sign their choice**; a nonce commitment can support inclusion checking, but receipt-freeness additionally requires revoting, a time-limited verification window, or an equivalent reviewed mechanism |
 | An outside attacker / a shared or lost device | Steal a credential and vote as someone | Eligibility credential is election-scoped and unlinked to the cast ballot; a lost device is not a lost franchise (paper equal path) |
 
 The auditors this must convince are external and non-trusting: the Attorney General, a bank, and a
@@ -67,7 +67,7 @@ Everything else follows from this one line:
 | Option | Where the private key lives | Strength | Cost / caveat |
 |--------|-----------------------------|----------|---------------|
 | **A. `localStorage` Ed25519** (ClawZ as-is) | Browser JS storage, plaintext | Weak — XSS-exfiltratable, single-device, lost on cache clear | Zero new work; **rejected as primary** |
-| **B. WebAuthn / passkey** (platform authenticator) | Device secure enclave / TPM, **non-exportable** | Strongest — XSS-proof, phishing-resistant, syncs across the resident's own devices | No npm dep needed; verification is over `authData ‖ SHA-256(clientDataJSON)`; default alg P-256 (Ed25519 only on some authenticators); needs enrollment |
+| **B. WebAuthn / passkey** (platform authenticator) | Device secure enclave / TPM, normally **non-exportable** | Strong resistance to key export and phishing; does **not** make the relying-party page or authenticated session XSS-proof; device sync depends on the platform/provider | No npm dep needed; verification is over `authData ‖ SHA-256(clientDataJSON)`; default alg P-256 (Ed25519 only on some authenticators); needs enrollment |
 | **C. Wrapped Ed25519** (`@noble/ed25519` + WebCrypto non-extractable / passphrase-encrypted) | Browser, but encrypted at rest | Medium — resists casual theft, gives raw Ed25519 over our netstring preimage | We own custody + recovery; passphrase UX for elderly residents is real friction |
 | **D. Printed recovery card** (public-key fingerprint + recovery secret / QR) | Paper, resident-held | Complements A/B/C — survives device loss, fits in-person enrollment | Physical issuance + secure printing; not a signing method on its own |
 
@@ -80,8 +80,10 @@ wrong variable. The private key's *storage location* matters far less than three
 1. **Signing your choice defeats the secret ballot.** A voter signature over the choice is a
    transferable, publicly-verifiable proof of *how* someone voted — exactly the coercion receipt the
    `pm-ballot` scheme spends three mitigations removing (strip `voterId`/`choice`, omit `ts`,
-   seal + hash-order the log). A coercer says "unlock your key and sign `yes` in front of me." The
-   nonce commitment is coercion-resistant *because no voter key signs the choice*.
+   seal + hash-order the log). A coercer says "unlock your key and sign `yes` in front of me." Omitting
+   the voter signature removes that direct proof, but a nonce commitment provides individual inclusion
+   evidence rather than receipt-freeness. A reviewed revoting rule, time-limited verification window,
+   or equivalent mechanism is still required before calling the system coercion-resistant.
 2. **Enrollment, not signing, is the integrity surface — and the operator controls it.** A
    client-side key stops the operator forging a *signature*, but does nothing to stop whoever writes
    the eligibility registry from binding a key *it* generated to a resident's name (then it can forge
@@ -97,7 +99,8 @@ wrong variable. The private key's *storage location* matters far less than three
 
 **Residents authenticate *eligibility*; they do not sign their *choice*. The ballot content /
 tally is signed by an *election-committee threshold key* (M-of-N, asymmetric) so no single party —
-operator included — can forge, without manufacturing a coercion receipt. A paper ballot is a
+operator included — can forge. This does not itself establish receipt-freeness; that remains a separate
+protocol and procedural gate. A paper ballot is a
 first-class equal path, not a fallback. `voter-card.v1` is an *eligibility credential* (public),
 committee-issued and human-witnessed, deliberately **decoupled from Archon minting and from the token
 structure**.**
@@ -110,9 +113,10 @@ Why each piece:
    not touch the plutocratic on-chain governor (`CoopGovernor.sol:72`, stake-weighted — unusable for
    one-member-one-vote per `README:§Open decisions`).
 2. **Eligibility is separated from ballot content** — a credential proves a resident *may* vote at
-   booth-entry; it is never linked to the cast ballot. **Individual verifiability is already provided
-   by the nonce commitment — no voter signature is required for a resident to confirm their vote
-   counted.**
+   booth-entry; it is never linked to the cast ballot. A nonce commitment supports individual
+   verifiability only when the voter also receives a trustworthy inclusion proof against a published,
+   append-only ballot-set commitment. Neither the inclusion-proof service nor a trusted bulletin-board
+   procedure is implemented today, and no voter signature is added as a substitute.
 3. **Enrollment is committee-controlled, human-witnessed, non-operator** — a neutral scrutineer body
    the contesting side trusts writes the registry, with an append-only, committee-signed eligibility
    log. Client-side keygen alone cannot prove the enroller is the named resident; a witness must.
@@ -128,6 +132,11 @@ Why each piece:
    **Mode B**, and there it is **raw Ed25519 over the netstring preimage**, never WebAuthn (dead on the
    co-op LAN with no secure context; drags device-linkable credential-ID + signature-counter into the
    receipt).
+7. **The committee verifies the ballot set before signing** — committee members must recompute the
+   tally deterministically from the complete immutable ballot log, reconcile paper ballots, and verify
+   the published ballot-set commitment/inclusion evidence. They must reject an operator-supplied tally
+   or ballot set that cannot be independently reproduced; threshold signatures authenticate an audited
+   result, not an unchecked operator assertion.
 
 What survives from rev 1: the load-bearing principle (§3 — no private key server-side) still holds; a
 `voter-card.v1` still holds *public material only* and stays separate from `signing-card.v1`; and the
@@ -144,9 +153,10 @@ anchor for both enrollment and tally signing.
  authenticates eligibility ──▶ witnesses enrollment, writes registry ──────▶ voter-card.v1 registry (Supabase)
    (credential proves MAY                                                     append-only eligibility log
     vote; not linked to choice)                                                 (committee-signed)
- casts vote → nonce-commitment  threshold-signs the tally / ballot log ─────▶ signed-receipt log (JuiceFS/S3)
-   receipt (already verifiable,  (no single party can forge; verifiers        vote.signed.v1 (NATS, scaffolded)
-   no signature needed)          check the committee public key)              Tally service (spec, unbuilt — 04)
+ casts vote → nonce-commitment  recomputes full ballot set, then signs ─────▶ append-only audit log (JuiceFS/S3)
+   (inclusion proof unbuilt;      (no single party can forge; verifiers        vote.signed.v1 (disabled,
+   no voter signature)           check the committee public key)              non-contractual scaffold)
+                                                                                Tally model exists; service unbuilt
  PAPER BALLOT (equal path) ─────────────────────────────────────────────────▶ counted into the same tally
 ```
 
@@ -155,6 +165,10 @@ Two lines never get crossed: (a) a voter's *choice* is never signed by a voter k
 store, mid-cutover per `JUICEFS_OBJECT_STORE_MIGRATION.md`) holds the **audit log**; Supabase holds the
 **public eligibility registry** — neither holds a private key, and the **tally-signing key is the
 committee's, split M-of-N**, never a single operator secret.
+
+`vote.signed.v1` is cataloged only as a Fordham rehearsal label and is gated `enabled:false`. It has no
+event schema in `pmoves/contracts`, no active publisher, and no service/health-check owner; it is not a
+contractual NATS interface until those artifacts and the activation review land together.
 
 ## 7. Do NOT mint the voter card through Archon (reversed from rev 1)
 
@@ -193,14 +207,14 @@ central danger.
 | Does a member sign their choice? | **No** — a signature would be a coercion receipt | **Yes** — members *want* attributable proof they participated |
 | Attribution / token linkage | **Decoupled** — no link to contribution/wealth identity | **On** — this is the point: shape attribution → credit → wealth |
 | Signing authority for the outcome | Committee **threshold** key (no single party forges) | The group co-signs its own formation |
-| Secrecy | Secret ballot, coercion-resistant | Public / attributable by design |
+| Secrecy | Secret-ballot target; receipt-freeness mechanism still counsel/protocol-gated | Public / attributable by design |
 
 **Mode B is grounded in primitives that already exist:** *shape attribution* credits contributions via
 **Dirichlet-weighted CGP packets** (`.claude/context/geometry-nats-subjects.md`), fed by
-`shape.trace.recorded.v1` → `shape.profile.updated.v1`, with SBT (soul-bound token) minting for the
-credit. So "sign to form the group, run the stand, get credit even for a one-off pop-up" maps directly
-onto: co-sign formation → each member's contribution is shape-attributed (Dirichlet CGP) → exports to
-`pmoves-wealth` (Firefly). This is the desirable coupling — it is the product.
+`shape.trace.recorded.v1` → `shape.profile.updated.v1`. Those subjects and the simulator are cataloged;
+SBT (soul-bound token) minting and live Firefly settlement remain unbuilt/activation-gated. Thus the
+current executable claim is attribution simulation and export, not resident credit issuance or settled
+wealth. That Mode-B coupling remains a product direction, not evidence of Mode-A legal eligibility.
 
 **The invariant (this is the load-bearing rule):**
 
@@ -227,9 +241,11 @@ corner.
 3. **Only then**, and as a v0.3 lane: define the **committee threshold-signing** scheme for the tally,
    the **eligibility credential** (public, election-scoped, committee-issued, human-witnessed — *not*
    Archon-minted), the **paper-parity** merge, and the recovery/enrollment operations.
-4. The A2UI `pm-ballot` receipt (`#2153`) already gives residents individual verifiability via the
-   nonce commitment — **no voter signature is added to a secret ballot.** A raw-Ed25519 voter signature
-   is considered *only* if an explicitly attributable (non-secret) voting mode is ever specced.
+4. The A2UI `pm-ballot` receipt (`#2153`) is a gated rehearsal. Its nonce commitment can support
+   individual verifiability only after a trustworthy append-only ballot-set commitment and inclusion
+   proof are implemented and reviewed; it does not by itself provide receipt-freeness. **No voter
+   signature is added to a secret ballot.** A raw-Ed25519 voter signature is considered only if an
+   explicitly attributable (non-secret) voting mode is ever specced.
 
 ## 10. Open operator decisions (new)
 

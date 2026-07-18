@@ -12,7 +12,8 @@
 
 - Spec: `docs/superpowers/specs/2026-07-17-member-registry-design.md`.
 - All new code in `PMOVES-ToKenism-Multi/integrations/contracts/`; do NOT modify `equalweight-governor-model.ts` (import from it only) or any other existing file.
-- Config defaults: `committeeSize 3`, `committeeThreshold 2`. Constructor MUST validate `1 <= committeeThreshold <= committeeSize` (throw otherwise).
+- Config defaults: `committeeSize 3`, `committeeThreshold 2`. Constructor MUST validate integer `committeeSize >= 2` and `2 <= committeeThreshold <= committeeSize` (throw otherwise).
+- `setCommittee` MUST install exactly `committeeSize` distinct IDs; smaller, larger, or duplicate-ID committees throw.
 - M-of-N gate: dedupe approvers; every approver must be on the committee; `distinct approvers >= committeeThreshold`; else throw.
 - `roll()` returns ONLY active members. `isEligible(id)` is true iff an active membership exists.
 - Import `EligibleMember` from `./equalweight-governor-model`; do not redefine it.
@@ -113,8 +114,11 @@ export class MemberRegistryModel {
 
   constructor(config: Partial<MemberRegistryConfig> = {}) {
     this.config = { committeeSize: 3, committeeThreshold: 2, ...config };
-    if (this.config.committeeThreshold < 1) {
-      throw new Error('committeeThreshold must be >= 1');
+    if (!Number.isSafeInteger(this.config.committeeSize) || this.config.committeeSize < 2) {
+      throw new Error('committeeSize must be an integer >= 2');
+    }
+    if (!Number.isSafeInteger(this.config.committeeThreshold) || this.config.committeeThreshold < 2) {
+      throw new Error('committeeThreshold must be an integer >= 2');
     }
     if (this.config.committeeThreshold > this.config.committeeSize) {
       throw new Error('committeeThreshold must be <= committeeSize');
@@ -122,6 +126,12 @@ export class MemberRegistryModel {
   }
 
   setCommittee(ids: string[]): void {
+    if (ids.length !== this.config.committeeSize) {
+      throw new Error(`committee must contain exactly ${this.config.committeeSize} members`);
+    }
+    if (new Set(ids).size !== ids.length) {
+      throw new Error('committee contains duplicate member ids');
+    }
     this.committee = new Set(ids);
   }
 
@@ -236,7 +246,7 @@ Expected: FAIL — `r.revoke is not a function` / `r.roll is not a function`.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd PMOVES-ToKenism-Multi/integrations && npx jest contracts/__tests__/member-registry-model.test.ts`
-Expected: PASS (7 tests).
+Expected: PASS (10 tests: the original eight plan cases plus smaller/larger and duplicate committee-cardinality regressions).
 
 - [ ] **Step 5: Commit**
 
@@ -317,7 +327,7 @@ Then: independent code-review, fold fixes back, admin-merge.
 
 ## Self-Review
 
-**Spec coverage:** enrol M-of-N (Task 1) ✓; revoke M-of-N (Task 2) ✓; isEligible (Task 1) ✓; roll() active-only (Task 2) ✓; config validation (Task 1) ✓; duplicate/non-committee approver (Task 1) ✓; roll→governor integration (Task 3) ✓; decoupled from tokens (no token import anywhere — Global Constraints) ✓; all 7 spec tests mapped (T1: enrol+dup+non-committee+config, T2: revoke+non-member+roll, T3: integration) ✓; no existing model modified ✓.
+**Spec coverage:** enrol M-of-N (Task 1) ✓; revoke M-of-N (Task 2) ✓; isEligible (Task 1) ✓; roll() active-only (Task 2) ✓; config validation (Task 1) ✓; exact distinct committee cardinality (Task 1) ✓; duplicate/non-committee approver (Task 1) ✓; roll→governor integration (Task 3) ✓; decoupled from tokens (no token import anywhere — Global Constraints) ✓; all 10 runtime tests mapped, including the Task-3 integration case and the two cardinality regressions added during review ✓; no existing model modified ✓.
 
 **Placeholder scan:** none — every code step is complete; every run step has command + expected result.
 

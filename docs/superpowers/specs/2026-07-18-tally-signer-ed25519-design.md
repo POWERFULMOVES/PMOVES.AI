@@ -1,10 +1,10 @@
 # Ed25519 Multisig TallySigner — Design Spec (governance replacement, stage 2)
 
 **Date:** 2026-07-18
-**Status:** DRAFT — approved for implementation (stage 2 of the #5 governance-replacement arc)
+**Status:** IMPLEMENTED AND TESTED — merged in ToKenism PR #64 (`d17ea07b`); activation remains counsel- and operations-gated
 **Scope:** the real committee tally-signature ONLY — a third-party-verifiable Ed25519 k-of-n multisignature replacing the stubbed `MockThresholdSigner`, behind the same `TallySigner` interface. Key custody, CGP/bus emission, secret-ballot integration, and paper parity are later stages, out of scope here.
 **Where:** submodule `PMOVES-ToKenism-Multi/integrations/contracts/`.
-**Builds on:** stage 1 `EqualWeightGovernorModel` (it calls `this.signer.sign(...)` through `TallySigner`) and stage 3 `MemberRegistryModel` (loose-coupled; see below). Honors `pmoves/docs/pilots/fordham-hill/08-voter-identity-key-custody.md` (§5b: "an election committee threshold-signs the tally … no single party incl. operator can forge — replaces single-operator HMAC") and `CATACLYSM_CROSSLINKS.md` (#5). DRAFT — counsel-gated before anything binding.
+**Builds on:** stage 1 `EqualWeightGovernorModel` (it calls `this.signer.sign(...)` through `TallySigner`) and stage 3 `MemberRegistryModel` (loose-coupled; see below). Honors `pmoves/docs/pilots/fordham-hill/08-voter-identity-key-custody.md` (§5b: "an election committee threshold-signs the tally … no single party incl. operator can forge — replaces single-operator HMAC") and `CATACLYSM_CROSSLINKS.md` (#5). The model is implemented; any binding use remains counsel-gated.
 
 ## Problem
 
@@ -54,15 +54,21 @@ export function tallyPreimage(tally: TallyResult): Buffer;
 // Encoding: for each field in fixed order, append `<byteLength>:<utf8 bytes>,`
 // Order: DOMAIN("pmoves.tally.v1"), proposalId, votesFor, votesAgainst,
 //        eligibleCount, voterCount, quorumMet("1"/"0"), passed("1"/"0")
+// Before serialization, votesFor, votesAgainst, eligibleCount, and voterCount
+// MUST each be non-negative safe integers and voterCount <= eligibleCount.
+// Fractional, NaN, infinite, negative, or unsafe values throw. Weighted voting
+// must use a documented scaled-integer representation before signing.
 // Numbers -> decimal string; booleans -> "1"/"0".
 ```
 
 ### The M-of-N gate (extracted, shared)
 
 ```ts
-// Throws on: a non-committee approver, or fewer than `threshold` DISTINCT
-// approvers. Returns the deduplicated approver list. This is the anti-forgery
-// gate — one definition, used by the real signer and MockThresholdSigner.
+// Throws unless threshold is a safe integer >= 2 and the committee contains
+// at least threshold distinct IDs; also throws on duplicate committee IDs, a
+// non-committee approver, or fewer than `threshold` DISTINCT approvers. Returns
+// the deduplicated approver list. This is the anti-forgery gate — one definition,
+// used by the real signer and MockThresholdSigner.
 export function assertCommitteeThreshold(
   approvers: string[],
   committee: string[],
@@ -70,7 +76,7 @@ export function assertCommitteeThreshold(
 ): string[];
 ```
 
-`equalweight-governor-model.ts`'s `MockThresholdSigner.sign` is refactored to call `assertCommitteeThreshold` instead of its inline checks (behavior identical; ~3 lines).
+`equalweight-governor-model.ts`'s `MockThresholdSigner.sign` is refactored to call `assertCommitteeThreshold` instead of its inline checks, so both signers inherit the minimum 2-of-N, distinct-committee, membership, and deduplicated-approver contract.
 
 ### Keyring + sim helper
 
@@ -125,11 +131,13 @@ export function verifyTallyAttestation(
   publicKeyring: Record<string, string>, // committeeMemberId -> publicKey (hex)
   threshold: number
 ): VerifyResult;
-// Steps: recompute tallyPreimage(tally); for each (id -> sig) in
-// attestation.signatures: require id in publicKeyring AND crypto.verify passes;
-// count DISTINCT verified committee signers; valid iff count >= threshold and
-// every listed signature verified. Any unknown id, bad sig, or short count =>
-// valid:false with a reason.
+// Steps: require attestation.algo === 'ed25519-multisig'; require threshold >= 2;
+// validate and recompute tallyPreimage(tally); require distinct approvers whose
+// set exactly equals the signature-map IDs; for each (id -> sig), require id in
+// publicKeyring AND crypto.verify passes; count DISTINCT public-key material;
+// valid iff that count >= threshold and every listed signature verified. Any
+// malformed tally, metadata mismatch, unknown id, duplicate key, bad sig, or
+// short count => valid:false with a reason.
 ```
 
 ### Attestation shape — minimal widening
@@ -159,6 +167,12 @@ Test file: `integrations/contracts/__tests__/tally-signer-ed25519.test.ts` (Jest
 8. **Preimage determinism / float-independence** — `tallyPreimage` is bytewise stable across calls; two `TallyResult`s with identical integers/booleans but different `turnout` floats produce identical preimages.
 9. **Gate parity** — after the refactor, `MockThresholdSigner` still throws on below-threshold / non-committee / duplicate (guards the extracted helper didn't change stage-1 behavior).
 10. **Integration** — `new EqualWeightGovernorModel({}, new Ed25519MultisigSigner(keyring))`, cast votes, `finalize(proposalId, approvers)` → returned `attestation` passes `verifyTallyAttestation` with the matching public keyring.
+11. **Canonical numeric rejection** — signing rejects fractional, `NaN`, infinite, negative, and unsafe count fields; verification returns `valid:false` for the same malformed tallies.
+12. **Minimum threshold** — both real and mock signers reject threshold `0` or `1`; verification also rejects thresholds below two.
+13. **Algorithm binding** — changing `attestation.algo` causes verification to fail even when the signatures are otherwise valid.
+14. **Signer-metadata binding** — duplicate, missing, added, or substituted `attestation.approvers` fail unless the distinct approver set exactly equals the signature-map IDs.
+
+The implemented focused suite expands these cases to 34 tests, including malformed encodings, duplicate public-key material, defensive failure reasons, and ballot-reference binding.
 
 ## Out of scope (later arc stages / follow-ons)
 
@@ -172,6 +186,6 @@ Test file: `integrations/contracts/__tests__/tally-signer-ed25519.test.ts` (Jest
 ## Success criteria
 
 - `tally-signer-ed25519.ts` compiles; all TDD tests pass; full submodule suite stays green.
-- `Ed25519MultisigSigner.sign` provably rejects a single-party / below-threshold / duplicate / non-committee action (tests 2–4).
-- `verifyTallyAttestation` provably rejects tampering, outsider forgery, and wrong-tally presentation (tests 5–7) using **public keys only** — the third-party informing surface.
+- `Ed25519MultisigSigner.sign` rejects a single-party / below-threshold / duplicate / non-committee action and malformed numeric tally (tests 2–4, 11–12).
+- `verifyTallyAttestation` rejects tampering, outsider forgery, wrong-tally presentation, malformed numeric tally, algorithm relabeling, and approver/signature metadata mismatch (tests 5–7, 11–14) using **public keys only** — the third-party informing surface.
 - The real signer drops into `EqualWeightGovernorModel` unchanged at the call site (test 10); the only stage-1 edits are the optional `signatures` field and the gate-helper refactor, with behavior preserved (test 9).

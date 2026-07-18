@@ -8,6 +8,12 @@
 
 **Tech Stack:** TypeScript, Jest (ts-jest). Submodule `PMOVES-ToKenism-Multi`, tests run from `integrations/`.
 
+> **Implementation reconciliation (2026-07-18):** The authoritative runtime is the ToKenism
+> implementation merged in submodule PR #64 (`d17ea07b`). Review hardening added bounded configuration, exact
+> distinct committees, proposal-scoped roll snapshots, duplicate/deadline guards, immutable finalized
+> tallies, and Ed25519 attestation validation. The snippets below are updated for those lifecycle
+> invariants, including a post-close gate for secret tally ingestion; the focused governor suite now contains 43 tests.
+
 ## Global Constraints
 
 - Spec: `docs/superpowers/specs/2026-07-17-equalweight-governor-design.md`.
@@ -16,7 +22,9 @@
 - Config defaults: `votingBasis 'member'`, `quorumPercentage 0.5`, `passThreshold 0.5`, `committeeSize 3`, `committeeThreshold 2`.
 - Voting weight: `member`→1, `unit`→`member.units ?? 1`, `share`→`member.shares ?? 1`.
 - Quorum is roll-percentage: `voterCount / eligibleCount >= quorumPercentage` — never stake-weighted.
-- `committeeThreshold >= 2` by default so no single party can finalize.
+- `quorumPercentage` and `passThreshold` are finite values in `[0,1]`; `committeeSize` is an integer `>= 2`; and `committeeThreshold` is an integer in `[2, committeeSize]`.
+- A proposal snapshots the eligible roll at creation; later `setRoll` calls affect future proposals only.
+- Proposal IDs are unique, deadlines are enforced when configured, and finalized tallies are persisted and immutable.
 - Set git identity in the submodule before committing: `git config user.name/user.email` mirrored from the parent repo (the submodule has no identity configured).
 
 ## Setup (do once, before Task 1)
@@ -42,7 +50,7 @@ git config user.name "$(git -C .. config user.name)"; git config user.email "$(g
 - Test: `PMOVES-ToKenism-Multi/integrations/contracts/__tests__/equalweight-governor-model.test.ts`
 
 **Interfaces:**
-- Produces: `EqualWeightGovernorModel` with `setRoll(members: EligibleMember[]): void`, `createProposal(id: string, title: string, closesAtWeek?: number): void`, `castVote(proposalId: string, voter: string, support: boolean): void`, `tally(proposalId: string): TallyResult`. Types `VotingBasis`, `EligibleMember`, `EqualWeightGovernorConfig`, `TallyResult` (fields per spec; `finalized:false` here).
+- Produces: `EqualWeightGovernorModel` with `setRoll(members: EligibleMember[]): void`, `createProposal(id: string, title: string, closesAtWeek?: number): void`, `castVote(proposalId: string, voter: string, support: boolean, currentWeek?: number): void`, `tally(proposalId: string): TallyResult`. Types `VotingBasis`, `EligibleMember`, `EqualWeightGovernorConfig`, `TallyResult`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -111,7 +119,9 @@ interface Proposal {
   id: string;
   title: string;
   closesAtWeek?: number;
+  roll: Map<string, EligibleMember>;
   votes: Map<string, boolean>; // voter -> support
+  finalizedTally?: TallyResult;
 }
 
 export class EqualWeightGovernorModel {
@@ -128,14 +138,34 @@ export class EqualWeightGovernorModel {
       committeeThreshold: 2,
       ...config,
     };
+    if (!Number.isFinite(this.config.quorumPercentage) || this.config.quorumPercentage < 0 || this.config.quorumPercentage > 1) {
+      throw new Error('quorumPercentage must be between 0 and 1');
+    }
+    if (!Number.isFinite(this.config.passThreshold) || this.config.passThreshold < 0 || this.config.passThreshold > 1) {
+      throw new Error('passThreshold must be between 0 and 1');
+    }
+    if (!Number.isSafeInteger(this.config.committeeSize) || this.config.committeeSize < 2) {
+      throw new Error('committeeSize must be an integer >= 2');
+    }
+    if (!Number.isSafeInteger(this.config.committeeThreshold) || this.config.committeeThreshold < 2 || this.config.committeeThreshold > this.config.committeeSize) {
+      throw new Error('committeeThreshold must be an integer between 2 and committeeSize');
+    }
   }
 
   setRoll(members: EligibleMember[]): void {
-    this.roll = new Map(members.map((m) => [m.id, m]));
+    if (new Set(members.map((m) => m.id)).size !== members.length) {
+      throw new Error('eligible roll contains duplicate member ids');
+    }
+    this.roll = new Map(members.map((m) => [m.id, { ...m }]));
   }
 
   createProposal(id: string, title: string, closesAtWeek?: number): void {
-    this.proposals.set(id, { id, title, closesAtWeek, votes: new Map() });
+    if (this.proposals.has(id)) throw new Error(`Proposal ${id} already exists`);
+    if (closesAtWeek !== undefined && (!Number.isSafeInteger(closesAtWeek) || closesAtWeek < 0)) {
+      throw new Error('closesAtWeek must be a non-negative safe integer');
+    }
+    const roll = new Map(Array.from(this.roll, ([memberId, member]) => [memberId, { ...member }]));
+    this.proposals.set(id, { id, title, closesAtWeek, roll, votes: new Map() });
   }
 
   private weightOf(member: EligibleMember): number {
@@ -150,9 +180,18 @@ export class EqualWeightGovernorModel {
     }
   }
 
-  castVote(proposalId: string, voter: string, support: boolean): void {
+  castVote(proposalId: string, voter: string, support: boolean, currentWeek?: number): void {
     const proposal = this.proposals.get(proposalId);
     if (!proposal) throw new Error(`Proposal ${proposalId} not found`);
+    if (proposal.finalizedTally) throw new Error(`Proposal ${proposalId} is finalized`);
+    if (proposal.closesAtWeek !== undefined) {
+      if (currentWeek === undefined || !Number.isSafeInteger(currentWeek) || currentWeek < 0) {
+        throw new Error(`A non-negative currentWeek is required for proposal ${proposalId}`);
+      }
+      if (currentWeek > proposal.closesAtWeek) throw new Error(`Proposal ${proposalId} is closed`);
+    }
+    if (!proposal.roll.has(voter)) throw new Error(`${voter} is not on the eligible roll`);
+    if (proposal.votes.has(voter)) throw new Error(`${voter} has already voted on ${proposalId}`);
     proposal.votes.set(voter, support);
   }
 
@@ -163,14 +202,14 @@ export class EqualWeightGovernorModel {
     let votesFor = 0;
     let votesAgainst = 0;
     for (const [voter, support] of proposal.votes) {
-      const member = this.roll.get(voter);
+      const member = proposal.roll.get(voter);
       if (!member) continue;
       const w = this.weightOf(member);
       if (support) votesFor += w;
       else votesAgainst += w;
     }
 
-    const eligibleCount = this.roll.size;
+    const eligibleCount = proposal.roll.size;
     const voterCount = proposal.votes.size;
     const turnout = eligibleCount > 0 ? voterCount / eligibleCount : 0;
 
@@ -241,10 +280,17 @@ Expected: FAIL — the two new tests do not throw.
 - [ ] **Step 3: Write minimal implementation** (replace `castVote` body)
 
 ```ts
-  castVote(proposalId: string, voter: string, support: boolean): void {
+  castVote(proposalId: string, voter: string, support: boolean, currentWeek?: number): void {
     const proposal = this.proposals.get(proposalId);
     if (!proposal) throw new Error(`Proposal ${proposalId} not found`);
-    if (!this.roll.has(voter)) {
+    if (proposal.finalizedTally) throw new Error(`Proposal ${proposalId} is finalized`);
+    if (proposal.closesAtWeek !== undefined) {
+      if (currentWeek === undefined || !Number.isSafeInteger(currentWeek) || currentWeek < 0) {
+        throw new Error(`A non-negative currentWeek is required for proposal ${proposalId}`);
+      }
+      if (currentWeek > proposal.closesAtWeek) throw new Error(`Proposal ${proposalId} is closed`);
+    }
+    if (!proposal.roll.has(voter)) {
       throw new Error(`${voter} is not on the eligible roll`);
     }
     if (proposal.votes.has(voter)) {
@@ -372,7 +418,7 @@ Expected: FAIL — `quorumMet`/`passed` are still hard-coded `false` from Task 1
 - [ ] **Step 3: Write minimal implementation** (replace the `return` block in `tally`)
 
 ```ts
-    const eligibleCount = this.roll.size;
+    const eligibleCount = proposal.roll.size;
     const voterCount = proposal.votes.size;
     const turnout = eligibleCount > 0 ? voterCount / eligibleCount : 0;
     const quorumMet = turnout >= this.config.quorumPercentage;
@@ -416,7 +462,7 @@ git commit -m "feat(gov): roll-percentage quorum + majority pass logic"
 
 **Interfaces:**
 - Consumes: `tally` (Task 1/4), `EqualWeightGovernorConfig.committeeThreshold`.
-- Produces: `setCommittee(memberIds: string[]): void`; `finalize(proposalId: string, approvers: string[]): TallyResult` (returns `{...tally, finalized:true, attestation}`); `TallySigner` interface `sign(tally, approvers, committee, threshold): TallyAttestation`; `MockThresholdSigner` (default injected); `TallyAttestation { algo, approvers, signature }`.
+- Produces: `setCommittee(memberIds: string[]): void`; `finalize(proposalId: string, approvers: string[]): TallyResult` (persists and returns a defensive copy of the immutable finalized result); `TallySigner` interface `sign(tally, approvers, committee, threshold): TallyAttestation`; `MockThresholdSigner` (default injected); `TallyAttestation { algo, approvers, signature }`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -552,11 +598,34 @@ Add a committee field + inject the signer in the class (constructor gains a seco
     this.signer = signer;
   }
 
+  private cloneTally(t: TallyResult): TallyResult {
+    return {
+      ...t,
+      ...(t.ballotRef ? { ballotRef: { ...t.ballotRef } } : {}),
+      ...(t.attestation ? {
+        attestation: {
+          ...t.attestation,
+          approvers: [...t.attestation.approvers],
+          ...(t.attestation.signatures ? { signatures: { ...t.attestation.signatures } } : {}),
+        },
+      } : {}),
+    };
+  }
+
   setCommittee(memberIds: string[]): void {
+    if (memberIds.length !== this.config.committeeSize) {
+      throw new Error(`committee must contain exactly ${this.config.committeeSize} members`);
+    }
+    if (new Set(memberIds).size !== memberIds.length) {
+      throw new Error('committee contains duplicate member ids');
+    }
     this.committee = new Set(memberIds);
   }
 
   finalize(proposalId: string, approvers: string[]): TallyResult {
+    const proposal = this.proposals.get(proposalId);
+    if (!proposal) throw new Error(`Proposal ${proposalId} not found`);
+    if (proposal.finalizedTally) return this.cloneTally(proposal.finalizedTally);
     const result = this.tally(proposalId);
     const attestation = this.signer.sign(
       result,
@@ -564,14 +633,20 @@ Add a committee field + inject the signer in the class (constructor gains a seco
       Array.from(this.committee),
       this.config.committeeThreshold
     );
-    return { ...result, finalized: true, attestation };
+    proposal.finalizedTally = this.cloneTally({ ...result, finalized: true, attestation });
+    return this.cloneTally(proposal.finalizedTally);
   }
 ```
+
+`cloneTally` defensively copies `ballotRef`, `attestation.approvers`, and
+`attestation.signatures`; `tally()` returns that stored snapshot after finalization, while
+`castVote()` and secret-tally ingestion reject later proposal mutations. A later `setRoll()` remains
+valid for future proposals because each existing proposal owns an immutable roll snapshot.
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd PMOVES-ToKenism-Multi/integrations && npx jest contracts/__tests__/equalweight-governor-model.test.ts`
-Expected: PASS (10 tests).
+Expected: PASS (43 focused governor tests after review hardening).
 
 - [ ] **Step 5: Run the full submodule suite (no regression)**
 
@@ -590,19 +665,23 @@ git commit -m "feat(gov): k-of-n committee finalize gate + TallySigner (no singl
 
 ## After the plan (open the PR)
 
+Start from the parent repository's required `.github/pull_request_template.md`, then populate it with the linked
+parent issue/PR, affected ToKenism contracts, actual focused/full-suite/typecheck/lint evidence,
+deployment impact, and rollback instructions. Do not use the former abbreviated inline body.
+
 ```bash
 cd PMOVES-ToKenism-Multi
 git push -u origin feat/equalweight-governor
 gh pr create --base PMOVES.AI-Edition-Hardened --head feat/equalweight-governor \
   --title "feat(gov): EqualWeightGovernor — equal-weight tally + roll-% quorum + M-of-N finalize" \
-  --body "Stage 1 of the #5 governance replacement (spec: docs/superpowers/specs/2026-07-17-equalweight-governor-design.md). Drop-in equal-weight (member/unit/share) governor with roll-% quorum and a modeled k-of-n committee finalize gate (crypto stubbed behind TallySigner). CoopGovernor left intact as the sweep contrast. Independent review + TDD-green expected."
+  --body-file /path/to/completed-pull-request-template.md
 ```
 
 Then: independent code-review (like #53–#59), fold fixes back, admin-merge.
 
 ## Self-Review
 
-**Spec coverage:** Components (Task 1/5) ✓; API/data flow (Tasks 1,2,4,5) ✓; voting basis member/unit/share (Task 1 `weightOf` + Task 3 contrast) ✓; roll-% quorum (Task 4) ✓; passed logic (Task 4) ✓; M-of-N gate + TallySigner + MockThresholdSigner (Task 5) ✓; all 6 spec tests mapped (Task1 tally, Task2 non-roll+double, Task3 basis contrast, Task4 quorum, Task5 M-of-N + non-committee) ✓; CoopGovernor untouched (Global Constraints) ✓. `unit` basis is implemented (Task 1) though only `member`/`share` are directly asserted — acceptable (the switch covers it; a unit test can be added later if desired).
+**Spec coverage:** Components (Task 1/5) ✓; API/data flow (Tasks 1,2,4,5) ✓; voting basis member/unit/share ✓; roll-% quorum ✓; bounded configuration and exact committee ✓; proposal roll snapshot, duplicate ID, deadline, secret-tally close window, and immutable finalization lifecycle ✓; M-of-N gate + TallySigner + MockThresholdSigner ✓; 43 focused governor tests pass after review hardening; CoopGovernor remains untouched as the non-binding contrast ✓.
 
 **Placeholder scan:** none — every code step has complete code; every run step has an exact command + expected result.
 
