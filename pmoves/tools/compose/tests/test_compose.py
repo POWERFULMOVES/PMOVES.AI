@@ -227,7 +227,7 @@ def test_fordham_hill_fixture_composes_clean():
     for name, expected_count in expected_components.items():
         actual = component_types.count(name)
         assert actual == expected_count, f"{name}: expected {expected_count}, got {actual}"
-    # All 7 v0.1 component types must be represented
+    # All v0.1 component types must be represented (7 visual + 1 haptic)
     assert set(component_types) == set(expected_components.keys()), \
         f"missing or extra component types: {set(component_types) ^ set(expected_components.keys())}"
     # pageMeta + pageHeader
