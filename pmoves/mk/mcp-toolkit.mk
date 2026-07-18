@@ -161,4 +161,11 @@ crush-bootstrap: ## Full Crush fleet bootstrap: config + MCP + CHIT passphrase f
 	@echo "[CRUSH] Starting fleet bootstrap..."
 	@bash scripts/crush-fleet-bootstrap.sh
 
-.PHONY: crush-bootstrap
+install-tools: ## Install pmoves-mini + crush-pmoves wrappers to ~/.local/bin
+	@LOCAL_BIN="${HOME}/.local/bin" && mkdir -p "$$LOCAL_BIN" \
+	  && for w in pmoves-mini crush-pmoves; do \
+	       [ -f "scripts/$$w" ] && cp "scripts/$$w" "$$LOCAL_BIN/$$w" && chmod +x "$$LOCAL_BIN/$$w" \
+	         && echo "[install] $$w → $$LOCAL_BIN/$$w"; \
+	     done
+
+.PHONY: crush-bootstrap install-tools
