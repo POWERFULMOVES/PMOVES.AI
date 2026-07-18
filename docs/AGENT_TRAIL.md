@@ -10,6 +10,40 @@
 
 ---
 
+<!-- graphiti:crush phase:visual-ecosystem-convergence ts:2026-07-18T05:10:00Z -->
+
+## ◇ Crush — Visual Ecosystem Convergence: 3 PRs Merged + Crush Bootstrap Repaired
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, visual-ecosystem, submodule-architecture
+**Voice:** Companion
+
+### Done
+- **Crush bootstrap repaired on B850 Knuckles**: installed gopls v0.23.0, fixed pmoves-mini wrapper (typer in .venv-pmoves), fixed cipher SSE URL (/mcp/sse -> /api/mcp/sse), created crush-env.sh tier file resolver, fixed crush-pmoves to source env before launch, huggingface port 3000 conflict resolved, 11 context paths configured.
+- **PR #2152 merged** (PMOVES.AI): CRUSH convergence + 3 verified bugs (TENSORZERO_URL port fix, cipher profile, MCP SSE path). Fixed compose drift gate, Pmoves-cipher .gitmodules branch pin (Hardened -> main), submodule gitlink gate ROLLBACK false positive (skip when DANGLING=identical).
+- **PR #2154 merged** (PMOVES.AI): ballot prior art + A2UI reconciliation. Addressed all CodeRabbit + Codex comments (amd-voice NVIDIA reset, TTS service DNS, Ed25519 auth vs secrecy distinction, grep reproducibility, pipeline status alignment, test fixture SSE path).
+- **PR #6 merged** (PMOVES-crush): visual ecosystem submodules — pmoves-catwalk (forked charmbracelet/catwalk with TensorZero provider), pmoves-gum (TUI scripting wrapper with agent signature theming), pmoves-vhs (3 demo tapes), showtime-status CLI, crush-model-picker, PBnJ Crush-first launcher. Published POWERFULMOVES/pmoves-catwalk fork with tensorzero.json.
+- **Pre-existing build breakage documented**: PMOVES-crush fork has 449+ LSP errors from stale root.go (upstream replaced tui with client/server architecture). Fixed 3 import paths (catwalk, fang, dead llm/tools deletion). Full rebase against upstream tracked as separate workstream.
+
+### Left Behind
+- **PMOVES-crush build**: root.go still imports removed `internal/tui` package — needs deep rebase against upstream main, not a visual-ecosystem PR concern
+- **go.mod catwalk replace**: commented out (CI can't resolve submodule path before `go mod tidy`); enable locally with `replace charm.land/catwalk => ./pmoves-catwalk`
+- **Ollama host binding**: cipher-api can't reach Ollama via host.docker.internal (binds 127.0.0.1 only). Needs `OLLAMA_HOST=0.0.0.0:11434`
+- **A2UI PRs (#2132-#2134)**: still conflicting, need rebase onto latest main
+
+### For Next Agent
+- **PMOVES-crush fork rebase**: rebased root.go + config.go + agent_test files against upstream charmbracelet/crush main to clear 449 compilation errors. This is the highest-priority fork-maintenance task.
+- **Gum PMOVES customizations**: layer agent signature theme colors into gum Go source (currently shell wrapper only)
+- **Showtime Go-native**: embed showtime-status logic into Crush TUI status bar once build is fixed
+- **SPARK node**: run `crush-pmoves` after pulling main to deploy all this work
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:z890-claude phase:H ts:2026-03-19T22:48:00Z -->
 
 ## ▣ z890-claude — Session Convergence: 14 PRs Merged + Pinokio + NATS Leaf + Azure Mirror
