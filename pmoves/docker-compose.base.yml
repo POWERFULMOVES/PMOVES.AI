@@ -485,6 +485,7 @@ volumes:
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
+  hi-rag-gpu-hf-cache: {}  # HuggingFace model cache for Qwen3-Reranker-4B (persists across restarts)
   comfy-watcher-output: {}
   comfy-watcher-state: {}
   llama-results: {}

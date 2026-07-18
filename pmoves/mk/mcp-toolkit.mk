@@ -166,4 +166,11 @@ hermes-bootstrap: ## Full Hermes fleet bootstrap: profile + MCP + CHIT + Docker 
 	@echo "[HERMES] Starting fleet bootstrap..."
 	@bash scripts/hermes-fleet-bootstrap.sh
 
-.PHONY: crush-bootstrap hermes-bootstrap
+install-tools: ## Install pmoves-mini + crush-pmoves + hermes-pmoves wrappers to ~/.local/bin
+	@LOCAL_BIN="${HOME}/.local/bin" && mkdir -p "$$LOCAL_BIN" \
+	  && for w in pmoves-mini crush-pmoves hermes-pmoves; do \
+	       [ -f "scripts/$$w" ] && cp "scripts/$$w" "$$LOCAL_BIN/$$w" && chmod +x "$$LOCAL_BIN/$$w" \
+	         && echo "[install] $$w → $$LOCAL_BIN/$$w"; \
+	     done
+
+.PHONY: crush-bootstrap hermes-bootstrap install-tools

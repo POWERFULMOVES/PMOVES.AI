@@ -230,8 +230,8 @@ async def pmoves_deps_check(**_: Any) -> list[TextContent]:
     deps = ["docker", "python3", "uv", "make", "gh", "node", "git", "rg"]
     results: dict[str, str] = {}
     for dep in deps:
-        _rc, _ = await _run(["which", dep], timeout=5)
-        results[dep] = "OK" if _rc == 0 else "MISSING"
+        rc, _out = await _run(["which", dep], timeout=5)
+        results[dep] = "OK" if rc == 0 else "MISSING"
     return [TextContent(type="text", text=json.dumps(results, indent=2))]
 
 

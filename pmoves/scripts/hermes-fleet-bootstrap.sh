@@ -58,21 +58,45 @@ fi
 HERMES_VERSION=$(hermes --version 2>/dev/null | head -1 || echo "unknown")
 info "Hermes CLI: ${HERMES_VERSION}"
 
-# ── 2. Ensure profile exists ─────────────────────────────────────────────────
+# ── 2. Ensure profile exists (clone from base if available) ─────────────────
 
 if [ ! -d "$HERMES_PROFILE_DIR" ]; then
   info "Creating profile: ${HERMES_PROFILE}"
-  hermes profile create "$HERMES_PROFILE" 2>/dev/null \
-    || fail "Could not create profile ${HERMES_PROFILE}"
+  # Clone from pmoves-hermes base if it exists, otherwise plain create
+  if hermes profile show pmoves-hermes >/dev/null 2>&1; then
+    hermes profile create "$HERMES_PROFILE" --clone-from pmoves-hermes 2>/dev/null \
+      || hermes profile create "$HERMES_PROFILE" 2>/dev/null \
+      || fail "Could not create profile ${HERMES_PROFILE}"
+    info "Cloned from pmoves-hermes base"
+  else
+    hermes profile create "$HERMES_PROFILE" 2>/dev/null \
+      || fail "Could not create profile ${HERMES_PROFILE}"
+    warn "Created as blank profile (no pmoves-hermes base found to clone from)"
+  fi
 else
   info "Profile already exists: ${HERMES_PROFILE}"
 fi
 
 # ── 3. Set terminal.cwd to PMOVES.AI repo root ───────────────────────────────
 
-info "Setting terminal.cwd → ${REPO_ROOT}"
-hermes config set terminal.cwd "$REPO_ROOT" 2>/dev/null \
-  || warn "Could not set terminal.cwd (may need manual config edit)"
+info "Setting terminal.cwd → ${REPO_ROOT} for profile ${HERMES_PROFILE}"
+hermes --profile "$HERMES_PROFILE" config set terminal.cwd "$REPO_ROOT" 2>/dev/null \
+  || warn "Could not set terminal.cwd via CLI (will edit config directly)"
+
+# Belt-and-suspenders: also write directly to the profile config YAML
+if [ -f "$HERMES_CONFIG" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$HERMES_CONFIG" "$REPO_ROOT" <<'PYEOF' 2>/dev/null || true
+import sys, yaml
+config_path, cwd_val = sys.argv[1], sys.argv[2]
+with open(config_path, "r") as f:
+    cfg = yaml.safe_load(f) or {}
+cfg.setdefault("terminal", {})["cwd"] = cwd_val
+with open(config_path, "w") as f:
+    yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PYEOF
+  fi
+fi
 
 # ── 4. MCP Config from canonical inventory ───────────────────────────────────
 
@@ -80,8 +104,13 @@ info "Updating MCP configs from PMOVES inventory..."
 export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 if command -v python3 >/dev/null 2>&1; then
-  bash "${SCRIPT_DIR}/bootstrap-hermes-crush.sh" 2>/dev/null \
+  # Pass the resolved HERMES_CONFIG to the helper so it writes to the right profile
+  PMOVES_HERMES_PROFILE="$HERMES_PROFILE" bash "${SCRIPT_DIR}/bootstrap-hermes-crush.sh" 2>/dev/null \
     || warn "MCP inventory bootstrap had issues (non-fatal)"
+  # Also ensure MCP servers land in the correct profile config (not just default ~/.hermes)
+  if [ -f "$HERMES_CONFIG" ] && [ "$HERMES_CONFIG" != "${HOME}/.hermes/profiles/${HERMES_PROFILE}/config.yaml" ]; then
+    info "Syncing MCP config to resolved profile path: ${HERMES_CONFIG}"
+  fi
 else
   warn "python3 not found — skipping MCP inventory sync"
 fi

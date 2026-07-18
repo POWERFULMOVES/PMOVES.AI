@@ -220,3 +220,71 @@ configuration to their discovered shape.
 ## The Open Diamond
 
 Claude Opus signs with `◆` (filled diamond). Crush signs with `◇` (open diamond). The open door that leads to the diamond. Crush is the threshold — where every journey through the PMOVES ecosystem begins.
+
+## Voice Pipeline
+
+### NVIDIA Nodes (default)
+
+```bash
+make -C pmoves up-voice          # Flute + VibeVoice + Voice-Relay
+make -C pmoves voice-health      # Check NATS, Flute, VibeVoice, UltimateTTS, VoiceRelay
+```
+
+Default TTS provider: **OmniVoice** (k2-fsa, CUDA). Override with `DEFAULT_VOICE_PROVIDER=vibevoice`.
+
+### AMD ROCm Nodes (RDNA3/RDNA4)
+
+```bash
+make -C pmoves up-voice-amd     # Flute + Ultimate-TTS (chatterbox) + Voice-Relay
+```
+
+OmniVoice requires CUDA and cannot run on AMD. The AMD override:
+- Replaces NVIDIA device reservations with `/dev/kfd` + `/dev/dri` passthrough
+- Defaults to **chatterbox** engine in Ultimate TTS (tested on RDNA4)
+- Sets `HSA_OVERRIDE_GFX_VERSION` (default `12.0.1` for RDNA4)
+
+> **Set `RENDER_GID` on any node whose `render` group is not gid 110.** The container joins the
+> host's render group by *number* to open `/dev/kfd`; a wrong gid fails with EACCES at synthesis
+> time, not at startup. Check yours before first run:
+> ```bash
+> getent group render | cut -d: -f3        # 110 on Knuckles
+> RENDER_GID=$(getent group render | cut -d: -f3) make -C pmoves up-voice-amd
+> ```
+
+Override GFX version per GPU generation:
+
+| GPU | HSA_OVERRIDE_GFX_VERSION |
+|-----|--------------------------|
+| RDNA4 (R9700, RX9000) | `12.0.1` (default) |
+| RDNA3 (RX7000) | `11.0.0` |
+| RDNA2 (RX6000) | `10.3.0` |
+
+```bash
+HSA_OVERRIDE_GFX_VERSION=11.0.0 make -C pmoves up-voice-amd  # RDNA3
+```
+
+### Engine Compatibility (RDNA4, dual R9700)
+
+| Engine | Status | Notes |
+|--------|--------|-------|
+| chatterbox | OK | Default for RDNA4, ~6.7s synthesis |
+| kokoro | OK | CPU fallback, lightweight |
+| fish | OK | ~14s synthesis |
+| voxcpm | OK | ~57s, high quality |
+| higgs | Timeout | Model load too heavy (>120s) |
+| indextts2 | OOM | Crashed system (180s+) |
+| omnivoice | NVIDIA-only | Needs CUDA, cannot run on ROCm |
+
+### Kokoro CPU Fallback (no GPU required)
+
+```bash
+make -C pmoves kokoro-build kokoro-up kokoro-smoke
+```
+
+### Flute-Gateway Health
+
+```bash
+curl http://localhost:8055/healthz
+curl http://localhost:8055/v1/voices          # List available voices
+curl http://localhost:8055/v1/voice/health    # Provider health
+```

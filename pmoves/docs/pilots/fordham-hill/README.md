@@ -31,6 +31,11 @@ THE CONVERGENCE: The dollars the capacity lane saves are the dollars the wealth 
 11. 11. Appendix — verified source citations (path:line) and the proven/modeled/scaffolded ledger.
 
 
+## Decision records (supplementary — DRAFT, REQUIRES LEGAL REVIEW)
+
+- [`07-ballot-prior-art-and-reconciliation.md`](07-ballot-prior-art-and-reconciliation.md) — voting-systems prior art; corrects that symmetric HMAC cannot underwrite a contested ballot; reconciles this lane with the A2UI `pm-ballot` lane.
+- [`08-voter-identity-key-custody.md`](08-voter-identity-key-custody.md) — voter identity & key custody. An adversarial test **inverted** the intuitive "resident signs their vote" design: signing a choice is a coercion receipt, WebAuthn disenfranchises an elderly electorate, and operator-run enrollment recreates forgeability. Corrected architecture: **residents authenticate eligibility (they don't sign their choice); an election committee threshold-signs the tally (no single party can forge); a paper ballot is a first-class equal path; the eligibility credential is decoupled from Archon minting and from the token structure.** v0.3 lane.
+
 ## Cross-cutting insights
 
 - The saving and the surplus are the same dollars. The ~$25/mo per home the capacity lane frees up (by replacing the $35 premium with a ~$10 pooled cost) is exactly what the wealth lane books as community surplus — one flow of money, two lanes describing it. This is the entire pooling thesis in one sentence: the money doesn't leave the building.

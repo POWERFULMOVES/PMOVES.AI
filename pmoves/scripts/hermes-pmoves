@@ -23,6 +23,14 @@ fi
 HERMES_PROFILE="${PMOVES_HERMES_PROFILE:-pmoves-hermes-elder}"
 
 echo "◇ hermes-pmoves → bootstrapping from $REPO_ROOT (profile: $HERMES_PROFILE)"
+
+# Clear stale DOCKER_HOST so Docker MCP tools work (Windows Docker Desktop uses named pipe)
+if [ -n "${DOCKER_HOST:-}" ] && [[ "${DOCKER_HOST}" == *"tcp://localhost:2375"* ]]; then
+  echo "◇ Clearing stale DOCKER_HOST=${DOCKER_HOST}"
+  unset DOCKER_HOST
+  export DOCKER_HOST=""
+fi
+
 PMOVES_HERMES_PROFILE="$HERMES_PROFILE" make -C "$REPO_ROOT/pmoves" hermes-bootstrap
 
 echo ""
