@@ -33,6 +33,7 @@ mcp-toolkit-help: ## Show Docker MCP Toolkit + PMOVES MCP bootstrap targets
 	@echo "  mcp-bootstrap             Umbrella: Toolkit + core + config bootstrap"
 	@echo "  mcp-bootstrap-check       Validate imported profile + generated configs + reachability"
 	@echo "  hermes-crush-bootstrap    Update Hermes Agent and Crush CLI MCP configs"
+	@echo "  hermes-bootstrap          Full Hermes fleet bootstrap: profile + MCP + CHIT + Docker"
 	@echo "  opencode-bootstrap        Update all pmoves/configs/claws/opencode-*.json MCP configs"
 	@echo "  openclaw-scope-bootstrap  Update all pmoves/configs/claws/scopes/*.json MCP configs"
 	@echo "  openclaw-scope-check      Validate scope MCP configs against tier expectations"
@@ -161,11 +162,15 @@ crush-bootstrap: ## Full Crush fleet bootstrap: config + MCP + CHIT passphrase f
 	@echo "[CRUSH] Starting fleet bootstrap..."
 	@bash scripts/crush-fleet-bootstrap.sh
 
-install-tools: ## Install pmoves-mini + crush-pmoves wrappers to ~/.local/bin
+hermes-bootstrap: ## Full Hermes fleet bootstrap: profile + MCP + CHIT + Docker verification
+	@echo "[HERMES] Starting fleet bootstrap..."
+	@bash scripts/hermes-fleet-bootstrap.sh
+
+install-tools: ## Install pmoves-mini + crush-pmoves + hermes-pmoves wrappers to ~/.local/bin
 	@LOCAL_BIN="${HOME}/.local/bin" && mkdir -p "$$LOCAL_BIN" \
-	  && for w in pmoves-mini crush-pmoves; do \
+	  && for w in pmoves-mini crush-pmoves hermes-pmoves; do \
 	       [ -f "scripts/$$w" ] && cp "scripts/$$w" "$$LOCAL_BIN/$$w" && chmod +x "$$LOCAL_BIN/$$w" \
 	         && echo "[install] $$w → $$LOCAL_BIN/$$w"; \
 	     done
 
-.PHONY: crush-bootstrap install-tools
+.PHONY: crush-bootstrap hermes-bootstrap install-tools
