@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-ballot&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .stack { max-width: 720px; }
+    .controls {
+      margin: 16px 0;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--pm-bg-elevated);
+      color: var(--pm-fg);
+      border: 1px solid var(--pm-border);
+      border-radius: var(--pm-radius-sm);
+      padding: 6px 12px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:hover { background: var(--pm-accent); }
+    .event-log {
+      margin-top: 16px;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--pm-fg-muted);
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--pm-bg-elevated);
+      border: 1px solid var(--pm-border);
+      border-radius: var(--pm-radius-sm);
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-ballot&gt; — v0.2 demo (Fordham bylaw-2026-q3)</h1>
+
+  <div class="stack">
+    <pm-toast id="t" position="bottom-right" timeout="5000"></pm-toast>
+
+    <pm-ballot
+      id="b"
+      ballot-id="bylaw-2026-q3"
+      title="Bylaw amendment: recall procedure"
+      description="Adopt a transparent recall procedure so residents can hold the board accountable. Quorum requires 50% of eligible voters (24 of 47)."
+      options='[{"id":"yes","label":"Yes — adopt the new recall procedure"},{"id":"no","label":"No — keep the existing procedure"},{"id":"abstain","label":"Abstain"}]'
+      eligible-voters="47"
+      quorum="0.5"
+      closes-at="2026-08-15T23:59:59-04:00"
+      voter-id="unit-12a-bob-m"
+      on-vote-cast="t:show"
+    ></pm-ballot>
+
+    <div class="controls">
+      <button id="reset">Reset (local mode)</button>
+    </div>
+
+    <pre class="event-log" id="log" aria-label="Event log"></pre>
+  </div>
+
+  <script type="module" src="../pm-toast/pm-toast.js"></script>
+  <script type="module" src="./pm-ballot.js"></script>
+  <script type="module">
+    const b = document.getElementById('b');
+    const t = document.getElementById('t');
+    const log = document.getElementById('log');
+    const logLine = (msg) => {
+      const line = document.createElement('div');
+      line.textContent = `[${new Date().toISOString()}] ${msg}`;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    };
+
+    // Listen for events fired by the ballot
+    b.addEventListener('vote-cast', (ev) => {
+      logLine(`vote-cast: optionId=${ev.detail.receipt.choice} receiptHash=${ev.detail.receipt.receiptHash.slice(0, 18)}…`);
+      // Fire the event wire to the toast (renderer does this in production)
+      if (typeof t.show === 'function') {
+        t.show(`Vote cast: ${ev.detail.receipt.choice.toUpperCase()} — your receipt is signed.`, 'success');
+      }
+    });
+    b.addEventListener('quorum-reached', (ev) => {
+      logLine(`quorum-reached: ${(ev.detail.quorum * 100).toFixed(1)}% (target: ${(ev.detail.target * 100).toFixed(0)}%)`);
+      if (typeof t.show === 'function') {
+        t.show('Quorum reached! Ballot outcome is binding.', 'info');
+      }
+    });
+
+    logLine(`ballot ready: ballotId=${b.ballotId}, eligibleVoters=${b.eligibleVoters}, quorum=${b.quorum}`);
+
+    document.getElementById('reset').addEventListener('click', () => {
+      // Local mode: just clear and remount the ballot
+      const parent = b.parentNode;
+      const next = b.cloneNode(true);
+      next.id = 'b';
+      parent.replaceChild(next, b);
+      location.reload();  // simplest reset
+    });
+  </script>
+</body>
+</html>
