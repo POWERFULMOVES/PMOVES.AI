@@ -284,7 +284,12 @@ Planned
 - ✅ Makefile/operator preflight stabilization — `help`, `preflight`, `flight-check*`, `bringup-showtime`, and mini CLI `preflight` now provide a consistent diagnostics path across Windows/WSL/Linux
 - ✅ Model operations source-of-truth + dynamic tooling — runtime routing now documented against Supabase model registry, local profile fallback is codified, and `pmoves/tools/models/*` is restored for profile apply/swap/seed/snapshot workflows
 - ✅ Submodule integration contract for SDK scale-out — standardized `pmoves-integrations/` layout (compose/models/n8n/secrets/auth/docs) documented for future PMOVES SDK onboarding
-- 🚧 P7 room/stage prospectus alignment — room catalog/runtime taxonomy/home-room entry have landed; remaining work is to make P7, Discord classrooms, and site language converge on those surfaces
+- ✅ P7 room/stage activation foundation — the reconciled catalog/schema/runtime contract
+  landed on 2026-07-17: nine schema-valid rehearsal rooms, persistent room stage
+  separated from transient session state, CHIT-gated live promotion, and an
+  orchestrator on :8122. Session `0db7c6ff-8e93-44a5-a1bb-3a749c314c34`
+  passed the NATS/Supabase live gate and ended safely at review. Remaining work is
+  per-room activation evidence, UI stage indicators, and Discord/site language parity.
 - 🚧 Agent Zero suit baseline refresh — upstream `v1.3` is real; PMOVES hardened fork/pin now needs an explicit sync-and-overlay decision before more suit/theming expansion
 - ✅ Integration contract CI gate for onboarding quality — `.github/workflows/integration-contract.yml` enforces strict template checks and validates opted-in overlays for announcer/model/gpu hook wiring
 - ✅ Submodule docs coverage dossier + audit gate — `make -C pmoves submodule-docs-audit` now generates `pmoves/docs/SUBMODULE_DOCS_DOSSIER.md` so repo docs always reference local submodule documentation entry points

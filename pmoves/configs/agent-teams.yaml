@@ -19,6 +19,7 @@ teams:
       - supaserch         # Port 8099 — Holographic deep research
       - botz_gateway      # Port 8054 — Work item distribution
       - gateway_agent     # Port 8100 — MCP tool orchestration
+      - p7_room_orchestrator  # Port 8122 — room stage/session control plane
       - consciousness_service  # CGP consciousness mapper
       - botz_architect    # BoTZ skill architect (registry topology.team=orchestration)
       - botz_builder      # BoTZ skill builder
@@ -26,6 +27,15 @@ teams:
       - space_agent       # Port 3010 — spatial/canvas agent
       - a0_plugins        # Agent Zero community plugin index + validation CI
       - hermes_agent      # HERMES gateway/reasoning agent (hermes-agent.room.control)
+
+  implementation:
+    name: "Implementation"
+    description: "Blueprint-first coding and delivery agents"
+    node_affinity: [5090, powerfulmoves, z890]
+    ci_runner: ai-lab
+    compose_profiles: [agents]
+    agents:
+      - kilocode_glm      # KiloCode GLM delivery agent (5090-kilocode room)
 
   research:
     name: "Research & Knowledge"
@@ -71,6 +81,7 @@ teams:
       - podcast_producer  # Port 8110 — Podcast RSS feed generation + multi-episode TTS
       - youtube_publisher # Port 8111 — YouTube upload + metadata + thumbnail generation
       - cipher_beats_analyst  # audio beats/CGP analyst (registry topology.team=media)
+      - darkxside_persona     # private co-creator/witness room agent
 
   data:
     name: "Data & Storage"

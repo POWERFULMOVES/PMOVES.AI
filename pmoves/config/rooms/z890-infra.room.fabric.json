@@ -1,6 +1,7 @@
 {
   "room_id": "z890-infra.room.fabric",
   "version": "1.0.0",
+  "stage": "rehearsal",
   "display_name": "Z890 Infra Fabric Room",
   "description": "Infrastructure room for topology, service health, secrets discipline, and operator bring-up.",
   "agent_id": "z890-claude",

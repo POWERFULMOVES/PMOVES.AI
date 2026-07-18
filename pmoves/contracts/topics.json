@@ -325,6 +325,31 @@
       "description": "PR Hedge Trim completed — review threads classified, fixed, and resolved",
       "publisher": ["claude-code-cli"],
       "subscriber": ["pr-monitor"]
+    },
+    "p7.room.session.started.v1": {
+      "schema": "schemas/room/p7.session.fact.v1.schema.json",
+      "description": "P7 room session entered active state.",
+      "publisher": ["p7-room-orchestrator"]
+    },
+    "p7.room.checkpoint.v1": {
+      "schema": "schemas/room/p7.session.fact.v1.schema.json",
+      "description": "P7 room session checkpoint.",
+      "publisher": ["p7-room-orchestrator"]
+    },
+    "p7.room.session.ended.v1": {
+      "schema": "schemas/room/p7.session.fact.v1.schema.json",
+      "description": "P7 room session entered ended state.",
+      "publisher": ["p7-room-orchestrator"]
+    },
+    "p7.room.stage.changed.v1": {
+      "schema": "schemas/room/p7.stage.changed.v1.schema.json",
+      "description": "P7 durable room stage changed.",
+      "publisher": ["p7-room-orchestrator"]
+    },
+    "p7.room.command.failed.v1": {
+      "schema": "schemas/room/p7.command.failed.v1.schema.json",
+      "description": "P7 rejected or failed a room command.",
+      "publisher": ["p7-room-orchestrator"]
     }
   }
 }

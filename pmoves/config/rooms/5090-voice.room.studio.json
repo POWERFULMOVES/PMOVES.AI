@@ -1,6 +1,7 @@
 {
   "room_id": "5090-voice.room.studio",
   "version": "1.0.0",
+  "stage": "rehearsal",
   "display_name": "5090 Voice Studio",
   "description": "Voice-first room for TTS, media pipelines, audition loops, and notebook-backed iteration.",
   "agent_id": "5090-claude",

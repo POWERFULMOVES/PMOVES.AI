@@ -268,6 +268,23 @@ services:
       com.pmoves.topology: "standalone-capable"
     # Note: Persistent volumes /a0/* are mounted from host, need proper ownership
 
+  p7-room-orchestrator:
+    user: "65532:65532"
+    read_only: true
+    tmpfs: !override
+      - /tmp:size=100M,mode=1777
+    cap_drop: !override ["ALL"]
+    security_opt: !override
+      - no-new-privileges:true
+    secrets:
+      - supabase_service_role_key
+      - p7_control_token
+    environment:
+      SUPABASE_SERVICE_ROLE_KEY: ""
+      SUPABASE_SERVICE_ROLE_KEY_FILE: /run/secrets/supabase_service_role_key
+      P7_CONTROL_TOKEN: ""
+      P7_CONTROL_TOKEN_FILE: /run/secrets/p7_control_token
+
   archon:
     user: "65532:65532"
     read_only: true
@@ -326,3 +343,5 @@ secrets:
     file: ${SUPABASE_SERVICE_ROLE_KEY_FILE:-/run/secrets/supabase_service_role_key}
   supabase_jwt_secret:
     file: ${SUPABASE_JWT_SECRET_FILE:-/run/secrets/supabase_jwt_secret}
+  p7_control_token:
+    file: ${P7_CONTROL_TOKEN_FILE:-/run/secrets/p7_control_token}

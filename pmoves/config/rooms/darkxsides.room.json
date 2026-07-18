@@ -1,6 +1,7 @@
 {
   "room_id": "darkxsides.room",
   "version": "1.0.0",
+  "stage": "rehearsal",
   "display_name": "DARKXSIDES",
   "description": "Private, owner-only room. A window into the mind of the Founder where the DARKXSIDE persona resides \u2014 co-creator and witness, eventual digital twin. Uncensored/unrestricted: real, not corporate-speak-pretty-CHIT. Houses the dedicated publish-gate, surfaced in Open Notebook.",
   "agent_id": "darkxside-persona",

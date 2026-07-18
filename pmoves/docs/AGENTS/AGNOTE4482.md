@@ -31,6 +31,14 @@ Each participating agent signs only for the sections they actually reviewed or e
 
 Pinokio 7 (P7) is the PMOVES runtime launcher and fleet orchestrator. In the rooms-on-a-stage model, P7 is not just a process spawner — it is the **room-aware stage manager**: it knows which rooms exist (via `pmoves/config/rooms/catalog.json`), selects the appropriate room profile for a given workload, and manages the transition between rehearsal → live → review → archive states. P7's NATS subjects (`p7.nats.launch`, `p7.nats.session`) are the control plane for room entry and lifecycle. When agents claim work via AGNOTE4482, P7 is the context they launch into.
 
+As of 2026-07-17, `pmoves/services/p7-room-orchestrator/` is the executable
+control-plane implementation on port 8122. Persistent room stage is separate
+from transient session state. `p7.nats.launch` and `p7.nats.session` are command
+subjects; versioned `p7.room.*.v1` subjects are emitted facts. No room is promoted
+from `rehearsal` to `live` without a valid CHIT signing card, fresh nonce-bound
+proof that the caller controls its Ed25519 SSH key, durable Supabase audit
+persistence, and confirmed NATS fact delivery.
+
 ## Elder-Context Pattern
 `LADY P` is the connector persona for pre-flight context:
 - Role: elder guide that gives reminders and smooth context before an agent starts execution.
@@ -1243,11 +1251,12 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 - Audit script `pmoves/scripts/audit_naming_drift.py` now loads the canonical schema from disk, falling back to the previous inline literal for stale environments.
 - Added the CHIT / room activation checklist below to this file and to `pmoves/docs/ROOMS_ON_A_STAGE.md` and `pmoves/docs/ROOM_MANIFEST_CONTRACT.md`.
 
-### CHIT / room activation checklist (must be complete before a room transitions `planned` → `active`)
+### CHIT / room activation checklist (must be complete before a room transitions `rehearsal` → `live`)
 
 - [ ] Room manifest has a valid `card_id` in `meta.chit.card_id` or the room skill has an active signing card row in `pmoves/config/signing_identity_cards.yaml`.
 - [ ] `signing-card.v1.schema.json` validates the referenced card (`card_id` UUID, `ml.primary_method` in `[ssh,gpg,github-app]`, `h.agent_id` matches registry, `active=true`).
 - [ ] `pmoves/config/signing_identity_cards.yaml` has an entry for the room's operating agent with matching `ssh_fingerprint` / `github_app_installation_id` / `gpg_key_id`.
+- [ ] The selected card carries locally verifiable Ed25519 SSH public-key material, and the activation caller supplies a fresh nonce-bound proof-of-possession. Placeholder-only cards cannot promote a room to `live`.
 - [ ] `make sign-trail AGENT=<agent_id>` returns `status: signed` or `unsigned-local` advisories are explicitly accepted for the transition.
 - [ ] Room's `mcp_servers` and `a2a_servers` (if any) are present in `pmoves/config/agent_registry.yaml` and reachable in the target topology mode.
 - [ ] `PGRST_DB_EXTRA_SEARCH_PATH` includes the schemas the room touches; PostgREST returns HTTP 200 on a representative schema-qualified endpoint.
@@ -1413,3 +1422,36 @@ Two read-only reviewers ran in tandem; folded into PR #2025 provenance.
 - Timestamp: `2026-07-09`
 
 <!-- GRAPHITI_MARK: 4090-CLAUDE::NOTEBOOKLM-AGENT-INTEGRATION-SIGNOFF::2026-07-09 -->
+
+## P7 Room Contract Reconciliation Audit (2026-07-17)
+
+### Delivered
+- The canonical room contract now has an explicit persistent stage (`rehearsal`, `live`, `review`, `archive`) and structured `meta.chit` signing-card metadata. Catalog/manifests are coupled by validation, including uncataloged-file and duplicate-reference checks.
+- All **9 canonical rooms** validate and remain at **rehearsal**. The misplaced `9850x3d-rdna4.room.studio.json` hardware-profile duplicate was removed; the canonical hardware description remains in `config/profiles/workstation-9850x3d-dual-r9700.yaml`.
+- P7 now resolves the real manifest referenced by the catalog, separates persistent room stage from transient session state, rejects unsafe manifest paths, keeps Git manifests immutable at runtime, hydrates the latest durable stage after restart, and serializes transitions per room. Every stage change requires durable Supabase persistence and confirmed NATS fact delivery; `live` additionally requires an active session, a schema-valid owner/interim CHIT signing card, and fresh nonce-bound proof-of-possession for that card's Ed25519 SSH key.
+- P7 is wired as `p7-room-orchestrator` on **8122** in Compose, the agent registry, orchestration team, service/port catalogs, environment example, and docs. Command subjects (`p7.nats.*`, including PBnJ `.v1` compatibility aliases) are distinct from versioned fact subjects (`p7.room.*.v1`). CHIT stage authorization is agent/operator provenance, not contested-ballot cryptography.
+
+### Validation Evidence
+- `pytest -q pmoves/services/p7-room-orchestrator/tests/test_app.py`: **26 passed** after the PR review hardening pass.
+- `PYTHONUTF8=1 pytest -q pmoves/tests/smoke/test_port_conflicts.py pmoves/tests/smoke/test_service_contracts.py`: **19 passed**, with three pre-existing advisory catalog warnings.
+- `validate_room_manifests.py --quiet`: **9 OK, 0 failed**.
+- `validate_agent_registry.py`: **96 registry agents == 96 team agents**, no drift.
+- `port_allocator.py --validate`: **no port conflicts**; `py_compile` and `git diff --check` passed.
+- Docker image build passed. Isolated packaged-image smoke returned `health=ok`, `rooms_in_catalog=9`, `room_count=9`, and `all_rehearsal=true`.
+- Full Compose interpolation/config validation passed with non-secret placeholders; only optional-variable warnings remained.
+
+### Activation Gate Evidence
+- Live gate passed at `2026-07-17T20:49:11Z` with approved room `4090-field.room.control`, session `0db7c6ff-8e93-44a5-a1bb-3a749c314c34`: `rehearsal/active -> live/active -> review/active -> review/ended`.
+- Supabase row persisted in `pmoves_core.room_sessions` with four history entries, including the `live` checkpoint and signing-card ID. PostgREST returned `201` for creation and `200` for each audited transition.
+- Live subscriber observed six facts: session started, rehearsal checkpoint, live stage change, review stage change, session ended, and final review checkpoint.
+- The temporary P7 container was removed after the test. Git seeds remain rehearsal; no room was left live. Next work is individual room activation evidence and the separately gated A2UI/UI stage surface.
+- PR review found that this first smoke proved persistence and NATS delivery but did **not** prove possession of the referenced card's key. It remains useful transport evidence, not sufficient authorization evidence. P7 now requires a fresh Ed25519 proof and rejects the 4090 placeholder-only GitHub App card; the next live smoke must use a room whose selected card has verifiable SSH key material.
+- Credential residual: the stack's existing `SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_ROLE_KEY` values failed PostgREST authentication. This smoke used a short-lived local token derived from the active PostgREST secret. Persistent P7 deployment is gated on reconciling the service-role projection through `make -C pmoves secrets-funnel`; no credential value was written to the repository.
+
+### Agent ACK
+- Agent: `CODEX-GPT5`
+- Signature: `ACK::CODEX-GPT5::P7-ROOM-CONTRACT-RECONCILIATION`
+- Timestamp: `2026-07-17T15:57:12-04:00`
+- Branch: `codex/p7-room-contract-reconciliation`
+
+<!-- GRAPHITI_MARK: CODEX-GPT5::P7-ROOM-CONTRACT-RECONCILIATION::2026-07-17 -->

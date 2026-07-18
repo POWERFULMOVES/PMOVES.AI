@@ -8,6 +8,7 @@
     "version",
     "display_name",
     "agent_id",
+    "stage",
     "shell",
     "apps",
     "notebook",
@@ -36,6 +37,11 @@
       "type": "string",
       "description": "Primary PMOVES agent identity owning this room"
     },
+    "stage": {
+      "type": "string",
+      "enum": ["rehearsal", "live", "review", "archive"],
+      "description": "Persistent room lifecycle stage. Transient session state is managed separately by P7."
+    },
     "alter": {
       "type": "string",
       "description": "Optional alter or room profile chosen for this manifestation"
@@ -60,6 +66,31 @@
         "content_rating": { "type": "string", "enum": ["standard", "uncensored"], "description": "'uncensored' means unrestricted authentic expression inside the room — not a pornography flag." },
         "exclude_from_public_catalog": { "type": "boolean" },
         "rating_note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "description": "Versioned room metadata used by control-plane integrations.",
+      "properties": {
+        "chit": {
+          "type": "object",
+          "description": "Cryptographic Handshake for Identity & Trust activation metadata.",
+          "required": ["card_id"],
+          "properties": {
+            "card_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Active signing card used for the current room activation posture."
+            },
+            "creator_id": { "type": "string" },
+            "interim": { "type": "boolean" },
+            "transition_to": { "type": "string" },
+            "transition_date": { "type": "string", "format": "date" },
+            "steward_card_id": { "type": "string", "format": "uuid" }
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },
@@ -106,7 +137,7 @@
                   },
                   "kind": {
                     "type": "string",
-                    "enum": ["chat", "notebook", "graph", "media", "controls", "tasks", "logs", "custom"]
+                    "enum": ["chat", "notebook", "graph", "media", "browser", "controls", "tasks", "logs", "custom"]
                   },
                   "position": {
                     "type": "string",

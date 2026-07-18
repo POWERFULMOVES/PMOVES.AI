@@ -109,6 +109,7 @@ Default ranges used by port allocator:
 | Agent Zero UI | 8081 | Orchestration |
 | Archon | 8091 | Agent Service |
 | Archon UI | 3737 | Agent UI |
+| P7 Room Orchestrator | 8122 | Room orchestration |
 | Mesh Agent | 0 | No HTTP |
 | Service Registry | 8100 | Discovery |
 | **Retrieval & Knowledge** |
