@@ -76,6 +76,12 @@ jobs:
             # PostgREST public read paths through RLS-gated objects; no blanket
             # USING(true) policies are added here.
             "pmoves/supabase/migrations/20260630000000_pmoves_kb_schema.sql"
+            # Public model-registry compatibility views use security_invoker, so
+            # the invoking role remains constrained by privileges/RLS on the
+            # canonical pmoves_core relations. The anon SELECT grants are the
+            # intentional PostgREST public-read compatibility surface.
+            "pmoves/supabase/migrations/20260703000000_model_registry_public_compat.sql"
+            "pmoves/supabase/migrations/20260703000200_model_registry_service_models_compat.sql"
             # Worktree-delta migrations promoted from db/v5_*.sql / local dev.
             # These are legacy/existing files; they are intentionally preserved
             # verbatim and are reviewed elsewhere, not hardened here.
