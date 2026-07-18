@@ -479,28 +479,32 @@ root:
           action:
             type: supabase_migration
             expect: "20260425000400"
-          status: pending
+          status: done
+          notes: "Migration 20260425000400 applied and ledgered in the pmoves database; P7 retains stage/action/signing-card history in metadata."
 
         - id: stage-10.pause-resume-subjects
-          task: "p7.room.{pause,resume,checkpoint}.v1 NATS subjects active"
+          task: "Versioned p7.room session/stage facts active"
           action:
             type: nats_subject
             expect: "p7.room.checkpoint.v1"
-          status: pending
+          status: done
+          notes: "Live session 0db7c6ff-8e93-44a5-a1bb-3a749c314c34 observed started/checkpoint/stage/ended facts on 2026-07-17."
 
         - id: stage-10.room-orchestrator
           task: "p7-room-orchestrator service"
           action:
             type: file_exists
             expect: "pmoves/services/p7-room-orchestrator/app.py"
-          status: pending
+          status: done
+          notes: "Port 8122 service, registry/team/compose wiring, and focused tests landed 2026-07-17."
 
         - id: stage-10.skill
           task: "/p7:room skill (pause/resume/status/migrate)"
           action:
             type: file_exists
             expect: ".claude/commands/p7/room.md"
-          status: pending
+          status: done
+          notes: "Command documentation reconciled to the :8122 API and split stage/session contracts on 2026-07-17."
 
     # =========================================================================
     # Stage 11: Tracks Playlist Reprocessing on 4090

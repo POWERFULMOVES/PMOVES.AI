@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-06-11
+> **Last refreshed:** 2026-07-17
 
 ---
 
@@ -73,6 +73,7 @@ Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md se
 | Z890 Main-Infra Pass | 2026-06-04 | `AGNOTE4482PHI.t1.md` §Z890 Main-Infra Pass | SPARK-drafted PR cluster merged, CI-wide sha-pin outage fixed (#1698), `chit_manifest_merge.py` tooling (#1706/7), gateway port 8111 alignment → VPS deploy green |
 | Z890 Fleet Fork-Sync + Governance | 2026-06-09→11 | `AGNOTE4482PHI.t1.md` §Fleet Fork-Sync Campaign | **All fork-sync drift cleared** (auto-tier + high-ahead Agent-Zero/hyperdimensions/Wealth + CRITICAL-huge ClawZ 8354c/Creator); **branch-protection automation** (31 forks protected, App Administration:RW validated, `branch-protection-sync.yml`); **supabase CRITICAL sync** (#1761 + TAC #1768, Kong gate passed); **Archon CI green** (lint #19 + E2E #20); space-agent public+protected |
 | HERMES v0.18.2 Config Alignment | 2026-07-12 | `HERMES_AGENT_INTEGRATION.md` §v0.18.2 Config Alignment | Elder-Melchor profile rewritten to v0.18.2 schema: `fallback_providers` cascade (kimi → minimax-oauth → openrouter → ollama-cloud), `credential_pool_strategies`, PII redaction (HIPAA), config migrated v0→v33, profile .env keys populated, `hermes doctor` all checks passed. Kilo Gateway (`kilocode`) confirmed as built-in provider for PMOVES-crush. Upstream PRs reviewed: #20893, #20920, #20876, #63168, #62871. |
+| P7 Room Contract Reconciliation | 2026-07-17 | `AGNOTE4482.md` §P7 Room Contract Reconciliation | Nine schema-valid rehearsal rooms; persistent room stage separated from transient session state; cryptographic CHIT live gate; P7 command/fact NATS roles; deployable orchestrator on :8122 with focused tests. |
 
 > ~~**⚠️ AGNOTE4482.md section gaps:** Supply Chain, SPARK Prep, and CHIT Hardening were backfilled 2026-05-17.~~ All SITREP wave index entries now have corresponding §-sections.
 
@@ -202,6 +203,28 @@ No row is a hard lane assignment.
 | MISSLING-LINK | Laptop / light-GPU dev (legacy) | i7-7700HQ 4c/8t; 16GB RAM; GTX 1070 8GB (Pascal sm_61); Win 11 Pro | **Hermes Agent** host node (not Claude Code/Codex); small/quantized model inference + CPU dev/ops; node doc: [`AGNOTE-pmoves-missling-link.md`](./AGNOTE-pmoves-missling-link.md) |
 
 ---
+
+## Current P7 / Room Truth (2026-07-17)
+
+- Catalog version `1.2.0` contains nine rooms; all are explicitly `rehearsal`.
+- `python pmoves/scripts/validate_room_manifests.py` reports 9/9 valid and also
+  fails on uncataloged room-manifest files.
+- Registry/team coupling is clean after adding the P7 orchestrator,
+  `darkxside_persona`, and the intended `implementation` team for `kilocode_glm`.
+- `p7-room-orchestrator` is wired on port 8122 under the `agents` and
+  `orchestration` Compose profiles.
+- Promotion to `live` is not implied by a healthy container. It requires an
+  active session, valid signing card, reachable dependencies, durable Supabase
+  audit persistence, and operator acceptance of the room activation checklist.
+- That gate is proven for `4090-field.room.control`: session
+  `0db7c6ff-8e93-44a5-a1bb-3a749c314c34` reached `live`, emitted the expected
+  NATS facts, persisted signed history, then ended safely at `review` on
+  2026-07-17. Git seeds remain rehearsal; this is evidence, not bulk promotion.
+- Persistent deployment still needs service-role credential reconciliation: the
+  current shared service-role variables fail PostgREST auth. Use the canonical
+  `make -C pmoves secrets-funnel` path before bringing P7 up permanently.
+- A2UI PRs #2132/#2133/#2134 remain a separate stacked lane and do not establish
+  room activation by themselves.
 
 ## Restore Safety
 

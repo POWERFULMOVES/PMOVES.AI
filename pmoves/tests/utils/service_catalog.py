@@ -96,6 +96,17 @@ SUPASERCH = ServiceDefinition(
     description="Multimodal holographic deep research orchestrator",
 )
 
+P7_ROOM_ORCHESTRATOR = ServiceDefinition(
+    name="p7-room-orchestrator",
+    port=8122,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status", "rooms_in_catalog", "nats_connected"],
+    profile="agents,orchestration",
+    dependencies=["nats"],
+    description="Room stage and transient session control plane",
+)
+
 CONSCIOUSNESS_SERVICE = ServiceDefinition(
     name="consciousness-service",
     port=0,  # NATS worker only
@@ -619,6 +630,7 @@ SERVICES = [
     ARCHON,
     DEEPRESEARCH,
     SUPASERCH,
+    P7_ROOM_ORCHESTRATOR,
     TENSORZERO_GATEWAY,
     TENSORZERO_CLICKHOUSE,
     TENSORZERO_UI,

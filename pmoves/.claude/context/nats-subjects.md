@@ -10,6 +10,26 @@ Comprehensive reference of all NATS message subjects used for event-driven commu
 - **JetStream:** Enabled for persistence
 - **Version:** 2.10-alpine
 
+## P7 Room and Session Control
+
+P7 separates command subjects from emitted facts:
+
+| Subject | Role | Direction |
+|---|---|---|
+| `p7.nats.launch` | Start a room session (`room_id` or legacy `room`) | client -> P7 |
+| `p7.nats.session` | Session or stage command (`pause`, `resume`, `end`, `archive`, `stage`) | client -> P7 |
+| `p7.nats.launch.v1`, `p7.nats.session.v1` | Compatibility aliases for existing PBnJ hooks; payload contract is unchanged | client -> P7 |
+| `p7.room.session.started.v1` | Session-start fact | P7 -> consumers |
+| `p7.room.checkpoint.v1` | Session checkpoint fact | P7 -> consumers |
+| `p7.room.session.ended.v1` | Session-ended fact | P7 -> consumers |
+| `p7.room.stage.changed.v1` | Persistent room-stage transition fact | P7 -> consumers |
+| `p7.room.command.failed.v1` | Rejected or malformed command fact | P7 -> operators |
+
+`room.stage` is `rehearsal | live | review | archive`. `session_state` is
+`planned | active | paused | ended | archived`. A transition to `live` is
+CHIT signing-card gated. Every stage transition requires durable Supabase audit
+persistence and confirmed NATS stage-fact delivery.
+
 ## Subject Naming Convention
 
 PMOVES uses versioned subject names following the pattern:

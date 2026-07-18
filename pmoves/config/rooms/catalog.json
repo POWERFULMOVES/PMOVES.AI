@@ -1,11 +1,12 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "rooms": [
     {
       "room_id": "4090-field.room.control",
       "agent_id": "4090-claude",
       "alter": "4090-field",
       "display_name": "4090 Field Control Room",
+      "stage": "rehearsal",
       "manifest": "4090-field.room.control.json",
       "summary": "Scout/control room for review, topology, handoff, and notebook-backed triage."
     },
@@ -14,6 +15,7 @@
       "agent_id": "5090-claude",
       "alter": "5090-voice",
       "display_name": "5090 Voice Studio",
+      "stage": "rehearsal",
       "manifest": "5090-voice.room.studio.json",
       "summary": "Voice-first room for TTS, media pipelines, notebook-backed iteration, and audition workflows."
     },
@@ -22,14 +24,16 @@
       "agent_id": "z890-claude",
       "alter": "z890-infra",
       "display_name": "Z890 Infra Fabric Room",
+      "stage": "rehearsal",
       "manifest": "z890-infra.room.fabric.json",
       "summary": "Infrastructure room for topology, service health, secrets discipline, and operator bring-up."
     },
     {
       "room_id": "5090-kilocode.room.studio",
-      "agent_id": "5090-kilocode",
+      "agent_id": "kilocode-glm",
       "alter": "5090-kilocode",
       "display_name": "5090 KiloCode GLM Workstation",
+      "stage": "rehearsal",
       "manifest": "5090-kilocode.room.studio.json",
       "summary": "GPU inference specialist node running KiloCode GLM on the GLM Coding Plan. Shares the 5090 with Claude Code and Codex."
     },
@@ -38,6 +42,7 @@
       "agent_id": "4090-claude",
       "alter": "4090-demo",
       "display_name": "PMOVES Demo Room",
+      "stage": "rehearsal",
       "manifest": "demo.room.json",
       "summary": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal."
     },
@@ -46,6 +51,7 @@
       "agent_id": "hermes-agent",
       "alter": "hermes-agent",
       "display_name": "HERMES Agent Control Room",
+      "stage": "rehearsal",
       "manifest": "hermes-agent.room.control.json",
       "summary": "Cross-platform gateway control room for Hermes Agent (NousResearch) integration. Manages profiles, skills, cron jobs, gateway instances, and NATS bridge telemetry."
     },
@@ -54,6 +60,7 @@
       "agent_id": "fordham-steward",
       "alter": "fordham-community",
       "display_name": "Fordham Hill Community Room",
+      "stage": "rehearsal",
       "manifest": "fordham.room.community.json",
       "summary": "Community cost-pooling + self-governance pilot room: mesh capacity A/B, pooled-dues/Firefly ledger, contribution attribution, and tamper-evident resident voting on one lattice. Stage: rehearsal. DRAFT - REQUIRES LEGAL REVIEW."
     },
@@ -62,6 +69,7 @@
       "agent_id": "darkxside-persona",
       "alter": "darkxside",
       "display_name": "DARKXSIDES",
+      "stage": "rehearsal",
       "manifest": "darkxsides.room.json",
       "summary": "Private, owner-only persona room (co-creator + witness -> eventual digital twin). Uncensored/unrestricted authentic expression; houses the dedicated publish-gate surfaced in Open Notebook, with a fail-closed public-egress redaction floor."
     },
@@ -70,6 +78,7 @@
       "agent_id": "5090-claude",
       "alter": "5090-tokenism",
       "display_name": "ToKenism Exchange",
+      "stage": "rehearsal",
       "manifest": "tokenism.room.exchange.json",
       "summary": "Token-economy simulation floor: business-idea scenarios in the ToKenism simulator, exported to the PMOVES-Wealth ledger. Public face of the L5 Economics layer."
     }

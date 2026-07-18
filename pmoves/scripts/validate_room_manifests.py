@@ -97,6 +97,15 @@ def iter_catalog_entries(catalog: dict, only_room_id: str | None) -> Iterable[di
         yield entry
 
 
+def discover_manifest_files() -> set[str]:
+    """Return canonical room manifests, excluding the catalog and extension sidecars."""
+    return {
+        path.name
+        for path in ROOM_DIR.glob("*.json")
+        if path.name != CATALOG_PATH.name and not path.name.endswith(".extras.json")
+    }
+
+
 def validate_entry(entry: dict, validator: jsonschema.Draft202012Validator) -> tuple[Path, dict]:
     manifest_name = entry.get("manifest")
     if not manifest_name:
@@ -109,7 +118,7 @@ def validate_entry(entry: dict, validator: jsonschema.Draft202012Validator) -> t
     manifest = read_json(manifest_path)
     validator.validate(manifest)
 
-    for key in ("room_id", "agent_id", "alter", "display_name"):
+    for key in ("room_id", "agent_id", "alter", "display_name", "stage"):
         catalog_value = entry.get(key)
         manifest_value = manifest.get(key)
         if catalog_value is not None and manifest_value != catalog_value:
@@ -141,7 +150,9 @@ def main(argv: list[str] | None = None) -> int:
     # the first invalid manifest — a single bad room must not hide the health of the
     # rest. Exit non-zero if any room is invalid.
     seen_ids: set[str] = set()
+    seen_manifests: set[str] = set()
     failures: list[str] = []
+    ok = 0
     for entry in matched:
         room_ref = entry.get("room_id") or entry.get("manifest") or "<unknown>"
         try:
@@ -150,7 +161,11 @@ def main(argv: list[str] | None = None) -> int:
             room_id = manifest["room_id"]
             if room_id in seen_ids:
                 raise ValueError(f"duplicate room_id in selection: {room_id}")
+            manifest_name = manifest_path.name
+            if manifest_name in seen_manifests:
+                raise ValueError(f"manifest referenced more than once: {manifest_name}")
             seen_ids.add(room_id)
+            seen_manifests.add(manifest_name)
         except Exception as exc:  # noqa: BLE001 - surface each room's failure, keep going
             first_line = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
             failures.append(f"{room_ref}: {first_line}")
@@ -161,9 +176,27 @@ def main(argv: list[str] | None = None) -> int:
             apps = len(manifest.get("apps", []))
             skills = len(manifest.get("skill_bindings", []))
             route = manifest.get("shell", {}).get("layout", {}).get("default_route", "-")
-            print(f"OK {manifest_path.name} room_id={room_id} apps={apps} skills={skills} route={route}")
+            stage = manifest.get("stage", "-")
+            print(
+                f"OK {manifest_path.name} room_id={room_id} stage={stage} "
+                f"apps={apps} skills={skills} route={route}"
+            )
+        ok += 1
 
-    ok = len(matched) - len(failures)
+    if not args.room_id:
+        referenced = {
+            entry.get("manifest")
+            for entry in catalog.get("rooms", [])
+            if entry.get("manifest")
+        }
+        discovered = discover_manifest_files()
+        for manifest_name in sorted(discovered - referenced):
+            failures.append(f"uncataloged room manifest: {manifest_name}")
+            print(f"FAIL uncataloged room manifest: {manifest_name}")
+        for manifest_name in sorted(referenced - discovered):
+            failures.append(f"catalog references missing manifest: {manifest_name}")
+            print(f"FAIL catalog references missing manifest: {manifest_name}")
+
     print(f"\nvalidated {len(matched)} room manifest(s): {ok} OK, {len(failures)} FAILED")
     if failures:
         print("FAILED rooms (fix separately — one bad manifest no longer hides the rest):")
