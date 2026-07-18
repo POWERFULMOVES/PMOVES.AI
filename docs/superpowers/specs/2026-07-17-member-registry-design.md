@@ -77,6 +77,7 @@ No changes to existing models; `EqualWeightGovernorModel` is imported (for `Elig
 - Secret-ballot integration (A2UI `pm-ballot` receipts as the vote source).
 - Paper parity.
 - Human-witnessed identity proofing (the real-world step behind an approval) — modeled here only as committee approval.
+- **Committee constitution / rotation.** `setCommittee` is a **trusted genesis act** — the anti-chokepoint ("no single party can enrol/revoke") guarantee holds *given a trustworthily-constituted committee*. It is ungated by design: gating it would create a bootstrap paradox and give false security (an operator who controls constitution could seat sock-puppets at genesis regardless). Runtime committee rotation (adding/removing committee members under M-of-N approval) is a later arc stage. This assumption is stated explicitly rather than assumed closed (per stage-3 review).
 
 ## Success criteria
 
