@@ -4,11 +4,18 @@
 
 > **DRAFT — REQUIRES LEGAL REVIEW.** This document is an engineering + process scaffold, not legal advice and not an adopted instrument. Every clause touching bylaws, board transition, quorum, notice, or voting validity is marked and MUST be reviewed by New York cooperative-corporation counsel and adopted through the co-op's own statutory amendment procedure before it has any binding effect. Nothing here certifies an election result.
 
+> **SECURITY RECONCILIATION:** The original HMAC ballot-receipt and shared-roster design below was
+> rejected by decision records `07` and `08`. HMAC remains agent-trail integrity only;
+> `vote.signed.v1` is disabled/non-contractual; contribution records are not legal eligibility; and
+> no election path is active. The corrected target uses an independently attested roll, a complete
+> immutable ballot set with inclusion evidence, committee Ed25519 tally attestation, paper parity,
+> and a separately reviewed receipt-freeness mechanism.
+
 ---
 
 ## 0. Boundary statement (read first)
 
-The fraud/mismanagement investigation into the outgoing board and management company is **human-led** — driven by **PMOVES-mike** and the **Missing Link** node. This platform and everything below it provide **transparency and auditable records only**: tamper-evident vote receipts, a deterministic quorum tally, and an append-only audit log. The software **makes no accusations, reaches no findings, and adjudicates nothing**. Investigators may *use* the auditable records as evidence; the records do not *produce* conclusions. This boundary is a design constraint, not a disclaimer — the signing/tally components are built to attest "who voted, when, on what," and deliberately stop there.
+The fraud/mismanagement investigation into the outgoing board and management company is **human-led** — driven by **PMOVES-mike** and the **Missing Link** node. This platform provides **transparency and rehearsal models only**. The software **makes no accusations, reaches no findings, adjudicates nothing, and currently produces no binding ballot evidence**. Any future audit record must preserve ballot secrecy and be accepted only after legal, resident, and election-committee review.
 
 ---
 
@@ -50,34 +57,34 @@ Resident (phone/laptop, no wallet, no gas)
 [Tally Service]  (NEW — deterministic, "tool can tool")
    • counts one accepted signed ballot per eligible unit
    • applies the BYLAW quorum % against the eligible roll size
-   • emits a signed audit report (sign_cgp over the tally)
+   • emits a committee-attested audit report after independent recomputation
         │
         ▼
-[Audit Log]  append-only, publicly verifiable receipts (transparency-only)
+[Audit Log]  append-only ballot-set commitment + inclusion proofs (unbuilt)
 ```
 
 Grounding for each reused piece:
-- **Signing:** `sign_cgp()` in `chit_security.py:72` is the single source of truth for HMAC signing; `sign_trail.py:33` is the existing CLI caller. A resident ballot is just a different CGP payload signed by the same primitive → a **tamper-evident vote receipt** with no wallet, gas, or blockchain.
-- **Transport:** `sign_trail.py` already stages publishes to `chit.signed.v1` on the mesh bus (skill `.claude/skills/pmoves-chit-sign/SKILL.md`). A `vote.signed.v1` subject is the direct analog.
-- **Identity:** issue each eligible resident a **signing identity card** in the same shape as `signing_identity_cards.yaml` (today keyed by agent). One card per voting unit = the cryptographic basis for one-unit-one-vote.
-- **Roll:** `users.yaml:humans` becomes the eligible-voter roll the quorum % is computed against (`users.yaml:19-26` already reserves the template rows).
+- **Signing:** `sign_cgp()` HMAC is valid for operator-controlled agent trails only. The rehearsal tally model uses distinct Ed25519 committee signatures, while a production non-operator key ceremony remains unbuilt.
+- **Transport:** `vote.signed.v1` is a disabled, non-contractual room label with no schema, publisher, or service owner. It is not a direct analog of `chit.signed.v1` until an interface and activation review land.
+- **Identity:** agent signing cards cannot establish resident voting eligibility. A future `voter-card.v1` must be election-scoped, committee-issued, human-witnessed, and unlinkable from contribution/token identity.
+- **Roll:** `users.yaml:humans` is a one-entry template, not a legal voter roll. An independently governed committee process must establish residency and membership before quorum math is meaningful.
 
 ### 1.3 Proposal lifecycle (transparent, auditable)
 
 1. **Draft** — proposal authored, classified (see amendment clause 2.5), notice window set per bylaw.
 2. **Notice / comment** — published to all residents over the mesh; open comment period (the constitution's amendment model already uses a 2-week comment window, `Cataclysm_DAO_Constitution_v0.1.md:49`).
-3. **Open vote** — ballots signed to `vote.signed.v1`; each resident receives their own receipt hash.
+3. **Open vote** — future ballot intake writes to an immutable ballot set; no voter signs their choice and no active `vote.signed.v1` publisher exists.
 4. **Close** — voting window ends; no further ballots accepted.
 5. **Tally** — deterministic count, quorum-% check against roll, majority/supermajority per class.
-6. **Publish audit report** — signed tally + list of receipt hashes (not identities in the public view) so any resident can verify their vote was counted and the total is reproducible.
+6. **Publish audit report** — after independent deterministic recomputation, publish the committee-attested tally, ballot-set commitment, and privacy-preserving inclusion proof. Receipt-freeness still requires a separate reviewed mechanism.
 7. **Archive** — immutable record retained for the co-op's books and for investigators.
 
 ### 1.4 What must be BUILT (gaps — none of this ships today)
 
 - **Ballot service + Tally service** — grep of `pmoves/services` for `quorum|ballot|castVote|proposal` returns nothing; the only vote engine is the on-chain governor. These are net-new (small, deterministic, mesh-native).
-- **Equal-weight voting** — no one-member/one-unit path exists in code; the SBT/`$WORK` "Citizen House" weighting described in the constitution has **no implementation** (only `GroToken/GroVault/FoodUSD/GroupPurchase` exist).
-- **Percentage-of-roll quorum** — must replace the flat `proposalThreshold` count with `count(accepted ballots) / count(eligible units) >= bylaw_quorum_pct`.
-- **`vote.signed.v1` schema + per-resident card issuance + tally/audit generator** — the sign primitive today emits `agent.graphiti.signed.v1`, not ballots.
+- **Equal-weight voting model** — implemented/tested in the ToKenism rehearsal; no election service or binding activation exists. The SBT/`$WORK` "Citizen House" remains unbuilt.
+- **Percentage-of-roll quorum model** — implemented against a proposal-snapshotted roll; the legal roll source and production service remain unbuilt.
+- **Ballot contract + evidence path** — define any future subject/schema/service together with committee-issued eligibility, immutable ballot-set commitment, inclusion proofs, receipt-freeness, paper merge, and tally/audit generation. `vote.signed.v1` is not currently contractual.
 - **Proxy / absentee / meeting-quorum tracking** — standard for a co-op annual meeting and a board transition; absent everywhere in the repo. Required before a real election.
 - **Populated roll + Committee on Elders as a governance actor** — see Part 2.2.
 
