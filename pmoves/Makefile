@@ -2679,7 +2679,7 @@ voice-follow-logs: ## Tail voice-follow logs
 	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
 
 # -------- Voice stack health + unified launch --------
-.PHONY: voice-health up-voice
+.PHONY: voice-health up-voice up-voice-amd
 
 voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Voice-Relay)
 	@echo "=== Voice Stack Health ==="
@@ -2714,6 +2714,23 @@ up-voice: ## Start voice stack: Flute-Gateway + VibeVoice CPU fallback + Voice-R
 		-f docker-compose.voice.yml \
 		--profile supabase-local --profile media --profile voice \
 		up -d flute-gateway vibevoice voice-relay
+	@echo ""
+	@$(MAKE) --no-print-directory voice-health
+
+up-voice-amd: ## Start voice stack for AMD ROCm nodes (RDNA3/4): Flute + Ultimate-TTS + Voice-Relay
+	@echo "Starting AMD ROCm voice stack (Flute + Ultimate-TTS [chatterbox] + Voice-Relay)..."
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) \
+		-f docker-compose.base.yml \
+		-f docker-compose.core.yml \
+		-f docker-compose.media.yml \
+		-f docker-compose.voice.yml \
+		-f docker-compose.amd-voice.yml \
+		--profile supabase-local --profile media --profile voice --profile tts \
+		up -d flute-gateway ultimate-tts-studio voice-relay
+	@echo ""
+	@echo "  AMD ROCm voice stack started."
+	@echo "  Ultimate TTS engine: $${ULTIMATE_TTS_DEFAULT_ENGINE:-chatterbox} (override with ULTIMATE_TTS_DEFAULT_ENGINE)"
+	@echo "  GFX version: $${HSA_OVERRIDE_GFX_VERSION:-12.0.1} (RDNA4 default; RDNA3: 11.0.0)"
 	@echo ""
 	@$(MAKE) --no-print-directory voice-health
 
@@ -2862,6 +2879,31 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
+
+.PHONY: up-cipher-full
+up-cipher-full: ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
+	@echo "Starting full Cipher embedding stack..."
+	@$(DC) up -d nats qdrant
+	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
+	@$(DC) --profile agents up -d --build cipher-api
+	@echo "✔ Cipher Memory + embedding pipeline ready"
+	@echo "  Cipher:    http://localhost:$${CIPHER_PORT:-8105}"
+	@echo "  Qdrant:    http://localhost:6333"
+	@echo "  Ollama:    http://localhost:11434"
+
+.PHONY: cipher-memory-smoke
+cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search (requires up-cipher-full)
+	@echo "Testing cipher /api/memory POST..."
+	@resp=$$(curl -sf -X POST http://localhost:$${CIPHER_PORT:-8105}/api/memory \
+		-H 'Content-Type: application/json' \
+		-d '{"content":"PMOVES cipher smoke test","category":"test","tags":["smoke"]}' 2>&1) \
+		&& echo "  POST OK: $$resp" \
+		|| (echo "  POST FAILED: $$resp" && exit 1)
+	@echo "Testing cipher /api/memory/search..."
+	@resp=$$(curl -sf "http://localhost:$${CIPHER_PORT:-8105}/api/memory/search?q=cipher&limit=1" 2>&1) \
+		&& echo "  SEARCH OK: $$resp" \
+		|| (echo "  SEARCH FAILED: $$resp" && exit 1)
+	@echo "✔ Cipher memory pipeline smoke passed"
 
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health

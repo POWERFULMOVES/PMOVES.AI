@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# pmoves-mini — fleet-installable wrapper for the PMOVES Mini CLI
+# Resolves the PMOVES.AI repo root and delegates to mini_cli.py
+set -euo pipefail
+
+REPO_ROOT=""
+for candidate in \
+  "$(cd "$(dirname "$0")/.." && pwd)" \
+  "$(git rev-parse --show-toplevel 2>/dev/null)" \
+  "$HOME/pinokio/api/PMOVES.AI"; do
+  if [ -f "$candidate/pmoves/tools/mini_cli.py" ]; then
+    REPO_ROOT="$candidate"
+    break
+  fi
+done
+
+if [ -z "$REPO_ROOT" ]; then
+  echo "ERROR: Could not find PMOVES.AI repo root" >&2
+  exit 1
+fi
+
+exec env PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+  "${PMOVES_PYTHON:-${REPO_ROOT}/pmoves/.venv-pmoves/bin/python}" \
+  "$REPO_ROOT/pmoves/tools/mini_cli.py" "$@"

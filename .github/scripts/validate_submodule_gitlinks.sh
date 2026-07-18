@@ -70,7 +70,11 @@ while IFS= read -r name; do
   esac
 
   # 2. LEFT / ROLLBACK — compare base...head; forward iff head is ahead/== base.
-  if [ -n "$base_link" ] && [ "$base_link" != "$head_link" ]; then
+  #    Skip when DANGLING passed as "identical" (head IS the tracked branch HEAD):
+  #    a force-push/rebase on the submodule repo makes the old pointer unreachable
+  #    from the new history, producing a false "diverged" ROLLBACK failure even
+  #    though the new gitlink is correct.
+  if [ -n "$base_link" ] && [ "$base_link" != "$head_link" ] && [ "$st" != "identical" ]; then
     st2=$(gh api "repos/$slug/compare/$base_link...$head_link" --jq '.status' 2>/dev/null || echo "error")
     case "$st2" in
       ahead|identical) : ;;                                         # forward advance
