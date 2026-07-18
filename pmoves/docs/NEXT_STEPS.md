@@ -1,7 +1,26 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-06-05_
+_Last updated: 2026-07-17_
+
+## Latest changes (July 17, 2026) - P7 room contract reconciliation
+
+- Room catalog `1.2.0` now carries nine explicit `rehearsal` stages; all nine
+  manifests validate against the guarded room schema.
+- Persistent room stage and transient P7 session state are separate contracts.
+- `p7-room-orchestrator` is wired on port 8122 with CHIT-gated live promotion,
+  fail-closed stage audit/fact delivery, restart hydration, per-room transition
+  serialization, PBnJ command compatibility, and focused tests.
+- Environment gate passed for `4090-field.room.control` in session
+  `0db7c6ff-8e93-44a5-a1bb-3a749c314c34`: Supabase history retained the signed
+  live checkpoint, six NATS facts were observed, and the session ended at review.
+- Next gate: activate additional rooms individually through the checklist and
+  surface audited stage state in UI/A2UI. Do not bulk-promote the catalog.
+- Before persistent P7 deployment, reconcile the stale service-role projection
+  through `make -C pmoves secrets-funnel`; current shared service-role variables
+  fail PostgREST auth, while the successful gate used a short-lived local token.
+- Keep A2UI PRs #2132/#2133/#2134 gated until their stacked merge sequence,
+  visual/CHIT/resident review, and tenant signing-card requirements are satisfied.
 
 ## Latest changes (June 5, 2026) - Disaster-recovery targets
 - Added **RTO/RPO targets per service tier**: `pmoves/docs/operations/rto-rpo-targets.md` (closes #1428). Per-tier Recovery Time / Recovery Point objectives anchored to the real `env.tier-*` model, per-tier recovery runbooks citing `make -C pmoves backup` + `up-*` layering, split-brain notes for the NATS island/fleet + Postgres + RustDesk-relay pairs, and a backup-isolation/restore-drill checklist. State concentrates in `tier-data` + `tier-supabase`; everything else is fast rebuild.

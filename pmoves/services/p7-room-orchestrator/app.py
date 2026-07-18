@@ -1,39 +1,37 @@
-"""
-PMOVES P7 Room Orchestrator Service
-===================================
-Manages room lifecycle with a state machine, CHIT validation on activation,
-Supabase session recording, and NATS event publishing.
+"""PMOVES P7 room and session orchestrator.
 
-State machine:
-    planned → active → (paused ↔ active)* → ended → archived
+P7 owns two related but distinct state machines:
 
-Endpoints:
-    GET    /healthz
-    POST   /api/v1/rooms/{room_id}/start
-    POST   /api/v1/rooms/{room_id}/pause
-    POST   /api/v1/rooms/{room_id}/resume
-    POST   /api/v1/rooms/{room_id}/end
-    GET    /api/v1/rooms
+* ``room.stage`` is the persistent room lifecycle:
+  rehearsal -> live -> review -> archive.
+* ``session.state`` is transient runtime state:
+  planned -> active/paused -> ended -> archived.
+
+Git remains the canonical room-manifest seed. Runtime transitions are recorded in
+Supabase and emitted as versioned NATS facts; the service never rewrites manifests.
+``p7.nats.launch`` and ``p7.nats.session`` are command subjects, while
+``p7.room.*.v1`` subjects are emitted facts.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
+import yaml
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-
-# --------------------------------------------------------------------------- #
-# Configuration
-# --------------------------------------------------------------------------- #
+from jsonschema import Draft202012Validator, FormatChecker
+from pydantic import BaseModel
 
 LOG = logging.getLogger("p7-room-orchestrator")
 logging.basicConfig(
@@ -41,19 +39,60 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
-ROOM_CATALOG_PATH = Path(os.getenv("ROOM_CATALOG_PATH", "pmoves/config/rooms/catalog.json"))
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
-NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+
+def _default_pmoves_root() -> Path:
+    """Locate PMOVES config in either the packaged image or source tree."""
+    packaged_root = Path("/app/pmoves")
+    if packaged_root.is_dir():
+        return packaged_root
+    source_file = Path(__file__).resolve()
+    return source_file.parents[2] if len(source_file.parents) > 2 else source_file.parent
+
+
+PMOVES_ROOT = Path(os.getenv("PMOVES_ROOT", str(_default_pmoves_root())))
+ROOM_CATALOG_PATH = Path(
+    os.getenv("ROOM_CATALOG_PATH", str(PMOVES_ROOT / "config" / "rooms" / "catalog.json"))
+)
+SIGNING_CARDS_PATH = Path(
+    os.getenv(
+        "SIGNING_CARDS_PATH",
+        str(PMOVES_ROOT / "config" / "signing_identity_cards.yaml"),
+    )
+)
+SIGNING_CARD_SCHEMA_PATH = Path(
+    os.getenv(
+        "SIGNING_CARD_SCHEMA_PATH",
+        str(PMOVES_ROOT / "contracts" / "schemas" / "identity" / "signing-card.v1.schema.json"),
+    )
+)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_REST_URL = os.getenv(
+    "P7_SUPABASE_REST_URL",
+    f"{SUPABASE_URL}/rest/v1" if SUPABASE_URL else "",
+).rstrip("/")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY", "")
+SUPABASE_SCHEMA = os.getenv("P7_SUPABASE_SCHEMA", "pmoves_core")
+NATS_URL = os.getenv("NATS_URL", "")
+
+NATS_COMMAND_LAUNCH = "p7.nats.launch"
+NATS_COMMAND_SESSION = "p7.nats.session"
+NATS_COMMAND_LAUNCH_V1 = f"{NATS_COMMAND_LAUNCH}.v1"
+NATS_COMMAND_SESSION_V1 = f"{NATS_COMMAND_SESSION}.v1"
 NATS_SUBJECT_STARTED = "p7.room.session.started.v1"
 NATS_SUBJECT_CHECKPOINT = "p7.room.checkpoint.v1"
 NATS_SUBJECT_ENDED = "p7.room.session.ended.v1"
+NATS_SUBJECT_STAGE = "p7.room.stage.changed.v1"
+NATS_SUBJECT_FAILED = "p7.room.command.failed.v1"
 
-# --------------------------------------------------------------------------- #
-# State machine
-# --------------------------------------------------------------------------- #
 
-class RoomState(str, Enum):
+class RoomStage(str, Enum):
+    REHEARSAL = "rehearsal"
+    LIVE = "live"
+    REVIEW = "review"
+    ARCHIVE = "archive"
+
+
+class SessionState(str, Enum):
     PLANNED = "planned"
     ACTIVE = "active"
     PAUSED = "paused"
@@ -61,33 +100,39 @@ class RoomState(str, Enum):
     ARCHIVED = "archived"
 
 
-TRANSITIONS: Dict[RoomState, List[RoomState]] = {
-    RoomState.PLANNED: [RoomState.ACTIVE],
-    RoomState.ACTIVE: [RoomState.PAUSED, RoomState.ENDED],
-    RoomState.PAUSED: [RoomState.ACTIVE, RoomState.ENDED],
-    RoomState.ENDED: [RoomState.ARCHIVED],
-    RoomState.ARCHIVED: [],
+STAGE_TRANSITIONS: dict[RoomStage, list[RoomStage]] = {
+    RoomStage.REHEARSAL: [RoomStage.LIVE],
+    RoomStage.LIVE: [RoomStage.REVIEW],
+    RoomStage.REVIEW: [RoomStage.LIVE, RoomStage.ARCHIVE],
+    RoomStage.ARCHIVE: [],
 }
 
-# --------------------------------------------------------------------------- #
-# In-memory session store (production: Supabase)
-# --------------------------------------------------------------------------- #
+SESSION_TRANSITIONS: dict[SessionState, list[SessionState]] = {
+    SessionState.PLANNED: [SessionState.ACTIVE],
+    SessionState.ACTIVE: [SessionState.PAUSED, SessionState.ENDED],
+    SessionState.PAUSED: [SessionState.ACTIVE, SessionState.ENDED],
+    SessionState.ENDED: [SessionState.ARCHIVED],
+    SessionState.ARCHIVED: [],
+}
+
 
 class RoomSession:
-    def __init__(self, room_id: str, manifest: Dict[str, Any]):
+    def __init__(self, room_id: str, manifest: dict[str, Any]):
         self.room_id = room_id
         self.manifest = manifest
-        self.state: RoomState = RoomState.PLANNED
-        self.session_id: str = str(uuid.uuid4())
-        self.started_at: Optional[float] = None
-        self.ended_at: Optional[float] = None
-        self.checkpoints: List[Dict[str, Any]] = []
+        self.stage = RoomStage(manifest["stage"])
+        self.state = SessionState.PLANNED
+        self.session_id = str(uuid.uuid4())
+        self.started_at: float | None = None
+        self.ended_at: float | None = None
+        self.checkpoints: list[dict[str, Any]] = []
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "room_id": self.room_id,
             "session_id": self.session_id,
-            "state": self.state.value,
+            "stage": self.stage.value,
+            "session_state": self.state.value,
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "checkpoint_count": len(self.checkpoints),
@@ -95,237 +140,500 @@ class RoomSession:
         }
 
 
-_sessions: Dict[str, RoomSession] = {}
+_sessions: dict[str, RoomSession] = {}
+_room_stages: dict[str, RoomStage] = {}
+_room_locks: dict[str, asyncio.Lock] = {}
 
 
-# --------------------------------------------------------------------------- #
-# Room catalog loader
-# --------------------------------------------------------------------------- #
+def _iso_timestamp(value: float | None) -> str | None:
+    """Convert an internal epoch timestamp to PostgREST-safe ISO 8601."""
+    if value is None:
+        return None
+    return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
 
-def load_catalog() -> Dict[str, Any]:
-    """Load room manifest catalog from disk."""
+
+def _read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def load_catalog() -> dict[str, Any]:
     if not ROOM_CATALOG_PATH.exists():
-        LOG.warning("Room catalog not found at %s; returning empty catalog", ROOM_CATALOG_PATH)
-        return {"rooms": []}
-    data = json.loads(ROOM_CATALOG_PATH.read_text())
-    return data
+        raise HTTPException(status_code=503, detail=f"Room catalog not found: {ROOM_CATALOG_PATH}")
+    return _read_json(ROOM_CATALOG_PATH)
 
 
-def get_room_manifest(room_id: str) -> Dict[str, Any]:
-    catalog = load_catalog()
-    for room in catalog.get("rooms", []):
-        if room.get("room_id") == room_id or room.get("id") == room_id:
-            return room
-    raise HTTPException(status_code=404, detail=f"Room '{room_id}' not in catalog")
+def get_room_manifest(room_id: str) -> dict[str, Any]:
+    """Resolve and load the manifest referenced by a catalog entry."""
+    entry = next(
+        (room for room in load_catalog().get("rooms", []) if room.get("room_id") == room_id),
+        None,
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Room '{room_id}' not in catalog")
+
+    manifest_name = entry.get("manifest")
+    if not manifest_name:
+        raise HTTPException(status_code=500, detail=f"Room '{room_id}' has no manifest reference")
+
+    room_dir = ROOM_CATALOG_PATH.parent.resolve()
+    manifest_path = (room_dir / manifest_name).resolve()
+    if manifest_path.parent != room_dir:
+        raise HTTPException(status_code=500, detail=f"Unsafe manifest path for room '{room_id}'")
+    if not manifest_path.is_file():
+        raise HTTPException(status_code=500, detail=f"Manifest not found for room '{room_id}'")
+
+    manifest = _read_json(manifest_path)
+    if manifest.get("room_id") != room_id:
+        raise HTTPException(status_code=500, detail=f"Manifest room_id mismatch for '{room_id}'")
+    if manifest.get("stage") != entry.get("stage"):
+        raise HTTPException(status_code=500, detail=f"Catalog stage mismatch for '{room_id}'")
+    return manifest
 
 
-# --------------------------------------------------------------------------- #
-# CHIT validation
-# --------------------------------------------------------------------------- #
+def _load_signing_cards() -> list[dict[str, Any]]:
+    if not SIGNING_CARDS_PATH.is_file() or not SIGNING_CARD_SCHEMA_PATH.is_file():
+        raise HTTPException(status_code=503, detail="CHIT signing-card configuration unavailable")
+    raw = yaml.safe_load(SIGNING_CARDS_PATH.read_text(encoding="utf-8")) or {}
+    return raw.get("cards") or []
 
-def validate_chit(manifest: Dict[str, Any]) -> None:
-    """
-    Validate CHIT (Capability, Handler, Integration, Trigger) prerequisites
-    before transitioning from planned → active.
-    """
-    chit = manifest.get("chit") or {}
-    missing = []
-    for field in ("capability", "handler", "integration", "trigger"):
-        if not chit.get(field):
-            missing.append(field)
-    if missing:
+
+def validate_chit(manifest: dict[str, Any]) -> str:
+    """Validate the cryptographic signing-card gate for a transition to live."""
+    cards = _load_signing_cards()
+    chit = (manifest.get("meta") or {}).get("chit") or {}
+    card_id = chit.get("card_id")
+
+    if card_id:
+        card = next((item for item in cards if item.get("card_id") == card_id), None)
+    else:
+        card = next(
+            (
+                item
+                for item in cards
+                if (item.get("h") or {}).get("agent_id") == manifest.get("agent_id")
+                and item.get("active") is True
+            ),
+            None,
+        )
+    if card is None:
+        raise HTTPException(status_code=422, detail="CHIT validation failed: no active signing card")
+
+    schema = _read_json(SIGNING_CARD_SCHEMA_PATH)
+    errors = sorted(
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(card),
+        key=lambda error: list(error.path),
+    )
+    if errors:
         raise HTTPException(
             status_code=422,
-            detail=f"CHIT validation failed for room: missing fields {missing}",
+            detail=f"CHIT validation failed: signing card invalid ({errors[0].message})",
         )
+    if card.get("active") is not True:
+        raise HTTPException(status_code=422, detail="CHIT validation failed: signing card inactive")
+
+    card_agent = (card.get("h") or {}).get("agent_id")
+    allowed_agents = {manifest.get("agent_id")}
+    if chit.get("interim") is True and chit.get("creator_id"):
+        allowed_agents.add(chit["creator_id"])
+    if card_agent not in allowed_agents:
+        raise HTTPException(status_code=422, detail="CHIT validation failed: signing-card owner mismatch")
+    return card["card_id"]
 
 
-# --------------------------------------------------------------------------- #
-# Supabase recorder
-# --------------------------------------------------------------------------- #
-
-async def record_session(session: RoomSession, action: str) -> None:
-    """Record session state to Supabase room_sessions table (best-effort)."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        LOG.info("Supabase not configured; skipping record for %s", session.room_id)
+async def record_session(session: RoomSession, action: str, *, required: bool = False) -> None:
+    """Record runtime state; live activation requires durable audit persistence."""
+    if not SUPABASE_REST_URL or not SUPABASE_KEY:
+        if required:
+            raise HTTPException(status_code=503, detail="Supabase audit persistence required for live stage")
+        LOG.info("Supabase not configured; skipping %s for %s", action, session.room_id)
         return
-    try:
-        payload = {
-            "session_id": session.session_id,
-            "room_id": session.room_id,
-            "state": session.state.value,
+    payload = {
+        "session_id": session.session_id,
+        "room_id": session.room_id,
+        "agent_id": session.manifest.get("agent_id"),
+        "state": session.state.value,
+        "started_at": _iso_timestamp(session.started_at),
+        "ended_at": _iso_timestamp(session.ended_at),
+        "metadata": {
+            "stage": session.stage.value,
             "action": action,
-            "started_at": session.started_at,
-            "ended_at": session.ended_at,
-        }
+            "history": session.checkpoints,
+        },
+    }
+    try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                f"{SUPABASE_URL}/rest/v1/room_sessions",
+            response = await client.post(
+                f"{SUPABASE_REST_URL}/room_sessions?on_conflict=session_id",
                 json=payload,
                 headers={
                     "apikey": SUPABASE_KEY,
                     "Authorization": f"Bearer {SUPABASE_KEY}",
                     "Content-Type": "application/json",
-                    "Prefer": "return=minimal",
+                    "Content-Profile": SUPABASE_SCHEMA,
+                    "Accept-Profile": SUPABASE_SCHEMA,
+                    "Prefer": "resolution=merge-duplicates,return=minimal",
                 },
             )
-            resp.raise_for_status()
-        LOG.info("Recorded %s for room %s to Supabase", action, session.room_id)
+            response.raise_for_status()
     except Exception as exc:
-        LOG.warning("Supabase record failed (%s); continuing", exc)
+        if required:
+            raise HTTPException(status_code=502, detail="Supabase audit persistence failed") from exc
+        LOG.warning("Supabase record failed (%s); continuing rehearsal session", exc)
 
 
-# --------------------------------------------------------------------------- #
-# NATS publisher
-# --------------------------------------------------------------------------- #
+async def hydrate_room_stages() -> None:
+    """Load the latest durable stage per catalog room without reviving old sessions."""
+    if not SUPABASE_REST_URL or not SUPABASE_KEY:
+        LOG.info("Supabase not configured; using Git room stages as runtime seeds")
+        return
+
+    catalog_room_ids = {
+        room["room_id"] for room in load_catalog().get("rooms", []) if room.get("room_id")
+    }
+    hydrated = 0
+    async with httpx.AsyncClient(timeout=10) as client:
+        for room_id in catalog_room_ids:
+            try:
+                response = await client.get(
+                    f"{SUPABASE_REST_URL}/room_sessions",
+                    params={
+                        "select": "metadata",
+                        "room_id": f"eq.{room_id}",
+                        "order": "started_at.desc",
+                        "limit": 1,
+                    },
+                    headers={
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_KEY}",
+                        "Accept-Profile": SUPABASE_SCHEMA,
+                    },
+                )
+                response.raise_for_status()
+                rows = response.json()
+                if not rows:
+                    continue
+                stage = RoomStage((rows[0].get("metadata") or {}).get("stage"))
+            except Exception as exc:
+                LOG.warning("Supabase stage hydration failed for %s (%s)", room_id, exc)
+                continue
+            _room_stages[room_id] = stage
+            hydrated += 1
+    LOG.info("Hydrated durable stages for %d rooms", hydrated)
+
 
 class NATSPublisher:
-    def __init__(self):
-        self._nc = None
+    def __init__(self) -> None:
+        self._nc: Any = None
 
-    async def connect(self):
+    @property
+    def connected(self) -> bool:
+        return bool(self._nc and self._nc.is_connected)
+
+    async def connect(self) -> None:
+        if not NATS_URL:
+            LOG.info("NATS_URL not configured; command subjects disabled")
+            return
         try:
             from nats.aio.client import Client as NATSClient
+
             self._nc = NATSClient()
             await self._nc.connect(servers=[NATS_URL])
-            LOG.info("Connected to NATS at %s", NATS_URL)
+            for subject in (NATS_COMMAND_LAUNCH, NATS_COMMAND_LAUNCH_V1):
+                await self._nc.subscribe(subject, cb=self._handle_launch)
+            for subject in (NATS_COMMAND_SESSION, NATS_COMMAND_SESSION_V1):
+                await self._nc.subscribe(subject, cb=self._handle_session)
+            LOG.info("Connected to NATS and subscribed to P7 command subjects")
         except Exception as exc:
-            LOG.warning("NATS connect failed (%s); events logged only", exc)
+            LOG.warning("NATS connect failed (%s); HTTP control remains available", exc)
             self._nc = None
 
-    async def publish(self, subject: str, payload: Dict[str, Any]):
+    async def publish(
+        self,
+        subject: str,
+        payload: dict[str, Any],
+        *,
+        required: bool = False,
+    ) -> None:
         body = json.dumps(payload).encode()
-        if self._nc:
+        if not self.connected:
+            if required:
+                raise HTTPException(status_code=503, detail=f"NATS fact delivery required: {subject}")
+            LOG.warning("NATS disconnected; skipped fact subject=%s", subject)
+            return
+        try:
             await self._nc.publish(subject, body)
-        LOG.info("NATS publish subject=%s bytes=%d", subject, len(body))
+            if required:
+                await self._nc.flush(timeout=5)
+        except Exception as exc:
+            if required:
+                raise HTTPException(status_code=502, detail=f"NATS fact delivery failed: {subject}") from exc
+            LOG.warning("NATS publish failed subject=%s (%s)", subject, exc)
+            return
+        LOG.info("NATS fact subject=%s bytes=%d", subject, len(body))
+
+    async def close(self) -> None:
+        if self._nc:
+            await self._nc.drain()
+            self._nc = None
+
+    async def _fail_command(self, command: str, payload: dict[str, Any], exc: Exception) -> None:
+        detail = getattr(exc, "detail", str(exc))
+        await self.publish(
+            NATS_SUBJECT_FAILED,
+            {"command": command, "payload": payload, "detail": detail, "ts": time.time()},
+        )
+
+    async def _handle_launch(self, message: Any) -> None:
+        payload: dict[str, Any] = {}
+        try:
+            payload = json.loads(message.data.decode())
+            room_id = payload.get("room_id") or payload["room"]
+            action = str(payload.get("action") or "start").lower()
+            target = (
+                SessionState.ENDED
+                if action in {"end", "stop", "stopped"}
+                else SessionState.ACTIVE
+            )
+            await transition_session(room_id, target)
+        except Exception as exc:
+            await self._fail_command(NATS_COMMAND_LAUNCH, payload, exc)
+
+    async def _handle_session(self, message: Any) -> None:
+        payload: dict[str, Any] = {}
+        try:
+            payload = json.loads(message.data.decode())
+            room_id = payload.get("room_id") or payload["room"]
+            action = payload["action"]
+            if action == "stage":
+                await transition_stage(room_id, RoomStage(payload["target"]))
+            else:
+                target = {
+                    "start": SessionState.ACTIVE,
+                    "started": SessionState.ACTIVE,
+                    "pause": SessionState.PAUSED,
+                    "resume": SessionState.ACTIVE,
+                    "end": SessionState.ENDED,
+                    "stop": SessionState.ENDED,
+                    "stopped": SessionState.ENDED,
+                    "archive": SessionState.ARCHIVED,
+                }[action]
+                await transition_session(room_id, target)
+        except Exception as exc:
+            await self._fail_command(NATS_COMMAND_SESSION, payload, exc)
 
 
 publisher = NATSPublisher()
 
 
-# --------------------------------------------------------------------------- #
-# Transition engine
-# --------------------------------------------------------------------------- #
-
-async def transition(room_id: str, target: RoomState, publish_subject: Optional[str] = None) -> RoomSession:
+def get_or_create_session(room_id: str) -> RoomSession:
     session = _sessions.get(room_id)
     if session is None:
-        manifest = get_room_manifest(room_id)
-        session = RoomSession(room_id, manifest)
+        session = RoomSession(room_id, get_room_manifest(room_id))
+        session.stage = _room_stages.get(room_id, session.stage)
         _sessions[room_id] = session
-
-    current = session.state
-    if target not in TRANSITIONS.get(current, []):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Invalid transition: {current.value} → {target.value}",
-        )
-
-    # CHIT validation on planned → active
-    if current == RoomState.PLANNED and target == RoomState.ACTIVE:
-        validate_chit(session.manifest)
-
-    session.state = target
-    now = time.time()
-
-    if target == RoomState.ACTIVE and session.started_at is None:
-        session.started_at = now
-    elif target == RoomState.ENDED and session.ended_at is None:
-        session.ended_at = now
-
-    session.checkpoints.append({"state": target.value, "ts": now})
-    await record_session(session, f"transition:{current.value}->{target.value}")
-
-    if publish_subject:
-        await publisher.publish(publish_subject, {
-            "room_id": room_id,
-            "session_id": session.session_id,
-            "state": target.value,
-            "ts": now,
-        })
-
-    # Always send a checkpoint
-    await publisher.publish(NATS_SUBJECT_CHECKPOINT, {
-        "room_id": room_id,
-        "session_id": session.session_id,
-        "checkpoint_state": target.value,
-        "ts": now,
-    })
-
     return session
 
 
-# --------------------------------------------------------------------------- #
-# API models
-# --------------------------------------------------------------------------- #
-
-class StartRequest(BaseModel):
-    chit_override: Optional[Dict[str, Any]] = Field(None, description="Override CHIT fields for activation")
+async def transition_session(room_id: str, target: SessionState) -> RoomSession:
+    lock = _room_locks.setdefault(room_id, asyncio.Lock())
+    async with lock:
+        return await _transition_session(room_id, target)
 
 
-# --------------------------------------------------------------------------- #
-# FastAPI app
-# --------------------------------------------------------------------------- #
+async def _transition_session(room_id: str, target: SessionState) -> RoomSession:
+    session = get_or_create_session(room_id)
+    current = session.state
+    if target not in SESSION_TRANSITIONS[current]:
+        raise HTTPException(status_code=409, detail=f"Invalid session transition: {current.value} -> {target.value}")
 
-app = FastAPI(title="PMOVES P7 Room Orchestrator", version="1.0.0")
+    session.state = target
+    now = time.time()
+    if target == SessionState.ACTIVE and session.started_at is None:
+        session.started_at = now
+    elif target == SessionState.ENDED and session.ended_at is None:
+        session.ended_at = now
+    session.checkpoints.append(
+        {
+            "session_state": target.value,
+            "previous_session_state": current.value,
+            "stage": session.stage.value,
+            "ts": now,
+        }
+    )
+    await record_session(session, f"session:{current.value}->{target.value}")
+
+    subject = None
+    if current == SessionState.PLANNED and target == SessionState.ACTIVE:
+        subject = NATS_SUBJECT_STARTED
+    elif target == SessionState.ENDED:
+        subject = NATS_SUBJECT_ENDED
+    if subject:
+        await publisher.publish(subject, session.to_dict())
+    await publisher.publish(NATS_SUBJECT_CHECKPOINT, session.to_dict())
+    return session
 
 
-@app.on_event("startup")
-async def _startup():
+async def transition_stage(room_id: str, target: RoomStage) -> RoomSession:
+    lock = _room_locks.setdefault(room_id, asyncio.Lock())
+    async with lock:
+        return await _transition_stage(room_id, target)
+
+
+async def _transition_stage(room_id: str, target: RoomStage) -> RoomSession:
+    session = get_or_create_session(room_id)
+    current = session.stage
+    if target not in STAGE_TRANSITIONS[current]:
+        raise HTTPException(status_code=409, detail=f"Invalid stage transition: {current.value} -> {target.value}")
+
+    if target == RoomStage.LIVE and session.state != SessionState.ACTIVE:
+        raise HTTPException(status_code=409, detail="Room session must be active before stage can transition to live")
+    if target == RoomStage.ARCHIVE and session.state not in {
+        SessionState.ENDED,
+        SessionState.ARCHIVED,
+    }:
+        raise HTTPException(status_code=409, detail="Room session must be ended before room can transition to archive")
+
+    if not publisher.connected:
+        raise HTTPException(status_code=503, detail="NATS stage-fact delivery required for stage transition")
+
+    card_id = None
+    if target == RoomStage.LIVE:
+        card_id = validate_chit(session.manifest)
+
+    previous = session.stage
+    session.stage = target
+    now = time.time()
+    session.checkpoints.append(
+        {
+            "session_state": session.state.value,
+            "stage": target.value,
+            "previous_stage": previous.value,
+            "signing_card_id": card_id,
+            "ts": now,
+        }
+    )
+    try:
+        await record_session(
+            session,
+            f"stage:{previous.value}->{target.value}",
+            required=True,
+        )
+    except Exception:
+        session.stage = previous
+        session.checkpoints.pop()
+        raise
+
+    payload = session.to_dict()
+    payload.update({"previous_stage": previous.value, "signing_card_id": card_id, "ts": now})
+    try:
+        await publisher.publish(
+            NATS_SUBJECT_STAGE,
+            payload,
+            required=True,
+        )
+    except Exception as publish_exc:
+        session.stage = previous
+        session.checkpoints.pop()
+        try:
+            await record_session(
+                session,
+                f"stage-rollback:{target.value}->{previous.value}",
+                required=True,
+            )
+        except Exception as rollback_exc:
+            raise HTTPException(
+                status_code=502,
+                detail="NATS stage fact failed and Supabase stage rollback failed",
+            ) from rollback_exc
+        raise publish_exc
+    _room_stages[room_id] = target
+    return session
+
+
+class StageRequest(BaseModel):
+    target: RoomStage
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await hydrate_room_stages()
     await publisher.connect()
+    yield
+    await publisher.close()
+
+
+app = FastAPI(title="PMOVES P7 Room Orchestrator", version="1.1.0", lifespan=lifespan)
 
 
 @app.get("/healthz")
-async def healthz():
+async def healthz() -> dict[str, Any]:
     catalog = load_catalog()
-    return {"status": "ok", "rooms_in_catalog": len(catalog.get("rooms", []))}
+    return {
+        "status": "ok",
+        "rooms_in_catalog": len(catalog.get("rooms", [])),
+        "sessions": len(_sessions),
+        "nats_connected": publisher.connected,
+    }
+
+
+@app.get("/api/v1/rooms/{room_id}")
+async def get_room(room_id: str) -> dict[str, Any]:
+    return get_or_create_session(room_id).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/start")
-async def start_room(room_id: str, req: Optional[StartRequest] = None):
-    manifest = get_room_manifest(room_id)
-    if req and req.chit_override:
-        manifest.setdefault("chit", {}).update(req.chit_override)
-    if room_id not in _sessions:
-        _sessions[room_id] = RoomSession(room_id, manifest)
-    session = await transition(room_id, RoomState.ACTIVE, NATS_SUBJECT_STARTED)
-    return session.to_dict()
+async def start_room(room_id: str) -> dict[str, Any]:
+    return (await transition_session(room_id, SessionState.ACTIVE)).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/pause")
-async def pause_room(room_id: str):
-    session = await transition(room_id, RoomState.PAUSED)
-    return session.to_dict()
+async def pause_room(room_id: str) -> dict[str, Any]:
+    return (await transition_session(room_id, SessionState.PAUSED)).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/resume")
-async def resume_room(room_id: str):
-    session = await transition(room_id, RoomState.ACTIVE)
-    return session.to_dict()
+async def resume_room(room_id: str) -> dict[str, Any]:
+    return (await transition_session(room_id, SessionState.ACTIVE)).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/end")
-async def end_room(room_id: str):
-    session = await transition(room_id, RoomState.ENDED, NATS_SUBJECT_ENDED)
-    return session.to_dict()
+async def end_room(room_id: str) -> dict[str, Any]:
+    return (await transition_session(room_id, SessionState.ENDED)).to_dict()
+
+
+@app.post("/api/v1/rooms/{room_id}/archive-session")
+async def archive_session(room_id: str) -> dict[str, Any]:
+    return (await transition_session(room_id, SessionState.ARCHIVED)).to_dict()
+
+
+@app.post("/api/v1/rooms/{room_id}/stage")
+async def set_room_stage(room_id: str, request: StageRequest) -> dict[str, Any]:
+    return (await transition_stage(room_id, request.target)).to_dict()
 
 
 @app.get("/api/v1/rooms")
-async def list_rooms():
-    catalog = load_catalog()
+async def list_rooms() -> dict[str, Any]:
     rooms = []
-    for room in catalog.get("rooms", []):
-        rid = room.get("room_id") or room.get("id")
-        sess = _sessions.get(rid)
-        rooms.append({
-            "room_id": rid,
-            "name": room.get("name", ""),
-            "state": sess.state.value if sess else "uninitialized",
-            "session_id": sess.session_id if sess else None,
-        })
+    for entry in load_catalog().get("rooms", []):
+        room_id = entry["room_id"]
+        session = _sessions.get(room_id)
+        rooms.append(
+            {
+                "room_id": room_id,
+                "display_name": entry.get("display_name", ""),
+                "stage": (
+                    session.stage.value
+                    if session
+                    else _room_stages.get(room_id, RoomStage(entry["stage"])).value
+                ),
+                "session_state": session.state.value if session else "uninitialized",
+                "session_id": session.session_id if session else None,
+            }
+        )
     return {"rooms": rooms, "total": len(rooms)}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8092)
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8122")))

@@ -37,6 +37,12 @@ ALTER TABLE IF EXISTS pmoves_core.room_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Revoke anon; grant service_role full, authenticated read
 DO $$ BEGIN
+  EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO service_role, authenticated';
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'GRANT USAGE on pmoves_core: %', SQLERRM;
+END $$;
+
+DO $$ BEGIN
   EXECUTE 'REVOKE ALL ON pmoves_core.room_sessions FROM anon';
 EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'REVOKE from anon on room_sessions: %', SQLERRM;

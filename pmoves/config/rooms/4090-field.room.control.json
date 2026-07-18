@@ -1,6 +1,7 @@
 {
   "room_id": "4090-field.room.control",
   "version": "1.0.0",
+  "stage": "rehearsal",
   "display_name": "4090 Field Control Room",
   "description": "Noise-reduction room for review, topology, and handoff control.",
   "agent_id": "4090-claude",
