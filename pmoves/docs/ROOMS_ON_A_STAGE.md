@@ -103,6 +103,7 @@ Before a room transitions from `rehearsal` → `live`, the following must be sat
 
 - [ ] A signing-card row exists in `pmoves/config/signing_identity_cards.yaml` for the room's operating agent, and `signing-card.v1.schema.json` validates it.
 - [ ] The room manifest declares `meta.chit.card_id` (or the owning skill provides a card ID at runtime) and the card has `active: true`.
+- [ ] The selected card includes locally verifiable Ed25519 SSH public-key material, and the activation caller provides a fresh nonce-bound proof-of-possession. Placeholder-only cards remain rehearsal-only.
 - [ ] `make sign-trail AGENT=<agent_id>` succeeds (`signed`) or `unsigned-local` advisory is explicitly accepted for the stage transition.
 - [ ] The room's declared `mcp_servers` and `a2a_servers` exist in `pmoves/config/agent_registry.yaml` and are reachable in the target topology mode (`standalone`/`docked`/`fleet`).
 - [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles in `sidecar.env` match the intended topology gradient.

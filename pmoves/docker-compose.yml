@@ -3148,7 +3148,9 @@ services:
     - SUPABASE_URL=${P7_SUPABASE_URL:-http://supabase-kong:8000}
     - P7_SUPABASE_REST_URL=${P7_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - SUPABASE_SERVICE_ROLE_KEY_FILE=${SUPABASE_SERVICE_ROLE_KEY_FILE:-}
     - P7_SUPABASE_SCHEMA=${P7_SUPABASE_SCHEMA:-pmoves_core}
+    - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
     ports:
     - ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
     depends_on:
@@ -3156,6 +3158,8 @@ services:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
+      supabase-kong:
+        condition: service_healthy
     profiles: ["agents", "orchestration"]
     networks: [pmoves_app, pmoves_api, pmoves_bus]
     healthcheck:

@@ -16,6 +16,9 @@ Supabase and emitted as versioned NATS facts; the service never rewrites manifes
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
+import hmac
 import json
 import logging
 import os
@@ -25,13 +28,19 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 import yaml
-from fastapi import FastAPI, HTTPException
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.hazmat.primitives.serialization import load_ssh_public_key
+from fastapi import Depends, FastAPI, Header, HTTPException
 from jsonschema import Draft202012Validator, FormatChecker
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from pmoves.services.common.env import get_secret
+from pmoves.services.common.events import validate_payload
 
 LOG = logging.getLogger("p7-room-orchestrator")
 logging.basicConfig(
@@ -70,9 +79,13 @@ SUPABASE_REST_URL = os.getenv(
     "P7_SUPABASE_REST_URL",
     f"{SUPABASE_URL}/rest/v1" if SUPABASE_URL else "",
 ).rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY", "")
+SUPABASE_KEY = get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or ""
 SUPABASE_SCHEMA = os.getenv("P7_SUPABASE_SCHEMA", "pmoves_core")
 NATS_URL = os.getenv("NATS_URL", "")
+P7_CONTROL_TOKEN = get_secret("P7_CONTROL_TOKEN", "") or ""
+ACTIVATION_PROOF_MAX_AGE_SECONDS = int(os.getenv("P7_ACTIVATION_PROOF_MAX_AGE_SECONDS", "300"))
+HYDRATION_ATTEMPTS = int(os.getenv("P7_HYDRATION_ATTEMPTS", "3"))
+HYDRATION_RETRY_SECONDS = float(os.getenv("P7_HYDRATION_RETRY_SECONDS", "1"))
 
 NATS_COMMAND_LAUNCH = "p7.nats.launch"
 NATS_COMMAND_SESSION = "p7.nats.session"
@@ -98,6 +111,15 @@ class SessionState(str, Enum):
     PAUSED = "paused"
     ENDED = "ended"
     ARCHIVED = "archived"
+
+
+class ActivationProof(BaseModel):
+    """Nonce-bound proof that the caller controls the selected signing card."""
+
+    card_id: str
+    nonce: str = Field(min_length=16, max_length=256)
+    issued_at: int
+    signature: str = Field(min_length=16, max_length=4096)
 
 
 STAGE_TRANSITIONS: dict[RoomStage, list[RoomStage]] = {
@@ -143,6 +165,7 @@ class RoomSession:
 _sessions: dict[str, RoomSession] = {}
 _room_stages: dict[str, RoomStage] = {}
 _room_locks: dict[str, asyncio.Lock] = {}
+_used_activation_nonces: dict[str, float] = {}
 
 
 def _iso_timestamp(value: float | None) -> str | None:
@@ -197,8 +220,8 @@ def _load_signing_cards() -> list[dict[str, Any]]:
     return raw.get("cards") or []
 
 
-def validate_chit(manifest: dict[str, Any]) -> str:
-    """Validate the cryptographic signing-card gate for a transition to live."""
+def _resolve_signing_card(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Resolve and validate the signing card authorized by a room manifest."""
     cards = _load_signing_cards()
     chit = (manifest.get("meta") or {}).get("chit") or {}
     card_id = chit.get("card_id")
@@ -237,6 +260,78 @@ def validate_chit(manifest: dict[str, Any]) -> str:
         allowed_agents.add(chit["creator_id"])
     if card_agent not in allowed_agents:
         raise HTTPException(status_code=422, detail="CHIT validation failed: signing-card owner mismatch")
+    return card
+
+
+def _activation_message(
+    room_id: str,
+    session_id: str,
+    previous_stage: RoomStage,
+    target: RoomStage,
+    proof: ActivationProof,
+) -> bytes:
+    """Build the canonical bytes signed for a live-stage activation."""
+    return json.dumps(
+        {
+            "card_id": proof.card_id,
+            "issued_at": proof.issued_at,
+            "nonce": proof.nonce,
+            "previous_stage": previous_stage.value,
+            "room_id": room_id,
+            "session_id": session_id,
+            "target_stage": target.value,
+            "version": "p7-room-activation-v1",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def validate_chit(
+    manifest: dict[str, Any],
+    proof: ActivationProof | None,
+    message: bytes,
+) -> str:
+    """Verify card eligibility and nonce-bound SSH proof-of-possession."""
+    card = _resolve_signing_card(manifest)
+    if proof is None:
+        raise HTTPException(status_code=401, detail="CHIT activation proof required")
+    if proof.card_id != card["card_id"]:
+        raise HTTPException(status_code=403, detail="CHIT activation proof card mismatch")
+
+    now = time.time()
+    if abs(now - proof.issued_at) > ACTIVATION_PROOF_MAX_AGE_SECONDS:
+        raise HTTPException(status_code=401, detail="CHIT activation proof expired")
+    for nonce, expires_at in list(_used_activation_nonces.items()):
+        if expires_at <= now:
+            _used_activation_nonces.pop(nonce, None)
+    if proof.nonce in _used_activation_nonces:
+        raise HTTPException(status_code=409, detail="CHIT activation proof nonce already used")
+
+    ml = card.get("ml") or {}
+    if ml.get("primary_method") != "ssh" or not ml.get("ssh_allowed_signers_line"):
+        raise HTTPException(
+            status_code=422,
+            detail="CHIT signing card has no locally verifiable SSH key material",
+        )
+    allowed_signer_parts = str(ml["ssh_allowed_signers_line"]).split()
+    try:
+        key_index = next(
+            index
+            for index, part in enumerate(allowed_signer_parts)
+            if part.startswith(("ssh-", "ecdsa-", "sk-"))
+        )
+        public_key = load_ssh_public_key(
+            f"{allowed_signer_parts[key_index]} {allowed_signer_parts[key_index + 1]}".encode()
+        )
+        if not isinstance(public_key, Ed25519PublicKey):
+            raise ValueError("only Ed25519 activation keys are supported")
+        signature = base64.b64decode(proof.signature, validate=True)
+        public_key.verify(signature, message)
+    except (InvalidSignature, ValueError, IndexError, StopIteration, binascii.Error) as exc:
+        raise HTTPException(status_code=403, detail="CHIT activation proof invalid") from exc
+
+    _used_activation_nonces[proof.nonce] = now + ACTIVATION_PROOF_MAX_AGE_SECONDS
     return card["card_id"]
 
 
@@ -281,44 +376,70 @@ async def record_session(session: RoomSession, action: str, *, required: bool = 
         LOG.warning("Supabase record failed (%s); continuing rehearsal session", exc)
 
 
-async def hydrate_room_stages() -> None:
-    """Load the latest durable stage per catalog room without reviving old sessions."""
-    if not SUPABASE_REST_URL or not SUPABASE_KEY:
-        LOG.info("Supabase not configured; using Git room stages as runtime seeds")
-        return
-
+async def _hydrate_room_stages_once() -> tuple[dict[str, RoomStage], dict[str, float]]:
+    """Read one complete durable-stage snapshot from Supabase."""
     catalog_room_ids = {
         room["room_id"] for room in load_catalog().get("rooms", []) if room.get("room_id")
     }
-    hydrated = 0
+    stages: dict[str, RoomStage] = {}
+    nonces: dict[str, float] = {}
     async with httpx.AsyncClient(timeout=10) as client:
         for room_id in catalog_room_ids:
-            try:
-                response = await client.get(
-                    f"{SUPABASE_REST_URL}/room_sessions",
-                    params={
-                        "select": "metadata",
-                        "room_id": f"eq.{room_id}",
-                        "order": "started_at.desc",
-                        "limit": 1,
-                    },
-                    headers={
-                        "apikey": SUPABASE_KEY,
-                        "Authorization": f"Bearer {SUPABASE_KEY}",
-                        "Accept-Profile": SUPABASE_SCHEMA,
-                    },
-                )
-                response.raise_for_status()
-                rows = response.json()
-                if not rows:
-                    continue
-                stage = RoomStage((rows[0].get("metadata") or {}).get("stage"))
-            except Exception as exc:
-                LOG.warning("Supabase stage hydration failed for %s (%s)", room_id, exc)
+            response = await client.get(
+                f"{SUPABASE_REST_URL}/room_sessions",
+                params={
+                    "select": "metadata",
+                    "room_id": f"eq.{room_id}",
+                    "order": "started_at.desc",
+                    "limit": 1,
+                },
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Accept-Profile": SUPABASE_SCHEMA,
+                },
+            )
+            response.raise_for_status()
+            rows = response.json()
+            if not rows:
                 continue
-            _room_stages[room_id] = stage
-            hydrated += 1
-    LOG.info("Hydrated durable stages for %d rooms", hydrated)
+            metadata = rows[0].get("metadata") or {}
+            stages[room_id] = RoomStage(metadata.get("stage"))
+            for checkpoint in metadata.get("history") or []:
+                nonce = checkpoint.get("activation_nonce")
+                issued_at = checkpoint.get("activation_issued_at")
+                if nonce and issued_at:
+                    nonces[str(nonce)] = float(issued_at) + ACTIVATION_PROOF_MAX_AGE_SECONDS
+    return stages, nonces
+
+
+async def hydrate_room_stages() -> None:
+    """Hydrate a complete durable snapshot; configured persistence fails closed."""
+    if not SUPABASE_REST_URL:
+        LOG.info("Supabase not configured; using Git room stages as runtime seeds")
+        return
+    if not SUPABASE_KEY:
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is required when Supabase is configured")
+
+    last_error: Exception | None = None
+    for attempt in range(1, max(HYDRATION_ATTEMPTS, 1) + 1):
+        try:
+            stages, nonces = await _hydrate_room_stages_once()
+            _room_stages.update(stages)
+            _used_activation_nonces.update(nonces)
+            LOG.info("Hydrated durable stages for %d rooms", len(stages))
+            return
+        except Exception as exc:
+            last_error = exc
+            LOG.error(
+                "Supabase stage hydration attempt %d/%d failed (%s)",
+                attempt,
+                max(HYDRATION_ATTEMPTS, 1),
+                exc,
+            )
+            if attempt < max(HYDRATION_ATTEMPTS, 1):
+                await asyncio.sleep(HYDRATION_RETRY_SECONDS)
+    raise RuntimeError("Supabase stage hydration failed; refusing Git-seed fallback") from last_error
 
 
 class NATSPublisher:
@@ -354,6 +475,7 @@ class NATSPublisher:
         *,
         required: bool = False,
     ) -> None:
+        validate_payload(subject, payload)
         body = json.dumps(payload).encode()
         if not self.connected:
             if required:
@@ -389,12 +511,18 @@ class NATSPublisher:
             payload = json.loads(message.data.decode())
             room_id = payload.get("room_id") or payload["room"]
             action = str(payload.get("action") or "start").lower()
-            target = (
-                SessionState.ENDED
-                if action in {"end", "stop", "stopped"}
-                else SessionState.ACTIVE
+            target = {
+                "start": SessionState.ACTIVE,
+                "started": SessionState.ACTIVE,
+                "end": SessionState.ENDED,
+                "stop": SessionState.ENDED,
+                "stopped": SessionState.ENDED,
+            }[action]
+            await transition_session(
+                room_id,
+                target,
+                rollover=action in {"start", "started"},
             )
-            await transition_session(room_id, target)
         except Exception as exc:
             await self._fail_command(NATS_COMMAND_LAUNCH, payload, exc)
 
@@ -405,7 +533,8 @@ class NATSPublisher:
             room_id = payload.get("room_id") or payload["room"]
             action = payload["action"]
             if action == "stage":
-                await transition_stage(room_id, RoomStage(payload["target"]))
+                proof = ActivationProof.model_validate(payload["proof"]) if payload.get("proof") else None
+                await transition_stage(room_id, RoomStage(payload["target"]), proof=proof)
             else:
                 target = {
                     "start": SessionState.ACTIVE,
@@ -417,7 +546,11 @@ class NATSPublisher:
                     "stopped": SessionState.ENDED,
                     "archive": SessionState.ARCHIVED,
                 }[action]
-                await transition_session(room_id, target)
+                await transition_session(
+                    room_id,
+                    target,
+                    rollover=action in {"start", "started"},
+                )
         except Exception as exc:
             await self._fail_command(NATS_COMMAND_SESSION, payload, exc)
 
@@ -434,14 +567,34 @@ def get_or_create_session(room_id: str) -> RoomSession:
     return session
 
 
-async def transition_session(room_id: str, target: SessionState) -> RoomSession:
+async def transition_session(
+    room_id: str,
+    target: SessionState,
+    *,
+    rollover: bool = False,
+) -> RoomSession:
     lock = _room_locks.setdefault(room_id, asyncio.Lock())
     async with lock:
-        return await _transition_session(room_id, target)
+        return await _transition_session(room_id, target, rollover=rollover)
 
 
-async def _transition_session(room_id: str, target: SessionState) -> RoomSession:
+async def _transition_session(
+    room_id: str,
+    target: SessionState,
+    *,
+    rollover: bool = False,
+) -> RoomSession:
     session = get_or_create_session(room_id)
+    if target == SessionState.ACTIVE and session.stage == RoomStage.ARCHIVE:
+        raise HTTPException(status_code=409, detail="Archived room cannot start a new session")
+    if rollover and target == SessionState.ACTIVE and session.state in {
+        SessionState.ENDED,
+        SessionState.ARCHIVED,
+    }:
+        replacement = RoomSession(room_id, get_room_manifest(room_id))
+        replacement.stage = _room_stages.get(room_id, session.stage)
+        _sessions[room_id] = replacement
+        session = replacement
     current = session.state
     if target not in SESSION_TRANSITIONS[current]:
         raise HTTPException(status_code=409, detail=f"Invalid session transition: {current.value} -> {target.value}")
@@ -473,13 +626,23 @@ async def _transition_session(room_id: str, target: SessionState) -> RoomSession
     return session
 
 
-async def transition_stage(room_id: str, target: RoomStage) -> RoomSession:
+async def transition_stage(
+    room_id: str,
+    target: RoomStage,
+    *,
+    proof: ActivationProof | None = None,
+) -> RoomSession:
     lock = _room_locks.setdefault(room_id, asyncio.Lock())
     async with lock:
-        return await _transition_stage(room_id, target)
+        return await _transition_stage(room_id, target, proof=proof)
 
 
-async def _transition_stage(room_id: str, target: RoomStage) -> RoomSession:
+async def _transition_stage(
+    room_id: str,
+    target: RoomStage,
+    *,
+    proof: ActivationProof | None = None,
+) -> RoomSession:
     session = get_or_create_session(room_id)
     current = session.stage
     if target not in STAGE_TRANSITIONS[current]:
@@ -498,7 +661,14 @@ async def _transition_stage(room_id: str, target: RoomStage) -> RoomSession:
 
     card_id = None
     if target == RoomStage.LIVE:
-        card_id = validate_chit(session.manifest)
+        activation_message = _activation_message(
+            room_id,
+            session.session_id,
+            current,
+            target,
+            proof,
+        ) if proof is not None else b""
+        card_id = validate_chit(session.manifest, proof, activation_message)
 
     previous = session.stage
     session.stage = target
@@ -509,6 +679,8 @@ async def _transition_stage(room_id: str, target: RoomStage) -> RoomSession:
             "stage": target.value,
             "previous_stage": previous.value,
             "signing_card_id": card_id,
+            "activation_nonce": proof.nonce if proof else None,
+            "activation_issued_at": proof.issued_at if proof else None,
             "ts": now,
         }
     )
@@ -533,7 +705,18 @@ async def _transition_stage(room_id: str, target: RoomStage) -> RoomSession:
         )
     except Exception as publish_exc:
         session.stage = previous
-        session.checkpoints.pop()
+        session.checkpoints.append(
+            {
+                "session_state": session.state.value,
+                "stage": previous.value,
+                "previous_stage": target.value,
+                "failed_stage": target.value,
+                "signing_card_id": card_id,
+                "error": str(getattr(publish_exc, "detail", publish_exc)),
+                "rollback": True,
+                "ts": time.time(),
+            }
+        )
         try:
             await record_session(
                 session,
@@ -552,6 +735,18 @@ async def _transition_stage(room_id: str, target: RoomStage) -> RoomSession:
 
 class StageRequest(BaseModel):
     target: RoomStage
+    proof: ActivationProof | None = None
+
+
+def require_http_control(
+    authorization: Annotated[str | None, Header()] = None,
+) -> None:
+    """Authenticate HTTP control-plane mutations with a secret-aware bearer token."""
+    if not P7_CONTROL_TOKEN:
+        raise HTTPException(status_code=503, detail="P7 HTTP control token not configured")
+    scheme, _, credential = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(credential, P7_CONTROL_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid P7 HTTP control credentials")
 
 
 @asynccontextmanager
@@ -562,7 +757,7 @@ async def lifespan(_: FastAPI):
     await publisher.close()
 
 
-app = FastAPI(title="PMOVES P7 Room Orchestrator", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="PMOVES P7 Room Orchestrator", version="1.2.0", lifespan=lifespan)
 
 
 @app.get("/healthz")
@@ -582,33 +777,52 @@ async def get_room(room_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/v1/rooms/{room_id}/start")
-async def start_room(room_id: str) -> dict[str, Any]:
-    return (await transition_session(room_id, SessionState.ACTIVE)).to_dict()
+async def start_room(
+    room_id: str,
+    _: Annotated[None, Depends(require_http_control)],
+) -> dict[str, Any]:
+    return (await transition_session(room_id, SessionState.ACTIVE, rollover=True)).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/pause")
-async def pause_room(room_id: str) -> dict[str, Any]:
+async def pause_room(
+    room_id: str,
+    _: Annotated[None, Depends(require_http_control)],
+) -> dict[str, Any]:
     return (await transition_session(room_id, SessionState.PAUSED)).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/resume")
-async def resume_room(room_id: str) -> dict[str, Any]:
+async def resume_room(
+    room_id: str,
+    _: Annotated[None, Depends(require_http_control)],
+) -> dict[str, Any]:
     return (await transition_session(room_id, SessionState.ACTIVE)).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/end")
-async def end_room(room_id: str) -> dict[str, Any]:
+async def end_room(
+    room_id: str,
+    _: Annotated[None, Depends(require_http_control)],
+) -> dict[str, Any]:
     return (await transition_session(room_id, SessionState.ENDED)).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/archive-session")
-async def archive_session(room_id: str) -> dict[str, Any]:
+async def archive_session(
+    room_id: str,
+    _: Annotated[None, Depends(require_http_control)],
+) -> dict[str, Any]:
     return (await transition_session(room_id, SessionState.ARCHIVED)).to_dict()
 
 
 @app.post("/api/v1/rooms/{room_id}/stage")
-async def set_room_stage(room_id: str, request: StageRequest) -> dict[str, Any]:
-    return (await transition_stage(room_id, request.target)).to_dict()
+async def set_room_stage(
+    room_id: str,
+    request: StageRequest,
+    _: Annotated[None, Depends(require_http_control)],
+) -> dict[str, Any]:
+    return (await transition_stage(room_id, request.target, proof=request.proof)).to_dict()
 
 
 @app.get("/api/v1/rooms")

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib.util
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import HTTPException
+from jsonschema import ValidationError
 
 
 APP_PATH = Path(__file__).resolve().parents[1] / "app.py"
@@ -22,6 +27,7 @@ def clear_sessions() -> None:
     p7._sessions.clear()
     p7._room_stages.clear()
     p7._room_locks.clear()
+    p7._used_activation_nonces.clear()
 
 
 def test_catalog_entry_resolves_full_manifest() -> None:
@@ -61,7 +67,7 @@ def test_room_stage_and_session_state_are_independent(monkeypatch: pytest.Monkey
     monkeypatch.setattr(p7, "record_session", fake_record)
     monkeypatch.setattr(p7.publisher, "publish", fake_publish)
     monkeypatch.setattr(type(p7.publisher), "connected", property(lambda self: True))
-    monkeypatch.setattr(p7, "validate_chit", lambda manifest: "card-validated")
+    monkeypatch.setattr(p7, "validate_chit", lambda *args: "00000000-0000-4000-8000-000000000001")
 
     session = asyncio.run(
         p7.transition_session("4090-field.room.control", p7.SessionState.ACTIVE)
@@ -78,7 +84,7 @@ def test_room_stage_and_session_state_are_independent(monkeypatch: pytest.Monkey
 
 
 def test_live_stage_requires_active_session(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(p7, "validate_chit", lambda manifest: "card-validated")
+    monkeypatch.setattr(p7, "validate_chit", lambda *args: "00000000-0000-4000-8000-000000000001")
 
     with pytest.raises(HTTPException, match="session must be active") as exc:
         asyncio.run(p7.transition_stage("4090-field.room.control", p7.RoomStage.LIVE))
@@ -95,7 +101,7 @@ def test_live_stage_requires_nats_delivery(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(p7, "record_session", fake_record)
     monkeypatch.setattr(p7.publisher, "publish", fake_publish)
-    monkeypatch.setattr(p7, "validate_chit", lambda manifest: "card-validated")
+    monkeypatch.setattr(p7, "validate_chit", lambda *args: "00000000-0000-4000-8000-000000000001")
 
     asyncio.run(p7.transition_session("4090-field.room.control", p7.SessionState.ACTIVE))
     with pytest.raises(HTTPException, match="NATS stage-fact delivery required") as exc:
@@ -130,7 +136,7 @@ def test_stage_publish_failure_rolls_back_durable_stage(
     monkeypatch.setattr(p7, "record_session", fake_record)
     monkeypatch.setattr(p7.publisher, "publish", fake_publish)
     monkeypatch.setattr(type(p7.publisher), "connected", property(lambda self: True))
-    monkeypatch.setattr(p7, "validate_chit", lambda manifest: "card-validated")
+    monkeypatch.setattr(p7, "validate_chit", lambda *args: "00000000-0000-4000-8000-000000000001")
 
     session = p7.get_or_create_session("4090-field.room.control")
     session.state = p7.SessionState.ACTIVE
@@ -143,19 +149,23 @@ def test_stage_publish_failure_rolls_back_durable_stage(
         ("stage:rehearsal->live", "live"),
         ("stage-rollback:live->rehearsal", "rehearsal"),
     ]
+    assert session.checkpoints[-2]["stage"] == "live"
+    assert session.checkpoints[-1]["rollback"] is True
+    assert session.checkpoints[-1]["failed_stage"] == "live"
+    assert session.checkpoints[-1]["signing_card_id"] == "00000000-0000-4000-8000-000000000001"
 
 
 def test_chit_uses_active_signing_card_for_room_owner() -> None:
     manifest = p7.get_room_manifest("4090-field.room.control")
 
-    assert p7.validate_chit(manifest) == "00000000-0000-4000-8000-000000000012"
+    assert p7._resolve_signing_card(manifest)["card_id"] == "00000000-0000-4000-8000-000000000012"
 
 
 def test_chit_fails_when_room_owner_has_no_signing_card() -> None:
     manifest = p7.get_room_manifest("5090-kilocode.room.studio")
 
     with pytest.raises(HTTPException, match="no active signing card") as exc:
-        p7.validate_chit(manifest)
+        p7._resolve_signing_card(manifest)
 
     assert exc.value.status_code == 422
 
@@ -246,7 +256,7 @@ def test_live_checkpoint_preserves_signing_card_in_audit_history(
     monkeypatch.setattr(p7, "record_session", fake_record)
     monkeypatch.setattr(p7.publisher, "publish", fake_publish)
     monkeypatch.setattr(type(p7.publisher), "connected", property(lambda self: True))
-    monkeypatch.setattr(p7, "validate_chit", lambda manifest: "card-validated")
+    monkeypatch.setattr(p7, "validate_chit", lambda *args: "00000000-0000-4000-8000-000000000001")
 
     session = asyncio.run(
         p7.transition_session("4090-field.room.control", p7.SessionState.ACTIVE)
@@ -259,7 +269,7 @@ def test_live_checkpoint_preserves_signing_card_in_audit_history(
     assert captured[-1]["required"] is True
     assert captured[-1]["history"][-1]["previous_stage"] == "rehearsal"
     assert captured[-1]["history"][-1]["stage"] == "live"
-    assert captured[-1]["history"][-1]["signing_card_id"] == "card-validated"
+    assert captured[-1]["history"][-1]["signing_card_id"] == "00000000-0000-4000-8000-000000000001"
 
 
 def test_command_and_fact_subjects_are_distinct() -> None:
@@ -354,7 +364,7 @@ def test_versioned_pbnj_session_action_maps_to_p7_state(
             }
         ).encode()
 
-    async def fake_transition(room_id: str, target: p7.SessionState) -> None:
+    async def fake_transition(room_id: str, target: p7.SessionState, **kwargs) -> None:  # noqa: ANN003
         captured.append((room_id, target))
 
     monkeypatch.setattr(p7, "transition_session", fake_transition)
@@ -378,7 +388,7 @@ def test_versioned_pbnj_launch_action_maps_to_p7_state(
             }
         ).encode()
 
-    async def fake_transition(room_id: str, target: p7.SessionState) -> None:
+    async def fake_transition(room_id: str, target: p7.SessionState, **kwargs) -> None:  # noqa: ANN003
         captured.append((room_id, target))
 
     monkeypatch.setattr(p7, "transition_session", fake_transition)
@@ -386,3 +396,157 @@ def test_versioned_pbnj_launch_action_maps_to_p7_state(
     asyncio.run(p7.publisher._handle_launch(FakeMessage()))
 
     assert captured == [("5090-voice.room.studio", p7.SessionState.ACTIVE)]
+
+
+def test_live_activation_requires_locally_verifiable_card_material() -> None:
+    manifest = p7.get_room_manifest("4090-field.room.control")
+    proof = p7.ActivationProof(
+        card_id="00000000-0000-4000-8000-000000000012",
+        nonce="nonce-with-16-chars",
+        issued_at=int(time.time()),
+        signature="not-a-real-signature",
+    )
+
+    with pytest.raises(HTTPException, match="no locally verifiable SSH key material") as exc:
+        p7.validate_chit(manifest, proof, b"activation")
+
+    assert exc.value.status_code == 422
+
+
+def test_live_activation_verifies_nonce_bound_ed25519_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.OpenSSH,
+        format=serialization.PublicFormat.OpenSSH,
+    ).decode()
+    card_id = "00000000-0000-4000-8000-000000000001"
+    card = {
+        "card_id": card_id,
+        "ml": {
+            "primary_method": "ssh",
+            "ssh_allowed_signers_line": f"darkxside {public_key} pmoves@pmoves.ai",
+        },
+    }
+    monkeypatch.setattr(p7, "_resolve_signing_card", lambda manifest: card)
+    proof = p7.ActivationProof(
+        card_id=card_id,
+        nonce="fresh-random-nonce-0001",
+        issued_at=int(time.time()),
+        signature="placeholder-value",
+    )
+    message = p7._activation_message(
+        "test.room",
+        "00000000-0000-4000-8000-000000000099",
+        p7.RoomStage.REHEARSAL,
+        p7.RoomStage.LIVE,
+        proof,
+    )
+    proof = proof.model_copy(
+        update={"signature": base64.b64encode(private_key.sign(message)).decode()}
+    )
+
+    assert p7.validate_chit({}, proof, message) == card_id
+    with pytest.raises(HTTPException, match="nonce already used") as exc:
+        p7.validate_chit({}, proof, message)
+    assert exc.value.status_code == 409
+
+
+def test_hydration_failure_refuses_git_seed_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingClient:
+        def __init__(self, **kwargs) -> None:  # noqa: ANN003
+            return None
+
+        async def __aenter__(self):  # noqa: ANN204
+            return self
+
+        async def __aexit__(self, *args) -> None:  # noqa: ANN002
+            return None
+
+        async def get(self, *args, **kwargs):  # noqa: ANN002, ANN003, ANN201
+            raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(p7, "SUPABASE_REST_URL", "http://supabase.test/rest/v1")
+    monkeypatch.setattr(p7, "SUPABASE_KEY", "test-key")
+    monkeypatch.setattr(p7, "HYDRATION_ATTEMPTS", 1)
+    monkeypatch.setattr(p7.httpx, "AsyncClient", FailingClient)
+
+    with pytest.raises(RuntimeError, match="refusing Git-seed fallback"):
+        asyncio.run(p7.hydrate_room_stages())
+
+
+def test_explicit_start_rolls_over_ended_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def no_op(*args, **kwargs) -> None:  # noqa: ANN002, ANN003
+        return None
+
+    monkeypatch.setattr(p7, "record_session", no_op)
+    monkeypatch.setattr(p7.publisher, "publish", no_op)
+    old_session = p7.get_or_create_session("4090-field.room.control")
+    old_session.state = p7.SessionState.ENDED
+    old_id = old_session.session_id
+
+    new_session = asyncio.run(
+        p7.transition_session(
+            "4090-field.room.control",
+            p7.SessionState.ACTIVE,
+            rollover=True,
+        )
+    )
+
+    assert new_session.session_id != old_id
+    assert new_session.state == p7.SessionState.ACTIVE
+
+
+def test_archived_room_rejects_new_session() -> None:
+    p7._room_stages["4090-field.room.control"] = p7.RoomStage.ARCHIVE
+
+    with pytest.raises(HTTPException, match="Archived room cannot start") as exc:
+        asyncio.run(
+            p7.transition_session(
+                "4090-field.room.control",
+                p7.SessionState.ACTIVE,
+                rollover=True,
+            )
+        )
+
+    assert exc.value.status_code == 409
+
+
+def test_unknown_launch_action_emits_failed_fact(monkeypatch: pytest.MonkeyPatch) -> None:
+    published: list[tuple[str, dict]] = []
+    transitioned: list[str] = []
+
+    class FakeMessage:
+        data = json.dumps({"room": "4090-field.room.control", "action": "strat"}).encode()
+
+    async def fake_publish(subject: str, payload: dict, **kwargs) -> None:  # noqa: ANN003
+        published.append((subject, payload))
+
+    async def fake_transition(*args, **kwargs) -> None:  # noqa: ANN002, ANN003
+        transitioned.append("called")
+
+    monkeypatch.setattr(p7.publisher, "publish", fake_publish)
+    monkeypatch.setattr(p7, "transition_session", fake_transition)
+
+    asyncio.run(p7.publisher._handle_launch(FakeMessage()))
+
+    assert transitioned == []
+    assert published[0][0] == p7.NATS_SUBJECT_FAILED
+
+
+def test_p7_fact_schema_rejects_incomplete_payload() -> None:
+    session = p7.get_or_create_session("4090-field.room.control")
+
+    assert p7.validate_payload(p7.NATS_SUBJECT_CHECKPOINT, session.to_dict())
+    with pytest.raises(ValidationError):
+        p7.validate_payload(p7.NATS_SUBJECT_CHECKPOINT, {"room_id": session.room_id})
+
+
+def test_http_control_authentication_is_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(p7, "P7_CONTROL_TOKEN", "control-secret")
+
+    assert p7.require_http_control("Bearer control-secret") is None
+    with pytest.raises(HTTPException, match="Invalid P7 HTTP control credentials") as exc:
+        p7.require_http_control("Bearer wrong")
+    assert exc.value.status_code == 401
