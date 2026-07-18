@@ -1,0 +1,227 @@
+{
+  "a2uiVersion": "0.1",
+  "tenant": {
+    "id": "fordham-hill",
+    "name": "Fordham Hill Community Room",
+    "theme": "armor",
+    "tagline": "Community cost-pooling + self-governance pilot room"
+  },
+  "messages": [
+    {
+      "type": "pageMeta",
+      "tenant": {
+        "id": "fordham-hill",
+        "name": "Fordham Hill Community Room",
+        "theme": "armor",
+        "tagline": "Community cost-pooling + self-governance pilot room"
+      }
+    },
+    {
+      "type": "pageHeader",
+      "title": "Fordham Hill Community Room",
+      "tagline": "Community cost-pooling + self-governance pilot room"
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "When the mesh node goes down, the block fixes it. When the cell tower goes down, we wait.",
+        "attribution": "Pilot resident, Fordham Hill",
+        "attributionRole": "cooperative member"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-image",
+      "props": {
+        "src": "./assets/fordham-gateway.jpg",
+        "alt": "Mobile mesh node rig in a hard case, Fordham Hill pilot",
+        "caption": "Fordham Hill pilot gateway, installed 2026-04",
+        "credit": "Render: PMOVES (generated, pending sign-off)"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "DARKXSIDE",
+        "agentRole": "operator",
+        "glyph": "✦",
+        "presence": "live"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "CLAUDE-OPUS",
+        "agentRole": "analytical",
+        "glyph": "◆",
+        "presence": "live"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "B850-CLAUDE",
+        "agentRole": "orchestrator",
+        "glyph": "◆",
+        "presence": "rehearsal"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "4090-CLAUDE",
+        "agentRole": "field",
+        "glyph": "◆",
+        "presence": "offline"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Mesh pilot: Fordham Hill",
+        "description": "50-family mesh + private AI. Voice that goes through walls. Community-owned infrastructure, cooperative-priced.",
+        "status": "live",
+        "tags": [
+          "mesh",
+          "voice",
+          "tenancy"
+        ],
+        "links": [
+          {
+            "label": "Capability brief",
+            "href": "#brief"
+          },
+          {
+            "label": "Discord",
+            "href": "#discord"
+          }
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Pooled-dues ledger",
+        "description": "Cooperative cost-pooling with tamper-evident resident voting. Tokenism settlement lane.",
+        "status": "planned",
+        "tags": [
+          "governance",
+          "ledger"
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Pilot-1 (archived)",
+        "description": "Initial mesh test, 5 families, 3 months. Lessons learned.",
+        "status": "archived"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Mesh uptime",
+        "value": "99.4",
+        "unit": "%",
+        "trend": "up",
+        "format": "percent"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Active sessions",
+        "value": "47",
+        "trend": "up"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Latency (p95)",
+        "value": "142",
+        "unit": "ms",
+        "trend": "down",
+        "format": "duration"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Families connected",
+        "value": "23",
+        "trend": "up"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-timeline",
+      "props": {
+        "events": [
+          {
+            "ts": "2026-07-15T10:00:00Z",
+            "title": "Mesh gateway came up",
+            "body": "Fordham Hill pilot gateway online. 47 households on the lattice.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-07-15T06:00:00Z",
+            "title": "Voice agent RVC model loaded",
+            "body": "Flute-Gateway finished loading the Kokoro + RVC stack. Latency p95 = 142ms.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-07-14T08:00:00Z",
+            "title": "Tokenism W1 closed",
+            "body": "G1 export wrapper + G3 firefly compose merge. 156 dry-run transactions.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-07-12T19:00:00Z",
+            "title": "Community co-design session",
+            "body": "12 residents, 3 hours, mapped the pooled-dues ledger schema.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-04-20T15:00:00Z",
+            "title": "Pilot kickoff",
+            "body": "PMOVES.AI / Fordham Hill co-op. First node live.",
+            "icon": "◆"
+          }
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-voice-clip",
+      "props": {
+        "title": "DARKXSIDE: why mesh, why now (placeholder audio — final clip pending)",
+        "speaker": "DARKXSIDE",
+        "duration": "0:04",
+        "src": "./assets/placeholder-voice.mp3",
+        "transcript": "So the question I keep getting is why bother with mesh when 5G exists. The answer is simple: 5G is not a right, it's a subscription. When the cell tower goes down in St. Maarten, the block goes dark. When the mesh node goes down, the block fixes it."
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "We started with five families and a question. Eight weeks later, 23 households are on the lattice and the block votes on its own infrastructure.",
+        "attribution": "Pilot co-organizer"
+      }
+    }
+  ]
+}

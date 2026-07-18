@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-metric-tile&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-accent-strong: #5B21B6;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+      --pm-motion-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+      --pm-motion-slow: 400ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      max-width: 800px;
+    }
+    .controls {
+      margin: 24px 0;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .controls button {
+      background: var(--pm-bg-elevated);
+      color: var(--pm-fg);
+      border: 1px solid var(--pm-border);
+      border-radius: var(--pm-radius-sm);
+      padding: 6px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .controls button:hover {
+      background: var(--pm-accent);
+    }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-metric-tile&gt; — v0.1 demo</h1>
+
+  <div class="grid">
+    <pm-metric-tile label="Mesh uptime" value="99.4" unit="%" trend="up" format="percent"></pm-metric-tile>
+    <pm-metric-tile label="Active sessions" value="47" trend="up"></pm-metric-tile>
+    <pm-metric-tile label="Latency" value="142" unit="ms" trend="down" format="duration"></pm-metric-tile>
+    <pm-metric-tile label="Storage" value="2.3" unit="GB" trend="flat"></pm-metric-tile>
+    <pm-metric-tile label="Build cost" value="12" unit="" trend="down" format="currency"></pm-metric-tile>
+    <pm-metric-tile label="Pending" data-source="fordham:workqueue.pending"></pm-metric-tile>
+    <pm-metric-tile label="Live sessions" data-source="https://api.pmoves.ai/tenants/fordham/sessions/count"></pm-metric-tile>
+  </div>
+
+  <div class="controls">
+    <button id="bump">Bump uptime → 99.6</button>
+    <button id="dip">Bump uptime → 99.1 (down)</button>
+  </div>
+
+  <script type="module" src="./pm-metric-tile.js"></script>
+  <script type="module">
+    const uptime = document.querySelector('pm-metric-tile');
+    document.getElementById('bump').addEventListener('click', () => {
+      uptime.value = '99.6';
+      uptime.trend = 'up';
+    });
+    document.getElementById('dip').addEventListener('click', () => {
+      uptime.value = '99.1';
+      uptime.trend = 'down';
+    });
+  </script>
+</body>
+</html>

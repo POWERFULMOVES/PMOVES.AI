@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A2UI v0.1 — Conformance Test</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-accent-strong: #5B21B6;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+      --pm-motion-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+      --pm-motion-slow: 400ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 18px;
+      margin: 0 0 16px;
+    }
+    pre {
+      background: var(--pm-bg-elevated);
+      border: 1px solid var(--pm-border);
+      border-radius: var(--pm-radius-sm);
+      padding: 12px;
+      font-size: 12px;
+      overflow: auto;
+      color: var(--pm-fg);
+    }
+    .status { font-weight: 600; }
+    .status.pass { color: #10b981; }
+    .status.fail { color: #ef4444; }
+    .status.warn { color: #f59e0b; }
+    section { margin-bottom: 24px; }
+    h2 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>A2UI v0.1 — Conformance Test</h1>
+
+  <section id="registry">
+    <h2>Component registration</h2>
+    <pre id="registry-out">Running...</pre>
+  </section>
+
+  <section id="tokens">
+    <h2>Token check (--pm-* present)</h2>
+    <pre id="tokens-out">Running...</pre>
+  </section>
+
+  <section id="shadow">
+    <h2>Shadow DOM encapsulation</h2>
+    <pre id="shadow-out">Running...</pre>
+  </section>
+
+  <section id="a11y">
+    <h2>Axe-core 4.x (WCAG 2 AA)</h2>
+    <pre id="a11y-out">Running...</pre>
+  </section>
+
+  <!-- Test surface: one of each v0.1 shipped component -->
+  <section id="test-surface" style="display:none">
+    <pm-space-agent-card agent-name="Test Agent" agent-role="test" presence="live"></pm-space-agent-card>
+    <pm-project-card title="Test Project" description="Test desc" status="live"></pm-project-card>
+    <pm-metric-tile label="Test metric" value="42" trend="up"></pm-metric-tile>
+    <pm-timeline events='[{"ts":"2026-07-15T10:00:00Z","title":"Event 1","body":"Test body","icon":"◆"}]'></pm-timeline>
+    <pm-voice-clip src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=" title="Test clip" duration="0:01"></pm-voice-clip>
+    <pm-image src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjwvc3ZnPg==" alt="Test" caption="Test caption"></pm-image>
+    <pm-quote-block quote="Test quote" attribution="Test" attribution-role="Tester"></pm-quote-block>
+  </section>
+
+  <!-- Inject components -->
+  <script type="module">
+    // Import all v0.1 components (7 total)
+    import '../web-components/pm-space-agent-card/pm-space-agent-card.js';
+    import '../web-components/pm-project-card/pm-project-card.js';
+    import '../web-components/pm-metric-tile/pm-metric-tile.js';
+    import '../web-components/pm-timeline/pm-timeline.js';
+    import '../web-components/pm-voice-clip/pm-voice-clip.js';
+    import '../web-components/pm-image/pm-image.js';
+    import '../web-components/pm-quote-block/pm-quote-block.js';
+
+    const out = (id, text, klass) => {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = klass || '';
+    };
+
+    // 1. Registry check
+    const expected = [
+      'pm-space-agent-card',
+      'pm-project-card',
+      'pm-metric-tile',
+      'pm-timeline',
+      'pm-voice-clip',
+      'pm-image',
+      'pm-quote-block',
+    ];
+    const registered = expected.filter((n) => customElements.get(n));
+    if (registered.length === expected.length) {
+      out('registry-out', `✓ All ${expected.length}/7 v0.1 components registered:\n  - ${registered.join('\n  - ')}`, 'pass');
+    } else {
+      const missing = expected.filter((n) => !customElements.get(n));
+      out('registry-out', `✗ Missing: ${missing.join(', ')}\n  Registered: ${registered.join(', ')}`, 'fail');
+    }
+
+    // 2. Token check — all components read --pm-* tokens
+    const components = document.querySelectorAll('#test-surface > *');
+    document.getElementById('test-surface').style.display = 'block';
+    const tokenReport = [];
+    components.forEach((comp) => {
+      // Get the CSS text from the first <style> in the shadow root.
+      // We read the raw textContent (works for HTMLStyleElement) and fall
+      // back to adoptedStyleSheets[0].cssText for the CSSStyleSheet case.
+      const styleEl = comp.shadowRoot?.querySelector('style');
+      let cssText = '';
+      if (styleEl) {
+        cssText = styleEl.textContent || '';
+      } else {
+        const adopted = comp.shadowRoot?.adoptedStyleSheets?.[0];
+        if (adopted) cssText = Array.from(adopted.cssRules || []).map((r) => r.cssText).join('\n');
+      }
+      // Check that --pm-* tokens are used and no hardcoded hex colors leak in the default styles
+      const usesTokens = /var\(--pm-/.test(cssText);
+      const hasHardcodedHex = /#[0-9a-fA-F]{3,8}/.test(cssText);
+      // --pm-bg, --pm-fg etc. all need to be referenced
+      const tokenCount = (cssText.match(/var\(--pm-/g) || []).length;
+      tokenReport.push(`  ${comp.tagName.toLowerCase()}: ${usesTokens ? '✓' : '✗'} uses --pm-* tokens (${tokenCount} refs)${hasHardcodedHex ? ' [HARDCODED HEX!]' : ''}`);
+    });
+    const allUseTokens = tokenReport.every((r) => r.includes('✓'));
+    out('tokens-out', tokenReport.join('\n'), allUseTokens ? 'pass' : 'fail');
+
+    // 3. Shadow DOM check
+    const shadowReport = [];
+    components.forEach((comp) => {
+      const hasShadow = !!comp.shadowRoot;
+      const mode = hasShadow && comp.shadowRoot.mode ? comp.shadowRoot.mode : 'none';
+      shadowReport.push(`  ${comp.tagName}: shadowRoot=${hasShadow ? 'yes' : 'no'} (mode=${mode})`);
+    });
+    const allShadow = shadowReport.every((r) => r.includes('yes'));
+    out('shadow-out', shadowReport.join('\n'), allShadow ? 'pass' : 'fail');
+
+    // 4. Axe-core a11y
+    const axeScript = document.createElement('script');
+    axeScript.src = 'https://cdn.jsdelivr.net/npm/axe-core@4.10.2/axe.min.js';
+    axeScript.onload = async () => {
+      try {
+        const result = await window.axe.run(document, {
+          runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] },
+        });
+        const violations = result.violations;
+        if (violations.length === 0) {
+          out('a11y-out', `✓ 0 violations\n  ${result.passes.length} rules passed`, 'pass');
+        } else {
+          const lines = violations.map((v) =>
+            `  [${v.impact}] ${v.id} - ${v.help} (${v.nodes.length} nodes)`
+          );
+          out('a11y-out', `✗ ${violations.length} violations:\n${lines.join('\n')}`, 'fail');
+        }
+      } catch (e) {
+        out('a11y-out', `✗ axe-core error: ${e.message}`, 'fail');
+      }
+    };
+    document.body.appendChild(axeScript);
+  </script>
+</body>
+</html>
