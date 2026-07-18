@@ -20,4 +20,5 @@ if [ -z "$REPO_ROOT" ]; then
 fi
 
 exec env PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
-  python3 "$REPO_ROOT/pmoves/tools/mini_cli.py" "$@"
+  "${PMOVES_PYTHON:-${REPO_ROOT}/pmoves/.venv-pmoves/bin/python}" \
+  "$REPO_ROOT/pmoves/tools/mini_cli.py" "$@"
