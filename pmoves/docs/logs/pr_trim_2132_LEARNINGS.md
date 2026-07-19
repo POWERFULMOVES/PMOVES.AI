@@ -68,8 +68,8 @@
     with no recorded consent or provenance, pinned to a real, identifiable
     Bronx housing cooperative.** A trim cycle that only reads diffs misses
     fixture-content questions — this needed a fixture-content audit step.
-    **Resolved:** quotes rewritten to obviously-synthetic personas ("Sample
-    voice — Maya R." / "Sample voice — Devon A." with `illustrative persona
-    (not a real resident)` role). A 3rd quote-block added as a "share your
-    story" CTA inviting real Fordham Hill residents to contribute — when they
-    do with consent, their quote replaces the placeholder (option C path).
+    **Resolved (PR #2269):** quotes rewritten to obviously-synthetic personas
+    ("Sample voice — Maya R." / "Sample voice — Devon A." with `illustrative
+    persona (not a real resident)` role). A 3rd quote-block added as a "share
+    your story" CTA inviting real Fordham Hill residents to contribute — when
+    they do with consent, their quote replaces the placeholder (option C path).
