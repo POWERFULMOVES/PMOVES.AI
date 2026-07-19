@@ -10,6 +10,41 @@
 
 ---
 
+<!-- graphiti:crush phase:visual-ecosystem-convergence ts:2026-07-18T05:10:00Z -->
+
+## ◇ Crush — Visual Ecosystem Convergence: Current Upstream + Launchers Reconciled
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, visual-ecosystem, submodule-architecture
+**Voice:** Companion
+
+### Done
+- **Crush bootstrap repaired on B850 Knuckles**: installed gopls v0.23.0, fixed pmoves-mini wrapper (typer in .venv-pmoves), fixed cipher SSE URL (/mcp/sse -> /api/mcp/sse), created crush-env.sh tier file resolver, fixed crush-pmoves to source env before launch, huggingface port 3000 conflict resolved, 11 context paths configured.
+- **PR #2152 merged** (PMOVES.AI): CRUSH convergence + 3 verified bugs (TENSORZERO_URL port fix, cipher profile, MCP SSE path). Fixed compose drift gate, Pmoves-cipher .gitmodules branch pin (Hardened -> main), submodule gitlink gate ROLLBACK false positive (skip when DANGLING=identical).
+- **PR #2154 merged** (PMOVES.AI): ballot prior art + A2UI reconciliation. Addressed all CodeRabbit + Codex comments (amd-voice NVIDIA reset, TTS service DNS, Ed25519 auth vs secrecy distinction, grep reproducibility, pipeline status alignment, test fixture SSE path).
+- **PR #6 merged** (PMOVES-crush): visual ecosystem submodules — pmoves-catwalk (forked charmbracelet/catwalk with TensorZero provider), pmoves-gum (TUI scripting wrapper with agent signature theming), pmoves-vhs (3 demo tapes), showtime-status CLI, crush-model-picker, PBnJ Crush-first launcher. Published POWERFULMOVES/pmoves-catwalk fork with tensorzero.json.
+- **PR #7 merged** (PMOVES-crush): reconciled the fork against current official upstream `4f4b8469`, preserved the current client/server runtime, fixed all three review findings, replaced the unreachable Catwalk gitlink, and cleared the 449-error stale-root failure. Cross-platform race builds/tests, lint, CodeQL, govulncheck, Grype, and dependency review passed.
+- **PR #8 merged** (PMOVES-crush): repaired Showtime HTTP/status rendering and the Pinokio path to the canonical `pmoves/scripts/crush-pmoves` wrapper. HTTP mock, path resolution, and the full cross-platform CI matrix passed.
+- **PR #2160 reconciled** (PMOVES.AI): promoted the reviewed PMOVES-crush gitlink to `9c3742e3` and aligned this trail with the merged runtime evidence.
+
+### Left Behind
+- **Catwalk activation**: the reachable `pmoves-catwalk@36981852` gitlink carries TensorZero and passes its Go suite, but the root `go.mod` replace remains intentionally disabled because normal CI does not initialize submodules before `go mod tidy`. Published PMOVES-crush binaries still use the pinned upstream Catwalk module until a submodule-aware build lane is added.
+- **Showtime Go-native status**: the repaired shell CLI is active; native TUI status-bar integration remains future work.
+- **Node activation**: fleet nodes still need to pull the promoted parent/submodule commits and run their local flight checks.
+
+### For Next Agent
+- **Catwalk build lane**: add a submodule-aware CI/release job before enabling `replace charm.land/catwalk => ./pmoves-catwalk`.
+- **Gum PMOVES customizations**: layer agent signature theme colors into gum Go source (currently shell wrapper only).
+- **Showtime Go-native**: embed the validated showtime-status behavior into the Crush TUI status bar.
+- **SPARK/B850 nodes**: pull parent main and `PMOVES-crush@9c3742e3`, then run `crush-pmoves` and local flight checks.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:z890-claude phase:H ts:2026-03-19T22:48:00Z -->
 
 ## ▣ z890-claude — Session Convergence: 14 PRs Merged + Pinokio + NATS Leaf + Azure Mirror
