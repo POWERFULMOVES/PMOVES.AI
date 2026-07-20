@@ -139,6 +139,59 @@ A2UI_USER_ACTION = "userAction"
 A2UI_CLOSE_SURFACE = "closeSurface"
 
 
+# --------------------------------------------------------------------------- #
+# P7 room-lifecycle handlers (module-level so unit tests can call them directly)
+# --------------------------------------------------------------------------- #
+
+async def forward_room_session_event(msg, websocket) -> None:
+    """Forward P7 ``room.session.updated.v1`` events to a WebSocket client.
+
+    Wraps the payload in a ``p7-rooms`` envelope so the A2UI renderer can
+    route it to the room-lifecycle surface. The payload (per P7 service
+    spec §6.3) carries ``room_id``, ``previous_stage``, ``new_stage``,
+    ``reason``, ``requester``, and a ``chit`` envelope; clients use the
+    ``previous_stage`` → ``new_stage`` delta to update their room card /
+    list / detail views.
+
+    Module-level (not a closure) so unit tests in
+    ``tests/test_room_envelope.py`` can call it directly. Named
+    ``forward_*`` (not ``*_handler``) to avoid shadowing the per-client
+    closure in ``client_websocket``.
+    """
+    try:
+        payload = json.loads(msg.data.decode())
+        envelope = {
+            "room": P7_WS_ROOM,
+            "subject": msg.subject,
+            "data": payload,
+        }
+        await websocket.send_text(json.dumps(envelope) + "\n")
+        room_session_events_forwarded.inc()
+    except Exception as e:
+        logger.warning(f"Failed to forward {msg.subject}: {e}")
+
+
+async def forward_config_reloaded_event(msg, websocket) -> None:
+    """Forward P7 ``pmoves.config.rooms.reloaded.v1`` events to a WebSocket client.
+
+    Carries ``schema_version`` + ``rooms_loaded``; the A2UI renderer uses
+    this to invalidate cached catalog snapshots and re-fetch.
+
+    Module-level (not a closure) so unit tests can call it directly.
+    """
+    try:
+        payload = json.loads(msg.data.decode())
+        envelope = {
+            "room": P7_WS_ROOM,
+            "subject": msg.subject,
+            "data": payload,
+        }
+        await websocket.send_text(json.dumps(envelope) + "\n")
+        room_config_reloaded_events_forwarded.inc()
+    except Exception as e:
+        logger.warning(f"Failed to forward {msg.subject}: {e}")
+
+
 @dataclass
 class A2UIEvent:
     """A2UI event wrapper for NATS transport."""
@@ -586,43 +639,16 @@ async def client_websocket(websocket: WebSocket):
             logger.warning(f"Failed to forward geometry message: {e}")
 
     async def room_session_handler(msg):
-        """Forward P7 room.session.updated.v1 events to WebSocket client.
-
-        Wraps the payload in a room envelope so the A2UI renderer can route
-        it to the room-lifecycle surface. The payload (per P7 service spec
-        §6.3) carries room_id, previous_stage, new_stage, reason, requester,
-        and a `chit` envelope; clients use the previous_stage → new_stage
-        delta to update their room card / list / detail views.
+        """Per-client NATS callback. Delegates to the module-level
+        ``forward_room_session_event`` so unit tests can call the canonical
+        implementation directly. The closure captures ``websocket`` so the
+        nats-py callback signature is preserved.
         """
-        try:
-            payload = json.loads(msg.data.decode())
-            envelope = {
-                "room": P7_WS_ROOM,
-                "subject": msg.subject,
-                "data": payload,
-            }
-            await websocket.send_text(json.dumps(envelope) + "\n")
-            room_session_events_forwarded.inc()
-        except Exception as e:
-            logger.warning(f"Failed to forward room.session.updated.v1: {e}")
+        return await forward_room_session_event(msg, websocket)
 
     async def config_reloaded_handler(msg):
-        """Forward P7 pmoves.config.rooms.reloaded.v1 events to WebSocket client.
-
-        Carries schema_version + rooms_loaded; the A2UI renderer uses this
-        to invalidate cached catalog snapshots and re-fetch.
-        """
-        try:
-            payload = json.loads(msg.data.decode())
-            envelope = {
-                "room": P7_WS_ROOM,
-                "subject": msg.subject,
-                "data": payload,
-            }
-            await websocket.send_text(json.dumps(envelope) + "\n")
-            room_config_reloaded_events_forwarded.inc()
-        except Exception as e:
-            logger.warning(f"Failed to forward pmoves.config.rooms.reloaded.v1: {e}")
+        """Per-client NATS callback. Same pattern as ``room_session_handler``."""
+        return await forward_config_reloaded_event(msg, websocket)
 
     sub = None
     geom_sub = None
