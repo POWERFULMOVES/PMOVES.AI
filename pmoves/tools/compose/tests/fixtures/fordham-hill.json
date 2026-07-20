@@ -64,11 +64,21 @@
       "props": {
         "title": "Mesh pilot: Fordham Hill",
         "description": "50-family mesh + private AI. Voice that goes through walls. Community-owned infrastructure, cooperative-priced.",
-        "status": "live",
-        "tags": ["mesh", "voice", "tenancy"],
+        "status": "rehearsal",
+        "tags": [
+          "mesh",
+          "voice",
+          "tenancy"
+        ],
         "links": [
-          { "label": "Capability brief", "href": "#brief" },
-          { "label": "Discord", "href": "#discord" }
+          {
+            "label": "Capability brief",
+            "href": "#brief"
+          },
+          {
+            "label": "Discord",
+            "href": "#discord"
+          }
         ]
       }
     },
@@ -78,7 +88,10 @@
         "title": "Pooled-dues ledger",
         "description": "Cooperative cost-pooling with tamper-evident resident voting. Tokenism settlement lane.",
         "status": "planned",
-        "tags": ["governance", "ledger"]
+        "tags": [
+          "governance",
+          "ledger"
+        ]
       }
     },
     {
@@ -92,7 +105,7 @@
     {
       "component": "pm-metric-tile",
       "props": {
-        "label": "Mesh uptime",
+        "label": "Mesh uptime (pilot target)",
         "value": "99.4",
         "unit": "%",
         "trend": "up",
@@ -102,7 +115,7 @@
     {
       "component": "pm-metric-tile",
       "props": {
-        "label": "Active sessions",
+        "label": "Active sessions (pilot target)",
         "value": "47",
         "trend": "up"
       }
@@ -110,7 +123,7 @@
     {
       "component": "pm-metric-tile",
       "props": {
-        "label": "Latency (p95)",
+        "label": "Latency (p95) (pilot target)",
         "value": "142",
         "unit": "ms",
         "trend": "down",
@@ -120,7 +133,7 @@
     {
       "component": "pm-metric-tile",
       "props": {
-        "label": "Families connected",
+        "label": "Families connected (pilot target)",
         "value": "23",
         "trend": "up"
       }

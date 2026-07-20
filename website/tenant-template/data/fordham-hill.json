@@ -86,7 +86,7 @@
       "props": {
         "title": "Mesh pilot: Fordham Hill",
         "description": "50-family mesh + private AI. Voice that goes through walls. Community-owned infrastructure, cooperative-priced.",
-        "status": "live",
+        "status": "rehearsal",
         "tags": [
           "mesh",
           "voice",
@@ -130,7 +130,7 @@
       "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
-        "label": "Mesh uptime",
+        "label": "Mesh uptime (pilot target)",
         "value": "99.4",
         "unit": "%",
         "trend": "up",
@@ -141,7 +141,7 @@
       "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
-        "label": "Active sessions",
+        "label": "Active sessions (pilot target)",
         "value": "47",
         "trend": "up"
       }
@@ -150,7 +150,7 @@
       "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
-        "label": "Latency (p95)",
+        "label": "Latency (p95) (pilot target)",
         "value": "142",
         "unit": "ms",
         "trend": "down",
@@ -161,7 +161,7 @@
       "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
-        "label": "Families connected",
+        "label": "Families connected (pilot target)",
         "value": "23",
         "trend": "up"
       }

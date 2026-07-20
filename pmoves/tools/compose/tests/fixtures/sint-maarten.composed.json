@@ -55,7 +55,7 @@
       "props": {
         "title": "Pre-positioned Pelican Node (5 units)",
         "description": "Solar + battery + Starlink Mini + HaLow mesh in a Pelican case. Deployable in 15 min, runs 72 hours on internal battery.",
-        "status": "live",
+        "status": "rehearsal",
         "tags": [
           "disaster",
           "mesh",
@@ -79,7 +79,7 @@
       "props": {
         "title": "Voice translation EN / NL / FR / ES / HT",
         "description": "Real-time voice translation in 5 languages. Built on the Flute-Gateway stack. Zero-retention by architecture.",
-        "status": "live",
+        "status": "rehearsal",
         "tags": [
           "voice",
           "translation",
@@ -148,7 +148,7 @@
       "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
-        "label": "Mesh uptime (rolling 7d)",
+        "label": "Mesh uptime (rolling 7d) (pilot target)",
         "value": "99.7",
         "unit": "%",
         "trend": "up",
@@ -159,7 +159,7 @@
       "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
-        "label": "Active voice sessions",
+        "label": "Active voice sessions (pilot target)",
         "value": "12",
         "trend": "up"
       }
@@ -168,7 +168,7 @@
       "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
-        "label": "Translation latency (p95)",
+        "label": "Translation latency (p95) (pilot target)",
         "value": "184",
         "unit": "ms",
         "trend": "down",
@@ -179,7 +179,7 @@
       "type": "createComponent",
       "component": "pm-metric-tile",
       "props": {
-        "label": "Battery endurance",
+        "label": "Battery endurance (pilot target)",
         "value": "72",
         "unit": "h",
         "trend": "flat",
