@@ -1,14 +1,24 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY services/p7-room-orchestrator/requirements.txt .
+
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY services/p7-room-orchestrator/app.py .
-COPY services/common /app/pmoves/services/common
-COPY config/rooms /app/pmoves/config/rooms
-COPY config/signing_identity_cards.yaml /app/pmoves/config/signing_identity_cards.yaml
-COPY contracts /app/pmoves/contracts
+# Copy the entire service directory; the modules sit alongside main.py
+# and main.py's sys.path shim makes them importable as a script-style run.
+COPY __init__.py .
+COPY main.py .
+COPY catalog.py .
+COPY transition.py .
+COPY nats_pub.py .
+COPY config.py .
+COPY README.md .
 
-EXPOSE 8122
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8122"]
+EXPOSE 8120
+
+# Healthcheck — service exposes GET /healthz on 8120
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)" || exit 1
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8120"]

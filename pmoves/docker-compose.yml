@@ -2858,6 +2858,59 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  p7:
+    # PMOVES P7 — room-aware stage manager (open-room lane, 2026-07-20).
+    # Mediates room lifecycle (rehearsal → live → review → archive), with CHIT
+    # activation gating on rehearsal→live, atomic catalog writeback, and signed
+    # NATS control-plane events. See:
+    #   pmoves/docs/specs/p7-service-spec-2026-07-20.md
+    #   pmoves/docs/ROOMS_ON_A_STAGE.md
+    #   pmoves/services/p7-room-orchestrator/README.md
+    build:
+      context: ./services/p7-room-orchestrator
+      dockerfile: Dockerfile
+    container_name: pmoves-p7
+    restart: unless-stopped
+    environment:
+      - P7_HTTP_PORT=8120
+      - P7_NATS_URL=nats://nats:4222
+      - P7_PMOVES_ROOT=/etc/pmoves
+      - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
+      - P7_ROOMS_DIR=/etc/pmoves/rooms
+      - P7_ROOM_MANIFEST_SCHEMA=/etc/pmoves/schemas/room/room.manifest.v1.schema.json
+      - P7_SIGNING_CARDS_PATH=/etc/pmoves/config/signing_identity_cards.yaml
+      - P7_AGENT_REGISTRY_PATH=/etc/pmoves/config/agent_registry.yaml
+      - P7_SERVICE_CARD_ID=${P7_SERVICE_CARD_ID:-}
+      - P7_SIGNING_KEY=${P7_SIGNING_KEY:-}
+      - P7_CHIT_REQUIRE_SIGNATURE=${P7_CHIT_REQUIRE_SIGNATURE:-true}
+      - P7_ALLOW_UNSIGNED_LOCAL=${P7_ALLOW_UNSIGNED_LOCAL:-true}
+      - P7_LOG_LEVEL=INFO
+    volumes:
+      # Catalog + per-room manifests: read-write so transitions can writeback current_stage
+      - ./config/rooms:/etc/pmoves/rooms:rw
+      # Schema + signing cards + agent registry: read-only (operator edits via git)
+      - ./contracts/schemas:/etc/pmoves/schemas:ro
+      - ./config/signing_identity_cards.yaml:/etc/pmoves/config/signing_identity_cards.yaml:ro
+      - ./config/agent_registry.yaml:/etc/pmoves/config/agent_registry.yaml:ro
+      - ./env.shared:/etc/pmoves/env.shared:ro
+    ports:
+      - "${P7_BIND:-127.0.0.1}:${P7_PORT:-8120}:8120"
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks: [pmoves_app, pmoves_bus, pmoves_external]
+    profiles: ["agents", "p7"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   mesh-agent:
     <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent
