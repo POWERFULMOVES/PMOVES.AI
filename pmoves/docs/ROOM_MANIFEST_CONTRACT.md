@@ -68,7 +68,7 @@ A binding answers:
 ## Core Rules
 1. Room owns presentation and session ergonomics; notebook owns durable state.
 2. Skills never bind directly to raw UI assumptions; they bind to declared surfaces and action namespaces.
-3. Suits and personas are runtime overlays on the platform — they control appearance, voice, and model routing within a room, but do not define the platform's topology or contract shape. The platform exists before any suit is applied.
+3. Overlays (formerly "suits") and personas are runtime bindings on the platform — they control appearance, voice, and model routing within a room, but do not define the platform's topology or contract shape. The platform exists before any overlay is applied. See `pmoves/docs/ROOMS_ON_A_STAGE.md` for the canonical "rooms / stages / overlays" model and the 2026-07-20 vocabulary-consolidation note.
 4. Skills may write back into notebook state only through declared targets.
 5. Room policy must remain compatible with PMOVES model routing, Graphiti, and CHIT rails.
 6. Rooms should be additive overlays, not hard forks of upstream interface systems.
@@ -345,12 +345,22 @@ Example:
 
 ## CHIT Signing-Card Activation Checklist
 
-A room manifest is not considered activated until the following are true:
+> **CANONICAL.** This is the single source of truth for the room activation gate.
+> `pmoves/docs/ROOMS_ON_A_STAGE.md` and `pmoves/docs/AGENTS/AGNOTE4482.md` link here.
+> Last updated: 2026-07-20 (open-room-lane consolidation; see AGNOTE4482PHI.t1.md).
 
-- [ ] `meta.chit.card_id` is present and non-empty, or the room skill supplies an active card at runtime.
-- [ ] The referenced card passes `pmoves/contracts/schemas/identity/signing-card.v1.schema.json` validation with `active: true`.
+A room manifest is not considered activated (i.e., may not transition `rehearsal` → `live`) until the following are true:
+
+- [ ] `meta.chit.card_id` is present and non-empty in the room manifest, **OR** the owning room skill supplies an active card ID at runtime that resolves to a row in `pmoves/config/signing_identity_cards.yaml`.
+- [ ] The referenced card passes `pmoves/contracts/schemas/identity/signing-card.v1.schema.json` validation: `card_id` is a UUID, `ml.primary_method` is one of `[ssh, gpg, github-app]`, `h.agent_id` matches the manifest's `agent_id`, and `active: true`.
 - [ ] `pmoves/config/signing_identity_cards.yaml` has a row for the room's operating agent with matching key material (`ssh_fingerprint`, `gpg_key_id`, or `github_app_installation_id`).
-- [ ] `make sign-trail AGENT=<agent_id>` returns a signed or explicitly accepted `unsigned-local` advisory before the room transitions to `live`.
-- [ ] All `mcp_servers` / `a2a_servers` declared in the manifest are present in `pmoves/config/agent_registry.yaml` and reachable in the target topology mode.
-- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` values in `sidecar.env` match the intended topology gradient (`standalone` → `docked` → `fleet`).
+- [ ] `make sign-trail AGENT=<agent_id>` returns a `signed` envelope, OR the `unsigned-local` advisory is explicitly accepted by the operator for the stage transition.
+- [ ] All `mcp_servers` and `a2a_servers` declared in the manifest are present in `pmoves/config/agent_registry.yaml` and are reachable in the target topology mode (`standalone` / `docked` / `fleet`).
+- [ ] `PGRST_DB_EXTRA_SEARCH_PATH` in the postgREST service config includes every schema the room's skills touch; PostgREST returns HTTP 200 on a representative schema-qualified endpoint.
+- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles in `sidecar.env` are documented for the target topology gradient (`standalone` → `docked` → `fleet`).
+
+### Transition vocabulary
+
+The room lifecycle uses four stages: `rehearsal` → `live` → `review` → `archive`.
+Earlier drafts of this checklist used `planned` → `active` (an apps-status vocabulary, not a room-stage vocabulary); that wording is deprecated. The room manifest contract is authoritative on stage names.
 

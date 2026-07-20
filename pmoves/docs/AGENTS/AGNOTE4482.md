@@ -1245,6 +1245,8 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 
 ### CHIT / room activation checklist (must be complete before a room transitions `planned` → `active`)
 
+> **HISTORICAL (2026-06-30, `AGENT-ZERO-0` CHIT-SIGNING-CARD-SCHEMA-CARVEOUT):** this checklist was originally added here and duplicated in `pmoves/docs/ROOMS_ON_A_STAGE.md` + `pmoves/docs/ROOM_MANIFEST_CONTRACT.md`. **As of 2026-07-20 (open-room lane, `Mavis`), the canonical lives in `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` § "CHIT Signing-Card Activation Checklist"** — single source of truth. Future edits go there, not here. The transition vocabulary has also been corrected: rooms use `rehearsal` → `live` → `review` → `archive`, NOT `planned` → `active` (which is an apps-status vocabulary from `apps[].status` enum). See `AGNOTE4482PHI.t1.md` open-room lane CLAIM for the consolidation trail.
+
 - [ ] Room manifest has a valid `card_id` in `meta.chit.card_id` or the room skill has an active signing card row in `pmoves/config/signing_identity_cards.yaml`.
 - [ ] `signing-card.v1.schema.json` validates the referenced card (`card_id` UUID, `ml.primary_method` in `[ssh,gpg,github-app]`, `h.agent_id` matches registry, `active=true`).
 - [ ] `pmoves/config/signing_identity_cards.yaml` has an entry for the room's operating agent with matching `ssh_fingerprint` / `github_app_installation_id` / `gpg_key_id`.

@@ -103,6 +103,8 @@
   "skill_bindings": [
     {
       "binding_id": "tokenism-run-scenario",
+      "skill_id": "pmoves/tokenism-scenario-runner",
+      "room_id": "tokenism.room.exchange",
       "display_name": "Run Business-Idea Scenario",
       "intent": [
         "simulate",
@@ -120,6 +122,35 @@
         "stream": "status",
         "max_steps": 8
       },
+      "context": {
+        "sources": [
+          "user-intent",
+          "room-state",
+          "notebook-selection"
+        ],
+        "include_last_turns": 4,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "tokenism.export.result.v1",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 600,
+        "fail_open": false,
+        "one_active_run": true
+      },
       "enabled": true,
       "tags": [
         "tokenism",
@@ -129,6 +160,8 @@
     },
     {
       "binding_id": "tokenism-export-to-wealth",
+      "skill_id": "pmoves/tokenism-wealth-export",
+      "room_id": "tokenism.room.exchange",
       "display_name": "Export Simulation to Wealth Ledger",
       "intent": [
         "export",
@@ -145,6 +178,35 @@
         "run_as": "agent",
         "stream": "status",
         "max_steps": 5
+      },
+      "context": {
+        "sources": [
+          "notebook-thread",
+          "notebook-selection",
+          "room-state"
+        ],
+        "include_last_turns": 2,
+        "notebook_writeback": false,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "tokenism.export.result.v1",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 300,
+        "fail_open": false,
+        "one_active_run": true
       },
       "enabled": false,
       "tags": [

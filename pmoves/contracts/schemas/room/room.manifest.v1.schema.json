@@ -42,8 +42,8 @@
     },
     "room_type": {
       "type": "string",
-      "enum": ["operator", "builder", "scout", "creator", "viewer", "hybrid"],
-      "description": "Primary operating pattern for the room"
+      "enum": ["operator", "builder", "scout", "creator", "viewer", "hybrid", "exchange"],
+      "description": "Primary operating pattern for the room. 'exchange' = financial/economic-exchange floor (e.g. ToKenism public face). Added 2026-07-20 via open-room-lane schema extension — see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md, pending operator signoff per AGNOTE4482 §1348."
     },
     "owner_mode": {
       "type": "string",
@@ -106,7 +106,8 @@
                   },
                   "kind": {
                     "type": "string",
-                    "enum": ["chat", "notebook", "graph", "media", "controls", "tasks", "logs", "custom"]
+                    "enum": ["chat", "notebook", "graph", "media", "controls", "tasks", "logs", "custom", "browser"],
+                    "description": "Panel kind. 'browser' = webview/iframe surface for external apps (e.g. ToKenism simulator, Firefly ledger). Added 2026-07-20 via open-room-lane schema extension — see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md, pending operator signoff per AGNOTE4482 §1348."
                   },
                   "position": {
                     "type": "string",
@@ -389,6 +390,11 @@
         "pattern": "^[a-z0-9][a-z0-9._-]*$"
       },
       "description": "Pinokio launcher or make target identifiers for room bringup"
+    },
+    "meta": {
+      "type": "object",
+      "description": "Free-form room metadata. Currently used for inline CHIT signing-card references (see fordham.room.community) and any other operator-level annotations. Sub-objects like 'meta.chit' should mirror the canonical signing-card fields (card_id, creator_id, etc.) from pmoves/contracts/schemas/identity/signing-card.v1.schema.json. Added 2026-07-20 via open-room-lane schema extension — see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md, pending operator signoff per AGNOTE4482 §1348.",
+      "additionalProperties": true
     }
   },
   "additionalProperties": false
