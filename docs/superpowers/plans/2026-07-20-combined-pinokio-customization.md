@@ -162,15 +162,25 @@ git push origin PMOVES.AI-Edition-Hardened
 - Consumes: Task 1 (`POWERFULMOVES/code`), Task 2 (`PMOVES-claude-code`), PMOVES-crush (existing).
 - Produces: PMOVES-pinokio hardened branch = the combined home; consumed by Task 4.
 
-- [ ] **Step 1: Add the three submodules** (in the `pinokio-hardened-merge` branch)
+- [ ] **Step 1: Add submodules + the crush thin-entry** (in the `pinokio-hardened-merge` branch)
+
+`pmoves-claude-code` and `plugin/code` are shaped with their launcher/plugins at repo root, so they submodule directly at their api/plugin path. `pmoves-crush`'s launcher is nested in its repo (`pbnj/pinokio/api/pmoves-crush/`), so it is pinned under `sources/` and surfaced via a thin in-tree api entry that delegates (respects Crush's structure, keeps version-pinning).
 
 ```bash
 cd D:/PMOVES.AI/pmoves-pbnj-submodule && git checkout pinokio-hardened-merge
-git submodule add -b PMOVES.AI-Edition-Hardened https://github.com/POWERFULMOVES/PMOVES-crush.git api/pmoves-crush
 git submodule add -b PMOVES.AI-Edition-Hardened https://github.com/POWERFULMOVES/PMOVES-claude-code.git api/pmoves-claude-code
 git submodule add -b PMOVES.AI-Edition-Hardened https://github.com/POWERFULMOVES/code.git plugin/code
+git submodule add -b PMOVES.AI-Edition-Hardened https://github.com/POWERFULMOVES/PMOVES-crush.git sources/pmoves-crush
 ```
-Expected: three `.gitmodules` entries; three gitlinks staged.
+
+Create the thin delegating entry `api/pmoves-crush/pinokio.js` (in-tree) that loads the nested crush launcher from the submodule:
+```js
+// api/pmoves-crush/pinokio.js — delegate to the crush launcher pinned in sources/
+module.exports = require("../../sources/pmoves-crush/pbnj/pinokio/api/pmoves-crush/pinokio.js")
+```
+And `api/pmoves-crush/install.js` runs `git submodule update --init --recursive` first so `sources/pmoves-crush` is present before the delegate resolves.
+
+Expected: three `.gitmodules` entries (`api/pmoves-claude-code`, `plugin/code`, `sources/pmoves-crush`) + the in-tree `api/pmoves-crush/` thin entry.
 
 - [ ] **Step 2: Add a top-level install shim** so `git submodule update --init --recursive` runs on install (`install.js` at repo root, or per-launcher)
 
