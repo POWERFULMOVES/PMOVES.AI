@@ -173,11 +173,21 @@ function check(name, pass, detail) {
   // tally increment publish in the same state update. An observer polling
   // data-state-source diffs consecutive snapshots and re-links them without
   // touching the hash. Not covered by the spec — found while implementing §5.4.
-  const correlated = await page.evaluate(async () => {
-    const b = document.getElementById('b');
+  const correlation = await page.evaluate(async () => {
+    // Use a fresh ballot with a real future close. Reusing the fixture after
+    // the earlier close would make castVote() a no-op and this test vacuous.
+    const b = document.createElement('pm-ballot');
+    b.setAttribute('ballot-id', 'correlation-check');
+    b.setAttribute('options', JSON.stringify([
+      { id: 'retain-board', label: 'Retain board' },
+      { id: 'abstain', label: 'Abstain' },
+    ]));
+    b.setAttribute('eligible-voters', '10');
+    b.setAttribute('closes-at', new Date(Date.now() + 864e5).toISOString());
+    document.body.appendChild(b);
     const snap = () => JSON.parse(JSON.stringify(b.state));
     const before = snap();
-    await b.castVote('abstain', 'apt-9C');
+    const receipt = await b.castVote('abstain', 'apt-9C');
     const after = snap();
     const fresh = (after.receipts || []).filter(
       (r) => !(before.receipts || []).some((x) => x.receiptHash === r.receiptHash));
@@ -186,12 +196,55 @@ function check(name, pass, detail) {
       if (k !== '_total' && (after.tally[k] || 0) > (before.tally[k] || 0)) bumped = k;
     }
     // Linkable only if exactly one receipt appeared alongside exactly one bump.
-    return fresh.length === 1 && bumped ? bumped : null;
+    return {
+      cast: !!receipt,
+      bumped,
+      freshReceipts: fresh.length,
+      linkedChoice: fresh.length === 1 && bumped ? bumped : null,
+    };
   });
   check(
+    'timing-correlation test casts a real vote on an open ballot',
+    correlation.cast === true && correlation.bumped === 'abstain',
+    `cast=${correlation.cast} bumped=${JSON.stringify(correlation.bumped)}`
+  );
+  check(
     'a state-polling observer cannot link a receipt to a tally increment',
-    correlated === null,
-    `observer recovered "${correlated}" by diffing two state snapshots — nonce bypassed entirely`
+    correlation.linkedChoice === null && correlation.freshReceipts === 0,
+    `observer recovered "${correlation.linkedChoice}" with ${correlation.freshReceipts} fresh receipt(s)`
+  );
+
+  // --- 8. State-source receipts are an untrusted public boundary ----------
+  // A rev-1 authority may still send the old private receipt shape. The
+  // component must allowlist the rev-3 public fields instead of republishing
+  // voterId/choice/nonce/ts after the seal lifts.
+  const synced = await page.evaluate(() => {
+    const el = document.createElement('pm-ballot');
+    el.setAttribute('ballot-id', 'state-source-normalization');
+    el.setAttribute('options', JSON.stringify([{ id: 'yes', label: 'Yes' }]));
+    el.setAttribute('eligible-voters', '10');
+    document.body.appendChild(el);
+    el.close();
+    el._applyData({
+      receipts: [
+        {
+          receiptHash: '0xpublic-safe',
+          status: 'cast',
+          voterId: 'apt-4B',
+          choice: 'yes',
+          nonce: 'voter-secret',
+          ts: '2026-07-20T00:00:00Z',
+        },
+        { receiptHash: '0xstatus-channel', status: 'choice:no' },
+        null,
+      ],
+    });
+    return el.state.receipts;
+  });
+  check(
+    'state-source receipts are normalized to the public allowlist',
+    JSON.stringify(synced) === JSON.stringify([{ receiptHash: '0xpublic-safe', status: 'cast' }]),
+    `normalized receipts = ${JSON.stringify(synced)}`
   );
 
   // --- 9. The 'vote-cast' event must not carry the tally -----------------

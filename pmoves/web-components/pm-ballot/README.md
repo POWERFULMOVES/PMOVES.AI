@@ -1,6 +1,6 @@
 # `<pm-ballot>` — v0.2
 
-Co-op governance ballot. Native radio options, submit, live tally, quorum progressbar, CHIT-signed receipt per vote. Implements [A2UI v0.2 ballot spec §5](../../../contracts/a2ui-v0.2-ballot.md#5-pm-ballot--the-v02-reference-component).
+Co-op governance ballot. Native radio options, submit, live tally, quorum progressbar, and nonce-commitment receipts. Implements [A2UI v0.2 ballot spec §5](../../contracts/a2ui-v0.2-ballot.md#5-pm-ballot--the-v02-reference-component).
 
 > **Status**: SHIPPED as v0.2 DRAFT (Fordham bylaw-2026-q3 use case is the legitimacy test).
 > **v0.2 contract extensions used**: `data-state-source` (state), `pm-event` slots (event emission).
@@ -39,6 +39,7 @@ Co-op governance ballot. Native radio options, submit, live tally, quorum progre
 | `voter-id` | string | (auth) | Current voter's ID. Set by the auth layer. |
 | `data-state-source` | string |   | NATS subject or HTTP URL for live tally + receipt sync. |
 | `on-vote-cast` | event wire |   | `pm-event` slot (§4.3). Format: `"<id>:<method>"`. |
+| `allow-insecure-demo-hash` | boolean attribute |   | Demo-only opt-in to the non-cryptographic fallback when `crypto.subtle` is unavailable. Never use for a real ballot. |
 
 ## Methods
 
@@ -49,37 +50,37 @@ Co-op governance ballot. Native radio options, submit, live tally, quorum progre
 | `tally` (getter) | Convenience: just the tally. |
 | `myChoice` (getter) | The current voter's choice + receipt (or null). |
 | `quorumPercent()` | Current / eligible as a 0-1 fraction. |
+| `close()` | Explicitly close the ballot and publish the hash-ordered public receipt log. |
 
 ## Events
 
 | Event | When | Detail |
 |-------|------|--------|
-| `vote-cast` | After `castVote()` succeeds | `{ receipt, tally }` |
-| `quorum-reached` | When `quorumPercent >= quorum` | `{ tally, quorum }` |
+| `vote-cast` | After `castVote()` succeeds | `{ receipt: { receiptHash, status } }` |
+| `quorum-reached` | When `quorumPercent >= quorum` | `{ quorum }` |
 | `ballot-closed` | When `castVote()` is called after `closes-at` | `{ reason }` |
+| `ballot-unavailable` | When a real cryptographic hash is unavailable | `{ reason: "insecure-context" }` |
 
 All events are `composed: true, bubbles: true` so they cross shadow DOM boundaries. The page-level renderer wires them to other components via `on-<event>` attributes.
 
 ## Receipt model
 
-Every vote generates a receipt:
+Every vote generates a private voter-held receipt:
 
 ```json
 {
   "voterId": "unit-12a-bob-m",
   "choice": "yes",
   "ts": "2026-07-15T10:00:00.000Z",
+  "nonce": "128-bit-random-hex",
   "receiptHash": "0x9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-  "signature": "chit-stub:9f86d081884c7d65"
+  "algo": "sha256"
 }
 ```
 
-The `receiptHash` is `sha256(ballotId + voterId + choice + ts)` (computed via `crypto.subtle`). Any resident can verify their vote was counted by:
-1. Computing the expected hash from their inputs (the demo footer shows the exact formula)
-2. Looking up the receipt in the public CHIT trail
-3. Verifying the signature against the tenant's signing card
+Only `{ "receiptHash": "...", "status": "cast" }` enters public state. Public receipts stay sealed until close and are then sorted by hash; `voterId`, `choice`, `ts`, and `nonce` never enter the public receipt log or the `vote-cast` event.
 
-In production, the `signature` field is a real CHIT signature (replaces the `chit-stub:` prefix). v0.2 demo uses the stub for local testing without a real CHIT passphrase.
+The commitment is SHA-256 over an unambiguous length-prefixed encoding of `ballotId`, `voterId`, `choice`, `ts`, and the 128-bit nonce. A resident verifies inclusion by recomputing that commitment from the private tuple and finding the hash in the closed public log. CHIT signs the authority's state mutation chain separately; the component does not manufacture a placeholder signature.
 
 ## ARIA
 
@@ -92,7 +93,7 @@ In production, the `signature` field is a real CHIT signature (replaces the `chi
 
 ## Theming
 
-Reads all 15 tokens from [A2UI v0.1 §6](../../../contracts/a2ui-v0.1.md#6-persona-theming-css-custom-properties). Uses `--pm-accent` for selected option + quorum fill; `--pm-accent-soft` for focus rings + receipt header.
+Reads all 15 tokens from [A2UI v0.1 §6](../../contracts/a2ui-v0.1.md#6-persona-theming-css-custom-properties). Uses `--pm-accent` for selected option + quorum fill; `--pm-accent-soft` for focus rings + receipt header.
 
 ## Anti-patterns avoided
 

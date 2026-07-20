@@ -371,11 +371,23 @@ class PmBallot extends HTMLElement {
       this._state = { ...this._state, tally: data.tally };
       this._render();
     }
-    if (data && data.receipts) {
+    if (data && Array.isArray(data.receipts)) {
       // Authority-published log lands in the sealed store; the `state` getter
-      // decides whether it is visible yet. Never assign to _state.receipts —
-      // that would bypass the seal.
-      this._sealedReceipts = data.receipts.slice();
+      // decides whether it is visible yet. Treat the state source as untrusted:
+      // older authorities may still send the rev-1 private shape containing
+      // voterId, choice, nonce, or ts. Rebuild every receipt from the two-field
+      // public allowlist so those fields can never cross this rendering boundary.
+      // Unknown statuses are rejected because `status` is also public text.
+      this._sealedReceipts = data.receipts.flatMap((receipt) => {
+        if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) return [];
+        const receiptHash = typeof receipt.receiptHash === 'string'
+          ? receipt.receiptHash.trim()
+          : '';
+        const status = receipt.status === 'cast' || receipt.status === 'superseded'
+          ? receipt.status
+          : '';
+        return receiptHash && status ? [{ receiptHash, status }] : [];
+      });
       this._render();
     }
   }
