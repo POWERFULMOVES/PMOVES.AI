@@ -2853,6 +2853,19 @@ up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agen
 	@$(DC) --profile agents up -d --build cipher-api
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
 
+.PHONY: up-p7
+up-p7: ## Start P7 room-aware stage manager (room lifecycle orchestration, port 8120)
+	@$(DC) --profile p7 --profile agents up -d --build p7
+	@$(MAKE) p7-health
+
+.PHONY: p7-health
+p7-health: ## Check P7 service health
+	@curl -sf http://localhost:$${P7_PORT:-8120}/healthz >/dev/null && echo " ✔ p7 healthy at http://localhost:$${P7_PORT:-8120}" || (echo "✗ p7 unhealthy" && exit 1)
+
+.PHONY: smoke-p7
+smoke-p7: ## Run P7 service smoke tests (catalog load + transition gate + idempotency)
+	@$(PYTHON) -m pytest -q services/p7-room-orchestrator/tests/ -x
+
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8105}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
