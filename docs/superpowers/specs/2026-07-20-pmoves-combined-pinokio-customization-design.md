@@ -78,10 +78,13 @@ Built on the Claude Agent SDK, layered into the repo (not CLI patches):
 4. **Meta-repo**: `git rm -r pbnj/`; add `pbnj` submodule → PMOVES-pinokio; fix path refs (`pbnj/pinokio/api/*` → `pbnj/api/*`) in `deploy/runbooks/pinokio-pbnj-install.md` and `.hermes/plans/2026-07-10_pmoves-p8-launcher-mesh-plan.md`.
 5. **Install**: point `D:\pinokio` at PMOVES-pinokio so the running node *is* the combined fork.
 
-## Must verify during planning
+## Verified during design (resolutions)
 
-- **Pinokio `--recurse-submodules`**: Model A depends on Pinokio cloning submodules at install. If it doesn't, fall back to a post-clone `git submodule update --init` step in the launcher `install.js`, or Model B (manifest) for the plugin layer.
-- **"auto cli" plugin**: `D:\pinokio\prototype\system\cli` (has `installable/`, `instant/`) — confirm what the operator means by "auto cli plugin on pinokio" and whether/how it joins the combined fork.
+- **Pinokio submodule recurse — RESOLVED by design, not dependency.** Rather than rely on Pinokio cloning `--recurse-submodules`, each submoduled launcher's `install.js` runs an explicit `git submodule update --init --recursive`. Model A then works regardless of Pinokio's clone behavior. (Deep-grepping the Pinokio bundle for its clone logic timed out on the bundled runtime; the explicit-init approach makes the answer moot.)
+- **"auto cli" — RESOLVED.** `D:\pinokio\prototype\system\cli` is Pinokio's built-in **CLI App Launcher generator**: `installable/` (custom install + launch command) and `instant/` (launch-only). `claude-code` and `crush` are CLI apps, so the plan uses the `installable` auto-cli generator to scaffold their launchers natively instead of hand-rolling `start.js`/`install.js`.
+
+## Still verify during planning
+
 - **Relative paths**: the `../../pmoves` paths in launcher `start.js`/`install.js` resolve against the Pinokio *install* layout (`D:\pinokio`), not the meta-repo mirror — verify they still resolve after the `pbnj/pinokio/api/*` → `pbnj/api/*` move.
 
 ## Testing / validation
