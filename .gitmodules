@@ -352,3 +352,7 @@
 	path = pmoves-hirag-mcp
 	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
 	branch = main
+[submodule "pbnj"]
+	path = pbnj
+	url = https://github.com/POWERFULMOVES/PMOVES-pinokio.git
+	branch = PMOVES.AI-Edition-Hardened

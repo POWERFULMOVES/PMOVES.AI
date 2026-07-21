@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="PMOVES Codex icon">
-  <rect width="256" height="256" rx="48" fill="#111111"/>
-  <circle cx="72" cy="128" r="32" fill="#f4f4f4"/>
-  <path d="M124 80h60c11 0 20 9 20 20v56c0 11-9 20-20 20h-60" fill="none" stroke="#f4f4f4" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M104 108l32 20-32 20" fill="none" stroke="#59c3c3" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
