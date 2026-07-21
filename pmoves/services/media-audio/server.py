@@ -278,6 +278,19 @@ async def metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+@app.get("/topology")
+async def topology():
+    """Network-awareness self-report (HYBRID_TOPOLOGY_NETWORK_AWARENESS.md §4)."""
+    try:
+        from services.common.topology import get_topology
+
+        topo = get_topology().to_dict()
+    except Exception:  # noqa: BLE001
+        logger.warning("topology unavailable", exc_info=True)
+        topo = {"error": "topology context unavailable"}
+    return {"service": "media-audio", "topology": topo}
+
+
 @app.post("/analyze")
 async def analyze(req: AudioAnalysisRequest):
     if _processor is None:
