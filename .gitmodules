@@ -352,3 +352,8 @@
 	path = pmoves-hirag-mcp
 	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
 	branch = main
+[submodule "PMOVES-OpenRoom"]
+	path = PMOVES-OpenRoom
+	url = https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all

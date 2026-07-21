@@ -231,6 +231,18 @@ Activation paths and cross-references live in `skills/README.md`.
 - **Relevant Skills:** `/search:deepresearch`, `/db:query`, `/deploy:up`, `/health:quick`
 - **README:** [PMOVES-Open-Notebook/README.md](../../../PMOVES-Open-Notebook/README.md)
 
+### PMOVES-OpenRoom
+- **Path:** `PMOVES-OpenRoom/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
+- **Branch:** `PMOVES.AI-Edition-Hardened`
+- **Purpose:** Room-experience shell — browser desktop where an agent operates a room's apps (fork of MiniMax-AI/OpenRoom). The missing fourth layer of rooms-on-a-stage: manifests/catalog + P7 lifecycle + stage cards exist; this is the desktop you enter.
+- **Integration Points:**
+  - `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` — room manifest is the browser-desktop declaration layer (`shell.layout` → window/panel composition, `apps[]` → operable apps)
+  - P7 room sessions (#2158) — entering a room should open a P7 session on the existing control plane
+  - `/stage/` catalog cards — the "enter room" action targets this shell
+- **Status:** Wired 2026-07-20; adapter work UNSTARTED — lane assigned to Mavis-5090 (operator-directed)
+- **README:** [PMOVES-OpenRoom/README.md](../../../PMOVES-OpenRoom/README.md)
+
 ---
 
 ## Document Processing
