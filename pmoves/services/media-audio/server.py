@@ -53,6 +53,8 @@ EMOTION_MODEL = os.environ.get("EMOTION_MODEL", "superb/hubert-large-superb-er")
 DIARIZATION_MODEL = os.environ.get("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
 HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
 MEDIA_AUDIO_SUBJECT = os.environ.get("MEDIA_AUDIO_SUBJECT", "media.audio.analyzed.v1")
+# Client-provided file paths must resolve within this dir (py/path-injection guard).
+MEDIA_INPUT_DIR = os.environ.get("MEDIA_INPUT_DIR", "/data")
 
 
 def check_gpu_available() -> dict:
@@ -291,18 +293,29 @@ async def topology():
     return {"service": "media-audio", "topology": topo}
 
 
+def _safe_input_path(raw: str) -> str:
+    """Resolve a client-provided path within MEDIA_INPUT_DIR; reject traversal (py/path-injection)."""
+    base = os.path.realpath(MEDIA_INPUT_DIR)
+    candidate = raw if os.path.isabs(raw) else os.path.join(base, raw)
+    resolved = os.path.realpath(candidate)
+    if resolved != base and os.path.commonpath([base, resolved]) != base:
+        raise HTTPException(status_code=400, detail="file_path is outside the allowed media directory")
+    return resolved
+
+
 @app.post("/analyze")
 async def analyze(req: AudioAnalysisRequest):
     if _processor is None:
         raise HTTPException(status_code=503, detail="models not ready")
-    if not os.path.exists(req.file_path):
+    path = _safe_input_path(req.file_path)
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="audio file not found")
     dispatch = {
-        "full": lambda: _processor.full(req.file_path, req.language),
-        "transcription": lambda: _processor.transcribe(req.file_path, req.language),
-        "emotion": lambda: _processor.emotion(req.file_path),
-        "diarization": lambda: _processor.diarize(req.file_path),
-        "features": lambda: _processor.features(req.file_path),
+        "full": lambda: _processor.full(path, req.language),
+        "transcription": lambda: _processor.transcribe(path, req.language),
+        "emotion": lambda: _processor.emotion(path),
+        "diarization": lambda: _processor.diarize(path),
+        "features": lambda: _processor.features(path),
     }
     fn = dispatch.get(req.analysis_type)
     if fn is None:
