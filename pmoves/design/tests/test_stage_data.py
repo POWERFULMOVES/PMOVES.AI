@@ -67,8 +67,14 @@ def test_messages_are_a_valid_static_surface():
 def test_planned_apps_are_labeled_not_hidden():
     messages = build_surface_messages(load_public_rooms())
     blob = json.dumps(messages)
-    # Manifest-honesty rule: wealth-ledger ships as planned until wiring lands.
-    assert "wealth-ledger (planned)" in blob
+    # Manifest-honesty rule, both directions: planned apps carry the label
+    # (Fordham's ballot-box until it's wired as a room app)...
+    assert "ballot-box (planned)" in blob
+    # ...and wealth-ledger DROPPED the label when W2 landed the wiring
+    # (G1 export live-verified 2026-07-20: 52wk/156tx dry-run + NATS event
+    # on the fleet broker).
+    assert "wealth-ledger (planned)" not in blob
+    assert "wealth-ledger" in blob
 
 
 def test_output_is_deterministic():
