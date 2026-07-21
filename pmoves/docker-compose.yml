@@ -3805,7 +3805,7 @@ services:
     build:
       context: .
       dockerfile: services/tokenism-simulator/Dockerfile
-    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-simulator:edge}
     restart: unless-stopped
     <<: *tier-agent-hardened-ro
     environment:
