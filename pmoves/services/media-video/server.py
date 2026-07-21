@@ -14,8 +14,10 @@ Fleet-adaptive backend via MEDIA_BACKEND: transformers (default, implemented) |
 nemo (SPARK, TODO) | vulkan (AMD ONNX-RT, TODO).
 """
 
+import asyncio
 import logging
 import os
+import tempfile
 import uuid
 from collections import Counter as Tally
 from datetime import datetime, timezone
@@ -26,7 +28,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 logger = logging.getLogger("pmoves.media-video")
 
@@ -62,6 +64,11 @@ MAX_FRAMES = int(os.environ.get("MEDIA_VIDEO_MAX_FRAMES", "600"))  # cap work pe
 MEDIA_VIDEO_SUBJECT = os.environ.get("MEDIA_VIDEO_SUBJECT", "media.video.analyzed.v1")
 # Client-provided file paths must resolve within this dir (py/path-injection guard).
 MEDIA_INPUT_DIR = os.environ.get("MEDIA_INPUT_DIR", "/data")
+# MinIO/S3 (env wired in the compose media-video block) — mirrors ffmpeg-whisper s3_client().
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT", "minio:9000")
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID", "")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").strip().lower() in ("true", "1", "yes")
 
 
 def check_gpu_available() -> dict:
@@ -84,9 +91,20 @@ def check_gpu_available() -> dict:
 
 
 class VideoAnalysisRequest(BaseModel):
-    file_path: str
+    # Accept a MinIO ref (bucket+key) like the audio pipeline, or a direct file_path.
+    bucket: Optional[str] = None
+    key: Optional[str] = None
+    file_path: Optional[str] = None
+    video_id: Optional[str] = None
+    namespace: Optional[str] = None
     sample_rate: Optional[int] = None  # override FRAME_SAMPLE_RATE
     confidence: Optional[float] = None  # override DETECTION_CONFIDENCE
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "VideoAnalysisRequest":
+        if bool(self.bucket and self.key) == bool(self.file_path):
+            raise ValueError("exactly one of (bucket+key) or file_path is required")
+        return self
 
 
 class VideoProcessor:
@@ -211,11 +229,18 @@ _processor: Optional[VideoProcessor] = None
 
 @app.on_event("startup")
 def _startup() -> None:
-    global _processor
-    try:
-        _processor = VideoProcessor()
-    except Exception:
-        logger.exception("processor init failed — service will report degraded")
+    # Load the detector in the background so startup returns immediately and /healthz is
+    # reachable during load; health reports degraded until the detector is ready.
+    import threading
+
+    def _load() -> None:
+        global _processor
+        try:
+            _processor = VideoProcessor()
+        except Exception:
+            logger.exception("processor init failed — service will report degraded")
+
+    threading.Thread(target=_load, name="media-video-model-loader", daemon=True).start()
 
 
 async def _maybe_publish(result: Dict[str, Any]) -> None:
@@ -296,33 +321,100 @@ def _safe_input_path(raw: str) -> str:
     return resolved
 
 
-@app.post("/analyze")
-async def analyze_video(req: VideoAnalysisRequest):
-    if _processor is None:
-        raise HTTPException(status_code=503, detail="detector not ready")
+def _s3_client():
+    import boto3
+
+    scheme = "https" if MINIO_SECURE else "http"
+    return boto3.client(
+        "s3",
+        endpoint_url=f"{scheme}://{MINIO_ENDPOINT}",
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
+    )
+
+
+def _fetch_from_minio(bucket: str, key: str) -> str:
+    tmpdir = tempfile.mkdtemp(prefix="media-video-")
+    local = os.path.join(tmpdir, os.path.basename(key) or "media")
+    try:
+        with open(local, "wb") as fh:
+            _s3_client().download_fileobj(bucket, key, fh)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("MinIO fetch failed for %s/%s", bucket, key)
+        raise HTTPException(status_code=502, detail="could not fetch object from storage") from e
+    return local
+
+
+def _resolve_source(req: VideoAnalysisRequest) -> "tuple[str, Optional[str]]":
+    """Return (local_path, cleanup_dir). cleanup_dir is set only for fetched MinIO objects."""
+    if req.bucket and req.key:
+        path = _fetch_from_minio(req.bucket, req.key)
+        return path, os.path.dirname(path)
     path = _safe_input_path(req.file_path)
     if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="video file not found")
-    result = _processor.analyze_video(
-        path,
-        req.sample_rate or FRAME_SAMPLE_RATE,
-        req.confidence if req.confidence is not None else DETECTION_CONFIDENCE,
-    )
-    await _maybe_publish(result)
-    return JSONResponse(content=result)
+        raise HTTPException(status_code=404, detail="media file not found")
+    return path, None
+
+
+def _stamp(result: Dict[str, Any], req: VideoAnalysisRequest) -> Dict[str, Any]:
+    if isinstance(result, dict):
+        if req.video_id:
+            result["video_id"] = req.video_id
+        if req.namespace:
+            result["namespace"] = req.namespace
+    return result
+
+
+async def _run_video(req: VideoAnalysisRequest) -> JSONResponse:
+    if _processor is None:
+        raise HTTPException(status_code=503, detail="detector not ready")
+    path, cleanup = _resolve_source(req)
+    try:
+        # Offload the (potentially long) inference off the event loop (Codex P2).
+        result = await asyncio.to_thread(
+            _processor.analyze_video,
+            path,
+            req.sample_rate or FRAME_SAMPLE_RATE,
+            req.confidence if req.confidence is not None else DETECTION_CONFIDENCE,
+        )
+        result = _stamp(result, req)
+        await _maybe_publish(result)
+        return JSONResponse(content=result)
+    finally:
+        if cleanup:
+            import shutil
+
+            shutil.rmtree(cleanup, ignore_errors=True)
+
+
+@app.post("/analyze")
+async def analyze_video(req: VideoAnalysisRequest):
+    return await _run_video(req)
+
+
+# Alias for pipeline callers that post to /process (parity with media-audio).
+@app.post("/process")
+async def process_video(req: VideoAnalysisRequest):
+    return await _run_video(req)
 
 
 @app.post("/frame")
 async def analyze_frame(req: VideoAnalysisRequest):
     if _processor is None:
         raise HTTPException(status_code=503, detail="detector not ready")
-    path = _safe_input_path(req.file_path)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="image file not found")
-    result = _processor.analyze_frame(
-        path, req.confidence if req.confidence is not None else DETECTION_CONFIDENCE
-    )
-    return JSONResponse(content=result)
+    path, cleanup = _resolve_source(req)
+    try:
+        result = await asyncio.to_thread(
+            _processor.analyze_frame,
+            path,
+            req.confidence if req.confidence is not None else DETECTION_CONFIDENCE,
+        )
+        return JSONResponse(content=_stamp(result, req))
+    finally:
+        if cleanup:
+            import shutil
+
+            shutil.rmtree(cleanup, ignore_errors=True)
 
 
 if __name__ == "__main__":
