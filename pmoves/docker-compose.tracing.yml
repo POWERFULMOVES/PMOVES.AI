@@ -76,12 +76,14 @@ services:
     depends_on:
       jaeger:
         condition: service_healthy
+    # The otel-collector-contrib image is distroless: no /bin/sh, no wget/curl,
+    # so every exec-based healthcheck (CMD-SHELL /dev/tcp included) fails with
+    # "stat /bin/sh: no such file or directory" while the collector itself runs
+    # fine. Same constraint as invidious-companion — disable the Docker probe
+    # and rely on the collector's health_check extension (:13133) + Prometheus
+    # scraping of :8889 for liveness.
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/13133 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      disable: true
     deploy:
       resources:
         limits:
