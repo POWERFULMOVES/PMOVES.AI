@@ -23,7 +23,7 @@ ToKenism is not a standalone service — it is a **CHIT attribution engine** com
 
 1. **CHIT TypeScript modules** (`integrations/contracts/chit/`)
    - `dirichlet-weights.ts` — Dirichlet-weighted contribution scoring
-   - `shape-attribution.ts` — action records plus SHA-256 / keccak256 Merkle proof verification
+   - `shape-attribution.ts` — action records plus Merkle proof-path generation/verification (current path uses a non-cryptographic 32-bit hash; real SHA-256 helper exists to wire in — see status table)
    - `hyperbolic-encoder.ts` — Poincare disk embedding support
    - `cgp-generator.ts` — deterministic CGP document generation
    - `swarm-attribution.ts` — bounded fitness and population metadata tracking
@@ -77,7 +77,8 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 |------------|--------|-------|
 | CGP v0.2/v1.0 generation | Active | `cgp-generator.ts`; schemas accept both current compatibility specs |
 | Dirichlet weighting | Active | `dirichlet-weights.ts` |
-| Merkle verification | Active | `shape-attribution.ts`; real SHA-256 and keccak256, order-preserving proof paths |
+| Merkle proof paths | Active | `shape-attribution.ts`; order-preserving proof paths work |
+| Cryptographic Merkle hash | **Partial** | prod path uses a non-cryptographic 32-bit hash (self-labeled "simulation"); real SHA-256 helper exists in `PMOVES-ToKenism-Multi/.claude/skills/chit-geometry/tools/merkle-verify.ts`, not yet wired; keccak256 not implemented |
 | Hyperbolic embedding | Partial | `hyperbolic-encoder.ts`; embedding support, not a proof-backed fairness layer |
 | Swarm metadata | Active | `swarm-attribution.ts`; records bounded fitness and population summaries only |
 | Zeta spectral filtering | Heuristic | `zeta-filter.ts`; method design still required before stronger claims |
