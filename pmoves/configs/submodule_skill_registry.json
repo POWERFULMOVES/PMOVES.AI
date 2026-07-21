@@ -409,6 +409,17 @@
       ],
       "agents_docs": []
     },
+    "PMOVES-OpenRoom": {
+      "context_tier": 4,
+      "domain_tags": ["ui", "agents"],
+      "skills": [
+        "p7/room"
+      ],
+      "context_files": [
+        "submodules.md"
+      ],
+      "agents_docs": []
+    },
     "PMOVES-DoX": {
       "context_tier": 2,
       "domain_tags": ["documents"],
