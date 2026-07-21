@@ -1293,6 +1293,10 @@ services:
     # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
     # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
     image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    # Only data-tier service without a restart policy — every Docker Desktop
+    # restart left MinIO dead (Exited 255) until manually started, which is
+    # how it sat down for 9 days and silently blocked the YT pipeline.
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
@@ -2819,9 +2823,10 @@ services:
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
     - PMOVES_HOST=0.0.0.0
-    - OLLAMA_URL=http://pmoves-ollama:11434
+    - OLLAMA_URL=http://host.docker.internal:11434
+    - OLLAMA_BASE_URL=http://host.docker.internal:11434
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
-    - TENSORZERO_URL=http://tensorzero-gateway:3030
+    - TENSORZERO_URL=http://tensorzero-gateway:3000
     - QDRANT_URL=http://qdrant:6333
     - QDRANT_API_KEY=${QDRANT__API_KEY:-}
     - QDRANT_COLLECTION=pmoves_cipher_memory
@@ -2835,7 +2840,9 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
-    profiles: ["agents"]
+    profiles: ["agents", "cipher"]
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
     networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "node", "-e", "const http=require('http');http.get('http://127.0.0.1:8105/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
@@ -3132,6 +3139,48 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  p7-room-orchestrator:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/p7-room-orchestrator/Dockerfile
+    image: ${P7_ROOM_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-p7-room-orchestrator:pmoves-latest}
+    container_name: pmoves-p7-room-orchestrator
+    hostname: p7-room-orchestrator
+    restart: unless-stopped
+    environment:
+    - PORT=8122
+    - PMOVES_ROOT=/app/pmoves
+    - NATS_URL=${NATS_URL}
+    - SUPABASE_URL=${P7_SUPABASE_URL:-http://supabase-kong:8000}
+    - P7_SUPABASE_REST_URL=${P7_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - SUPABASE_SERVICE_ROLE_KEY_FILE=${SUPABASE_SERVICE_ROLE_KEY_FILE:-}
+    - P7_SUPABASE_SCHEMA=${P7_SUPABASE_SCHEMA:-pmoves_core}
+    - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
+    ports:
+    - ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      supabase-kong:
+        condition: service_healthy
+    profiles: ["agents", "orchestration"]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8122/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   deepresearch:
     <<: *tier-agent-hardened-rw
     build:
@@ -3275,7 +3324,7 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
-    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
+    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1}
     depends_on:
       nats:
         condition: service_healthy

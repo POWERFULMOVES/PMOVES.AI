@@ -19,8 +19,8 @@ def sample_inventory(tmp_path: Path) -> Path:
             {
                 "version": 1,
                 "defaults": {
-                    "cipher_local_url": "http://localhost:8105/mcp/sse",
-                    "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
+                    "cipher_local_url": "http://localhost:8105/api/mcp/sse",
+                    "cipher_fleet_url": "http://${TS_Z890}:8105/api/mcp/sse",
                     "agent_zero_local_url": "http://localhost:8080/mcp",
                     "agent_zero_fleet_url": "http://${TS_Z890}:8080/mcp",
                 },
@@ -41,7 +41,7 @@ def sample_inventory(tmp_path: Path) -> Path:
                                 "transport": "sse",
                                 "endpoint": "local",
                                 "endpoint_prefix": "cipher",
-                                "url": "http://localhost:8105/mcp/sse",
+                                "url": "http://localhost:8105/api/mcp/sse",
                                 "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
                                 "clients": ["hermes"],
                             },
@@ -113,7 +113,7 @@ def test_render_claude_kimi(sample_inventory: Path, context: dict[str, str]) -> 
     servers = rendered["mcpServers"]
     assert "pmoves-cipher" in servers
     assert servers["pmoves-cipher"]["type"] == "sse"
-    assert servers["pmoves-cipher"]["url"] == "http://z890.example.com:8105/mcp/sse"
+    assert servers["pmoves-cipher"]["url"] == "http://z890.example.com:8105/api/mcp/sse"
     assert servers["pmoves-cipher"]["headers"]["Authorization"] == "Bearer test-token"
     assert "hermes-only" not in servers
 
@@ -188,14 +188,14 @@ def test_deep_merge_args_replaces_list() -> None:
 def test_endpoint_fleet_resolves_fleet_urls(sample_inventory: Path) -> None:
     inventory = gen.load_inventory(sample_inventory)
     rendered = gen.generate_for_client("opencode", inventory=inventory, endpoint="fleet")
-    assert rendered["mcpServers"]["pmoves-cipher"]["url"] == "http://${TS_Z890}:8105/mcp/sse"
+    assert rendered["mcpServers"]["pmoves-cipher"]["url"] == "http://${TS_Z890}:8105/api/mcp/sse"
     assert rendered["mcpServers"]["agent-zero"]["url"] == "http://${TS_Z890}:8080/mcp"
 
 
 def test_endpoint_local_resolves_local_urls(sample_inventory: Path) -> None:
     inventory = gen.load_inventory(sample_inventory)
     rendered = gen.generate_for_client("opencode", inventory=inventory, endpoint="local")
-    assert rendered["mcpServers"]["pmoves-cipher"]["url"] == "http://localhost:8105/mcp/sse"
+    assert rendered["mcpServers"]["pmoves-cipher"]["url"] == "http://localhost:8105/api/mcp/sse"
     assert rendered["mcpServers"]["agent-zero"]["url"] == "http://localhost:8080/mcp"
 
 
@@ -203,7 +203,7 @@ def test_hermes_local_cipher_keeps_explicit_url(sample_inventory: Path) -> None:
     inventory = gen.load_inventory(sample_inventory)
     rendered = gen.generate_for_client("hermes", inventory=inventory, endpoint="fleet")
     servers = rendered["mcp_servers"]
-    assert servers["pmoves-cipher-local"]["url"] == "http://localhost:8105/mcp/sse"
+    assert servers["pmoves-cipher-local"]["url"] == "http://localhost:8105/api/mcp/sse"
 
 
 @pytest.fixture
@@ -215,8 +215,8 @@ def scope_inventory(tmp_path: Path) -> Path:
             {
                 "version": 1,
                 "defaults": {
-                    "cipher_local_url": "http://localhost:8105/mcp/sse",
-                    "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
+                    "cipher_local_url": "http://localhost:8105/api/mcp/sse",
+                    "cipher_fleet_url": "http://${TS_Z890}:8105/api/mcp/sse",
                     "agent_zero_local_url": "http://localhost:8080/mcp",
                     "agent_zero_fleet_url": "http://${TS_Z890}:8080/mcp",
                 },
@@ -333,7 +333,7 @@ def test_openclaw_scope_bootstrap_preserves_non_pmoves(
     data = json.loads(scope_path.read_text(encoding="utf-8"))
     servers = data["mcp_servers"]
     assert "gpu-mesh" in servers, "scope-specific non-PMOVES MCP should be preserved"
-    assert servers["pmoves-cipher"]["url"] == "http://${TS_Z890}:8105/mcp/sse"
+    assert servers["pmoves-cipher"]["url"] == "http://${TS_Z890}:8105/api/mcp/sse"
     assert "agent-zero" in servers
     assert "pmoves-docker-gateway" in servers
 

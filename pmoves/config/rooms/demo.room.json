@@ -1,6 +1,7 @@
 {
   "room_id": "demo.room.rehearsal",
   "version": "1.0.0",
+  "stage": "rehearsal",
   "display_name": "PMOVES Demo Room",
   "description": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal.",
   "agent_id": "4090-claude",

@@ -1,6 +1,7 @@
 {
   "room_id": "fordham.room.community",
   "version": "1.0.0",
+  "stage": "rehearsal",
   "display_name": "Fordham Hill Community Room",
   "description": "Community cost-pooling + self-governance pilot room: mesh capacity A/B, pooled-dues ledger, contribution attribution, and tamper-evident resident voting on one lattice. Stage: rehearsal. DRAFT - REQUIRES LEGAL REVIEW.",
   "agent_id": "fordham-steward",

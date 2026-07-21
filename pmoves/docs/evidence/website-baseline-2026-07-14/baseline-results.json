@@ -1,0 +1,130 @@
+{
+  "pages": [
+    {
+      "name": "index",
+      "url": "http://127.0.0.1:8765/",
+      "screenshots": [
+        {
+          "viewport": "desktop",
+          "status": 200,
+          "title": "PMOVES.AI — It's been a good run, ISPs.",
+          "file": "pmoves\\docs\\evidence\\website-baseline-2026-07-14\\screenshots\\index-desktop.png"
+        },
+        {
+          "viewport": "tablet",
+          "status": 200,
+          "title": "PMOVES.AI — It's been a good run, ISPs.",
+          "file": "pmoves\\docs\\evidence\\website-baseline-2026-07-14\\screenshots\\index-tablet.png"
+        },
+        {
+          "viewport": "mobile",
+          "status": 200,
+          "title": "PMOVES.AI — It's been a good run, ISPs.",
+          "file": "pmoves\\docs\\evidence\\website-baseline-2026-07-14\\screenshots\\index-mobile.png"
+        }
+      ]
+    },
+    {
+      "name": "stage",
+      "url": "http://127.0.0.1:8765/stage/",
+      "screenshots": [
+        {
+          "viewport": "desktop",
+          "status": 200,
+          "title": "PMOVES.AI — The Stage",
+          "file": "pmoves\\docs\\evidence\\website-baseline-2026-07-14\\screenshots\\stage-desktop.png"
+        },
+        {
+          "viewport": "tablet",
+          "status": 200,
+          "title": "PMOVES.AI — The Stage",
+          "file": "pmoves\\docs\\evidence\\website-baseline-2026-07-14\\screenshots\\stage-tablet.png"
+        },
+        {
+          "viewport": "mobile",
+          "status": 200,
+          "title": "PMOVES.AI — The Stage",
+          "file": "pmoves\\docs\\evidence\\website-baseline-2026-07-14\\screenshots\\stage-mobile.png"
+        }
+      ]
+    }
+  ],
+  "a11y": [
+    {
+      "page": "index",
+      "violations": 1,
+      "incomplete": 1,
+      "details": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.10/color-contrast?application=axeAPI",
+          "nodes": 10,
+          "targets": [
+            [
+              ".card-link.card:nth-child(1) > .card-cta"
+            ],
+            [
+              ".card-link.card:nth-child(2) > .card-cta"
+            ],
+            [
+              ".card-link.card:nth-child(3) > .card-cta"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "page": "stage",
+      "violations": 1,
+      "incomplete": 1,
+      "details": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.10/color-contrast?application=axeAPI",
+          "nodes": 1,
+          "targets": [
+            [
+              "footer > p"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "brokenLinks": [
+    {
+      "page": "index",
+      "link": "/demo/voice",
+      "absolute": "http://127.0.0.1:8765/demo/voice",
+      "status": 404
+    },
+    {
+      "page": "index",
+      "link": "/demo/rag",
+      "absolute": "http://127.0.0.1:8765/demo/rag",
+      "status": 404
+    },
+    {
+      "page": "index",
+      "link": "/privacy",
+      "absolute": "http://127.0.0.1:8765/privacy",
+      "status": 404
+    },
+    {
+      "page": "index",
+      "link": "/terms",
+      "absolute": "http://127.0.0.1:8765/terms",
+      "status": 404
+    },
+    {
+      "page": "index",
+      "link": "/security",
+      "absolute": "http://127.0.0.1:8765/security",
+      "status": 404
+    }
+  ]
+}

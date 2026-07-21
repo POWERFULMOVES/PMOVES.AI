@@ -1,5 +1,5 @@
 # Rooms on a Stage — Model Overview
-_Last updated: 2026-07-07_
+_Last updated: 2026-07-17_
 
 ## What This Is
 
@@ -20,8 +20,12 @@ Rooms are the entrypoints through which users (human or agent) access the platfo
 | **PMOVES Demo Room** | One-click Agent Zero + 4090 Claude claws + HERMES assist | 4090-claude | rehearsal |
 | **HERMES Agent Control** | Cross-platform gateway: profiles, skills, cron, NATS bridge | hermes-agent | rehearsal |
 | **Fordham Hill Community** | Cost-pooling mesh + co-op self-governance pilot (onboarding / transaction / creator / voice) | fordham-steward | rehearsal |
+| **DARKXSIDES** | Private co-creator/witness room with fail-closed public egress | darkxside-persona | rehearsal |
+| **ToKenism Exchange** | Token-economy simulation and guarded Wealth export | 5090-claude | rehearsal |
 
-_Catalog: `pmoves/config/rooms/catalog.json` (7 rooms). All 4 node rooms typically `live`; demo / hermes / fordham are `rehearsal`._
+_Catalog: `pmoves/config/rooms/catalog.json` (9 rooms). All manifests are explicitly
+`rehearsal` until their CHIT signing-card, reachability, persistence, and operator
+activation gates are recorded._
 
 Planned rooms (from the prospectus frame):
 - **foyer** — first P7 screen, room selection
@@ -43,6 +47,10 @@ Every room has a stage state that describes its current lifecycle position:
 
 Stage transitions are managed by P7. A room in `rehearsal` should show a rehearsal banner; a room in `live` should show a live indicator.
 
+Room stage is persistent control-plane state. It is distinct from a transient P7
+session state (`planned`, `active`, `paused`, `ended`, `archived`): a rehearsal
+room can have an active test session without being represented as production-live.
+
 ### Suits (runtime/persona bindings)
 
 Suits are layered onto rooms — they are NOT the platform itself, they are the visible styling and runtime binding:
@@ -63,6 +71,9 @@ P7 (Pinokio 7) is the room-aware stage manager. It:
 5. Provides NATS control plane subjects (`p7.nats.launch`, `p7.nats.session`) for room entry and lifecycle
 
 P7 is not just a process spawner — it is the context that agents launch into.
+The deployable control plane is `p7-room-orchestrator` on port `8122`. It consumes
+the two `p7.nats.*` command subjects and emits versioned `p7.room.*.v1` facts for
+session checkpoints, stage changes, and rejected commands.
 
 ## What Rooms Own vs. Don't Own
 
@@ -92,6 +103,7 @@ Before a room transitions from `rehearsal` → `live`, the following must be sat
 
 - [ ] A signing-card row exists in `pmoves/config/signing_identity_cards.yaml` for the room's operating agent, and `signing-card.v1.schema.json` validates it.
 - [ ] The room manifest declares `meta.chit.card_id` (or the owning skill provides a card ID at runtime) and the card has `active: true`.
+- [ ] The selected card includes locally verifiable Ed25519 SSH public-key material, and the activation caller provides a fresh nonce-bound proof-of-possession. Placeholder-only cards remain rehearsal-only.
 - [ ] `make sign-trail AGENT=<agent_id>` succeeds (`signed`) or `unsigned-local` advisory is explicitly accepted for the stage transition.
 - [ ] The room's declared `mcp_servers` and `a2a_servers` exist in `pmoves/config/agent_registry.yaml` and are reachable in the target topology mode (`standalone`/`docked`/`fleet`).
 - [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles in `sidecar.env` match the intended topology gradient.

@@ -50,6 +50,7 @@ DEFAULT_PORTS = {
     "archon": 8091,  # 3737 is the consolidated UI port (mapped to same container)
     "mesh-agent": 0,  # No HTTP interface
     "service-registry": 8100,
+    "p7-room-orchestrator": 8122,
 
     # Retrieval & Knowledge
     "hi-rag-gateway-v2": 8086,

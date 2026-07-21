@@ -197,7 +197,7 @@ MCP_SPECS: List[MCPSpec] = [
         key="pmoves-cipher",
         config={
             "type": "sse",
-            "url": "http://${TS_Z890}:8105/mcp/sse",
+            "url": "http://${TS_Z890}:8105/api/mcp/sse",
             "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
@@ -207,7 +207,7 @@ MCP_SPECS: List[MCPSpec] = [
         key="pmoves-cipher-local",
         config={
             "type": "sse",
-            "url": "http://localhost:8105/mcp/sse",
+            "url": "http://localhost:8105/api/mcp/sse",
             "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },

@@ -101,8 +101,8 @@ metadata:
   tags: [fordham-hill, onboarding, mesh, voter-roll, community-pilot]
 spec:
   role: >-
-    Enroll residents onto the community mesh and record them on the eligible-voter roll —
-    the single roster YAML that is both the contribution ledger and the ballot roll (README.md:40).
+    Enroll residents onto the community mesh and stage committee-reviewed eligibility evidence.
+    Contribution records and the roster YAML do not by themselves establish the legal ballot roll.
   team_ref: fordham-community
   node_affinity: [kvm4-1, kvm4-2, kvm2]
   model:
@@ -111,7 +111,7 @@ spec:
     fallback: ollama
   capabilities:
     - mesh_enrollment_token       # fleet:enroll — CHIT-signed device enrollment token
-    - voter_roll_append           # write resident row into roster users.yaml (the roll)
+    - voter_roll_candidate        # stage evidence for committee review; never self-authorize eligibility
     - consent_capture             # record explicit PII/enrollment consent before any write
     - committee_on_elders_enroll  # enroll Committee rows (commented templates today, README.md:14)
     - roll_reconcile              # diff enrolled vs roster; report the 1-of-N gap honestly

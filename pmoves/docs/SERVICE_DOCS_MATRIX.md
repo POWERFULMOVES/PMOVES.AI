@@ -28,6 +28,7 @@
 |---------|------|-----------|--------|----------|---------------|--------|-------|-------|
 | Agent Zero | 8080, 8081 | `PMOVES-Agent-Zero/CLAUDE.md` | `PMOVES-Agent-Zero/README.md` | `.claude/context/mcp-api.md` | `agent.*`, `claude.code.*` | `/healthz` | P1 (root, NATS) | L3 |
 | Archon | 8091, 3737 | `PMOVES-Archon/CLAUDE.md` | `PMOVES-Archon/README.md` | `pmoves/docs/ARCHON_INTEGRATION.md` | `archon.*` | `/healthz` | -- | L3 |
+| P7 Room Orchestrator | 8122 | -- | `pmoves/services/p7-room-orchestrator/README.md` | Inline OpenAPI | `p7.nats.*`, `p7.room.*.v1` | `/healthz` | CHIT live gate | L3 |
 | Mesh Agent | -- | -- | -- | -- | `mesh.announce.*` | -- | -- | L3 |
 | Channel Monitor | 8097 | -- | `pmoves/services/channel-monitor/` | -- | -- | `/healthz` | -- | L3 |
 | Cipher Memory | 8105 | `Pmoves-cipher/CLAUDE.md` | `Pmoves-cipher/README.md` | Inline | `cipher.*` | `/health` | -- | L3 |

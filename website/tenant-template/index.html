@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#050508" />
+  <title>PMOVES Tenant</title>
+  <meta name="description" content="A PMOVES community page — composed by agents, rendered with HTML5 Web Components." />
+
+  <link rel="stylesheet" href="./tenant.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="tenant-header">
+    <a class="tenant-home" href="/">← PMOVES.AI</a>
+    <span class="tenant-signature" aria-hidden="true">✦</span>
+  </header>
+
+  <main id="main" class="tenant-main">
+    <h1 id="tenant-title" class="tenant-title">Loading…</h1>
+    <p id="tenant-tagline" class="tenant-tagline"></p>
+    <section id="tenant-surface" class="tenant-surface" aria-label="Tenant surface">
+      <noscript>This page is composed by PMOVES agents and needs JavaScript to render its surfaces.</noscript>
+    </section>
+  </main>
+
+  <footer class="tenant-footer">
+    <p>
+      Composed with
+      <a href="https://github.com/POWERFULMOVES/PMOVES.AI" rel="noopener noreferrer" target="_blank">PMOVES.AI</a>
+      ·
+      <a href="/tenant-template/data/<tenant>.json" id="raw-link" rel="noopener">raw A2UI JSON</a>
+      ·
+      <a href="/stage/">stage</a>
+    </p>
+  </footer>
+
+  <script type="module">
+    // Wire up the tenant page: fetch the composed A2UI JSON, render via web components.
+    import { renderTenant } from './tenant-renderer.js';
+
+    // ?tenant=<id> picks the page; default = fordham-hill (the pilot).
+    // Slug-only: a raw value here becomes a fetch path in the renderer.
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('tenant') || 'fordham-hill';
+    const tenant = /^[a-z0-9][a-z0-9-]*$/.test(raw) ? raw : 'fordham-hill';
+    document.getElementById('raw-link').href = `./data/${tenant}.json`;
+
+    renderTenant(tenant).catch((err) => {
+      console.error('tenant render failed:', err);
+      document.getElementById('tenant-title').textContent = 'Page not found';
+      document.getElementById('tenant-tagline').textContent = `Could not load tenant: ${tenant}`;
+    });
+  </script>
+</body>
+</html>

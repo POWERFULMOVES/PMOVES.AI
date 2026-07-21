@@ -10,6 +10,26 @@ Comprehensive reference of all NATS message subjects used for event-driven commu
 - **JetStream:** Enabled for persistence
 - **Version:** 2.10-alpine
 
+## P7 Room and Session Control
+
+P7 separates command subjects from emitted facts:
+
+| Subject | Role | Direction |
+|---|---|---|
+| `p7.nats.launch` | Start a room session (`room_id` or legacy `room`) | client -> P7 |
+| `p7.nats.session` | Session or stage command (`pause`, `resume`, `end`, `archive`, `stage`) | client -> P7 |
+| `p7.nats.launch.v1`, `p7.nats.session.v1` | Compatibility aliases for existing PBnJ hooks; payload contract is unchanged | client -> P7 |
+| `p7.room.session.started.v1` | Session-start fact | P7 -> consumers |
+| `p7.room.checkpoint.v1` | Session checkpoint fact | P7 -> consumers |
+| `p7.room.session.ended.v1` | Session-ended fact | P7 -> consumers |
+| `p7.room.stage.changed.v1` | Persistent room-stage transition fact | P7 -> consumers |
+| `p7.room.command.failed.v1` | Rejected or malformed command fact | P7 -> operators |
+
+`room.stage` is `rehearsal | live | review | archive`. `session_state` is
+`planned | active | paused | ended | archived`. A transition to `live` is
+CHIT signing-card gated. Every stage transition requires durable Supabase audit
+persistence and confirmed NATS stage-fact delivery.
+
 ## Subject Naming Convention
 
 PMOVES uses versioned subject names following the pattern:
@@ -1651,6 +1671,32 @@ nats server report connections
   or `chit`. Branch trail publish remains CI-owned; live branch/CHIT receive needs a
   persistent audit subscriber, `make -C pmoves nats-agent-inbox`, or an equivalent
   MCP/NATS bridge before it can be treated as online.
+
+**`branch.<branch>.a2ui.trail.v1`**
+- **Direction:** Published by the local PostToolUse hook `.claude/hooks/a2ui-crew-trail.sh`
+  (dev-time, best-effort) → Consumed by monitoring / audit lane
+- **Purpose:** Dev-time A2UI lane branch trail — emits an advisory event when an A2UI lane
+  file is edited (web components, `a2ui-*` contracts, compose tools, tenant templates).
+  Subject uses dot-separated branch path segments (e.g. `branch.feat.a2ui-v02.a2ui.trail.v1`).
+  Sibling of the shift-crew lane hook `.claude/hooks/shift-crew-trail.sh`
+  (`branch.<branch>.trail.v1`); different lane, different subject.
+- **Payload:**
+  ```json
+  {
+    "event": "a2ui_edit",
+    "file": "pm-ballot.js",
+    "path": "pmoves/web-components/pm-ballot/pm-ballot.js",
+    "pattern": "pmoves/web-components/",
+    "branch": "feat/a2ui-v02-impl-review-style",
+    "node": "<hostname>",
+    "ts": "2026-07-16T00:00:00Z"
+  }
+  ```
+- **Notes:** ADVISORY / UNSIGNED — unlike the CI `branch.<path-segments>.trail.v1` §9.4
+  trail, this payload carries NO `spec`, NO `signing_card_id`, and NO HMAC. Audit-lane
+  consumers of `branch.>` MUST skip it for signature verification. Best-effort: publish
+  failure is silent and the hook always exits 0; a durable local record is appended to
+  the gitignored `pmoves/docs/logs/a2ui_branch_trail.jsonl` regardless.
 
 **`village.gate.result.v1`**
 - **Direction:** Staged by `pmoves/tools/village_gate.py` (CI + local `make village-gate`) → Consumed by monitoring / signoff audit lane

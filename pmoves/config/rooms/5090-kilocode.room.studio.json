@@ -1,9 +1,10 @@
 {
   "room_id": "5090-kilocode.room.studio",
   "version": "1.0.0",
+  "stage": "rehearsal",
   "display_name": "5090 KiloCode GLM Workstation",
   "description": "GPU inference specialist node running KiloCode GLM on the GLM Coding Plan. Shares the 5090 with Claude Code and Codex.",
-  "agent_id": "5090-kilocode",
+  "agent_id": "kilocode-glm",
   "alter": "5090-kilocode",
   "room_type": "builder",
   "owner_mode": "shared",

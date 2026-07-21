@@ -85,6 +85,12 @@ Git is now the canonical seed for room manifests.
   - `pmoves/config/rooms/4090-field.room.control.json`
   - `pmoves/config/rooms/5090-voice.room.studio.json`
   - `pmoves/config/rooms/z890-infra.room.fabric.json`
+  - `pmoves/config/rooms/5090-kilocode.room.studio.json`
+  - `pmoves/config/rooms/demo.room.json`
+  - `pmoves/config/rooms/hermes-agent.room.control.json`
+  - `pmoves/config/rooms/fordham.room.community.json`
+  - `pmoves/config/rooms/darkxsides.room.json`
+  - `pmoves/config/rooms/tokenism.room.exchange.json`
 
 Supabase or another runtime store can mirror these later, but the seed shape starts here so rooms can be reviewed, diffed, and versioned like any other PMOVES control-plane asset.
 
@@ -99,7 +105,8 @@ The room manifest declares:
 - notebook: provider, workspace/thread refs, sync mode
 - skill bindings: room-local binding records
 - policies: model routing, publish policy, memory policy
-- stage: current lifecycle state (`rehearsal` | `live` | `review` | `archive`)
+- stage: required persistent lifecycle state (`rehearsal` | `live` | `review` | `archive`)
+- activation metadata: optional structured `meta.chit` signing-card reference
 - telemetry/provenance: optional observability and trace context
 
 ## Skill-to-Room Binding Model
@@ -328,13 +335,17 @@ Example:
 ```
 
 ## Recommended Next Implementation Steps
-1. Add a `room_events_subject` consumer in the UI/launcher layer so room changes become observable.
+1. Add a `room_events_subject` consumer in the UI layer so P7's versioned
+   `p7.room.*.v1` facts become visible as stage/session indicators. P7 command
+   consumption is DONE in `pmoves/services/p7-room-orchestrator/`.
 2. Map existing Notebook Workbench surfaces onto declared `action_namespace` values.
 3. ~~Add room defaults for `5090-voice`, `4090-field`, and `z890-infra` as first manifest examples.~~ DONE — seeded under `pmoves/config/rooms/`.
 4. Mirror room manifests into Supabase or another runtime store only after a loader exists; keep git as canonical seed.
 5. ~~Add one smoke path that loads a manifest and verifies app routes, notebook refs, and skill bindings resolve.~~ DONE — `validate_room_manifests.py`.
 6. Add `/dashboard/review`, `/dashboard/voice`, `/dashboard/media` route implementations. DONE — PR #1142.
 7. Populate `team_refs`/`service_refs`/`launcher_refs` in all room manifests. DONE — PR #1143.
+8. Keep room stage and session state separate: manifests persist room stage;
+   P7 records transient `planned|active|paused|ended|archived` sessions.
 
 ## Related References
 - `pmoves/docs/MODEL_FABRIC_CONTRACT.md`
@@ -350,7 +361,7 @@ A room manifest is not considered activated until the following are true:
 - [ ] `meta.chit.card_id` is present and non-empty, or the room skill supplies an active card at runtime.
 - [ ] The referenced card passes `pmoves/contracts/schemas/identity/signing-card.v1.schema.json` validation with `active: true`.
 - [ ] `pmoves/config/signing_identity_cards.yaml` has a row for the room's operating agent with matching key material (`ssh_fingerprint`, `gpg_key_id`, or `github_app_installation_id`).
+- [ ] P7 can locally verify the selected card's Ed25519 SSH public key and the activation request includes a fresh nonce-bound proof-of-possession; card presence alone is not authorization.
 - [ ] `make sign-trail AGENT=<agent_id>` returns a signed or explicitly accepted `unsigned-local` advisory before the room transitions to `live`.
 - [ ] All `mcp_servers` / `a2a_servers` declared in the manifest are present in `pmoves/config/agent_registry.yaml` and reachable in the target topology mode.
 - [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` values in `sidecar.env` match the intended topology gradient (`standalone` → `docked` → `fleet`).
-

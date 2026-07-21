@@ -18,8 +18,14 @@ if [ -z "$REPO_ROOT" ]; then
   exit 1
 fi
 
+echo "◇ crush-pmoves → sourcing PMOVES tier env..."
+source "$REPO_ROOT/pmoves/scripts/crush-env.sh"
+
 echo "◇ crush-pmoves → bootstrapping from $REPO_ROOT"
 make -C "$REPO_ROOT/pmoves" crush-bootstrap
+
+# Re-source env after bootstrap (which runs secrets-funnel, may populate new values)
+source "$REPO_ROOT/pmoves/scripts/crush-env.sh"
 
 echo ""
 echo "◇ Launching Crush..."

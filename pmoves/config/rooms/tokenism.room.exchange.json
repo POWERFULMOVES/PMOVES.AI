@@ -1,11 +1,12 @@
 {
   "room_id": "tokenism.room.exchange",
   "version": "1.0.0",
+  "stage": "rehearsal",
   "display_name": "ToKenism Exchange",
   "description": "Token-economy simulation floor: run business-idea scenarios in the ToKenism simulator, then export the results into PMOVES-Wealth (Firefly III) as browsable ledgers. The audience-facing face of the L5 Economics layer.",
   "agent_id": "5090-claude",
   "alter": "5090-tokenism",
-  "room_type": "exchange",
+  "room_type": "hybrid",
   "owner_mode": "alter",
   "access": {
     "visibility": "public"
@@ -73,7 +74,7 @@
         "export-csv"
       ],
       "pinned": false,
-      "status": "planned"
+      "status": "active"
     }
   ],
   "notebook": {
@@ -103,6 +104,8 @@
   "skill_bindings": [
     {
       "binding_id": "tokenism-run-scenario",
+      "skill_id": "tokenism-run-scenario",
+      "room_id": "tokenism.room.exchange",
       "display_name": "Run Business-Idea Scenario",
       "intent": [
         "simulate",
@@ -120,6 +123,20 @@
         "stream": "status",
         "max_steps": 8
       },
+      "context": {
+        "sources": ["room-state", "notebook-thread", "user-intent"],
+        "include_last_turns": 4,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "notebook-entry",
+          "delivery": "append",
+          "path": "pages/scenario-log",
+          "artifact_type": "json"
+        }
+      ],
       "enabled": true,
       "tags": [
         "tokenism",
@@ -129,6 +146,8 @@
     },
     {
       "binding_id": "tokenism-export-to-wealth",
+      "skill_id": "tokenism-export-to-wealth",
+      "room_id": "tokenism.room.exchange",
       "display_name": "Export Simulation to Wealth Ledger",
       "intent": [
         "export",
@@ -146,7 +165,21 @@
         "stream": "status",
         "max_steps": 5
       },
-      "enabled": false,
+      "context": {
+        "sources": ["room-state", "notebook-thread", "user-intent"],
+        "include_last_turns": 4,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "tokenism.export.result.v1",
+          "artifact_type": "json"
+        }
+      ],
+      "enabled": true,
       "tags": [
         "tokenism",
         "wealth",

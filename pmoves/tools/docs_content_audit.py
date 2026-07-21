@@ -92,6 +92,7 @@ KNOWN_PORTS: Dict[str, int] = {
     "notebook-sync": 8095,
     "cipher-memory": 8105,
     "channel-monitor": 8097,
+    "p7-room-orchestrator": 8122,
     "prometheus": 9090,
     "grafana": 3000,
     "loki": 3100,

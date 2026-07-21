@@ -63,6 +63,7 @@ SERVICE_GROUPS = {
         "nats-echo-req",
         "nats-echo-res",
         "consciousness-service",
+        "p7-room-orchestrator",
         "evo-controller",
         "hf-agent",
         "hf-research-agent",
@@ -226,8 +227,7 @@ def main():
     with open(base_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(base_header)
         yaml.dump(base, f)
-    svc_count = sum(len(v) for v in SERVICE_GROUPS.values())
-    print(f"✓ docker-compose.base.yml (anchors + volumes + networks)")
+    print("✓ docker-compose.base.yml (anchors + volumes + networks)")
 
     # ── Build overlay files ──
     total = 0

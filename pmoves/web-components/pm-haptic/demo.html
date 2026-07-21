@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-haptic&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .stack {
+      display: grid;
+      gap: 16px;
+      max-width: 560px;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    label {
+      font-size: 13px;
+      color: var(--pm-fg-muted);
+      min-width: 100px;
+    }
+    input[type="range"] { flex: 1; }
+    input[type="text"] {
+      flex: 1;
+      background: var(--pm-bg-elevated);
+      color: var(--pm-fg);
+      border: 1px solid var(--pm-border);
+      border-radius: var(--pm-radius-sm);
+      padding: 6px 10px;
+      font: inherit;
+    }
+    .controls {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--pm-bg-elevated);
+      color: var(--pm-fg);
+      border: 1px solid var(--pm-border);
+      border-radius: var(--pm-radius-sm);
+      padding: 8px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { background: var(--pm-accent); }
+    .haptic-bar {
+      padding: 12px 16px;
+      background: var(--pm-bg-elevated);
+      border: 1px solid var(--pm-border);
+      border-radius: var(--pm-radius);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .note {
+      font-size: 11px;
+      color: var(--pm-fg-muted);
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-haptic&gt; — v0.1 demo</h1>
+
+  <div class="stack">
+    <div class="haptic-bar">
+      <pm-haptic id="h1"></pm-haptic>
+      <span>One-shot pattern (100,50,100,50,100)</span>
+      <button id="b1">Pulse</button>
+    </div>
+
+    <div class="haptic-bar">
+      <pm-haptic id="h2" bpm="120"></pm-haptic>
+      <span>Auto-derive from BPM (120)</span>
+      <button id="b2">Pulse</button>
+      <button id="b2loop">Start loop</button>
+      <button id="b2stop">Stop loop</button>
+    </div>
+
+    <div class="haptic-bar">
+      <span>Custom pattern:</span>
+      <input type="text" id="customPattern" value="200,100,50,100" style="flex:1;max-width:240px">
+      <pm-haptic id="h3" pattern="200,100,50,100"></pm-haptic>
+      <button id="b3">Pulse</button>
+    </div>
+
+    <div>
+      <div class="row">
+        <label>BPM</label>
+        <input type="range" id="bpm" min="40" max="200" value="120" />
+        <span id="bpm-val">120</span>
+      </div>
+      <div class="note" id="note">Slider drives the loop BPM. Browser must support Vibration API (most mobile browsers; desktop usually silent).</div>
+    </div>
+  </div>
+
+  <script type="module" src="./pm-haptic.js"></script>
+  <script type="module">
+    const h1 = document.getElementById('h1');
+    const h2 = document.getElementById('h2');
+    const h3 = document.getElementById('h3');
+    const bpmEl = document.getElementById('bpm');
+    const bpmVal = document.getElementById('bpm-val');
+    const customEl = document.getElementById('customPattern');
+
+    // One-shot buttons
+    document.getElementById('b1').addEventListener('click', () => h1.pulse());
+    document.getElementById('b2').addEventListener('click', () => h2.pulse());
+    document.getElementById('b3').addEventListener('click', () => h3.pulse());
+
+    // BPM-driven loop
+    document.getElementById('b2loop').addEventListener('click', () => h2.startLoop());
+    document.getElementById('b2stop').addEventListener('click', () => h2._stopLoop());
+
+    // BPM slider drives h2's bpm + live updates
+    bpmEl.addEventListener('input', () => {
+      const v = parseInt(bpmEl.value, 10);
+      bpmVal.textContent = String(v);
+      h2.bpm = v;
+      h2.startLoop();  // restart with new BPM
+    });
+
+    // Custom pattern input
+    customEl.addEventListener('input', () => {
+      h3.pattern = customEl.value;
+    });
+
+    // Note: prefers-reduced-motion check
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) {
+      document.getElementById('note').textContent =
+        'prefers-reduced-motion is ON — vibration is suppressed but the visual indicator still flashes. Set respect-reduced-motion="false" on the component to override.';
+    }
+  </script>
+</body>
+</html>
