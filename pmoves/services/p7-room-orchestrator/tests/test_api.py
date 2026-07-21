@@ -78,11 +78,15 @@ def _patch_publisher_after_lifespan(monkeypatch):
 
 @pytest.fixture
 def client(hermetic_settings, catalog_with_two_rooms):
-    """FastAPI TestClient with the hermetic pmoves root."""
+    """FastAPI TestClient with the hermetic pmoves root + bearer auth."""
     # Reload main module-level state so the SETTINGS singleton picks up
-    # the env vars set by hermetic_settings (P7_PMOVES_ROOT, etc.).
+    # the env vars set by hermetic_settings (P7_PMOVES_ROOT, P7_CONTROL_TOKEN, etc.).
     importlib.reload(main)
-    with TestClient(main.app) as c:
+    # The default Authorization header satisfies the require_http_control
+    # dependency on /api/p7/rooms/{id}/transition. Per-test override via
+    # `client.headers = {}` is possible if a test needs to exercise the
+    # 401/503 auth paths.
+    with TestClient(main.app, headers={"Authorization": "Bearer test-control-token"}) as c:
         yield c
 
 

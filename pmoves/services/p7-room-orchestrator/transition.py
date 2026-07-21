@@ -335,11 +335,27 @@ class TransitionEngine:
             LOG.error("signing_cards load failed: %s", exc)
             self._signing_cards = {}
             return self._signing_cards
-        # shape: {"cards": {"<uuid>": {...}, ...}} or flat dict
-        if isinstance(data, dict) and "cards" in data and isinstance(data["cards"], dict):
-            self._signing_cards = data["cards"]
-        else:
+        # Three accepted shapes (see pmoves/config/signing_identity_cards.yaml):
+        # 1. {"cards": [{"card_id": ..., "ml": {...}, "h": {...}}, ...]}
+        #    (canonical — the production file uses a list)
+        # 2. {"cards": {"<uuid>": {...}, ...}}
+        #    (older shape; kept for backward compat)
+        # 3. flat dict-of-cards {"<uuid>": {...}, ...}
+        cards_field = data.get("cards") if isinstance(data, dict) else None
+        if isinstance(cards_field, list):
+            # Index by card_id; skip entries without one.
+            indexed: Dict[str, Dict[str, Any]] = {}
+            for entry in cards_field:
+                if isinstance(entry, dict) and entry.get("card_id"):
+                    indexed[entry["card_id"]] = entry
+            self._signing_cards = indexed
+        elif isinstance(cards_field, dict):
+            self._signing_cards = cards_field
+        elif isinstance(data, dict):
             self._signing_cards = data
+        else:
+            LOG.warning("signing_cards has unexpected shape: %s", type(data))
+            self._signing_cards = {}
         return self._signing_cards
 
     def _validate_signing_card(self, card: Dict[str, Any], manifest_agent_id: str) -> List[str]:

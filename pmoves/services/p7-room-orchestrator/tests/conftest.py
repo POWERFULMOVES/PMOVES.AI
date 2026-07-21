@@ -85,7 +85,9 @@ def _write_manifest(rooms_dir: Path, room_id: str, extra_meta: dict | None = Non
 
 
 def _write_signing_cards(path: Path, cards: dict) -> None:
-    path.write_text(yaml_dump({"cards": cards}))
+    # Production file is a LIST of cards under `cards:` (canonical shape).
+    # See pmoves/config/signing_identity_cards.yaml.
+    path.write_text(yaml_dump({"cards": list(cards.values())}))
 
 
 def _write_agent_registry(path: Path, servers: list[str]) -> None:
@@ -229,13 +231,22 @@ def hermetic_settings(
     """
     Set env vars so P7Settings reads from the temp root. Returns the P7Settings
     instance. Note: pmoves_root is set to the temp root so relative paths resolve.
+    Also sets P7_CONTROL_TOKEN to a known test value so the bearer-auth
+    dependency on /api/p7/rooms/{id}/transition passes.
     """
     monkeypatch.setenv("P7_PMOVES_ROOT", str(temp_pmoves_root))
     monkeypatch.setenv("P7_NATS_URL", "nats://127.0.0.1:1")  # unreachable; tests verify log-only fallback
     monkeypatch.setenv("P7_SERVICE_CARD_ID", "")
     monkeypatch.setenv("P7_SIGNING_KEY", "")
     monkeypatch.setenv("P7_ALLOW_UNSIGNED_LOCAL", "true")
+    monkeypatch.setenv("P7_CONTROL_TOKEN", "test-control-token")
     # Reload settings to pick up env
     from config import P7Settings
     s = P7Settings()
     return s
+
+
+@pytest.fixture
+def auth_headers():
+    """Default Authorization header for tests that exercise mutating endpoints."""
+    return {"Authorization": "Bearer test-control-token"}

@@ -28,7 +28,7 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Annotated
 
 # Ensure this directory is on sys.path so absolute imports work whether the
 # service is run as `uvicorn main:app` from the service dir OR as a module
@@ -37,9 +37,23 @@ _THIS_DIR = str(Path(__file__).resolve().parent)
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+# Shared secret-aware env helper (P7_CONTROL_TOKEN, P7_SIGNING_KEY, etc.)
+import sys as _sys
+_SERVICES_COMMON = Path(__file__).resolve().parents[3] / "services" / "common"
+if str(_SERVICES_COMMON) not in _sys.path:
+    _sys.path.insert(0, str(_SERVICES_COMMON))
+try:
+    from env import get_secret as _get_secret  # type: ignore
+except ImportError:  # pragma: no cover
+    def _get_secret(key: str, default: str | None = None) -> str | None:
+        import os
+        return os.environ.get(key, default)
+
+import hmac
 
 from catalog import CatalogError, CatalogLoader, ManifestError
 from config import P7Settings
@@ -72,6 +86,33 @@ SETTINGS: P7Settings = _build_settings()
 CATALOG: Optional[CatalogLoader] = None
 PUBLISHER: Optional[NATSPublisher] = None
 ENGINE: Optional[TransitionEngine] = None
+
+# P7 HTTP control token. Reads from P7_CONTROL_TOKEN or P7_CONTROL_TOKEN_FILE
+# (secret-aware). When unset, mutating endpoints return 503 (fail-closed)
+# rather than silently allow unauthenticated state changes.
+P7_CONTROL_TOKEN: str = _get_secret("P7_CONTROL_TOKEN", "") or ""
+
+
+def require_http_control(
+    authorization: Optional[str] = Header(default=None),
+) -> None:
+    """Authenticate HTTP control-plane mutations with a secret-aware bearer token.
+
+    Mirrors the original p7-room-orchestrator contract (see origin/main
+    pmoves/services/p7-room-orchestrator/app.py). Returns:
+      - 503 if the service is not configured with a token (fail-closed)
+      - 401 if the request lacks a valid bearer credential
+    """
+    if not P7_CONTROL_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="P7 HTTP control token not configured (set P7_CONTROL_TOKEN or P7_CONTROL_TOKEN_FILE)",
+        )
+    scheme, _, credential = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(credential, P7_CONTROL_TOKEN):
+        raise HTTPException(
+            status_code=401, detail="Invalid P7 HTTP control credentials"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -166,6 +207,22 @@ async def _catalog_error_handler(_: Request, exc: CatalogError) -> JSONResponse:
     )
 
 
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Fail-closed handler for any unhandled exception.
+
+    The full exception (including stack trace) is logged server-side so
+    operators can diagnose, but only a generic message is returned to the
+    client to avoid leaking internals (paths, env values, library versions).
+    Per CodeQL guidance for information-exposure findings.
+    """
+    LOG.exception("unhandled exception in %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"error": "internal_error", "detail": "an internal error occurred"},
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Pydantic models
 # --------------------------------------------------------------------------- #
@@ -227,7 +284,7 @@ async def get_room(room_id: str) -> Dict[str, Any]:
     }
 
 
-@app.post("/api/p7/rooms/{room_id}/transition")
+@app.post("/api/p7/rooms/{room_id}/transition", dependencies=[Depends(require_http_control)])
 async def transition_room(room_id: str, req: TransitionRequest) -> Dict[str, Any]:
     if ENGINE is None or PUBLISHER is None:
         raise HTTPException(status_code=503, detail="P7 service not ready")

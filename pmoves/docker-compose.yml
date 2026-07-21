@@ -2867,11 +2867,12 @@ services:
     #   pmoves/docs/ROOMS_ON_A_STAGE.md
     #   pmoves/services/p7-room-orchestrator/README.md
     build:
-      context: ./services/p7-room-orchestrator
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/p7-room-orchestrator/Dockerfile
     container_name: pmoves-p7
     restart: unless-stopped
     environment:
+      - P7_HOST=0.0.0.0
       - P7_HTTP_PORT=8120
       - P7_NATS_URL=nats://nats:4222
       - P7_PMOVES_ROOT=/etc/pmoves
@@ -2882,6 +2883,7 @@ services:
       - P7_AGENT_REGISTRY_PATH=/etc/pmoves/config/agent_registry.yaml
       - P7_SERVICE_CARD_ID=${P7_SERVICE_CARD_ID:-}
       - P7_SIGNING_KEY=${P7_SIGNING_KEY:-}
+      - P7_SIGNING_KEY_FILE=${P7_SIGNING_KEY_FILE:-}
       - P7_CHIT_REQUIRE_SIGNATURE=${P7_CHIT_REQUIRE_SIGNATURE:-true}
       - P7_ALLOW_UNSIGNED_LOCAL=${P7_ALLOW_UNSIGNED_LOCAL:-true}
       - P7_LOG_LEVEL=INFO

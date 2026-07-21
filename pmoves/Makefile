@@ -2894,6 +2894,31 @@ p7-health: ## Check P7 service health
 smoke-p7: ## Run P7 service smoke tests (catalog load + transition gate + idempotency)
 	@$(PYTHON) -m pytest -q services/p7-room-orchestrator/tests/ -x
 
+.PHONY: up-cipher-full
+up-cipher-full: ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
+	@echo "Starting full Cipher embedding stack..."
+	@$(DC) up -d nats qdrant
+	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
+	@$(DC) --profile agents up -d --build cipher-api
+	@echo "✔ Cipher Memory + embedding pipeline ready"
+	@echo "  Cipher:    http://localhost:$${CIPHER_PORT:-8105}"
+	@echo "  Qdrant:    http://localhost:6333"
+	@echo "  Ollama:    http://localhost:11434"
+
+.PHONY: cipher-memory-smoke
+cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search (requires up-cipher-full)
+	@echo "Testing cipher /api/memory POST..."
+	@resp=$$(curl -sf -X POST http://localhost:$${CIPHER_PORT:-8105}/api/memory \
+		-H 'Content-Type: application/json' \
+		-d '{"content":"PMOVES cipher smoke test","category":"test","tags":["smoke"]}' 2>&1) \
+		&& echo "  POST OK: $$resp" \
+		|| (echo "  POST FAILED: $$resp" && exit 1)
+	@echo "Testing cipher /api/memory/search..."
+	@resp=$$(curl -sf "http://localhost:$${CIPHER_PORT:-8105}/api/memory/search?q=cipher&limit=1" 2>&1) \
+		&& echo "  SEARCH OK: $$resp" \
+		|| (echo "  SEARCH FAILED: $$resp" && exit 1)
+	@echo "✔ Cipher memory pipeline smoke passed"
+
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8105}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
