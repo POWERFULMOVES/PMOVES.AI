@@ -19,7 +19,7 @@ customModes:
       Reference files:
       - .claude/CLAUDE.md — full architecture overview and service catalog
       - .claude/context/services-catalog.md — port allocations and health endpoints
-      - pmoves/config/agent_registry.yaml — canonical agent definitions (91 agents)
+      - pmoves/config/2 — canonical agent definitions (46 agents)
       - pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md — type system and evolution paths
 
       Service patterns:
@@ -52,7 +52,7 @@ customModes:
       - .claude/CLAUDE.md — production service catalog with all ports and APIs
       - .claude/context/nats-subjects.md — NATS subject ownership matrix
       - .claude/context/geometry-nats-subjects.md — GEOMETRY BUS subjects
-      - pmoves/config/agent_registry.yaml — 91 agents with classes, types, layers, CHIT toggles
+      - pmoves/config/agent_registry.yaml — 46 agents with classes, types, layers, CHIT toggles
       - pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md — type effectiveness and evolution
       - plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md — integration architecture
 
