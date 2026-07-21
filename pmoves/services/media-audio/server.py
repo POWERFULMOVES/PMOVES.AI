@@ -17,6 +17,7 @@ See project_media_stack_roadmap.
 
 import logging
 import os
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -26,7 +27,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 logger = logging.getLogger("pmoves.media-audio")
 
@@ -55,6 +56,12 @@ HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"
 MEDIA_AUDIO_SUBJECT = os.environ.get("MEDIA_AUDIO_SUBJECT", "media.audio.analyzed.v1")
 # Client-provided file paths must resolve within this dir (py/path-injection guard).
 MEDIA_INPUT_DIR = os.environ.get("MEDIA_INPUT_DIR", "/data")
+# MinIO/S3 (env already wired in docker-compose media-audio block). Mirrors the
+# ffmpeg-whisper s3_client() chain so bucket+key jobs can be fetched.
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT", "minio:9000")
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID", "")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").strip().lower() in ("true", "1", "yes")
 
 
 def check_gpu_available() -> dict:
@@ -77,9 +84,24 @@ def check_gpu_available() -> dict:
 
 
 class AudioAnalysisRequest(BaseModel):
-    file_path: str
+    # Real callers (ffmpeg-whisper forward hook, n8n flow) send a MinIO ref; direct
+    # file_path is kept for local/direct-mount + tests. Exactly one source required.
+    bucket: Optional[str] = None
+    key: Optional[str] = None
+    file_path: Optional[str] = None
+    video_id: Optional[str] = None
+    namespace: Optional[str] = None
+    transcript: Optional[Dict[str, Any]] = None  # if forwarded, skip re-running STT
     analysis_type: str = "full"  # full | transcription | emotion | diarization | features
     language: str = "auto"
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "AudioAnalysisRequest":
+        has_ref = bool(self.bucket and self.key)
+        has_path = bool(self.file_path)
+        if has_ref == has_path:
+            raise ValueError("exactly one of (bucket+key) or file_path is required")
+        return self
 
 
 class AudioProcessor:
@@ -202,14 +224,17 @@ class AudioProcessor:
             logger.exception("diarization failed")
             return {"error": str(e)}
 
-    def full(self, path: str, language: str = "auto") -> Dict[str, Any]:
+    def full(self, path: str, language: str = "auto", pretranscript: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         started = datetime.now(timezone.utc)
+        # If an upstream hop already transcribed (ffmpeg-whisper forwards it), reuse it
+        # instead of re-running STT on the GPU.
+        transcription = pretranscript if pretranscript is not None else self.transcribe(path, language)
         result: Dict[str, Any] = {
             "task_id": str(uuid.uuid4()),
             "file_path": path,
             "timestamp": started.isoformat(),
             "features": self.features(path),
-            "transcription": self.transcribe(path, language),
+            "transcription": transcription,
             "emotion": self.emotion(path),
             "diarization": self.diarize(path),
         }
@@ -303,27 +328,79 @@ def _safe_input_path(raw: str) -> str:
     return resolved
 
 
-@app.post("/analyze")
-async def analyze(req: AudioAnalysisRequest):
+def _s3_client():
+    """boto3 S3 client for MinIO — mirrors ffmpeg-whisper/server.py:329-338."""
+    import boto3
+
+    scheme = "https" if MINIO_SECURE else "http"
+    return boto3.client(
+        "s3",
+        endpoint_url=f"{scheme}://{MINIO_ENDPOINT}",
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
+    )
+
+
+def _fetch_from_minio(bucket: str, key: str) -> str:
+    """Download a MinIO object to a temp file; returns the local path (caller cleans up its dir)."""
+    tmpdir = tempfile.mkdtemp(prefix="media-audio-")
+    local = os.path.join(tmpdir, os.path.basename(key) or "audio")
+    try:
+        with open(local, "wb") as fh:
+            _s3_client().download_fileobj(bucket, key, fh)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("MinIO fetch failed for %s/%s", bucket, key)
+        raise HTTPException(status_code=502, detail="could not fetch object from storage") from e
+    return local
+
+
+async def _run_analysis(req: AudioAnalysisRequest) -> JSONResponse:
     if _processor is None:
         raise HTTPException(status_code=503, detail="models not ready")
-    path = _safe_input_path(req.file_path)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="audio file not found")
-    dispatch = {
-        "full": lambda: _processor.full(path, req.language),
-        "transcription": lambda: _processor.transcribe(path, req.language),
-        "emotion": lambda: _processor.emotion(path),
-        "diarization": lambda: _processor.diarize(path),
-        "features": lambda: _processor.features(path),
-    }
-    fn = dispatch.get(req.analysis_type)
-    if fn is None:
-        raise HTTPException(status_code=400, detail=f"invalid analysis_type: {req.analysis_type}")
-    result = fn()
-    if req.analysis_type == "full":
-        await _maybe_publish(result)
-    return JSONResponse(content=result)
+    cleanup_dir: Optional[str] = None
+    if req.bucket and req.key:
+        path = _fetch_from_minio(req.bucket, req.key)
+        cleanup_dir = os.path.dirname(path)
+    else:
+        path = _safe_input_path(req.file_path)
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="audio file not found")
+    try:
+        dispatch = {
+            "full": lambda: _processor.full(path, req.language, pretranscript=req.transcript),
+            "transcription": lambda: (req.transcript or _processor.transcribe(path, req.language)),
+            "emotion": lambda: _processor.emotion(path),
+            "diarization": lambda: _processor.diarize(path),
+            "features": lambda: _processor.features(path),
+        }
+        fn = dispatch.get(req.analysis_type)
+        if fn is None:
+            raise HTTPException(status_code=400, detail=f"invalid analysis_type: {req.analysis_type}")
+        result = fn()
+        if isinstance(result, dict):
+            if req.video_id:
+                result["video_id"] = req.video_id
+            if req.namespace:
+                result["namespace"] = req.namespace
+        if req.analysis_type == "full":
+            await _maybe_publish(result)
+        return JSONResponse(content=result)
+    finally:
+        if cleanup_dir:
+            import shutil
+
+            shutil.rmtree(cleanup_dir, ignore_errors=True)
+
+
+@app.post("/analyze")
+async def analyze(req: AudioAnalysisRequest):
+    return await _run_analysis(req)
+
+
+# Alias — the wired n8n flow posts to /process (see media-payload-explorer findings).
+@app.post("/process")
+async def process(req: AudioAnalysisRequest):
+    return await _run_analysis(req)
 
 
 if __name__ == "__main__":
