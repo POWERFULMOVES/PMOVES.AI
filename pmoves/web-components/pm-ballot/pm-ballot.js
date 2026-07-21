@@ -31,15 +31,19 @@ class PmBallot extends HTMLElement {
       'ballot-id', 'title', 'description', 'options',
       'eligible-voters', 'quorum', 'closes-at',
       'voter-id', 'data-state-source', 'data-source',
+      'allow-insecure-demo-hash',
     ];
   }
 
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._state = { tally: {}, receipts: [] };
+    this._state = { tally: {} };
+    // Public receipts, held back until close (see the `state` getter).
+    this._sealedReceipts = [];
     this._myChoice = null;
     this._castError = null;
+    this._forcedClosed = false;
     this._subscription = null;
     this._listeners = [];  // event-wire subscribers (e.g. <pm-toast>)
   }
@@ -93,7 +97,35 @@ class PmBallot extends HTMLElement {
   get voterId() { return this.getAttribute('voter-id') || null; }
   set voterId(v) { v ? this.setAttribute('voter-id', v) : this.removeAttribute('voter-id'); }
 
-  get state() { return this._state; }
+  // Published state (what `data-state-source` exposes to every client).
+  //
+  // Receipts are SEALED until the ballot closes. A 128-bit nonce hides the
+  // choice inside the hash, but it does nothing if a receipt is published in
+  // the same state update that increments its option's tally: an observer
+  // polling this getter diffs two snapshots, sees one new receipt and one
+  // bumped option, and re-links them without touching the hash. For a 47-unit
+  // co-op recall that reconstructs the whole ballot.
+  //
+  // Three things are required together, and each closes a different re-link:
+  //   1. seal until close      -> no live receipt/tally coincidence
+  //   2. no `ts` on the public receipt -> an observer who recorded the tally
+  //      timeline cannot re-link by timestamp after close (the voter keeps
+  //      the exact ts in their own tuple; presence-in-log is what verifies)
+  //   3. order by hash, not insertion -> position cannot re-link to the order
+  //      the live tally moved in
+  //
+  // Deviates from spec §5.4/§5.2, which publish {receiptHash, ts} live —
+  // raised as a spec amendment on PR #2133.
+  get state() {
+    const sealed = this._isSealed();
+    return {
+      ...this._state,
+      receipts: sealed
+        ? []
+        : this._sealedReceipts.slice().sort((a, b) => (a.receiptHash < b.receiptHash ? -1 : 1)),
+      receiptsSealed: sealed ? this._sealedReceipts.length : 0,
+    };
+  }
   get tally() { return this._state.tally || {}; }
   get myChoice() { return this._myChoice; }
 
@@ -101,7 +133,21 @@ class PmBallot extends HTMLElement {
   // 'vote-cast' event (v0.2 §4.3). Async because _hashReceipt uses the
   // (async) SubtleCrypto API.
   async castVote(optionId, voterIdOverride) {
-    if (!this._isOpen()) {
+    // A ballot served over plain http:// (a co-op LAN at http://192.168.x.x is
+    // the realistic case) has no crypto.subtle, so the sha256 path is gone.
+    // getRandomValues still works, so a 128-bit nonce would be minted and then
+    // committed with a 32-bit FNV checksum — a colliding receipt is findable in
+    // under a second, meaning the commitment binds to nothing and the voter is
+    // told to verify with a hash that opens to more than one choice.
+    // Refuse rather than silently downgrade: the old code disclosed the
+    // downgrade in the receipt panel, i.e. only AFTER the vote was irrevocable.
+    if (!this._canHashSecurely() && !this.hasAttribute('allow-insecure-demo-hash')) {
+      this._castError = 'insecure-context';
+      this._render();
+      this._fire('ballot-unavailable', { reason: 'insecure-context' });
+      return null;
+    }
+    if (!this._isVotingOpen()) {
       this._fire('ballot-closed', { reason: 'closed-or-not-yet-open' });
       return null;
     }
@@ -111,14 +157,28 @@ class PmBallot extends HTMLElement {
     }
     const voterId = voterIdOverride || this.voterId || `anonymous-${Date.now()}`;
     const ts = new Date().toISOString();
-    const { hash: receiptHash, algo } = await this._hashReceipt(voterId, optionId, ts);
+    const nonce = this._nonce();
+    const { hash: receiptHash, algo } = await this._hashReceipt(voterId, optionId, ts, nonce);
 
-    const receipt = {
-      voterId, choice: optionId, ts, receiptHash, algo,
-      // v0.2: signature is a placeholder; real CHIT signing wires in via
-      // the data-state-source subscriber in production.
-      signature: `chit-stub:${receiptHash.slice(0, 16)}`,
+    // The voter's receipt. Held ONLY in this browser — it is the (choice, ts,
+    // nonce) tuple §5.4 tells the resident to keep. It is returned to the
+    // caller and rendered locally; it must never reach `_state`.
+    const voterReceipt = {
+      ballotId: this.ballotId, voterId, choice: optionId, ts, nonce, receiptHash, algo,
     };
+
+    // The public receipt. Carries no voterId and no choice — not even in
+    // recomputable form (§5.5 rule 1) — and no `ts`, which would let an
+    // observer re-link it to a tally increment (see the `state` getter).
+    //
+    // No `signature` key: the CHIT signature is applied by the state authority
+    // over each appended mutation, not minted client-side. A placeholder here
+    // was a prefix of receiptHash — derivable by anyone, authenticating
+    // nothing — and a field named `signature` invites a consumer to trust it.
+    // An absent field fails loudly; a fake one fails silently.
+    const publicReceipt = { receiptHash, status: 'cast' };
+    this._sealedReceipts.push(publicReceipt);
+
     this._state = {
       ...this._state,
       tally: {
@@ -126,16 +186,23 @@ class PmBallot extends HTMLElement {
         [optionId]: (this._state.tally[optionId] || 0) + 1,
         _total: (this._state.tally._total || 0) + 1,
       },
-      receipts: [...(this._state.receipts || []), receipt],
     };
-    this._myChoice = { optionId, receipt };
+    this._myChoice = { optionId, receipt: voterReceipt };
     this._render();
 
-    this._fire('vote-cast', { receipt, tally: this._state.tally });
+    // Event carries the PUBLIC receipt ONLY — no nonce, no choice, and no tally.
+    // Shipping the post-cast tally beside the receiptHash re-links them for any
+    // listener: the key that just incremented IS the choice. That is the same
+    // correlation the `state` getter seals against, so emitting it here would
+    // re-open it on the outward wire (§4.3 routes this off-component).
+    // Consumers needing the aggregate read the `tally` getter, which carries no
+    // receipt and so cannot be correlated with one.
+    this._fire('vote-cast', { receipt: publicReceipt });
     if (this._hasReachedQuorum()) {
-      this._fire('quorum-reached', { tally: this._state.tally, quorum: this.quorumPercent() });
+      this._fire('quorum-reached', { quorum: this.quorumPercent() });
     }
-    return receipt;
+    // The voter's receipt goes to the caller, not to shared state.
+    return voterReceipt;
   }
 
   // ---- v0.2 event wire (pm-event slots §4.3) ----
@@ -171,9 +238,48 @@ class PmBallot extends HTMLElement {
     }
   }
 
-  _isOpen() {
-    if (!this.closesAt) return true;
-    return Date.now() < new Date(this.closesAt).getTime();
+  // Close time in ms, or: null when unset, NaN when unparseable.
+  _closeTime() {
+    if (!this.closesAt) return null;
+    return new Date(this.closesAt).getTime();   // NaN if the author typo'd it
+  }
+
+  // Is this ballot accepting votes? FAILS OPEN on a config error.
+  // A malformed closes-at is an authoring mistake; disenfranchising every
+  // resident because of one is the worse failure. Surfaced visibly instead.
+  _isVotingOpen() {
+    if (this._forcedClosed) return false;
+    const t = this._closeTime();
+    if (t === null || Number.isNaN(t)) return true;
+    return Date.now() < t;
+  }
+
+  // Are receipts still sealed? FAILS CLOSED (sealed) on a config error.
+  // Publishing receipts early leaks votes irreversibly; staying sealed is
+  // merely inconvenient. Opposite default to _isVotingOpen by design — these
+  // two consumers previously shared one boolean, so one was always wrong:
+  // an unparseable date closed the voting AND lifted the seal simultaneously.
+  _isSealed() {
+    if (this._forcedClosed) return false;
+    const t = this._closeTime();
+    if (t === null || Number.isNaN(t)) return true;
+    return Date.now() < t;
+  }
+
+  // Explicit close, so the seal has a lift condition that does not depend on an
+  // optional attribute. Without this, a ballot authored with no closes-at (the
+  // spec's own §6 sample, and this component's test fixture) stays sealed
+  // forever and its receipts NEVER publish — residents could never verify.
+  close() {
+    this._forcedClosed = true;
+    this._render();
+  }
+
+  // True when the ballot can never publish receipts on its own. Rendered as a
+  // visible authoring error rather than silently swallowed.
+  _hasNoCloseCondition() {
+    const t = this._closeTime();
+    return !this._forcedClosed && (t === null || Number.isNaN(t));
   }
 
   _hasReachedQuorum() {
@@ -185,14 +291,38 @@ class PmBallot extends HTMLElement {
     return (this._state.tally._total || 0) / this.eligibleVoters;
   }
 
-  // Receipt hash: sha256(ballotId + voterId + choice + ts) where a secure
-  // context is available; otherwise a non-cryptographic FNV-1a checksum.
-  // Returns { hash, algo } so the receipt UI can be honest about which was
-  // used. Uses the browser SubtleCrypto API on the secure path.
-  // TODO(v0.2 spec §5.4 rev): nonce-commitment receipts — mix a voter-held
-  // random nonce into the hash so public receipts don't reveal the vote.
-  async _hashReceipt(voterId, choice, ts) {
-    const input = `${this.ballotId}|${voterId}|${choice}|${ts}`;
+  // Is a real cryptographic hash available? crypto.subtle requires a secure
+  // context (https:, or http://localhost — but NOT http://192.168.x.x).
+  _canHashSecurely() {
+    return !!(window.crypto && window.crypto.subtle);
+  }
+
+  // 128-bit voter-held nonce (§5.4). getRandomValues — unlike crypto.subtle —
+  // is available in non-secure contexts, so the nonce never silently degrades.
+  _nonce() {
+    const b = new Uint8Array(16);
+    (window.crypto || window.msCrypto).getRandomValues(b);
+    return Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Length-prefixed (netstring-style) encoding of the receipt preimage.
+  //
+  // §5.4 requires that distinct input tuples can never produce the same
+  // preimage. Plain `|`-joining does NOT give that: a `|` inside a field
+  // shifts the boundaries, so ('apt-4B|yes','no') and ('apt-4B','yes|no')
+  // collide. Prefixing each field with its length makes the parse unambiguous
+  // for ANY field content, so no caller has to remember to sanitize.
+  _preimage(ballotId, voterId, choice, ts, nonce) {
+    return [ballotId, voterId, choice, ts, nonce]
+      .map((f) => `${String(f).length}:${f}`)
+      .join('');
+  }
+
+  // Receipt hash: sha256 over the nonce commitment where a secure context is
+  // available; otherwise a non-cryptographic FNV-1a checksum. Returns
+  // { hash, algo } so the receipt UI can be honest about which ran.
+  async _hashReceipt(voterId, choice, ts, nonce) {
+    const input = this._preimage(this.ballotId, voterId, choice, ts, nonce);
     if (window.crypto && window.crypto.subtle) {
       const buf = new TextEncoder().encode(input);
       const digest = await window.crypto.subtle.digest('SHA-256', buf);
@@ -241,8 +371,23 @@ class PmBallot extends HTMLElement {
       this._state = { ...this._state, tally: data.tally };
       this._render();
     }
-    if (data && data.receipts) {
-      this._state = { ...this._state, receipts: data.receipts };
+    if (data && Array.isArray(data.receipts)) {
+      // Authority-published log lands in the sealed store; the `state` getter
+      // decides whether it is visible yet. Treat the state source as untrusted:
+      // older authorities may still send the rev-1 private shape containing
+      // voterId, choice, nonce, or ts. Rebuild every receipt from the two-field
+      // public allowlist so those fields can never cross this rendering boundary.
+      // Unknown statuses are rejected because `status` is also public text.
+      this._sealedReceipts = data.receipts.flatMap((receipt) => {
+        if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) return [];
+        const receiptHash = typeof receipt.receiptHash === 'string'
+          ? receipt.receiptHash.trim()
+          : '';
+        const status = receipt.status === 'cast' || receipt.status === 'superseded'
+          ? receipt.status
+          : '';
+        return receiptHash && status ? [{ receiptHash, status }] : [];
+      });
       this._render();
     }
   }
@@ -298,15 +443,34 @@ class PmBallot extends HTMLElement {
     const quorumPct = this.quorumPercent();
     const quorumTarget = this.quorum;
     const reachedQuorum = this._hasReachedQuorum();
-    const open = this._isOpen();
+    const open = this._isVotingOpen();
     const myChoice = this._myChoice;
+    // A ballot that cannot hash securely must not accept a vote at all, and the
+    // resident must learn that BEFORE they choose — not in the receipt panel
+    // after the button has already locked.
+    const insecure = !this._canHashSecurely() && !this.hasAttribute('allow-insecure-demo-hash');
+    // A ballot with no parseable close time can never publish its receipts, so
+    // no resident could ever verify. Surface it instead of sealing silently.
+    const noClose = this._hasNoCloseCondition();
+    const usable = open && !insecure;
+
+    // Blocking notices, rendered above the options so they are read first.
+    const noticeHtml = [
+      insecure ? `<p class="notice notice-error" role="alert"><strong>Voting is unavailable on this
+        connection.</strong> This page is not served over a secure connection (https), so your
+        browser cannot create a real cryptographic receipt. Casting a vote here would give you a
+        receipt that does not actually prove anything. Open this ballot over https and try again.</p>` : '',
+      noClose ? `<p class="notice notice-warn" role="alert"><strong>This ballot has no valid closing
+        time set.</strong> Receipts stay sealed until a ballot closes, so until this is fixed by
+        whoever published it, no one will be able to verify the result.</p>` : '',
+    ].join('');
 
     // Per-option rows
     const optionsHtml = options.map((opt) => {
       const count = tally[opt.id] || 0;
       const pct = total > 0 ? (count / total * 100).toFixed(0) : 0;
       const checked = myChoice?.optionId === opt.id;
-      const disabled = !open || !!myChoice;
+      const disabled = !usable || !!myChoice;
       return `
         <label class="option ${checked ? 'selected' : ''}" data-option-id="${this._escapeAttr(opt.id)}">
           <input type="radio" name="ballot-${this._escapeAttr(this.ballotId)}" value="${this._escapeAttr(opt.id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
@@ -321,7 +485,7 @@ class PmBallot extends HTMLElement {
     // secure context, or a non-cryptographic local checksum as fallback.
     const receiptNote = myChoice
       ? (myChoice.receipt.algo === 'sha256'
-        ? `Your vote is recorded (CHIT signature pending signing-card registration). Verify with: <code>sha256("${this._escapeText(this.ballotId)}|${this._escapeText(myChoice.receipt.voterId)}|${this._escapeText(myChoice.receipt.choice)}|${this._escapeText(myChoice.receipt.ts)}")</code></p>`
+        ? `Your vote is recorded (CHIT signature pending signing-card registration). <strong>Save your secret code above — it is shown once and only you have it.</strong> Without it your vote still counts, but you lose the ability to check it yourself. When the ballot closes, recompute your receipt from your saved code and find it in the published list — that proves your vote was counted without revealing to anyone how you voted.</p>`
         : `Your vote is recorded (CHIT signature pending signing-card registration). This receipt is a non-cryptographic local demo checksum (FNV-1a) because the page is not running in a secure context — it is not verifiable with sha256.</p>`)
       : '';
     const receiptHtml = myChoice ? `
@@ -331,6 +495,7 @@ class PmBallot extends HTMLElement {
           <dt>Choice</dt><dd>${this._escapeText(myChoice.optionId)}</dd>
           <dt>Time</dt><dd>${this._escapeText(myChoice.receipt.ts)}</dd>
           <dt>Receipt</dt><dd class="hash">${this._escapeText(myChoice.receipt.receiptHash)}</dd>
+          <dt>Your secret code</dt><dd class="hash nonce">${this._escapeText(myChoice.receipt.nonce || '')}</dd>
         </dl>
         <p class="receipt-note">${receiptNote}
       </div>
@@ -453,6 +618,20 @@ class PmBallot extends HTMLElement {
           cursor: pointer;
         }
         button.cast:hover { background: var(--pm-accent-soft, #A78BFA); }
+        .notice {
+          margin: 0 0 12px; padding: 10px 12px; border-radius: 6px;
+          font-size: 0.9rem; line-height: 1.45;
+        }
+        .notice-error {
+          background: rgba(220, 38, 38, 0.12);
+          border: 1px solid rgba(220, 38, 38, 0.5);
+          color: var(--pm-color-text, inherit);
+        }
+        .notice-warn {
+          background: rgba(217, 119, 6, 0.12);
+          border: 1px solid rgba(217, 119, 6, 0.5);
+          color: var(--pm-color-text, inherit);
+        }
         button.cast:disabled {
           opacity: 0.5;
           cursor: not-allowed;
@@ -548,10 +727,11 @@ class PmBallot extends HTMLElement {
         </header>
         ${statusHtml}
         <form class="options" role="radiogroup" aria-label="Ballot options">
+          ${noticeHtml}
           ${optionsHtml}
         </form>
-        <button type="button" class="cast" ${!open || !!myChoice ? 'disabled' : ''}>
-          ${myChoice ? '✓ Vote cast' : open ? 'Cast vote' : 'Ballot closed'}
+        <button type="button" class="cast" ${!usable || !!myChoice ? 'disabled' : ''}>
+          ${myChoice ? '✓ Vote cast' : insecure ? 'Voting unavailable' : open ? 'Cast vote' : 'Ballot closed'}
         </button>
         ${this._castError ? `<p class="status status-error" role="alert">⚠ Could not cast vote: ${this._escapeText(this._castError)}</p>` : ''}
         ${quorumHtml}

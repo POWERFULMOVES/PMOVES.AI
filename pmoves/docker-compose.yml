@@ -1293,6 +1293,10 @@ services:
     # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
     # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
     image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    # Only data-tier service without a restart policy — every Docker Desktop
+    # restart left MinIO dead (Exited 255) until manually started, which is
+    # how it sat down for 9 days and silently blocked the YT pipeline.
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
