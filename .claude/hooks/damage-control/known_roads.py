@@ -78,6 +78,27 @@ def _is_schema_target(normalized_fwd: str) -> bool:
     return "contracts" in parts and "schemas" in parts
 
 
+def _is_topic_target(normalized_fwd: str) -> bool:
+    """topic domain: the PMOVES NATS subject registry pmoves/contracts/topics.json.
+
+    topics.json is readOnly because a change to the subject contract ripples to
+    every publisher/subscriber and the shared `events.publish` topic validator.
+    It is NOT a *.schema.json, so the schema domain does not cover it; this domain
+    opens ONLY that one file under a `contracts` segment in a PMOVES-owned tree,
+    and — like schema — still requires a provable reason (pr:/issue:/handoff:).
+    """
+    basename = os.path.basename(normalized_fwd).lower()
+    if basename != "topics.json":
+        return False
+    parts = normalized_fwd.lower().split("/")
+    if not any(
+        p == "pmoves" or p.startswith("pmoves-") or p.startswith("pmoves.")
+        for p in parts
+    ):
+        return False
+    return "contracts" in parts
+
+
 def _is_dockerfile_target(normalized_fwd: str) -> bool:
     """dockerfile domain: PMOVES service Dockerfiles (and .dockerignore).
 
@@ -112,6 +133,7 @@ def _is_dockerfile_target(normalized_fwd: str) -> bool:
 DOMAIN_PATTERNS: Dict[str, Callable[[str], bool]] = {
     "compose": _is_compose_target,
     "schema": _is_schema_target,
+    "topic": _is_topic_target,
     "dockerfile": _is_dockerfile_target,
 }
 
