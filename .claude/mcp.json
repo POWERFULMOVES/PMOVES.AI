@@ -122,6 +122,12 @@
         "public"
       ]
     },
+    "comfy": {
+      "_purpose": "Official ComfyUI MCP (comfy.org) — exposes the ComfyUI engine over MCP: build/edit/run + save/re-run workflows, search models/nodes/templates, generate image/video/audio/3D. Lets the creator-operator computer-use agent drive workflows via MCP instead of clicking the UI.",
+      "_note": "This is the HOSTED CLOUD endpoint (drives Comfy's cloud). OAuth sign-in on first use in Claude Code (no key needed). For the SELF-HOSTED fleet ComfyUI (project_creator_comfyui_selfhost), a local ComfyUI-API MCP (community, via ComfyUI /prompt) is a separate follow-up to drive the operator's own instance. Claude Code skips gracefully if not signed in.",
+      "type": "http",
+      "url": "https://cloud.comfy.org/mcp"
+    },
     "supabase-db": {
       "_purpose": "Postgres MCP (crystaldba/postgres-mcp 'Postgres MCP Pro') for the SELF-HOSTED Supabase Postgres — the DDL/RLS/migration sibling of pmoves-supabase. Does what PostgREST CANNOT: run SQL, inspect schema + RLS policies, apply migrations, EXPLAIN/health/index analysis. DELIBERATE, SCOPED EXCEPTION to the 'never raw psql' rule (CATALOG.md): data-plane CRUD still goes through pmoves-supabase (PostgREST); this is for schema/migration/RLS work only (the same class as bootstrap's docker-exec psql).",
       "_setup": "Set SUPABASE_DB_URI to a HOST-reachable connection string: postgresql://pmoves:<SUPABASE_DB_PASSWORD>@<host>:<port>/pmoves (the Supabase CLI stack publishes Postgres on a host port — use localhost/host.docker.internal + that port, NOT the internal 'supabase-db' service name). access-mode=unrestricted enables DDL/DML for migrations/RLS; use --access-mode=restricted for read-only audits.",
