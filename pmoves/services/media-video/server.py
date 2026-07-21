@@ -48,8 +48,14 @@ processing_errors = Counter(
 PORT = int(os.environ.get("MEDIA_VIDEO_PORT", "8079"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 MEDIA_BACKEND = os.environ.get("MEDIA_BACKEND", "transformers").lower()
-# DETR (Apache) replaces YOLO (AGPL). Legacy YOLO_* envs are still honored for confidence/rate.
+# Detector engine, operator-selectable:
+#   "detr" (default) — facebook/detr-resnet-50, Apache-2.0, ships anywhere.
+#   "yolo"           — Ultralytics YOLO. AGPL-3.0: fine to RUN on a private/self-hosted
+#                      fleet (ideal on Jetson/TensorRT); the license rule governs what
+#                      you *ship*, not what you privately *run*. Operator's call.
+DETECTION_ENGINE = os.environ.get("DETECTION_ENGINE", "detr").lower()
 DETECTION_MODEL = os.environ.get("DETECTION_MODEL", "facebook/detr-resnet-50")
+YOLO_MODEL = os.environ.get("YOLO_MODEL", "yolov8n.pt")
 DETECTION_CONFIDENCE = float(os.environ.get("DETECTION_CONFIDENCE", os.environ.get("YOLO_CONFIDENCE", "0.25")))
 FRAME_SAMPLE_RATE = int(os.environ.get("FRAME_SAMPLE_RATE", "5"))
 MAX_FRAMES = int(os.environ.get("MEDIA_VIDEO_MAX_FRAMES", "600"))  # cap work per request
@@ -87,6 +93,8 @@ class VideoProcessor:
     def __init__(self) -> None:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.detector = None
+        self.engine = DETECTION_ENGINE if DETECTION_ENGINE in ("detr", "yolo") else "detr"
+        self.model_name = YOLO_MODEL if self.engine == "yolo" else DETECTION_MODEL
         self.backend = MEDIA_BACKEND
         if self.backend != "transformers":
             logger.warning(
@@ -98,6 +106,16 @@ class VideoProcessor:
         self._load()
 
     def _load(self) -> None:
+        if self.engine == "yolo":
+            logger.info("Loading YOLO on %s (%s)", self.device, YOLO_MODEL)
+            try:
+                from ultralytics import YOLO
+
+                self.detector = YOLO(YOLO_MODEL)
+                logger.info("YOLO detector loaded (%s)", YOLO_MODEL)
+            except Exception:
+                logger.exception("YOLO load failed (is `ultralytics` installed?)")
+            return
         logger.info("Loading DETR on %s (%s)", self.device, DETECTION_MODEL)
         try:
             from transformers import pipeline
@@ -107,11 +125,18 @@ class VideoProcessor:
                 model=DETECTION_MODEL,
                 device=0 if self.device == "cuda" else -1,
             )
-            logger.info("detector loaded (%s)", DETECTION_MODEL)
+            logger.info("DETR detector loaded (%s)", DETECTION_MODEL)
         except Exception:
             logger.exception("detector load failed")
 
     def _detect(self, pil_image, confidence: float) -> List[Dict[str, Any]]:
+        if self.engine == "yolo":
+            out: List[Dict[str, Any]] = []
+            for r in self.detector(pil_image, conf=confidence, verbose=False):
+                names = r.names
+                for b in r.boxes:
+                    out.append({"label": names[int(b.cls)], "score": float(b.conf)})
+            return out
         raw = self.detector(pil_image, threshold=confidence)
         return [{"label": d["label"], "score": float(d["score"])} for d in raw]
 
@@ -122,8 +147,8 @@ class VideoProcessor:
             from PIL import Image
 
             dets = self._detect(Image.open(path).convert("RGB"), confidence)
-            video_frames_processed.labels(model=DETECTION_MODEL).inc()
-            return {"detections": dets, "model": DETECTION_MODEL}
+            video_frames_processed.labels(model=self.model_name).inc()
+            return {"detections": dets, "model": self.model_name, "engine": self.engine}
         except Exception as e:  # noqa: BLE001
             processing_errors.labels(error_type=type(e).__name__).inc()
             logger.exception("frame analysis failed")
@@ -157,7 +182,7 @@ class VideoProcessor:
                         tally[d["label"]] += 1
                     frames.append({"frame": idx, "detections": dets})
                     sampled += 1
-                    video_frames_processed.labels(model=DETECTION_MODEL).inc()
+                    video_frames_processed.labels(model=self.model_name).inc()
                 idx += 1
         finally:
             cap.release()
@@ -171,7 +196,8 @@ class VideoProcessor:
             "confidence": confidence,
             "object_counts": dict(tally.most_common()),
             "frames": frames,
-            "model": DETECTION_MODEL,
+            "model": self.model_name,
+            "engine": self.engine,
             "truncated": sampled >= MAX_FRAMES,
             "processing_time": (datetime.now(timezone.utc) - started).total_seconds(),
             "status": "completed",
@@ -216,8 +242,9 @@ async def healthz():
             "status": "healthy" if healthy else "degraded",
             "service": "media-video",
             "backend": MEDIA_BACKEND,
+            "engine": _processor.engine if _processor else DETECTION_ENGINE,
             "gpu": gpu,
-            "model": DETECTION_MODEL,
+            "model": _processor.model_name if _processor else DETECTION_MODEL,
             "detector_loaded": ready,
         },
     )
@@ -231,11 +258,25 @@ async def root():
         "version": "1.0.0",
         "gpu": check_gpu_available(),
         "config": {
-            "detection_model": DETECTION_MODEL,
+            "engine": _processor.engine if _processor else DETECTION_ENGINE,
+            "model": _processor.model_name if _processor else DETECTION_MODEL,
             "confidence": DETECTION_CONFIDENCE,
             "frame_sample_rate": FRAME_SAMPLE_RATE,
         },
     }
+
+
+@app.get("/topology")
+async def topology():
+    """Network-awareness self-report (HYBRID_TOPOLOGY_NETWORK_AWARENESS.md §4)."""
+    try:
+        from services.common.topology import get_topology
+
+        topo = get_topology().to_dict()
+    except Exception:  # noqa: BLE001
+        logger.warning("topology unavailable", exc_info=True)
+        topo = {"error": "topology context unavailable"}
+    return {"service": "media-video", "topology": topo}
 
 
 @app.get("/metrics")
