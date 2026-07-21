@@ -49,7 +49,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **clap-embed** `:8108` — Deterministic CLAP audio/text embedder (MOF lattice node, `laion/larger_clap_music`). `POST /embed/audio`, `POST /embed/text`, `GET /healthz`, `GET /metrics`. Optional NATS `audio.embed.request.v1`/`audio.embed.result.v1`. WS-A grounding layer.
 
-**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.**
+**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.** ℹ️ *Note: runs as an on-demand headless render (see `reference_a2ui_remotion_render`); it is **not** currently wired into any `docker-compose*.yml` as a long-running service — the port/health-endpoint spec applies when it is run as a service.*
 
 ## Voice & Speech
 
@@ -63,9 +63,9 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **FFmpeg-Whisper** `:8078` — Media transcription with Faster-Whisper (small model). GPU. Reads/writes MinIO.
 
-**Media-Video Analyzer** `:8079` — YOLOv8 frame analysis. Every 5th frame, conf 0.25. Outputs to Supabase.
+**Media-Video Analyzer** `:8079` — ⚠️ **NOT IMPLEMENTED (scaffold only).** `pmoves/services/media-video/` contains only a Dockerfile + requirements + `__init__.py` — no `server.py`; the container's `CMD uvicorn server:app` will crash-loop on boot. It is currently wired into `docker-compose.media.yml`. *Intended:* YOLOv8 frame analysis (every 5th frame, conf 0.25) → Supabase. Implement or unwire before shipping.
 
-**Media-Audio Analyzer** `:8082` — Emotion/speaker detection. Model: `superb/hubert-large-superb-er`.
+**Media-Audio Analyzer** `:8082` — ⚠️ **NOT IMPLEMENTED (scaffold only).** `pmoves/services/media-audio/` contains only a Dockerfile + requirements + `__init__.py` — no `server.py`; will crash-loop on boot. Currently wired into `docker-compose.media.yml`. *Intended:* emotion/speaker detection (`superb/hubert-large-superb-er`). Implement or unwire before shipping.
 
 **Extract Worker** `:8083` — Text embedding + indexing. Qdrant (vectors) + Meilisearch (FTS). Model: `all-MiniLM-L6-v2`. API: `POST /ingest`.
 
