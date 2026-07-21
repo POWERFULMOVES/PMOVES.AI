@@ -45,6 +45,9 @@ def _patch_publisher_after_lifespan(monkeypatch):
         async def connect(self):
             return True
 
+        async def connect_with_retry(self):
+            return True
+
         async def disconnect(self):
             return None
 

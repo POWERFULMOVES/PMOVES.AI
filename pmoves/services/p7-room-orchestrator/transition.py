@@ -41,6 +41,7 @@ Checklist", canonical — 7 items, 2026-07-20 open-room-lane consolidation):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -155,8 +156,11 @@ class TransitionEngine:
                 status_code=400,
             )
 
-        # 1. Load manifest
-        manifest = self._catalog.get_manifest(room_id)
+        # 1. Load manifest + current stage.
+        # Both touch disk (manifest read + JSON validate); offload to a thread
+        # so the event loop isn't blocked during transitions. The CatalogLoader's
+        # internal `threading.RLock` keeps state safe across threads.
+        manifest = await asyncio.to_thread(self._catalog.get_manifest, room_id)
         current = self._catalog.current_stage(room_id)
 
         # 2. Idempotent no-op
@@ -182,8 +186,10 @@ class TransitionEngine:
             if unchecked:
                 raise ChecklistError(unchecked)
 
-        # 5. Atomic writeback to catalog
-        updated_row = self._catalog.update_stage(room_id, target_stage, reason)
+        # 5. Atomic writeback to catalog (disk I/O — offload).
+        updated_row = await asyncio.to_thread(
+            self._catalog.update_stage, room_id, target_stage, reason
+        )
 
         # 6. Publish signed event
         await self._publisher.publish_room_updated(
@@ -223,31 +229,33 @@ class TransitionEngine:
             unchecked.append(
                 "1. manifest.meta.chit.card_id is missing or empty"
             )
-            # If no card_id, the rest of the checklist is moot — but
-            # we still surface the next two so the operator sees the cascade.
+            # Items 2/3 depend on the card; mark them as skipped but
+            # continue evaluating items 4-7 (which are independent of
+            # the card and may surface other issues the operator needs
+            # to fix in the same iteration).
             unchecked.append("2. signing card validation: skipped (no card_id)")
             unchecked.append("3. signing_identity_cards.yaml: skipped (no card_id)")
-            return unchecked
-
-        # Item 2: signing card validates (UUID, primary_method, agent_id match, active)
-        card = self._find_signing_card(card_id)
-        if card is None:
-            unchecked.append(
-                f"2. signing card {card_id!r} not found in signing_identity_cards.yaml"
-            )
+            card = None
         else:
-            card_errors = self._validate_signing_card(card, manifest.get("agent_id", ""))
-            unchecked.extend(f"2. {e}" for e in card_errors)
-
-        # Item 3: signing_identity_cards.yaml has a row for the room's operating agent
-        # (already covered if card found + card.h.agent_id matches)
-        if card is not None:
-            agent_id = manifest.get("agent_id", "")
-            if card.get("h", {}).get("agent_id") != agent_id:
+            # Item 2: signing card validates (UUID, primary_method, agent_id match, active)
+            card = self._find_signing_card(card_id)
+            if card is None:
                 unchecked.append(
-                    f"3. signing_identity_cards.yaml: card.h.agent_id "
-                    f"{card.get('h', {}).get('agent_id')!r} != manifest.agent_id {agent_id!r}"
+                    f"2. signing card {card_id!r} not found in signing_identity_cards.yaml"
                 )
+            else:
+                card_errors = self._validate_signing_card(card, manifest.get("agent_id", ""))
+                unchecked.extend(f"2. {e}" for e in card_errors)
+
+            # Item 3: signing_identity_cards.yaml has a row for the room's operating agent
+            # (only meaningful when a card was found)
+            if card is not None:
+                agent_id = manifest.get("agent_id", "")
+                if card.get("h", {}).get("agent_id") != agent_id:
+                    unchecked.append(
+                        f"3. signing_identity_cards.yaml: card.h.agent_id "
+                        f"{card.get('h', {}).get('agent_id')!r} != manifest.agent_id {agent_id!r}"
+                    )
 
         # Item 4: sign-trail signed, or unsigned-local allowed
         # P7's runtime equivalent is: P7 itself has a signing key (or allows
@@ -281,32 +289,25 @@ class TransitionEngine:
                     )
 
         # Item 6: PGRST_DB_EXTRA_SEARCH_PATH includes the room's schemas
-        # We check the env var is set; per-room schema coverage is data-driven
-        # (skill_bindings[*].context.sources include "notebook-thread" / "notebook-selection"
-        # only, so we don't introspect SQL here — that's the operator's job).
-        pgrst_path = self._settings.resolved("pmoves/env.shared")
-        pgrst_set = False
-        if pgrst_path.exists():
-            content = pgrst_path.read_text(errors="ignore")
-            if re.search(r"^PGRST_DB_EXTRA_SEARCH_PATH\s*=", content, re.MULTILINE):
-                pgrst_set = True
-        # Also check process env directly
-        if os.environ.get("PGRST_DB_EXTRA_SEARCH_PATH"):
-            pgrst_set = True
+        # The canonical sidecar config is `pmoves/env.shared` (the file
+        # is referenced as `sidecar.env` in ROOM_MANIFEST_CONTRACT.md for
+        # historical reasons; we treat them as the same source of truth).
+        # We check both the file contents and the process env directly.
+        sidecar_env = self._load_sidecar_env()
+        pgrst_set = bool(sidecar_env.get("PGRST_DB_EXTRA_SEARCH_PATH"))
         if not pgrst_set:
             unchecked.append(
-                "6. PGRST_DB_EXTRA_SEARCH_PATH not set in env.shared or process env"
+                "6. PGRST_DB_EXTRA_SEARCH_PATH not set in env.shared (sidecar.env) or process env"
             )
 
         # Item 7: CHIT_REQUIRE_SIGNATURE / CHIT_DECRYPT_ANCHORS documented
-        sidecar = self._load_sidecar_env()
         chit_keys = {"CHIT_REQUIRE_SIGNATURE", "CHIT_DECRYPT_ANCHORS"}
-        missing_keys = [k for k in chit_keys if k not in sidecar]
+        missing_keys = [k for k in chit_keys if k not in sidecar_env]
         if missing_keys:
             unchecked.append(
-                f"7. sidecar.env is missing keys: {missing_keys}"
+                f"7. env.shared (sidecar.env) is missing keys: {missing_keys}"
             )
-        elif self._settings.chit_require_signature and sidecar.get("CHIT_REQUIRE_SIGNATURE", "").lower() not in ("true", "1", "yes"):
+        elif self._settings.chit_require_signature and sidecar_env.get("CHIT_REQUIRE_SIGNATURE", "").lower() not in ("true", "1", "yes"):
             unchecked.append(
                 "7. CHIT_REQUIRE_SIGNATURE is set to non-truthy value; P7 chit_require_signature=true"
             )
@@ -398,19 +399,25 @@ class TransitionEngine:
         return self._agent_registry
 
     def _load_sidecar_env(self) -> Dict[str, str]:
+        """Load the canonical sidecar config (pmoves/env.shared; historically
+        referred to as `sidecar.env` in ROOM_MANIFEST_CONTRACT.md) and merge
+        with process env. Process env wins — useful for tests and for runtime
+        overrides (e.g. docker compose env_file).
+        """
         if self._sidecar_env is not None:
             return self._sidecar_env
         path = self._settings.resolved("pmoves/env.shared")
-        if not path.exists():
-            self._sidecar_env = {}
-            return self._sidecar_env
         env: Dict[str, str] = {}
-        for line in path.read_text(errors="ignore").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                k, _, v = line.partition("=")
-                env[k.strip()] = v.strip().strip('"').strip("'")
+        if path.exists():
+            for line in path.read_text(errors="ignore").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    k, _, v = line.partition("=")
+                    env[k.strip()] = v.strip().strip('"').strip("'")
+        # Process env wins so tests can override cleanly.
+        for k, v in os.environ.items():
+            env[k] = v
         self._sidecar_env = env
         return self._sidecar_env

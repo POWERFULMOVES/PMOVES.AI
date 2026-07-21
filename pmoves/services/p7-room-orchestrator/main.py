@@ -23,6 +23,7 @@ without package init.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import sys
@@ -125,7 +126,11 @@ async def lifespan(app: FastAPI):
     global CATALOG, PUBLISHER, ENGINE
 
     CATALOG = CatalogLoader(SETTINGS)
-    signing_key = os.environ.get("P7_SIGNING_KEY", "")
+    # P7_SIGNING_KEY is secret-aware: prefer P7_SIGNING_KEY_FILE if the
+    # operator mounted a key in a file (Docker secrets / k8s secret). This
+    # mirrors the P7_CONTROL_TOKEN pattern above and aligns with the
+    # `get_secret` helper at pmoves/services/common/env.py.
+    signing_key = _get_secret("P7_SIGNING_KEY", "") or ""
     PUBLISHER = NATSPublisher(
         nats_url=SETTINGS.nats_url,
         service_card_id=SETTINGS.service_card_id,
@@ -134,7 +139,10 @@ async def lifespan(app: FastAPI):
         retry_backoff_sec=SETTINGS.nats_retry_backoff_sec,
         signing_key=signing_key,
     )
-    await PUBLISHER.connect()
+    # Startup connect with bounded retry + exponential backoff so the
+    # service can wait out a slow NATS at boot. Falls back to log-only
+    # mode if all attempts fail.
+    await PUBLISHER.connect_with_retry()
     ENGINE = TransitionEngine(SETTINGS, CATALOG, PUBLISHER)
 
     # publish initial config-reloaded event
@@ -268,13 +276,17 @@ async def list_rooms() -> Dict[str, Any]:
 async def get_room(room_id: str) -> Dict[str, Any]:
     if CATALOG is None:
         raise HTTPException(status_code=503, detail="catalog not initialized")
+    # Catalog row lookup is in-memory; safe to do directly.
     row = CATALOG.get_room_row(room_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"room {room_id!r} not in catalog")
+    # Manifest load is disk I/O + JSON schema validation — offload to a
+    # thread so we don't block the event loop. The CatalogLoader's
+    # internal `threading.RLock` keeps it safe across threads.
     manifest = None
     manifest_error = None
     try:
-        manifest = CATALOG.get_manifest(room_id)
+        manifest = await asyncio.to_thread(CATALOG.get_manifest, room_id)
     except ManifestError as exc:
         manifest_error = str(exc)
     return {
@@ -303,7 +315,8 @@ async def transition_room(room_id: str, req: TransitionRequest) -> Dict[str, Any
 async def reload_catalog() -> Dict[str, Any]:
     if CATALOG is None or PUBLISHER is None:
         raise HTTPException(status_code=503, detail="P7 service not ready")
-    cat = CATALOG.reload()
+    # Catalog reload is disk I/O — offload to a thread.
+    cat = await asyncio.to_thread(CATALOG.reload)
     rooms_loaded = len(cat.get("rooms", []))
     await PUBLISHER.publish_config_reloaded(
         schema_version=cat.get("schema_version", "?"),

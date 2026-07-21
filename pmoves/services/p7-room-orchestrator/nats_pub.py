@@ -74,7 +74,13 @@ class NATSPublisher:
         return self._connected
 
     async def connect(self) -> bool:
-        """Connect to NATS. Returns True on success, False on failure (log-only mode)."""
+        """Connect to NATS. Returns True on success, False on failure (log-only mode).
+
+        This is the one-shot lazy-connect path used when `publish()` discovers
+        we're not connected. For the lifespan (startup) path, use
+        `connect_with_retry()` so we respect `retry_max_attempts` +
+        `retry_backoff_sec`.
+        """
         async with self._lock:
             if self._connected:
                 return True
@@ -93,6 +99,43 @@ class NATSPublisher:
                 self._nc = None
                 self._connected = False
                 return False
+
+    async def connect_with_retry(self) -> bool:
+        """Connect to NATS with bounded retry + exponential backoff.
+
+        Up to `retry_max_attempts` attempts; between attempts, sleep
+        `retry_backoff_sec * 2**attempt` (capped at 60s) so we don't hammer
+        a slow NATS server during cold start. The total wait time is bounded
+        by sum(backoff[0..max_attempts-1]).
+
+        Returns True on first successful connect, False if all attempts fail
+        (caller should treat as log-only mode).
+        """
+        last_exc: Optional[BaseException] = None
+        for attempt in range(self._retry_max):
+            try:
+                ok = await self.connect()
+                if ok:
+                    if attempt > 0:
+                        LOG.info("NATS connect succeeded on attempt %d/%d",
+                                 attempt + 1, self._retry_max)
+                    return True
+                last_exc = RuntimeError("connect() returned False")
+            except Exception as exc:  # defensive — connect() should not raise
+                last_exc = exc
+            # Don't sleep after the final attempt.
+            if attempt < self._retry_max - 1:
+                backoff = min(self._retry_backoff * (2 ** attempt), 60.0)
+                LOG.warning(
+                    "NATS connect attempt %d/%d failed (%s); retrying in %.1fs",
+                    attempt + 1, self._retry_max, last_exc, backoff,
+                )
+                await asyncio.sleep(backoff)
+        LOG.error(
+            "NATS connect gave up after %d attempts (last error: %s); log-only mode",
+            self._retry_max, last_exc,
+        )
+        return False
 
     async def disconnect(self) -> None:
         async with self._lock:
