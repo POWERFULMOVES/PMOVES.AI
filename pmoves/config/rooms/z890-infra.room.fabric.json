@@ -1,16 +1,13 @@
 {
   "room_id": "z890-infra.room.fabric",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "stage": "rehearsal",
   "display_name": "Z890 Infra Fabric Room",
-  "description": "Infrastructure room for topology, service health, secrets discipline, and operator bring-up.",
+  "description": "Infrastructure room for topology, service health, secrets discipline, operator bring-up, and local-first automation including legal-assist, email, messaging, and n8n/Archon workflows.",
   "agent_id": "z890-claude",
   "alter": "z890-infra",
   "room_type": "operator",
   "owner_mode": "alter",
-  "access": {
-    "visibility": "unlisted"
-  },
   "shell": {
     "theme": {
       "theme_id": "infra-fabric",
@@ -81,31 +78,31 @@
       "pinned": false
     },
     {
-      "app_id": "mcp-cipher",
+      "app_id": "legal-assist-panel",
       "kind": "custom",
-      "route": "/mcp/cipher",
-      "provider": "pmoves-cipher-mcp",
-      "action_namespace": "mcp.v1.cipher",
-      "capabilities": ["cipher", "chit", "announce", "health"],
-      "status": "planned"
+      "route": "/dashboard/legal-assist",
+      "provider": "pmoves-legal-assist",
+      "action_namespace": "legal",
+      "capabilities": ["document-review", "chronology", "case-law", "contract-analysis"],
+      "pinned": true
     },
     {
-      "app_id": "mcp-nats",
+      "app_id": "email-organizer-panel",
       "kind": "custom",
-      "route": "/mcp/nats",
-      "provider": "pmoves-nats-mcp",
-      "action_namespace": "mcp.v1.nats",
-      "capabilities": ["publish", "subscribe", "jetstream", "health"],
-      "status": "planned"
+      "route": "/dashboard/email-organizer",
+      "provider": "pmoves-email-organizer",
+      "action_namespace": "email",
+      "capabilities": ["triage", "migrate", "draft-reply", "route-to-legal"],
+      "pinned": true
     },
     {
-      "app_id": "mcp-tailscale",
+      "app_id": "n8n-archon-bridge",
       "kind": "custom",
-      "route": "/mcp/tailscale",
-      "provider": "pmoves-tailscale-mcp",
-      "action_namespace": "mcp.v1.tailscale",
-      "capabilities": ["network", "devices", "authkeys", "tailnet"],
-      "status": "planned"
+      "route": "/dashboard/n8n-archon",
+      "provider": "pmoves-n8n-archon-bridge",
+      "action_namespace": "workflow",
+      "capabilities": ["start-n8n", "start-archon", "deploy-workflows", "run-job"],
+      "pinned": true
     }
   ],
   "notebook": {
@@ -123,7 +120,7 @@
     "signature_ref": "z890-claude",
     "voice": "analytical",
     "glyph": "⚙",
-    "resonance": ["infrastructure", "persistence-modeling", "supabase-integration", "docker-hardening"]
+    "resonance": ["infrastructure", "persistence-modeling", "supabase-integration", "docker-hardening", "legal-assist", "email-organization", "workflow-automation"]
   },
   "skill_bindings": [
     {
@@ -228,92 +225,90 @@
       "tags": ["secrets", "chit", "graphiti"]
     },
     {
-      "binding_id": "cipher-mcp-bridge",
-      "skill_id": "pmoves_cipher_mcp",
+      "binding_id": "folder-monitor-legal",
+      "skill_id": "pmoves-folder-monitor",
       "room_id": "z890-infra.room.fabric",
-      "display_name": "Cipher MCP Bridge",
-      "intent": ["cipher", "chit", "memory"],
+      "display_name": "Folder Monitor (Legal / Zero-Retention)",
+      "intent": ["documents", "legal", "e2b", "sandbox", "zero-retention"],
       "activation": {
-        "invocation_mode": "explicit",
-        "trigger_phrases": ["open cipher mcp", "cipher bridge"],
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["watch the legal folder", "process new documents", "run folder monitor"],
         "requires_selection": false
       },
       "surface": {
-        "app_id": "mcp-cipher",
-        "target": "sidebar",
-        "route": "/mcp/cipher"
+        "app_id": "legal-assist-panel",
+        "target": "toolbar",
+        "route": "/dashboard/legal-assist"
       },
       "execution": {
         "mode": "background",
-        "run_as": "room-service",
+        "run_as": "worker",
         "stream": "events",
-        "max_steps": 4
+        "max_steps": 10
       },
       "context": {
-        "sources": ["room-state", "graphiti-trail", "agent-registry"],
+        "sources": ["room-state", "user-intent"],
         "include_last_turns": 2,
         "notebook_writeback": true,
-        "artifact_types": ["json"]
+        "artifact_types": ["text", "json"]
       },
       "outputs": [
         {
-          "target": "room-state",
-          "delivery": "replace",
-          "path": "mcp/cipher/last-result",
-          "artifact_type": "json"
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/legal-review",
+          "artifact_type": "text"
         },
         {
-          "target": "chat-response",
-          "delivery": "notify",
-          "artifact_type": "text"
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "agent.graphiti.signed.v1",
+          "artifact_type": "json"
         }
       ],
       "guardrails": {
         "require_approval": false,
-        "max_runtime_sec": 60,
-        "fail_open": true,
+        "max_runtime_sec": 900,
+        "fail_open": false,
         "one_active_run": true
       },
-      "enabled": false,
-      "tags": ["mcp", "cipher", "planned"],
-      "metadata": {
-        "status": "planned"
-      }
+      "enabled": true,
+      "tags": ["folder-monitor", "legal", "e2b", "zero-retention"]
     },
     {
-      "binding_id": "nats-mcp-bridge",
-      "skill_id": "pmoves_nats_mcp",
+      "binding_id": "legal-assist-review",
+      "skill_id": "pmoves-legal-assist",
       "room_id": "z890-infra.room.fabric",
-      "display_name": "NATS MCP Bridge",
-      "intent": ["nats", "messaging", "ops"],
+      "display_name": "Legal Assist Review",
+      "intent": ["legal", "contract", "tenant", "chronology", "case-law"],
       "activation": {
-        "invocation_mode": "explicit",
-        "trigger_phrases": ["open nats mcp", "nats bridge"],
-        "requires_selection": false
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["review this contract", "build a tenant chronology", "find case law", "prepare for attorney review"],
+        "requires_selection": true
       },
       "surface": {
-        "app_id": "mcp-nats",
-        "target": "sidebar",
-        "route": "/mcp/nats"
+        "app_id": "legal-assist-panel",
+        "target": "canvas",
+        "route": "/dashboard/legal-assist"
       },
       "execution": {
-        "mode": "background",
-        "run_as": "room-service",
-        "stream": "events",
-        "max_steps": 4
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 8
       },
       "context": {
-        "sources": ["room-state", "open-apps", "agent-registry"],
-        "include_last_turns": 2,
+        "sources": ["notebook-thread", "graphiti-trail", "persona", "room-state"],
+        "include_last_turns": 5,
         "notebook_writeback": true,
-        "artifact_types": ["json"]
+        "artifact_types": ["text", "json"]
       },
       "outputs": [
         {
-          "target": "room-state",
-          "delivery": "replace",
-          "path": "mcp/nats/last-result",
-          "artifact_type": "json"
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/legal-review",
+          "artifact_type": "text"
         },
         {
           "target": "chat-response",
@@ -322,51 +317,99 @@
         }
       ],
       "guardrails": {
-        "require_approval": false,
-        "max_runtime_sec": 60,
-        "fail_open": true,
+        "require_approval": true,
+        "max_runtime_sec": 600,
+        "fail_open": false,
         "one_active_run": true
       },
-      "enabled": false,
-      "tags": ["mcp", "nats", "planned"],
-      "metadata": {
-        "status": "planned"
-      }
+      "enabled": true,
+      "tags": ["legal", "courtlistener", "contract", "tenant"]
     },
     {
-      "binding_id": "tailscale-mcp-bridge",
-      "skill_id": "pmoves_tailscale_mcp",
+      "binding_id": "email-organizer",
+      "skill_id": "pmoves-email-organizer",
       "room_id": "z890-infra.room.fabric",
-      "display_name": "Tailscale MCP Bridge",
-      "intent": ["tailscale", "network", "authkeys"],
+      "display_name": "Email Organizer",
+      "intent": ["email", "titanmail", "gmail", "triage", "migrate"],
       "activation": {
-        "invocation_mode": "explicit",
-        "trigger_phrases": ["open tailscale mcp", "tailnet mcp"],
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["organize my email", "triage inbox", "migrate titanmail to gmail", "review email backlog"],
         "requires_selection": false
       },
       "surface": {
-        "app_id": "mcp-tailscale",
-        "target": "sidebar",
-        "route": "/mcp/tailscale"
+        "app_id": "email-organizer-panel",
+        "target": "toolbar",
+        "route": "/dashboard/email-organizer"
       },
       "execution": {
         "mode": "background",
-        "run_as": "room-service",
+        "run_as": "worker",
         "stream": "events",
-        "max_steps": 4
+        "max_steps": 10
       },
       "context": {
-        "sources": ["room-state", "agent-registry"],
-        "include_last_turns": 2,
+        "sources": ["room-state", "user-intent"],
+        "include_last_turns": 3,
         "notebook_writeback": true,
-        "artifact_types": ["json"]
+        "artifact_types": ["text", "json"]
       },
       "outputs": [
         {
-          "target": "room-state",
-          "delivery": "replace",
-          "path": "mcp/tailscale/last-result",
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/email-triage",
+          "artifact_type": "text"
+        },
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "ops.email.triage.completed.v1",
           "artifact_type": "json"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 1200,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["email", "titanmail", "gmail", "triage"]
+    },
+    {
+      "binding_id": "n8n-archon-bridge",
+      "skill_id": "pmoves-n8n-archon-bridge",
+      "room_id": "z890-infra.room.fabric",
+      "display_name": "n8n + Archon Bridge",
+      "intent": ["n8n", "archon", "workflow", "automation", "research", "verification"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["start n8n", "start archon", "deploy workflows", "run the bridge"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "n8n-archon-bridge",
+        "target": "toolbar",
+        "route": "/dashboard/n8n-archon"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 6
+      },
+      "context": {
+        "sources": ["room-state", "open-apps", "graphiti-trail"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/n8n-archon",
+          "artifact_type": "text"
         },
         {
           "target": "chat-response",
@@ -375,27 +418,80 @@
         }
       ],
       "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 600,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["n8n", "archon", "workflow", "automation"]
+    },
+    {
+      "binding_id": "yt-monitor",
+      "skill_id": "pmoves-yt-monitor",
+      "room_id": "z890-infra.room.fabric",
+      "display_name": "YouTube Monitor",
+      "intent": ["youtube", "monitor", "transcript", "research"],
+      "activation": {
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["run youtube monitor", "check channels", "fetch new videos"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "notebook-workbench",
+        "target": "sidebar",
+        "route": "/notebook-workbench"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "worker",
+        "stream": "events",
+        "max_steps": 6
+      },
+      "context": {
+        "sources": ["room-state"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/yt-monitor",
+          "artifact_type": "text"
+        },
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "media.transcript.ready.v1",
+          "artifact_type": "json"
+        }
+      ],
+      "guardrails": {
         "require_approval": false,
-        "max_runtime_sec": 60,
+        "max_runtime_sec": 1800,
         "fail_open": true,
         "one_active_run": true
       },
-      "enabled": false,
-      "tags": ["mcp", "tailscale", "planned"],
-      "metadata": {
-        "status": "planned"
-      }
+      "enabled": true,
+      "tags": ["youtube", "monitor", "transcript"]
     }
   ],
-  "team_refs": ["orchestration", "data", "infra"],
-  "service_refs": ["agent-zero", "supabase", "nats", "prometheus", "grafana"],
-  "launcher_refs": ["up-agents", "up-monitoring", "secrets-funnel"],
+  "team_refs": ["orchestration", "data", "infra", "legal", "research"],
+  "service_refs": ["agent-zero", "supabase", "nats", "prometheus", "grafana", "n8n", "archon", "e2b-mcp-server", "yt-monitor"],
+  "launcher_refs": ["up-agents", "up-monitoring", "secrets-funnel", "up-n8n", "up-archon", "folder-monitor", "email-organizer", "yt-monitor"],
   "policies": {
     "model_routing": "tensorzero",
     "publish": {
       "allow_nats_emit": true,
       "allow_external_publish": false,
-      "allowed_subjects": ["agent.graphiti.signed.v1", "ops.pr.monitor.completed.v1"]
+      "allowed_subjects": [
+        "agent.graphiti.signed.v1",
+        "ops.pr.monitor.completed.v1",
+        "ops.email.triage.completed.v1",
+        "media.transcript.ready.v1"
+      ]
     },
     "memory": {
       "graphiti": true,
@@ -410,11 +506,16 @@
   },
   "provenance": {
     "source": "pmoves/config/rooms/catalog.json",
-    "updated_at": "2026-03-27T12:30:00Z",
+    "updated_at": "2026-06-30T12:00:00Z",
     "related_docs": [
       "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
       "pmoves/docs/MODEL_FABRIC_CONTRACT.md",
-      "pmoves/docs/BOTZ_SKILLS_MARKETPLACE.md"
+      "pmoves/docs/BOTZ_SKILLS_MARKETPLACE.md",
+      "pmoves/skills/pmoves-legal-assist/SKILL.md",
+      "pmoves/skills/pmoves-folder-monitor/SKILL.md",
+      "pmoves/skills/pmoves-email-organizer/SKILL.md",
+      "pmoves/skills/pmoves-yt-monitor/SKILL.md",
+      "pmoves/skills/pmoves-n8n-archon-bridge/SKILL.md"
     ]
   }
 }
