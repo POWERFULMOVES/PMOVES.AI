@@ -63,9 +63,9 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **FFmpeg-Whisper** `:8078` — Media transcription with Faster-Whisper (small model). GPU. Reads/writes MinIO.
 
-**Media-Video Analyzer** `:8079` — ⚠️ **NOT IMPLEMENTED (scaffold only).** `pmoves/services/media-video/` contains only a Dockerfile + requirements + `__init__.py` — no `server.py`; the container's `CMD uvicorn server:app` will crash-loop on boot. It is currently wired into `docker-compose.media.yml`. *Intended:* YOLOv8 frame analysis (every 5th frame, conf 0.25) → Supabase. Implement or unwire before shipping.
+**Media-Video Analyzer** `:8079` — object detection over sampled video frames. On `main` this is a FastAPI **stub** (`server.py` with `/healthz`, `/metrics`, GPU detection; analysis pipeline was `TODO`) — it starts and serves health, it does not crash-loop. Full pipeline implemented in PR #2182 (OpenCV frame sampling → **DETR** default, YOLO selectable via `DETECTION_ENGINE`). Wired into `docker-compose.media.yml`. Health: `GET /healthz`.
 
-**Media-Audio Analyzer** `:8082` — ⚠️ **NOT IMPLEMENTED (scaffold only).** `pmoves/services/media-audio/` contains only a Dockerfile + requirements + `__init__.py` — no `server.py`; will crash-loop on boot. Currently wired into `docker-compose.media.yml`. *Intended:* emotion/speaker detection (`superb/hubert-large-superb-er`). Implement or unwire before shipping.
+**Media-Audio Analyzer** `:8082` — audio analysis (STT + diarization + emotion). On `main` this is a FastAPI **stub** (`server.py` with `/healthz`, `/metrics`, GPU detection; analysis pipeline was `TODO`) — it starts and serves health, it does not crash-loop. Full pipeline implemented in PR #2181 (whisper-large-v3-turbo + pyannote-3.1 + `superb/hubert-large-superb-er`). Wired into `docker-compose.media.yml`. Health: `GET /healthz`.
 
 **Extract Worker** `:8083` — Text embedding + indexing. Qdrant (vectors) + Meilisearch (FTS). Model: `all-MiniLM-L6-v2`. API: `POST /ingest`.
 
