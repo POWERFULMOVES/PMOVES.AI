@@ -52,7 +52,7 @@ Bounded or planned:
 - Zeta behavior is heuristic and must stay labeled that way until a method design is reviewed.
 - ToKenism swarm records fitness and population metadata. Real PSO/evolutionary operators are handled by the PMOVES model-fitness/EvoSwarm workstream, not hidden in ToKenism.
 - Live production settlement still needs Firefly executor dry-runs, chain transaction execution, and deployment validation.
-- **Merkle hashing is not yet cryptographic.** The production `shape-attribution.ts` `hash()` uses a fast non-cryptographic 32-bit integer hash (self-labeled "simulation"), so proofs are structurally valid but not cryptographically tamper-evident. A real `crypto.createHash('sha256')` implementation exists in `.claude/skills/chit-geometry/tools/merkle-verify.ts` but is not wired into the production path; `keccak256` is not implemented. Wiring real SHA-256 is a tracked follow-up (note: `crypto.createHash` is Node-only — the current hash was chosen for browser/Node parity, so the swap must preserve browser support).
+- **Merkle hashing is not yet cryptographic.** The production `shape-attribution.ts` `hash()` uses a fast non-cryptographic 32-bit integer hash (self-labeled "simulation"), so proofs are structurally valid but not cryptographically tamper-evident. A real `crypto.createHash('sha256')` implementation exists in `PMOVES-ToKenism-Multi/.claude/skills/chit-geometry/tools/merkle-verify.ts` (the ToKenism submodule) but is not wired into the production path; `keccak256` is not implemented. Wiring real SHA-256 is a tracked follow-up (note: `crypto.createHash` is Node-only — the current hash was chosen for browser/Node parity, so the swap must preserve browser support).
 
 ### Key Principles
 

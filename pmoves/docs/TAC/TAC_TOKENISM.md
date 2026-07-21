@@ -78,7 +78,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 | CGP v0.2/v1.0 generation | Active | `cgp-generator.ts`; schemas accept both current compatibility specs |
 | Dirichlet weighting | Active | `dirichlet-weights.ts` |
 | Merkle proof paths | Active | `shape-attribution.ts`; order-preserving proof paths work |
-| Cryptographic Merkle hash | **Partial** | prod path uses a non-cryptographic 32-bit hash (self-labeled "simulation"); real SHA-256 helper exists in `chit-geometry/tools/merkle-verify.ts`, not yet wired; keccak256 not implemented |
+| Cryptographic Merkle hash | **Partial** | prod path uses a non-cryptographic 32-bit hash (self-labeled "simulation"); real SHA-256 helper exists in `PMOVES-ToKenism-Multi/.claude/skills/chit-geometry/tools/merkle-verify.ts`, not yet wired; keccak256 not implemented |
 | Hyperbolic embedding | Partial | `hyperbolic-encoder.ts`; embedding support, not a proof-backed fairness layer |
 | Swarm metadata | Active | `swarm-attribution.ts`; records bounded fitness and population summaries only |
 | Zeta spectral filtering | Heuristic | `zeta-filter.ts`; method design still required before stronger claims |
