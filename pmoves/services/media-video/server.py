@@ -60,6 +60,8 @@ DETECTION_CONFIDENCE = float(os.environ.get("DETECTION_CONFIDENCE", os.environ.g
 FRAME_SAMPLE_RATE = int(os.environ.get("FRAME_SAMPLE_RATE", "5"))
 MAX_FRAMES = int(os.environ.get("MEDIA_VIDEO_MAX_FRAMES", "600"))  # cap work per request
 MEDIA_VIDEO_SUBJECT = os.environ.get("MEDIA_VIDEO_SUBJECT", "media.video.analyzed.v1")
+# Client-provided file paths must resolve within this dir (py/path-injection guard).
+MEDIA_INPUT_DIR = os.environ.get("MEDIA_INPUT_DIR", "/data")
 
 
 def check_gpu_available() -> dict:
@@ -284,14 +286,25 @@ async def metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+def _safe_input_path(raw: str) -> str:
+    """Resolve a client-provided path within MEDIA_INPUT_DIR; reject traversal (py/path-injection)."""
+    base = os.path.realpath(MEDIA_INPUT_DIR)
+    candidate = raw if os.path.isabs(raw) else os.path.join(base, raw)
+    resolved = os.path.realpath(candidate)
+    if resolved != base and os.path.commonpath([base, resolved]) != base:
+        raise HTTPException(status_code=400, detail="file_path is outside the allowed media directory")
+    return resolved
+
+
 @app.post("/analyze")
 async def analyze_video(req: VideoAnalysisRequest):
     if _processor is None:
         raise HTTPException(status_code=503, detail="detector not ready")
-    if not os.path.exists(req.file_path):
+    path = _safe_input_path(req.file_path)
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="video file not found")
     result = _processor.analyze_video(
-        req.file_path,
+        path,
         req.sample_rate or FRAME_SAMPLE_RATE,
         req.confidence if req.confidence is not None else DETECTION_CONFIDENCE,
     )
@@ -303,10 +316,11 @@ async def analyze_video(req: VideoAnalysisRequest):
 async def analyze_frame(req: VideoAnalysisRequest):
     if _processor is None:
         raise HTTPException(status_code=503, detail="detector not ready")
-    if not os.path.exists(req.file_path):
+    path = _safe_input_path(req.file_path)
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="image file not found")
     result = _processor.analyze_frame(
-        req.file_path, req.confidence if req.confidence is not None else DETECTION_CONFIDENCE
+        path, req.confidence if req.confidence is not None else DETECTION_CONFIDENCE
     )
     return JSONResponse(content=result)
 
