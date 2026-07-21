@@ -60,7 +60,7 @@ except ImportError:
 
 def _chit_signing_key() -> str:
     """Canonical signing-key chain; empty string = dev mode (unsigned)."""
-    return os.getenv("CHIT_SIGNING_KEY") or os.getenv("CHIT_PASSPHRASE", "")
+    return get_secret("CHIT_SIGNING_KEY") or get_secret("CHIT_PASSPHRASE", "")
 
 
 def _chit_signature_required() -> bool:
