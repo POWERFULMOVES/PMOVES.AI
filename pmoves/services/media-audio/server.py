@@ -45,6 +45,18 @@ transcription_errors = Counter(
     "media_audio_transcription_errors_total", "Transcription errors", ["error_type"]
 )
 
+def _read_secret(name: str) -> Optional[str]:
+    """Read a secret from <NAME>_FILE (Docker/K8s secrets mount) or the env var directly."""
+    path = os.environ.get(f"{name}_FILE")
+    if path and os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                return fh.read().strip()
+        except OSError:
+            logger.warning("could not read %s_FILE", name)
+    return os.environ.get(name)
+
+
 # --- Environment configuration ---
 PORT = int(os.environ.get("MEDIA_AUDIO_PORT", "8082"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
@@ -52,7 +64,7 @@ MEDIA_BACKEND = os.environ.get("MEDIA_BACKEND", "transformers").lower()
 STT_MODEL = os.environ.get("STT_MODEL", "openai/whisper-large-v3-turbo")
 EMOTION_MODEL = os.environ.get("EMOTION_MODEL", "superb/hubert-large-superb-er")
 DIARIZATION_MODEL = os.environ.get("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
-HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+HF_TOKEN = _read_secret("HF_TOKEN") or _read_secret("HUGGING_FACE_HUB_TOKEN")
 MEDIA_AUDIO_SUBJECT = os.environ.get("MEDIA_AUDIO_SUBJECT", "media.audio.analyzed.v1")
 # Client-provided file paths must resolve within this dir (py/path-injection guard).
 MEDIA_INPUT_DIR = os.environ.get("MEDIA_INPUT_DIR", "/data")
@@ -239,7 +251,15 @@ class AudioProcessor:
             "diarization": self.diarize(path),
         }
         result["processing_time"] = (datetime.now(timezone.utc) - started).total_seconds()
-        result["status"] = "completed"
+        # Report "partial" (not "completed") if any sub-analysis returned an error.
+        errored = [
+            stage
+            for stage in ("features", "transcription", "emotion", "diarization")
+            if isinstance(result.get(stage), dict) and result[stage].get("error")
+        ]
+        result["status"] = "completed" if not errored else "partial"
+        if errored:
+            result["failed_stages"] = errored
         return result
 
 
@@ -248,11 +268,18 @@ _processor: Optional[AudioProcessor] = None
 
 @app.on_event("startup")
 def _startup() -> None:
-    global _processor
-    try:
-        _processor = AudioProcessor()
-    except Exception:
-        logger.exception("processor init failed — service will report degraded")
+    # Load models in the background so startup returns immediately and /healthz is
+    # reachable while (heavy) model loading proceeds; health reports degraded until ready.
+    import threading
+
+    def _load() -> None:
+        global _processor
+        try:
+            _processor = AudioProcessor()
+        except Exception:
+            logger.exception("processor init failed — service will report degraded")
+
+    threading.Thread(target=_load, name="media-audio-model-loader", daemon=True).start()
 
 
 async def _maybe_publish(result: Dict[str, Any]) -> None:
