@@ -1,8 +1,8 @@
 # Room Manifest Schema Extensions — 2026-07-20
 
-**Status:** PROVISIONAL — pending operator signoff per AGNOTE4482 §1348
+**Status:** APPROVED (operator signoff 2026-07-20, recorded in AGNOTE4482PHI.t1.md as `Mavis::OPEN-ROOM-LANE-RELEASE::2026-07-20`)
 **Lane:** Open Room Lane (Mavis, mvs_09c9b116c675418b9d8b1a48b10867dc)
-**Branch:** `feat-auto-20260720-8d27fc57` (provisional commit on operator's auto-mode worktree)
+**Branch:** `feat/open-room-lane` (PR #2173)
 **Date:** 2026-07-20
 **Affects schema:** `pmoves/contracts/schemas/room/room.manifest.v1.schema.json`
 **Affects manifests:** `pmoves/config/rooms/{fordham.room.community,tokenism.room.exchange}.json`
@@ -127,15 +127,25 @@ Both skill bindings were missing `skill_id`, `room_id`, `context.sources`, `outp
 validated 9 room manifest(s): 9 OK, 0 FAILED
 ```
 
-## 6. Operator signoff checklist
+## 6. Operator signoff (recorded 2026-07-20)
 
-Before this PR merges to `main`:
+All schema extensions + the data fix landed together. AGNOTE4482PHI.t1.md
+records both the CLAIM (`Mavis::OPEN-ROOM-LANE-CLAIM::2026-07-20T17:59:39Z`)
+and the operator signoff RELEASE
+(`Mavis::OPEN-ROOM-LANE-RELEASE::2026-07-20`). All boxes checked:
 
-- [ ] Review the 3 schema extensions (§3.1, §3.2, §3.3) and confirm each is acceptable.
-- [ ] Confirm the `meta` object as an acceptable interim path, with the first-class `chit_card` field planned as the eventual replacement.
-- [ ] Confirm the `tokenism.room.exchange.skill_bindings` data fix (§4.1) — specifically that `binding[1].guardrails.require_approval: true` is the correct default for the W1 dry-run spec.
-- [ ] Confirm AGNOTE4482 §1348 precedence: this spec is in-scope for the operator-approval gate that also covers `p7`, app `config`, `sandbox_policy`, `multi_user` fields — they should all be reviewed together.
-- [ ] (Stretch) Review the room manifest `stage` field. It is referenced in `room.manifest.v1.schema.json` description text (line 102) and in the docs as `rehearsal` | `live` | `review` | `archive` but is not currently a top-level required field. Worth adding it to make the room manifest self-describing rather than relying on the catalog to carry it.
+- [x] 3 schema extensions (§3.1, §3.2, §3.3) approved
+- [x] `meta` object accepted as interim path; first-class `chit_card` field
+      planned as eventual replacement
+- [x] `tokenism.room.exchange.skill_bindings` data fix approved — including
+      `binding[1].guardrails.require_approval: true` for the W1 dry-run spec
+- [x] AGNOTE4482 §1348 gate honored: spec landed in the same PR
+      (`feat/open-room-lane`, PR #2173) as the runtime code so they can be
+      reviewed together
+- [x] (Stretch) Stage field handled by `current_stage` on catalog rows
+      (see `pmoves/docs/ROOMS_ON_A_STAGE.md`); the manifest's `stage`
+      description is left for a follow-up to avoid expanding the schema
+      without a concrete consumer
 
 ## 7. References
 

@@ -69,9 +69,50 @@ P7 (Pinokio 7) is the room-aware stage manager. It:
 5. Provides NATS control plane subjects (`p7.nats.launch`, `p7.nats.session`) for room entry and lifecycle
 
 P7 is not just a process spawner — it is the context that agents launch into.
-The deployable control plane is `p7-room-orchestrator` on port `8122`. It consumes
-the two `p7.nats.*` command subjects and emits versioned `p7.room.*.v1` facts for
-session checkpoints, stage changes, and rejected commands.
+
+The deployable control plane is the FastAPI service at
+`pmoves/services/p7-room-orchestrator` (port `8120`; override via
+`P7_HTTP_PORT`). It exposes the public HTTP API for room lifecycle
+management:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET  | `/healthz` | service + catalog + NATS health |
+| GET  | `/api/p7/rooms` | list rooms (catalog rows) |
+| GET  | `/api/p7/rooms/{room_id}` | room detail (catalog row + validated manifest) |
+| POST | `/api/p7/rooms/{room_id}/transition` | state-machine transition (gated `rehearsal → live`) |
+| POST | `/api/p7/reload` | force re-read of catalog from disk |
+
+P7 publishes on these NATS subjects (every payload is wrapped with a `chit`
+block — see [NATS envelope contract](#nats-envelope-signed-or-unsigned-local) below):
+
+| Subject | When |
+|---|---|
+| `p7.nats.launch` | reserved (room entered) |
+| `p7.nats.session` | reserved (session opened/closed) |
+| `room.session.updated.v1` | every stage transition |
+| `pmoves.config.rooms.reloaded.v1` | startup + `/api/p7/reload` |
+
+Mutations (`POST`) require a `Bearer` token (`P7_CONTROL_TOKEN` or
+`P7_CONTROL_TOKEN_FILE`); when unset, they `503` (fail-closed) rather than
+silently allow unauthenticated state changes. See
+[`p7-service-spec-2026-07-20.md`](specs/p7-service-spec-2026-07-20.md) for
+the full spec.
+
+### NATS envelope (signed or unsigned-local)
+
+Every NATS payload from P7 carries a `chit` block:
+
+```json
+{ "chit": { "kid": "<service_card_id>", "ts": "<iso8601>",
+            "status": "signed|unsigned-local", "signature": "<hex>" } }
+```
+
+- `signed` — `P7_SERVICE_CARD_ID` + `P7_SIGNING_KEY` are both set; signature
+  is HMAC-SHA256 over the payload.
+- `unsigned-local` — either is unset. Same convention used elsewhere in
+  PMOVES for local-dev (per `.claude/BOOTSTRAP.md` § "Signing is optional
+  locally").
 
 ## What Rooms Own vs. Don't Own
 

@@ -130,7 +130,7 @@ rehearsal ──► live ──► review ──► archive
 | `404` from `/api/p7/rooms/{id}` | Room not in `pmoves/config/rooms/catalog.json`. Add it (schema_version 1.2.0+ requires `current_stage`). |
 | `409 invalid_transition` | Read the response's `valid_next_stages`; chain transitions through it. |
 | `422 chit_checklist_failed` | The `unchecked` list is operator-actionable. Address each, then retry. |
-| NATS subject has no traffic | `curl http://localhost:8120/healthz | jq .nats_connected`. If false, restart `make -C pmoves up-p7`. |
+| NATS subject has no traffic | `curl -s http://localhost:8120/healthz` then check `nats_connected`. If false, restart with `make -C pmoves up-p7`. |
 | `meta.chit.card_id is missing` (item 1) | Add `meta.chit.card_id: "<uuid>"` to the room's `*.room.json` AND a matching row in `pmoves/config/signing_identity_cards.yaml`. |
 | Port 8120 collision | 8092 is taken by `pdf-ingest` + `publisher-discord`; 8120 should be free. `lsof -i :8120` to confirm. |
 

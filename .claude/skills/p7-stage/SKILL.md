@@ -95,7 +95,11 @@ curl -s http://localhost:8120/api/p7/rooms/4090-field.room.control | jq
    - **CHIT gate** on `rehearsal → live` (returns `422` with `unchecked` list
      if any of the 7 items fail; otherwise proceeds).
    - **Atomic catalog writeback** of `current_stage` + `stage_verified_at`.
-   - **Signed NATS publish** on `room.session.updated.v1`.
+   - **NATS publish** on `room.session.updated.v1` with a `chit` envelope.
+     The envelope is `signed` (HMAC-SHA256) when `P7_SERVICE_CARD_ID` +
+     `P7_SIGNING_KEY` are both set, otherwise `unsigned-local` (per
+     `.claude/BOOTSTRAP.md` § "Signing is optional locally" — same convention
+     used elsewhere in PMOVES for local-dev).
 4. **Report.** Tell the operator the result. If `422`, surface the
    `unchecked` items verbatim — they are operator-actionable (each maps to
    a specific checklist line in `ROOM_MANIFEST_CONTRACT.md`).

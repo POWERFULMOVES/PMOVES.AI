@@ -68,7 +68,7 @@ HMAC-SHA256. If unset, status is `unsigned-local` per
 | `P7_HTTP_PORT` | `8120` | FastAPI port |
 | `P7_PMOVES_ROOT` | `.` (cwd) | root for resolving relative paths |
 | `P7_SERVICE_CARD_ID` | (empty) | P7's own signing card UUID; empty = unsigned-local |
-| `P7_SIGNING_KEY` | (empty) | HMAC key for P7's own envelopes; empty = unsigned-local |
+| `P7_SIGNING_KEY` | (empty) | HMAC key for P7's own envelopes; empty = unsigned-local. Can be supplied via `P7_SIGNING_KEY_FILE` (Docker secrets / k8s) — see [Secret-aware env](#secret-aware-env) below. |
 | `P7_CHIT_REQUIRE_SIGNATURE` | `true` | fail-closed if transitions are unsigned |
 | `P7_ALLOW_UNSIGNED_LOCAL` | `true` | operator-acknowledged unsigned-local advisory is OK |
 | `P7_LOG_LEVEL` | `INFO` | |
@@ -91,9 +91,42 @@ docker run --rm -p 8120:8120 \
   -e P7_PMOVES_ROOT=/etc/pmoves \
   -e P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json \
   -e P7_ROOMS_DIR=/etc/pmoves/rooms \
-  -e NATS_URL=nats://host.docker.internal:4222 \
+  -e P7_NATS_URL=nats://host.docker.internal:4222 \
   pmoves-p7
 ```
+
+### Secret-aware env
+
+P7 follows the standard PMOVES `*_FILE` pattern for secrets: prefer mounting
+a file and pointing `*_FILE` at it over passing the secret inline on the
+command line. The actual env var is read first, then the file is read as a
+fallback.
+
+| Var | File fallback | Purpose |
+|---|---|---|
+| `P7_CONTROL_TOKEN` | `P7_CONTROL_TOKEN_FILE` | Bearer token for `POST /api/p7/...` mutations (fail-closed if both unset) |
+| `P7_SIGNING_KEY` | `P7_SIGNING_KEY_FILE` | HMAC key for the `chit.signature` block on NATS envelopes |
+
+Docker example with secrets:
+
+```bash
+docker run --rm -p 8120:8120 \
+  -v $PWD/pmoves/config/rooms:/etc/pmoves/rooms:ro \
+  -v $PWD/secrets:/run/secrets:ro \
+  -e P7_PMOVES_ROOT=/etc/pmoves \
+  -e P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json \
+  -e P7_ROOMS_DIR=/etc/pmoves/rooms \
+  -e P7_NATS_URL=nats://nats:4222 \
+  -e P7_CONTROL_TOKEN_FILE=/run/secrets/p7-control-token \
+  -e P7_SIGNING_KEY_FILE=/run/secrets/p7-signing-key \
+  pmoves-p7
+```
+
+Local-dev override: when `P7_CONTROL_TOKEN` / `P7_SIGNING_KEY` are unset
+locally, the service still runs (auth: 503 from `require_http_control`; NATS
+envelopes: `chit.status="unsigned-local"` per `pmoves/.claude/BOOTSTRAP.md`).
+For local testing, set `P7_CONTROL_TOKEN=dev-token` in your shell before
+starting the server.
 
 ## Tests
 
