@@ -71,6 +71,21 @@ NODE="$(hostname 2>/dev/null | tr '[:upper:]' '[:lower:]')" || NODE=""
 TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))')"
 PAYLOAD="{\"event\":\"shift_crew_edit\",\"file\":\"$(basename "$FILE_PATH")\",\"branch\":\"$BRANCH\",\"node\":\"$NODE\",\"ts\":\"$TIMESTAMP\"}"
 
+# Durable record FIRST, network second: this hook runs under a 5s PostToolUse
+# timeout and the nats-py fallback alone can spend 4s inside wait_for() —
+# if the publish went first, a slow NATS could get the hook killed before
+# the local append ever ran, leaving the edit with no durable record.
+# Append-only JSONL at pmoves/docs/logs/shift_crew_branch_trail.jsonl.
+# Mirrors a2ui-crew-trail.sh (PR #2134), which pairs this durable write with
+# its advisory NATS emit.
+PMOVES_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+LOG_DIR="${PMOVES_ROOT}/pmoves/docs/logs"
+LOG_FILE="${LOG_DIR}/shift_crew_branch_trail.jsonl"
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+if [ -d "$LOG_DIR" ]; then
+    echo "$PAYLOAD" >> "$LOG_FILE" 2>/dev/null || true
+fi
+
 # Attempt publish via nats CLI (prefer) or nats-py
 # 127.0.0.1, not localhost: Windows resolves localhost to ::1 first and the
 # ::1 connect stalls ~2s before refusing — which eats nats-py's entire
@@ -109,18 +124,6 @@ async def main():
 
 asyncio.run(main())
 " "$SUBJECT" "$PAYLOAD" 2>/dev/null
-fi
-
-# Always write a local trail line as the durable record (whether or not the
-# NATS publish above succeeded). Append-only JSONL at
-# pmoves/docs/logs/shift_crew_branch_trail.jsonl. Mirrors a2ui-crew-trail.sh
-# (PR #2134), which pairs this durable write with its advisory NATS emit.
-PMOVES_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
-LOG_DIR="${PMOVES_ROOT}/pmoves/docs/logs"
-LOG_FILE="${LOG_DIR}/shift_crew_branch_trail.jsonl"
-mkdir -p "$LOG_DIR" 2>/dev/null || true
-if [ -d "$LOG_DIR" ]; then
-    echo "$PAYLOAD" >> "$LOG_FILE" 2>/dev/null || true
 fi
 
 exit 0
