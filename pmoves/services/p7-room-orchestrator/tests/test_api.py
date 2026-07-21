@@ -8,12 +8,21 @@ We swap in a FakePublisher post-startup so we can assert publish calls.
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
+import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
 from fastapi.testclient import TestClient
+
+# Ensure the service directory is on sys.path so `import main` works.
+_SERVICE_DIR = str(Path(__file__).resolve().parents[1])
+if _SERVICE_DIR not in sys.path:
+    sys.path.insert(0, _SERVICE_DIR)
+import main  # noqa: E402  (sys.path manipulation above)
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +32,11 @@ def _patch_publisher_after_lifespan(monkeypatch):
     so tests can assert on published events. We patch `nats_pub.NATSPublisher`
     class itself so the lifespan's `NATSPublisher(...)` call returns the fake.
     """
+    import importlib
     import nats_pub as nats_pub_mod
+    # Reload main so the lifespan's `NATSPublisher(...)` call uses the patched class
+    import main
+    importlib.reload(main)
 
     class FakePublisher:
         def __init__(self, *args, **kwargs):
@@ -66,10 +79,8 @@ def _patch_publisher_after_lifespan(monkeypatch):
 @pytest.fixture
 def client(hermetic_settings, catalog_with_two_rooms):
     """FastAPI TestClient with the hermetic pmoves root."""
-    # Reload main module-level state so it picks up the env vars set by
-    # hermetic_settings.
-    import importlib
-    import main
+    # Reload main module-level state so the SETTINGS singleton picks up
+    # the env vars set by hermetic_settings (P7_PMOVES_ROOT, etc.).
     importlib.reload(main)
     with TestClient(main.app) as c:
         yield c
