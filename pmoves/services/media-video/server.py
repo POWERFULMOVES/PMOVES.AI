@@ -340,7 +340,10 @@ def _fetch_from_minio(bucket: str, key: str) -> str:
     tmpdir = tempfile.mkdtemp(prefix="media-video-")
     local = os.path.join(tmpdir, uuid.uuid4().hex)
     try:
-        with open(local, "wb") as fh:
+        # `local` is tmpdir + a random uuid4 hex — never derived from `key`/`bucket` — so
+        # this open() cannot be steered by client input despite CodeQL's taint tracking
+        # conflating it with the (separately-passed) S3 bucket/key args below.
+        with open(local, "wb") as fh:  # lgtm[py/path-injection]
             _s3_client().download_fileobj(bucket, key, fh)
     except Exception as e:  # noqa: BLE001
         shutil.rmtree(tmpdir, ignore_errors=True)  # don't leak the tempdir on failure
@@ -355,7 +358,11 @@ def _resolve_source(req: VideoAnalysisRequest) -> "tuple[str, Optional[str]]":
         path = _fetch_from_minio(req.bucket, req.key)
         return path, os.path.dirname(path)
     path = _safe_input_path(req.file_path)
-    if not os.path.exists(path):
+    # `_safe_input_path()` already resolves via os.path.realpath and rejects anything
+    # outside MEDIA_INPUT_DIR via os.path.commonpath (the exact root-confinement guard
+    # CodeQL's own py/path-injection remediation recommends); it just doesn't recognize
+    # a custom function as a sanitizer barrier.
+    if not os.path.exists(path):  # lgtm[py/path-injection]
         raise HTTPException(status_code=404, detail="media file not found")
     return path, None
 
@@ -388,7 +395,10 @@ async def _run_video(req: VideoAnalysisRequest) -> JSONResponse:
         if cleanup:
             import shutil
 
-            shutil.rmtree(cleanup, ignore_errors=True)
+            # `cleanup` is only set for the MinIO branch of `_resolve_source()`, where it is
+            # `os.path.dirname()` of a uuid4-named tempfile under `tempfile.mkdtemp()` — never
+            # built from client-supplied bucket/key/file_path text.
+            shutil.rmtree(cleanup, ignore_errors=True)  # lgtm[py/path-injection]
 
 
 @app.post("/analyze")
@@ -418,7 +428,9 @@ async def analyze_frame(req: VideoAnalysisRequest):
         if cleanup:
             import shutil
 
-            shutil.rmtree(cleanup, ignore_errors=True)
+            # Same reasoning as `_run_video()`: `cleanup` is a uuid4-named tempdir, never
+            # built from client-supplied text.
+            shutil.rmtree(cleanup, ignore_errors=True)  # lgtm[py/path-injection]
 
 
 if __name__ == "__main__":
