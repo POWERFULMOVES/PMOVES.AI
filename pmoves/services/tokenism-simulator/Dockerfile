@@ -44,6 +44,12 @@ RUN mkdir -p /app/services/common
 COPY services/common/__init__.py /app/services/common/__init__.py
 COPY services/common/env.py /app/services/common/env.py
 
+# pmoves.services.common.env — the boot path (chit_encoder) imports this namespace spelling
+RUN mkdir -p /app/pmoves/services/common \
+    && printf '' > /app/pmoves/services/__init__.py \
+    && printf '' > /app/pmoves/services/common/__init__.py
+COPY services/common/env.py /app/pmoves/services/common/env.py
+
 # Create non-root user for PMOVES hardening
 RUN useradd -m -u 1001 pmoves && \
     chown -R pmoves:pmoves /app
