@@ -155,7 +155,7 @@ locally".
 | `404` from `/api/p7/rooms/{id}` | room not in catalog | Add the room to `pmoves/config/rooms/catalog.json` (schema_version 1.2.0+ requires `current_stage`) |
 | `409 invalid_transition` | state machine rejects | Read the response's `valid_next_stages` field; chain transitions |
 | `422 chit_checklist_failed` | one or more of the 7 CHIT items fail | The response's `unchecked` list is the spec; address each, then retry |
-| NATS subject has no traffic | P7 service not connected to NATS | `curl http://localhost:8120/healthz | jq .nats_connected`; restart `make -C pmoves up-p7` if false |
+| NATS subject has no traffic | P7 service not connected to NATS | `curl http://localhost:8120/healthz \| jq .nats_connected`; restart `make -C pmoves up-p7` if false |
 | `meta.chit.card_id is missing` (item 1) | manifest doesn't reference a signing card | Add `meta.chit.card_id: "<uuid>"` to the room's `*.room.json` manifest, AND add a row in `pmoves/config/signing_identity_cards.yaml` |
 | Port 8120 collision | other service grabbed it | 8092 is taken by `pdf-ingest` + `publisher-discord`; 8120 should be free. `lsof -i :8120` to confirm |
 
