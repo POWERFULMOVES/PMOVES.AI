@@ -67,7 +67,7 @@ STT_MODEL = os.environ.get("STT_MODEL", "openai/whisper-large-v3-turbo")
 EMOTION_MODEL = os.environ.get("EMOTION_MODEL", "superb/hubert-large-superb-er")
 DIARIZATION_MODEL = os.environ.get("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
 HF_TOKEN = _read_secret("HF_TOKEN") or _read_secret("HUGGING_FACE_HUB_TOKEN")
-MEDIA_AUDIO_SUBJECT = os.environ.get("MEDIA_AUDIO_SUBJECT", "media.audio.analyzed.v1")
+MEDIA_AUDIO_SUBJECT = os.environ.get("MEDIA_AUDIO_SUBJECT", "analysis.audio.v1")
 # Client-provided file paths must resolve within this dir (py/path-injection guard).
 MEDIA_INPUT_DIR = os.environ.get("MEDIA_INPUT_DIR", "/data")
 # MinIO/S3 (env already wired in docker-compose media-audio block). Mirrors the
@@ -286,6 +286,15 @@ def _startup() -> None:
 
 async def _maybe_publish(result: Dict[str, Any]) -> None:
     if not NATS_URL:
+        return
+    # Conform to the registered analysis.audio.v1 contract before emitting: its schema
+    # (contracts/schemas/analysis/audio.v1.schema.json) requires an `emotions` array.
+    # The build context is ./services/media-audio so the schema file is not in the image;
+    # enforce its one hard invariant inline rather than poison consumers with a bad payload.
+    if not isinstance(result, dict) or not isinstance(result.get("emotions"), list):
+        logger.warning(
+            "skipping %s publish: payload missing required 'emotions' array", MEDIA_AUDIO_SUBJECT
+        )
         return
     try:
         import json
