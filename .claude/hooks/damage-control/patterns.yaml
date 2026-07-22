@@ -24,22 +24,24 @@ bashToolPatterns:
   # ---------------------------------------------------------------------------
   # DESTRUCTIVE FILE OPERATIONS
   # ---------------------------------------------------------------------------
-  # Negative lookbehinds exclude `docker rm`/`podman rm` — targeted container
-  # removal is not mass filesystem destruction. The dangerous forms
+  # Negative lookbehinds exclude `docker rm`/`podman rm`/`git rm` — targeted
+  # container removal and reversible git-index removal are not mass filesystem
+  # destruction. `git rm` stages a tracked-file removal that git can recover;
+  # it is categorically different from `rm -rf`. The dangerous container forms
   # (`docker rm $(docker ps -aq)`, `docker ps -q | xargs docker rm`, and
   # their podman equivalents) are caught by dedicated hard-block rules
   # further down the file ("Container sweep hard-blocks" section).
-  - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+(-[^\s]*)*-[rRf]'
-    reason: rm with recursive or force flags (filesystem rm, not docker/podman)
+  - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+(-[^\s]*)*-[rRf]'
+    reason: rm with recursive or force flags (filesystem rm, not docker/podman/git)
 
-  - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+-[rRf]'
-    reason: rm with recursive or force flags (filesystem rm, not docker/podman)
+  - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+-[rRf]'
+    reason: rm with recursive or force flags (filesystem rm, not docker/podman/git)
 
-  - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+--recursive'
-    reason: rm with --recursive flag (filesystem rm, not docker/podman)
+  - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+--recursive'
+    reason: rm with --recursive flag (filesystem rm, not docker/podman/git)
 
-  - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+--force'
-    reason: rm with --force flag (filesystem rm, not docker/podman)
+  - pattern: '(?<!docker\s)(?<!podman\s)(?<!git\s)\brm\s+--force'
+    reason: rm with --force flag (filesystem rm, not docker/podman/git)
 
   - pattern: '\bsudo\s+rm\b'
     reason: sudo rm

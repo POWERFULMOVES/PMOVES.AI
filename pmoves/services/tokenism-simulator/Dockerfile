@@ -12,6 +12,10 @@ LABEL version="1.0.0"
 # Set working directory
 WORKDIR /app
 
+# Ensure pmoves.* namespace packages import regardless of invocation cwd
+# (mirrors hi-rag-gateway-v2 pattern)
+ENV PYTHONPATH=/app
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
