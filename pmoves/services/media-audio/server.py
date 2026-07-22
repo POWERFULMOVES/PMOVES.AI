@@ -393,7 +393,9 @@ async def _run_analysis(req: AudioAnalysisRequest) -> JSONResponse:
         raise HTTPException(status_code=503, detail="models not ready")
     cleanup_dir: Optional[str] = None
     if req.bucket and req.key:
-        path = _fetch_from_minio(req.bucket, req.key)
+        # Blocking network I/O (potentially large download) — keep it off the event
+        # loop, same as the inference dispatch below (review #2181 follow-up).
+        path = await asyncio.to_thread(_fetch_from_minio, req.bucket, req.key)
         cleanup_dir = os.path.dirname(path)
     else:
         path = _safe_input_path(req.file_path)
