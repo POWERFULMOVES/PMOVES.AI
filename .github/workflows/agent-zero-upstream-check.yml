@@ -16,7 +16,7 @@ permissions:
 
 env:
   UPSTREAM_REPO: agent0ai/agent-zero
-  VERSION_FILE: pmoves/services/agent-zero/.a0-upstream-version
+  DOCKERFILE: pmoves/services/agent-zero/Dockerfile.multiarch
 
 jobs:
   check-upstream:
@@ -49,11 +49,21 @@ jobs:
       - name: Read current pinned version
         id: read_version
         run: |
-          # VERSION_FILE is a runtime state file (gitignored, see .gitignore) so it
-          # is absent on a fresh checkout. Default to "none" so a missing pin reads
-          # as "not current" and the compare step opens/reuses a PR instead of the
-          # job crashing with `cat: No such file or directory`.
-          CURRENT_TAG=$(cat "${{ env.VERSION_FILE }}" 2>/dev/null || echo "none")
+          # Derive the current pin from the Dockerfile ARG — it's committed to
+          # git, unlike the old .a0-upstream-version state file (gitignored, so
+          # it's always absent on a fresh Actions checkout and `git add -A` in
+          # the create-pr job silently drops any write to it too).
+          # AGENT_ZERO_REF is normally a PMOVES fork branch name in the form
+          # PMOVES.AI-Edition-<version>; extract <version> when present,
+          # otherwise treat the ref itself as the version (covers the
+          # transitional state mid-bump-PR where AGENT_ZERO_REF holds a raw
+          # upstream tag pending fork sync).
+          CURRENT_REF=$(grep -oP '^ARG AGENT_ZERO_REF=\K.*' "${{ env.DOCKERFILE }}")
+          if [[ "${CURRENT_REF}" =~ ^PMOVES\.AI-Edition-(.+)$ ]]; then
+            CURRENT_TAG="${BASH_REMATCH[1]}"
+          else
+            CURRENT_TAG="${CURRENT_REF}"
+          fi
           echo "CURRENT_TAG=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Compare versions
@@ -116,13 +126,9 @@ jobs:
             echo "PYREQWEST_PRESENT=false" >> "$GITHUB_ENV"
           fi
 
-      - name: Update version pin file
-        run: |
-          echo "${{ needs.check-upstream.outputs.new_tag }}" > "${{ env.VERSION_FILE }}"
-
       - name: Update Dockerfile AGENT_ZERO_REF
         run: |
-          sed -i 's/^ARG AGENT_ZERO_REF=.*/ARG AGENT_ZERO_REF=${{ needs.check-upstream.outputs.new_tag }}/' pmoves/services/agent-zero/Dockerfile.multiarch
+          sed -i 's/^ARG AGENT_ZERO_REF=.*/ARG AGENT_ZERO_REF=${{ needs.check-upstream.outputs.new_tag }}/' "${{ env.DOCKERFILE }}"
 
       - name: Update upstream-constraints.txt if needed
         run: |
@@ -169,7 +175,6 @@ jobs:
 
           ### What this PR does
           - Bumps `AGENT_ZERO_REF` in `Dockerfile.multiarch` to `${{ needs.check-upstream.outputs.new_tag }}`
-          - Updates `.a0-upstream-version` pin file
           - Updates `upstream-constraints.txt` if transitive dep pins needed
 
           ### ⚠️ Fork Sync Required
