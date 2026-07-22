@@ -17,6 +17,7 @@ nemo (SPARK, TODO) | vulkan (AMD ONNX-RT, TODO).
 import asyncio
 import logging
 import os
+import shutil
 import tempfile
 import uuid
 from collections import Counter as Tally
@@ -334,12 +335,15 @@ def _s3_client():
 
 
 def _fetch_from_minio(bucket: str, key: str) -> str:
+    # Local filename is a random UUID (never derived from the user-controlled key) so no
+    # untrusted data flows into a filesystem path (CodeQL py/path-injection).
     tmpdir = tempfile.mkdtemp(prefix="media-video-")
-    local = os.path.join(tmpdir, os.path.basename(key) or "media")
+    local = os.path.join(tmpdir, uuid.uuid4().hex)
     try:
         with open(local, "wb") as fh:
             _s3_client().download_fileobj(bucket, key, fh)
     except Exception as e:  # noqa: BLE001
+        shutil.rmtree(tmpdir, ignore_errors=True)  # don't leak the tempdir on failure
         logger.exception("MinIO fetch failed for %s/%s", bucket, key)
         raise HTTPException(status_code=502, detail="could not fetch object from storage") from e
     return local
