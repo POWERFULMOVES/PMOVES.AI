@@ -32,6 +32,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     else \
       pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt; \
     fi
+# Diarization deps (pyannote) installed separately so they land regardless of the
+# lock-vs-requirements.txt path above — the x86_64 lock does not pin pyannote, which
+# would leave diarization broken on the GPU image (Codex #2181 P1). Full pip-compile
+# regeneration of the lock with pyannote is the ideal follow-up.
+RUN pip install --no-cache-dir "pyannote.audio>=3.3.0" "pydub>=0.25.1"
 COPY . ./
 
 # Security: Run as non-root user (GPU services need video group)
@@ -43,7 +48,8 @@ USER pmoves:pmoves
 
 EXPOSE 8082
 
-# Health check (GPU service — process-based, skeleton without HTTP server)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
-    CMD pgrep -f "uvicorn" || exit 1
-CMD ["uvicorn","server:app","--host","127.0.0.1","--port","8082"]
+# Health check — real HTTP probe now that server.py exposes /healthz.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8082/healthz || exit 1
+# Bind 0.0.0.0 so the service is reachable across the compose network (not just in-container).
+CMD ["uvicorn","server:app","--host","0.0.0.0","--port","8082"]
