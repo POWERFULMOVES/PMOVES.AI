@@ -4,8 +4,8 @@ Written after the Z890 node was brought current with main (was 773 behind — th
 
 ## Context
 
-- **Z890** is now on main (`checkout -B origin/main`): cipher-auth wired, full MCP program present, tokenism `:edge` deploying (pending the packaging fix — see `tokenism-pmoves-services-common-packaging-2026-07-22.md`). Recreate of the rest of the Z890 stack: dry-run validates against the working env.
-- The **KVMs and other nodes are almost certainly behind main too** — the same currency check that fixed Z890 applies fleet-wide. The likely one-move fix per node: bring its working tree to main (`git checkout -B <branch> origin/main`, preserving git-ignored env), regenerate tier files (`make secrets-funnel`), dry-run config, tiered recreate.
+- **Z890** is now on main (`checkout -B origin/main`): cipher-auth wired, full MCP program present, tokenism `:edge` deploying with the packaging fix applied (see `tokenism-pmoves-services-common-packaging-2026-07-22.md`) — pending rebuild/redeploy verification on Z890. Recreate of the rest of the Z890 stack: dry-run validates against the working env.
+- The **KVMs and other nodes are almost certainly behind main too** — the same currency check that fixed Z890 applies fleet-wide. The guarded catch-up per node: `git fetch origin`; check for uncommitted/unpushed local work; record a rollback ref (`git branch backup/<node>-pre-cutover`); then `git checkout -B <branch> origin/main` (preserving git-ignored env); regenerate tier files (`make secrets-funnel`); dry-run config; tiered recreate; roll back via the backup ref if recreate fails.
 
 ## Node → service placement (current vs intended)
 
@@ -34,17 +34,17 @@ Components (GPU): `up-comfyui`, `up-vibevoice`, `up-voice-relay`, plus the `cata
 
 ## Track 3 — KVM/VPS recreation
 
-Per-node, via `vps-deployer` (Hostinger MCP + Tailscale-SSH). For each KVM: (a) currency check (behind main?), (b) bring tree to main, (c) regenerate tier env, (d) recreate its assigned services. **kvm4-2 (NATS fleet bus) is the critical one** — coordinate downtime; the bus underpins cross-node. Reference: `deploy/runbooks/hostinger-vps-deploy.md`, memory `project_kvm42_unprovisioned_nats_down`.
+Per-node, via `vps-deployer` (Hostinger MCP + Tailscale-SSH). For each KVM: (a) `git fetch origin` + currency check (behind main?), (b) check/preserve local work + record a rollback ref, (c) bring tree to main, (d) regenerate tier env, (e) recreate its assigned services, (f) roll back via the preserved ref if recreate fails. **kvm4-2 (NATS fleet bus) is the critical one** — coordinate downtime; the bus underpins cross-node. Reference: `deploy/runbooks/hostinger-vps-deploy.md`, memory `project_kvm42_unprovisioned_nats_down`.
 
 ## Cross-cutting
 
 - **Stale worktree hygiene**: `.worktrees/pr1720` + `.worktrees/pr1724` (long-closed PRs) carry legacy CHIT paths that fail the secrets-audit gate — prune them ([[feedback_check_worktree_before_remove]] first).
 - **Branch hygiene**: ~10 stale merged MCP branch refs to prune (squash-artifact `ahead=N`).
-- **Node cutover pattern** (reusable): `git checkout -B <branch> origin/main` (preserves git-ignored env + untracked grant) → `make secrets-funnel` → `make compose ARGS="config --quiet"` dry-run → tiered recreate. This is how any behind-node catches up.
+- **Node cutover pattern** (reusable): `git fetch origin` → check for local/unpushed work → record rollback ref (`git branch backup/<node>-pre-cutover`) → `git checkout -B <branch> origin/main` (preserves git-ignored env + untracked grant) → `make secrets-funnel` → `make compose ARGS="config --quiet"` dry-run → tiered recreate → roll back via the backup ref if recreate fails. This is how any behind-node catches up.
 
 ## Sequence recommendation
 
-1. Finish Z890 (tokenism fix + recreate the rest). ← in progress
+1. Z890: rebuild/redeploy tokenism-simulator with the applied packaging fix + verify healthy; recreate the rest. ← in progress
 2. kvm4-2 currency (NATS bus health is fleet-critical).
 3. 4090 media/networking (Jellyfin).
 4. Creator pipeline (5090).

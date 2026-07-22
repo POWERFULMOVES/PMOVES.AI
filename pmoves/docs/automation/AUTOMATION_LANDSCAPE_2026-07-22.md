@@ -4,7 +4,7 @@ Read-only audit across four lenses (n8n currency, pipeline map, MCP/agents wirin
 
 ## TL;DR
 
-PMOVES automation is **three lanes, not one**: **n8n** (the built-out workflow engine — 32+ canonical pipelines, registry-synced, agent-wired over HTTP), **make/CI** (bring-up + scheduled maintenance crons), and a **Claude-native digest pair** (cloud routine + local Task Scheduler). A fourth the operator named — **Activepieces** (with LinkedIn) — has **zero repo footprint**; it's operator-external. "n8n has MCP and agents" is *agents-yes (HTTP), MCP-no, Archon-planned-only*.
+PMOVES automation is **three lanes, not one**: **n8n** (the built-out workflow engine — 32+ canonical pipelines, registry-synced, agent-wired over HTTP), **make/CI** (bring-up + scheduled maintenance crons), and a **Claude-native digest pair** (cloud routine + local Task Scheduler). A fourth the operator named — **Activepieces** (with LinkedIn) — has **zero repo footprint**; it's operator-external. "n8n has MCP and agents" is *agents-yes (HTTP), MCP-yes (merged on main; the audited node was simply stale), Archon-planned-only*.
 
 ---
 
@@ -35,11 +35,11 @@ Cloud Claude routine (daily 13:00 UTC) → Gmail PR-audit digest; local Task Sch
 
 **Activepieces = zero repo footprint** — no submodule, no dir, no doc/plan/compose/env/git-history reference on any branch. Purely operator-external today. **LinkedIn** in-repo is only manual content (GTM docs `pmoves/docs/gtm/02_linkedin_package.md`, launch copy on `docs/socials-launch-copy`). The *in-repo* candidate for LinkedIn *automation* is n8n's `pmoves_social_publisher.json` (lists Discord/Twitter/LinkedIn) — activation state unverified.
 
-**Why it's a real fleet candidate (from activepieces.com, 2026-07-22):** Activepieces is **MIT-licensed, open-source, self-hostable** (GitHub, Docker) — so it fits the fork-as-submodule fleet pattern. Critically, it ships **native MCP + AI Agents** — the exact MCP integration the PMOVES n8n lane *lacks* (see integration table below). So adopting Activepieces wouldn't just add LinkedIn connectors; it would bring an MCP-native automation surface. The operator's "Activepieces has LinkedIn / n8n has mcp and agents" framing partly inverts: **Activepieces natively has MCP + agents; the n8n lane's MCP is the gap.** LinkedIn action/trigger specifics + connection method (official API vs unofficial) were not on the landing page — verify against the Activepieces LinkedIn piece docs before committing to it as the LinkedIn lane.
+**Why it's a real fleet candidate (from activepieces.com, 2026-07-22):** Activepieces is **MIT-licensed, open-source, self-hostable** (GitHub, Docker) — so it fits the fork-as-submodule fleet pattern. Critically, it ships **native MCP + AI Agents** — the exact MCP integration the PMOVES n8n lane *lacks* (see integration table below). So adopting Activepieces wouldn't just add LinkedIn connectors; it would bring an MCP-native automation surface. The operator's "Activepieces has LinkedIn / n8n has mcp and agents" framing partly inverts: **Activepieces natively has MCP + agents; the n8n lane's MCP is present on main — the gap was a stale node checkout, not missing capability.** LinkedIn action/trigger specifics + connection method (official API vs unofficial) were not on the landing page — verify against the Activepieces LinkedIn piece docs before committing to it as the LinkedIn lane.
 
 ## Integration reality (the "n8n has MCP and agents" claim)
 
-**CORRECTION (2026-07-22, after operator flag):** the MCP integration is NOT missing/aspirational — it is a **large body of built-but-unmerged work orders** sitting in ~10 branches. The initial audit read only the current tree/workflow JSON and missed all of it. n8n the product *is* self-hostable and *does* have MCP nodes (MCP Server Trigger + MCP Client Tool); the PMOVES MCP wiring for cipher/hirag/a0/comfy/notebooklm/observability was done in branches and left off.
+**CORRECTION (2026-07-22, after operator flag):** the MCP integration is NOT missing/aspirational — it is a **large body of built-but-unmerged work orders** sitting in ~11 branches. The initial audit read only the current tree/workflow JSON and missed all of it. n8n the product *is* self-hostable and *does* have MCP nodes (MCP Server Trigger + MCP Client Tool); the PMOVES MCP wiring for cipher/hirag/a0/comfy/notebooklm/observability was done in branches and left off.
 
 | Link | State (in-tree) | Real state |
 |---|---|---|
@@ -50,7 +50,7 @@ Cloud Claude routine (daily 13:00 UTC) → Gmail PR-audit digest; local Task Sch
 
 ### MCP branches — ALL ALREADY MERGED (no recovery; the node is just stale)
 
-**RE-CORRECTION (2026-07-22, triage-verified):** the "dropped work orders" framing was itself wrong. All 10 branches are **already merged or superseded on main** — the `ahead=N` counts are pure squash-merge SHA-divergence artifacts (the `[gone]≠merged` trap: audit against merged PRs, not `main..branch` ancestry). Each was `git merge-base --is-ancestor`-verified against current `origin/main`.
+**RE-CORRECTION (2026-07-22, triage-verified):** the "dropped work orders" framing was itself wrong. All 11 branches are **already merged or superseded on main** — the `ahead=N` counts are pure squash-merge SHA-divergence artifacts (the `[gone]≠merged` trap: audit against merged PRs, not `main..branch` ancestry). Each was `git merge-base --is-ancestor`-verified against current `origin/main`.
 
 | Branch | PR | Landed | Note |
 |---|---|---|---|
@@ -68,7 +68,7 @@ Cloud Claude routine (daily 13:00 UTC) → Gmail PR-audit digest; local Task Sch
 
 **Root cause of every MCP symptom this session (cipher 401, "MCP missing"):** the running node is on `local/pmoves-hermes-z890-config`, **773 commits behind main**, whose `.claude/mcp.json` predates the cipher-auth fix (#2046) and lacks the whole MCP program. Verified: node tree's mcp.json has 0 cipher-auth matches; main's has it.
 
-**The fix is NOT a multi-PR recovery — it is ONE move:** land the reconciliation (#2184) and cut the node over to main. That puts the entire MCP program (cipher auth, hirag/a0/comfy/notebooklm MCP, rooms MCP apps) onto the node and makes Cipher authenticate. Then prune the 10 stale merged branch refs (housekeeping).
+**The fix is NOT a multi-PR recovery — it is ONE move:** land the reconciliation (#2184) and cut the node over to main. That puts the entire MCP program (cipher auth, hirag/a0/comfy/notebooklm MCP, rooms MCP apps) onto the node and makes Cipher authenticate. Then prune the 11 stale merged branch refs (housekeeping).
 
 ## Division of labor
 
@@ -101,7 +101,7 @@ The review-thread claim that "n8n already reshapes `media.audio.analyzed.v1` →
 
 **P3 — capability gaps (design-first):**
 7. **n8n ↔ Archon** — implement the `pmoves-n8n-archon-bridge` design (add `up-archon` target, starter workflows, agent defs).
-8. **n8n ↔ MCP** — decide if/how n8n is exposed as/consumes MCP (currently absent despite the "MCP Hub" framing).
+8. **n8n ↔ MCP** — cut the stale node over to main and verify the merged MCP wiring.
 9. **Activepieces** — decide whether it becomes an in-repo fleet submodule or stays operator-external. It's MIT/self-hostable with **native MCP + AI Agents** (which the n8n lane lacks) + LinkedIn connectors — so it could close BOTH the LinkedIn-automation gap AND the MCP gap (item 8) at once. Verify its LinkedIn connection method (official API vs unofficial) before committing. Document the decision.
 10. **Doc gap** — write the n8n/Activepieces/make-CI/agents division-of-labor into `PMOVES_COMPLETE_ARCHITECTURE.md`.
 11. **`worktree-sitrep` target** — implement the documented-but-missing make target.

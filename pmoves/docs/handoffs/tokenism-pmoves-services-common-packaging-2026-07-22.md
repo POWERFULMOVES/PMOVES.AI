@@ -14,9 +14,9 @@ Scope: **one file** (`pmoves/services/tokenism-simulator/Dockerfile`), the addit
 
 ## The bug (main-wide, verified live)
 
-`pmoves-tokenism-simulator` crash-loops. Root cause is a namespace-packaging mismatch on **main** (the reconciled image build merged via #2184 was incomplete):
+`pmoves-tokenism-simulator` enters a crash loop. Root cause is a namespace-packaging mismatch on **main** (the reconciled image build merged via #2184 was incomplete):
 
-- Boot chain: `app.py → api/simulation.py → services/simulation_engine.py → services/chit_encoder.py:26`, which does `from pmoves.services.common.env import get_secret`.
+- Boot chain: `app.py → api/simulation.py → services/simulation_engine.py → services/chit_encoder.py:23-26`, which tries `from services.common.env import get_secret` first and falls back to `from pmoves.services.common.env import get_secret` on `ImportError`.
 - The build packages `services/common/env.py` at `/app/services/common/` (importable as `services.common.env`) and `pmoves/tools/*` at `/app/pmoves/tools/` — but **not** `pmoves/services/common/`. So `pmoves.services.common.env` → `ModuleNotFoundError: No module named 'pmoves.services'`.
 - Earlier verification was flawed: it tested `import pmoves.tools.chit_security` (which the fix DID make work) instead of the actual boot import. The crash is one module deeper.
 
@@ -25,8 +25,9 @@ The GHCR CI image `ghcr.io/powerfulmoves/pmoves-tokenism-simulator:edge` is buil
 ## The fix (additive, mirrors the existing `pmoves/tools/` block)
 
 Add after the existing `services/common` block (~line 45):
-```
-# pmoves.services.common.env — the boot path (chit_encoder) imports this namespace
+```dockerfile
+# pmoves.services.common.env — fallback import path (chit_encoder tries
+# services.common.env first, falls back to this spelling on ImportError)
 RUN mkdir -p /app/pmoves/services/common \
     && printf '' > /app/pmoves/services/__init__.py \
     && printf '' > /app/pmoves/services/common/__init__.py
@@ -38,7 +39,7 @@ COPY services/common/env.py /app/pmoves/services/common/env.py
 ## Acceptance test (the REAL boot path, not chit_security)
 
 Inside the rebuilt image:
-```
+```bash
 docker run --rm --entrypoint python <tag> -c "import services.simulation_engine; print('BOOT-IMPORT-OK')"
 ```
 Must print `BOOT-IMPORT-OK` with no `ModuleNotFoundError`. A green healthcheck is NOT sufficient (gunicorn can appear up before the worker crash).
