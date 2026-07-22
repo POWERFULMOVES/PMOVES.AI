@@ -124,7 +124,7 @@ jobs:
       names: ${{ steps.resolve.outputs.names }}
     steps:
       - name: Checkout (matrix config)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Resolve integration matrix
         id: resolve
@@ -180,7 +180,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout (stub)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Load integration config
         id: cfg
@@ -402,7 +402,7 @@ jobs:
           echo "Build-host disk after /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
 
       - name: Checkout (stub)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Load integration config
         id: cfg
