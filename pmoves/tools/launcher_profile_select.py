@@ -194,7 +194,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Hermes profile    : {hermes_profile_name}")
     print(f"Hermes config     : {hermes_config_path}")
 
-    hermes_profile_dir.mkdir(parents=True, exist_ok=True)
     current_config = load_yaml(hermes_config_path) if hermes_config_path.exists() else {}
 
     overrides = launcher.get("hermes_config_overrides", {})
@@ -208,12 +207,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.env_template_only:
         if args.write:
+            hermes_profile_dir.mkdir(parents=True, exist_ok=True)
             with open(env_template_path, "w", encoding="utf-8") as f:
-                f.write(env_content)
+                f.write(env_content)  # lgtm[py/clear-text-storage-sensitive-data] -- env_content holds secret KEY NAMES only (render_env_template), values are always left blank for the operator to fill in
             print(f"Wrote .env template: {env_template_path}")
         else:
             print(f"\nDry run: would write .env template to {env_template_path}")
-            print(env_content)
+            print(env_content)  # lgtm[py/clear-text-logging-sensitive-data] -- env_content holds secret KEY NAMES only (render_env_template), values are always left blank for the operator to fill in
         return 0
 
     # ─────────────────────────────────────────────────────────────────────
@@ -229,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     # ─────────────────────────────────────────────────────────────────────
     # Write config.yaml
     # ─────────────────────────────────────────────────────────────────────
+    hermes_profile_dir.mkdir(parents=True, exist_ok=True)
     if hermes_config_path.exists():
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         backup_path = hermes_config_path.with_suffix(f".yaml.backup-{timestamp}")
@@ -239,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Wrote Hermes config: {hermes_config_path}")
 
     with open(env_template_path, "w", encoding="utf-8") as f:
-        f.write(env_content)
+        f.write(env_content)  # lgtm[py/clear-text-storage-sensitive-data] -- env_content holds secret KEY NAMES only (render_env_template), values are always left blank for the operator to fill in
     print(f"Wrote .env template: {env_template_path}")
 
     print("\nNext steps:")

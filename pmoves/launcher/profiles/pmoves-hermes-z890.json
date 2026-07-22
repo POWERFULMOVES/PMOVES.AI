@@ -56,10 +56,7 @@
     "up-monitoring",
     "secrets-funnel",
     "up-n8n",
-    "up-archon",
-    "folder-monitor",
-    "email-organizer",
-    "yt-monitor"
+    "up-archon-native"
   ],
   "model_routing": {
     "default": "local",

@@ -84,7 +84,8 @@
       "provider": "pmoves-legal-assist",
       "action_namespace": "legal",
       "capabilities": ["document-review", "chronology", "case-law", "contract-analysis"],
-      "pinned": true
+      "pinned": true,
+      "status": "planned"
     },
     {
       "app_id": "email-organizer-panel",
@@ -93,7 +94,8 @@
       "provider": "pmoves-email-organizer",
       "action_namespace": "email",
       "capabilities": ["triage", "migrate", "draft-reply", "route-to-legal"],
-      "pinned": true
+      "pinned": true,
+      "status": "planned"
     },
     {
       "app_id": "n8n-archon-bridge",
@@ -102,7 +104,8 @@
       "provider": "pmoves-n8n-archon-bridge",
       "action_namespace": "workflow",
       "capabilities": ["start-n8n", "start-archon", "deploy-workflows", "run-job"],
-      "pinned": true
+      "pinned": true,
+      "status": "planned"
     }
   ],
   "notebook": {
@@ -480,7 +483,7 @@
   ],
   "team_refs": ["orchestration", "data", "infra", "legal", "research"],
   "service_refs": ["agent-zero", "supabase", "nats", "prometheus", "grafana", "n8n", "archon", "e2b-mcp-server", "yt-monitor"],
-  "launcher_refs": ["up-agents", "up-monitoring", "secrets-funnel", "up-n8n", "up-archon", "folder-monitor", "email-organizer", "yt-monitor"],
+  "launcher_refs": ["up-agents", "up-monitoring", "secrets-funnel", "up-n8n", "up-archon-native"],
   "policies": {
     "model_routing": "tensorzero",
     "publish": {
