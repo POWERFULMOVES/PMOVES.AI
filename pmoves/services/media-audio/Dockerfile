@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # lock-vs-requirements.txt path above — the x86_64 lock does not pin pyannote, which
 # would leave diarization broken on the GPU image (Codex #2181 P1). Full pip-compile
 # regeneration of the lock with pyannote is the ideal follow-up.
-RUN pip install --no-cache-dir pyannote.audio>=3.3.0 pydub>=0.25.1
+RUN pip install --no-cache-dir "pyannote.audio>=3.3.0" "pydub>=0.25.1"
 COPY . ./
 
 # Security: Run as non-root user (GPU services need video group)

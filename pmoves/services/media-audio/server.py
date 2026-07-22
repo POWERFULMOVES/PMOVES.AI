@@ -15,8 +15,10 @@ nemo (SPARK Parakeet/Sortformer, TODO) | vulkan (AMD whisper.cpp/ONNX-RT, TODO).
 See project_media_stack_roadmap.
 """
 
+import asyncio
 import logging
 import os
+import shutil
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -71,8 +73,8 @@ MEDIA_INPUT_DIR = os.environ.get("MEDIA_INPUT_DIR", "/data")
 # MinIO/S3 (env already wired in docker-compose media-audio block). Mirrors the
 # ffmpeg-whisper s3_client() chain so bucket+key jobs can be fetched.
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT", "minio:9000")
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID", "")
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+MINIO_ACCESS_KEY = _read_secret("MINIO_ACCESS_KEY") or _read_secret("AWS_ACCESS_KEY_ID") or ""
+MINIO_SECRET_KEY = _read_secret("MINIO_SECRET_KEY") or _read_secret("AWS_SECRET_ACCESS_KEY") or ""
 MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").strip().lower() in ("true", "1", "yes")
 
 
@@ -369,13 +371,18 @@ def _s3_client():
 
 
 def _fetch_from_minio(bucket: str, key: str) -> str:
-    """Download a MinIO object to a temp file; returns the local path (caller cleans up its dir)."""
+    """Download a MinIO object to a temp file; returns the local path (caller cleans up its dir).
+
+    The local filename is a random UUID (never derived from the user-controlled ``key``) so no
+    untrusted data flows into a filesystem path (CodeQL py/path-injection).
+    """
     tmpdir = tempfile.mkdtemp(prefix="media-audio-")
-    local = os.path.join(tmpdir, os.path.basename(key) or "audio")
+    local = os.path.join(tmpdir, uuid.uuid4().hex)
     try:
         with open(local, "wb") as fh:
             _s3_client().download_fileobj(bucket, key, fh)
     except Exception as e:  # noqa: BLE001
+        shutil.rmtree(tmpdir, ignore_errors=True)  # don't leak the tempdir on failure
         logger.exception("MinIO fetch failed for %s/%s", bucket, key)
         raise HTTPException(status_code=502, detail="could not fetch object from storage") from e
     return local
@@ -403,7 +410,8 @@ async def _run_analysis(req: AudioAnalysisRequest) -> JSONResponse:
         fn = dispatch.get(req.analysis_type)
         if fn is None:
             raise HTTPException(status_code=400, detail=f"invalid analysis_type: {req.analysis_type}")
-        result = fn()
+        # Offload the (blocking) GPU/CPU inference off the event loop.
+        result = await asyncio.to_thread(fn)
         if isinstance(result, dict):
             if req.video_id:
                 result["video_id"] = req.video_id
@@ -414,8 +422,6 @@ async def _run_analysis(req: AudioAnalysisRequest) -> JSONResponse:
         return JSONResponse(content=result)
     finally:
         if cleanup_dir:
-            import shutil
-
             shutil.rmtree(cleanup_dir, ignore_errors=True)
 
 
