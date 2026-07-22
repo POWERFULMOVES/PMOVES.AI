@@ -62,7 +62,7 @@ YOLO_MODEL = os.environ.get("YOLO_MODEL", "yolov8n.pt")
 DETECTION_CONFIDENCE = float(os.environ.get("DETECTION_CONFIDENCE", os.environ.get("YOLO_CONFIDENCE", "0.25")))
 FRAME_SAMPLE_RATE = int(os.environ.get("FRAME_SAMPLE_RATE", "5"))
 MAX_FRAMES = int(os.environ.get("MEDIA_VIDEO_MAX_FRAMES", "600"))  # cap work per request
-MEDIA_VIDEO_SUBJECT = os.environ.get("MEDIA_VIDEO_SUBJECT", "media.video.analyzed.v1")
+MEDIA_VIDEO_SUBJECT = os.environ.get("MEDIA_VIDEO_SUBJECT", "analysis.video.v1")
 # Client-provided file paths must resolve within this dir (py/path-injection guard).
 MEDIA_INPUT_DIR = os.environ.get("MEDIA_INPUT_DIR", "/data")
 # MinIO/S3 (env wired in the compose media-video block) — mirrors ffmpeg-whisper s3_client().
@@ -246,6 +246,13 @@ def _startup() -> None:
 
 async def _maybe_publish(result: Dict[str, Any]) -> None:
     if not NATS_URL:
+        return
+    # analysis.video.v1 is the registered subject (contracts/topics.json). Its schema
+    # (contracts/schemas/analysis/video.v1.schema.json) is referenced there but not yet
+    # authored, so we can only enforce that the payload is a JSON object for now; skip a
+    # non-dict result rather than emit a malformed message to the registered subject.
+    if not isinstance(result, dict):
+        logger.warning("skipping %s publish: payload is not a JSON object", MEDIA_VIDEO_SUBJECT)
         return
     try:
         import json
