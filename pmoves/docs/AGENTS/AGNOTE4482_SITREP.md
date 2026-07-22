@@ -40,10 +40,10 @@ Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
 **What it was**: the "CF Pages is a canvas PMOVES agents paint on" reframe (DARKXSIDE, 2026-07-15). Every community PMOVES visits gets a living, A2UI-rendered, agent-composed CF Pages tenant. Substrate: HTML5 Web Components (no framework, framework-agnostic). The review-trim cycle is operator-gated: every thread becomes a LEARNINGS.md entry before any code moves.
 
 **Where the work is on main**:
-- **PR #2132** (5,509 additions, 65 files) — A2UI v0.1 + Fordham Hill tenant: spec + 7 components (`<pm-space-agent-card>` `<pm-project-card>` `<pm-metric-tile>` `<pm-timeline>` `<pm-voice-clip>` `<pm-image>` `<pm-quote-block>`) + `compose_tenant_page()` Python tool (19/19 tests) + Fordham Hill tenant page live
+- **PR #2132** (5,509 additions, 65 files) — A2UI v0.1 + Fordham Hill tenant: spec + 7 components (`<pm-space-agent-card>` `<pm-project-card>` `<pm-metric-tile>` `<pm-timeline>` `<pm-voice-clip>` `<pm-image>` `<pm-quote-block>`) + `compose_tenant_page()` Python tool (19/19 tests) + Fordham Hill tenant page composed and ready to deploy (CF Pages deploy not yet run — operator call)
 - **PR #2133** (1,056 additions, 18 files) — A2UI v0.2 design: `<pm-haptic>` v0.1 + rev-3 spec reconciliation of the v0.2 ballot contract (squash-merged as #2157)
-- **PR #2134** (3,046 additions, 34 files) — A2UI v0.2 implementation: `<pm-toast>` + `<pm-ballot>` (stateful, CHIT-signed receipts, nonce-commitment per rev-3 §5.4) + St. Maarten tenant (2nd) + v0.2 event wire + CF Pages deploy target + review-style scaffolding (LEARNINGS template + a2ui trail hook + meta-doc)
-- **PR manifest**: `pmoves/docs/logs/pr_open/pr_manifest_2026-07-15.json`
+- **PR #2134** (3,046 additions, 34 files) — A2UI v0.2 implementation: `<pm-toast>` + `<pm-ballot>` (stateful, unsigned demo receipts — `chit-stub:` placeholder signature, nonce-commitment still TODO per rev-3 §5.4) + St. Maarten tenant (2nd) + v0.2 event wire + CF Pages deploy target + review-style scaffolding (LEARNINGS template + a2ui trail hook + meta-doc)
+- **PR closeout record**: `pmoves/docs/logs/pr_open/PR_closeout_a2ui.body.md`
 - **Trim LEARNINGS** (per-PR, written by 5090-CLAUDE): `pmoves/docs/logs/pr_trim_213{2,3,4}_LEARNINGS.md` (9 + 9 + 6 entries; four-bucket structure: missed-signal / fix-pattern / wrong-suggestion / already-addressed)
 - **A2UI v0.1 spec**: `pmoves/contracts/a2ui-v0.1.md`
 - **A2UI v0.2 ballot spec (rev-3)**: `pmoves/contracts/a2ui-v0.2-ballot.md`
