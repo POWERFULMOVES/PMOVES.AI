@@ -2,10 +2,10 @@
 
 **Status:** DRAFT spec — nothing deployed. Review before building.
 **Author:** 4090-claude · 2026-06-20
-**Goal:** stand up `PMOVES-BoTZ-gateway` (fork of `microsoft/mcp-gateway`, .NET, port 8052) as the **host-reachable unified MCP front** that routes to internal-tier MCP backends (Cipher, Hi-RAG, the 5 observability MCPs). This is also the *only* correct way for the host-side Claude Code MCP client to reach Cipher, since `pmoves_*` are `internal: true`.
+**Goal:** stand up `PMOVES-BotZ-gateway` (fork of `microsoft/mcp-gateway`, .NET, port 8052) as the **host-reachable unified MCP front** that routes to internal-tier MCP backends (Cipher, Hi-RAG, the 5 observability MCPs). This is also the *only* correct way for the host-side Claude Code MCP client to reach Cipher, since `pmoves_*` are `internal: true`.
 
 ## Disambiguation (important)
-- **`PMOVES-BoTZ-gateway/`** (submodule, .NET, :8052, `microsoft/mcp-gateway` fork) — the **MCP reverse-proxy** with `/adapters` control plane. ← THIS is what we deploy.
+- **`PMOVES-BotZ-gateway/`** (submodule, .NET, :8052, `microsoft/mcp-gateway` fork) — the **MCP reverse-proxy** with `/adapters` control plane. ← THIS is what we deploy.
 - **`services/botz-gateway/`** (in-repo Python, :8102, "bot mgmt + Geometry BUS", `make up-bots`) — a *different* service. Not the MCP gateway. Leave as-is.
 
 ## The central constraint
@@ -15,13 +15,13 @@
 
 ## Phase A — Deploy the gateway as a compose service
 
-Add a `botz-mcp-gateway` service (own overlay `docker-compose.botz-mcp.yml`, or into `docker-compose.agents.yml`). Sketch (verify .NET build specifics against `PMOVES-BoTZ-gateway/Dockerfile` + `docker-compose.pmoves.yml` template + `PMOVES.AI_INTEGRATION.md`):
+Add a `botz-mcp-gateway` service (own overlay `docker-compose.botz-mcp.yml`, or into `docker-compose.agents.yml`). Sketch (verify .NET build specifics against `PMOVES-BotZ-gateway/Dockerfile` + `docker-compose.pmoves.yml` template + `PMOVES.AI_INTEGRATION.md`):
 
 ```yaml
 services:
   botz-mcp-gateway:
     build:
-      context: ../PMOVES-BoTZ-gateway
+      context: ../PMOVES-BotZ-gateway
       dockerfile: Dockerfile            # confirm path (dotnet/ subdir?)
     image: ${BOTZ_MCP_GATEWAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-botz-mcp-gateway:pmoves-latest}
     environment:
@@ -46,7 +46,7 @@ networks:
 
 ## Phase B — Register adapters (control plane)
 
-Once `:8052/healthz` is green, register one adapter per backend (persist in `PMOVES-BoTZ-gateway/deployment/` or a boot seed so they survive restart):
+Once `:8052/healthz` is green, register one adapter per backend (persist in `PMOVES-BotZ-gateway/deployment/` or a boot seed so they survive restart):
 
 | Adapter | Backend (reachable over pmoves_app) | Transport |
 |---|---|---|
@@ -59,7 +59,7 @@ Once `:8052/healthz` is green, register one adapter per backend (persist in `PMO
 | `tensorzero` | `…mcp_tensorzero` | stdio |
 | `jcodemunch` | PMOVES-jcodemunch-mcp (after onboarding) | per its README |
 
-`curl -X POST http://localhost:8052/adapters -H "Authorization: Bearer $BOTZ_GATEWAY_TOKEN" -d '{"name":"cipher","transport":"sse","url":"http://cipher-api:8105/mcp/sse"}'` (confirm exact schema against the gateway's OpenAPI in `PMOVES-BoTZ-gateway/openapi/`).
+`curl -X POST http://localhost:8052/adapters -H "Authorization: Bearer $BOTZ_GATEWAY_TOKEN" -d '{"name":"cipher","transport":"sse","url":"http://cipher-api:8105/mcp/sse"}'` (confirm exact schema against the gateway's OpenAPI in `PMOVES-BotZ-gateway/openapi/`).
 
 ## Phase C — Repoint clients to the gateway
 
@@ -72,7 +72,7 @@ Once `:8052/healthz` is green, register one adapter per backend (persist in `PMO
 - This is also the **host-reachable Cipher fix** (task #3) and the 100+ tool/agent unlock.
 
 ## Verify-at-deploy unknowns (flagged)
-1. `PMOVES-BoTZ-gateway/Dockerfile` build path + .NET base image size (could be a slow pull — schedule when registry isn't throttled).
+1. `PMOVES-BotZ-gateway/Dockerfile` build path + .NET base image size (could be a slow pull — schedule when registry isn't throttled).
 2. Exact `/adapters` POST schema (read `openapi/`).
 3. Whether an existing non-internal pmoves network can be reused vs creating `pmoves_edge`.
 4. `BOTZ_GATEWAY_TOKEN` provisioning via the secrets pipeline (add to manifest → `secrets-funnel`).

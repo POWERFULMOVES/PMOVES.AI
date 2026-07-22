@@ -3,7 +3,7 @@
 **Status:** plan for review (read-only research). **Lane:** JuiceFS-core is **Z890's** (`AGNOTE4482PHI.t1.md:1058`, `[[project_supabase_multinode_juicefs_vision]]`) — coordinate, don't claim it. Claim the **media/publisher/Jellyfin** lane.
 
 ## Why now
-MinIO is **EOL (archived Feb 2026)** — already flagged in `pmoves/docker-compose.yml:1281`. JuiceFS replacing it is fixing an acknowledged problem, not a greenfield want. `POWERFULMOVES/PMOVES-juicefs` fork exists but is **not wired** (no submodule, no compose, no code refs). Design already specced in `research/SUPABASE_SYNC_HANDOFF_2026-06-09.md:58-86` + `pmoves/docs/architecture/FLEET_ACCESS_NATS_HUB.md`.
+MinIO is **EOL (archived Feb 2026)** — already flagged in `pmoves/docker-compose.yml:1281`. JuiceFS replacing it is fixing an acknowledged problem, not a greenfield want. **Post-review correction:** `pmoves/docker-compose.juicefs.yml` + `Makefile` targets (`up-juicefs`/`down-juicefs`/`juicefs-status`/`juicefs-smoke`) already stand up a JuiceFS S3-gateway PoC (Redis metadata + one-time format + gateway, S3-compatible drop-in for `minio:9000`) — that PoC exists and is profile-gated, but the `POWERFULMOVES/PMOVES-juicefs` fork itself is **not** a registered submodule and no application code (boto3/minio-SDK consumers) has been repointed to it yet. Treat this plan as building the migration from that existing PoC, not from a greenfield. Design already specced in `research/SUPABASE_SYNC_HANDOFF_2026-06-09.md:58-86` + `pmoves/docs/architecture/FLEET_ACCESS_NATS_HUB.md`.
 
 ## MinIO consumer map (blast radius)
 - **boto3 (already S3-generic, dual-read `S3_ENDPOINT`/`AWS_*`):** presign (`services/presign/api.py:22-40`), ffmpeg-whisper (`server.py:292-337`), pdf-ingest. → **env-only repoint.**

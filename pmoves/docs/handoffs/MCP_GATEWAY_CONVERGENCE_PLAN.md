@@ -19,7 +19,9 @@ Related: PR #1849 (serializer fix, merged-pending) · PR #1361 (5 observability 
 
 ## Phase 0 — Full refresh from main (unblocks ports + gateway-agent)
 
-**Goal:** the running stack rebuilds from current `main` so (a) `pmoves_*` networks are recreated → `:8105` publishes, and (b) `gateway-agent` rebuilds with the COPY fix.
+**Goal:** the running stack rebuilds from current `main` so (a) `gateway-agent` rebuilds with the COPY fix, and (b) any *config* drift affecting `:8105` is picked up.
+
+**Caveat (post-review correction):** `cipher-api` already declares `ports: ["${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"]` and joins the non-internal `pmoves_external` network (`pmoves/docker-compose.yml`) — the port-publish gap is **not** a missing network/port declaration. A plain `down`/`up` with no Compose change will not fix a host/Docker-Desktop port-publishing bug (see `[[project_internal_networks_block_port_publishing.md]]` / `[[project_z890_kong_bind_real_root_cause.md]]`). Diagnose the Docker Desktop version/daemon behavior first; only fall back to a full stack recreate as a blunt-instrument retry, not as the primary fix.
 
 **Risk:** the main checkout is on `fix/ghcr-matrix-paths-gate` with substantial uncommitted/working-tree changes (per session-start `git status`). "Update to main" must not lose that work.
 
@@ -55,6 +57,8 @@ Then **consolidate client config to a single gateway entry** (keep direct entrie
 ---
 
 ## Phase 2 — Onboard 3 repos (BLOCKERS first)
+
+**Post-review status update:** as of this doc landing in-repo, `pmoves-cipher-mcp`, `PMOVES-jcodemunch-mcp`, and `pmoves-hirag-mcp` are **already registered submodules** (`.gitmodules` + gitlinks present in `git ls-tree HEAD`). The onboarding steps below are the **historical plan as drafted 2026-06-20** — do not re-run `git rm --cached` / `git submodule add` against these paths; that would discard the existing gitlink/working tree and conflict with the current registration. If further reconciliation is needed, diff the existing submodule state against this plan's intent instead of re-onboarding from scratch.
 
 **Blockers (resolve before edits):**
 1. `fork-sync.yml` + fleet-fork-sync skill live only on `origin/feat/fleet-fork-sync-skill` → base onboarding edits there or merge it first.
