@@ -3488,7 +3488,10 @@ services:
     - GLM_API_KEY=${GLM_API_KEY:-local-disabled}
     - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
     - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
-    - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
+    # Kimi coding plan: canonical KIMI_CODING_API (manifest/tier key,
+    # 2026-07-24) feeds the gateway's legacy Moonshot env location; the old
+    # name still works as a direct fallback for nodes not yet re-funnelled.
+    - MOONSHOT_API_KEY=${KIMI_CODING_API:-${MOONSHOT_API_KEY:-local-disabled}}
     - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
     - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
     - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
