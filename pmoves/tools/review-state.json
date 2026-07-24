@@ -1,5 +1,5 @@
 {
-  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics.",
+  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics. Cron review-iter-poll was disarmed at 2026-07-24T13:45Z (no new threads for >30m, both PRs are in cycle-1-done state).",
   "schema_version": "1.0.0",
   "prs": {
     "POWERFULMOVES/PMOVES.AI#2199": {
@@ -11,9 +11,10 @@
       "last_cycle_commits": [
         "347f64c753"
       ],
-      "status": "cycle-1-done"
+      "status": "cycle-1-done",
+      "cron_status": "disarmed"
     },
-    "POWERFULMOVES/PMOVES-OpenRoom#1": {
+    "POWERMOVES/PMOVES-OpenRoom#1": {
       "last_seen_thread_ids": [
         "3645275855",
         "3645275861",
@@ -23,7 +24,8 @@
       "last_cycle_commits": [
         "c367e17"
       ],
-      "status": "cycle-1-done"
+      "status": "cycle-1-done",
+      "cron_status": "disarmed"
     }
   }
 }
