@@ -567,6 +567,15 @@ def test_openroom_session_endpoint_open_close_round_trip(
     captured: list[tuple[str, dict]] = []
 
     async def fake_publish(subject, payload, **kwargs):
+        # Exercise the real schema validation that the production
+        # publisher runs via envelope() -> validate_payload(). This way
+        # a payload that fails the schema (e.g. `room_stage: null` on
+        # close, which the p7.session.command.v1 schema rejects) makes
+        # the test fail instead of silently passing. Only the NATS I/O
+        # is stubbed out, not the validation layer.
+        from pmoves.services.common.events import validate_payload
+
+        validate_payload(subject, payload)
         captured.append((subject, payload))
         return None
 

@@ -20,9 +20,13 @@ Cron").
 
 For each of my open PRs (Mavis's author):
 1. List the PR's review threads (chatgpt-codex-connector, coderabbitai,
-   CodeQL, custom).
+   CodeQL, custom). Thread state is read via the GraphQL
+   `resolveReviewThread` mutation (not the REST `/pulls/:n/comments`
+   endpoint, which only returns comment bodies — it doesn't surface
+   whether a thread is currently resolved or not). For the un-resolved
+   set, diff against the last-seen IDs.
 2. Diff against the last-seen set (cached in this worktree's
-   `pmoves/tools/.review-state.json`).
+   `pmoves/tools/review-state.json`).
 3. If new threads exist, spawn a sub-agent (verifier) to classify
    each into one of:
    - **legit** (address in current branch)
@@ -54,7 +58,9 @@ For each of my open PRs (Mavis's author):
 
 - `pmoves/tools/review-iter-workflow.md` — this doc
 - `pmoves/tools/review-state.json` — last-seen thread IDs per PR
-  (regenerated each cycle)
+  (regenerated each cycle; this is the single source of truth — do
+  not create `pmoves/tools/.review-state.json` or any other cache
+  file, that splits the de-dup state)
 - `pmoves/tools/review-iter-prompt.md` — the prompt template given to
   the sub-agent on each cycle
 
@@ -74,13 +80,18 @@ The cron prompt itself is below.
 
 ## Cron prompt template
 
-```
+```text
 review-iter cycle N for Mavis.
 
 Step 1: read pmoves/tools/review-iter-workflow.md (the workflow doc).
 Step 2: read pmoves/tools/review-state.json (last-seen thread IDs).
 Step 3: list my open PRs via `gh pr list --author @me --state open`.
-Step 4: for each PR, list review threads via `gh api repos/:owner/:repo/pulls/:n/comments`.
+Step 4: for each PR, list review threads via
+        `gh api graphql -f query='...' pulls/.../reviewThreads` to
+        capture BOTH the comment bodies and the isResolved state.
+        (REST `pulls/:n/comments` only returns bodies; for resolution
+        state, the GraphQL `resolveReviewThread` mutation is the
+        canonical surface.)
 Step 5: diff against last-seen; for each new thread, classify per the
         5-bucket taxonomy (legit / already-fixed / owner / out-of-scope / pre-existing).
 Step 6: if no new threads, check the last cycle timestamp. If > 30 min

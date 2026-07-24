@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import pathlib
+from urllib.parse import quote
 
 DESIGN = pathlib.Path(__file__).resolve().parent
 ROOMS_DIR = DESIGN.parent / "config" / "rooms"
@@ -32,9 +33,11 @@ DEFAULT_OUT = DESIGN.parent.parent / "website" / "stage" / "data" / "public-room
 SURFACE_ID = "stage-rooms"
 
 # Where the Enter button navigates. Override via OPENROOM_BASE_URL env var
-# (e.g. http://localhost:5173 for local vite dev, https://openroom.pmoves.ai
-# for prod, http://staging.openroom.pmoves.ai for staging). The action carries
-# the room_id; stage.js reads OPENROOM_BASE_URL at runtime if available.
+# (e.g. http://localhost:3000 for local vite dev, https://openroom.pmoves.ai
+# for prod, http://staging.openroom.pmoves.ai for staging). The URL is baked
+# into the button's action context at generation time; stage.js only reads
+# ctx.url and never touches OPENROOM_BASE_URL itself, so re-pointing requires
+# regenerating stage-data (`make stage-data OPENROOM_BASE_URL=...`).
 OPENROOM_BASE_URL_DEFAULT = "https://openroom.pmoves.ai"
 
 
@@ -93,7 +96,11 @@ def _enter_button(prefix: str, room_id: str, base_url: str) -> list[dict]:
     """
     text_id = f"{prefix}_enter_text"
     button_id = f"{prefix}_enter_button"
-    target_url = f"{base_url.rstrip('/')}/?room={room_id}"
+    # URL-encode the room_id so any future id containing `&`, `#`, or
+    # spaces produces a well-formed query string rather than a malformed
+    # navigation URL. Today's ids are dots/hyphens only, but the catalog
+    # is operator-edited and we don't want a regression there.
+    target_url = f"{base_url.rstrip('/')}/?room={quote(room_id, safe='')}"
     return [
         _text(text_id, "Enter \u2192", "body"),
         {

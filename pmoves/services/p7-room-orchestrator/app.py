@@ -881,17 +881,24 @@ async def openroom_session_command(
         result = await transition_session(room_id, SessionState.ACTIVE, rollover=True)
     else:
         result = await transition_session(room_id, SessionState.ENDED)
-    payload = {
+    # Build the NATS command payload. `room_stage` is optional on the
+    # wire (Pydantic defaults it to None when not supplied); the schema
+    # forbids `null` so we omit the key entirely instead of sending
+    # `room_stage: null`. `envelope()` calls `validate_payload()` so a
+    # stray null would fail fast with a JSON-schema error.
+    payload: dict[str, Any] = {
         "v": "1.0.0",
         "room_id": room_id,
         "action": request.action,
         "agent_id": request.agent_id,
-        "alter": request.alter,
-        "room_stage": request.room_stage,
         "session_id": result.session_id,
         "timestamp": request.timestamp
         or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+    if request.alter is not None:
+        payload["alter"] = request.alter
+    if request.room_stage is not None:
+        payload["room_stage"] = request.room_stage
     await _publish_session_command(room_id, payload)
     return {
         "session_id": result.session_id,

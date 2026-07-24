@@ -1,20 +1,40 @@
 {
-  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics. Cron review-iter-poll was disarmed at 2026-07-24T13:45Z (no new threads for >30m, both PRs are in cycle-1-done state).",
+  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics. Cron review-iter-poll was re-armed 2026-07-24T15:10Z after review-iter-2 SHIPPED — both PRs in cycle-2-done state, all 14 cycle-2 threads resolved (2 P1 + 12 P2/nitpick; the Three-Body protocol thread is owner-bucketed and out of scope).",
   "schema_version": "1.0.0",
   "prs": {
     "POWERFULMOVES/PMOVES.AI#2199": {
       "last_seen_thread_ids": [
         "3645282021",
-        "3645282024"
+        "3645282024",
+        "3645826533",
+        "3645826549",
+        "3645826555",
+        "3645826559",
+        "3645826567",
+        "3645826571",
+        "3645826586",
+        "3645826595",
+        "3645826615",
+        "3645826625",
+        "3645826629"
       ],
-      "last_cycle_at": "2026-07-24T13:10:00Z",
+      "last_cycle_at": "2026-07-24T15:10:00Z",
       "last_cycle_commits": [
-        "347f64c753"
+        "ad217e5d03",
+        "ad1e3a7d3f"
       ],
-      "status": "cycle-1-done",
-      "cron_status": "disarmed"
+      "last_cycle_branch": "review-iter-2",
+      "status": "cycle-2-done",
+      "cron_status": "armed",
+      "owner_bucket_threads": {
+        "3645826541": {
+          "file": "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md:1351",
+          "title": "Apply the Three-Body protocol consistently to both records and automation",
+          "reason": "design / governance — requires operator to define the claim/TTL/CHIT artifact shape for the Three-Body handoff; out of scope for a review-iter cycle"
+        }
+      }
     },
-    "POWERMOVES/PMOVES-OpenRoom#1": {
+    "POWERFULMOVES/PMOVES-OpenRoom#1": {
       "last_seen_thread_ids": [
         "3645275855",
         "3645275861",
@@ -25,7 +45,8 @@
         "c367e17"
       ],
       "status": "cycle-1-done",
-      "cron_status": "disarmed"
+      "cron_status": "armed",
+      "note": "no new threads since review-iter-1 (cycle-2 doesn't touch the fork; the fork's gitlink promotion to PMOVES.AI-Edition-Hardened was an out-of-band push on the fork's remote, not a fork-branch commit)"
     }
   }
 }
