@@ -894,6 +894,15 @@ model = "chat_zai_glm52"
 weight = 0.8
 temperature = 0.1
 
+# Kimi coding plan (kimi-k2.7-code via Moonshot) — second operator
+# coding-plan suit for Agent Zero, alongside the GLM lane above.
+[functions.agent_zero.variants.hosted_kimi_code]
+type = "chat_completion"
+model = "chat_kimi_k2_7_code"
+weight = 0.6
+temperature = 0.2
+max_tokens = 8192
+
 # --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
 # SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
 # Nemotron tag verified via /api/tags (nemotron-3-super:120b). R9700 variants remain 0.0.
@@ -1121,6 +1130,14 @@ model = "chat_zai_glm52"
 weight = 0.7
 temperature = 0.2
 
+# Kimi coding plan suit for Archon work orders (pairs with GLM above).
+[functions.archon_work_orders.variants.hosted_kimi_code]
+type = "chat_completion"
+model = "chat_kimi_k2_7_code"
+weight = 0.6
+temperature = 0.2
+max_tokens = 8192
+
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]
 type = "chat"
@@ -1143,6 +1160,14 @@ type = "chat_completion"
 model = "chat_zai_glm52"
 weight = 0.6
 temperature = 0.1
+
+# Kimi coding plan suit for Archon code review (pairs with GLM above).
+[functions.archon_code_review.variants.hosted_kimi_code]
+type = "chat_completion"
+model = "chat_kimi_k2_7_code"
+weight = 0.6
+temperature = 0.2
+max_tokens = 8192
 
 # --- Hi-RAG Reranking Function -----------------------------------------------
 [functions.hirag_rerank]
