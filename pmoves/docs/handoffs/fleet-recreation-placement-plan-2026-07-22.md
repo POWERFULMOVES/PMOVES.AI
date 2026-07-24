@@ -1,11 +1,19 @@
 # Fleet Recreation & Service-Placement Plan — 2026-07-22
 
-Written after the Z890 node was brought current with main (was 773 behind — the root cause of the session's cipher-401 / "MCP missing" symptoms). This plans the remaining fleet: 4090 media/networking, creator pipeline, KVM recreation. Deferred execution — remote-node deploys are deliberate, per-node, operator-approved.
+Written after the Z890 node was reported reconciled to then-current main (it had
+been 773 commits behind, causing that session's cipher-401 / "MCP missing"
+symptoms). This plans the remaining fleet: 4090 media/networking, creator
+pipeline, and KVM recreation. Deferred execution — remote-node deploys are
+deliberate, per-node, operator-approved.
+
+> **Historical planning snapshot:** node revisions, health, and deployment
+> progress were reported on 2026-07-22. Verify every node live before using this
+> as an execution plan.
 
 ## Context
 
-- **Z890** is now on main (`checkout -B origin/main`): cipher-auth wired, full MCP program present, tokenism `:edge` deploying with the packaging fix applied (see `tokenism-pmoves-services-common-packaging-2026-07-22.md`) — pending rebuild/redeploy verification on Z890. Recreate of the rest of the Z890 stack: dry-run validates against the working env.
-- The **KVMs and other nodes are almost certainly behind main too** — the same currency check that fixed Z890 applies fleet-wide. The guarded catch-up per node: `git fetch origin`; check for uncommitted/unpushed local work; record a rollback ref (`git branch backup/<node>-pre-cutover`); then `git checkout -B <branch> origin/main` (preserving git-ignored env); regenerate tier files (`make secrets-funnel`); dry-run config; tiered recreate; roll back via the backup ref if recreate fails.
+- **Z890** was reported cut over to then-current main (`checkout -B origin/main`), with tokenism rebuild/redeploy still pending. Recheck its exact SHA, dirty state, MCP configuration, and running image before proceeding (see `tokenism-pmoves-services-common-packaging-2026-07-22.md`).
+- The **KVM and other node revisions were not verified by this document**. Apply the same currency check fleet-wide. The guarded catch-up per node: `git fetch origin`; check for uncommitted/unpushed local work; record a rollback ref (`git branch backup/<node>-pre-cutover`); then `git checkout -B <branch> origin/main` (preserving git-ignored env); regenerate tier files (`make secrets-funnel`); dry-run config; tiered recreate; roll back via the backup ref if recreate fails.
 
 ## Node → service placement (current vs intended)
 
@@ -44,7 +52,7 @@ Per-node, via `vps-deployer` (Hostinger MCP + Tailscale-SSH). For each KVM: (a) 
 
 ## Sequence recommendation
 
-1. Z890: rebuild/redeploy tokenism-simulator with the applied packaging fix + verify healthy; recreate the rest. ← in progress
+1. Z890: verify current SHA/state, then rebuild/redeploy tokenism-simulator with the packaging fix and verify healthy before considering any broader recreate.
 2. kvm4-2 currency (NATS bus health is fleet-critical).
 3. 4090 media/networking (Jellyfin).
 4. Creator pipeline (5090).

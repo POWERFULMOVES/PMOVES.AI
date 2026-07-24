@@ -1,7 +1,7 @@
 # Handoff — tokenism image: initialize `services.common` minimally (CHIT-signing boot fix)
 
 **Date:** 2026-07-22
-**Node:** Z890 (now on main)
+**Node:** Z890 (reported on main on 2026-07-22; reverify live)
 **Gated path:** `pmoves/services/tokenism-simulator/Dockerfile` (`dockerfile` Known-Road domain)
 **Purpose:** Provable Known-Road referent for a small image-build fix that completes the tokenism CHIT-signing packaging.
 
