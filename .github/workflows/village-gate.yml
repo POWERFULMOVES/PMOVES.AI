@@ -38,7 +38,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install gate dependencies
-        run: pip install --quiet pyyaml ruff
+        # The 1,100-violation ratchet was measured with Ruff 0.14.14
+        # (1,032 baseline; currently 1,040). Ruff 0.16 changed the unconfigured
+        # default rule surface and inflated the same tree to ~9,450 findings,
+        # making the budget nondeterministic. Bump the pin and ratchet together.
+        run: pip install --quiet pyyaml "ruff==0.14.14"
 
       - name: Run Village Gate
         run: |
