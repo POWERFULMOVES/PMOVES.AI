@@ -633,3 +633,15 @@ def test_openroom_session_endpoint_open_close_round_trip(
         headers=headers,
     )
     assert res.status_code == 400
+
+    # Re-entry after a close should NOT 409 (regression for the chatgpt-codex
+    # P1: the OpenRoom adapter may enter/leave/enter the same room; the
+    # ENDED -> ACTIVE transition needs rollover=True).
+    res_open2 = client.post(
+        "/api/p7/rooms/4090-field.room.control/session",
+        json={"action": "open", "agent_id": "DARKXSIDE"},
+        headers=headers,
+    )
+    assert res_open2.status_code == 200
+    body_open2 = res_open2.json()
+    assert body_open2["action"] == "open"

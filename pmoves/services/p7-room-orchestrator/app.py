@@ -872,7 +872,13 @@ async def openroom_session_command(
             detail=f"action must be 'open' or 'close', got {request.action!r}",
         )
     if request.action == "open":
-        result = await transition_session(room_id, SessionState.ACTIVE)
+        # Rollover=True: if a prior session is ENDED (e.g. from a previous
+        # open/close cycle on the same room), the state machine permits
+        # ENDED -> ACTIVE only with rollover. Without it, re-entry gets
+        # HTTP 409 (state-machine rejection). Mirrors the existing
+        # /api/v1/rooms/{id}/start path so the OpenRoom adapter can be
+        # entered/left/entered without a service restart.
+        result = await transition_session(room_id, SessionState.ACTIVE, rollover=True)
     else:
         result = await transition_session(room_id, SessionState.ENDED)
     payload = {
