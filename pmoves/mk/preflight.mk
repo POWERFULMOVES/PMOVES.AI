@@ -261,6 +261,31 @@ pr-trim: ## Full hedge trim cycle: analyze + resolve + trail sign
 	@$(MAKE) --no-print-directory pr-trim-resolve PR="$${PR:-0}" RESOLVE_ACTIONABLE="$${RESOLVE_ACTIONABLE:-}"
 	@$(MAKE) --no-print-directory sign-trail SUMMARY="PR Hedge Trim: trimmed PR #$${PR:-0}" AGENT="$${AGENT:-claude-opus}"
 
+pr-closeout-audit: ## Fail-closed closeout audit for an exact PR head (PR=N EXPECTED_HEAD=full-sha)
+	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
+	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
+	@$(PRECHECK_PY) tools/pr_closeout.py audit \
+		--pr "$$PR" \
+		--expected-head "$$EXPECTED_HEAD" \
+		--base "$${PR_CLOSEOUT_BASE:-main}" \
+		$${ADMIN_REVIEW_BYPASS:+--admin-review-bypass} \
+		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
+		$(ARGS)
+
+pr-closeout-merge: ## Audit + guarded admin squash merge (PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha')
+	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
+	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
+	@test -n "$${CONFIRM:-}" || { echo "ERROR: CONFIRM is required"; exit 2; }
+	@$(PRECHECK_PY) tools/pr_closeout.py merge \
+		--pr "$$PR" \
+		--expected-head "$$EXPECTED_HEAD" \
+		--base "$${PR_CLOSEOUT_BASE:-main}" \
+		--method "$${MERGE_METHOD:-squash}" \
+		--admin \
+		--confirm "$$CONFIRM" \
+		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
+		$(ARGS)
+
 floos-status: ## Show FlOO$ pairing status
 	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)
 

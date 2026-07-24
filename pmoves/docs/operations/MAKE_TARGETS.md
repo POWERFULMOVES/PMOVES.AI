@@ -256,6 +256,19 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Runs `pr-monitor` and CHIT-encodes the learnings markdown into:
     - `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
   - Use when review learnings need machine-parseable CHIT artifact handoff.
+- `make pr-closeout-audit PR=<number> EXPECTED_HEAD=<full-sha>`
+  - Runs the fail-closed final audit against live GitHub state.
+  - Blocks stale/behind/conflicting heads, drafts, unchecked PR-body tasks,
+    unresolved review threads, missing or non-green required checks, and
+    pending/failing Actions checks.
+  - Set `ADMIN_REVIEW_BYPASS=1` only for the documented self-authored CODEOWNER
+    deadlock. Explicit advisory exceptions use
+    `ALLOW_ADVISORY_FAILURE=<check-name>`.
+- `make pr-closeout-merge PR=<number> EXPECTED_HEAD=<full-sha> CONFIRM="MERGE #<number> @ <full-sha>"`
+  - Repeats the closeout audit and performs a SHA-pinned admin merge only after
+    every non-review gate passes.
+  - Defaults to squash; override with `MERGE_METHOD=rebase|merge`.
+  - Runbook: `pmoves/docs/operations/PR_CLOSEOUT.md`.
 - `make floos-status`
   - Shows FlOO$ pairing inventory/status from `pmoves/configs/skill-pairings.yaml`.
 - `make floos-pr-monitor-validate`
