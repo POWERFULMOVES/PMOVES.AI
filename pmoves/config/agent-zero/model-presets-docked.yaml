@@ -1,0 +1,46 @@
+# PMOVES model presets — DOCKED Agent Zero (Agent Zero 2.5 _model_config plugin)
+#
+# Deployed to /a0/usr/plugins/_model_config/presets.yaml (bind mount from
+# pmoves/data/agent-zero/model-config/). When this file exists in usr, the
+# plugin's bootstrap skips downloading the stock agent0ai/a0-presets
+# collection — which is exactly what happened on first 2.5 boot and left both
+# instances pointed at openrouter/gpt-5.6-terra instead of PMOVES routing.
+#
+# Chat/utility route through TensorZero's agent_zero function (GLM + Kimi
+# coding-plan suits weighted there — single seam, PR #2197). api_base is set
+# per-model because the fork registry's tensorzero provider default
+# (:3000/v1) is wrong — the OpenAI-compat surface is /openai/v1 (verified
+# live: /v1 404, /openai/v1 200).
+- name: Default
+  chat:
+    provider: tensorzero
+    name: tensorzero::function_name::agent_zero
+    api_base: http://tensorzero-gateway:3000/openai/v1
+    ctx_length: 128000
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs: {}
+  utility:
+    provider: tensorzero
+    name: tensorzero::function_name::agent_zero
+    api_base: http://tensorzero-gateway:3000/openai/v1
+    ctx_length: 128000
+    ctx_input: 0.7
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs: {}
+  embedding:
+    provider: tensorzero
+    # openai/ prefix REQUIRED here: A0's embed path hands this name straight
+    # to litellm without adding the provider prefix (unlike the chat/utility
+    # wrappers) — bare tensorzero::… fails with "LLM Provider NOT provided".
+    name: openai/tensorzero::embedding_model_name::qwen3_embedding_4b_local
+    api_base: http://tensorzero-gateway:3000/openai/v1
+    rl_requests: 0
+    rl_input: 0
+    kwargs: {}
