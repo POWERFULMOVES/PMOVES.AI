@@ -38,6 +38,11 @@ services:
     environment:
     # Supervisor listens on this port (inner AZ runs on :5000 internally)
     - PORT=8080
+    # The 2026-03 pmoves-agent-zero image defaults its readiness probe to
+    # 127.0.0.1:80 while the inner AZ here serves on :5000 — without this
+    # override the supervisor can NEVER see the inner come up, times out at
+    # 180s, and PID 1 exits: measured 368 restarts before diagnosis.
+    - AGENT_ZERO_API_BASE=http://127.0.0.1:5000
     - AGENT_FORM=DARKXSIDE
     - TOPOLOGY_MODE=standalone
     - DOCKED_MODE=false
