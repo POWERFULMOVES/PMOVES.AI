@@ -550,3 +550,86 @@ def test_http_control_authentication_is_fail_closed(monkeypatch: pytest.MonkeyPa
     with pytest.raises(HTTPException, match="Invalid P7 HTTP control credentials") as exc:
         p7.require_http_control("Bearer wrong")
     assert exc.value.status_code == 401
+
+
+def test_openroom_session_endpoint_open_close_round_trip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OpenRoom adapter lane (2026-07-24): POST /api/p7/rooms/{id}/session.
+
+    action=open binds a session, returns session_id, and emits a NATS command
+    on p7.nats.session. action=close ends the session and emits the matching
+    close command. Both calls must be authorized by the bearer token.
+    """
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(p7, "P7_CONTROL_TOKEN", "control-secret")
+    captured: list[tuple[str, dict]] = []
+
+    async def fake_publish(subject, payload, **kwargs):
+        captured.append((subject, payload))
+        return None
+
+    monkeypatch.setattr(p7.publisher, "publish", fake_publish)
+
+    client = TestClient(p7.app)
+    headers = {"Authorization": "Bearer control-secret"}
+
+    # action=open
+    res = client.post(
+        "/api/p7/rooms/4090-field.room.control/session",
+        json={
+            "action": "open",
+            "agent_id": "DARKXSIDE",
+            "alter": "4090-demo",
+            "room_stage": "rehearsal",
+        },
+        headers=headers,
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["action"] == "open"
+    assert body["room_id"] == "4090-field.room.control"
+    assert body["subject"] == "p7.nats.session.v1"
+    session_id = body["session_id"]
+    assert session_id
+    open_capture = [c for c in captured if c[0] == "p7.nats.session.v1"]
+    assert len(open_capture) == 1
+    assert open_capture[0][1]["action"] == "open"
+    assert open_capture[0][1]["session_id"] == session_id
+    assert open_capture[0][1]["agent_id"] == "DARKXSIDE"
+
+    # action=close
+    res = client.post(
+        "/api/p7/rooms/4090-field.room.control/session",
+        json={
+            "action": "close",
+            "agent_id": "DARKXSIDE",
+            "session_id": session_id,
+        },
+        headers=headers,
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["action"] == "close"
+    # Filter to just our session commands (skip the STARTED/ENDED/CHECKPOINT
+    # events emitted by the underlying state machine). Verify at least one
+    # close command was published.
+    close_captures = [c for c in captured if c[0] == "p7.nats.session.v1" and c[1].get("action") == "close"]
+    assert len(close_captures) >= 1
+    assert close_captures[0][1]["session_id"] == session_id
+
+    # No bearer = 401
+    res = client.post(
+        "/api/p7/rooms/4090-field.room.control/session",
+        json={"action": "open", "agent_id": "DARKXSIDE"},
+    )
+    assert res.status_code == 401
+
+    # Bad action = 400
+    res = client.post(
+        "/api/p7/rooms/4090-field.room.control/session",
+        json={"action": "rotate", "agent_id": "DARKXSIDE"},
+        headers=headers,
+    )
+    assert res.status_code == 400

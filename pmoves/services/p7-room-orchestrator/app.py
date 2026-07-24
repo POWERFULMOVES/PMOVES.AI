@@ -626,6 +626,20 @@ async def _transition_session(
     return session
 
 
+async def _publish_session_command(room_id: str, payload: dict[str, Any]) -> None:
+    """Best-effort publish of an OpenRoom session command on p7.nats.session.
+
+    Falls back to log-only if NATS is not configured. The downstream A2UI
+    bridge subscribes to p7.nats.session and forwards the event into the
+    WebSocket room envelope, so the desktop sees the same lifecycle facts
+    that the agent-side commands produce.
+    """
+    try:
+        await publisher.publish(NATS_COMMAND_SESSION_V1, payload)
+    except Exception as exc:  # defensive: publisher.publish already logs
+        LOG.warning("session command publish failed room=%s (%s)", room_id, exc)
+
+
 async def transition_stage(
     room_id: str,
     target: RoomStage,
@@ -738,6 +752,25 @@ class StageRequest(BaseModel):
     proof: ActivationProof | None = None
 
 
+class SessionCommandRequest(BaseModel):
+    """OpenRoom adapter session command (openroom-adapter lane, 2026-07-24).
+
+    The OpenRoom fork calls POST /api/p7/rooms/{id}/session on enter/leave with
+    this body. action=open binds a P7 session; action=close ends it. The
+    request is a thin wrapper that publishes a NATS command on
+    p7.nats.session (and persists a session row when Supabase is configured),
+    so the OpenRoom desktop composes against the same control plane that the
+    /api/v1/rooms/... endpoints expose.
+    """
+
+    action: str = Field(..., description='"open" or "close"')
+    agent_id: str = Field(..., min_length=1)
+    alter: str = ""
+    room_stage: str | None = None
+    timestamp: str | None = None
+    session_id: str | None = None  # present on close, echoes the open() return
+
+
 def require_http_control(
     authorization: Annotated[str | None, Header()] = None,
 ) -> None:
@@ -814,6 +847,54 @@ async def archive_session(
     _: Annotated[None, Depends(require_http_control)],
 ) -> dict[str, Any]:
     return (await transition_session(room_id, SessionState.ARCHIVED)).to_dict()
+
+
+@app.post("/api/p7/rooms/{room_id}/session")
+async def openroom_session_command(
+    room_id: str,
+    request: SessionCommandRequest,
+    _: Annotated[None, Depends(require_http_control)],
+) -> dict[str, Any]:
+    """OpenRoom adapter: bind / unbind a P7 session (openroom-adapter lane).
+
+    The OpenRoom fork (PMOVES-OpenRoom) loads a room manifest on
+    `?room=<id>` and calls this endpoint on enter/leave. action=open
+    publishes a `p7.nats.session` command + persists a session row
+    (when Supabase is configured); action=close ends the session.
+
+    Returns {session_id, action, room_id, subject, persisted}. The session_id
+    is a UUID the adapter echoes back in the close() call so the session
+    can be matched across opens/closes.
+    """
+    if request.action not in ("open", "close"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"action must be 'open' or 'close', got {request.action!r}",
+        )
+    if request.action == "open":
+        result = await transition_session(room_id, SessionState.ACTIVE)
+    else:
+        result = await transition_session(room_id, SessionState.ENDED)
+    payload = {
+        "v": "1.0.0",
+        "room_id": room_id,
+        "action": request.action,
+        "agent_id": request.agent_id,
+        "alter": request.alter,
+        "room_stage": request.room_stage,
+        "session_id": result.session_id,
+        "timestamp": request.timestamp
+        or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    await _publish_session_command(room_id, payload)
+    return {
+        "session_id": result.session_id,
+        "action": request.action,
+        "room_id": room_id,
+        "subject": NATS_COMMAND_SESSION_V1,
+        "stage": result.stage.value,
+        "state": result.state.value,
+    }
 
 
 @app.post("/api/v1/rooms/{room_id}/stage")
