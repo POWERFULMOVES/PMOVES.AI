@@ -11,6 +11,12 @@ FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS upstream
 ARG AGENT_ZERO_REPO=https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
 ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
 
+# Cache-bust the clone when the branch tip moves: ADD of this ref URL
+# re-fetches whenever the branch head changes, invalidating the clone layer
+# below. Without it a rebuild cache-hits the old clone and silently ships a
+# stale tree (issue #2202: post-v2.5 rebuild ran the June 5f38d70 tree).
+ADD https://api.github.com/repos/POWERFULMOVES/PMOVES-Agent-Zero/git/ref/heads/${AGENT_ZERO_REF} /tmp/agent-zero-ref.json
+
 # Clone PMOVES fork of Agent Zero (matches submodule branch)
 RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
       ${AGENT_ZERO_REPO} /git/agent-zero
@@ -38,7 +44,7 @@ COPY services/agent-zero/upstream-constraints.txt /tmp/upstream-constraints.txt
 # If re-enabling, also add huggingface.co:443 to integrations-ghcr.yml egress.
 RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements.txt \
-    && uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements2.txt
+    && if [ -f /git/agent-zero/requirements2.txt ]; then uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements2.txt; fi
 
 # ── Stage 2: PMOVES overlay ────────────────────────────────────
 FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS app
