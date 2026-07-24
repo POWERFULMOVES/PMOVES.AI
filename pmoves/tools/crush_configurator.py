@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -103,6 +104,92 @@ ZAI_SPEC = ProviderSpec(
     default_large="glm-5.2",
     default_small="glm-5-turbo",
 )
+
+
+
+# Ollama (local) provider — used on SPARK and other local-inference nodes when
+# TensorZero is unavailable. Model list is discovered dynamically.
+OLLAMA_SPEC = ProviderSpec(
+    id="ollama",
+    name="Ollama",
+    base_url="http://localhost:11434/v1",
+    type="openai",
+    env_var=None,
+    models=[],
+    default_large=None,
+    default_small=None,
+)
+
+
+
+def _fetch_ollama_models(base_url: str = "http://localhost:11434") -> List[ModelSpec]:
+    """Fetch available chat models from the local Ollama API.
+
+    Queries Ollama's /api/tags endpoint to discover locally pulled models. Only
+    models that advertise the 'completion' capability are included, so embedding
+    models are not surfaced as chat candidates. Roles are inferred from the model's
+    reported parameter_size (>= 30B or 'T' units → large), falling back to naming
+    patterns only when the size field is missing.
+    """
+    import re
+    import urllib.request
+    import urllib.error
+
+    try:
+        with urllib.request.urlopen(f"{base_url.rstrip('/')}/api/tags", timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            models = []
+            for model in data.get("models", []):
+                model_id = model.get("name", "")
+                if not model_id:
+                    continue
+                capabilities = model.get("capabilities", [])
+                if "completion" not in capabilities:
+                    continue
+                role = "small"
+                details = model.get("details") or {}
+                param_size = details.get("parameter_size", "")
+                match = re.match(r"([\d.]+)\s*([A-Za-z]+)", str(param_size))
+                if match:
+                    value = float(match.group(1))
+                    unit = match.group(2).upper()
+                    if unit == "T" or (unit == "B" and value >= 30.0):
+                        role = "large"
+                else:
+                    # Fallback to naming heuristics when Ollama omits size metadata
+                    name_lower = model_id.lower()
+                    if any(
+                        x in name_lower
+                        for x in ["32b", "70b", "120b", "claude", "gpt-4o", "glm-5", "glm-4.7", "nemotron", "hermes3:70b"]
+                    ):
+                        role = "large"
+                models.append(ModelSpec(id=model_id, name=model_id, role=role))
+            return models
+    except (urllib.error.URLError, TimeoutError):
+        return []
+
+
+
+def _detect_node(env_cache: Dict[Path, Dict[str, str]]) -> str:
+    """Detect whether this node is the DGX Spark sidecar.
+
+    Returns 'spark' when the environment (SPARK_CHAT_MODEL, SPARK_PORT) or the
+    hostname (HOSTNAME, NODE_NAME, platform.node()) indicates 'pmoves-spark'.
+    Otherwise returns 'fleet' for fleet/Tailscale defaults.
+    """
+    if any(
+        (_lookup_env(var, env_cache) or os.getenv(var))
+        for var in ("SPARK_CHAT_MODEL", "SPARK_PORT")
+    ):
+        return "spark"
+    for var in ("HOSTNAME", "NODE_NAME"):
+        val = os.getenv(var, "")
+        if val and "pmoves-spark" in val.lower():
+            return "spark"
+    if "pmoves-spark" in platform.node().lower():
+        return "spark"
+    return "fleet"
+
 
 
 def _fetch_tensorzero_models() -> List[ModelSpec]:
@@ -349,14 +436,8 @@ MCP_SPECS: List[MCPSpec] = [
 ]
 
 
-def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str, List[ModelSpec]]) -> Dict[str, Dict[str, str]]:
-    """Select models — TensorZero primary, Z.AI direct fallback.
-
-    TensorZero routes internally to all backends. When TensorZero is
-    unavailable, Z.AI Coding Plan (GLM-5.2 / GLM-5-Turbo) serves as
-    the direct fallback so `crush setup` produces a working config even
-    on nodes without the gateway running.
-    """
+def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str, List[ModelSpec]], node: str) -> Dict[str, Dict[str, str]]:
+    """Select models — TensorZero primary, local Ollama on Spark, Z.AI direct fallback."""
     # TensorZero is the preferred gateway
     if "tensorzero" in available:
         tz_spec = available["tensorzero"]
@@ -365,15 +446,16 @@ def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str
             "small": {"provider": "tensorzero", "model": tz_spec.default_small or "qwen3_8b_local"},
         }
 
-    # Z.AI direct fallback when TensorZero is absent
-    if "zai" in available:
-        zai_spec = available["zai"]
+    # On Spark, local Ollama is the preferred fallback over cloud providers
+    if node == "spark" and "ollama" in available:
+        ollama_spec = available["ollama"]
+        fallback_model = ollama_spec.models[0].id if ollama_spec.models else ""
         return {
-            "large": {"provider": "zai", "model": zai_spec.default_large or "glm-5.2"},
-            "small": {"provider": "zai", "model": zai_spec.default_small or "glm-5-turbo"},
+            "large": {"provider": "ollama", "model": ollama_spec.default_large or fallback_model},
+            "small": {"provider": "ollama", "model": ollama_spec.default_small or fallback_model},
         }
 
-    # Last resort: scan remaining providers
+    # Z.AI direct fallback when TensorZero is absent
     large: Optional[Tuple[str, str]] = None
     small: Optional[Tuple[str, str]] = None
     for provider_id, provider in available.items():
@@ -396,14 +478,20 @@ def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str
 
 
 def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
-    """Build Crush config with TensorZero as the ONLY provider.
+    """Build Crush config with TensorZero as the preferred provider.
 
     This function dynamically discovers all available models from the TensorZero
     Gateway API, eliminating hardcoded model lists. TensorZero serves as the
     single source of truth for model routing and observability.
 
+    The configuration is node-aware: on the DGX Spark sidecar, local Ollama is
+    used as the fallback provider and the generated MCP server URLs point to the
+    local Cipher and Agent Zero sidecar endpoints instead of the fleet Tailscale
+    hosts.
+
     The configuration includes:
-    - TensorZero as the sole provider (all models route through it)
+    - TensorZero as the preferred gateway (all models route through it when reachable)
+    - Ollama local fallback on SPARK when TensorZero is unavailable
     - MCP servers (pmoves-mini, docker, n8n) with auto-detection
     - Context paths for PMOVES.AI documentation
     - LSP servers for Python, TypeScript, and Go
@@ -413,7 +501,8 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         A tuple of:
             - Dict[str, object]: Complete Crush configuration ready for JSON serialization
             - Dict[str, ProviderSpec]: Mapping of provider IDs to ProviderSpec objects
-                for runtime inspection. Keys: {"tensorzero"}
+                for runtime inspection. Keys vary by node (e.g. {"tensorzero"} or
+                {"ollama"}).
 
     Raises:
         urllib.error.URLError: If TensorZero API is unreachable during model discovery.
@@ -422,7 +511,7 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
 
     Example:
         >>> config, providers = build_config()
-        >>> print(f"Found {len(providers['tensorzero'].models)} models")
+        >>> print(f"Found {len(providers.get('tensorzero', providers['ollama']).models)} models")
         >>> with open("~/.config/crush/crush.json", "w") as f:
         ...     json.dump(config, f, indent=2)
 
@@ -430,8 +519,10 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         - MCP servers are automatically disabled if required commands or env vars are missing
         - Context paths are filtered to only include files that exist
         - Fallback models used if TensorZero unavailable: qwen3_8b, claude-sonnet-4-5
+        - On SPARK, Ollama models are discovered from the local /api/tags endpoint
     """
     env_cache = {path: _load_env_file(path) for path in ENV_CANDIDATES}
+    node = _detect_node(env_cache)
 
     base_url_env = _lookup_env("TENSORZERO_BASE_URL", env_cache) or "http://localhost:3030"
     base_url = f"{base_url_env.rstrip('/')}/v1"
@@ -497,11 +588,53 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         available_specs["zai"] = zai_spec
         provider_models["zai"] = zai_spec.models
 
-    models_config = _select_models(available_specs, provider_models)
+    # On the DGX Spark sidecar, prefer local Ollama over a remote TensorZero gateway.
+    # Only add Ollama as a provider when we can actually discover its pulled models
+    # from the local /api/tags endpoint — no hardcoded model tags.
+    if node == "spark":
+        raw_ollama_base = (
+            _lookup_env("OLLAMA_SPARK_BASE_URL", env_cache)
+            or _lookup_env("SPARK_CHAT_API_BASE", env_cache)
+            or "http://localhost:11434"
+        )
+        ollama_base_url = f"{raw_ollama_base.rstrip('/')}/v1"
+        ollama_models = _fetch_ollama_models(raw_ollama_base)
+
+        if ollama_models:
+            ollama_large = [m for m in ollama_models if m.role == "large"]
+            ollama_small = [m for m in ollama_models if m.role == "small"]
+            ollama_default_large = ollama_large[0].id if ollama_large else ollama_models[0].id
+            ollama_default_small = ollama_small[0].id if ollama_small else ollama_default_large
+
+            providers_dict["ollama"] = {
+                "name": "Ollama",
+                "base_url": ollama_base_url,
+                "type": "openai",
+                "models": [model.to_dict() for model in ollama_models],
+            }
+            ollama_spec = ProviderSpec(
+                id="ollama",
+                name="Ollama",
+                base_url=ollama_base_url,
+                type="openai",
+                env_var=None,
+                models=ollama_models,
+                default_large=ollama_default_large,
+                default_small=ollama_default_small,
+            )
+            available_specs["ollama"] = ollama_spec
+            provider_models["ollama"] = ollama_models
+
+    models_config = _select_models(available_specs, provider_models, node)
 
     mcp_config: Dict[str, Dict[str, object]] = {}
     for spec in MCP_SPECS:
         config = dict(spec.config)
+        if node == "spark":
+            if spec.key in ("pmoves-cipher", "pmoves-cipher-local"):
+                config["url"] = "http://localhost:8105/mcp/sse"
+            elif spec.key == "agent-zero":
+                config["url"] = "http://localhost:8093/mcp"
         disabled = False
         if spec.required_commands and not all(shutil.which(cmd) for cmd in spec.required_commands):
             disabled = True
