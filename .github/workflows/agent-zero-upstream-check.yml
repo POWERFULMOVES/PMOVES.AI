@@ -16,7 +16,7 @@ permissions:
 
 env:
   UPSTREAM_REPO: agent0ai/agent-zero
-  VERSION_FILE: pmoves/services/agent-zero/.a0-upstream-version
+  DOCKERFILE: pmoves/services/agent-zero/Dockerfile.multiarch
 
 jobs:
   check-upstream:
@@ -49,12 +49,38 @@ jobs:
       - name: Read current pinned version
         id: read_version
         run: |
-          # VERSION_FILE is a runtime state file (gitignored, see .gitignore) so it
-          # is absent on a fresh checkout. Default to "none" so a missing pin reads
-          # as "not current" and the compare step opens/reuses a PR instead of the
-          # job crashing with `cat: No such file or directory`.
-          CURRENT_TAG=$(cat "${{ env.VERSION_FILE }}" 2>/dev/null || echo "none")
+          # Derive the current pin from the Dockerfile ARG — it's committed to
+          # git, unlike the old .a0-upstream-version state file (gitignored, so
+          # it's always absent on a fresh Actions checkout and `git add -A` in
+          # the create-pr job silently drops any write to it too).
+          # AGENT_ZERO_REF is normally a PMOVES fork branch name in the form
+          # PMOVES.AI-Edition-<version>; extract <version> when present,
+          # otherwise treat the ref itself as the version (covers the
+          # transitional state mid-bump-PR where AGENT_ZERO_REF holds a raw
+          # upstream tag pending fork sync).
+          CURRENT_REF=$(grep -oP '^ARG AGENT_ZERO_REF=\K.*' "${{ env.DOCKERFILE }}")
+          # Prefer an explicit committed version marker when present. The fork's
+          # hardened branch (e.g. PMOVES.AI-Edition-Hardened) is a rolling branch
+          # whose name carries no version, so deriving the version from the ref
+          # alone would capture a non-version token ("Hardened") and never match a
+          # real upstream tag — opening a bump PR on every run.
+          PINNED_VER=$(grep -oP '^ARG AGENT_ZERO_UPSTREAM_VERSION=\K.*' "${{ env.DOCKERFILE }}" || true)
+          if [[ "${CURRENT_REF}" =~ ^PMOVES\.AI-Edition-(.+)$ ]]; then
+            CURRENT_TAG="${BASH_REMATCH[1]}"
+          else
+            CURRENT_TAG="${CURRENT_REF}"
+          fi
+          # If the ref-derived tag isn't version-shaped, fall back to the marker.
+          if [[ ! "${CURRENT_TAG}" =~ ^v?[0-9] ]] && [[ -n "${PINNED_VER}" ]]; then
+            CURRENT_TAG="${PINNED_VER}"
+          fi
           echo "CURRENT_TAG=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+          # Whether we have a real version to compare against at all.
+          if [[ "${CURRENT_TAG}" =~ ^v?[0-9] ]]; then
+            echo "CURRENT_IS_VERSION=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "CURRENT_IS_VERSION=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Compare versions
         id: compare
@@ -64,7 +90,13 @@ jobs:
           NEW_TAG="${{ steps.detect.outputs.tag }}"
           NEW_NO_V="${NEW_TAG#v}"
 
-          if [ "${CURRENT_NO_V}" = "${NEW_NO_V}" ]; then
+          if [ "${{ steps.read_version.outputs.CURRENT_IS_VERSION }}" != "true" ]; then
+            # No comparable version pin (rolling branch ref, no AGENT_ZERO_UPSTREAM_VERSION
+            # marker). Don't spam bump PRs — report current and tell the operator how
+            # to opt into auto-bump.
+            echo "UPSTREAM_CURRENT=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::AGENT_ZERO_REF pins a non-version ref ('${CURRENT_NO_V}'); add 'ARG AGENT_ZERO_UPSTREAM_VERSION=<tag>' to ${{ env.DOCKERFILE }} to enable auto-bump comparison."
+          elif [ "${CURRENT_NO_V}" = "${NEW_NO_V}" ]; then
             echo "UPSTREAM_CURRENT=true" >> "$GITHUB_OUTPUT"
             echo "Versions match: ${CURRENT_NO_V}"
           else
@@ -116,13 +148,12 @@ jobs:
             echo "PYREQWEST_PRESENT=false" >> "$GITHUB_ENV"
           fi
 
-      - name: Update version pin file
+      - name: Update Dockerfile upstream pins
         run: |
-          echo "${{ needs.check-upstream.outputs.new_tag }}" > "${{ env.VERSION_FILE }}"
-
-      - name: Update Dockerfile AGENT_ZERO_REF
-        run: |
-          sed -i 's/^ARG AGENT_ZERO_REF=.*/ARG AGENT_ZERO_REF=${{ needs.check-upstream.outputs.new_tag }}/' pmoves/services/agent-zero/Dockerfile.multiarch
+          sed -i 's/^ARG AGENT_ZERO_REF=.*/ARG AGENT_ZERO_REF=${{ needs.check-upstream.outputs.new_tag }}/' "${{ env.DOCKERFILE }}"
+          if grep -q '^ARG AGENT_ZERO_UPSTREAM_VERSION=' "${{ env.DOCKERFILE }}"; then
+            sed -i 's/^ARG AGENT_ZERO_UPSTREAM_VERSION=.*/ARG AGENT_ZERO_UPSTREAM_VERSION=${{ needs.check-upstream.outputs.new_tag }}/' "${{ env.DOCKERFILE }}"
+          fi
 
       - name: Update upstream-constraints.txt if needed
         run: |
@@ -169,7 +200,6 @@ jobs:
 
           ### What this PR does
           - Bumps `AGENT_ZERO_REF` in `Dockerfile.multiarch` to `${{ needs.check-upstream.outputs.new_tag }}`
-          - Updates `.a0-upstream-version` pin file
           - Updates `upstream-constraints.txt` if transitive dep pins needed
 
           ### ⚠️ Fork Sync Required
