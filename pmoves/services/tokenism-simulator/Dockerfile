@@ -39,16 +39,12 @@ COPY tools/__init__.py /app/pmoves/tools/__init__.py
 COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
 COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
 
-# services/common/env.py — CHIT passphrase + secret helpers (imported as services.common.env)
-RUN mkdir -p /app/services/common
-COPY services/common/__init__.py /app/services/common/__init__.py
+# services/common/env.py — CHIT passphrase + secret helpers.
+# Keep this partial package initializer empty: the repository initializer imports
+# modules that are intentionally not bundled in this narrow service image.
+RUN mkdir -p /app/services/common \
+    && printf '' > /app/services/common/__init__.py
 COPY services/common/env.py /app/services/common/env.py
-
-# pmoves.services.common.env — fallback import path (chit_encoder tries services.common.env first, falls back to this spelling on ImportError)
-RUN mkdir -p /app/pmoves/services/common \
-    && printf '' > /app/pmoves/services/__init__.py \
-    && printf '' > /app/pmoves/services/common/__init__.py
-COPY services/common/env.py /app/pmoves/services/common/env.py
 
 # Create non-root user for PMOVES hardening
 RUN useradd -m -u 1001 pmoves && \
