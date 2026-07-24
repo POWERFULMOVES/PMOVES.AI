@@ -18,8 +18,9 @@ A PR is closeout-ready only when all of the following are true:
    example is a rate-limited `CodeRabbit` status after its actual threads have
    already been audited.
 8. `CHANGES_REQUESTED` always blocks. Admin mode may bypass only the otherwise
-   unsatisfiable self-authored CODEOWNER approval; it does not bypass any other
-   gate above.
+   unsatisfiable self-authored CODEOWNER approval, and only when the live PR
+   author matches the explicitly expected admin author. It does not bypass any
+   other gate above.
 
 `pmoves/tools/pr_closeout.py` is the executable contract. It audits live GitHub
 state immediately before merge and pins the merge to the full reviewed head SHA.
@@ -64,6 +65,7 @@ the reconciled head and wait for the fresh check suite. Never close out a
 ```bash
 HEAD_SHA="$(gh pr view 2196 --json headRefOid --jq .headRefOid)"
 PR=2196 EXPECTED_HEAD="$HEAD_SHA" ADMIN_REVIEW_BYPASS=1 \
+  PR_ADMIN_AUTHOR=POWERFULMOVES \
   ALLOW_ADVISORY_FAILURE=CodeRabbit \
   make -C pmoves pr-closeout-audit
 ```
@@ -81,6 +83,7 @@ sanctioned admin path. Use it only after a passing closeout audit:
 HEAD_SHA="$(gh pr view 2196 --json headRefOid --jq .headRefOid)"
 PR=2196 EXPECTED_HEAD="$HEAD_SHA" \
   CONFIRM="MERGE #2196 @ $HEAD_SHA" \
+  PR_ADMIN_AUTHOR=POWERFULMOVES \
   ALLOW_ADVISORY_FAILURE=CodeRabbit \
   make -C pmoves pr-closeout-merge
 ```
@@ -96,7 +99,8 @@ Run **PR Closeout Gate** with `workflow_dispatch`:
 - `expected_head_sha`: the full reviewed SHA.
 - `action`: `audit` first; select `merge` only after the audit passes.
 - `admin_review_bypass`: enable only for the documented self-authored approval
-  deadlock.
+  deadlock; the workflow requires both the dispatch actor and PR author to
+  match the repository owner.
 - `allow_advisory_failures`: comma-separated explicit exceptions.
 - `confirmation`: `MERGE #<PR> @ <full-head-sha>` for merge mode.
 

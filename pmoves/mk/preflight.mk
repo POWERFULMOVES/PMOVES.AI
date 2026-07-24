@@ -269,6 +269,7 @@ pr-closeout-audit: ## Fail-closed closeout audit for an exact PR head (PR=N EXPE
 		--expected-head "$$EXPECTED_HEAD" \
 		--base "$${PR_CLOSEOUT_BASE:-main}" \
 		$${ADMIN_REVIEW_BYPASS:+--admin-review-bypass} \
+		$${ADMIN_REVIEW_BYPASS:+--admin-author "$${PR_ADMIN_AUTHOR:-POWERFULMOVES}"} \
 		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
 		$(ARGS)
 
@@ -282,6 +283,7 @@ pr-closeout-merge: ## Audit + guarded admin squash merge (PR=N EXPECTED_HEAD=sha
 		--base "$${PR_CLOSEOUT_BASE:-main}" \
 		--method "$${MERGE_METHOD:-squash}" \
 		--admin \
+		--admin-author "$${PR_ADMIN_AUTHOR:-POWERFULMOVES}" \
 		--confirm "$$CONFIRM" \
 		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
 		$(ARGS)

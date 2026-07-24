@@ -262,7 +262,8 @@ This file summarizes the most-used targets and maps them to what they do under d
     unresolved review threads, missing or non-green required checks, and
     pending/failing Actions checks.
   - Set `ADMIN_REVIEW_BYPASS=1` only for the documented self-authored CODEOWNER
-    deadlock. Explicit advisory exceptions use
+    deadlock. The PR author must match `PR_ADMIN_AUTHOR` (default:
+    `POWERFULMOVES`). Explicit advisory exceptions use
     `ALLOW_ADVISORY_FAILURE=<check-name>`.
 - `make pr-closeout-merge PR=<number> EXPECTED_HEAD=<full-sha> CONFIRM="MERGE #<number> @ <full-sha>"`
   - Repeats the closeout audit and performs a SHA-pinned admin merge only after

@@ -40,6 +40,7 @@ def _pr(**overrides: object) -> dict[str, object]:
         "number": 42,
         "title": "fix: example",
         "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/42",
+        "author": {"login": "POWERFULMOVES"},
         "state": "OPEN",
         "isDraft": False,
         "baseRefName": "main",
@@ -86,6 +87,7 @@ def _evaluate(
     required: list[dict[str, str]] | None = None,
     threads: list[Thread] | None = None,
     admin: bool = True,
+    expected_admin_author: str = "POWERFULMOVES",
     expected_head: str = "a" * 40,
     allowed_advisories: tuple[str, ...] = ("CodeRabbit",),
 ) -> pr_closeout.CloseoutReport:
@@ -97,6 +99,7 @@ def _evaluate(
         expected_head_sha=expected_head,
         expected_base="main",
         allow_admin_review_bypass=admin,
+        expected_admin_author=expected_admin_author,
         allowed_advisory_failures=allowed_advisories,
     )
 
@@ -115,6 +118,18 @@ def test_normal_closeout_requires_approval() -> None:
     report = _evaluate(admin=False)
 
     assert not report.ready
+    assert "merge state is BLOCKED" in report.blockers
+    assert "review decision is REVIEW_REQUIRED" in report.blockers
+
+
+def test_admin_closeout_requires_matching_pr_author() -> None:
+    report = _evaluate(pr=_pr(author={"login": "dependabot[bot]"}))
+
+    assert not report.ready
+    assert (
+        "admin review bypass denied: PR author dependabot[bot] does not match "
+        "expected author POWERFULMOVES"
+    ) in report.blockers
     assert "merge state is BLOCKED" in report.blockers
     assert "review decision is REVIEW_REQUIRED" in report.blockers
 
@@ -182,6 +197,24 @@ def test_pending_check_blocks() -> None:
 
     assert not report.ready
     assert "pending check: CodeQL" in report.blockers
+
+
+def test_pending_advisory_status_context_still_blocks() -> None:
+    report = _evaluate(
+        pr=_pr(
+            statusCheckRollup=[
+                {
+                    "__typename": "StatusContext",
+                    "context": "CodeRabbit",
+                    "state": "PENDING",
+                }
+            ]
+        )
+    )
+
+    assert not report.ready
+    assert "pending status context: CodeRabbit" in report.blockers
+    assert report.advisory_failures == []
 
 
 def test_missing_required_checks_fails_closed() -> None:

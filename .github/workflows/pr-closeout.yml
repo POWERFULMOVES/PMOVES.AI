@@ -89,6 +89,8 @@ jobs:
           CLOSEOUT_ACTION: ${{ inputs.action }}
           MERGE_METHOD: ${{ inputs.merge_method }}
           ADMIN_REVIEW_BYPASS: ${{ inputs.admin_review_bypass }}
+          ADMIN_AUTHOR: ${{ github.repository_owner }}
+          DISPATCH_ACTOR: ${{ github.actor }}
           ALLOW_ADVISORY_FAILURES: ${{ inputs.allow_advisory_failures }}
           MERGE_CONFIRMATION: ${{ inputs.confirmation }}
         shell: bash
@@ -104,6 +106,12 @@ jobs:
             --json-out "$RUNNER_TEMP/pr-closeout.json"
           )
 
+          if [[ "$ADMIN_REVIEW_BYPASS" == "true" &&
+                "$DISPATCH_ACTOR" != "$ADMIN_AUTHOR" ]]; then
+            echo "::error::Admin review bypass may only be dispatched by $ADMIN_AUTHOR"
+            exit 1
+          fi
+
           IFS=',' read -ra advisory_names <<< "$ALLOW_ADVISORY_FAILURES"
           for advisory in "${advisory_names[@]}"; do
             advisory="${advisory#"${advisory%%[![:space:]]*}"}"
@@ -115,12 +123,12 @@ jobs:
 
           if [[ "$CLOSEOUT_ACTION" == "audit" ]]; then
             if [[ "$ADMIN_REVIEW_BYPASS" == "true" ]]; then
-              args+=(--admin-review-bypass)
+              args+=(--admin-review-bypass --admin-author "$ADMIN_AUTHOR")
             fi
           else
             args+=(--method "$MERGE_METHOD" --confirm "$MERGE_CONFIRMATION")
             if [[ "$ADMIN_REVIEW_BYPASS" == "true" ]]; then
-              args+=(--admin)
+              args+=(--admin --admin-author "$ADMIN_AUTHOR")
             fi
           fi
 

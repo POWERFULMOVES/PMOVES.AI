@@ -41,6 +41,7 @@ class CloseoutReport:
     pr_number: int
     title: str
     url: str
+    author: str
     state: str
     base: str
     head_sha: str
@@ -123,8 +124,8 @@ def _fetch_pr(repo: str, number: int) -> dict[str, Any]:
             repo,
             "--json",
             (
-                "number,title,url,state,isDraft,baseRefName,headRefOid,mergeable,"
-                "mergeStateStatus,reviewDecision,body,statusCheckRollup"
+                "number,title,url,author,state,isDraft,baseRefName,headRefOid,"
+                "mergeable,mergeStateStatus,reviewDecision,body,statusCheckRollup"
             ),
         ]
     )
@@ -202,11 +203,10 @@ def _evaluate_rollup(
             if state in PASS_CONTEXT_STATES:
                 continue
             detail = {"name": name, "state": state or "UNKNOWN", "url": url}
-            if name in allowed_advisory_failures:
-                report.advisory_failures.append(detail)
-                continue
             if state in {"PENDING", "EXPECTED", ""}:
                 _append_blocker(report.blockers, f"pending status context: {name}")
+            elif name in allowed_advisory_failures:
+                report.advisory_failures.append(detail)
             else:
                 _append_blocker(
                     report.blockers,
@@ -243,16 +243,24 @@ def evaluate_closeout(
     expected_head_sha: str = "",
     expected_base: str = "main",
     allow_admin_review_bypass: bool = False,
+    expected_admin_author: str = "",
     allowed_advisory_failures: Iterable[str] = (),
 ) -> CloseoutReport:
     """Evaluate a PR snapshot without mutating GitHub state."""
 
     head_sha = str(pr.get("headRefOid") or "")
+    author_data = pr.get("author")
+    author = (
+        str(author_data.get("login") or "")
+        if isinstance(author_data, dict)
+        else str(author_data or "")
+    )
     report = CloseoutReport(
         repo=repo,
         pr_number=int(pr.get("number") or 0),
         title=str(pr.get("title") or ""),
         url=str(pr.get("url") or ""),
+        author=author,
         state=str(pr.get("state") or "UNKNOWN").upper(),
         base=str(pr.get("baseRefName") or ""),
         head_sha=head_sha,
@@ -262,6 +270,19 @@ def evaluate_closeout(
         merge_state_status=str(pr.get("mergeStateStatus") or "UNKNOWN").upper(),
         review_decision=str(pr.get("reviewDecision") or "REVIEW_REQUIRED").upper(),
     )
+    admin_bypass_authorized = bool(
+        allow_admin_review_bypass
+        and expected_admin_author
+        and report.author.casefold() == expected_admin_author.casefold()
+    )
+
+    if allow_admin_review_bypass and not admin_bypass_authorized:
+        _append_blocker(
+            report.blockers,
+            "admin review bypass denied: "
+            f"PR author {report.author or 'UNKNOWN'} does not match "
+            f"expected author {expected_admin_author or 'UNSET'}",
+        )
 
     if report.state != "OPEN":
         _append_blocker(report.blockers, f"PR state is {report.state}, not OPEN")
@@ -292,12 +313,12 @@ def evaluate_closeout(
             report.blockers,
             f"merge state is {report.merge_state_status}",
         )
-    elif report.merge_state_status == "BLOCKED" and not allow_admin_review_bypass:
+    elif report.merge_state_status == "BLOCKED" and not admin_bypass_authorized:
         _append_blocker(report.blockers, "merge state is BLOCKED")
 
     if report.review_decision == "CHANGES_REQUESTED":
         _append_blocker(report.blockers, "review changes are requested")
-    elif report.review_decision != "APPROVED" and not allow_admin_review_bypass:
+    elif report.review_decision != "APPROVED" and not admin_bypass_authorized:
         _append_blocker(
             report.blockers,
             f"review decision is {report.review_decision}",
@@ -372,6 +393,7 @@ def audit_pr(
     expected_head_sha: str = "",
     expected_base: str = "main",
     allow_admin_review_bypass: bool = False,
+    expected_admin_author: str = "",
     allowed_advisory_failures: Iterable[str] = (),
 ) -> CloseoutReport:
     pr = _fetch_pr(repo, number)
@@ -385,6 +407,7 @@ def audit_pr(
         expected_head_sha=expected_head_sha,
         expected_base=expected_base,
         allow_admin_review_bypass=allow_admin_review_bypass,
+        expected_admin_author=expected_admin_author,
         allowed_advisory_failures=allowed_advisory_failures,
     )
 
@@ -394,6 +417,7 @@ def _print_report(report: CloseoutReport) -> None:
     print(
         f"PR #{report.pr_number} closeout: {verdict}\n"
         f"  URL: {report.url}\n"
+        f"  Author: {report.author}\n"
         f"  Head: {report.head_sha}\n"
         f"  Base: {report.base}\n"
         f"  Merge: {report.mergeable}/{report.merge_state_status}\n"
@@ -498,6 +522,11 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
         help="non-required check/status name allowed to fail (repeatable)",
     )
     parser.add_argument(
+        "--admin-author",
+        default="",
+        help="required PR author login when using an admin review bypass",
+    )
+    parser.add_argument(
         "--json-out",
         default="",
         help="write audit JSON to this path; use '-' for stdout",
@@ -547,12 +576,15 @@ def main(argv: list[str] | None = None) -> int:
     admin_bypass = bool(
         getattr(args, "admin_review_bypass", False) or getattr(args, "admin", False)
     )
+    if admin_bypass and not args.admin_author:
+        parser.error("admin review bypass requires --admin-author")
     report = audit_pr(
         repo,
         args.pr,
         expected_head_sha=args.expected_head,
         expected_base=args.base,
         allow_admin_review_bypass=admin_bypass,
+        expected_admin_author=args.admin_author,
         allowed_advisory_failures=args.allow_advisory_failure,
     )
     _print_report(report)
