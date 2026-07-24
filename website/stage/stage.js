@@ -112,6 +112,59 @@ async function boot() {
     el.enableCustomElements = false;
     host.appendChild(el);
   }
+
+  installEnterRoomHandler(host);
+}
+
+// Enter-room action handler (openroom-adapter lane, 2026-07-24).
+//
+// Each public room card on /stage/ has a primary Button whose action is
+// {name: "enter-room", context: [{key: "room_id", value: ...},
+//                                  {key: "url", value: <openroom url>}]}
+// — see pmoves/design/stage_data.py. The A2UI v0.8 renderer doesn't auto-route
+// button actions; the spec is renderer-agnostic and leaves routing to the host
+// page. We attach a single delegated click listener that walks up the DOM
+// from any clicked element, looks for the nearest <a2ui-button>'s .action
+// property, and navigates if the action is "enter-room".
+//
+// Stays in the same CSP-safe / no-inline-script spirit as the rest of the
+// /stage/ surface: this is the host page's own listener, not an inline
+// handler in a baked message.
+function installEnterRoomHandler(host) {
+  host.addEventListener("click", (event) => {
+    const path = event.composedPath ? event.composedPath() : [];
+    let target = null;
+    for (const node of path) {
+      if (node && node.tagName && node.tagName.toLowerCase() === "a2ui-button") {
+        target = node;
+        break;
+      }
+    }
+    if (!target || !target.action) return;
+    const action = target.action;
+    if (!action || action.name !== "enter-room") return;
+    const ctx = {};
+    if (Array.isArray(action.context)) {
+      for (const entry of action.context) {
+        if (!entry || !entry.key) continue;
+        const v = entry.value || {};
+        if (typeof v.literalString === "string") ctx[entry.key] = v.literalString;
+        else if (typeof v.literalNumber === "number") ctx[entry.key] = v.literalNumber;
+        else if (typeof v.literalBoolean === "boolean") ctx[entry.key] = v.literalBoolean;
+      }
+    }
+    const url = ctx.url;
+    const roomId = ctx.room_id;
+    if (!url) {
+      console.warn("[stage] enter-room action missing url context; ignoring", roomId);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    // Same-tab navigation; the OpenRoom shell mounts at ?room=<id> and the
+    // shell's loader (apps/webuiapps/src/pages/RoomLoader/) takes over.
+    window.location.assign(url);
+  });
 }
 
 boot();

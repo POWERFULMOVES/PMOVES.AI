@@ -8,6 +8,13 @@ The baked file is byte-for-byte a valid agent message stream: the same JSON an
 agent could push over the A2UI NATS Bridge renders identically (DL-4 spec D2).
 All values are literalString — no data model needed for a static bake.
 
+Each public room card gets an Enter button (added 2026-07-24 as part of the
+openroom-adapter lane, see pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md). The
+button's action is {name: "enter-room", context: [{key: "room_id", ...}]} —
+website/stage/stage.js attaches a global click listener that intercepts this
+action and navigates to OPENROOM_BASE_URL?room=<id> (or, in local dev,
+http://localhost:5173/?room=<id>).
+
 Run via `make -C pmoves stage-data`; drift gate is `stage-data-check`.
 """
 
@@ -15,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 
 DESIGN = pathlib.Path(__file__).resolve().parent
@@ -22,6 +30,12 @@ ROOMS_DIR = DESIGN.parent / "config" / "rooms"
 DEFAULT_OUT = DESIGN.parent.parent / "website" / "stage" / "data" / "public-rooms.json"
 
 SURFACE_ID = "stage-rooms"
+
+# Where the Enter button navigates. Override via OPENROOM_BASE_URL env var
+# (e.g. http://localhost:5173 for local vite dev, https://openroom.pmoves.ai
+# for prod, http://staging.openroom.pmoves.ai for staging). The action carries
+# the room_id; stage.js reads OPENROOM_BASE_URL at runtime if available.
+OPENROOM_BASE_URL_DEFAULT = "https://openroom.pmoves.ai"
 
 
 def is_public_room(manifest: dict) -> bool:
@@ -67,6 +81,40 @@ def _text(component_id: str, text: str, usage_hint: str | None = None) -> dict:
     return {"id": component_id, "component": {"Text": body}}
 
 
+def _enter_button(prefix: str, room_id: str, base_url: str) -> list[dict]:
+    """Emit the 'Enter' button + child Text for a room card.
+
+    The action's context carries both the room_id and the full navigation URL
+    (resolved at bake time from OPENROOM_BASE_URL). stage.js attaches a global
+    click listener that intercepts this action and navigates to the URL.
+    Keeping the URL in the bake means operators can re-point at staging/local
+    by re-running `make stage-data OPENROOM_BASE_URL=...` without touching
+    stage.js.
+    """
+    text_id = f"{prefix}_enter_text"
+    button_id = f"{prefix}_enter_button"
+    target_url = f"{base_url.rstrip('/')}/?room={room_id}"
+    return [
+        _text(text_id, "Enter \u2192", "body"),
+        {
+            "id": button_id,
+            "component": {
+                "Button": {
+                    "child": text_id,
+                    "primary": True,
+                    "action": {
+                        "name": "enter-room",
+                        "context": [
+                            {"key": "room_id", "value": {"literalString": room_id}},
+                            {"key": "url", "value": {"literalString": target_url}},
+                        ],
+                    },
+                }
+            },
+        },
+    ]
+
+
 def _apps_line(manifest: dict) -> str:
     parts = []
     for app in manifest.get("apps", []):
@@ -102,6 +150,14 @@ def build_surface_messages(rooms: list[dict]) -> list[dict]:
         if apps_line:
             child_ids.append(f"{prefix}_apps")
             components.append(_text(f"{prefix}_apps", f"Apps: {apps_line}", "caption"))
+
+        # Enter button (openroom-adapter lane, 2026-07-24). Always last child
+        # so the card lays out title/meta/desc/apps above the action.
+        base_url = os.environ.get("OPENROOM_BASE_URL", OPENROOM_BASE_URL_DEFAULT)
+        button_components = _enter_button(prefix, manifest["room_id"], base_url)
+        for c in button_components:
+            components.append(c)
+            child_ids.append(c["id"])
 
         components.append(
             {

@@ -53,6 +53,43 @@
           }
         },
         {
+          "id": "room0_enter_text",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Enter \u2192"
+              },
+              "usageHint": "body"
+            }
+          }
+        },
+        {
+          "id": "room0_enter_button",
+          "component": {
+            "Button": {
+              "child": "room0_enter_text",
+              "primary": true,
+              "action": {
+                "name": "enter-room",
+                "context": [
+                  {
+                    "key": "room_id",
+                    "value": {
+                      "literalString": "fordham.room.community"
+                    }
+                  },
+                  {
+                    "key": "url",
+                    "value": {
+                      "literalString": "https://openroom.pmoves.ai/?room=fordham.room.community"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
           "id": "room0_column",
           "component": {
             "Column": {
@@ -61,7 +98,9 @@
                   "room0_title",
                   "room0_meta",
                   "room0_desc",
-                  "room0_apps"
+                  "room0_apps",
+                  "room0_enter_text",
+                  "room0_enter_button"
                 ]
               },
               "alignment": "start"
@@ -120,6 +159,43 @@
           }
         },
         {
+          "id": "room1_enter_text",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Enter \u2192"
+              },
+              "usageHint": "body"
+            }
+          }
+        },
+        {
+          "id": "room1_enter_button",
+          "component": {
+            "Button": {
+              "child": "room1_enter_text",
+              "primary": true,
+              "action": {
+                "name": "enter-room",
+                "context": [
+                  {
+                    "key": "room_id",
+                    "value": {
+                      "literalString": "demo.room.rehearsal"
+                    }
+                  },
+                  {
+                    "key": "url",
+                    "value": {
+                      "literalString": "https://openroom.pmoves.ai/?room=demo.room.rehearsal"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
           "id": "room1_column",
           "component": {
             "Column": {
@@ -128,7 +204,9 @@
                   "room1_title",
                   "room1_meta",
                   "room1_desc",
-                  "room1_apps"
+                  "room1_apps",
+                  "room1_enter_text",
+                  "room1_enter_button"
                 ]
               },
               "alignment": "start"
@@ -187,6 +265,43 @@
           }
         },
         {
+          "id": "room2_enter_text",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Enter \u2192"
+              },
+              "usageHint": "body"
+            }
+          }
+        },
+        {
+          "id": "room2_enter_button",
+          "component": {
+            "Button": {
+              "child": "room2_enter_text",
+              "primary": true,
+              "action": {
+                "name": "enter-room",
+                "context": [
+                  {
+                    "key": "room_id",
+                    "value": {
+                      "literalString": "tokenism.room.exchange"
+                    }
+                  },
+                  {
+                    "key": "url",
+                    "value": {
+                      "literalString": "https://openroom.pmoves.ai/?room=tokenism.room.exchange"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
           "id": "room2_column",
           "component": {
             "Column": {
@@ -195,7 +310,9 @@
                   "room2_title",
                   "room2_meta",
                   "room2_desc",
-                  "room2_apps"
+                  "room2_apps",
+                  "room2_enter_text",
+                  "room2_enter_button"
                 ]
               },
               "alignment": "start"
@@ -211,6 +328,112 @@
           }
         },
         {
+          "id": "room3_title",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "\u2699 Z890 Infra Fabric Room"
+              },
+              "usageHint": "h3"
+            }
+          }
+        },
+        {
+          "id": "room3_meta",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "operator \u00b7 z890-claude / z890-infra"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room3_desc",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Infrastructure room for topology, service health, secrets discipline, operator bring-up, and local-first automation including legal-assist, email, messaging, and n8n/Archon workflows."
+              }
+            }
+          }
+        },
+        {
+          "id": "room3_apps",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Apps: services-dashboard \u00b7 notebook-workbench \u00b7 graphiti-status \u00b7 legal-assist-panel (planned) \u00b7 email-organizer-panel (planned) \u00b7 n8n-archon-bridge (planned)"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room3_enter_text",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Enter \u2192"
+              },
+              "usageHint": "body"
+            }
+          }
+        },
+        {
+          "id": "room3_enter_button",
+          "component": {
+            "Button": {
+              "child": "room3_enter_text",
+              "primary": true,
+              "action": {
+                "name": "enter-room",
+                "context": [
+                  {
+                    "key": "room_id",
+                    "value": {
+                      "literalString": "z890-infra.room.fabric"
+                    }
+                  },
+                  {
+                    "key": "url",
+                    "value": {
+                      "literalString": "https://openroom.pmoves.ai/?room=z890-infra.room.fabric"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "room3_column",
+          "component": {
+            "Column": {
+              "children": {
+                "explicitList": [
+                  "room3_title",
+                  "room3_meta",
+                  "room3_desc",
+                  "room3_apps",
+                  "room3_enter_text",
+                  "room3_enter_button"
+                ]
+              },
+              "alignment": "start"
+            }
+          }
+        },
+        {
+          "id": "room3_card",
+          "component": {
+            "Card": {
+              "child": "room3_column"
+            }
+          }
+        },
+        {
           "id": "stage_root",
           "component": {
             "Column": {
@@ -218,7 +441,8 @@
                 "explicitList": [
                   "room0_card",
                   "room1_card",
-                  "room2_card"
+                  "room2_card",
+                  "room3_card"
                 ]
               },
               "alignment": "stretch"
