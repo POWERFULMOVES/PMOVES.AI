@@ -1,0 +1,29 @@
+{
+  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics.",
+  "schema_version": "1.0.0",
+  "prs": {
+    "POWERFULMOVES/PMOVES.AI#2199": {
+      "last_seen_thread_ids": [
+        "3645282021",
+        "3645282024"
+      ],
+      "last_cycle_at": "2026-07-24T13:10:00Z",
+      "last_cycle_commits": [
+        "347f64c753"
+      ],
+      "status": "cycle-1-done"
+    },
+    "POWERFULMOVES/PMOVES-OpenRoom#1": {
+      "last_seen_thread_ids": [
+        "3645275855",
+        "3645275861",
+        "3645275867"
+      ],
+      "last_cycle_at": "2026-07-24T13:10:00Z",
+      "last_cycle_commits": [
+        "c367e17"
+      ],
+      "status": "cycle-1-done"
+    }
+  }
+}

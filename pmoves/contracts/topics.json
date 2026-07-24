@@ -331,6 +331,12 @@
       "description": "P7 room session entered active state.",
       "publisher": ["p7-room-orchestrator"]
     },
+    "p7.nats.session.v1": {
+      "schema": "schemas/room/p7.session.command.v1.schema.json",
+      "description": "P7 session command (open|close|heartbeat) emitted by the OpenRoom desktop on room enter/leave. Inbound to the A2UI bridge + observability. Distinct from the fact subjects (p7.room.session.*.v1) which the orchestrator emits on state changes.",
+      "publisher": ["p7-room-orchestrator"],
+      "subscriber": ["a2ui-nats-bridge", "monitoring"]
+    },
     "p7.room.checkpoint.v1": {
       "schema": "schemas/room/p7.session.fact.v1.schema.json",
       "description": "P7 room session checkpoint.",

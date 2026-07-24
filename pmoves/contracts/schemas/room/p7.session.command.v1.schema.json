@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/room/p7.session.command.v1.schema.json",
+  "title": "P7 Session Command v1",
+  "description": "Command payload for p7.nats.session.v1 — emitted by the OpenRoom adapter (openroom-adapter lane, 2026-07-24) on room enter/leave. Distinct from the fact subjects (p7.room.session.*.v1) which the orchestrator emits on state changes; this is the inbound command surface for the OpenRoom desktop.",
+  "type": "object",
+  "required": ["v", "room_id", "action", "agent_id", "timestamp"],
+  "properties": {
+    "v": {"type": "string", "const": "1.0.0"},
+    "room_id": {"type": "string", "minLength": 1},
+    "action": {"type": "string", "enum": ["open", "close", "heartbeat"]},
+    "agent_id": {"type": "string", "minLength": 1},
+    "alter": {"type": "string"},
+    "room_stage": {"type": "string", "enum": ["rehearsal", "live", "review", "archive"]},
+    "session_id": {"type": "string", "format": "uuid"},
+    "timestamp": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}
