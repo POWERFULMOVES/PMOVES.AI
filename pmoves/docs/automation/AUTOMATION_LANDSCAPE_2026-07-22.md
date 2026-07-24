@@ -55,9 +55,15 @@ configuration, credentials, and live routes are checked.
 | n8n ↔ Archon | not in workflows | `pmoves-n8n-archon-bridge` skill is design-doc; but `docs/workorder-archon-nats-2026-06-01` + archon-promote branches exist |
 | Cipher usability | auth routes and bearer-forwarding fix are present on `main` | live container health and authentication remain node checks |
 
-### MCP branches — ALL ALREADY MERGED (no recovery; the node is just stale)
+### MCP branches — MERGED OR SUPERSEDED (no branch revival)
 
-**RE-CORRECTION (2026-07-22, triage-verified):** the "dropped work orders" framing was itself wrong. All 11 branches are **already merged or superseded on main** — the `ahead=N` counts are pure squash-merge SHA-divergence artifacts (the `[gone]≠merged` trap: audit against merged PRs, not `main..branch` ancestry). Each was `git merge-base --is-ancestor`-verified against current `origin/main`.
+**RE-CORRECTION (2026-07-22, triage-verified):** the "dropped work
+orders" framing was itself wrong. The listed work is **merged or superseded on
+main**. Status is based on merged-PR metadata and the identified replacement
+path (for example, #1958 → #1960), not branch-tip ancestry. Squash merges do not
+make the old branch tip an ancestor of `main`, so `ahead=N`,
+`git merge-base --is-ancestor`, and `[gone]` are not merge evidence by
+themselves.
 
 | Branch | PR | Landed | Note |
 |---|---|---|---|

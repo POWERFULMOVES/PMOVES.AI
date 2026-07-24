@@ -42,12 +42,34 @@ Components (GPU): `up-comfyui`, `up-vibevoice`, `up-voice-relay`, plus the `cata
 
 ## Track 3 — KVM/VPS recreation
 
-Per-node, via `vps-deployer` (Hostinger MCP + Tailscale-SSH). For each KVM: (a) `git fetch origin` + currency check (behind main?), (b) check/preserve local work + record a rollback ref, (c) bring tree to main, (d) regenerate tier env, (e) recreate its assigned services, (f) roll back via the preserved ref if recreate fails. **kvm4-2 (NATS fleet bus) is the critical one** — coordinate downtime; the bus underpins cross-node. Reference: `deploy/runbooks/hostinger-vps-deploy.md`, memory `project_kvm42_unprovisioned_nats_down`.
+Per-node, via `vps-deployer` (Hostinger MCP + Tailscale-SSH). Before each
+cutover, follow the Three-Body collision-avoidance protocol: claim exclusive
+branch/lane ownership in `AGNOTE4482PHI.t1.md`; post progress in both the PR and
+handoff note; export any handoff artifact with
+`CHIT_NO_CLEARTEXT=1 make -C pmoves chit-export`; and record its artifact
+reference. Perform the smallest isolated validation first. Release the lane only
+after recording the CHIT artifact reference and signed ACK.
+
+For each KVM: (a) `git fetch origin` + currency check (behind main?), (b)
+check/preserve local work + record a rollback ref, (c) bring tree to main, (d)
+regenerate tier env, (e) recreate its assigned services, (f) roll back via the
+preserved ref if recreate fails. **kvm4-2 (NATS fleet bus) is the critical one**
+— coordinate downtime; the bus underpins cross-node. Reference:
+`deploy/runbooks/hostinger-vps-deploy.md`, memory
+`project_kvm42_unprovisioned_nats_down`.
 
 ## Cross-cutting
 
-- **Stale worktree hygiene**: `.worktrees/pr1720` + `.worktrees/pr1724` (long-closed PRs) carry legacy CHIT paths that fail the secrets-audit gate — prune them ([[feedback_check_worktree_before_remove]] first).
-- **Branch hygiene**: ~10 stale merged MCP branch refs to prune (squash-artifact `ahead=N`).
+- **Stale worktree hygiene**: `.worktrees/pr1720` + `.worktrees/pr1724` were
+  reported as carrying legacy CHIT paths. Before any removal, identify the
+  owner, confirm clean state, verify every commit is reachable from a retained
+  ref, and create a recovery ref when it is not. A closed PR or "stale" label is
+  not removal evidence (`[[feedback_check_worktree_before_remove]]` remains a
+  prerequisite).
+- **Branch hygiene**: review the reported MCP branch refs individually. Confirm
+  merged-PR metadata or patch equivalence, check ownership and unpublished
+  commits, and preserve a recovery ref before deletion. Squash-artifact
+  `ahead=N` or `[gone]` alone is not proof that a branch is safe to prune.
 - **Node cutover pattern** (reusable): `git fetch origin` → check for local/unpushed work → record rollback ref (`git branch backup/<node>-pre-cutover`) → `git checkout -B <branch> origin/main` (preserves git-ignored env + untracked grant) → `make secrets-funnel` → `make compose ARGS="config --quiet"` dry-run → tiered recreate → roll back via the backup ref if recreate fails. This is how any behind-node catches up.
 
 ## Sequence recommendation
