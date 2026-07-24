@@ -157,9 +157,22 @@ session publish fails gracefully as designed).
 
 ## Reproducing the visual evidence
 
-Canonical port: OpenRoom dev runs on `:3000` (vite default — both
-`take-screenshots.cjs` and `take-stage-screenshots.cjs` target this
-port; do not change one without the other).
+Two distinct dev servers, one per script. Do not collapse them.
+
+- **OpenRoom dev**: `pnpm dev` from `PMOVES-OpenRoom/apps/webuiapps`
+  — vite default `:3000`. `take-screenshots.cjs` loads
+  `http://localhost:3000/?room=<id>` (the PMOVES-room composition
+  path: vite dev plugin serves `/api/rooms/<id>.json`, vite proxy
+  forwards `/api/p7/*` to the local p7-orchestrator).
+- **Stage static server**: `python -m http.server 8080` from
+  `website/` — the `/stage/` Enter-button surface.
+  `take-stage-screenshots.cjs` loads `http://localhost:8080/stage/`
+  (only the public-rooms catalog baked into `public-rooms.json`,
+  no OpenRoom dev needed).
+
+If the ports need to change, update the script's `localhost:PORT`
+URL AND the corresponding README terminal instructions; the two
+are independent (one change does not require the other).
 
 ### PowerShell (Windows)
 

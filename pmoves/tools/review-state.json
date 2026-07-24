@@ -1,5 +1,5 @@
 {
-  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics. Cron review-iter-poll was re-armed 2026-07-24T15:10Z after review-iter-2 SHIPPED — both PRs in cycle-2-done state, all 14 cycle-2 threads resolved (2 P1 + 12 P2/nitpick; the Three-Body protocol thread is owner-bucketed and out of scope).",
+  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics. Cron review-iter-poll re-armed 2026-07-24T15:30Z after review-iter-3 SHIPPED — PMOVES.AI#2199 is cycle-3-done with all 3 cycle-3 threads resolved (P2/nitpick only; no P1, no owner-bucket). PMOVES-OpenRoom#1 remains cycle-1-done; cycle-2 and cycle-3 both didn't touch the fork (the gitlink promotion to PMOVES.AI-Edition-Hardened was an out-of-band push on the fork's remote, not a fork-branch commit).",
   "schema_version": "1.0.0",
   "prs": {
     "POWERFULMOVES/PMOVES.AI#2199": {
@@ -16,15 +16,17 @@
         "3645826595",
         "3645826615",
         "3645826625",
-        "3645826629"
+        "3645826629",
+        "3646394761",
+        "3646394767",
+        "3646394772"
       ],
-      "last_cycle_at": "2026-07-24T15:10:00Z",
+      "last_cycle_at": "2026-07-24T15:30:00Z",
       "last_cycle_commits": [
-        "ad217e5d03",
-        "ad1e3a7d3f"
+        "c8faa550ae"
       ],
-      "last_cycle_branch": "review-iter-2",
-      "status": "cycle-2-done",
+      "last_cycle_branch": "review-iter-3",
+      "status": "cycle-3-done",
       "cron_status": "armed",
       "owner_bucket_threads": {
         "3645826541": {
@@ -46,7 +48,7 @@
       ],
       "status": "cycle-1-done",
       "cron_status": "armed",
-      "note": "no new threads since review-iter-1 (cycle-2 doesn't touch the fork; the fork's gitlink promotion to PMOVES.AI-Edition-Hardened was an out-of-band push on the fork's remote, not a fork-branch commit)"
+      "note": "no new threads since review-iter-1 (cycle-2 and cycle-3 both didn't touch the fork; the fork's gitlink promotion to PMOVES.AI-Edition-Hardened was an out-of-band push on the fork's remote, not a fork-branch commit)"
     }
   }
 }
