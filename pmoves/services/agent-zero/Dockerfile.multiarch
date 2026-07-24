@@ -39,7 +39,7 @@ COPY services/agent-zero/upstream-constraints.txt /tmp/upstream-constraints.txt
 # If re-enabling, also add huggingface.co:443 to integrations-ghcr.yml egress.
 RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements.txt \
-    && uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements2.txt
+    && if [ -f /git/agent-zero/requirements2.txt ]; then uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements2.txt; fi
 
 # ── Stage 2: PMOVES overlay ────────────────────────────────────
 FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS app
