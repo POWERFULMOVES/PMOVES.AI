@@ -111,6 +111,12 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
+.PHONY: secrets-pull secrets-funnel-from-prod
+secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
+	@bash scripts/secrets/pull_chit_bundle.sh
+
+secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull newest CI bundle, then materialize tier files from it
+
 .PHONY: secrets-funnel-sync-from-bundle
 secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files from a pre-installed CI CHIT bundle (skips chit-export so CI credentials are not overwritten)
 	@if [ ! -f "$(CHIT_EXPORT_PATH)" ]; then \
