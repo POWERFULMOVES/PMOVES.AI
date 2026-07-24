@@ -19,7 +19,11 @@ CREATE TABLE IF NOT EXISTS pmoves_core.chit_phrases (
 
 -- HNSW index for fast approximate nearest-neighbor search on embeddings
 CREATE INDEX IF NOT EXISTS idx_chit_phrases_embedding_hnsw
-    ON pmoves_core.chit_phrases USING hnsw (embedding vector_cosine_ops);
+    ON pmoves_core.chit_phrases USING hnsw ((embedding::halfvec(2560)) halfvec_cosine_ops);
+
+-- Unique canonical phrase enables an idempotent seed (ON CONFLICT below)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chit_phrases_canonical
+    ON pmoves_core.chit_phrases (phrase_canonical);
 
 -- Helpful category index
 CREATE INDEX IF NOT EXISTS idx_chit_phrases_category
@@ -67,4 +71,4 @@ INSERT INTO pmoves_core.chit_phrases (phrase_canonical, category, weight) VALUES
     ('tell me a joke',            'request',    0.8),
     ('see you later',             'farewell',   1.0),
     ('nice to meet you',          'greeting',   0.9)
-ON CONFLICT (phrase_id) DO NOTHING;
+ON CONFLICT (phrase_canonical) DO NOTHING;
