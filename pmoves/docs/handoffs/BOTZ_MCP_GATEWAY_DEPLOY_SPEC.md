@@ -2,14 +2,14 @@
 
 **Status:** DRAFT spec — nothing deployed. Review before building.
 **Author:** 4090-claude · 2026-06-20
-**Goal:** stand up `PMOVES-BotZ-gateway` (fork of `microsoft/mcp-gateway`, .NET, port 8052) as the **host-reachable unified MCP front** that routes to internal-tier MCP backends (Cipher, Hi-RAG, the 5 observability MCPs). This is also the *only* correct way for the host-side Claude Code MCP client to reach Cipher, since `pmoves_*` are `internal: true`.
+**Goal:** stand up `PMOVES-BotZ-gateway` (fork of `microsoft/mcp-gateway`, .NET, port 8052) as the **host-reachable unified MCP front** that routes to internal-tier MCP backends (Cipher, Hi-RAG, the 5 observability MCPs). This is a consolidation option, not a prerequisite for direct Cipher access: current Compose already publishes Cipher on `127.0.0.1:8105` and attaches it to `pmoves_external`.
 
 ## Disambiguation (important)
 - **`PMOVES-BotZ-gateway/`** (submodule, .NET, :8052, `microsoft/mcp-gateway` fork) — the **MCP reverse-proxy** with `/adapters` control plane. ← THIS is what we deploy.
 - **`services/botz-gateway/`** (in-repo Python, :8102, "bot mgmt + Geometry BUS", `make up-bots`) — a *different* service. Not the MCP gateway. Leave as-is.
 
 ## The central constraint
-`pmoves_app/bus/data` are `internal: true` (docker-compose.yml ~4272-4284). **A container on internal-only networks cannot publish a host port.** Therefore the gateway must be attached to **two** networks:
+`pmoves_app/bus/data` are `internal: true` (verify current generated line numbers before implementation). To reach internal backends while also accepting host traffic, the gateway should be attached to **two** networks:
 1. **`pmoves_app`** (internal) — to reach `cipher-api:8105`, `hi-rag-gateway-v2`, etc.
 2. **a non-internal bridge** — to publish `:8052` to the host. Options: (a) reuse an existing non-internal pmoves network if one exists, or (b) **add a `pmoves_edge` bridge network (`internal: false`)** dedicated to host-facing gateways. Verify which non-internal nets already exist (`docker network ls` + grep compose for `internal: false`/networks without the flag) before creating a new one.
 
@@ -57,13 +57,13 @@ Once `:8052/healthz` is green, register one adapter per backend (persist in `PMO
 | `loki` | `…mcp_loki` | stdio |
 | `jaeger` | `…mcp_jaeger` | stdio |
 | `tensorzero` | `…mcp_tensorzero` | stdio |
-| `jcodemunch` | PMOVES-jcodemunch-mcp (after onboarding) | per its README |
+| `jcodemunch` | PMOVES-jcodemunch-mcp (already registered as a submodule; verify current transport) | per its README |
 
 `curl -X POST http://localhost:8052/adapters -H "Authorization: Bearer $BOTZ_GATEWAY_TOKEN" -d '{"name":"cipher","transport":"sse","url":"http://cipher-api:8105/mcp/sse"}'` (confirm exact schema against the gateway's OpenAPI in `PMOVES-BotZ-gateway/openapi/`).
 
 ## Phase C — Repoint clients to the gateway
 
-- **`.claude/mcp.json`**: add `pmoves-mcp-gateway` → sse `http://localhost:8052/mcp` (Bearer `${BOTZ_GATEWAY_TOKEN}`). **Keep the direct `pmoves-cipher` entry as transition fallback**, retire after validation (same discipline as the `_pmoves-cipher-legacy-python-wrapper` entry). NOTE: the direct `pmoves-cipher` localhost:8105 entry **cannot work on this host** (internal net) — the gateway entry is what actually connects.
+- **`.claude/mcp.json`**: add `pmoves-mcp-gateway` → sse `http://localhost:8052/mcp` (Bearer `${BOTZ_GATEWAY_TOKEN}`). **Keep the direct `pmoves-cipher` entry as transition fallback**, retire only after both paths are tested (same discipline as the `_pmoves-cipher-legacy-python-wrapper` entry). If direct `localhost:8105` is unreachable despite its current port mapping and `pmoves_external` attachment, diagnose host/daemon publishing independently.
 - **`pmoves/docker/pmoves-4090-web/profile.yaml`**: replace per-server blocks with the single gateway server.
 
 ## Phase D — Validate (via MCP skills)
@@ -79,4 +79,4 @@ Once `:8052/healthz` is green, register one adapter per backend (persist in `PMO
 5. The `pmoves-hirag-mcp` bridge must be containerized/registerable (it's stdio today) — ties to task #6.
 
 ## Dependencies / order
-Onboard `pmoves-hirag-mcp` repo (task #6) before its adapter. Observability MCPs (#1361) already exist. Cipher already healthy. gateway-agent (:8100, separate) is the Agent-Zero MCP-tool orchestrator — complementary, not this gateway.
+`pmoves-hirag-mcp` and `PMOVES-jcodemunch-mcp` are already registered submodules; reconcile their current transport and pin before adapter work rather than re-onboarding them. Observability MCPs (#1361) already exist. Verify Cipher health at deploy time. gateway-agent (:8100, separate) is the Agent-Zero MCP-tool orchestrator — complementary, not this gateway.

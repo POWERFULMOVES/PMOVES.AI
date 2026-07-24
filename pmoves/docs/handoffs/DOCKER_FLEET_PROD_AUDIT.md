@@ -4,6 +4,11 @@ This is a synthesis task — I have all five subsystem audits in the prompt and 
 
 # PMOVES Dynamic Fleet — Docker Production-Readiness Remediation Plan
 
+**Historical planning snapshot:** this document preserves a June 2026 synthesis.
+It is not an executable current-state backlog. The correction ledger below is
+authoritative; every remaining proposal must be revalidated on current `main`
+before implementation.
+
 Synthesized by 4090-CLAUDE (deploy/CI spine) from 5 subsystem audits. Drives PRs + a Z890 handoff.
 
 > ## ⚠️ VERIFICATION CORRECTIONS (2026-06-23) — READ BEFORE ACTING
@@ -21,11 +26,11 @@ Synthesized by 4090-CLAUDE (deploy/CI spine) from 5 subsystem audits. Drives PRs
 
 | Subsystem | Verdict | Headline gap |
 |---|---|---|
-| **Buildx/BuildKit builders** | Properly configured (CI path), **scaffolded for persistence** | No GC bounds on persistent builders; disk-free step runs *after* buildx setup (P1 race). |
+| **Buildx/BuildKit builders** | Properly configured (CI path), **scaffolded for persistence** | Revalidate GC bounds on any persistent builders; the reported disk-free/buildx ordering race is already fixed. |
 | **Self-hosted runners** | **Scaffolded only** for disk hygiene | No per-job workspace cleanup + no pre-flight disk gate → **recurring "No space left on device" root cause**. |
-| **Model runners** | Properly configured (GPU serving stack) | Docker Model Runner unused (fine); real risks are unpinned model images + missing `QDRANT_RECREATE_ON_DIM_MISMATCH=false` (data-loss). |
+| **Model runners** | Properly configured (GPU serving stack) | Docker Model Runner unused (fine); revalidate image pinning and multi-GPU policy. The reported Qdrant guard is already present. |
 | **Engine/daemon + disk hygiene** | **Scaffolded only** | Zero container log rotation + no VPS `daemon.json` → unbounded `json-file` logs are the *other half* of the disk-full root cause. |
-| **Compose (prod + modular)** | Properly configured (~99% health/restart) | Small coverage gaps (3 services no limits/health, `cataclysm` no restart) + hardening anchors not applied fleet-wide. |
+| **Compose (prod + modular)** | Properly configured (~99% health/restart) | Revalidate service-specific limits/health claims; `cataclysm` is a network, not a service. |
 
 ---
 
@@ -64,9 +69,9 @@ Add a `check-disk-capacity` job (≥20GB free) as a `needs:` dependency for buil
 Doc: https://docs.docker.com/build/building/best-practices/#managing-runner-disk-space
 - **Lane:** 4090 (workflow YAML).
 
-### P1-D — Move "Free disk space" BEFORE buildx setup in `integrations-ghcr.yml` · **4090-lane**
-Reorder lines 265–270 to run *before* line 273 buildx setup (currently a race that can corrupt buildx bootstrap on a near-full runner). Also fix the PR-validation job's ordering.
-- **Lane:** 4090 (workflow YAML, mechanical reorder).
+### P1-D — CLOSED: disk cleanup ordering
+Current `integrations-ghcr.yml` runs its disk-free step before buildx setup. No
+action remains unless a fresh audit finds another job with reversed ordering.
 
 ### P1-E — VPS `daemon.json` (KVM4-1/-2, KVM2) · **VPS, IaC-tracked**
 No version-controlled daemon config on production VPS → no log rotation/live-restore. Create `/etc/docker/daemon.json`:
@@ -82,8 +87,9 @@ Track in `pmoves/docs/operations/VPS_DAEMON_BOOTSTRAP.md` + Ansible/Terraform (P
 Z890 is workstation + GPU runner + inference host. Any persistent buildx/`buildkitd.toml`/GC change must not be unilateral. Create `pmoves/docs/operations/BUILDER_COORDINATION.md`, file a claim in `AGNOTE4482PHI.t1.md` before changes. Doc: https://docs.docker.com/build/builders/#driver-options
 - **Lane:** doc is 4090-lane; the *gate it enforces* is Z890.
 
-### P1-G — `cataclysm` missing restart policy · **4090-lane**
-`cataclysm` has no `restart:` → no auto-recovery on crash. Add `restart: unless-stopped`. Doc: https://docs.docker.com/compose/compose-file/compose-file-v3/#restart_policy
+### P1-G — INVALID: `cataclysm` is not a service
+`cataclysm` names a network (`cataclysm-net`), so a restart-policy change does
+not apply.
 
 ---
 
@@ -101,7 +107,7 @@ Z890 is workstation + GPU runner + inference host. Any persistent buildx/`buildk
 - Move runner workspace off `/tmp` → persistent host dir in `pmoves/tools/local_cert_runners.py:326` (`/tmp` can be purged mid-job). **4090-lane code edit** + runner restart.
 
 **Model runners (4090-lane, compose edits):**
-- **`QDRANT_RECREATE_ON_DIM_MISMATCH=false` on Hi-RAG v2 GPU** (data-loss guard — treat as near-P1). CATALOG.md.
+- **Qdrant dimension-mismatch guard:** no action from this snapshot; current code and Compose already default `QDRANT_RECREATE_ON_DIM_MISMATCH=false`.
 - Pin TensorZero/Hi-RAG images to digests (Ollama/NIM already pinned).
 - Standardize GPU reservation syntax (long-form `deploy.resources.reservations.devices`); deprecate `gpus: all`. https://docs.docker.com/compose/gpu-support/
 - `CUDA_VISIBLE_DEVICES` per service on multi-GPU nodes (Knuckles dual-GPU, SPARK).
@@ -153,7 +159,7 @@ Z890 = workstation + GPU runner + primary inference host (RTX 3090 Ti, 24GB — 
 - **Two ready handoffs to land on Z890:** network-tier anchors (`z890-compose-base-network-tier-anchors.md`) + VibeVoice media profile (`z890-compose-voice-vibevoice-media-profile.md`) — both need `COMPOSE_EDIT=1`, zero runtime change.
 - **Runner token freshness:** `make -C pmoves gha-runner-4090-preflight` before assuming 4090/Z890 has a current PAT.
 
-**Pure 4090-lane (no Z890 needed):** P1-B, P1-C, P1-D, P1-G, all workflow-YAML and compose-text edits (QEMU, Qdrant guard, image pinning, limits/healthchecks, restart policies, doc creation). Validate via `docker compose config` + `actionlint` locally.
+**Pure 4090-lane (no Z890 needed):** revalidated P1-B/P1-C items and workflow/compose text edits such as QEMU, image pinning, limits/healthchecks, and documentation. P1-D is closed, P1-G is invalid, and the Qdrant guard already exists.
 
 ---
 
@@ -166,7 +172,7 @@ Z890 = workstation + GPU runner + primary inference host (RTX 3090 Ti, 24GB — 
 3. **Local build of one service** (build context = repo root per memory `feedback_docker_build_context.md`):
    `docker buildx build --build-arg PIP_CONSTRAINT=requirements.lock -f <Dockerfile> .` — proves the build arg + context path before fleet dispatch.
 4. **Cache/GC behavior:** create a throwaway named builder with the proposed `buildkitd.toml`, run two builds, `docker buildx du` to confirm GC bound holds. (Throwaway only — do NOT touch Z890's builder.)
-5. **Qdrant guard:** assert `QDRANT_RECREATE_ON_DIM_MISMATCH=false` resolves in rendered config: `docker compose config | grep -A2 hi-rag` after edit.
+5. **Qdrant guard:** assert the existing `QDRANT_RECREATE_ON_DIM_MISMATCH=false` baseline still resolves in rendered config: `docker compose config | grep -A2 hi-rag`.
 6. **Log rotation locally:** start one service on 4090 Docker Desktop, confirm `docker inspect <c> --format '{{.HostConfig.LogConfig}}'` shows `max-size=50m max-file=3`.
 7. **Pre-dispatch gate:** existing `pmoves/mk/build-gate.mk` (`build_gate.py`) before pushing workflow changes.
 
@@ -177,4 +183,4 @@ Z890 = workstation + GPU runner + primary inference host (RTX 3090 Ti, 24GB — 
 - GHA-cache-on-self-hosted disk footprint, and QEMU arm64 cross-build on amd64 runners.
 - GPU-specific items (CUDA_VISIBLE_DEVICES isolation, gpu-orchestrator sock spawn, VRAM affinity) — Z890/SPARK/Knuckles only.
 
-**Sequencing for PRs:** ship pure-4090 workflow + compose-text PRs first (P1-B/C/D/G, P2 Qdrant guard/QEMU/pinning) → validate green on 4090 → then the Z890 handoff bundle (P1-A log rotation, P1-F builder gate, ready compose handoffs) → then VPS daemon.json via Hostinger MCP/vps-deployer (P1-E) in an off-peak window.
+**Sequencing for PRs:** re-audit P1-B/C and the QEMU/pinning proposals on current main, then ship only confirmed gaps → validate green on 4090 → then the Z890 handoff bundle (P1-A log rotation, P1-F builder gate, ready compose handoffs) → then VPS daemon.json via Hostinger MCP/vps-deployer (P1-E) in an off-peak window.

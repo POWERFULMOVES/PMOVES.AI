@@ -17,9 +17,9 @@ Related: PR #1849 (serializer fix, merged-pending) · PR #1361 (5 observability 
 
 ---
 
-## Phase 0 — Full refresh from main (unblocks ports + gateway-agent)
+## Phase 0 — Reconcile the deploy checkout and rebuild gateway-agent
 
-**Goal:** the running stack rebuilds from current `main` so (a) `gateway-agent` rebuilds with the COPY fix, and (b) any *config* drift affecting `:8105` is picked up.
+**Goal:** reconcile the deploy checkout with current `main` and rebuild `gateway-agent` with the COPY fix. Treat Cipher host-port diagnosis as a separate lane.
 
 **Caveat (post-review correction):** `cipher-api` already declares `ports: ["${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"]` and joins the non-internal `pmoves_external` network (`pmoves/docker-compose.yml`) — the port-publish gap is **not** a missing network/port declaration. A plain `down`/`up` with no Compose change will not fix a host/Docker-Desktop port-publishing bug (see `[[project_internal_networks_block_port_publishing.md]]` / `[[project_z890_kong_bind_real_root_cause.md]]`). Diagnose the Docker Desktop version/daemon behavior first; only fall back to a full stack recreate as a blunt-instrument retry, not as the primary fix.
 
@@ -27,11 +27,10 @@ Related: PR #1849 (serializer fix, merged-pending) · PR #1361 (5 observability 
 
 **Runbook (operator-confirmed):**
 1. Triage main-checkout dirty state: `git -C . status --short`. Decide per file — commit valuable changes to their own branches, stash the rest (`git stash push -m pre-main-refresh`). Do **not** blanket-discard.
-2. Update deploy checkout to main: `git fetch origin && git switch main && git pull` (or rebase the ghcr branch later — separate concern).
-3. Stack down/up via Known Roads: `make -C pmoves down` then `make -C pmoves secrets-funnel` (now safe — serializer fix prevents the env.tier-agent corruption) then `make -C pmoves up` (rebuilds images incl. gateway-agent + recreates `pmoves_*` networks).
-4. Verify: `curl localhost:8105/health` (host reach restored), `docker ps | grep gateway-agent` (no crash-loop), `docker inspect pmoves-cipher-api-1 --format '{{json .NetworkSettings.Ports}}'` (no longer empty).
-
-> If the dirty state is too risky to move, fallback = recreate only the `pmoves_*` networks via down/up on the current checkout (fixes ports) and rebuild gateway-agent from a clean `main` worktree — but compose project-name mismatch makes the single-checkout path cleaner.
+2. Update the deploy checkout to main only after the dirty-state decision: `git fetch origin && git switch main && git pull` (or rebase the ghcr branch later — separate concern).
+3. Rebuild only the affected service through the Compose Known Road: `make -C pmoves compose ARGS="up -d --no-deps --build --recreate gateway-agent"`. Do not take down the full stack for an unproven port-publishing hypothesis.
+4. Verify gateway-agent independently: `docker ps | grep gateway-agent`, its health endpoint/logs, and the expected image/source revision.
+5. Diagnose Cipher without asserting recovery: compare `docker compose config`, `docker inspect pmoves-cipher-api-1 --format '{{json .NetworkSettings.Ports}}'`, and `curl localhost:8105/health`. If the declared binding is absent at runtime, identify the host/daemon or project-state cause before choosing a scoped recreate.
 
 ---
 
