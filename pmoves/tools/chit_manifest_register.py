@@ -46,6 +46,15 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # Tier 3: LLM (external provider keys) — TensorZero/worker lanes read
     # these from env.tier-llm.
     "HF_TOKEN": {"tier": "llm", "required": False},
+    # Kimi coding plan (Moonshot). Canonical name matches the operator's GH
+    # prod secret; the legacy Moonshot name stays honored as a source alias.
+    # TensorZero's model config still reads the legacy name at the gateway —
+    # compose maps it from this canonical key.
+    "KIMI_CODING_API": {
+        "tier": "llm",
+        "required": False,
+        "aliases": ["MOONSHOT_API_KEY"],
+    },
     "KILOCODE_API_KEY": {"tier": "llm", "required": False},
     "OLLAMA_API_KEY": {"tier": "llm", "required": False},
     "MINIMAX_API_KEY": {"tier": "llm", "required": False},
