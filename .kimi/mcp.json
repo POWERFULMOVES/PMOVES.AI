@@ -35,7 +35,7 @@
         "-y",
         "@supabase/mcp-server-postgrest@0.1.1",
         "--apiUrl",
-        "http://localhost:8000/rest/v1",
+        "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
         "--apiKey",
         "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
         "--schema",
@@ -86,6 +86,11 @@
         "--profile",
         "pmoves_5090_web"
       ]
+    },
+    "archon": {
+      "description": "Archon knowledge / task orchestrator",
+      "type": "http",
+      "url": "http://${TS_Z890}:8051"
     }
   }
 }
