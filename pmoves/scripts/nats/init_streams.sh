@@ -22,6 +22,12 @@ set -u
 
 NATS_URL="${NATS_URL:-nats://nats:pmoves@nats:4222}"
 
+# This sidecar always runs in-cluster on the pmoves_bus network. env.shared's
+# NATS_URL targets host-run agents (host localhost:4222), which can never
+# resolve from inside a container — rewrite a localhost/127.0.0.1 host to the
+# `nats` service DNS name, preserving optional credentials and the port.
+NATS_URL=$(printf '%s' "$NATS_URL" | sed -E 's#(//|@)(localhost|127\.0\.0\.1):#\1nats:#')
+
 # Wait for NATS to be reachable (healthcheck may pass before JetStream is ready)
 MAX_RETRIES=30
 RETRY=0
