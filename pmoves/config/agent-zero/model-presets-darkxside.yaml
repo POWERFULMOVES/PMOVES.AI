@@ -1,0 +1,42 @@
+# PMOVES model presets — DARKXSIDE standalone sidecar (Agent Zero 2.5)
+#
+# Deployed to pmoves/usr/plugins/_model_config/presets.yaml (the sidecar
+# bind-mounts ./usr -> /a0/usr). Standalone topology: cloud chat direct on
+# the Z.AI coding plan (no TensorZero dependency — sidecar must work when
+# the monolith is down), embeddings on host Ollama.
+#
+# zai_coding provider (fork registry) supplies the coding api_base; the key
+# resolves via ZAI_CODING_API_KEY (models.get_api_key convention), mapped
+# from the tier-held credential in docker-compose.darkxside-sidecar.yml.
+- name: Default
+  chat:
+    provider: zai_coding
+    name: glm-5-turbo
+    api_base: ''
+    ctx_length: 128000
+    ctx_history: 0.7
+    vision: false
+    max_embeds: 10
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs: {}
+  utility:
+    provider: zai_coding
+    name: glm-5-turbo
+    api_base: ''
+    ctx_length: 128000
+    ctx_input: 0.7
+    rl_requests: 0
+    rl_input: 0
+    rl_output: 0
+    kwargs: {}
+  embedding:
+    provider: ollama
+    # ollama/ prefix REQUIRED: A0's embed path hands this name straight to
+    # litellm without adding the provider prefix (unlike chat/utility).
+    name: ollama/qwen3-embedding:4b
+    api_base: http://host.docker.internal:11434
+    rl_requests: 0
+    rl_input: 0
+    kwargs: {}
