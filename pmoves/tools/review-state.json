@@ -1,5 +1,5 @@
 {
-  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics. Cron review-iter-poll re-armed 2026-07-24T15:30Z after review-iter-3 SHIPPED — PMOVES.AI#2199 is cycle-3-done with all 3 cycle-3 threads resolved (P2/nitpick only; no P1, no owner-bucket). PMOVES-OpenRoom#1 remains cycle-1-done; cycle-2 and cycle-3 both didn't touch the fork (the gitlink promotion to PMOVES.AI-Edition-Hardened was an out-of-band push on the fork's remote, not a fork-branch commit).",
+  "_note": "Last-seen review thread IDs per Mavis PR. Regenerated each review-iter cycle. See review-iter-workflow.md for the loop semantics. Cron review-iter-poll disarmed 2026-07-24T16:15Z after cycle-3 SHIPPED + 45m quiet (>30m guard met, no new threads) — both PRs in cycle-3-done (parent) / cycle-1-done (fork) state. PMOVES.AI#2199 had 17 review threads addressed across 3 cycles (2 P1 + 15 P2/nitpick; 1 owner-bucketed Three-Body protocol thread deferred to operator). PMOVES-OpenRoom#1 had 3 P2 threads addressed in cycle 1; cycles 2/3 didn't touch the fork. Will re-arm on /re-iter comment or a new review thread.",
   "schema_version": "1.0.0",
   "prs": {
     "POWERFULMOVES/PMOVES.AI#2199": {
@@ -27,7 +27,7 @@
       ],
       "last_cycle_branch": "review-iter-3",
       "status": "cycle-3-done",
-      "cron_status": "armed",
+      "cron_status": "disarmed",
       "owner_bucket_threads": {
         "3645826541": {
           "file": "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md:1351",
@@ -47,7 +47,7 @@
         "c367e17"
       ],
       "status": "cycle-1-done",
-      "cron_status": "armed",
+      "cron_status": "disarmed",
       "note": "no new threads since review-iter-1 (cycle-2 and cycle-3 both didn't touch the fork; the fork's gitlink promotion to PMOVES.AI-Edition-Hardened was an out-of-band push on the fork's remote, not a fork-branch commit)"
     }
   }
