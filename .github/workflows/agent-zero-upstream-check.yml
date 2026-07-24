@@ -148,9 +148,12 @@ jobs:
             echo "PYREQWEST_PRESENT=false" >> "$GITHUB_ENV"
           fi
 
-      - name: Update Dockerfile AGENT_ZERO_REF
+      - name: Update Dockerfile upstream pins
         run: |
           sed -i 's/^ARG AGENT_ZERO_REF=.*/ARG AGENT_ZERO_REF=${{ needs.check-upstream.outputs.new_tag }}/' "${{ env.DOCKERFILE }}"
+          if grep -q '^ARG AGENT_ZERO_UPSTREAM_VERSION=' "${{ env.DOCKERFILE }}"; then
+            sed -i 's/^ARG AGENT_ZERO_UPSTREAM_VERSION=.*/ARG AGENT_ZERO_UPSTREAM_VERSION=${{ needs.check-upstream.outputs.new_tag }}/' "${{ env.DOCKERFILE }}"
+          fi
 
       - name: Update upstream-constraints.txt if needed
         run: |
