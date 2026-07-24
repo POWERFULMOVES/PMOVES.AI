@@ -1094,6 +1094,14 @@ services:
     - supabase-local
     environment:
     - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    # Pass-through (no `=`) so these resolve to ABSENT from the host, overriding
+    # the empty-string values the supabase env files set. vector 0.28.1 fails to
+    # build its logflare proxy connector from an empty-string HTTP_PROXY ("Failed
+    # to build Proxy connector: empty string") and crash-loops; an ABSENT var is
+    # fine. (An `=` here would re-set the empty string and reintroduce the crash.)
+    - HTTP_PROXY
+    - HTTPS_PROXY
+    - NO_PROXY
     volumes:
     - supabase-vector-data:/var/lib/vector
     - ../PMOVES-supabase/docker/volumes/logs/vector.yml:/etc/vector/vector.yml:ro
