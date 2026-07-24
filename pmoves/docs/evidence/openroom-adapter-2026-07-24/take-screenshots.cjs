@@ -43,8 +43,19 @@ const ROOMS = [
   });
 
   // First, screenshot the empty shell to show the desktop baseline.
+  // Use domcontentloaded because the OpenRoom shell has persistent
+  // background activity (LFM config fetch, vibe container, etc.) that
+  // never reaches networkidle. Wait for the desktop root element so
+  // the screenshot doesn't fire mid-mount.
   console.log('Loading empty shell...');
-  await page.goto('http://localhost:3000/', { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto('http://localhost:3000/', {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000,
+  });
+  await page.waitForSelector('[data-app-id], .desktop, body', {
+    state: 'attached',
+    timeout: 10000,
+  });
   await page.waitForTimeout(2000);
   await page.screenshot({
     path: path.join(EVIDENCE_DIR, '01-shell-empty.png'),
@@ -55,22 +66,39 @@ const ROOMS = [
   // Then, load each public room and screenshot the composed desktop.
   for (const room of ROOMS) {
     console.log(`Loading room ${room.id}...`);
-    // Use 'domcontentloaded' instead of 'networkidle' because the OpenRoom
-    // shell has persistent background activity (LFM config fetch, vibe
-    // container, etc.) that never reaches idle. 3s wait after DOM ready
-    // gives the room adapter time to fetch the manifest, register apps,
-    // and open the windows.
+    // Use 'domcontentloaded' for the same reason as the empty shell.
+    // After DOM ready, wait for at least one window element to be in
+    // the DOM before screenshotting — the room adapter registers
+    // windows in the React tree once the manifest is parsed. Falls
+    // back to a generous timeout if the room has no panels.
     await page.goto(`http://localhost:3000/?room=${room.id}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
     });
-    await page.waitForTimeout(4000);
+    // Deterministic readiness: assert that either a window was
+    // composed (we expect panels for every public room) or the
+    // wallpaper reached the DOM. If neither lands, the test fails
+    // loudly instead of producing a black screenshot.
+    const ready = await Promise.race([
+      page
+        .waitForSelector('[data-pmoves-room]', { state: 'attached', timeout: 8000 })
+        .then(() => 'wallpaper'),
+      page
+        .waitForSelector('.window, [data-window-id]', { state: 'attached', timeout: 8000 })
+        .then(() => 'window'),
+    ]).catch(() => 'timeout');
+    if (ready === 'timeout') {
+      throw new Error(
+        `room ${room.id}: no wallpaper or window element appeared within 8s — adapter may not have loaded the manifest`,
+      );
+    }
+    await page.waitForTimeout(1500);
     const filename = `02-room-${room.label}.png`;
     await page.screenshot({
       path: path.join(EVIDENCE_DIR, filename),
       fullPage: false,
     });
-    console.log(`  -> ${filename}`);
+    console.log(`  -> ${filename} (readiness: ${ready})`);
   }
 
   // Write the console log so we can see what the adapter reported.

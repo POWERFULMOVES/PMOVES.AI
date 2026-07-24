@@ -1,8 +1,19 @@
 # OpenRoom Adapter Lane — First Slice Evidence (2026-07-24)
 
+> **Historical snapshot — pre-review-iter.**
+> This README was authored at the first-slice evidence capture, BEFORE
+> review-iter-1 and review-iter-2 were merged. The test counts and
+> commit list below are first-slice values (119/119, 27/27). For the
+> current lane record (121/121 vitest, 28/28 P7 pytest) and the
+> full stacked-commits history, see `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+> entries `Mavis::OPENROOM-ADAPTER-REVIEW-ITER-{1,2}-RELEASE::2026-07-24`.
+> The reproduction recipe (port numbers, env vars) is canonical and
+> matches the screenshot scripts; only the static stats in the
+> "Tests passing" + "Diff summary" sections are stale.
+
 **Lane:** `Mavis::OPENROOM-ADAPTER-LANE-CLAIM::2026-07-24`
 **Branch:** `feat/openroom-adapter` (off `origin/main` @ 1797d1b99a)
-**PR:** TBD (push pending — this is the pre-push evidence capture)
+**PR:** #2199 (`POWERFULMOVES/PMOVES.AI`)
 
 ## What this slice delivers
 
@@ -30,7 +41,9 @@ Closes the "A2UI but no rooms" surface gap on `/stage/`:
 
 ## Tests passing
 
-```
+> Pre-review-iter counts. Current: 121/121 vitest, 28/28 P7 pytest.
+
+```text
 $ pnpm vitest run --no-coverage
  Test Files  8 passed (8)
       Tests  119 passed (119)
@@ -49,7 +62,11 @@ $ python -m pytest pmoves/design/tests/test_stage_data.py
 
 ## Diff summary (parent + submodule)
 
-```
+> Pre-review-iter snapshot; review-iter-1 + review-iter-2 commits
+> not listed here. See the AGNOTE entries referenced above for
+> the full stack.
+
+```text
 feat/openroom-adapter ahead of origin/main by 6 commits:
 
   9e2faee  docs(agnote): openroom-adapter lane pickup
@@ -73,13 +90,13 @@ branch feat/pmoves-room-adapter:
 
 The adapter is wired end-to-end. To exercise the flow locally:
 
-1. `cd PMOVES-OpenRoom && pnpm install && pnpm dev` — Vite on `:5173`
+1. `cd PMOVES-OpenRoom && pnpm install && pnpm dev` — Vite on `:3000`
    with `/api/rooms/<id>.json` served from `pmoves/config/rooms/`
 2. `cd pmoves/services/p7-room-orchestrator && P7_PMOVES_ROOT=../../..
    P7_CONTROL_TOKEN=dev-token python app.py` — P7 on `:8120`
 3. Visit `https://pmoves.ai/stage/` (or local equivalent), click
    "Enter →" on any public room card
-4. The browser navigates to `http://localhost:5173/?room=<id>`
+4. The browser navigates to `http://localhost:3000/?room=<id>`
 5. The OpenRoom shell mounts, fetches the manifest, registers apps,
    opens 3 windows (or however many panels the manifest has),
    applies the theme, calls P7 session open
@@ -140,21 +157,50 @@ session publish fails gracefully as designed).
 
 ## Reproducing the visual evidence
 
-```bash
+Canonical port: OpenRoom dev runs on `:3000` (vite default — both
+`take-screenshots.cjs` and `take-stage-screenshots.cjs` target this
+port; do not change one without the other).
+
+### PowerShell (Windows)
+
+```powershell
 # Terminal 1: P7 backend
-cd .worktrees/feat-openroom-adapter
-$env:P7_PMOVES_ROOT = '../../..'
+cd .worktrees\feat-openroom-adapter
+$env:P7_PMOVES_ROOT = '..\..\..'
 $env:P7_CONTROL_TOKEN = 'dev-token'
-uvicorn pmoves.services.p7-room-orchestrator.app:app \
+uvicorn pmoves.services.p7-room-orchestrator.app:app `
   --host 127.0.0.1 --port 8120 --app-dir .
 
 # Terminal 2: OpenRoom dev server
-cd .worktrees/feat-openroom-adapter/PMOVES-OpenRoom/apps/webuiapps
+cd .worktrees\feat-openroom-adapter\PMOVES-OpenRoom\apps\webuiapps
 $env:PMOVES_P7_URL = 'http://127.0.0.1:8120'
 $env:PMOVES_P7_TOKEN = 'dev-token'
 npm run dev
 
-# Terminal 3: /stage/ static server (or use any static file host)
+# Terminal 3: /stage/ static server
+cd .worktrees\feat-openroom-adapter\website
+python -m http.server 8080
+
+# Terminal 4: take screenshots
+cd .worktrees\feat-openroom-adapter
+node pmoves\docs\evidence\openroom-adapter-2026-07-24\take-screenshots.cjs
+node pmoves\docs\evidence\openroom-adapter-2026-07-24\take-stage-screenshots.cjs
+```
+
+### Bash / WSL / Linux
+
+```bash
+# Terminal 1: P7 backend
+cd .worktrees/feat-openroom-adapter
+P7_PMOVES_ROOT=../../.. P7_CONTROL_TOKEN=dev-token \
+  uvicorn pmoves.services.p7-room-orchestrator.app:app \
+    --host 127.0.0.1 --port 8120 --app-dir .
+
+# Terminal 2: OpenRoom dev server
+cd .worktrees/feat-openroom-adapter/PMOVES-OpenRoom/apps/webuiapps
+PMOVES_P7_URL=http://127.0.0.1:8120 PMOVES_P7_TOKEN=dev-token npm run dev
+
+# Terminal 3: /stage/ static server
 cd .worktrees/feat-openroom-adapter/website
 python -m http.server 8080
 
