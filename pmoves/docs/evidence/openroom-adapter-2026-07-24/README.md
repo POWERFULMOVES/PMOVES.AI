@@ -119,3 +119,51 @@ The adapter is wired end-to-end. To exercise the flow locally:
   registration, theme, P7 session, dispose, error paths).
 - `pmoves/scripts/validate_room_manifests.py` — 9/9 OK (no
   regression on the catalog).
+
+## Visual evidence (Playwright screenshots, 2026-07-24)
+
+Captured by booting the OpenRoom dev server + a local
+p7-room-orchestrator on `127.0.0.1:8120` (no NATS, no Supabase —
+session publish fails gracefully as designed).
+
+| File | What it shows |
+|---|---|
+| `screenshots/01-shell-empty.png` | The stock OpenRoom desktop at `/` with no room loaded — 11 sample apps (Twitter, Music, Diary, etc.) on the left, Aoi character on the right, taskbar at bottom. Baseline. |
+| `screenshots/02-room-demo.png` | The PMOVES Demo Room loaded via `?room=demo.room.rehearsal`. 3 windows composed (Agent Zero Main, Claude Code Panel, Hermes Assist) from the manifest's `shell.layout.panels[]`. Each window shows the "PREVIEW — not connected to live services · demo.room.rehearsal" stage banner (rehearsal stage discipline). StubApp fallback rendering manifest metadata (appId 1002, stage rehearsal, room demo.room.rehearsal). |
+| `screenshots/02-room-fordham.png` | Fordham Hill Community Room loaded — 4 windows composed (Resident Chat, Pilot Notebook, Pilot Metrics, Voice Stage). Same PREVIEW banner. Different room shape (more apps) but the same adapter composes them all. |
+| `screenshots/02-room-tokenism.png` | ToKenism Exchange — adapter composes 2 windows. Same PREVIEW banner. |
+| `screenshots/03-stage-with-enter-buttons.png` | The `/stage/` page with the new "Enter →" button on each public room card. Closes the "A2UI but no rooms" surface observation. |
+| `screenshots/04-stage-enter-hover.png` | Same page with the Fordham card's Enter button hovered. |
+| `screenshots/05-stage-full.png` | Full-page screenshot showing all 4 public cards (Fordham, Demo, ToKenism, z890-infra — the z890 leak is pre-existing on `origin/main`, separate concern). |
+| `screenshots/console.log` | Browser console output from the OpenRoom runs: confirms the adapter loaded each room, called P7 session open on each (HTTP 200, 404 on NATS publish because no NATS server running — graceful). |
+| `screenshots/stage-console.log` | Browser console from the /stage/ runs. |
+
+## Reproducing the visual evidence
+
+```bash
+# Terminal 1: P7 backend
+cd .worktrees/feat-openroom-adapter
+$env:P7_PMOVES_ROOT = '../../..'
+$env:P7_CONTROL_TOKEN = 'dev-token'
+uvicorn pmoves.services.p7-room-orchestrator.app:app \
+  --host 127.0.0.1 --port 8120 --app-dir .
+
+# Terminal 2: OpenRoom dev server
+cd .worktrees/feat-openroom-adapter/PMOVES-OpenRoom/apps/webuiapps
+$env:PMOVES_P7_URL = 'http://127.0.0.1:8120'
+$env:PMOVES_P7_TOKEN = 'dev-token'
+npm run dev
+
+# Terminal 3: /stage/ static server (or use any static file host)
+cd .worktrees/feat-openroom-adapter/website
+python -m http.server 8080
+
+# Terminal 4: take screenshots
+cd .worktrees/feat-openroom-adapter
+node pmoves/docs/evidence/openroom-adapter-2026-07-24/take-screenshots.cjs
+node pmoves/docs/evidence/openroom-adapter-2026-07-24/take-stage-screenshots.cjs
+```
+
+Then visit:
+- `http://localhost:3000/?room=demo.room.rehearsal` — opens the room
+- `http://localhost:8080/stage/` — see the Enter buttons

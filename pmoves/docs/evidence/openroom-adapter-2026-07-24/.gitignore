@@ -1,0 +1,6 @@
+# Screenshots are local evidence; capture is reproducible from
+# take-screenshots.cjs / take-stage-screenshots.cjs once a dev server
+# is running. Keep the artifacts out of git to avoid bloat on the
+# repo (each screenshot is ~1-2 MB).
+screenshots/
+*.log
