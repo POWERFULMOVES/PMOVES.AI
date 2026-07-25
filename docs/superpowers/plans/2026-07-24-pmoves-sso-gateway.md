@@ -45,7 +45,9 @@ python-jose[cryptography]==3.3.0
 httpx==0.28.1
 jinja2==3.1.5
 pydantic-settings==2.7.1
+python-multipart==0.0.20
 ```
+(`python-multipart` is a RUNTIME dep — FastAPI needs it at route-registration time for the `Form(...)` login endpoint added in Task 2.)
 
 - [ ] **Step 2: Write the failing test**
 
@@ -274,10 +276,13 @@ for k, v in {"SUPABASE_JWT_SECRET": SECRET, "GOTRUE_URL": "http://gotrue:9999",
     os.environ.setdefault(k, v)
 import importlib, config, jwt_verify, gotrue, app as appmod
 for m in (config, jwt_verify, gotrue, appmod): importlib.reload(m)
-client = TestClient(appmod.app)
+# base_url must be a real *.pmoves.ai host: the session cookie is Domain=.pmoves.ai,
+# and httpx's cookie jar drops cookies whose Domain doesn't suffix-match the request host.
+client = TestClient(appmod.app, base_url="https://auth.pmoves.ai")
 
 def _access(email="a@b.co"):
-    return jwt.encode({"sub":"u1","email":email,"exp":int(time.time())+3600}, SECRET, algorithm="HS256")
+    # role='authenticated' is REQUIRED — verify_session (Task 1) rejects any other role.
+    return jwt.encode({"sub":"u1","email":email,"role":"authenticated","exp":int(time.time())+3600}, SECRET, algorithm="HS256")
 
 def test_login_page_renders():
     r = client.get("/login?rd=https://health.pmoves.ai")
@@ -299,7 +304,7 @@ def test_logout_clears_cookie():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest python -m pytest tests/test_login.py -q`
+Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio python -m pytest tests/test_login.py -q`
 Expected: FAIL (`ModuleNotFoundError: gotrue`).
 
 - [ ] **Step 3: Write `gotrue.py`**
@@ -393,7 +398,7 @@ def logout():
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest python -m pytest tests/test_login.py -q`
+Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio python -m pytest tests/test_login.py -q`
 Expected: PASS (3 passed).
 
 - [ ] **Step 7: Commit**
@@ -427,7 +432,7 @@ SECRET="test-secret-value-at-least-32-chars-long!!"
 for k,v in {"SUPABASE_JWT_SECRET":SECRET,"GOTRUE_URL":"http://g:9999","PUBLIC_BASE_URL":"https://auth.pmoves.ai","JELLYFIN_OIDC_CLIENT_ID":"jf","JELLYFIN_OIDC_CLIENT_SECRET":"sec"}.items(): os.environ.setdefault(k,v)
 import importlib, config, jwt_verify, gotrue, oidc, app as appmod
 for m in (config,jwt_verify,gotrue,oidc,appmod): importlib.reload(m)
-client=TestClient(appmod.app)
+client=TestClient(appmod.app, base_url="https://auth.pmoves.ai")
 
 def test_discovery_lists_endpoints():
     d=client.get("/.well-known/openid-configuration").json()
@@ -436,7 +441,7 @@ def test_discovery_lists_endpoints():
     assert d["token_endpoint"].endswith("/oidc/token")
 
 def test_token_endpoint_mints_id_token():
-    sess=jwt.encode({"sub":"u1","email":"a@b.co","exp":int(time.time())+3600}, SECRET, algorithm="HS256")
+    sess=jwt.encode({"sub":"u1","email":"a@b.co","role":"authenticated","exp":int(time.time())+3600}, SECRET, algorithm="HS256")
     code=oidc._issue_code(sess)  # helper: bind an auth code to a validated session
     r=client.post("/oidc/token", data={"grant_type":"authorization_code","code":code,
         "client_id":"jf","client_secret":"sec","redirect_uri":"https://media.pmoves.ai/sso/OID/redirect/pmoves"})
@@ -445,7 +450,7 @@ def test_token_endpoint_mints_id_token():
     assert claims["email"]=="a@b.co"
 
 def test_token_rejects_bad_client_secret():
-    sess=jwt.encode({"sub":"u1","email":"a@b.co","exp":int(time.time())+3600}, SECRET, algorithm="HS256")
+    sess=jwt.encode({"sub":"u1","email":"a@b.co","role":"authenticated","exp":int(time.time())+3600}, SECRET, algorithm="HS256")
     code=oidc._issue_code(sess)
     r=client.post("/oidc/token", data={"grant_type":"authorization_code","code":code,"client_id":"jf","client_secret":"WRONG","redirect_uri":"x"})
     assert r.status_code==401
@@ -453,7 +458,7 @@ def test_token_rejects_bad_client_secret():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest python -m pytest tests/test_oidc.py -q`
+Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio python -m pytest tests/test_oidc.py -q`
 Expected: FAIL (`ModuleNotFoundError: oidc`).
 
 - [ ] **Step 3: Write `oidc.py`**
@@ -533,7 +538,7 @@ app.include_router(oidc.router)
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest python -m pytest tests/test_oidc.py -q`
+Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio python -m pytest tests/test_oidc.py -q`
 Expected: PASS (3 passed).
 
 - [ ] **Step 6: Commit**
