@@ -266,6 +266,7 @@ git commit -m "feat(sso-auth): scaffold service + Supabase-JWT verify + /auth/ve
 # pmoves/services/sso-auth/tests/test_login.py
 import time
 import pytest
+import httpx
 from jose import jwt
 from fastapi.testclient import TestClient
 import config, gotrue
@@ -349,6 +350,29 @@ def test_logout_redirects_local_and_revokes(monkeypatch):
     r = client.get("/logout", cookies={"pmoves_session": "sometoken"}, follow_redirects=False)
     assert r.headers["location"] == "/login"
     assert called.get("token") == "sometoken"
+
+def test_gotrue_outage_becomes_gotrue_error(monkeypatch):
+    # A GoTrue OUTAGE (transport error) must surface as GoTrueError so the
+    # endpoint handlers' `except GoTrueError` catch it — never a raw httpx
+    # exception that would 500 the login/callback (fail-closed invariant).
+    def _down(*a, **k): raise httpx.ConnectError("connection refused")
+    monkeypatch.setattr(gotrue.httpx, "post", _down)
+    with pytest.raises(gotrue.GoTrueError):
+        gotrue.password_grant("a@b.co", "pw")
+    with pytest.raises(gotrue.GoTrueError):
+        gotrue.exchange_code("somecode")
+    with pytest.raises(gotrue.GoTrueError):
+        gotrue.logout("sometoken")
+
+def test_logout_clears_cookie_even_when_gotrue_down(monkeypatch):
+    # /logout stays fail-closed: a GoTrue outage must NOT stop the local cookie
+    # from being cleared, and must still redirect to the local /login (never 500).
+    def _down(*a, **k): raise httpx.ConnectError("connection refused")
+    monkeypatch.setattr(gotrue.httpx, "post", _down)
+    client.cookies.clear()
+    r = client.get("/logout", cookies={"pmoves_session": "sometoken"}, follow_redirects=False)
+    assert r.headers["location"] == "/login"
+    assert 'pmoves_session=""' in r.headers.get("set-cookie", "") or "pmoves_session=;" in r.headers.get("set-cookie", "")
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -366,12 +390,22 @@ from config import settings
 
 class GoTrueError(Exception): ...
 
+def _post(path: str, *, ok=(200,), **kwargs) -> httpx.Response:
+    # Single POST helper: a GoTrue OUTAGE (connect/timeout/transport error) must
+    # surface as GoTrueError, not a raw httpx exception — otherwise the callers'
+    # `except GoTrueError` blocks miss it and the endpoint 500s, violating the
+    # spec's fail-closed / never-500 invariant. So we wrap httpx.RequestError too.
+    try:
+        r = httpx.post(f"{settings.gotrue_url}{path}", timeout=10.0, **kwargs)
+    except httpx.RequestError as ex:
+        raise GoTrueError(f"gotrue unreachable: {ex!r}") from ex
+    if r.status_code not in ok:
+        raise GoTrueError(f"gotrue {path} {r.status_code}")
+    return r
+
 def password_grant(email: str, password: str) -> dict:
-    url = f"{settings.gotrue_url}/token?grant_type=password"
-    r = httpx.post(url, json={"email": email, "password": password}, timeout=10.0)
-    if r.status_code != 200:
-        raise GoTrueError(f"gotrue {r.status_code}")
-    return r.json()
+    return _post("/token?grant_type=password",
+                 json={"email": email, "password": password}).json()
 
 def github_authorize_url(redirect_to: str) -> str:
     q = urlencode({"provider": "github", "redirect_to": redirect_to})
@@ -379,18 +413,12 @@ def github_authorize_url(redirect_to: str) -> str:
 
 def exchange_code(code: str) -> dict:
     # GoTrue PKCE/code exchange: POST /token?grant_type=pkce (auth code flow).
-    url = f"{settings.gotrue_url}/token?grant_type=pkce"
-    r = httpx.post(url, json={"auth_code": code}, timeout=10.0)
-    if r.status_code != 200:
-        raise GoTrueError(f"gotrue exchange {r.status_code}")
-    return r.json()
+    return _post("/token?grant_type=pkce", json={"auth_code": code}).json()
 
 def logout(access_token: str) -> None:
     # Server-side revoke of the GoTrue session (POST /logout with the bearer).
-    r = httpx.post(f"{settings.gotrue_url}/logout",
-                   headers={"Authorization": f"Bearer {access_token}"}, timeout=10.0)
-    if r.status_code not in (200, 204):
-        raise GoTrueError(f"gotrue logout {r.status_code}")
+    _post("/logout", ok=(200, 204),
+          headers={"Authorization": f"Bearer {access_token}"})
 ```
 
 - [ ] **Step 4: Write `templates/login.html`**
