@@ -357,3 +357,8 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
 	branch = PMOVES.AI-Edition-Hardened
 	ignore = all
+[submodule "Pmoves-pretext"]
+	path = Pmoves-pretext
+	url = https://github.com/POWERFULMOVES/Pmoves-pretext.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all
