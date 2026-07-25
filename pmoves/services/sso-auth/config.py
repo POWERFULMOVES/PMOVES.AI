@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     # explicitly below. NoDecode skips that eager decode; load()'s explicit kwarg
     # (parsed via .split(",")) always wins in the init > env source-merge order.
     jellyfin_oidc_redirect_uris: Annotated[list[str], NoDecode] = []  # env: JELLYFIN_OIDC_REDIRECT_URIS
+    # RSA private-key PEM used to sign OIDC id_tokens (RS256). Empty => OIDC
+    # signing disabled (the OIDC endpoints 503; /auth/verify is unaffected).
+    # Generated once, stored via the CHIT vault / env at deploy.
+    oidc_signing_key: str = ""  # env: OIDC_SIGNING_KEY
 
     @classmethod
     def load(cls) -> "Settings":
@@ -38,6 +42,7 @@ class Settings(BaseSettings):
             jellyfin_oidc_client_id=g("JELLYFIN_OIDC_CLIENT_ID", ""),
             jellyfin_oidc_client_secret=g("JELLYFIN_OIDC_CLIENT_SECRET", ""),
             jellyfin_oidc_redirect_uris=redirect_uris,
+            oidc_signing_key=g("OIDC_SIGNING_KEY", "").replace("\\n", "\n"),
         )
 
 

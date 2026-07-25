@@ -5,6 +5,13 @@ from jose import jwt
 from fastapi.testclient import TestClient
 import config, oidc
 import app as appmod
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+_RSA = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+_RSA_PRIV = _RSA.private_bytes(serialization.Encoding.PEM,
+    serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+_RSA_PUB = _RSA.public_key().public_bytes(serialization.Encoding.PEM,
+    serialization.PublicFormat.SubjectPublicKeyInfo).decode()
 
 SECRET = "test-secret-value-at-least-32-chars-long!!"
 client = TestClient(appmod.app, base_url="https://auth.pmoves.ai")
@@ -16,7 +23,8 @@ def _env(monkeypatch):
     for k, v in {"SUPABASE_JWT_SECRET": SECRET, "GOTRUE_URL": "http://g:9999",
                  "PUBLIC_BASE_URL": "https://auth.pmoves.ai",
                  "JELLYFIN_OIDC_CLIENT_ID": "jf", "JELLYFIN_OIDC_CLIENT_SECRET": "sec",
-                 "JELLYFIN_OIDC_REDIRECT_URIS": RD}.items():
+                 "JELLYFIN_OIDC_REDIRECT_URIS": RD,
+                 "OIDC_SIGNING_KEY": _RSA_PRIV}.items():
         monkeypatch.setenv(k, v)
     config.settings._reset()
     yield
@@ -32,14 +40,33 @@ def test_discovery_lists_endpoints():
     assert d["issuer"]=="https://auth.pmoves.ai"
     assert d["authorization_endpoint"].endswith("/oidc/authorize")
     assert d["token_endpoint"].endswith("/oidc/token")
+    assert d["id_token_signing_alg_values_supported"]==["RS256"]
+    assert d["jwks_uri"].endswith("/oidc/jwks")
 
 def test_token_endpoint_mints_id_token():
     code=oidc._issue_code(_sess(), RD)  # helper: bind an auth code to a validated session + redirect_uri
     r=client.post("/oidc/token", data={"grant_type":"authorization_code","code":code,
         "client_id":"jf","client_secret":"sec","redirect_uri":RD})
     assert r.status_code==200
-    idt=r.json()["id_token"]; claims=jwt.decode(idt, SECRET, algorithms=["HS256"], audience="jf")
+    idt=r.json()["id_token"]
+    from jose import jwt as _jwt
+    assert _jwt.get_unverified_header(idt)["kid"]=="pmoves-sso-1"
+    claims=_jwt.decode(idt, _RSA_PUB, algorithms=["RS256"], audience="jf")
     assert claims["email"]=="a@b.co"
+
+def test_jwks_publishes_rsa_public_key():
+    j=client.get("/oidc/jwks").json()
+    assert len(j["keys"])==1
+    k=j["keys"][0]
+    assert k["kty"]=="RSA" and k["kid"]=="pmoves-sso-1" and k["use"]=="sig" and k["alg"]=="RS256"
+    assert k.get("n") and k.get("e")   # modulus + exponent present
+
+def test_userinfo_accepts_minted_id_token():
+    code=oidc._issue_code(_sess(), RD)
+    idt=client.post("/oidc/token", data={"grant_type":"authorization_code","code":code,
+        "client_id":"jf","client_secret":"sec","redirect_uri":RD}).json()["id_token"]
+    r=client.get("/oidc/userinfo", headers={"Authorization": f"Bearer {idt}"})
+    assert r.status_code==200 and r.json()["email"]=="a@b.co"
 
 def test_token_rejects_bad_client_secret():
     code=oidc._issue_code(_sess(), RD)
