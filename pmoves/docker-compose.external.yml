@@ -15,6 +15,10 @@ services:
       DJANGO_CLEAR_STATIC_FIRST: "${WGER_CLEAR_STATIC_FIRST:-True}"
       TIME_ZONE: "${WGER_TIME_ZONE:-America/New_York}"
       SITE_URL: "${WGER_SITE_URL:-http://localhost:8010}"
+      # SSO gateway: trust the Remote-User header injected by Traefik forward-auth.
+      # wger's nginx front (wger-nginx) must proxy_set_header Remote-User upstream.
+      WGER_ALLOW_REMOTE_USER: "True"
+      WGER_REMOTE_USER_HEADER: "Remote-User"
     volumes:
       - wger-static:/home/wger/static
       - wger-media:/home/wger/media
@@ -30,8 +34,16 @@ services:
         aliases:
           - pmoves-wger-nginx
       pmoves_external: {}
-    ports:
-      - "${WGER_HOST_PORT:-8010}:80"
+    # No host `ports:` — reachable only through Traefik (health.pmoves.ai), so the
+    # forward-auth Remote-User header cannot be spoofed by bypassing the proxy.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.health.rule=Host(`health.pmoves.ai`)
+      - traefik.http.routers.health.entrypoints=websecure
+      - traefik.http.routers.health.tls.certresolver=cf
+      - traefik.http.routers.health.middlewares=pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.services.health.loadbalancer.server.port=80
     volumes:
       - wger-static:/wger/static:ro
       - wger-media:/wger/media:ro
@@ -56,8 +68,22 @@ services:
       TZ: ${FIREFLY_TZ:-America/New_York}
       # Neutralise Windows SSL_CERT_FILE leak
       SSL_CERT_FILE: ""
-    ports:
-      - "${FIREFLY_PORT:-8075}:8080"  # Default 8075; 8082 reserved for media-audio in docker-compose.yml
+      # SSO gateway: Firefly III has NO native OIDC (FR #10662) — remote_user_guard
+      # IS the documented SSO path. Auto-provisions the X-Auth-Email user on first
+      # header-auth. DISABLE_FRAME_HEADER lets it render behind the proxy.
+      AUTHENTICATION_GUARD: remote_user_guard
+      AUTHENTICATION_GUARD_HEADER: Remote-User
+      AUTHENTICATION_GUARD_EMAIL: X-Auth-Email
+      DISABLE_FRAME_HEADER: "true"
+    # No host `ports:` — reachable only through Traefik (wealth.pmoves.ai).
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.wealth.rule=Host(`wealth.pmoves.ai`)
+      - traefik.http.routers.wealth.entrypoints=websecure
+      - traefik.http.routers.wealth.tls.certresolver=cf
+      - traefik.http.routers.wealth.middlewares=pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.services.wealth.loadbalancer.server.port=8080
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
@@ -146,9 +172,17 @@ services:
       SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
       SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
       SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
-    ports:
-      - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"
-      - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"
+    # No host `ports:` — reachable only through Traefik (notebook.pmoves.ai). The
+    # UI (8502) is fronted; the API (5055) is internal (UI calls it on localhost).
+    # RemoteUserMiddleware in the fork (Task 8) trusts the injected Remote-User.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.notebook.rule=Host(`notebook.pmoves.ai`)
+      - traefik.http.routers.notebook.entrypoints=websecure
+      - traefik.http.routers.notebook.tls.certresolver=cf
+      - traefik.http.routers.notebook.middlewares=pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.services.notebook.loadbalancer.server.port=8502
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
@@ -165,8 +199,16 @@ services:
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
-    ports:
-      - "8096:8096"
+    # No host `ports:` — reachable only through Traefik (media.pmoves.ai). NOTE:
+    # NO forward-auth middleware here — Jellyfin's OIDC plugin (Task 9) handles
+    # auth itself; the plugin's web UI must reach /oidc/* unauthenticated.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.media.rule=Host(`media.pmoves.ai`)
+      - traefik.http.routers.media.entrypoints=websecure
+      - traefik.http.routers.media.tls.certresolver=cf
+      - traefik.http.services.media.loadbalancer.server.port=8096
     volumes:
       - ./data/jellyfin/config:/config
       - ./data/jellyfin/cache:/cache

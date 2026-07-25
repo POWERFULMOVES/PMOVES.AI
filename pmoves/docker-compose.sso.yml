@@ -1,0 +1,20 @@
+services:
+  sso-auth:
+    build: { context: ., dockerfile: services/sso-auth/Dockerfile }
+    image: ${SSO_AUTH_IMAGE:-pmoves/sso-auth:local}
+    container_name: pmoves-sso-auth
+    restart: unless-stopped
+    environment:
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
+      GOTRUE_URL: ${GOTRUE_URL:-http://supabase-gotrue:9999}
+      PUBLIC_BASE_URL: ${SSO_PUBLIC_BASE_URL:-https://auth.pmoves.ai}
+      SSO_COOKIE_DOMAIN: ${SSO_COOKIE_DOMAIN:-.pmoves.ai}
+      JELLYFIN_OIDC_CLIENT_ID: ${JELLYFIN_OIDC_CLIENT_ID}
+      JELLYFIN_OIDC_CLIENT_SECRET: ${JELLYFIN_OIDC_CLIENT_SECRET}
+      JELLYFIN_OIDC_REDIRECT_URIS: ${JELLYFIN_OIDC_REDIRECT_URIS:-https://media.pmoves.ai/sso/OID/redirect/pmoves}
+    networks: { pmoves_app: { aliases: [pmoves-sso-auth] }, pmoves_external: {} }
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+networks:
+  pmoves_app: { external: true }
+  pmoves_external: { external: true }
