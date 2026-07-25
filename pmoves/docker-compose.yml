@@ -2908,7 +2908,10 @@ services:
     environment:
       - P7_HOST=0.0.0.0
       - P7_HTTP_PORT=8120
-      - P7_NATS_URL=nats://nats:4222
+      # Broker requires auth (documented default creds convention) — without
+      # them P7 boots in log-only fallback (nats_connected:false, no signed
+      # lifecycle events on the control plane).
+      - P7_NATS_URL=${P7_NATS_URL:-nats://nats:pmoves@nats:4222}
       - P7_PMOVES_ROOT=/etc/pmoves
       - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
       - P7_ROOMS_DIR=/etc/pmoves/rooms
@@ -3256,6 +3259,10 @@ services:
         condition: service_completed_successfully
       supabase-kong:
         condition: service_healthy
+        # kong is profile-gated (supabase-local); without required:false any
+        # --profile agents invocation fails project-wide as "depends on
+        # undefined service" when the supabase profile isn't active.
+        required: false
     profiles: ["agents", "orchestration"]
     networks: [pmoves_app, pmoves_api, pmoves_bus]
     healthcheck:
