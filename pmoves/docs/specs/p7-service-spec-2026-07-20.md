@@ -1,0 +1,301 @@
+# P7 Service Spec — Room-Aware Stage Manager Runtime
+
+**Status:** APPROVED (operator signoff 2026-07-20, recorded in AGNOTE4482PHI.t1.md as `Mavis::OPEN-ROOM-LANE-RELEASE::2026-07-20`)
+**Lane:** Open Room Lane (Mavis, mvs_09c9b116c675418b9d8b1a48b10867dc)
+**Branch:** `feat/open-room-lane` (PR #2173)
+**Date:** 2026-07-20
+**Companion spec:** [`room-manifest-schema-extensions-2026-07-20.md`](room-manifest-schema-extensions-2026-07-20.md) (APPROVED 2026-07-20)
+
+---
+
+## 1. Goal
+
+P7 (Pinokio 7) is the room-aware stage manager. The catalog (`pmoves/config/rooms/catalog.json`) and the room manifests exist, the schema is now validating all 9 rooms, and the `current_stage` field is exposed for fast lookup. What is missing is the **runtime**: a small service that knows the room topology, exposes a transition API, and publishes lifecycle events on NATS so downstream consumers (A2UI, agent-registry, observability) can react.
+
+This spec defines that service. It is intentionally small: one Python file for the catalog loader, one for the transition logic, one for the NATS publisher, and a thin FastAPI app. ~300-400 lines total. No business logic, no skill execution, no model routing — P7 is *only* the stage manager.
+
+## 2. Why this exists
+
+Per `pmoves/docs/AGENTS/AGNOTE4482.md` §30-32 (P7 — Room-Aware Stage Manager):
+
+> Pinokio 7 (P7) is the PMOVES runtime launcher and fleet orchestrator. In the rooms-on-a-stage model, P7 is not just a process spawner — it is the **room-aware stage manager**: it knows which rooms exist (via `pmoves/config/rooms/catalog.json`), selects the appropriate room profile for a given workload, and manages the transition between rehearsal → live → review → archive states. P7's NATS subjects (`p7.nats.launch`, `p7.nats.session`) are the control plane for room entry and lifecycle. When agents claim work via AGNOTE4482, P7 is the context they launch into.
+
+Per `pmoves/docs/ROOMS_ON_A_STAGE.md` §56-65 (P7 — The Stage Manager):
+
+> P7 (Pinokio 7) is the room-aware stage manager. It:
+> 1. Knows which rooms exist (via `pmoves/config/rooms/catalog.json`)
+> 2. Selects the appropriate room profile for a given workload
+> 3. Loads the correct overlay for the room
+> 4. Manages stage transitions (rehearsal → live → review → archive)
+> 5. Provides NATS control plane subjects (`p7.nats.launch`, `p7.nats.session`) for room entry and lifecycle
+>
+> P7 is not just a process spawner — it is the context that agents launch into.
+
+Both definitions describe a runtime service. Today, P7 is a **declarative concept** (catalog + manifests + NATS subjects) without an executable. This spec closes that gap.
+
+## 3. Scope
+
+### 3.1 In scope
+
+- **Catalog loader** — read `pmoves/config/rooms/catalog.json` (schema v1.2.0+) at startup, cache in memory, refresh on `pmoves.config.rooms.reloaded.v1` NATS subject.
+- **Manifest loader** — on demand, load `pmoves/config/rooms/{room_id}.json` and validate against `room.manifest.v1.schema.json`.
+- **Stage transition API** — `POST /api/p7/rooms/{room_id}/transition` accepting `{target_stage: rehearsal|live|review|archive, reason: string, requester: agent_id}`. Reads CHIT activation checklist from the canonical `ROOM_MANIFEST_CONTRACT.md`; refuses transition if any unchecked item exists.
+- **Room query API** — `GET /api/p7/rooms` (list with current_stage), `GET /api/p7/rooms/{room_id}` (full manifest + current stage + transition history).
+- **NATS publishers** — `p7.nats.launch` (room entered), `p7.nats.session` (room session opened/closed), `room.session.updated.v1` (stage changed), `pmoves.config.rooms.reloaded.v1` (config reloaded).
+- **Healthcheck** — `GET /healthz` returning `{status: ok, rooms_loaded: N, nats_connected: bool}`.
+- **CHIT signing** — every transition publishes a CHIT-signed payload on `room.session.updated.v1` (HMAC-SHA256 over the payload using `P7_SIGNING_KEY`; falls back to `unsigned-local` when unset per `.claude/BOOTSTRAP.md`).
+- **Docker compose** — new `p7` service in `pmoves/docker-compose.yml` with healthcheck, NATS dependency, and the room manifest volume mounted read-only.
+- **Make target** — `make -C pmoves up-p7` (mirrors `up-cipher`, `up-agents-published` patterns from BOOTSTRAP.md).
+- **Unit tests** — pytest covering catalog load, manifest validation, transition gating, NATS payload shape.
+- **Smoke test** — `make -C pmoves smoke-p7` boots the service, transitions `demo.room.rehearsal` from `rehearsal` → `live` (gated; should fail) and back (should succeed), asserts NATS publishes.
+
+### 3.2 Out of scope (separate lanes)
+
+- **Skill execution** — P7 doesn't run skills. The `skill_bindings[].execution` is consumed by agent-runtime / Agent Zero, not P7.
+- **Model routing** — P7 doesn't select models. `policies.model_routing` is consumed by the model nexus layer.
+- **Notebook state** — P7 doesn't read/write notebook. The `notebook` block is a reference for the agent runtime.
+- **Overlay switching** — P7 doesn't switch overlays. The `overlays` (formerly "suits") concept is a runtime binding that the agent runtime consumes; P7 just records the currently-bound overlay in transition events.
+- **CHIT signing key management** — P7 uses the existing `pmoves.tools.chit_security` module; it doesn't manage keys.
+
+## 4. Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    P7 Service (FastAPI)                       │
+│                                                              │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐    │
+│  │   Catalog   │  │  Transition  │  │   NATS Publisher  │    │
+│  │   Loader    │◄─┤   Engine     ├─►│   (signed events) │    │
+│  │  (in-mem)   │  │  (gated)     │  │                   │    │
+│  └──────┬──────┘  └──────┬───────┘  └────────┬──────────┘    │
+│         │                │                   │               │
+└─────────┼────────────────┼───────────────────┼───────────────┘
+          │                │                   │
+          ▼                ▼                   ▼
+   pmoves/config/   CHIT activation      p7.nats.launch
+   rooms/catalog    checklist gate       p7.nats.session
+   .json +          (canonical doc +     room.session.updated.v1
+   per-room         signing card         pmoves.config.rooms
+   manifests        validation)          .reloaded.v1
+```
+
+## 5. File layout (as built)
+
+```
+pmoves/services/p7-room-orchestrator/
+├── __init__.py
+├── main.py              # FastAPI app, ~330 lines
+├── catalog.py           # CatalogLoader: load + cache + reload + atomic writeback, ~250 lines
+├── transition.py        # TransitionEngine: gate + execute, ~400 lines
+├── nats_pub.py          # NATSPublisher: signed publish + retry, ~200 lines
+├── config.py            # Pydantic settings (P7_*-prefixed)
+├── README.md            # Operator-facing quickstart
+├── Dockerfile           # monorepo-root build context, WORKDIR=/app
+└── tests/
+    ├── test_catalog.py
+    ├── test_transition.py
+    ├── test_nats_pub.py
+    └── test_api.py
+```
+
+> Note: the directory is `p7-room-orchestrator` (kebab) so it lines up with the
+> other `*`-style service dirs (e.g. `a2ui-nats-bridge`). Python imports use
+> the snake_case form (e.g. `from catalog import CatalogLoader`) because the
+> service runs as a script (`uvicorn main:app`) from the service dir, not as
+> a package. The tests' `conftest.py` puts the service dir on `sys.path` so
+> the module names resolve.
+
+`pmoves/docker-compose.yml` adds (profile: `p7`, joined to `nats`):
+
+```yaml
+  p7:
+    build:
+      context: .
+      dockerfile: services/p7-room-orchestrator/Dockerfile
+    image: pmoves/p7-room-orchestrator:latest
+    container_name: pmoves-p7
+    profiles: ["p7"]
+    restart: unless-stopped
+    environment:
+      - P7_HOST=0.0.0.0
+      - P7_HTTP_PORT=8120
+      - P7_NATS_URL=nats://nats:4222
+      - P7_PMOVES_ROOT=/etc/pmoves
+      - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
+      - P7_ROOMS_DIR=/etc/pmoves/rooms
+      - P7_ROOM_MANIFEST_SCHEMA=/etc/pmoves/contracts/schemas/room/room.manifest.v1.schema.json
+      - P7_CHIT_REQUIRE_SIGNATURE=${P7_CHIT_REQUIRE_SIGNATURE:-true}
+      - P7_ALLOW_UNSIGNED_LOCAL=${P7_ALLOW_UNSIGNED_LOCAL:-true}
+      - P7_LOG_LEVEL=INFO
+      # Secrets (prefer *_FILE when mounted):
+      - P7_CONTROL_TOKEN=${P7_CONTROL_TOKEN:-}
+      - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
+      - P7_SIGNING_KEY=${P7_SIGNING_KEY:-}
+      - P7_SIGNING_KEY_FILE=${P7_SIGNING_KEY_FILE:-}
+    volumes:
+      - ./config/rooms:/etc/pmoves/rooms:ro
+      - ./contracts/schemas:/etc/pmoves/contracts/schemas:ro
+      - ./config/signing_identity_cards.yaml:/etc/pmoves/config/signing_identity_cards.yaml:ro
+      - ./config/agent_registry.yaml:/etc/pmoves/config/agent_registry.yaml:ro
+    ports:
+      - "8120:8120"  # P7 HTTP API
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8120/healthz',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+```
+
+`pmoves/Makefile` adds:
+
+```makefile
+up-p7:
+	docker compose -f pmoves/docker-compose.yml --profile p7 up -d p7
+
+p7-health:
+	curl -fsS http://localhost:8120/healthz
+
+smoke-p7:
+	cd pmoves/services/p7-room-orchestrator && P7_PMOVES_ROOT=../../.. python -m pytest tests/ -v
+```
+
+## 6. NATS subject contract
+
+All subjects already declared in `pmoves/docs/AGNOTE4482.md` §30-32 and `pmoves/docs/ROOMS_ON_A_STAGE.md` §56-65. This spec fixes the payload shapes.
+
+### 6.1 `p7.nats.launch` (room entered)
+
+```json
+{
+  "v": "1.0.0",
+  "room_id": "demo.room.rehearsal",
+  "agent_id": "4090-claude",
+  "alter": "4090-demo",
+  "overlay": "agent-zero-local",
+  "manifest_version": "1.0.0",
+  "timestamp": "2026-07-20T18:00:00Z",
+  "chit": { "card_id": "...", "signature": "..." }
+}
+```
+
+### 6.2 `p7.nats.session` (room session opened/closed)
+
+```json
+{
+  "v": "1.0.0",
+  "room_id": "demo.room.rehearsal",
+  "session_id": "uuid-v4",
+  "action": "open|close|heartbeat",
+  "agent_id": "4090-claude",
+  "timestamp": "2026-07-20T18:00:00Z",
+  "chit": { "card_id": "...", "signature": "..." }
+}
+```
+
+### 6.3 `room.session.updated.v1` (stage changed) — already declared in room manifest telemetry
+
+```json
+{
+  "v": "1.0.0",
+  "room_id": "demo.room.rehearsal",
+  "previous_stage": "rehearsal",
+  "new_stage": "live",
+  "reason": "operator approval per AGNOTE 2026-07-20",
+  "requester": "Mavis",
+  "timestamp": "2026-07-20T18:00:00Z",
+  "chit": { "card_id": "...", "signature": "..." }
+}
+```
+
+### 6.4 `pmoves.config.rooms.reloaded.v1` (catalog reloaded)
+
+```json
+{
+  "v": "1.0.0",
+  "schema_version": "1.2.0",
+  "rooms_loaded": 9,
+  "timestamp": "2026-07-20T18:00:00Z",
+  "chit": { "card_id": "...", "signature": "..." }
+}
+```
+
+## 7. Stage transition gate
+
+`TransitionEngine.transition(room_id, target_stage, reason, requester)` MUST:
+
+1. Load the room manifest.
+2. If `current_stage == target_stage`, no-op (idempotent), return 200.
+3. If `target_stage == "live"` and `current_stage != "rehearsal"`, reject (only rehearsal → live is valid; the others are review/archive from live).
+4. If `target_stage == "live"`, run the CHIT activation checklist from `ROOM_MANIFEST_CONTRACT.md`:
+   - `meta.chit.card_id` present OR skill supplies card at runtime
+   - signing card validates against `signing-card.v1.schema.json` with `active: true`
+   - signing-identity-cards.yaml has a matching row
+   - `make sign-trail` returns signed OR unsigned-local explicitly accepted
+   - `mcp_servers` / `a2a_servers` declared in manifest are present in agent_registry.yaml
+   - `PGRST_DB_EXTRA_SEARCH_PATH` includes the room's schemas
+   - `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` documented for target topology
+5. Update `catalog.json` row's `current_stage` (atomic write + reload publish).
+6. Wrap the `room.session.updated.v1` payload with a `chit` block (HMAC-SHA256
+   signature using `P7_SIGNING_KEY` when set, `unsigned-local` when not).
+7. Publish on `room.session.updated.v1`.
+8. Return 200 with the signed payload.
+
+If any checklist item fails, return 422 with the specific unchecked items in the response body.
+
+## 8. Operational contract
+
+- **Boot sequence**: P7 starts AFTER `nats` (compose dependency). On boot: load catalog, load all manifests, validate, publish `pmoves.config.rooms.reloaded.v1` with initial state.
+- **Reload**: on `pmoves.config.rooms.reloaded.v1` (inbound), reload catalog from disk. Triggered by operator running `make rooms-reload` or by a file-watch on `pmoves/config/rooms/`.
+- **Failure mode**: if NATS is unreachable on boot, P7 retries with exponential backoff (1s, 2s, 4s, ..., 60s cap). Healthcheck returns 503 until NATS is reachable. Catalog reads are local-file, so they work without NATS.
+- **Observability**: structured JSON logs to stdout. Optional Prometheus metrics on `/metrics` (room count, transition count by from/to, transition latency, NATS publish latency, CHIT signing latency).
+
+## 9. Operator decisions (resolved 2026-07-20)
+
+1. **Port 8120** — confirmed. 8092 is taken by pdf-ingest + publisher-discord;
+   8120 is free and matches the `agent-*` port neighborhood.
+2. **CHIT signing key** — P7 has its own card + key (`P7_SERVICE_CARD_ID` +
+   `P7_SIGNING_KEY`, file fallbacks `P7_SERVICE_CARD_ID_FILE` /
+   `P7_SIGNING_KEY_FILE` via `pmoves/services/common/env.py::get_secret`).
+   P7 is an infra service, not a room agent.
+3. **Catalog write-back** — P7 writes `current_stage` directly to
+   `pmoves/config/rooms/catalog.json` (atomic write-temp + rename). Full
+   catalog edits (add/remove rooms, change bindings) still go through git.
+4. **A2UI backward compatibility** — confirmed. A2UI DL-4.1 (`/stage/` page)
+   continues to read `pmoves/ui/lib/rooms.ts` + `isPublicRoom` rules. A2UI
+   ALSO gained an optional consumer (`a2ui-nats-bridge`) that subscribes to
+   `room.session.updated.v1` and `pmoves.config.rooms.reloaded.v1` so live
+   room state can flow to the dashboard — this is additive, not breaking.
+5. **Worktree strategy** — spec + code + a2ui consumer all landed together
+   in `feat/open-room-lane` (PR #2173), 11 commits.
+
+## 10. Signoff (recorded 2026-07-20)
+
+All open questions resolved; spec is APPROVED. See AGNOTE4482PHI.t1.md
+entries `Mavis::OPEN-ROOM-LANE-CLAIM::2026-07-20T17:59:39Z` (claim) and
+`Mavis::OPEN-ROOM-LANE-RELEASE::2026-07-20` (release with operator signoff).
+
+- [x] File layout (§5) — `p7-room-orchestrator` dir, kebab-case to match
+      other `*-bridge` / `*-service` siblings
+- [x] Port 8120
+- [x] CHIT signing strategy: P7's own card + key
+- [x] Catalog write-back: P7 writes `current_stage` directly
+- [x] A2UI backward compatibility: additive (A2UI consumer is opt-in)
+- [x] Worktree strategy: spec + code + a2ui consumer in one PR
+- [x] NATS subject payload shapes (§6.1-6.4)
+- [x] Transition gate semantics (§7): rehearsal → live is the only gated path
+
+## 11. References
+
+- `pmoves/docs/AGENTS/AGNOTE4482.md` §30-32 (P7 definition)
+- `pmoves/docs/ROOMS_ON_A_STAGE.md` §56-65 (P7 stage manager model)
+- `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` (room manifest + CHIT activation checklist)
+- `pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md` (companion spec — must land first)
+- `pmoves/config/rooms/catalog.json` (schema v1.2.0)
+- `pmoves/contracts/schemas/room/room.manifest.v1.schema.json`
+- `pmoves/contracts/schemas/identity/signing-card.v1.schema.json`
+- `pmoves/tools/chit_security.py` (signing module P7 uses)
+- `.claude/BOOTSTRAP.md` (Known Roads: `up-cipher` / `up-agents-published` patterns)
+- Open Room Lane CLAIM (AGNOTE4482PHI.t1.md, 2026-07-20T17:59:39Z, GRAPHITI_MARK `Mavis::OPEN-ROOM-LANE-CLAIM::2026-07-20`)

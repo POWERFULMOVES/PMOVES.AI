@@ -3,7 +3,7 @@ _Last updated: 2026-07-17_
 
 ## What This Is
 
-PMOVES.AI organizes its platform as rooms on a stage — a topology model with three layers: rooms, stages, and suits. This document explains the model end-to-end.
+PMOVES.AI organizes its platform as rooms on a stage — a topology model with three layers: rooms, stages, and overlays. This document explains the model end-to-end.
 
 ## The Three Layers
 
@@ -47,33 +47,72 @@ Every room has a stage state that describes its current lifecycle position:
 
 Stage transitions are managed by P7. A room in `rehearsal` should show a rehearsal banner; a room in `live` should show a live indicator.
 
-Room stage is persistent control-plane state. It is distinct from a transient P7
-session state (`planned`, `active`, `paused`, `ended`, `archived`): a rehearsal
-room can have an active test session without being represented as production-live.
+### Overlays (runtime/persona bindings)
 
-### Suits (runtime/persona bindings)
+> **Vocabulary change (2026-07-20, open-room lane).** Earlier drafts of this document called these "suits". That term collided with `pmoves/configs/model-suits/` (per-model YAML profiles in the model framework) and caused confusion between runtime/persona overlays and model profiles. Renamed to **overlays** in the room context; "suits" remains the canonical term for per-model profiles under `pmoves/configs/model-suits/`.
 
-Suits are layered onto rooms — they are NOT the platform itself, they are the visible styling and runtime binding:
+Overlays are layered onto rooms — they are NOT the platform itself, they are the visible styling and runtime binding:
 
-- **Base suit**: upstream Agent Zero (external baseline)
-- **Custom suit**: PMOVES hardened overlays (security, CHIT, NATS wiring)
-- **Styling suit**: voice, theme, persona (visible layer)
+- **Base overlay**: upstream Agent Zero (external baseline)
+- **Custom overlay**: PMOVES hardened bindings (security, CHIT, NATS wiring)
+- **Styling overlay**: voice, theme, persona (visible layer)
 
-A room can switch suits without changing rooms. Suit selection is profile-governed, not raw-env governed.
+A room can switch overlays without changing rooms. Overlay selection is profile-governed, not raw-env governed.
 
 ## P7 — The Stage Manager
 
 P7 (Pinokio 7) is the room-aware stage manager. It:
 1. Knows which rooms exist (via `pmoves/config/rooms/catalog.json`)
 2. Selects the appropriate room profile for a given workload
-3. Loads the correct suit for the room
+3. Loads the correct overlay for the room
 4. Manages stage transitions (rehearsal -> live -> review -> archive)
 5. Provides NATS control plane subjects (`p7.nats.launch`, `p7.nats.session`) for room entry and lifecycle
 
 P7 is not just a process spawner — it is the context that agents launch into.
-The deployable control plane is `p7-room-orchestrator` on port `8122`. It consumes
-the two `p7.nats.*` command subjects and emits versioned `p7.room.*.v1` facts for
-session checkpoints, stage changes, and rejected commands.
+
+The deployable control plane is the FastAPI service at
+`pmoves/services/p7-room-orchestrator` (port `8120`; override via
+`P7_HTTP_PORT`). It exposes the public HTTP API for room lifecycle
+management:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET  | `/healthz` | service + catalog + NATS health |
+| GET  | `/api/p7/rooms` | list rooms (catalog rows) |
+| GET  | `/api/p7/rooms/{room_id}` | room detail (catalog row + validated manifest) |
+| POST | `/api/p7/rooms/{room_id}/transition` | state-machine transition (gated `rehearsal → live`) |
+| POST | `/api/p7/reload` | force re-read of catalog from disk |
+
+P7 publishes on these NATS subjects (every payload is wrapped with a `chit`
+block — see [NATS envelope contract](#nats-envelope-signed-or-unsigned-local) below):
+
+| Subject | When |
+|---|---|
+| `p7.nats.launch` | reserved (room entered) |
+| `p7.nats.session` | reserved (session opened/closed) |
+| `room.session.updated.v1` | every stage transition |
+| `pmoves.config.rooms.reloaded.v1` | startup + `/api/p7/reload` |
+
+Mutations (`POST`) require a `Bearer` token (`P7_CONTROL_TOKEN` or
+`P7_CONTROL_TOKEN_FILE`); when unset, they `503` (fail-closed) rather than
+silently allow unauthenticated state changes. See
+[`p7-service-spec-2026-07-20.md`](specs/p7-service-spec-2026-07-20.md) for
+the full spec.
+
+### NATS envelope (signed or unsigned-local)
+
+Every NATS payload from P7 carries a `chit` block:
+
+```json
+{ "chit": { "kid": "<service_card_id>", "ts": "<iso8601>",
+            "status": "signed|unsigned-local", "signature": "<hex>" } }
+```
+
+- `signed` — `P7_SERVICE_CARD_ID` + `P7_SIGNING_KEY` are both set; signature
+  is HMAC-SHA256 over the payload.
+- `unsigned-local` — either is unset. Same convention used elsewhere in
+  PMOVES for local-dev (per `.claude/BOOTSTRAP.md` § "Signing is optional
+  locally").
 
 ## What Rooms Own vs. Don't Own
 
@@ -99,12 +138,4 @@ Rooms do NOT own:
 
 ## CHIT Signing-Card Activation Checklist
 
-Before a room transitions from `rehearsal` → `live`, the following must be satisfied:
-
-- [ ] A signing-card row exists in `pmoves/config/signing_identity_cards.yaml` for the room's operating agent, and `signing-card.v1.schema.json` validates it.
-- [ ] The room manifest declares `meta.chit.card_id` (or the owning skill provides a card ID at runtime) and the card has `active: true`.
-- [ ] The selected card includes locally verifiable Ed25519 SSH public-key material, and the activation caller provides a fresh nonce-bound proof-of-possession. Placeholder-only cards remain rehearsal-only.
-- [ ] `make sign-trail AGENT=<agent_id>` succeeds (`signed`) or `unsigned-local` advisory is explicitly accepted for the stage transition.
-- [ ] The room's declared `mcp_servers` and `a2a_servers` exist in `pmoves/config/agent_registry.yaml` and are reachable in the target topology mode (`standalone`/`docked`/`fleet`).
-- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles in `sidecar.env` match the intended topology gradient.
-- [ ] `PGRST_DB_EXTRA_SEARCH_PATH` includes every schema the room's skills touch.
+> **See canonical checklist in [`pmoves/docs/ROOM_MANIFEST_CONTRACT.md`](ROOM_MANIFEST_CONTRACT.md#chit-signing-card-activation-checklist).** That is the single source of truth. This doc links rather than duplicates to prevent drift. Last consolidated: 2026-07-20 (open-room lane; see `AGNOTE4482PHI.t1.md`).

@@ -135,22 +135,35 @@ def _fetch_pr(repo: str, number: int) -> dict[str, Any]:
 
 
 def _fetch_required_checks(repo: str, number: int) -> list[dict[str, Any]]:
-    payload = _run_json(
-        [
-            "gh",
-            "pr",
-            "checks",
-            str(number),
-            "--repo",
-            repo,
-            "--required",
-            "--json",
-            "name,state,bucket,link,workflow",
-        ],
-        allow_failure=True,
-    )
-    if payload is None:
+    command = [
+        "gh",
+        "pr",
+        "checks",
+        str(number),
+        "--repo",
+        repo,
+        "--required",
+        "--json",
+        "name,state,bucket,link,workflow",
+    ]
+    proc = _run(command, allow_failure=True)
+    raw_payload = proc.stdout.strip()
+    if not raw_payload:
+        if "no required checks reported" in proc.stderr.casefold():
+            return []
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"required-check query failed ({proc.returncode}): "
+                f"{' '.join(command)}\n{proc.stderr.strip()}"
+            )
         return []
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"invalid required-check JSON for {repo}#{number}: {exc}\n"
+            f"{raw_payload[:500]}"
+        ) from exc
     if not isinstance(payload, list):
         raise RuntimeError(f"invalid required-check payload for {repo}#{number}")
     return [item for item in payload if isinstance(item, dict)]
@@ -179,6 +192,17 @@ def _first_thread_url(thread: Any) -> str:
 def _append_blocker(blockers: list[str], message: str) -> None:
     if message not in blockers:
         blockers.append(message)
+
+
+def _console_safe(value: object, encoding: str | None) -> str:
+    text = str(value)
+    if not encoding:
+        return text
+    return text.encode(encoding, errors="backslashreplace").decode(encoding)
+
+
+def _print_console(value: object = "") -> None:
+    print(_console_safe(value, getattr(sys.stdout, "encoding", None)))
 
 
 def _evaluate_rollup(
@@ -414,7 +438,7 @@ def audit_pr(
 
 def _print_report(report: CloseoutReport) -> None:
     verdict = "READY" if report.ready else "BLOCKED"
-    print(
+    _print_console(
         f"PR #{report.pr_number} closeout: {verdict}\n"
         f"  URL: {report.url}\n"
         f"  Author: {report.author}\n"
@@ -428,30 +452,30 @@ def _print_report(report: CloseoutReport) -> None:
         f"  Allowed advisory failures: {len(report.advisory_failures)}"
     )
     if report.blockers:
-        print("Blockers:")
+        _print_console("Blockers:")
         for blocker in report.blockers:
-            print(f"  - {blocker}")
+            _print_console(f"  - {blocker}")
     if report.unresolved_threads:
-        print("Unresolved threads:")
+        _print_console("Unresolved threads:")
         for thread in report.unresolved_threads:
             location = thread.path or "unknown-path"
             if thread.line is not None:
                 location = f"{location}:{thread.line}"
-            print(
+            _print_console(
                 f"  - [{thread.classification}] {location} "
                 f"{thread.url or thread.thread_id}"
             )
     if report.unchecked_tasks:
-        print("Unchecked tasks:")
+        _print_console("Unchecked tasks:")
         for task in report.unchecked_tasks:
-            print(f"  - {task}")
+            _print_console(f"  - {task}")
 
 
 def _write_json(report: CloseoutReport, path: str) -> None:
-    payload = json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
     if path == "-":
-        print(payload, end="")
+        print(json.dumps(report.to_dict(), indent=2, ensure_ascii=True))
         return
+    payload = json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(payload)
 

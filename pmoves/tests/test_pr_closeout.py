@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -222,6 +223,42 @@ def test_missing_required_checks_fails_closed() -> None:
 
     assert not report.ready
     assert "no required checks were reported" in report.blockers
+
+
+def test_fetch_required_checks_treats_gh_no_checks_result_as_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = subprocess.CompletedProcess(
+        args=["gh", "pr", "checks"],
+        returncode=1,
+        stdout="",
+        stderr="no required checks reported on the 'stale-branch' branch\n",
+    )
+    monkeypatch.setattr(pr_closeout, "_run", lambda *args, **kwargs: result)
+
+    assert pr_closeout._fetch_required_checks("OWNER/REPO", 42) == []
+
+
+def test_fetch_required_checks_preserves_unexpected_gh_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = subprocess.CompletedProcess(
+        args=["gh", "pr", "checks"],
+        returncode=1,
+        stdout="",
+        stderr="HTTP 401: Bad credentials\n",
+    )
+    monkeypatch.setattr(pr_closeout, "_run", lambda *args, **kwargs: result)
+
+    with pytest.raises(RuntimeError, match="required-check query failed"):
+        pr_closeout._fetch_required_checks("OWNER/REPO", 42)
+
+
+def test_console_safe_escapes_unencodable_pr_text() -> None:
+    assert (
+        pr_closeout._console_safe("approve → publish", "cp1252")
+        == "approve \\u2192 publish"
+    )
 
 
 def test_resolved_threads_do_not_block() -> None:

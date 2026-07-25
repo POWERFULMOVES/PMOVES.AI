@@ -420,6 +420,15 @@
       ],
       "agents_docs": []
     },
+    "Pmoves-pretext": {
+      "context_tier": 4,
+      "domain_tags": ["ui"],
+      "skills": [],
+      "context_files": [
+        "submodules.md"
+      ],
+      "agents_docs": []
+    },
     "PMOVES-DoX": {
       "context_tier": 2,
       "domain_tags": ["documents"],

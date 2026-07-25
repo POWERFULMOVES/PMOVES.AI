@@ -1,81 +1,170 @@
-# P7 Room Orchestrator
+# P7 Room-Aware Stage Manager
 
-P7 is the executable room-aware stage manager for PMOVES. It resolves canonical
-manifests from `pmoves/config/rooms/catalog.json`, manages transient room
-sessions, records state to Supabase, and bridges NATS commands to versioned facts.
+FastAPI service that mediates the room lifecycle (rehearsal → live → review
+→ archive) per the rooms-on-a-stage model. Aligned to the spec at
+[`pmoves/docs/specs/p7-service-spec-2026-07-20.md`](../../docs/specs/p7-service-spec-2026-07-20.md).
 
-## State contracts
+## Endpoints
 
-- Room stage is persistent: `rehearsal -> live -> review -> archive`; every
-  transition requires a durable Supabase write and confirmed NATS fact delivery.
-- Session state is transient: `planned -> active <-> paused -> ended -> archived`.
-- A rehearsal room can run an active test session without claiming production-live status.
-- `rehearsal -> live` requires an active, schema-valid CHIT signing card and
-  a fresh nonce-bound proof-of-possession made with that card's SSH key,
-  successful durable Supabase audit persistence, and confirmed NATS stage-fact
-  delivery. Cards without locally verifiable key material cannot activate a room.
-- On startup, the latest audited room stage is hydrated from Supabase; historical
-  sessions are not revived.
-- The CHIT signing-card gate establishes agent/operator provenance for stage
-  activation. It is not a ballot signature or a claim about contested-ballot
-  integrity; Fordham ballot cryptography remains a separate governance contract.
+| Method | Path | Purpose |
+|---|---|---|
+| GET  | `/healthz` | service + catalog + NATS health |
+| GET  | `/api/p7/rooms` | list rooms (catalog rows) |
+| GET  | `/api/p7/rooms/{room_id}` | room detail (catalog row + validated manifest) |
+| POST | `/api/p7/rooms/{room_id}/transition` | state-machine transition (gated rehearsal→live) |
+| POST | `/api/p7/reload` | force re-read of catalog from disk |
 
-## NATS roles
+Default port: **8120** (override with `P7_HTTP_PORT`).
 
-- Commands consumed: `p7.nats.launch`, `p7.nats.session` (plus the `.v1`
-  aliases used by existing PBnJ hooks).
-- Facts emitted: `p7.room.session.started.v1`, `p7.room.checkpoint.v1`,
-  `p7.room.session.ended.v1`, `p7.room.stage.changed.v1`, and
-  `p7.room.command.failed.v1`.
+## State machine
 
-## HTTP API
-
-The service listens on `8122` by default.
-
-- `GET /healthz`
-- `GET /api/v1/rooms`
-- `GET /api/v1/rooms/{room_id}`
-- `POST /api/v1/rooms/{room_id}/start|pause|resume|end|archive-session`
-- `POST /api/v1/rooms/{room_id}/stage` with `{"target":"live"}`
-
-All mutating HTTP routes require `Authorization: Bearer $P7_CONTROL_TOKEN`.
-NATS commands rely on broker credentials; a `live` stage command additionally
-requires the same `proof` object as HTTP. The activation signature is base64 of
-an Ed25519 signature over canonical compact JSON with sorted keys:
-
-```json
-{
-  "card_id": "<signing-card UUID>",
-  "issued_at": 1784318400,
-  "nonce": "<at least 16 random characters>",
-  "previous_stage": "rehearsal",
-  "room_id": "<room id>",
-  "session_id": "<current session UUID>",
-  "target_stage": "live",
-  "version": "p7-room-activation-v1"
-}
+```
+rehearsal ──► live ──► review ──► archive
+                │        │
+                └────────┴──► (any of: review, archive)
 ```
 
-Start locally through Compose:
+| from → to | Gated? | Notes |
+|---|---|---|
+| `rehearsal → live` | **YES** (full CHIT checklist) | the only gated transition |
+| `live → review` | no | audit pause |
+| `live → archive` | no | retire |
+| `review → live` | no | promote back |
+| `review → archive` | no | retire from review |
+| same → same | n/a | idempotent no-op |
+| `archive → *` | rejected (409) | terminal |
+
+## CHIT activation checklist (rehearsal → live only)
+
+See the canonical list in
+[`pmoves/docs/ROOM_MANIFEST_CONTRACT.md`](../../docs/ROOM_MANIFEST_CONTRACT.md)
+§ "CHIT Signing-Card Activation Checklist". P7 implements all 7 items and
+returns `422` with the unchecked items in the response body if any fail.
+
+## NATS subjects (signed envelopes)
+
+| Subject | When | Payload |
+|---|---|---|
+| `p7.nats.launch` | reserved (room entered) | `{room_id, agent_id, alter, overlay, ...}` |
+| `p7.nats.session` | reserved (session opened/closed) | `{room_id, session_id, action, ...}` |
+| `room.session.updated.v1` | on every stage transition | `{room_id, previous_stage, new_stage, reason, requester, ...}` |
+| `pmoves.config.rooms.reloaded.v1` | on startup + `/api/p7/reload` | `{schema_version, rooms_loaded, ...}` |
+
+Every payload has a `chit: {kid, ts, status, signature}` block. If P7 is
+configured with `P7_SERVICE_CARD_ID` + `P7_SIGNING_KEY`, signatures are
+HMAC-SHA256. If unset, status is `unsigned-local` per
+`pmoves/.claude/BOOTSTRAP.md` § "Signing is optional locally".
+
+## Configuration (env vars, all `P7_`-prefixed)
+
+| Var | Default | Notes |
+|---|---|---|
+| `P7_NATS_URL` | `nats://nats:4222` | NATS endpoint |
+| `P7_ROOM_CATALOG_PATH` | `pmoves/config/rooms/catalog.json` | path to catalog |
+| `P7_ROOMS_DIR` | `pmoves/config/rooms` | dir containing per-room manifests |
+| `P7_ROOM_MANIFEST_SCHEMA` | `pmoves/contracts/schemas/room/room.manifest.v1.schema.json` | schema for manifest validation |
+| `P7_SIGNING_CARDS_PATH` | `pmoves/config/signing_identity_cards.yaml` | CHIT signing card registry |
+| `P7_AGENT_REGISTRY_PATH` | `pmoves/config/agent_registry.yaml` | server registry for mcp_servers/a2a_servers |
+| `P7_HTTP_PORT` | `8120` | FastAPI port |
+| `P7_PMOVES_ROOT` | `.` (cwd) | root for resolving relative paths |
+| `P7_SERVICE_CARD_ID` | (empty) | P7's own signing card UUID; empty = unsigned-local |
+| `P7_SIGNING_KEY` | (empty) | HMAC key for P7's own envelopes; empty = unsigned-local. Can be supplied via `P7_SIGNING_KEY_FILE` (Docker secrets / k8s) — see [Secret-aware env](#secret-aware-env) below. |
+| `P7_CHIT_REQUIRE_SIGNATURE` | `true` | fail-closed if transitions are unsigned |
+| `P7_ALLOW_UNSIGNED_LOCAL` | `true` | operator-acknowledged unsigned-local advisory is OK |
+| `P7_LOG_LEVEL` | `INFO` | |
+
+## Local development
 
 ```bash
-docker compose -f pmoves/docker-compose.yml \
-  --profile supabase-local --profile agents up p7-room-orchestrator
+cd pmoves/services/p7-room-orchestrator
+pip install -r requirements.txt
+P7_PMOVES_ROOT=../../.. python main.py
+# → http://localhost:8120/healthz
 ```
 
-The Supabase profile is required because startup hydration is fail-closed when
-durable persistence is configured. Provide service-role and control credentials
-through their direct variables or the corresponding `_FILE` mounts.
-
-Focused checks:
+## Container
 
 ```bash
-python pmoves/scripts/validate_room_manifests.py
-python pmoves/scripts/validate_agent_registry.py
-pytest -q pmoves/services/p7-room-orchestrator/tests/test_app.py
+docker build -t pmoves-p7 pmoves/services/p7-room-orchestrator
+docker run --rm -p 8120:8120 \
+  -v $PWD/pmoves/config/rooms:/etc/pmoves/rooms:ro \
+  -e P7_PMOVES_ROOT=/etc/pmoves \
+  -e P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json \
+  -e P7_ROOMS_DIR=/etc/pmoves/rooms \
+  -e P7_NATS_URL=nats://host.docker.internal:4222 \
+  pmoves-p7
 ```
 
-Git manifests remain immutable runtime seeds. Stage transitions are stored in
-`pmoves_core.room_sessions.metadata`; `history` retains session/stage checkpoints
-and the live signing-card ID so later review/end upserts do not erase activation
-evidence. The service does not rewrite JSON files.
+### Secret-aware env
+
+P7 follows the standard PMOVES `*_FILE` pattern for secrets: prefer mounting
+a file and pointing `*_FILE` at it over passing the secret inline on the
+command line. The actual env var is read first, then the file is read as a
+fallback.
+
+| Var | File fallback | Purpose |
+|---|---|---|
+| `P7_CONTROL_TOKEN` | `P7_CONTROL_TOKEN_FILE` | Bearer token for `POST /api/p7/...` mutations (fail-closed if both unset) |
+| `P7_SIGNING_KEY` | `P7_SIGNING_KEY_FILE` | HMAC key for the `chit.signature` block on NATS envelopes |
+
+Docker example with secrets:
+
+```bash
+docker run --rm -p 8120:8120 \
+  -v $PWD/pmoves/config/rooms:/etc/pmoves/rooms:ro \
+  -v $PWD/secrets:/run/secrets:ro \
+  -e P7_PMOVES_ROOT=/etc/pmoves \
+  -e P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json \
+  -e P7_ROOMS_DIR=/etc/pmoves/rooms \
+  -e P7_NATS_URL=nats://nats:4222 \
+  -e P7_CONTROL_TOKEN_FILE=/run/secrets/p7-control-token \
+  -e P7_SIGNING_KEY_FILE=/run/secrets/p7-signing-key \
+  pmoves-p7
+```
+
+Local-dev override: when `P7_CONTROL_TOKEN` / `P7_SIGNING_KEY` are unset
+locally, the service still runs (auth: 503 from `require_http_control`; NATS
+envelopes: `chit.status="unsigned-local"` per `pmoves/.claude/BOOTSTRAP.md`).
+For local testing, set `P7_CONTROL_TOKEN=dev-token` in your shell before
+starting the server.
+
+## Tests
+
+```bash
+cd pmoves/services/p7-room-orchestrator
+P7_PMOVES_ROOT=../../.. pytest tests/ -v
+```
+
+The tests are hermetic — they write a temp catalog + signing_cards + agent
+registry, exercise the engine + endpoints, and clean up.
+
+## Operator runbook
+
+- **First-time setup**: set `P7_SERVICE_CARD_ID` to a real signing-card UUID
+  from `pmoves/config/signing_identity_cards.yaml` and `P7_SIGNING_KEY` to
+  the matching HMAC secret. Until then, transitions are `unsigned-local`
+  (P7 logs this every transition; the CHIT checklist item 4 still passes
+  because `P7_ALLOW_UNSIGNED_LOCAL=true` by default).
+- **Transition a room to live**:
+  ```bash
+  curl -X POST http://localhost:8120/api/p7/rooms/z890-infra.room.fabric/transition \
+    -H "Content-Type: application/json" \
+    -d '{"target_stage":"live","reason":"operator approval","requester":"DARKXSIDE"}'
+  ```
+- **Reload catalog after manual edit**:
+  ```bash
+  curl -X POST http://localhost:8120/api/p7/reload
+  ```
+- **Audit transitions**: subscribe to `room.session.updated.v1` on NATS. The
+  `chit.status` field tells you whether the envelope is signed or
+  `unsigned-local`.
+
+## Cross-references
+
+- Spec: [`p7-service-spec-2026-07-20.md`](../../docs/specs/p7-service-spec-2026-07-20.md)
+- Rooms model: [`ROOMS_ON_A_STAGE.md`](../../docs/ROOMS_ON_A_STAGE.md)
+- Manifest contract: [`ROOM_MANIFEST_CONTRACT.md`](../../docs/ROOM_MANIFEST_CONTRACT.md)
+- Catalog: [`catalog.json`](../../config/rooms/catalog.json)
+- Schema: [`room.manifest.v1.schema.json`](../../contracts/schemas/room/room.manifest.v1.schema.json)
+- Operator slash command: [`.claude/commands/p7/room.md`](../../../.claude/commands/p7/room.md)
+- AGNOTE CLAIM/RELEASE: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (search "Mavis::OPEN-ROOM-LANE")
