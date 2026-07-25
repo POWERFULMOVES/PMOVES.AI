@@ -1,0 +1,42 @@
+# pmoves/services/sso-auth/config.py
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=None, extra="ignore")
+    supabase_jwt_secret: str          # env: SUPABASE_JWT_SECRET
+    gotrue_url: str                   # env: GOTRUE_URL (internal http://supabase-gotrue:9999)
+    public_base_url: str              # env: PUBLIC_BASE_URL (https://auth.pmoves.ai)
+    cookie_domain: str = ".pmoves.ai" # env: SSO_COOKIE_DOMAIN
+    cookie_name: str = "pmoves_session"
+    session_ttl_seconds: int = 3600
+    jellyfin_oidc_client_id: str      # env: JELLYFIN_OIDC_CLIENT_ID
+    jellyfin_oidc_client_secret: str  # env: JELLYFIN_OIDC_CLIENT_SECRET
+
+    @classmethod
+    def load(cls) -> "Settings":
+        import os
+        return cls(
+            supabase_jwt_secret=os.environ["SUPABASE_JWT_SECRET"],
+            gotrue_url=os.environ["GOTRUE_URL"],
+            public_base_url=os.environ["PUBLIC_BASE_URL"],
+            cookie_domain=os.environ.get("SSO_COOKIE_DOMAIN", ".pmoves.ai"),
+            jellyfin_oidc_client_id=os.environ["JELLYFIN_OIDC_CLIENT_ID"],
+            jellyfin_oidc_client_secret=os.environ["JELLYFIN_OIDC_CLIENT_SECRET"],
+        )
+
+
+class _LazySettings:
+    """Lazy settings proxy — reads env on FIRST attribute access, NOT at import.
+    So the service starts under compose env, AND tests set env then call
+    `settings._reset()` to force a fresh read. Never read required env at import
+    time (that crashes pytest collection when env is unset). All modules import
+    this `settings` object and use `settings.<field>` uniformly."""
+    _cached = None  # type: Settings | None
+    def __getattr__(self, name):
+        if _LazySettings._cached is None:
+            _LazySettings._cached = Settings.load()
+        return getattr(_LazySettings._cached, name)
+    def _reset(self):
+        _LazySettings._cached = None
+
+settings = _LazySettings()
