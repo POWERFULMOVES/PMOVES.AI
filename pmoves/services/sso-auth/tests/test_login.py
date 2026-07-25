@@ -20,7 +20,8 @@ def _env(monkeypatch):
     test files when the full suite runs. The lazy proxy + _reset() is all we need."""
     for k, v in {"SUPABASE_JWT_SECRET": SECRET, "GOTRUE_URL": "http://gotrue:9999",
                  "PUBLIC_BASE_URL": "https://auth.pmoves.ai",
-                 "JELLYFIN_OIDC_CLIENT_ID": "jf", "JELLYFIN_OIDC_CLIENT_SECRET": "s"}.items():
+                 "JELLYFIN_OIDC_CLIENT_ID": "jf", "JELLYFIN_OIDC_CLIENT_SECRET": "s",
+                 "SSO_FORWARD_AUTH_SECRET": "proxy-shared-secret-xyz"}.items():
         monkeypatch.setenv(k, v)
     config.settings._reset()
     yield
@@ -41,6 +42,22 @@ def test_post_login_sets_cookie_then_verify_ok(monkeypatch):
     cookie = r.cookies.get("pmoves_session"); assert cookie
     v = client.get("/auth/verify", cookies={"pmoves_session": cookie})
     assert v.status_code == 200 and v.headers["Remote-User"] == "a@b.co"
+
+def test_verify_emits_forward_auth_secret_on_200(monkeypatch):
+    # Proof-of-proxy: /auth/verify must emit X-Forward-Auth-Secret on success so
+    # Traefik forwards it and apps can confirm the request transited the proxy.
+    monkeypatch.setattr(gotrue, "password_grant", lambda email, pw: {"access_token": _access(email)})
+    cookie = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"/"},
+                         follow_redirects=False).cookies.get("pmoves_session")
+    v = client.get("/auth/verify", cookies={"pmoves_session": cookie})
+    assert v.status_code == 200
+    assert v.headers.get("X-Forward-Auth-Secret") == "proxy-shared-secret-xyz"
+
+def test_verify_401_omits_forward_auth_secret():
+    # No session -> 401 and no secret leaked.
+    client.cookies.clear()
+    v = client.get("/auth/verify")
+    assert v.status_code == 401 and "x-forward-auth-secret" not in {k.lower() for k in v.headers}
 
 def test_logout_clears_cookie():
     # Isolate from the shared module-level `client`'s cookie jar: a prior test

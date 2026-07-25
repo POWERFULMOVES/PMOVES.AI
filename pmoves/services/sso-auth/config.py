@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # signing disabled (the OIDC endpoints 503; /auth/verify is unaffected).
     # Generated once, stored via the CHIT vault / env at deploy.
     oidc_signing_key: str = ""  # env: OIDC_SIGNING_KEY
+    # Proof-of-proxy shared secret. /auth/verify emits it as X-Forward-Auth-Secret
+    # on 200 (Traefik forwards it via authResponseHeaders, overwriting any client
+    # value); apps verify it before honoring Remote-User, so a peer that reaches an
+    # app OFF-proxy cannot forge the header. Empty => not emitted.
+    forward_auth_secret: str = ""  # env: SSO_FORWARD_AUTH_SECRET
 
     @classmethod
     def load(cls) -> "Settings":
@@ -43,6 +48,7 @@ class Settings(BaseSettings):
             jellyfin_oidc_client_secret=g("JELLYFIN_OIDC_CLIENT_SECRET", ""),
             jellyfin_oidc_redirect_uris=redirect_uris,
             oidc_signing_key=g("OIDC_SIGNING_KEY", "").replace("\\n", "\n"),
+            forward_auth_secret=g("SSO_FORWARD_AUTH_SECRET", ""),
         )
 
 
