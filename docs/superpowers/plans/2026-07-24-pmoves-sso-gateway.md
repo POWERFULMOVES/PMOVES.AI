@@ -312,13 +312,43 @@ def test_logout_clears_cookie():
     assert 'pmoves_session=""' in r.headers.get("set-cookie","") or "pmoves_session=;" in r.headers.get("set-cookie","").replace(" ","")
 
 def test_login_rejects_open_redirect(monkeypatch):
-    # SECURITY: an off-domain rd must NOT be honored (open-redirect/phishing) —
-    # it falls back to '/'; an in-*.pmoves.ai rd IS honored.
+    # SECURITY: off-domain / bypass-crafted rd must NOT be honored — falls to '/'.
     monkeypatch.setattr(gotrue, "password_grant", lambda email, pw: {"access_token": _access(email)})
-    evil = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://evil.com/x"}, follow_redirects=False)
-    assert evil.headers["location"] == "/"
-    ok = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://health.pmoves.ai/dash"}, follow_redirects=False)
-    assert ok.headers["location"] == "https://health.pmoves.ai/dash"
+    bad = ["https://evil.com/x", "//evil.com", "/\\evil.com",
+           "https://health.pmoves.ai.evil.com/", "https://evilpmoves.ai",
+           "https://health.pmoves.ai@evil.com", "\thttps://evil.com"]
+    for rd in bad:
+        r = client.post("/login", data={"email":"a@b.co","password":"pw","rd":rd}, follow_redirects=False)
+        assert r.headers["location"] == "/", f"open redirect not blocked for {rd!r}"
+    # in-domain (absolute) and same-origin (relative) rds ARE honored
+    for rd in ("https://health.pmoves.ai/dash", "/dashboard"):
+        r = client.post("/login", data={"email":"a@b.co","password":"pw","rd":rd}, follow_redirects=False)
+        assert r.headers["location"] == rd, f"in-domain rd wrongly rejected: {rd!r}"
+
+def test_bad_login_shows_error(monkeypatch):
+    # A rejected password redirects to /login?...&e=1, and the GET login page renders the error.
+    def _boom(email, pw): raise gotrue.GoTrueError("bad creds")
+    monkeypatch.setattr(gotrue, "password_grant", _boom)
+    r = client.post("/login", data={"email":"a@b.co","password":"wrong","rd":"/"}, follow_redirects=False)
+    assert r.status_code in (302, 303) and r.headers["location"].startswith("/login") and "e=1" in r.headers["location"]
+    page = client.get("/login?e=1")
+    assert b"Sign-in failed" in page.content
+
+def test_callback_error_redirects_to_login(monkeypatch):
+    # A stale/replayed OAuth code must NOT 500 — it redirects back to /login.
+    def _boom(code): raise gotrue.GoTrueError("bad code")
+    monkeypatch.setattr(gotrue, "exchange_code", _boom)
+    r = client.get("/callback?code=x&rd=/dash", follow_redirects=False)
+    assert r.status_code in (302, 303) and r.headers["location"].startswith("/login")
+
+def test_logout_redirects_local_and_revokes(monkeypatch):
+    # /logout must go to the browser-reachable local /login (NOT the internal
+    # gotrue_url) and best-effort server-side revoke the token.
+    called = {}
+    monkeypatch.setattr(gotrue, "logout", lambda t: called.setdefault("token", t))
+    r = client.get("/logout", cookies={"pmoves_session": "sometoken"}, follow_redirects=False)
+    assert r.headers["location"] == "/login"
+    assert called.get("token") == "sometoken"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -354,6 +384,13 @@ def exchange_code(code: str) -> dict:
     if r.status_code != 200:
         raise GoTrueError(f"gotrue exchange {r.status_code}")
     return r.json()
+
+def logout(access_token: str) -> None:
+    # Server-side revoke of the GoTrue session (POST /logout with the bearer).
+    r = httpx.post(f"{settings.gotrue_url}/logout",
+                   headers={"Authorization": f"Bearer {access_token}"}, timeout=10.0)
+    if r.status_code not in (200, 204):
+        raise GoTrueError(f"gotrue logout {r.status_code}")
 ```
 
 - [ ] **Step 4: Write `templates/login.html`**
@@ -382,7 +419,7 @@ from fastapi import Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 import gotrue
 
 _templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -391,10 +428,19 @@ def _safe_rd(rd: str) -> str:
     """Open-redirect guard: `rd` reaches us from a query/form param, so an
     attacker could pass rd=https://evil.com and phish a logged-in user. Allow
     ONLY a same-origin relative path, or an http(s) URL whose host is within the
-    PMOVES cookie domain (*.pmoves.ai). Anything else falls back to '/'."""
-    if rd.startswith("/") and not rd.startswith("//"):
-        return rd
+    PMOVES cookie domain (*.pmoves.ai). Anything else falls back to '/'.
+
+    Hardened against browser quirks: leading whitespace/control chars are
+    stripped by browsers parsing Location, and '/\\', '//', backslashes, or
+    embedded CR/LF/TAB can be read as authority-relative or inject headers."""
+    rd = rd.strip()
+    if not rd or any(c in rd for c in "\r\n\t") or "\\" in rd:
+        return "/"
     p = urlparse(rd)
+    # Relative same-origin path: require empty scheme AND netloc, and a single
+    # leading slash (reject '//' protocol-relative).
+    if not p.scheme and not p.netloc and rd.startswith("/") and not rd.startswith("//"):
+        return rd
     dom = settings.cookie_domain.lstrip(".").lower()   # e.g. 'pmoves.ai'
     host = (p.hostname or "").lower().rstrip(".")
     if p.scheme in ("http", "https") and host and (host == dom or host.endswith("." + dom)):
@@ -406,11 +452,12 @@ def _set_session(resp, access_token: str):
                     httponly=True, secure=True, samesite="lax", max_age=settings.session_ttl_seconds)
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, rd: str = "/"):
+def login_page(request: Request, rd: str = "/", e: str = ""):
     rd = _safe_rd(rd)
-    cb = f"{settings.public_base_url}/callback?rd={rd}"
+    cb = f"{settings.public_base_url}/callback?" + urlencode({"rd": rd})  # rd may contain &/# — encode it
+    error = "Sign-in failed — check your email and password." if e else None
     return _templates.TemplateResponse("login.html", {"request": request, "rd": rd,
-        "github_url": gotrue.github_authorize_url(cb), "error": None})
+        "github_url": gotrue.github_authorize_url(cb), "error": error})
 
 @app.post("/login")
 def login_submit(email: str = Form(...), password: str = Form(...), rd: str = Form("/")):
@@ -418,19 +465,33 @@ def login_submit(email: str = Form(...), password: str = Form(...), rd: str = Fo
     try:
         tok = gotrue.password_grant(email, password)
     except gotrue.GoTrueError:
-        return RedirectResponse(f"/login?rd={rd}&e=1", status_code=303)
+        return RedirectResponse("/login?" + urlencode({"rd": rd, "e": "1"}), status_code=303)
     resp = RedirectResponse(rd, status_code=303); _set_session(resp, tok["access_token"]); return resp
 
 @app.get("/callback")
 def callback(code: str = "", rd: str = "/"):
     rd = _safe_rd(rd)
-    tok = gotrue.exchange_code(code)
+    try:
+        tok = gotrue.exchange_code(code)  # a stale/replayed OAuth code is routine — don't 500
+    except gotrue.GoTrueError:
+        return RedirectResponse("/login?" + urlencode({"rd": rd, "e": "1"}), status_code=303)
     resp = RedirectResponse(rd, status_code=303); _set_session(resp, tok["access_token"]); return resp
 
 @app.get("/logout")
-def logout():
-    resp = RedirectResponse(f"{settings.gotrue_url}/logout", status_code=303)
-    resp.delete_cookie(settings.cookie_name, domain=settings.cookie_domain); return resp
+def logout(request: Request):
+    # Best-effort SERVER-SIDE GoTrue revoke (so a captured token is invalidated,
+    # not just the cookie), then clear the local cookie and send the browser to
+    # the browser-reachable local /login. Do NOT redirect to gotrue_url — it is
+    # an INTERNAL address the browser cannot resolve.
+    token = request.cookies.get(settings.cookie_name, "")
+    if token:
+        try:
+            gotrue.logout(token)
+        except gotrue.GoTrueError:
+            pass  # best effort — still clear the local session
+    resp = RedirectResponse("/login", status_code=303)
+    resp.delete_cookie(settings.cookie_name, domain=settings.cookie_domain, secure=True, httponly=True)
+    return resp
 ```
 
 - [ ] **Step 6: Run test to verify it passes**
