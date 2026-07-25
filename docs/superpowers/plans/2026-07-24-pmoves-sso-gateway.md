@@ -123,7 +123,8 @@ Expected: FAIL (`ModuleNotFoundError: jwt_verify`).
 
 ```python
 # pmoves/services/sso-auth/config.py
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated
+from pydantic_settings import BaseSettings, SettingsConfigDict, NoDecode
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
@@ -138,7 +139,12 @@ class Settings(BaseSettings):
     # Exact-match allowlist of registered OIDC redirect URIs (comma-separated in
     # env). /oidc/authorize MUST reject any redirect_uri not in this list — an
     # unvalidated redirect_uri is an open-redirect + auth-code-leak vector.
-    jellyfin_oidc_redirect_uris: list[str] = []  # env: JELLYFIN_OIDC_REDIRECT_URIS
+    # NoDecode: pydantic-settings' EnvSettingsSource treats a list-typed field as
+    # "complex" and eagerly json.loads() the raw env value BEFORE init-kwarg
+    # precedence applies. A comma-separated JELLYFIN_OIDC_REDIRECT_URIS isn't JSON,
+    # so without NoDecode it raises SettingsError even though load() always passes
+    # the parsed list explicitly. NoDecode skips that eager decode.
+    jellyfin_oidc_redirect_uris: Annotated[list[str], NoDecode] = []  # env: JELLYFIN_OIDC_REDIRECT_URIS
 
     @classmethod
     def load(cls) -> "Settings":
