@@ -43,15 +43,38 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 # Shared secret-aware env helper (P7_CONTROL_TOKEN, P7_SIGNING_KEY, etc.)
+# Walk upward for services/common instead of a fixed parents[3]: in the
+# container the module lives at /app/main.py (two path components), so
+# parents[3] raises IndexError before the ImportError fallback can engage
+# (crash-loop observed at first bring-up, 2026-07-25).
 import sys as _sys
-_SERVICES_COMMON = Path(__file__).resolve().parents[3] / "services" / "common"
-if str(_SERVICES_COMMON) not in _sys.path:
-    _sys.path.insert(0, str(_SERVICES_COMMON))
+for _cand in Path(__file__).resolve().parents:
+    _common = _cand / "services" / "common"
+    if _common.is_dir():
+        if str(_common) not in _sys.path:
+            # APPEND, never insert(0): services/common also ships config.py,
+            # which would shadow this service's own `config` module and break
+            # `from config import P7Settings` (relative-import ImportError).
+            _sys.path.append(str(_common))
+        break
 try:
     from env import get_secret as _get_secret  # type: ignore
 except ImportError:  # pragma: no cover
     def _get_secret(key: str, default: str | None = None) -> str | None:
+        # Container fallback (services/common is not baked into the image).
+        # Must honor the <KEY>_FILE convention — compose delivers
+        # P7_SIGNING_KEY_FILE, which a plain os.environ lookup would
+        # silently ignore, leaving the signing key unloaded in-container.
         import os
+        file_path = os.environ.get(f"{key}_FILE")
+        if file_path:
+            try:
+                with open(file_path, encoding="utf-8") as fh:
+                    value = fh.read().strip()
+                if value:
+                    return value
+            except OSError:
+                pass
         return os.environ.get(key, default)
 
 import hmac
