@@ -800,6 +800,16 @@ services:
     networks: { pmoves_app: { aliases: [pmoves-sso-auth] }, pmoves_external: {} }
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+    # Traefik MUST see this container to resolve `sso-auth@docker` (the auth
+    # router's service, defined on the traefik container). Under
+    # exposedbydefault=false a container is invisible without traefik.enable=true;
+    # and being dual-homed it needs the explicit network. This registers the
+    # `sso-auth` service that auth.pmoves.ai's router (in the traefik compose)
+    # points at — without it the login page never comes up and SSO breaks at the door.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.services.sso-auth.loadbalancer.server.port=8080
 networks:
   pmoves_app: { external: true }
   pmoves_external: { external: true }
