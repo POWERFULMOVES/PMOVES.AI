@@ -15,13 +15,18 @@ class Settings(BaseSettings):
     @classmethod
     def load(cls) -> "Settings":
         import os
+        g = os.environ.get
+        # Only SUPABASE_JWT_SECRET is required — it is all the /auth/verify hot
+        # path needs. The login/OIDC fields default to "" so a deployment that
+        # hasn't provisioned the Jellyfin OIDC vars still serves forward-auth
+        # (those paths fail at request time if actually used, not at verify).
         return cls(
             supabase_jwt_secret=os.environ["SUPABASE_JWT_SECRET"],
-            gotrue_url=os.environ["GOTRUE_URL"],
-            public_base_url=os.environ["PUBLIC_BASE_URL"],
-            cookie_domain=os.environ.get("SSO_COOKIE_DOMAIN", ".pmoves.ai"),
-            jellyfin_oidc_client_id=os.environ["JELLYFIN_OIDC_CLIENT_ID"],
-            jellyfin_oidc_client_secret=os.environ["JELLYFIN_OIDC_CLIENT_SECRET"],
+            gotrue_url=g("GOTRUE_URL", ""),
+            public_base_url=g("PUBLIC_BASE_URL", ""),
+            cookie_domain=g("SSO_COOKIE_DOMAIN", ".pmoves.ai"),
+            jellyfin_oidc_client_id=g("JELLYFIN_OIDC_CLIENT_ID", ""),
+            jellyfin_oidc_client_secret=g("JELLYFIN_OIDC_CLIENT_SECRET", ""),
         )
 
 

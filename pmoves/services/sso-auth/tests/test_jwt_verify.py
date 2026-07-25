@@ -40,3 +40,21 @@ def test_tampered_token_raises():
 def test_empty_token_raises():
     with pytest.raises(SessionInvalid):
         verify_session("")
+
+def test_non_authenticated_role_rejected():
+    # A validly-SIGNED token whose role != 'authenticated' (e.g. Supabase's
+    # PUBLIC anon key, signed with the same secret) must NOT authenticate —
+    # signature validity alone is insufficient.
+    anon = jwt.encode({"sub": "anon", "role": "anon", "exp": int(time.time()) + 60},
+                      SECRET, algorithm="HS256")
+    with pytest.raises(SessionInvalid):
+        verify_session(anon)
+
+def test_verify_works_without_oidc_env(monkeypatch):
+    # The /auth/verify hot path must NOT depend on the Jellyfin OIDC config —
+    # removing it must still verify (fail-closed contract), not raise KeyError→500.
+    monkeypatch.delenv("JELLYFIN_OIDC_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JELLYFIN_OIDC_CLIENT_SECRET", raising=False)
+    config.settings._reset()
+    claims = verify_session(_tok())
+    assert claims["role"] == "authenticated"
