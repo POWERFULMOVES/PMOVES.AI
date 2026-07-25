@@ -92,6 +92,24 @@ def test_tampered_token_raises():
 def test_empty_token_raises():
     with pytest.raises(SessionInvalid):
         verify_session("")
+
+def test_non_authenticated_role_rejected():
+    # A validly-SIGNED token whose role != 'authenticated' (e.g. Supabase's
+    # PUBLIC anon key, signed with the same secret) must NOT authenticate —
+    # signature validity alone is insufficient.
+    anon = jwt.encode({"sub": "anon", "role": "anon", "exp": int(time.time()) + 60},
+                      SECRET, algorithm="HS256")
+    with pytest.raises(SessionInvalid):
+        verify_session(anon)
+
+def test_verify_works_without_oidc_env(monkeypatch):
+    # The /auth/verify hot path must NOT depend on the Jellyfin OIDC config —
+    # removing it must still verify (fail-closed contract), not raise KeyError→500.
+    monkeypatch.delenv("JELLYFIN_OIDC_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JELLYFIN_OIDC_CLIENT_SECRET", raising=False)
+    config.settings._reset()
+    claims = verify_session(_tok())
+    assert claims["role"] == "authenticated"
 ```
 
 - [ ] **Step 3: Run test to verify it fails**
@@ -119,13 +137,18 @@ class Settings(BaseSettings):
     @classmethod
     def load(cls) -> "Settings":
         import os
+        g = os.environ.get
+        # Only SUPABASE_JWT_SECRET is required — it is all the /auth/verify hot
+        # path needs. The login/OIDC fields default to "" so a deployment that
+        # hasn't provisioned the Jellyfin OIDC vars still serves forward-auth
+        # (those paths fail at request time if actually used, not at verify).
         return cls(
             supabase_jwt_secret=os.environ["SUPABASE_JWT_SECRET"],
-            gotrue_url=os.environ["GOTRUE_URL"],
-            public_base_url=os.environ["PUBLIC_BASE_URL"],
-            cookie_domain=os.environ.get("SSO_COOKIE_DOMAIN", ".pmoves.ai"),
-            jellyfin_oidc_client_id=os.environ["JELLYFIN_OIDC_CLIENT_ID"],
-            jellyfin_oidc_client_secret=os.environ["JELLYFIN_OIDC_CLIENT_SECRET"],
+            gotrue_url=g("GOTRUE_URL", ""),
+            public_base_url=g("PUBLIC_BASE_URL", ""),
+            cookie_domain=g("SSO_COOKIE_DOMAIN", ".pmoves.ai"),
+            jellyfin_oidc_client_id=g("JELLYFIN_OIDC_CLIENT_ID", ""),
+            jellyfin_oidc_client_secret=g("JELLYFIN_OIDC_CLIENT_SECRET", ""),
         )
 
 
@@ -161,14 +184,19 @@ def verify_session(token: str) -> dict:
         raise SessionInvalid("empty token")
     secret = settings.supabase_jwt_secret  # lazy proxy: reads env on first access
     try:
-        # HS256 with the shared Supabase secret. audience 'authenticated' is
-        # GoTrue's default; options relax aud check to tolerate anon/service too.
-        return jwt.decode(
+        claims = jwt.decode(
             token, secret, algorithms=["HS256"],
             options={"verify_aud": False},
         )
     except JWTError as e:
         raise SessionInvalid(str(e)) from e
+    # SECURITY: only a real GoTrue *session* token authenticates. Supabase's
+    # anon and service_role keys are signed with the SAME secret but carry
+    # role 'anon' / 'service_role' — and the anon key is PUBLIC by design.
+    # Require the session role, else a public value would authenticate.
+    if claims.get("role") != "authenticated":
+        raise SessionInvalid(f"non-session role: {claims.get('role')!r}")
+    return claims
 ```
 
 - [ ] **Step 6: Write `app.py` (verify + healthz only for this task)**
