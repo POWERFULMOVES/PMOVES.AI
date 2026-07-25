@@ -1,5 +1,6 @@
 # pmoves/services/sso-auth/oidc.py
 import hmac, secrets, time
+from urllib.parse import urlencode
 from jose import jwt
 from fastapi import APIRouter, Request, Form, Response
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -44,7 +45,10 @@ def authorize(request: Request, redirect_uri: str, state: str = "", client_id: s
     try:
         verify_session(token)
     except SessionInvalid:
-        return RedirectResponse(f"/login?rd={request.url}", status_code=303)
+        # urlencode the whole authorize URL — it contains &/= (redirect_uri, state),
+        # and an unencoded rd would be truncated at the first & on the login page,
+        # dropping the required redirect_uri and 422-ing the post-login bounce-back.
+        return RedirectResponse("/login?" + urlencode({"rd": str(request.url)}), status_code=303)
     code = _issue_code(token, redirect_uri)
     sep = "&" if "?" in redirect_uri else "?"
     return RedirectResponse(f"{redirect_uri}{sep}code={code}&state={state}", status_code=303)

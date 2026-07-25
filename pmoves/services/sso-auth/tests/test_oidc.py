@@ -77,3 +77,17 @@ def test_authorize_registered_uri_issues_code():
     assert r.status_code==303
     loc=r.headers["location"]
     assert loc.startswith(RD) and "code=" in loc and "state=xyz" in loc
+
+def test_authorize_no_session_bounces_to_login_with_encoded_rd():
+    # No session (but registered client_id + redirect_uri) -> 303 to /login with the
+    # FULL authorize URL urlencoded in rd, so redirect_uri/state survive the bounce.
+    # An UNencoded rd would truncate at the first & and drop the required redirect_uri.
+    from urllib.parse import parse_qs, urlparse
+    client.cookies.clear()
+    r=client.get(f"/oidc/authorize?client_id=jf&redirect_uri={RD}&state=xyz",
+                 follow_redirects=False)
+    assert r.status_code==303
+    loc=r.headers["location"]
+    assert loc.startswith("/login?")
+    rd=parse_qs(urlparse(loc).query)["rd"][0]   # decoded back to the full authorize URL
+    assert "redirect_uri=" in rd and "state=xyz" in rd
