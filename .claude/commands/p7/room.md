@@ -1,7 +1,23 @@
-# P7 Room and Session Management
+# /p7:room — Room lifecycle via P7 stage manager
 
-Manage persistent room stage and transient session state through the P7 room
-orchestrator on port 8122.
+Manage the room lifecycle (rehearsal → live → review → archive) via the
+**P7** room-aware stage manager (FastAPI service on port **8120**).
+
+## State machine
+
+```
+rehearsal ──► live ──► review ──► archive
+                │        │
+                └────────┴──► (review or archive)
+```
+
+- **`rehearsal → live`** is **gated** by the CHIT activation checklist
+  (see [Canonical CHIT checklist](../../pmoves/docs/ROOM_MANIFEST_CONTRACT.md#chit-signing-card-activation-checklist)).
+  P7 returns `422` with the unchecked items if any fail.
+- **`live → review` / `live → archive` / `review → live` / `review → archive`** are ungated.
+- **`archive` is terminal** — no further transitions.
+
+The same stage on either side is an idempotent no-op (returns `noop: true`).
 
 ## Usage
 
@@ -9,40 +25,128 @@ orchestrator on port 8122.
 /p7:room <action> <room_id> [target]
 ```
 
-| Action | API operation | Description |
-|---|---|---|
-| `list` | `GET /api/v1/rooms` | List rooms and current state |
-| `status` | `GET /api/v1/rooms/{room_id}` | Get one room's status |
-| `start` | `POST /api/v1/rooms/{room_id}/start` | Start or roll over a transient session |
-| `pause` | `POST /api/v1/rooms/{room_id}/pause` | Pause an active session |
-| `resume` | `POST /api/v1/rooms/{room_id}/resume` | Resume a paused session |
-| `end` | `POST /api/v1/rooms/{room_id}/end` | End an active or paused session |
-| `archive-session` | `POST /api/v1/rooms/{room_id}/archive-session` | Archive an ended session |
-| `stage` | `POST /api/v1/rooms/{room_id}/stage` | Transition persistent stage to `live`, `review`, or `archive` |
+| Action | Description |
+|---|---|
+| `list` | List all rooms with their `current_stage` |
+| `status` | Get one room's catalog row + manifest |
+| `transition` | Transition a room to a new stage (gated on `rehearsal → live`) |
+| `reload` | Force P7 to re-read the catalog from disk |
 
-Examples:
+## Examples
+
+### List all rooms
 
 ```bash
-curl -X POST http://localhost:8122/api/v1/rooms/z890-infra.room.fabric/start \
-  -H "Authorization: Bearer $P7_CONTROL_TOKEN"
-curl -X POST http://localhost:8122/api/v1/rooms/z890-infra.room.fabric/stage \
-  -H "Authorization: Bearer $P7_CONTROL_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"target":"live","proof":{"card_id":"<uuid>","nonce":"<random-16+-chars>","issued_at":<unix-seconds>,"signature":"<base64-ed25519-signature>"}}'
-curl http://localhost:8122/api/v1/rooms/z890-infra.room.fabric
+curl -s http://localhost:8120/api/p7/rooms | jq
 ```
 
-Room stage is `rehearsal -> live -> review -> archive`. Session state is
-`planned -> active <-> paused -> ended -> archived`. Starting a rehearsal session
-does not promote the room to live.
+### Get one room's status
 
-Mutating HTTP operations require the P7 control bearer token. Before
-`rehearsal -> live`, verify the room activation checklist in
-`pmoves/docs/ROOMS_ON_A_STAGE.md`: signing card, registry reachability, topology
-toggles, PostgREST schema exposure, durable audit persistence, and fresh
-nonce-bound Ed25519 proof-of-possession must all pass. The canonical signed
-message format is documented in `pmoves/services/p7-room-orchestrator/README.md`.
+```bash
+curl -s http://localhost:8120/api/p7/rooms/z890-infra.room.fabric | jq
+```
 
-NATS clients may publish commands to `p7.nats.launch` and `p7.nats.session`.
-Consumers should observe versioned `p7.room.*.v1` facts rather than treating a
-command publication as proof that a transition succeeded.
+### Transition a room to `live` (gated — passes CHIT checklist)
+
+```bash
+curl -X POST http://localhost:8120/api/p7/rooms/z890-infra.room.fabric/transition \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_stage": "live",
+    "reason": "z890 brought up, all CHIT checks pass",
+    "requester": "DARKXSIDE"
+  }'
+```
+
+If the CHIT checklist fails:
+
+```json
+{
+  "error": "chit_checklist_failed",
+  "detail": "CHIT activation checklist failed: 1 item(s) unchecked",
+  "unchecked": [
+    "1. manifest.meta.chit.card_id is missing or empty"
+  ]
+}
+```
+
+### Transition live → review (ungated)
+
+```bash
+curl -X POST http://localhost:8120/api/p7/rooms/z890-infra.room.fabric/transition \
+  -H "Content-Type: application/json" \
+  -d '{"target_stage": "review", "reason": "audit pause", "requester": "DARKXSIDE"}'
+```
+
+### Reload catalog after manual edit
+
+```bash
+curl -X POST http://localhost:8120/api/p7/reload
+```
+
+## Healthcheck
+
+```bash
+curl -s http://localhost:8120/healthz | jq
+# → { "status": "ok", "rooms_loaded": 9, "schema_version": "1.2.0",
+#     "nats_connected": true, "service_card_id": null, "chit_require_signature": true }
+```
+
+## NATS events (subscribe to see transitions in real-time)
+
+| Subject | Payload fields | When |
+|---|---|---|
+| `room.session.updated.v1` | `room_id, previous_stage, new_stage, reason, requester, chit{...}` | every transition |
+| `p7.nats.launch` | `room_id, agent_id, alter, overlay, manifest_version, chit{...}` | reserved (room entered) |
+| `p7.nats.session` | `room_id, session_id, action, agent_id, chit{...}` | reserved (session open/close) |
+| `pmoves.config.rooms.reloaded.v1` | `schema_version, rooms_loaded, chit{...}` | on startup + `/api/p7/reload` |
+
+Every payload has a `chit` block. `chit.status` is `signed` if P7 is configured
+with a signing key, otherwise `unsigned-local` (per
+`pmoves/.claude/BOOTSTRAP.md`).
+
+## Room manifest
+
+Rooms are defined in `pmoves/config/rooms/catalog.json` (schema_version 1.2.0+).
+Each row carries `current_stage` (the live source of truth) and references
+`manifest` (filename in `pmoves/config/rooms/`).
+
+See:
+- `pmoves/docs/ROOMS_ON_A_STAGE.md` — end-to-end room model
+- `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` — manifest interface + canonical CHIT checklist
+- `pmoves/docs/specs/p7-service-spec-2026-07-20.md` — P7 service spec
+- `pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md` — schema extensions (operator-approved 2026-07-20)
+- `pmoves/docs/AGENTS/AGNOTE4482.md` §P7 — P7 stage manager definition
+
+## Troubleshooting
+
+- **CHIT signature required**: rooms transitioning `rehearsal → live` must pass the
+  CHIT/room activation checklist. See
+  [`ROOM_MANIFEST_CONTRACT.md`](../../pmoves/docs/ROOM_MANIFEST_CONTRACT.md#chit-signing-card-activation-checklist).
+  Most common failure: `meta.chit.card_id` missing from the manifest — add it
+  in the manifest's `meta` block, or set up a signing card in
+  `pmoves/config/signing_identity_cards.yaml` and reference it.
+- **P7 service unreachable**: confirm `make -C pmoves up-p7` (or compose
+  equivalent) and that port 8120 is exposed.
+- **NATS disconnected**: P7 still serves HTTP transitions (catalog is local-file);
+  NATS is the fanout. To reconnect, restart the service or wait for the
+  exponential backoff to retry.
+- **State-machine rejection (409)**: the requested `from → to` transition is
+  not valid. The response body's `valid_next_stages` field tells you what's
+  allowed from the current stage.
+- **Schema-invalid manifest**: run `python pmoves/scripts/validate_room_manifests.py`
+  to see which manifest fails the schema.
+
+## What changed in this revision (2026-07-20)
+
+- **Port 8092 → 8120** (8092 is taken by `pdf-ingest` and `publisher-discord`).
+- **State machine vocabulary** is now the rooms-on-a-stage canonical
+  `rehearsal/live/review/archive` (was `planned/active/paused/ended/archived`).
+- **CHIT check** uses `meta.chit.card_id` (was `chit.capability/handler/integration/trigger`).
+- **NATS subjects** are `p7.nats.launch` / `p7.nats.session` / `room.session.updated.v1`
+  (was `p7.room.session.{started,checkpoint,ended}.v1`).
+- **Endpoint** is `/api/p7/rooms/{id}/transition` (was
+  `/api/v1/rooms/{id}/{start|pause|resume|end}`).
+- **Catalog writeback**: `current_stage` is updated atomically on every transition.
+- See [P7 service spec](../../pmoves/docs/specs/p7-service-spec-2026-07-20.md)
+  for the full design.

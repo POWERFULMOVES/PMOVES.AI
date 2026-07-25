@@ -1450,30 +1450,31 @@ archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARC
 up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 	@$(DC) up -d archon
 
-# Native Archon: run Archon's OWN compose (server + mcp + frontend) against local
-# Supabase, fed by pipeline-emitted env.shared. Replaces the broken hand-rolled
-# archon*.submodule.yml wrapper. Frontend :3737, MCP :8051, server :8181.
+# Native Archon 0.6.0: TS/SQLite-native, runs from its OWN compose + own env file.
+# 0.6.0 upstream rewrote Python -> TypeScript and does NOT use Supabase — it uses
+# SQLite by default (~/.archon), or its own Postgres via Archon's `--profile
+# with-db`. The server self-allocates port 3090 and IGNORES the compose PORT (PORT
+# is not injected into the container), so the published mapping must target 3090.
+# Requires the operator to seed Archon's own env file from its example first (that
+# file is secrets-domain and not machine-emitted by the PMOVES pipeline).
+# See memory project_archon_060_native. Standalone for now; deeper main-compose
+# integration is tracked as the "#5 Archon integration" follow-up.
 ARCHON_NATIVE_DIR := $(CURDIR)/../PMOVES-Archon
-# SUPABASE_URL is injected as a shell-env override scoped to THIS compose only
-# (compose precedence: shell env > --env-file). It is deliberately absent from the
-# global env.shared so it never clobbers the in-compose ${SUPABASE_URL:-http://supabase-kong:8000}
-# default other services use (Codex #1984 P1). host.docker.internal reaches the
-# host-published Kong gateway from Archon's standalone compose network.
-ARCHON_NATIVE_SUPABASE_URL ?= http://host.docker.internal:8000
-ARCHON_NATIVE_DC := SUPABASE_URL=$(ARCHON_NATIVE_SUPABASE_URL) docker compose --env-file $(CURDIR)/env.shared \
+ARCHON_NATIVE_PORT ?= 3090
+ARCHON_NATIVE_DC := PORT=$(ARCHON_NATIVE_PORT) docker compose \
 	--project-directory $(ARCHON_NATIVE_DIR) -f $(ARCHON_NATIVE_DIR)/docker-compose.yml
 
-.PHONY: archon-native-config up-archon-native down-archon-native
-# secrets-runtime-hydrate fills SUPABASE_SERVICE_KEY from the freshest canonical
-# source (live Supabase container's SERVICE_ROLE_KEY) before Archon reads it.
-archon-native-config: secrets-runtime-hydrate ## Render native Archon config + confirm Supabase env is populated
-	@$(ARCHON_NATIVE_DC) config 2>/dev/null | grep -E "SUPABASE_URL|SUPABASE_SERVICE_KEY" | sed -E 's/(KEY: ).{12}.*/\1<set>/' | sort -u
-
-up-archon-native: secrets-runtime-hydrate ## Build+start native Archon (server+mcp+frontend) on local Supabase
-	@$(ARCHON_NATIVE_DC) up --build -d
+.PHONY: up-archon-native down-archon-native archon-native-health
+up-archon-native: ## Build+start native Archon 0.6.0 (TS/SQLite) standalone on :3090
+	@test -f "$(ARCHON_NATIVE_DIR)/.env" || { echo "ERROR: Archon env file missing. Seed it first: cp $(ARCHON_NATIVE_DIR)/.env.example $(ARCHON_NATIVE_DIR)/.env"; exit 1; }
+	@$(ARCHON_NATIVE_DC) up --build -d app
+	@echo "✔ Archon 0.6.0 native starting → http://localhost:$(ARCHON_NATIVE_PORT)/api/health"
 
 down-archon-native: ## Stop native Archon stack
 	@$(ARCHON_NATIVE_DC) down
+
+archon-native-health: ## Check native Archon 0.6.0 health (:3090)
+	@curl -sf http://localhost:$(ARCHON_NATIVE_PORT)/api/health && echo " ✔ archon 0.6.0 healthy" || (echo "✗ archon unhealthy" && exit 1)
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
@@ -2855,10 +2856,15 @@ ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
 up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
 
-# Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
+# Bring up agents stack (NATS, Agent Zero, Mesh Agent) and publisher-discord.
+# NOTE: `archon` is intentionally omitted here — the in-compose `archon` service is
+# the pre-0.6.0 Python wrapper (imports server.main), which the 0.6.0 TS rewrite
+# broke (crash-loops). Archon 0.6.0 runs standalone via `make up-archon-native`
+# (:3090). Re-integrating a first-class 0.6.0 archon service into this compose is
+# the tracked "#5 Archon integration" follow-up.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, Cipher Memory, etc.) preferring submodule builds
-	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord cipher-api
+up-agents-stack: ## Start Agents (NATS, Agent Zero, Cipher Memory, etc.); Archon runs via up-archon-native
+	@$(DC) --profile agents up -d nats agent-zero mesh-agent deepresearch publisher-discord cipher-api
 
 .PHONY: up-notebooklm
 up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
@@ -2869,6 +2875,31 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
+
+.PHONY: up-p7
+up-p7: ## Start P7 room-aware stage manager (room lifecycle orchestration, port 8120)
+	@# --profile p7 ONLY: adding --profile agents activates the legacy
+	@# p7-room-orchestrator whose supabase-kong dependency is profile-gated
+	@# (supabase-local) — compose then fails the whole project as "depends on
+	@# undefined service". The new p7 service needs no agents-profile peer.
+	@$(DC) --profile p7 up -d --build p7
+	@$(MAKE) p7-health
+
+.PHONY: p7-health
+p7-health: ## Check P7 service health
+	@# Retry loop: up-p7 chains straight into this and the container needs a
+	@# few seconds to boot — a single immediate probe false-fails the target.
+	@ok=0; for i in 1 2 3 4 5 6 7 8 9 10; do \
+	  if curl -sf http://localhost:$${P7_PORT:-8120}/healthz >/dev/null 2>&1; then ok=1; break; fi; \
+	  sleep 3; \
+	done; \
+	if [ "$$ok" = "1" ]; then echo " ✔ p7 healthy at http://localhost:$${P7_PORT:-8120}"; else echo "✗ p7 unhealthy" && exit 1; fi
+
+.PHONY: smoke-p7
+smoke-p7: ## Run P7 service smoke tests (catalog load + transition gate + idempotency)
+	@# Tests import the service's flat modules (main/catalog/config) — pytest
+	@# must run from the service dir or those imports shadow/miss.
+	@cd services/p7-room-orchestrator && $(PYTHON) -m pytest -q tests/ -x
 
 .PHONY: up-cipher-full
 up-cipher-full: ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
