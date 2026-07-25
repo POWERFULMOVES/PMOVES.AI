@@ -191,7 +191,12 @@ services:
     restart: unless-stopped
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
+    # NATS_URL pinned to the in-network broker (documented default creds —
+    # feedback_nats_creds_convention). Two prior sources delivered a
+    # HOST-shaped value (localhost) into the container: env.tier-agent after
+    # a prod-bundle materialization, and a duplicate ${NATS_URL} entry below
+    # (last list entry wins). Broke archon's broker connect 2026-07-24.
+    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://nats:pmoves@nats:4222}
     - PORT=8091
     - ENVIRONMENT=${ENVIRONMENT:-production}
     - ARCHON_ENV=${ARCHON_ENV:-production}
@@ -209,7 +214,10 @@ services:
     - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    - NATS_URL=${NATS_URL}
+    # (duplicate NATS_URL removed 2026-07-24: ${NATS_URL} interpolates the
+    # HOST-shaped project value (localhost) into the container — last list
+    # entry wins, silently overriding the in-network pin above. Same class
+    # as the nats-init localhost bug.)
     - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
       # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
       # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
