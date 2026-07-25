@@ -45,3 +45,12 @@ def test_logout_clears_cookie():
     r = client.get("/logout", follow_redirects=False)
     assert r.status_code in (302, 303)
     assert 'pmoves_session=""' in r.headers.get("set-cookie","") or "pmoves_session=;" in r.headers.get("set-cookie","").replace(" ","")
+
+def test_login_rejects_open_redirect(monkeypatch):
+    # SECURITY: an off-domain rd must NOT be honored (open-redirect/phishing) —
+    # it falls back to '/'; an in-*.pmoves.ai rd IS honored.
+    monkeypatch.setattr(gotrue, "password_grant", lambda email, pw: {"access_token": _access(email)})
+    evil = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://evil.com/x"}, follow_redirects=False)
+    assert evil.headers["location"] == "/"
+    ok = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://health.pmoves.ai/dash"}, follow_redirects=False)
+    assert ok.headers["location"] == "https://health.pmoves.ai/dash"
