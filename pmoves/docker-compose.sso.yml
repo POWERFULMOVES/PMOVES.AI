@@ -1,0 +1,29 @@
+services:
+  sso-auth:
+    build: { context: ., dockerfile: services/sso-auth/Dockerfile }
+    image: ${SSO_AUTH_IMAGE:-pmoves/sso-auth:local}
+    container_name: pmoves-sso-auth
+    restart: unless-stopped
+    environment:
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
+      GOTRUE_URL: ${GOTRUE_URL:-http://supabase-gotrue:9999}
+      PUBLIC_BASE_URL: ${SSO_PUBLIC_BASE_URL:-https://auth.pmoves.ai}
+      SSO_COOKIE_DOMAIN: ${SSO_COOKIE_DOMAIN:-.pmoves.ai}
+      JELLYFIN_OIDC_CLIENT_ID: ${JELLYFIN_OIDC_CLIENT_ID}
+      JELLYFIN_OIDC_CLIENT_SECRET: ${JELLYFIN_OIDC_CLIENT_SECRET}
+      JELLYFIN_OIDC_REDIRECT_URIS: ${JELLYFIN_OIDC_REDIRECT_URIS:-https://media.pmoves.ai/sso/OID/redirect/pmoves}
+    networks: { pmoves_app: { aliases: [pmoves-sso-auth] }, pmoves_external: {} }
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    # Traefik MUST see this container to resolve `sso-auth@docker` — the service
+    # the auth.pmoves.ai router (defined on the traefik container) points at.
+    # Under exposedbydefault=false a container is invisible without
+    # traefik.enable=true, and dual-homed it needs the explicit network. Without
+    # these the login page never registers and SSO breaks at the front door.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.services.sso-auth.loadbalancer.server.port=8080
+networks:
+  pmoves_app: { external: true }
+  pmoves_external: { external: true }

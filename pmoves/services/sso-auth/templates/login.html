@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><title>PMOVES Sign in</title></head>
+<body style="font-family:system-ui;max-width:22rem;margin:4rem auto">
+  <h1>PMOVES</h1>
+  <a href="{{ github_url }}" style="display:block;padding:.6rem;text-align:center;background:#24292e;color:#fff;border-radius:6px;text-decoration:none">Sign in with GitHub</a>
+  <p style="text-align:center;color:#888">or</p>
+  <form method="post" action="/login">
+    <input type="hidden" name="rd" value="{{ rd }}">
+    <input name="email" type="email" placeholder="email" required style="width:100%;padding:.5rem;margin:.25rem 0">
+    <input name="password" type="password" placeholder="password" required style="width:100%;padding:.5rem;margin:.25rem 0">
+    <button type="submit" style="width:100%;padding:.6rem">Sign in</button>
+  </form>
+  {% if error %}<p style="color:#c00">{{ error }}</p>{% endif %}
+</body></html>
