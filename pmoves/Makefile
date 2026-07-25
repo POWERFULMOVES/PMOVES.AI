@@ -2887,6 +2887,31 @@ up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agen
 	@$(DC) --profile agents up -d --build cipher-api
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
 
+.PHONY: up-p7
+up-p7: ## Start P7 room-aware stage manager (room lifecycle orchestration, port 8120)
+	@# --profile p7 ONLY: adding --profile agents activates the legacy
+	@# p7-room-orchestrator whose supabase-kong dependency is profile-gated
+	@# (supabase-local) — compose then fails the whole project as "depends on
+	@# undefined service". The new p7 service needs no agents-profile peer.
+	@$(DC) --profile p7 up -d --build p7
+	@$(MAKE) p7-health
+
+.PHONY: p7-health
+p7-health: ## Check P7 service health
+	@# Retry loop: up-p7 chains straight into this and the container needs a
+	@# few seconds to boot — a single immediate probe false-fails the target.
+	@ok=0; for i in 1 2 3 4 5 6 7 8 9 10; do \
+	  if curl -sf http://localhost:$${P7_PORT:-8120}/healthz >/dev/null 2>&1; then ok=1; break; fi; \
+	  sleep 3; \
+	done; \
+	if [ "$$ok" = "1" ]; then echo " ✔ p7 healthy at http://localhost:$${P7_PORT:-8120}"; else echo "✗ p7 unhealthy" && exit 1; fi
+
+.PHONY: smoke-p7
+smoke-p7: ## Run P7 service smoke tests (catalog load + transition gate + idempotency)
+	@# Tests import the service's flat modules (main/catalog/config) — pytest
+	@# must run from the service dir or those imports shadow/miss.
+	@cd services/p7-room-orchestrator && $(PYTHON) -m pytest -q tests/ -x
+
 .PHONY: up-cipher-full
 up-cipher-full: ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
 	@echo "Starting full Cipher embedding stack..."
