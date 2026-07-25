@@ -38,25 +38,29 @@ services:
     environment:
     # Supervisor listens on this port (inner AZ runs on :5000 internally)
     - PORT=8080
+    # The 2026-03 pmoves-agent-zero image defaults its readiness probe to
+    # 127.0.0.1:80 while the inner AZ here serves on :5000 — without this
+    # override the supervisor can NEVER see the inner come up, times out at
+    # 180s, and PID 1 exits: measured 368 restarts before diagnosis.
+    - AGENT_ZERO_API_BASE=http://127.0.0.1:5000
+    # --dockerized=true is REQUIRED on A0 2.5 (dev-mode inner RFC-calls fail
+    # in-container with "No RFC password") — see docker-compose.yml agent-zero.
+    - AGENT_ZERO_EXTRA_ARGS=--dockerized=true
     - AGENT_FORM=DARKXSIDE
     - TOPOLOGY_MODE=standalone
     - DOCKED_MODE=false
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # LLM: Z.AI GLM-5-turbo (coding) as primary — cloud, not local
-    - A0_SET_chat_model_provider=openai
-    - A0_SET_chat_model_name=glm-5-turbo
-    - A0_SET_chat_model_api_base=https://api.zai.chat/v1
-    - A0_SET_util_model_provider=openai
-    - A0_SET_util_model_name=glm-5-turbo
-    - A0_SET_util_model_api_base=https://api.zai.chat/v1
-    # Browser + Embed: Ollama on HOST via host.docker.internal
-    - A0_SET_browser_model_provider=openai
-    - A0_SET_browser_model_name=${DARKXSIDE_BROWSER_MODEL:-qwen3.5-35b-a3b}
-    - A0_SET_browser_model_api_base=http://host.docker.internal:11434/v1
-    - A0_SET_embed_model_provider=openai
-    - A0_SET_embed_model_name=${DARKXSIDE_EMBED_MODEL:-qwen3-embedding:4b}
-    - A0_SET_embed_model_api_base=http://host.docker.internal:11434/v1
+    # LLM: Z.AI GLM-5-turbo (coding) as primary — cloud, not local.
+    # A0 2.5 REPLACED the flat A0_SET_<role>_model_* settings with the
+    # _model_config preset plugin: the old vars are silently ignored (they
+    # target keys removed from the Settings schema). Model selection now
+    # lives in /a0/usr/plugins/_model_config/presets.yaml — seeded from
+    # pmoves/config/agent-zero/model-presets-darkxside.yaml via the ./usr
+    # mount below. Only the provider API key remains env-driven:
+    # models.get_api_key() resolves ZAI_CODING_API_KEY for the zai_coding
+    # provider (fork registry, api.z.ai coding endpoint).
+    - ZAI_CODING_API_KEY=${Z_AI_API_KEY:-}
     # A2A enabled
     - A0_SET_a2a_server_enabled=true
     - A0_SET_mcp_server_token=

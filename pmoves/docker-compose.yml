@@ -1094,6 +1094,14 @@ services:
     - supabase-local
     environment:
     - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    # Pass-through (no `=`) so these resolve to ABSENT from the host, overriding
+    # the empty-string values the supabase env files set. vector 0.28.1 fails to
+    # build its logflare proxy connector from an empty-string HTTP_PROXY ("Failed
+    # to build Proxy connector: empty string") and crash-loops; an ABSENT var is
+    # fine. (An `=` here would re-set the empty string and reintroduce the crash.)
+    - HTTP_PROXY
+    - HTTPS_PROXY
+    - NO_PROXY
     volumes:
     - supabase-vector-data:/var/lib/vector
     - ../PMOVES-supabase/docker/volumes/logs/vector.yml:/etc/vector/vector.yml:ro
@@ -2591,7 +2599,11 @@ services:
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
-    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
+    # --dockerized=true is REQUIRED on A0 2.5: runtime.is_development() is
+    # simply "not --dockerized", and a development-mode inner routes file
+    # browsing + prompt extensions through RFC calls that die with
+    # "No RFC password" inside the container.
+    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0 --dockerized=true}
     - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
@@ -2632,6 +2644,10 @@ services:
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
     - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    # Same placeholder for the A0 2.5 preset plugin: get_api_key() resolves
+    # TENSORZERO_API_KEY for provider "tensorzero"; without it the UI banners
+    # "Missing API Key for model presets" even though the gateway needs none.
+    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-tensorzero-routed}
     - A0_SET_chat_model_provider=openai
     # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
     - A0_SET_chat_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
@@ -2683,6 +2699,16 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # A0 2.5 user-config tree (same pattern as the sidecars' ./usr mount).
+    # Carries usr/plugins/_model_config/presets.yaml — WITHOUT it the
+    # _model_config plugin bootstrap downloads the stock agent0ai/a0-presets
+    # collection and the instance chats via openrouter/gpt-5.6-terra instead
+    # of TensorZero (observed on first 2.5 boot). Seed from
+    # pmoves/config/agent-zero/model-presets-docked.yaml. Mount the WHOLE
+    # usr tree, not a nested subdir: a nested bind makes Docker pre-create
+    # /a0/usr path components as root before init-a0.sh populates /a0,
+    # breaking the runtime user's write to /a0/usr/.env (PermissionError).
+    - ${AGENT_ZERO_USR_DIR:-./data/agent-zero/usr}:/a0/usr
     # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
     # Read-only: forms are introspective metadata; runtime never rewrites them.
     - ./configs/agents/forms:/app/configs/agents/forms:ro
@@ -2733,7 +2759,12 @@ services:
     restart: unless-stopped
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
+    # NATS_URL pinned to the in-network broker (documented default creds —
+    # feedback_nats_creds_convention). Two prior sources delivered a
+    # HOST-shaped value (localhost) into the container: env.tier-agent after
+    # a prod-bundle materialization, and a duplicate ${NATS_URL} entry below
+    # (last list entry wins). Broke archon's broker connect 2026-07-24.
+    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://nats:pmoves@nats:4222}
     - PORT=8091
     - ENVIRONMENT=${ENVIRONMENT:-production}
     - ARCHON_ENV=${ARCHON_ENV:-production}
@@ -2751,7 +2782,10 @@ services:
     - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    - NATS_URL=${NATS_URL}
+    # (duplicate NATS_URL removed 2026-07-24: ${NATS_URL} interpolates the
+    # HOST-shaped project value (localhost) into the container — last list
+    # entry wins, silently overriding the in-network pin above. Same class
+    # as the nats-init localhost bug.)
     - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
       # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
       # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
@@ -3526,6 +3560,12 @@ services:
     - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
     - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
     - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
+    # Kimi Code SUBSCRIPTION key (canonical manifest/tier name, 2026-07-24).
+    # Read by models.chat_kimi_for_coding on api.kimi.com/coding/v1 — the
+    # subscription platform is ISOLATED from pay-per-token api.moonshot.ai,
+    # so this key must NOT be funneled into the legacy Moonshot location
+    # (it 401s there; verified live).
+    - KIMI_CODING_API=${KIMI_CODING_API:-local-disabled}
     - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
     - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
     - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
@@ -3860,7 +3900,7 @@ services:
     build:
       context: .
       dockerfile: services/tokenism-simulator/Dockerfile
-    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-simulator:edge}
     restart: unless-stopped
     <<: *tier-agent-hardened-ro
     environment:

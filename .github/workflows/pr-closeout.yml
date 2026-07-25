@@ -1,0 +1,144 @@
+name: PR Closeout Gate
+
+# Manual, fail-closed composition of the existing PR monitor, hedge-trim, CI,
+# task-list, and sanctioned admin-merge lanes. This workflow never executes PR
+# head code: it checks out trusted main and inspects the selected PR via GitHub.
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to audit or merge
+        required: true
+        type: number
+      expected_head_sha:
+        description: Full reviewed head SHA (prevents stale-head merges)
+        required: true
+        type: string
+      action:
+        description: Audit only, or merge after a passing audit
+        required: true
+        default: audit
+        type: choice
+        options:
+          - audit
+          - merge
+      merge_method:
+        description: Merge method (used only when action=merge)
+        required: true
+        default: squash
+        type: choice
+        options:
+          - squash
+          - rebase
+          - merge
+      admin_review_bypass:
+        description: Use the sanctioned admin path for self-authored PR review
+        required: true
+        default: false
+        type: boolean
+      allow_advisory_failures:
+        description: Comma-separated non-required advisory checks allowed to fail
+        required: false
+        default: CodeRabbit
+        type: string
+      confirmation:
+        description: 'For merge: MERGE #<PR> @ <full-head-sha>'
+        required: false
+        default: ""
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: pr-closeout-${{ inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  token:
+    uses: ./.github/workflows/_app-token.yml
+    secrets: inherit
+    with:
+      repositories: ${{ github.event.repository.name }}
+      permission-contents: write
+      permission-pull-requests: write
+      permission-administration: write
+
+  closeout:
+    needs: token
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout trusted main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ needs.token.outputs.token }}
+
+      - name: Audit and optionally merge exact PR head
+        env:
+          GH_TOKEN: ${{ needs.token.outputs.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          CLOSEOUT_ACTION: ${{ inputs.action }}
+          MERGE_METHOD: ${{ inputs.merge_method }}
+          ADMIN_REVIEW_BYPASS: ${{ inputs.admin_review_bypass }}
+          ADMIN_AUTHOR: ${{ github.repository_owner }}
+          DISPATCH_ACTOR: ${{ github.actor }}
+          ALLOW_ADVISORY_FAILURES: ${{ inputs.allow_advisory_failures }}
+          MERGE_CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          args=(
+            --repo "$GITHUB_REPOSITORY"
+            "$CLOSEOUT_ACTION"
+            --pr "$PR_NUMBER"
+            --expected-head "$EXPECTED_HEAD_SHA"
+            --base main
+            --json-out "$RUNNER_TEMP/pr-closeout.json"
+          )
+
+          if [[ "$ADMIN_REVIEW_BYPASS" == "true" &&
+                "$DISPATCH_ACTOR" != "$ADMIN_AUTHOR" ]]; then
+            echo "::error::Admin review bypass may only be dispatched by $ADMIN_AUTHOR"
+            exit 1
+          fi
+
+          IFS=',' read -ra advisory_names <<< "$ALLOW_ADVISORY_FAILURES"
+          for advisory in "${advisory_names[@]}"; do
+            advisory="${advisory#"${advisory%%[![:space:]]*}"}"
+            advisory="${advisory%"${advisory##*[![:space:]]}"}"
+            if [[ -n "$advisory" ]]; then
+              args+=(--allow-advisory-failure "$advisory")
+            fi
+          done
+
+          if [[ "$CLOSEOUT_ACTION" == "audit" ]]; then
+            if [[ "$ADMIN_REVIEW_BYPASS" == "true" ]]; then
+              args+=(--admin-review-bypass --admin-author "$ADMIN_AUTHOR")
+            fi
+          else
+            args+=(--method "$MERGE_METHOD" --confirm "$MERGE_CONFIRMATION")
+            if [[ "$ADMIN_REVIEW_BYPASS" == "true" ]]; then
+              args+=(--admin --admin-author "$ADMIN_AUTHOR")
+            fi
+          fi
+
+          python3 pmoves/tools/pr_closeout.py "${args[@]}" |
+            tee "$RUNNER_TEMP/pr-closeout.txt"
+
+          {
+            echo "## PR Closeout Gate"
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/pr-closeout.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

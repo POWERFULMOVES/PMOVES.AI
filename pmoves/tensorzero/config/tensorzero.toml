@@ -222,6 +222,20 @@ api_base = "https://api.moonshot.ai/v1"
 model_name = "kimi-k2.7-code"
 api_key_location = "env::MOONSHOT_API_KEY"
 
+# Kimi Code SUBSCRIPTION endpoint — distinct platform from pay-per-token
+# api.moonshot.ai (same split as z.ai paas vs coding). Subscription keys are
+# platform-isolated: sent to api.moonshot.ai/v1 they 401 "Invalid
+# Authentication" (verified live 2026-07-24). Model id on this platform is
+# kimi-for-coding; key = canonical KIMI_CODING_API from the prod funnel.
+[models.chat_kimi_for_coding]
+routing = ["kimi_coding_primary"]
+
+[models.chat_kimi_for_coding.providers.kimi_coding_primary]
+type = "openai"
+api_base = "https://api.kimi.com/coding/v1"
+model_name = "kimi-for-coding"
+api_key_location = "env::KIMI_CODING_API"
+
 [models.chat_openrouter]
 routing = ["openrouter_primary"]
 
@@ -894,6 +908,15 @@ model = "chat_zai_glm52"
 weight = 0.8
 temperature = 0.1
 
+# Kimi coding plan (kimi-k2.7-code via Moonshot) — second operator
+# coding-plan suit for Agent Zero, alongside the GLM lane above.
+[functions.agent_zero.variants.hosted_kimi_code]
+type = "chat_completion"
+model = "chat_kimi_for_coding"
+weight = 0.6
+temperature = 1.0
+max_tokens = 8192
+
 # --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
 # SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
 # Nemotron tag verified via /api/tags (nemotron-3-super:120b). R9700 variants remain 0.0.
@@ -1121,6 +1144,14 @@ model = "chat_zai_glm52"
 weight = 0.7
 temperature = 0.2
 
+# Kimi coding plan suit for Archon work orders (pairs with GLM above).
+[functions.archon_work_orders.variants.hosted_kimi_code]
+type = "chat_completion"
+model = "chat_kimi_for_coding"
+weight = 0.6
+temperature = 1.0
+max_tokens = 8192
+
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]
 type = "chat"
@@ -1143,6 +1174,14 @@ type = "chat_completion"
 model = "chat_zai_glm52"
 weight = 0.6
 temperature = 0.1
+
+# Kimi coding plan suit for Archon code review (pairs with GLM above).
+[functions.archon_code_review.variants.hosted_kimi_code]
+type = "chat_completion"
+model = "chat_kimi_for_coding"
+weight = 0.6
+temperature = 1.0
+max_tokens = 8192
 
 # --- Hi-RAG Reranking Function -----------------------------------------------
 [functions.hirag_rerank]

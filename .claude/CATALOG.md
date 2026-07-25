@@ -49,7 +49,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **clap-embed** `:8108` — Deterministic CLAP audio/text embedder (MOF lattice node, `laion/larger_clap_music`). `POST /embed/audio`, `POST /embed/text`, `GET /healthz`, `GET /metrics`. Optional NATS `audio.embed.request.v1`/`audio.embed.result.v1`. WS-A grounding layer.
 
-**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.**
+**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.** ℹ️ *Note: runs as an on-demand headless render (see `reference_a2ui_remotion_render`); it is **not** currently wired into any `docker-compose*.yml` as a long-running service — the port/health-endpoint spec applies when it is run as a service.*
 
 ## Voice & Speech
 
@@ -63,9 +63,9 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **FFmpeg-Whisper** `:8078` — Media transcription with Faster-Whisper (small model). GPU. Reads/writes MinIO.
 
-**Media-Video Analyzer** `:8079` — YOLOv8 frame analysis. Every 5th frame, conf 0.25. Outputs to Supabase.
+**Media-Video Analyzer** `:8079` — object detection over sampled video frames. On `main` this is a FastAPI **stub** (`server.py` with `/healthz`, `/metrics`, GPU detection; analysis pipeline was `TODO`) — it starts and serves health, it does not crash-loop. Full pipeline implemented in PR #2182 (OpenCV frame sampling → **DETR** default, YOLO selectable via `DETECTION_ENGINE`). Wired into `docker-compose.media.yml`. Health: `GET /healthz`.
 
-**Media-Audio Analyzer** `:8082` — Emotion/speaker detection. Model: `superb/hubert-large-superb-er`.
+**Media-Audio Analyzer** `:8082` — audio analysis (STT + diarization + emotion). On `main` this is a FastAPI **stub** (`server.py` with `/healthz`, `/metrics`, GPU detection; analysis pipeline was `TODO`) — it starts and serves health, it does not crash-loop. Full pipeline implemented in PR #2181 (whisper-large-v3-turbo + pyannote-3.1 + `superb/hubert-large-superb-er`). Wired into `docker-compose.media.yml`. Health: `GET /healthz`.
 
 **Extract Worker** `:8083` — Text embedding + indexing. Qdrant (vectors) + Meilisearch (FTS). Model: `all-MiniLM-L6-v2`. API: `POST /ingest`.
 

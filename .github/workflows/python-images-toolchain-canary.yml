@@ -46,7 +46,7 @@ jobs:
           INPUT_WHEEL_VERSION: ${{ github.event.inputs.wheel_version || '' }}
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           import pathlib
@@ -107,7 +107,7 @@ jobs:
           CANDIDATE_WHEEL: ${{ steps.versions.outputs.candidate_wheel }}
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python3 - <<'PY'
           import os
           import pathlib
           import re

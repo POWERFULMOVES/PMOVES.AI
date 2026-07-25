@@ -74,7 +74,7 @@
         "export-csv"
       ],
       "pinned": false,
-      "status": "planned"
+      "status": "active"
     }
   ],
   "notebook": {
@@ -209,7 +209,7 @@
         "fail_open": false,
         "one_active_run": true
       },
-      "enabled": false,
+      "enabled": true,
       "tags": [
         "tokenism",
         "wealth",

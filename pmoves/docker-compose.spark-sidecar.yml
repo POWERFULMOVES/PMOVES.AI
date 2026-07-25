@@ -96,6 +96,13 @@ services:
     environment:
     # Supervisor listens on this port (inner AZ runs on :5000 internally)
     - PORT=8080
+    # --dockerized=true is REQUIRED on A0 2.5 (dev-mode inner RFC-calls fail
+    # in-container with "No RFC password") — see docker-compose.yml agent-zero.
+    - AGENT_ZERO_EXTRA_ARGS=--dockerized=true
+    # Same probe-base override as the DARKXSIDE sidecar: the 2026-03 image
+    # defaults its readiness probe to 127.0.0.1:80, but the inner AZ serves
+    # on :5000 — without this the supervisor times out and restart-loops.
+    - AGENT_ZERO_API_BASE=http://127.0.0.1:5000
     - AGENT_FORM=SPARK
     - TOPOLOGY_MODE=standalone
     - DOCKED_MODE=false

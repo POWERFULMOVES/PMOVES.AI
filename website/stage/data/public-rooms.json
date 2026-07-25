@@ -159,7 +159,7 @@
           "component": {
             "Text": {
               "text": {
-                "literalString": "exchange \u00b7 5090-claude / 5090-tokenism"
+                "literalString": "hybrid \u00b7 5090-claude / 5090-tokenism"
               },
               "usageHint": "caption"
             }
@@ -180,7 +180,7 @@
           "component": {
             "Text": {
               "text": {
-                "literalString": "Apps: tokenism-simulator \u00b7 wealth-ledger (planned)"
+                "literalString": "Apps: tokenism-simulator \u00b7 wealth-ledger"
               },
               "usageHint": "caption"
             }
