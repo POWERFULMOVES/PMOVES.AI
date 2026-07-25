@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     session_ttl_seconds: int = 3600
     jellyfin_oidc_client_id: str      # env: JELLYFIN_OIDC_CLIENT_ID
     jellyfin_oidc_client_secret: str  # env: JELLYFIN_OIDC_CLIENT_SECRET
+    # Exact-match allowlist of registered OIDC redirect URIs (comma-separated in
+    # env). /oidc/authorize MUST reject any redirect_uri not in this list — an
+    # unvalidated redirect_uri is an open-redirect + auth-code-leak vector.
+    jellyfin_oidc_redirect_uris: list[str] = []  # env: JELLYFIN_OIDC_REDIRECT_URIS
 
     @classmethod
     def load(cls) -> "Settings":
@@ -144,6 +148,7 @@ class Settings(BaseSettings):
         # path needs. The login/OIDC fields default to "" so a deployment that
         # hasn't provisioned the Jellyfin OIDC vars still serves forward-auth
         # (those paths fail at request time if actually used, not at verify).
+        redirect_uris = [u.strip() for u in g("JELLYFIN_OIDC_REDIRECT_URIS", "").split(",") if u.strip()]
         return cls(
             supabase_jwt_secret=os.environ["SUPABASE_JWT_SECRET"],
             gotrue_url=g("GOTRUE_URL", ""),
@@ -151,6 +156,7 @@ class Settings(BaseSettings):
             cookie_domain=g("SSO_COOKIE_DOMAIN", ".pmoves.ai"),
             jellyfin_oidc_client_id=g("JELLYFIN_OIDC_CLIENT_ID", ""),
             jellyfin_oidc_client_secret=g("JELLYFIN_OIDC_CLIENT_SECRET", ""),
+            jellyfin_oidc_redirect_uris=redirect_uris,
         )
 
 
@@ -567,11 +573,17 @@ def _env(monkeypatch):
     the shared config module across test files)."""
     for k, v in {"SUPABASE_JWT_SECRET": SECRET, "GOTRUE_URL": "http://g:9999",
                  "PUBLIC_BASE_URL": "https://auth.pmoves.ai",
-                 "JELLYFIN_OIDC_CLIENT_ID": "jf", "JELLYFIN_OIDC_CLIENT_SECRET": "sec"}.items():
+                 "JELLYFIN_OIDC_CLIENT_ID": "jf", "JELLYFIN_OIDC_CLIENT_SECRET": "sec",
+                 "JELLYFIN_OIDC_REDIRECT_URIS": RD}.items():
         monkeypatch.setenv(k, v)
     config.settings._reset()
     yield
     config.settings._reset()
+
+RD = "https://media.pmoves.ai/sso/OID/redirect/pmoves"  # the single registered redirect_uri
+
+def _sess():
+    return jwt.encode({"sub":"u1","email":"a@b.co","role":"authenticated","exp":int(time.time())+3600}, SECRET, algorithm="HS256")
 
 def test_discovery_lists_endpoints():
     d=client.get("/.well-known/openid-configuration").json()
@@ -580,19 +592,49 @@ def test_discovery_lists_endpoints():
     assert d["token_endpoint"].endswith("/oidc/token")
 
 def test_token_endpoint_mints_id_token():
-    sess=jwt.encode({"sub":"u1","email":"a@b.co","role":"authenticated","exp":int(time.time())+3600}, SECRET, algorithm="HS256")
-    code=oidc._issue_code(sess)  # helper: bind an auth code to a validated session
+    code=oidc._issue_code(_sess(), RD)  # helper: bind an auth code to a validated session + redirect_uri
     r=client.post("/oidc/token", data={"grant_type":"authorization_code","code":code,
-        "client_id":"jf","client_secret":"sec","redirect_uri":"https://media.pmoves.ai/sso/OID/redirect/pmoves"})
+        "client_id":"jf","client_secret":"sec","redirect_uri":RD})
     assert r.status_code==200
     idt=r.json()["id_token"]; claims=jwt.decode(idt, SECRET, algorithms=["HS256"], audience="jf")
     assert claims["email"]=="a@b.co"
 
 def test_token_rejects_bad_client_secret():
-    sess=jwt.encode({"sub":"u1","email":"a@b.co","role":"authenticated","exp":int(time.time())+3600}, SECRET, algorithm="HS256")
-    code=oidc._issue_code(sess)
-    r=client.post("/oidc/token", data={"grant_type":"authorization_code","code":code,"client_id":"jf","client_secret":"WRONG","redirect_uri":"x"})
+    code=oidc._issue_code(_sess(), RD)
+    r=client.post("/oidc/token", data={"grant_type":"authorization_code","code":code,"client_id":"jf","client_secret":"WRONG","redirect_uri":RD})
     assert r.status_code==401
+
+def test_token_rejects_mismatched_redirect_uri():
+    # A code minted for the registered URI must not be redeemable against another.
+    code=oidc._issue_code(_sess(), RD)
+    r=client.post("/oidc/token", data={"grant_type":"authorization_code","code":code,
+        "client_id":"jf","client_secret":"sec","redirect_uri":"https://evil.example/cb"})
+    assert r.status_code==400
+
+def test_authorize_rejects_unregistered_redirect_uri():
+    # Open-redirect / auth-code-leak guard: an authed user lured to authorize with
+    # an attacker redirect_uri must get 400 (NO Location header), never a code.
+    sess=_sess()
+    r=client.get(f"/oidc/authorize?client_id=jf&redirect_uri=https://evil.example/cb&state=x",
+                 cookies={"pmoves_session":sess}, follow_redirects=False)
+    assert r.status_code==400
+    assert "location" not in {k.lower() for k in r.headers}
+
+def test_authorize_rejects_wrong_client_id():
+    sess=_sess()
+    r=client.get(f"/oidc/authorize?client_id=WRONG&redirect_uri={RD}&state=x",
+                 cookies={"pmoves_session":sess}, follow_redirects=False)
+    assert r.status_code==400
+
+def test_authorize_registered_uri_issues_code():
+    # The happy path still works: registered client_id + redirect_uri + valid
+    # session → 303 to the registered URI carrying a code.
+    sess=_sess()
+    r=client.get(f"/oidc/authorize?client_id=jf&redirect_uri={RD}&state=xyz",
+                 cookies={"pmoves_session":sess}, follow_redirects=False)
+    assert r.status_code==303
+    loc=r.headers["location"]
+    assert loc.startswith(RD) and "code=" in loc and "state=xyz" in loc
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -604,7 +646,7 @@ Expected: FAIL (`ModuleNotFoundError: oidc`).
 
 ```python
 # pmoves/services/sso-auth/oidc.py
-import secrets, time
+import hmac, secrets, time
 from jose import jwt
 from fastapi import APIRouter, Request, Form, Response
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -612,11 +654,20 @@ from config import settings
 from jwt_verify import verify_session, SessionInvalid
 
 router = APIRouter()
-_CODES: dict[str, tuple[str, float]] = {}   # code -> (session_jwt, expiry). In-memory: single replica; fine for Phase 1.
+# code -> (session_jwt, expiry, redirect_uri). In-memory: single replica; fine for Phase 1.
+_CODES: dict[str, tuple[str, float, str]] = {}
 _CODE_TTL = 120
 
-def _issue_code(session_jwt: str) -> str:
-    c = secrets.token_urlsafe(24); _CODES[c] = (session_jwt, time.time() + _CODE_TTL); return c
+def _issue_code(session_jwt: str, redirect_uri: str) -> str:
+    # Bind the code to the exact redirect_uri it was issued for; /oidc/token
+    # re-checks it, so a code minted for the registered URI can't be replayed
+    # against a different one.
+    c = secrets.token_urlsafe(24); _CODES[c] = (session_jwt, time.time() + _CODE_TTL, redirect_uri); return c
+
+def _client_ok(client_id: str, client_secret: str) -> bool:
+    # Constant-time comparison — the client_secret is a confidential shared secret.
+    return (hmac.compare_digest(client_id, settings.jellyfin_oidc_client_id)
+            and hmac.compare_digest(client_secret, settings.jellyfin_oidc_client_secret))
 
 @router.get("/.well-known/openid-configuration")
 def discovery():
@@ -631,22 +682,29 @@ def discovery():
 def authorize(request: Request, redirect_uri: str, state: str = "", client_id: str = ""):
     """User must already have a PMOVES session (Traefik does NOT ForwardAuth this
     service). If not, bounce to /login and come back."""
+    # Validate the client + redirect_uri BEFORE any session logic or code issuance.
+    # An unregistered redirect_uri is an open-redirect + auth-code-leak vector, so
+    # we 400 (never redirect) rather than reflect an attacker-supplied location.
+    if client_id != settings.jellyfin_oidc_client_id or redirect_uri not in settings.jellyfin_oidc_redirect_uris:
+        return JSONResponse({"error": "invalid_request", "detail": "unregistered client_id or redirect_uri"}, status_code=400)
     token = request.cookies.get(settings.cookie_name, "")
     try:
         verify_session(token)
     except SessionInvalid:
         return RedirectResponse(f"/login?rd={request.url}", status_code=303)
-    code = _issue_code(token)
+    code = _issue_code(token, redirect_uri)
     sep = "&" if "?" in redirect_uri else "?"
     return RedirectResponse(f"{redirect_uri}{sep}code={code}&state={state}", status_code=303)
 
 @router.post("/oidc/token")
 def token(grant_type: str = Form(...), code: str = Form(...), client_id: str = Form(...),
           client_secret: str = Form(...), redirect_uri: str = Form("")):
-    if client_id != settings.jellyfin_oidc_client_id or client_secret != settings.jellyfin_oidc_client_secret:
+    if not _client_ok(client_id, client_secret):
         return Response(status_code=401)
     entry = _CODES.pop(code, None)
-    if not entry or entry[1] < time.time():
+    # Reject missing/expired codes, AND codes whose bound redirect_uri doesn't
+    # match the one presented here (RFC 6749 §4.1.3 redirect_uri consistency).
+    if not entry or entry[1] < time.time() or entry[2] != redirect_uri:
         return JSONResponse({"error": "invalid_grant"}, status_code=400)
     claims = verify_session(entry[0])
     now = int(time.time())
@@ -678,7 +736,7 @@ app.include_router(oidc.router)
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio python -m pytest tests/test_oidc.py -q`
-Expected: PASS (3 passed).
+Expected: PASS (7 passed).
 
 - [ ] **Step 6: Commit**
 
@@ -732,6 +790,7 @@ services:
       SSO_COOKIE_DOMAIN: ${SSO_COOKIE_DOMAIN:-.pmoves.ai}
       JELLYFIN_OIDC_CLIENT_ID: ${JELLYFIN_OIDC_CLIENT_ID}
       JELLYFIN_OIDC_CLIENT_SECRET: ${JELLYFIN_OIDC_CLIENT_SECRET}
+      JELLYFIN_OIDC_REDIRECT_URIS: ${JELLYFIN_OIDC_REDIRECT_URIS:-https://media.pmoves.ai/sso/OID/redirect/pmoves}
     networks: { pmoves_app: { aliases: [pmoves-sso-auth] }, pmoves_external: {} }
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
@@ -1047,10 +1106,12 @@ SSO_COOKIE_DOMAIN=.pmoves.ai
 GOTRUE_URL=http://supabase-gotrue:9999
 JELLYFIN_OIDC_CLIENT_ID=
 JELLYFIN_OIDC_CLIENT_SECRET=
+# Comma-separated exact-match allowlist of OIDC redirect URIs (open-redirect guard).
+JELLYFIN_OIDC_REDIRECT_URIS=https://media.pmoves.ai/sso/OID/redirect/pmoves
 CLOUDFLARE_DNS_API_TOKEN=
 ACME_EMAIL=ops@pmoves.ai
 ```
-(`SUPABASE_JWT_SECRET`/`JWT_SECRET` already exist — reuse, do NOT add.)
+(`SUPABASE_JWT_SECRET`/`JWT_SECRET` already exist — reuse, do NOT add. `JELLYFIN_OIDC_REDIRECT_URIS` is non-secret config, not a generated secret — it goes in `env.shared.example` only, not the secrets manifest.)
 
 - [ ] **Step 2: Register the generated secrets in `secrets_manifest_v2.yaml`** (JELLYFIN_OIDC_CLIENT_ID/SECRET as generated 32-char tokens; CLOUDFLARE_DNS_API_TOKEN as a cgp/vault value the operator supplies). Follow the example→manifest→funnel procedure; then `make -C pmoves secrets-funnel`.
 
