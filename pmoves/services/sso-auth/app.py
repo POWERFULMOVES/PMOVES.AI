@@ -105,3 +105,7 @@ def logout(request: Request):
     resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(settings.cookie_name, domain=settings.cookie_domain, secure=True, httponly=True)
     return resp
+
+# append to pmoves/services/sso-auth/app.py
+import oidc
+app.include_router(oidc.router)
