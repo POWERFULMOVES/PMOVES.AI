@@ -26,3 +26,40 @@ def auth_verify(request: Request):
             "X-Auth-Subject": claims.get("sub", ""),
         },
     )
+
+# append to pmoves/services/sso-auth/app.py
+from fastapi import Form
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+from pathlib import Path
+import gotrue
+
+_templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+def _set_session(resp, access_token: str):
+    resp.set_cookie(settings.cookie_name, access_token, domain=settings.cookie_domain,
+                    httponly=True, secure=True, samesite="lax", max_age=settings.session_ttl_seconds)
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, rd: str = "/"):
+    cb = f"{settings.public_base_url}/callback?rd={rd}"
+    return _templates.TemplateResponse("login.html", {"request": request, "rd": rd,
+        "github_url": gotrue.github_authorize_url(cb), "error": None})
+
+@app.post("/login")
+def login_submit(email: str = Form(...), password: str = Form(...), rd: str = Form("/")):
+    try:
+        tok = gotrue.password_grant(email, password)
+    except gotrue.GoTrueError:
+        return RedirectResponse(f"/login?rd={rd}&e=1", status_code=303)
+    resp = RedirectResponse(rd, status_code=303); _set_session(resp, tok["access_token"]); return resp
+
+@app.get("/callback")
+def callback(code: str = "", rd: str = "/"):
+    tok = gotrue.exchange_code(code)
+    resp = RedirectResponse(rd, status_code=303); _set_session(resp, tok["access_token"]); return resp
+
+@app.get("/logout")
+def logout():
+    resp = RedirectResponse(f"{settings.gotrue_url}/logout", status_code=303)
+    resp.delete_cookie(settings.cookie_name, domain=settings.cookie_domain); return resp
