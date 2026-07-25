@@ -1,5 +1,6 @@
 # pmoves/services/sso-auth/config.py
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated
+from pydantic_settings import BaseSettings, SettingsConfigDict, NoDecode
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
@@ -11,6 +12,14 @@ class Settings(BaseSettings):
     session_ttl_seconds: int = 3600
     jellyfin_oidc_client_id: str      # env: JELLYFIN_OIDC_CLIENT_ID
     jellyfin_oidc_client_secret: str  # env: JELLYFIN_OIDC_CLIENT_SECRET
+    # NoDecode: this is a plain list[str], but pydantic-settings' EnvSettingsSource
+    # treats list-typed fields as "complex" and unconditionally tries json.loads()
+    # on the raw env value BEFORE init-kwarg precedence is applied — our comma-
+    # separated JELLYFIN_OIDC_REDIRECT_URIS isn't JSON, so without NoDecode this
+    # throws SettingsError even though load() always supplies the parsed list
+    # explicitly below. NoDecode skips that eager decode; load()'s explicit kwarg
+    # (parsed via .split(",")) always wins in the init > env source-merge order.
+    jellyfin_oidc_redirect_uris: Annotated[list[str], NoDecode] = []  # env: JELLYFIN_OIDC_REDIRECT_URIS
 
     @classmethod
     def load(cls) -> "Settings":
@@ -20,6 +29,7 @@ class Settings(BaseSettings):
         # path needs. The login/OIDC fields default to "" so a deployment that
         # hasn't provisioned the Jellyfin OIDC vars still serves forward-auth
         # (those paths fail at request time if actually used, not at verify).
+        redirect_uris = [u.strip() for u in g("JELLYFIN_OIDC_REDIRECT_URIS", "").split(",") if u.strip()]
         return cls(
             supabase_jwt_secret=os.environ["SUPABASE_JWT_SECRET"],
             gotrue_url=g("GOTRUE_URL", ""),
@@ -27,6 +37,7 @@ class Settings(BaseSettings):
             cookie_domain=g("SSO_COOKIE_DOMAIN", ".pmoves.ai"),
             jellyfin_oidc_client_id=g("JELLYFIN_OIDC_CLIENT_ID", ""),
             jellyfin_oidc_client_secret=g("JELLYFIN_OIDC_CLIENT_SECRET", ""),
+            jellyfin_oidc_redirect_uris=redirect_uris,
         )
 
 

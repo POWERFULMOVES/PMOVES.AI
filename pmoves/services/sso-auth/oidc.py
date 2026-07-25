@@ -1,5 +1,5 @@
 # pmoves/services/sso-auth/oidc.py
-import secrets, time
+import hmac, secrets, time
 from jose import jwt
 from fastapi import APIRouter, Request, Form, Response
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -7,11 +7,20 @@ from config import settings
 from jwt_verify import verify_session, SessionInvalid
 
 router = APIRouter()
-_CODES: dict[str, tuple[str, float]] = {}   # code -> (session_jwt, expiry). In-memory: single replica; fine for Phase 1.
+# code -> (session_jwt, expiry, redirect_uri). In-memory: single replica; fine for Phase 1.
+_CODES: dict[str, tuple[str, float, str]] = {}
 _CODE_TTL = 120
 
-def _issue_code(session_jwt: str) -> str:
-    c = secrets.token_urlsafe(24); _CODES[c] = (session_jwt, time.time() + _CODE_TTL); return c
+def _issue_code(session_jwt: str, redirect_uri: str) -> str:
+    # Bind the code to the exact redirect_uri it was issued for; /oidc/token
+    # re-checks it, so a code minted for the registered URI can't be replayed
+    # against a different one.
+    c = secrets.token_urlsafe(24); _CODES[c] = (session_jwt, time.time() + _CODE_TTL, redirect_uri); return c
+
+def _client_ok(client_id: str, client_secret: str) -> bool:
+    # Constant-time comparison — the client_secret is a confidential shared secret.
+    return (hmac.compare_digest(client_id, settings.jellyfin_oidc_client_id)
+            and hmac.compare_digest(client_secret, settings.jellyfin_oidc_client_secret))
 
 @router.get("/.well-known/openid-configuration")
 def discovery():
@@ -26,22 +35,29 @@ def discovery():
 def authorize(request: Request, redirect_uri: str, state: str = "", client_id: str = ""):
     """User must already have a PMOVES session (Traefik does NOT ForwardAuth this
     service). If not, bounce to /login and come back."""
+    # Validate the client + redirect_uri BEFORE any session logic or code issuance.
+    # An unregistered redirect_uri is an open-redirect + auth-code-leak vector, so
+    # we 400 (never redirect) rather than reflect an attacker-supplied location.
+    if client_id != settings.jellyfin_oidc_client_id or redirect_uri not in settings.jellyfin_oidc_redirect_uris:
+        return JSONResponse({"error": "invalid_request", "detail": "unregistered client_id or redirect_uri"}, status_code=400)
     token = request.cookies.get(settings.cookie_name, "")
     try:
         verify_session(token)
     except SessionInvalid:
         return RedirectResponse(f"/login?rd={request.url}", status_code=303)
-    code = _issue_code(token)
+    code = _issue_code(token, redirect_uri)
     sep = "&" if "?" in redirect_uri else "?"
     return RedirectResponse(f"{redirect_uri}{sep}code={code}&state={state}", status_code=303)
 
 @router.post("/oidc/token")
 def token(grant_type: str = Form(...), code: str = Form(...), client_id: str = Form(...),
           client_secret: str = Form(...), redirect_uri: str = Form("")):
-    if client_id != settings.jellyfin_oidc_client_id or client_secret != settings.jellyfin_oidc_client_secret:
+    if not _client_ok(client_id, client_secret):
         return Response(status_code=401)
     entry = _CODES.pop(code, None)
-    if not entry or entry[1] < time.time():
+    # Reject missing/expired codes, AND codes whose bound redirect_uri doesn't
+    # match the one presented here (RFC 6749 §4.1.3 redirect_uri consistency).
+    if not entry or entry[1] < time.time() or entry[2] != redirect_uri:
         return JSONResponse({"error": "invalid_grant"}, status_code=400)
     claims = verify_session(entry[0])
     now = int(time.time())
