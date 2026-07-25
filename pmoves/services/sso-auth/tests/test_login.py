@@ -1,19 +1,29 @@
 # pmoves/services/sso-auth/tests/test_login.py
-import time, os
+import time
 import pytest
 from jose import jwt
 from fastapi.testclient import TestClient
+import config, gotrue
+import app as appmod
 
 SECRET = "test-secret-value-at-least-32-chars-long!!"
-for k, v in {"SUPABASE_JWT_SECRET": SECRET, "GOTRUE_URL": "http://gotrue:9999",
-             "PUBLIC_BASE_URL": "https://auth.pmoves.ai", "JELLYFIN_OIDC_CLIENT_ID": "jf",
-             "JELLYFIN_OIDC_CLIENT_SECRET": "s"}.items():
-    os.environ.setdefault(k, v)
-import importlib, config, jwt_verify, gotrue, app as appmod
-for m in (config, jwt_verify, gotrue, appmod): importlib.reload(m)
+
 # base_url must be a real *.pmoves.ai host: the session cookie is Domain=.pmoves.ai,
 # and httpx's cookie jar drops cookies whose Domain doesn't suffix-match the request host.
 client = TestClient(appmod.app, base_url="https://auth.pmoves.ai")
+
+@pytest.fixture(autouse=True)
+def _env(monkeypatch):
+    """Set env + reset the lazy settings proxy per test. NO module-level env-set
+    or importlib.reload — those pollute the shared `config` module and break other
+    test files when the full suite runs. The lazy proxy + _reset() is all we need."""
+    for k, v in {"SUPABASE_JWT_SECRET": SECRET, "GOTRUE_URL": "http://gotrue:9999",
+                 "PUBLIC_BASE_URL": "https://auth.pmoves.ai",
+                 "JELLYFIN_OIDC_CLIENT_ID": "jf", "JELLYFIN_OIDC_CLIENT_SECRET": "s"}.items():
+        monkeypatch.setenv(k, v)
+    config.settings._reset()
+    yield
+    config.settings._reset()
 
 def _access(email="a@b.co"):
     # role='authenticated' is REQUIRED — verify_session (Task 1) rejects any other role.
