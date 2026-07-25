@@ -310,6 +310,15 @@ def test_logout_clears_cookie():
     r = client.get("/logout", follow_redirects=False)
     assert r.status_code in (302, 303)
     assert 'pmoves_session=""' in r.headers.get("set-cookie","") or "pmoves_session=;" in r.headers.get("set-cookie","").replace(" ","")
+
+def test_login_rejects_open_redirect(monkeypatch):
+    # SECURITY: an off-domain rd must NOT be honored (open-redirect/phishing) —
+    # it falls back to '/'; an in-*.pmoves.ai rd IS honored.
+    monkeypatch.setattr(gotrue, "password_grant", lambda email, pw: {"access_token": _access(email)})
+    evil = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://evil.com/x"}, follow_redirects=False)
+    assert evil.headers["location"] == "/"
+    ok = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://health.pmoves.ai/dash"}, follow_redirects=False)
+    assert ok.headers["location"] == "https://health.pmoves.ai/dash"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -373,9 +382,24 @@ from fastapi import Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
+from urllib.parse import urlparse
 import gotrue
 
 _templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+def _safe_rd(rd: str) -> str:
+    """Open-redirect guard: `rd` reaches us from a query/form param, so an
+    attacker could pass rd=https://evil.com and phish a logged-in user. Allow
+    ONLY a same-origin relative path, or an http(s) URL whose host is within the
+    PMOVES cookie domain (*.pmoves.ai). Anything else falls back to '/'."""
+    if rd.startswith("/") and not rd.startswith("//"):
+        return rd
+    p = urlparse(rd)
+    dom = settings.cookie_domain.lstrip(".").lower()   # e.g. 'pmoves.ai'
+    host = (p.hostname or "").lower().rstrip(".")
+    if p.scheme in ("http", "https") and host and (host == dom or host.endswith("." + dom)):
+        return rd
+    return "/"
 
 def _set_session(resp, access_token: str):
     resp.set_cookie(settings.cookie_name, access_token, domain=settings.cookie_domain,
@@ -383,12 +407,14 @@ def _set_session(resp, access_token: str):
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, rd: str = "/"):
+    rd = _safe_rd(rd)
     cb = f"{settings.public_base_url}/callback?rd={rd}"
     return _templates.TemplateResponse("login.html", {"request": request, "rd": rd,
         "github_url": gotrue.github_authorize_url(cb), "error": None})
 
 @app.post("/login")
 def login_submit(email: str = Form(...), password: str = Form(...), rd: str = Form("/")):
+    rd = _safe_rd(rd)
     try:
         tok = gotrue.password_grant(email, password)
     except gotrue.GoTrueError:
@@ -397,6 +423,7 @@ def login_submit(email: str = Form(...), password: str = Form(...), rd: str = Fo
 
 @app.get("/callback")
 def callback(code: str = "", rd: str = "/"):
+    rd = _safe_rd(rd)
     tok = gotrue.exchange_code(code)
     resp = RedirectResponse(rd, status_code=303); _set_session(resp, tok["access_token"]); return resp
 
