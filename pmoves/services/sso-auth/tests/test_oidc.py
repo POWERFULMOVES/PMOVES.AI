@@ -118,3 +118,19 @@ def test_authorize_no_session_bounces_to_login_with_encoded_rd():
     assert loc.startswith("/login?")
     rd=parse_qs(urlparse(loc).query)["rd"][0]   # decoded back to the full authorize URL
     assert "redirect_uri=" in rd and "state=xyz" in rd
+
+def test_signing_key_auto_generates_and_persists(monkeypatch, tmp_path):
+    # No explicit OIDC_SIGNING_KEY -> generate an RSA key once and persist it to
+    # the key file (the "genuine cleaner pattern": no PEM in the env pipeline).
+    keyfile = tmp_path / "oidc_signing_key"
+    monkeypatch.delenv("OIDC_SIGNING_KEY", raising=False)
+    monkeypatch.setenv("OIDC_SIGNING_KEY_PATH", str(keyfile))
+    config.settings._reset()
+    oidc._key_cache.clear()
+    assert not keyfile.exists()
+    priv1, _, jwk1 = oidc._keys()
+    assert keyfile.exists() and "PRIVATE KEY" in priv1 and jwk1["kty"] == "RSA"
+    # a second resolution reads the SAME persisted key (stable JWKS across restarts)
+    oidc._key_cache.clear()
+    priv2, _, _ = oidc._keys()
+    assert priv2 == priv1

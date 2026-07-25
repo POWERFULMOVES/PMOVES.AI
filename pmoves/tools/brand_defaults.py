@@ -281,12 +281,10 @@ def _ensure_sso_credentials(text: str) -> str:
     Config (idempotent branded defaults): auth base URL, cookie domain, GoTrue
     URL, the Jellyfin OIDC client_id + redirect allowlist, ACME email.
 
-    Secrets (generated once when blank/placeholder):
-      - SSO_FORWARD_AUTH_SECRET / JELLYFIN_OIDC_CLIENT_SECRET — random url-safe.
-      - OIDC_SIGNING_KEY — an RSA-2048 private key (RS256 id_tokens for the
-        Jellyfin OIDC plugin). env.shared is Docker env_file format and cannot
-        hold real newlines, so the PEM is stored `\\n`-escaped on a single line
-        (sso-auth config.py un-escapes at load). _set_kv would reject a raw PEM.
+    Secrets (generated once when blank/placeholder): SSO_FORWARD_AUTH_SECRET /
+    JELLYFIN_OIDC_CLIENT_SECRET — random url-safe. (These must also be registered
+    in secrets_manifest_v2.yaml so the funnel keeps them through CGP hydration.)
+    The RSA OIDC signing key is NOT handled here — sso-auth self-provisions it.
     """
     config_defaults = {
         "SSO_PUBLIC_BASE_URL": "https://auth.pmoves.ai",
@@ -304,21 +302,11 @@ def _ensure_sso_credentials(text: str) -> str:
         if _is_blank_or_placeholder(_get_kv(text, key)):
             text = _set_kv(text, key, _strong_random(32))
 
-    if _is_blank_or_placeholder(_get_kv(text, "OIDC_SIGNING_KEY")):
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric import rsa
-
-        pem = (
-            rsa.generate_private_key(public_exponent=65537, key_size=2048)
-            .private_bytes(
-                serialization.Encoding.PEM,
-                serialization.PrivateFormat.PKCS8,
-                serialization.NoEncryption(),
-            )
-            .decode()
-        )
-        text = _set_kv(text, "OIDC_SIGNING_KEY", pem.replace("\n", "\\n"))
-
+    # NOTE: OIDC_SIGNING_KEY (the RSA id_token signing key) is intentionally NOT
+    # generated here. A large multi-line PEM doesn't fit the url-safe CHIT/env
+    # pipeline; sso-auth self-provisions it (load-or-generate to a persisted key
+    # file — see oidc._load_or_generate_private_key). Set OIDC_SIGNING_KEY only as
+    # an explicit override / for multi-node shared keys.
     return text
 
 

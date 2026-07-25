@@ -1,9 +1,11 @@
 # pmoves/services/sso-auth/oidc.py
-import hmac, secrets, time
+import hmac, os, secrets, time
+from pathlib import Path
 from urllib.parse import urlencode
 from jose import jwt
 from jose import jwk as jose_jwk
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import APIRouter, Request, Form, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from config import settings
@@ -19,13 +21,39 @@ _key_cache: dict[str, tuple[str, str, dict]] = {}   # priv_pem -> (priv_pem, pub
 
 class OIDCNotConfigured(Exception): ...
 
+def _load_or_generate_private_key() -> str:
+    """Resolve the RSA signing-key PEM. Precedence:
+      1. explicit OIDC_SIGNING_KEY env override (settings.oidc_signing_key), else
+      2. the persisted key file at settings.oidc_signing_key_path, else
+      3. generate an RSA-2048 key and persist it there (0600) for restart / JWKS
+         stability — mount a shared key file for multi-node consistency.
+    A large PEM doesn't belong in the url-safe CHIT/env secrets pipeline, so the
+    default is self-provisioning. Raises OIDCNotConfigured if no key can be
+    obtained (e.g. an unwritable path) so the OIDC endpoints 503 instead of 500."""
+    if settings.oidc_signing_key:
+        return settings.oidc_signing_key
+    path = Path(settings.oidc_signing_key_path)
+    try:
+        if path.is_file():
+            return path.read_text()
+        pem = rsa.generate_private_key(public_exponent=65537, key_size=2048).private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption()).decode()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(pem)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass  # best-effort perms (non-POSIX / already-restricted)
+        return pem
+    except OSError as ex:
+        raise OIDCNotConfigured() from ex
+
 def _keys():
-    """(priv_pem, pub_pem, public_jwk) for the configured RSA signing key.
-    Cached by the key material, so config.settings._reset() in tests re-derives.
-    Raises OIDCNotConfigured when no key is set (OIDC endpoints then 503)."""
-    priv = settings.oidc_signing_key
-    if not priv:
-        raise OIDCNotConfigured()
+    """(priv_pem, pub_pem, public_jwk) for the RSA signing key. Cached by the key
+    material, so config.settings._reset() in tests re-derives. Raises
+    OIDCNotConfigured only when a key can't be obtained (OIDC endpoints then 503)."""
+    priv = _load_or_generate_private_key()
     if priv not in _key_cache:
         pk = serialization.load_pem_private_key(priv.encode(), password=None)
         pub_pem = pk.public_key().public_bytes(
