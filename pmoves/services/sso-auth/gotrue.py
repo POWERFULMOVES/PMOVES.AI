@@ -23,3 +23,10 @@ def exchange_code(code: str) -> dict:
     if r.status_code != 200:
         raise GoTrueError(f"gotrue exchange {r.status_code}")
     return r.json()
+
+def logout(access_token: str) -> None:
+    # Server-side revoke of the GoTrue session (POST /logout with the bearer).
+    r = httpx.post(f"{settings.gotrue_url}/logout",
+                   headers={"Authorization": f"Bearer {access_token}"}, timeout=10.0)
+    if r.status_code not in (200, 204):
+        raise GoTrueError(f"gotrue logout {r.status_code}")

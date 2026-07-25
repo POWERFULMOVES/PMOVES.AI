@@ -32,7 +32,7 @@ from fastapi import Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 import gotrue
 
 _templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -56,11 +56,12 @@ def _set_session(resp, access_token: str):
                     httponly=True, secure=True, samesite="lax", max_age=settings.session_ttl_seconds)
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, rd: str = "/"):
+def login_page(request: Request, rd: str = "/", e: str = ""):
     rd = _safe_rd(rd)
-    cb = f"{settings.public_base_url}/callback?rd={rd}"
+    cb = f"{settings.public_base_url}/callback?" + urlencode({"rd": rd})  # rd may contain &/# — encode it
+    error = "Sign-in failed — check your email and password." if e else None
     return _templates.TemplateResponse("login.html", {"request": request, "rd": rd,
-        "github_url": gotrue.github_authorize_url(cb), "error": None})
+        "github_url": gotrue.github_authorize_url(cb), "error": error})
 
 @app.post("/login")
 def login_submit(email: str = Form(...), password: str = Form(...), rd: str = Form("/")):
@@ -68,16 +69,30 @@ def login_submit(email: str = Form(...), password: str = Form(...), rd: str = Fo
     try:
         tok = gotrue.password_grant(email, password)
     except gotrue.GoTrueError:
-        return RedirectResponse(f"/login?rd={rd}&e=1", status_code=303)
+        return RedirectResponse("/login?" + urlencode({"rd": rd, "e": "1"}), status_code=303)
     resp = RedirectResponse(rd, status_code=303); _set_session(resp, tok["access_token"]); return resp
 
 @app.get("/callback")
 def callback(code: str = "", rd: str = "/"):
     rd = _safe_rd(rd)
-    tok = gotrue.exchange_code(code)
+    try:
+        tok = gotrue.exchange_code(code)  # a stale/replayed OAuth code is routine — don't 500
+    except gotrue.GoTrueError:
+        return RedirectResponse("/login?" + urlencode({"rd": rd, "e": "1"}), status_code=303)
     resp = RedirectResponse(rd, status_code=303); _set_session(resp, tok["access_token"]); return resp
 
 @app.get("/logout")
-def logout():
-    resp = RedirectResponse(f"{settings.gotrue_url}/logout", status_code=303)
-    resp.delete_cookie(settings.cookie_name, domain=settings.cookie_domain); return resp
+def logout(request: Request):
+    # Best-effort SERVER-SIDE GoTrue revoke (so a captured token is invalidated,
+    # not just the cookie), then clear the local cookie and send the browser to
+    # the browser-reachable local /login. Do NOT redirect to gotrue_url — it is
+    # an INTERNAL address the browser cannot resolve.
+    token = request.cookies.get(settings.cookie_name, "")
+    if token:
+        try:
+            gotrue.logout(token)
+        except gotrue.GoTrueError:
+            pass  # best effort — still clear the local session
+    resp = RedirectResponse("/login", status_code=303)
+    resp.delete_cookie(settings.cookie_name, domain=settings.cookie_domain, secure=True, httponly=True)
+    return resp
