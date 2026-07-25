@@ -4132,6 +4132,20 @@ compose-split-check: ## Drift gate: fail if committed overlays differ from regen
 	    exit 1; \
 	  fi
 
+# PMOVES_NETWORKS wiring: mirror each service's networks: into PMOVES_NETWORKS= in
+# its own environment: so topology.TopologyContext.from_env() sees a non-empty
+# docker_networks (backs on_network()/has_external_egress()). Source-mutating, so
+# run BEFORE compose-split. See scripts/inject_pmoves_networks.py.
+COMPOSE_NETWORKS_RUN := uv run --no-project --with ruamel.yaml==0.19.1 python scripts/inject_pmoves_networks.py
+
+.PHONY: compose-networks compose-networks-check
+compose-networks: ## Wire PMOVES_NETWORKS into docker-compose.yml, then regenerate overlays
+	@cd $(CURDIR) && $(COMPOSE_NETWORKS_RUN)
+	@$(MAKE) --no-print-directory compose-split
+
+compose-networks-check: ## Drift gate: fail if PMOVES_NETWORKS is out of sync with services' networks:
+	@cd $(CURDIR) && $(COMPOSE_NETWORKS_RUN) --check
+
 .PHONY: validate-service-tools-packaging
 validate-service-tools-packaging: ## Audit that services importing pmoves.tools copy them into Docker images
 	@$(PYTHON) $(CURDIR)/scripts/validate_service_tools_packaging.py

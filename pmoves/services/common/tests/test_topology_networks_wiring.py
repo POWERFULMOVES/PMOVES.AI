@@ -1,4 +1,4 @@
-"""Pending test for the PMOVES_NETWORKS wiring gap (dormant since #2183).
+"""Regression test for the PMOVES_NETWORKS wiring (closed the #2183 gap).
 
 ``topology.py``'s ``TopologyContext.from_env()`` reads ``PMOVES_NETWORKS``
 from the process environment, but no Compose file or bootstrap script
@@ -13,11 +13,9 @@ entry in their ``environment:`` list, so that ``TopologyContext.from_env()``
 would see a non-empty ``docker_networks`` set for that service once actually
 deployed.
 
-Marked ``xfail(strict=True)``: this SHOULD start passing once the wiring plan
-described in fix/pmoves-networks-wiring's PR body is implemented, and
-``strict=True`` turns an unexpected XPASS into a hard failure — forcing
-whoever lands the real wiring to delete this marker instead of leaving it
-silently stale.
+The wiring is produced by ``pmoves/scripts/inject_pmoves_networks.py`` (run in
+CI via ``make -C pmoves compose-networks-check``); this test guards two
+representative services so a future edit that drops the mirroring is caught.
 
 Not part of the default ``pyproject.toml`` ``testpaths`` (like its sibling
 ``test_topology.py`` in this same directory) — run explicitly:
@@ -51,16 +49,6 @@ def _load_service(name: str) -> dict:
 @pytest.mark.skipif(
     not _SOURCE_COMPOSE.exists(),
     reason="docker-compose.yml not present in this checkout",
-)
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PMOVES_NETWORKS is not yet wired into docker-compose.yml service "
-        "environments (dormant gap tracked in PR #2183's review thread + "
-        "fix/pmoves-networks-wiring's design-plan PR). Delete this xfail "
-        "once a service's networks: list is mirrored into its own "
-        "environment: [PMOVES_NETWORKS=...] entry."
-    ),
 )
 @pytest.mark.parametrize("service_name", _SAMPLE_SERVICES)
 def test_service_environment_mirrors_networks_into_pmoves_networks(service_name):

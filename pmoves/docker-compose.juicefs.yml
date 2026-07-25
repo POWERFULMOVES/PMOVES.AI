@@ -42,6 +42,8 @@ services:
           cpus: '0.5'
           memory: 512M
 
+    environment:
+    - PMOVES_NETWORKS=pmoves_data
   juicefs-format:  # one-time FS format (idempotent); gateway waits on this
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -61,6 +63,8 @@ services:
     networks:
     - pmoves_data
 
+    environment:
+    - PMOVES_NETWORKS=pmoves_data
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -75,6 +79,7 @@ services:
     # juicefs gateway uses the MinIO gateway code: these are the S3 access/secret keys.
     - MINIO_ROOT_USER=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
     - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
+    - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
     - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
@@ -103,6 +108,7 @@ services:
     environment:
     # Same credential chain as juicefs-gateway (no baked-in secret) so smoke auth always matches.
     - MC_HOST_jfs=http://${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}:${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}@juicefs-gateway:9000
+    - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
     - "set -e; mc mb -p jfs/assets jfs/outputs; printf 'hello-juicefs-2026' | mc pipe jfs/assets/smoke.txt; echo '--- GET ---'; mc cat jfs/assets/smoke.txt; echo; echo '--- multi-bucket list (assets+outputs

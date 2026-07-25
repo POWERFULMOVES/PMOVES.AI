@@ -31,6 +31,7 @@ services:
     - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
     - YOLO_CONFIDENCE=${YOLO_CONFIDENCE:-0.25}
     - FRAME_SAMPLE_RATE=${FRAME_SAMPLE_RATE:-5}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     deploy:
       resources:
         reservations:
@@ -67,6 +68,7 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     deploy:
       resources:
         reservations:
@@ -117,6 +119,7 @@ services:
     - NO_PROXY=
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
     deploy:
       resources:
         reservations:
@@ -179,6 +182,7 @@ services:
     - NATS_URL=${NATS_URL}
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data
     depends_on:
       nats:
         condition: service_healthy
@@ -225,6 +229,7 @@ services:
     environment:
     - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
     - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:8093:8093
     profiles:
@@ -261,6 +266,7 @@ services:
     - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_monitoring,pmoves_external
     ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
     profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
@@ -329,6 +335,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
     ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", "${FLUTE_BIND:-127.0.0.1}:8056:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
@@ -366,6 +373,7 @@ services:
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_external
     ports: ["${CAST_TTS_BIND:-0.0.0.0}:${CAST_TTS_PORT:-8060}:8060"]
     profiles: ["cast", "media"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
@@ -405,6 +413,7 @@ services:
     - NATS_URL=${NATS_URL}
     - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
     - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
+    - PMOVES_NETWORKS=pmoves_bus
     ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
     profiles: ["cast", "media"]
     networks: [pmoves_bus]
@@ -435,6 +444,7 @@ services:
     restart: unless-stopped
     environment:
     - PORT=4416
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
     - minio
     profiles:
@@ -488,6 +498,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external
     volumes:
     - pmoves-ollama-models:/root/.ollama/models
     # Prevent transient Docker embedded-DNS failures from blocking model pull.
@@ -525,6 +536,7 @@ services:
       # Operators launching NIM should still set NGC_API_KEY explicitly.
     - NGC_API_KEY=${NGC_API_KEY:-}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     ports:
     - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8200}:8000"
     profiles: ["gpu", "nim"]
@@ -567,6 +579,7 @@ services:
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
       # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
@@ -624,6 +637,7 @@ services:
     - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8105}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     volumes:
     - ${LLAMA_MODELS_PATH:-./models}:/models:ro
     - llama-results:/results
@@ -674,6 +688,7 @@ services:
     - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
     - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-${S3_PUBLIC_BASE_URL:-http://${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}}}
     - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_data
     depends_on:
       nats:
         condition: service_healthy

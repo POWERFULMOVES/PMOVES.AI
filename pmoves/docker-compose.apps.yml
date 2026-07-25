@@ -64,6 +64,7 @@ services:
     - POSTGRES_USER=wger
     - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:?set WGER_DB_PASSWORD in env.tier-data}
     - PGDATA=/var/lib/postgresql/data/pgdata
+    - PMOVES_NETWORKS=pmoves_data
     volumes:
     - wger-db:/var/lib/postgresql/data
     profiles: ["health", "wger"]
@@ -123,6 +124,7 @@ services:
     - GH_APP_ID=${GH_APP_ID:-}
     - GH_APP_SEC=${GH_APP_SEC:-}
     - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     volumes:
     - ./config/agent_signatures.yaml:/app/config/agent_signatures.yaml:ro
     depends_on:
@@ -215,6 +217,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_data,pmoves_external
     volumes:
     - ./config:/app/config
     - pmoves-yt-data:/data
