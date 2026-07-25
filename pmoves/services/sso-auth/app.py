@@ -41,10 +41,19 @@ def _safe_rd(rd: str) -> str:
     """Open-redirect guard: `rd` reaches us from a query/form param, so an
     attacker could pass rd=https://evil.com and phish a logged-in user. Allow
     ONLY a same-origin relative path, or an http(s) URL whose host is within the
-    PMOVES cookie domain (*.pmoves.ai). Anything else falls back to '/'."""
-    if rd.startswith("/") and not rd.startswith("//"):
-        return rd
+    PMOVES cookie domain (*.pmoves.ai). Anything else falls back to '/'.
+
+    Hardened against browser quirks: leading whitespace/control chars are
+    stripped by browsers parsing Location, and '/\\', '//', backslashes, or
+    embedded CR/LF/TAB can be read as authority-relative or inject headers."""
+    rd = rd.strip()
+    if not rd or any(c in rd for c in "\r\n\t") or "\\" in rd:
+        return "/"
     p = urlparse(rd)
+    # Relative same-origin path: require empty scheme AND netloc, and a single
+    # leading slash (reject '//' protocol-relative).
+    if not p.scheme and not p.netloc and rd.startswith("/") and not rd.startswith("//"):
+        return rd
     dom = settings.cookie_domain.lstrip(".").lower()   # e.g. 'pmoves.ai'
     host = (p.hostname or "").lower().rstrip(".")
     if p.scheme in ("http", "https") and host and (host == dom or host.endswith("." + dom)):

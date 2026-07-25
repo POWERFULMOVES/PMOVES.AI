@@ -1,6 +1,7 @@
 # pmoves/services/sso-auth/tests/test_login.py
 import time
 import pytest
+import httpx
 from jose import jwt
 from fastapi.testclient import TestClient
 import config, gotrue
@@ -52,13 +53,18 @@ def test_logout_clears_cookie():
     assert 'pmoves_session=""' in r.headers.get("set-cookie","") or "pmoves_session=;" in r.headers.get("set-cookie","").replace(" ","")
 
 def test_login_rejects_open_redirect(monkeypatch):
-    # SECURITY: an off-domain rd must NOT be honored (open-redirect/phishing) —
-    # it falls back to '/'; an in-*.pmoves.ai rd IS honored.
+    # SECURITY: off-domain / bypass-crafted rd must NOT be honored — falls to '/'.
     monkeypatch.setattr(gotrue, "password_grant", lambda email, pw: {"access_token": _access(email)})
-    evil = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://evil.com/x"}, follow_redirects=False)
-    assert evil.headers["location"] == "/"
-    ok = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://health.pmoves.ai/dash"}, follow_redirects=False)
-    assert ok.headers["location"] == "https://health.pmoves.ai/dash"
+    bad = ["https://evil.com/x", "//evil.com", "/\\evil.com",
+           "https://health.pmoves.ai.evil.com/", "https://evilpmoves.ai",
+           "https://health.pmoves.ai@evil.com", "\thttps://evil.com"]
+    for rd in bad:
+        r = client.post("/login", data={"email":"a@b.co","password":"pw","rd":rd}, follow_redirects=False)
+        assert r.headers["location"] == "/", f"open redirect not blocked for {rd!r}"
+    # in-domain (absolute) and same-origin (relative) rds ARE honored
+    for rd in ("https://health.pmoves.ai/dash", "/dashboard"):
+        r = client.post("/login", data={"email":"a@b.co","password":"pw","rd":rd}, follow_redirects=False)
+        assert r.headers["location"] == rd, f"in-domain rd wrongly rejected: {rd!r}"
 
 def test_bad_login_shows_error(monkeypatch):
     # A rejected password redirects to /login?...&e=1, and the GET login page renders the error.
@@ -84,3 +90,26 @@ def test_logout_redirects_local_and_revokes(monkeypatch):
     r = client.get("/logout", cookies={"pmoves_session": "sometoken"}, follow_redirects=False)
     assert r.headers["location"] == "/login"
     assert called.get("token") == "sometoken"
+
+def test_gotrue_outage_becomes_gotrue_error(monkeypatch):
+    # A GoTrue OUTAGE (transport error) must surface as GoTrueError so the
+    # endpoint handlers' `except GoTrueError` catch it — never a raw httpx
+    # exception that would 500 the login/callback (fail-closed invariant).
+    def _down(*a, **k): raise httpx.ConnectError("connection refused")
+    monkeypatch.setattr(gotrue.httpx, "post", _down)
+    with pytest.raises(gotrue.GoTrueError):
+        gotrue.password_grant("a@b.co", "pw")
+    with pytest.raises(gotrue.GoTrueError):
+        gotrue.exchange_code("somecode")
+    with pytest.raises(gotrue.GoTrueError):
+        gotrue.logout("sometoken")
+
+def test_logout_clears_cookie_even_when_gotrue_down(monkeypatch):
+    # /logout stays fail-closed: a GoTrue outage must NOT stop the local cookie
+    # from being cleared, and must still redirect to the local /login (never 500).
+    def _down(*a, **k): raise httpx.ConnectError("connection refused")
+    monkeypatch.setattr(gotrue.httpx, "post", _down)
+    client.cookies.clear()
+    r = client.get("/logout", cookies={"pmoves_session": "sometoken"}, follow_redirects=False)
+    assert r.headers["location"] == "/login"
+    assert 'pmoves_session=""' in r.headers.get("set-cookie", "") or "pmoves_session=;" in r.headers.get("set-cookie", "")
