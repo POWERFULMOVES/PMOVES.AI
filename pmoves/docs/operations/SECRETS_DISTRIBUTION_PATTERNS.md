@@ -50,7 +50,7 @@ gh workflow run sync-secrets-local.yml --repo POWERFULMOVES/PMOVES.AI \
 
 ## Pattern B — Artifact upload + per-node pull (recommended for new nodes)
 
-**Status:** Roadmap. Use when adding a new node whose runtime cannot host a GH Actions runner OR when secrets should be pushed to a specific path rather than landing in a runner-writable directory.
+**Status:** SHIPPED (consumer side, 2026-07-24). The producer upload-artifact step has been live in `sync-secrets-local.yml` since Pattern A; the consumer is now `make -C pmoves secrets-pull` (installs the newest successful run's bundle at the canonical user-scoped CHIT path) and the one-shot `make -C pmoves secrets-funnel-from-prod` (pull + materialize tier files). No per-run path or run-id juggling — schedule the one-shot per node (Task Scheduler / cron) or run on demand. Use for any node whose runtime cannot host a GH Actions runner (5090, Z890) OR when secrets should be pushed to a specific path rather than landing in a runner-writable directory.
 
 **Design:**
 
