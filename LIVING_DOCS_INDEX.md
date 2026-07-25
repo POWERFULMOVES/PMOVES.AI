@@ -49,7 +49,10 @@ These are the rendering targets. Doc updates should propagate visually through t
 | **A2UI** (NATS-backed agent UI bridge) | [`PMOVES-A2UI/`](./PMOVES-A2UI/) | `.claude/context/geometry-nats-subjects.md` (`a2ui.*` subjects) |
 | **Hyperdimensions** (visualization layer) | [`Pmoves-hyperdimensions/`](./Pmoves-hyperdimensions/) | submodule README + skill `/hyperdim:*` |
 | **D3JS skill** (Claude-driven viz) | [`skills/Pmoves-claude-d3js-skill/`](./skills/Pmoves-claude-d3js-skill/) | [`skills/README.md`](./skills/README.md) |
-| **Creator pipeline** (themes, motion, remotion) | `PMOVES-Creator/` | submodule context |
+| **Creator pipeline** (themes, motion, Remotion) | `PMOVES-Creator/` + [`pmoves/services/a2ui-renderer/`](./pmoves/services/a2ui-renderer/) | [`pmoves/docs/CREATOR_PIPELINE.md`](./pmoves/docs/CREATOR_PIPELINE.md) |
+| **Pretext text layout** (`@chenglou/pretext`, deterministic wrap/caption/living-doc overlays in the Remotion runtime) | [`Pmoves-pretext` fork](https://github.com/POWERFULMOVES/Pmoves-pretext), consumed by `pmoves/services/a2ui-renderer/src/remotion/` | [`pmoves/docs/CREATOR_PIPELINE.md`](./pmoves/docs/CREATOR_PIPELINE.md) §text_layout |
+| **CHIT Visual Tour** (public explainer, armor tokens) | [`website/chit-tour/`](./website/chit-tour/) | content source-of-truth = `data.js` SOURCES map; evidence policy: verified actuals only, projections labeled |
+| **Skills registry** (submodule ↔ skills ↔ context map) | [`pmoves/configs/submodule_skill_registry.json`](./pmoves/configs/submodule_skill_registry.json) | machine-emitted via `pmoves/tools/chit_manifest_register.py` doctrine; commands live in [`.claude/commands/`](./.claude/commands/) |
 | **A2UI NATS bridge** (port 9224) | service-side | `.claude/CATALOG.md` |
 
 ## CLI surfaces — operator-facing entry points

@@ -441,3 +441,16 @@ footer.foot { padding: 28px 56px 40px; color: var(--text-faint); font-size: 12px
 
 /* assumptions / caveats list */
 .u-caveat-list { font-size: 13.5px; color: var(--text-muted); padding-left: 18px; margin: 8px 0 0; line-height: 1.6; }
+
+/* Honesty chip: marks projection-model visualizations vs measured actuals */
+.chip-projection {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  vertical-align: middle;
+  border: 1px solid var(--pm-signature-soft, #FB7185);
+  color: var(--pm-signature-soft, #FB7185);
+  border-radius: 3px;
+}

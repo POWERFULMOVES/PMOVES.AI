@@ -282,12 +282,85 @@
       <div class="eyebrow">10 · CHIT as the economic coordination layer</div>
       <h2>Tokenomics: where the geometry pays off</h2>
       <p class="lede">
-        CHIT is a coordination protocol — and coordination has a unit economics. The PMOVES projection bundle
-        models five-year cumulative profit, breakeven, scenario expected value, and Docker-style container
-        replication for community micro-businesses that ride on the same
-        <span class="mono">tokenism.cgp.*</span> NATS subjects as the rest of the framework.
-        Below: four projection lenses, each grounded in a single CSV in the
-        <span class="mono">CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections</span> directory.
+        CHIT is a coordination protocol — and coordination has a unit economics. This section separates two
+        things honestly: <strong>measured results</strong> from the pipeline that actually runs today, and a
+        <strong>five-year projection model</strong> (planning numbers, clearly labeled — not measurements).
+      </p>
+
+      <!-- ═══ VERIFIED ACTUALS — measured run evidence ═══ -->
+      <div class="viz-card u-mb-24" id="toke-actuals">
+        <div class="viz-head">
+          <h3>Verified actuals · ToKenism → Wealth export, measured run</h3>
+          <div class="legend"><span class="mono">run 2026-07-25T14:02:00Z · scenario: baseline · dry-run</span></div>
+        </div>
+        <div class="viz-body">
+          <div class="kpi-strip toke-kpis-4">
+            <div class="kpi"><div class="kpi-num">52</div><div class="kpi-label">weeks simulated</div></div>
+            <div class="kpi"><div class="kpi-num">156</div><div class="kpi-label">ledger transactions generated</div></div>
+            <div class="kpi"><div class="kpi-num">1</div><div class="kpi-label">NATS event · <span class="mono">tokenism.export.result.v1</span></div></div>
+            <div class="kpi"><div class="kpi-num">dry-run</div><div class="kpi-label">settlement gated (TAC_TOKENISM)</div></div>
+          </div>
+          <table class="table u-mt-8">
+            <thead><tr><th>Week-1 sample (real records from this run)</th><th>Flow</th><th class="num">Amount</th><th>Category</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">Group B Pool → Group B Members</td><td>transfer</td><td class="num">$1,880.71</td><td>Internal Transfer</td></tr>
+              <tr><td class="mono">Group A Pool → External Merchants</td><td>withdrawal</td><td class="num">$3,864.05</td><td>External Spending</td></tr>
+              <tr><td class="mono">Group B Pool → External Merchants</td><td>withdrawal</td><td class="num">$1,513.16</td><td>External Spending</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="viz-foot" style="display:block">
+          <div><strong>Provenance chain</strong> (commitment, not signature — an unsigned demo-mode run):</div>
+          <div class="mono" style="word-break:break-all">event = {"dryRun":true,"scenario_id":"baseline","transactionCount":156,"weeksSimulated":52}</div>
+          <div class="mono" style="word-break:break-all">sha256(event) = d8ea4139fe5f65d341e5b310f0e4287411dadbea66ac6eed760da73e48dacf7d</div>
+          <div>▸ pipeline: ToKenism simulator → export sidecar (<span class="mono">PMOVES-ToKenism-Multi/integrations/firefly</span>, PR #52) → Firefly III ledger (dry-run) → <span class="mono">tokenism.export.result.v1</span> (registered, <span class="mono">nats-subjects.md</span>)</div>
+          <div>▸ room wiring live-verified &amp; merged: PMOVES.AI PR #2169 (<span class="mono">9414f03b</span>, 2026-07-20) — the ToKenism Exchange room's wealth-ledger app is <em>active</em>, export binding <em>enabled</em>, live settlement still gated dry-run-by-default</div>
+        </div>
+      </div>
+
+      <!-- ═══ REGULATORY ANCHOR — current US framework, July 2026 ═══ -->
+      <div class="viz-card u-mb-24" id="toke-regulatory">
+        <div class="viz-head">
+          <h3>Regulatory anchor · where this sits under the 2026 US framework</h3>
+          <div class="legend"><span class="mono">status as of 2026-07-25 · engineering posture, not legal advice</span></div>
+        </div>
+        <div class="viz-body">
+          <table class="table">
+            <thead><tr><th>Framework</th><th>Status (July 2026)</th><th>What it means for shape attribution &amp; this model</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>GENIUS Act</strong><br><span class="mono">payment stablecoins · law since 2025-07-18</span></td>
+                <td>Implementation rulemaking in flight: OCC NPRM (Mar 2026, comments closed May 1), FDIC NPRM (Apr 2026), FinCEN/OFAC AML joint NPRM, Treasury §4(c) state-regime NPRM. Statutory deadline for regulations: 2026-07-18. Effective the earlier of 2027-01-18 or 120 days after final rules.</td>
+                <td>Shape-attribution units are <strong>designed to stay outside</strong> the payment-stablecoin perimeter: they record contribution (CGP attribution), they are not redeemable fixed-monetary-value instruments. Two hard design rails this locks in: <em>no fixed-USD redemption promise</em> (that makes it a payment stablecoin → licensed-issuer-only, 1:1 reserves), and <em>no yield-on-holdings</em> (GENIUS bars issuer interest; distributions must remain earned attribution, which is exactly what the measured run above shows — pool→member transfers keyed to contribution, not APY).</td>
+              </tr>
+              <tr>
+                <td><strong>CLARITY Act</strong><br><span class="mono">market structure · H.R. 3633</span></td>
+                <td>Passed House; cleared Senate Banking; on the Senate calendar (No. 423). Updated Senate text 2026-07-22 (Banking+Agriculture merge, federal-official ethics bar). Three open disputes (law-enforcement §604, stablecoin yield, ethics scope); realistic 2026 window closes ~Aug 10.</td>
+                <td>Not law yet — so the model keeps <strong>both classification branches</strong> priced in. The digital-commodity path (decentralization / mature-system tests) is strengthened by attribution being a <em>used utility</em> on the Geometry Bus; it is weakened by any profit-expectation framing — which is why the projection lenses below are labeled planning instruments and the public claims stay measured-actuals-first.</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="u-mt-8">
+            <strong>Simulation updates this anchoring queues up</strong> (planned, not yet run):
+            <ul>
+              <li>Attribution-vs-yield scenario pair: assert every distribution path in the simulator is contribution-keyed (the baseline already is); add a failing-by-design yield-on-holdings scenario as a compliance tripwire.</li>
+              <li>Compliance-overhead line item: AML/BSA program costs (FinCEN NPRM) added to the breakeven model's fixed costs.</li>
+              <li>Regulatory-timeline variable in scenario analysis: GENIUS effective-date branch (Jan 2027 vs rules+120d) × CLARITY pass/stall branch.</li>
+              <li>Reserve-model scenario stays <em>parked</em> unless a fixed-value community token is ever proposed — at which point it becomes a licensed-issuer conversation, not a simulator parameter.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="viz-foot">
+          <span>▸ sources: Federal Register (OCC 2026-04089, FDIC 2026-06974), Treasury press (sb0435), Congress.gov H.R.3633, Senate calendar reporting — checked 2026-07-25</span>
+        </div>
+      </div>
+
+      <p class="lede">
+        Everything below this line is the <strong>projection model</strong>: five-year cumulative profit,
+        breakeven, scenario expected value, and container-replication economics for community micro-businesses
+        that would ride the same <span class="mono">tokenism.cgp.*</span> subjects. Four lenses, each grounded
+        in a single CSV in the <span class="mono">CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections</span> bundle —
+        planning instruments, not measured results.
       </p>
 
       <!-- KPI strip from the rolled-up 5Y / community projections -->
@@ -296,7 +369,7 @@
       <!-- 5Y cumulative profit -->
       <div class="viz-card u-mb-24">
         <div class="viz-head">
-          <h3>Cumulative net profit, 2025 – 2029 · per business archetype</h3>
+          <h3>Cumulative net profit, 2025 – 2029 · per business archetype <span class="chip-projection">PROJECTION MODEL</span></h3>
           <div class="legend" id="toke-cum-legend"></div>
         </div>
         <div class="viz-body">
@@ -311,7 +384,7 @@
       <!-- Breakeven (horizontal range bars) + Scenario expected value (small multiples) -->
       <div class="grid c2 u-mb-24">
         <div class="viz-card">
-          <div class="viz-head"><h3>Months to breakeven · optimistic → conservative</h3></div>
+          <div class="viz-head"><h3>Months to breakeven · optimistic → conservative <span class="chip-projection">PROJECTION MODEL</span></h3></div>
           <div class="viz-body">
             <svg id="toke-breakeven" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Range chart of breakeven months for each business model"></svg>
           </div>
@@ -320,7 +393,7 @@
           </div>
         </div>
         <div class="viz-card">
-          <div class="viz-head"><h3>Risk-weighted expected value · per scenario</h3></div>
+          <div class="viz-head"><h3>Risk-weighted expected value · per scenario <span class="chip-projection">PROJECTION MODEL</span></h3></div>
           <div class="viz-body">
             <svg id="toke-scenarios" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Stacked bars of scenario expected value per business model"></svg>
           </div>
@@ -333,7 +406,7 @@
       <!-- Docker container scaling -->
       <div class="viz-card u-mb-24">
         <div class="viz-head">
-          <h3>Container ROI vs. replication scale · the Docker-style argument</h3>
+          <h3>Container ROI vs. replication scale · the Docker-style argument <span class="chip-projection">PROJECTION MODEL</span></h3>
           <div class="legend" id="toke-container-legend"></div>
         </div>
         <div class="viz-body">
@@ -346,7 +419,7 @@
       </div>
 
       <!-- Community impact -->
-      <h3 class="u-h-sub-28">Community economic impact · three participation rates</h3>
+      <h3 class="u-h-sub-28">Community economic impact · three participation rates <span class="chip-projection">PROJECTION MODEL</span></h3>
       <table class="table" id="toke-community-table">
         <thead><tr><th>Scenario</th><th class="num">Participants</th><th class="num">Total invest</th><th class="num">Annual income lift</th><th class="num">×Multiplier</th><th class="num">Total impact</th><th class="num">Community ROI</th></tr></thead>
         <tbody></tbody>
