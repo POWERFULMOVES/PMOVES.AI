@@ -288,7 +288,11 @@ async def get_room(room_id: str) -> Dict[str, Any]:
     try:
         manifest = await asyncio.to_thread(CATALOG.get_manifest, room_id)
     except ManifestError as exc:
-        manifest_error = str(exc)
+        # Log the detail (ManifestError messages include internal filesystem
+        # paths) but return a generic message so we don't expose those paths to
+        # the caller (CodeQL py/stack-trace-exposure).
+        LOG.warning("manifest load failed for room %s: %s", room_id, exc)
+        manifest_error = "manifest failed to load or validate"
     return {
         "catalog_row": row,
         "manifest": manifest,

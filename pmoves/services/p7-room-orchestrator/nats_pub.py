@@ -86,6 +86,15 @@ class NATSPublisher:
                 return True
             try:
                 from nats.aio.client import Client as NATSClient
+                # Drain any stale client (e.g. a mid-stream publish failure set
+                # _connected=False) before replacing it, so we don't leak the
+                # old connection when reconnecting.
+                if self._nc is not None:
+                    try:
+                        await self._nc.drain()
+                    except Exception:
+                        pass
+                    self._nc = None
                 self._nc = NATSClient()
                 await asyncio.wait_for(
                     self._nc.connect(servers=[self._nats_url]),
