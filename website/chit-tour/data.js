@@ -368,6 +368,8 @@ const NATS_SUBJECTS = [
 
 // --- assumptions / coverage ---
 const COVERAGE_NOTES = [
+  "The CHIT two-meaning split used throughout this tour — concept = 'Cymatic Holographic Information Theory', mechanism = 'Compressed Hierarchical Information Transfer' — is BRAND-OWNER CANON (DARKXSIDE, 2026-06-09): the deliberate reconciliation of 7 historically conflicting expansions found across the docs. The PMOVESCHIT source files still carry the older single expansion 'Cymatic-Holographic Information Transfer' pending the fleet-wide doc sweep; where this tour states the split, that is the canon speaking, not the cited file.",
+  "Version currency: the CGP spec is v1.0 production-ready (CGP_v1.0_SPECIFICATION.md, 2026-02-08), but documented example payloads in geometry-nats-subjects.md still show chit.cgp.v0.1/v0.2 traffic — the spec is ahead of the recorded examples, not the other way around.",
   "Definitions and terminology are taken verbatim from pmoves/docs/PMOVESCHIT/00_GLOSSARY.md and 01_WHAT_IS_CHIT.md (CHIT, CGP, CHR, EVO SWARM, Five Pillars, GEOMETRY BUS, Poincaré Disk).",
   "MOF mappings, the Seven Design Principles, the gap-size formula, and meta-agent vs. standard-agent typology come from pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md (canonical reference, v1.0.0).",
   "Agent classes (Legendary/Standard/Specialized/Utility), 7 service types, evolution stages, CHIT toggles, and the dual-type table come from pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md (v1.5.0, 76 agents).",
