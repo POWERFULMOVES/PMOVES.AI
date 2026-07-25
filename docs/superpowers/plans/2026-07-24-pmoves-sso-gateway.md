@@ -53,49 +53,50 @@ pydantic-settings==2.7.1
 # pmoves/services/sso-auth/tests/test_jwt_verify.py
 import time, pytest
 from jose import jwt
+import config
 from jwt_verify import verify_session, SessionInvalid
 
 SECRET = "test-secret-value-at-least-32-chars-long!!"
+
+@pytest.fixture(autouse=True)
+def _env(monkeypatch):
+    """Set the required env, then reset the lazy settings proxy so it re-reads.
+    verify_session() reads settings.<field> at call time, so no module reload
+    is needed."""
+    for k, v in {"SUPABASE_JWT_SECRET": SECRET, "GOTRUE_URL": "http://gotrue:9999",
+                 "PUBLIC_BASE_URL": "https://auth.pmoves.ai",
+                 "JELLYFIN_OIDC_CLIENT_ID": "jf", "JELLYFIN_OIDC_CLIENT_SECRET": "s"}.items():
+        monkeypatch.setenv(k, v)
+    config.settings._reset()
+    yield
+    config.settings._reset()
 
 def _tok(**over):
     claims = {"sub": "user-123", "email": "a@b.co", "exp": int(time.time()) + 60, "role": "authenticated"}
     claims.update(over)
     return jwt.encode(claims, SECRET, algorithm="HS256")
 
-def test_valid_token_returns_claims(monkeypatch):
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET)
-    monkeypatch.setenv("GOTRUE_URL", "http://gotrue:9999")
-    monkeypatch.setenv("PUBLIC_BASE_URL", "https://auth.pmoves.ai")
-    monkeypatch.setenv("JELLYFIN_OIDC_CLIENT_ID", "jf"); monkeypatch.setenv("JELLYFIN_OIDC_CLIENT_SECRET", "s")
-    import importlib, jwt_verify; importlib.reload(jwt_verify)
-    claims = jwt_verify.verify_session(_tok())
+def test_valid_token_returns_claims():
+    claims = verify_session(_tok())
     assert claims["email"] == "a@b.co" and claims["sub"] == "user-123"
 
-def test_expired_token_raises(monkeypatch):
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET); monkeypatch.setenv("GOTRUE_URL", "x")
-    monkeypatch.setenv("PUBLIC_BASE_URL", "x"); monkeypatch.setenv("JELLYFIN_OIDC_CLIENT_ID", "x"); monkeypatch.setenv("JELLYFIN_OIDC_CLIENT_SECRET", "x")
-    import importlib, jwt_verify; importlib.reload(jwt_verify)
-    with pytest.raises(jwt_verify.SessionInvalid):
-        jwt_verify.verify_session(_tok(exp=int(time.time()) - 10))
+def test_expired_token_raises():
+    with pytest.raises(SessionInvalid):
+        verify_session(_tok(exp=int(time.time()) - 10))
 
-def test_tampered_token_raises(monkeypatch):
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET); monkeypatch.setenv("GOTRUE_URL", "x")
-    monkeypatch.setenv("PUBLIC_BASE_URL", "x"); monkeypatch.setenv("JELLYFIN_OIDC_CLIENT_ID", "x"); monkeypatch.setenv("JELLYFIN_OIDC_CLIENT_SECRET", "x")
-    import importlib, jwt_verify; importlib.reload(jwt_verify)
-    with pytest.raises(jwt_verify.SessionInvalid):
-        jwt_verify.verify_session(jwt.encode({"sub":"x","exp":int(time.time())+60}, "wrong-secret-wrong-secret-wrong!!", algorithm="HS256"))
+def test_tampered_token_raises():
+    with pytest.raises(SessionInvalid):
+        verify_session(jwt.encode({"sub": "x", "exp": int(time.time()) + 60},
+                                  "wrong-secret-wrong-secret-wrong!!", algorithm="HS256"))
 
-def test_empty_token_raises(monkeypatch):
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET); monkeypatch.setenv("GOTRUE_URL", "x")
-    monkeypatch.setenv("PUBLIC_BASE_URL", "x"); monkeypatch.setenv("JELLYFIN_OIDC_CLIENT_ID", "x"); monkeypatch.setenv("JELLYFIN_OIDC_CLIENT_SECRET", "x")
-    import importlib, jwt_verify; importlib.reload(jwt_verify)
-    with pytest.raises(jwt_verify.SessionInvalid):
-        jwt_verify.verify_session("")
+def test_empty_token_raises():
+    with pytest.raises(SessionInvalid):
+        verify_session("")
 ```
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest python -m pytest tests/test_jwt_verify.py -q`
+Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio python -m pytest tests/test_jwt_verify.py -q`
 Expected: FAIL (`ModuleNotFoundError: jwt_verify`).
 
 - [ ] **Step 4: Write `config.py`**
@@ -127,7 +128,22 @@ class Settings(BaseSettings):
             jellyfin_oidc_client_secret=os.environ["JELLYFIN_OIDC_CLIENT_SECRET"],
         )
 
-settings = Settings.load()
+
+class _LazySettings:
+    """Lazy settings proxy — reads env on FIRST attribute access, NOT at import.
+    So the service starts under compose env, AND tests set env then call
+    `settings._reset()` to force a fresh read. Never read required env at import
+    time (that crashes pytest collection when env is unset). All modules import
+    this `settings` object and use `settings.<field>` uniformly."""
+    _cached = None  # type: Settings | None
+    def __getattr__(self, name):
+        if _LazySettings._cached is None:
+            _LazySettings._cached = Settings.load()
+        return getattr(_LazySettings._cached, name)
+    def _reset(self):
+        _LazySettings._cached = None
+
+settings = _LazySettings()
 ```
 
 - [ ] **Step 5: Write `jwt_verify.py`** (mirrors `PMOVES-BoTZ/features/mcp_bridge/auth.py` `validate_jwt`)
@@ -143,11 +159,12 @@ class SessionInvalid(Exception):
 def verify_session(token: str) -> dict:
     if not token:
         raise SessionInvalid("empty token")
+    secret = settings.supabase_jwt_secret  # lazy proxy: reads env on first access
     try:
         # HS256 with the shared Supabase secret. audience 'authenticated' is
         # GoTrue's default; options relax aud check to tolerate anon/service too.
         return jwt.decode(
-            token, settings.supabase_jwt_secret, algorithms=["HS256"],
+            token, secret, algorithms=["HS256"],
             options={"verify_aud": False},
         )
     except JWTError as e:
@@ -189,7 +206,7 @@ def auth_verify(request: Request):
 
 - [ ] **Step 7: Run test to verify it passes**
 
-Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest python -m pytest tests/test_jwt_verify.py -q`
+Run: `cd pmoves/services/sso-auth && uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio python -m pytest tests/test_jwt_verify.py -q`
 Expected: PASS (4 passed).
 
 - [ ] **Step 8: Commit**
