@@ -1,0 +1,5 @@
+FROM python:3.11-slim
+WORKDIR /app
+RUN pip install --no-cache-dir 'nats-py>=2.7'
+COPY decoded_consumer.py .
+CMD ["python", "decoded_consumer.py"]
