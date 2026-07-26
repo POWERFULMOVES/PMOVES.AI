@@ -76,6 +76,18 @@ if (Test-Path $envf) {
     Write-Warning "[claude-pmoves] $envf not found - MCP creds may be missing. Run: make -C pmoves ensure-env-shared"
 }
 
-# Hand off to claude with any passed args
-& claude @args
+# Hand off to claude with any passed args.
+# Claude Code only reads `.mcp.json` at the repo root (project scope),
+# `~/.claude.json` (user/local), or an explicit `--mcp-config` — it does NOT read
+# `.claude/mcp.json`. Without this flag every server defined there stays dark and
+# the vars loaded above have nothing to resolve into (Unix twin: claude-pmoves.sh).
+# NOT --strict-mcp-config: merge, so the per-node `.mcp.json` written by
+# `make -C pmoves mcp-toolkit-connect` stays live alongside the tracked roster.
+$roster = Join-Path $root '.claude\mcp.json'
+if (Test-Path $roster) {
+    & claude --mcp-config $roster @args
+} else {
+    Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
+    & claude @args
+}
 exit $LASTEXITCODE

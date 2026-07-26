@@ -69,4 +69,20 @@ else
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2
 fi
 
-exec claude "$@"
+# Point Claude Code at the tracked PMOVES MCP roster. Claude Code only reads
+# `.mcp.json` at the repo root (project scope), `~/.claude.json` (user/local),
+# or an explicit `--mcp-config` — it does NOT read `.claude/mcp.json`. Without
+# this flag every server defined there stays dark and the env vars loaded above
+# have nothing to resolve into, which is exactly the "no access to all tools"
+# symptom this wrapper was written to fix.
+#
+# NOT --strict-mcp-config: we want a MERGE, so the per-node `.mcp.json` written
+# by `make -C pmoves mcp-toolkit-connect` (the Docker MCP gateway entry) stays
+# live alongside the tracked roster.
+MCP_ROSTER="$ROOT/.claude/mcp.json"
+if [ -f "$MCP_ROSTER" ]; then
+  exec claude --mcp-config "$MCP_ROSTER" "$@"
+else
+  echo "[claude-pmoves] WARN: $MCP_ROSTER not found — PMOVES MCP servers will not load." >&2
+  exec claude "$@"
+fi
