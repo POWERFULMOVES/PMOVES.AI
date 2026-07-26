@@ -175,6 +175,11 @@
       "schema": "schemas/geometry/cgp.v2.schema.json",
       "description": "CHIT Geometry Packet v2 with attribution, Merkle proofs, and hyperbolic encoding"
     },
+    "bpm.encoded.v1": {
+      "schema": "schemas/geometry/cgp.v2.schema.json",
+      "description": "Prosodic BPM-encoded CGP v0.2 packet emitted by bpm-encoder-worker from mesh.gpu.inference.result.v1.",
+      "publisher": ["bpm-encoder-worker"]
+    },
     "geometry.swarm.meta.v1": {
       "schema": "schemas/geometry/swarm.meta.v1.schema.json"
     },

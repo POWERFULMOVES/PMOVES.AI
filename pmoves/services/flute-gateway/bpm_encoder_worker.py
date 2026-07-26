@@ -22,7 +22,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from nats.aio.client import Client as NATS
 
@@ -68,9 +68,13 @@ def _resolve_nats_url() -> str:
 def _redact_url(url: str) -> str:
     try:
         parsed = urlparse(url)
-        if parsed.password:
-            netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
-            return url.replace(parsed.netloc, netloc)
+        # Redact all user-info, not just user:password — token-only URLs
+        # (nats://TOKEN@host) put the secret in `username` with no password.
+        if parsed.username or parsed.password:
+            host = parsed.hostname or ""
+            if parsed.port:
+                host = f"{host}:{parsed.port}"
+            return urlunparse(parsed._replace(netloc=f"***@{host}"))
     except Exception:
         pass
     return url
@@ -125,7 +129,7 @@ def _build_cgp_packet(profile: dict, source: dict) -> dict:
     ts = datetime.now(timezone.utc).isoformat()
     packet_id = str(uuid.uuid4())
     packet = {
-        "spec": "cgp_v0.2",
+        "spec": "chit.cgp.v0.2",
         "id": packet_id,
         "timestamp": ts,
         "source": {
@@ -146,10 +150,18 @@ def _build_cgp_packet(profile: dict, source: dict) -> dict:
                     {
                         "id": f"chunk_{i}",
                         "type": "prosodic_chunk",
+                        # One CGP point per prosodic chunk. The schema's point
+                        # requires `id`; prosodic attributes ride in `meta` so
+                        # the packet validates against cgp.v2.schema.json.
                         "points": [
-                            {"field": "text", "value": c["text"][:200]},
-                            {"field": "boundary", "value": c["boundary"]},
-                            {"field": "bpm", "value": c["bpm"]},
+                            {
+                                "id": f"chunk_{i}_pt",
+                                "text": c["text"][:200],
+                                "meta": {
+                                    "boundary": c["boundary"],
+                                    "bpm": c["bpm"],
+                                },
+                            }
                         ],
                     }
                     for i, c in enumerate(profile["chunks"])
@@ -172,8 +184,10 @@ async def main():
         await nc.connect(nats_url, connect_timeout=10)
         logger.info("Connected to NATS at %s", _redact_url(nats_url))
     except Exception as e:
+        # Fail fast with a non-zero exit so container supervisors (Docker/K8s)
+        # restart the worker on a startup-order race instead of seeing exit 0.
         logger.error("Failed to connect to NATS: %s", type(e).__name__)
-        return
+        sys.exit(1)
 
     sub_subject = os.environ.get("BPM_ENCODER_SUBSCRIBE_SUBJECT", "mesh.gpu.inference.result.v1")
     pub_subject = os.environ.get("BPM_ENCODER_PUBLISH_SUBJECT", "bpm.encoded.v1")
