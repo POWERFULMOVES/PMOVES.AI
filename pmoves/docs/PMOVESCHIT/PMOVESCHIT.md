@@ -534,7 +534,7 @@ python chit_backend.py /path/to/your.docx --out ./public/data/cgp.json --K 8 --S
 
 * **Boundary projection (holography)** → CHR already does this (optimize directions U on the boundary; measure global & slab entropy).&#x20;
 * **Fractal self‑similarity** → the recursion of CHR inside clusters (Phase B) + spectra across scales.&#x20;
-* **Geometric transfer** → CGP is the first concrete “packet” for your **Cymatic‑Holographic Information Transfer**, designed for high‑fidelity, low‑ambiguity decoding (Phase C).
+* **Geometric transfer** → CGP is the first concrete “packet” for your **Cymatic Holographic Information Theory**, designed for high‑fidelity, low‑ambiguity decoding (Phase C).
 * **RPE lens** → direct hooks via per‑constellation slab histograms/spectra and entropy trajectories.&#x20;
 
 If you want, I can next draft a short “Methods” section for the CHIT paper that cites your CHR pipeline and formalizes CGP as an interchange format.
