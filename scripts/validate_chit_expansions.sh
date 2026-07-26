@@ -25,7 +25,9 @@ MECHANISM="Compressed Hierarchical Information Transfer"
 
 # Generic detector: any "<Word>[- ]<Word> Information (Transfer|Token|Theory)".
 # Everything it finds that is NOT one of the two canon forms is a violation.
-DETECT='[A-Z][a-z]+[- ][A-Z][a-z]+ Information (Transfer|Token|Theory|Transmission)'
+# PCRE. The separator class tolerates Unicode hyphens/dashes and the non-breaking
+# space (U+00A0) so variants like "Cymatic‑Holographic …" (U+2011) can't escape.
+DETECT='[A-Z][a-z]+[-\x{2010}\x{2011}\x{2012}\x{2013}\x{00A0} ][A-Z][a-z]+ Information (Transfer|Token|Theory|Transmission)'
 
 FILE_GLOBS=('*.md' '*.py' '*.yaml' '*.yml' '*.json' '*.ts' '*.tsx')
 
@@ -36,7 +38,7 @@ if [[ "${1:-}" == "--list" ]]; then
 fi
 
 # Collect every matching expansion occurrence, then drop the two canon forms.
-violations="$(git grep -n -I -E "$DETECT" -- "${FILE_GLOBS[@]}" 2>/dev/null \
+violations="$(git grep -n -I -P "$DETECT" -- "${FILE_GLOBS[@]}" 2>/dev/null \
   | grep -vF "$CONCEPT" \
   | grep -vF "$MECHANISM" || true)"
 
