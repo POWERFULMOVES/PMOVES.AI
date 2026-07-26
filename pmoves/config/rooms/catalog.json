@@ -109,6 +109,18 @@
       "current_stage": "rehearsal",
       "stage_source": "inferred from DL-4 work (5090-CLAUDE 2026-07-12): W1 just delivered, W2+ blocked on live-verify",
       "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "persona.room.livingdoc",
+      "agent_id": "darkxside-persona",
+      "alter": "persona-livingdoc",
+      "display_name": "Russell Richardson — Applied AI Architect (Living Doc)",
+      "stage": "live",
+      "manifest": "persona.room.livingdoc.json",
+      "summary": "Public, audience-facing living-doc room: the LinkedIn-aligned persona profile as a first-class OpenRoom the Mavis-5090 adapter serves. a2ui profile shell + authored PreTeXt case studies + planned Remotion walkthrough; content single-sourced in persona.json.",
+      "current_stage": "live",
+      "stage_source": "manifest stage field (public audience-facing doc, ready to serve)",
+      "stage_verified_at": "2026-07-26T21:00:00Z"
     }
   ]
 }
