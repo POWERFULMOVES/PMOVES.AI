@@ -1,0 +1,261 @@
+{
+  "room_id": "persona.room.livingdoc",
+  "version": "1.0.0",
+  "display_name": "Russell Richardson — Applied AI Architect (Living Doc)",
+  "description": "Public, audience-facing living-doc room for the DARKXSIDE / Russell Richardson persona. Renders the LinkedIn-aligned profile as a first-class OpenRoom the Mavis-5090 adapter can serve: the a2ui profile shell, authored PreTeXt technical case studies, and a planned Remotion architecture walkthrough. Content model is single-source in persona.json (kept in sync with docs/research/persona/06_linkedin_profile.md).",
+  "agent_id": "darkxside-persona",
+  "stage": "live",
+  "alter": "persona-livingdoc",
+  "room_type": "viewer",
+  "owner_mode": "primary",
+  "access": {
+    "visibility": "public",
+    "owner_only": false,
+    "invite_list": [],
+    "content_rating": "standard",
+    "rating_note": "Public professional living-doc. Employer-facing translation of PMOVES work; no private/uncensored content. Public egress still passes policies.publish.egress_redaction_floor."
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "persona-dual-frequency",
+      "accent_color": "#F4A12B",
+      "skin": "waveform-editorial",
+      "icon": "waveform"
+    },
+    "layout": {
+      "default_route": "/persona/livingdoc",
+      "panels": [
+        {
+          "panel_id": "profile-main",
+          "kind": "custom",
+          "position": "center",
+          "size": 60,
+          "pinned": true
+        },
+        {
+          "panel_id": "casestudy-side",
+          "kind": "custom",
+          "position": "right",
+          "size": 24,
+          "pinned": true
+        },
+        {
+          "panel_id": "walkthrough-strip",
+          "kind": "media",
+          "position": "bottom",
+          "size": 16,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "persona": {
+    "signature_ref": "darkxside-persona",
+    "role": [
+      "founder",
+      "applied-ai-architect"
+    ],
+    "voice": "plain-then-distinctive",
+    "register": [
+      "professional",
+      "systems-thinking",
+      "bronx"
+    ],
+    "glyph": "◈",
+    "resonance": [
+      "founder-builder",
+      "beats-before-code",
+      "local-first-sovereignty",
+      "sign-every-line"
+    ],
+    "twin_target": "operator"
+  },
+  "apps": [
+    {
+      "app_id": "persona-shell",
+      "kind": "custom",
+      "route": "/persona/livingdoc",
+      "provider": "pmoves-ui",
+      "action_namespace": "persona",
+      "capabilities": [
+        "profile-view",
+        "skills-clusters",
+        "featured-links",
+        "pmoves-to-employer-translation",
+        "automation-fabric"
+      ],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "pretext-casestudies",
+      "kind": "custom",
+      "route": "/persona/pretext",
+      "provider": "pmoves-pretext",
+      "action_namespace": "pretext",
+      "capabilities": [
+        "chit-mof-isomorphism",
+        "egress-gate-set-membership",
+        "cgp-state-vector",
+        "mathjax-render"
+      ],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "remotion-walkthrough",
+      "kind": "media",
+      "route": "/persona/walkthrough",
+      "provider": "a2ui-renderer",
+      "action_namespace": "remotion",
+      "capabilities": [
+        "architecture-walkthrough",
+        "3min-tour",
+        "scene-composition"
+      ],
+      "pinned": false,
+      "status": "planned"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "persona",
+    "thread_ref": "living-doc",
+    "default_page": "profile",
+    "sync": {
+      "mode": "mirrored",
+      "writeback_targets": [
+        "entries",
+        "pages"
+      ],
+      "artifact_prefix": "rooms/persona"
+    }
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "persona-livingdoc-sync",
+      "skill_id": "pmoves-persona-render",
+      "room_id": "persona.room.livingdoc",
+      "display_name": "Sync Living Doc — render from persona.json",
+      "intent": [
+        "render",
+        "sync",
+        "profile"
+      ],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": [
+          "resync the living doc",
+          "render the persona room",
+          "update the profile shell"
+        ],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "persona-shell",
+        "target": "panel",
+        "route": "/persona/livingdoc"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": [
+          "room-state",
+          "notebook-thread",
+          "persona"
+        ],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": [
+          "text",
+          "json"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "artifact-store",
+          "delivery": "replace",
+          "path": "rooms/persona/index.html",
+          "artifact_type": "text"
+        },
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/render-log",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 180,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": [
+        "persona",
+        "living-doc",
+        "render"
+      ]
+    }
+  ],
+  "policies": {
+    "model_routing": "tensorzero",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "gate_param": "publish_gate",
+      "gate_mode": "manual",
+      "allowed_subjects": [
+        "room.session.updated.v1"
+      ],
+      "egress_redaction_floor": {
+        "enforce_on": "public-egress",
+        "rules": [
+          "kids-always-redacted",
+          "shaela-private",
+          "no-literal-lan-or-tailscale-ips",
+          "investor-model-private"
+        ],
+        "fail_closed": true,
+        "note": "Room is public but the redaction floor still applies to any egress: no private family details, no raw LAN/Tailscale IPs, and the investor-facing financial model stays gated (persona.json marks it TODO/private)."
+      }
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "team_refs": [
+    "creator",
+    "orchestration"
+  ],
+  "service_refs": [
+    "open-notebook",
+    "a2ui-renderer",
+    "nats"
+  ],
+  "launcher_refs": [
+    "up-open-notebook"
+  ],
+  "telemetry": {
+    "graphiti_phase": "Persona Living Doc",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/persona/livingdoc"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-07-26T21:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/research/persona/06_linkedin_profile.md",
+      "pmoves/docs/research/persona/07_linkedin_living_doc_room.md",
+      "pmoves/rooms/persona/persona.json"
+    ]
+  }
+}
