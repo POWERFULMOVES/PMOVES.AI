@@ -65,7 +65,7 @@
         </p>
         <div class="pillrow">
           <span class="pill"><span class="dot"></span> chit.cgp.v1.0 — production CGP spec</span>
-          <span class="pill amber"><span class="dot"></span> 76 agents · 4 classes · 7 types</span>
+          <span class="pill amber"><span class="dot"></span> 96 agents in the live registry (taxonomy doc still says 76 — doc lag, noted in §12)</span>
           <span class="pill"><span class="dot"></span> 7 layers (L0–L5 + L2.5) · 5 canonical planes</span>
           <span class="pill amber"><span class="dot"></span> Built from <span class="mono u-ml-4">PMOVESCHIT/*</span> + <span class="mono">AGENTS/*</span></span>
         </div>
@@ -79,7 +79,7 @@
         <div class="kpi"><div class="label">Agent Classes</div><div class="value">4<small>by prefix</small></div></div>
         <div class="kpi"><div class="label">Service Types</div><div class="value">7<small>tiers</small></div></div>
         <div class="kpi"><div class="label">Stack Layers</div><div class="value">L0–L5<small>+ L2.5</small></div></div>
-        <div class="kpi"><div class="label">Agents (registry)</div><div class="value">76<small>taxonomy v1.5.0</small></div></div>
+        <div class="kpi"><div class="label">Agents (registry)</div><div class="value">96<small>agent_registry.yaml, counted 2026-07-26</small></div></div>
       </div>
     </section>
 
@@ -120,8 +120,108 @@
     <section id="pillars" class="section">
       <div class="eyebrow">03 · Mathematical foundations</div>
       <h2>Five pillars hold up CHIT</h2>
-      <p class="lede">You don't need the math to use CHIT, but each pillar exists in code and is independently auditable. Hover for the reference implementation path.</p>
+      <p class="lede">You don't need the math to use CHIT, but each pillar exists in code and is independently auditable. Hover for the reference implementation path. Below the cards, <strong>four laboratories run each pillar's actual math in your browser</strong> — with the exact parameters the reference implementations use, and honest notes where the shipped code and the doc prose differ. (Pillar 2's laboratory is the Poincaré section, §08.)</p>
       <div class="grid c3" id="pillars-grid"></div>
+
+      <!-- ═══ LAB · Pillar 1: Dirichlet ═══ -->
+      <div class="viz-card u-mt-24">
+        <div class="viz-head"><h3>Lab · Pillar 1 — Dirichlet attribution, sampled live</h3></div>
+        <div class="viz-body">
+          <div class="grid c2">
+            <div>
+              <svg id="lab-dirichlet-svg" style="width:100%;height:400px" role="img" aria-label="2-simplex with live Dirichlet samples"></svg>
+            </div>
+            <div>
+              <p>Three contributors share attribution. Each dot is a <b>fresh draw</b> from
+              Dir(α) — sampled with Marsaglia–Tsang gammas, normalized. Record a contribution and
+              watch the posterior tighten around that contributor: the closed-form update
+              <span class="mono">α_i += amount · concentrationK</span> is the exact rule from
+              <span class="mono">dirichlet-weights.ts</span> (smoothingAlpha 0.1, concentrationK 1.0).</p>
+              <p>
+                <button class="mini-btn" id="lab-dir-a">contribution → A (+1.0)</button>
+                <button class="mini-btn" id="lab-dir-b">contribution → B (+1.0)</button>
+                <button class="mini-btn" id="lab-dir-c">contribution → C (+1.0)</button>
+                <button class="mini-btn" id="lab-dir-reset">reset to prior</button>
+              </p>
+              <div id="lab-dirichlet-info"></div>
+            </div>
+          </div>
+        </div>
+        <div class="viz-foot"><span>▸ params &amp; update rule: PMOVES-ToKenism-Multi/integrations/contracts/chit/dirichlet-weights.ts</span></div>
+      </div>
+
+      <!-- ═══ LAB · Pillar 3: Merkle ═══ -->
+      <div class="viz-card u-mt-24">
+        <div class="viz-head"><h3>Lab · Pillar 3 — Merkle tamper-evidence over the real export records</h3></div>
+        <div class="viz-body">
+          <p>The four leaves are <b>real records</b> from the measured export run of 2026-07-25
+          (the same ones in the Tokenomics Verified Actuals card), hashed with WebCrypto SHA-256
+          in the shape <span class="mono">shape-attribution.ts</span> hashes
+          (<span class="mono">{address, action, amount, week, category}</span>). Pick a leaf to see its
+          inclusion proof <span class="mono">{path, pathIndices}</span> verify against the committed root —
+          then tamper and watch the proof die.</p>
+          <p><button class="mini-btn" id="lab-merkle-tamper">tamper: set leaf 0 amount to $9999.99</button></p>
+          <div id="lab-merkle"></div>
+        </div>
+        <div class="viz-foot"><span>▸ proof/verify structure: shape-attribution.ts (getMerkleProof, verifyProof) · leaves: run 2026-07-25T14:02Z</span></div>
+      </div>
+
+      <!-- ═══ LAB · Pillar 4: Zeta ═══ -->
+      <div class="viz-card u-mt-24">
+        <div class="viz-head"><h3>Lab · Pillar 4 — Zeta spectral filter, exact implementation</h3>
+          <div class="legend"><span class="mono" id="lab-zeta-params">numZeros=10 · decay=0.90</span></div>
+        </div>
+        <div class="viz-body">
+          <p>The filter weights are <span class="mono">w_n = decayⁿ / ln(γ_n)</span> over the first N
+          non-trivial Riemann zeta zeros (constants verbatim from <span class="mono">zeta-filter.ts</span>),
+          normalized, applied as the same <b>circular convolution</b> <span class="mono">filterSpectrum()</span> uses.
+          Left input is <b>real</b>: the 4-bin spectrum from the worked CGP example in
+          <span class="mono">01_WHAT_IS_CHIT.md</span>. Right input is a <b>labeled synthetic</b> 32-bin
+          spectrum so you can see the noise-vs-structure behavior.</p>
+          <p class="mono" style="font-size:12px">
+            zeros N: <input type="range" id="lab-zeta-n" min="1" max="20" value="10" style="vertical-align:middle"> ·
+            decay: <input type="range" id="lab-zeta-d" min="50" max="100" value="90" style="vertical-align:middle">
+          </p>
+          <div id="lab-zeta"></div>
+        </div>
+        <div class="viz-foot"><span>▸ zeros &amp; kernel: zeta-filter.ts (ZETA_ZEROS, computeWeights, filterSpectrum) · defaults numZeros=10, decay=0.9</span></div>
+      </div>
+
+      <!-- ═══ LAB · Pillar 5: Swarm ═══ -->
+      <div class="viz-card u-mt-24">
+        <div class="viz-head"><h3>Lab · Pillar 5 — the swarm fitness function (and an honesty note)</h3></div>
+        <div class="viz-body">
+          <p><b>What ships today:</b> <span class="mono">swarm-attribution.ts</span> is the fitness
+          <em>scorer</em> and population tracker on <span class="mono">tokenism.swarm.population.v1</span> —
+          its own header states it does <b>not</b> perform mutation, selection, or crossover. The doc
+          prose ("mutate with Dirichlet noise, select survivors") describes the target architecture,
+          not this layer. Panel A runs the <b>real scorer</b> with its exact
+          <span class="mono">gini_reduction</span> weights (0.6 gini · 0.2 poverty · 0.1 wealth ·
+          0.05 participation · 0.025 spending · 0.025 savings; targets Gini 0.3, poverty 0.1).
+          Panel B is a <b>clearly-labeled demo</b> of the described evolutionary loop, driving that same scorer.</p>
+          <div class="grid c2">
+            <div>
+              <h4>A · the real scorer</h4>
+              <p class="mono" style="font-size:12px">
+                Gini: <input type="range" id="sw-gini" min="0" max="90" value="55" style="vertical-align:middle"><br>
+                poverty rate: <input type="range" id="sw-pov" min="0" max="60" value="25" style="vertical-align:middle"><br>
+                wealth growth: <input type="range" id="sw-wealth" min="0" max="100" value="50" style="vertical-align:middle">
+              </p>
+              <div id="lab-swarm-scorer"></div>
+            </div>
+            <div>
+              <h4>B · evolutionary loop (demo of the described operator)</h4>
+              <p>
+                <button class="mini-btn" id="lab-swarm-run">run / pause</button>
+                <button class="mini-btn" id="lab-swarm-reset">reset</button>
+              </p>
+              <div id="lab-swarm-plot"></div>
+              <div id="lab-swarm-info"></div>
+            </div>
+          </div>
+        </div>
+        <div class="viz-foot"><span>▸ scorer weights/targets: swarm-attribution.ts (TARGET_WEIGHTS.gini_reduction, calculateFitness) · non-implementation note: lines 196-198</span></div>
+      </div>
     </section>
 
     <!-- ===== GEOMETRY BUS ===== -->
@@ -555,5 +655,6 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
 
 <script src="data.js"></script>
 <script type="module" src="app.js"></script>
+<script src="pillars-lab.js"></script>
 </body>
 </html>

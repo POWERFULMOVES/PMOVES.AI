@@ -454,3 +454,11 @@ footer.foot { padding: 28px 56px 40px; color: var(--text-faint); font-size: 12px
   color: var(--pm-signature-soft, #FB7185);
   border-radius: 3px;
 }
+
+/* pillar-lab controls */
+.mini-btn {
+  font: inherit; font-size: 12px; padding: 3px 10px; margin: 2px 4px 2px 0;
+  background: transparent; color: var(--pm-signature-soft, #FB7185);
+  border: 1px solid var(--pm-signature-soft, #FB7185); border-radius: 3px; cursor: pointer;
+}
+.mini-btn:hover { background: rgba(251, 113, 133, 0.12); }
