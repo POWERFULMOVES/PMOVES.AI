@@ -527,3 +527,443 @@ const CHIT_TOKENOMICS_LINK = [
   { primitive: "Attribution settlement",  chitRole: "Merkle proofs (Pillar 3) make every weekly attribution export tamper-evident before payout.",      agent: "tokenism.cgp.weekly.v1 → Discord/analytics" },
   { primitive: "Risk-adjusted scoring",   chitRole: "Zeta spectral filter (Pillar 4) separates persistent revenue signals from one-off spikes.",        agent: "EVO SWARM consensus" },
 ];
+// REAL agent taxonomy tree — extracted verbatim from pmoves/config/agent_registry.yaml
+// (taxonomy_version 1.5.0, 96 agents, extracted 2026-07-26). NOT hand-curated.
+const AGENT_TREE = {
+ "taxonomyVersion": "1.5.0",
+ "agentCount": 96,
+ "source": "pmoves/config/agent_registry.yaml",
+ "extractedUtc": "2026-07-26",
+ "tree": {
+  "standard": {
+   "agent": [
+    {
+     "id": "agent_zero",
+     "name": "Agent Zero"
+    },
+    {
+     "id": "kilocode_glm",
+     "name": "KiloCode GLM"
+    },
+    {
+     "id": "space_agent",
+     "name": "PMOVES Space-Agent"
+    },
+    {
+     "id": "archon",
+     "name": "Archon"
+    },
+    {
+     "id": "supaserch",
+     "name": "SupaSerch"
+    },
+    {
+     "id": "botz_gateway",
+     "name": "BoTZ Gateway"
+    },
+    {
+     "id": "botz_architect",
+     "name": "BoTZ Architect"
+    },
+    {
+     "id": "botz_builder",
+     "name": "BoTZ Builder"
+    },
+    {
+     "id": "botz_auditor",
+     "name": "BoTZ Auditor"
+    },
+    {
+     "id": "gateway_agent",
+     "name": "Gateway Agent"
+    },
+    {
+     "id": "p7_room_orchestrator",
+     "name": "P7 Room Orchestrator"
+    },
+    {
+     "id": "mesh_agent",
+     "name": "Mesh Agent"
+    },
+    {
+     "id": "agentgym",
+     "name": "AgentGym"
+    },
+    {
+     "id": "e2b_danger_room",
+     "name": "E2B Danger Room"
+    },
+    {
+     "id": "notebooklm_agent",
+     "name": "NotebookLM Agent"
+    }
+   ],
+   "worker": [
+    {
+     "id": "hirag_v2",
+     "name": "Hi-RAG v2"
+    },
+    {
+     "id": "extract_worker",
+     "name": "Extract Worker"
+    },
+    {
+     "id": "channel_monitor",
+     "name": "Channel Monitor"
+    },
+    {
+     "id": "notebook_sync",
+     "name": "Notebook Sync"
+    },
+    {
+     "id": "pdf_ingest",
+     "name": "PDF Ingest"
+    },
+    {
+     "id": "publisher_discord",
+     "name": "Publisher-Discord"
+    },
+    {
+     "id": "langextract",
+     "name": "LangExtract"
+    },
+    {
+     "id": "dox",
+     "name": "DoX"
+    },
+    {
+     "id": "evoswarm_controller",
+     "name": "EvoSwarm Controller"
+    }
+   ],
+   "llm": [
+    {
+     "id": "deep_research",
+     "name": "DeepResearch"
+    }
+   ],
+   "api": [
+    {
+     "id": "tensorzero",
+     "name": "TensorZero Gateway"
+    },
+    {
+     "id": "flute_gateway",
+     "name": "Flute-Gateway"
+    }
+   ],
+   "media": [
+    {
+     "id": "cast_tts_gateway",
+     "name": "Cast TTS Gateway"
+    },
+    {
+     "id": "pmoves_yt",
+     "name": "PMOVES.YT"
+    },
+    {
+     "id": "ffmpeg_whisper",
+     "name": "FFmpeg-Whisper"
+    },
+    {
+     "id": "media_video",
+     "name": "Media-Video Analyzer"
+    },
+    {
+     "id": "media_audio",
+     "name": "Media-Audio Analyzer"
+    },
+    {
+     "id": "ultimate_tts",
+     "name": "Ultimate-TTS-Studio"
+    },
+    {
+     "id": "creator",
+     "name": "Creator"
+    },
+    {
+     "id": "podcast_producer",
+     "name": "Podcast Producer"
+    },
+    {
+     "id": "remotion_renderer",
+     "name": "Remotion Renderer"
+    },
+    {
+     "id": "youtube_publisher",
+     "name": "YouTube Publisher"
+    }
+   ],
+   "ui": [
+    {
+     "id": "mai_ui",
+     "name": "MAI-UI"
+    },
+    {
+     "id": "crush",
+     "name": "Crush"
+    },
+    {
+     "id": "a2ui",
+     "name": "A2UI"
+    },
+    {
+     "id": "e2b_desktop",
+     "name": "E2B Desktop"
+    },
+    {
+     "id": "clawz",
+     "name": "ClawZ (OpenClaw)"
+    }
+   ],
+   "data": [
+    {
+     "id": "open_notebook",
+     "name": "Open Notebook"
+    }
+   ]
+  },
+  "specialized": {
+   "agent": [
+    {
+     "id": "darkxside_persona",
+     "name": "DARKXSIDE Persona"
+    },
+    {
+     "id": "consciousness_service",
+     "name": "Consciousness Service"
+    },
+    {
+     "id": "agentgym_rl",
+     "name": "AgentGym RL"
+    },
+    {
+     "id": "fordham_steward",
+     "name": "Fordham Steward"
+    },
+    {
+     "id": "fordham_onboarding",
+     "name": "Fordham Onboarding"
+    },
+    {
+     "id": "fordham_transaction",
+     "name": "Fordham Transaction"
+    },
+    {
+     "id": "fordham_creator",
+     "name": "Fordham Creator"
+    },
+    {
+     "id": "fordham_voice",
+     "name": "Fordham Voice"
+    },
+    {
+     "id": "nemoclaw",
+     "name": "NeMo Claw"
+    },
+    {
+     "id": "nemotron_claw",
+     "name": "Nemotron Claw"
+    },
+    {
+     "id": "hf_agent",
+     "name": "HF Agent"
+    },
+    {
+     "id": "hf_research_agent",
+     "name": "HF Research Agent"
+    }
+   ],
+   "media": [
+    {
+     "id": "jellyfin_bridge",
+     "name": "Jellyfin Bridge"
+    },
+    {
+     "id": "transcribe_and_fetch",
+     "name": "Transcribe and Fetch"
+    },
+    {
+     "id": "jellyfin_ai",
+     "name": "Jellyfin AI Media Stack"
+    },
+    {
+     "id": "cipher_beats_analyst",
+     "name": "Cipher Beats Analyst"
+    }
+   ],
+   "data": [
+    {
+     "id": "cipher_memory",
+     "name": "Cipher Memory"
+    },
+    {
+     "id": "metrics_specialist",
+     "name": "Prometheus Metrics Specialist"
+    },
+    {
+     "id": "logs_specialist",
+     "name": "Loki Logs Specialist"
+    },
+    {
+     "id": "tracing_specialist",
+     "name": "Jaeger Tracing Specialist"
+    }
+   ],
+   "ui": [
+    {
+     "id": "hyperdimensions",
+     "name": "Hyperdimensions"
+    },
+    {
+     "id": "wealth",
+     "name": "Wealth (Firefly III)"
+    },
+    {
+     "id": "health",
+     "name": "Health (wger)"
+    },
+    {
+     "id": "dashboard_specialist",
+     "name": "Grafana Dashboard Specialist"
+    }
+   ],
+   "worker": [
+    {
+     "id": "swarm_attribution",
+     "name": "Swarm Attribution"
+    }
+   ],
+   "llm": [
+    {
+     "id": "llama_lab",
+     "name": "Llama Throughput Lab"
+    },
+    {
+     "id": "autoresearch",
+     "name": "autoresearch"
+    },
+    {
+     "id": "llm_observability",
+     "name": "TensorZero LLM Observability Specialist"
+    }
+   ]
+  },
+  "utility": {
+   "api": [
+    {
+     "id": "presign",
+     "name": "Presign"
+    },
+    {
+     "id": "render_webhook",
+     "name": "Render Webhook"
+    },
+    {
+     "id": "vps_fleet_manager",
+     "name": "VPS Fleet Manager"
+    }
+   ],
+   "worker": [
+    {
+     "id": "pr_hedge_trim",
+     "name": "PR Hedge Trim"
+    },
+    {
+     "id": "n8n",
+     "name": "n8n"
+    },
+    {
+     "id": "danger_infra",
+     "name": "Danger Infra"
+    }
+   ],
+   "data": [
+    {
+     "id": "nats",
+     "name": "NATS"
+    },
+    {
+     "id": "supabase",
+     "name": "Supabase"
+    },
+    {
+     "id": "qdrant",
+     "name": "Qdrant"
+    },
+    {
+     "id": "neo4j",
+     "name": "Neo4j"
+    },
+    {
+     "id": "meilisearch",
+     "name": "Meilisearch"
+    },
+    {
+     "id": "minio",
+     "name": "MinIO"
+    },
+    {
+     "id": "prometheus",
+     "name": "Prometheus"
+    },
+    {
+     "id": "loki",
+     "name": "Loki"
+    },
+    {
+     "id": "headscale",
+     "name": "Headscale"
+    }
+   ],
+   "ui": [
+    {
+     "id": "grafana",
+     "name": "Grafana"
+    },
+    {
+     "id": "rustdesk",
+     "name": "RustDesk"
+    },
+    {
+     "id": "invidious",
+     "name": "Invidious"
+    }
+   ],
+   "agent": [
+    {
+     "id": "surf",
+     "name": "Surf"
+    },
+    {
+     "id": "e2b_spells",
+     "name": "E2B Spells"
+    },
+    {
+     "id": "a0_plugins",
+     "name": "a0-plugins"
+    },
+    {
+     "id": "pmoves_e2b_mcp_server",
+     "name": "E2B MCP Server"
+    },
+    {
+     "id": "hermes_agent",
+     "name": "HERMES Agent"
+    },
+    {
+     "id": "container_agent",
+     "name": "Container Agent"
+    }
+   ]
+  },
+  "ci": {
+   "ci": [
+    {
+     "id": "pmoves_ci_bot",
+     "name": "PMOVES CI Bot"
+    }
+   ]
+  }
+ }
+};
