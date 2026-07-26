@@ -115,6 +115,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
       nats:
         condition: service_healthy
@@ -236,6 +237,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -290,6 +292,7 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
     - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_app,pmoves_bus
     ports:
     - "${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"    # Default 8111; 8110 reserved for model-registry
     profiles: ["agents"]
@@ -360,6 +363,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     ports:
     - ${HIRAG_V1_BIND:-127.0.0.1}:${HIRAG_V1_HOST_PORT:-8089}:8086
     depends_on:
@@ -451,6 +455,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     ports:
@@ -526,6 +531,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     deploy:
       resources:
         reservations:
@@ -654,6 +660,7 @@ services:
     - HTTPS_PROXY=
     - NO_PROXY=
     - HF_HOME=/data/huggingface
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     gpus: all
     deploy:
       resources:
@@ -712,6 +719,7 @@ services:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     depends_on: [nats]
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
@@ -750,6 +758,7 @@ services:
     - QDRANT_COLLECTION=pmoves_cipher_memory
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
+    - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external
     command: ["sh", "-c", "node dist/src/app/index.cjs --mode api --port 8105 --host 0.0.0.0 --agent memAgent/cipher.yml --mcp-transport-type sse"]
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
@@ -790,6 +799,7 @@ services:
     - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_external]
   a2ui-nats-bridge:
@@ -810,6 +820,7 @@ services:
     # CHIT fail-closed verification gate (house pattern, mirrors hi-rag-gateway*)
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${A2UI_BIND:-0.0.0.0}:9224:9224
     depends_on:
@@ -846,6 +857,7 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+    - PMOVES_NETWORKS=pmoves_bus
     depends_on:
     - nats
     profiles:
@@ -873,6 +885,7 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
+    - PMOVES_NETWORKS=pmoves_bus
     depends_on:
     - nats
     profiles:
@@ -908,6 +921,7 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     - PYTHONUNBUFFERED=1
+    - PMOVES_NETWORKS=pmoves_app
     ports: ["${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
@@ -946,6 +960,7 @@ services:
     - SUPABASE_SERVICE_ROLE_KEY_FILE=${SUPABASE_SERVICE_ROLE_KEY_FILE:-}
     - P7_SUPABASE_SCHEMA=${P7_SUPABASE_SCHEMA:-pmoves_core}
     - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
     ports:
     - ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
     depends_on:
@@ -990,6 +1005,7 @@ services:
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
     ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:8113:8113"]
     profiles: ["orchestration"]
     # Docker Desktop does not publish host ports for services attached only to internal networks.
@@ -1039,6 +1055,7 @@ services:
     - HF_TAGS=${HF_TAGS:-}
     - HF_AUTHOR=${HF_AUTHOR:-}
     - HF_LIMIT=${HF_LIMIT:-50}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
     - ${HF_AGENT_BIND:-0.0.0.0}:${HF_AGENT_PORT:-8201}:8201
     depends_on:
@@ -1079,6 +1096,7 @@ services:
     - HF_MIN_SCORE=${HF_MIN_SCORE:-50}
     - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-}
     - HF_AVOID_TAGS=${HF_AVOID_TAGS:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
     depends_on:
