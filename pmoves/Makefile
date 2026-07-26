@@ -3271,6 +3271,26 @@ down-n8n: ## Stop n8n workflow services
 	@$(N8N_DC) stop n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 	@$(N8N_DC) rm -f n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 
+# ---- ActivePieces (standalone self-host — low-code automation companion to n8n) ----
+# Known Road wrappers so the standalone stack is never brought up via raw
+# `docker compose up` (which would bypass the env-injection convention). Its
+# secrets live in its own gitignored env.activepieces (self-managed instance keys,
+# seeded from env.activepieces.example + hydrated via the secrets pipeline).
+AP_DIR := $(CURDIR)/activepieces
+AP_DC := docker compose --project-directory $(AP_DIR) -f $(AP_DIR)/docker-compose.yml --env-file $(AP_DIR)/env.activepieces -p pmoves-activepieces
+
+.PHONY: up-activepieces down-activepieces activepieces-health
+up-activepieces: ## Start the standalone ActivePieces self-host (:8087)
+	@test -f "$(AP_DIR)/env.activepieces" || { echo "ERROR: activepieces/env.activepieces missing — seed it: 'cp activepieces/env.activepieces.example activepieces/env.activepieces' then hydrate the SECRET values (see activepieces/README.md). Never hand-commit secrets."; exit 1; }
+	@$(AP_DC) up -d
+	@echo "✔ ActivePieces starting → http://localhost:$${AP_APP_PORT:-8087}/  (check: make -C pmoves activepieces-health)"
+
+down-activepieces: ## Stop the ActivePieces self-host
+	@$(AP_DC) down
+
+activepieces-health: ## Check ActivePieces app health
+	@curl -sf "http://localhost:$${AP_APP_PORT:-8087}/api/v1/flags" >/dev/null && echo "✔ activepieces healthy" || (echo "✗ activepieces unhealthy" && exit 1)
+
 n8n-api-bootstrap: ## Create/login the n8n owner and mint a fresh Public API key into the local env file
 	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/bootstrap_n8n_api.py" \
 		--base-url "$(N8N_BASE_URL)" \
