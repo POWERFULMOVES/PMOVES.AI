@@ -1,5 +1,5 @@
 """
-CHIT (Cognitive Holographic Information Transfer) Module
+CHIT (Compressed Hierarchical Information Transfer) Module
 
 WARNING: This module provides base16 hex ENCODING, not ENCRYPTION.
 Base16 is trivially reversible and provides zero cryptographic protection.

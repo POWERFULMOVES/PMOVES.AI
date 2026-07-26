@@ -127,7 +127,7 @@ class MACATensorZeroConsensus:
     """
 
     # System prompt for consensus voting
-    CONSENSUS_SYSTEM_PROMPT = """You are a consensus agent evaluating geometric proposals for the CHIT (Context-Hybrid Information Token) system.
+    CONSENSUS_SYSTEM_PROMPT = """You are a consensus agent evaluating geometric proposals for the CHIT (Cymatic Holographic Information Theory) system.
 
 Your role is to:
 1. Evaluate geometric packets based on coherence, entropy reduction, and alignment

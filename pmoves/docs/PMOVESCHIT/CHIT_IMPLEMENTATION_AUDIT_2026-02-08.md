@@ -13,7 +13,7 @@
 
 ## Executive Summary
 
-The CHIT (Context-Hybrid Information Token) and GEOMETRY BUS implementation across PMOVES.AI is **substantially complete** with all five mathematical pillars implemented in TypeScript. Critical gaps exist in Python service integration, NATS stream configuration, and CGP schema version consistency across services.
+The CHIT (Cymatic Holographic Information Theory) and GEOMETRY BUS implementation across PMOVES.AI is **substantially complete** with all five mathematical pillars implemented in TypeScript. Critical gaps exist in Python service integration, NATS stream configuration, and CGP schema version consistency across services.
 
 **Overall Implementation Status:** 75% Complete
 

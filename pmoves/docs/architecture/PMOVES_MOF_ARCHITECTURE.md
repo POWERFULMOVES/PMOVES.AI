@@ -29,7 +29,7 @@ This document specifies that isomorphism as architecture.
 | **"Nobel Prize in Chemistry 2023 … MOFs"** | *Factual fix:* the **2025** Chemistry Nobel recognized metal-organic frameworks (Kitagawa, Robson, Yaghi); 2023 was quantum dots. Corrected in-text below. |
 | **"7,000 m²/g," "training speedup," "this is not metaphor / structural isomorphism"** | These are **analogies / design theses**, not benchmarked PMOVES metrics — generative framing, not measured claims. |
 
-**CHIT naming:** canonical term is **Cymatic-Holographic Information Transfer**; "Compressed Hierarchical Information Transfer" is an accurate *facet* (CHIT compresses at the signing/encode moment). Both are true — one system seen from two moments in the pipeline.
+**CHIT naming:** CHIT is a deliberate two-meaning term (canon: `AGNOTE4482PHI.t1.md`, DARKXSIDE 2026-06-09). The *concept* is **Cymatic Holographic Information Theory** — the geometry-of-meaning lens (holographic/high-dimensional encoding, "meaning has shape"). The *mechanism* is **Compressed Hierarchical Information Transfer** — the signing/secrets + transport layer (CHIT packets over the NATS geometry bus + Hi-RAG retrieval; `chit:sign-trail`). Use *Theory* for the concept, *Transfer* for the engineering — not two names for one thing, but two meanings addressed by context.
 
 ---
 
@@ -73,7 +73,7 @@ TensorZero is PMOVES' melon. Different LLMs have different capability profiles (
 
 In squeeze film levitation, no external controller maintains the gap. As air accumulates, pressure rises until it supports the transducer's weight. Outflow matches inflow. The system finds its own balance through the physics of the gap.
 
-CHIT (Cymatic-Holographic Information Transfer) provides this self-stabilizing mechanism for PMOVES *by design* (see Implementation Status — the signed-trail autoregulation below is a design target; the current module is a secrets encoder). Signed agent trails — cryptographic verification that an agent's output matches its expected execution pattern — create a closed-loop correction without a supervisor.
+CHIT (Compressed Hierarchical Information Transfer) provides this self-stabilizing mechanism for PMOVES *by design* (see Implementation Status — the signed-trail autoregulation below is a design target; the current module is a secrets encoder). Signed agent trails — cryptographic verification that an agent's output matches its expected execution pattern — create a closed-loop correction without a supervisor.
 
 **Structural role**: Self-stabilizing equilibrium through signed trail autoregulation.
 

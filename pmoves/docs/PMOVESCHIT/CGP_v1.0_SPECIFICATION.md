@@ -3,7 +3,7 @@
 
 # CHIT Geometry Packet (CGP) v1.0 Specification
 
-**Comprehensive specification for the CHIT (Cymatic-Holographic Information Transfer) protocol**
+**Comprehensive specification for the CHIT (Cymatic Holographic Information Theory) protocol**
 
 **Version:** 1.0
 **Status:** Production Ready
@@ -29,7 +29,7 @@
 
 ## Executive Summary
 
-CHIT (Cymatic-Holographic Information Transfer) is a **geometric protocol for information encoding** that transforms data into boundary representations (CGP packets) enabling:
+CHIT (Cymatic Holographic Information Theory) is a **geometric protocol for information encoding** that transforms data into boundary representations (CGP packets) enabling:
 
 - **Holographic Compression**: Information encoded on "surfaces" rather than volumes
 - **Universal Translatability**: Geometry-only mode enables shared codebook communication

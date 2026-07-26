@@ -2,7 +2,7 @@
 
 # CHIT Attribution System - Human Guide
 
-Welcome to the PMOVES CHIT (Context-Hybrid Information Token) attribution system. This guide explains how your contributions to the ToKenism cooperative are tracked, weighted, and verified.
+Welcome to the PMOVES CHIT (Cymatic Holographic Information Theory) attribution system. This guide explains how your contributions to the ToKenism cooperative are tracked, weighted, and verified.
 
 ## What is CHIT?
 

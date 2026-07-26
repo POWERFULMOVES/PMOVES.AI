@@ -66,7 +66,7 @@ Each layer maps to the same MOF physics. The mapping is not analogical — it is
 
 ---
 
-### L2 — Information: CHIT (Cymatic-Holographic Information Transfer)
+### L2 — Information: CHIT (Cymatic Holographic Information Theory)
 
 **What it is**: CHIT encodes meaning as geometry instead of token streams. A CGP (CHIT Geometry Packet) captures the shape of information — its directions, densities, and hierarchies — and throws away the raw tokens. The receiver reconstructs meaning from shape alone.
 
