@@ -1,0 +1,56 @@
+{
+  "$schema_note": "Content model for the DARKXSIDE / Russell Richardson persona living-doc room. Single source of truth — both the LinkedIn paste (docs/research/persona/06_linkedin_profile.md) and the pmoves.ai persona room render from this. Keep in sync with 06 on edits.",
+  "version": "2026-07-26",
+  "identity": {
+    "name": "Russell Richardson",
+    "alias": "DARKXSIDE",
+    "location": "Bronx, NY / Distributed",
+    "roles_founder": "Founder, PMOVES.AI · CATACLYSM STUDIOS INC",
+    "roles_external": "Principal / Applied AI Architect · AI Deployment Engineer"
+  },
+  "headline": {
+    "primary": "Founder, PMOVES.AI | Principal Applied AI Architect | Agentic Systems, RAG, AI Deployment & Local-First Infrastructure | Hiring + Open to Mission-Aligned Roles",
+    "alt_broad": "Founder, PMOVES.AI | Applied AI Architect | Agentic Systems, RAG, AI Deployment, Creative Automation & Local-First Infrastructure",
+    "alt_founder": "Founder & CEO @ CATACLYSM STUDIOS INC | Building PMOVES.AI — 91-agent multi-agent orchestration with Metal-Organic Framework architecture | Bronx beat-architect turned infrastructure builder | Local-first AI sovereignty"
+  },
+  "availability": "Building PMOVES.AI and assembling collaborators around CATACLYSM STUDIOS — and open to embedded, fractional, contract, or full-time roles in Applied AI architecture, agentic workflows, AI deployment, technical product, or developer education. Strongest contribution: taking a complicated AI opportunity from research and fragmented tools to a bounded, observable system with working code, evaluations, human review, docs, and a path to production.",
+  "plain_lead": "I design and ship local-first, event-driven AI platforms — coordinating specialized agents, retrieval, multimodal data pipelines, model routing, observability, security controls, and human-approval workflows — and take them from scattered experiments to production.",
+  "about_short": "I build the infrastructure I need. 82 tracks and 15 years of beat-making taught me a BPM is a state vector and a sketch is a prototype — then I turned that instinct on AI systems. Same person who made the beats. Same philosophy, different frequency: build what you need, scale what works, sign every line.",
+  "highlights": [
+    "91 agents across 13 teams over 50 gitlinked submodules; 5 rooms; topology audit → production-hardened in under 5 months, zero registry drift",
+    "34-flow n8n automation fabric + ActivePieces low-code workspace connecting services, SaaS, and the event bus",
+    "Metal-Organic Framework architecture: NATS JetStream as traveling wave, TensorZero as impedance matcher, CHIT (cryptographic identity + signed audit trails) as self-stabilizing equilibrium",
+    "First-class voice: Flute Gateway, realtime synthesis, BPM→prosodic pipeline (agents read the room, not just the numbers)",
+    "Hardened authentication, credential management, and network segmentation across the fleet"
+  ],
+  "skills": {
+    "Architecture & Engineering": ["Multi-Agent Orchestration", "Distributed Systems", "Event-Driven Architecture (NATS JetStream)", "Knowledge Graph Engineering (Neo4j)", "Cryptographic Identity (CHIT)", "LLM Gateway & Routing (TensorZero)", "Voice AI Infrastructure", "Docker & Container Orchestration", "CI/CD Security Gates"],
+    "AI/ML": ["LLM Integration (GLM, KIMI/Moonshot, MiniMax, Claude)", "Model Suit Design & Provider Cascades", "Agent Memory & Attribution", "AI Safety & Security Hardening", "Local-First AI Deployment", "RAG / Retrieval"],
+    "Infrastructure & DevOps": ["Tailscale Mesh / Zero-Trust", "Cloud-Hybrid (KVM, VPS, Edge)", "Infrastructure as Code", "Observability (Prometheus, Grafana, Loki, ClickHouse)"],
+    "Automation & Workflow": ["n8n Workflow Automation (34-flow fabric)", "ActivePieces Low-Code Automation", "Webhook & Event-Driven Integration", "Cross-SaaS Orchestration"],
+    "Leadership & Vision": ["Applied AI Architecture (0→1)", "Technical Team Coordination", "Tokenomics & Cooperative Economics", "Community-Driven Pilot Design", "First-Principles Systems Thinking"]
+  },
+  "featured": [
+    {"title": "PMOVES.AI — Multi-Agent Orchestration Platform", "link": "https://github.com/POWERFULMOVES/PMOVES.AI", "blurb": "91 agents. 13 teams. 50 submodules. 5 rooms. MOF architecture with CHIT identity, Consciousness Service, and full voice infra. Local-first, sovereign."},
+    {"title": "The Convergence Wave — Topology Audit → Production", "link": "https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/docs/AGENTS/AGNOTE4482.md", "blurb": "5-month technical narrative: fleet to 91 agents with zero drift, security resolved, voice integrated, community room online. The master coordination record."},
+    {"title": "Automation Fabric — 34 n8n Flows + ActivePieces", "link": "https://github.com/POWERFULMOVES/PMOVES.AI/tree/main/pmoves/n8n/flows", "blurb": "34 production n8n workflows (finance, health, media, voice, CI, research) + an ActivePieces low-code workspace. Automation as first-class infrastructure."},
+    {"title": "CHIT Geometry Bus — 5-Layer Grand Convergence", "link": "https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md", "blurb": "Cryptographic Handshake for Identity & Trust — L1 Structure → L5 Economics. Signed CGP packets on the geometry event bus. The math backbone of sovereign coordination."},
+    {"title": "DARKXSIDE — 82 Tracks, 15 Years", "link": "https://soundcloud.com/darkxside", "blurb": "Bronx beat architecture across Hip-hop, R&B, EDM, Drum & Bass. BPM as state vector. The catalog as codebase. Beats before code.", "todo": "confirm SoundCloud handle"},
+    {"title": "CATACLYSM STUDIOS — 5-Year Model", "link": "", "blurb": "5-tier L1–L5 structure, Fordham Hill cooperative pilot, cooperative tokenomics.", "todo": "investor-facing model URL — keep private/gated, not a public repo link"}
+  ],
+  "translation": [
+    {"pmoves": "Rooms on a stage", "employer": "Purpose-built AI workspaces with explicit tools, data, ownership, permissions, and lifecycle states"},
+    {"pmoves": "P7 stage manager", "employer": "Orchestration and runtime-routing layer"},
+    {"pmoves": "Agent suits", "employer": "Configurable model, persona, tool, and policy bindings"},
+    {"pmoves": "Geometry Bus", "employer": "Event-driven structured-context exchange"},
+    {"pmoves": "CHIT", "employer": "Cryptographic agent identity + signed, non-repudiable audit trails"},
+    {"pmoves": "CGP packets", "employer": "Structured state vectors (mood/tempo/posture) on the event bus"},
+    {"pmoves": "n8n / ActivePieces fabric", "employer": "Workflow-automation + low-code integration layer (event-driven, versioned as code)"}
+  ],
+  "closer": "Build what you need. Scale what works. Sign every line.",
+  "connect": "Engineers who think in systems, founders building local-first infrastructure, and teams who need someone to move AI from research and fragmented tools to production.",
+  "room_media": {
+    "remotion_walkthrough": {"status": "planned", "note": "3-min architecture walkthrough via the a2ui Remotion renderer"},
+    "pretext_panels": {"status": "planned", "note": "CHIT math + MOF isomorphism + CGP authored in PreTeXt → HTML/MathJax"}
+  }
+}
