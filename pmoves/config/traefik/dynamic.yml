@@ -3,7 +3,11 @@ http:
     pmoves-forward-auth:
       forwardAuth:
         address: "http://pmoves-sso-auth:8080/auth/verify"
-        authResponseHeaders: ["Remote-User", "X-Auth-Email", "X-Auth-Subject"]
+        # X-Forward-Auth-Secret is copied from the auth-service RESPONSE onto the
+        # upstream request, OVERWRITING any client-supplied value — so a client
+        # cannot smuggle it through Traefik, and apps can trust it as proof the
+        # request transited the proxy (defence-in-depth vs Remote-User spoofing).
+        authResponseHeaders: ["Remote-User", "X-Auth-Email", "X-Auth-Subject", "X-Forward-Auth-Secret"]
         # On 401 Traefik returns the auth service's response; a 401 body/redirect
         # sends the browser to auth.pmoves.ai/login (see errors middleware below).
     pmoves-auth-redirect:

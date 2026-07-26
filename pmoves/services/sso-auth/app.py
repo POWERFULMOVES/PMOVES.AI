@@ -18,14 +18,18 @@ def auth_verify(request: Request):
     except SessionInvalid:
         return Response(status_code=401)
     ident = claims.get("email") or claims.get("sub") or ""
-    return Response(
-        status_code=200,
-        headers={
-            "Remote-User": ident,
-            "X-Auth-Email": claims.get("email", ""),
-            "X-Auth-Subject": claims.get("sub", ""),
-        },
-    )
+    headers = {
+        "Remote-User": ident,
+        "X-Auth-Email": claims.get("email", ""),
+        "X-Auth-Subject": claims.get("sub", ""),
+    }
+    # Proof-of-proxy: emit the shared secret so apps can confirm the request
+    # actually transited Traefik (Traefik forwards this via authResponseHeaders,
+    # overwriting any client-supplied value). A peer reaching an app off-proxy
+    # cannot produce it. Only emitted when configured.
+    if settings.forward_auth_secret:
+        headers["X-Forward-Auth-Secret"] = settings.forward_auth_secret
+    return Response(status_code=200, headers=headers)
 
 # append to pmoves/services/sso-auth/app.py
 from fastapi import Form

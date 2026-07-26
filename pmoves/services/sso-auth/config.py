@@ -20,6 +20,18 @@ class Settings(BaseSettings):
     # explicitly below. NoDecode skips that eager decode; load()'s explicit kwarg
     # (parsed via .split(",")) always wins in the init > env source-merge order.
     jellyfin_oidc_redirect_uris: Annotated[list[str], NoDecode] = []  # env: JELLYFIN_OIDC_REDIRECT_URIS
+    # RSA private-key PEM for signing OIDC id_tokens (RS256). Resolution order
+    # (see oidc._load_or_generate_private_key): this explicit env override FIRST,
+    # else the persisted key file at oidc_signing_key_path, else generate-once and
+    # persist there. Large PEMs don't belong in the url-safe CHIT/env pipeline, so
+    # the default is self-provisioning; mount a shared key file for multi-node.
+    oidc_signing_key: str = ""       # env: OIDC_SIGNING_KEY (optional explicit override)
+    oidc_signing_key_path: str = "/data/oidc_signing_key.pem"  # env: OIDC_SIGNING_KEY_PATH
+    # Proof-of-proxy shared secret. /auth/verify emits it as X-Forward-Auth-Secret
+    # on 200 (Traefik forwards it via authResponseHeaders, overwriting any client
+    # value); apps verify it before honoring Remote-User, so a peer that reaches an
+    # app OFF-proxy cannot forge the header. Empty => not emitted.
+    forward_auth_secret: str = ""  # env: SSO_FORWARD_AUTH_SECRET
 
     @classmethod
     def load(cls) -> "Settings":
@@ -38,6 +50,9 @@ class Settings(BaseSettings):
             jellyfin_oidc_client_id=g("JELLYFIN_OIDC_CLIENT_ID", ""),
             jellyfin_oidc_client_secret=g("JELLYFIN_OIDC_CLIENT_SECRET", ""),
             jellyfin_oidc_redirect_uris=redirect_uris,
+            oidc_signing_key=g("OIDC_SIGNING_KEY", "").replace("\\n", "\n"),
+            oidc_signing_key_path=g("OIDC_SIGNING_KEY_PATH", "/data/oidc_signing_key.pem"),
+            forward_auth_secret=g("SSO_FORWARD_AUTH_SECRET", ""),
         )
 
 

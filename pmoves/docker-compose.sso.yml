@@ -12,7 +12,15 @@ services:
       JELLYFIN_OIDC_CLIENT_ID: ${JELLYFIN_OIDC_CLIENT_ID}
       JELLYFIN_OIDC_CLIENT_SECRET: ${JELLYFIN_OIDC_CLIENT_SECRET}
       JELLYFIN_OIDC_REDIRECT_URIS: ${JELLYFIN_OIDC_REDIRECT_URIS:-https://media.pmoves.ai/sso/OID/redirect/pmoves}
-    networks: { pmoves_app: { aliases: [pmoves-sso-auth] }, pmoves_external: {} }
+      # Layer-2 proof-of-proxy secret (must be listed here or it never reaches the
+      # container — compose only injects env vars declared in this block).
+      SSO_FORWARD_AUTH_SECRET: ${SSO_FORWARD_AUTH_SECRET:-}
+      # Optional explicit RSA signing-key override; empty => self-provision to /data.
+      OIDC_SIGNING_KEY: ${OIDC_SIGNING_KEY:-}
+    # pmoves_api: GoTrue (supabase-gotrue) lives there — required to reach it for
+    # login/callback/logout. pmoves_external: Traefik edge. pmoves_app: fleet peers.
+    networks: { pmoves_app: { aliases: [pmoves-sso-auth] }, pmoves_external: {}, pmoves_api: {} }
+    volumes: [sso-oidc-key:/data]   # persist the self-provisioned OIDC signing key across recreates
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     # Traefik MUST see this container to resolve `sso-auth@docker` — the service
@@ -27,3 +35,6 @@ services:
 networks:
   pmoves_app: { external: true }
   pmoves_external: { external: true }
+  pmoves_api: { external: true }
+volumes:
+  sso-oidc-key: {}

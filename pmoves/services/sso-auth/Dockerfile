@@ -21,8 +21,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY services/sso-auth/ .
 
 # Non-root runtime (PMOVES hardening — matches the fleet's uid 1001 pattern).
-RUN useradd -m -u 1001 pmoves && chown -R pmoves:pmoves /app
+# /data holds the self-provisioned OIDC signing key (oidc._load_or_generate_private_key).
+# Owned by pmoves so the non-root runtime can write it; mount a volume here to
+# persist across recreates (and a shared key file for multi-node JWKS consistency).
+RUN useradd -m -u 1001 pmoves && mkdir -p /data && chown -R pmoves:pmoves /app /data
 USER pmoves
+VOLUME ["/data"]
 
 EXPOSE 8080
 
