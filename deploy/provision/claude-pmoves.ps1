@@ -85,7 +85,41 @@ if (Test-Path $envf) {
 # `make -C pmoves mcp-toolkit-connect` stays live alongside the tracked roster.
 $roster = Join-Path $root '.claude\mcp.json'
 if (Test-Path $roster) {
-    & claude --mcp-config $roster @args
+    # Normalize the roster before handing it to Claude (Codex #2243):
+    #   P2 - drop servers whose key starts with "_" (disabled-in-name-only, e.g.
+    #        `_pmoves-cipher-legacy-python-wrapper`; `_disabled` is metadata, not a
+    #        real off-switch, so Claude would otherwise launch the broken dupe).
+    #   P3 - rewrite repo-relative ("./...") command/arg paths to absolute $root
+    #        paths so `uv --directory ./pmoves-nats-mcp` launches from any CWD.
+    $useRoster = $roster
+    try {
+        $cfg = Get-Content -Raw $roster | ConvertFrom-Json
+        function Resolve-RelPath($p) {
+            if ($p -is [string] -and $p.StartsWith('./')) { Join-Path $root ($p.Substring(2)) } else { $p }
+        }
+        $clean = [ordered]@{}
+        foreach ($prop in $cfg.mcpServers.PSObject.Properties) {
+            if ($prop.Name.StartsWith('_')) { continue }   # disabled-in-name-only
+            $s = $prop.Value
+            if (($s.PSObject.Properties.Name -contains 'command') -and ($s.command -is [string])) {
+                $s.command = Resolve-RelPath $s.command
+            }
+            if (($s.PSObject.Properties.Name -contains 'args') -and $s.args) {
+                $s.args = @($s.args | ForEach-Object { Resolve-RelPath $_ })
+            }
+            $clean[$prop.Name] = $s
+        }
+        $cfg.mcpServers = [pscustomobject]$clean
+        $resolved = Join-Path $env:TEMP 'claude-pmoves-mcp-roster.json'
+        $cfg | ConvertTo-Json -Depth 32 | Set-Content -Encoding UTF8 $resolved
+        $useRoster = $resolved
+    } catch {
+        Write-Warning "[claude-pmoves] could not normalize roster ($($_.Exception.Message)); using raw $roster"
+    }
+    # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
+    # (`<configs...>`), so the space form would swallow a trailing positional
+    # prompt as another config value (Codex #2243 P1).
+    & claude "--mcp-config=$useRoster" @args
 } else {
     Write-Warning "[claude-pmoves] $roster not found - PMOVES MCP servers will not load."
     & claude @args
