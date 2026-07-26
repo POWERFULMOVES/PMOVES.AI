@@ -10,8 +10,11 @@
 
 set -euo pipefail
 
-USER_HOME="${SUDO_USER:-${HOME}}"
 USER_NAME="${SUDO_USER:-${USER}}"
+# SUDO_USER holds the login name, not a path — resolve the account's real home
+# via the passwd database so wrapper/AppImage/PMOVES_ROOT don't land in $CWD.
+USER_HOME="$(getent passwd "$USER_NAME" 2>/dev/null | cut -d: -f6)"
+USER_HOME="${USER_HOME:-${HOME}}"
 APPIMAGE_SOURCE="${A0_LAUNCHER_APPIMAGE:-${USER_HOME}/Downloads/a0-launcher-0.9-linux-arm64.AppImage}"
 PMOVES_ROOT="${PMOVES_ROOT:-${USER_HOME}/agent-zero/PMOVES.AI}"
 
@@ -44,11 +47,13 @@ docker_install() {
   step "Docker install / update"
   if command -v docker >/dev/null 2>&1; then
     log "Docker already installed: $(docker --version)"
-    return 0
+  else
+    curl -fsSL https://get.docker.com | sh
+    log "Docker installed. Re-login for group membership to take effect."
   fi
-  curl -fsSL https://get.docker.com | sh
+  # Ensure the target user is in the docker group regardless of whether Docker
+  # was just installed or was already present.
   usermod -aG docker "$USER_NAME" || true
-  log "Docker installed. Re-login for group membership to take effect."
 }
 
 appimage_setup() {

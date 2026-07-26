@@ -81,8 +81,11 @@ if [[ -f "$APPIMAGE" ]]; then
   if [[ -x "$APPIMAGE" ]]; then
     printf "  ✅ AppImage found and executable: %s\n" "$APPIMAGE"
   else
-    warnings=$((warnings+1))
-    printf "  ⚠️  AppImage found but not executable; fix with: chmod +x %s\n" "$APPIMAGE"
+    # The a0-launcher wrapper execs the AppImage for --appimage-extract, which
+    # fails with permission denied when it is not executable — treat as missing,
+    # not a soft warning, so validation cannot report a false success.
+    missing=$((missing+1))
+    printf "  ❌ AppImage found but not executable (wrapper runs it for --appimage-extract); fix with: chmod +x %s\n" "$APPIMAGE"
   fi
 else
   missing=$((missing+1))
