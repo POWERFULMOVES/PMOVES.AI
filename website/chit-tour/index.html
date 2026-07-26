@@ -238,30 +238,89 @@
     <!-- ===== POINCARE DISK ===== -->
     <section id="poincare" class="section">
       <div class="eyebrow">08 · Hierarchical capacity</div>
-      <h2>Why hyperbolic? The Poincaré disk</h2>
+      <h2>Why hyperbolic? The Poincaré disk — computed, not decorated</h2>
       <p class="lede">
-        Pillar 2 of CHIT is hyperbolic geometry with curvature <span class="mono">K = −1</span>. Distance grows exponentially toward the boundary,
-        giving <span class="mono">O(log n)</span> tree distortion — a natural fit for the agent taxonomy and for nested CHIT constellations.
-        This disk renders 76 agents grouped by class, illustrating the kind of layout
-        <span class="mono">Pmoves-hyperdimensions</span> produces in production.
+        Pillar 2 of CHIT is hyperbolic geometry with curvature <span class="mono">K = −1</span>. Everything on this
+        disk is <strong>computed in your browser right now</strong> from the real agent registry
+        (<span class="mono">agent_registry.yaml</span>, taxonomy v1.5.0, 96 agents): the tree
+        registry → class → type → agent is embedded with <strong>Sarkar's construction</strong>
+        (Möbius-translate each node to the origin, fan its children at hyperbolic distance τ,
+        translate back), and every edge is a true geodesic — an arc of a circle orthogonal to the
+        boundary. Nothing is hand-placed. One honest correction the real data forced: the registry
+        currently marks <em>zero</em> agents legendary (43 standard · 28 specialized · 24 utility · 1 ci) —
+        the earlier version of this page drew two "Legendary" center dots that do not exist.
       </p>
 
-      <div class="viz-card">
+      <div class="grid c2 u-mb-24">
+        <div class="viz-card">
+          <div class="viz-head">
+            <h3>The metric, doing work</h3>
+          </div>
+          <div class="viz-body">
+            <p>The Poincaré metric and distance function this page evaluates:</p>
+            <pre class="mono" style="overflow-x:auto">ds = 2‖dz‖ / (1 − ‖z‖²)          (length element — blows up at the rim)
+
+d(u,v) = arcosh( 1 + 2‖u−v‖² / ((1−‖u‖²)(1−‖v‖²)) )
+
+T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar uses)</pre>
+            <div id="poincare-metric" class="u-mt-8"></div>
+          </div>
+          <div class="viz-foot"><span class="mono">click two nodes on the disk →</span></div>
+        </div>
+        <div class="viz-card">
+          <div class="viz-head"><h3>Measured distortion of this embedding</h3></div>
+          <div class="viz-body">
+            <div id="poincare-distortion"></div>
+            <p class="u-mt-8">The dashed rings mark <b>equal hyperbolic steps</b> from the center
+            (d = 0.75, 1.50, 2.25, …) at euclidean radius <span class="mono">tanh(d/2)</span> —
+            their crowding toward the rim is the compression cost of flattening H² into a unit disk,
+            and exactly why exponentially-growing trees fit: each ring outward holds exponentially
+            more room at constant hyperbolic density.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="viz-card u-mb-24">
         <div class="viz-head">
-          <h3>Poincaré disk · 76 agents grouped by class</h3>
+          <h3>Sarkar embedding of the live registry · 96 agents</h3>
           <div class="legend">
-            <span class="u-c-legendary">● Legendary</span>
-            <span class="u-c-standard">● Standard</span>
-            <span class="u-c-specialized">● Specialized</span>
-            <span class="u-c-utility">● Utility</span>
+            <span style="color:#7C3AED">● standard (43)</span>
+            <span style="color:#9a6fdf">● specialized (28)</span>
+            <span style="color:#0D9488">● utility (24)</span>
+            <span style="color:#FB7185">● ci (1)</span>
           </div>
         </div>
         <div class="viz-body">
-          <canvas id="poincare-canvas"></canvas>
+          <svg id="poincare-svg" style="width:100%;height:620px" role="img" aria-label="Poincaré disk with the real agent registry tree embedded via Sarkar's construction; edges are geodesic arcs"></svg>
+        </div>
+        <div class="viz-foot">
+          <span class="mono">hover a node for its computed ‖z‖ · click two nodes to evaluate d(u,v)</span>
         </div>
       </div>
+
+      <div class="viz-card">
+        <div class="viz-head"><h3>What is being flattened: hyperboloid → stereographic shadow</h3></div>
+        <div class="viz-body">
+          <p>The disk is the <strong>shadow of the hyperboloid sheet</strong>
+          <span class="mono">x² + y² − z² = −1, z ≥ 1</span>, projected from the south pole
+          <span class="mono">S = (0,0,−1)</span> onto the plane <span class="mono">z = 0</span>.
+          The lift of a disk point <span class="mono">p</span> back onto the sheet is</p>
+          <pre class="mono" style="overflow-x:auto">(p_x, p_y)  ↦  ( 2p_x , 2p_y , 1 + ‖p‖² ) / (1 − ‖p‖²)</pre>
+          <p>Below: the class and type nodes of the actual embedding, lifted onto the sheet, with their
+          projection rays back down to the disk. Agent-level leaves are truncated from this view —
+          near-rim points lift to <span class="mono">z</span> in the hundreds, which is the head-room
+          the flat picture hides.</p>
+          <canvas id="hyperboloid-canvas" style="width:100%;height:440px"></canvas>
+        </div>
+        <div class="viz-foot">
+          <span class="mono">rotating view · rays: S → sheet point → disk shadow</span>
+        </div>
+      </div>
+
       <p class="u-caption u-mt-10">
-        ▸ source: pmoves/docs/PMOVESCHIT/01_WHAT_IS_CHIT.md (Pillar 2) · pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md (76 agents v1.5.0)
+        ▸ math: 01_WHAT_IS_CHIT.md (Pillar 2, K = −1, Möbius addition, O(log n) tree distortion) ·
+        tree data: pmoves/config/agent_registry.yaml (taxonomy v1.5.0, 96 agents, extracted 2026-07-26) ·
+        embedding: Sarkar (2011) scaled variant, τ = [1.1, 1.7, 2.3] per level, computed client-side on load
       </p>
     </section>
 
