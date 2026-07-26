@@ -69,4 +69,67 @@ else
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2
 fi
 
-exec claude "$@"
+# Point Claude Code at the tracked PMOVES MCP roster. Claude Code only reads
+# `.mcp.json` at the repo root (project scope), `~/.claude.json` (user/local),
+# or an explicit `--mcp-config` — it does NOT read `.claude/mcp.json`. Without
+# this flag every server defined there stays dark and the env vars loaded above
+# have nothing to resolve into, which is exactly the "no access to all tools"
+# symptom this wrapper was written to fix.
+#
+# NOT --strict-mcp-config: we want a MERGE, so the per-node `.mcp.json` written
+# by `make -C pmoves mcp-toolkit-connect` (the Docker MCP gateway entry) stays
+# live alongside the tracked roster.
+MCP_ROSTER="$ROOT/.claude/mcp.json"
+if [ -f "$MCP_ROSTER" ]; then
+  # Normalize the roster before handing it to Claude:
+  #   P2 — drop servers whose key starts with "_" (disabled-in-name-only, e.g.
+  #        `_pmoves-cipher-legacy-python-wrapper`; `_disabled` is metadata, not a
+  #        real MCP off-switch, so Claude would otherwise launch the broken dupe).
+  #   P3 — rewrite repo-relative ("./…") command/arg paths to absolute $ROOT paths
+  #        so `uv --directory ./pmoves-nats-mcp` launches from any caller CWD.
+  # (Codex #2243). The transform needs JSON parsing; python3 is present on PMOVES
+  # nodes. If it is missing we fall back to the raw roster (previous behavior).
+  RESOLVED="${TMPDIR:-/tmp}/claude-pmoves-mcp-roster.$(id -u).json"
+  resolved_ok=0
+  if command -v python3 >/dev/null 2>&1; then
+    if PM_ROOT="$ROOT" python3 - "$MCP_ROSTER" "$RESOLVED" <<'PY'
+import json, os, sys
+root = os.environ["PM_ROOT"]
+src, dst = sys.argv[1], sys.argv[2]
+def resolve(p):
+    return os.path.join(root, p[2:]) if isinstance(p, str) and p.startswith("./") else p
+with open(src) as fh:
+    data = json.load(fh)
+clean = {}
+for name, cfg in (data.get("mcpServers") or {}).items():
+    if name.startswith("_"):          # disabled-in-name-only — exclude
+        continue
+    if isinstance(cfg, dict):
+        if isinstance(cfg.get("command"), str):
+            cfg["command"] = resolve(cfg["command"])
+        if isinstance(cfg.get("args"), list):
+            cfg["args"] = [resolve(a) for a in cfg["args"]]
+    clean[name] = cfg
+data["mcpServers"] = clean
+with open(dst, "w") as fh:
+    json.dump(data, fh)
+PY
+    then
+      resolved_ok=1
+    fi
+  fi
+
+  # Pass the config with `--mcp-config=<file>` (the `=` form): `--mcp-config` is a
+  # variadic option (`<configs...>`), so the space form would swallow a trailing
+  # positional prompt as another config value (Codex #2243 P1). The `=` binds
+  # exactly one value and leaves "$@" as separate arguments.
+  if [ "$resolved_ok" -eq 1 ]; then
+    exec claude --mcp-config="$RESOLVED" "$@"
+  else
+    echo "[claude-pmoves] WARN: could not normalize roster (python3 missing?); using raw $MCP_ROSTER" >&2
+    exec claude --mcp-config="$MCP_ROSTER" "$@"
+  fi
+else
+  echo "[claude-pmoves] WARN: $MCP_ROSTER not found — PMOVES MCP servers will not load." >&2
+  exec claude "$@"
+fi
