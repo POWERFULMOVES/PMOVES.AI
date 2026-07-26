@@ -454,10 +454,10 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 		$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 			-e KONG_DATABASE=postgres \
 			-e KONG_PG_HOST=supabase-db \
-			-e KONG_PG_DATABASE=postgres \
-			-e KONG_PG_USER=$${SUPABASE_DB_USER:-postgres} \
-			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
-			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
+			-e KONG_PG_DATABASE=$${POSTGRES_DB:-$${SUPABASE_DB_NAME:-postgres}} \
+			-e KONG_PG_USER=$${POSTGRES_USER:-$${SUPABASE_DB_USER:-postgres}} \
+			-e KONG_PG_PASSWORD=$${POSTGRES_PASSWORD:-$${SUPABASE_DB_PASSWORD:-postgres}} \
+			kong/kong:3.9.1 sh -c "kong migrations bootstrap --yes 2>/dev/null || true; kong migrations up --yes 2>/dev/null || true" >/dev/null 2>&1 || true; \
 		$(MAKE) --no-print-directory supa-bootstrap-db; \
 		$(DC) --profile supabase-local up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
@@ -681,40 +681,29 @@ supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase D
 supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in public.pmoves_bootstrap_history)
 	@echo "🗄️ Applying Supabase schema + seeds..."
 	@$(MAKE) --no-print-directory supa-start >/dev/null
-	@set -euo pipefail; \
+	@set -uo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
-	if [ -d "supabase/migrations" ]; then \
-		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
-			[ -f "$$migration" ] || continue; \
-			name=$$(basename "$$migration"); \
-			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
-			if [ "$$applied" = "1" ]; then \
-				echo "   Skipping migration (already applied): $$name"; \
-				continue; \
-			fi; \; echo "   Applying migration: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$migration"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+	PGDB=$${POSTGRES_DB:-pmoves}; \
+	: "Run psql as the privileged supabase_admin role over TCP, sourcing the DB"; \
+	: "password from the container env. supabase_admin is the self-hosted superuser;"; \
+	: "the plain 'postgres' role is NOT superuser and lacks CREATE on public."; \
+	admin_psql() { docker exec -i "$$db" sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -w -h 127.0.0.1 -U supabase_admin -d "'"$$PGDB"'" -v ON_ERROR_STOP=1 "$$@"' _ "$$@"; }; \
+	admin_psql -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));" >/dev/null; \
+	apply_dir() { akind="$$1"; adir="$$2"; \
+		if [ ! -d "$$adir" ]; then echo "   ⚠️  No $$adir directory found"; return 0; fi; \
+		ok=0; skip=0; fail=0; \
+		for f in $$(find "$$adir" -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$f" ] || continue; \
+			name=$$(basename "$$f"); \
+			if [ "$$(admin_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='$$akind' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]')" = "1" ]; then skip=$$((skip+1)); continue; fi; \
+			if admin_psql < "$$f" >/tmp/sb_apply.log 2>&1; then \
+				admin_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('$$akind', '$$name') ON CONFLICT DO NOTHING;" >/dev/null; ok=$$((ok+1)); \
+			else fail=$$((fail+1)); echo "   ⚠️  $$akind FAILED (skipped): $$name :: $$(grep -iE 'ERROR' /tmp/sb_apply.log | head -1 | cut -c1-100)"; fi; \
 		done; \
-	else \
-		echo "   ⚠️  No migrations directory found"; \
-	fi; \
-	if [ -d "supabase/initdb" ]; then \
-		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
-			[ -f "$$seed" ] || continue; \
-			name=$$(basename "$$seed"); \
-			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
-			if [ "$$applied" = "1" ]; then \
-				echo "   Skipping seed (already applied): $$name"; \
-				continue; \
-			fi; \; echo "   Applying seed: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$seed"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
-		done; \
-	else \
-		echo "   ⚠️  No initdb directory found"; \
-	fi
+		echo "   $$akind: applied=$$ok skipped=$$skip failed=$$fail"; }; \
+	apply_dir migration supabase/migrations; \
+	apply_dir seed supabase/initdb
 	@echo "✅ Supabase bootstrap complete"
 
 .PHONY: supabase-bootstrap-no-start

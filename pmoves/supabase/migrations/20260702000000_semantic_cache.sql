@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS pmoves_cache.llm_semantic_cache (
 -- HNSW index for fast cosine similarity search
 CREATE INDEX IF NOT EXISTS idx_semantic_cache_embedding_hnsw
     ON pmoves_cache.llm_semantic_cache
-    USING hnsw (query_embedding vector_cosine_ops)
+    USING hnsw ((query_embedding::halfvec(3072)) halfvec_cosine_ops)
     WITH (m = 16, ef_construction = 64);
 
 -- Index for TTL eviction
