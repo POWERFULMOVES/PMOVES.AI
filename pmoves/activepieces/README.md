@@ -9,20 +9,27 @@ rather than baked into the main fleet compose. Flows are versioned as code in
 - **Hosted account:** `cataclysmstudios@gmail.com` on ActivePieces Cloud.
 - **Phase 1 (this):** standalone self-host. **Phase 2 (tracked):** integrate as a first-class service in the main fleet `docker-compose.yml`.
 
-## Bring up
+## Bring up (Known Road — `make`, not raw docker)
+
+Use the make targets — they wrap the standalone compose with the correct
+`--env-file`/project settings. Do **not** run raw `docker compose up` (it
+bypasses the env-injection convention and trips the pipeline guard).
 
 ```bash
-cd pmoves/activepieces
-cp env.activepieces.example env.activepieces        # then hydrate the SECRET values
-# secrets (AP_ENCRYPTION_KEY, AP_JWT_SECRET, AP_POSTGRES_PASSWORD, AP_LICENSE_KEY)
-# come from the PMOVES secrets pipeline — do NOT hand-write real values.
-docker compose --env-file env.activepieces -p pmoves-activepieces up -d
+# 1. seed the (gitignored) instance env once, then hydrate its SECRET values
+cp pmoves/activepieces/env.activepieces.example pmoves/activepieces/env.activepieces
+# secrets — AP_ENCRYPTION_KEY, AP_JWT_SECRET, AP_POSTGRES_PASSWORD (+ AP_LICENSE_KEY
+# for ee/Git Sync) — via the PMOVES secrets pipeline; do NOT hand-commit real values.
+# env.activepieces is gitignored so secrets never land in the repo.
+
+# 2. bring up / check / down
+make -C pmoves up-activepieces
+make -C pmoves activepieces-health
+make -C pmoves down-activepieces
 ```
 
 UI: <http://localhost:8087> (bound to `127.0.0.1` by default — front it with the
 mesh/Tailscale rather than publishing to the LAN, per the privacy-mesh rule).
-
-Down: `docker compose --env-file env.activepieces -p pmoves-activepieces down`
 
 ## Connecting to the hosted account (Git Sync)
 

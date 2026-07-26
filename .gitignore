@@ -341,3 +341,6 @@ pmoves/.vscode/
 out/
 pmoves/.wrangler/
 threads*.json
+
+# ActivePieces self-host instance env (secrets — keep .example only)
+pmoves/activepieces/env.activepieces
