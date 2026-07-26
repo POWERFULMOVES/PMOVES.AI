@@ -127,6 +127,11 @@
       <div class="viz-card u-mt-24">
         <div class="viz-head"><h3>Lab · Pillar 1 — Dirichlet attribution, sampled live</h3></div>
         <div class="viz-body">
+          <div class="digest-strip">
+            <div><span class="digest-k">Plain words</span> When several people build one thing, this is the fair-split machine: it turns raw contribution amounts into shares that always add up to 100% and never zero anyone out.</div>
+            <div><span class="digest-k">Try this</span> Click <em>contribution → B</em> three times. The dot cloud slides toward B's corner — B earned more, so B's expected share grows. Reset and watch it spread back out.</div>
+            <div><span class="digest-k">Why it matters for attribution</span> Your share of a shape is a Dirichlet weight. More recorded contribution → bigger α → bigger expected share. The floor (smoothingAlpha) means showing up at all guarantees a non-zero share.</div>
+          </div>
           <div class="grid c2">
             <div>
               <svg id="lab-dirichlet-svg" style="width:100%;height:400px" role="img" aria-label="2-simplex with live Dirichlet samples"></svg>
@@ -154,6 +159,11 @@
       <div class="viz-card u-mt-24">
         <div class="viz-head"><h3>Lab · Pillar 3 — Merkle tamper-evidence over the real export records</h3></div>
         <div class="viz-body">
+          <div class="digest-strip">
+            <div><span class="digest-k">Plain words</span> A receipt system nobody can quietly edit: every record is fingerprinted, fingerprints are combined pairwise up to one root fingerprint, and any edit anywhere changes the root.</div>
+            <div><span class="digest-k">Try this</span> Press the tamper button. One amount changes from $1,880.71 to $9,999.99 — and the proof fails in red, because the edited fingerprint no longer chains up to the committed root.</div>
+            <div><span class="digest-k">Why it matters for attribution</span> Your attribution share only pays out if its proof verifies. That means nobody — including the operator — can shave your share after the fact without the math shouting about it.</div>
+          </div>
           <p>The four leaves are <b>real records</b> from the measured export run of 2026-07-25
           (the same ones in the Tokenomics Verified Actuals card), hashed with WebCrypto SHA-256
           in the shape <span class="mono">shape-attribution.ts</span> hashes
@@ -172,6 +182,11 @@
           <div class="legend"><span class="mono" id="lab-zeta-params">numZeros=10 · decay=0.90</span></div>
         </div>
         <div class="viz-body">
+          <div class="digest-strip">
+            <div><span class="digest-k">Plain words</span> A noise filter with unusual tuning: instead of arbitrary frequencies, it weights by the Riemann zeta zeros — fixed mathematical constants nobody chose and nobody can game.</div>
+            <div><span class="digest-k">Try this</span> Drag the decay slider down. Fewer zeros dominate and the filtered spectrum gets smoother; drag N up and finer structure survives. The left input is a real packet from the docs.</div>
+            <div><span class="digest-k">Why it matters for attribution</span> Attribution reads signal from shape spectra. A filter built on universal constants means the 'what counts as signal' knob isn't a knob anyone can quietly turn in their own favor.</div>
+          </div>
           <p>The filter weights are <span class="mono">w_n = decayⁿ / ln(γ_n)</span> over the first N
           non-trivial Riemann zeta zeros (constants verbatim from <span class="mono">zeta-filter.ts</span>),
           normalized, applied as the same <b>circular convolution</b> <span class="mono">filterSpectrum()</span> uses.
@@ -191,6 +206,11 @@
       <div class="viz-card u-mt-24">
         <div class="viz-head"><h3>Lab · Pillar 5 — the swarm fitness function (and an honesty note)</h3></div>
         <div class="viz-body">
+          <div class="digest-strip">
+            <div><span class="digest-k">Plain words</span> The judge, not the players: a scoring function that rates any allocation of wealth by fairness (Gini), poverty, growth, and participation — with fixed public weights.</div>
+            <div><span class="digest-k">Try this</span> In Panel A, drag Gini up: fitness falls. In Panel B, press run: random allocations evolve toward the same judge's preferences — inequality drops generation by generation.</div>
+            <div><span class="digest-k">Why it matters for attribution</span> Whatever process proposes shares — humans, agents, markets — the scorer is the fixed public standard they're measured against. The weights are in the repo, not in anyone's head.</div>
+          </div>
           <p><b>What ships today:</b> <span class="mono">swarm-attribution.ts</span> is the fitness
           <em>scorer</em> and population tracker on <span class="mono">tokenism.swarm.population.v1</span> —
           its own header states it does <b>not</b> perform mutation, selection, or crossover. The doc
@@ -221,6 +241,34 @@
           </div>
         </div>
         <div class="viz-foot"><span>▸ scorer weights/targets: swarm-attribution.ts (TARGET_WEIGHTS.gini_reduction, calculateFitness) · non-implementation note: lines 196-198</span></div>
+      </div>
+    
+      <!-- ═══ Where the pillars converge: tokenizable by design ═══ -->
+      <div class="viz-card u-mt-24" id="tokenizable-design">
+        <div class="viz-head"><h3>Where the five pillars converge: shape attribution is tokenizable by design</h3></div>
+        <div class="viz-body">
+          <p class="lede">Each lab above is one stage of a single pipeline — and the pipeline's output is
+          deliberately shaped so that a share of attribution can become a <b>verifiable, transferable claim</b>:</p>
+          <table class="table">
+            <thead><tr><th>Stage</th><th>Pillar doing the work</th><th>What it contributes to the token surface</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">1 · domain content → CGP shape</td><td>Zeta (P4) + hyperbolic encoding (P2)</td><td>Any domain — text, audio, economics — compresses to the same shape format, filtered by constants nobody can game, placed in a hierarchy with room for everyone.</td></tr>
+              <tr><td class="mono">2 · shape → shares</td><td>Dirichlet (P1)</td><td>Contribution amounts become weights that sum to 1 and never zero anyone out — the split IS the cap table for that shape.</td></tr>
+              <tr><td class="mono">3 · shares → committed record</td><td>Merkle (P3)</td><td>Every share lands in a tree with an inclusion proof. The contract's action types already include <span class="mono">token_received</span> and <span class="mono">reward_claimed</span>, and claims are verified against the root (shape-attribution.ts:404).</td></tr>
+              <tr><td class="mono">4 · records → allocation pressure</td><td>Swarm scorer (P5)</td><td>The public fitness function judges whole allocations on fairness/poverty/growth — the standard proposals are measured against.</td></tr>
+              <tr><td class="mono">5 · claims → ledger</td><td>ToKenism export (§10)</td><td>The measured pipeline: simulator → export sidecar → Firefly ledger, dry-run gated, event-committed on the Geometry Bus. See the Verified Actuals card.</td></tr>
+            </tbody>
+          </table>
+          <p class="u-mt-8"><b>The interop consequence — bring your own CHIT map:</b> because every stage
+          speaks shape-format in and proof-format out, an external domain doesn't integrate by adopting
+          PMOVES internals — it integrates by <em>emitting a CGP for its own domain</em> and connecting to the
+          Geometry Bus. Its constellations get Dirichlet shares, its shares get Merkle proofs, its claims
+          verify against the same roots. This is already happening: the live registry carries
+          <b>18 external contributors</b> (hermes-agent, claude-opus, kilocode, codex, …) alongside the 96
+          internal agents. And the regulatory rails from §10 apply by construction: shares are
+          contribution-keyed (never yield-on-holdings) and claims are proofs, not redemption promises.</p>
+        </div>
+        <div class="viz-foot"><span>▸ action types &amp; claim verification: shape-attribution.ts · external contributors: pmoves/config/agent_registry.yaml · mint path &amp; regulatory rails: §10</span></div>
       </div>
     </section>
 
@@ -350,6 +398,12 @@
         currently marks <em>zero</em> agents legendary (43 standard · 28 specialized · 24 utility · 1 ci) —
         the earlier version of this page drew two "Legendary" center dots that do not exist.
       </p>
+
+      <div class="digest-strip">
+            <div><span class="digest-k">Plain words</span> Trees don't fit in flat space — each generation needs exponentially more room. Hyperbolic space HAS that room, and the disk is its map: the rim is infinitely far away.</div>
+            <div><span class="digest-k">Try this</span> Click a class node, then an agent near the rim. The euclidean gap looks small; the hyperbolic distance is huge — the compression factor tells you how much the map squeezes.</div>
+            <div><span class="digest-k">Why it matters for attribution</span> Where your contribution sits in the hierarchy IS geometry here. Domains nest without crowding, so a new domain's whole subtree fits without renumbering anyone else's.</div>
+          </div>
 
       <div class="grid c2 u-mb-24">
         <div class="viz-card">
