@@ -191,7 +191,7 @@ Contains data processing worker configurations.
 
 ## CHIT Secret Management
 
-CHIT (Cognitive Holographic Information Transfer) provides secure encoding/decoding of environment secrets with multi-target output.
+CHIT (Compressed Hierarchical Information Transfer) provides secure encoding/decoding of environment secrets with multi-target output.
 
 ### CHIT_PROD_PASSPHRASE (Required for Production)
 

@@ -18,7 +18,7 @@ After analyzing the YouTube video's multi-agent orchestration system and compari
 
 ---
 
-## 1. CHIT: Cymatic-Holographic Information Transfer
+## 1. CHIT: Cymatic Holographic Information Theory
 
 ### What It Is
 A geometric protocol for agents to share compressed, structured knowledge representations instead of verbose token streams.

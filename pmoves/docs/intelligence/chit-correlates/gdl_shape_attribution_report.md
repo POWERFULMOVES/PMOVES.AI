@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-This report maps recent developments in two research areas to CHIT (Cymatic-Holographic Information Transfer), a geometric protocol encoding information as Geometry Packets (CGPs) — mathematical manifolds with super_nodes, constellations, spectra, and points — rather than token streams.
+This report maps recent developments in two research areas to CHIT (Cymatic Holographic Information Theory), a geometric protocol encoding information as Geometry Packets (CGPs) — mathematical manifolds with super_nodes, constellations, spectra, and points — rather than token streams.
 
 **Across 65 queries and 400+ results screened, ZERO papers challenge CHIT's geometric encoding thesis.** The literature uniformly validates that: (1) knowledge representations have intrinsic geometric structure, (2) manifold/curved encodings outperform Euclidean baselines, (3) geometric analysis of latent spaces is productive for interpretability, and (4) geometric invariance is a causal design variable, not an epiphenomenon.
 

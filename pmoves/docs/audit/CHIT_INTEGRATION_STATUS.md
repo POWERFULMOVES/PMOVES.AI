@@ -24,7 +24,7 @@
 
 ### What is CHIT?
 
-**CHIT (Context-Hybrid Information Token)** is PMOVES.AI's protocol for encoding, transmitting, and decoding geometric intelligence across services. It combines:
+**CHIT (Compressed Hierarchical Information Transfer)** is PMOVES.AI's protocol for encoding, transmitting, and decoding geometric intelligence across services. It combines:
 
 - **Hyperbolic Geometry** (Poincaré disk model) for hierarchical data encoding
 - **Riemann Zeta Filtering** for spectral similarity analysis

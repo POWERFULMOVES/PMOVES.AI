@@ -2,7 +2,7 @@
 
 **Thread 7.3: How CHIT concepts mirror across the PMOVES.AI repository**
 
-The CHIT (Context-Hybrid Information Token) system creates a coherent mathematical fabric woven through multiple layers of the platform. Each concept has mirror representations in TypeScript modules, NATS subjects, Neo4j graph, CGP schema, and agent taxonomy.
+The CHIT (Cymatic Holographic Information Theory) system creates a coherent mathematical fabric woven through multiple layers of the platform. Each concept has mirror representations in TypeScript modules, NATS subjects, Neo4j graph, CGP schema, and agent taxonomy.
 
 ## The Five Mirrors
 
