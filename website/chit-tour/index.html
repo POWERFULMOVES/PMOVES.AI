@@ -554,12 +554,24 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
             </tbody>
           </table>
           <div class="u-mt-8">
-            <strong>Simulation updates this anchoring queues up</strong> (planned, not yet run):
+            <strong>Simulation updates from this anchoring — EXECUTED 2026-07-26</strong> (results, not plans):
             <ul>
-              <li>Attribution-vs-yield scenario pair: assert every distribution path in the simulator is contribution-keyed (the baseline already is); add a failing-by-design yield-on-holdings scenario as a compliance tripwire.</li>
-              <li>Compliance-overhead line item: AML/BSA program costs (FinCEN NPRM) added to the breakeven model's fixed costs.</li>
-              <li>Regulatory-timeline variable in scenario analysis: GENIUS effective-date branch (Jan 2027 vs rules+120d) × CLARITY pass/stall branch.</li>
-              <li>Reserve-model scenario stays <em>parked</em> unless a fixed-value community token is ever proposed — at which point it becomes a licensed-issuer conversation, not a simulator parameter.</li>
+              <li><b>Attribution-vs-yield tripwire — REAL run, PASS.</b> All <b>156 transactions</b> of a full
+              52-week baseline simulation checked: 52 pool transfers + 104 external-spending withdrawals,
+              zero yield/interest/APY-shaped flows — every distribution is contribution-keyed. Self-test:
+              a synthetic yield-on-holdings transaction is correctly flagged by the checker.</li>
+              <li><b>AML/BSA overhead on breakeven — model, labeled ($1,500/mo program assumption).</b>
+              Headline finding with teeth: <b>no archetype survives standalone</b> — implied monthly net
+              (~$1,064 for the strongest) is below the program cost, so breakeven never arrives. Pooled
+              across container replicas the picture inverts: pool of 3 → 8.9 months, 5 → 6.5, 10 → 5.5.
+              The Docker-style replication argument isn't an optimization under GENIUS-era compliance —
+              it's the only viable structure for micro-issuers.</li>
+              <li><b>Regulatory-timeline scenario variable — model, labeled.</b> Expected values recomputed
+              across four branches (GENIUS effective early-vs-Jan-2027 × CLARITY passes-vs-stalls; branch
+              factors are planning assumptions): the both-delayed branch prices a ~22% ambiguity haircut
+              on the top archetype (EV 1455.5 → 1135.3).</li>
+              <li>Reserve-model scenario remains <em>parked</em> unless a fixed-value community token is ever
+              proposed — at which point it becomes a licensed-issuer conversation, not a simulator parameter.</li>
             </ul>
           </div>
         </div>
