@@ -344,3 +344,6 @@ threads*.json
 
 # ActivePieces self-host instance env (secrets — keep .example only)
 pmoves/activepieces/env.activepieces
+
+# PreTeXt generated build output (rebuild with: pretext build web)
+pmoves/rooms/persona/pretext/output/
