@@ -6,7 +6,7 @@ pyreqwest-impersonate==0.5.3  # freeze nearest wheel-backed release; 0.5.5 is so
 faiss-cpu==1.11.0
 fastmcp==3.2.4
 fasta2a==0.5.0
-flask[async]==3.0.3
+flask[async]==3.1.3
 flask-basicauth==0.2.0
 flaredantic==0.1.5
 GitPython==3.1.54
@@ -32,7 +32,7 @@ python-dotenv==1.2.2
 pytz==2024.2
 sentence-transformers==3.0.1
 tiktoken==0.8.0
-unstructured[all-docs]==0.16.23
+unstructured[all-docs]==0.18.18
 unstructured-client==0.31.0
 webcolors==24.6.0
 nest-asyncio==1.6.0
