@@ -49,7 +49,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **clap-embed** `:8108` — Deterministic CLAP audio/text embedder (MOF lattice node, `laion/larger_clap_music`). `POST /embed/audio`, `POST /embed/text`, `GET /healthz`, `GET /metrics`. Optional NATS `audio.embed.request.v1`/`audio.embed.result.v1`. WS-A grounding layer.
 
-**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.** ℹ️ *Note: runs as an on-demand headless render (see `reference_a2ui_remotion_render`); it is **not** currently wired into any `docker-compose*.yml` as a long-running service — the port/health-endpoint spec applies when it is run as a service.*
+**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.** Wired into `docker-compose.yml` under the **`creator`** profile (opt-in — heavy Remotion/Chromium image): `make -C pmoves up-a2ui-renderer` (#2228).
 
 ## Voice & Speech
 
