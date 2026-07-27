@@ -827,6 +827,11 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  # A2UI Renderer — turns A2UI/ProvenanceLivingDoc JSON specs into MP4/GIF/WebM
+  # via Remotion (Chromium in-image), uploads to MinIO, and publishes
+  # a2ui.render.completed.v1. Heavy image (bundled Chromium) → its own `creator`
+  # profile so it is opt-in (`make -C pmoves up-a2ui-renderer`), not pulled into
+  # the default agents bring-up. Companion to a2ui-nats-bridge above (#2228).
   nats-echo-req:
     <<: *tier-agent-hardened-ro
     build:

@@ -3342,6 +3342,69 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  # A2UI Renderer — turns A2UI/ProvenanceLivingDoc JSON specs into MP4/GIF/WebM
+  # via Remotion (Chromium in-image), uploads to MinIO, and publishes
+  # a2ui.render.completed.v1. Heavy image (bundled Chromium) → its own `creator`
+  # profile so it is opt-in (`make -C pmoves up-a2ui-renderer`), not pulled into
+  # the default agents bring-up. Companion to a2ui-nats-bridge above (#2228).
+  a2ui-renderer:
+    <<: *tier-agent-hardened
+    build:
+      # The renderer Dockerfile COPYs from its own dir (COPY package.json ./ ;
+      # COPY . .), so the build context is the service dir — NOT pmoves/ like the
+      # a2ui-nats-bridge (whose Dockerfile uses repo-relative COPY paths).
+      context: services/a2ui-renderer
+      dockerfile: Dockerfile
+    image: ${A2UI_RENDERER_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-renderer:pmoves-latest}
+    container_name: pmoves-a2ui-renderer
+    hostname: a2ui-renderer
+    restart: unless-stopped
+    environment:
+    - PORT=8107
+    - NODE_ENV=production
+    # NATS_URL from env.shared/env.tier-agent carries credentials.
+    - NATS_URL=${NATS_URL}
+    # NOTE: the renderer publishes the fixed subject a2ui.render.completed.v1
+    # (hardcoded in src/index.ts) — no configurable subject env is wired, so we
+    # don't advertise one here to avoid implying consumers can rename it.
+    # JWT fail-closed on /render, /render/chart, /render/provenance.
+    - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
+    # MinIO output sink — map the renderer's S3 creds onto the canonical root creds.
+    - MINIO_ENDPOINT=${A2UI_MINIO_ENDPOINT:-http://minio:9000}
+    - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
+    - MINIO_BUCKET=${A2UI_MINIO_BUCKET:-outputs}
+    - PMOVES_NETWORKS=pmoves_bus
+    ports:
+    - ${A2UI_RENDERER_BIND:-127.0.0.1}:${A2UI_RENDERER_PORT:-8107}:8107
+    # Chromium needs more shared memory than Docker's 64MB default.
+    shm_size: 512m
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    profiles:
+    - creator
+    networks:
+    - pmoves_bus
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -fsS
+      - http://localhost:8107/healthz
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
   p7-room-orchestrator:
     <<: *tier-agent-hardened-ro
     build:
