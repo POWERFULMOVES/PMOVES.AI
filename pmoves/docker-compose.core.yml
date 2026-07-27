@@ -1213,6 +1213,7 @@ services:
     - POSTGRES_USER=${ARCHON_DB_USER:-archon}
     - POSTGRES_PASSWORD=${ARCHON_DB_PASSWORD:-archon}
     - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    - PMOVES_NETWORKS=pmoves_app
     volumes:
     - archon-pg-data:/var/lib/postgresql/data
     networks:
