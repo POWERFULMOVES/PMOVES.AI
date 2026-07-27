@@ -26,7 +26,22 @@ Three additions to `room.manifest.v1`, all top-level optional, all additive (no 
 
 3. **`hardware_requirements`** — object: `{ gpu: bool, min_vram_mb: int, gpu_arch: [sm_89|sm_90|sm_100|sm_110|sm_120], node_roles: [primary-gpu-tts|infra-coordinator|mobile-relay|gpu-inference|edge-ai|api-gateway|data-storage|exit-proxy], cpu_arch: [x86_64|arm64] }`. P7's session-open handler reads this + the current node's profile (`pmoves/config/profiles/`) + the fleet's `pinokio-network-inventory.yaml` to pick the right physical host for the room session. The Fordham room sets `gpu: false` (no local render) + `node_roles: [infra-coordinator]` (stays on z890); the helpdesk sets `gpu: false` + `node_roles: [infra-coordinator, primary-gpu-tts, gpu-inference]` (z890 default, mesh-renders to 5090/Spark on demand); `creator-studio` sets `gpu: true` + `min_vram_mb: 24000` + `node_roles: [primary-gpu-tts, gpu-inference]` (P7 routes to 5090 first, escalates to Spark for >24GB jobs).
 
-4. **`pinokio_app_refs`** — array of `{ slug, role: primary|optional|fallback, gpu_reservation_mb }`. Each ref resolves to `pmoves/config/pinokio-apps/curated/<slug>.yaml` (or `user/<slug>.yaml` for user-added apps) for endpoint, healthcheck, gpu_required, node_affinity, pinokio_skill_ref. P7 session-open calls `pinokio start <slug>` per app in dependency order, respecting the declared GPU reservations. The `creator-studio` room references `comfyui-desktop` (primary, 16GB), `ace-step` (optional, 8GB), `wan` (optional, 24GB), `lightonocr-2-1b` (fallback, 2GB).
+4. **`pinokio_app_refs`** — array of `{ slug, role: primary|optional|fallback, gpu_reservation_mb, gpu_reservation_mode: concurrent|exclusive, autostart: bool }`. Each ref resolves to `pmoves/config/pinokio-apps/curated/<slug>.yaml` (or `user/<slug>.yaml` for user-added apps) for endpoint, healthcheck, gpu_required, node_affinity, pinokio_skill_ref. P7 session-open calls `pinokio start <slug>` per app in dependency order, respecting the declared GPU reservations and the autostart + gpu_reservation_mode interaction described below. The `creator-studio` room references `comfyui-desktop` (primary, 16GB, concurrent, autostart), `ace-step` (optional, 8GB, concurrent, autostart), `wan` (optional, 24GB, **exclusive**, **autostart: false**), `lightonocr-2-1b` (fallback, 2GB, concurrent, autostart).
+
+### `autostart` + `gpu_reservation_mode` interaction (added review-iter-2)
+
+The two knobs combine into a 4-quadrant behavior matrix that P7's session-open enforces:
+
+| `autostart` | `gpu_reservation_mode` | Behavior |
+|---|---|---|
+| `true` (default) | `concurrent` (default) | P7 starts this app on room launch; VRAM counts toward the concurrent sum. The host node must satisfy `sum(concurrent_refs.gpu_reservation_mb) <= node_vram_mb`. |
+| `true` | `exclusive` | P7 starts this app on room launch; the app claims the whole host GPU. P7 rejects the room if any other `autostart: true` ref is in the same launch set (the scheduler can't satisfy exclusive + concurrent at session-open). Workaround: set the exclusive ref to `autostart: false` and let the skill that needs it launch it on demand. |
+| `false` | `concurrent` | P7 does NOT start this app on room launch; VRAM is reserved against the host's available budget so the app can be started later. The skill that needs it triggers the launch. |
+| `false` | `exclusive` | P7 does NOT start this app on room launch; the exclusive claim is deferred. The skill that needs it launches the app on a node with the full VRAM available (typically DGX Spark for big video / LoRA jobs). This is the recommended pattern for big models that shouldn't be in the room's initial launch set. |
+
+**Why this is a 4-quadrant matrix, not just `autostart: false` alone:** WAN video gen claims 24 GB exclusive. On a 32 GB 5090, the other concurrent refs (comfyui-desktop 16 GB + ace-step 8 GB + lightonocr-2-1b 2 GB = 26 GB) fit just fine — but the moment P7 tries to ALSO start wan, the host can't satisfy 26 GB concurrent + 24 GB exclusive on a 32 GB GPU. Setting `autostart: false` on the wan ref moves it out of the launch set, so the room opens with the 3 concurrent apps and the comfy-mesh-skill's video-gen mode launches wan on demand when the user asks for video (typically routed to Spark for the 24 GB exclusive claim).
+
+P7's session-open validates this constraint at admission: if any `autostart: true` ref has `gpu_reservation_mode: exclusive` AND any other `autostart: true` ref exists, P7 returns `409 conflict` with `room_id` + the offending ref slug(s). The fix is in the manifest, not the runtime.
 
 ## Why this and not a different shape
 
