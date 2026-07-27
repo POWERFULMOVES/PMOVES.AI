@@ -39,6 +39,24 @@ Reads are open. Writes require the `X-PMOVES-Bridge-Token` header
 (loaded from `PMOVES_BRIDGE_TOKEN` at service start; fail-closed with
 503 if not configured).
 
+## Slice-3 NATS pipeline integration (creator-collab lane)
+
+When the env vars `NATS_EVENT_BUS_URL` (e.g. `http://nats_event_bus:8131`)
+and `NATS_EVENT_BUS_TOKEN` are set, every successful `POST /v1/apps/{slug}/launch`
+fires a `room.presence.v1` event to the bus with
+`actor=pinokio_bridge:<slug>`, `actor_kind=service`, `action=active`.
+The POST is **best-effort** (a down bus does NOT fail the launch) and
+carries `actor_metadata: {pid, script}` for debugging.
+
+This is the first concrete wire-up of the slice-3 NATS pipeline
+end-to-end: operator runs `pterm run comfyui-desktop/start.js` →
+pinokio_bridge launches it → bus sees a presence event → room sidebar
+(in a future slice) can render "comfyui-desktop is now running in
+creator-studio".
+
+When `NATS_EVENT_BUS_URL` is unset (the default), the launch path is
+unchanged — no event is emitted, no network call is made.
+
 ## Running
 
 ### Production
