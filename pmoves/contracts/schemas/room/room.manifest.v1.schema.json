@@ -438,7 +438,8 @@
     },
     "hardware_requirements": {
       "type": "object",
-      "description": "Hardware pin the room needs to operate. P7's session-open handler uses this + the current node's profile (from pmoves/config/profiles/) to pick the right physical host for the room session. 'false' for cpu-only rooms (Fordham, helpdesk); 'true' with vram_mb for GPU rooms. Added 2026-07-27 via creator-collab-lane.",
+      "description": "Hardware pin the room needs to operate. P7's session-open handler uses this + the current node's profile (from pmoves/config/profiles/) to pick the right physical host for the room session. 'false' for cpu-only rooms (Fordham, helpdesk); 'true' with vram_mb for GPU rooms. Added 2026-07-27 via creator-collab-lane. gpu + min_vram_mb are required so P7 has a complete request to schedule against; the allOf block adds a conditional check that gpu:true rooms carry positive VRAM while gpu:false rooms carry exactly 0. Updated 2026-07-27 via creator-collab-lane review-iter-2 per CodeRabbit on PR #2264 (thread 3657849847).",
+      "required": ["gpu", "min_vram_mb"],
       "properties": {
         "gpu": {
           "type": "boolean",
@@ -447,7 +448,7 @@
         "min_vram_mb": {
           "type": "integer",
           "minimum": 0,
-          "description": "Minimum total VRAM the host needs. 0 for CPU rooms; 12000+ for typical ComfyUI workflows; 24000+ for video gen / LoRA training; 120000+ for 120B-class inference."
+          "description": "Minimum total VRAM the host needs. 0 for CPU rooms; 12000+ for typical ComfyUI workflows; 24000+ for video gen / LoRA training; 120000+ for 120B-class inference. Must be 0 when gpu=false and >=1 when gpu=true (enforced via the allOf conditional below)."
         },
         "gpu_arch": {
           "type": "array",
@@ -470,7 +471,17 @@
           "items": { "type": "string", "enum": ["x86_64", "arm64"] }
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "gpu": { "const": true } }, "required": ["gpu"] },
+          "then": { "properties": { "min_vram_mb": { "minimum": 1 } } }
+        },
+        {
+          "if": { "properties": { "gpu": { "const": false } }, "required": ["gpu"] },
+          "then": { "properties": { "min_vram_mb": { "const": 0 } } }
+        }
+      ]
     },
     "pinokio_app_refs": {
       "type": "array",
@@ -498,6 +509,11 @@
             "enum": ["concurrent", "exclusive"],
             "default": "concurrent",
             "description": "How this app's VRAM reservation combines with sibling refs. 'concurrent' = shares the host GPU with other concurrent apps (default; the host must satisfy the SUM of concurrent reservations). 'exclusive' = claims the whole GPU for this app while it runs (P7 only admits this ref when no other concurrent ref is loaded on the same host). Use exclusive for big models (wan video gen, LoRA training) that won't fit alongside anything else. Added 2026-07-27 via creator-collab-lane review-iter-1 per P2 review on PR #2264."
+          },
+          "autostart": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether P7 session-open auto-starts this Pinokio app when the room opens. Default true. Set false for apps that should only launch on explicit skill request (e.g. WAN video gen - 24GB exclusive; doesn't belong in the room's initial launch set). With autostart=false P7 treats the ref as an on-demand app: not in the launch set, not counted toward the concurrent reservation sum, and only started by the skill that names it. If a manifest has any auto-launched ref with gpu_reservation_mode=exclusive AND any other auto-launched ref, P7 rejects the room (the scheduler can't satisfy both at session-open). Added 2026-07-27 via creator-collab-lane review-iter-2 per CodeRabbit on PR #2264 (thread 3657849853)."
           }
         },
         "additionalProperties": false

@@ -45,7 +45,8 @@
       "slug": "wan",
       "role": "optional",
       "gpu_reservation_mb": 24000,
-      "gpu_reservation_mode": "exclusive"
+      "gpu_reservation_mode": "exclusive",
+      "autostart": false
     },
     {
       "slug": "lightonocr-2-1b",

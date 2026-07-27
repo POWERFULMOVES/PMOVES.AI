@@ -4,7 +4,7 @@
 
 **Lane owner:** Mavis (Mavis::CREATOR-COLLAB-LANE-CLAIM::2026-07-27).
 **Pattern:** openroom-adapter cadence (3 stacked commits per slice: P1 + functional + docs).
-**Visual evidence / smoke test:** slice 5d — full creator-studio E2E with real Pinokio apps + a 5090/Spark render.
+**Visual evidence / smoke test:** slice 5d — **planned** (full creator-studio E2E with real Pinokio apps + a 5090/Spark render, lands with slice 5). Until slice 5 ships, no E2E evidence is available; the only shipped artifacts are the manifest + schema (slice 1) and the first consumer of the new fields (also in slice 1).
 
 ## Why
 
@@ -24,9 +24,24 @@ Three additions to `room.manifest.v1`, all top-level optional, all additive (no 
 
    Every room gets the `pinokio-bridge-skill` bound; this field just tunes the UI mode. Fordham uses `ambient` (community help desk can render an infographic on demand); 4090-field uses `background` (no ComfyUI panel in the ops room, but the skill runs if an agent asks for a viz); 5090-voice and the new `creator-studio` use `primary` (full studio surface); legacy rooms without this field default to `off` (zero behavior change).
 
-3. **`hardware_requirements`** — object: `{ gpu: bool, min_vram_mb: int, gpu_arch: [sm_89|sm_90|sm_100|sm_110|sm_120], node_roles: [primary-gpu-tts|infra-coordinator|mobile-relay|gpu-inference|edge-ai|api-gateway|data-storage|exit-proxy], cpu_arch: [x86_64|arm64] }`. P7's session-open handler reads this + the current node's profile (`pmoves/config/profiles/`) + the fleet's `pinokio-network-inventory.yaml` to pick the right physical host for the room session. The Fordham room sets `gpu: false` (no local render) + `node_roles: [infra-coordinator]` (stays on z890); the helpdesk sets `gpu: false` + `node_roles: [infra-coordinator, primary-gpu-tts, gpu-inference]` (z890 default, mesh-renders to 5090/Spark on demand); `creator-studio` sets `gpu: true` + `min_vram_mb: 24000` + `node_roles: [primary-gpu-tts, gpu-inference]` (P7 routes to 5090 first, escalates to Spark for >24GB jobs).
+3. **`hardware_requirements`** — object: `{ gpu: bool, min_vram_mb: int, gpu_arch: [sm_89|sm_90|sm_100|sm_110|sm_120], node_roles: [primary-gpu-tts|infra-coordinator|mobile-relay|gpu-inference|edge-ai|api-gateway|data-storage|exit-proxy], cpu_arch: [x86_64|arm64] }`. P7's session-open handler reads this + the current node's profile (`pmoves/config/profiles/`) + the fleet's `pinokio-network-inventory.yaml` to pick the right physical host for the room session. The Fordham room sets `gpu: false` (CPU-only SESSION — lives on z890 as the infra-coordinator; the room itself never moves to a GPU host) + `node_roles: [infra-coordinator]`. Renders triggered from the room (via the helpdesk-skill that lands in slice 6) are NOT routed to the room's host — they go through the mesh-render broker to 5090/Spark/cloud. The helpdesk sets `gpu: false` + `node_roles: [infra-coordinator, primary-gpu-tts, gpu-inference]` (session on z890; mesh-renders on demand). `creator-studio` sets `gpu: true` + `min_vram_mb: 24000` + `node_roles: [primary-gpu-tts, gpu-inference]` (P7 routes to 5090 first, escalates to Spark for >24GB jobs). Required fields + conditional validation enforced via the schema (see P1 of review-iter-2).
 
-4. **`pinokio_app_refs`** — array of `{ slug, role: primary|optional|fallback, gpu_reservation_mb }`. Each ref resolves to `pmoves/config/pinokio-apps/curated/<slug>.yaml` (or `user/<slug>.yaml` for user-added apps) for endpoint, healthcheck, gpu_required, node_affinity, pinokio_skill_ref. P7 session-open calls `pinokio start <slug>` per app in dependency order, respecting the declared GPU reservations. The `creator-studio` room references `comfyui-desktop` (primary, 16GB), `ace-step` (optional, 8GB), `wan` (optional, 24GB), `lightonocr-2-1b` (fallback, 2GB).
+4. **`pinokio_app_refs`** — array of `{ slug, role: primary|optional|fallback, gpu_reservation_mb, gpu_reservation_mode: concurrent|exclusive, autostart: bool }`. Each ref resolves to `pmoves/config/pinokio-apps/curated/<slug>.yaml` (or `user/<slug>.yaml` for user-added apps) for endpoint, healthcheck, gpu_required, node_affinity, pinokio_skill_ref. P7 session-open calls `pinokio start <slug>` per app in dependency order, respecting the declared GPU reservations and the autostart + gpu_reservation_mode interaction described below. The `creator-studio` room references `comfyui-desktop` (primary, 16GB, concurrent, autostart), `ace-step` (optional, 8GB, concurrent, autostart), `wan` (optional, 24GB, **exclusive**, **autostart: false**), `lightonocr-2-1b` (fallback, 2GB, concurrent, autostart).
+
+### `autostart` + `gpu_reservation_mode` interaction (added review-iter-2)
+
+The two knobs combine into a 4-quadrant behavior matrix that P7's session-open enforces:
+
+| `autostart` | `gpu_reservation_mode` | Behavior |
+|---|---|---|
+| `true` (default) | `concurrent` (default) | P7 starts this app on room launch; VRAM counts toward the concurrent sum. The host node must satisfy `sum(concurrent_refs.gpu_reservation_mb) <= node_vram_mb`. |
+| `true` | `exclusive` | P7 starts this app on room launch; the app claims the whole host GPU. P7 rejects the room if any other `autostart: true` ref is in the same launch set (the scheduler can't satisfy exclusive + concurrent at session-open). Workaround: set the exclusive ref to `autostart: false` and let the skill that needs it launch it on demand. |
+| `false` | `concurrent` | P7 does NOT start this app on room launch; VRAM is reserved against the host's available budget so the app can be started later. The skill that needs it triggers the launch. |
+| `false` | `exclusive` | P7 does NOT start this app on room launch; the exclusive claim is deferred. The skill that needs it launches the app on a node with the full VRAM available (typically DGX Spark for big video / LoRA jobs). This is the recommended pattern for big models that shouldn't be in the room's initial launch set. |
+
+**Why this is a 4-quadrant matrix, not just `autostart: false` alone:** WAN video gen claims 24 GB exclusive. On a 32 GB 5090, the other concurrent refs (comfyui-desktop 16 GB + ace-step 8 GB + lightonocr-2-1b 2 GB = 26 GB) fit just fine — but the moment P7 tries to ALSO start wan, the host can't satisfy 26 GB concurrent + 24 GB exclusive on a 32 GB GPU. Setting `autostart: false` on the wan ref moves it out of the launch set, so the room opens with the 3 concurrent apps and the comfy-mesh-skill's video-gen mode launches wan on demand when the user asks for video (typically routed to Spark for the 24 GB exclusive claim).
+
+P7's session-open validates this constraint at admission: if any `autostart: true` ref has `gpu_reservation_mode: exclusive` AND any other `autostart: true` ref exists, P7 returns `409 conflict` with `room_id` + the offending ref slug(s). The fix is in the manifest, not the runtime.
 
 ## Why this and not a different shape
 
@@ -49,7 +64,7 @@ Per `pmoves/configs/pinokio-network-inventory.yaml` + `pmoves/config/profiles/`:
 | pmoves-jetson-orin | Edge CUDA | — | edge-ai | Ollama |
 | kvm2 | — | — | exit-proxy | Cloudflare-Tunnel, Tailscale-Funnel |
 
-The Fordham room on z890 with `gpu: false` + `creator_surface: ambient` will trigger mesh-rendering when the helpdesk-skill (slice 6) decides an answer benefits from a visual. The mesh-render broker (slice 2) routes the request to 5090 first (LAN, 32GB, fastest for the typical image-gen case), escalates to Spark for >24GB jobs (video, LoRA), falls back to cloud.comfy.org MCP if no fleet GPU is up.
+When slice 6 lands, Fordham on z890 (CPU SESSION) + `creator_surface: ambient` will let the helpdesk-skill trigger mesh-renders when an answer benefits from a visual. The mesh-render broker (slice 2) routes the render request to 5090 first (LAN, 32GB, fastest for the typical image-gen case), escalates to Spark for >24GB jobs (video, LoRA), falls back to cloud.comfy.org MCP if no fleet GPU is up. The Fordham session itself never moves to a GPU host — only the render does. (Updated in review-iter-2 per CodeRabbit thread 3657849863; the previous version conflated the room session's CPU posture with the mesh-render's GPU posture.)
 
 ## Cross-references
 

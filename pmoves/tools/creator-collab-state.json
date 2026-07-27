@@ -76,9 +76,38 @@
         "threads_p1": 2,
         "threads_p2": 2,
         "review_ids": [3657631789, 3657631802, 3657631817, 3657631834],
+        "thread_resolutions": {
+          "3657631789": {"thread_id": "PRRT_kwDOPkuAKM6UEiTO", "resolved_at": "2026-07-27T13:50:00Z", "method": "GraphQL resolveReviewThread"},
+          "3657631802": {"thread_id": "PRRT_kwDOPkuAKM6UEiTa", "resolved_at": "2026-07-27T13:50:00Z", "method": "GraphQL resolveReviewThread"},
+          "3657631817": {"thread_id": "PRRT_kwDOPkuAKM6UEiTi", "resolved_at": "2026-07-27T13:50:00Z", "method": "GraphQL resolveReviewThread"},
+          "3657631834": {"thread_id": "PRRT_kwDOPkuAKM6UEiTz", "resolved_at": "2026-07-27T13:50:00Z", "method": "GraphQL resolveReviewThread"}
+        },
+        "pr_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5092177264",
         "commits": [
           {"sha": "7bfb81381a", "kind": "P1", "summary": "CHIT card 050 (creator-steward) + default_route -> /notebook-workbench + 3 apps -> planned"},
-          {"sha": "9a10610a2a", "kind": "functional", "summary": "gpu_arch sm_75/80/86/87 + gpu_reservation_mode enum + wan exclusive"}
+          {"sha": "9a10610a2a", "kind": "functional", "summary": "gpu_arch sm_75/80/86/87 + gpu_reservation_mode enum + wan exclusive"},
+          {"sha": "443e34f530", "kind": "docs", "summary": "AGNOTE release entry + state file reviews block (schema 1.1.0)"}
+        ]
+      },
+      "cycle_2": {
+        "status": "DONE",
+        "completed_at": "2026-07-27T14:15:00Z",
+        "branch": "creator-collab-iter-2",
+        "merge_target": "feat/creator-collab-lane",
+        "pr": 2264,
+        "reviewer": "coderabbitai[bot]",
+        "threads_addressed": 5,
+        "threads_out_of_scope": 1,
+        "threads_p1": 2,
+        "threads_minor": 3,
+        "out_of_scope_threads": [
+          {"db_id": 3657849839, "reason": "pre-existing persona.room.livingdoc em-dash catalog drift - not in this lane per cron constraints"}
+        ],
+        "review_ids": [3657849847, 3657849853, 3657849858, 3657849863, 3657849867],
+        "commits": [
+          {"sha": "c7637828d3", "kind": "P1", "summary": "schema hardware_requirements required+conditional + pinokio_app_refs autostart; wan autostart=false; spec doc 4-quadrant matrix; AGNOTE 5090-routing qualified"},
+          {"sha": "bba23d61de", "kind": "functional", "summary": "spec doc + AGNOTE Fordham session-vs-render clarification"},
+          {"sha": "<this-commit-sha>", "kind": "docs", "summary": "spec doc Slice 5d evidence relabeled planned; state file cycle 2 entry + cycle 1 docs-commit SHA; AGNOTE docs-commit SHA + out-of-scope note"}
         ]
       }
     }
