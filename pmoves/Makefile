@@ -3650,17 +3650,18 @@ voice-relay-smoke: ## Smoke test voice-relay health
 # ────────────────────────────────────────────────────────────────────────────
 
 .PHONY: up-a2ui-renderer a2ui-renderer-smoke
-up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port 8107, creator profile)
+A2UI_RENDERER_PORT ?= 8107
+up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port $(A2UI_RENDERER_PORT), creator profile)
 	@echo "Starting a2ui-renderer (heavy Chromium image — first build is slow)..."
 	@$(DC) --profile creator up -d --build a2ui-renderer
 	@sleep 5
-	@curl -sf http://localhost:8107/healthz > /dev/null 2>&1 \
-	  && echo "a2ui-renderer ready at http://localhost:8107" \
-	  || echo "a2ui-renderer may still be starting (check: curl http://localhost:8107/healthz)"
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz > /dev/null 2>&1 \
+	  && echo "a2ui-renderer ready at http://localhost:$(A2UI_RENDERER_PORT)" \
+	  || echo "a2ui-renderer may still be starting (check: curl http://localhost:$(A2UI_RENDERER_PORT)/healthz)"
 
 a2ui-renderer-smoke: ## Smoke test a2ui-renderer health
 	@echo "a2ui-renderer smoke test..."
-	@curl -sf http://localhost:8107/healthz || { echo "a2ui-renderer not responding at http://localhost:8107/healthz"; exit 1; }
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz || { echo "a2ui-renderer not responding at http://localhost:$(A2UI_RENDERER_PORT)/healthz"; exit 1; }
 
 # ────────────────────────────────────────────────────────────────────────────
 # HI-RAG GATEWAY (Hybrid RAG v2)

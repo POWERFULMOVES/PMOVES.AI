@@ -3343,8 +3343,11 @@ services:
   a2ui-renderer:
     <<: *tier-agent-hardened
     build:
-      context: .
-      dockerfile: services/a2ui-renderer/Dockerfile
+      # The renderer Dockerfile COPYs from its own dir (COPY package.json ./ ;
+      # COPY . .), so the build context is the service dir — NOT pmoves/ like the
+      # a2ui-nats-bridge (whose Dockerfile uses repo-relative COPY paths).
+      context: services/a2ui-renderer
+      dockerfile: Dockerfile
     image: ${A2UI_RENDERER_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-renderer:pmoves-latest}
     container_name: pmoves-a2ui-renderer
     hostname: a2ui-renderer
@@ -3354,7 +3357,9 @@ services:
     - NODE_ENV=production
     # NATS_URL from env.shared/env.tier-agent carries credentials.
     - NATS_URL=${NATS_URL}
-    - A2UI_RENDER_COMPLETED_SUBJECT=${A2UI_RENDER_COMPLETED_SUBJECT:-a2ui.render.completed.v1}
+    # NOTE: the renderer publishes the fixed subject a2ui.render.completed.v1
+    # (hardcoded in src/index.ts) — no configurable subject env is wired, so we
+    # don't advertise one here to avoid implying consumers can rename it.
     # JWT fail-closed on /render, /render/chart, /render/provenance.
     - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
     # MinIO output sink — map the renderer's S3 creds onto the canonical root creds.

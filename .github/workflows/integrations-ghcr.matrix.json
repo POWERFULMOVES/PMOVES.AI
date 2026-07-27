@@ -132,6 +132,18 @@
     "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
+    "name": "a2ui-renderer",
+    "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+    "ref": "main",
+    "context": "pmoves/services/a2ui-renderer",
+    "dockerfile": "pmoves/services/a2ui-renderer/Dockerfile",
+    "image_name": "pmoves-a2ui-renderer",
+    "build_args": "",
+    "platforms": "linux/amd64,linux/arm64",
+    "generate_sbom": false,
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
+  },
+  {
     "name": "session-context-worker",
     "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
     "ref": "main",

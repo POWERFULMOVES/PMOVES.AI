@@ -2807,12 +2807,12 @@ agents:
     class: standard
     primary_type: media
     secondary_type: ui
-    port: null   # headless render; no dedicated compose port
-    health: null   # headless render, no HTTP daemon — /healthz would be unreachable
+    port: 8107   # a2ui-renderer compose service (creator profile) — #2228
+    health: /healthz
     layers: [L2, L5]
     evolution_stage: stage_1
     nats:
-      publishes: []
+      publishes: [a2ui.render.completed.v1]
       subscribes: []
     chit_toggles:
       delta_sensitive: false
@@ -2829,9 +2829,9 @@ agents:
       node_affinity: [powerfulmoves, z890]
       team: media
       ci_runner: ai-lab
-      compose_profile: gpu
+      compose_profile: creator
     source: "pmoves/services/a2ui-renderer/"
-    description: "A2UI Remotion provenance rendering — headless, invoked via render:provenance:* npm scripts (not a long-running HTTP daemon). Source: pmoves/services/a2ui-renderer/. NOTE: no dedicated compose port (8105/8107 are contested by cipher-api/consciousness)."
+    description: "A2UI Remotion provenance renderer — HTTP daemon (POST /render/provenance) on port 8107, creator compose profile, publishes a2ui.render.completed.v1, uploads MP4/GIF/WebM to MinIO. Also usable headless via render:provenance:* npm scripts. Source: pmoves/services/a2ui-renderer/ (compose service added #2228)."
 
   youtube_publisher:
     name: "YouTube Publisher"
