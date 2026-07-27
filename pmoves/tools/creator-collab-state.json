@@ -18,10 +18,13 @@
       "status": "SHIPPED",
       "shipped_at": "2026-07-27T09:23:00Z",
       "title": "Room manifest schema extensions: room_purpose, creator_surface, hardware_requirements, pinokio_app_refs",
-      "commits": ["89e23fea8f", "4f65b8e88e"],
+      "commits": [
+        "89e23fea8f",
+        "4f65b8e88e"
+      ],
       "scope": "pmoves/contracts/schemas/room/room.manifest.v1.schema.json (+ 4 top-level optional fields), pmoves/config/rooms/creator-studio.room.collab.json (first consumer of the new fields), pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md (spec doc), pmoves/tools/creator-collab-workflow.md (lane doc), pmoves/config/rooms/catalog.json (+1 entry for creator-studio)",
       "validator_status": "OK",
-      "tests": "validate_room_manifests.py: 10 OK, 1 pre-existing failure (persona.room.livingdoc em-dash mismatch — pre-existing, not in this lane's scope)",
+      "tests": "validate_room_manifests.py: 10 OK, 1 pre-existing failure (persona.room.livingdoc em-dash mismatch \u00e2\u20ac\u201d pre-existing, not in this lane's scope)",
       "review_iter": {
         "current_cycle": 1,
         "status": "DONE",
@@ -33,34 +36,56 @@
     "2_pinokio_bridge_skill": {
       "status": "pending",
       "title": "Pinokio bridge skill (wrapper around Pinokio's built-in pinokio + gepeto skills)",
-      "depends_on": ["1_contract_extension"],
-      "estimated_files": ["pmoves/skills/pinokio-bridge-skill/SKILL.md", "pmoves/services/pinokio_bridge/app.py", "pmoves/services/pinokio_bridge/tests/"]
+      "depends_on": [
+        "1_contract_extension"
+      ],
+      "estimated_files": [
+        "pmoves/skills/pinokio-bridge-skill/SKILL.md",
+        "pmoves/services/pinokio_bridge/app.py",
+        "pmoves/services/pinokio_bridge/tests/"
+      ]
     },
     "3_nats_pipeline": {
       "status": "pending",
       "title": "NATS pipeline: comfy.collab.{prompt,progress,artifact}.v1 + room.presence.v1 + room.directory.v1",
-      "depends_on": ["2_pinokio_bridge_skill"]
+      "depends_on": [
+        "2_pinokio_bridge_skill"
+      ]
     },
     "4_pinokio_apps_registry": {
       "status": "pending",
       "title": "Pinokio apps registry: curated/ + user/ + schema + discovery tool + gepeto wrapper",
-      "depends_on": ["1_contract_extension"]
+      "depends_on": [
+        "1_contract_extension"
+      ]
     },
     "5_creator_studio_seed_and_smoke": {
       "status": "partial",
       "title": "creator-studio.room.collab.json + Pinokio apps registry + E2E smoke",
-      "depends_on": ["1_contract_extension", "2_pinokio_bridge_skill", "4_pinokio_apps_registry"],
-      "shipped_partial": ["creator-studio.room.collab.json (manifest only)"]
+      "depends_on": [
+        "1_contract_extension",
+        "2_pinokio_bridge_skill",
+        "4_pinokio_apps_registry"
+      ],
+      "shipped_partial": [
+        "creator-studio.room.collab.json (manifest only)"
+      ]
     },
     "6_helpdesk_skill_and_room": {
       "status": "pending",
       "title": "pmoves-helpdesk-skill + room-suggest-skill + pmoves.room.helpdesk.json",
-      "depends_on": ["1_contract_extension", "2_pinokio_bridge_skill", "3_nats_pipeline"]
+      "depends_on": [
+        "1_contract_extension",
+        "2_pinokio_bridge_skill",
+        "3_nats_pipeline"
+      ]
     },
     "7_fordham_e2e": {
       "status": "pending",
-      "title": "Fordham ↔ PMOVES-helpdesk E2E (full cross-room flow + visual evidence)",
-      "depends_on": ["all_above"]
+      "title": "Fordham \u00e2\u2020\u201d PMOVES-helpdesk E2E (full cross-room flow + visual evidence)",
+      "depends_on": [
+        "all_above"
+      ]
     }
   },
   "reviews": {
@@ -75,18 +100,51 @@
         "threads_addressed": 4,
         "threads_p1": 2,
         "threads_p2": 2,
-        "review_ids": [3657631789, 3657631802, 3657631817, 3657631834],
+        "review_ids": [
+          3657631789,
+          3657631802,
+          3657631817,
+          3657631834
+        ],
         "thread_resolutions": {
-          "3657631789": {"thread_id": "PRRT_kwDOPkuAKM6UEiTO", "resolved_at": "2026-07-27T13:50:00Z", "method": "GraphQL resolveReviewThread"},
-          "3657631802": {"thread_id": "PRRT_kwDOPkuAKM6UEiTa", "resolved_at": "2026-07-27T13:50:00Z", "method": "GraphQL resolveReviewThread"},
-          "3657631817": {"thread_id": "PRRT_kwDOPkuAKM6UEiTi", "resolved_at": "2026-07-27T13:50:00Z", "method": "GraphQL resolveReviewThread"},
-          "3657631834": {"thread_id": "PRRT_kwDOPkuAKM6UEiTz", "resolved_at": "2026-07-27T13:50:00Z", "method": "GraphQL resolveReviewThread"}
+          "3657631789": {
+            "thread_id": "PRRT_kwDOPkuAKM6UEiTO",
+            "resolved_at": "2026-07-27T13:50:00Z",
+            "method": "GraphQL resolveReviewThread"
+          },
+          "3657631802": {
+            "thread_id": "PRRT_kwDOPkuAKM6UEiTa",
+            "resolved_at": "2026-07-27T13:50:00Z",
+            "method": "GraphQL resolveReviewThread"
+          },
+          "3657631817": {
+            "thread_id": "PRRT_kwDOPkuAKM6UEiTi",
+            "resolved_at": "2026-07-27T13:50:00Z",
+            "method": "GraphQL resolveReviewThread"
+          },
+          "3657631834": {
+            "thread_id": "PRRT_kwDOPkuAKM6UEiTz",
+            "resolved_at": "2026-07-27T13:50:00Z",
+            "method": "GraphQL resolveReviewThread"
+          }
         },
         "pr_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5092177264",
         "commits": [
-          {"sha": "7bfb81381a", "kind": "P1", "summary": "CHIT card 050 (creator-steward) + default_route -> /notebook-workbench + 3 apps -> planned"},
-          {"sha": "9a10610a2a", "kind": "functional", "summary": "gpu_arch sm_75/80/86/87 + gpu_reservation_mode enum + wan exclusive"},
-          {"sha": "443e34f530", "kind": "docs", "summary": "AGNOTE release entry + state file reviews block (schema 1.1.0)"}
+          {
+            "sha": "7bfb81381a",
+            "kind": "P1",
+            "summary": "CHIT card 050 (creator-steward) + default_route -> /notebook-workbench + 3 apps -> planned"
+          },
+          {
+            "sha": "9a10610a2a",
+            "kind": "functional",
+            "summary": "gpu_arch sm_75/80/86/87 + gpu_reservation_mode enum + wan exclusive"
+          },
+          {
+            "sha": "443e34f530",
+            "kind": "docs",
+            "summary": "AGNOTE release entry + state file reviews block (schema 1.1.0)"
+          }
         ]
       },
       "cycle_2": {
@@ -101,14 +159,68 @@
         "threads_p1": 2,
         "threads_minor": 3,
         "out_of_scope_threads": [
-          {"db_id": 3657849839, "reason": "pre-existing persona.room.livingdoc em-dash catalog drift - not in this lane per cron constraints"}
+          {
+            "db_id": 3657849839,
+            "reason": "pre-existing persona.room.livingdoc em-dash catalog drift - not in this lane per cron constraints"
+          }
         ],
-        "review_ids": [3657849847, 3657849853, 3657849858, 3657849863, 3657849867],
+        "review_ids": [
+          3657849847,
+          3657849853,
+          3657849858,
+          3657849863,
+          3657849867
+        ],
         "commits": [
-          {"sha": "c7637828d3", "kind": "P1", "summary": "schema hardware_requirements required+conditional + pinokio_app_refs autostart; wan autostart=false; spec doc 4-quadrant matrix; AGNOTE 5090-routing qualified"},
-          {"sha": "bba23d61de", "kind": "functional", "summary": "spec doc + AGNOTE Fordham session-vs-render clarification"},
-          {"sha": "<this-commit-sha>", "kind": "docs", "summary": "spec doc Slice 5d evidence relabeled planned; state file cycle 2 entry + cycle 1 docs-commit SHA; AGNOTE docs-commit SHA + out-of-scope note"}
-        ]
+          {
+            "sha": "c7637828d3",
+            "kind": "P1",
+            "summary": "schema hardware_requirements required+conditional + pinokio_app_refs autostart; wan autostart=false; spec doc 4-quadrant matrix; AGNOTE 5090-routing qualified"
+          },
+          {
+            "sha": "bba23d61de",
+            "kind": "functional",
+            "summary": "spec doc + AGNOTE Fordham session-vs-render clarification"
+          },
+          {
+            "sha": "c1bfc6ae9f",
+            "kind": "docs",
+            "summary": "spec doc Slice 5d evidence relabeled planned; state file cycle 2 entry + cycle 1 docs-commit SHA; AGNOTE docs-commit SHA + out-of-scope note"
+          }
+        ],
+        "thread_resolutions": {
+          "3657849847": {
+            "thread_id": "PRRT_kwDOPkuAKM6UFHZ2",
+            "resolved_at": "2026-07-27T14:18:00Z",
+            "method": "GraphQL resolveReviewThread"
+          },
+          "3657849853": {
+            "thread_id": "PRRT_kwDOPkuAKM6UFHZ8",
+            "resolved_at": "2026-07-27T14:18:00Z",
+            "method": "GraphQL resolveReviewThread"
+          },
+          "3657849858": {
+            "thread_id": "PRRT_kwDOPkuAKM6UFHaA",
+            "resolved_at": "2026-07-27T14:18:00Z",
+            "method": "GraphQL resolveReviewThread"
+          },
+          "3657849863": {
+            "thread_id": "PRRT_kwDOPkuAKM6UFHaF",
+            "resolved_at": "2026-07-27T14:18:00Z",
+            "method": "GraphQL resolveReviewThread"
+          },
+          "3657849867": {
+            "thread_id": "PRRT_kwDOPkuAKM6UFHaI",
+            "resolved_at": "2026-07-27T14:18:00Z",
+            "method": "GraphQL resolveReviewThread"
+          },
+          "3657849839": {
+            "thread_id": "PRRT_kwDOPkuAKM6UFHZw",
+            "resolved_at": "2026-07-27T14:18:00Z",
+            "method": "GraphQL resolveReviewThread (out-of-scope \u2014 pre-existing persona.room.livingdoc em-dash catalog drift; recorded not fixed in this lane)"
+          }
+        },
+        "pr_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-(cycle-2)"
       }
     }
   },
@@ -117,7 +229,7 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-27T13:45:00Z",
-    "next_run": "2026-07-27T14:15:00Z"
+    "last_run": "2026-07-27T14:18:00Z",
+    "next_run": "2026-07-27T14:48:00Z"
   }
 }
