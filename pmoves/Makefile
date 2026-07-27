@@ -2863,8 +2863,8 @@ up-jellyfin:
 # (:3090). Re-integrating a first-class 0.6.0 archon service into this compose is
 # the tracked "#5 Archon integration" follow-up.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: ## Start Agents (NATS, Agent Zero, Cipher Memory, etc.); Archon runs via up-archon-native
-	@$(DC) --profile agents up -d nats agent-zero mesh-agent deepresearch publisher-discord cipher-api
+up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
+	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 
 .PHONY: up-notebooklm
 up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
