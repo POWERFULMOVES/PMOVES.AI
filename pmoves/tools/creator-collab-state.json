@@ -149,7 +149,7 @@
       },
       "cycle_2": {
         "status": "DONE",
-        "completed_at": "2026-07-27T14:15:00Z",
+        "completed_at": "2026-07-27T14:18:00Z",
         "branch": "creator-collab-iter-2",
         "merge_target": "feat/creator-collab-lane",
         "pr": 2264,
@@ -220,7 +220,7 @@
             "method": "GraphQL resolveReviewThread (out-of-scope \u2014 pre-existing persona.room.livingdoc em-dash catalog drift; recorded not fixed in this lane)"
           }
         },
-        "pr_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-(cycle-2)"
+        "pr_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5092391250"
       }
     }
   },
@@ -229,7 +229,7 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-27T14:18:00Z",
-    "next_run": "2026-07-27T14:48:00Z"
+    "last_run": "2026-07-27T14:25:00Z",
+    "next_run": "2026-07-27T14:55:00Z"
   }
 }
