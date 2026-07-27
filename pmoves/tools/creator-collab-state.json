@@ -148,7 +148,7 @@
         ]
       },
       "cycle_2": {
-        "status": "DONE",
+        "status": "DONE_DISARMED",
         "completed_at": "2026-07-27T14:18:00Z",
         "branch": "creator-collab-iter-2",
         "merge_target": "feat/creator-collab-lane",
@@ -221,7 +221,8 @@
           }
         },
         "pr_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5092391250"
-      }
+      },
+      "closing_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5093288788"
     }
   },
   "cron": {
@@ -229,7 +230,9 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-27T14:25:00Z",
-    "next_run": "2026-07-27T14:55:00Z"
+    "last_run": "2026-07-27T15:00:00Z",
+    "next_run": null,
+    "disarmed_at": "2026-07-27T15:00:00Z",
+    "disarmed_reason": "cycle 2 closed >30m ago, no new threads, lane review activity settled"
   }
 }
