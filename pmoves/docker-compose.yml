@@ -1941,7 +1941,7 @@ services:
     - NATS_URL=${NATS_URL}
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -1992,7 +1992,7 @@ services:
     # Next standalone binds to HOSTNAME; docker injects the container id there
     - HOSTNAME=0.0.0.0
     - INTERNAL_BACKEND_URL=http://transcribe-backend:8000
-    - PMOVES_NETWORKS=pmoves_app
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
     depends_on:
       transcribe-backend:
         condition: service_healthy
@@ -3001,34 +3001,35 @@ services:
     container_name: pmoves-p7
     restart: unless-stopped
     environment:
-      - P7_HOST=0.0.0.0
-      - P7_HTTP_PORT=8120
+    - P7_HOST=0.0.0.0
+    - P7_HTTP_PORT=8120
       # Broker requires auth (documented default creds convention) — without
       # them P7 boots in log-only fallback (nats_connected:false, no signed
       # lifecycle events on the control plane).
-      - P7_NATS_URL=${P7_NATS_URL:-nats://nats:pmoves@nats:4222}
-      - P7_PMOVES_ROOT=/etc/pmoves
-      - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
-      - P7_ROOMS_DIR=/etc/pmoves/rooms
-      - P7_ROOM_MANIFEST_SCHEMA=/etc/pmoves/schemas/room/room.manifest.v1.schema.json
-      - P7_SIGNING_CARDS_PATH=/etc/pmoves/config/signing_identity_cards.yaml
-      - P7_AGENT_REGISTRY_PATH=/etc/pmoves/config/agent_registry.yaml
-      - P7_SERVICE_CARD_ID=${P7_SERVICE_CARD_ID:-}
-      - P7_SIGNING_KEY=${P7_SIGNING_KEY:-}
-      - P7_SIGNING_KEY_FILE=${P7_SIGNING_KEY_FILE:-}
-      - P7_CHIT_REQUIRE_SIGNATURE=${P7_CHIT_REQUIRE_SIGNATURE:-true}
-      - P7_ALLOW_UNSIGNED_LOCAL=${P7_ALLOW_UNSIGNED_LOCAL:-true}
-      - P7_LOG_LEVEL=INFO
+    - P7_NATS_URL=${P7_NATS_URL:-nats://nats:pmoves@nats:4222}
+    - P7_PMOVES_ROOT=/etc/pmoves
+    - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
+    - P7_ROOMS_DIR=/etc/pmoves/rooms
+    - P7_ROOM_MANIFEST_SCHEMA=/etc/pmoves/schemas/room/room.manifest.v1.schema.json
+    - P7_SIGNING_CARDS_PATH=/etc/pmoves/config/signing_identity_cards.yaml
+    - P7_AGENT_REGISTRY_PATH=/etc/pmoves/config/agent_registry.yaml
+    - P7_SERVICE_CARD_ID=${P7_SERVICE_CARD_ID:-}
+    - P7_SIGNING_KEY=${P7_SIGNING_KEY:-}
+    - P7_SIGNING_KEY_FILE=${P7_SIGNING_KEY_FILE:-}
+    - P7_CHIT_REQUIRE_SIGNATURE=${P7_CHIT_REQUIRE_SIGNATURE:-true}
+    - P7_ALLOW_UNSIGNED_LOCAL=${P7_ALLOW_UNSIGNED_LOCAL:-true}
+    - P7_LOG_LEVEL=INFO
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     volumes:
       # Catalog + per-room manifests: read-write so transitions can writeback current_stage
-      - ./config/rooms:/etc/pmoves/rooms:rw
+    - ./config/rooms:/etc/pmoves/rooms:rw
       # Schema + signing cards + agent registry: read-only (operator edits via git)
-      - ./contracts/schemas:/etc/pmoves/schemas:ro
-      - ./config/signing_identity_cards.yaml:/etc/pmoves/config/signing_identity_cards.yaml:ro
-      - ./config/agent_registry.yaml:/etc/pmoves/config/agent_registry.yaml:ro
-      - ./env.shared:/etc/pmoves/env.shared:ro
+    - ./contracts/schemas:/etc/pmoves/schemas:ro
+    - ./config/signing_identity_cards.yaml:/etc/pmoves/config/signing_identity_cards.yaml:ro
+    - ./config/agent_registry.yaml:/etc/pmoves/config/agent_registry.yaml:ro
+    - ./env.shared:/etc/pmoves/env.shared:ro
     ports:
-      - "${P7_BIND:-127.0.0.1}:${P7_PORT:-8120}:8120"
+    - "${P7_BIND:-127.0.0.1}:${P7_PORT:-8120}:8120"
     depends_on:
       nats:
         condition: service_healthy

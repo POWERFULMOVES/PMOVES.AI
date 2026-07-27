@@ -182,7 +182,7 @@ services:
     - NATS_URL=${NATS_URL}
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -233,7 +233,7 @@ services:
     # Next standalone binds to HOSTNAME; docker injects the container id there
     - HOSTNAME=0.0.0.0
     - INTERNAL_BACKEND_URL=http://transcribe-backend:8000
-    - PMOVES_NETWORKS=pmoves_app
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
     depends_on:
       transcribe-backend:
         condition: service_healthy
