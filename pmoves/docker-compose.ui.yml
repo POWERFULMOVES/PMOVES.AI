@@ -49,6 +49,9 @@ services:
     - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
     - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
+    - PMOVES_UI_THEME=${PMOVES_UI_THEME:-pmoves-armor}
+    # Next standalone binds to HOSTNAME; docker injects the container id there
+    - HOSTNAME=0.0.0.0
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
     extra_hosts:
     - "host.docker.internal:host-gateway"

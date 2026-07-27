@@ -45,8 +45,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // House theme engine: pm-tokens.generated.css swaps --pm-* by data-theme.
+  // Server-rendered from env so the whole surface re-skins per deployment.
+  const theme = process.env.PMOVES_UI_THEME || 'pmoves-armor';
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" data-theme={theme}>
       <head>
         {/* Preconnect to Google Fonts */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

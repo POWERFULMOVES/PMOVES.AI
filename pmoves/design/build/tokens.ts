@@ -3,6 +3,7 @@ export const themes = {
   "darkxside-skin": {
     "--pm-accent": "#E11D48",
     "--pm-accent-2": "#7C3AED",
+    "--pm-accent-2-soft": "#A78BFA",
     "--pm-accent-soft": "#FB7185",
     "--pm-bg": "#0a0608",
     "--pm-bg-tint": "#140a0e",
@@ -30,6 +31,7 @@ export const themes = {
   "pmoves-armor": {
     "--pm-accent": "#7C3AED",
     "--pm-accent-2": "#0D9488",
+    "--pm-accent-2-soft": "#2DD4BF",
     "--pm-accent-soft": "#A78BFA",
     "--pm-bg": "#050508",
     "--pm-bg-tint": "#0a0a12",

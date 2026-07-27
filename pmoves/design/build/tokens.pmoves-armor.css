@@ -2,6 +2,7 @@
 :root[data-theme="pmoves-armor"], :root:not([data-theme]) {
   --pm-accent: #7C3AED;
   --pm-accent-2: #0D9488;
+  --pm-accent-2-soft: #2DD4BF;
   --pm-accent-soft: #A78BFA;
   --pm-bg: #050508;
   --pm-bg-tint: #0a0a12;
