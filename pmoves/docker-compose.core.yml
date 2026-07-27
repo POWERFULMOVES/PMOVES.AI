@@ -1203,6 +1203,34 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+  archon-postgres:
+    image: ${ARCHON_POSTGRES_IMAGE:-postgres:17-alpine}
+    container_name: pmoves-archon-postgres
+    hostname: archon-postgres
+    restart: unless-stopped
+    environment:
+    - POSTGRES_DB=${ARCHON_DB_NAME:-remote_coding_agent}
+    - POSTGRES_USER=${ARCHON_DB_USER:-archon}
+    - POSTGRES_PASSWORD=${ARCHON_DB_PASSWORD:-archon}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    - PMOVES_NETWORKS=pmoves_app
+    volumes:
+    - archon-pg-data:/var/lib/postgresql/data
+    networks:
+    - pmoves_app
+    profiles:
+    - agents
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   p7:
     # PMOVES P7 — room-aware stage manager (open-room lane, 2026-07-20).
     # Mediates room lifecycle (rehearsal → live → review → archive), with CHIT

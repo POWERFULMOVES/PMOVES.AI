@@ -2841,54 +2841,65 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+  # Archon 0.6.0 — TypeScript/Bun remote-coding-agent, built from the PMOVES-Archon
+  # submodule (0.6.0 rewrote the old Python service to TS; the vendored Python
+  # wrapper under services/archon/ is dead — see #2217). Serves HTTP + UI + MCP on
+  # a single port (3090, /api/health). Backed by a dedicated Postgres (pg_notify
+  # realtime); Archon auto-inits its schema on first boot.
+  archon-postgres:
+    image: ${ARCHON_POSTGRES_IMAGE:-postgres:17-alpine}
+    container_name: pmoves-archon-postgres
+    hostname: archon-postgres
+    restart: unless-stopped
+    environment:
+    - POSTGRES_DB=${ARCHON_DB_NAME:-remote_coding_agent}
+    - POSTGRES_USER=${ARCHON_DB_USER:-archon}
+    - POSTGRES_PASSWORD=${ARCHON_DB_PASSWORD:-archon}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    - PMOVES_NETWORKS=pmoves_app
+    volumes:
+    - archon-pg-data:/var/lib/postgresql/data
+    networks:
+    - pmoves_app
+    profiles:
+    - agents
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   archon:
     <<: *tier-agent-hardened
     build:
-      context: .
-      dockerfile: ./services/archon/Dockerfile
-      args:
-      - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
-      - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
+      context: ../PMOVES-Archon
+      dockerfile: Dockerfile
+    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
+    # No container_name: keep the compose-default `${PROJECT}-archon-1` name that
+    # `wait-agents` and the REST policy probe (Makefile) inspect by that exact name.
+    hostname: archon
     restart: unless-stopped
     environment:
-      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-    # NATS_URL pinned to the in-network broker (documented default creds —
-    # feedback_nats_creds_convention). Two prior sources delivered a
-    # HOST-shaped value (localhost) into the container: env.tier-agent after
-    # a prod-bundle materialization, and a duplicate ${NATS_URL} entry below
-    # (last list entry wins). Broke archon's broker connect 2026-07-24.
+    - PORT=3090
+    - HOST=0.0.0.0
+    - NODE_ENV=production
+    - ARCHON_DOCKER=true
+    # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
+    - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
+    - BETTER_AUTH_SECRET=${ARCHON_BETTER_AUTH_SECRET:-${BETTER_AUTH_SECRET:-}}
     - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://nats:pmoves@nats:4222}
-    - PORT=8091
-    - ENVIRONMENT=${ENVIRONMENT:-production}
-    - ARCHON_ENV=${ARCHON_ENV:-production}
-    - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
-    - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
-    - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
-    - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
-    - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-    - ENVIRONMENT=${ENVIRONMENT:-production}
-    - ARCHON_ENV=${ARCHON_ENV:-production}
-      # Compose-first Archon Supabase wiring. CLI mode can override via
-      # ARCHON_SUPABASE_* / SUPABASE_* env values.
-    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}}
-    - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-kong:8000}}
-    - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
-    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    # (duplicate NATS_URL removed 2026-07-24: ${NATS_URL} interpolates the
-    # HOST-shaped project value (localhost) into the container — last list
-    # entry wins, silently overriding the in-network pin above. Same class
-    # as the nats-init localhost bug.)
-    - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-      # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
-      # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
-    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
-    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      # GitHub App credentials — archon MCP cross-repo cloning (planned)
-    - GH_APP_ID=${GH_APP_ID:-}
-    - GH_APP_SEC=${GH_APP_SEC:-}
-    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
-      # Host environment leak guard (see x-host-leak-guard docs above)
+    # Claude auth — the TS server exits(1) at boot if none of these is present.
+    - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+    - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-false}
+    # gh auth — non-fatal warning if absent.
+    - GH_TOKEN=${GH_TOKEN:-}
+    # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - REQUESTS_CA_BUNDLE=
@@ -2897,47 +2908,43 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
+      archon-postgres:
+        condition: service_healthy
       nats:
         condition: service_healthy
-      tensorzero-gateway:
-        condition: service_healthy
-    command:
-    - python
-    - -c
-    - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')
     ports:
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_PORT:-8091}:8091
-    # Canonical UI port — the PMOVES archon image builds upstream static assets
-    # and serves them from the same HTTP server (see services/archon/main.py).
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_UI_PORT:-3737}:8091
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_MCP_PORT:-8051}:8051
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_WS_PORT:-8052}:8052
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_PORT:-3090}:3090
+    # UI compat: keep the historical 3737 host port pointing at the unified server
+    # (NEXT_PUBLIC_ARCHON_UI_URL default is http://localhost:3737).
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_UI_PORT:-3737}:3090
+    volumes:
+    - archon-data:/.archon
+    - archon-user-home:/home/appuser
     networks:
       pmoves_app:
         aliases:
         - archon-server
-      pmoves_api:
       pmoves_bus:
+      # Archon needs egress to reach the Claude API + GitHub with the configured
+      # credentials; pmoves_app/pmoves_bus are internal-only.
       pmoves_external:
-    extra_hosts:
-    - host.docker.internal:host-gateway
+    profiles:
+    - agents
     healthcheck:
-      test:
-      - CMD-SHELL
-      - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)"
-      interval: 20s
-      timeout: 5s
-      retries: 12
-      start_period: 15s
-
-  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First boot runs bun install + Postgres schema init — allow generous slack.
+      start_period: 90s
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 2G
+  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
   cipher-api:
     <<: *tier-agent-hardened
     build:
@@ -4915,6 +4922,9 @@ services:
           memory: 256M
 volumes:
   neo4j-data: {}
+  archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
+  archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
+  archon-pg-data: {}       # Archon dedicated Postgres data (pg_notify realtime)
   cipher-data: {}
   qdrant-data: {}
   meilisearch-data: {}

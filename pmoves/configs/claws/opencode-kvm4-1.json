@@ -108,7 +108,7 @@
     "role": "api-gateway",
     "services": [
       "agent-zero:8080",
-      "archon:8091",
+      "archon:3090",
       "tensorzero:3030",
       "nats:4222"
     ]
