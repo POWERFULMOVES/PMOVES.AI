@@ -1,12 +1,17 @@
 {
   "$schema_note": "Content model for the DARKXSIDE / Russell Richardson persona living-doc room. Single source of truth — both the LinkedIn paste (docs/research/persona/06_linkedin_profile.md) and the pmoves.ai persona room render from this. Keep in sync with 06 on edits.",
-  "version": "2026-07-26",
+  "version": "2026-07-27",
   "identity": {
     "name": "Russell Richardson",
     "alias": "DARKXSIDE",
     "location": "Bronx, NY / Distributed",
     "roles_founder": "Founder, PMOVES.AI · CATACLYSM STUDIOS INC",
-    "roles_external": "Principal / Applied AI Architect · AI Deployment Engineer"
+    "roles_external": "Principal / Applied AI Architect · AI Deployment Engineer",
+    "links": {
+      "linkedin": "https://www.linkedin.com/in/russell-richardson-1913b037/",
+      "soundcloud": "https://soundcloud.com/darkxside",
+      "github": "https://github.com/POWERFULMOVES/PMOVES.AI"
+    }
   },
   "headline": {
     "primary": "Founder, PMOVES.AI | Principal Applied AI Architect | Agentic Systems, RAG, AI Deployment & Local-First Infrastructure | Hiring + Open to Mission-Aligned Roles",
@@ -35,8 +40,8 @@
     {"title": "The Convergence Wave — Topology Audit → Production", "link": "https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/docs/AGENTS/AGNOTE4482.md", "blurb": "5-month technical narrative: fleet to 91 agents with zero drift, security resolved, voice integrated, community room online. The master coordination record."},
     {"title": "Automation Fabric — 34 n8n Flows + ActivePieces", "link": "https://github.com/POWERFULMOVES/PMOVES.AI/tree/main/pmoves/n8n/flows", "blurb": "34 production n8n workflows (finance, health, media, voice, CI, research) + an ActivePieces low-code workspace. Automation as first-class infrastructure."},
     {"title": "CHIT Geometry Bus — 5-Layer Grand Convergence", "link": "https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md", "blurb": "Cryptographic Handshake for Identity & Trust — L1 Structure → L5 Economics. Signed CGP packets on the geometry event bus. The math backbone of sovereign coordination."},
-    {"title": "DARKXSIDE — 82 Tracks, 15 Years", "link": "https://soundcloud.com/darkxside", "blurb": "Bronx beat architecture across Hip-hop, R&B, EDM, Drum & Bass. BPM as state vector. The catalog as codebase. Beats before code.", "todo": "confirm SoundCloud handle"},
-    {"title": "CATACLYSM STUDIOS — 5-Year Model", "link": "", "blurb": "5-tier L1–L5 structure, Fordham Hill cooperative pilot, cooperative tokenomics.", "todo": "investor-facing model URL — keep private/gated, not a public repo link"}
+    {"title": "DARKXSIDE — 82 Tracks, 15 Years", "link": "https://soundcloud.com/darkxside", "blurb": "Bronx beat architecture across Hip-hop, R&B, EDM, Drum & Bass. BPM as state vector. The catalog as codebase. Beats before code."},
+    {"title": "CATACLYSM STUDIOS — 5-Year Model", "link": "", "gated": true, "blurb": "5-tier L1–L5 structure, Fordham Hill cooperative pilot, cooperative tokenomics. Investor-facing model available privately on request — not a public link."}
   ],
   "translation": [
     {"pmoves": "Rooms on a stage", "employer": "Purpose-built AI workspaces with explicit tools, data, ownership, permissions, and lifecycle states"},
