@@ -255,7 +255,8 @@
       "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
       "pmoves/docs/research/persona/06_linkedin_profile.md",
       "pmoves/docs/research/persona/07_linkedin_living_doc_room.md",
-      "pmoves/rooms/persona/persona.json"
+      "pmoves/rooms/persona/persona.json",
+      "pmoves/services/a2ui-renderer/demos/persona_walkthrough.request.json"
     ]
   }
 }

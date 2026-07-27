@@ -50,7 +50,17 @@
   "closer": "Build what you need. Scale what works. Sign every line.",
   "connect": "Engineers who think in systems, founders building local-first infrastructure, and teams who need someone to move AI from research and fragmented tools to production.",
   "room_media": {
-    "remotion_walkthrough": {"status": "planned", "note": "3-min architecture walkthrough via the a2ui Remotion renderer"},
-    "pretext_panels": {"status": "planned", "note": "CHIT math + MOF isomorphism + CGP authored in PreTeXt → HTML/MathJax"}
+    "remotion_walkthrough": {
+      "status": "authored",
+      "note": "3-min architecture walkthrough (employer-first, standard systems terms before PMOVES vocab) authored as an a2ui Remotion provenance-living-doc request; render to embed on the deployed host.",
+      "request": "pmoves/services/a2ui-renderer/demos/persona_walkthrough.request.json",
+      "render": "cd pmoves/services/a2ui-renderer && npm i && npm run render:provenance:file -- --default-input demos/persona_walkthrough.request.json --default-output demos/persona_walkthrough.preview.mp4"
+    },
+    "pretext_panels": {
+      "status": "authored",
+      "note": "CHIT math + MOF isomorphism + CGP authored in PreTeXt → HTML/MathJax (PR #2238).",
+      "source": "pmoves/rooms/persona/pretext/source/main.ptx",
+      "render": "cd pmoves/rooms/persona/pretext && uv run --no-project --with pretext pretext build web"
+    }
   }
 }
