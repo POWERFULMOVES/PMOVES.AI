@@ -4,7 +4,7 @@
 
 **Lane owner:** Mavis (Mavis::CREATOR-COLLAB-LANE-CLAIM::2026-07-27).
 **Pattern:** openroom-adapter cadence (3 stacked commits per slice: P1 + functional + docs).
-**Visual evidence / smoke test:** slice 5d — full creator-studio E2E with real Pinokio apps + a 5090/Spark render.
+**Visual evidence / smoke test:** slice 5d — **planned** (full creator-studio E2E with real Pinokio apps + a 5090/Spark render, lands with slice 5). Until slice 5 ships, no E2E evidence is available; the only shipped artifacts are the manifest + schema (slice 1) and the first consumer of the new fields (also in slice 1).
 
 ## Why
 
