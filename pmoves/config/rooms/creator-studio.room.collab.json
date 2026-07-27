@@ -1,0 +1,253 @@
+{
+  "room_id": "creator-studio.room.collab",
+  "version": "1.0.0",
+  "display_name": "Creator Studio (Collaborative)",
+  "description": "Full-surface creator studio: shared prompt queue, live ComfyUI render progress, artifact gallery, multi-user whiteboard, and Pinokio app orchestration (ComfyUI + ACE-Step music + WAN video + d3js viz) on the fleet's GPU nodes. P7 routes the session to 5090 by default (RTX 5090 32GB), escalates to DGX Spark for >24GB jobs, falls back to cloud.comfy.org MCP if no fleet GPU is up. Stage: rehearsal.",
+  "stage": "rehearsal",
+  "agent_id": "creator-steward",
+  "alter": "creator-studio",
+  "room_type": "creator",
+  "room_purpose": "studio",
+  "creator_surface": "primary",
+  "owner_mode": "shared",
+  "access": {
+    "visibility": "unlisted",
+    "invite_list": ["creator-steward", "5090-claude", "4090-claude", "z890-claude", "darkxside-persona"]
+  },
+  "meta": {
+    "chit": {
+      "card_id": "00000000-0000-4000-8000-000000000010",
+      "creator_id": "darkxside",
+      "interim": true,
+      "transition_to": "creator-steward",
+      "transition_date": "2026-08-15"
+    }
+  },
+  "hardware_requirements": {
+    "gpu": true,
+    "min_vram_mb": 24000,
+    "gpu_arch": ["sm_120", "sm_110"],
+    "node_roles": ["primary-gpu-tts", "gpu-inference"],
+    "cpu_arch": ["x86_64", "arm64"]
+  },
+  "pinokio_app_refs": [
+    {
+      "slug": "comfyui-desktop",
+      "role": "primary",
+      "gpu_reservation_mb": 16000
+    },
+    {
+      "slug": "ace-step",
+      "role": "optional",
+      "gpu_reservation_mb": 8000
+    },
+    {
+      "slug": "wan",
+      "role": "optional",
+      "gpu_reservation_mb": 24000
+    },
+    {
+      "slug": "lightonocr-2-1b",
+      "role": "fallback",
+      "gpu_reservation_mb": 2000
+    }
+  ],
+  "shell": {
+    "theme": {
+      "theme_id": "creator-studio",
+      "accent_color": "#7C3AED",
+      "skin": "studio-grid",
+      "icon": "wand"
+    },
+    "layout": {
+      "default_route": "/canvas/creator",
+      "panels": [
+        { "panel_id": "creator-canvas", "kind": "browser", "position": "center", "size": 60, "pinned": true },
+        { "panel_id": "live-queue", "kind": "tasks", "position": "left", "size": 22, "pinned": true },
+        { "panel_id": "artifact-gallery", "kind": "browser", "position": "right", "size": 18, "pinned": false }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "creator-canvas-primary",
+      "kind": "browser",
+      "route": "/canvas/creator",
+      "provider": "pmoves-openroom",
+      "action_namespace": "creator",
+      "capabilities": ["prompt-queue", "live-progress", "artifact-gallery", "whiteboard", "multi-user-presence"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "notebook-workbench",
+      "kind": "notebook",
+      "route": "/notebook-workbench",
+      "provider": "pmoves-notebook-workbench",
+      "action_namespace": "notebook",
+      "capabilities": ["threads", "entries", "pages", "snapshots", "search"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "pinokio-bridge",
+      "kind": "dashboard",
+      "route": "/dashboard/pinokio",
+      "provider": "pmoves-pinokio-bridge",
+      "action_namespace": "pinokio",
+      "capabilities": ["app-list", "app-launch", "app-status", "app-logs", "gepeto-scaffold"],
+      "pinned": false,
+      "status": "active"
+    },
+    {
+      "app_id": "comfy-collab",
+      "kind": "browser",
+      "route": "/canvas/comfy",
+      "provider": "pmoves-comfy-bridge",
+      "action_namespace": "comfy",
+      "capabilities": ["submit-prompt", "live-progress", "artifact-ready", "queue-position", "cancel"],
+      "pinned": true,
+      "status": "active"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "creator-studio-collab",
+    "thread_ref": "sessions",
+    "default_page": "current-session",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": ["entries", "pages", "threads", "snapshots"],
+      "artifact_prefix": "rooms/creator-studio"
+    }
+  },
+  "persona": {
+    "signature_ref": "creator-steward",
+    "voice": "concrete-curious",
+    "glyph": "✺",
+    "resonance": ["creator", "studio", "comfyui", "pinokio", "collab", "mesh-render"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "comfy-mesh-skill",
+      "skill_id": "pinokio-bridge-skill",
+      "room_id": "creator-studio.room.collab",
+      "display_name": "ComfyUI Mesh Render",
+      "intent": ["creator", "image", "video", "audio", "render", "queue"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["render this", "queue the prompt", "spin up comfy", "submit to fleet"],
+        "requires_selection": true
+      },
+      "surface": { "app_id": "creator-canvas-primary", "target": "canvas", "route": "/canvas/creator" },
+      "execution": { "mode": "workflow", "run_as": "agent", "stream": "events", "max_steps": 6 },
+      "context": {
+        "sources": ["notebook-thread", "open-apps", "room-state", "user-intent"],
+        "include_last_turns": 4,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json", "image", "video"]
+      },
+      "outputs": [
+        { "target": "nats-event", "delivery": "emit", "subject": "comfy.collab.prompt.v1", "artifact_type": "json" },
+        { "target": "nats-event", "delivery": "emit", "subject": "comfy.collab.progress.v1", "artifact_type": "json" },
+        { "target": "nats-event", "delivery": "emit", "subject": "comfy.collab.artifact.v1", "artifact_type": "json" },
+        { "target": "notebook-entry", "delivery": "append", "path": "threads/sessions", "artifact_type": "image" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 900, "fail_open": false, "one_active_run": true },
+      "enabled": true,
+      "tags": ["creator", "comfy", "mesh", "render", "fleet"]
+    },
+    {
+      "binding_id": "presence-room",
+      "skill_id": "room-presence-skill",
+      "room_id": "creator-studio.room.collab",
+      "display_name": "Multi-user Presence",
+      "intent": ["collab", "presence", "who-is-here"],
+      "activation": {
+        "invocation_mode": "ambient",
+        "trigger_phrases": [],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "live-queue", "target": "background", "route": "/canvas/creator" },
+      "execution": { "mode": "background", "run_as": "room-service", "stream": "events", "max_steps": 1 },
+      "context": {
+        "sources": ["room-state", "open-apps"],
+        "include_last_turns": 0,
+        "notebook_writeback": false,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        { "target": "nats-event", "delivery": "emit", "subject": "room.presence.v1", "artifact_type": "json" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 30, "fail_open": true, "one_active_run": false },
+      "enabled": true,
+      "tags": ["collab", "presence", "ambient"]
+    },
+    {
+      "binding_id": "whiteboard-collab",
+      "skill_id": "claude-d3js",
+      "room_id": "creator-studio.room.collab",
+      "display_name": "Whiteboard Visualization",
+      "intent": ["creator", "viz", "whiteboard", "modeled"],
+      "activation": {
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["sketch this", "draw the flow", "chart the queue"],
+        "requires_selection": false
+      },
+      "surface": { "app_id": "creator-canvas-primary", "target": "panel", "route": "/canvas/creator" },
+      "execution": { "mode": "inline", "run_as": "agent", "stream": "status", "max_steps": 5 },
+      "context": {
+        "sources": ["notebook-thread", "room-state", "open-apps"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        { "target": "artifact-store", "delivery": "append", "path": "studio/whiteboard-viz", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": false, "max_runtime_sec": 300, "fail_open": true, "one_active_run": true },
+      "enabled": true,
+      "tags": ["creator", "viz", "whiteboard", "modeled-draft"]
+    }
+  ],
+  "team_refs": ["creator", "media", "data", "research"],
+  "service_refs": ["nats", "supabase", "agent-zero", "archon", "cipher-memory", "minio", "qdrant", "pinokio-bridge"],
+  "launcher_refs": ["comfyui-desktop", "ace-step", "wan", "lightonocr-2-1b"],
+  "policies": {
+    "model_routing": "hybrid",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "room.session.updated.v1",
+        "comfy.collab.prompt.v1",
+        "comfy.collab.progress.v1",
+        "comfy.collab.artifact.v1",
+        "room.presence.v1",
+        "room.directory.v1",
+        "agent.graphiti.signed.v1",
+        "creator.studio.artifact.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "Creator Studio",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/health"
+  },
+  "provenance": {
+    "source": "creator-collab-lane slice 5 (2026-07-27)",
+    "updated_at": "2026-07-27T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md",
+      "pmoves/docs/handoffs/creator-comfyui-selfhost-config-2026-06-24.md",
+      "pmoves/configs/pinokio-network-inventory.yaml"
+    ]
+  }
+}

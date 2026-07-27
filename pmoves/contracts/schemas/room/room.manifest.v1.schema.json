@@ -425,6 +425,77 @@
       "type": "object",
       "description": "Free-form room metadata. Currently used for inline CHIT signing-card references (see fordham.room.community) and any other operator-level annotations. Sub-objects like 'meta.chit' should mirror the canonical signing-card fields (card_id, creator_id, etc.) from pmoves/contracts/schemas/identity/signing-card.v1.schema.json. Added 2026-07-20 via open-room-lane schema extension — see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md, pending operator signoff per AGNOTE4482 §1348.",
       "additionalProperties": true
+    },
+    "room_purpose": {
+      "type": "string",
+      "enum": ["community", "control", "studio", "operator", "classroom", "field", "showroom", "intake", "exchange", "custom"],
+      "description": "Social / topological role the room plays in the PMOVES lattice. Distinct from `room_type` (which is the operating pattern, e.g. 'creator'/'scout'/'hybrid'); `room_purpose` answers 'who comes here and why'. Examples: 'community' for Fordham/pilot rooms where residents ask questions, 'studio' for full creator surfaces (e.g. creator-studio.room.collab), 'control' for ops/infra rooms, 'intake' for help desks that route to other rooms. Added 2026-07-27 via creator-collab-lane — see pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md."
+    },
+    "creator_surface": {
+      "type": "string",
+      "enum": ["primary", "ambient", "background", "off"],
+      "description": "How the ComfyUI / Pinokio creator surface shows up in the room. 'primary' = full collab canvas (prompt queue + live progress + artifact gallery + whiteboard), 'ambient' = chat-overlay only (small 'render this' button next to chat, no main panel), 'background' = no UI on the desktop but the skill runs on explicit agent request, 'off' = not available. Every room gets the comfy-mesh-skill bound; this field just tunes the UI mode. Added 2026-07-27 via creator-collab-lane."
+    },
+    "hardware_requirements": {
+      "type": "object",
+      "description": "Hardware pin the room needs to operate. P7's session-open handler uses this + the current node's profile (from pmoves/config/profiles/) to pick the right physical host for the room session. 'false' for cpu-only rooms (Fordham, helpdesk); 'true' with vram_mb for GPU rooms. Added 2026-07-27 via creator-collab-lane.",
+      "properties": {
+        "gpu": {
+          "type": "boolean",
+          "description": "Whether the room requires a GPU. Set false for CPU-only rooms (e.g. Fordham, helpdesk); true for rooms that need to render locally."
+        },
+        "min_vram_mb": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum total VRAM the host needs. 0 for CPU rooms; 12000+ for typical ComfyUI workflows; 24000+ for video gen / LoRA training; 120000+ for 120B-class inference."
+        },
+        "gpu_arch": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["sm_89", "sm_90", "sm_100", "sm_110", "sm_120"]
+          },
+          "description": "Allowed NVIDIA compute capabilities. sm_89 = RTX 4090, sm_90 = H100, sm_110 = GB10 (DGX Spark), sm_120 = RTX 5090."
+        },
+        "node_roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["primary-gpu-tts", "infra-coordinator", "mobile-relay", "gpu-inference", "edge-ai", "api-gateway", "data-storage", "exit-proxy"]
+          },
+          "description": "Fleet node roles (from pmoves/configs/pinokio-network-inventory.yaml) that can host this room. Used by P7 session-open to pick a host."
+        },
+        "cpu_arch": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["x86_64", "arm64"] }
+        }
+      },
+      "additionalProperties": false
+    },
+    "pinokio_app_refs": {
+      "type": "array",
+      "description": "Pinokio apps the room brings up on launch via `PINOKIO_SCRIPT_AUTOLAUNCH` / `PINOKIO_SCRIPT_REQUIRES`. Each ref resolves to `pmoves/config/pinokio-apps/curated/<slug>.yaml` (or `user/<slug>.yaml`) for endpoint, healthcheck, gpu_required, node_affinity, pinokio_skill_ref. P7 session-open calls `pinokio start <slug>` per app in dependency order, respecting the declared GPU reservations. Added 2026-07-27 via creator-collab-lane.",
+      "items": {
+        "type": "object",
+        "required": ["slug"],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "description": "Pinokio app slug matching `pmoves/config/pinokio-apps/curated/<slug>.yaml` or `user/<slug>.yaml`"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["primary", "optional", "fallback"],
+            "description": "primary = the room depends on this app, optional = nice-to-have, fallback = only if primary not available"
+          },
+          "gpu_reservation_mb": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "VRAM the room reserves for this app when computing room capacity. Used by P7 to refuse to start the room if the host node can't satisfy the union of reservations."
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false
