@@ -6,6 +6,10 @@ import './globals.css';
    Cataclysm Studios Inc.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// Operational console: render at request time so runtime env (theme,
+// service URLs) is honored on every route — no build-time HTML baking.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: {
     default: 'PMOVES.AI — Powerful Moves for Everyday Creators',
@@ -48,6 +52,9 @@ export default function RootLayout({
   // House theme engine: pm-tokens.generated.css swaps --pm-* by data-theme.
   // Server-rendered from env so the whole surface re-skins per deployment.
   const theme = process.env.PMOVES_UI_THEME || 'pmoves-armor';
+  // (dynamic below: this is an operational console — rendering at request
+  // time keeps PMOVES_UI_THEME and service env honored on every route
+  // instead of baking build-time values into static HTML.)
   return (
     <html lang="en" className="dark" data-theme={theme}>
       <head>

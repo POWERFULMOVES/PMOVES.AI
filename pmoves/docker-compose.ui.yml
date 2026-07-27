@@ -11,6 +11,11 @@ services:
     build:
       context: ./ui
       dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* is inlined into the browser bundle at build time —
+        # runtime env never reaches client code (PR #2261 review).
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
     environment:
