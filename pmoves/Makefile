@@ -1179,13 +1179,54 @@ down-all: ## Stop ALL services in graceful reverse order
 	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
 	@-$(MAKE) --no-print-directory down-tensorzero
 	@-$(MAKE) --no-print-directory down-agents
+	@-$(MAKE) --no-print-directory down-voice
+	@-$(MAKE) --no-print-directory down-search
 	@-$(MAKE) --no-print-directory down-model-management
 	@-$(MAKE) --no-print-directory down-workers
+	@-$(MAKE) --no-print-directory down-inference
 	@-$(MAKE) --no-print-directory down-bus
 	@-$(MAKE) --no-print-directory down-data
 	@-$(MAKE) --no-print-directory down-obs
 	@-$(MAKE) --no-print-directory down-supabase
 	@echo "✅ All services stopped gracefully"
+
+# Shutdown order is the reverse of startup, and the ordering is load-bearing:
+# TensorZero is a GATEWAY in front of the inference backends, and Ollama comes
+# up BEFORE TensorZero. So TZ must go down EARLY (position 2) and the backends
+# LATE (down-inference) — otherwise the gateway is briefly live with its
+# backend already gone, and in-flight requests fail instead of draining.
+# Likewise down-voice/down-search run before down-inference: they are callers.
+
+# vibevoice lives in docker-compose.voice.yml, which is NOT in STACK_FILES, so a
+# bare `$(DC) stop vibevoice` cannot resolve it — docker compose errors, `|| true`
+# swallows it, and the container keeps running while the target reports success.
+# It therefore needs the voice overlay appended explicitly. (The pre-existing
+# `stop-vibevoice` target has this same latent bug; see VOICE_OVERLAY use below.)
+VOICE_SERVICES := flute-gateway voice-relay cast-tts-gateway ultimate-tts-studio
+VOICE_OVERLAY := -f docker-compose.voice.yml
+VOICE_OVERLAY_SERVICES := vibevoice
+SEARCH_SERVICES := hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-gateway-v2-gpu
+INFERENCE_SERVICES := pmoves-ollama comfyui
+
+.PHONY: down-voice
+down-voice: ## Stop voice fabric (Flute-Gateway, Voice-Relay, VibeVoice, TTS studio)
+	@echo "🔇 Stopping voice fabric..."
+	@$(DC) stop $(VOICE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(VOICE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) rm -f $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+
+.PHONY: down-search
+down-search: ## Stop Hi-RAG gateways (all CPU/GPU/v2 variants)
+	@echo "🔎 Stopping Hi-RAG gateways..."
+	@$(DC) stop $(SEARCH_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(SEARCH_SERVICES) >/dev/null 2>&1 || true
+
+.PHONY: down-inference
+down-inference: ## Stop local inference backends (Ollama, ComfyUI) — frees VRAM
+	@echo "🧊 Stopping inference backends (frees VRAM)..."
+	@$(DC) stop $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-integrations
 down-integrations: ## Stop external integrations
@@ -3452,7 +3493,7 @@ up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights
 
 .PHONY: stop-vibevoice
 stop-vibevoice: ## Stop VibeVoice realtime container (keeps model volume)
-	@$(DC) stop vibevoice >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
 	@echo "✔ VibeVoice stopped"
 
 .PHONY: vibevoice-smoke
