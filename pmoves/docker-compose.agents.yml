@@ -970,6 +970,10 @@ services:
         condition: service_completed_successfully
       supabase-kong:
         condition: service_healthy
+        # kong is profile-gated (supabase-local); without required:false any
+        # --profile agents invocation fails project-wide as "depends on
+        # undefined service" when the supabase profile isn't active.
+        required: false
     profiles: ["agents", "orchestration"]
     networks: [pmoves_app, pmoves_api, pmoves_bus]
     healthcheck:
