@@ -18,6 +18,13 @@ const getRequiredEnv = (...keys: string[]): string => {
     }
   }
 
+  // `next build` (e.g. inside `docker build`) has no live env, and this
+  // module is evaluated during prerender. Placeholder there; the strict
+  // throw still guards real runtime misconfiguration.
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return "http://build-phase-placeholder.invalid";
+  }
+
   throw new Error(`Missing required environment variable. Checked: ${keys.join(", ")}`);
 };
 
