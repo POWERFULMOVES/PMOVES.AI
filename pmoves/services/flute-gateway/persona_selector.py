@@ -14,6 +14,7 @@ import os
 from services.common.env import get_secret
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 import yaml
@@ -221,6 +222,98 @@ def resolve_engine_host(
     result = dict(affinity)
     result["selected"] = selected
     return result
+
+
+def host_affinity_enabled() -> bool:
+    """True when host-affinity routing is opted in via ``VOICE_HOST_AFFINITY``.
+
+    Default OFF — casts target the single configured provider URL unless the
+    operator explicitly enables cross-node routing.
+    """
+    return os.getenv("VOICE_HOST_AFFINITY", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def fleet_nodes_from_env() -> Optional[list[str]]:
+    """Parse ``VOICE_FLEET_NODES`` (comma-separated up-node ids) → list or None.
+
+    None (unset) means "assume the preferred node is up" — the optimistic
+    default. A set value restricts routing to nodes currently reported up.
+    """
+    raw = os.getenv("VOICE_FLEET_NODES", "").strip()
+    if not raw:
+        return None
+    return [n.strip() for n in raw.split(",") if n.strip()]
+
+
+def node_to_host(node: str) -> str:
+    """Map a fleet node id to its Tailscale hostname (``pmoves-<node>``).
+
+    Node ids in host_affinity are bare slugs (``kvm4-2``, ``spark``, ``5090``);
+    the fleet reaches them over the tailnet by hostname. Never emits raw IPs.
+    Already-prefixed ids pass through unchanged.
+    """
+    node = str(node)
+    return node if node.startswith("pmoves-") else f"pmoves-{node}"
+
+
+def resolve_engine_target(
+    engine: str,
+    configured_url: str,
+    *,
+    available_nodes: Optional[list[str]] = None,
+    enabled: Optional[bool] = None,
+) -> tuple[str, Optional[str]]:
+    """Resolve the target URL for an ``engine`` cast under host-affinity routing.
+
+    This is the seam that wires ``resolve_engine_host()`` into the Flute-Gateway
+    synthesis path. When routing is enabled and a node is selected, the
+    ``configured_url`` host is swapped for the selected node's Tailscale
+    hostname (``pmoves-<node>``), preserving scheme / port / path / userinfo.
+
+    Returns ``(target_url, selected_node)``. Falls back to
+    ``(configured_url, None)`` — i.e. the single-configured-URL behaviour —
+    when routing is disabled, the engine has no host_affinity entry, no eligible
+    node is up, or the configured URL has no host to swap. Fail-open by design:
+    routing never blocks a cast.
+
+    Args:
+        engine: Engine id used for the host_affinity lookup.
+        configured_url: The provider's configured base URL (e.g. ULTIMATE_TTS_URL).
+        available_nodes: Up-node filter; defaults to ``VOICE_FLEET_NODES``.
+        enabled: Override the ``VOICE_HOST_AFFINITY`` opt-in (mainly for tests).
+    """
+    if enabled is None:
+        enabled = host_affinity_enabled()
+    if not enabled or not configured_url:
+        return configured_url, None
+
+    if available_nodes is None:
+        available_nodes = fleet_nodes_from_env()
+
+    affinity = resolve_engine_host(engine, available_nodes)
+    if not affinity:
+        return configured_url, None
+    selected = affinity.get("selected")
+    if not selected:
+        return configured_url, None
+
+    parts = urlsplit(configured_url)
+    if not parts.hostname:
+        return configured_url, None
+
+    # hostport is credential-free and safe to log; the full netloc may carry
+    # userinfo (user:password@host) which must never be logged in clear text.
+    hostport = node_to_host(selected)
+    if parts.port:
+        hostport = f"{hostport}:{parts.port}"
+    netloc = hostport
+    if parts.username:
+        auth = parts.username + (f":{parts.password}" if parts.password else "")
+        netloc = f"{auth}@{hostport}"
+
+    target = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    logger.info("host-affinity: engine=%s routed to node=%s (%s)", engine, selected, hostport)
+    return target, str(selected)
 
 
 def get_host_affinity_map() -> dict[str, dict[str, Any]]:

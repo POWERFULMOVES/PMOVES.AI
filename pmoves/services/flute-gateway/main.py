@@ -404,6 +404,11 @@ class SynthesizeResponse(BaseModel):
     duration_seconds: float = Field(..., description="Audio duration")
     sample_rate: int = Field(24000, description="Sample rate in Hz")
     format: str = Field("pcm16", description="Audio format")
+    node: Optional[str] = Field(
+        None,
+        description="Fleet node the cast was routed to via host-affinity, or None "
+        "when routing is disabled / the configured URL was used.",
+    )
 
 
 class RecognizeResponse(BaseModel):
@@ -699,6 +704,32 @@ async def get_config():
 
 
 # TTS synthesis endpoint
+def _route_engine_provider(singleton, provider_cls, engine: str, configured_url: str):
+    """Host-affinity seam: pick the provider instance for this cast.
+
+    When ``VOICE_HOST_AFFINITY`` selects a node whose URL differs from the
+    configured one, return a transient provider bound to that node's URL;
+    otherwise return the startup singleton. Fail-open: any construction error
+    falls back to the singleton (routing never blocks a cast).
+
+    Returns ``(provider, selected_node)`` — ``selected_node`` is surfaced in the
+    response so callers can see where the cast ran.
+    """
+    from persona_selector import resolve_engine_target
+
+    target_url, node = resolve_engine_target(engine, configured_url)
+    if node and target_url != configured_url:
+        try:
+            return provider_cls(target_url), node
+        except Exception as exc:  # noqa: BLE001 - fail-open to the configured host
+            logger.warning(
+                "host-affinity: could not build %s for node=%s (%s); using configured URL",
+                provider_cls.__name__, node, exc,
+            )
+            return singleton, None
+    return singleton, node
+
+
 @app.post("/v1/voice/synthesize", response_model=SynthesizeResponse, dependencies=[Depends(verify_api_key)])
 async def synthesize_speech(request: SynthesizeRequest):
     """
@@ -757,10 +788,14 @@ async def synthesize_speech(request: SynthesizeRequest):
                 format="pcm16"
             )
         elif provider_name == "ultimate_tts" and ultimate_tts_provider:
-            audio_data = await ultimate_tts_provider.synthesize(
+            ut_engine = request.engine or "kitten_tts"
+            ut_provider, ut_node = _route_engine_provider(
+                ultimate_tts_provider, UltimateTTSProvider, ut_engine, ULTIMATE_TTS_URL,
+            )
+            audio_data = await ut_provider.synthesize(
                 text=request.text,
                 voice=request.voice,
-                engine=request.engine or "kitten_tts",
+                engine=ut_engine,
             )
             if not audio_data:
                 raise HTTPException(status_code=502, detail="Ultimate-TTS returned empty audio.")
@@ -783,7 +818,8 @@ async def synthesize_speech(request: SynthesizeRequest):
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
                 sample_rate=24000,
-                format="wav"
+                format="wav",
+                node=ut_node,
             )
         elif provider_name == "voicebox" and voicebox_provider:
             audio_data = await voicebox_provider.synthesize(
@@ -823,7 +859,10 @@ async def synthesize_speech(request: SynthesizeRequest):
                 format="wav"
             )
         elif provider_name == "omnivoice" and omnivoice_provider:
-            audio_data = await omnivoice_provider.synthesize(
+            ov_provider, ov_node = _route_engine_provider(
+                omnivoice_provider, OmniVoiceProvider, "omnivoice", OMNIVOICE_URL,
+            )
+            audio_data = await ov_provider.synthesize(
                 text=request.text,
                 voice=request.voice,
                 instruct=request.engine if request.engine and request.engine != "omnivoice" else None,
@@ -857,7 +896,8 @@ async def synthesize_speech(request: SynthesizeRequest):
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
                 sample_rate=sample_rate,
-                format="wav"
+                format="wav",
+                node=ov_node,
             )
         else:
             if provider_name == "vibevoice" and not vibevoice_provider:
