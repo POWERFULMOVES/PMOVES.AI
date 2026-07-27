@@ -347,3 +347,5 @@ pmoves/activepieces/env.activepieces
 
 # PreTeXt generated build output (rebuild with: pretext build web)
 pmoves/rooms/persona/pretext/output/
+# Persona living-doc rendered static bundle (make persona-render → served by nginx)
+pmoves/rooms/persona/dist/
