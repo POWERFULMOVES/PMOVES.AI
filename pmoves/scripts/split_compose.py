@@ -73,6 +73,7 @@ SERVICE_GROUPS = {
         "media-audio",
         "ffmpeg-whisper",
         "transcribe-backend",
+        "transcribe-frontend",
         "jellyfin-bridge",
         "ultimate-tts-studio",
         "flute-gateway",

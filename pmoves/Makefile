@@ -3864,6 +3864,11 @@ down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@$(JELLYFIN_AI_DC) --profile jellyfin-ai down
 	@echo "✔ Jellyfin AI overlay down"
 
+.PHONY: jellyfin-ai-compose
+jellyfin-ai-compose: ensure-env-shared ## Run docker compose against the Jellyfin AI overlay. Usage: make jellyfin-ai-compose ARGS="up -d --build jellyfin-audio-processor"
+	@if [ -z "$(strip $(ARGS))" ]; then 		echo "Usage: make jellyfin-ai-compose ARGS=\"<docker compose args>\""; 		exit 1; 	fi
+	@$(JELLYFIN_AI_DC) --profile jellyfin-ai $(ARGS)
+
 .PHONY: up-jellyfin-ai-nvenc
 up-jellyfin-ai-nvenc: ensure-env-shared ## Start Jellyfin AI with NVENC hardware transcoding (RTX 4090)
 	@echo "→ Starting Jellyfin AI overlay with NVENC..."
