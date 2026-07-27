@@ -91,10 +91,11 @@ jobs:
         run: |
           docker pull hello-world:latest
           docker tag hello-world:latest "${USER_PKG}:pat"
-          docker tag hello-world:latest "${ORG_PKG}:pat"
+          docker tag hello-world:latest "${ORG_PKG}:app"
 
-      # The decision: classic PAT pushing to the USER namespace (production target,
-      # zero repoint). Plus the org namespace for completeness.
+      # The decision under test: classic PAT to the USER namespace (production
+      # target, zero repoint) vs the minted org App token to the ORG namespace
+      # (Path D — does an App with Packages:write actually push ghcr.io/<org>/*?).
       - name: PAT push → USER namespace ghcr.io/powerfulmoves/* (expect SUCCESS)
         id: pat_user
         continue-on-error: true
@@ -107,31 +108,42 @@ jobs:
           docker push "${USER_PKG}:pat"
           docker logout ghcr.io || true
 
-      - name: PAT push → ORG namespace ghcr.io/cataclysm-studios-inc/* (info only)
-        id: pat_org
+      # This is the actual Path-D probe: authenticate with the MINTED App token
+      # (steps.tok_org.outputs.token), not the PAT — otherwise the org result only
+      # re-tests the PAT and proves nothing about the App token.
+      - name: App-token push → ORG namespace ghcr.io/cataclysm-studios-inc/* (the hypothesis)
+        id: app_org
         continue-on-error: true
         env:
-          PAT: ${{ secrets.GHCR_TOKEN }}
-          PAT_USER: ${{ secrets.GHCR_USERNAME }}
+          APP_TOKEN: ${{ steps.tok_org.outputs.token }}
         run: |
-          echo "$PAT" | docker login ghcr.io -u "${PAT_USER:-x-access-token}" --password-stdin
-          docker push "${ORG_PKG}:pat"
+          if [ -z "$APP_TOKEN" ]; then
+            echo "org App token not minted (GHCR_APP_* / GH_APP_* secrets unset) — cannot probe Path D"
+            exit 1
+          fi
+          echo "$APP_TOKEN" | docker login ghcr.io -u x-access-token --password-stdin
+          docker push "${ORG_PKG}:app"
           docker logout ghcr.io || true
 
       - name: Verdict
         if: always()
         run: |
           U="${{ steps.pat_user.outcome }}"
-          O="${{ steps.pat_org.outcome }}"
-          echo "=== classic-PAT GHCR push verdict ==="
-          echo "PAT → user namespace (powerfulmoves)        : $U  (expect success)"
-          echo "PAT → org namespace  (cataclysm-studios-inc) : $O  (info)"
+          A="${{ steps.app_org.outcome }}"
+          echo "=== GHCR push owner-scope verdict ==="
+          echo "PAT       → user namespace (powerfulmoves)         : $U  (expect success — production target)"
+          echo "App token → org namespace  (cataclysm-studios-inc) : $A  (Path D hypothesis)"
           echo ""
-          if [ "$U" = "success" ]; then
-            echo ">>> §4 FIXED by the classic PAT on the USER namespace — stay on"
-            echo "    ghcr.io/powerfulmoves/*, NO repoint needed. Org not required for packages."
+          if [ "$A" = "success" ]; then
+            echo ">>> Path D CONFIRMED: an org App with Packages:write CAN push ghcr.io/<org>/*."
           else
-            echo ">>> PAT still cannot push the user namespace — check scopes (write:packages) / SSO authorization."
+            echo ">>> Path D NOT confirmed: the org App token could not push (or was not minted)."
           fi
           echo ""
           echo "NOTE: may leave throwaway packages pmoves-apptoken-canary — delete from the Packages UI after review."
+          # The PAT → user push is the production-critical target: fail the job if it
+          # did not succeed (was previously masked by continue-on-error + info-only verdict).
+          if [ "$U" != "success" ]; then
+            echo "::error::Required PAT push to the user namespace failed ($U) — check write:packages scope / SSO authorization."
+            exit 1
+          fi
