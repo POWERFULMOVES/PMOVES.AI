@@ -1,0 +1,92 @@
+name: ActivePieces — search automations
+
+# Enumerate the ActivePieces flows the ACTIVEPIECES_API_KEY secret can see,
+# list them all (name, status, project), and flag LinkedIn/social ones. Gives an
+# accurate "N ActivePieces automations" figure to sit beside the n8n fabric on
+# the LinkedIn persona, and surfaces any LinkedIn/social flow to wire.
+#
+# Read-only: only GETs the ActivePieces API. Manual dispatch only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ap_base_url:
+        description: ActivePieces API base (no trailing slash)
+        default: https://cloud.activepieces.com
+        required: true
+      flag_pattern:
+        description: Case-insensitive regex to flag flows (matched against each flow's full JSON — piece names + display)
+        default: 'linkedin|social|twitter|facebook|instagram|mastodon|buffer|hootsuite'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  list-flows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List ActivePieces flows (all + flag LinkedIn/social)
+        env:
+          AP_KEY: ${{ secrets.ACTIVEPIECES_API_KEY }}
+          AP_BASE: ${{ inputs.ap_base_url }}
+          FLAG: ${{ inputs.flag_pattern }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AP_KEY:-}" ]; then
+            echo "::error::ACTIVEPIECES_API_KEY secret is empty — add it in repo/org secrets."; exit 1
+          fi
+          AP_BASE="${AP_BASE%/}"   # strip any trailing slash
+          auth=(-H "Authorization: Bearer $AP_KEY" -H "Content-Type: application/json")
+          # --fail-with-body: non-2xx returns the body AND a non-zero exit so we see the error.
+          api() { curl -sS --fail-with-body "${auth[@]}" "$@"; }
+
+          {
+            echo "## ActivePieces automations"
+            echo ""
+            echo "Instance: \`$AP_BASE\` · flag pattern: \`$FLAG\`"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Resolve project ids. A platform API key spans projects (/projects);
+          # a project-scoped token exposes its own via /users/me.
+          pids="$(api "$AP_BASE/api/v1/projects" 2>/dev/null | jq -r '(.data // [])[].id' 2>/dev/null || true)"
+          if [ -z "$pids" ]; then
+            pids="$(api "$AP_BASE/api/v1/users/me" 2>/dev/null | jq -r '.projectId // empty' 2>/dev/null || true)"
+          fi
+          if [ -z "$pids" ]; then
+            echo "::error::Could not resolve any projectId — check the key scope and base URL ($AP_BASE)."; exit 1
+          fi
+
+          total=0; flagged=0
+          {
+            echo "| Flow | Status | Project | LinkedIn/social |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for pid in $pids; do
+            cursor=""
+            while : ; do
+              url="$AP_BASE/api/v1/flows?projectId=$pid&limit=50"
+              [ -n "$cursor" ] && url="$url&cursor=$cursor"
+              page="$(api "$url")"
+              ids="$(echo "$page" | jq -r '(.data // [])[].id')"
+              [ -z "$ids" ] && break
+              for fid in $ids; do
+                detail="$(api "$AP_BASE/api/v1/flows/$fid" 2>/dev/null || echo '{}')"
+                name="$(echo "$detail" | jq -r '.version.displayName // .id')"
+                status="$(echo "$detail" | jq -r '.status // "?"')"
+                if echo "$detail" | grep -qiE "$FLAG"; then hit='✅'; flagged=$((flagged+1)); else hit=''; fi
+                echo "| ${name//|/\\|} | $status | ${pid:0:8} | $hit |" >> "$GITHUB_STEP_SUMMARY"
+                total=$((total+1))
+              done
+              cursor="$(echo "$page" | jq -r '.next // empty')"
+              [ -z "$cursor" ] && break
+            done
+          done
+
+          {
+            echo ""
+            echo "**Total flows: $total · LinkedIn/social-flagged: $flagged**"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "total=$total flagged=$flagged"
