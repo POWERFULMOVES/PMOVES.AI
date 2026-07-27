@@ -16,7 +16,7 @@
   },
   "meta": {
     "chit": {
-      "card_id": "00000000-0000-4000-8000-000000000010",
+      "card_id": "00000000-0000-4000-8000-000000000050",
       "creator_id": "darkxside",
       "interim": true,
       "transition_to": "creator-steward",
@@ -60,7 +60,7 @@
       "icon": "wand"
     },
     "layout": {
-      "default_route": "/canvas/creator",
+      "default_route": "/notebook-workbench",
       "panels": [
         { "panel_id": "creator-canvas", "kind": "browser", "position": "center", "size": 60, "pinned": true },
         { "panel_id": "live-queue", "kind": "tasks", "position": "left", "size": 22, "pinned": true },
@@ -76,8 +76,8 @@
       "provider": "pmoves-openroom",
       "action_namespace": "creator",
       "capabilities": ["prompt-queue", "live-progress", "artifact-gallery", "whiteboard", "multi-user-presence"],
-      "pinned": true,
-      "status": "active"
+      "pinned": false,
+      "status": "planned"
     },
     {
       "app_id": "notebook-workbench",
@@ -97,7 +97,7 @@
       "action_namespace": "pinokio",
       "capabilities": ["app-list", "app-launch", "app-status", "app-logs", "gepeto-scaffold"],
       "pinned": false,
-      "status": "active"
+      "status": "planned"
     },
     {
       "app_id": "comfy-collab",
@@ -106,8 +106,8 @@
       "provider": "pmoves-comfy-bridge",
       "action_namespace": "comfy",
       "capabilities": ["submit-prompt", "live-progress", "artifact-ready", "queue-position", "cancel"],
-      "pinned": true,
-      "status": "active"
+      "pinned": false,
+      "status": "planned"
     }
   ],
   "notebook": {
