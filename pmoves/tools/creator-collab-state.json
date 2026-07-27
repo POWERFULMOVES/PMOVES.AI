@@ -6,7 +6,7 @@
     "worktree": ".worktrees/feat-creator-collab-lane",
     "branch": "feat/creator-collab-lane",
     "pr": 2264,
-    "ship_count": 2,
+    "ship_count": 3,
     "total_slices": 7,
     "status": "in_progress",
     "started_at": "2026-07-27T09:23:00Z",
@@ -58,8 +58,19 @@
       "tests": "pinokio_bridge 24/24; P7 46/46; A2UI 16/16; manifests 10/11"
     },
     "3_nats_pipeline": {
-      "status": "pending",
-      "title": "NATS pipeline: comfy.collab.{prompt,progress,artifact}.v1 + room.presence.v1 + room.directory.v1",
+      "status": "SHIPPED",
+      "shipped_at": "2026-07-27T18:35:00Z",
+      "title": "NATS pipeline: 5 JSON Schemas + nats_event_bus service + pinokio_bridge launch hook",
+      "branch": "slice-3-nats-pipeline",
+      "base": "feat/creator-collab-lane @ f29b170d35 (rebased from origin/main @ 42ad231419 because the launch hook needs slice-2's pinokio_bridge code)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "9a71453d29",
+        "2daff111a0",
+        "50eade1485"
+      ],
+      "scope": "pmoves/contracts/schemas/comfy/{collab.prompt,collab.progress,collab.artifact}.v1.schema.json (3 new) + pmoves/contracts/schemas/room/{room.presence,room.directory}.v1.schema.json (2 new) + pmoves/contracts/topics.json (+5 entries) + pmoves/services/nats_event_bus/ (new service: app.py, state.py, Dockerfile, requirements.txt, README.md, tests/test_app.py, __init__.py) + pmoves/services/pinokio_bridge/app.py (_publish_presence_event helper + launch_app hook) + pmoves/services/pinokio_bridge/README.md (slice-3 section) + pmoves/services/pinokio_bridge/tests/test_app.py (+4 cases)",
+      "tests": "nats_event_bus 20/20 (new); pinokio_bridge 28/28 (was 24, +4); p7-room-orchestrator 46/46 (no regression); a2ui-nats-bridge 16/16 (no regression); validate_room_manifests.py 10/11 (pre-existing persona.room.livingdoc em-dash, out of scope)",
       "depends_on": [
         "2_pinokio_bridge_skill"
       ]
@@ -242,10 +253,10 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-27T18:00:00Z",
-    "next_run": "2026-07-27T18:30:00Z",
+    "last_run": "2026-07-27T18:35:00Z",
+    "next_run": "2026-07-27T19:05:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
-    "disarmed_reason": "cycle 2 closed >30m ago, no new threads, lane review activity settled",
-    "note": "slice 2 SHIPPED on slice-2-pinokio-bridge branch (3 commits); merged into feat/creator-collab-lane. Slice 3 (NATS pipeline) is next pending but depends on slice 5 (creator-studio E2E smoke) per the original plan; will hold for operator signal."
+    "disarmed_reason": "review-iter-poll cycle 2 closed >30m ago, no new threads, lane review activity settled",
+    "note": "slice 3 SHIPPED on slice-3-nats-pipeline branch (3 commits: 9a71453d29 P1 schemas, 2daff111a0 functional service + bridge hook, 50eade1485 docs); pending --no-ff merge into feat/creator-collab-lane. Slice 4 (pinokio-apps registry) and slice 5 (creator-studio E2E smoke) are next. Slice 6 (helpdesk-skill + room-suggest-skill + pmoves.room.helpdesk.json) was unblocked by slice 3 (room.directory.v1 + room.presence.v1 are now live). Slice 7 (Fordham E2E) is the integrated demo, lands last."
   }
 }

@@ -203,6 +203,147 @@ def test_launch_app_with_token_succeeds(
 
 
 # ---------------------------------------------------------------------------
+# Slice 3 NATS pipeline — launch hook (_publish_presence_event helper)
+# ---------------------------------------------------------------------------
+
+
+def test_publish_presence_event_noop_when_url_unset() -> None:
+    """When bus_url is empty, the helper returns None without calling httpx."""
+    from pmoves.services.pinokio_bridge.app import _publish_presence_event
+
+    result = _publish_presence_event("comfyui-desktop", "active", bus_url="", bus_token="")
+    assert result is None
+
+
+def test_publish_presence_event_sends_correct_envelope(monkeypatch) -> None:
+    """Mock httpx.Client and assert the helper POSTs the right envelope."""
+    from pmoves.services.pinokio_bridge import app as bridge_app
+
+    captured: Dict[str, Any] = {}
+
+    class _FakeResp:
+        status_code = 200
+        text = '{"envelope":{"id":"x"}}'
+
+        def json(self) -> Dict[str, Any]:
+            return {"envelope": {"id": "x"}}
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def post(self, url, json=None, headers=None):  # noqa: A002
+            captured["url"] = url
+            captured["json"] = json
+            captured["headers"] = headers
+            return _FakeResp()
+
+    class _FakeHttpx:
+        Client = _FakeClient
+
+    monkeypatch.setattr(bridge_app, "httpx", _FakeHttpx, raising=False)
+    # Inject a fake module attribute for the lazy import.
+    import sys
+    sys.modules["httpx"] = _FakeHttpx  # type: ignore
+
+    result = bridge_app._publish_presence_event(
+        "comfyui-desktop",
+        "active",
+        room_id="creator-studio",
+        extra_metadata={"pid": 1234, "script": "start.js"},
+        bus_url="http://nats_event_bus.test:8131",
+        bus_token="test-bus-token",
+    )
+    assert result == {"envelope": {"id": "x"}}
+    assert captured["url"] == "http://nats_event_bus.test:8131/v1/publish"
+    body = captured["json"]
+    assert body["topic"] == "room.presence.v1"
+    assert body["source"] == "pinokio_bridge"
+    payload = body["payload"]
+    assert payload["room_id"] == "creator-studio"
+    assert payload["actor"] == "pinokio_bridge:comfyui-desktop"
+    assert payload["actor_kind"] == "service"
+    assert payload["action"] == "active"
+    assert payload["surface"] == "comfyui-desktop"
+    assert payload["actor_metadata"] == {"pid": 1234, "script": "start.js"}
+    assert "presence_id" in payload and "observed_at" in payload
+    assert captured["headers"]["X-PMOVES-NatsBus-Token"] == "test-bus-token"
+
+
+def test_publish_presence_event_swallows_connection_error(monkeypatch) -> None:
+    """A connection error must not raise — the launch must not be blocked."""
+    from pmoves.services.pinokio_bridge import app as bridge_app
+
+    class _ExplodingClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def post(self, *args, **kwargs):
+            raise ConnectionError("bus down")
+
+    class _FakeHttpx:
+        Client = _ExplodingClient
+
+    import sys
+    sys.modules["httpx"] = _FakeHttpx  # type: ignore
+    monkeypatch.setattr(bridge_app, "httpx", _FakeHttpx, raising=False)
+
+    result = bridge_app._publish_presence_event(
+        "comfyui-desktop", "active", bus_url="http://x:1", bus_token=""
+    )
+    assert result is None
+
+
+def test_publish_presence_event_logs_non_2xx(monkeypatch, caplog) -> None:
+    """A 4xx/5xx from the bus logs WARNING but returns None (does not raise)."""
+    import logging
+    from pmoves.services.pinokio_bridge import app as bridge_app
+
+    class _BadResp:
+        status_code = 422
+        text = "schema fail"
+
+        def json(self):
+            return None
+
+    class _Client:
+        def __init__(self, *a, **k) -> None:
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *a) -> None:
+            return None
+        def post(self, *a, **k):
+            return _BadResp()
+
+    class _Httpx:
+        Client = _Client
+
+    import sys
+    sys.modules["httpx"] = _Httpx  # type: ignore
+    monkeypatch.setattr(bridge_app, "httpx", _Httpx, raising=False)
+
+    with caplog.at_level(logging.WARNING, logger="pinokio_bridge"):
+        result = bridge_app._publish_presence_event(
+            "comfyui-desktop", "active", bus_url="http://x:1", bus_token=""
+        )
+    assert result is None
+    assert any("nats_event_bus publish returned 422" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
 # Surface 1: Autolaunch
 # ---------------------------------------------------------------------------
 

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/room/room.presence.v1.schema.json",
+  "title": "Room Presence v1",
+  "description": "Presence event for a room — who joined, left, focused, blurred, or is currently active. Emitted by the room UI (notebook-workbench, creator-canvas-primary) and by P7 when an agent session enters or leaves the room. Consumed by the room sidebar to render the active collaborator list.",
+  "type": "object",
+  "required": [
+    "room_id",
+    "presence_id",
+    "actor",
+    "actor_kind",
+    "action",
+    "observed_at"
+  ],
+  "properties": {
+    "room_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Room manifest identifier the presence event refers to."
+    },
+    "presence_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique id for this presence event. Enables dedup if the same event is published by multiple surfaces."
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Optional P7 room session id. Null when presence happens outside an active session."
+    },
+    "actor": {
+      "type": "string",
+      "minLength": 1,
+      "description": "User handle, agent name, or service identifier the presence event is about."
+    },
+    "actor_kind": {
+      "type": "string",
+      "enum": ["user", "agent", "service"],
+      "description": "Classifies the actor. user = a human, agent = an AI agent session, service = a background process (e.g. pinokio-bridge)."
+    },
+    "action": {
+      "type": "string",
+      "enum": ["join", "leave", "focus", "blur", "active", "idle"],
+      "description": "What the actor did. focus/blur are tab- or window-level. active/idle are coarse heartbeat states."
+    },
+    "surface": {
+      "type": ["string", "null"],
+      "description": "Optional room surface the action is scoped to (e.g. notebook-workbench, comfy-collab). Null when surface-agnostic."
+    },
+    "actor_metadata": {
+      "type": "object",
+      "description": "Optional actor context (model_id, device, user_agent, etc.). Free-form.",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp the presence event was observed."
+    }
+  },
+  "additionalProperties": false
+}

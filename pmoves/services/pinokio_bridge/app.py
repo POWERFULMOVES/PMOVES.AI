@@ -20,9 +20,11 @@ the only consumer that mutates state.
 """
 # NOTE: do NOT add `from __future__ import annotations` — Pydantic v2 +
 # FastAPI Body() need real class refs at runtime, not PEP 563 strings.
+import logging
 import os
 import secrets
 import subprocess
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -34,6 +36,9 @@ from pydantic import BaseModel, Field
 from .state import DEFAULT_PINOKIO_HOME, PinokioState
 
 
+logger = logging.getLogger("pinokio_bridge")
+
+
 # --------------------------------------------------------------------------
 # Config
 # --------------------------------------------------------------------------
@@ -42,6 +47,83 @@ PORT = int(os.environ.get("PINOKIO_BRIDGE_PORT", "8130"))
 HOST = os.environ.get("PINOKIO_BRIDGE_HOST", "127.0.0.1")
 PINOKIO_HOME = Path(os.environ.get("PINOKIO_HOME", DEFAULT_PINOKIO_HOME))
 BRIDGE_TOKEN = os.environ.get("PMOVES_BRIDGE_TOKEN", "")
+
+# Slice-3 NATS pipeline integration. When NATS_EVENT_BUS_URL is set
+# (e.g. http://nats_event_bus:8131), a successful app launch fires a
+# `room.presence.v1` event with actor_kind=service so the room
+# sidebar can show "comfyui-desktop is now running" alongside user
+# presence. The POST is best-effort: a failure to reach the bus is
+# logged but does NOT fail the launch.
+NATS_EVENT_BUS_URL = os.environ.get("NATS_EVENT_BUS_URL", "").rstrip("/")
+NATS_EVENT_BUS_TOKEN = os.environ.get("NATS_EVENT_BUS_TOKEN", "")
+
+
+def _publish_presence_event(
+    slug: str,
+    action: str,
+    *,
+    room_id: Optional[str] = None,
+    extra_metadata: Optional[Dict[str, Any]] = None,
+    bus_url: Optional[str] = None,
+    bus_token: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Best-effort: emit a `room.presence.v1` event to nats_event_bus.
+
+    Returns the response body dict on success, or None when no bus is
+    configured / the call failed. Failures (timeout, non-2xx, JSON
+    decode) are logged at WARNING and swallowed — a launch must not
+    fail because the event bus is down.
+
+    `bus_url` and `bus_token` default to the module-level NATS_EVENT_BUS_URL
+    / NATS_EVENT_BUS_TOKEN so production code doesn't have to pass them.
+    Tests pass fakes (or both empty) to assert on the call.
+
+    The `httpx` library is imported lazily so a non-network test
+    environment without httpx still loads the module.
+    """
+    url = (bus_url if bus_url is not None else NATS_EVENT_BUS_URL).rstrip("/")
+    token = bus_token if bus_token is not None else NATS_EVENT_BUS_TOKEN
+    if not url:
+        return None
+    try:
+        import httpx  # type: ignore
+    except ImportError:
+        logger.warning("nats_event_bus URL configured but httpx is not installed; skipping publish")
+        return None
+
+    now = datetime.now(timezone.utc).isoformat() + "Z"
+    payload: Dict[str, Any] = {
+        "room_id": room_id or "unknown",
+        "presence_id": str(uuid.uuid4()),
+        "actor": f"pinokio_bridge:{slug}",
+        "actor_kind": "service",
+        "action": action,
+        "surface": slug,
+        "observed_at": now,
+    }
+    if extra_metadata:
+        payload["actor_metadata"] = extra_metadata
+    body = {
+        "topic": "room.presence.v1",
+        "payload": payload,
+        "source": "pinokio_bridge",
+    }
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-PMOVES-NatsBus-Token"] = token
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            r = client.post(f"{url}/v1/publish", json=body, headers=headers)
+        if r.status_code >= 300:
+            logger.warning("nats_event_bus publish returned %d: %s", r.status_code, r.text[:200])
+            return None
+        try:
+            return r.json()
+        except Exception:  # noqa: BLE001
+            return None
+    except Exception as e:  # noqa: BLE001 — best-effort, never block the launch
+        logger.warning("nats_event_bus publish failed (slug=%s, action=%s): %s", slug, action, e)
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -172,6 +254,19 @@ def create_app(
         if isinstance(meta, dict):
             meta["state"] = "launching"
             meta["pid"] = proc.pid
+        # Best-effort room.presence.v1 broadcast (slice-3 NATS pipeline).
+        # A failure here MUST NOT fail the launch — the process is
+        # already running by this point. room_id is best-effort: the
+        # app meta may not declare it, in which case we pass None and
+        # the bus defaults the field to "unknown".
+        _meta = state.get_app(slug)
+        _room_id = _meta.get("room_id") if isinstance(_meta, dict) else None
+        _publish_presence_event(
+            slug,
+            "active",
+            room_id=_room_id,
+            extra_metadata={"pid": proc.pid, "script": req.script},
+        )
         return {
             "slug": slug,
             "script": req.script,
