@@ -3367,6 +3367,7 @@ services:
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - MINIO_BUCKET=${A2UI_MINIO_BUCKET:-outputs}
+    - PMOVES_NETWORKS=pmoves_bus
     ports:
     - ${A2UI_RENDERER_BIND:-127.0.0.1}:${A2UI_RENDERER_PORT:-8107}:8107
     # Chromium needs more shared memory than Docker's 64MB default.
