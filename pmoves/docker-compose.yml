@@ -2879,7 +2879,8 @@ services:
       context: ../PMOVES-Archon
       dockerfile: Dockerfile
     image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
-    container_name: pmoves-archon
+    # No container_name: keep the compose-default `${PROJECT}-archon-1` name that
+    # `wait-agents` and the REST policy probe (Makefile) inspect by that exact name.
     hostname: archon
     restart: unless-stopped
     environment:
@@ -2925,6 +2926,9 @@ services:
         aliases:
         - archon-server
       pmoves_bus:
+      # Archon needs egress to reach the Claude API + GitHub with the configured
+      # credentials; pmoves_app/pmoves_bus are internal-only.
+      pmoves_external:
     profiles:
     - agents
     healthcheck:
