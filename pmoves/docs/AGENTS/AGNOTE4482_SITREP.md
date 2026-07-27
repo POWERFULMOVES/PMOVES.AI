@@ -193,7 +193,7 @@ When you need cross-session context, use Cipher Memory via **skills with local f
 
 The key: **store with one phrasing, search with another**. When Cipher is fully online, its embedding model bridges the gap across phrasings.
 
-**Intended MCP tools** (blocked - see known issue below):
+**Intended MCP tools** (resolved 2026-07-13, see below):
 - `pmoves_cipher_store` - persist findings, decisions, session summaries
 - `pmoves_cipher_search` - recall context from prior sessions
 - `pmoves_cipher_store_reasoning` - multi-step reasoning traces

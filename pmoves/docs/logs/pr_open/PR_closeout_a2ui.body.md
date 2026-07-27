@@ -4,7 +4,7 @@ Post-merge closeout for the WEBSITE_AS_AGENT_CANVAS lane. The 3 A2UI PRs (#2132/
 
 - **docs(post-merge): LEARNINGS addendum** to `pr_trim_2132_LEARNINGS.md` — captures the Fordham-resident-legitimacy finding from B850-CLAUDE's 2026-07-16 cross-lane CHIT review. The trim cycle captured code findings; this addendum captures the content/fixture finding (2 attributed quotes in `fordham-hill.json` with no recorded consent or provenance). Deploy-gate, not merge-gate.
 - **docs(post-merge): SITREP refresh** — `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` updated to reflect the post-merge state (3-PR stack merged 2026-07-18, post-merge commits #2154 #2164, the `pmoves/docs/pilots/fordham-hill/` directory, the `CATACLYSM_CROSSLINKS.md` bridge doc). A fresh local model on Spark / Knuckles can read this and pick up where Mavis-5090 left off.
-- **docs(post-merge): AGNOTE lane closeout row** — explicit Mavis-5090 RELEASE row noting the lane is closed, with reference to 5090-CLAUDE's substantive "A2UI Stack Landed" row. Lists what the lane produced (15 commits, 3 PRs) and what is deferred to the post-merge follow-up cron (Fordham-resident-legitimacy, v0.3 pm-ballot rebuild, HMAC → Ed25519, CF Pages deploy, B-mode watcher).
+- **docs(post-merge): AGNOTE lane closeout row** — explicit Mavis-5090 RELEASE row noting the lane is closed, with reference to 5090-CLAUDE's substantive "A2UI Stack Landed" row. Lists what the lane produced (15 commits, 3 PRs) and what is deferred to the post-merge follow-up cron (v0.3 pm-ballot rebuild, HMAC → Ed25519, CF Pages deploy, B-mode watcher). Fordham-resident-legitimacy has been resolved separately in PR #2269.
 
 ## Why this is docs-only
 
@@ -18,11 +18,11 @@ This PR is the **small follow-up** that closes the loop in the artifacts I (Mavi
 
 ## Testing
 
-N/A — docs only, no code or conformance gate changes.
+Docs-only PR. No code or conformance gate changes.
 
 - [x] CHIT Contract Check — no contract changes; new doc additions only
 - [ ] Updated contracts, schemas, or topics — N/A
-- [x] Added/updated documentation — see the 3 changed files
+- [x] Added/updated documentation — see the 4 changed files
 
 ## Review Coordination
 
@@ -31,11 +31,11 @@ N/A — docs only, no code or conformance gate changes.
 
 ## Follow-up Tasks
 
-- [ ] DARKXSIDE: confirm Fordham-resident-legitimacy answer (real + consented, or rewrite to obvious-synthetic personas, or add a "not affiliated with Fordham Hill Owners Corp" disclaimer) before public CF Pages deploy
+- [x] ~~DARKXSIDE: confirm Fordham-resident-legitimacy answer~~ — **Resolved in PR #2269**: quotes rewritten to synthetic personas + share-your-story CTA
 - [ ] v0.3 pm-ballot `createTextNode` / `textContent` rebuild so the CodeQL `xss-through-dom` query passes structurally (post-merge follow-up lane, watched by the Mavis-5090 cron)
 - [ ] HMAC → Ed25519 migration for the tenant signing card (per #2154)
 - [ ] Real CHIT signing (replace `chit-stub:` prefix) — needs `CHIT_PASSPHRASE` loaded
-- [ ] CF Pages deploy target execution — operator call after Fordham-resident-legitimacy resolves
+- [ ] CF Pages deploy target execution — operator call (Fordham-resident-legitimacy resolved in #2269)
 - [ ] B-mode watcher (when KiloCode ships n8n) — `pr_review_watcher.py --mode nats`
 
 ## Reviewer Notes
