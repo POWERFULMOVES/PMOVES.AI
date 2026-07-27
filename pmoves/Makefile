@@ -3291,6 +3291,37 @@ down-activepieces: ## Stop the ActivePieces self-host
 activepieces-health: ## Check ActivePieces app health
 	@curl -sf "http://localhost:$${AP_APP_PORT:-8087}/api/v1/flags" >/dev/null && echo "✔ activepieces healthy" || (echo "✗ activepieces unhealthy" && exit 1)
 
+# --- Persona living-doc room (Phase 5 host cutover) — PUBLIC static site at
+# persona.pmoves.ai behind the Traefik edge (docker-compose.traefik.yml, #2221).
+# Serves the RENDERED living-doc, NOT the OpenRoom operator desktop (private).
+# See docs/handoffs/persona-room-public-edge.md.
+PERSONA_DIST := $(CURDIR)/rooms/persona/dist
+PERSONA_DC := docker compose -p $(PROJECT)-persona --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.persona.yml
+
+.PHONY: persona-render up-persona down-persona persona-health
+persona-render: ## Render the persona living-doc (PreTeXt + Remotion) into rooms/persona/dist
+	@echo "→ PreTeXt case study …"
+	@cd rooms/persona/pretext && uv run --no-project --with pretext pretext build web
+	@echo "→ Remotion walkthrough (pulls deps + headless chromium) …"
+	@cd services/a2ui-renderer && (npm ci >/dev/null 2>&1 || npm install) && npm run render:provenance:file -- --default-input demos/persona_walkthrough.request.json --default-output demos/persona_walkthrough.preview.mp4
+	@echo "→ assembling static bundle → rooms/persona/dist"
+	@rm -rf "$(PERSONA_DIST)" && mkdir -p "$(PERSONA_DIST)/pretext"
+	@cp rooms/persona/index.html "$(PERSONA_DIST)/index.html"
+	@cp -r rooms/persona/pretext/output/web/. "$(PERSONA_DIST)/pretext/" 2>/dev/null || echo "  (pretext output missing — check the build above)"
+	@cp services/a2ui-renderer/demos/persona_walkthrough.preview.mp4 "$(PERSONA_DIST)/walkthrough.mp4" 2>/dev/null || echo "  (walkthrough render missing — slot degrades to 'authored' link)"
+	@echo "✔ persona bundle staged at rooms/persona/dist"
+
+up-persona: ## Serve the persona living-doc at persona.pmoves.ai (Traefik edge must be up)
+	@test -f "$(PERSONA_DIST)/index.html" || { echo "ERROR: no rendered bundle — run 'make persona-render' first"; exit 1; }
+	@$(PERSONA_DC) up -d
+	@echo "✔ persona-room up — Traefik serves https://persona.pmoves.ai (ensure the DNS record + edge are live)"
+
+down-persona: ## Stop the persona living-doc service
+	@$(PERSONA_DC) down
+
+persona-health: ## Check the persona-room container status
+	@$(PERSONA_DC) ps persona-room
+
 n8n-api-bootstrap: ## Create/login the n8n owner and mint a fresh Public API key into the local env file
 	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/bootstrap_n8n_api.py" \
 		--base-url "$(N8N_BASE_URL)" \

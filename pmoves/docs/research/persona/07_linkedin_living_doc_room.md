@@ -73,6 +73,34 @@ The room registers in `pmoves/config/rooms/catalog.json` and is stage-managed by
 - **Remotion scope**: one 3-min walkthrough first, or the full clip set (beats→code, convergence, teaching) up front.
 - **Domain cutover**: how/when pmoves.ai DNS points at the new (non-CF) host.
 
-## 8. Non-goals (this pass)
+## 8. Non-goals (original plan pass)
 
-No build, no host provisioning, no DNS change. This is the scoped plan; implementation is a separate, phased effort gated on §7.
+No build, no host provisioning, no DNS change. That was the scoped plan; implementation followed in the phases below.
+
+## 9. Implementation status + Phase 5 runbook
+
+| Phase | Status |
+|---|---|
+| 1. Content model | ✅ `persona.json` (#2236) |
+| 2. Room shell | ✅ a2ui shell (#2237) |
+| 3. Remotion walkthrough | ✅ composition authored (#2247) — `services/a2ui-renderer/demos/persona_walkthrough.request.json` |
+| 4. PreTeXt panels | ✅ authored + build-verified (#2238) — `rooms/persona/pretext/` |
+| 4.5 OpenRoom manifest | ✅ `config/rooms/persona.room.livingdoc.json` (#2246), adapter-served |
+| **5. Host on pmoves.ai proper** | **wiring landed — operator runs render + bring-up + DNS** |
+
+**Decision (locked):** public URL **`persona.pmoves.ai`**; serve the **rendered static living-doc** (a2ui shell + PreTeXt HTML + Remotion walkthrough) behind the #2221 Traefik edge. The OpenRoom *operator desktop* (Mavis-5090 adapter) stays **private** — same manifest, two surfaces.
+
+**What shipped (this PR):**
+- `docker-compose.persona.yml` — hardened unprivileged-nginx `persona-room` service, Traefik labels for `persona.pmoves.ai` (**public** — no `pmoves-forward-auth` middleware).
+- `config/nginx/persona.conf` — static serve (:8080), security headers, `/healthz`.
+- Makefile: `persona-render` (PreTeXt + Remotion → `rooms/persona/dist/`), `up-persona`, `down-persona`, `persona-health`.
+- `docs/handoffs/persona-room-public-edge.md` — the edge-overlay handoff brief.
+
+**Operator runbook (Known Road):**
+1. Ensure the Traefik edge is up (creates the external `pmoves_external` network).
+2. **DNS**: point `persona.pmoves.ai` → the edge host (Cloudflare; the `*.pmoves.ai` DNS-challenge cert / resolver `cf` covers it).
+3. `make -C pmoves persona-render` — renders PreTeXt + Remotion into `rooms/persona/dist/` (gitignored).
+4. `make -C pmoves up-persona` — starts `persona-room`; Traefik auto-discovers it and serves `https://persona.pmoves.ai`.
+5. Promote the room manifest `stage: live` (already set) and verify with `make -C pmoves persona-health`.
+
+Investor/financial panels remain **out** of the public bundle (gated separately, per §7 — kept private).
