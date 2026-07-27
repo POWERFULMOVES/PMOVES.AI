@@ -11,11 +11,13 @@
     "status": "in_progress",
     "started_at": "2026-07-27T09:23:00Z",
     "operator": "darkxside",
-    "model_anchor": "creator-steward"
+    "model_anchor": "creator-steward",
+    "merged_at": "2026-07-27T15:29:02Z",
+    "pr_state": "MERGED"
   },
   "slices": {
     "1_contract_extension": {
-      "status": "SHIPPED",
+      "status": "SHIPPED_MERGED",
       "shipped_at": "2026-07-27T09:23:00Z",
       "title": "Room manifest schema extensions: room_purpose, creator_surface, hardware_requirements, pinokio_app_refs",
       "commits": [
@@ -31,7 +33,10 @@
         "branch": "creator-collab-iter-1",
         "merge_target": "feat/creator-collab-lane",
         "reviewer": "chatgpt-codex-connector"
-      }
+      },
+      "merged_at": "2026-07-27T15:29:02Z",
+      "merge_commit": "ad6f62db8a7341bcb1b3ca27ef4ab6f541230c09",
+      "merged_by": "POWERFULMOVES"
     },
     "2_pinokio_bridge_skill": {
       "status": "pending",
@@ -230,9 +235,10 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-27T15:00:00Z",
-    "next_run": null,
+    "last_run": "2026-07-27T15:29:00Z",
+    "next_run": "2026-07-27T15:59:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
-    "disarmed_reason": "cycle 2 closed >30m ago, no new threads, lane review activity settled"
+    "disarmed_reason": "cycle 2 closed >30m ago, no new threads, lane review activity settled",
+    "note": "slice 1 merged to main at 15:29Z; lane ready for slice 2 (pinokio-bridge-skill) - awaiting operator signal to start or to disarm"
   }
 }
