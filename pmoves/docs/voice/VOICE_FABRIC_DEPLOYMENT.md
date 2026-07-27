@@ -34,9 +34,19 @@ a preferred node is used when up, else the first eligible node that is up, else 
 floor. The CHIT-sign→voice subscriber (`tools/voice_cast_on_sign.py`) POSTs to Flute-Gateway;
 Flute does the node selection. **Self-healing is the routing layer, not the engine.**
 
-> **Implementation status:** Host-affinity routing is the **target architecture**.
-> Until `resolve_engine_host()` is wired into the Flute-Gateway synthesis path, casts
-> target the single configured provider URL (`ULTIMATE_TTS_URL`/`OMNIVOICE_URL`).
+> **Implementation status:** Host-affinity routing is **wired into the synthesis path**
+> and **opt-in**. `resolve_engine_target()` (persona_selector) is called by
+> `/v1/voice/synthesize` for the `ultimate_tts` and `omnivoice` providers: when
+> `VOICE_HOST_AFFINITY=1`, it resolves the engine's node via `resolve_engine_host()`
+> and host-swaps the configured URL to that node's Tailscale hostname
+> (`pmoves-<node>`, scheme/port/path preserved), routing the cast to a transient
+> provider bound to that URL. The chosen node is returned in the response `node` field.
+>
+> **Fail-open by default.** With `VOICE_HOST_AFFINITY` unset (the default), or when the
+> engine has no `host_affinity` row / no eligible node is up, casts fall back to the
+> single configured provider URL (`ULTIMATE_TTS_URL`/`OMNIVOICE_URL`) — unchanged
+> behaviour. `VOICE_FLEET_NODES` (comma-separated up-node ids) restricts routing to
+> nodes currently up; unset means "assume the preferred node is up".
 
 ## The reachability rule (localhost vs Docker)
 

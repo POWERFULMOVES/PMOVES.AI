@@ -141,3 +141,76 @@ def test_resolver_tolerates_int_available_node():
     # Defense-in-depth: an int node id from a caller still matches the string slug.
     res = ps.resolve_engine_host("higgs", available_nodes=[5090])
     assert str(res["selected"]) == "5090"
+
+
+# --- resolve_engine_target: the synthesis-path host-affinity seam ---
+
+_CONFIGURED = "http://host.docker.internal:7860"
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_target_disabled_returns_configured_url():
+    # Opt-in OFF → single-configured-URL behaviour, no node.
+    url, node = ps.resolve_engine_target("kokoro", _CONFIGURED, enabled=False)
+    assert url == _CONFIGURED
+    assert node is None
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_target_host_swaps_to_preferred_node():
+    # Enabled + preferred up → host swapped to pmoves-<node>, port preserved.
+    url, node = ps.resolve_engine_target("kokoro", _CONFIGURED, enabled=True)
+    assert node == "kvm4-2"
+    assert url == "http://pmoves-kvm4-2:7860"
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_target_falls_back_to_next_up_node():
+    url, node = ps.resolve_engine_target(
+        "kokoro", _CONFIGURED, available_nodes=["kvm4-1", "spark"], enabled=True,
+    )
+    assert node == "kvm4-1"
+    assert url == "http://pmoves-kvm4-1:7860"
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_target_numeric_node_becomes_hostname():
+    url, node = ps.resolve_engine_target(
+        "higgs", _CONFIGURED, available_nodes=["5090"], enabled=True,
+    )
+    assert node == "5090"
+    assert url == "http://pmoves-5090:7860"
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_target_no_eligible_node_falls_back():
+    # GPU engine, only a CPU KVM up → no node selected → configured URL.
+    url, node = ps.resolve_engine_target(
+        "indextts2", _CONFIGURED, available_nodes=["kvm4-2"], enabled=True,
+    )
+    assert url == _CONFIGURED
+    assert node is None
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_target_unknown_engine_falls_back():
+    # e.g. the omnivoice branch: no host_affinity row → configured URL used.
+    url, node = ps.resolve_engine_target("omnivoice", _CONFIGURED, enabled=True)
+    assert url == _CONFIGURED
+    assert node is None
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_target_preserves_path_and_query():
+    url, node = ps.resolve_engine_target(
+        "kokoro", "https://host.docker.internal:8002/tts?fmt=wav", enabled=True,
+    )
+    assert node == "kvm4-2"
+    assert url == "https://pmoves-kvm4-2:8002/tts?fmt=wav"
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_node_to_host_prefixes_and_passthrough():
+    assert ps.node_to_host("spark") == "pmoves-spark"
+    assert ps.node_to_host("5090") == "pmoves-5090"
+    assert ps.node_to_host("pmoves-kvm4-2") == "pmoves-kvm4-2"  # already prefixed
