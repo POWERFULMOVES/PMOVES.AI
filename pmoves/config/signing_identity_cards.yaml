@@ -410,3 +410,27 @@ cards:
       created: "2026-07-09"
       interim: false
       notes: "Community steward for Fordham Hill pilot. SSH fingerprint pending operator action."
+
+  # ---- Creator Studio Steward ----
+  - card_id: "00000000-0000-4000-8000-000000000050"
+    agent_id: creator-steward
+    active: true
+    role: creator_steward
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+      ci_runner_label: null
+    h:
+      agent_id: "creator-steward"
+      display_name: "Creator Studio Steward"
+      glyph: "✺"              # ✺ Creator / atelier mark
+      color: "#7C3AED"             # Violet-600 — matches creator-studio accent
+      voice: companion
+      role: creator_steward
+      archetype: creative_director
+      vote_weight: 1.0
+      governance_scope: creator-studio.room.collab
+    metadata:
+      created: "2026-07-27"
+      interim: true
+      notes: "Added 2026-07-27 (creator-collab slice 1) per P1 review on PR #2264 — was a missing card referenced by the creator-studio room manifest (meta.chit.card_id 00000000-0000-4000-8000-000000000010 belongs to z890-claude, not creator-steward). Marked interim pending operator ssh-keygen; flip to non-interim + populate ml.ssh_fingerprint / h.ssh_fingerprint / github_app_installation_id when the steward runtime is up."
