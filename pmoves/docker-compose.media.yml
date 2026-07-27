@@ -198,6 +198,7 @@ services:
     - pmoves_bus
     - pmoves_api
     - pmoves_data  # MinIO access (minio:9000)
+    - pmoves_external  # host port publish (tier nets are internal:true)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
       interval: 30s
@@ -205,6 +206,50 @@ services:
       retries: 3
       start_period: 30s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  transcribe-frontend:
+    <<: *tier-worker-hardened
+    build:
+      context: ../PMOVES-transcribe-and-fetch
+      dockerfile: Dockerfile
+    image: ${TRANSCRIBE_FRONTEND_IMAGE:-pmoves-transcribe-frontend:local}
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    # Browser-facing base = backend host port; server-side calls stay in-network
+    - NEXT_PUBLIC_API_BASE=${TRANSCRIBE_PUBLIC_API_BASE:-http://localhost:8074}
+    # Next standalone binds to HOSTNAME; docker injects the container id there
+    - HOSTNAME=0.0.0.0
+    - INTERNAL_BACKEND_URL=http://transcribe-backend:8000
+    - PMOVES_NETWORKS=pmoves_app
+    depends_on:
+      transcribe-backend:
+        condition: service_healthy
+    ports:
+    - ${TRANSCRIBE_FRONTEND_BIND:-0.0.0.0}:${TRANSCRIBE_FRONTEND_HOST_PORT:-448}:448
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_external  # host port publish (tier nets are internal:true)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:448/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:

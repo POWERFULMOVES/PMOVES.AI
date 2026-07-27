@@ -168,6 +168,15 @@ class MediaProcessor:
             auth_response = await client.post(
                 f"{self.jellyfin_url}/Users/AuthenticateByName",
                 json=_build_auth_payload(self.jellyfin_username, self.jellyfin_password),
+                # Jellyfin 10.9+ rejects AuthenticateByName without a
+                # MediaBrowser authorization header (400, not 401).
+                headers={
+                    "X-Emby-Authorization": (
+                        'MediaBrowser Client="pmoves-audio-processor", '
+                        'Device="audio-processor", '
+                        'DeviceId="pmoves-audio-processor", Version="1.0"'
+                    )
+                },
             )
         except httpx.HTTPError as exc:
             raise JellyfinAuthError(f"Failed to reach Jellyfin for authentication: {exc}") from exc
