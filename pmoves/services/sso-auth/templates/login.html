@@ -1,6 +1,7 @@
 <!doctype html><html><head><meta charset="utf-8"><title>PMOVES Sign in</title></head>
 <body style="font-family:system-ui;max-width:22rem;margin:4rem auto">
   <h1>PMOVES</h1>
+  {% if google_enabled %}<a href="{{ google_url }}" style="display:block;padding:.6rem;margin-bottom:.5rem;text-align:center;background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:6px;text-decoration:none">Sign in with Google</a>{% endif %}
   <a href="{{ github_url }}" style="display:block;padding:.6rem;text-align:center;background:#24292e;color:#fff;border-radius:6px;text-decoration:none">Sign in with GitHub</a>
   <p style="text-align:center;color:#888">or</p>
   <form method="post" action="/login">

@@ -35,6 +35,22 @@ def test_login_page_renders():
     r = client.get("/login?rd=https://health.pmoves.ai")
     assert r.status_code == 200 and b"Sign in with GitHub" in r.content
 
+def test_google_button_hidden_by_default():
+    # SSO_GOOGLE_ENABLED unset (the _env fixture doesn't set it) => no button,
+    # so we never bounce a user off a GoTrue "provider disabled" error.
+    r = client.get("/login")
+    assert r.status_code == 200 and b"Sign in with Google" not in r.content
+
+def test_google_button_shown_when_enabled(monkeypatch):
+    monkeypatch.setenv("SSO_GOOGLE_ENABLED", "true")
+    config.settings._reset()
+    r = client.get("/login?rd=https://health.pmoves.ai")
+    assert r.status_code == 200 and b"Sign in with Google" in r.content
+    # The button must drive GoTrue's google external-provider handshake, with
+    # our /callback (carrying rd) as the return target.
+    assert "provider=google" in r.text
+    assert "redirect_to=" in r.text and "%2Fcallback" in r.text
+
 def test_post_login_sets_cookie_then_verify_ok(monkeypatch):
     monkeypatch.setattr(gotrue, "password_grant", lambda email, pw: {"access_token": _access(email)})
     r = client.post("/login", data={"email":"a@b.co","password":"pw","rd":"https://health.pmoves.ai"}, follow_redirects=False)
