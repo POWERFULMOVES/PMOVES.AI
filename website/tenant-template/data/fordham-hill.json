@@ -26,8 +26,8 @@
       "component": "pm-quote-block",
       "props": {
         "quote": "When the mesh node goes down, the block fixes it. When the cell tower goes down, we wait.",
-        "attribution": "Pilot resident, Fordham Hill",
-        "attributionRole": "cooperative member"
+        "attribution": "Sample voice \u2014 Maya R.",
+        "attributionRole": "illustrative persona (not a real resident)"
       }
     },
     {
@@ -220,7 +220,17 @@
       "component": "pm-quote-block",
       "props": {
         "quote": "We started with five families and a question. Eight weeks later, 23 households are on the lattice and the block votes on its own infrastructure.",
-        "attribution": "Pilot co-organizer"
+        "attribution": "Sample voice \u2014 Devon A.",
+        "attributionRole": "illustrative persona (not a real resident)"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "This could be your voice. If you live at Fordham Hill and want to share what the pilot means to your household, reach out to the PMOVES team. Your story replaces this placeholder.",
+        "attribution": "PMOVES Team",
+        "attributionRole": "community liaison"
       }
     }
   ]
