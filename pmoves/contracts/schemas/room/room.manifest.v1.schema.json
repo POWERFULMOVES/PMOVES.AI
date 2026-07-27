@@ -453,9 +453,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["sm_89", "sm_90", "sm_100", "sm_110", "sm_120"]
+            "enum": ["sm_75", "sm_80", "sm_86", "sm_87", "sm_89", "sm_90", "sm_100", "sm_110", "sm_120"]
           },
-          "description": "Allowed NVIDIA compute capabilities. sm_89 = RTX 4090, sm_90 = H100, sm_110 = GB10 (DGX Spark), sm_120 = RTX 5090."
+          "description": "Allowed NVIDIA compute capabilities. sm_75 = Turing (RTX 20-series, T4), sm_80 = A100 (data-center Ampere), sm_86 = RTX 3060-3090 / RTX 3090 Ti (consumer Ampere, also the Z890 fleet node), sm_87 = Jetson Orin NX (edge Ampere), sm_89 = RTX 4090 (Ada Lovelace), sm_90 = H100 (Hopper), sm_100 = GB100 / B200 (data-center Blackwell), sm_110 = GB10 (DGX Spark, unified-memory Blackwell), sm_120 = RTX 5090 (consumer Blackwell)."
         },
         "node_roles": {
           "type": "array",
@@ -492,6 +492,12 @@
             "type": "integer",
             "minimum": 0,
             "description": "VRAM the room reserves for this app when computing room capacity. Used by P7 to refuse to start the room if the host node can't satisfy the union of reservations."
+          },
+          "gpu_reservation_mode": {
+            "type": "string",
+            "enum": ["concurrent", "exclusive"],
+            "default": "concurrent",
+            "description": "How this app's VRAM reservation combines with sibling refs. 'concurrent' = shares the host GPU with other concurrent apps (default; the host must satisfy the SUM of concurrent reservations). 'exclusive' = claims the whole GPU for this app while it runs (P7 only admits this ref when no other concurrent ref is loaded on the same host). Use exclusive for big models (wan video gen, LoRA training) that won't fit alongside anything else. Added 2026-07-27 via creator-collab-lane review-iter-1 per P2 review on PR #2264."
           }
         },
         "additionalProperties": false
