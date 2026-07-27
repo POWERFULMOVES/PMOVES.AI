@@ -6,7 +6,7 @@
     "worktree": ".worktrees/feat-creator-collab-lane",
     "branch": "feat/creator-collab-lane",
     "pr": 2264,
-    "ship_count": 1,
+    "ship_count": 2,
     "total_slices": 7,
     "status": "in_progress",
     "started_at": "2026-07-27T09:23:00Z",
@@ -39,7 +39,7 @@
       "merged_by": "POWERFULMOVES"
     },
     "2_pinokio_bridge_skill": {
-      "status": "pending",
+      "status": "SHIPPED",
       "title": "Pinokio bridge skill (wrapper around Pinokio's built-in pinokio + gepeto skills)",
       "depends_on": [
         "1_contract_extension"
@@ -48,7 +48,14 @@
         "pmoves/skills/pinokio-bridge-skill/SKILL.md",
         "pmoves/services/pinokio_bridge/app.py",
         "pmoves/services/pinokio_bridge/tests/"
-      ]
+      ],
+      "shipped_at": "2026-07-27T18:00:00Z",
+      "scope": "pmoves/skills/pinokio-bridge-skill/SKILL.md + pmoves/services/pinokio_bridge/ (app.py, state.py, tests/test_app.py, Dockerfile, requirements.txt, README.md) + pmoves/configs/tac_trees/pinokio-p8.tac.yaml",
+      "commits": [
+        "cbb5f9c569",
+        "855c7cb7a0"
+      ],
+      "tests": "pinokio_bridge 24/24; P7 46/46; A2UI 16/16; manifests 10/11"
     },
     "3_nats_pipeline": {
       "status": "pending",
@@ -235,10 +242,10 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-27T15:29:00Z",
-    "next_run": "2026-07-27T15:59:00Z",
+    "last_run": "2026-07-27T18:00:00Z",
+    "next_run": "2026-07-27T18:30:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
     "disarmed_reason": "cycle 2 closed >30m ago, no new threads, lane review activity settled",
-    "note": "slice 1 merged to main at 15:29Z; lane ready for slice 2 (pinokio-bridge-skill) - awaiting operator signal to start or to disarm"
+    "note": "slice 2 SHIPPED on slice-2-pinokio-bridge branch (3 commits); merged into feat/creator-collab-lane. Slice 3 (NATS pipeline) is next pending but depends on slice 5 (creator-studio E2E smoke) per the original plan; will hold for operator signal."
   }
 }

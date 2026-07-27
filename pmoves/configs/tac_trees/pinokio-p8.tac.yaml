@@ -1,0 +1,248 @@
+# TAC Tree: Pinokio 8 Integration
+# =================================
+# Audits the Pinokio 8 surfaces that the pmoves-pinokio_bridge service
+# (pmoves/services/pinokio_bridge/) reads from and writes to. Companion
+# to pinokio-p7.tac.yaml (which tracks the v1->v7 transition); P8 lands
+# four new managed surfaces (autolaunch, orchestration, managed skills,
+# GPU/VRAM templates) that the bridge exposes to PMOVES agents.
+#
+# Run from the monorepo root:
+#   make -C pmoves tac-pinokio-p8
+# or via the tac runner:
+#   pmoves/scripts/tac.py run pmoves/configs/tac_trees/pinokio-p8.tac.yaml
+#
+# Pre-flight: Pinokio 8.x installed locally (pterm --version reports
+# 8.x.x or higher), pinokio_bridge service reachable on port 8130,
+# PMOVES_BRIDGE_TOKEN exported in the environment.
+#
+# This file is the canonical audit surface for the creator-collab slice 2
+# deliverable. If any of the leaf checks fail, the bridge service will
+# silently serve stale state; the P7 room-orchestrator will then route
+# to the wrong node; rooms will fail to autolaunch their dependencies.
+
+name: "Pinokio 8 Integration"
+version: "1.0.0"
+description: "Track Pinokio 8 managed surfaces (autolaunch, orchestration, managed skills, GPU/VRAM templates) + bridge service health + cross-machine state for PMOVES consumers."
+
+root:
+  id: pinokio-p8
+  task: "Pinokio 8 integration review"
+  context: "D:\\pinokio\\ (or ~/pinokio/) + pmoves-pinokio_bridge service on port 8130 + pmoves/services/p7-room-orchestrator consumer"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Pinokio 8 install + version + bridge service
+    # =========================================================================
+    - id: pinokio.p8.install
+      task: "Pinokio 8 install per machine"
+      context: "D:\\pinokio\\ + pterm in PATH + PMOVES_HOME = D:\\pinokio"
+      agent_hint: codex
+      children:
+        - id: pinokio.p8.version.check
+          task: "Pinokio 8.x installed (>= 8.0.0)"
+          action:
+            type: shell
+            target: "pterm"
+            args: ["--version"]
+            expect: "Output contains '8.' (e.g. '8.0.0' or '8.x.y')"
+          context: "P8 brings the autolaunch + managed-skills + structured-argv surfaces this tree audits"
+          agent_hint: codex
+
+        - id: pinokio.p8.home.dir
+          task: "Pinokio home dir is on the expected path"
+          action:
+            type: file.exists
+            target: "D:\\pinokio\\version.json"
+            expect: "File exists (creator-studio manifest is set up against this path)"
+          context: "Default Windows home; override via PINOKIO_HOME env var on other machines"
+          agent_hint: codex
+
+        - id: pinokio.p8.bridge.service.health
+          task: "pinokio_bridge service is reachable on port 8130"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/healthz"
+            method: "GET"
+            expect: "HTTP 200 with body {status: ok, pinokio_version: 8.x.x, writes_enabled: true|false}"
+          context: "Service should be running on every machine that hosts a PMOVES GPU node; PMOVES_BRIDGE_TOKEN env var enables writes"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Autolaunch (the P8 first-class feature)
+    # =========================================================================
+    - id: pinokio.p8.autolaunch
+      task: "Autolaunch surfaces per machine + per app"
+      context: "D:\\pinokio\\autolaunch\\state.json - consumed by /v1/autolaunch + /v1/apps/{slug}/autolaunch"
+      agent_hint: codex
+      children:
+        - id: pinokio.p8.autolaunch.state.file
+          task: "Autolaunch state file exists on disk"
+          action:
+            type: file.exists
+            target: "D:\\pinokio\\autolaunch\\state.json"
+            expect: "File exists; pinokio_bridge reads it on startup; missing file = empty autolaunch state in API responses"
+          context: "P8 writes this on every autolaunch toggle; empty file = first-run state"
+          agent_hint: codex
+
+        - id: pinokio.p8.autolaunch.api.list
+          task: "Bridge API /v1/autolaunch returns the autolaunch state"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/autolaunch"
+            method: "GET"
+            expect: "HTTP 200; JSON array with one entry per installed app, each {slug, enabled, script, last_evaluated_at}"
+          context: "P7 reads this once per room-session-open to verify room manifest's pinokio_app_refs[*].autostart matches Pinokio's autolaunch state"
+          agent_hint: codex
+
+        - id: pinokio.p8.autolaunch.api.set.requires.token
+          task: "POST /v1/apps/{slug}/autolaunch requires the bridge token (fail-closed)"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/apps/comfyui-desktop/autolaunch"
+            method: "POST"
+            headers: {}
+            body: '{"enabled": true}'
+            expect: "HTTP 401 (no token) or HTTP 503 (service has no token configured); never 200 without auth"
+          context: "Token check is the only auth on the bridge; missing auth must not silently succeed"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Orchestration (recursive dependency-aware launch)
+    # =========================================================================
+    - id: pinokio.p8.orchestration
+      task: "Orchestration graph + launch order"
+      context: "D:\\pinokio\\orchestration\\graph.json - consumed by /v1/apps/{slug}/dependencies + /v1/orchestration/graph"
+      agent_hint: codex
+      children:
+        - id: pinokio.p8.orchestration.graph.file
+          task: "Orchestration graph file exists on disk"
+          action:
+            type: file.exists
+            target: "D:\\pinokio\\orchestration\\graph.json"
+            expect: "File exists with at minimum {nodes: [...], edges: [...], cycles: []}"
+          context: "P8 writes this when the user adds a dependency via the Autolaunch 'Add dependency' button; missing file = no managed dependencies"
+          agent_hint: codex
+
+        - id: pinokio.p8.orchestration.cycles
+          task: "No cycles in the orchestration graph"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/orchestration/graph"
+            method: "GET"
+            expect: "HTTP 200 with cycles: [] (empty); any cycle is a launch-order bug Pinokio 8 cannot resolve at runtime"
+          context: "Cycles show up in the P8 UI; the bridge surfaces them in /v1/orchestration/graph so P7 can refuse to start the room"
+          agent_hint: codex
+
+        - id: pinokio.p8.orchestration.api.dependencies
+          task: "Bridge resolves transitive dependencies correctly for at least one known app"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/apps/comfyui-desktop/dependencies"
+            method: "GET"
+            expect: "HTTP 200 with launch_order: [[shared-models], [comfyui-desktop]] (shared-models at level 0, comfyui-desktop at level 1); ready_checks.shared-models = true"
+          context: "P7's comfy-mesh-skill calls this before launching comfyui; if shared-models is not at level 0, the room will fail to start"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Managed skills (Pinokio 8's library syncing into local agent folders)
+    # =========================================================================
+    - id: pinokio.p8.managed.skills
+      task: "Managed skill library + sync targets"
+      context: "D:\\pinokio\\skills\\library.json + sync_state.json - consumed by /v1/skills + /v1/skills/{slug}/sync + /v1/skills/conflicts"
+      agent_hint: codex
+      children:
+        - id: pinokio.p8.managed.skills.library
+          task: "Built-in `pinokio` and `gepeto` skills are in the managed library"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/skills"
+            method: "GET"
+            expect: "HTTP 200; slugs list contains both 'pinokio' and 'gepeto' (built-in skills)"
+          context: "P8 ships these as managed skills; PMOVES's pinokio-bridge skill wraps the same library via /v1/skills"
+          agent_hint: codex
+
+        - id: pinokio.p8.managed.skills.conflicts.resolved
+          task: "No unresolved managed-skill conflicts"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/skills/conflicts"
+            method: "GET"
+            expect: "HTTP 200; empty array or only resolved conflicts (manual review completed)"
+          context: "P8 surfaces conflicts when the local SKILL.md is modified after sync; pmoves-living-docs-refresh uses this to detect drift"
+          agent_hint: codex
+
+        - id: pinokio.p8.managed.skills.sync.target.writable
+          task: "Sync target dir is writable for pmoves user"
+          action:
+            type: file.exists
+            target: "D:\\pinokio\\skills\\sync_targets\\"
+            expect: "Directory exists; pmoves user can write to it (the bridge service runs as pmoves)"
+          context: "P8's sync writes the SKILL.md files into the target dir; if unwritable, /v1/skills/{slug}/sync returns 500"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: GPU/VRAM templates (the {{vram}} / {{gpu_*}} P8 surface)
+    # =========================================================================
+    - id: pinokio.p8.gpu.templates
+      task: "GPU + VRAM detection per machine"
+      context: "D:\\pinokio\\gpu\\state.json - consumed by /v1/gpu/detect + /v1/gpu/match"
+      agent_hint: codex
+      children:
+        - id: pinokio.p8.gpu.detect.api
+          task: "Bridge API /v1/gpu/detect returns the detected GPU"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/gpu/detect"
+            method: "GET"
+            expect: "HTTP 200 with primary.model containing the actual GPU model on the host (e.g. 'RTX 5090' on 5090, 'RTX 3090 Ti' on z890, 'GB10' on Spark)"
+          context: "P7 uses this to route room sessions to the right host; missing file = P7 falls back to pmoves/config/profiles/<node>.yaml (slower path)"
+          agent_hint: codex
+
+        - id: pinokio.p8.gpu.match.creator.studio
+          task: "Bridge can match creator-studio room requirements (sm_120 / 24GB) on the 5090 host"
+          action:
+            type: http
+            target: "http://127.0.0.1:8130/v1/gpu/match?min_vram=24000&gpu_arch=sm_120,sm_110"
+            method: "GET"
+            expect: "HTTP 200 with matched: true on the 5090 (vram 32GB, sm_120); matched: false elsewhere"
+          context: "P7 calls this exact query during creator-studio room-session-open per the slice 1 hardware_requirements schema"
+          agent_hint: codex
+
+        - id: pinokio.p8.gpu.templates.launcher.uses
+          task: "PMOVES-Pinokio launchers reference the {{vram}} / {{gpu_*}} template vars"
+          action:
+            type: grep
+            target: "pbnj/pinokio/api/pmoves-creator-comfyui/install.js"
+            pattern: "\\{\\{vram\\}\\}|\\{\\{gpu_model\\}\\}|\\{\\{gpu_target\\}\\}"
+            expect: "At least one Pinokio launcher in the PMOVES-Pinokio fork references the P8 template vars; if zero, the launchers are still on the v1 model and the bridge's GPU surface is unused"
+          context: "PMOVES-Pinokio fork sync to P8 (separate fleet-fork-sync lane) brings the P8 template support; this check catches the drift"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: Cross-machine P7 + bridge integration
+    # =========================================================================
+    - id: pinokio.p8.cross.machine
+      task: "P7 + bridge work together across the PMOVES fleet"
+      context: "Tailscale mesh provides WAN; P7 + bridge are HTTP-on-localhost services"
+      agent_hint: codex
+      children:
+        - id: pinokio.p7.to.bridge.localhost
+          task: "P7 can reach pinokio_bridge on localhost:8130 from the 5090"
+          action:
+            type: shell
+            target: "curl"
+            args: ["-s", "http://127.0.0.1:8130/healthz"]
+            expect: "HTTP 200 with the bridge health JSON (run from the 5090 host)"
+          context: "P7 is a Python service on the same host; the bridge should be co-located on every fleet node"
+          agent_hint: codex
+
+        - id: pinokio.p8.bridge.routed.across.mesh
+          task: "From 4090 laptop, can reach 5090's bridge via Tailscale"
+          action:
+            type: shell
+            target: "curl"
+            args: ["-s", "http://100.90.223.15:8130/healthz"]
+            expect: "HTTP 200 (the 5090 bridge should be reachable on its Tailscale IP from any fleet node)"
+          context: "Tailscale provides the WAN path; cross-node room routing requires the bridge to be reachable on the tailnet"
+          agent_hint: codex

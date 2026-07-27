@@ -120,7 +120,7 @@ See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 ```
 A0_MCP_ENABLE_DEFAULTS=true
 A0_MCP_FILESYSTEM_ROOTS=/data
-A0_MCP_ARCHON_ENDPOINT=http://archon-server:8051
+A0_MCP_ARCHON_ENDPOINT=http://archon-server:3090
 A0_MCP_NEO4J_URL=bolt://neo4j:7687
 A0_MCP_SUPABASE_URL=http://kong:8000
 A0_MCP_GATEWAY_ENDPOINT=http://gateway:8086
@@ -131,7 +131,7 @@ A0_MCP_SERVERS=
 - Optional advanced override (must be a single line):
 
 ```
-A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=http://archon-server:8051";
+A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=http://archon-server:3090";
 ```
 
 - Seed the runtime mapping file for Agent Zero (writes to `pmoves/data/agent-zero/runtime/mcp/servers.env`):

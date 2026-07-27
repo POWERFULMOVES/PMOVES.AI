@@ -23,7 +23,7 @@ the HuggingFace infrastructure built.
 | Agent registry entries (8201/8202) | stage_1 (registry-only) | No service code yet |
 | NATS subjects (6 HF subjects) | Fully specified | `nats-subjects.md` |
 | HF_TOKEN through CHIT funnel | Wired | secrets_manifest.yaml, tier: llm |
-| Ollama model roster | Pruned + optimized | qwen3.5:35b-a3b-q8_0, nemotron-3-super:120b |
+| Ollama model roster | Pruned + optimized | `qwen3.5:35b-a3b-q4_K_M` is the canonical `local_fallback` for every plan in `dgx-spark-grace-blackwell.yaml`; `nemotron-3-super:120b` is a **Phase-C soak** target (weight 0.0/0.1, NVFP4 pending GB10), not a primary. NVIDIA/nemo lanes are wired via OpenClaw (`opencode-nemoclaw.json`, `opencode-nemotron-claw.json`) — the SPARK profile does not point at them. |
 | GitHub runner | Online | pmoves-spark-ailab (ARM64) |
 
 ## SPARK Crush Awakening — Steps

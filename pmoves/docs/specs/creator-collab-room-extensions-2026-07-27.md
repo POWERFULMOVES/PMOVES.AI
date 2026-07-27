@@ -43,6 +43,28 @@ The two knobs combine into a 4-quadrant behavior matrix that P7's session-open e
 
 P7's session-open validates this constraint at admission: if any `autostart: true` ref has `gpu_reservation_mode: exclusive` AND any other `autostart: true` ref exists, P7 returns `409 conflict` with `room_id` + the offending ref slug(s). The fix is in the manifest, not the runtime.
 
+## P8 surface mapping (added slice 2, 2026-07-27)
+
+Slice 1's schema fields were designed to be the PMOVES-side declaration of the same surfaces Pinokio 8 manages natively. The `pinokio_bridge` service (slice 2) reads from Pinokio's on-disk state and the room manifest, and reconciles them at session-open. Here's the field-by-field mapping:
+
+| Schema field (slice 1) | P8 surface | Bridge endpoint | What P7 does at session-open |
+|---|---|---|---|
+| `pinokio_app_refs[*].slug` | `~/pinokio/api/<slug>/` (app dir) | `GET /v1/apps/{slug}/status` | Resolves the slug to a Pinokio install; 404s the room if the app isn't installed |
+| `pinokio_app_refs[*].role: primary\|optional\|fallback` | — (PMOVES-internal policy) | — | Decides whether the ref is required, nice-to-have, or last-resort; doesn't change Pinokio's view of the app |
+| `pinokio_app_refs[*].gpu_reservation_mb` | — (PMOVES-internal budget) | — | Contributes to the concurrent VRAM sum; the bridge doesn't see this directly |
+| `pinokio_app_refs[*].gpu_reservation_mode: concurrent\|exclusive` | P8 autolaunch + per-app GPU claim | `GET /v1/autolaunch` (post-write verification) | Verifies the P8 autolaunch state matches the manifest's `autostart` intent |
+| `pinokio_app_refs[*].autostart: bool` | P8 `/autolaunch` page state | `GET/POST /v1/apps/{slug}/autolaunch` | Toggles the app's autolaunch; `false` means the app is on-demand only |
+| `hardware_requirements.gpu: bool` | — (room-level decision) | — | Combined with `min_vram_mb` to require the bridge's `/v1/gpu/match` |
+| `hardware_requirements.min_vram_mb` | `{{vram}}` template var | `GET /v1/gpu/match?min_vram=N` | Routes the room session to a host with at least N MB VRAM |
+| `hardware_requirements.gpu_arch: [sm_XX]` | `{{gpu_target}}` template var | `GET /v1/gpu/match?gpu_arch=sm_120,sm_110` | Routes to a host with a matching compute capability (the bridge normalizes the raw `12.0` to `sm_120` internally) |
+| `hardware_requirements.node_roles: [...]` | — (PMOVES fleet topology) | — | Coarse routing preference; the bridge's per-host detection is the final say |
+| `hardware_requirements.cpu_arch: [x86_64\|arm64]` | — (PMOVES fleet topology) | — | Same as node_roles; coarse routing preference |
+| (no direct slice-1 field) | P8 orchestration (recursive deps) | `GET /v1/apps/{slug}/dependencies` | P7 uses this to verify the room's launch order is feasible (e.g. creator-studio needs comfyui which needs shared-models) |
+| (no direct slice-1 field) | P8 managed skills (sync state) | `GET /v1/skills`, `GET /v1/skills/conflicts` | `pmoves-living-docs-refresh` uses this to detect drift between the managed-skill library and the local PMOVES skill folder |
+| (no direct slice-1 field) | P8 GPU templates (full set: `{{vram}}`, `{{gpu_model}}`, `{{gpu_driver}}`, `{{gpu_target}}`, `{{gpus}}`) | `GET /v1/gpu/detect` | P7's `/v1/gpu/detect` is the canonical source for the same data that Pinokio 8's launcher templates see; the bridge keeps the two in sync by reading Pinokio's own state file |
+
+The bridge service is the single source of truth for the read-side. Pinokio's own state files are the source of truth for the write-side; the bridge forwards writes to Pinokio via structured `shell.run` argv (P8 surface, not raw shell).
+
 ## Why this and not a different shape
 
 - **Not extending `room_type`** — `room_type` is the operating pattern (creator/scout/hybrid) and is referenced by `pmoves/configs/agent-teams.yaml`, the skill marketplace, and the OpenRoom adapter. Conflating "what the room does" with "who it serves" would tangle two real concerns. Two fields, two clean axes.
@@ -74,7 +96,11 @@ When slice 6 lands, Fordham on z890 (CPU SESSION) + `creator_surface: ambient` w
 - `pmoves/config/rooms/creator-studio.room.collab.json` — slice 5 seed
 - `pmoves/configs/pinokio-network-inventory.yaml` — fleet inventory
 - `pmoves/config/profiles/{workstation_5090,laptop-4090,dgx-spark-grace-blackwell,z890-coordinator}.yaml` — node profiles
-- `D:\pinokio\prototype\PINOKIO.md` — Pinokio built-in `pinokio` + `gepeto` skills (the bridge we wrap)
+- `D:\pinokio\prototype\PINOKIO.md` — Pinokio v1 docs (legacy, pre-8.0); the bridge wraps P8's autolaunch + orchestration + managed skills + GPU surfaces
+- `https://cocktailpeanutlabs.github.io/p8/` — Pinokio 8.0.0 release notes (the upstream this slice wraps)
+- `pmoves/skills/pinokio-bridge-skill/SKILL.md` — PMOVES-side skill that uses the bridge (slice 2 P1 commit)
+- `pmoves/services/pinokio_bridge/` — the Python adapter (slice 2 functional commit)
+- `pmoves/configs/tac_trees/pinokio-p8.tac.yaml` — the P8 audit tree (slice 2 functional commit)
 - `pmoves/docs/handoffs/creator-comfyui-selfhost-config-2026-06-24.md` — self-host config handoff
 - AGNOTE4482PHI.t1.md — lane CLAIM + RELEASE entries
 
