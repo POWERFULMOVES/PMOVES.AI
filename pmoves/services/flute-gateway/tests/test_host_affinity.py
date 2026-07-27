@@ -210,6 +210,18 @@ def test_target_preserves_path_and_query():
 
 
 @pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
+def test_target_preserves_userinfo_in_url():
+    # Routing keeps embedded credentials in the target URL (so the cast still
+    # authenticates), while the info log uses only the credential-free host:port
+    # (guards against clear-text password logging — CodeQL py/clear-text-logging).
+    url, node = ps.resolve_engine_target(
+        "kokoro", "http://user:secretpw@host.docker.internal:7860", enabled=True,
+    )
+    assert node == "kvm4-2"
+    assert url == "http://user:secretpw@pmoves-kvm4-2:7860"
+
+
+@pytest.mark.skipif(not _PS_AVAILABLE, reason="persona_selector import chain unavailable")
 def test_node_to_host_prefixes_and_passthrough():
     assert ps.node_to_host("spark") == "pmoves-spark"
     assert ps.node_to_host("5090") == "pmoves-5090"

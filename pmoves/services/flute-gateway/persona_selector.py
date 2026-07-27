@@ -301,15 +301,18 @@ def resolve_engine_target(
     if not parts.hostname:
         return configured_url, None
 
-    netloc = node_to_host(selected)
+    # hostport is credential-free and safe to log; the full netloc may carry
+    # userinfo (user:password@host) which must never be logged in clear text.
+    hostport = node_to_host(selected)
     if parts.port:
-        netloc = f"{netloc}:{parts.port}"
+        hostport = f"{hostport}:{parts.port}"
+    netloc = hostport
     if parts.username:
         auth = parts.username + (f":{parts.password}" if parts.password else "")
-        netloc = f"{auth}@{netloc}"
+        netloc = f"{auth}@{hostport}"
 
     target = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
-    logger.info("host-affinity: engine=%s routed to node=%s (%s)", engine, selected, netloc)
+    logger.info("host-affinity: engine=%s routed to node=%s (%s)", engine, selected, hostport)
     return target, str(selected)
 
 
