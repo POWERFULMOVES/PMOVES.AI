@@ -232,13 +232,108 @@ The vendored yt-dlp fork supports **1000+ sites**. Key platforms for PMOVES cont
 3. HuggingFace dataset exports → `/mnt/pmoves/media/datasets/`
 4. Persona grounding from processed content
 
-## Key Decisions Needed (Operator)
+### Phase 6: Social Media Automation (Activepieces Cloud)
+1. Build COS templates for LinkedIn content scheduling
+2. YouTube engagement automation (comment drafting on research videos)
+3. Cross-platform content distribution (Twitter, Discord, LinkedIn)
+4. Creator onboarding flows ("want PMOVES too?" → deployment wizard)
+5. Wire Activepieces Cloud to self-hosted Activepieces via webhook bridge
 
-1. **JuiceFS metadata engine**: PostgreSQL (recommended) vs Redis
-2. **JuiceFS data backend**: Keep MinIO initially (recommended) vs direct filesystem
-3. **Primary Jellyfin host**: Which node runs Jellyfin for mesh playback? (5090 recommended — GPU transcode)
-4. **n8n S3 access**: Keep HTTP-only orchestration (recommended) vs add S3 integration
-5. **Content retention policy**: How long to keep downloaded videos vs transcripts only?
+### Phase 7: Space Monitoring + Retention
+1. Enable node_exporter on all fleet nodes for Prometheus disk metrics
+2. Add disk usage alerts (>85% warning, >95% critical)
+3. Deploy automated cleanup cron: raw video >30 days, live captures >7 days
+4. Add `node_storage_status` table to Supabase for capacity planning
+5. JuiceFS volume policies: per-directory quotas and compression settings
+
+## Operator Decisions (Resolved 2026-07-28)
+
+### 1. JuiceFS metadata engine: PostgreSQL ✅
+Use the existing Supabase Postgres instance. `JUICEFS_META_URL=postgres://...@supabase-db:5432/postgres?search_path=juicefs_meta`. Durable, WAL-replicated, one fewer service to operate.
+
+### 2. Multi-node GPU hosting: Any GPU node can host Jellyfin or process ✅
+Not one primary Jellyfin host — **every node with a GPU** can serve as Jellyfin host or transcode node. KVMs run llama.cpp for lightweight inference, passing through to GPU nodes. Node-enhanced (NVIDIA or AMD) are all compatible.
+
+| Node | GPU | Jellyfin Transcode | llama.cpp | Role |
+|------|-----|-------------------|-----------|------|
+| **5090** | RTX 5090 32GB | NVENC (primary) | CUDA | GPU inference + TTS + media host |
+| **Z890** | none (delegates) | VAAPI (Intel QSV) | CPU | Infrastructure coordinator |
+| **Knuckles** | 2× R9700 64GB RDNA4 | VAAPI (AMD) | ROCm 7.1 HIP | Data-tier + ROCm inference + downloader |
+| **KVM4-2** | none | CPU (software) | CPU (llama.cpp) | Data-storage + lightweight inference |
+| **SPARK** | GB10 Blackwell | NVENC | CUDA | Edge GPU inference |
+| **4090** | RTX 4090 16GB | NVENC | CUDA | Mobile relay |
+
+**Jellyfin federation:** Each node runs Jellyfin pointing at the shared JuiceFS media mount. Clients connect to the nearest/best GPU node for transcode. `JELLYFIN_PublishedServerUrl` is per-node via Tailscale Serve.
+
+**llama.cpp on KVMs:** KVM4-1/KVM4-2 can run lightweight llama.cpp server (CPU) for small models (Qwen2.5-3B, etc) without GPU. GPU nodes expose `llama-server` over HTTP for larger models via TensorZero routing.
+
+**Jellyfin client/plugin review needed:**
+- Jellyfin version 10.11.0 (`lscr.io/linuxserver/jellyfin:10.11.0`) — check for updates
+- GrayJay plugin host (`pmoves/services/grayjay-plugin-host/`) — verify compatibility
+- SSO/OIDC plugin (`pmoves/services/sso-auth/`) — verify token flow
+- Plugin manifest repo URL may need refresh
+
+### 3. Automation: MCP + A2A + Activepieces Cloud ✅
+**Multi-layer automation strategy:**
+
+**Layer 1: MCP agents** — Direct tool access for Crush/HERMES/Agent Zero
+- MCP servers: docker, cipher, Hi-RAG, Tailscale, Supabase, HuggingFace
+- Agents access media via MCP tool calls (list files, trigger downloads, query Hi-RAG)
+
+**Layer 2: A2A** — Agent-to-agent task delegation
+- Agent Zero A2A server (`/.well-known/agent-card.json`, `/a2a/v1/tasks`)
+- Cipher A2A discovery (for cross-node agent visibility)
+- Tasks: "transcribe this video", "generate voice clone", "analyze this content"
+
+**Layer 3: Activepieces Cloud (unlimited runs)** — Social media automation
+- **LinkedIn automation** via COS templates: post scheduling, content repurposing
+- **YouTube engagement**: PMOVES agents help creators with comments on videos used in research
+- **Social media distribution**: Cross-post PMOVES-synthesized content to multiple platforms
+- **Creator collaboration**: Creators who interact with PMOVES content may want PMOVES tools
+- Activepieces Cloud has unlimited runs → no self-hosted worker bottleneck
+- Self-hosted Activepieces (port 8087) remains for private/internal flows
+
+**COS template priorities:**
+- LinkedIn: automated posting from processed video transcripts/persona insights
+- YouTube: comment drafting on research videos, engagement tracking
+- Twitter/X: cross-posting summarized content
+- Discord: community notification when new content is processed
+
+### 4. Content retention: AI lab model — transform, synthesize, analyze ✅
+**Storage policy: Private AI lab, not a public media archive.**
+
+| Content Type | Retention | Rationale |
+|-------------|-----------|------------|
+| Raw video downloads | 30 days post-transcription | Source is re-downloadable; transcripts are permanent |
+| Transcripts | Permanent | Core knowledge base asset |
+| Audio (TTS/voice clones) | Permanent | Generated assets, expensive to recreate |
+| Images (ComfyUI) | Permanent | Generated assets |
+| Generated video (Remotion) | Permanent | Generated assets |
+| Models/weights | Permanent (versioned) | Training investments |
+| Datasets (HF exports) | Permanent | Research assets |
+| Live captures (WebRTC) | 7 days unless flagged | Ephemeral by nature |
+
+**Public-facing: ZERO data exposure unless explicitly business-approved.**
+- Tailscale/Pinokio mesh is private — all content stays inside the mesh
+- cataclysmstudios.com public website: no raw content, only curated/synthesized outputs
+- Demo/enterprise showcases: synthetic only, no real user data
+- Website contact form → sessions for assistance are private (operator-gated)
+
+**Space monitoring and scoping:**
+- Prometheus alert when any node disk usage >85% (needs node_exporter — currently disabled)
+- JuiceFS provides transparent dedup + LZ4/Zstd compression (reduces storage 30-50%)
+- Per-content-type quotas: configurable via JuiceFS volume policies
+- `make volume-list` shows Docker volume sizes
+- Automated cleanup: cron job that purges raw video >30 days old from `/mnt/pmoves/media/video/youtube/` (transcripts preserved)
+- Capacity planning: each node reports disk usage to Supabase `pmoves_core.node_storage_status` table
+
+**AI lab considerations:**
+- Content is meant to be **transformed, synthesized, and analyzed** — not archived as-is
+- Downstream products: datasets (HF), embeddings (Qdrant), knowledge graph (Neo4j), transcripts (Hi-RAG)
+- Raw media is intermediate; the knowledge artifacts derived from it are the permanent assets
+- Voice clone training data: stored in `/mnt/pmoves/media/audio/voice-clones/` with per-persona subdirectories
+- Research datasets: versioned and exported to HuggingFace for reproducibility
+- Agent training data: interaction traces and transcripts feed shape discovery and model fitness
 
 ## Cross-References
 
