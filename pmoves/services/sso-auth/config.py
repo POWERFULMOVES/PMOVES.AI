@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     # value); apps verify it before honoring Remote-User, so a peer that reaches an
     # app OFF-proxy cannot forge the header. Empty => not emitted.
     forward_auth_secret: str = ""  # env: SSO_FORWARD_AUTH_SECRET
+    # Whether GoTrue has the Google external provider wired. Purely a UI gate for
+    # the login page's "Sign in with Google" button — the actual OAuth handshake
+    # lives entirely in GoTrue (SUPABASE_AUTH_EXTERNAL_GOOGLE_*). Showing the
+    # button when the provider is disabled would just bounce the user off a
+    # GoTrue error, so we hide it until the operator enables the provider.
+    google_enabled: bool = False   # env: SSO_GOOGLE_ENABLED (truthy = show button)
 
     @classmethod
     def load(cls) -> "Settings":
@@ -53,6 +59,8 @@ class Settings(BaseSettings):
             oidc_signing_key=g("OIDC_SIGNING_KEY", "").replace("\\n", "\n"),
             oidc_signing_key_path=g("OIDC_SIGNING_KEY_PATH", "/data/oidc_signing_key.pem"),
             forward_auth_secret=g("SSO_FORWARD_AUTH_SECRET", ""),
+            google_enabled=g("SSO_GOOGLE_ENABLED", "").strip().lower()
+            in ("1", "true", "yes", "on"),
         )
 
 
