@@ -2,8 +2,16 @@
 # ===========================================================================
 #
 # Make targets that toggle outbound routing of pmoves-yt, bgutil-pot-provider,
-# invidious-companion, and invidious through the KVM4-1 Tailscale exit node
-# (pmoves-kvm4-1, Hostinger datacenter). Bypasses YouTube residential-IP 403s.
+# invidious-companion, and invidious through a Tailscale exit node.
+#
+# IMPORTANT (2026-07-28 discovery): YouTube datacenter IPs get FLAGGED by
+# YouTube's bot detection. Residential IPs work. The egress sidecar is kept
+# as an optional fallback, but the DEFAULT for YT download traffic should be
+# host-direct (residential). See YT_EGRESS_RUNBOOK.md § "Direct vs Egress".
+#
+# Two mechanisms:
+#   1. Host-level exit node: `tailscale set --exit-node=<node>` (affects ALL traffic)
+#   2. Container sidecar: docker-compose.yt-egress.yml (opt-in per-container proxy)
 #
 # See pmoves/docs/operations/YT_EGRESS_RUNBOOK.md for full operator guide.
 
@@ -11,7 +19,7 @@ YT_EGRESS_COMPOSE := docker-compose.yt-egress.yml
 YT_EGRESS_SERVICES := pmoves-yt bgutil-pot-provider invidious-companion invidious
 YT_EGRESS_EXIT_HOST := pmoves-kvm4-1
 
-.PHONY: up-yt-egress down-yt-egress yt-egress-preflight yt-egress-status yt-egress-verify
+.PHONY: up-yt-egress down-yt-egress yt-egress-preflight yt-egress-status yt-egress-verify yt-direct yt-egress-check
 
 up-yt-egress: ensure-env-shared yt-egress-preflight ## Route YT services through KVM4-1 exit node
 	@if [ -z "$${TAILSCALE_AUTHKEY:-}" ]; then \
@@ -35,6 +43,42 @@ down-yt-egress: ## Stop egress sidecar, revert YT services to residential IP
 	@echo "[yt-egress] Recreating YT services without proxy env..."
 	@$(DC) up -d --force-recreate $(YT_EGRESS_SERVICES)
 	@echo "[yt-egress] Deactivation complete. Services now egress via host IP."
+
+yt-direct: ## Ensure YT services use host-direct (residential) egress — clears host exit node
+	@echo "[yt-direct] Clearing host-level Tailscale exit node (if set)..."
+	@if command -v tailscale >/dev/null 2>&1; then \
+		current=$$(tailscale status --json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('ExitNodeStatus',{}).get('TailscaleIPs',[''])[0])" 2>/dev/null || echo ""); \
+		if [ -n "$$current" ] && [ "$$current" != "none" ]; then \
+			tailscale set --exit-node=; \
+			echo "[yt-direct] Host exit node cleared."; \
+		else \
+			echo "[yt-direct] No host exit node set — already direct."; \
+		fi; \
+	fi
+	@echo "[yt-direct] Stopping container egress sidecar (if running)..."
+	@$(DC) -f $(YT_EGRESS_COMPOSE) stop tailscale-yt-egress 2>/dev/null || true
+	@$(DC) -f $(YT_EGRESS_COMPOSE) rm -f tailscale-yt-egress 2>/dev/null || true
+	@echo "[yt-direct] Recreating YT services with direct egress..."
+	@$(DC) up -d --force-recreate $(YT_EGRESS_SERVICES) 2>/dev/null || true
+	@echo "[yt-direct] Done. Verify with: make yt-egress-check"
+
+yt-egress-check: ## Show current egress mode + test YouTube extraction
+	@echo "=== Host exit node ==="
+	@if command -v tailscale >/dev/null 2>&1; then \
+		tailscale status --json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);ens=d.get('ExitNodeStatus',{});ip=ens.get('TailscaleIPs',['none']);print(f'Exit node: {ip[0] if ip else \"none\"}')" 2>/dev/null || echo "(tailscale not connected)"; \
+	else echo "(tailscale CLI not found)"; fi
+	@echo ""
+	@echo "=== Container egress IP ==="
+	@yt_container=$$(docker ps -q --filter "name=pmoves-pmoves-yt" 2>/dev/null | head -1); \
+	if [ -n "$$yt_container" ]; then \
+		docker exec $$yt_container python3 -c "import requests;print(requests.get('https://api.ipify.org',timeout=5).text)" 2>/dev/null || echo "(check failed)"; \
+	else echo "(pmoves-yt not running)"; fi
+	@echo ""
+	@echo "=== Container proxy env ==="
+	@yt_container=$$(docker ps -q --filter "name=pmoves-pmoves-yt" 2>/dev/null | head -1); \
+	if [ -n "$$yt_container" ]; then \
+		docker exec $$yt_container python3 -c "import os;print('HTTP_PROXY:',os.getenv('HTTP_PROXY','(empty)'));print('HTTPS_PROXY:',os.getenv('HTTPS_PROXY','(empty)'))" 2>/dev/null || echo "(check failed)"; \
+	else echo "(pmoves-yt not running)"; fi
 
 yt-egress-preflight: ## Verify KVM4-1 is advertising exit node before activating
 	@echo "[yt-egress] Preflight: checking $(YT_EGRESS_EXIT_HOST) Tailscale exit-node advertisement..."

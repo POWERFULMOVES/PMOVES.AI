@@ -96,12 +96,16 @@ def _supabase_headers() -> dict:
 
 
 async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
-    """Fetch encrypted cookies from Supabase, decrypt, atomically write to disk.
+    """Fetch encrypted cookies + refresh token from Supabase, decrypt, write to disk.
+
+    Writes the Netscape cookie file AND the plaintext refresh token to the
+    shared volume. pmoves-yt reads the refresh token to call YouTube Data API
+    v3 for metadata (works from datacenter IPs, unlike yt-dlp extraction).
 
     Returns True on success. Uses async httpx + atomic write (tmp + rename)
     so the yt-dlp per-request readers never see a torn cookie file.
     """
-    url = f"{_supabase_url()}{TABLE_PATH}?user_id=eq.{user_id}&select=encrypted_cookies,encrypted_po_token"
+    url = f"{_supabase_url()}{TABLE_PATH}?user_id=eq.{user_id}&select=encrypted_cookies,encrypted_po_token,encrypted_refresh_token"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=_supabase_headers())
@@ -161,6 +165,21 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
             except OSError as e:
                 logger.warning(f"PO token write failed (cookies still valid): {e}")
                 po_tmp.unlink(missing_ok=True)
+
+    # Write the decrypted OAuth refresh token so pmoves-yt can call YouTube
+    # Data API v3 for IP-agnostic metadata enrichment.
+    enc_refresh = rows[0].get("encrypted_refresh_token") if rows else None
+    if enc_refresh:
+        try:
+            refresh_token = _decrypt(enc_refresh)
+            if refresh_token:
+                token_path = output.parent / "yt-refresh-token.txt"
+                tmp_tok = token_path.with_suffix(".txt.tmp")
+                tmp_tok.write_text(refresh_token.strip())
+                tmp_tok.replace(token_path)
+                logger.info(f"Wrote refresh token to {token_path}")
+        except (RuntimeError, OSError) as e:
+            logger.warning(f"Refresh token write failed: {e}")
 
     return True
 

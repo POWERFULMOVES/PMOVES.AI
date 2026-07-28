@@ -21,6 +21,9 @@ services:
     build:
       context: ./services/yt-cookie-refresher
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     environment:
       - PORT=8115
       - NATS_URL=${NATS_URL}
@@ -41,7 +44,7 @@ services:
     ports:
       - "${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:8115:8115"
     profiles: ["yt-cookies"]
-    networks: [pmoves_api, pmoves_bus]
+    networks: [pmoves_api, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8115/healthz', timeout=5)"]
       interval: 30s
@@ -57,6 +60,7 @@ services:
   yt-cookie-writer:
     build:
       context: ./services/yt-cookie-writer
+    user: root
     # main.py now touches /tmp/healthy after NATS subscription is active,
     # matching the Dockerfile healthcheck. This override keeps it consistent.
     healthcheck:
@@ -83,7 +87,7 @@ services:
     volumes:
       - yt-cookies-vol:/cookies
     profiles: ["yt-cookies"]
-    networks: [pmoves_bus, pmoves_api]
+    networks: [pmoves_bus, pmoves_api, pmoves_external]
     deploy:
       resources:
         limits:

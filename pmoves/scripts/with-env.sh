@@ -125,3 +125,10 @@ if [ -z "${SUPABASE_SECRET_KEY:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ];
 fi
 
 export PMOVES_ENV_LOADER=1
+
+# Execute any remaining arguments as a command with the loaded environment.
+# This enables the pattern: bash scripts/with-env.sh <command> <args>
+# When sourced (no arguments), the env is simply exported and control returns.
+if [ $# -gt 0 ]; then
+  exec "$@"
+fi
