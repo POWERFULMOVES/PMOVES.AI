@@ -104,7 +104,7 @@ services:
   # Mounted rw because yt-dlp updates the cookiejar during extraction.
   pmoves-yt:
     environment:
-      - YT_COOKIES=/app/config/cookies/yt-cookies.txt
+      - YT_COOKIES=/tmp/yt-cookies/yt-cookies.txt
       - YT_PO_TOKEN_FILE=/app/config/cookies/yt-po-token.txt
     volumes:
       - yt-cookies-vol:/app/config/cookies:rw
@@ -117,8 +117,6 @@ services:
       sh -c '
         mkdir -p /tmp/yt-cookies &&
         cp /app/config/cookies/yt-cookies.txt /tmp/yt-cookies/yt-cookies.txt 2>/dev/null || true &&
-        cp /app/config/cookies/yt-refresh-token.txt /tmp/yt-cookies/yt-refresh-token.txt 2>/dev/null || true &&
-        export YT_COOKIES=/tmp/yt-cookies/yt-cookies.txt &&
         if [ -f /app/config/cookies/yt-po-token.txt ] && [ -s /app/config/cookies/yt-po-token.txt ]; then
           export YT_PO_TOKEN_VALUE="$$(cat /app/config/cookies/yt-po-token.txt)";
           echo "Loaded harvested PO token from cookie-writer volume";
