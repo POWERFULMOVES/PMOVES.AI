@@ -54,12 +54,13 @@ Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When a d
 | Server | Transport | Purpose |
 |--------|-----------|---------|
 | `pmoves-cipher` | SSE `http://localhost:8105/mcp/sse` | Persistent agent memory lookups + writes |
+| `agent-zero` | HTTP `http://localhost:8080/mcp` | Agent Zero orchestrator |
 | `docker` | stdio `mcp/docker` | Container inspection via local Docker socket |
-| `pmoves-docker-gateway` | stdio `docker mcp gateway --profile pmoves_5090_web` | Full Docker MCP Toolkit profile |
-| `pmoves-nats-fleet` | stdio | Cross-node NATS publish/subscribe |
-| `pmoves-e2b` | stdio | E2B sandbox code execution |
-| `pmoves-supabase` | stdio | Self-hosted PostgREST data-plane access |
-| `huggingface` | stdio | Hub model/dataset/space search + Gradio execution |
+| `pmoves-docker-gateway` | SSE `http://localhost:8090/sse` | Full Docker MCP Toolkit gateway (botz-gateway bridge); start with `make -C pmoves mcp-toolkit-gateway-start` |
+| `pmoves-nats-fleet` | stdio `./pmoves-nats-mcp` | Cross-node NATS publish/subscribe |
+| `pmoves-e2b` | stdio `@e2b/mcp-server` via `pmoves-e2b-mcp-server` fork | E2B sandbox code execution (E2B_API_KEY from secrets funnel) |
+| `pmoves-supabase` | stdio `@supabase/mcp-server-postgrest@0.1.1` | Self-hosted PostgREST data-plane access |
+| `huggingface` | stdio `@llmindset/hf-mcp-server` | Hub model/dataset/space search + Gradio execution |
 
 ## Botz Gateway
 

@@ -467,9 +467,6 @@ x-tier-api-hardened-gpu:
 name: pmoves
 volumes:
   neo4j-data: {}
-  archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
-  archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
-  archon-pg-data: {}       # Archon dedicated Postgres data (pg_notify realtime)
   cipher-data: {}
   qdrant-data: {}
   meilisearch-data: {}
@@ -488,7 +485,6 @@ volumes:
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
-  hi-rag-gpu-hf-cache: {}  # HuggingFace model cache for Qwen3-Reranker-4B (persists across restarts)
   comfy-watcher-output: {}
   comfy-watcher-state: {}
   llama-results: {}

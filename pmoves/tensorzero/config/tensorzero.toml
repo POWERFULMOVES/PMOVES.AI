@@ -222,20 +222,6 @@ api_base = "https://api.moonshot.ai/v1"
 model_name = "kimi-k2.7-code"
 api_key_location = "env::MOONSHOT_API_KEY"
 
-# Kimi Code SUBSCRIPTION endpoint — distinct platform from pay-per-token
-# api.moonshot.ai (same split as z.ai paas vs coding). Subscription keys are
-# platform-isolated: sent to api.moonshot.ai/v1 they 401 "Invalid
-# Authentication" (verified live 2026-07-24). Model id on this platform is
-# kimi-for-coding; key = canonical KIMI_CODING_API from the prod funnel.
-[models.chat_kimi_for_coding]
-routing = ["kimi_coding_primary"]
-
-[models.chat_kimi_for_coding.providers.kimi_coding_primary]
-type = "openai"
-api_base = "https://api.kimi.com/coding/v1"
-model_name = "kimi-for-coding"
-api_key_location = "env::KIMI_CODING_API"
-
 [models.chat_openrouter]
 routing = ["openrouter_primary"]
 
@@ -343,7 +329,6 @@ type = "openai"
 api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5v-turbo"
 api_key_location = "env::Z_AI_API_KEY"
-
 
 # --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
 [models.coding_qwen3_coder_30b_local]
@@ -689,6 +674,17 @@ api_key_location = "none"
 
 [embedding_models.gemma_embed_local]
 routing = ["ollama_local_embedding"]
+# BGE-M3 (568M, 1024d dense + sparse + ColBERT) — multi-tier embedding keystone.
+# Used by Hi-RAG hybrid search and the pmoves_hybrid collection. MIT license.
+[embedding_models.bge_m3_local]
+routing = ["ollama_local_embedding"]
+
+[embedding_models.bge_m3_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "bge-m3"
+api_key_location = "none"
+
 
 [embedding_models.gemma_embed_local.providers.ollama_local_embedding]
 type = "openai"
@@ -907,15 +903,6 @@ type = "chat_completion"
 model = "chat_zai_glm52"
 weight = 0.8
 temperature = 0.1
-
-# Kimi coding plan (kimi-k2.7-code via Moonshot) — second operator
-# coding-plan suit for Agent Zero, alongside the GLM lane above.
-[functions.agent_zero.variants.hosted_kimi_code]
-type = "chat_completion"
-model = "chat_kimi_for_coding"
-weight = 0.6
-temperature = 1.0
-max_tokens = 8192
 
 # --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
 # SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
@@ -1144,14 +1131,6 @@ model = "chat_zai_glm52"
 weight = 0.7
 temperature = 0.2
 
-# Kimi coding plan suit for Archon work orders (pairs with GLM above).
-[functions.archon_work_orders.variants.hosted_kimi_code]
-type = "chat_completion"
-model = "chat_kimi_for_coding"
-weight = 0.6
-temperature = 1.0
-max_tokens = 8192
-
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]
 type = "chat"
@@ -1174,14 +1153,6 @@ type = "chat_completion"
 model = "chat_zai_glm52"
 weight = 0.6
 temperature = 0.1
-
-# Kimi coding plan suit for Archon code review (pairs with GLM above).
-[functions.archon_code_review.variants.hosted_kimi_code]
-type = "chat_completion"
-model = "chat_kimi_for_coding"
-weight = 0.6
-temperature = 1.0
-max_tokens = 8192
 
 # --- Hi-RAG Reranking Function -----------------------------------------------
 [functions.hirag_rerank]
@@ -1511,18 +1482,24 @@ type = "chat_completion"
 model = "chat_zai_glm5_turbo"
 weight = 0.3
 temperature = 0.1
-max_tokens = 8192
-
-[functions.coding_kilocode.variants.cloud_zai_glm51]
-type = "chat_completion"
-model = "chat_zai_glm51"
-weight = 0.2
-temperature = 0.2
-max_tokens = 8192
 
 [functions.coding_kilocode.variants.local_qwen35_9b]
 type = "chat_completion"
 model = "qwen35_9b"
+
+[functions.coding_kilocode.variants.cloud_zai_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.8
+
+[functions.coding_kilocode.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.2
 
 # MiniMax Token Plan (cloud primary, local fallback)
 [functions.coding_minimax]
@@ -1720,7 +1697,6 @@ model = "chat_zai_glm51"
 temperature = 0.7
 max_tokens = 8192
 weight = 0.0
-
 
 # --- Worker functions: registry lane aliases ONLY (no-hardcoded-models gate) ---
 

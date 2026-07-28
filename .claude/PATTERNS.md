@@ -785,6 +785,42 @@ rg -n '[a-z]+:[a-z]' .claude/skills/*/SKILL.md --glob '!*.py'
 
 **Fix lane:** Add a `ZAI_SPEC` ProviderSpec (~40 lines), emit Z.AI alongside TensorZero when `Z_AI_API_KEY` is present, add `"glm"` to role-inference patterns. Also add `chat_zai_glm52` to `provider_catalog.yaml` (currently GLM-5.2 only listed under `ollama_cloud`).
 
+## Cipher Village Phase B — Stacked PR Learnings (2026-07-28)
+
+**Context:** `Pmoves-cipher` `feat/cipher-agent-scope` accumulated six concerns. Crush is active on that worktree, so all branch surgery was done in isolated `/tmp/Pmoves-cipher-pr*` worktrees.
+
+**Worktree split flow:**
+- Base: `d9fab9a8` on `PMOVES.AI-Edition-Hardened`.
+- PR1 `feat/cipher-agent-scope-rebased` — `agentId` parameter on all MCP tools + REST routes.
+- PR2 `feat/cipher-per-agent-tokens` — Supabase token registry + auth middleware enforcement.
+- PR3 `feat/cipher-mcp-catalog` — gateway-agent catalog bridge + MCP tool wiring.
+- PR4 `feat/cipher-session-cache` — `session_save` / `session_recall` tools.
+- PR5 `feat/cipher-neo4j-graph` — graph client + `graph_expand` tool.
+- PR6 `feat/cipher-hirag-bridge` — HiRAG `hybrid_search` proxy.
+
+**Singleton-stub hygiene in cipher tests:**
+- `getEmbeddingSidecar()`, `getHiragClient()`, and `getMCPCatalogClient()` are process-wide singletons. Tests that stub them with `Object.assign` must save/restore the original methods and reset cached state (`collectionReady`, `cache`, `cacheTime`, `fetching`, `gpuAvailable`) in cleanup, otherwise later test files see the stub and fail with misleading "returns empty list" or unreachable-gateway symptoms. Use a `stubSingleton<T>` helper that records originals and restores them.
+
+**MemoryManager.list does not accept `tags`:**
+- `ListMemoriesOptionsSchema` rejects `tags`. Fallbacks that need tag filtering must load all memories via `memoryManager.list({})` and filter in-memory. Affected: `reasoning_patterns` and `session_recall` tool implementations.
+
+**MCP catalog wiring gap:**
+- Defining the `pmoves_cipher_mcp_list` / `pmoves_cipher_mcp_get` tool schemas is not enough; they must also be registered in `buildMcpServer()` and dispatched in the tool handler. PR3 commit `c5d7ec6d` only added `src/pmoves/mcp-catalog.ts`; the tool wiring was added in the PR3 worktree.
+
+**Per-agent token enforcement pattern:**
+- Token middleware resolves `req.agentId` from the Supabase token registry. Both `mcp-sse.ts` and `memory-routes.ts` must call `assertAgentId(req, args)` and reject with 403 when `req.agentId` is present and does not match `args.agentId` (including wildcard cross-agent search). Pass auth context from `rest-server.ts` into the route handlers.
+
+**Per-agent token superproject support:**
+- Migration: `pmoves/supabase/migrations/20260728100000_cipher_agent_tokens.sql` for `pmoves_core.cipher_agent_tokens` and `pmoves_core.cipher_access_log`.
+- Make target: `cipher-mint-token` in `pmoves/Makefile` + `pmoves/scripts/mint_cipher_token.py`.
+
+**Verification recipe:**
+```bash
+# In each /tmp/Pmoves-cipher-pr* worktree
+npm test
+npm run typecheck
+```
+
 ## Review Comment Verification Protocol
 
 **Before fixing any review comment (including nitpicks):**

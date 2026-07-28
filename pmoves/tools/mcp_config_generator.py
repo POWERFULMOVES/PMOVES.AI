@@ -116,8 +116,13 @@ def _expand(value: str, env: Dict[str, str], *, allow_os_environ: bool = True) -
         if val:
             result.append(val)
         elif default:
-            # Recursively expand default so nested fallbacks resolve.
-            result.append(_expand(default, env))
+            if allow_os_environ:
+                # Recursively expand default so nested fallbacks resolve.
+                result.append(_expand(default, env))
+            else:
+                # Tracked config: preserve the full ${VAR:-default} placeholder so
+                # secrets and local overrides are not committed to the repo.
+                result.append(value[start:i])
         else:
             result.append(value[start:i])
 
