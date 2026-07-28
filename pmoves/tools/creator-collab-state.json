@@ -84,9 +84,9 @@
       "merge_target": "feat/creator-collab-lane",
       "commits": [
         "d679e83332",
-        "4a6b1b3194"
+        "4a6b1b3194",
+        "ad6e2b3e0e"
       ],
-      "note": "docs SHA filled in after docs commit; see AGNOTE Mavis::CREATOR-COLLAB-SLICE-4-CLAIM::2026-07-28",
       "scope": "pmoves/configs/pinokio-apps/schema/pinokio-app.v1.schema.json + pmoves/configs/pinokio-apps/curated/{comfyui-desktop,ace-step,wan,lightonocr-2-1b,ultimate-tts-studio,qwen3-tts,vibevoice-realtime,voxforge-pro,n8n,sillytavern,unsloth,customokio}.yaml (12) + pmoves/configs/tac_trees/{pinokio-venv,pmoves-container,tailnet-mesh,public-tunnel}.tac.yaml (4) + pmoves/services/mesh_exposure/ (new service: app.py, state.py, Dockerfile, requirements.txt, README.md, tests/test_app.py) + pmoves/skills/gepeto-wrapper-skill/SKILL.md + pmoves/tools/pinokio_apps/{discover.py,README.md,tests/test_discover.py,_write_curated.py} + pmoves/docs/research/creator-collab-slice-4-deep-dive-2026-07-28.md + pmoves/docs/specs/pinokio-apps-registry-2026-07-28.md",
       "tests": "mesh_exposure 29/29 (new); pinokio_apps 19/19 (new); nats_event_bus 20/20 (no regression); pinokio_bridge 28/28 (no regression); p7-room-orchestrator 46/46 (no regression); a2ui-nats-bridge 16/16 (no regression); validate_room_manifests.py 10/11 (pre-existing persona.room.livingdoc em-dash, out of scope)",
       "operator_signoff": "Q1=4-level ladder, Q2=4 separate trees, Q3=full mesh_exposure service in slice 4 (the deep-dive report + 2-question signoff were held for 6 hours; operator chose the full-service path over a stub).",
@@ -265,10 +265,10 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-28T13:35:00Z",
-    "next_run": "2026-07-28T14:05:00Z",
+    "last_run": "2026-07-28T13:50:00Z",
+    "next_run": "2026-07-28T14:20:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
     "disarmed_reason": "review-iter-poll cycle 2 closed >30m ago, no new threads, lane review activity settled",
-    "note": "slice 4 SHIPPED on slice-4-pinokio-apps-registry branch (3 commits: d679e83332 P1 schema+12 curated+4 TAC trees, 4a6b1b3194 functional mesh_exposure+discovery+gepeto-wrapper, <docs-sha> docs); pending --no-ff merge into feat/creator-collab-lane. Slice 5 (creator-studio E2E smoke) and slice 6 (helpdesk-skill+room-suggest-skill+pmoves.room.helpdesk.json) are next. Slice 6 was unblocked by slice 3 (room.directory.v1 + room.presence.v1 are now live) and slice 4 (the helpdesk reads the registry to route residents to the right room). Slice 7 (Fordham E2E) is the integrated demo, lands last."
+    "note": "slice 4 SHIPPED on slice-4-pinokio-apps-registry branch (3 commits: d679e83332 P1 schema+12 curated+4 TAC trees, 4a6b1b3194 functional mesh_exposure+discovery+gepeto-wrapper, ad6e2b3e0e docs); pending --no-ff merge into feat/creator-collab-lane. Slice 5 (creator-studio E2E smoke) and slice 6 (helpdesk-skill+room-suggest-skill+pmoves.room.helpdesk.json) are next. Slice 6 was unblocked by slice 3 (room.directory.v1 + room.presence.v1 are now live) and slice 4 (the helpdesk reads the registry to route residents to the right room). Slice 7 (Fordham E2E) is the integrated demo, lands last."
   }
 }
