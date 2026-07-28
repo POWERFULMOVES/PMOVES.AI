@@ -103,11 +103,13 @@ services:
   # does not silently shadow the writer's output.
   # Mounted rw because yt-dlp updates the cookiejar during extraction.
   pmoves-yt:
+    volumes:
+      - yt-cookies-vol:/app/config/cookies:rw
+      - ${JUICEFS_HOST_MOUNT:-/home/pmoves-knuckles/pmoves-fs}:/mnt/pmoves/media:rshared
     environment:
       - YT_COOKIES=/tmp/yt-cookies/yt-cookies.txt
       - YT_PO_TOKEN_FILE=/app/config/cookies/yt-po-token.txt
-    volumes:
-      - yt-cookies-vol:/app/config/cookies:rw
+      - JUICEFS_MEDIA_ROOT=/mnt/pmoves/media
     # Load the harvested PO token from the cookie-writer volume before
     # starting uvicorn. yt.py reads YT_PO_TOKEN_VALUE at module-import
     # time, so it must be in the environment at launch. If the file does
