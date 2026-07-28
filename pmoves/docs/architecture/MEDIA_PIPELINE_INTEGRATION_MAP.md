@@ -29,20 +29,40 @@ The primary ingestion engine. Already has far more capability than we were using
 - Rate limiting via `asyncio.Lock` + `YT_RATE_LIMIT`
 - Multi-platform support via `_infer_platform()` — works with any yt-dlp site
 
-### PMOVES-transcribe-and-fetch (port 8074) — Transcription Specialist
-Powerful transcription pipeline but **no batch API** and **no NATS consumer** (despite declared subjects).
+### PMOVES-transcribe-and-fetch (port 8074) — Genesis Service (Aspirational)
+The **first PMOVES service** — SupaSearch was born from here. Currently a Whisper-first transcription pipeline whose broader PMOVES integration is largely **declarative** (env seeds, NATS subject declarations, compose overlays) but not yet wired into backend code.
 
-**Strengths to leverage:**
-- Three transcription backends: Faster-Whisper (local GPU), Groq (cloud), LLM Registry (LiteLLM proxy)
-- Rich output: Markdown tables with clickable timestamps, CSV, Excel, PDF
-- Dual-write to workspace + Obsidian vault
-- SSE real-time progress streaming
-- pgvector search over transcripts
+**What's live:**
+- Obsidian dual-write (the one real, end-to-end integration) — Markdown/CSV/Excel to vault
+- Faster-Whisper local transcription on GPU
+- LLM Registry (LiteLLM proxy) for model routing
+- Supabase dual-write mode
 
-**Gap:** The declared NATS subjects (`transcribe.fetch.request.v1` / `.result.v1`) are **forward-looking contracts only** — no subscriber exists in the backend. Batch processing would require either:
-- Option A: Sequential API scripting via `/process-video/` loop
-- Option B: Wire a NATS consumer to the declared subjects (contract-ready)
-- Option C: Add `/process-batch/` endpoint
+**What's declared but NOT wired:**
+- NATS subjects (`transcribe.fetch.request.v1`) — forward-looking contract only, no subscriber
+- Neo4j mindmap — env-seeded (`bolt://neo4j:7687`), no consumer in backend code
+- Open Notebook — zero references in submodule
+- Flute-Gateway piping — network-attach only, no code
+- CHIT/geometry — archived CGP packets only, no live signing
+- Remotion/pretext/web animation — sibling skills, not piped here
+
+**Critical bug found:** `transcribe1.py:1071` calls `registry_service.transcribe_audio()` but the method is actually `transcribe_audio_advanced()` — broken call site for any non-Whisper model selection.
+
+**The vision (what it should become):**
+The genesis service should be the nexus where:
+- Processed content flows to Open Notebook live (Obsidian links → 2nd brain → Neo4j mindmap)
+- Pretext + Remotion + web animation skills transform raw content into synthesized media
+- Gateway piping connects Flute-Gateway for voice/multimodal
+- CHIT maps of media references enable cross-library resonance finding
+- The PMOVES.YT agent uses these maps for multimodal human communication — personal geometry of media from any source, enabling quicker translation even across different libraries
+
+**Integration path for the media pipeline:**
+1. Fix the broken `transcribe_audio` → `transcribe_audio_advanced` call site
+2. Wire NATS consumer for `transcribe.fetch.request.v1` (PMOVES.YT publishes `ingest.transcript.ready.v1`)
+3. Add Obsidian vault path → JuiceFS mount (`/mnt/pmoves/media/transcripts/obsidian/`)
+4. Wire Neo4j graph writes (mindmap nodes from transcript segments)
+5. Wire Open Notebook publishing (HTTP POST to `open-notebook:5055/api/sources/json`)
+6. Connect Remotion skill for content transformation/synthesis
 
 ### DeepResearch (port 8098) — Research Worker
 NATS-driven LLM research worker that:
