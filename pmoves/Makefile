@@ -1174,20 +1174,20 @@ health-dormant: ## Health-check dormant/newly-activated services
 # =============================================================================
 
 .PHONY: down-all
-down-all: ## Stop ALL services in graceful reverse order
+down-all: ## Stop ALL services in graceful reverse order (voice, search, inference, agents, data)
 	@echo "🛑 Graceful shutdown starting..."
-	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
-	@-$(MAKE) --no-print-directory down-tensorzero
-	@-$(MAKE) --no-print-directory down-agents
-	@-$(MAKE) --no-print-directory down-voice
-	@-$(MAKE) --no-print-directory down-search
-	@-$(MAKE) --no-print-directory down-model-management
-	@-$(MAKE) --no-print-directory down-workers
-	@-$(MAKE) --no-print-directory down-inference
-	@-$(MAKE) --no-print-directory down-bus
-	@-$(MAKE) --no-print-directory down-data
-	@-$(MAKE) --no-print-directory down-obs
-	@-$(MAKE) --no-print-directory down-supabase
+	$(MAKE) --no-print-directory down-integrations 2>/dev/null || true
+	$(MAKE) --no-print-directory down-tensorzero || true
+	$(MAKE) --no-print-directory down-agents || true
+	$(MAKE) --no-print-directory down-voice || true
+	$(MAKE) --no-print-directory down-search || true
+	$(MAKE) --no-print-directory down-model-management || true
+	$(MAKE) --no-print-directory down-workers || true
+	$(MAKE) --no-print-directory down-inference || true
+	$(MAKE) --no-print-directory down-bus || true
+	$(MAKE) --no-print-directory down-data || true
+	$(MAKE) --no-print-directory down-obs || true
+	$(MAKE) --no-print-directory down-supabase || true
 	@echo "✅ All services stopped gracefully"
 
 # Shutdown order is the reverse of startup, and the ordering is load-bearing:
@@ -1209,21 +1209,22 @@ SEARCH_SERVICES := hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-ga
 INFERENCE_SERVICES := pmoves-ollama comfyui
 
 .PHONY: down-voice
-down-voice: ## Stop voice fabric (Flute-Gateway, Voice-Relay, VibeVoice, TTS studio)
+down-voice: ## Stop voice fabric (Flute-Gateway, Voice-Relay, VibeVoice, TTS studio, OmniVoice)
 	@echo "🔇 Stopping voice fabric..."
 	@$(DC) stop $(VOICE_SERVICES) >/dev/null 2>&1 || true
 	@$(DC) rm -f $(VOICE_SERVICES) >/dev/null 2>&1 || true
 	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
 	@$(DC) $(VOICE_OVERLAY) rm -f $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+	@-docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice down 2>/dev/null || true
 
 .PHONY: down-search
-down-search: ## Stop Hi-RAG gateways (all CPU/GPU/v2 variants)
+down-search: ## Stop Hi-RAG gateways (all CPU/GPU/v2 variants). Used by down-all.
 	@echo "🔎 Stopping Hi-RAG gateways..."
 	@$(DC) stop $(SEARCH_SERVICES) >/dev/null 2>&1 || true
 	@$(DC) rm -f $(SEARCH_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-inference
-down-inference: ## Stop local inference backends (Ollama, ComfyUI) — frees VRAM
+down-inference: ## Stop local inference backends (Ollama, ComfyUI) — frees VRAM. Used by down-all.
 	@echo "🧊 Stopping inference backends (frees VRAM)..."
 	@$(DC) stop $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
 	@$(DC) rm -f $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
