@@ -1,0 +1,42 @@
+schema_version: "1.0.0"
+slug: unsloth
+title: "Unsloth LLM Training"
+description: "LLM fine-tuning (Unsloth). On-demand only; 24GB exclusive claim goes to DGX Spark for the actual training runs."
+owner: pinokio
+version_seen: "2024.10"
+runtime:
+  launcher_script: start.js
+  autostart: false
+  gpu_required: true
+  min_vram_mb: 24000
+  gpu_arch: [sm_120, sm_110, sm_90]
+  gpu_reservation_mb: 24000
+  gpu_reservation_mode: exclusive
+  dependencies: []
+  requires_hf_login: true
+endpoints:
+  primary:
+    port: 0  # dynamic, resolved via pinokio_bridge /v1/apps/{slug}/status
+    protocol: http
+    health: null
+  alt: []
+pinokio_skill_ref: null
+network_exposure:
+  l1_venv:
+    reachable: true
+  l2_container_same_host:
+    reachable: true
+    address: null
+  l3_mesh:
+    reachable: true
+    address: null
+    headscale_acl_ports: []
+    tags_required: []
+  l4_public:
+    reachable: false
+    tunnel: null
+    dns_record: null
+    public_url: null
+notes:
+  - "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record"
+  - "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
