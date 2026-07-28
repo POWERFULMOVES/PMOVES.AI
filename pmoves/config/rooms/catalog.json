@@ -114,13 +114,25 @@
       "room_id": "persona.room.livingdoc",
       "agent_id": "darkxside-persona",
       "alter": "persona-livingdoc",
-      "display_name": "Russell Richardson — Applied AI Architect (Living Doc)",
+      "display_name": "Russell Richardson - Applied AI Architect (Living Doc)",
       "stage": "live",
       "manifest": "persona.room.livingdoc.json",
       "summary": "Public, audience-facing living-doc room: the LinkedIn-aligned persona profile as a first-class OpenRoom the Mavis-5090 adapter serves. a2ui profile shell + authored PreTeXt case studies + planned Remotion walkthrough; content single-sourced in persona.json.",
       "current_stage": "live",
       "stage_source": "manifest stage field (public audience-facing doc, ready to serve)",
       "stage_verified_at": "2026-07-26T21:00:00Z"
+    },
+    {
+      "room_id": "creator-studio.room.collab",
+      "agent_id": "creator-steward",
+      "alter": "creator-studio",
+      "display_name": "Creator Studio (Collaborative)",
+      "stage": "rehearsal",
+      "manifest": "creator-studio.room.collab.json",
+      "summary": "Full-surface creator studio: shared prompt queue + live ComfyUI render + artifact gallery + multi-user whiteboard. P7 routes the session to 5090 (RTX 5090 32GB) by default, escalates to DGX Spark for >24GB jobs (video gen, LoRA training), falls back to cloud.comfy.org MCP if no fleet GPU is up. creator-collab-lane slice 5 — 2026-07-27.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest stage field (slice 5 SHIPPED; runtime smoke lands in slice 5d)",
+      "stage_verified_at": "2026-07-27T00:00:00Z"
     }
   ]
 }

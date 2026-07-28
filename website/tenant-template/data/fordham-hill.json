@@ -26,8 +26,8 @@
       "component": "pm-quote-block",
       "props": {
         "quote": "When the mesh node goes down, the block fixes it. When the cell tower goes down, we wait.",
-        "attribution": "Pilot resident, Fordham Hill",
-        "attributionRole": "cooperative member"
+        "attribution": "Sample voice — Maya R.",
+        "attributionRole": "illustrative persona (not a real resident)"
       }
     },
     {
@@ -85,12 +85,13 @@
       "component": "pm-project-card",
       "props": {
         "title": "Mesh pilot: Fordham Hill",
-        "description": "50-family mesh + private AI. Voice that goes through walls. Community-owned infrastructure, cooperative-priced.",
+        "description": "50-family Wi-Fi HaLow mesh on OpenMANET 902-928 MHz. Voice agents that go through walls — no cell tower, no ISP dependency. Community-owned infrastructure at ~$1K/family/year vs traditional ISP pricing.",
         "status": "rehearsal",
         "tags": [
           "mesh",
           "voice",
-          "tenancy"
+          "openmanet",
+          "community-owned"
         ],
         "links": [
           {
@@ -109,11 +110,43 @@
       "component": "pm-project-card",
       "props": {
         "title": "Pooled-dues ledger",
-        "description": "Cooperative cost-pooling with tamper-evident resident voting. Tokenism settlement lane.",
+        "description": "Dual-token cooperative model: $CAT (governance), $WORK (reputation SBT), $CRED (community credits). Two-house voting — token house 50%+ and citizen house 60%+. Quadratic voting via GroToken. 3.25x revenue / 4.4x profit projection vs traditional.",
         "status": "planned",
         "tags": [
           "governance",
-          "ledger"
+          "tokenomics",
+          "dao",
+          "voting"
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Food co-op group buying",
+        "description": "Bulk grocery purchasing via Food-USD stablecoin. Hydroponics + fermentation micro-factory in underutilized spaces. AI-driven demand forecasting from household meal-plan data. $CRED credits keep value circulating locally.",
+        "status": "planned",
+        "tags": [
+          "food-coop",
+          "stablecoin",
+          "hydroponics",
+          "ai"
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Creator guild",
+        "description": "Resident-run media pods: AI video, music, and art production. On-chain revenue splits via smart contracts. Pre-order funded events and merch. DARKXSIDE'S SCHOOL OF POWERFULMOVES curriculum built in.",
+        "status": "planned",
+        "tags": [
+          "creator",
+          "media",
+          "revenue-split",
+          "education"
         ]
       }
     },
@@ -168,9 +201,43 @@
     },
     {
       "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Revenue projection (vs traditional)",
+        "value": "3.25",
+        "unit": "x",
+        "trend": "up",
+        "format": "plain"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Household savings (annual target)",
+        "value": "1000",
+        "unit": "USD",
+        "trend": "up",
+        "format": "currency"
+      }
+    },
+    {
+      "type": "createComponent",
       "component": "pm-timeline",
       "props": {
         "events": [
+          {
+            "ts": "2026-07-20T12:00:00Z",
+            "title": "DAO proposal presented to board",
+            "body": "Cataclysm Studios DAO Fordham Hill Proposal v0.1 — parent DAO with 3 guilds (Infra & Cloud, Creator, Wealth & Learning). 90-day rollout with milestone gates.",
+            "icon": "⚙"
+          },
+          {
+            "ts": "2026-07-18T14:00:00Z",
+            "title": "Token suite designed",
+            "body": "$CAT (governance, ERC-20), $WORK (reputation SBT, non-transferable), $CRED (community credits, stable). Two-house voting architecture locked.",
+            "icon": "⚙"
+          },
           {
             "ts": "2026-07-15T10:00:00Z",
             "title": "Mesh gateway came up",
@@ -220,7 +287,17 @@
       "component": "pm-quote-block",
       "props": {
         "quote": "We started with five families and a question. Eight weeks later, 23 households are on the lattice and the block votes on its own infrastructure.",
-        "attribution": "Pilot co-organizer"
+        "attribution": "Sample voice — Devon A.",
+        "attributionRole": "illustrative persona (not a real resident)"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "This could be your voice. If you live at Fordham Hill and want to share what the pilot means to your household, reach out to the PMOVES team. Your story replaces this placeholder.",
+        "attribution": "PMOVES Team",
+        "attributionRole": "community liaison"
       }
     }
   ]

@@ -14,7 +14,7 @@ describe('room catalog loader', () => {
 
   it('loads the room catalog entries', async () => {
     const catalog = await loadRoomCatalog();
-    expect(catalog.schema_version).toBe('1.1.0');
+    expect(catalog.schema_version).toBe('1.2.0');
     expect(catalog.rooms.map((room) => room.room_id)).toEqual(
       expect.arrayContaining([
         '4090-field.room.control',

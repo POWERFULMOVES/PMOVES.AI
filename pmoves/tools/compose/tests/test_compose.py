@@ -216,11 +216,11 @@ def test_fordham_hill_fixture_composes_clean():
     # surfaces to the fixture doesn't break this test.
     component_types = [m["component"] for m in page["messages"] if m["type"] == "createComponent"]
     expected_components = {
-        "pm-quote-block": 2,
+        "pm-quote-block": 3,
         "pm-image": 1,
         "pm-space-agent-card": 4,
-        "pm-project-card": 3,
-        "pm-metric-tile": 4,
+        "pm-project-card": 5,
+        "pm-metric-tile": 6,
         "pm-timeline": 1,
         "pm-voice-clip": 1,
     }

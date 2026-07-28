@@ -2863,8 +2863,8 @@ up-jellyfin:
 # (:3090). Re-integrating a first-class 0.6.0 archon service into this compose is
 # the tracked "#5 Archon integration" follow-up.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: ## Start Agents (NATS, Agent Zero, Cipher Memory, etc.); Archon runs via up-archon-native
-	@$(DC) --profile agents up -d nats agent-zero mesh-agent deepresearch publisher-discord cipher-api
+up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
+	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 
 .PHONY: up-notebooklm
 up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
@@ -3082,7 +3082,7 @@ GHCR_PREPUBLISH_SCRIPT ?= tools/ghcr_local_prepublish.py
 GHCR_MATRIX_FILE ?= ../.github/workflows/integrations-ghcr.matrix.json
 GHCR_PREPUBLISH_TAG_SUFFIX ?= local-smoke
 GHCR_PREPUBLISH_PLATFORM ?= linux/amd64
-GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge session-context-worker tokenism-ui
+GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge a2ui-renderer session-context-worker tokenism-ui
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -3644,6 +3644,24 @@ up-voice-relay: ## Start voice-relay NATS bridge (port 8121, CPU only)
 voice-relay-smoke: ## Smoke test voice-relay health
 	@echo "voice-relay smoke test..."
 	@curl -sf http://localhost:8121/healthz || { echo "voice-relay not responding at http://localhost:8121/healthz"; exit 1; }
+
+# ────────────────────────────────────────────────────────────────────────────
+# A2UI RENDERER (Remotion living-doc renderer, creator profile, port 8107)
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-a2ui-renderer a2ui-renderer-smoke
+A2UI_RENDERER_PORT ?= 8107
+up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port $(A2UI_RENDERER_PORT), creator profile)
+	@echo "Starting a2ui-renderer (heavy Chromium image — first build is slow)..."
+	@$(DC) --profile creator up -d --build a2ui-renderer
+	@sleep 5
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz > /dev/null 2>&1 \
+	  && echo "a2ui-renderer ready at http://localhost:$(A2UI_RENDERER_PORT)" \
+	  || echo "a2ui-renderer may still be starting (check: curl http://localhost:$(A2UI_RENDERER_PORT)/healthz)"
+
+a2ui-renderer-smoke: ## Smoke test a2ui-renderer health
+	@echo "a2ui-renderer smoke test..."
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz || { echo "a2ui-renderer not responding at http://localhost:$(A2UI_RENDERER_PORT)/healthz"; exit 1; }
 
 # ────────────────────────────────────────────────────────────────────────────
 # HI-RAG GATEWAY (Hybrid RAG v2)
