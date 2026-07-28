@@ -37,6 +37,7 @@ logger = logging.getLogger("yt-cookie-writer")
 
 NATS_SUBJECT = "ingest.cookies.refreshed.v1"
 COOKIE_OUTPUT_PATH = os.environ.get("YT_COOKIE_OUTPUT_PATH", "/app/config/cookies/yt-cookies.txt")
+PO_TOKEN_OUTPUT_PATH = os.environ.get("YT_PO_TOKEN_OUTPUT_PATH", "/app/config/cookies/yt-po-token.txt")
 TABLE_PATH = "/rest/v1/yt_oauth_cookies"
 DEFAULT_USER_ID = "darkxside"
 VALID_STATUSES = {"success", "failed", "revoked"}
@@ -100,7 +101,7 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
     Returns True on success. Uses async httpx + atomic write (tmp + rename)
     so the yt-dlp per-request readers never see a torn cookie file.
     """
-    url = f"{_supabase_url()}{TABLE_PATH}?user_id=eq.{user_id}&select=encrypted_cookies"
+    url = f"{_supabase_url()}{TABLE_PATH}?user_id=eq.{user_id}&select=encrypted_cookies,encrypted_po_token"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=_supabase_headers())
@@ -137,6 +138,30 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
         return False
 
     logger.info(f"Wrote {len(cookies_str)} bytes to {output} (atomic)")
+
+    # Bridge the orphaned PO token: the refresher harvests it alongside cookies
+    # but the writer previously discarded it. Writing it to the shared volume
+    # lets pmoves-yt use the harvested token instead of relying solely on
+    # bgutil-pot-provider's headless browser solver.
+    enc_po = rows[0].get("encrypted_po_token")
+    if enc_po:
+        try:
+            po_token = _decrypt(enc_po)
+        except RuntimeError as e:
+            logger.warning(f"PO token decryption failed (cookies still written): {e}")
+            po_token = None
+
+        if po_token and po_token.strip():
+            po_output = Path(PO_TOKEN_OUTPUT_PATH)
+            po_tmp = po_output.with_suffix(po_output.suffix + ".tmp")
+            try:
+                po_tmp.write_text(po_token.strip())
+                po_tmp.replace(po_output)
+                logger.info(f"Wrote PO token ({len(po_token)} bytes) to {po_output}")
+            except OSError as e:
+                logger.warning(f"PO token write failed (cookies still valid): {e}")
+                po_tmp.unlink(missing_ok=True)
+
     return True
 
 
