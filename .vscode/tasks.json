@@ -1,0 +1,231 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PMOVES: fleet-status",
+      "type": "shell",
+      "command": "make -C pmoves fleet-status",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: up-dev",
+      "type": "shell",
+      "command": "make -C pmoves up-dev",
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: down-dev",
+      "type": "shell",
+      "command": "make -C pmoves down-dev",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: ps-dev",
+      "type": "shell",
+      "command": "make -C pmoves ps-dev",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: logs-dev",
+      "type": "shell",
+      "command": "make -C pmoves logs-dev",
+      "group": "test",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: worktree-sitrep",
+      "type": "shell",
+      "command": "make -C pmoves worktree-sitrep-strict",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: docs-reconcile-check",
+      "type": "shell",
+      "command": "make -C pmoves docs-reconcile-check",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: verify-dev",
+      "type": "shell",
+      "command": "make -C pmoves verify-dev",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: env-status",
+      "type": "shell",
+      "command": "make -C pmoves env-status",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: secrets-status",
+      "type": "shell",
+      "command": "make -C pmoves secrets-status",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: agentgym-run (BabyAI)",
+      "type": "shell",
+      "command": "make -C pmoves agentgym-run ENV=BabyAI EPISODES=5",
+      "group": "test",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "git: worktree list",
+      "type": "shell",
+      "command": "git worktree list",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "NATS: health check",
+      "type": "shell",
+      "command": "curl -sf http://localhost:8222/healthz && echo 'NATS: OK' || echo 'NATS: DOWN'",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "4090: sitrep",
+      "type": "shell",
+      "command": "git log --oneline -3 && git worktree list && curl -sf http://localhost:8222/healthz && echo 'NATS OK' || echo 'NATS DOWN'",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: ui-dev-start (:4482)",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/pmoves/ui" },
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: ui-dev-stop (:4482)",
+      "type": "shell",
+      "command": "pkill -f 'next dev -p 4482' || echo 'No :4482 dev server running'",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: ui-dev-start (make :3001)",
+      "type": "shell",
+      "command": "make -C pmoves ui-dev-start",
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: ui-dev-stop (make :3001)",
+      "type": "shell",
+      "command": "make -C pmoves ui-dev-stop",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: up-darkxside-sidecar",
+      "type": "shell",
+      "command": "make -C pmoves up-darkxside-sidecar",
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: down-darkxside-sidecar",
+      "type": "shell",
+      "command": "make -C pmoves down-darkxside-sidecar",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: up-spark-sidecar",
+      "type": "shell",
+      "command": "make -C pmoves up-spark-sidecar",
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: down-spark-sidecar",
+      "type": "shell",
+      "command": "make -C pmoves down-spark-sidecar",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: archon-native-health (:8091)",
+      "type": "shell",
+      "command": "make -C pmoves archon-native-health",
+      "options": { "env": { "ARCHON_NATIVE_PORT": "${env:ARCHON_NATIVE_PORT:8091}" } },
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: archon-smoke",
+      "type": "shell",
+      "command": "make -C pmoves archon-smoke",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent Zero: health check (:8082)",
+      "type": "shell",
+      "command": "curl -sf http://localhost:8082/healthz && echo 'Agent Zero: OK' || echo 'Agent Zero: DOWN'",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES UI: health check (:4482)",
+      "type": "shell",
+      "command": "curl -sf http://localhost:4482 && echo 'PMOVES UI: OK' || echo 'PMOVES UI: DOWN'",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Archon: health check (:8091)",
+      "type": "shell",
+      "command": "curl -sf http://localhost:8091/healthz && echo 'Archon: OK' || echo 'Archon: DOWN'",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "A0 Launcher: start (external installer)",
+      "type": "shell",
+      "command": "if command -v a0-launcher >/dev/null 2>&1; then a0-launcher; else echo 'a0-launcher not in PATH. Install from https://www.agent-zero.ai/p/docs/installation/'; fi",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    }
+  ]
+}
