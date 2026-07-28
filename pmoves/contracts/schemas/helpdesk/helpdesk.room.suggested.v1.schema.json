@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Helpdesk Room Suggested",
+  "description": "Creator-collab slice 6: room-suggest-skill produced a ranked list of candidate rooms for a persona + intent. Carries the parent intake_id (or 'explore' for ad-hoc), the persona context (agent_id + role), and the ranked candidates with persona-aware scores. Emitted by room-suggest-skill when invoked (ambient on every chat turn, or explicit on the room-suggest UI). Consumed by nats_event_bus + room-suggestions panel.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["suggestion_id", "context", "candidates", "suggested_at"],
+  "properties": {
+    "suggestion_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "parent_intake_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Optional parent intake_id (matches helpdesk.intake.opened.v1) when the suggestion was triggered by an intake"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_id", "intents"],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "description": "Visitor's agent_id (persona or fleet agent)"
+        },
+        "persona_role": {
+          "type": "string",
+          "description": "Optional role hint used for persona-aware ranking (e.g. 'resident', 'creator', 'operator', 'elder')"
+        },
+        "intents": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Intents extracted from the visitor's question or explicit 'next room' ask"
+        },
+        "hardware_needed": {
+          "type": "object",
+          "description": "Optional hardware pin: gpu + min_vram_mb + node_roles. When set, candidates are filtered to rooms that satisfy the pin.",
+          "additionalProperties": false,
+          "properties": {
+            "gpu": { "type": "boolean" },
+            "min_vram_mb": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["room_id", "score", "rationale"],
+        "properties": {
+          "room_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this room was ranked at this position (intent + persona + hardware match)"
+          },
+          "matched_intents": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "matched_capabilities": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "deep_link": {
+            "type": "string",
+            "description": "Suggested deep-link into the candidate room's primary surface"
+          }
+        }
+      }
+    },
+    "directory_version": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Version of the room directory snapshot used for the suggestion"
+    },
+    "suggested_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
