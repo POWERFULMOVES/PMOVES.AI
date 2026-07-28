@@ -185,3 +185,49 @@ exit-node-obs-install: ## Deploy continuous exit-node obs to a node: make exit-n
 		$(OBS_INSTALL) $(EXIT_OBS) root@$$node:/opt/pmoves-obs-stage/; \
 	ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes root@$$node \
 		'chmod +x /opt/pmoves-obs-stage/*.sh && BW_CAP_TB=$(or $(BW_CAP_TB),16) bash /opt/pmoves-obs-stage/install-exit-node-obs.sh'
+
+# ---------------------------------------------------------------------------
+# YouTube playlist metadata crawl via Data API v3 (IP-agnostic).
+# Crawls all videos in a playlist and stores metadata in Supabase.
+# Script: pmoves/tools/yt_playlist_crawl.py (runs inside pmoves-yt container).
+# ---------------------------------------------------------------------------
+
+YT_PLAYLIST_ID ?= PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8
+YT_CRAWL_NAMESPACE ?= darkxside
+
+.PHONY: yt-playlist-crawl yt-playlist-stats
+
+yt-playlist-crawl: ## Crawl YouTube playlist metadata via Data API: make yt-playlist-crawl [YT_PLAYLIST_ID=...] [YT_CRAWL_NAMESPACE=...]
+	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-pmoves-yt-1$$'; then \
+		echo "ERROR: pmoves-yt container not running. Start with 'make -C pmoves up'." >&2; \
+		exit 1; \
+	fi
+	@echo "[yt-crawl] Copying crawl script to container..."
+	@docker cp tools/yt_playlist_crawl.py pmoves-pmoves-yt-1:/app/yt_playlist_crawl.py
+	@echo "[yt-crawl] Starting playlist crawl (playlist: $(YT_PLAYLIST_ID), namespace: $(YT_CRAWL_NAMESPACE))..."
+	@docker exec pmoves-pmoves-yt-1 python3 /app/yt_playlist_crawl.py \
+		--playlist "$(YT_PLAYLIST_ID)" \
+		--namespace "$(YT_CRAWL_NAMESPACE)"
+
+yt-playlist-stats: ## Show crawled video statistics from Supabase
+	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-supabase-db-1$$'; then \
+		echo "ERROR: Supabase DB container not running." >&2; \
+		exit 1; \
+	fi
+	@echo "=== YouTube Playlist Video Stats ==="
+	@docker exec -e PGPASSWORD=$$(grep POSTGRES_PASSWORD env.tier-data 2>/dev/null | cut -d= -f2) \
+		pmoves-supabase-db-1 psql -U supabase_admin -d postgres -c "
+		SET search_path TO pmoves_core;
+		SELECT count(*) AS total, count(DISTINCT video_id) AS unique_videos,
+		       count(*) FILTER (WHERE downloaded) AS downloaded,
+		       count(*) FILTER (WHERE duration_seconds > 0) AS with_duration
+		FROM youtube_videos;
+		SELECT
+		    CASE WHEN duration_seconds < 300 THEN 'short(<5m)'
+		         WHEN duration_seconds < 1200 THEN 'medium(5-20m)'
+		         WHEN duration_seconds < 3600 THEN 'long(20-60m)'
+		         ELSE 'very_long(1h+)' END AS duration_bucket,
+		    count(*) AS cnt
+		FROM youtube_videos WHERE duration_seconds IS NOT NULL
+		GROUP BY 1 ORDER BY cnt DESC;
+	"
