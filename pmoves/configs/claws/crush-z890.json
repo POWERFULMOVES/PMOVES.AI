@@ -16,9 +16,9 @@
     "zai": {
       "id": "zai",
       "name": "Z.ai GLM Coding Plan",
-      "type": "openai",
+      "type": "openai-compat",
       "base_url": "https://api.z.ai/api/coding/paas/v4",
-      "api_key": "$Z_AI_API_KEY",
+      "api_key": "${Z_AI_API_KEY:?set Z_AI_API_KEY}",
       "models": [
         {
           "id": "glm-5-turbo",

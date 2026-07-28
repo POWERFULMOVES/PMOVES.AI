@@ -16,9 +16,9 @@
     "zai": {
       "id": "zai",
       "name": "Z.ai GLM Coding Plan",
-      "type": "openai",
+      "type": "openai-compat",
       "base_url": "https://api.z.ai/api/coding/paas/v4",
-      "api_key": "$Z_AI_API_KEY",
+      "api_key": "${Z_AI_API_KEY:?set Z_AI_API_KEY}",
       "models": [
         {
           "id": "glm-5-turbo",
@@ -64,7 +64,7 @@
     "ollama-local": {
       "id": "ollama-local",
       "name": "Ollama (local 4090)",
-      "type": "openai",
+      "type": "openai-compat",
       "base_url": "http://localhost:11434/v1",
       "api_key": "ollama",
       "models": [
