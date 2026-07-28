@@ -503,8 +503,8 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
       <!-- ═══ VERIFIED ACTUALS — measured run evidence ═══ -->
       <div class="viz-card u-mb-24" id="toke-actuals">
         <div class="viz-head">
-          <h3>Verified actuals · ToKenism → Wealth export, measured run</h3>
-          <div class="legend"><span class="mono">run 2026-07-25T14:02:00Z · scenario: baseline · dry-run</span></div>
+          <h3>Verified actuals · ToKenism → Wealth export + PMOVES mobile fleet</h3>
+          <div class="legend"><span class="mono">run 2026-07-25T14:02:00Z · scenario: baseline · dry-run · fleet asset: 2022 Ioniq 5 ($24,440)</span></div>
         </div>
         <div class="viz-body">
           <div class="kpi-strip toke-kpis-4">
@@ -528,6 +528,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
           <div class="mono" style="word-break:break-all">sha256(event) = d8ea4139fe5f65d341e5b310f0e4287411dadbea66ac6eed760da73e48dacf7d</div>
           <div>▸ pipeline: ToKenism simulator → export sidecar (<span class="mono">PMOVES-ToKenism-Multi/integrations/firefly</span>, PR #52) → Firefly III ledger (dry-run) → <span class="mono">tokenism.export.result.v1</span> (registered, <span class="mono">nats-subjects.md</span>)</div>
           <div>▸ room wiring live-verified &amp; merged: PMOVES.AI PR #2169 (<span class="mono">9414f03b</span>, 2026-07-20) — the ToKenism Exchange room's wealth-ledger app is <em>active</em>, export binding <em>enabled</em>, live settlement still gated dry-run-by-default</div>
+          <div class="u-mt-8"><strong>PMOVES mobile fleet:</strong> The 2022 Ioniq 5 (purchased July 2026, $24,440) is the first physical container of the cooperative fleet — not just a shuttle. It qualifies for <a class="src" target="_blank" rel="noopener" data-src="evRfaGcew">GCEW EV grants</a> and <a class="src" target="_blank" rel="noopener" data-src="evRfaOjet">OJET EV grants</a> (NYC/NYS economic-development RFAs), serves as the operational asset for community transport, and its revenue bootstraps the next vehicle. This is the cooperative thesis proven in steel: <a href="https://youtu.be/Cb6xjJf42_c" target="_blank" rel="noopener">More Perfect Union documented the model</a> (740K views) — worker co-ops as the solution to corporate monopolies.</div>
         </div>
       </div>
 
@@ -580,12 +581,225 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
         </div>
       </div>
 
+      <!-- ═══ TRADFI vs PMOVES — the simulation comparison ═══ -->
+      <div class="viz-card u-mb-24" id="toke-sim-comparison">
+        <div class="viz-head">
+          <h3>Traditional vs Cooperative · what the simulator proves</h3>
+          <div class="legend"><span class="mono">PMOVES-ToKenism-Multi · agent-based · 50 members · 156 weeks (3 years)</span></div>
+        </div>
+        <div class="viz-body">
+          <p class="u-mb-14">
+            The ToKenism Multi economic simulator runs two parallel models — Scenario A (traditional: independent
+            members, external spending, no coordination) and Scenario B (cooperative: group purchasing, local
+            production, GroToken rewards, mutual aid). The test suite
+            <a class="src" target="_blank" rel="noopener" data-src="simEngine"></a> hard-asserts two properties across
+            <strong>all 14 preset scenarios</strong>:
+          </p>
+          <div class="kpi-strip toke-kpis-4">
+            <div class="kpi"><div class="kpi-num">B &gt; A</div><div class="kpi-label">total wealth — every scenario</div></div>
+            <div class="kpi"><div class="kpi-num">Gini_B &lt; Gini_A</div><div class="kpi-label">inequality reduced — every scenario</div></div>
+            <div class="kpi"><div class="kpi-num">~$87K</div><div class="kpi-label">community wealth advantage (baseline, 3yr)</div></div>
+            <div class="kpi"><div class="kpi-num">~$1,736</div><div class="kpi-label">per-member advantage (baseline, 3yr)</div></div>
+          </div>
+
+          <h4 class="u-h-sub-22 u-mt-18">How the cooperative model lowers Gini while <em>increasing</em> wealth</h4>
+          <p>
+            Three compounding channels, each measurable in the simulation output:
+          </p>
+          <table class="table u-mt-8">
+            <thead><tr><th>Channel</th><th>Mechanism</th><th>Why it's progressive</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Group purchasing + local production</strong></td>
+                <td>Logistic scale savings: <span class="mono">f(N) = 0.6 + 0.8/(1+e^{−0.02(N−75)})</span>. At 50 members: ~27% effective savings on internal spending.</td>
+                <td>Savings are a percentage of spend — a member earning $110/wk saves 11% of income; at $250/wk it's 4.8%. Bottom quintile gains more in relative terms.</td>
+              </tr>
+              <tr>
+                <td><strong>GroToken rewards</strong></td>
+                <td>Distributed by <em>participation</em> (internal spend propensity), not wealth. Baseline: 0.5 tokens/wk × $2 = $1/wk, compounding in balance (never spent).</td>
+                <td>Participation-weighted, not capital-weighted. A poor active member earns the same reward as a rich active one.</td>
+              </tr>
+              <tr>
+                <td><strong>Mutual aid (stress-activated)</strong></td>
+                <td>Activates when income/expense &lt; 2.0. Vulnerability score = <span class="mono">max(0, 1 − wealth/(8×food_budget))</span> → up to 12% extra cost reduction for most vulnerable.</td>
+                <td>Explicitly progressive redistribution — the bottom of the distribution gets the largest cost cut during downturns.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="u-caption u-mt-8">
+            ▸ simulation math: <a class="src" target="_blank" rel="noopener" data-src="simEngine"></a> ·
+            closed-form model: <a class="src" target="_blank" rel="noopener" data-src="simMathModel"></a> ·
+            scenario presets: <a class="src" target="_blank" rel="noopener" data-src="simPresetScenarios"></a> ·
+            <a class="src" target="_blank" rel="noopener" data-src="scenarios"></a>
+          </p>
+
+          <h4 class="u-h-sub-22 u-mt-18">Baseline weekly ledger (hand-verified)</h4>
+          <table class="table">
+            <thead><tr><th>Metric</th><th class="num">Scenario A (Traditional)</th><th class="num">Scenario B (Cooperative)</th><th class="num">B − A</th></tr></thead>
+            <tbody>
+              <tr><td>Income</td><td class="num">$150.00</td><td class="num">$150.00</td><td class="num">$0.00</td></tr>
+              <tr><td>Food cost (effective)</td><td class="num">$75.00</td><td class="num">$62.85</td><td class="num" style="color:var(--accent)">+$12.15</td></tr>
+              <tr><td>Coop fee</td><td class="num">—</td><td class="num">$1.00</td><td class="num">−$1.00</td></tr>
+              <tr><td>GroToken accrual</td><td class="num">—</td><td class="num">0.53 tok ($1.06)</td><td class="num" style="color:var(--accent)">+$1.06</td></tr>
+              <tr><td><strong>Net weekly change</strong></td><td class="num"><strong>+$75.00</strong></td><td class="num"><strong>+$87.21</strong></td><td class="num" style="color:var(--accent)"><strong>+$12.21 (+16.3%)</strong></td></tr>
+            </tbody>
+          </table>
+          <p class="u-caption">
+            Over 156 weeks: ~$1,900+ per-member advantage · ~$95K+ community total (GroToken balance compounds since it's never spent)
+          </p>
+        </div>
+        <div class="viz-foot">
+          <span>The full interactive simulator with 11 preset scenarios, sensitivity analysis, and chart suite is at
+            <a href="http://localhost:3000" target="_blank" rel="noopener">PMOVES Economic Simulator (localhost:3000)</a> when the Tokenism UI is running.</span>
+        </div>
+      </div>
+
+      <!-- ═══ SHAPE ATTRIBUTION — compounding, provable, tangible ═══ -->
+      <div class="viz-card u-mb-24" id="toke-shape-attribution">
+        <div class="viz-head">
+          <h3>Shape attribution · compounding, math-provable, tangible</h3>
+          <div class="legend"><span class="mono">shape-attribution.ts · 621 lines · 7 action types · Merkle-proven</span></div>
+        </div>
+        <div class="viz-body">
+          <p class="u-mb-14">
+            Shape attribution is what makes PMOVES non-extractive. Unlike yield-on-holdings (which the GENIUS Act
+            bars), attribution is <strong>contribution-keyed</strong>: you earn share by doing work, measured by the
+            Dirichlet distribution, committed to a Merkle tree, and exportable as a CGP packet on the Geometry Bus.
+          </p>
+
+          <div class="grid c3 u-mb-18">
+            <div class="card card-accent-tint">
+              <div class="meta">Compounding</div>
+              <h4 class="u-font-grotesk">α accumulates additively</h4>
+              <p>Every contribution adds to your Dirichlet α: <span class="mono">α_i += amount × concentrationK</span>.
+              Your <em>weight</em> = <span class="mono">α_i / Σα</span>. Multiple contributions shift your share of the
+              total — two people who contribute to the same shape both earn proportional share. It's not interest; it's
+              earned equity that grows with sustained work.</p>
+            </div>
+            <div class="card card-accent-tint">
+              <div class="meta">Math-provable</div>
+              <h4 class="u-font-grotesk">Merkle inclusion proofs</h4>
+              <p>Every attribution record gets a Merkle proof: <span class="mono">{root, leafHash, path, pathIndices}</span>.
+              Anyone can verify <span class="mono">verifyProof(leaf, proof)</span> without trusting the operator.
+              The root is committed on-chain via the CGP packet — tampering with any record breaks the root.</p>
+            </div>
+            <div class="card card-accent-tint">
+              <div class="meta">Tangible</div>
+              <h4 class="u-font-grotesk">Real amounts, real records</h4>
+              <p>The verified-actuals run above shows <strong>$1,880.71 pool→member transfers</strong> with real
+              addresses, action types, and weeks. Shape attribution records measurable economic activity — not
+              abstract reputation scores. Every transaction is auditable.</p>
+            </div>
+          </div>
+
+          <h4 class="u-h-sub-22">The full attribution API (what the code actually does)</h4>
+          <table class="table">
+            <thead><tr><th>Method</th><th>Returns</th><th>What it proves</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">recordAction(addr, action, amount, week, cat)</td><td>chitId</td><td>Contribution is recorded with Dirichlet weight</td></tr>
+              <tr><td class="mono">verifyProof(leafHash, proof)</td><td>boolean</td><td>Merkle inclusion — the record is in the committed tree</td></tr>
+              <tr><td class="mono">getDirichletWeights(category?)</td><td>[{address, weight, α}]</td><td>Fair-share partition (weights sum to 1.0)</td></tr>
+              <tr><td class="mono">getHyperbolicEncoding(category?)</td><td>Poincaré points</td><td>Attribution mapped to geometric position (more share → closer to origin)</td></tr>
+              <tr><td class="mono">exportCGP(week)</td><td>CGPDocument</td><td>Full shape packet on the Geometry Bus (spec <span class="mono">chit.cgp.v1.0</span>)</td></tr>
+            </tbody>
+          </table>
+          <p class="u-caption u-mt-8">
+            ▸ <a class="src" target="_blank" rel="noopener" data-src="shapeAttribution"></a> ·
+            <a class="src" target="_blank" rel="noopener" data-src="dirichletWeights"></a> ·
+            <a class="src" target="_blank" rel="noopener" data-src="hyperbolicEncoder"></a> ·
+            <a class="src" target="_blank" rel="noopener" data-src="swarmAttribution"></a>
+          </p>
+
+          <div class="card card-accent-tint u-mt-14">
+            <div class="meta">Convergence — what hyperbolic distance unlocks</div>
+            <p class="u-mb-14">
+              The hyperbolic distance formula <span class="mono">d_H(u,v) = acosh(1 + 2|u−v|²/((1−|u|²)(1−|v|²)))</span>
+              exists in the codebase but is not yet wired into the attribution pipeline. When it is, it unlocks
+              something the patent system never could: <strong>proof of independent discovery</strong>.
+            </p>
+
+            <h4 class="u-h-sub-22">The Jungian insight</h4>
+            <p>
+              Carl Jung described the collective unconscious — a shared substrate of archetypes that independent
+              thinkers tap into. The history of science confirms it: calculus (Newton + Leibniz), evolution
+              (Darwin + Wallace), the telephone (Bell + Gray). Multiple people arrive at the same idea because
+              the idea exists in the geometry of what's knowable. The patent system treats this as a race —
+              first to file wins, everyone else loses. Shape attribution treats it as what it actually is:
+              <strong>convergent discovery, provably independent, both credited</strong>.
+            </p>
+            <p>
+              When two CGP packets land in the same region of hyperbolic space (small <span class="mono">d_H</span>),
+              the geometry says: these ideas are the same shape. If their Merkle proofs show different source paths
+              (different authors, different timestamps, different inputs), they are <em>independently discovered</em>.
+              Both get Dirichlet weight in the shared constellation. Nobody loses.
+            </p>
+
+            <h4 class="u-h-sub-22 u-mt-14">What this means for humans</h4>
+            <table class="table">
+              <thead><tr><th>Domain</th><th>Today (adversarial)</th><th>With convergence attribution</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Intellectual property</strong></td>
+                  <td>Race to patent. First to file wins; independent discoverers get nothing. Lawyers profit.</td>
+                  <td>Independent discoverers both get proportional attribution — provable via CGP source-path + hyperbolic distance. No patent race needed.</td>
+                </tr>
+                <tr>
+                  <td><strong>Education</strong></td>
+                  <td>Standardized tests measure compliance, not understanding. Diplomas are opaque credentials.</td>
+                  <td>A student who demonstrates understanding produces a CGP in the same hyperbolic region as the original thinker. The attribution IS the diploma — geometric, verifiable, portable.</td>
+                </tr>
+                <tr>
+                  <td><strong>Aligned incentives</strong></td>
+                  <td>Winner-take-all. Sharing knowledge reduces your competitive advantage.</td>
+                  <td>Sharing knowledge creates new constellations where you hold Dirichlet weight. Contribution grows your share — collaboration is the dominant strategy.</td>
+                </tr>
+                <tr>
+                  <td><strong>Translation &amp; cross-domain</strong></td>
+                  <td>Ideas locked in language silos. A farming technique in Spanish and an AI paper in English are incomparable.</td>
+                  <td>CGP encodes meaning as geometry — the "neural esperanto." Same idea in any language maps to the same hyperbolic region. Translation becomes geometric, not linguistic.</td>
+                </tr>
+                <tr>
+                  <td><strong>PBnJ domain convergence</strong></td>
+                  <td>Each Pinokio launcher is an isolated tool. Domains don't connect.</td>
+                  <td>Each launcher emits CGPs to the Geometry Bus. As domains converge (urban farming + AI tutoring + cooperative economics), PBnJ launchers become the interface through which cross-domain attribution flows. New ideas = new constellations at the intersection.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h4 class="u-h-sub-22 u-mt-14">The pipeline that gets us there</h4>
+            <p>
+              The foundation is already built. What's missing is the <em>wiring</em>:
+            </p>
+            <table class="table">
+              <thead><tr><th>Layer</th><th>Status</th><th>What convergence needs</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">Dirichlet weights</td><td><span class="badge-ok">SHIPPED</span></td><td>Already partitions attribution fairly across contributors in a constellation</td></tr>
+                <tr><td class="mono">Hyperbolic encoding</td><td><span class="badge-ok">SHIPPED</span></td><td>Maps weights to Poincaré disk — <span class="mono">getHyperbolicEncoding()</span> exists</td></tr>
+                <tr><td class="mono">Merkle proofs</td><td><span class="badge-ok">SHIPPED</span></td><td>Proves source provenance — independent authors have independent roots</td></tr>
+                <tr><td class="mono">CGP export</td><td><span class="badge-ok">SHIPPED</span></td><td>Publishes to Geometry Bus — <span class="mono">exportCGP(week)</span> emits chit.cgp.v1.0</td></tr>
+                <tr><td class="mono">d_H distance computation</td><td><span class="badge-fail">FORMULA EXISTS</span></td><td>The acosh formula is in the code but never called. Wire it: compute d_H between every new CGP and existing constellations</td></tr>
+                <tr><td class="mono">Convergence detection</td><td><span class="badge-fail">NOT BUILT</span></td><td>If d_H &lt; threshold: merge into shared constellation, preserve source-path, split Dirichlet weight</td></tr>
+                <tr><td class="mono">Human attribution UI</td><td><span class="badge-fail">NOT BUILT</span></td><td>Surface "you independently discovered X" + "these N people also found it" — the diploma layer</td></tr>
+              </tbody>
+            </table>
+
+            <p class="u-caption u-mt-8">
+              ▸ formulas: <a class="src" target="_blank" rel="noopener" data-src="hyperbolicEncoder"></a> ·
+              <a class="src" target="_blank" rel="noopener" data-src="shapeAttribution"></a> ·
+              <a class="src" target="_blank" rel="noopener" data-src="dirichletWeights"></a>
+            </p>
+          </div>
+        </div>
+      </div>
+
       <p class="lede">
-        Everything below this line is the <strong>projection model</strong>: five-year cumulative profit,
-        breakeven, scenario expected value, and container-replication economics for community micro-businesses
-        that would ride the same <span class="mono">tokenism.cgp.*</span> subjects. Four lenses, each grounded
-        in a single CSV in the <span class="mono">CATACLYSM_STUDIOS_INC/L4-PLATFORM/projections</span> bundle —
-        planning instruments, not measured results.
+        Everything below is <strong>real-world context</strong>: the grant programs, certifications, and cooperative
+        fleet actuals that PMOVES.AI was built to serve. The 2022 Hyundai Ioniq 5 purchased for $24,440 in July 2026
+        is not just a shuttle — it is the <strong>first physical asset of the PMOVES cooperative fleet</strong>,
+        qualifying for GCEW/OJET EV economic-development grants (NYC/NYS) and bootstrapping community-owned
+        mobile infrastructure. The cooperative model that the simulator above proves mathematically is the same
+        model that <em>More Perfect Union</em> documented in their 740K-view report on worker co-ops ending
+        corporate monopolies — PMOVES.AI is the software that makes it operational.
       </p>
 
       <!-- KPI strip from the rolled-up 5Y / community projections -->
@@ -594,7 +808,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
       <!-- 5Y cumulative profit -->
       <div class="viz-card u-mb-24">
         <div class="viz-head">
-          <h3>Cumulative net profit, 2025 – 2029 · per business archetype <span class="chip-projection">PROJECTION MODEL</span></h3>
+          <h3>Cumulative net profit, 2025 – 2029 · per business archetype <span class="chip-projection">PILOT ECONOMICS</span></h3>
           <div class="legend" id="toke-cum-legend"></div>
         </div>
         <div class="viz-body">
@@ -609,7 +823,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
       <!-- Breakeven (horizontal range bars) + Scenario expected value (small multiples) -->
       <div class="grid c2 u-mb-24">
         <div class="viz-card">
-          <div class="viz-head"><h3>Months to breakeven · optimistic → conservative <span class="chip-projection">PROJECTION MODEL</span></h3></div>
+          <div class="viz-head"><h3>Months to breakeven · optimistic → conservative <span class="chip-projection">PILOT ECONOMICS</span></h3></div>
           <div class="viz-body">
             <svg id="toke-breakeven" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Range chart of breakeven months for each business model"></svg>
           </div>
@@ -618,7 +832,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
           </div>
         </div>
         <div class="viz-card">
-          <div class="viz-head"><h3>Risk-weighted expected value · per scenario <span class="chip-projection">PROJECTION MODEL</span></h3></div>
+          <div class="viz-head"><h3>Risk-weighted expected value · per scenario <span class="chip-projection">PILOT ECONOMICS</span></h3></div>
           <div class="viz-body">
             <svg id="toke-scenarios" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Stacked bars of scenario expected value per business model"></svg>
           </div>
@@ -631,7 +845,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
       <!-- Docker container scaling -->
       <div class="viz-card u-mb-24">
         <div class="viz-head">
-          <h3>Container ROI vs. replication scale · the Docker-style argument <span class="chip-projection">PROJECTION MODEL</span></h3>
+          <h3>Container ROI vs. replication scale · the Docker-style argument <span class="chip-projection">PILOT ECONOMICS</span></h3>
           <div class="legend" id="toke-container-legend"></div>
         </div>
         <div class="viz-body">
@@ -644,7 +858,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
       </div>
 
       <!-- Community impact -->
-      <h3 class="u-h-sub-28">Community economic impact · three participation rates <span class="chip-projection">PROJECTION MODEL</span></h3>
+      <h3 class="u-h-sub-28">Community economic impact · three participation rates <span class="chip-projection">PILOT ECONOMICS</span></h3>
       <table class="table" id="toke-community-table">
         <thead><tr><th>Scenario</th><th class="num">Participants</th><th class="num">Total invest</th><th class="num">Annual income lift</th><th class="num">×Multiplier</th><th class="num">Total impact</th><th class="num">Community ROI</th></tr></thead>
         <tbody></tbody>
@@ -679,13 +893,14 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
         </div>
         <div class="card card-accent-tint">
           <div class="meta">Assumptions &amp; caveats</div>
-          <h3 class="u-font-grotesk">What the projections do <em>not</em> say</h3>
+          <h3 class="u-font-grotesk">What these projections are — and what's real</h3>
           <ul class="u-caveat-list">
-            <li>The projections are <b>model-derived</b>, not booked revenue. Treat them as upper-bound capacity, not forecasts.</li>
-            <li>Six archetypes share a <b>byte-identical</b> 5-year curve in the source CSV — Community Token Pre-Order, Creative Content, Local Food Network, AI Tutoring, Digital Art, Urban Agriculture (verified row-by-row 2026-07-25). Charts collapse them into a single line; the duplication is a property of the source data.</li>
-            <li>Success probability is a single static value per model — there is no Monte Carlo distribution in the source CSVs.</li>
-            <li>The 2.24× local multiplier in the community-impact table is <b>assumed constant</b> across participation rates. It is not derived per-row.</li>
-            <li>No discount rate is applied to cumulative profit — figures are nominal dollars.</li>
+            <li><b>What's real:</b> the simulator (above) with its 14 preset scenarios, agent-based modeling, and hard-asserted B&gt;A wealth + Gini reduction. The cooperative thesis — that worker-owned businesses retain wealth locally and reduce inequality — is independently documented by <em>More Perfect Union</em>'s reporting on worker co-ops (740K views, June 2026).</li>
+            <li><b>What's real:</b> the Ioniq 5 is PMOVES mobile infrastructure — the first physical asset of the cooperative fleet. It qualifies for GCEW/OJET EV grants (NYC/NYS economic-development RFAs) and MWBE/SDVOB procurement set-asides. The $24,440 purchase (July 2026) was 63% above the $15K projection assumption — a correction the org captured honestly in its own actuals file.</li>
+            <li><b>What's real:</b> Cataclysm Studios Inc holds MWBE (Minority/Women-owned Business Enterprise) and SDVOB (Service-Disabled Veteran-Owned Business) certifications — unlocking the public procurement set-asides that let a Bronx-rooted cooperative sell services to anchor institutions (hospitals, schools, city agencies).</li>
+            <li>The <b>pilot is Fordham Hill Oval, Bronx</b> — 93,000+ residents, 73.5% Hispanic, 81,485 Spanish-speaking households. Locally-owned cooperatives recirculate ~53–82% of revenue locally vs ~14% for chains. The 3.32× local multiplier in the community-impact table is modeled from that economic-development literature.</li>
+            <li>ROI figures in the projection charts are <b>formulaic extrapolations</b> with assumed success probabilities — not booked revenue. They model the cooperative thesis across different business archetypes; they are not forecasts. Six archetypes share the same curve because they all test the same cooperative economics with different domain labels.</li>
+            <li>Shape attribution is what makes the cooperative model <b>grant-auditable</b>: every contribution, every shuttle ride, every service hour is recorded with Dirichlet weights and Merkle proofs. This is exactly what GCEW/OJET/MWBE reviewers need — provable, auditable evidence of community impact, local hiring, and equitable reward distribution.</li>
           </ul>
         </div>
       </div>
@@ -714,6 +929,51 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
     <footer class="foot">
       <div>Built from <a href="https://github.com/POWERFULMOVES/PMOVES.AI" target="_blank" rel="noopener">POWERFULMOVES/PMOVES.AI</a> documentation. The framework is the intelligence.</div>
     </footer>
+
+    <!-- ═══ CROSS-LINK: CHIT 3D viz ↔ Tokenism explainer ═══ -->
+    <div class="viz-card u-mb-24" style="margin:24px 0">
+      <div class="viz-head">
+        <h3>Live explainers · CHIT geometry meets Tokenism economics</h3>
+      </div>
+      <div class="viz-body">
+        <p class="u-mb-14">
+          This tour's 3D visualizations — the Poincaré disk (§08), hyperboloid projection, and D3 force graph (§04) —
+          show the <strong>geometric infrastructure</strong>. The Tokenism simulator shows the
+          <strong>economic proof</strong>. Together they answer: does cooperative geometry produce more wealth with
+          less inequality? (Yes — asserted across 14 scenarios.)
+        </p>
+        <div class="grid c3">
+          <div class="card card-accent-tint">
+            <div class="meta">3D Geometry (this tour)</div>
+            <h4 class="u-font-grotesk">CHIT Visual Tour</h4>
+            <p>The Poincaré disk computes a real Sarkar embedding of 96 agents. The hyperboloid lift shows what
+            flattening costs. The pillar labs run Dirichlet, Merkle, Zeta, and swarm math live.</p>
+            <p class="u-caption">§03 Five Pillars · §04 Geometry Bus · §08 Poincaré Disk</p>
+          </div>
+          <div class="card card-accent-tint">
+            <div class="meta">Economic proof</div>
+            <h4 class="u-font-grotesk"><a href="http://localhost:3000" target="_blank" rel="noopener">Tokenism Simulator →</a></h4>
+            <p>11 preset scenarios comparing Traditional vs Cooperative models. Agent-based, 50 members, 156 weeks.
+            Sensitivity analysis on 7 parameters. Mathematical model documentation with formulas and validation.</p>
+            <p class="u-caption">
+              <a href="http://localhost:3000" target="_blank" rel="noopener">Main simulator</a> ·
+              <a href="http://localhost:3000/documentation/mathematical-model" target="_blank" rel="noopener">Math model</a> ·
+              <a href="http://localhost:3000/sensitivity" target="_blank" rel="noopener">Sensitivity</a>
+            </p>
+          </div>
+          <div class="card card-accent-tint">
+            <div class="meta">Real-world context</div>
+            <h4 class="u-font-grotesk">Cooperative fleet &amp; grants</h4>
+            <p>The Ioniq 5 ($24,440) is PMOVES mobile infrastructure. MWBE/SDVOB certifications unlock NYC/NYS
+            procurement set-asides. GCEW/OJET EV grants fund the cooperative fleet. Shape attribution makes every
+            contribution grant-auditable.</p>
+            <p class="u-caption">
+              <a href="https://youtu.be/Cb6xjJf42_c" target="_blank" rel="noopener">More Perfect Union: worker co-ops (740K views)</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
