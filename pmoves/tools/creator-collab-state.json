@@ -6,7 +6,7 @@
     "worktree": ".worktrees/feat-creator-collab-lane",
     "branch": "feat/creator-collab-lane",
     "pr": 2264,
-    "ship_count": 4,
+    "ship_count": 5,
     "total_slices": 7,
     "status": "in_progress",
     "started_at": "2026-07-27T09:23:00Z",
@@ -107,8 +107,19 @@
       ]
     },
     "6_helpdesk_skill_and_room": {
-      "status": "pending",
-      "title": "pmoves-helpdesk-skill + room-suggest-skill + pmoves.room.helpdesk.json",
+      "status": "SHIPPED",
+      "title": "pmoves-helpdesk-skill + room-suggest-skill + pmoves.room.helpdesk.json + 3 helpdesk.* NATS subjects + skill frontmatter tests",
+      "shipped_at": "2026-07-28T18:30:00Z",
+      "branch": "slice-6-helpdesk-and-room-suggest",
+      "base": "feat/creator-collab-lane @ fd89b2c9ab (post slice 4)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "4494a34b9b",
+        "c46542f313"
+      ],
+      "scope": "pmoves/config/rooms/pmoves.room.helpdesk.json (NEW: first room_purpose=intake + creator_surface=ambient room, CPU-only, runs on z890 infra-coordinator) + pmoves/config/rooms/catalog.json (+1 entry) + pmoves/contracts/topics.json (96->99 topics, +3: helpdesk.intake.opened.v1 + helpdesk.intake.routed.v1 + helpdesk.room.suggested.v1) + pmoves/contracts/schemas/helpdesk/{helpdesk.intake.opened,helpdesk.intake.routed,helpdesk.room.suggested}.v1.schema.json (3 new Draft 2020-12 schemas, additionalProperties:false, format:uuid on id fields) + pmoves/skills/pmoves-helpdesk-skill/SKILL.md (NEW: the concierge — visitor state, accept/reject, notebook writeback, mesh-render handoff) + pmoves/skills/room-suggest-skill/SKILL.md (NEW: the pure ranker — deterministic, cached, callable from anywhere, emits helpdesk.room.suggested.v1) + pmoves/skills/tests/test_frontmatter.py (NEW: 10 tests, stdlib + pyyaml only, locks the slice-4 'schema/contract first' rule) + pmoves/docs/specs/helpdesk-and-room-suggest-2026-07-28.md (NEW: 10-section spec doc).",
+      "tests": "pmoves/skills/tests/test_frontmatter.py: 10/10 NEW (was 0 in the lane — slice 6 introduces the skill frontmatter test convention). Full test suite: 168/168 PASS (was 158/158 before this slice; +10 from the new frontmatter tests, no regressions across mesh_exposure 29/29, pinokio_apps 19/19, nats_event_bus 20/20, pinokio_bridge 28/28, p7-room-orchestrator 46/46, a2ui-nats-bridge 16/16). validate_room_manifests.py: 11 OK / 12 (1 pre-existing failure: persona.room.livingdoc em-dash catalog drift, out of scope). events.load_schema() for all 3 new helpdesk subjects: 3/3 OK; events.envelope(): 3/3 OK.",
+      "operator_signoff": "Q1='slice 6 then slice 5 sequentially' (operator picked sequential order to keep the unblock path linear — slice 6 unblocks slice 7 Fordham E2E; slice 5 visual evidence is independent and lands after).",
       "depends_on": [
         "1_contract_extension",
         "2_pinokio_bridge_skill",
@@ -269,6 +280,6 @@
     "next_run": "2026-07-28T14:20:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
     "disarmed_reason": "review-iter-poll cycle 2 closed >30m ago, no new threads, lane review activity settled",
-    "note": "slice 4 SHIPPED on slice-4-pinokio-apps-registry branch (3 commits: d679e83332 P1 schema+12 curated+4 TAC trees, 4a6b1b3194 functional mesh_exposure+discovery+gepeto-wrapper, ad6e2b3e0e docs); pending --no-ff merge into feat/creator-collab-lane. Slice 5 (creator-studio E2E smoke) and slice 6 (helpdesk-skill+room-suggest-skill+pmoves.room.helpdesk.json) are next. Slice 6 was unblocked by slice 3 (room.directory.v1 + room.presence.v1 are now live) and slice 4 (the helpdesk reads the registry to route residents to the right room). Slice 7 (Fordham E2E) is the integrated demo, lands last."
+    "note": "slice 6 SHIPPED on slice-6-helpdesk-and-room-suggest branch (2 commits: 4494a34b9b P1 helpdesk room+3 NATS schemas+catalog entry, c46542f313 functional helpdesk-skill+room-suggest-skill+frontmatter tests); pending --no-ff merge into feat/creator-collab-lane + docs commit (spec + AGNOTE CLAIM). Slice 5 (creator-studio E2E smoke with Playwright screenshots) is next per operator's 'slice 6 then slice 5 sequentially' signoff; slice 7 (Fordham E2E) is the integrated demo and lands last. Slice 6 unblocks slice 7 — the Fordham resident lands in pmoves.room.helpdesk (intake x ambient), the helpdesk routes them to fordham.room.community via the room-suggest ranker, all 3 helpdesk.* events land in nats_event_bus. Topics.json is now at 99 (was 91 pre-slice-3, +5 slice 3, +3 slice 6). ship_count advanced 4 -> 5."
   }
 }
