@@ -98,3 +98,9 @@ tracked:
     freshness_days: 90
     severity: INFO
     description: "Grand Convergence five-layer thesis — slow-changing"
+
+  # ── Service docs (a2ui-renderer) ──────────────────────────────────────
+  - path: pmoves/services/a2ui-renderer/README.md
+    freshness_days: 30
+    severity: P2
+    description: "A2UI Renderer (port 8107) — Remotion animation engine for creator pipeline"

@@ -838,7 +838,7 @@ seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 		echo "⚠️  Qdrant not running. Starting data tier..."; \
 		$(MAKE) --no-print-directory up-data-tier; \
 	fi
-	@$(DC) up -d --no-deps --build --recreate hi-rag-gateway-v2
+	@$(DC) up -d --no-deps --build --force-recreate hi-rag-gateway-v2
 	@sleep 5
 	@$(DC) exec -T hi-rag-gateway-v2 python /app/scripts/seed_local.py 2>/dev/null || \
 		$(DC) exec -T hi-rag-gateway-v2 python3 /app/scripts/seed_local.py 2>/dev/null || \
@@ -1019,6 +1019,17 @@ up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 	@$(DC) up -d $(DATA_SERVICES)
 	@$(MAKE) --no-print-directory wait-data
 	@echo "✅ Data tier ready"
+
+.PHONY: reset-data-tier
+reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreate with current credentials
+	@echo "⚠️  This will DELETE all data-tier volumes (Neo4j, Qdrant, Meilisearch, MinIO)."
+	@echo "⚠️  Press Ctrl+C to abort. Continuing in 3 seconds..."
+	@sleep 3
+	@$(DC) stop $(DATA_SERVICES) 2>/dev/null || true
+	@$(DC) rm -f $(DATA_SERVICES) 2>/dev/null || true
+	@docker volume rm $(PROJECT)_neo4j-data $(PROJECT)_qdrant-data $(PROJECT)_meilisearch-data $(PROJECT)_minio-data 2>/dev/null || true
+	@$(MAKE) --no-print-directory up-data-tier
+	@echo "✅ Data tier reset with current env.tier-data credentials"
 
 .PHONY: up-minio
 up-minio: ## Start MinIO object storage (port 9000) + Presign
@@ -1661,6 +1672,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^NEO4J_AUTH=neo4j/.*|NEO4J_AUTH=neo4j/$${NEO4J_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		grep -q "^MEILI_API_KEY=" env.tier-data 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-data; \
 		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		echo "✓ Populated env.tier-data"; \
 	fi; \
@@ -1697,6 +1710,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=$${MINIO_SECRET_KEY:-minioadmin}|" env.tier-api; \
 		sed -i "s|^PRESIGN_SHARED_SECRET=.*|PRESIGN_SHARED_SECRET=$${PRESIGN_SHARED_SECRET:-$(shell openssl rand -hex 32)}|" env.tier-api; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		grep -q "^MEILI_API_KEY=" env.tier-api 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-api; \
 		echo "✓ Populated env.tier-api"; \
 	fi; \
 	if [ -f "env.tier-llm" ]; then \
@@ -4086,8 +4101,8 @@ neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_alia
 	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
 
 neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
-	@echo "→ Bootstrapping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j bootstrap
+	@echo "→ Bootstrapping Neo4j..."
+	@bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
 neo4j-status: ## Check Neo4j status from submodule
 	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
@@ -4384,7 +4399,7 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
 
-.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 	@bash $(CURDIR)/scripts/claude-pmoves.sh delivery-agent
 
@@ -4396,3 +4411,7 @@ kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
 
 codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh
+
+cipher-mint-token: ## Mint a new per-agent cipher token: AGENT=crush-spark [SCOPES="memory:read,memory:write"]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=crush-spark [SCOPES='memory:read,memory:write']"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write)"
