@@ -4457,3 +4457,19 @@ codex-pmoves: ## Launch Codex CLI with PMOVES context
 cipher-mint-token: ## Mint a new per-agent cipher token: AGENT=crush-spark [SCOPES="memory:read,memory:write"]
 	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=crush-spark [SCOPES='memory:read,memory:write']"; exit 1; fi
 	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write)"
+
+.PHONY: beats-analyze beats-hyperdim beats-pipeline
+beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
+	@echo "[beats] Running sonic fingerprint analysis (glaze mode)..."
+	@rm -f $(CURDIR)/data/beats/soundcloud/darkxside/.fingerprints.json
+	@cd $(CURDIR)/.. && uv run pmoves/tools/analyze_beats.py analyze --sense-mode glaze
+
+beats-hyperdim: ## Export analysis to Hyperdimensions saves + constellation embed
+	@echo "[beats] Exporting to Hyperdimensions..."
+	@cd $(CURDIR)/.. && uv run pmoves/tools/beats_to_cgp.py export-hyperdim
+
+beats-pipeline: ## Full pipeline: analyze -> cluster -> export to Hyperdimensions
+	@echo "[beats] Full DARKXSIDE beats -> Hyperdimensions pipeline..."
+	@$(MAKE) -C $(CURDIR) beats-analyze
+	@$(MAKE) -C $(CURDIR) beats-hyperdim
+	@echo "[beats] Done. Open website/hyperdim/ or website/embeds/beats-constellation/"
