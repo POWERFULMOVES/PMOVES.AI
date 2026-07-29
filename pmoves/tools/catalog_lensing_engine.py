@@ -22,7 +22,6 @@ import hashlib
 import json
 import logging
 import math
-import os
 import pickle
 import re
 import sys
@@ -30,7 +29,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 
@@ -2040,7 +2039,7 @@ def _print_summary(stats: Dict[str, Any], args: argparse.Namespace) -> None:
     if not args.dry_run:
         print(f"  Output:           {args.output}")
     else:
-        print(f"  Output:           (dry run -- not written)")
+        print("  Output:           (dry run -- not written)")
     print(f"  Embedding cache:  {args.cache_path}")
 
     dim_stats = stats.get("dimension_stats", {})

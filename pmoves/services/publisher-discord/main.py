@@ -1016,7 +1016,7 @@ async def _handle_claude_session_start(payload: Dict[str, Any]) -> None:
 
     # Build embed for the initial message
     emb = {
-        "title": f"Claude Session Started",
+        "title": "Claude Session Started",
         "color": 0x5865f2,  # Discord blurple
         "fields": []
     }

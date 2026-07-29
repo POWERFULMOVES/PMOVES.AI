@@ -11,11 +11,10 @@ Features:
 """
 
 import os
-import json
 import logging
 import math
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 
@@ -98,7 +97,7 @@ class CGPMapper:
         # Convert spherical to Cartesian coordinates
         x = radius * math.sin(theta) * math.cos(phi)
         y = radius * math.sin(theta) * math.sin(phi)
-        z = radius * math.cos(theta)
+        radius * math.cos(theta)
 
         theory_id = f"{category}:{name.lower().replace(' ', '_')}"
 
@@ -126,7 +125,7 @@ class CGPMapper:
                 )
                 zeta_analysis = zeta_filter.analyze_spectrum(spectrum)
                 # Use zeta-filtered spectrum as the anchor (preserves harmonic structure)
-                filtered_spectrum = zeta_analysis["filtered"]
+                zeta_analysis["filtered"]
 
                 # Add zeta metadata to packet
                 zeta_meta = {

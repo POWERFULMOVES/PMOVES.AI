@@ -1,4 +1,7 @@
-import base64, io, json, wave
+import base64
+import io
+import json
+import wave
 import numpy as np
 from nats_responder import handle_request
 

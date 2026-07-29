@@ -1,4 +1,5 @@
-import os, json, time
+import os
+import json
 from typing import List, Dict, Any
 
 from qdrant_client import QdrantClient
@@ -42,7 +43,7 @@ def seed_docs() -> List[Dict[str, Any]]:
 
 def ensure_qdrant_collection(client: QdrantClient, dim: int):
     try:
-        info = client.get_collection(COLL)
+        client.get_collection(COLL)
         # If exists, assume OK
         return
     except Exception:

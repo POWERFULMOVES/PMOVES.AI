@@ -9,8 +9,6 @@ We swap in a FakePublisher post-startup so we can assert publish calls.
 from __future__ import annotations
 
 import importlib
-import json
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List

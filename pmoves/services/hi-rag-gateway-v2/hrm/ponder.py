@@ -10,7 +10,6 @@ Implements the pondering mechanism from the pinilDissanayaka/HRM architecture:
 from __future__ import annotations
 
 import logging
-import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
@@ -152,7 +151,6 @@ class PonderingController:
         if not isinstance(state, torch.Tensor):
             return self._ponder_no_torch(state)
 
-        device = state.device
         step_fn = transform
         if step_fn is None:
             step_fn = self._step_transform  # type: ignore[assignment]

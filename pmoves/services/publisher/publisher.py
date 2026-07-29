@@ -77,7 +77,6 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev testi
 
 from services.common.telemetry import (
     PublisherMetrics,
-    PublishTelemetry,
     compute_publish_telemetry,
 )
 

@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import pathlib
-import shutil
 import time
 
 from minio import Minio
@@ -205,10 +204,7 @@ if __name__ == "__main__":
     import asyncio
     asyncio.run(run())
 
-import os, time, json, hashlib, pathlib, datetime
-from minio import Minio
-from nats.aio.client import Client as NATS
-from services.common.events import envelope
+import os
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT","minio:9000")
 MINIO_USE_SSL = os.environ.get("MINIO_USE_SSL","false").lower() == "true"
@@ -273,7 +269,7 @@ async def run():
                     try:
                         from datetime import timedelta
                         presigned = client.presigned_get_object(BUCKET, key, expires=timedelta(hours=PRESIGN_HOURS))
-                    except Exception as e:
+                    except Exception:
                         presigned = None
                     public_url = f"{PUBLIC_BASE_URL}/{BUCKET}/{key}".replace('//','/').replace('http:/','http://').replace('https:/','https://')
                     payload = {"artifact_uri": f"s3://{BUCKET}/{key}"}

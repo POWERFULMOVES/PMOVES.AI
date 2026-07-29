@@ -93,7 +93,7 @@ class TensorZeroClient:
             Performance metrics
         """
         end = datetime.now()
-        start = end - timedelta(hours=hours)
+        end - timedelta(hours=hours)
 
         model_filter = f"AND model_name = '{model}'" if model else ""
 
@@ -375,7 +375,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 token_diff = m2_data.get("total_tokens", 0) - m1_data.get("total_tokens", 0)
                 request_diff = m2_data.get("total_requests", 0) - m1_data.get("total_requests", 0)
 
-                output.append(f"\n  Differences:")
+                output.append("\n  Differences:")
                 output.append(f"    Latency: {latency_diff:+.2f}ms")
                 output.append(f"    Tokens: {token_diff:+,}")
                 output.append(f"    Requests: {request_diff:+,}")

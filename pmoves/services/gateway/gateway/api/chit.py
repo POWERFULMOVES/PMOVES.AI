@@ -1,4 +1,9 @@
-import os, json, base64, hashlib, hmac, logging, struct
+import os
+import json
+import base64
+import hashlib
+import logging
+import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -13,7 +18,7 @@ try:
     from services.common.env import get_secret
 except ModuleNotFoundError:  # package-qualified import path used by repo tests
     from pmoves.services.common.env import get_secret
-from pmoves.tools.chit_security import _unpack_floats, verify_cgp as _verify_cgp, decrypt_anchors as _decrypt_anchors
+from pmoves.tools.chit_security import _unpack_floats, verify_cgp as _verify_cgp
 from pmoves.tools.chit_common import canon
 
 router = APIRouter(tags=["CHIT"])
@@ -400,9 +405,9 @@ def geometry_calibration_report(body: GeometryCalibrationRequest):
     if not anchor: raise HTTPException(status_code=400, detail="No anchor")
     nrm = sum(x*x for x in anchor) ** 0.5 or 1.0
     u = [x/nrm for x in anchor]
-    vals=[]; 
+    vals=[] 
     for it in items:
-        vec = it.get("vec"); 
+        vec = it.get("vec") 
         if vec: vals.append(sum(a*b for a,b in zip(u, vec)))
     rmin, rmax = const.radial_minmax; bins = len(const.spectrum)
     width = (rmax-rmin)/bins; hist=[0]*bins

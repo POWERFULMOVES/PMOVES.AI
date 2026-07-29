@@ -17,11 +17,9 @@ The state module is the pure-functional core. It does:
 from __future__ import annotations
 
 import logging
-import os
-from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import yaml
 

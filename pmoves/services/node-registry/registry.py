@@ -130,7 +130,6 @@ class NodeRegistry:
 
     async def _subscribe_announce(self):
         """Subscribe to node announcements."""
-        import nats
 
         async def on_announce(msg):
             try:
@@ -162,7 +161,7 @@ class NodeRegistry:
                 cb=on_announce,
             )
             logger.info(f"Subscribed to {SUBJECTS['announce']}")
-        except Exception as e:
+        except Exception:
             # Fallback to regular subscription
             sub = await self._nc.subscribe(SUBJECTS["announce"], cb=on_announce)
             self._subscriptions.append(sub)
@@ -170,7 +169,6 @@ class NodeRegistry:
 
     async def _subscribe_heartbeat(self):
         """Subscribe to node heartbeats."""
-        import nats
 
         async def on_heartbeat(msg):
             try:
@@ -204,7 +202,6 @@ class NodeRegistry:
 
     async def _subscribe_query(self):
         """Subscribe to node queries."""
-        import nats
 
         async def on_query(msg):
             # Define error response helper
@@ -280,7 +277,6 @@ class NodeRegistry:
 
     async def _subscribe_drain(self):
         """Subscribe to node drain requests."""
-        import nats
 
         async def on_drain(msg):
             try:
@@ -504,7 +500,6 @@ async def run_with_api(
 
 
 if __name__ == "__main__":
-    import sys
 
     logging.basicConfig(
         level=logging.INFO,

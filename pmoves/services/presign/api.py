@@ -2,10 +2,9 @@ import os
 import socket
 import time
 import hmac
-import hashlib
 from contextlib import asynccontextmanager
-from typing import Optional, List, Dict
-from fastapi import FastAPI, HTTPException, Header, Query
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel, Field
 import boto3
 from botocore.config import Config

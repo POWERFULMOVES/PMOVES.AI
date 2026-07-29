@@ -869,7 +869,6 @@ class HardwareDetector:
 
                 # Parse IPs from remaining parts
                 ipv4_addresses = []
-                ipv6_addresses = []
                 for part in parts[3:]:
                     if part.startswith("inet"):
                         if part == "inet6":
@@ -1144,10 +1143,10 @@ class ResourceAllocator:
             lines.append(f"  {service}:")
             lines.append("    deploy:")
             lines.append("      resources:")
-            lines.append(f"        limits:")
+            lines.append("        limits:")
             lines.append(f"          memory: {resources['limits']['memory']}")
             lines.append(f"          cpus: '{resources['limits']['cpus']}'")
-            lines.append(f"        reservations:")
+            lines.append("        reservations:")
             lines.append(f"          memory: {resources['reservations']['memory']}")
             lines.append(f"          cpus: '{resources['reservations']['cpus']}'")
             lines.append("")

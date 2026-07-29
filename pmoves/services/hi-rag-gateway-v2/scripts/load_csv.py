@@ -1,10 +1,13 @@
-import os, sys, csv
+import os
+import sys
+import csv
 from pathlib import Path
 from typing import List, Dict, Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
-import requests, json as pyjson
+import requests
+import json as pyjson
 
 _repo_root = Path(__file__).resolve().parents[4]
 if str(_repo_root) not in sys.path:

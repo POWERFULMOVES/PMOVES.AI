@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import httpx
 import pytest
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "app.py"

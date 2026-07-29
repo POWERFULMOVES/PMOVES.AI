@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import ipaddress
 import json
 import logging
@@ -548,7 +547,7 @@ async def search(q: str = Query(..., min_length=1, description="Search query")) 
     try:
         result = await process_request(q, context=context, envelope={"query": q, "channel": channel})
         return result
-    except ValueError as exc:
+    except ValueError:
         REQUEST_ERRORS.labels(channel=channel, reason="ValueError").inc()
         raise HTTPException(status_code=400, detail="Invalid search request") from None
     except Exception as exc:  # noqa: BLE001

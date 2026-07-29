@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import Response, HTMLResponse
+from fastapi.responses import Response
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-import json, os, math, re
+import json
+import os
+import math
+import re
 
 _SAFE_SHAPE_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 DATA_DIR = Path("data").resolve()

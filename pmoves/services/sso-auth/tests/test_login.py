@@ -4,7 +4,8 @@ import pytest
 import httpx
 from jose import jwt
 from fastapi.testclient import TestClient
-import config, gotrue
+import config
+import gotrue
 import app as appmod
 
 SECRET = "test-secret-value-at-least-32-chars-long!!"

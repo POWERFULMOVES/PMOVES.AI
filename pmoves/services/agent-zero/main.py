@@ -19,7 +19,6 @@ from services.common.bootstrap import bootstrap_import_paths
 
 bootstrap_import_paths()
 
-from services.common.env import get_secret
 
 # NATS service announcement integration
 try:

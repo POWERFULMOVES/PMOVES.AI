@@ -301,7 +301,7 @@ class VoiceFollowCastAgent:
         if self.default_device:
             sys.stderr.write(f"  ↳ device: {self.default_device}\n")
         if self.notebook_client:
-            sys.stderr.write(f"  ↳ notebook_logging: enabled\n")
+            sys.stderr.write("  ↳ notebook_logging: enabled\n")
 
         self.running = True
         done = asyncio.Event()

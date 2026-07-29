@@ -21,7 +21,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from events.bus import EventBus, Event, get_event_bus
+from events.bus import EventBus
 from events.subjects import (
     AGENT_STARTED,
     TASK_CREATED,
@@ -256,7 +256,7 @@ class EventBusTester:
             # Publish some events
             for i in range(3):
                 await self.bus.publish(
-                    subject=f"pmoves.test.metric.v1",
+                    subject="pmoves.test.metric.v1",
                     event_type="TEST_METRIC",
                     data={"index": i},
                     source="test"

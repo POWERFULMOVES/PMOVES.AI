@@ -3,10 +3,10 @@
 import json
 import math
 import io
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import anyio
-from fastapi import APIRouter, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from fastapi.responses import RedirectResponse
 import urllib3
 
@@ -14,7 +14,7 @@ from config import (
     CHIT_REQUIRE_SIGNATURE, CHIT_PASSPHRASE, CHIT_DECRYPT_ANCHORS, CHIT_PERSIST_DB,
     CHIT_DECODE_TEXT, CHIT_DECODE_IMAGE, CHIT_DECODE_AUDIO,
     CHIT_CODEBOOK_PATH, CHIT_T5_MODEL, CHIT_CLIP_MODEL,
-    PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE,
+    PGHOST, PGUSER, PGPASSWORD, PGDATABASE,
     GAN_SIDECAR_ENABLED, NATS_URL, NAMESPACE_DEFAULT, logger,
 )
 from security import (
@@ -310,7 +310,6 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
 @router.post("/geometry/calibration/report")
 def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):
     def _js(p, q):
-        import math
         def _kl(a, b):
             eps = 1e-9
             s = 0.0
@@ -323,7 +322,7 @@ def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscal
     def _w1(p, q):
         from itertools import accumulate
         cdp=list(accumulate(p)); cdq=list(accumulate(q))
-        n=max(1,len(cdp));
+        n=max(1,len(cdp))
         return sum(abs((cdp[i] if i<len(cdp) else 1.0)-(cdq[i] if i<len(cdq) else 1.0)) for i in range(n))/n
     data = body.get("data")
     const_ids = body.get("constellation_ids") or []
@@ -353,7 +352,6 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
     try:
         from sentence_transformers import SentenceTransformer
         from PIL import Image
-        import numpy as np
     except Exception:
         raise HTTPException(500, "missing dependencies for image decode (sentence-transformers, Pillow)")
     mode = (body.get("mode") or "geometry").lower()

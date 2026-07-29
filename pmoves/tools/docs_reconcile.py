@@ -555,7 +555,7 @@ def print_report(report: ReconcileReport, json_mode: bool = False) -> None:
 
     if report.dashboard_meta:
         m = report.dashboard_meta
-        print(f"\n  Dashboard:")
+        print("\n  Dashboard:")
         print(f"    Commit:      {m.commit}")
         print(f"    Updated:     {m.last_updated}")
         if report.git_state:

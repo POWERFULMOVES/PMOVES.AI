@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
-from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
 from .state import DEFAULT_PINOKIO_HOME, PinokioState

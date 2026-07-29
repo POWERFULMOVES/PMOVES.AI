@@ -7,11 +7,10 @@ Automatic retry logic with exponential backoff and circuit breaker pattern.
 import asyncio
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Callable, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from collections import deque
 
 
 class CircuitState(Enum):

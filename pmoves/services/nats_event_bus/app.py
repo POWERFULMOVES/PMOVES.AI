@@ -18,9 +18,8 @@ import logging
 import os
 import secrets
 import sys
-import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -37,9 +36,9 @@ except ImportError:  # pragma: no cover — local/dev path
     _HERE = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, os.path.normpath(os.path.join(_HERE, "..", "..")))
     from services.common.events import envelope as _envelope  # type: ignore
-    from services.common.events import load_schema, validate_payload  # type: ignore
+    from services.common.events import validate_payload  # type: ignore
 
-from .state import DEFAULT_TOPICS, DIRECTORY_TOPIC, EventCache, NatsSubscriber, PRESENCE_TOPIC
+from .state import DIRECTORY_TOPIC, EventCache, NatsSubscriber, PRESENCE_TOPIC
 
 
 # --------------------------------------------------------------------------

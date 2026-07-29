@@ -15,20 +15,17 @@ Metrics:
   - github_issue_triage_error_total
 """
 
-import asyncio
 import os
-import re
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 
 import httpx
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import JSONResponse
-from prometheus_client import Counter, Histogram, Gauge, generate_latest
+from prometheus_client import Counter, Histogram, generate_latest
 from nats.aio.client import Client as NATS
-from nats.aio.errors import ErrTimeout
 
 from labeling_rules import LabelingRules
 from hirag_client import HiRAGClient
@@ -252,7 +249,7 @@ async def handle_webhook_event(msg):
         issue_number = issue_data.get('number')
 
         if not repo or not issue_number:
-            logger.warning(f"Invalid webhook event: missing repo or issue_number")
+            logger.warning("Invalid webhook event: missing repo or issue_number")
             return
 
         # Only process opened and edited issues

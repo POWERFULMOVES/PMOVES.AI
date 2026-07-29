@@ -316,7 +316,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     written = write_entries(entries, args.user_dir, dry_run=args.dry_run)
 
-    print(f"\ndiscover.py summary")
+    print("\ndiscover.py summary")
     print(f"  pinokio_home:    {args.pinokio_home}")
     print(f"  existing slugs:  {len(existing)} (curated + user)")
     print(f"  scanned apps:    {len(source_dirs) + len(errors)}")

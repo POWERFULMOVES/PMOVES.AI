@@ -174,10 +174,10 @@ def render(app):
         )
     else:
         l4_block = (
-            f"    reachable: false\n"
-            f"    tunnel: null\n"
-            f"    dns_record: null\n"
-            f"    public_url: null"
+            "    reachable: false\n"
+            "    tunnel: null\n"
+            "    dns_record: null\n"
+            "    public_url: null"
         )
 
     lines = [

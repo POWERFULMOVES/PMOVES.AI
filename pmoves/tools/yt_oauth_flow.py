@@ -23,7 +23,6 @@ Called via Make targets:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -364,7 +363,6 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
     print(f"\n>>> Open this URL in your browser:\n{auth_url}\n")
     print(f">>> Waiting for callback on {redirect_uri} (5 min timeout)...")
 
-    import select
     import time
     deadline = time.time() + 300
     while time.time() < deadline:

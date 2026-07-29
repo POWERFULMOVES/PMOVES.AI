@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit, urlunsplit
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 import numpy as np
@@ -59,11 +59,8 @@ from providers import (
 
 # Prosodic sidecar imports
 from prosodic import (
-    BoundaryType,
     ProsodicChunk,
     parse_prosodic,
-    format_prosodic_analysis,
-    prosodic_stitch,
     stitch_chunks,
 )
 
@@ -939,7 +936,7 @@ async def synthesize_speech(request: SynthesizeRequest):
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
         logger.exception("TTS synthesis failed")
         raise HTTPException(status_code=500, detail="TTS synthesis failed")
@@ -1115,7 +1112,7 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
     except HTTPException as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status=str(exc.status_code)).inc()
         raise
-    except Exception as e:
+    except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
         logger.exception("TTS synthesis (audio) failed")
         raise HTTPException(status_code=500, detail="TTS synthesis failed")
@@ -1316,7 +1313,7 @@ async def recognize_speech(
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="500").inc()
         logger.exception("STT recognition failed")
         raise HTTPException(status_code=500, detail="STT recognition failed")
@@ -1546,7 +1543,7 @@ async def websocket_tts(websocket: WebSocket):
                     "message": "VibeVoice provider not available"
                 })
 
-    except Exception as exc:
+    except Exception:
         logger.exception("WebSocket TTS error")
         try:
             await websocket.send_json({"type": "error", "message": "Internal server error"})

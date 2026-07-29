@@ -8,9 +8,8 @@ Wraps the existing VibeVoiceProvider as a pipecat FrameProcessor that:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import TYPE_CHECKING, AsyncGenerator, Optional
+from typing import TYPE_CHECKING, AsyncGenerator
 
 import numpy as np
 

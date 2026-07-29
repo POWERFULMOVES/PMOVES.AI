@@ -9,7 +9,6 @@ import logging
 import os
 import signal
 import sys
-from contextlib import asynccontextmanager
 
 import structlog
 from aiohttp import web
@@ -268,6 +267,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
         sys.exit(0)
-    except Exception as e:
+    except Exception:
         logger.exception("Fatal error in Node Registry service")
         sys.exit(1)

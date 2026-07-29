@@ -45,9 +45,7 @@ import enum
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
-from typing import Optional
 
 import httpx
 import numpy as np
@@ -352,7 +350,8 @@ def _gaze_ollama(path: Path, ollama_url: str, model: str = "qwen2-audio") -> dic
     (Qwen2-Audio treats it as audio). Falls back to text-only prompt if model
     does not support audio.
     """
-    import base64, httpx as _httpx
+    import base64
+    import httpx as _httpx
     result = {"model_description": "", "model_tags": [], "model_embedding": []}
     try:
         audio_b64 = base64.b64encode(path.read_bytes()).decode()
@@ -710,7 +709,7 @@ def analyze(
         if sense_mode == SenseMode.gaze or coherence < COHERENCE_THRESHOLD:
             if sense_mode == SenseMode.auto:
                 console.print(
-                    f"  [yellow]⚡ Signal ambiguous — escalating to [bold magenta]gaze[/bold magenta] mode[/]")
+                    "  [yellow]⚡ Signal ambiguous — escalating to [bold magenta]gaze[/bold magenta] mode[/]")
             records = gaze_enrich(records, ollama, hirag)
             # Re-cluster with enriched embeddings if available
             has_embeddings = any(len(r.get("model_embedding", [])) > 0 for r in records)
@@ -739,7 +738,7 @@ def analyze(
                 "sense_mode": "gaze"
             }))
         else:
-            console.print(f"  [green]✓ Signal clear — staying at [bold cyan]glaze[/bold cyan] mode[/]")
+            console.print("  [green]✓ Signal clear — staying at [bold cyan]glaze[/bold cyan] mode[/]")
 
     # Build groups
     grp_map: dict[int, list] = {}
@@ -752,7 +751,7 @@ def analyze(
 
     for gid, members in sorted(grp_map.items(), key=lambda kv: -len(kv[1])):
         gname = f"{name_group(members)}_c{gid}"
-        m3u = write_playlist(gname, members, output)
+        write_playlist(gname, members, output)
         avg_bpm = round(float(np.mean([r["tempo_bpm"] for r in members])), 1)
         table.add_row(gname, str(len(members)), str(avg_bpm),
                       _energy_label(float(np.mean([r["loudness_I"] for r in members]))),
@@ -779,7 +778,7 @@ def groups(
     """[bold]Show existing sonic groups from a previous analyze run.[/bold]"""
     summary_path = output / "groups_summary.json"
     if not summary_path.exists():
-        console.print(f"[red]No groups_summary.json found. Run [bold]analyze[/] first.[/]")
+        console.print("[red]No groups_summary.json found. Run [bold]analyze[/] first.[/]")
         raise typer.Exit(1)
 
     with open(summary_path) as f:

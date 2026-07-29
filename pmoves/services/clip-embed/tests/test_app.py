@@ -1,5 +1,4 @@
 import io
-import numpy as np
 from fastapi.testclient import TestClient
 from app import create_app, get_embedder
 

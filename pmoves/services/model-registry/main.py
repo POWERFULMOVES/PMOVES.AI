@@ -19,7 +19,6 @@ Architecture:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -30,7 +29,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, Query
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, Field
 import uvicorn
@@ -665,7 +664,7 @@ class TensorZeroConfigBuilder:
                 lines.extend([
                     f"[functions.{function_name}.variants.{variant}]",
                     f'type = "chat:{variant_key}"',
-                    f'weight = 1.0',
+                    'weight = 1.0',
                     ""
                 ])
 

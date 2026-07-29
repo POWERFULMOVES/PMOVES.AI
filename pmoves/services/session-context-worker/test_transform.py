@@ -5,7 +5,6 @@ Demonstrates the transformation from session.context.v1 to kb.upsert.request.v1.
 """
 
 import json
-import sys
 from datetime import datetime
 
 # Sample session context event
@@ -85,12 +84,12 @@ def extract_searchable_content(context):
     pending_tasks = context.get("pending_tasks", [])
     if pending_tasks:
         task_texts = [f"[{t['status']}] {t['content']}" for t in pending_tasks]
-        parts.append(f"Tasks:\n" + "\n".join(task_texts))
+        parts.append("Tasks:\n" + "\n".join(task_texts))
 
     decisions = context.get("decisions", [])
     if decisions:
         decision_texts = [f"Q: {d['question']}\nA: {d['answer']}" for d in decisions]
-        parts.append(f"Decisions:\n" + "\n".join(decision_texts))
+        parts.append("Decisions:\n" + "\n".join(decision_texts))
 
     active_files = context.get("active_files", [])
     if active_files:
@@ -100,7 +99,7 @@ def extract_searchable_content(context):
     tool_executions = context.get("tool_executions", [])
     if tool_executions:
         tool_summaries = [f"{t['tool']}: {t['summary']}" for t in tool_executions]
-        parts.append(f"Tool executions:\n" + "\n".join(tool_summaries))
+        parts.append("Tool executions:\n" + "\n".join(tool_summaries))
 
     return "\n\n".join(parts)
 

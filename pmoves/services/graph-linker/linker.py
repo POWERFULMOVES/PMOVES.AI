@@ -1,4 +1,8 @@
-import os, asyncio, json, re, glob
+import os
+import asyncio
+import json
+import re
+import glob
 from nats.aio.client import Client as NATS
 from neo4j import GraphDatabase
 

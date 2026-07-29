@@ -42,5 +42,5 @@ for raw_line in sse_resp:
         print(f"Unloaded in {time.time()-t0:.1f}s")
         break
     if line.startswith("event:") and "error" in line:
-        print(f"Error unloading")
+        print("Error unloading")
         break

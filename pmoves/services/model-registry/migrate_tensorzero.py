@@ -18,7 +18,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -161,7 +161,7 @@ class TensorZeroParser:
         # Process chat models
         for model_name, model_def in self.config.get("models", {}).items():
             for provider_name, provider_def in model_def.get("providers", {}).items():
-                model_type = provider_def.get("type", "openai")
+                provider_def.get("type", "openai")
                 is_ollama = "ollama" in provider_def.get("api_base", "").lower()
 
                 models.append(

@@ -338,10 +338,10 @@ def cmd_persona_select(args: argparse.Namespace) -> int:
         name = sig.get("display_name", args.agent_id)
         print(f"{fg}{_BOLD}{glyph} {name}{_RST} selected")
         print()
-        print(f"  To apply to your shell session:")
+        print("  To apply to your shell session:")
         print(f"  {_DIM}eval $(python {__file__} persona select {args.agent_id} --export){_RST}")
         print()
-        print(f"  Or set directly:")
+        print("  Or set directly:")
         print(f"  {_DIM}export PMOVES_AGENT_ID={args.agent_id}{_RST}")
     return 0
 
@@ -363,7 +363,7 @@ def cmd_persona_current(args: argparse.Namespace) -> int:
         }, indent=2))
     else:
         if agent_id == "unknown":
-            print(f"No persona active. Set via: export PMOVES_AGENT_ID=<agent-id>")
+            print("No persona active. Set via: export PMOVES_AGENT_ID=<agent-id>")
         else:
             fg = _fg(sig.get("color", "#888"))
             glyph = sig.get("glyph", "?")

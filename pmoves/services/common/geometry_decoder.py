@@ -28,16 +28,13 @@ import json
 import base64
 import binascii
 import hashlib
-import hmac
 import struct
 
 from .env import get_secret
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 from copy import deepcopy
-from datetime import datetime
 
-from pydantic import ValidationError
 
 # Optional dependencies with graceful fallback
 try:
@@ -60,26 +57,20 @@ except Exception:
     HAS_NUMPY = False
 
 try:
-    from sentence_transformers import SentenceTransformer  # type: ignore
     HAS_SENTENCE_TRANSFORMERS = True
 except Exception:
     HAS_SENTENCE_TRANSFORMERS = False
 
 # Local imports
 from pmoves.services.common.geometry_models import (
-    CGP,
     CGP_VERSION_V01,
     CGP_VERSION_V02,
     CGP_VERSION_V10,
-    Constellation,
     DecodedGeometry,
     GeometryData,
-    Point,
-    SuperNode,
     TextFragment,
     ValidationResult,
     detect_cgp_version,
-    cgp_dict_to_model,
 )
 from pmoves.tools.chit_common import canon as _canon
 from pmoves.tools.chit_security import (
