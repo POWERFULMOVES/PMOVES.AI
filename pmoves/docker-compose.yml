@@ -1673,6 +1673,24 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  clip-embed:
+    <<: *tier-api-hardened
+    build:
+      context: ./services/clip-embed
+      dockerfile: Dockerfile
+    image: pmoves/clip-embed:latest
+    environment:
+    - CLIP_MODEL_ID=${CLIP_MODEL_ID:-openai/clip-vit-large-patch14}
+    - CLIP_MODEL_REVISION=${CLIP_MODEL_REVISION:-main}
+    - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
+    - CLIP_EMBED_PORT=8109
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    ports:
+    - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    restart: unless-stopped
+    profiles:
+    - orchestration
   clap-embed:
     <<: *tier-api-hardened
     build:
