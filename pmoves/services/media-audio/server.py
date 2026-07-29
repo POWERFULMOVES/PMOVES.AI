@@ -164,7 +164,7 @@ class AudioProcessor:
             try:
                 from pyannote.audio import Pipeline as PyannotePipeline
 
-                pipe = PyannotePipeline.from_pretrained(DIARIZATION_MODEL, use_auth_token=HF_TOKEN)
+                pipe = PyannotePipeline.from_pretrained(DIARIZATION_MODEL, token=HF_TOKEN)
                 if self.device == "cuda":
                     pipe.to(torch.device("cuda"))
                 self.models["diarization"] = pipe
