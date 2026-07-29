@@ -80,6 +80,49 @@ DEFAULT_OLLAMA  = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
 DEFAULT_HIRAG   = os.environ.get("HIRAG_GPU_URL",   "http://localhost:8087")
 
 
+# ── Key/scale detection (Krumhansl-Schmuckler) ──────────────────────────────
+
+_KEY_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+_MAJOR_PROFILE = np.array([
+    6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+_MINOR_PROFILE = np.array([
+    6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+
+
+def _detect_key(chroma_vec: "np.ndarray") -> dict:
+    """Krumhansl-Schmuckler key-finding algorithm.
+
+    Correlates the chroma vector against all 24 rotated major/minor key
+    profiles. Returns the best-matching key, scale, and correlation strength.
+    This is the same algorithm Essentia uses internally for Key detection."""
+    c = np.asarray(chroma_vec, dtype="float64")
+    if c.size != 12:
+        return {"key": "C", "scale": "major", "key_strength": 0.0}
+    best_corr = -2.0
+    best_key = 0
+    best_scale = "major"
+    for i in range(12):
+        rotated = np.roll(_MAJOR_PROFILE, i)
+        r = float(np.corrcoef(c, rotated)[0, 1])
+        if r > best_corr:
+            best_corr = r
+            best_key = i
+            best_scale = "major"
+    for i in range(12):
+        rotated = np.roll(_MINOR_PROFILE, i)
+        r = float(np.corrcoef(c, rotated)[0, 1])
+        if r > best_corr:
+            best_corr = r
+            best_key = i
+            best_scale = "minor"
+    return {
+        "key": _KEY_NAMES[best_key],
+        "scale": best_scale,
+        "key_strength": round(max(best_corr, 0.0), 4),
+    }
+
+
 # ── librosa interpretable features (deterministic) ────────────────────────────
 
 def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
@@ -94,12 +137,15 @@ def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
     silent = (y.size == 0) or (not np.any(y))
     if silent:
         tempo = 0.0
+        beat_times = []
     else:
         try:
-            tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+            tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
             tempo = float(np.asarray(tempo).reshape(-1)[0]) if np.asarray(tempo).size else 0.0
+            beat_times = librosa.frames_to_time(beat_frames, sr=sr).tolist()
         except Exception:
             tempo = 0.0
+            beat_times = []
     if not np.isfinite(tempo):
         tempo = 0.0
     chroma = librosa.feature.chroma_stft(y=y, sr=sr).mean(axis=1)
@@ -118,6 +164,7 @@ def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
     flatness = float(np.nan_to_num(flatness, nan=0.0, posinf=0.0, neginf=0.0))
     feat = {
         "tempo_bpm": round(float(tempo), 4),
+        "beat_count": len(beat_times),
         "chroma": [round(float(v), 6) for v in chroma],
         "mfcc": [round(float(v), 6) for v in mfcc],
         "spectral_contrast": [round(float(v), 6) for v in contrast],
@@ -126,6 +173,11 @@ def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
         "spectral_centroid": round(centroid, 4),
         "spectral_flatness": round(flatness, 6),
     }
+    # Key/scale detection via Krumhansl-Schmuckler (same algorithm Essentia uses internally)
+    key_info = _detect_key(chroma)
+    feat.update(key_info)
+    # Store first 64 beat times for particle burst timing in Hyperdimensions
+    feat["beat_times"] = [round(t, 4) for t in beat_times[:64]]
     # Cymatic grounding: deterministic "sound -> geometry" features
     # (harmonicity/symmetry + named-frequency detection). See cymatic.py.
     try:

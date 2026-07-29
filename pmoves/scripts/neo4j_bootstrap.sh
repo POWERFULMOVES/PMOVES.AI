@@ -20,10 +20,11 @@ if [ -z "$PYTHON_BIN" ]; then
   exit 0
 fi
 echo "→ Applying Neo4j constraints and seed aliases via cypher-shell"
-if [ -f "$ROOT/neo4j/cypher/001_init.cypher" ]; then
-  echo "   • 001_init.cypher"
-  docker exec -i "$CONTAINER" cypher-shell -u "$USER" -p "$PASS" < "$ROOT/neo4j/cypher/001_init.cypher" >/dev/null
-fi
+for cypher in "$ROOT/neo4j/cypher/"*.cypher; do
+  [ -f "$cypher" ] || continue
+  echo "   • $(basename "$cypher")"
+  docker exec -i "$CONTAINER" cypher-shell -u "$USER" -p "$PASS" < "$cypher" >/dev/null
+done
 $PYTHON_BIN - "$CSV_SRC" <<'PY' | docker exec -i "$CONTAINER" cypher-shell -u "$USER" -p "$PASS" >/dev/null
 import csv
 import sys

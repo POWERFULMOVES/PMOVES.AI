@@ -2927,6 +2927,36 @@ agents:
       compose_profile: workers
     description: "HuggingFace model evaluation worker — subscribes to discovery events, evaluates models against benchmark criteria, publishes evaluation results"
 
+  hf_mcp_server:
+    name: "HF MCP Server"
+    class: utility
+    primary_type: agent
+    secondary_type: api
+    port: 8203
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["hf.model.downloaded.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_request
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890, 5090, laptop-4090]
+      team: research
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "Model Context Protocol server for HuggingFace Hub — model discovery, download, metadata, GGUF conversion; exposes SSE MCP and REST API"
+
 
 # ── MCP Server Registry ─────────────────────────────────────────────────────
 # Root-level MCP servers that can be bound into room manifests as skills.

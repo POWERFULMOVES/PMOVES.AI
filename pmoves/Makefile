@@ -838,7 +838,7 @@ seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 		echo "⚠️  Qdrant not running. Starting data tier..."; \
 		$(MAKE) --no-print-directory up-data-tier; \
 	fi
-	@$(DC) up -d --no-deps --build --recreate hi-rag-gateway-v2
+	@$(DC) up -d --no-deps --build --force-recreate hi-rag-gateway-v2
 	@sleep 5
 	@$(DC) exec -T hi-rag-gateway-v2 python /app/scripts/seed_local.py 2>/dev/null || \
 		$(DC) exec -T hi-rag-gateway-v2 python3 /app/scripts/seed_local.py 2>/dev/null || \
@@ -1020,6 +1020,17 @@ up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 	@$(MAKE) --no-print-directory wait-data
 	@echo "✅ Data tier ready"
 
+.PHONY: reset-data-tier
+reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreate with current credentials
+	@echo "⚠️  This will DELETE all data-tier volumes (Neo4j, Qdrant, Meilisearch, MinIO)."
+	@echo "⚠️  Press Ctrl+C to abort. Continuing in 3 seconds..."
+	@sleep 3
+	@$(DC) stop $(DATA_SERVICES) 2>/dev/null || true
+	@$(DC) rm -f $(DATA_SERVICES) 2>/dev/null || true
+	@docker volume rm $(PROJECT)_neo4j-data $(PROJECT)_qdrant-data $(PROJECT)_meilisearch-data $(PROJECT)_minio-data 2>/dev/null || true
+	@$(MAKE) --no-print-directory up-data-tier
+	@echo "✅ Data tier reset with current env.tier-data credentials"
+
 .PHONY: up-minio
 up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@echo "📦 Starting MinIO..."
@@ -1174,18 +1185,60 @@ health-dormant: ## Health-check dormant/newly-activated services
 # =============================================================================
 
 .PHONY: down-all
-down-all: ## Stop ALL services in graceful reverse order
+down-all: ## Stop ALL services in graceful reverse order (voice, search, inference, agents, data)
 	@echo "🛑 Graceful shutdown starting..."
-	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
-	@-$(MAKE) --no-print-directory down-tensorzero
-	@-$(MAKE) --no-print-directory down-agents
-	@-$(MAKE) --no-print-directory down-model-management
-	@-$(MAKE) --no-print-directory down-workers
-	@-$(MAKE) --no-print-directory down-bus
-	@-$(MAKE) --no-print-directory down-data
-	@-$(MAKE) --no-print-directory down-obs
-	@-$(MAKE) --no-print-directory down-supabase
+	$(MAKE) --no-print-directory down-integrations 2>/dev/null || true
+	$(MAKE) --no-print-directory down-tensorzero || true
+	$(MAKE) --no-print-directory down-agents || true
+	$(MAKE) --no-print-directory down-voice || true
+	$(MAKE) --no-print-directory down-search || true
+	$(MAKE) --no-print-directory down-model-management || true
+	$(MAKE) --no-print-directory down-workers || true
+	$(MAKE) --no-print-directory down-inference || true
+	$(MAKE) --no-print-directory down-bus || true
+	$(MAKE) --no-print-directory down-data || true
+	$(MAKE) --no-print-directory down-obs || true
+	$(MAKE) --no-print-directory down-supabase || true
 	@echo "✅ All services stopped gracefully"
+
+# Shutdown order is the reverse of startup, and the ordering is load-bearing:
+# TensorZero is a GATEWAY in front of the inference backends, and Ollama comes
+# up BEFORE TensorZero. So TZ must go down EARLY (position 2) and the backends
+# LATE (down-inference) — otherwise the gateway is briefly live with its
+# backend already gone, and in-flight requests fail instead of draining.
+# Likewise down-voice/down-search run before down-inference: they are callers.
+
+# vibevoice lives in docker-compose.voice.yml, which is NOT in STACK_FILES, so a
+# bare `$(DC) stop vibevoice` cannot resolve it — docker compose errors, `|| true`
+# swallows it, and the container keeps running while the target reports success.
+# It therefore needs the voice overlay appended explicitly. (The pre-existing
+# `stop-vibevoice` target has this same latent bug; see VOICE_OVERLAY use below.)
+VOICE_SERVICES := flute-gateway voice-relay cast-tts-gateway ultimate-tts-studio
+VOICE_OVERLAY := -f docker-compose.voice.yml
+VOICE_OVERLAY_SERVICES := vibevoice
+SEARCH_SERVICES := hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-gateway-v2-gpu
+INFERENCE_SERVICES := pmoves-ollama comfyui
+
+.PHONY: down-voice
+down-voice: ## Stop voice fabric (Flute-Gateway, Voice-Relay, VibeVoice, TTS studio, OmniVoice)
+	@echo "🔇 Stopping voice fabric..."
+	@$(DC) stop $(VOICE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(VOICE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) rm -f $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+	@-docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice down 2>/dev/null || true
+
+.PHONY: down-search
+down-search: ## Stop Hi-RAG gateways (all CPU/GPU/v2 variants). Used by down-all.
+	@echo "🔎 Stopping Hi-RAG gateways..."
+	@$(DC) stop $(SEARCH_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(SEARCH_SERVICES) >/dev/null 2>&1 || true
+
+.PHONY: down-inference
+down-inference: ## Stop local inference backends (Ollama, ComfyUI) — frees VRAM. Used by down-all.
+	@echo "🧊 Stopping inference backends (frees VRAM)..."
+	@$(DC) stop $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-integrations
 down-integrations: ## Stop external integrations
@@ -1661,6 +1714,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^NEO4J_AUTH=neo4j/.*|NEO4J_AUTH=neo4j/$${NEO4J_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		grep -q "^MEILI_API_KEY=" env.tier-data 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-data; \
 		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		echo "✓ Populated env.tier-data"; \
 	fi; \
@@ -1697,6 +1752,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=$${MINIO_SECRET_KEY:-minioadmin}|" env.tier-api; \
 		sed -i "s|^PRESIGN_SHARED_SECRET=.*|PRESIGN_SHARED_SECRET=$${PRESIGN_SHARED_SECRET:-$(shell openssl rand -hex 32)}|" env.tier-api; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		grep -q "^MEILI_API_KEY=" env.tier-api 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-api; \
 		echo "✓ Populated env.tier-api"; \
 	fi; \
 	if [ -f "env.tier-llm" ]; then \
@@ -3452,7 +3509,7 @@ up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights
 
 .PHONY: stop-vibevoice
 stop-vibevoice: ## Stop VibeVoice realtime container (keeps model volume)
-	@$(DC) stop vibevoice >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
 	@echo "✔ VibeVoice stopped"
 
 .PHONY: vibevoice-smoke
@@ -4086,8 +4143,8 @@ neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_alia
 	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
 
 neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
-	@echo "→ Bootstrapping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j bootstrap
+	@echo "→ Bootstrapping Neo4j..."
+	@bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
 neo4j-status: ## Check Neo4j status from submodule
 	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
@@ -4384,7 +4441,7 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
 
-.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 	@bash $(CURDIR)/scripts/claude-pmoves.sh delivery-agent
 
@@ -4396,3 +4453,23 @@ kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
 
 codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh
+
+cipher-mint-token: ## Mint a new per-agent cipher token: AGENT=crush-spark [SCOPES="memory:read,memory:write"]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=crush-spark [SCOPES='memory:read,memory:write']"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write)"
+
+.PHONY: beats-analyze beats-hyperdim beats-pipeline
+beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
+	@echo "[beats] Running sonic fingerprint analysis (glaze mode)..."
+	@rm -f $(CURDIR)/data/beats/soundcloud/darkxside/.fingerprints.json
+	@cd $(CURDIR)/.. && uv run pmoves/tools/analyze_beats.py analyze --sense-mode glaze
+
+beats-hyperdim: ## Export analysis to Hyperdimensions saves + constellation embed
+	@echo "[beats] Exporting to Hyperdimensions..."
+	@cd $(CURDIR)/.. && uv run pmoves/tools/beats_to_cgp.py export-hyperdim
+
+beats-pipeline: ## Full pipeline: analyze -> cluster -> export to Hyperdimensions
+	@echo "[beats] Full DARKXSIDE beats -> Hyperdimensions pipeline..."
+	@$(MAKE) -C $(CURDIR) beats-analyze
+	@$(MAKE) -C $(CURDIR) beats-hyperdim
+	@echo "[beats] Done. Open website/hyperdim/ or website/embeds/beats-constellation/"

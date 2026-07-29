@@ -1,4 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;600&family=Exo+2:wght@300;400;500;600;700&display=swap');
+/* House theme engine (pmoves/design): --pm-* tokens, swapped via data-theme
+   on <html>. Generated copy — regenerate with `make -C pmoves design-tokens`. */
+@import './pm-tokens.generated.css';
 
 @tailwind base;
 @tailwind components;
@@ -17,17 +20,20 @@
   --void-elevated: #0a0a0f;
   --void-soft: #12121a;
 
-  /* Cataclysm Signature Colors - Enhanced Saturation */
-  --cata-cyan: #00e5ff;
-  --cata-cyan-dim: #0097a7;
-  --cata-ember: #ff3d3d;
-  --cata-ember-dim: #b22828;
+  /* Cataclysm Signature Colors — aliased onto the house theme engine
+     (--pm-* from pm-tokens.generated.css, sourced from agent_signatures.yaml).
+     Swap the armor by setting data-theme on <html>; previous literals remain
+     as fallbacks. forest/gold are status colors outside the token set. */
+  --cata-cyan: var(--pm-accent-2-soft, #00e5ff);
+  --cata-cyan-dim: var(--pm-accent-2, #0097a7);
+  --cata-ember: var(--pm-signature-soft, #ff3d3d);
+  --cata-ember-dim: var(--pm-signature, #b22828);
   --cata-forest: #00ff88;
   --cata-forest-dim: #00a858;
   --cata-gold: #ffd700;
   --cata-gold-dim: #b8860b;
-  --cata-violet: #a855f7;
-  --cata-violet-dim: #7c3aed;
+  --cata-violet: var(--pm-accent-soft, #a855f7);
+  --cata-violet-dim: var(--pm-accent, #7c3aed);
 
   /* Typography Colors */
   --ink-primary: #f8f8f8;

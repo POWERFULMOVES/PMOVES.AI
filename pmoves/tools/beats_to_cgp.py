@@ -61,6 +61,9 @@ from rich.table import Table
 
 from pmoves.tools.cgp_v2_build import build_attribution, build_hyperbolic_block
 from pmoves.tools.chit_security import sign_cgp
+from pmoves.tools.analyze_beats import (
+    _tempo_label, _timbre_label, _energy_label, _character,
+)
 
 app = typer.Typer(
     name="beats-to-cgp",
@@ -629,6 +632,573 @@ def map_params(
             str(round(ps["sense_mode_threshold"], 2)),
         )
     console.print(table)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# export-hyperdim: Generate Hyperdimensions save files from real analysis data
+# ═══════════════════════════════════════════════════════════════════════════════
+
+DEFAULT_HYPERDIM_SAVES = os.environ.get(
+    "HYPERDIM_SAVES_DIR", "website/hyperdim/saves")
+DEFAULT_EMBED_DIR = os.environ.get(
+    "BEATS_EMBED_DIR", "website/embeds/beats-constellation")
+
+
+def _group_aggregate(members: list[dict]) -> dict:
+    """Compute rich aggregate features from group member fingerprints."""
+    bpms = [r.get("tempo_bpm", 90) for r in members]
+    centroids = [r.get("spectral_centroid", 2000) for r in members]
+    flatnesses = [r.get("spectral_flatness", 0.3) for r in members]
+    lras = [r.get("loudness_LRA", 8) for r in members]
+    loudnesses = [r.get("loudness_I", -16) for r in members]
+    onsets = [r.get("onset_rate", 2.0) for r in members]
+
+    avg = {
+        "tempo_bpm": float(np.mean(bpms)),
+        "spectral_centroid": float(np.mean(centroids)),
+        "spectral_flatness": float(np.mean(flatnesses)),
+        "loudness_LRA": float(np.mean(lras)),
+        "loudness_I": float(np.mean(loudnesses)),
+        "onset_rate": float(np.mean(onsets)),
+    }
+
+    avg["tempo_label"] = _tempo_label(avg["tempo_bpm"])
+    avg["timbre"] = _timbre_label(avg["spectral_centroid"])
+    avg["character"] = _character(avg["spectral_flatness"])
+    avg["energy"] = _energy_label(avg["loudness_I"])
+
+    chroma_matrix = np.array(
+        [r.get("chroma", [0] * 12) for r in members if "chroma" in r])
+    if chroma_matrix.size > 0:
+        avg["chroma_mean"] = [round(float(v), 6) for v in chroma_matrix.mean(axis=0)]
+        avg["chroma_dominant"] = int(np.argmax(chroma_matrix.mean(axis=0)))
+    else:
+        avg["chroma_mean"] = [0.0] * 12
+        avg["chroma_dominant"] = 0
+
+    mfcc_matrix = np.array(
+        [r.get("mfcc", [0] * 20) for r in members if "mfcc" in r])
+    if mfcc_matrix.size > 0:
+        avg["spectral_flux"] = round(
+            float(np.mean(np.std(mfcc_matrix, axis=0))), 6)
+    else:
+        avg["spectral_flux"] = 0.0
+
+    # Cymatic features: harmonicity/symmetry from member fingerprints
+    cym_vals = [r.get("cymatic", {}) for r in members if r.get("cymatic")]
+    if cym_vals:
+        avg["cymatic"] = {
+            "harmonic_ratio": round(float(np.mean(
+                [c.get("harmonic_ratio", 0) for c in cym_vals])), 4),
+            "symmetry": round(float(np.mean(
+                [c.get("symmetry", 0) for c in cym_vals])), 4),
+            "n_fold": int(np.median(
+                [c.get("n_fold", 1) for c in cym_vals])),
+            "rotational_symmetry": round(float(np.mean(
+                [c.get("rotational_symmetry", 0) for c in cym_vals])), 4),
+        }
+    else:
+        avg["cymatic"] = {}
+
+    # Key/scale from chroma (Krumhansl-Schmuckler)
+    if chroma_matrix.size > 0:
+        from pmoves.tools.analyze_beats import _detect_key
+        avg.update(_detect_key(chroma_matrix.mean(axis=0)))
+    else:
+        avg["key"] = "C"
+        avg["scale"] = "major"
+        avg["key_strength"] = 0.0
+
+    # Beat times: collect and normalize for particle burst timing
+    all_beats = []
+    for r in members:
+        beats = r.get("beat_times", [])
+        if beats:
+            all_beats.append(beats)
+    valid_intervals = [np.mean(np.diff(b)) for b in all_beats if len(b) > 1]
+    if valid_intervals:
+        avg["avg_beat_interval"] = round(float(np.mean(valid_intervals)), 4)
+    else:
+        avg["avg_beat_interval"] = round(60.0 / max(avg["tempo_bpm"], 1), 4)
+
+    return avg
+
+
+_SURFACE_TEMPLATES = {
+    "bass-heavy": '''function surface(input) {{
+    const u = (input.u - 0.5) * 2 * Math.PI;
+    const v = (input.v - 0.5) * 2 * Math.PI;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz || {hz};
+    const fitness = input.fitness || {fitness};
+    const t = input.t || 0;
+    const lobes = {lobes};
+    const r_base = 2.5 + fitness * 1.5;
+    const warp = Math.abs(kappa) * 10;
+    const orbit = delta * 3;
+    const R = r_base + Math.sin(u * lobes + t * orbit) * warp;
+    const x = (R + Math.cos(v) * 0.8) * Math.cos(u);
+    const y = (R + Math.cos(v) * 0.8) * Math.sin(u);
+    const z = Math.sin(v) * 1.2 + Math.sin(u * (lobes + 2) + t * orbit) * warp * 0.5;
+    const hue = hz * 6.2832;
+    const r_col = 0.5 + 0.5 * Math.sin(hue + u);
+    const g_col = 0.5 + 0.5 * Math.sin(hue + u + 2.094);
+    const b_col = 0.5 + 0.5 * Math.sin(hue + u + 4.189);
+    const a = 0.7 + fitness * 0.3;
+    return {{ x, y, z, r: r_col, g: g_col, b: b_col, a }};
+}}''',
+
+    "warm": '''function surface(input) {{
+    const u = input.u * 2 * Math.PI;
+    const v = input.v * 4 * Math.PI;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz || {hz};
+    const fitness = input.fitness || {fitness};
+    const t = input.t || 0;
+    const turns = {lobes};
+    const r_base = 0.5 + (u / (2 * Math.PI)) * (3 + fitness * 2);
+    const spiral = delta * 0.8;
+    const flare = Math.abs(kappa) * 6;
+    const x = r_base * Math.cos(u * turns + t * spiral) + Math.sin(v) * flare * 0.3;
+    const y = r_base * Math.sin(u * turns + t * spiral) + Math.cos(v) * flare * 0.3;
+    const z = (u / (2 * Math.PI) - 0.5) * 4 + Math.sin(v * 2 + u * 3) * Math.abs(kappa) * 2;
+    const hue = hz * 6.2832;
+    const r_col = 0.5 + 0.5 * Math.sin(hue + u * 0.5);
+    const g_col = 0.5 + 0.5 * Math.sin(hue + u * 0.5 + 2.094);
+    const b_col = 0.5 + 0.5 * Math.sin(hue + u * 0.5 + 4.189);
+    const a = 0.65 + fitness * 0.35;
+    return {{ x, y, z, r: r_col, g: g_col, b: b_col, a }};
+}}''',
+
+    "balanced": '''function surface(input) {{
+    const u = (input.u - 0.5) * 2 * Math.PI;
+    const v = (input.v - 0.5) * 2 * Math.PI;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz || {hz};
+    const fitness = input.fitness || {fitness};
+    const t = input.t || 0;
+    const r_base = 3 + fitness * 2;
+    const warp = kappa * 8;
+    const orbit = delta * 2;
+    const R = r_base + Math.sin(u * 3 + t * orbit) * warp;
+    const x = (R + Math.cos(v)) * Math.cos(u);
+    const y = (R + Math.cos(v)) * Math.sin(u);
+    const z = Math.sin(v) + Math.sin(u * 5 + t * orbit * 2) * Math.abs(kappa) * 3;
+    const hue = hz * 6.2832;
+    const r_col = 0.5 + 0.5 * Math.sin(hue + u);
+    const g_col = 0.5 + 0.5 * Math.sin(hue + u + 2.094);
+    const b_col = 0.5 + 0.5 * Math.sin(hue + u + 4.189);
+    const a = 0.7 + fitness * 0.3;
+    return {{ x, y, z, r: r_col, g: g_col, b: b_col, a }};
+}}''',
+
+    "electric": '''function surface(input) {{
+    const u = (input.u - 0.5) * 2 * Math.PI;
+    const v = (input.v - 0.5) * 2 * Math.PI;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz || {hz};
+    const fitness = input.fitness || {fitness};
+    const t = input.t || 0;
+    const p = {lobes};
+    const q = p + 2;
+    const orbit = delta * 1.5;
+    const r_base = 2 + fitness * 2;
+    const cu = Math.cos(u * p + t * orbit);
+    const su = Math.sin(u * p + t * orbit);
+    const cv = Math.cos(v * q);
+    const sv = Math.sin(v * q);
+    const x = (r_base + cu) * Math.cos(u) + cv * Math.abs(kappa) * 3;
+    const y = (r_base + cu) * Math.sin(u) + sv * Math.abs(kappa) * 3;
+    const z = su + Math.sin(u * q + v * 2) * Math.abs(kappa) * 4;
+    const hue = hz * 6.2832;
+    const intensity = 0.5 + 0.5 * Math.sin(hue + u * p);
+    const r_col = intensity;
+    const g_col = 0.3 + 0.4 * Math.sin(hue + u + 2.094);
+    const b_col = 0.5 + 0.5 * Math.cos(hue + v);
+    const a = 0.7 + fitness * 0.3;
+    return {{ x, y, z, r: r_col, g: g_col, b: b_col, a }};
+}}''',
+
+    "airy": '''function surface(input) {{
+    const u = (input.u - 0.5) * Math.PI;
+    const v = (input.v - 0.5) * 2 * Math.PI;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz || {hz};
+    const fitness = input.fitness || {fitness};
+    const t = input.t || 0;
+    const harmonics = {lobes};
+    const r = 3.5 + fitness * 1.5;
+    const theta = u + Math.sin(t * delta) * 0.3;
+    const x = r * Math.sin(theta) * Math.cos(v);
+    const y = r * Math.sin(theta) * Math.sin(v);
+    const ripple = Math.sin(theta * harmonics + v * 2 + t * delta * 2) * Math.abs(kappa) * 4;
+    const z = r * Math.cos(theta) + ripple;
+    const hue = hz * 6.2832;
+    const r_col = 0.5 + 0.5 * Math.sin(hue + theta * harmonics);
+    const g_col = 0.5 + 0.5 * Math.sin(hue + theta * harmonics + 2.094);
+    const b_col = 0.5 + 0.5 * Math.sin(hue + theta * harmonics + 4.189);
+    const a = 0.6 + fitness * 0.4;
+    return {{ x, y, z, r: r_col, g: g_col, b: b_col, a }};
+}}''',
+
+    # ProjectM/MilkDrop-inspired fluid surface — audio-reactive ripples
+    # Bass frequencies drive wave amplitude; treble drives turbulence.
+    # Used when cymatic symmetry is low (chaotic/noisy character).
+    "fluid": '''function surface(input) {{
+    const u = (input.u - 0.5) * 4 * Math.PI;
+    const v = (input.v - 0.5) * 4 * Math.PI;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz || {hz};
+    const fitness = input.fitness || {fitness};
+    const t = input.t || 0;
+    const sym = {symmetry};
+    const orbit = delta * 2;
+    const r_base = 2 + fitness * 2;
+    const flow = Math.sin(u * 2 + v * 1.5 + t * orbit) * 1.5;
+    const ripple2 = Math.cos(u * 4 - v * 3 + t * orbit * 2) * Math.abs(kappa) * 3;
+    const turb = Math.sin(u * 7 + v * 5 + t * orbit * 0.7) * (1 - sym) * 2;
+    const x = (r_base + flow) * Math.cos(u) + turb * 0.5;
+    const y = (r_base + flow) * Math.sin(u) + turb * 0.5;
+    const z = ripple2 + Math.sin(v * 3 + t * orbit) * sym * 2;
+    const hue = hz * 6.2832;
+    const wave = 0.5 + 0.5 * Math.sin(hue + u * 2 + t * orbit);
+    const r_col = wave * (0.4 + sym * 0.6);
+    const g_col = 0.3 + 0.5 * Math.sin(hue + u + v + 2.094);
+    const b_col = 0.5 + 0.5 * Math.sin(hue + v * 3 + 4.189) * sym;
+    const a = 0.6 + fitness * 0.4;
+    return {{ x, y, z, r: r_col, g: g_col, b: b_col, a }};
+}}''',
+}
+
+
+# Key-to-color palette: circle of fifths hue mapping
+# Each key gets a deterministic hue offset; major = warmer, minor = cooler
+_KEY_HUE_OFFSET = {
+    "C": 0.0,    "C#": 0.083, "D": 0.167, "D#": 0.25,
+    "E": 0.333,  "F": 0.417,  "F#": 0.5,  "G": 0.583,
+    "G#": 0.667, "A": 0.75,   "A#": 0.833, "B": 0.917,
+}
+
+
+def _key_to_palette(key: str, scale: str) -> dict:
+    """Map musical key/scale to color palette for surface rendering."""
+    hue = _KEY_HUE_OFFSET.get(key, 0.0)
+    if scale == "minor":
+        hue = (hue + 0.5) % 1.0  # shift to complementary for minor
+    sat = 0.7 if scale == "major" else 0.5
+    return {
+        "hue_offset": round(hue, 4),
+        "saturation": sat,
+        "warmth": 1.0 if scale == "major" else 0.6,
+        "palette_name": f"{key} {scale}",
+    }
+
+
+def _select_surface(timbre: str, chroma_dominant: int, onset_rate: float,
+                    symmetry: float = 0.5) -> tuple[str, int]:
+    """Select surface template based on sonic character + cymatic symmetry.
+
+    Low symmetry (chaotic/noisy) triggers the fluid surface;
+    high symmetry keeps the geometric topology."""
+    if symmetry < 0.3:
+        template = _SURFACE_TEMPLATES["fluid"]
+    else:
+        template = _SURFACE_TEMPLATES.get(timbre, _SURFACE_TEMPLATES["balanced"])
+    lobes = max(3, min(8, chroma_dominant + 3 + int(onset_rate)))
+    return template, lobes
+
+
+def _build_hyperdim_save(group: dict, fps: dict[str, dict],
+                         coherence: float = 0.5) -> dict | None:
+    """Build a single Hyperdimensions save JSON from a sonic group."""
+    members = [fps[n] for n in group["tracks"] if n in fps]
+    if not members:
+        return None
+
+    agg = _group_aggregate(members)
+    sv = track_to_state_vector(agg)
+
+    # Cymatic symmetry modulates kappa: high symmetry = smoother curvature
+    cym = agg.get("cymatic", {})
+    sym = cym.get("symmetry", 0.5)
+    # Blend: high symmetry pulls kappa toward 0 (smooth), low pushes negative
+    sv["kappa"] = round(sv["kappa"] * (1.0 - sym * 0.5), 4)
+    sv["F"] = round(coherence, 4)
+
+    template, lobes = _select_surface(agg["timbre"], agg["chroma_dominant"],
+                                      agg["onset_rate"], sym)
+    # Build surface code — fluid template needs symmetry param
+    surface_kwargs = dict(
+        delta=sv["delta"], kappa=sv["kappa"], hz=sv["Hz"],
+        fitness=sv["F"], lobes=lobes)
+    if "fluid" in template:
+        surface_kwargs["symmetry"] = round(sym, 3)
+    surface_code = template.format(**surface_kwargs)
+
+    onset_anim_speed = round(max(2, min(30, agg["onset_rate"] * 3)), 1)
+
+    # Key/scale -> color palette
+    palette = _key_to_palette(agg.get("key", "C"), agg.get("scale", "major"))
+
+    # Beat interval for particle burst timing
+    beat_interval = agg.get("avg_beat_interval", 0.5)
+
+    return {
+        "surface": {"code": surface_code},
+        "parameters": {
+            "uMin": 0, "uMax": 1, "vMin": 0, "vMax": 1,
+            "uSegs": 120, "vSegs": 120,
+        },
+        "extraParameters": [
+            {"name": "t", "value": 0, "min": 0, "max": 6.2832,
+             "step": 0.01, "runtime": onset_anim_speed},
+            {"name": "delta", "value": sv["delta"],
+             "min": round(max(0, sv["delta"] - 0.1), 3),
+             "max": round(min(1, sv["delta"] + 0.1), 3),
+             "step": 0.005, "runtime": 12},
+            {"name": "kappa", "value": sv["kappa"],
+             "min": round(min(sv["kappa"], sv["kappa"] - 0.05), 3),
+             "max": round(max(sv["kappa"], sv["kappa"] + 0.05), 3),
+             "step": 0.005, "runtime": 15},
+            {"name": "hz", "value": sv["Hz"],
+             "min": round(max(0, sv["Hz"] - 0.1), 3),
+             "max": round(min(1, sv["Hz"] + 0.1), 3),
+             "step": 0.01, "runtime": 20},
+            {"name": "fitness", "value": sv["F"],
+             "min": 0.1, "max": 1.0, "step": 0.05, "runtime": 25},
+        ],
+        "display": {
+            "autoRotate": True,
+            "showAxes": False,
+            "showSurface": True,
+            "showWireframe": False,
+            "dirIntensity": 1.2,
+            "ambientIntensity": 0.5,
+            "shininess": max(50, int(200 - agg["spectral_flux"] * 100)),
+            "globalSaturation": 1.5 + sv["Hz"] * 0.6,
+            "camera": {
+                "position": {"x": 12, "y": 8, "z": 6},
+                "target": {"x": 0, "y": 0, "z": 0},
+            },
+        },
+        "outputs": {"coordConversion": "none", "rgbToHsv": False},
+        "meta": {
+            "source": "cipher_beats_analyst",
+            "cgp_spec": "chit.cgp.v0.2",
+            "group": group["group"],
+            "tracks": len(members),
+            "state_vector": sv,
+            "sonic_profile": {
+                "tempo_bpm": round(agg["tempo_bpm"], 1),
+                "tempo_label": agg["tempo_label"],
+                "timbre": agg["timbre"],
+                "character": agg["character"],
+                "energy": agg["energy"],
+                "onset_rate": round(agg["onset_rate"], 3),
+                "spectral_flux": agg["spectral_flux"],
+                "chroma_dominant": agg["chroma_dominant"],
+                "loudness_I": round(agg["loudness_I"], 1),
+                "key": agg.get("key", "C"),
+                "scale": agg.get("scale", "major"),
+                "key_strength": agg.get("key_strength", 0.0),
+                "beat_interval": beat_interval,
+            },
+            "cymatic": cym,
+            "color_palette": palette,
+            "surface_topology": "fluid" if sym < 0.3 else agg["timbre"],
+            "inferred_shape": f"{agg['timbre'].title()} {agg['tempo_label']} Constellation",
+            "pipeline": "analyze_beats -> beats_to_cgp export-hyperdim",
+        },
+    }
+
+
+def _build_tracks_json(groups: list[dict],
+                       fps: dict[str, dict]) -> list[dict]:
+    """Build track data array for the beats-constellation embed."""
+    import os
+    audio_rel = os.environ.get(
+        "BEATS_AUDIO_REL",
+        "/audio/beats")
+    tracks = []
+    for g in groups:
+        gname = g["group"]
+        family_parts = gname.rsplit("_", 1)
+        family = family_parts[0] if len(family_parts) > 1 else gname
+
+        for tname in g["tracks"]:
+            rec = fps.get(tname)
+            if not rec:
+                continue
+            sv = track_to_state_vector(rec)
+            file_path = rec.get("file", "")
+            file_name = os.path.basename(file_path) if file_path else ""
+            audio_url = f"{audio_rel}/{file_name}" if file_name else ""
+            tracks.append({
+                "name": tname,
+                "group": gname,
+                "family": family,
+                "bpm": round(rec.get("tempo_bpm", 90), 1),
+                "delta": sv["delta"],
+                "hz": sv["Hz"],
+                "A": sv["A"],
+                "kappa": sv["kappa"],
+                "timbre": rec.get("timbre", "balanced"),
+                "character": rec.get("character", "textured"),
+                "energy": _energy_label(rec.get("loudness_I", -16)),
+                "onset_rate": round(rec.get("onset_rate", 0), 3),
+                "loudness_I": round(rec.get("loudness_I", -16), 1),
+                "duration_s": round(rec.get("duration_s", 0), 1),
+                "audio_url": audio_url,
+                "key": rec.get("key", "C"),
+                "scale": rec.get("scale", "major"),
+                "key_strength": rec.get("key_strength", 0.0),
+                "beat_count": rec.get("beat_count", 0),
+                "chroma": rec.get("chroma", []),
+                "mfcc": rec.get("mfcc", []),
+                "spectral_centroid": round(rec.get("spectral_centroid", 2000), 1),
+                "spectral_flatness": round(rec.get("spectral_flatness", 0.3), 4),
+                "cymatic": rec.get("cymatic", {}),
+            })
+    return tracks
+
+
+@app.command(name="export-hyperdim")
+def export_hyperdim(
+    summary:      str  = typer.Option(DEFAULT_SUMMARY, "--summary"),
+    fingerprints: str  = typer.Option(DEFAULT_FP,      "--fingerprints"),
+    saves_dir:    str  = typer.Option(DEFAULT_HYPERDIM_SAVES, "--saves-dir",
+                                      help="Hyperdimensions saves directory"),
+    embed_dir:    str  = typer.Option(DEFAULT_EMBED_DIR, "--embed-dir",
+                                      help="Beats-constellation embed directory"),
+    coherence:    float = typer.Option(0.5, "--coherence"),
+):
+    """[bold cyan]Export analysis data to Hyperdimensions saves + constellation embed.[/bold cyan]
+
+    Generates one parametric surface save per sonic group (with unique topology
+    derived from timbre/spectral data), a constellation overview, and a
+    tracks.json for the star-chart embed — all from real fingerprint data.
+    """
+    groups = load_summary(summary)
+    fps = load_fingerprints(fingerprints)
+    saves_path = Path(saves_dir)
+    embed_path = Path(embed_dir)
+    saves_path.mkdir(parents=True, exist_ok=True)
+    embed_path.mkdir(parents=True, exist_ok=True)
+
+    table = Table("Group", "Tracks", "Shape", "delta", "Hz", "kappa",
+                  "Timbre", title="Hyperdimensions Export")
+    written = []
+
+    for g in groups:
+        save = _build_hyperdim_save(g, fps, coherence)
+        if not save:
+            console.print(f"  [yellow]skip {g['group']} — no fingerprints[/]")
+            continue
+
+        fname = f"beats_{g['group'].split('_c')[-1]}.json"
+        fpath = saves_path / fname
+        fpath.write_text(json.dumps(save, indent=2), encoding="utf-8")
+
+        meta = save["meta"]
+        sv = meta["state_vector"]
+        sp = meta["sonic_profile"]
+        table.add_row(
+            g["group"][:32], str(g["count"]),
+            meta["surface_topology"],
+            str(sv["delta"]), str(sv["Hz"]), str(sv["kappa"]),
+            sp["timbre"],
+        )
+        written.append({"file": fname, "name": g["group"],
+                        "group": g["group"]})
+
+    if not written:
+        console.print("[red]No groups exported — check fingerprint data.[/]")
+        raise typer.Exit(1)
+
+    all_track_names = [n for g in groups for n in g["tracks"]]
+    overview = _build_hyperdim_save(
+        {"group": "constellation", "tracks": all_track_names,
+         "count": len(all_track_names)},
+        fps, coherence)
+    if overview:
+        ov_members = [fps[n] for g in groups for n in g["tracks"] if n in fps]
+        if ov_members:
+            agg = _group_aggregate(ov_members)
+            sv = track_to_state_vector(agg)
+            cym = agg.get("cymatic", {})
+            sym = cym.get("symmetry", 0.5)
+            sv["kappa"] = round(sv["kappa"] * (1.0 - sym * 0.5), 4)
+            sv["F"] = round(coherence, 4)
+            template, lobes = _select_surface(
+                agg["timbre"], agg["chroma_dominant"], agg["onset_rate"], sym)
+            surface_kwargs = dict(
+                delta=sv["delta"], kappa=sv["kappa"], hz=sv["Hz"],
+                fitness=sv["F"], lobes=lobes)
+            if "fluid" in template:
+                surface_kwargs["symmetry"] = round(sym, 3)
+            overview["surface"]["code"] = template.format(**surface_kwargs)
+            palette = _key_to_palette(agg.get("key", "C"), agg.get("scale", "major"))
+            overview["meta"]["group"] = "DARKXSIDE Beats Constellation"
+            overview["meta"]["tracks"] = len(ov_members)
+            overview["meta"]["state_vector"] = sv
+            overview["meta"]["sonic_profile"] = {
+                "tempo_bpm": round(agg["tempo_bpm"], 1),
+                "tempo_label": agg["tempo_label"],
+                "timbre": agg["timbre"],
+                "character": agg["character"],
+                "energy": agg["energy"],
+                "onset_rate": round(agg["onset_rate"], 3),
+                "spectral_flux": agg["spectral_flux"],
+                "chroma_dominant": agg["chroma_dominant"],
+                "loudness_I": round(agg["loudness_I"], 1),
+                "key": agg.get("key", "C"),
+                "scale": agg.get("scale", "major"),
+                "key_strength": agg.get("key_strength", 0.0),
+                "beat_interval": agg.get("avg_beat_interval", 0.5),
+            }
+            overview["meta"]["cymatic"] = cym
+            overview["meta"]["color_palette"] = palette
+            overview["meta"]["surface_topology"] = "fluid" if sym < 0.3 else agg["timbre"]
+            overview["meta"]["inferred_shape"] = "Full Catalog Constellation"
+            ov_path = saves_path / "beats_constellation.json"
+            ov_path.write_text(json.dumps(overview, indent=2), encoding="utf-8")
+            console.print(f"  [green]OK[/] Overview -> beats_constellation.json")
+
+    tracks = _build_tracks_json(groups, fps)
+    tracks_path = embed_path / "tracks.json"
+    tracks_path.write_text(json.dumps(tracks, indent=2), encoding="utf-8")
+    console.print(f"  [green]OK[/] {len(tracks)} tracks -> {tracks_path}")
+
+    list_path = saves_path / "_list.json"
+    if list_path.exists():
+        existing = json.loads(list_path.read_text(encoding="utf-8"))
+    else:
+        existing = []
+
+    beats_entries = [
+        {"file": "beats_constellation.json",
+         "name": "🎵 Beats Constellation (DARKXSIDE)"},
+    ]
+    for w in written:
+        beats_entries.append(
+            {"file": w["file"],
+             "name": f"🎵 {w['group']}"})
+    non_beats = [e for e in existing if not e["file"].startswith("beats")]
+    updated = non_beats + beats_entries
+    list_path.write_text(json.dumps(updated, indent=4), encoding="utf-8")
+    console.print(f"  [green]OK[/] _list.json updated ({len(beats_entries)} beats entries)")
+
+    console.print(table)
+    console.print(f"\n[bold green]OK Export complete.[/] "
+                  f"{len(written)} group saves + overview + tracks.json")
+    console.print(f"  Saves -> {saves_path}/")
+    console.print(f"  Embed -> {embed_path}/tracks.json")
 
 
 if __name__ == "__main__":

@@ -6,11 +6,11 @@ and TensorZero config generation.
 ## Quick Start
 
 ```bash
-# Standalone
-docker compose -f pmoves/docker-compose/hf-mcp-server.yml up -d
+# Standalone within the agents overlay
+docker compose -f pmoves/docker-compose.base.yml -f pmoves/docker-compose.agents.yml --profile research up -d hf-mcp-server
 
 # Full agents profile (includes hf-agent + hf-research-agent)
-docker compose -f pmoves/docker-compose.yml --profile research up -d
+docker compose -f pmoves/docker-compose.yml --profile agents --profile research up -d
 ```
 
 ## Endpoints
@@ -24,7 +24,8 @@ docker compose -f pmoves/docker-compose.yml --profile research up -d
 | `/api/model/download` | POST | Download model to cache |
 | `/api/models` | GET | List cached models |
 | `/api/config/tensorzero` | GET | Generate TensorZero TOML |
-| `/sse` | GET | MCP SSE endpoint |
+| `/mcp/sse` | GET | MCP SSE endpoint |
+| `/mcp/messages/` | POST | MCP JSON-RPC message endpoint |
 
 ## Configuration
 

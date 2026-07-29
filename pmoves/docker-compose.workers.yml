@@ -460,7 +460,7 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
-    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1}
+    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
       nats:

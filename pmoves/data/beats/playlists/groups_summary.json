@@ -1,108 +1,113 @@
 [
   {
-    "group": "Allegro_balanced_Bright_c1",
-    "count": 21,
+    "group": "Moderato_balanced_Bright_c2",
+    "count": 27,
     "tracks": [
       "Absynth Club mix",
       "Arcade Low - 2",
-      "Ask Me",
       "Ask You",
-      "CLANK",
-      "FIRST BOSS",
-      "Guitary Dwstro 3busy 4",
-      "Lira 9",
-      "Looops 6long",
-      "MATTER COMMANDER",
-      "Piano Wax 76 Bpm dnb Dark",
-      "Rak no# 10 mix issue no# 4",
-      "RAKS LIT",
-      "Ree 3b 25",
-      "Reminiscence",
-      "SCARD",
-      "Strange Love",
-      "TALK SLOW",
-      "The Setup Just Leave Me Alone \u29f8 Don't Leave Me Alone",
-      "THEY'LL KILL YOU (OOMPA LOOMPA mix)",
-      "WEIRD v1"
-    ]
-  },
-  {
-    "group": "Allegro_balanced_Bright_c5",
-    "count": 17,
-    "tracks": [
-      "14 Track 14",
-      "808 SIGNS",
-      "BoomBap Low Long",
+      "BOLLYWOOD MADNESS",
       "Crush no # 71",
-      "Darque 8",
-      "Final Chrono 3",
-      "Final Chrono Dark Rev A",
-      "FLATTERY 4",
-      "Happy Practice",
+      "Guitary Dwstro 3busy 4",
       "Harbinger",
-      "Lost Tapes A Side B Side - 1",
+      "Like you a lot",
+      "MATTER COMMANDER",
+      "MULTI BIT DARK",
+      "MULTIBIT",
+      "NICE BABY",
+      "RAKS LIT",
       "RAKS SLOW",
-      "Starscreams and Loud Scars",
+      "Ree 3b 25",
+      "SCARD",
+      "Shrooms 9 Low slow change",
+      "Sketch 5 116.44 LOUD",
       "Storms",
-      "The Calm Storm",
+      "Street Fighter Lower",
+      "the empath",
       "The Harbringer",
+      "the legend of Rattlesnake Jake",
+      "THE SMALLEST VIOLINS",
+      "THEY'LL KILL YOU (OOMPA LOOMPA mix)",
+      "WACK",
       "When"
     ]
   },
   {
-    "group": "Allegro_balanced_Bright_c6",
-    "count": 14,
+    "group": "Allegro_warm_Bright_c1",
+    "count": 18,
     "tracks": [
-      "Frayed",
-      "Gone till remember",
-      "Johnny 5",
-      "Life Ex Machina",
-      "LITTY",
-      "Mood no# 3",
-      "NICE BABY",
-      "Shaelamix1loudLONG 183bpm",
-      "Sketch 5 116.44 LOUD",
-      "Sketchy tech 11",
-      "Street Fighter Lower",
-      "the empath",
-      "the legend of Rattlesnake Jake",
-      "THE SMALLEST VIOLINS"
-    ]
-  },
-  {
-    "group": "Allegro_balanced_Bright_c0",
-    "count": 9,
-    "tracks": [
+      "14 Track 14",
       "808 Low",
       "Aquary 4",
       "Asylum 2 nice",
-      "BOLLYWOOD MADNESS",
-      "Jazz2loud",
-      "Piano Wax Loud",
-      "Shrooms 9 Low slow change",
-      "STARBLAST",
-      "WACK"
-    ]
-  },
-  {
-    "group": "Allegro_balanced_Bright_c4",
-    "count": 8,
-    "tracks": [
+      "BoomBap Low Long",
+      "Darque 8",
+      "Final Chrono Dark Rev A",
+      "FIRST BOSS",
+      "Happy Practice",
       "Hip Hops n Star Snaps",
       "inquiringcuriousmind",
-      "Krukky 18drums 6frek 4premaster 4b",
-      "Like you a lot",
+      "Lira 9",
+      "Lost Tapes A Side B Side - 1",
+      "Rak no# 10 mix issue no# 4",
       "Rav Low",
       "Sketch 8 B Loud Dark",
-      "SOUL MOVES",
-      "Strange things"
+      "Strange Love",
+      "WEIRD v1"
     ]
   },
   {
-    "group": "Moderato_balanced_Bright_c2",
-    "count": 6,
+    "group": "Presto_balanced_Bright_c0",
+    "count": 15,
+    "tracks": [
+      "808 SIGNS",
+      "CLANK",
+      "Final Chrono 3",
+      "FLATTERY 4",
+      "Gone till remember",
+      "Jazz2loud",
+      "Looops 6long",
+      "Piano Wax 76 Bpm dnb Dark",
+      "Piano Wax Loud",
+      "Reminiscence",
+      "SOUL MOVES",
+      "STARBLAST",
+      "Starscreams and Loud Scars",
+      "The Calm Storm",
+      "The Setup Just Leave Me Alone \u29f8 Don't Leave Me Alone"
+    ]
+  },
+  {
+    "group": "Andante_warm_Bright_c4",
+    "count": 7,
     "tracks": [
       "Aquary Rnb",
+      "Frayed",
+      "Johnny 5",
+      "LITTY",
+      "Mood no# 3",
+      "Shae lullaby",
+      "Sketchy tech 11"
+    ]
+  },
+  {
+    "group": "Presto_balanced_Bright_c6",
+    "count": 7,
+    "tracks": [
+      "ARCANE NIGHT",
+      "Ask Me",
+      "Krukky 18drums 6frek 4premaster 4b",
+      "Lately",
+      "Shaelamix1loudLONG 183bpm",
+      "Strange things",
+      "TALK SLOW"
+    ]
+  },
+  {
+    "group": "Allegro_balanced_Bright_c3",
+    "count": 6,
+    "tracks": [
+      "HERE",
       "Ice Cream 3 In 1",
       "IMCRAZY",
       "SIRIUSSADHAPPYMIX",
@@ -111,19 +116,14 @@
     ]
   },
   {
-    "group": "Moderato_balanced_Bright_c7",
-    "count": 6,
+    "group": "Allegro_electric_Bright_c5",
+    "count": 1,
     "tracks": [
-      "ARCANE NIGHT",
-      "HERE",
-      "Lately",
-      "MULTI BIT DARK",
-      "MULTIBIT",
-      "Shae lullaby"
+      "Life Ex Machina"
     ]
   },
   {
-    "group": "Allegro_balanced_Deep_c3",
+    "group": "Presto_bass-heavy_Deep_c7",
     "count": 1,
     "tracks": [
       "THE ALIEN IN THE WINDOW"

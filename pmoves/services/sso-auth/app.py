@@ -74,7 +74,9 @@ def login_page(request: Request, rd: str = "/", e: str = ""):
     cb = f"{settings.public_base_url}/callback?" + urlencode({"rd": rd})  # rd may contain &/# — encode it
     error = "Sign-in failed — check your email and password." if e else None
     return _templates.TemplateResponse("login.html", {"request": request, "rd": rd,
-        "github_url": gotrue.github_authorize_url(cb), "error": error})
+        "github_url": gotrue.provider_authorize_url("github", cb),
+        "google_url": gotrue.provider_authorize_url("google", cb),
+        "google_enabled": settings.google_enabled, "error": error})
 
 @app.post("/login")
 def login_submit(email: str = Form(...), password: str = Form(...), rd: str = Form("/")):

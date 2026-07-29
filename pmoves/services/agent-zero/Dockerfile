@@ -84,7 +84,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #    a read-only rootfs; avoiding network/cache writes at startup is intentional).
 ARG DOCKER_CLI_VERSION=27.5.1
 ARG SUPABASE_POSTGREST_MCP_VERSION=0.1.1
-RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" \
+RUN ARCH=$(dpkg --print-architecture) \
+    && case "$ARCH" in \
+         amd64) DOCKER_ARCH=x86_64 ;; \
+         arm64) DOCKER_ARCH=aarch64 ;; \
+         *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+       esac \
+    && curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-${DOCKER_CLI_VERSION}.tgz" \
       | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
     && docker --version \
     && npm install -g "@supabase/mcp-server-postgrest@${SUPABASE_POSTGREST_MCP_VERSION}" \
@@ -96,7 +102,9 @@ RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir \
        --constraint requirements.lock -r requirements.txt
 
-# Init script (replaces upstream /ins/copy_A0.sh)
+# Init script (replaces upstream /ins/copy_A0.sh).
+# /a0 is owned by the non-root runtime user (65532) so the container can keep
+# the hardened tier's cap_drop=ALL and run without DAC_OVERRIDE.
 RUN install -d -o 65532 -g 65532 /a0 \
     && printf '#!/bin/bash\nset -e\nif [ ! -f "/a0/run_ui.py" ]; then\n  cp -rn --no-preserve=ownership,mode "/git/agent-zero/." "/a0"\nfi\n' \
        > /usr/local/bin/init-a0.sh \
