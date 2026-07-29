@@ -102,7 +102,8 @@
       "base": "feat/creator-collab-lane @ 970fb50792 (post slice 6)",
       "merge_target": "feat/creator-collab-lane",
       "commits": [
-        "a7e9e9f4de"
+        "a7e9e9f4de",
+        "1dd4df2828"
       ],
       "scope": "pmoves/tools/creator-collab-evidence/render_dashboard.py (NEW, 16.7 KB, stdlib + pyyaml only — reads catalog.json + 2 new room manifests + 12 curated YAMLs + topics.json, generates single static HTML page) + pmoves/tools/creator-collab-evidence/capture_screenshots.py (NEW, 5.3 KB — boots local HTTP server, opens chromium headless at 1440x900, captures 7 PNGs) + pmoves/docs/evidence/creator-collab-2026-07-28/index.html (NEW, 29 KB rendered dashboard) + pmoves/docs/evidence/creator-collab-2026-07-28/screenshots/{01-overview,02-rooms,03-creator-studio,04-helpdesk,05-pinokio-apps,06-tac-trees,07-topics}.png (NEW, 7 PNGs, ~1 MB total) + pmoves/docs/evidence/creator-collab-2026-07-28/README.md (NEW, 5.8 KB — explains the evidence) + pmoves/docs/specs/creator-collab-visual-evidence-2026-07-28.md (NEW — 8-section slice 5 spec).",
       "tests": "pmoves/scripts/validate_room_manifests.py: 11 OK / 12 (1 pre-existing failure: persona.room.livingdoc em-dash catalog drift, out of scope). Full test suite: 168/168 PASS (no regression — slice 5 doesn't touch any code, only adds evidence files). Renderer's HTML output parses cleanly in chromium (no console errors; CSS Grid + native <details> work as expected). 7 PNGs captured at 1440x900 viewport; full-page is 1440x5655 (496 KB).",
