@@ -2,7 +2,7 @@
 
 > **GRAPHITI_MARK:** SPARK-KIMI::HF-MCP-SERVER-WIRING::2026-07-28
 > **Lane:** Crush MCP revival + finish HF agent lane (awakening doc C1-C5)
-> **Status:** in-flight
+> **Status:** in-flight (compose + registry wired; pending runtime verification)
 > **Supersedes:**
 
 ## Context
@@ -23,7 +23,7 @@ emitted by `crush_configurator.py` for the cross-node default:
 
 ### 1. Stand up services
 - [x] `make -C pmoves up-cipher` — Known Road, builds cipher-api from `Pmoves-cipher/Dockerfile.pmoves`
-- [ ] Add hf-mcp-server to `pmoves/docker-compose.agents.yml` (port 8203)
+- [x] Add hf-mcp-server to `pmoves/docker-compose.yml` (port 8203) + regenerate `docker-compose.agents.yml`
 - [ ] `docker compose --profile agents up -d hf-mcp-server`
 - [ ] Verify both healthy (`cipher-health`, `curl :8203/healthz`)
 
@@ -47,6 +47,31 @@ sources `pmoves/env.shared` via `with-env.sh` pattern, execs `crush`. Loaded
 Crush reads MCP config at startup. Existing session will continue with the
 broken MCPs; restart required.
 
+## PM-Spark Video Search & Summarization (Claw opportunity)
+
+Repo: `https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git`
+
+What it is: NVIDIA AI Blueprint for Video Search and Summarization (VSS) forked
+for PMOVES/SPARK. Provides real-time video intelligence, downstream analytics,
+and agentic workflows with MCP exposure.
+
+Reusable surfaces for Claw / other agents:
+
+| Asset | Claw use case | Integration path |
+|-------|---------------|------------------|
+| `skills/vss-ask-video/SKILL.md` | Ask visual questions about a video clip | Install into `~/.openclaw-autoclaw/skills/vss-ask-video/` (agentskills.io format) |
+| `skills/vss-search-archive/SKILL.md` | Natural-language search across video archives | Same skill install pattern |
+| `skills/vss-generate-video-report/SKILL.md` | Generate incident/behavior reports | Same skill install pattern |
+| `skills/vss-deploy-profile/SKILL.md` | Deploy/tear down VSS profiles (base/search/lvs/warehouse/edge) | Skill install + `vss-deploy-profile` reference |
+| `services/agent/src/vss_agents/orchestrator/tools.py` | VSS orchestrator tools (profiles, prereqs, compose up/down/status) | Wrap as MCP server or import as Claw tools |
+| `services/agent/src/vss_agents/video_analytics/tools.py` | Video analytics tools (sensors, incidents, alerts, clips) | Expose via MCP/REST adapter |
+| `services/analytics/video-analytics-api/` | REST API for analytics data | Add as PMOVES service + compose stanza |
+
+Recommended next step: submodule this repo as `PMOVES-Spark-VSS/`, add a
+`pmoves-vss-agent` compose service that runs the VSS agent/API, and install the
+agentskills.io skills into Claw's skill directory. This gives every PMOVES agent
+local video understanding + search + summarization tools.
+
 ## Out of Scope (separate lanes)
 
 - Update `pmoves/tools/crush_configurator.py` to emit pmoves-local hf-mcp-server
@@ -55,5 +80,6 @@ broken MCPs; restart required.
 - Wire CIPHER_API_TOKEN through env.tier-agent (cipher-api accepts requests
   without auth when CIPHER_API_TOKEN is unset per dev-skip rule, but production
   should set it).
-- Add `hf-mcp-server` to `pmoves/config/agent_registry.yaml`.
-- Update CATALOG.md to add `:8203 hf-mcp-server`.
+- ~~Add `hf-mcp-server` to `pmoves/config/agent_registry.yaml`.~~ Done.
+- ~~Update CATALOG.md to add `:8203 hf-mcp-server`.~~ Done.
+- Submodule / wire PM-Spark-VSS for Claw.

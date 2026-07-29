@@ -821,6 +821,44 @@ npm test
 npm run typecheck
 ```
 
+## SPARK HF MCP Server Wiring (2026-07-29)
+
+**Context:** Finish the open handoff to wire `pmoves/services/hf-mcp-server/` into the
+agents compose overlay on host port 8203.
+
+**Compose wiring pattern:**
+- Add new services to `pmoves/docker-compose.yml` (the source of truth), then
+  regenerate overlays with `python scripts/split_compose.py`.
+- Keep internal container port (`8096`) and host-published port (`8203`) distinct
+  in docs/CATALOG to avoid collision with Headscale (`8096` in remote overlay)
+  and Jellyfin.
+- Use `*tier-agent-hardened-rw` for services that write to a host-mounted model
+  cache (`${HF_HOME:-./data/models}:/models`).
+- Profile membership: `["agents", "research"]` so both `up-agents` and research
+  bring-up paths include the MCP server.
+
+**Registry/catalog parity:**
+- Add the service to `pmoves/config/agent_registry.yaml` under the HF Agent
+  services block, including `nats.publishes: ["hf.model.downloaded.v1"]`.
+- Update `.claude/CATALOG.md` and `pmoves/docs/SERVICE_DOCS_MATRIX.md` in the
+  same edit so future agents find the port/health/docs surface.
+
+**Validation shortcuts:**
+- `docker compose -f docker-compose.base.yml -f docker-compose.agents.yml --profile agents config` requires a lot of tier secrets; for a focused check,
+  extract the single service into a temporary compose file that includes
+  `docker-compose.base.yml` for networks/anchors and stub `nats`/`nats-init`.
+- The existing `pmoves-hf-mcp-server:spark-local` container on port 8203 can
+  serve as a live health reference when NATS is reachable.
+
+**PM-Spark VSS opportunity for Claw:**
+- `https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git`
+  ships agentskills.io-compatible skills (`vss-ask-video`,
+  `vss-search-archive`, `vss-generate-video-report`, `vss-deploy-profile`, etc.).
+- Easiest integration path for Claw: install the skill directories under
+  `~/.openclaw-autoclaw/skills/` and point them at a running VSS deployment.
+- Longer path: submodule as `PMOVES-Spark-VSS/`, add a `pmoves-vss-agent`
+  compose service, and expose the VSS agent/orchestrator tools as MCP.
+
 ## Review Comment Verification Protocol
 
 **Before fixing any review comment (including nitpicks):**

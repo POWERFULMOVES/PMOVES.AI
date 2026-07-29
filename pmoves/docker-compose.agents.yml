@@ -955,7 +955,7 @@ services:
   hf-agent:
     # HF Agent — autonomous HuggingFace model patrol. Publishes
     # hf.model.discovered.v1. Polls HF Hub on HF_POLL_INTERVAL (default 300s).
-    <<:
+    <<: &tier-agent-hardened-rw
       env_file:
       - env.shared
       - env.tier-agent
@@ -1041,5 +1041,49 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  hf-mcp-server:
+    # HF MCP Server — Model Context Protocol tools for HuggingFace Hub.
+    # Provides hf.model.search/info/download/list/convert_gguf and publishes
+    # hf.model.downloaded.v1. Uses local /models cache shared with Ollama/vLLM.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/hf-mcp-server
+      dockerfile: Dockerfile
+    image: ${HF_MCP_SERVER_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-mcp-server:pmoves-latest}
+    container_name: pmoves-hf-mcp-server
+    hostname: hf-mcp-server
+    restart: unless-stopped
+    environment:
+    - PORT=8096
+    - NATS_URL=${NATS_URL}
+    - HF_HOME=${HF_HOME:-/models}
+    - HF_HUB_CACHE=${HF_HUB_CACHE:-/models/hub}
+    - HF_HUB_ENABLE_HF_TRANSFER=${HF_HUB_ENABLE_HF_TRANSFER:-1}
+    - HF_TOKEN=${HF_TOKEN:-}
+    - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    ports:
+    - ${HF_MCP_SERVER_BIND:-0.0.0.0}:${HF_MCP_SERVER_PORT:-8203}:8096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
+    volumes:
+    - ${HF_HOME:-./data/models}:/models
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
