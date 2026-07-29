@@ -49,6 +49,21 @@ def print_check(category, text, passed):
     return passed
 
 
+def print_error(message):
+    """Print an error message."""
+    print(f"{Colors.RED}✗ ERROR:{Colors.RESET} {message}")
+
+
+def print_success(message):
+    """Print a success message."""
+    print(f"{Colors.GREEN}✓{Colors.RESET} {message}")
+
+
+def print_warning(message):
+    """Print a warning message."""
+    print(f"{Colors.YELLOW}⚠ WARNING:{Colors.RESET} {message}")
+
+
 def run_command(cmd, check=False, capture_output=True, timeout=30):
     """
     Run a shell command with timeout.

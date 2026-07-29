@@ -5,7 +5,7 @@ Demonstrates the transformation from session.context.v1 to kb.upsert.request.v1.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Sample session context event
 SAMPLE_SESSION_CONTEXT = {

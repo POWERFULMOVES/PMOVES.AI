@@ -193,7 +193,7 @@ async def run() -> None:
                         # Continue without presigned URL - not critical for all workflows
 
                     env = envelope("gen.image.result.v1", payload, source="comfy-watcher")
-                    env["payload"]["meta"] = meta
+                    env["payload"]["meta"] = payload["meta"]
                     await nc.publish("gen.image.result.v1".encode(), json.dumps(env).encode())
                     print("Uploaded and announced:", key)
                 except Exception as e:

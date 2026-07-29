@@ -8,7 +8,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .storage import InMemoryNodeStore, NodeRecord, SupabaseNodeStore
 from ..resource_detector.models import NodeCapabilities, NodeHeartbeat

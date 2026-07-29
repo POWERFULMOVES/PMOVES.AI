@@ -29,6 +29,12 @@ from prometheus_client import (
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# CGP (CHIT Geometry Packet) publish configuration.
+# When CGP_PUBLISH_ENABLED is False, _emit_cgp_packet short-circuits and returns False.
+# CGP_SUBJECT is the NATS subject the geometry bus listens on (default geometry.cgp.v1).
+CGP_PUBLISH_ENABLED = os.getenv("CGP_PUBLISH_ENABLED", "true").strip().lower() == "true"
+CGP_SUBJECT = os.getenv("CGP_SUBJECT", "geometry.cgp.v1")
+
 
 def _redact_url(url: str) -> str:
     p = urlparse(url)

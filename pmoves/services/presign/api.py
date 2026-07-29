@@ -2,6 +2,7 @@ import os
 import socket
 import time
 import hmac
+import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header

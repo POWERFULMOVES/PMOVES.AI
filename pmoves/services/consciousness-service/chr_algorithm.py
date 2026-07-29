@@ -15,9 +15,12 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+if TYPE_CHECKING:  # pragma: no cover - typing helper only
+    from sentence_transformers import SentenceTransformer
 
 try:
     from services.common.env import get_secret
