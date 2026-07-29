@@ -715,9 +715,9 @@ def _group_aggregate(members: list[dict]) -> dict:
         beats = r.get("beat_times", [])
         if beats:
             all_beats.append(beats)
-    if all_beats:
-        avg["avg_beat_interval"] = round(
-            float(np.mean([np.mean(np.diff(b)) for b in all_beats if len(b) > 1])), 4)
+    valid_intervals = [np.mean(np.diff(b)) for b in all_beats if len(b) > 1]
+    if valid_intervals:
+        avg["avg_beat_interval"] = round(float(np.mean(valid_intervals)), 4)
     else:
         avg["avg_beat_interval"] = round(60.0 / max(avg["tempo_bpm"], 1), 4)
 
@@ -728,8 +728,8 @@ _SURFACE_TEMPLATES = {
     "bass-heavy": '''function surface(input) {{
     const u = (input.u - 0.5) * 2 * Math.PI;
     const v = (input.v - 0.5) * 2 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
     const hz = input.hz || {hz};
     const fitness = input.fitness || {fitness};
     const t = input.t || 0;
@@ -752,8 +752,8 @@ _SURFACE_TEMPLATES = {
     "warm": '''function surface(input) {{
     const u = input.u * 2 * Math.PI;
     const v = input.v * 4 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
     const hz = input.hz || {hz};
     const fitness = input.fitness || {fitness};
     const t = input.t || 0;
@@ -775,8 +775,8 @@ _SURFACE_TEMPLATES = {
     "balanced": '''function surface(input) {{
     const u = (input.u - 0.5) * 2 * Math.PI;
     const v = (input.v - 0.5) * 2 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
     const hz = input.hz || {hz};
     const fitness = input.fitness || {fitness};
     const t = input.t || 0;
@@ -798,8 +798,8 @@ _SURFACE_TEMPLATES = {
     "electric": '''function surface(input) {{
     const u = (input.u - 0.5) * 2 * Math.PI;
     const v = (input.v - 0.5) * 2 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
     const hz = input.hz || {hz};
     const fitness = input.fitness || {fitness};
     const t = input.t || 0;
@@ -826,8 +826,8 @@ _SURFACE_TEMPLATES = {
     "airy": '''function surface(input) {{
     const u = (input.u - 0.5) * Math.PI;
     const v = (input.v - 0.5) * 2 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
     const hz = input.hz || {hz};
     const fitness = input.fitness || {fitness};
     const t = input.t || 0;
@@ -852,8 +852,8 @@ _SURFACE_TEMPLATES = {
     "fluid": '''function surface(input) {{
     const u = (input.u - 0.5) * 4 * Math.PI;
     const v = (input.v - 0.5) * 4 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
     const hz = input.hz || {hz};
     const fitness = input.fitness || {fitness};
     const t = input.t || 0;
@@ -1024,7 +1024,7 @@ def _build_tracks_json(groups: list[dict],
     import os
     audio_rel = os.environ.get(
         "BEATS_AUDIO_REL",
-        "../../../pmoves/data/beats/soundcloud/darkxside")
+        "/audio/beats")
     tracks = []
     for g in groups:
         gname = g["group"]

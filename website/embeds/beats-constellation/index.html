@@ -174,7 +174,7 @@ const fftOverlay=document.getElementById("fftOverlay");
 const nowPlaying=document.getElementById("nowPlaying");
 const npText=document.getElementById("npText");
 const player=document.getElementById("player");
-let W=0,Hh=0,DPR=1,hovered=null; const disabled=new Set();
+let W=0,Hh=0,DPR=1,hovered=null,playingGroup=null; const disabled=new Set();
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc=(s)=>s.replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 
@@ -190,6 +190,7 @@ for (let i=0; i<FFT_BARS; i++) {
 let fftData = new Float32Array(FFT_BARS);
 let meydaAnalyzer = null;
 let audioCtx = null;
+let mediaSource = null;
 
 function resize(){ const r=canvas.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2); W=r.width; Hh=r.height;
   canvas.width=Math.round(W*DPR); canvas.height=Math.round(Hh*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
@@ -197,29 +198,27 @@ const X=(s)=>s.nx*W, Y=(s)=>s.ny*Hh;
 
 async function playTrack(star) {
   if (!star.audio_url) { console.warn("No audio_url for", star.name); return; }
-  // Stop current
+  playingGroup = star.group;
+  // Stop current analyzer but keep audio context
   if (meydaAnalyzer) { try { meydaAnalyzer.stop(); } catch(e){} meydaAnalyzer = null; }
   player.pause();
   player.src = star.audio_url;
   try {
     await player.play();
-    // Set up Web Audio + Meyda
+    // Set up Web Audio + Meyda (once — reuse source node)
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    // Disconnect previous source if any
-    let src;
-    try {
-      src = audioCtx.createMediaElementSource(player);
-    } catch(e) {
-      // Already connected — reuse
-      return;
+    // Create media source only once — calling createMediaElementSource twice
+    // on the same element throws InvalidStateError
+    if (!mediaSource) {
+      mediaSource = audioCtx.createMediaElementSource(player);
+      mediaSource.connect(audioCtx.destination);
     }
-    src.connect(audioCtx.destination);
     meydaAnalyzer = Meyda.createMeydaAnalyzer({
       audioContext: audioCtx,
-      source: src,
+      source: mediaSource,
       bufferSize: 512,
       featureExtractors: ["spectralCentroid", "spectralFlatness", "rms", "spectralRolloff"],
       callback: (features) => {
@@ -273,7 +272,7 @@ function draw(t){
   // Live audio reactivity: pulse stars in the playing group
   const playingRms = fftData.reduce((s,v)=>s+v,0) / FFT_BARS;
   stars.forEach(s=>{ if(disabled.has(s.family)) return; const c=famColor(s.family); const isH=hovered===s;
-    const groupPulse = playingRms > 0.01 ? 1 + playingRms * 2 * (s.group === hovered?.group ? 1 : 0.3) : 1;
+    const groupPulse = playingRms > 0.01 ? 1 + playingRms * 2 * (s.group === (playingGroup || hovered?.group) ? 1 : 0.3) : 1;
     const tw=reduce?1:(0.82+0.18*Math.sin(t/900+s.phase)*s.twk); const r=(isH?4.6:2.4)*(0.9+0.2*tw)*groupPulse;
     ctx.shadowColor=c; ctx.shadowBlur=(isH?18:9)*glow*groupPulse; ctx.fillStyle=c; ctx.globalAlpha=isH?1:0.55+0.4*tw;
     ctx.beginPath(); ctx.arc(X(s),Y(s),r,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
