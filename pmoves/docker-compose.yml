@@ -720,7 +720,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
     - PMOVES_NETWORKS=pmoves_api,pmoves_public
-    entrypoint: ["/bin/bash", "-c", "for i in $$(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($$i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
+    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -1105,6 +1105,14 @@ services:
     - supabase-local
     environment:
     - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    # Pass-through (no `=`) so these resolve to ABSENT from the host, overriding
+    # the empty-string values the supabase env files set. vector 0.28.1 fails to
+    # build its logflare proxy connector from an empty-string HTTP_PROXY ("Failed
+    # to build Proxy connector: empty string") and crash-loops; an ABSENT var is
+    # fine. (An `=` here would re-set the empty string and reintroduce the crash.)
+    - HTTP_PROXY
+    - HTTPS_PROXY
+    - NO_PROXY
     - PMOVES_NETWORKS=pmoves_data
     volumes:
     - supabase-vector-data:/var/lib/vector
@@ -1113,9 +1121,9 @@ services:
     # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
     - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9001/health"]
-      interval: 20s
-      timeout: 5s
+      test: ["CMD-SHELL", "vector validate /etc/vector/vector.yml || exit 1"]
+      interval: 30s
+      timeout: 10s
       retries: 3
       start_period: 10s
     depends_on:
@@ -1309,6 +1317,10 @@ services:
     # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
     # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
     image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    # Only data-tier service without a restart policy — every Docker Desktop
+    # restart left MinIO dead (Exited 255) until manually started, which is
+    # how it sat down for 9 days and silently blocked the YT pipeline.
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
@@ -1470,7 +1482,6 @@ services:
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
-    - MEILI_API_KEY=${MEILI_API_KEY:-${MEILI_MASTER_KEY}}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
     - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
@@ -1726,7 +1737,6 @@ services:
     - NO_PROXY=
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
-    - MEILI_API_KEY=${MEILI_API_KEY:-${MEILI_MASTER_KEY}}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
@@ -1931,7 +1941,7 @@ services:
     - NATS_URL=${NATS_URL}
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -1947,6 +1957,7 @@ services:
     - pmoves_bus
     - pmoves_api
     - pmoves_data  # MinIO access (minio:9000)
+    - pmoves_external  # host port publish (tier nets are internal:true)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
       interval: 30s
@@ -1954,6 +1965,50 @@ services:
       retries: 3
       start_period: 30s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  transcribe-frontend:
+    <<: *tier-worker-hardened
+    build:
+      context: ../PMOVES-transcribe-and-fetch
+      dockerfile: Dockerfile
+    image: ${TRANSCRIBE_FRONTEND_IMAGE:-pmoves-transcribe-frontend:local}
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    # Browser-facing base = backend host port; server-side calls stay in-network
+    - NEXT_PUBLIC_API_BASE=${TRANSCRIBE_PUBLIC_API_BASE:-http://localhost:8074}
+    # Next standalone binds to HOSTNAME; docker injects the container id there
+    - HOSTNAME=0.0.0.0
+    - INTERNAL_BACKEND_URL=http://transcribe-backend:8000
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
+    depends_on:
+      transcribe-backend:
+        condition: service_healthy
+    ports:
+    - ${TRANSCRIBE_FRONTEND_BIND:-0.0.0.0}:${TRANSCRIBE_FRONTEND_HOST_PORT:-448}:448
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_external  # host port publish (tier nets are internal:true)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:448/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -2287,7 +2342,6 @@ services:
     - USE_MEILI=true
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
-    - MEILI_API_KEY=${MEILI_API_KEY:-${MEILI_MASTER_KEY}}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
     - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
@@ -2379,7 +2433,6 @@ services:
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
-    - MEILI_API_KEY=${MEILI_API_KEY:-${MEILI_MASTER_KEY}}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
     - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
@@ -2462,6 +2515,10 @@ services:
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+    - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
     - ALPHA=${ALPHA:-0.7}
@@ -2511,6 +2568,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - HF_HOME=/data/huggingface
     - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     gpus: all
     deploy:
@@ -2539,6 +2597,8 @@ services:
     - pmoves_external  # Required for hub fallback and host-gateway Supabase routes
     extra_hosts:
     - host.docker.internal:host-gateway
+    volumes:
+    - hi-rag-gpu-hf-cache:/data/huggingface
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
       interval: 30s
@@ -2631,7 +2691,11 @@ services:
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
-    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
+    # --dockerized=true is REQUIRED on A0 2.5: runtime.is_development() is
+    # simply "not --dockerized", and a development-mode inner routes file
+    # browsing + prompt extensions through RFC calls that die with
+    # "No RFC password" inside the container.
+    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0 --dockerized=true}
     - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
@@ -2662,18 +2726,20 @@ services:
     #   docker          — full container control over the mounted socket (mcp/docker)
     #   pmoves-supabase — self-hosted PostgREST data plane (pre-installed in image)
     #   cipher          — Consciousness/CHIT persistent memory over SSE
-    #   archon          — Knowledge / task orchestration bridge over HTTP
     # BoTZ-gateway (persona/forms) and Hi-RAG are added by their owning lanes once
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
-    - ARCHON_MCP_URL=${ARCHON_MCP_URL:-http://archon-server:8051}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"},"archon":{"type":"http","url":"${ARCHON_MCP_URL:-http://archon-server:8051}"}}}'
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/api/mcp/sse}
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
     - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    # Same placeholder for the A0 2.5 preset plugin: get_api_key() resolves
+    # TENSORZERO_API_KEY for provider "tensorzero"; without it the UI banners
+    # "Missing API Key for model presets" even though the gateway needs none.
+    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-tensorzero-routed}
     - A0_SET_chat_model_provider=openai
     # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
     - A0_SET_chat_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
@@ -2717,8 +2783,6 @@ services:
         condition: service_completed_successfully
       tensorzero-gateway:
         condition: service_healthy
-      archon:
-        condition: service_healthy
     ports:
     - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_UI_PORT:-8081}:80
@@ -2728,6 +2792,16 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # A0 2.5 user-config tree (same pattern as the sidecars' ./usr mount).
+    # Carries usr/plugins/_model_config/presets.yaml — WITHOUT it the
+    # _model_config plugin bootstrap downloads the stock agent0ai/a0-presets
+    # collection and the instance chats via openrouter/gpt-5.6-terra instead
+    # of TensorZero (observed on first 2.5 boot). Seed from
+    # pmoves/config/agent-zero/model-presets-docked.yaml. Mount the WHOLE
+    # usr tree, not a nested subdir: a nested bind makes Docker pre-create
+    # /a0/usr path components as root before init-a0.sh populates /a0,
+    # breaking the runtime user's write to /a0/usr/.env (PermissionError).
+    - ${AGENT_ZERO_USR_DIR:-./data/agent-zero/usr}:/a0/usr
     # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
     # Read-only: forms are introspective metadata; runtime never rewrites them.
     - ./configs/agents/forms:/app/configs/agents/forms:ro
@@ -2767,46 +2841,65 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+  # Archon 0.6.0 — TypeScript/Bun remote-coding-agent, built from the PMOVES-Archon
+  # submodule (0.6.0 rewrote the old Python service to TS; the vendored Python
+  # wrapper under services/archon/ is dead — see #2217). Serves HTTP + UI + MCP on
+  # a single port (3090, /api/health). Backed by a dedicated Postgres (pg_notify
+  # realtime); Archon auto-inits its schema on first boot.
+  archon-postgres:
+    image: ${ARCHON_POSTGRES_IMAGE:-postgres:17-alpine}
+    container_name: pmoves-archon-postgres
+    hostname: archon-postgres
+    restart: unless-stopped
+    environment:
+    - POSTGRES_DB=${ARCHON_DB_NAME:-remote_coding_agent}
+    - POSTGRES_USER=${ARCHON_DB_USER:-archon}
+    - POSTGRES_PASSWORD=${ARCHON_DB_PASSWORD:-archon}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    - PMOVES_NETWORKS=pmoves_app
+    volumes:
+    - archon-pg-data:/var/lib/postgresql/data
+    networks:
+    - pmoves_app
+    profiles:
+    - agents
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   archon:
     <<: *tier-agent-hardened
     build:
-      context: .
-      dockerfile: ./services/archon/Dockerfile
-      args:
-      - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
-      - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
+      context: ../PMOVES-Archon
+      dockerfile: Dockerfile
+    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
+    # No container_name: keep the compose-default `${PROJECT}-archon-1` name that
+    # `wait-agents` and the REST policy probe (Makefile) inspect by that exact name.
+    hostname: archon
     restart: unless-stopped
     environment:
-      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
-    - PORT=8091
-    - ENVIRONMENT=${ENVIRONMENT:-production}
-    - ARCHON_ENV=${ARCHON_ENV:-production}
-    - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
-    - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
-    - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
-    - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
-    - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-    - ENVIRONMENT=${ENVIRONMENT:-production}
-    - ARCHON_ENV=${ARCHON_ENV:-production}
-      # Compose-first Archon Supabase wiring. CLI mode can override via
-      # ARCHON_SUPABASE_* / SUPABASE_* env values.
-    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}}
-    - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-kong:8000}}
-    - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
-    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    - NATS_URL=${NATS_URL}
-    - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-      # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
-      # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
-    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
-    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      # GitHub App credentials — archon MCP cross-repo cloning (planned)
-    - GH_APP_ID=${GH_APP_ID:-}
-    - GH_APP_SEC=${GH_APP_SEC:-}
-    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
-      # Host environment leak guard (see x-host-leak-guard docs above)
+    - PORT=3090
+    - HOST=0.0.0.0
+    - NODE_ENV=production
+    - ARCHON_DOCKER=true
+    # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
+    - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
+    - BETTER_AUTH_SECRET=${ARCHON_BETTER_AUTH_SECRET:-${BETTER_AUTH_SECRET:-}}
+    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://nats:pmoves@nats:4222}
+    # Claude auth — the TS server exits(1) at boot if none of these is present.
+    - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+    - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-false}
+    # gh auth — non-fatal warning if absent.
+    - GH_TOKEN=${GH_TOKEN:-}
+    # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - REQUESTS_CA_BUNDLE=
@@ -2815,47 +2908,43 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
-    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
+      archon-postgres:
+        condition: service_healthy
       nats:
         condition: service_healthy
-      tensorzero-gateway:
-        condition: service_healthy
-    command:
-    - python
-    - -c
-    - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')
     ports:
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_PORT:-8091}:8091
-    # Canonical UI port — the PMOVES archon image builds upstream static assets
-    # and serves them from the same HTTP server (see services/archon/main.py).
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_UI_PORT:-3737}:8091
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_MCP_PORT:-8051}:8051
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_WS_PORT:-8052}:8052
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_PORT:-3090}:3090
+    # UI compat: keep the historical 3737 host port pointing at the unified server
+    # (NEXT_PUBLIC_ARCHON_UI_URL default is http://localhost:3737).
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_UI_PORT:-3737}:3090
+    volumes:
+    - archon-data:/.archon
+    - archon-user-home:/home/appuser
     networks:
       pmoves_app:
         aliases:
         - archon-server
-      pmoves_api:
       pmoves_bus:
+      # Archon needs egress to reach the Claude API + GitHub with the configured
+      # credentials; pmoves_app/pmoves_bus are internal-only.
       pmoves_external:
-    extra_hosts:
-    - host.docker.internal:host-gateway
+    profiles:
+    - agents
     healthcheck:
-      test:
-      - CMD-SHELL
-      - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)"
-      interval: 20s
-      timeout: 5s
-      retries: 12
-      start_period: 15s
-
-  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First boot runs bun install + Postgres schema init — allow generous slack.
+      start_period: 90s
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 2G
+  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
   cipher-api:
     <<: *tier-agent-hardened
     build:
@@ -2869,15 +2958,17 @@ services:
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
     - PMOVES_HOST=0.0.0.0
-    - OLLAMA_URL=http://pmoves-ollama:11434
+    - OLLAMA_URL=http://host.docker.internal:11434
+    - OLLAMA_BASE_URL=http://host.docker.internal:11434
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
-    - TENSORZERO_URL=http://tensorzero-gateway:3030
+    - TENSORZERO_URL=http://tensorzero-gateway:3000
     - QDRANT_URL=http://qdrant:6333
     - QDRANT_API_KEY=${QDRANT__API_KEY:-}
     - QDRANT_COLLECTION=pmoves_cipher_memory
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
     - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external
+    command: ["sh", "-c", "node dist/src/app/index.cjs --mode api --port 8105 --host 0.0.0.0 --agent memAgent/cipher.yml --mcp-transport-type sse"]
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
@@ -2885,7 +2976,9 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
-    profiles: ["agents"]
+    profiles: ["agents", "cipher"]
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
     networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "node", "-e", "const http=require('http');http.get('http://127.0.0.1:8105/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
@@ -2901,6 +2994,65 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  p7:
+    # PMOVES P7 — room-aware stage manager (open-room lane, 2026-07-20).
+    # Mediates room lifecycle (rehearsal → live → review → archive), with CHIT
+    # activation gating on rehearsal→live, atomic catalog writeback, and signed
+    # NATS control-plane events. See:
+    #   pmoves/docs/specs/p7-service-spec-2026-07-20.md
+    #   pmoves/docs/ROOMS_ON_A_STAGE.md
+    #   pmoves/services/p7-room-orchestrator/README.md
+    build:
+      context: .
+      dockerfile: services/p7-room-orchestrator/Dockerfile
+    container_name: pmoves-p7
+    restart: unless-stopped
+    environment:
+    - P7_HOST=0.0.0.0
+    - P7_HTTP_PORT=8120
+      # Broker requires auth (documented default creds convention) — without
+      # them P7 boots in log-only fallback (nats_connected:false, no signed
+      # lifecycle events on the control plane).
+    - P7_NATS_URL=${P7_NATS_URL:-nats://nats:pmoves@nats:4222}
+    - P7_PMOVES_ROOT=/etc/pmoves
+    - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
+    - P7_ROOMS_DIR=/etc/pmoves/rooms
+    - P7_ROOM_MANIFEST_SCHEMA=/etc/pmoves/schemas/room/room.manifest.v1.schema.json
+    - P7_SIGNING_CARDS_PATH=/etc/pmoves/config/signing_identity_cards.yaml
+    - P7_AGENT_REGISTRY_PATH=/etc/pmoves/config/agent_registry.yaml
+    - P7_SERVICE_CARD_ID=${P7_SERVICE_CARD_ID:-}
+    - P7_SIGNING_KEY=${P7_SIGNING_KEY:-}
+    - P7_SIGNING_KEY_FILE=${P7_SIGNING_KEY_FILE:-}
+    - P7_CHIT_REQUIRE_SIGNATURE=${P7_CHIT_REQUIRE_SIGNATURE:-true}
+    - P7_ALLOW_UNSIGNED_LOCAL=${P7_ALLOW_UNSIGNED_LOCAL:-true}
+    - P7_LOG_LEVEL=INFO
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    volumes:
+      # Catalog + per-room manifests: read-write so transitions can writeback current_stage
+    - ./config/rooms:/etc/pmoves/rooms:rw
+      # Schema + signing cards + agent registry: read-only (operator edits via git)
+    - ./contracts/schemas:/etc/pmoves/schemas:ro
+    - ./config/signing_identity_cards.yaml:/etc/pmoves/config/signing_identity_cards.yaml:ro
+    - ./config/agent_registry.yaml:/etc/pmoves/config/agent_registry.yaml:ro
+    - ./env.shared:/etc/pmoves/env.shared:ro
+    ports:
+    - "${P7_BIND:-127.0.0.1}:${P7_PORT:-8120}:8120"
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks: [pmoves_app, pmoves_bus, pmoves_external]
+    profiles: ["agents", "p7"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   mesh-agent:
     <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent
@@ -3125,51 +3277,6 @@ services:
       retries: 3
       start_period: 30s
 
-  hf-mcp-server:
-    # HF MCP Server — Model Context Protocol tools for HuggingFace Hub.
-    # Provides hf.model.search/info/download/list/convert_gguf and publishes
-    # hf.model.downloaded.v1. Models download to /models; inference services
-    # can mount the same host path or import converted GGUF artifacts.
-    <<: *tier-agent-hardened-rw
-    build:
-      context: ./services/hf-mcp-server
-      dockerfile: Dockerfile
-    image: ${HF_MCP_SERVER_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-mcp-server:pmoves-latest}
-    container_name: pmoves-hf-mcp-server
-    hostname: hf-mcp-server
-    restart: unless-stopped
-    environment:
-    - PORT=8096
-    - NATS_URL=${NATS_URL}
-    - HF_HOME=${HF_HOME:-/models}
-    - HF_HUB_CACHE=${HF_HUB_CACHE:-/models/hub}
-    - HF_HUB_ENABLE_HF_TRANSFER=${HF_HUB_ENABLE_HF_TRANSFER:-1}
-    - HF_TOKEN=${HF_TOKEN:-}
-    - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}
-    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
-    ports:
-    - ${HF_MCP_SERVER_BIND:-127.0.0.1}:${HF_MCP_SERVER_PORT:-8203}:8096
-    depends_on:
-      nats:
-        condition: service_healthy
-      nats-init:
-        condition: service_completed_successfully
-    profiles: ["agents", "research"]
-    networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
-    volumes:
-    - ${HF_HOME:-./data/models}:/models
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8096/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-
   # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
   notebooklm-agent:
     deploy:
@@ -3235,6 +3342,53 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  p7-room-orchestrator:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/p7-room-orchestrator/Dockerfile
+    image: ${P7_ROOM_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-p7-room-orchestrator:pmoves-latest}
+    container_name: pmoves-p7-room-orchestrator
+    hostname: p7-room-orchestrator
+    restart: unless-stopped
+    environment:
+    - PORT=8122
+    - PMOVES_ROOT=/app/pmoves
+    - NATS_URL=${NATS_URL}
+    - SUPABASE_URL=${P7_SUPABASE_URL:-http://supabase-kong:8000}
+    - P7_SUPABASE_REST_URL=${P7_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - SUPABASE_SERVICE_ROLE_KEY_FILE=${SUPABASE_SERVICE_ROLE_KEY_FILE:-}
+    - P7_SUPABASE_SCHEMA=${P7_SUPABASE_SCHEMA:-pmoves_core}
+    - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    ports:
+    - ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      supabase-kong:
+        condition: service_healthy
+        # kong is profile-gated (supabase-local); without required:false any
+        # --profile agents invocation fails project-wide as "depends on
+        # undefined service" when the supabase profile isn't active.
+        required: false
+    profiles: ["agents", "orchestration"]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8122/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   deepresearch:
     <<: *tier-agent-hardened-rw
     build:
@@ -3382,7 +3536,7 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
-    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
+    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
       nats:
@@ -3533,6 +3687,12 @@ services:
     - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
     - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
     - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
+    # Kimi Code SUBSCRIPTION key (canonical manifest/tier name, 2026-07-24).
+    # Read by models.chat_kimi_for_coding on api.kimi.com/coding/v1 — the
+    # subscription platform is ISOLATED from pay-per-token api.moonshot.ai,
+    # so this key must NOT be funneled into the legacy Moonshot location
+    # (it 401s there; verified live).
+    - KIMI_CODING_API=${KIMI_CODING_API:-local-disabled}
     - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
     - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
     - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
@@ -3874,7 +4034,7 @@ services:
     build:
       context: .
       dockerfile: services/tokenism-simulator/Dockerfile
-    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-simulator:edge}
     restart: unless-stopped
     <<: *tier-agent-hardened-ro
     environment:
@@ -4762,6 +4922,9 @@ services:
           memory: 256M
 volumes:
   neo4j-data: {}
+  archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
+  archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
+  archon-pg-data: {}       # Archon dedicated Postgres data (pg_notify realtime)
   cipher-data: {}
   qdrant-data: {}
   meilisearch-data: {}
@@ -4780,6 +4943,7 @@ volumes:
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
+  hi-rag-gpu-hf-cache: {}  # HuggingFace model cache for Qwen3-Reranker-4B (persists across restarts)
   comfy-watcher-output: {}
   comfy-watcher-state: {}
   llama-results: {}
