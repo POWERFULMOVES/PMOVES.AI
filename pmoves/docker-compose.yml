@@ -4296,6 +4296,15 @@ services:
     env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
     environment:
     - NODE_ENV=production
+      # Room manifests — the rooms API reads catalog.json + the per-room
+      # manifests from this directory. Without it, the Rooms tab on the
+      # home page renders "Room manifests are not available yet" and
+      # /api/rooms returns 500. PMOVES_ROOM_CONFIG_DIR overrides the
+      # default (cwd/../config/rooms) to a path inside the container
+      # where the rooms data is mounted. The volume below maps the host
+      # pmoves/config/rooms to /app/rooms:ro so the standalone Next.js
+      # build can read the room data.
+    - PMOVES_ROOM_CONFIG_DIR=/app/rooms
       # Supabase
     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
@@ -4333,6 +4342,11 @@ services:
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
     extra_hosts:
     - "host.docker.internal:host-gateway"
+    # Room manifests: the standalone Next.js build can't read host
+    # files by default; mount pmoves/config/rooms read-only at /app/rooms
+    # so the rooms API (/api/rooms) and the home-page Rooms tab work.
+    volumes:
+    - ./config/rooms:/app/rooms:ro
     ports:
     - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
