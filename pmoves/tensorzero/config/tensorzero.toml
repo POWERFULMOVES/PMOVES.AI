@@ -931,11 +931,12 @@ type = "chat_completion"
 model = "llamacpp_rdna4_gemma4_26b_dual"
 weight = 0.0
 
-# Kimi K2.7-code — available through agent_zero but inactive by default
+# Kimi K2.7-code — secondary cloud model for coding tasks
 [functions.agent_zero.variants.hosted_kimi_k2_7]
 type = "chat_completion"
 model = "chat_kimi_k2_7_code"
-weight = 0.0
+weight = 0.4
+temperature = 0.2
 
 [functions.coding_kimi]
 type = "chat"
@@ -1648,10 +1649,10 @@ weight = 0.9
 
 [functions.pmoves_orchestrator_coding.variants.cloud_kimi]
 type = "chat_completion"
-model = "chat_moonshot"
+model = "chat_kimi_k2_7_code"
 temperature = 0.2
-max_tokens = 8192
-weight = 0.0
+max_tokens = 131072
+weight = 0.5
 
 [functions.pmoves_orchestrator_coding.variants.cloud_alibaba]
 type = "chat_completion"
