@@ -23,6 +23,7 @@ the only consumer that mutates state.
 import logging
 import os
 import secrets
+import shutil
 import subprocess
 import uuid
 from datetime import datetime, timezone
@@ -47,6 +48,21 @@ PORT = int(os.environ.get("PINOKIO_BRIDGE_PORT", "8130"))
 HOST = os.environ.get("PINOKIO_BRIDGE_HOST", "127.0.0.1")
 PINOKIO_HOME = Path(os.environ.get("PINOKIO_HOME", DEFAULT_PINOKIO_HOME))
 BRIDGE_TOKEN = os.environ.get("PMOVES_BRIDGE_TOKEN", "")
+
+# The bridge forwards `/v1/apps/{slug}/launch` to the Pinokio launcher
+# (`pterm run ...`) via subprocess. The launcher must be on PATH in the
+# service's runtime environment. We probe at import time so /healthz
+# can report the status and the launch endpoint can fail with a clear
+# 503 (rather than a generic 500 from a Popen FileNotFoundError) when
+# pterm is missing. Common reasons it would be missing: containerized
+# deployment without pterm installed, dev box without Pinokio.
+PTERM_PATH = shutil.which("pterm")
+PTERM_AVAILABLE = PTERM_PATH is not None
+if not PTERM_AVAILABLE:
+    logger.warning(
+        "pterm not found on PATH; /v1/apps/{slug}/launch will return 503 "
+        "until the Pinokio launcher is installed in the service runtime"
+    )
 
 # Slice-3 NATS pipeline integration. When NATS_EVENT_BUS_URL is set
 # (e.g. http://nats_event_bus:8131), a successful app launch fires a
@@ -187,6 +203,8 @@ def create_app(
             "pinokio_version": s.pinokio_version,
             "home": str(s.home),
             "writes_enabled": bool(app.state.bridge_token),
+            "pterm_available": PTERM_AVAILABLE,
+            "pterm_path": PTERM_PATH,
             "last_loaded_at": s.last_loaded_at,
             "uptime_sec": int(
                 (datetime.now(timezone.utc)
@@ -226,7 +244,23 @@ def create_app(
         Calls `pterm run` (or `pterm start`) with the argv. The P8
         launcher handles multiline arguments by routing them to
         PINOKIO_ARG_* env vars automatically.
+
+        Returns 503 with a clear actionable message when pterm is not
+        on PATH (PTERM_AVAILABLE=False at import time). Documented
+        deployment puts pterm on the host; the bridge container must
+        either include pterm in its image or have pterm bind-mounted
+        from the host. The /healthz endpoint surfaces the pterm status.
         """
+        if not PTERM_AVAILABLE:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "pterm not found on PATH in the bridge service runtime. "
+                    "Install the Pinokio launcher (pterm) in the container image, "
+                    "or bind-mount a host pterm binary into the container at /usr/local/bin. "
+                    "See /healthz for the current pterm status."
+                ),
+            )
         state = app.state.pinokio
         meta = state.get_app(slug)
         if meta is None:

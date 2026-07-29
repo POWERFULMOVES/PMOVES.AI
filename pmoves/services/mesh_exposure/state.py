@@ -355,25 +355,39 @@ class ApplyResult:
     """The result of an apply. Each section reports what changed."""
     def __init__(self):
         self.headscale_written: List[Dict[str, Any]] = []
+        self.headscale_removed: List[Dict[str, Any]] = []
         self.cloudflared_written: List[Dict[str, Any]] = []
+        self.cloudflared_removed: List[Dict[str, Any]] = []
         self.dns_written: List[Dict[str, Any]] = []
+        self.dns_removed: List[Dict[str, Any]] = []
         self.errors: List[str] = []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "headscale_written": self.headscale_written,
+            "headscale_removed": self.headscale_removed,
             "cloudflared_written": self.cloudflared_written,
+            "cloudflared_removed": self.cloudflared_removed,
             "dns_written": self.dns_written,
+            "dns_removed": self.dns_removed,
             "errors": self.errors,
         }
 
 
 # These callables do the actual writes. Default no-ops in the service
 # (the writer is the operator's runbook); tests inject mocks that
-# record the writes.
-HeadscaleWriter = Callable[[List[Dict[str, Any]]], None]
-CloudflaredWriter = Callable[[List[Dict[str, Any]]], None]
-DnsWriter = Callable[[List[Dict[str, Any]]], None]
+# record the writes. Each writer receives (added, removed) so a
+# retraction actually removes the live record — the previous contract
+# that only took `added` left stale entries live on retraction.
+HeadscaleWriter = Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], None]
+CloudflaredWriter = Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], None]
+"""Writer for cloudflared tunnel ingress. Receives (added, removed) lists
+so a retraction actually removes the tunnel entry; the previous contract
+that only took `added` left stale entries live on retraction."""
+
+DnsWriter = Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], None]
+"""Writer for DNS records. Receives (added, removed) lists; same
+retraction rationale as CloudflaredWriter."""
 
 
 def apply(
@@ -384,18 +398,21 @@ def apply(
 ) -> ApplyResult:
     result = ApplyResult()
     try:
-        headscale_writer(plan_obj.headscale_added)
+        headscale_writer(plan_obj.headscale_added, plan_obj.headscale_removed)
         result.headscale_written = plan_obj.headscale_added
+        result.headscale_removed = plan_obj.headscale_removed
     except Exception as e:  # noqa: BLE001
         result.errors.append(f"headscale: {e}")
     try:
-        cloudflared_writer(plan_obj.cloudflared_added)
+        cloudflared_writer(plan_obj.cloudflared_added, plan_obj.cloudflared_removed)
         result.cloudflared_written = plan_obj.cloudflared_added
+        result.cloudflared_removed = plan_obj.cloudflared_removed
     except Exception as e:  # noqa: BLE001
         result.errors.append(f"cloudflared: {e}")
     try:
-        dns_writer(plan_obj.dns_added)
+        dns_writer(plan_obj.dns_added, plan_obj.dns_removed)
         result.dns_written = plan_obj.dns_added
+        result.dns_removed = plan_obj.dns_removed
     except Exception as e:  # noqa: BLE001
         result.errors.append(f"dns: {e}")
     return result

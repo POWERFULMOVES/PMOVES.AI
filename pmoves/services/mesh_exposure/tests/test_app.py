@@ -478,9 +478,9 @@ def test_apply_in_apply_writer_mode_records_last_apply(client, monkeypatch) -> N
         headscale_reader=lambda: [],
         cloudflared_reader=lambda: [],
         dns_reader=lambda: [],
-        headscale_writer=lambda rules: written["h"].extend(rules),
-        cloudflared_writer=lambda rules: written["c"].extend(rules),
-        dns_writer=lambda recs: written["d"].extend(recs),
+        headscale_writer=lambda added, removed: written["h"].extend(added),
+        cloudflared_writer=lambda added, removed: written["c"].extend(added),
+        dns_writer=lambda added, removed: written["d"].extend(added),
     )
     # The fixture's app has WRITER_MODE=noop. We need to reload to get
     # the apply mode without monkeypatching the module-level constant.
@@ -494,9 +494,9 @@ def test_apply_in_apply_writer_mode_records_last_apply(client, monkeypatch) -> N
         headscale_reader=lambda: [],
         cloudflared_reader=lambda: [],
         dns_reader=lambda: [],
-        headscale_writer=lambda rules: written["h"].extend(rules),
-        cloudflared_writer=lambda rules: written["c"].extend(rules),
-        dns_writer=lambda recs: written["d"].extend(recs),
+        headscale_writer=lambda added, removed: written["h"].extend(added),
+        cloudflared_writer=lambda added, removed: written["c"].extend(added),
+        dns_writer=lambda added, removed: written["d"].extend(added),
     )
     c = TestClient(a2)
     r = c.post(

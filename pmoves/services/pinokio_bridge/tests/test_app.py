@@ -195,11 +195,13 @@ def test_launch_app_with_token_succeeds(
         headers={"X-PMOVES-Bridge-Token": TEST_TOKEN},
         json={"script": "start.js", "argv_extra": ["--yolo"]},
     )
-    # The launch may fail (no `pterm` in PATH in CI) but the token
-    # check + argv assembly + state mutation should happen first.
-    # A 200 or 500 is both OK for this test — what matters is that
-    # a 401/422/404 is NOT returned.
-    assert r.status_code in (200, 500), r.text
+    # The launch may fail for several reasons depending on the test
+    # environment: 200 (pterm in PATH + Popen succeeded), 500 (Popen
+    # OSError), or 503 (pterm not on PATH — the explicit pre-flight
+    # check added in PR #2283 review-iter). What matters is that
+    # auth + argv assembly + state mutation happen before any launch
+    # attempt: a 401/422/404 is NOT acceptable.
+    assert r.status_code in (200, 500, 503), r.text
 
 
 # ---------------------------------------------------------------------------

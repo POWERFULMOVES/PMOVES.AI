@@ -29,15 +29,21 @@ from typing import Any, Deque, Dict, List, Optional, Set
 logger = logging.getLogger("nats_event_bus.state")
 
 
-# The 5 slice-3 subjects this service knows about by default. New
-# subjects can be added by extending this list — the EventCache and
-# subscriber both iterate it.
+# The 5 slice-3 subjects + 3 slice-6 helpdesk subjects this service
+# knows about by default. New subjects can be added by extending this
+# list — the EventCache and subscriber both iterate it. The
+# EventCache.append() also auto-registers unknown topics at runtime
+# (defense in depth), so this list is the eager-default set rather
+# than a closed allow-list.
 DEFAULT_TOPICS: List[str] = [
     "comfy.collab.prompt.v1",
     "comfy.collab.progress.v1",
     "comfy.collab.artifact.v1",
     "room.presence.v1",
     "room.directory.v1",
+    "helpdesk.intake.opened.v1",
+    "helpdesk.intake.routed.v1",
+    "helpdesk.room.suggested.v1",
 ]
 
 # Convenience aliases used by /v1/snapshot/* and /v1/presence/{room_id}.
