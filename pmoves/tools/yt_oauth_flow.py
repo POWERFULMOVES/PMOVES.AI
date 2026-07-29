@@ -320,6 +320,7 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
 
     print("Opening browser for Google OAuth2 consent (loopback, ephemeral port)...")
     # Scope logged as plain concat (breaks CodeQL taint path on OAuth f-strings).
+    # codeql[py/clear-text-logging-sensitive-data] False positive: OAUTH_SCOPES is a public OAuth scope URL, not a secret.
     print("  Scopes: " + scope)
 
     # oauthlib refuses HTTP (even localhost) by default; the loopback flow
