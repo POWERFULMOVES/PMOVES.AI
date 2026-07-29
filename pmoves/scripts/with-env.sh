@@ -129,6 +129,7 @@ export PMOVES_ENV_LOADER=1
 # Execute any remaining arguments as a command with the loaded environment.
 # This enables the pattern: bash scripts/with-env.sh <command> <args>
 # When sourced (no arguments), the env is simply exported and control returns.
-if [ $# -gt 0 ]; then
+# Only dispatch when executed directly, not when sourced.
+if [ $# -gt 0 ] && [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
   exec "$@"
 fi

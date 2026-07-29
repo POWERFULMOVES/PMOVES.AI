@@ -70,11 +70,12 @@ def get_supabase_records(
         params[k] = v
 
     resp = requests.get(
-        f"{rest_url}/rest/v1/youtube_videos",
+        f"{rest_url}/youtube_videos",
         params=params,
         headers={
             "apikey": service_key,
             "Authorization": f"Bearer {service_key}",
+            "Accept-Profile": "pmoves_core",
         },
         timeout=30,
     )
@@ -86,13 +87,14 @@ def get_supabase_records(
 
 def update_downloaded(rest_url: str, service_key: str, video_id: str, s3_path: str):
     resp = requests.patch(
-        f"{rest_url}/rest/v1/youtube_videos",
+        f"{rest_url}/youtube_videos",
         params={"video_id": f"eq.{video_id}"},
         json={"downloaded": True, "updated_at": "now()"},
         headers={
             "apikey": service_key,
             "Authorization": f"Bearer {service_key}",
             "Content-Type": "application/json",
+            "Content-Profile": "pmoves_core",
             "Prefer": "return=minimal",
         },
         timeout=15,
@@ -190,9 +192,10 @@ def main():
     # --- Credentials ---
     service_key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     rest_url = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_URL", "")
+    # Normalize: strip trailing slash, ensure it ends with /rest/v1
+    rest_url = rest_url.rstrip("/")
     if not rest_url.endswith("/rest/v1"):
-        # SUPABASE_URL might already include /rest/v1
-        pass
+        rest_url = f"{rest_url}/rest/v1"
 
     cookiefile = os.environ.get("YT_COOKIES")
 

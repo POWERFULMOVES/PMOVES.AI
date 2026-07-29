@@ -205,7 +205,12 @@ yt-playlist-crawl: ## Crawl YouTube playlist metadata via Data API: make yt-play
 	@echo "[yt-crawl] Copying crawl script to container..."
 	@docker cp tools/yt_playlist_crawl.py pmoves-pmoves-yt-1:/app/yt_playlist_crawl.py
 	@echo "[yt-crawl] Starting playlist crawl (playlist: $(YT_PLAYLIST_ID), namespace: $(YT_CRAWL_NAMESPACE))..."
-	@docker exec pmoves-pmoves-yt-1 python3 /app/yt_playlist_crawl.py \
+	@docker exec \
+		-e SUPA_REST_URL=$${SUPA_REST_URL:-http://supabase-kong:8000} \
+		-e SUPABASE_SERVICE_ROLE_KEY=$$(grep SUPABASE_SERVICE_ROLE_KEY env.tier-agent 2>/dev/null | cut -d= -f2) \
+		-e GOOGLE_CLIENT_ID=$$(grep CHANNEL_MONITOR_GOOGLE_CLIENT_ID env.tier-agent 2>/dev/null | cut -d= -f2) \
+		-e GOOGLE_CLIENT_SECRET=$$(grep CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET env.tier-agent 2>/dev/null | cut -d= -f2) \
+		pmoves-pmoves-yt-1 python3 /app/yt_playlist_crawl.py \
 		--playlist "$(YT_PLAYLIST_ID)" \
 		--namespace "$(YT_CRAWL_NAMESPACE)"
 
@@ -253,14 +258,18 @@ juicefs-status: ## Show JuiceFS mount status
 
 juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	@echo "Starting JuiceFS mount (local DB)..."
+	$(eval JFS_HOST_HOME := $(HOME))
+	$(eval JFS_MOUNT_POINT := $(JFS_HOST_HOME)/pmoves-fs)
+	@mkdir -p "$(JFS_MOUNT_POINT)"
 	@docker run -d \
 	    --name juicefs-mount \
 	    --restart unless-stopped \
 	    --privileged \
 	    --network host \
 	    --entrypoint sh \
-	    -v $$HOME/.local/share/juicefs-data:/data \
-	    -v $$HOME/pmoves-fs:$$HOME/pmoves-fs:rshared \
+	    -e JFS_MOUNT="$(JFS_MOUNT_POINT)" \
+	    -v $(JFS_HOST_HOME)/.local/share/juicefs-data:/data \
+	    -v $(JFS_MOUNT_POINT):$(JFS_MOUNT_POINT):rshared \
 	    juicedata/mount:ce-v1.3.0 \
-	    -c 'exec juicefs mount --enable-xattr "postgres://supabase_admin:$(SUPABASE_DB_PASSWORD)@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" $$HOME/pmoves-fs' 2>/dev/null || echo "Already running or failed"
+	    -c 'exec juicefs mount --enable-xattr "postgres://supabase_admin:$(SUPABASE_DB_PASSWORD)@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$$JFS_MOUNT"' 2>/dev/null || echo "Already running or failed"
 	@echo "Use 'make juicefs-status' to verify"

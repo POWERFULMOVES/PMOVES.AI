@@ -107,7 +107,7 @@ services:
       - yt-cookies-vol:/app/config/cookies:rw
       - ${JUICEFS_HOST_MOUNT:-/home/pmoves-knuckles/pmoves-fs}:/mnt/pmoves/media:rshared
     environment:
-      - YT_COOKIES=/tmp/yt-cookies/yt-cookies.txt
+      - YT_COOKIES=/app/config/cookies/yt-cookies.txt
       - YT_PO_TOKEN_FILE=/app/config/cookies/yt-po-token.txt
       - JUICEFS_MEDIA_ROOT=/mnt/pmoves/media
     # Load the harvested PO token from the cookie-writer volume before
@@ -117,8 +117,6 @@ services:
     # the active PO token backend.
     command: >-
       sh -c '
-        mkdir -p /tmp/yt-cookies &&
-        cp /app/config/cookies/yt-cookies.txt /tmp/yt-cookies/yt-cookies.txt 2>/dev/null || true &&
         if [ -f /app/config/cookies/yt-po-token.txt ] && [ -s /app/config/cookies/yt-po-token.txt ]; then
           export YT_PO_TOKEN_VALUE="$$(cat /app/config/cookies/yt-po-token.txt)";
           echo "Loaded harvested PO token from cookie-writer volume";

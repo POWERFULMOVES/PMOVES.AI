@@ -209,13 +209,17 @@ def upsert_to_supabase(
     # Batch in groups of 25 to keep payloads reasonable
     for i in range(0, len(records), 25):
         batch = records[i : i + 25]
+        base = rest_url.rstrip("/")
+        if not base.endswith("/rest/v1"):
+            base = f"{base}/rest/v1"
         resp = requests.post(
-            f"{rest_url}/rest/v1/youtube_videos",
+            f"{base}/youtube_videos",
             json=batch,
             headers={
                 "apikey": service_key,
                 "Authorization": f"Bearer {service_key}",
                 "Content-Type": "application/json",
+                "Content-Profile": "pmoves_core",
                 "Prefer": "resolution=merge-duplicates,return=minimal",
             },
             timeout=30,

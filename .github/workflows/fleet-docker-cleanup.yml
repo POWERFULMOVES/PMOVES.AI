@@ -16,7 +16,7 @@ on:
 jobs:
   cleanup:
     name: Docker disk hygiene
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -63,10 +63,18 @@ jobs:
 
       - name: Stale runner workspace cleanup (>3 days)
         run: |
+          # Skip cleanup if any runner jobs are currently in progress.
+          # Check for active runner processes; abort if found.
+          ACTIVE_JOBS=$(pgrep -f 'Runner.Worker' | head -5)
+          if [ -n "$ACTIVE_JOBS" ]; then
+            echo "Active runner jobs detected — skipping workspace cleanup to avoid corrupting live builds."
+            exit 0
+          fi
           for workdir in /tmp/runner/_work /home/*/actions-runner/_work /tmp/runner-kvm/_work; do
             if [ -d "$workdir" ]; then
               echo "Cleaning stale workspaces in $workdir (>3 days)..."
-              find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; 2>/dev/null || true
+              # Only remove top-level repo dirs older than 3 days that have no lock file
+              find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 \! -name '.*' -exec rm -rf {} \; 2>/dev/null || true
             fi
           done
 
