@@ -571,7 +571,9 @@ def write_playlist(name: str, members: list[dict], output_dir: Path):
         f.write(f"# DARKXSIDE Sonic Group: {name}\n")
         f.write(f"# Tracks: {len(members)}\n\n")
         for r in sorted(members, key=lambda x: x["tempo_bpm"]):
-            f.write(f"#EXTINF:{int(r.get('duration_s', -1))},{r['name']}\n{r['file']}\n")
+            duration = int(r.get('duration_s', -1))
+            file_path = str(r['file']).replace('\\', '/')
+            f.write(f"#EXTINF:{duration},{r['name']}\n{file_path}\n")
     return m3u
 
 

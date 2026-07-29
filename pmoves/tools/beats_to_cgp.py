@@ -98,10 +98,10 @@ def track_to_state_vector(rec: dict) -> dict:
     lra       = rec.get("loudness_LRA", 8.0)
     flatness  = rec.get("spectral_flatness", 0.3)
 
-    delta = (bpm - 60) / 120.0               # 0 = Largo, 1 = Presto
-    hz    = min(centroid / 8000.0, 1.0)       # 0 = bass, 1 = airy
-    kappa = -(lra / 20.0)                     # tighter LRA = less curvature
-    A     = 1.0 - min(flatness * 2, 1.0)      # tonal=1.0, noisy=0.0
+    delta = max(0.0, min(1.0, (bpm - 60) / 120.0))  # clamp [0,1]: 0=Largo, 1=Presto
+    hz    = max(0.0, min(1.0, centroid / 8000.0))    # clamp [0,1]: 0=bass, 1=airy
+    kappa = -(lra / 20.0)                             # tighter LRA = less curvature
+    A     = 1.0 - min(flatness * 2, 1.0)              # tonal=1.0, noisy=0.0
 
     return {
         "delta": round(delta, 4),
@@ -716,8 +716,10 @@ def _group_aggregate(members: list[dict]) -> dict:
         if beats:
             all_beats.append(beats)
     if all_beats:
+        intervals = [float(np.mean(np.diff(b))) for b in all_beats if len(b) > 1]
         avg["avg_beat_interval"] = round(
-            float(np.mean([np.mean(np.diff(b)) for b in all_beats if len(b) > 1])), 4)
+            float(np.mean(intervals)) if intervals else
+            60.0 / max(avg["tempo_bpm"], 1), 4)
     else:
         avg["avg_beat_interval"] = round(60.0 / max(avg["tempo_bpm"], 1), 4)
 
@@ -728,11 +730,11 @@ _SURFACE_TEMPLATES = {
     "bass-heavy": '''function surface(input) {{
     const u = (input.u - 0.5) * 2 * Math.PI;
     const v = (input.v - 0.5) * 2 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
-    const hz = input.hz || {hz};
-    const fitness = input.fitness || {fitness};
-    const t = input.t || 0;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz ?? {hz};
+    const fitness = input.fitness ?? {fitness};
+    const t = input.t ?? 0;
     const lobes = {lobes};
     const r_base = 2.5 + fitness * 1.5;
     const warp = Math.abs(kappa) * 10;
@@ -752,11 +754,11 @@ _SURFACE_TEMPLATES = {
     "warm": '''function surface(input) {{
     const u = input.u * 2 * Math.PI;
     const v = input.v * 4 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
-    const hz = input.hz || {hz};
-    const fitness = input.fitness || {fitness};
-    const t = input.t || 0;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz ?? {hz};
+    const fitness = input.fitness ?? {fitness};
+    const t = input.t ?? 0;
     const turns = {lobes};
     const r_base = 0.5 + (u / (2 * Math.PI)) * (3 + fitness * 2);
     const spiral = delta * 0.8;
@@ -775,11 +777,11 @@ _SURFACE_TEMPLATES = {
     "balanced": '''function surface(input) {{
     const u = (input.u - 0.5) * 2 * Math.PI;
     const v = (input.v - 0.5) * 2 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
-    const hz = input.hz || {hz};
-    const fitness = input.fitness || {fitness};
-    const t = input.t || 0;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz ?? {hz};
+    const fitness = input.fitness ?? {fitness};
+    const t = input.t ?? 0;
     const r_base = 3 + fitness * 2;
     const warp = kappa * 8;
     const orbit = delta * 2;
@@ -798,11 +800,11 @@ _SURFACE_TEMPLATES = {
     "electric": '''function surface(input) {{
     const u = (input.u - 0.5) * 2 * Math.PI;
     const v = (input.v - 0.5) * 2 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
-    const hz = input.hz || {hz};
-    const fitness = input.fitness || {fitness};
-    const t = input.t || 0;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz ?? {hz};
+    const fitness = input.fitness ?? {fitness};
+    const t = input.t ?? 0;
     const p = {lobes};
     const q = p + 2;
     const orbit = delta * 1.5;
@@ -826,11 +828,11 @@ _SURFACE_TEMPLATES = {
     "airy": '''function surface(input) {{
     const u = (input.u - 0.5) * Math.PI;
     const v = (input.v - 0.5) * 2 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
-    const hz = input.hz || {hz};
-    const fitness = input.fitness || {fitness};
-    const t = input.t || 0;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz ?? {hz};
+    const fitness = input.fitness ?? {fitness};
+    const t = input.t ?? 0;
     const harmonics = {lobes};
     const r = 3.5 + fitness * 1.5;
     const theta = u + Math.sin(t * delta) * 0.3;
@@ -852,11 +854,11 @@ _SURFACE_TEMPLATES = {
     "fluid": '''function surface(input) {{
     const u = (input.u - 0.5) * 4 * Math.PI;
     const v = (input.v - 0.5) * 4 * Math.PI;
-    const delta = input.delta || {delta};
-    const kappa = input.kappa || {kappa};
-    const hz = input.hz || {hz};
-    const fitness = input.fitness || {fitness};
-    const t = input.t || 0;
+    const delta = input.delta ?? {delta};
+    const kappa = input.kappa ?? {kappa};
+    const hz = input.hz ?? {hz};
+    const fitness = input.fitness ?? {fitness};
+    const t = input.t ?? 0;
     const sym = {symmetry};
     const orbit = delta * 2;
     const r_base = 2 + fitness * 2;

@@ -190,6 +190,7 @@ for (let i=0; i<FFT_BARS; i++) {
 let fftData = new Float32Array(FFT_BARS);
 let meydaAnalyzer = null;
 let audioCtx = null;
+let mediaSource = null;
 
 function resize(){ const r=canvas.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2); W=r.width; Hh=r.height;
   canvas.width=Math.round(W*DPR); canvas.height=Math.round(Hh*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
@@ -197,7 +198,7 @@ const X=(s)=>s.nx*W, Y=(s)=>s.ny*Hh;
 
 async function playTrack(star) {
   if (!star.audio_url) { console.warn("No audio_url for", star.name); return; }
-  // Stop current
+  // Stop current analyzer
   if (meydaAnalyzer) { try { meydaAnalyzer.stop(); } catch(e){} meydaAnalyzer = null; }
   player.pause();
   player.src = star.audio_url;
@@ -208,42 +209,39 @@ async function playTrack(star) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    // Disconnect previous source if any
-    let src;
-    try {
-      src = audioCtx.createMediaElementSource(player);
-    } catch(e) {
-      // Already connected — reuse
-      return;
+    // Reuse the MediaElementSource across tracks (can only create one per element)
+    if (!mediaSource) {
+      mediaSource = audioCtx.createMediaElementSource(player);
     }
-    src.connect(audioCtx.destination);
+    mediaSource.connect(audioCtx.destination);
     meydaAnalyzer = Meyda.createMeydaAnalyzer({
       audioContext: audioCtx,
-      source: src,
+      source: mediaSource,
       bufferSize: 512,
-      featureExtractors: ["spectralCentroid", "spectralFlatness", "rms", "spectralRolloff"],
+      featureExtractors: ["amplitudeSpectrum"],
       callback: (features) => {
-        if (!features) return;
-        // Approximate frequency bars from spectral features
-        const centroid = features.spectralCentroid || 0;
-        const flatness = features.spectralFlatness || 0;
-        const rms = features.rms || 0;
-        const rolloff = features.spectralRolloff || 0;
-        // Map centroid to a distribution of bar heights
-        const peakBar = Math.round((centroid / 22050) * FFT_BARS);
-        const spread = Math.max(3, Math.round(flatness * FFT_BARS * 0.5));
+        if (!features || !features.amplitudeSpectrum) return;
+        const spectrum = features.amplitudeSpectrum;
+        // Map raw spectrum bins to our FFT_BARS display bars
+        const binSize = Math.floor(spectrum.length / FFT_BARS);
         for (let i=0; i<FFT_BARS; i++) {
-          const dist = Math.abs(i - peakBar);
-          const target = Math.max(0, rms * 100 * Math.exp(-dist*dist / (2*spread*spread)));
-          fftData[i] = fftData[i] * 0.7 + target * 0.3;
+          let sum = 0;
+          for (let j=0; j<binSize; j++) {
+            sum += spectrum[i * binSize + j] || 0;
+          }
+          const target = sum / binSize;
+          fftData[i] = fftData[i] * 0.6 + target * 0.4;
         }
         // Update overlay
         for (let i=0; i<FFT_BARS; i++) {
-          fftBars[i].style.height = `${Math.min(100, fftData[i] * 200)}%`;
+          fftBars[i].style.height = `${Math.min(100, fftData[i] * 300)}%`;
         }
         fftOverlay.classList.add("on");
         nowPlaying.classList.add("on");
-        npText.textContent = `${star.name} · ${Math.round(centroid)}Hz · ${features.rms?features.rms.toFixed(3):0} RMS`;
+        const rms = fftData.reduce((s,v)=>s+v,0) / FFT_BARS;
+        const centroidBin = fftData.indexOf(Math.max(...fftData));
+        const centroidHz = Math.round(centroidBin * 22050 / (FFT_BARS * 2));
+        npText.textContent = `${star.name} · ${centroidHz}Hz · RMS ${rms.toFixed(3)}`;
       },
     });
     meydaAnalyzer.start();
