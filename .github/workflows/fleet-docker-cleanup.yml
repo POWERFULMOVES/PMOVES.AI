@@ -1,0 +1,77 @@
+name: Fleet Docker Cleanup
+
+on:
+  schedule:
+    # Every Sunday 03:00 UTC (low-traffic window)
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      aggressive:
+        description: 'Aggressive mode (remove ALL unused images, not just >72h)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+
+jobs:
+  cleanup:
+    name: Docker disk hygiene
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: ai-lab
+            runner_label: pmoves-b850-runner-1
+          - host: vps
+            runner_label: pmoves-kvm4-2
+
+    steps:
+      - name: Pre-cleanup disk status
+        run: |
+          echo "=== $(hostname) BEFORE ==="
+          df -h /
+          docker system df
+
+      - name: Safe Docker cleanup (images + build cache, NEVER volumes)
+        run: |
+          # Phase 1: Stopped containers
+          docker container prune -f || true
+
+          # Phase 2: Build cache (biggest reclaim — the 148GB BuildKit state issue)
+          docker builder prune -af || true
+
+          # Phase 3: Unused images
+          if [ "${{ github.event.inputs.aggressive }}" = "true" ]; then
+            echo "AGGRESSIVE: removing ALL unused images"
+            docker image prune -a -f || true
+          else
+            echo "SAFE: removing images older than 72h"
+            docker image prune -a -f --filter "until=72h" || true
+          fi
+
+          # Phase 4: Dangling images (always)
+          docker image prune -f || true
+
+          # Phase 5: Swept /tmp scratch (stereoscope, SBOM, etc.)
+          find /tmp -maxdepth 1 -name 'stereoscope-*' -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          find /tmp -maxdepth 1 -name 'sbom-*' -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+
+          # NEVER run 'docker volume prune' — fleet data volumes are co-hosted.
+          # Use 'make -C pmoves volume-reset SERVICE=<name>' for targeted resets.
+
+      - name: Stale runner workspace cleanup (>3 days)
+        run: |
+          for workdir in /tmp/runner/_work /home/*/actions-runner/_work /tmp/runner-kvm/_work; do
+            if [ -d "$workdir" ]; then
+              echo "Cleaning stale workspaces in $workdir (>3 days)..."
+              find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; 2>/dev/null || true
+            fi
+          done
+
+      - name: Post-cleanup disk status
+        run: |
+          echo "=== $(hostname) AFTER ==="
+          df -h /
+          docker system df
