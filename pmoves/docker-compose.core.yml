@@ -430,7 +430,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
     - PMOVES_NETWORKS=pmoves_api,pmoves_public
-    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong
+    entrypoint: ["/bin/bash", "-c", "for i in $$(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($$i/30)...\"; sleep 2; done; kong
         migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
