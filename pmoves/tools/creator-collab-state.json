@@ -141,6 +141,21 @@
       "depends_on": [
         "all_above"
       ]
+    },
+    "7_prep_infra_fixes": {
+      "status": "SHIPPED",
+      "shipped_at": "2026-07-29T07:00:00Z",
+      "title": "Real-infra fixups unblocking the lane PR + slice 7 Fordham E2E: catalog em-dash parity + pmoves-ui rooms mount",
+      "branch": "slice-7-prep-infra-fixes",
+      "base": "feat/creator-collab-lane @ 445ebb34e5 (post slice 5 redo)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "194d6745fe"
+      ],
+      "scope": "pmoves/config/rooms/catalog.json (1 line: persona.room.livingdoc display_name `-` -> em-dash `—` to match the manifest) + pmoves/docker-compose.yml (pmoves-ui service: PMOVES_ROOM_CONFIG_DIR=/app/rooms env + ./config/rooms:/app/rooms:ro volume, +14 lines). 2 files, 15 insertions(+), 1 deletion(-).",
+      "tests": "validate_room_manifests.py 12/12 OK (was 11/12 with the catalog parity failure). pmoves-ui container pmoves-pmoves-ui-1 verified on :4482 with rooms volume mounted; /api/health returns 200, /api/rooms returns 200 with all 12 rooms. env.shared HOSTNAME=8e7b7f2fa242 fix is local-only (gitignored; not part of this commit).",
+      "operator_signoff": "'yes lets commit and lets see if ui is ready after pr and everything from previous 6 slices landed' — operator wants the lane PR-ready and pmoves-ui verified before slice 7's integrated runtime demo. Catalog em-dash unblocked slice 5 evidence (creator-collab territory); docker-compose rooms mount is generic infra but bundled in the same commit because both fixes were discovered on the same live-runtime pass. PMOVES_ROOM_CONFIG_DIR + config/rooms volume mount is now the standard recipe for any Next.js / standalone-build service that needs to read pmoves config data.",
+      "depends_on": []
     }
   },
   "reviews": {
@@ -285,10 +300,10 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-28T22:30:00Z",
-    "next_run": "2026-07-28T23:00:00Z",
+    "last_run": "2026-07-29T07:00:00Z",
+    "next_run": "2026-07-29T07:30:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
     "disarmed_reason": "review-iter-poll cycle 2 closed >30m ago, no new threads, lane review activity settled",
-    "note": "slice 5 SHIPPED on slice-5-creator-studio-e2e-smoke branch (1 commit: a7e9e9f4de functional dashboard renderer + 7 playwright screenshots + README + spec doc); pending --no-ff merge into feat/creator-collab-lane. Slice 7 (Fordham E2E) is the only remaining slice; it's the integrated runtime demo. ship_count advanced 5 -> 6. Visual evidence at pmoves/docs/evidence/creator-collab-2026-07-28/ (index.html + 7 PNGs) — contract-level snapshot of the lane's state after slices 1+2+3+4+6 SHIPPED, per operator's Option A signoff (render_dashboard.py + capture_screenshots.py, stdlib + pyyaml + Playwright headless at 1440x900 viewport). The full runtime E2E remains slice 7's job."
+    "note": "slice 5 SHIPPED on slice-5-creator-studio-e2e-smoke branch (1 commit: a7e9e9f4de functional dashboard renderer + 7 playwright screenshots + README + spec doc); pending --no-ff merge into feat/creator-collab-lane. Slice 7 (Fordham E2E) is the only remaining slice; it's the integrated runtime demo. ship_count advanced 5 -> 6. Visual evidence at pmoves/docs/evidence/creator-collab-2026-07-28/ (index.html + 7 PNGs) — contract-level snapshot of the lane's state after slices 1+2+3+4+6 SHIPPED, per operator's Option A signoff (render_dashboard.py + capture_screenshots.py, stdlib + pyyaml + Playwright headless at 1440x900 viewport). The full runtime E2E remains slice 7's job. 2026-07-29 update: slice 7 prep (real-infra fixups) SHIPPED on slice-7-prep-infra-fixes (1 P1 commit: 194d6745fe) — catalog em-dash parity + pmoves-ui rooms mount. validate_room_manifests.py now 12/12 OK (was 11/12). pmoves-ui on :4482 verified with rooms volume mounted. Lane is now PR-ready (26 commits ahead of origin/main). Slice 7 (Fordham E2E) is the only remaining numbered slice; cron continues to tick every 30m awaiting operator direction on slice 7 scope + go-live."
   }
 }
