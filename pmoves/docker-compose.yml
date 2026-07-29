@@ -2962,8 +2962,8 @@ services:
     environment:
     - PORT=8096
     - NATS_URL=${NATS_URL}
-    - HF_HOME=${HF_HOME:-/models}
-    - HF_HUB_CACHE=${HF_HUB_CACHE:-/models/hub}
+    - HF_HOME=/models
+    - HF_HUB_CACHE=/models/hub
     - HF_HUB_ENABLE_HF_TRANSFER=${HF_HUB_ENABLE_HF_TRANSFER:-1}
     - HF_TOKEN=${HF_TOKEN:-}
     - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}
@@ -2978,7 +2978,7 @@ services:
     profiles: ["agents", "research"]
     networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
     volumes:
-    - ${HF_HOME:-./data/models}:/models
+    - ${HF_MODELS_HOST_PATH:-./data/models}:/models
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8096/healthz"]
       interval: 30s
