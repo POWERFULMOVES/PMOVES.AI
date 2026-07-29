@@ -9,12 +9,14 @@
     --ground:#070912; --surface:#0c1120; --panel:#0e1526; --ink:#eaeefb; --ink-dim:#99a3bd;
     --ink-mute:#5f6b88; --hairline:#1b2540; --hover:#ffffff;
     --allegro-bright:#c98500; --moderato-bright:#3987e5; --allegro-deep:#d55181; --star-glow:0.9;
+    --live-bar:#c98500; --live-glow:0.95;
   }
   @media (prefers-color-scheme: light) {
     :root {
       --ground:#eef1f8; --surface:#ffffff; --panel:#f7f9fe; --ink:#0c1122; --ink-dim:#55607a;
       --ink-mute:#8b94ab; --hairline:#dde3f0; --hover:#0c1122;
       --allegro-bright:#b57500; --moderato-bright:#2a78d6; --allegro-deep:#c53c74; --star-glow:0.55;
+      --live-bar:#b57500; --live-glow:0.7;
     }
   }
   * { box-sizing: border-box; }
@@ -69,45 +71,87 @@
   .ro-field { color: var(--ink-dim); white-space: nowrap; }
   .ro-field b { color: var(--ink); font-weight: 600; }
   .ro-chip { color: var(--ground); background: var(--focus-col, var(--ink)); border-radius: 5px; padding: 1px 7px; font-size: 10.5px; font-weight: 600; }
+  .ro-play { color: var(--focus-col, var(--moderato-bright)); font-size: 11px; cursor: pointer; text-decoration: underline; }
 
   .tip {
     position: fixed; pointer-events: none; z-index: 40; opacity: 0; transform: translateY(4px);
     transition: opacity .12s; background: var(--panel); border: 1px solid var(--hairline);
     border-radius: 9px; padding: 7px 10px; font-family: ui-monospace, Menlo, Consolas, monospace;
-    font-size: 12px; max-width: 230px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    font-size: 12px; max-width: 260px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
   }
   .tip.on { opacity: 1; transform: translateY(0); }
   .tip .t-name { font-family: system-ui, sans-serif; font-weight: 600; color: var(--ink); font-size: 13px; display:block; margin-bottom: 3px; }
   .tip .t-row { color: var(--ink-dim); }
   .tip .t-row b { color: var(--ink); }
+  .tip .t-play { display:block; margin-top:4px; color: var(--moderato-bright); font-size:11px; }
+
+  /* Live FFT spectrum bar overlay */
+  .fft-overlay {
+    position: absolute; bottom: 60px; left: 12px; right: 12px; height: 36px;
+    display: flex; align-items: flex-end; gap: 1px; pointer-events: none;
+    opacity: 0; transition: opacity .3s;
+  }
+  .fft-overlay.on { opacity: 0.7; }
+  .fft-bar { flex: 1; background: var(--live-bar); border-radius: 1px; min-height: 1px; box-shadow: 0 0 4px var(--live-glow); }
+
+  .now-playing {
+    position: absolute; top: 70px; right: 14px;
+    background: color-mix(in oklab, var(--panel) 85%, transparent);
+    border: 1px solid var(--hairline); border-radius: 8px; padding: 6px 10px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+    display: none; align-items: center; gap: 8px;
+  }
+  .now-playing.on { display: flex; }
+  .now-playing .np-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--allegro-deep); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
   @media (max-width: 560px) { .legend { display: none; } .title { left: 12px; right: auto; text-align: left; } }
 </style>
 </head>
 <body>
   <div class="stage">
-    <canvas id="sky" aria-label="Star chart of 82 DARKXSIDE tracks positioned by tempo, grouped into constellations"></canvas>
+    <canvas id="sky" aria-label="Star chart of DARKXSIDE tracks positioned by tempo, grouped into constellations"></canvas>
     <div class="title">
       <div class="k">DARKXSIDE · beats-to-cgp</div>
       <div class="n">Catalog Star-Chart</div>
-      <div class="s">82 tracks · 8 constellations · x = tempo</div>
+      <div class="s" id="subtitle">Loading...</div>
     </div>
+    <div class="now-playing" id="nowPlaying"><span class="np-dot"></span><span id="npText"></span></div>
     <div class="legend" id="legend"><div class="lg-title">Families</div></div>
-    <div class="readout" id="readout"><span class="ro-hint">Hover a star — tempo, family, CGP state vector.</span></div>
+    <div class="fft-overlay" id="fftOverlay"></div>
+    <div class="readout" id="readout"><span class="ro-hint">Hover a star - tempo, family, key. Click to play.</span></div>
   </div>
+  <audio id="player" crossorigin="anonymous"></audio>
   <div class="tip" id="tip"></div>
 
 <script type="module">
-const TRACKS = [{"name":"Absynth Club mix","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":122.2,"delta":0.518,"hz":0.2,"A":0.5},{"name":"Arcade Low - 2","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":121.4,"delta":0.512,"hz":0.2,"A":0.5},{"name":"Ask Me","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":121.6,"delta":0.513,"hz":0.2,"A":0.5},{"name":"Ask You","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":121.6,"delta":0.513,"hz":0.2,"A":0.5},{"name":"CLANK","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":121.8,"delta":0.515,"hz":0.2,"A":0.5},{"name":"FIRST BOSS","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":120.2,"delta":0.502,"hz":0.2,"A":0.5},{"name":"Guitary Dwstro 3busy 4","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":119.2,"delta":0.493,"hz":0.2,"A":0.5},{"name":"Lira 9","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":121.2,"delta":0.51,"hz":0.2,"A":0.5},{"name":"Looops 6long","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":123.2,"delta":0.527,"hz":0.2,"A":0.5},{"name":"MATTER COMMANDER","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":122.2,"delta":0.518,"hz":0.2,"A":0.5},{"name":"Piano Wax 76 Bpm dnb Dark","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":120.6,"delta":0.505,"hz":0.2,"A":0.5},{"name":"Rak no# 10 mix issue no# 4","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":121.8,"delta":0.515,"hz":0.2,"A":0.5},{"name":"RAKS LIT","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":122.0,"delta":0.517,"hz":0.2,"A":0.5},{"name":"Ree 3b 25","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":119.6,"delta":0.497,"hz":0.2,"A":0.5},{"name":"Reminiscence","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":123.0,"delta":0.525,"hz":0.2,"A":0.5},{"name":"SCARD","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":120.2,"delta":0.502,"hz":0.2,"A":0.5},{"name":"Strange Love","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":121.2,"delta":0.51,"hz":0.2,"A":0.5},{"name":"TALK SLOW","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":121.4,"delta":0.512,"hz":0.2,"A":0.5},{"name":"The Setup Just Leave Me Alone ⧸ Don't Leave Me Alone","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":123.0,"delta":0.525,"hz":0.2,"A":0.5},{"name":"THEY'LL KILL YOU (OOMPA LOOMPA mix)","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":122.0,"delta":0.517,"hz":0.2,"A":0.5},{"name":"WEIRD v1","group":"Allegro_balanced_Bright_c1","family":"Allegro-Bright","bpm":120.2,"delta":0.502,"hz":0.2,"A":0.5},{"name":"14 Track 14","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":119.0,"delta":0.492,"hz":0.2,"A":0.5},{"name":"808 SIGNS","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":119.8,"delta":0.498,"hz":0.2,"A":0.5},{"name":"BoomBap Low Long","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":119.2,"delta":0.493,"hz":0.2,"A":0.5},{"name":"Crush no # 71","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":120.4,"delta":0.503,"hz":0.2,"A":0.5},{"name":"Darque 8","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":118.4,"delta":0.487,"hz":0.2,"A":0.5},{"name":"Final Chrono 3","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":118.6,"delta":0.488,"hz":0.2,"A":0.5},{"name":"Final Chrono Dark Rev A","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":119.4,"delta":0.495,"hz":0.2,"A":0.5},{"name":"FLATTERY 4","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":120.4,"delta":0.503,"hz":0.2,"A":0.5},{"name":"Happy Practice","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":119.8,"delta":0.498,"hz":0.2,"A":0.5},{"name":"Harbinger","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":119.2,"delta":0.493,"hz":0.2,"A":0.5},{"name":"Lost Tapes A Side B Side - 1","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":116.2,"delta":0.468,"hz":0.2,"A":0.5},{"name":"RAKS SLOW","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":120.6,"delta":0.505,"hz":0.2,"A":0.5},{"name":"Starscreams and Loud Scars","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":120.8,"delta":0.507,"hz":0.2,"A":0.5},{"name":"Storms","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":119.6,"delta":0.497,"hz":0.2,"A":0.5},{"name":"The Calm Storm","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":120.2,"delta":0.502,"hz":0.2,"A":0.5},{"name":"The Harbringer","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":119.2,"delta":0.493,"hz":0.2,"A":0.5},{"name":"When","group":"Allegro_balanced_Bright_c5","family":"Allegro-Bright","bpm":118.8,"delta":0.49,"hz":0.2,"A":0.5},{"name":"Frayed","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":116.8,"delta":0.473,"hz":0.2,"A":0.5},{"name":"Gone till remember","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":119.8,"delta":0.498,"hz":0.2,"A":0.5},{"name":"Johnny 5","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":122.8,"delta":0.523,"hz":0.2,"A":0.5},{"name":"Life Ex Machina","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":120.4,"delta":0.503,"hz":0.2,"A":0.5},{"name":"LITTY","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":121.2,"delta":0.51,"hz":0.2,"A":0.5},{"name":"Mood no# 3","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":121.2,"delta":0.51,"hz":0.2,"A":0.5},{"name":"NICE BABY","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":121.2,"delta":0.51,"hz":0.2,"A":0.5},{"name":"Shaelamix1loudLONG 183bpm","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":119.6,"delta":0.497,"hz":0.2,"A":0.5},{"name":"Sketch 5 116.44 LOUD","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":119.8,"delta":0.498,"hz":0.2,"A":0.5},{"name":"Sketchy tech 11","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":119.2,"delta":0.493,"hz":0.2,"A":0.5},{"name":"Street Fighter Lower","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":121.2,"delta":0.51,"hz":0.2,"A":0.5},{"name":"the empath","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":119.8,"delta":0.498,"hz":0.2,"A":0.5},{"name":"the legend of Rattlesnake Jake","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":120.4,"delta":0.503,"hz":0.2,"A":0.5},{"name":"THE SMALLEST VIOLINS","group":"Allegro_balanced_Bright_c6","family":"Allegro-Bright","bpm":121.6,"delta":0.513,"hz":0.2,"A":0.5},{"name":"808 Low","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":121.6,"delta":0.513,"hz":0.2,"A":0.5},{"name":"Aquary 4","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":120.0,"delta":0.5,"hz":0.2,"A":0.5},{"name":"Asylum 2 nice","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":121.0,"delta":0.508,"hz":0.2,"A":0.5},{"name":"BOLLYWOOD MADNESS","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":120.8,"delta":0.507,"hz":0.2,"A":0.5},{"name":"Jazz2loud","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":122.2,"delta":0.518,"hz":0.2,"A":0.5},{"name":"Piano Wax Loud","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":122.2,"delta":0.518,"hz":0.2,"A":0.5},{"name":"Shrooms 9 Low slow change","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":123.2,"delta":0.527,"hz":0.2,"A":0.5},{"name":"STARBLAST","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":123.0,"delta":0.525,"hz":0.2,"A":0.5},{"name":"WACK","group":"Allegro_balanced_Bright_c0","family":"Allegro-Bright","bpm":122.4,"delta":0.52,"hz":0.2,"A":0.5},{"name":"Hip Hops n Star Snaps","group":"Allegro_balanced_Bright_c4","family":"Allegro-Bright","bpm":115.6,"delta":0.463,"hz":0.2,"A":0.5},{"name":"inquiringcuriousmind","group":"Allegro_balanced_Bright_c4","family":"Allegro-Bright","bpm":116.0,"delta":0.467,"hz":0.2,"A":0.5},{"name":"Krukky 18drums 6frek 4premaster 4b","group":"Allegro_balanced_Bright_c4","family":"Allegro-Bright","bpm":114.6,"delta":0.455,"hz":0.2,"A":0.5},{"name":"Like you a lot","group":"Allegro_balanced_Bright_c4","family":"Allegro-Bright","bpm":115.8,"delta":0.465,"hz":0.2,"A":0.5},{"name":"Rav Low","group":"Allegro_balanced_Bright_c4","family":"Allegro-Bright","bpm":116.4,"delta":0.47,"hz":0.2,"A":0.5},{"name":"Sketch 8 B Loud Dark","group":"Allegro_balanced_Bright_c4","family":"Allegro-Bright","bpm":117.4,"delta":0.478,"hz":0.2,"A":0.5},{"name":"SOUL MOVES","group":"Allegro_balanced_Bright_c4","family":"Allegro-Bright","bpm":118.2,"delta":0.485,"hz":0.2,"A":0.5},{"name":"Strange things","group":"Allegro_balanced_Bright_c4","family":"Allegro-Bright","bpm":116.8,"delta":0.473,"hz":0.2,"A":0.5},{"name":"Aquary Rnb","group":"Moderato_balanced_Bright_c2","family":"Moderato-Bright","bpm":104.0,"delta":0.367,"hz":0.2,"A":0.5},{"name":"Ice Cream 3 In 1","group":"Moderato_balanced_Bright_c2","family":"Moderato-Bright","bpm":107.0,"delta":0.392,"hz":0.2,"A":0.5},{"name":"IMCRAZY","group":"Moderato_balanced_Bright_c2","family":"Moderato-Bright","bpm":104.0,"delta":0.367,"hz":0.2,"A":0.5},{"name":"SIRIUSSADHAPPYMIX","group":"Moderato_balanced_Bright_c2","family":"Moderato-Bright","bpm":104.0,"delta":0.367,"hz":0.2,"A":0.5},{"name":"Star Dreams ⧸ Wild Far","group":"Moderato_balanced_Bright_c2","family":"Moderato-Bright","bpm":104.0,"delta":0.367,"hz":0.2,"A":0.5},{"name":"Whosupnext - 01","group":"Moderato_balanced_Bright_c2","family":"Moderato-Bright","bpm":105.8,"delta":0.382,"hz":0.2,"A":0.5},{"name":"ARCANE NIGHT","group":"Moderato_balanced_Bright_c7","family":"Moderato-Bright","bpm":112.6,"delta":0.438,"hz":0.2,"A":0.5},{"name":"HERE","group":"Moderato_balanced_Bright_c7","family":"Moderato-Bright","bpm":108.2,"delta":0.402,"hz":0.2,"A":0.5},{"name":"Lately","group":"Moderato_balanced_Bright_c7","family":"Moderato-Bright","bpm":112.6,"delta":0.438,"hz":0.2,"A":0.5},{"name":"MULTI BIT DARK","group":"Moderato_balanced_Bright_c7","family":"Moderato-Bright","bpm":111.8,"delta":0.432,"hz":0.2,"A":0.5},{"name":"MULTIBIT","group":"Moderato_balanced_Bright_c7","family":"Moderato-Bright","bpm":112.2,"delta":0.435,"hz":0.2,"A":0.5},{"name":"Shae lullaby","group":"Moderato_balanced_Bright_c7","family":"Moderato-Bright","bpm":110.0,"delta":0.417,"hz":0.2,"A":0.5},{"name":"THE ALIEN IN THE WINDOW","group":"Allegro_balanced_Deep_c3","family":"Allegro-Deep","bpm":119.4,"delta":0.495,"hz":0.2,"A":0.5}];
-const FAMILIES = [
-  { id:"Allegro-Bright",  label:"Allegro · Bright",  varname:"--allegro-bright" },
-  { id:"Moderato-Bright", label:"Moderato · Bright", varname:"--moderato-bright" },
-  { id:"Allegro-Deep",    label:"Allegro · Deep",    varname:"--allegro-deep" },
+import Meyda from 'https://esm.sh/meyda@0.7.3';
+
+let TRACKS = [];
+try {
+  const resp = await fetch('tracks.json');
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  TRACKS = await resp.json();
+} catch (e) {
+  console.error('Failed to load tracks.json:', e);
+  document.getElementById('readout').innerHTML =
+    '<span class="ro-hint">No track data. Run: beats_to_cgp.py export-hyperdim</span>';
+}
+
+if (TRACKS.length === 0) throw new Error('No track data loaded');
+
+const FAMILY_COLORS = [
+  {varname:"--allegro-bright"}, {varname:"--moderato-bright"}, {varname:"--allegro-deep"},
+  {varname:"--star-glow"},
 ];
+const FAMILIES = [...new Set(TRACKS.map(t=>t.family))].map((fid,i) => ({
+  id: fid, label: fid.replace(/-/g,' · '), varname: FAMILY_COLORS[i % FAMILY_COLORS.length].varname,
+}));
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const famColor = (fid) => css(FAMILIES.find(f => f.id === fid).varname);
+const famColor = (fid) => { const f=FAMILIES.find(f=>f.id===fid); return f?css(f.varname):css("--star-glow"); };
 function h01(str, salt){ let h=2166136261^salt; for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);} h=(h>>>0); return (h%100000)/100000; }
-const BPM_MIN=100, BPM_MAX=126;
+const bpms=TRACKS.map(t=>t.bpm);
+const BPM_MIN=Math.floor(Math.min(...bpms)-2), BPM_MAX=Math.ceil(Math.max(...bpms)+2);
 const bpmToNx=(b)=>0.075+0.85*(b-BPM_MIN)/(BPM_MAX-BPM_MIN);
 const GROUP_ORDER=[...new Set(TRACKS.map(t=>t.group))];
 const gm={};
@@ -121,44 +165,145 @@ GROUP_ORDER.forEach(g=>{ const gs=stars.filter(s=>s.group===g);
   gs.forEach(s=>{ gs.filter(o=>o!==s).map(o=>({o,d:(o.nx-s.nx)**2+(o.ny-s.ny)**2})).sort((a,b)=>a.d-b.d).slice(0,2)
     .forEach(({o})=>{ if(!edges.some(e=>e.a===o&&e.b===s)) edges.push({a:s,b:o,group:g}); }); }); });
 
+document.getElementById('subtitle').textContent =
+  `${TRACKS.length} tracks · ${GROUP_ORDER.length} constellations · click to play`;
+
 const canvas=document.getElementById("sky"), ctx=canvas.getContext("2d");
 const tip=document.getElementById("tip"), readout=document.getElementById("readout");
+const fftOverlay=document.getElementById("fftOverlay");
+const nowPlaying=document.getElementById("nowPlaying");
+const npText=document.getElementById("npText");
+const player=document.getElementById("player");
 let W=0,Hh=0,DPR=1,hovered=null; const disabled=new Set();
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc=(s)=>s.replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+// Build FFT overlay bars
+const FFT_BARS = 64;
+const fftBars = [];
+for (let i=0; i<FFT_BARS; i++) {
+  const bar = document.createElement("div");
+  bar.className = "fft-bar";
+  fftOverlay.appendChild(bar);
+  fftBars.push(bar);
+}
+let fftData = new Float32Array(FFT_BARS);
+let meydaAnalyzer = null;
+let audioCtx = null;
+
 function resize(){ const r=canvas.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2); W=r.width; Hh=r.height;
   canvas.width=Math.round(W*DPR); canvas.height=Math.round(Hh*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
 const X=(s)=>s.nx*W, Y=(s)=>s.ny*Hh;
+
+async function playTrack(star) {
+  if (!star.audio_url) { console.warn("No audio_url for", star.name); return; }
+  // Stop current
+  if (meydaAnalyzer) { try { meydaAnalyzer.stop(); } catch(e){} meydaAnalyzer = null; }
+  player.pause();
+  player.src = star.audio_url;
+  try {
+    await player.play();
+    // Set up Web Audio + Meyda
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    // Disconnect previous source if any
+    let src;
+    try {
+      src = audioCtx.createMediaElementSource(player);
+    } catch(e) {
+      // Already connected — reuse
+      return;
+    }
+    src.connect(audioCtx.destination);
+    meydaAnalyzer = Meyda.createMeydaAnalyzer({
+      audioContext: audioCtx,
+      source: src,
+      bufferSize: 512,
+      featureExtractors: ["spectralCentroid", "spectralFlatness", "rms", "spectralRolloff"],
+      callback: (features) => {
+        if (!features) return;
+        // Approximate frequency bars from spectral features
+        const centroid = features.spectralCentroid || 0;
+        const flatness = features.spectralFlatness || 0;
+        const rms = features.rms || 0;
+        const rolloff = features.spectralRolloff || 0;
+        // Map centroid to a distribution of bar heights
+        const peakBar = Math.round((centroid / 22050) * FFT_BARS);
+        const spread = Math.max(3, Math.round(flatness * FFT_BARS * 0.5));
+        for (let i=0; i<FFT_BARS; i++) {
+          const dist = Math.abs(i - peakBar);
+          const target = Math.max(0, rms * 100 * Math.exp(-dist*dist / (2*spread*spread)));
+          fftData[i] = fftData[i] * 0.7 + target * 0.3;
+        }
+        // Update overlay
+        for (let i=0; i<FFT_BARS; i++) {
+          fftBars[i].style.height = `${Math.min(100, fftData[i] * 200)}%`;
+        }
+        fftOverlay.classList.add("on");
+        nowPlaying.classList.add("on");
+        npText.textContent = `${star.name} · ${Math.round(centroid)}Hz · ${features.rms?features.rms.toFixed(3):0} RMS`;
+      },
+    });
+    meydaAnalyzer.start();
+  } catch(e) {
+    console.error("Playback/Meyda error:", e);
+    nowPlaying.classList.add("on");
+    npText.textContent = `${star.name} (no FFT)`;
+  }
+}
+
+player.addEventListener("ended", () => {
+  if (meydaAnalyzer) { try { meydaAnalyzer.stop(); } catch(e){} meydaAnalyzer = null; }
+  fftOverlay.classList.remove("on");
+  nowPlaying.classList.remove("on");
+});
+
 function draw(t){
   ctx.clearRect(0,0,W,Hh);
   ctx.strokeStyle=css("--hairline"); ctx.fillStyle=css("--ink-mute"); ctx.font="11px ui-monospace, monospace"; ctx.textAlign="center"; ctx.lineWidth=1;
-  for(let b=105;b<=125;b+=5){ const x=bpmToNx(b)*W; ctx.globalAlpha=0.5; ctx.beginPath(); ctx.moveTo(x,Hh-28); ctx.lineTo(x,Hh-22); ctx.stroke(); ctx.globalAlpha=0.7; ctx.fillText(b,x,Hh-10); }
-  ctx.globalAlpha=0.55; ctx.textAlign="left"; ctx.fillText("LARGO",8,Hh-10); ctx.textAlign="right"; ctx.fillText("PRESTO →",W-8,Hh-10); ctx.globalAlpha=1; ctx.textAlign="start";
-  edges.forEach(e=>{ if(disabled.has(e.a.family)||disabled.has(e.b.family)) return; const lit=hovered&&hovered.group===e.group;
+  const bpmLo=Math.ceil(BPM_MIN/5)*5, bpmHi=Math.floor(BPM_MAX/5)*5;
+  for(let b=bpmLo;b<=bpmHi;b+=5){ const x=bpmToNx(b)*W; ctx.globalAlpha=0.5; ctx.beginPath(); ctx.moveTo(x,Hh-28); ctx.lineTo(x,Hh-22); ctx.stroke(); ctx.globalAlpha=0.7; ctx.fillText(b,x,Hh-10); }
+  ctx.globalAlpha=0.55; ctx.textAlign="left"; ctx.fillText("LARGO",8,Hh-10); ctx.textAlign="right"; ctx.fillText("PRESTO ->",W-8,Hh-10); ctx.globalAlpha=1; ctx.textAlign="start";
+  edges.forEach(e=>{ if(disabled.has(e.a.family)||disabled.has(e.b.family)) return; const lit=hovered&&(hovered.group===e.group);
     ctx.strokeStyle=famColor(e.a.family); ctx.globalAlpha=lit?0.5:0.16; ctx.lineWidth=lit?1.3:0.8; ctx.beginPath(); ctx.moveTo(X(e.a),Y(e.a)); ctx.lineTo(X(e.b),Y(e.b)); ctx.stroke(); });
   ctx.globalAlpha=1;
   const glow=parseFloat(css("--star-glow"))||0.8;
+  // Live audio reactivity: pulse stars in the playing group
+  const playingRms = fftData.reduce((s,v)=>s+v,0) / FFT_BARS;
   stars.forEach(s=>{ if(disabled.has(s.family)) return; const c=famColor(s.family); const isH=hovered===s;
-    const tw=reduce?1:(0.82+0.18*Math.sin(t/900+s.phase)*s.twk); const r=(isH?4.6:2.4)*(0.9+0.2*tw);
-    ctx.shadowColor=c; ctx.shadowBlur=(isH?18:9)*glow; ctx.fillStyle=c; ctx.globalAlpha=isH?1:0.55+0.4*tw;
+    const groupPulse = playingRms > 0.01 ? 1 + playingRms * 2 * (s.group === hovered?.group ? 1 : 0.3) : 1;
+    const tw=reduce?1:(0.82+0.18*Math.sin(t/900+s.phase)*s.twk); const r=(isH?4.6:2.4)*(0.9+0.2*tw)*groupPulse;
+    ctx.shadowColor=c; ctx.shadowBlur=(isH?18:9)*glow*groupPulse; ctx.fillStyle=c; ctx.globalAlpha=isH?1:0.55+0.4*tw;
     ctx.beginPath(); ctx.arc(X(s),Y(s),r,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
     ctx.globalAlpha=1; ctx.fillStyle=css("--hover"); ctx.beginPath(); ctx.arc(X(s),Y(s),isH?1.8:0.9,0,Math.PI*2); ctx.fill();
     if(isH){ ctx.strokeStyle=css("--hover"); ctx.globalAlpha=0.85; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(X(s),Y(s),r+5,0,Math.PI*2); ctx.stroke(); } });
   ctx.globalAlpha=1; requestAnimationFrame(draw);
 }
 function pick(mx,my){ let best=null,bd=15*15; for(const s of stars){ if(disabled.has(s.family)) continue; const dx=X(s)-mx,dy=Y(s)-my,d=dx*dx+dy*dy; if(d<bd){bd=d;best=s;} } return best; }
+
 canvas.addEventListener("mousemove",(e)=>{ const r=canvas.getBoundingClientRect(); const s=pick(e.clientX-r.left,e.clientY-r.top); hovered=s;
   if(s){ canvas.style.cursor="pointer"; const c=famColor(s.family);
-    tip.innerHTML=`<span class="t-name">${esc(s.name)}</span><span class="t-row">${s.family.replace("-"," · ")}</span><br><span class="t-row"><b>${s.bpm.toFixed(1)}</b> BPM · δ <b>${s.delta.toFixed(3)}</b></span>`;
+    const timbre=s.timbre?` · ${s.timbre}`:"";
+    const onset=s.onset_rate?` · onset ${s.onset_rate.toFixed(1)}/s`:"";
+    const keyInfo=s.key?` · ${s.key} ${s.scale}`:"";
+    const playHint = s.audio_url ? '<span class="t-play">Click to play -></span>' : '';
+    tip.innerHTML=`<span class="t-name">${esc(s.name)}</span><span class="t-row">${s.family.replace("-"," · ")}${keyInfo}</span><br><span class="t-row"><b>${s.bpm.toFixed(1)}</b> BPM · δ <b>${s.delta.toFixed(3)}</b></span><br><span class="t-row">Hz <b>${s.hz.toFixed(2)}</b> · A <b>${s.A.toFixed(2)}</b>${timbre}${onset}</span>${playHint}`;
     tip.style.borderColor=c; tip.classList.add("on");
     const tw=tip.getBoundingClientRect(); let x=e.clientX+14,y=e.clientY+14;
     if(x+tw.width>innerWidth-8) x=e.clientX-tw.width-14; if(y+tw.height>innerHeight-8) y=e.clientY-tw.height-14;
     tip.style.left=x+"px"; tip.style.top=y+"px";
     readout.style.setProperty("--focus-col",c); readout.classList.add("live");
-    readout.innerHTML=`<span class="ro-chip">STAR</span><span class="ro-name">${esc(s.name)}</span><span class="ro-field"><b>${s.family.replace("-"," · ")}</b></span><span class="ro-field tnum">tempo <b>${s.bpm.toFixed(1)}</b> BPM</span><span class="ro-field tnum">δ <b>${s.delta.toFixed(3)}</b> · Hz <b>${s.hz.toFixed(2)}</b> · A <b>${s.A.toFixed(2)}</b></span>`;
-  } else { canvas.style.cursor="default"; tip.classList.remove("on"); readout.classList.remove("live"); readout.innerHTML=`<span class="ro-hint">Hover a star — tempo, family, CGP state vector.</span>`; }
+    const playCtl = s.audio_url ? '<span class="ro-play" id="playBtn">PLAY</span>' : '';
+    readout.innerHTML=`<span class="ro-chip">STAR</span><span class="ro-name">${esc(s.name)}</span><span class="ro-field"><b>${s.family.replace("-"," · ")}</b></span><span class="ro-field tnum">${s.key||""} ${s.scale||""}</span><span class="ro-field tnum">tempo <b>${s.bpm.toFixed(1)}</b> BPM</span><span class="ro-field tnum">δ <b>${s.delta.toFixed(3)}</b> · Hz <b>${s.hz.toFixed(2)}</b></span>${playCtl}`;
+    const pb=document.getElementById("playBtn"); if(pb) pb.onclick=()=>playTrack(s);
+  } else { canvas.style.cursor="default"; tip.classList.remove("on"); readout.classList.remove("live"); readout.innerHTML=`<span class="ro-hint">Hover a star - tempo, family, key. Click to play.</span>`; }
 });
-canvas.addEventListener("mouseleave",()=>{ hovered=null; tip.classList.remove("on"); readout.classList.remove("live"); readout.innerHTML=`<span class="ro-hint">Hover a star — tempo, family, CGP state vector.</span>`; });
+
+canvas.addEventListener("click",(e)=>{ const r=canvas.getBoundingClientRect(); const s=pick(e.clientX-r.left,e.clientY-r.top); if(s) playTrack(s); });
+
+canvas.addEventListener("mouseleave",()=>{ hovered=null; tip.classList.remove("on"); readout.classList.remove("live"); readout.innerHTML=`<span class="ro-hint">Hover a star - tempo, family, key. Click to play.</span>`; });
 const legend=document.getElementById("legend");
 FAMILIES.forEach(f=>{ const n=TRACKS.filter(t=>t.family===f.id).length; const row=document.createElement("div");
   row.className="lg-row"; row.setAttribute("role","button"); row.tabIndex=0;

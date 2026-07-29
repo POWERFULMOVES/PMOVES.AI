@@ -13,7 +13,7 @@
     },
     {
         "file": "mobius_strip.json",
-        "name": "Möbius Strip"
+        "name": "M\u00f6bius Strip"
     },
     {
         "file": "klein_bottle.json",
@@ -101,10 +101,38 @@
     },
     {
         "file": "chit_manifold.json",
-        "name": "⚡ CHIT Manifold"
+        "name": "\u26a1 CHIT Manifold"
     },
     {
-        "file": "beats_constellation.json",
-        "name": "🎵 Beats Constellation (DARKXSIDE)"
+        "file": "beats_2.json",
+        "name": "\ud83c\udfb5 Moderato_balanced_Bright_c2"
+    },
+    {
+        "file": "beats_1.json",
+        "name": "\ud83c\udfb5 Allegro_warm_Bright_c1"
+    },
+    {
+        "file": "beats_0.json",
+        "name": "\ud83c\udfb5 Presto_balanced_Bright_c0"
+    },
+    {
+        "file": "beats_4.json",
+        "name": "\ud83c\udfb5 Andante_warm_Bright_c4"
+    },
+    {
+        "file": "beats_6.json",
+        "name": "\ud83c\udfb5 Presto_balanced_Bright_c6"
+    },
+    {
+        "file": "beats_3.json",
+        "name": "\ud83c\udfb5 Allegro_balanced_Bright_c3"
+    },
+    {
+        "file": "beats_5.json",
+        "name": "\ud83c\udfb5 Allegro_electric_Bright_c5"
+    },
+    {
+        "file": "beats_7.json",
+        "name": "\ud83c\udfb5 Presto_bass-heavy_Deep_c7"
     }
 ]
