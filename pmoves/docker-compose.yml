@@ -3128,7 +3128,8 @@ services:
   hf-mcp-server:
     # HF MCP Server — Model Context Protocol tools for HuggingFace Hub.
     # Provides hf.model.search/info/download/list/convert_gguf and publishes
-    # hf.model.downloaded.v1. Uses local /models cache shared with Ollama/vLLM.
+    # hf.model.downloaded.v1. Models download to /models; inference services
+    # can mount the same host path or import converted GGUF artifacts.
     <<: *tier-agent-hardened-rw
     build:
       context: ./services/hf-mcp-server
@@ -3147,7 +3148,7 @@ services:
     - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
-    - ${HF_MCP_SERVER_BIND:-0.0.0.0}:${HF_MCP_SERVER_PORT:-8203}:8096
+    - ${HF_MCP_SERVER_BIND:-127.0.0.1}:${HF_MCP_SERVER_PORT:-8203}:8096
     depends_on:
       nats:
         condition: service_healthy

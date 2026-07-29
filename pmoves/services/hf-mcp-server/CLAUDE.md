@@ -24,7 +24,8 @@ docker compose -f pmoves/docker-compose.yml --profile agents --profile research 
 | `/api/model/download` | POST | Download model to cache |
 | `/api/models` | GET | List cached models |
 | `/api/config/tensorzero` | GET | Generate TensorZero TOML |
-| `/sse` | GET | MCP SSE endpoint |
+| `/mcp/sse` | GET | MCP SSE endpoint |
+| `/mcp/messages/` | POST | MCP JSON-RPC message endpoint |
 
 ## Configuration
 

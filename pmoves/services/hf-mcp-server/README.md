@@ -99,7 +99,7 @@ Add to your MCP client configuration:
 ```yaml
 mcp_servers:
   huggingface:
-    url: "http://localhost:8203/sse"
+    url: "http://localhost:8203/mcp/sse"
     transport: "sse"
 ```
 

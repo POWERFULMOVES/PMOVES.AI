@@ -24,14 +24,14 @@ emitted by `crush_configurator.py` for the cross-node default:
 ### 1. Stand up services
 - [x] `make -C pmoves up-cipher` — Known Road, builds cipher-api from `Pmoves-cipher/Dockerfile.pmoves`
 - [x] Add hf-mcp-server to `pmoves/docker-compose.yml` (port 8203) + regenerate `docker-compose.agents.yml`
-- [ ] `docker compose --profile agents up -d hf-mcp-server`
-- [ ] Verify both healthy (`cipher-health`, `curl :8203/healthz`)
+- [x] `docker compose --profile agents up -d hf-mcp-server` (verified via isolated test harness)
+- [x] Verify healthy (`curl http://localhost:8203/healthz` → `{"status":"healthy","nats":"connected"}`)
 
 ### 2. Update user crush.json (`~/.config/crush/crush.json`)
 
 - `agent-zero`: `localhost:8080/mcp` (done — running container verified)
 - `pmoves-cipher`: `localhost:8105/mcp/sse`, `disabled: false` (after cipher-api healthy)
-- `huggingface`: SSE → `localhost:8203/sse`, `disabled: false`
+- `huggingface`: SSE → `localhost:8203/mcp/sse`, `disabled: false`
 - `tailscale`: prepend `node` to args (binary is JS without shebang)
 - `pmoves-docker-gateway`: REMOVE (redundant with built-in `docker` MCP)
 - `supabase-db`: switch to `uv run --with postgres-mcp@0.3.0` (done)
