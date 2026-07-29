@@ -5,7 +5,6 @@ Handles authentication, rate limiting, and API calls to GitHub
 for runner status, workflow runs, and job information.
 """
 
-import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional
@@ -73,8 +72,8 @@ class GitHubClient:
         except FileNotFoundError:
             logger.error(f"GitHub PAT not found: GITHUB_PAT env var not set and {self.pat_file} not found")
             return False
-        except Exception as e:
-            logger.exception(f"Failed to load GitHub PAT from file")
+        except Exception:
+            logger.exception("Failed to load GitHub PAT from file")
             return False
 
     async def _get_client(self) -> httpx.AsyncClient:

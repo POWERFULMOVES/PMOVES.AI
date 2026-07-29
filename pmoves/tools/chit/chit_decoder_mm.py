@@ -19,7 +19,7 @@ import argparse
 import json
 import os
 from typing import Tuple, List
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import numpy as np
 from PIL import Image
@@ -265,7 +265,6 @@ def decode_audio(
     model.load_ckpt()  # Uses default checkpoint
 
     # Encode audio files
-    text_embeddings = []
     for path in audio_paths:
         # This is a placeholder - actual CLAP audio encoding would go here
         # The CLAP API is complex and varies by version

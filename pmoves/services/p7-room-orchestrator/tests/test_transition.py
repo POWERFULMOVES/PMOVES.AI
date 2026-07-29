@@ -7,7 +7,6 @@ fake that records calls; the engine treats `publish_*` calls as best-effort.
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List
 
 import pytest

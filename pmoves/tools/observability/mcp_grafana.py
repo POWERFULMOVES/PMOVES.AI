@@ -215,13 +215,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 f"Dashboard: {title}",
                 f"UID: {uid}",
                 f"Version: {version}",
-                f"\nStructure:",
+                "\nStructure:",
                 f"  Panels: {len(panels)}",
                 f"  Rows: {len(rows)}"
             ]
 
             if panels:
-                output.append(f"\nPanels (first 10):")
+                output.append("\nPanels (first 10):")
                 for panel in panels[:10]:
                     panel_title = panel.get("title", "untitled")
                     panel_id = panel.get("id", 0)
@@ -340,7 +340,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             url = f"{client.base_url}/d/{uid}"
 
             output = [
-                f"Dashboard created successfully!",
+                "Dashboard created successfully!",
                 f"Title: {title}",
                 f"Template: {template}",
                 f"UID: {uid}",
@@ -414,7 +414,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             response.raise_for_status()
 
             output = [
-                f"Alert configured successfully!",
+                "Alert configured successfully!",
                 f"Dashboard: {dashboard_uid}",
                 f"Panel ID: {panel_id}",
                 f"Panel Title: {panel.get('title', 'Panel')}",

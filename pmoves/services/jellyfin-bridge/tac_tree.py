@@ -18,7 +18,6 @@ Architecture:
       └── render: target-specific CSS/JSON output
 """
 
-import json
 import os
 import pathlib
 from typing import Any, Dict, List, Optional, Tuple

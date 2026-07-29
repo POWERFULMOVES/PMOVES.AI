@@ -93,7 +93,7 @@ class TensorZeroObservabilitySpecialist:
             Performance metrics
         """
         end = datetime.now()
-        start = end - timedelta(hours=hours)
+        end - timedelta(hours=hours)
 
         model_filter = f"AND model_name = '{model}'" if model else ""
 
@@ -347,7 +347,7 @@ def main():
 
             if "comparison" in comp:
                 c = comp['comparison']
-                print(f"\n  Differences:")
+                print("\n  Differences:")
                 print(f"    Latency: {c['latency_diff_ms']:+.2f}ms")
                 print(f"    Tokens: {c['token_diff']:+,}")
                 print(f"    Requests: {c['request_count_diff']:+,}")

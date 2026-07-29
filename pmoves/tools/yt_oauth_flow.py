@@ -23,7 +23,6 @@ Called via Make targets:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -320,8 +319,11 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
     flow = _build_flow(client_id, client_secret, scope)
 
     print("Opening browser for Google OAuth2 consent (loopback, ephemeral port)...")
-    # Scope logged as plain concat (breaks CodeQL taint path on OAuth f-strings).
-    print("  Scopes: " + scope)
+    # Scope intentionally NOT logged: CodeQL flags any print that traces to an
+    # OAuth-derived parameter (clear-text-logging-sensitive-data). The scope
+    # value is set via --scopes arg or OAUTH_SCOPES default; run with --help
+    # to see the configured value.
+    print("  Scopes: configured (use --scopes to override; see --help)")
 
     # oauthlib refuses HTTP (even localhost) by default; the loopback flow
     # always uses plain HTTP, so opt in explicitly.
@@ -364,7 +366,6 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
     print(f"\n>>> Open this URL in your browser:\n{auth_url}\n")
     print(f">>> Waiting for callback on {redirect_uri} (5 min timeout)...")
 
-    import select
     import time
     deadline = time.time() + 300
     while time.time() < deadline:

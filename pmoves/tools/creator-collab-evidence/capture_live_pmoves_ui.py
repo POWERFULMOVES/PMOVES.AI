@@ -1,6 +1,7 @@
 """Capture screenshots of the LIVE pmoves-ui on :4482 (real runtime)."""
 from __future__ import annotations
-import sys, time
+import sys
+import time
 from playwright.sync_api import sync_playwright
 
 URL = "http://localhost:4482"

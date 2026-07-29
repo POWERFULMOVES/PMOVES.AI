@@ -9,10 +9,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from config import Settings
-from models import NATSMessage
-from nats_handler import NATSHandler, counters, MockNATSMessage
-from neo4j_client import Neo4jClient
+from nats_handler import counters, MockNATSMessage
 
 
 @pytest.fixture(autouse=True)

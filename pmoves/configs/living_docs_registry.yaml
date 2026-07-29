@@ -15,7 +15,7 @@
 tracked:
   # ── Root keystones (CLAUDE.md fleet) ───────────────────────────────────
   - path: CLAUDE.md
-    freshness_days: 30
+    freshness_days: 60
     severity: P2
     description: "Root keystone — points to BOOTSTRAP/CATALOG/PATTERNS/AGENTS/AGNOTE4482"
   - path: AGENTS.md
@@ -25,19 +25,19 @@ tracked:
 
   # ── .claude tier ──────────────────────────────────────────────────────
   - path: .claude/BOOTSTRAP.md
-    freshness_days: 30
+    freshness_days: 90
     severity: P1
     description: "Flat foundation — Emperor-CHIT-Humility, Known Roads, MCP entrypoints"
   - path: .claude/CATALOG.md
-    freshness_days: 14
+    freshness_days: 30
     severity: P1
     description: "Service catalog (ports, URLs, health endpoints) — drifts faster as services move"
   - path: .claude/PATTERNS.md
-    freshness_days: 30
+    freshness_days: 60
     severity: P2
     description: "Known Roads, CHIT, skill pairings, dev patterns"
   - path: .claude/PINOKIO_LAUNCHER_GUIDE.md
-    freshness_days: 60
+    freshness_days: 90
     severity: INFO
     description: "Pinokio launcher guide — on-demand context, slow-changing"
 
@@ -67,11 +67,11 @@ tracked:
     severity: P1
     description: "Per-service CHIT integration tier (Full/Partial/None) — high-velocity"
   - path: pmoves/docs/AGENTS/AGNOTE4482.BEATS.md
-    freshness_days: 60
+    freshness_days: 180
     severity: P2
     description: "BPM encoding + prosodic bridge spec (referenced by W6 Convergence)"
   - path: pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md
-    freshness_days: 60
+    freshness_days: 180
     severity: P2
     description: "FlOO$ skill pairings spec (ToKenism bridge)"
   - path: pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md
@@ -85,7 +85,7 @@ tracked:
 
   # ── Navigable index (front-and-center entry point) ─────────────────────
   - path: LIVING_DOCS_INDEX.md
-    freshness_days: 14
+    freshness_days: 30
     severity: P2
     description: "Navigable index of all living docs + UI/CLI surfaces — operator entry point"
 

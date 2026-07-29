@@ -3,7 +3,8 @@ import time
 import pytest
 from jose import jwt
 from fastapi.testclient import TestClient
-import config, oidc
+import config
+import oidc
 import app as appmod
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
@@ -84,7 +85,7 @@ def test_authorize_rejects_unregistered_redirect_uri():
     # Open-redirect / auth-code-leak guard: an authed user lured to authorize with
     # an attacker redirect_uri must get 400 (NO Location header), never a code.
     sess=_sess()
-    r=client.get(f"/oidc/authorize?client_id=jf&redirect_uri=https://evil.example/cb&state=x",
+    r=client.get("/oidc/authorize?client_id=jf&redirect_uri=https://evil.example/cb&state=x",
                  cookies={"pmoves_session":sess}, follow_redirects=False)
     assert r.status_code==400
     assert "location" not in {k.lower() for k in r.headers}

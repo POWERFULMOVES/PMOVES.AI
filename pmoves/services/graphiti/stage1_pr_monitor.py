@@ -15,7 +15,6 @@ TODO:
 - Publish structured PR event to NATS
 """
 
-import json
 import logging
 from typing import Any, Dict
 

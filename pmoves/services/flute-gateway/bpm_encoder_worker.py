@@ -18,10 +18,8 @@ import os
 import re
 import signal
 import sys
-import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from nats.aio.client import Client as NATS
@@ -91,11 +89,10 @@ def _extract_text(payload: dict) -> str:
 
 def _detect_boundaries(text: str) -> list[dict]:
     boundaries = []
-    pos = 0
     for match in _BOUNDARY_RE.finditer(text):
         boundary_type = "SENTENCE" if match.group().rstrip() in ".!?" else "CLAUSE" if match.group().rstrip() in ";" else "PHRASE"
         boundaries.append({"position": match.start(), "type": boundary_type, "bpm": BOUNDARY_BPM[boundary_type]})
-        pos = match.end()
+        match.end()
     if not boundaries:
         boundaries.append({"position": len(text), "type": "NONE", "bpm": BOUNDARY_BPM["NONE"]})
     return boundaries

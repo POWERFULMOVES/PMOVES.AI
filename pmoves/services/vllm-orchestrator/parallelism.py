@@ -8,7 +8,7 @@ import dataclasses
 import logging
 from typing import Dict, List, Optional, Tuple
 
-from ..resource_detector.hardware import GpuInfo, NodeTier
+from ..resource_detector.hardware import GpuInfo
 
 logger = logging.getLogger(__name__)
 

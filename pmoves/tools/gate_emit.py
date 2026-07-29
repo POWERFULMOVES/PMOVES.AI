@@ -8,7 +8,10 @@ Usage:
     export NATS_URL=nats://nats:pmoves@localhost:4222
     python pmoves/tools/gate_emit.py --artifact s3://pmoves/reports/r1.md --title "Report 1"
 """
-import argparse, asyncio, json, os
+import argparse
+import asyncio
+import json
+import os
 import nats
 
 

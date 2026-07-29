@@ -17,12 +17,10 @@ MCP Tools:
 - hf.model.convert_gguf: Convert to GGUF for Ollama
 """
 
-import asyncio
 import json
 import logging
 import os
 import re
-import shutil
 import threading
 import time
 from dataclasses import dataclass, field
@@ -33,17 +31,14 @@ from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
 
 import nats as nats_lib
-import aiohttp
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from huggingface_hub import (
     HfApi,
-    hf_hub_download,
     snapshot_download,
 )
 from huggingface_hub.utils import tqdm as hf_tqdm
 from mcp.server import MCPServer
-from mcp.types import TextContent, Tool
 
 # Configure logging
 logging.basicConfig(
@@ -985,7 +980,6 @@ hf_mcp_cached_models_total {cached_count}
 # TYPE hf_mcp_downloads_total counter
 hf_mcp_downloads_total {_download_count}
 """
-    from fastapi.responses import Response
     return Response(
         content=metrics_text,
         media_type="text/plain",

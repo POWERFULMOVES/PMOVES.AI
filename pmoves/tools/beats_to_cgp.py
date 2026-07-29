@@ -53,7 +53,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-import httpx
 import numpy as np
 import typer
 from rich.console import Console
@@ -513,7 +512,7 @@ def render(
                           f"({len(groups)} groups) to [bold]{SUBJECT_CGP}[/]")
 
         asyncio.run(_publish_one())
-        console.print(f"\n[bold green]✓ Done.[/] Open Hyperdimensions to see the constellations.")
+        console.print("\n[bold green]✓ Done.[/] Open Hyperdimensions to see the constellations.")
         return
 
     table = Table("Group", "Tracks", "delta", "Hz", "kappa", "A", title="CGP State Vectors")
@@ -533,7 +532,7 @@ def render(
 
     asyncio.run(_publish_all())
     console.print(table)
-    console.print(f"\n[bold green]✓ Done.[/] Open Hyperdimensions to see the constellations.")
+    console.print("\n[bold green]✓ Done.[/] Open Hyperdimensions to see the constellations.")
 
 
 @app.command()
@@ -584,7 +583,7 @@ def watch(
             h = _hash.md5(content).hexdigest()
             if h != last_hash:
                 last_hash = h
-                console.print(f"[yellow]Change detected[/] — re-publishing constellations…")
+                console.print("[yellow]Change detected[/] — re-publishing constellations…")
                 # Re-invoke render logic inline
                 groups = json.loads(content)
                 fps    = load_fingerprints(fingerprints)
@@ -1168,7 +1167,7 @@ def export_hyperdim(
             overview["meta"]["inferred_shape"] = "Full Catalog Constellation"
             ov_path = saves_path / "beats_constellation.json"
             ov_path.write_text(json.dumps(overview, indent=2), encoding="utf-8")
-            console.print(f"  [green]OK[/] Overview -> beats_constellation.json")
+            console.print("  [green]OK[/] Overview -> beats_constellation.json")
 
     tracks = _build_tracks_json(groups, fps)
     tracks_path = embed_path / "tracks.json"

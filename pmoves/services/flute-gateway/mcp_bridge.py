@@ -30,7 +30,7 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 from fastapi import APIRouter, Request

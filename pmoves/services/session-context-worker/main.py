@@ -10,13 +10,11 @@ import asyncio
 import json
 import logging
 import os
-import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-import nats
 from fastapi import FastAPI
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
@@ -134,7 +132,7 @@ def _extract_searchable_content(context: Dict[str, Any]) -> str:
             if content:
                 task_texts.append(f"[{status}] {content}")
         if task_texts:
-            parts.append(f"Tasks:\n" + "\n".join(task_texts))
+            parts.append("Tasks:\n" + "\n".join(task_texts))
 
     # Add decisions
     decisions = context.get("decisions", [])
@@ -146,7 +144,7 @@ def _extract_searchable_content(context: Dict[str, Any]) -> str:
             if question and answer:
                 decision_texts.append(f"Q: {question}\nA: {answer}")
         if decision_texts:
-            parts.append(f"Decisions:\n" + "\n".join(decision_texts))
+            parts.append("Decisions:\n" + "\n".join(decision_texts))
 
     # Add active files summary
     active_files = context.get("active_files", [])
@@ -165,7 +163,7 @@ def _extract_searchable_content(context: Dict[str, Any]) -> str:
             if tool_name and summary:
                 tool_summaries.append(f"{tool_name}: {summary}")
         if tool_summaries:
-            parts.append(f"Tool executions:\n" + "\n".join(tool_summaries[:5]))
+            parts.append("Tool executions:\n" + "\n".join(tool_summaries[:5]))
 
     # Add agent spawns
     agent_spawns = context.get("agent_spawns", [])
@@ -178,7 +176,7 @@ def _extract_searchable_content(context: Dict[str, Any]) -> str:
             if agent_type:
                 agent_texts.append(f"{agent_type} [{status}]: {task}")
         if agent_texts:
-            parts.append(f"Agent spawns:\n" + "\n".join(agent_texts))
+            parts.append("Agent spawns:\n" + "\n".join(agent_texts))
 
     return "\n\n".join(parts)
 
@@ -329,7 +327,7 @@ async def _handle_session_context(msg: Msg) -> None:
         messages_processed.labels(context_type).inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
 
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         logger.exception("Failed to decode JSON")
         messages_failed.labels("json_decode_error").inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)

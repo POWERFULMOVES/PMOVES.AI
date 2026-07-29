@@ -159,7 +159,7 @@ def transpile_cgp_to_a2ui(cgp_data: Dict[str, Any]) -> Dict[str, Any]:
 
             # Map each point (track) → sub-element
             for pt in constellation.get("points", []):
-                pt_label = pt.get("label", f"point_{element_idx}")
+                pt.get("label", f"point_{element_idx}")
                 proj = pt.get("proj", [0.5, 0.5, 0.5])
                 conf = pt.get("conf", 1.0)
                 elements.append({

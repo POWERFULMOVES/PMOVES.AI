@@ -1,9 +1,6 @@
 """Tests for decoded_consumer — geometry.packet.decoded.v1 subscriber."""
-import json
-import asyncio
 import sys
 import os
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from decoded_consumer import _validate_decoded_packet, _redact_url, _resolve_nats_url

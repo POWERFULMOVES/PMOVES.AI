@@ -527,7 +527,7 @@ async def main(argv: Optional[List[str]] = None) -> int:
             urls, args.output, publish_to_hirag=args.publish
         )
 
-        print(f"\n[done] Harvest complete:")
+        print("\n[done] Harvest complete:")
         print(f"  URLs processed: {summary['total_urls']}")
         print(f"  Successful: {summary['successful']}")
         print(f"  Failed: {summary['failed']}")

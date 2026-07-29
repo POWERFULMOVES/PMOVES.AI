@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import argparse
 import http.server
-import os
 import socket
 import socketserver
 import sys
@@ -64,9 +63,10 @@ def _free_port(preferred: int) -> int:
 @contextmanager
 def _serve(directory: Path, port: int):
     """Serve `directory` over HTTP on a background thread. Yields the URL."""
-    handler = lambda *args, **kwargs: http.server.SimpleHTTPRequestHandler(
-        *args, directory=str(directory), **kwargs
-    )
+    def handler(*args, **kwargs):
+        return http.server.SimpleHTTPRequestHandler(
+            *args, directory=str(directory), **kwargs
+        )
     httpd = socketserver.TCPServer(("127.0.0.1", port), handler)
     httpd.daemon_threads = True
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)

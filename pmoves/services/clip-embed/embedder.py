@@ -69,7 +69,6 @@ class ClipHFModel:
             return feats.detach().cpu().float().numpy()
 
     def embed_text(self, texts):
-        import numpy as np
         torch = self._torch
         with torch.no_grad():
             inputs = self.processor(text=list(texts), return_tensors="pt", padding=True, truncation=True)

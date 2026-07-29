@@ -25,11 +25,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Annotated
+from typing import Any, Dict, Optional
 
 # Ensure this directory is on sys.path so absolute imports work whether the
 # service is run as `uvicorn main:app` from the service dir OR as a module

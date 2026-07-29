@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import sys
-import textwrap
 
 import pytest
 
@@ -27,11 +26,10 @@ for p in (
 import yaml  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from mesh_exposure.app import ApplyRequest, create_app  # noqa: E402
+from mesh_exposure.app import create_app  # noqa: E402
 from mesh_exposure.state import (  # noqa: E402
     DEFAULT_REGISTRY_DIR,
     Registry,
-    apply,
     desired_cloudflared_entries,
     desired_dns_records,
     desired_headscale_rules,
@@ -436,7 +434,7 @@ def test_get_plan_noop_does_not_set_last_change_at(client) -> None:
     # First plan populates current state via a chain
     r1 = client.get("/v1/reconcile/plan")
     assert r1.status_code == 200
-    first_change = client.get("/v1/reconcile/status").json()["last_change_at"]
+    client.get("/v1/reconcile/status").json()["last_change_at"]
     # Second plan against the same (mocked empty) current state will
     # still be non-noop because noop_readers returns []; but if we
     # match current state to desired, the noop flag flips. We test
@@ -453,7 +451,6 @@ def test_get_plan_noop_does_not_set_last_change_at(client) -> None:
 def test_apply_without_token_returns_503_when_service_token_unset() -> None:
     """If MESH_EXPOSURE_TOKEN is empty, the service ships in read-only
     mode and apply returns 503 with a clear error."""
-    import importlib
     # Reload app module with MESHBUS_TOKEN cleared
     import mesh_exposure.app as app_mod
     orig_token = os.environ.pop("MESH_EXPOSURE_TOKEN", None)
@@ -510,9 +507,9 @@ def test_apply_in_apply_writer_mode_records_last_apply(client, monkeypatch) -> N
     recording writers to verify the diff was passed through."""
     from mesh_exposure.state import plan as plan_fn
     reg = client.app.state.registry
-    p = plan_fn(reg, lambda: [], lambda: [], lambda: [])
+    plan_fn(reg, lambda: [], lambda: [], lambda: [])
     written: dict = {"h": [], "c": [], "d": []}
-    a = create_app(
+    create_app(
         registry=reg,
         token=TEST_TOKEN,
         headscale_reader=lambda: [],

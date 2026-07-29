@@ -13,7 +13,6 @@ a path segment). URL-encoding (%2F) prevents this.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from urllib.parse import quote
 

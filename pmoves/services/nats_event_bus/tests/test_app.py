@@ -31,10 +31,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 from nats_event_bus.app import PublishRequest, create_app  # noqa: E402
 from nats_event_bus.state import (  # noqa: E402
     DEFAULT_TOPICS,
-    DIRECTORY_TOPIC,
     EventCache,
     NatsSubscriber,
-    PRESENCE_TOPIC,
 )
 
 

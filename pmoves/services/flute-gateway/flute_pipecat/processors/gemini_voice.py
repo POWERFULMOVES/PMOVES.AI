@@ -8,7 +8,6 @@ and pipes it to local audio output and/or Google Cast Edge devices
 from __future__ import annotations
 
 import asyncio
-import base64
 import logging
 import os
 from typing import AsyncGenerator, Optional
@@ -129,7 +128,7 @@ class GeminiVoiceProcessor(FrameProcessor):
         if not self.client:
             return None
             
-        system_instruction = f"You are a helpful voice assistant. Speak naturally."
+        system_instruction = "You are a helpful voice assistant. Speak naturally."
         
         response = self.client.models.generate_content(
             model=self.model,
