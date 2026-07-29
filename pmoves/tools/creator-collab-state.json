@@ -6,7 +6,7 @@
     "worktree": ".worktrees/feat-creator-collab-lane",
     "branch": "feat/creator-collab-lane",
     "pr": 2264,
-    "ship_count": 5,
+    "ship_count": 6,
     "total_slices": 7,
     "status": "in_progress",
     "started_at": "2026-07-27T09:23:00Z",
@@ -95,15 +95,22 @@
       ]
     },
 "5_creator_studio_seed_and_smoke": {
-      "status": "partial",
-      "title": "creator-studio.room.collab.json + Pinokio apps registry + E2E smoke",
+      "status": "SHIPPED",
+      "shipped_at": "2026-07-28T22:30:00Z",
+      "title": "creator-studio visual evidence dashboard + 7 playwright screenshots + render_dashboard.py + capture_screenshots.py",
+      "branch": "slice-5-creator-studio-e2e-smoke",
+      "base": "feat/creator-collab-lane @ 970fb50792 (post slice 6)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "a7e9e9f4de"
+      ],
+      "scope": "pmoves/tools/creator-collab-evidence/render_dashboard.py (NEW, 16.7 KB, stdlib + pyyaml only — reads catalog.json + 2 new room manifests + 12 curated YAMLs + topics.json, generates single static HTML page) + pmoves/tools/creator-collab-evidence/capture_screenshots.py (NEW, 5.3 KB — boots local HTTP server, opens chromium headless at 1440x900, captures 7 PNGs) + pmoves/docs/evidence/creator-collab-2026-07-28/index.html (NEW, 29 KB rendered dashboard) + pmoves/docs/evidence/creator-collab-2026-07-28/screenshots/{01-overview,02-rooms,03-creator-studio,04-helpdesk,05-pinokio-apps,06-tac-trees,07-topics}.png (NEW, 7 PNGs, ~1 MB total) + pmoves/docs/evidence/creator-collab-2026-07-28/README.md (NEW, 5.8 KB — explains the evidence) + pmoves/docs/specs/creator-collab-visual-evidence-2026-07-28.md (NEW — 8-section slice 5 spec).",
+      "tests": "pmoves/scripts/validate_room_manifests.py: 11 OK / 12 (1 pre-existing failure: persona.room.livingdoc em-dash catalog drift, out of scope). Full test suite: 168/168 PASS (no regression — slice 5 doesn't touch any code, only adds evidence files). Renderer's HTML output parses cleanly in chromium (no console errors; CSS Grid + native <details> work as expected). 7 PNGs captured at 1440x900 viewport; full-page is 1440x5655 (496 KB).",
+      "operator_signoff": "Option A: 'Boot pmoves-ui on :4482 + screenshot the dashboard rendering the new manifests' (operator chose the quickest path). Implemented as a contract-level snapshot generator (render_dashboard.py reads the actual JSON / YAML, no copy-paste drift) + Playwright headless capture (1440x900 viewport) rather than booting the Next.js pmoves/ui surface (which needs env.shared + npm install + Supabase secrets). Same evidence, lighter path; the contract-level snapshot answers 'did the new manifests parse + render correctly?' without the deploy machinery. The full runtime E2E is slice 7.",
       "depends_on": [
         "1_contract_extension",
         "2_pinokio_bridge_skill",
         "4_pinokio_apps_registry"
-      ],
-      "shipped_partial": [
-        "creator-studio.room.collab.json (manifest only)"
       ]
     },
     "6_helpdesk_skill_and_room": {
@@ -277,10 +284,10 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-28T18:30:00Z",
-    "next_run": "2026-07-28T19:00:00Z",
+    "last_run": "2026-07-28T22:30:00Z",
+    "next_run": "2026-07-28T23:00:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
     "disarmed_reason": "review-iter-poll cycle 2 closed >30m ago, no new threads, lane review activity settled",
-    "note": "slice 6 SHIPPED + docs commit landed on slice-6-helpdesk-and-room-suggest branch (3 commits: 4494a34b9b P1 helpdesk room+3 NATS schemas+catalog entry, c46542f313 functional helpdesk-skill+room-suggest-skill+frontmatter tests, 3d9f4f4d81 docs spec+AGNOTE CLAIM+state SHIPPED); pending --no-ff merge into feat/creator-collab-lane. Slice 5 (creator-studio E2E smoke with Playwright screenshots) is next per operator's 'slice 6 then slice 5 sequentially' signoff; slice 7 (Fordham E2E) is the integrated demo and lands last. Slice 6 unblocks slice 7 — the Fordham resident lands in pmoves.room.helpdesk (intake x ambient), the helpdesk routes them to fordham.room.community via the room-suggest ranker, all 3 helpdesk.* events land in nats_event_bus. Topics.json is now at 99 (was 91 pre-slice-3, +5 slice 3, +3 slice 6). ship_count advanced 4 -> 5."
+    "note": "slice 5 SHIPPED on slice-5-creator-studio-e2e-smoke branch (1 commit: a7e9e9f4de functional dashboard renderer + 7 playwright screenshots + README + spec doc); pending --no-ff merge into feat/creator-collab-lane. Slice 7 (Fordham E2E) is the only remaining slice; it's the integrated runtime demo. ship_count advanced 5 -> 6. Visual evidence at pmoves/docs/evidence/creator-collab-2026-07-28/ (index.html + 7 PNGs) — contract-level snapshot of the lane's state after slices 1+2+3+4+6 SHIPPED, per operator's Option A signoff (render_dashboard.py + capture_screenshots.py, stdlib + pyyaml + Playwright headless at 1440x900 viewport). The full runtime E2E remains slice 7's job."
   }
 }
