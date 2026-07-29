@@ -1,6 +1,6 @@
 # Creator Collab Lane — Room Manifest Schema Extensions (2026-07-27)
 
-**Status:** Slice 1 SHIPPED on `feat/creator-collab-lane` (worktree off `origin/main` @ `4cbf58b4e5`).
+**Status:** Slices 1, 2, and 3 SHIPPED on `feat/creator-collab-lane` (worktree off `origin/main` @ `42ad231419` + `f87eee766d` for slice 3). Slice 1 shipped via PR #2264 (admin-merged 2026-07-27T15:29Z). Slices 2 + 3 live on the lane branch awaiting a PR.
 
 **Lane owner:** Mavis (Mavis::CREATOR-COLLAB-LANE-CLAIM::2026-07-27).
 **Pattern:** openroom-adapter cadence (3 stacked commits per slice: P1 + functional + docs).
@@ -43,6 +43,91 @@ The two knobs combine into a 4-quadrant behavior matrix that P7's session-open e
 
 P7's session-open validates this constraint at admission: if any `autostart: true` ref has `gpu_reservation_mode: exclusive` AND any other `autostart: true` ref exists, P7 returns `409 conflict` with `room_id` + the offending ref slug(s). The fix is in the manifest, not the runtime.
 
+## P8 surface mapping (added slice 2, 2026-07-27)
+
+Slice 1's schema fields were designed to be the PMOVES-side declaration of the same surfaces Pinokio 8 manages natively. The `pinokio_bridge` service (slice 2) reads from Pinokio's on-disk state and the room manifest, and reconciles them at session-open. Here's the field-by-field mapping:
+
+| Schema field (slice 1) | P8 surface | Bridge endpoint | What P7 does at session-open |
+|---|---|---|---|
+| `pinokio_app_refs[*].slug` | `~/pinokio/api/<slug>/` (app dir) | `GET /v1/apps/{slug}/status` | Resolves the slug to a Pinokio install; 404s the room if the app isn't installed |
+| `pinokio_app_refs[*].role: primary\|optional\|fallback` | — (PMOVES-internal policy) | — | Decides whether the ref is required, nice-to-have, or last-resort; doesn't change Pinokio's view of the app |
+| `pinokio_app_refs[*].gpu_reservation_mb` | — (PMOVES-internal budget) | — | Contributes to the concurrent VRAM sum; the bridge doesn't see this directly |
+| `pinokio_app_refs[*].gpu_reservation_mode: concurrent\|exclusive` | P8 autolaunch + per-app GPU claim | `GET /v1/autolaunch` (post-write verification) | Verifies the P8 autolaunch state matches the manifest's `autostart` intent |
+| `pinokio_app_refs[*].autostart: bool` | P8 `/autolaunch` page state | `GET/POST /v1/apps/{slug}/autolaunch` | Toggles the app's autolaunch; `false` means the app is on-demand only |
+| `hardware_requirements.gpu: bool` | — (room-level decision) | — | Combined with `min_vram_mb` to require the bridge's `/v1/gpu/match` |
+| `hardware_requirements.min_vram_mb` | `{{vram}}` template var | `GET /v1/gpu/match?min_vram=N` | Routes the room session to a host with at least N MB VRAM |
+| `hardware_requirements.gpu_arch: [sm_XX]` | `{{gpu_target}}` template var | `GET /v1/gpu/match?gpu_arch=sm_120,sm_110` | Routes to a host with a matching compute capability (the bridge normalizes the raw `12.0` to `sm_120` internally) |
+| `hardware_requirements.node_roles: [...]` | — (PMOVES fleet topology) | — | Coarse routing preference; the bridge's per-host detection is the final say |
+| `hardware_requirements.cpu_arch: [x86_64\|arm64]` | — (PMOVES fleet topology) | — | Same as node_roles; coarse routing preference |
+| (no direct slice-1 field) | P8 orchestration (recursive deps) | `GET /v1/apps/{slug}/dependencies` | P7 uses this to verify the room's launch order is feasible (e.g. creator-studio needs comfyui which needs shared-models) |
+| (no direct slice-1 field) | P8 managed skills (sync state) | `GET /v1/skills`, `GET /v1/skills/conflicts` | `pmoves-living-docs-refresh` uses this to detect drift between the managed-skill library and the local PMOVES skill folder |
+| (no direct slice-1 field) | P8 GPU templates (full set: `{{vram}}`, `{{gpu_model}}`, `{{gpu_driver}}`, `{{gpu_target}}`, `{{gpus}}`) | `GET /v1/gpu/detect` | P7's `/v1/gpu/detect` is the canonical source for the same data that Pinokio 8's launcher templates see; the bridge keeps the two in sync by reading Pinokio's own state file |
+
+The bridge service is the single source of truth for the read-side. Pinokio's own state files are the source of truth for the write-side; the bridge forwards writes to Pinokio via structured `shell.run` argv (P8 surface, not raw shell).
+
+## NATS pipeline (added slice 3, 2026-07-27)
+
+Slice 1 + 2 gave rooms the *declaration* of the creator surface and the *bridge* to Pinokio's own state. Slice 3 wires the *event flow* so consumers (room sidebar, dashboard, future helpdesk / room-suggest skills) can ask "what's happening in this room right now?" without holding a NATS subscription each. The bus is the small projection that lets HTTP-only consumers read the recent stream.
+
+### 5 new subjects (5 new JSON Schemas, all `additionalProperties: false`)
+
+| Subject | What it carries | Publishers | Subscribers |
+|---|---|---|---|
+| `comfy.collab.prompt.v1` | A creative prompt submitted to a ComfyUI collab session. Carries `parent_prompt_id` for chain-of-edits. | `creator-canvas-primary`, `notebook-workbench`, `pinokio_bridge` | `comfy-watcher`, `comfyui`, `nats_event_bus` |
+| `comfy.collab.progress.v1` | Progress update (phase, percent, current_node, step) for a running workflow. Linked via `prompt_id`. | `comfy-watcher`, `comfyui` | `nats_event_bus`, `notebook-workbench`, `creator-canvas-primary` |
+| `comfy.collab.artifact.v1` | A workflow produced an artifact (image/video/audio/model/text). Carries `uri`, `thumbnail_uri`, `metadata`. | `comfy-watcher`, `comfyui` | `nats_event_bus`, `notebook-workbench`, `creator-canvas-primary`, `minio-gateway` |
+| `room.presence.v1` | Join/leave/focus/blur/active for a room. `actor_kind` is `user\|agent\|service`. | `notebook-workbench`, `creator-canvas-primary`, `p7-room-orchestrator` | `nats_event_bus`, `room-sidebar`, `pmoves-helpdesk-skill` (slice 6) |
+| `room.directory.v1` | Snapshot of every known room with stage, `room_purpose`, `creator_surface`, `hardware_summary`, `apps_count`, `skills_count`. | `p7-room-orchestrator` | `nats_event_bus`, `dashboard`, `room-suggest-skill` (slice 6), `pmoves-helpdesk-skill` (slice 6) |
+
+Schemas live at `pmoves/contracts/schemas/{comfy,room}/*.v1.schema.json` and are registered in `pmoves/contracts/topics.json` (96 topics total after slice 3, was 91 before).
+
+### nats_event_bus service (`pmoves/services/nats_event_bus/`)
+
+- **Port:** 8131 (next to pinokio_bridge 8130). FastAPI on uvicorn.
+- **6 endpoints:**
+  - `GET /healthz` — health + topic list + writes/nats state
+  - `GET /v1/topics` — list the 5 slice-3 subjects
+  - `GET /v1/events/{topic}?since=<ts>&limit=<N>` — recent envelopes (1-200, default 50)
+  - `POST /v1/publish` — validate + cache + (best-effort) NATS publish
+  - `GET /v1/snapshot/room-directory` — most recent `room.directory.v1` envelope
+  - `GET /v1/presence/{room_id}?limit=<N>` — recent presence events for a room
+- **Storage:** in-memory `EventCache` (per-topic deque, default 100 envelopes/topic, auto-registers new topics on first publish). No persistence — restart loses cache. NATS is the source of truth; the cache is the HTTP projection.
+- **Auth:** `X-PMOVES-NatsBus-Token` (loaded from `NATS_EVENT_BUS_TOKEN`). Fail-closed: missing service token disables writes (503). Different header from `X-PMOVES-Bridge-Token` so tokens can be scoped per service.
+- **Schema validation:** every POST is validated against the topic's JSON Schema (resolved from `pmoves/contracts/topics.json`). 422 on schema fail. Because all schemas are `additionalProperties: false`, a producer cannot smuggle extra fields through the bus.
+- **Optional NATS subscriber:** when `NATS_URL` is set, a background task subscribes to all 5 topics and fills the cache from external publishers. Best-effort: a failed connection doesn't break the HTTP surface. Disable via `NATS_EVENT_BUS_DISABLE_SUBSCRIBER=true`.
+- **Container:** `Dockerfile` (slim Python 3.12 + uvicorn). `requirements.txt` pins fastapi, uvicorn, pydantic, nats-py, httpx, jsonschema, pytest. Healthcheck on `/healthz`.
+
+### pinokio_bridge launch hook (slice 3 wiring)
+
+When `pinokio_bridge` is configured with `NATS_EVENT_BUS_URL` (e.g. `http://nats_event_bus:8131`) and `NATS_EVENT_BUS_TOKEN`, every successful `POST /v1/apps/{slug}/launch` fires a `room.presence.v1` event to the bus with `actor=pinokio_bridge:<slug>`, `actor_kind=service`, `action=active`, `actor_metadata={pid, script}`. The POST is **best-effort** — a down bus (timeout, non-2xx, JSON error) logs WARNING and returns `None`; a launch must NOT be blocked by the bus. When `NATS_EVENT_BUS_URL` is unset (the default), the launch path is unchanged.
+
+This is the first concrete wire-up of the slice-3 pipeline end-to-end: operator runs `pterm run comfyui-desktop/start.js` from creator-studio → `pinokio_bridge` launches it → `nats_event_bus` sees a presence event → a future room sidebar (slice 5d visual evidence) can render "comfyui-desktop is now running in creator-studio" without the sidebar holding a NATS subscription of its own.
+
+### Why a service, not just NATS subs in every consumer
+
+Three reasons:
+
+1. **HTTP-only consumers** (the dashboard, the helpdesk-skill in slice 6, the room-suggest-skill in slice 6) cannot subscribe to NATS directly without pulling in `nats-py` + a long-lived connection. The bus gives them a `/v1/events/{topic}` read.
+2. **Schema gate at publish time** — the bus validates the payload against the topic schema and rejects (422) before the event enters the cache or hits NATS. Bad payloads don't pollute downstream consumers.
+3. **Failure isolation** — a down NATS connection doesn't cascade to the bus's HTTP surface. The bus degrades gracefully (cache stays empty until NATS comes back; POSTs still validate and cache locally).
+
+### Test surface
+
+- `nats_event_bus/tests/test_app.py` — **20/20 pass**. Covers: health, topic listing, write auth (503/401/200), schema validation (422), unknown topics (404), publish-then-read, limit clamping, snapshot latest, presence filtering, auto-registration of new topics, subscriber disabled without `NATS_URL`, subscriber default topic inheritance, and `PublishRequest` pydantic surface. No live NATS required.
+- `pinokio_bridge/tests/test_app.py` — **28/28 pass** (was 24; +4 for the launch hook). Covers: no-op when bus URL unset, correct envelope shape on success, swallows connection error, logs non-2xx.
+- `p7-room-orchestrator` — **46/46 pass** (no regression).
+- `a2ui-nats-bridge` — **16/16 pass** (no regression).
+- `validate_room_manifests.py` — **10/11 OK** (pre-existing `persona.room.livingdoc` em-dash catalog drift, out-of-scope for this lane per slice-1 review-iter-2 cycle-2 thread 3657849839).
+
+### Cross-references (slice 3 additions)
+
+- `pmoves/contracts/schemas/comfy/collab.{prompt,progress,artifact}.v1.schema.json` — 3 new schemas
+- `pmoves/contracts/schemas/room/{room.presence,room.directory}.v1.schema.json` — 2 new schemas
+- `pmoves/contracts/topics.json` — +5 entries (96 total, was 91)
+- `pmoves/services/nats_event_bus/` — new service (app.py, state.py, Dockerfile, requirements.txt, README.md, tests/)
+- `pmoves/services/pinokio_bridge/app.py` — `_publish_presence_event` helper + launch hook
+- `pmoves/services/pinokio_bridge/README.md` — added "Slice-3 NATS pipeline integration" section
+
 ## Why this and not a different shape
 
 - **Not extending `room_type`** — `room_type` is the operating pattern (creator/scout/hybrid) and is referenced by `pmoves/configs/agent-teams.yaml`, the skill marketplace, and the OpenRoom adapter. Conflating "what the room does" with "who it serves" would tangle two real concerns. Two fields, two clean axes.
@@ -74,7 +159,11 @@ When slice 6 lands, Fordham on z890 (CPU SESSION) + `creator_surface: ambient` w
 - `pmoves/config/rooms/creator-studio.room.collab.json` — slice 5 seed
 - `pmoves/configs/pinokio-network-inventory.yaml` — fleet inventory
 - `pmoves/config/profiles/{workstation_5090,laptop-4090,dgx-spark-grace-blackwell,z890-coordinator}.yaml` — node profiles
-- `D:\pinokio\prototype\PINOKIO.md` — Pinokio built-in `pinokio` + `gepeto` skills (the bridge we wrap)
+- `D:\pinokio\prototype\PINOKIO.md` — Pinokio v1 docs (legacy, pre-8.0); the bridge wraps P8's autolaunch + orchestration + managed skills + GPU surfaces
+- `https://cocktailpeanutlabs.github.io/p8/` — Pinokio 8.0.0 release notes (the upstream this slice wraps)
+- `pmoves/skills/pinokio-bridge-skill/SKILL.md` — PMOVES-side skill that uses the bridge (slice 2 P1 commit)
+- `pmoves/services/pinokio_bridge/` — the Python adapter (slice 2 functional commit)
+- `pmoves/configs/tac_trees/pinokio-p8.tac.yaml` — the P8 audit tree (slice 2 functional commit)
 - `pmoves/docs/handoffs/creator-comfyui-selfhost-config-2026-06-24.md` — self-host config handoff
 - AGNOTE4482PHI.t1.md — lane CLAIM + RELEASE entries
 

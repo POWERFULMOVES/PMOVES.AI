@@ -114,7 +114,7 @@
       "room_id": "persona.room.livingdoc",
       "agent_id": "darkxside-persona",
       "alter": "persona-livingdoc",
-      "display_name": "Russell Richardson - Applied AI Architect (Living Doc)",
+      "display_name": "Russell Richardson — Applied AI Architect (Living Doc)",
       "stage": "live",
       "manifest": "persona.room.livingdoc.json",
       "summary": "Public, audience-facing living-doc room: the LinkedIn-aligned persona profile as a first-class OpenRoom the Mavis-5090 adapter serves. a2ui profile shell + authored PreTeXt case studies + planned Remotion walkthrough; content single-sourced in persona.json.",
@@ -133,6 +133,18 @@
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (slice 5 SHIPPED; runtime smoke lands in slice 5d)",
       "stage_verified_at": "2026-07-27T00:00:00Z"
+    },
+    {
+      "room_id": "pmoves.room.helpdesk",
+      "agent_id": "pmoves-helpdesk-steward",
+      "alter": "pmoves-helpdesk",
+      "display_name": "PMOVES Helpdesk (Intake & Routing)",
+      "stage": "rehearsal",
+      "manifest": "pmoves.room.helpdesk.json",
+      "summary": "First-stop intake room: 'how can PMOVES help?' Reads slice-3 room.directory.v1 + slice-4 pinokio-apps registry to route a resident to the right room and the right fleet GPU. Ambient mesh-render button (creator_surface=ambient) hands off to creator-studio rather than rendering inline. CPU-only — runs on the infra-coordinator node (z890). creator-collab-lane slice 6 — 2026-07-28.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest stage field (slice 6 SHIPPED; runtime smoke lands in slice 7)",
+      "stage_verified_at": "2026-07-28T00:00:00Z"
     }
   ]
 }

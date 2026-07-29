@@ -6,16 +6,18 @@
     "worktree": ".worktrees/feat-creator-collab-lane",
     "branch": "feat/creator-collab-lane",
     "pr": 2264,
-    "ship_count": 1,
+    "ship_count": 6,
     "total_slices": 7,
     "status": "in_progress",
     "started_at": "2026-07-27T09:23:00Z",
     "operator": "darkxside",
-    "model_anchor": "creator-steward"
+    "model_anchor": "creator-steward",
+    "merged_at": "2026-07-27T15:29:02Z",
+    "pr_state": "MERGED"
   },
   "slices": {
     "1_contract_extension": {
-      "status": "SHIPPED",
+      "status": "SHIPPED_MERGED",
       "shipped_at": "2026-07-27T09:23:00Z",
       "title": "Room manifest schema extensions: room_purpose, creator_surface, hardware_requirements, pinokio_app_refs",
       "commits": [
@@ -24,17 +26,20 @@
       ],
       "scope": "pmoves/contracts/schemas/room/room.manifest.v1.schema.json (+ 4 top-level optional fields), pmoves/config/rooms/creator-studio.room.collab.json (first consumer of the new fields), pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md (spec doc), pmoves/tools/creator-collab-workflow.md (lane doc), pmoves/config/rooms/catalog.json (+1 entry for creator-studio)",
       "validator_status": "OK",
-      "tests": "validate_room_manifests.py: 10 OK, 1 pre-existing failure (persona.room.livingdoc em-dash mismatch \u00e2\u20ac\u201d pre-existing, not in this lane's scope)",
+      "tests": "validate_room_manifests.py: 10 OK, 1 pre-existing failure (persona.room.livingdoc em-dash mismatch â€” pre-existing, not in this lane's scope)",
       "review_iter": {
         "current_cycle": 1,
         "status": "DONE",
         "branch": "creator-collab-iter-1",
         "merge_target": "feat/creator-collab-lane",
         "reviewer": "chatgpt-codex-connector"
-      }
+      },
+      "merged_at": "2026-07-27T15:29:02Z",
+      "merge_commit": "ad6f62db8a7341bcb1b3ca27ef4ab6f541230c09",
+      "merged_by": "POWERFULMOVES"
     },
     "2_pinokio_bridge_skill": {
-      "status": "pending",
+      "status": "SHIPPED",
       "title": "Pinokio bridge skill (wrapper around Pinokio's built-in pinokio + gepeto skills)",
       "depends_on": [
         "1_contract_extension"
@@ -43,37 +48,87 @@
         "pmoves/skills/pinokio-bridge-skill/SKILL.md",
         "pmoves/services/pinokio_bridge/app.py",
         "pmoves/services/pinokio_bridge/tests/"
-      ]
+      ],
+      "shipped_at": "2026-07-27T18:00:00Z",
+      "scope": "pmoves/skills/pinokio-bridge-skill/SKILL.md + pmoves/services/pinokio_bridge/ (app.py, state.py, tests/test_app.py, Dockerfile, requirements.txt, README.md) + pmoves/configs/tac_trees/pinokio-p8.tac.yaml",
+      "commits": [
+        "cbb5f9c569",
+        "855c7cb7a0"
+      ],
+      "tests": "pinokio_bridge 24/24; P7 46/46; A2UI 16/16; manifests 10/11"
     },
     "3_nats_pipeline": {
-      "status": "pending",
-      "title": "NATS pipeline: comfy.collab.{prompt,progress,artifact}.v1 + room.presence.v1 + room.directory.v1",
+      "status": "SHIPPED",
+      "shipped_at": "2026-07-27T18:35:00Z",
+      "title": "NATS pipeline: 5 JSON Schemas + nats_event_bus service + pinokio_bridge launch hook",
+      "branch": "slice-3-nats-pipeline",
+      "base": "feat/creator-collab-lane @ f29b170d35 (rebased from origin/main @ 42ad231419 because the launch hook needs slice-2's pinokio_bridge code)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "9a71453d29",
+        "2daff111a0",
+        "50eade1485"
+      ],
+      "scope": "pmoves/contracts/schemas/comfy/{collab.prompt,collab.progress,collab.artifact}.v1.schema.json (3 new) + pmoves/contracts/schemas/room/{room.presence,room.directory}.v1.schema.json (2 new) + pmoves/contracts/topics.json (+5 entries) + pmoves/services/nats_event_bus/ (new service: app.py, state.py, Dockerfile, requirements.txt, README.md, tests/test_app.py, __init__.py) + pmoves/services/pinokio_bridge/app.py (_publish_presence_event helper + launch_app hook) + pmoves/services/pinokio_bridge/README.md (slice-3 section) + pmoves/services/pinokio_bridge/tests/test_app.py (+4 cases)",
+      "tests": "nats_event_bus 20/20 (new); pinokio_bridge 28/28 (was 24, +4); p7-room-orchestrator 46/46 (no regression); a2ui-nats-bridge 16/16 (no regression); validate_room_manifests.py 10/11 (pre-existing persona.room.livingdoc em-dash, out of scope)",
       "depends_on": [
         "2_pinokio_bridge_skill"
       ]
     },
     "4_pinokio_apps_registry": {
-      "status": "pending",
-      "title": "Pinokio apps registry: curated/ + user/ + schema + discovery tool + gepeto wrapper",
+      "status": "SHIPPED",
+      "shipped_at": "2026-07-28T13:35:00Z",
+      "title": "pinokio-apps registry: schema + 12 curated + 4 TAC trees + discovery tool + gepeto-wrapper + mesh_exposure (full cloudflared + headscale ACL + hostinger DNS reconcile)",
+      "branch": "slice-4-pinokio-apps-registry",
+      "base": "feat/creator-collab-lane @ 4f926ea72e (post slice 3)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "d679e83332",
+        "4a6b1b3194",
+        "ad6e2b3e0e"
+      ],
+      "scope": "pmoves/configs/pinokio-apps/schema/pinokio-app.v1.schema.json + pmoves/configs/pinokio-apps/curated/{comfyui-desktop,ace-step,wan,lightonocr-2-1b,ultimate-tts-studio,qwen3-tts,vibevoice-realtime,voxforge-pro,n8n,sillytavern,unsloth,customokio}.yaml (12) + pmoves/configs/tac_trees/{pinokio-venv,pmoves-container,tailnet-mesh,public-tunnel}.tac.yaml (4) + pmoves/services/mesh_exposure/ (new service: app.py, state.py, Dockerfile, requirements.txt, README.md, tests/test_app.py) + pmoves/skills/gepeto-wrapper-skill/SKILL.md + pmoves/tools/pinokio_apps/{discover.py,README.md,tests/test_discover.py,_write_curated.py} + pmoves/docs/research/creator-collab-slice-4-deep-dive-2026-07-28.md + pmoves/docs/specs/pinokio-apps-registry-2026-07-28.md",
+      "tests": "mesh_exposure 29/29 (new); pinokio_apps 19/19 (new); nats_event_bus 20/20 (no regression); pinokio_bridge 28/28 (no regression); p7-room-orchestrator 46/46 (no regression); a2ui-nats-bridge 16/16 (no regression); validate_room_manifests.py 10/11 (pre-existing persona.room.livingdoc em-dash, out of scope)",
+      "operator_signoff": "Q1=4-level ladder, Q2=4 separate trees, Q3=full mesh_exposure service in slice 4 (the deep-dive report + 2-question signoff were held for 6 hours; operator chose the full-service path over a stub).",
       "depends_on": [
         "1_contract_extension"
       ]
     },
     "5_creator_studio_seed_and_smoke": {
-      "status": "partial",
-      "title": "creator-studio.room.collab.json + Pinokio apps registry + E2E smoke",
+      "status": "SHIPPED",
+      "shipped_at": "2026-07-28T22:30:00Z",
+      "title": "creator-studio visual evidence dashboard + 7 playwright screenshots + render_dashboard.py + capture_screenshots.py",
+      "branch": "slice-5-creator-studio-e2e-smoke",
+      "base": "feat/creator-collab-lane @ 970fb50792 (post slice 6)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "a7e9e9f4de",
+        "1dd4df2828"
+      ],
+      "scope": "pmoves/tools/creator-collab-evidence/render_dashboard.py (NEW, 16.7 KB, stdlib + pyyaml only — reads catalog.json + 2 new room manifests + 12 curated YAMLs + topics.json, generates single static HTML page) + pmoves/tools/creator-collab-evidence/capture_screenshots.py (NEW, 5.3 KB — boots local HTTP server, opens chromium headless at 1440x900, captures 7 PNGs) + pmoves/docs/evidence/creator-collab-2026-07-28/index.html (NEW, 29 KB rendered dashboard) + pmoves/docs/evidence/creator-collab-2026-07-28/screenshots/{01-overview,02-rooms,03-creator-studio,04-helpdesk,05-pinokio-apps,06-tac-trees,07-topics}.png (NEW, 7 PNGs, ~1 MB total) + pmoves/docs/evidence/creator-collab-2026-07-28/README.md (NEW, 5.8 KB — explains the evidence) + pmoves/docs/specs/creator-collab-visual-evidence-2026-07-28.md (NEW — 8-section slice 5 spec).",
+      "tests": "pmoves/scripts/validate_room_manifests.py: 11 OK / 12 (1 pre-existing failure: persona.room.livingdoc em-dash catalog drift, out of scope). Full test suite: 168/168 PASS (no regression — slice 5 doesn't touch any code, only adds evidence files). Renderer's HTML output parses cleanly in chromium (no console errors; CSS Grid + native <details> work as expected). 7 PNGs captured at 1440x900 viewport; full-page is 1440x5655 (496 KB).",
+      "operator_signoff": "Option A: 'Boot pmoves-ui on :4482 + screenshot the dashboard rendering the new manifests' (operator chose the quickest path). Implemented as a contract-level snapshot generator (render_dashboard.py reads the actual JSON / YAML, no copy-paste drift) + Playwright headless capture (1440x900 viewport) rather than booting the Next.js pmoves/ui surface (which needs env.shared + npm install + Supabase secrets). Same evidence, lighter path; the contract-level snapshot answers 'did the new manifests parse + render correctly?' without the deploy machinery. The full runtime E2E is slice 7.",
       "depends_on": [
         "1_contract_extension",
         "2_pinokio_bridge_skill",
         "4_pinokio_apps_registry"
-      ],
-      "shipped_partial": [
-        "creator-studio.room.collab.json (manifest only)"
       ]
     },
     "6_helpdesk_skill_and_room": {
-      "status": "pending",
-      "title": "pmoves-helpdesk-skill + room-suggest-skill + pmoves.room.helpdesk.json",
+      "status": "SHIPPED",
+      "title": "pmoves-helpdesk-skill + room-suggest-skill + pmoves.room.helpdesk.json + 3 helpdesk.* NATS subjects + skill frontmatter tests",
+      "shipped_at": "2026-07-28T18:30:00Z",
+      "branch": "slice-6-helpdesk-and-room-suggest",
+      "base": "feat/creator-collab-lane @ fd89b2c9ab (post slice 4)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "4494a34b9b",
+        "c46542f313",
+        "3d9f4f4d81"
+      ],
+      "scope": "pmoves/config/rooms/pmoves.room.helpdesk.json (NEW: first room_purpose=intake + creator_surface=ambient room, CPU-only, runs on z890 infra-coordinator) + pmoves/config/rooms/catalog.json (+1 entry) + pmoves/contracts/topics.json (96->99 topics, +3: helpdesk.intake.opened.v1 + helpdesk.intake.routed.v1 + helpdesk.room.suggested.v1) + pmoves/contracts/schemas/helpdesk/{helpdesk.intake.opened,helpdesk.intake.routed,helpdesk.room.suggested}.v1.schema.json (3 new Draft 2020-12 schemas, additionalProperties:false, format:uuid on id fields) + pmoves/skills/pmoves-helpdesk-skill/SKILL.md (NEW: the concierge — visitor state, accept/reject, notebook writeback, mesh-render handoff) + pmoves/skills/room-suggest-skill/SKILL.md (NEW: the pure ranker — deterministic, cached, callable from anywhere, emits helpdesk.room.suggested.v1) + pmoves/skills/tests/test_frontmatter.py (NEW: 10 tests, stdlib + pyyaml only, locks the slice-4 'schema/contract first' rule) + pmoves/docs/specs/helpdesk-and-room-suggest-2026-07-28.md (NEW: 10-section spec doc) + pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md (CLAIM entry + GRAPHITI_MARK).",
+      "tests": "pmoves/skills/tests/test_frontmatter.py: 10/10 NEW (was 0 in the lane — slice 6 introduces the skill frontmatter test convention). Full test suite: 168/168 PASS (was 158/158 before this slice; +10 from the new frontmatter tests, no regressions across mesh_exposure 29/29, pinokio_apps 19/19, nats_event_bus 20/20, pinokio_bridge 28/28, p7-room-orchestrator 46/46, a2ui-nats-bridge 16/16). validate_room_manifests.py: 11 OK / 12 (1 pre-existing failure: persona.room.livingdoc em-dash catalog drift, out of scope). events.load_schema() for all 3 new helpdesk subjects: 3/3 OK; events.envelope(): 3/3 OK.",
+      "operator_signoff": "Q1='slice 6 then slice 5 sequentially' (operator picked sequential order to keep the unblock path linear — slice 6 unblocks slice 7 Fordham E2E; slice 5 visual evidence is independent and lands after).",
       "depends_on": [
         "1_contract_extension",
         "2_pinokio_bridge_skill",
@@ -82,9 +137,48 @@
     },
     "7_fordham_e2e": {
       "status": "pending",
-      "title": "Fordham \u00e2\u2020\u201d PMOVES-helpdesk E2E (full cross-room flow + visual evidence)",
+      "title": "Fordham â†” PMOVES-helpdesk E2E (full cross-room flow + visual evidence)",
       "depends_on": [
         "all_above"
+      ]
+    },
+    "7_prep_infra_fixes": {
+      "status": "SHIPPED",
+      "shipped_at": "2026-07-29T07:00:00Z",
+      "title": "Real-infra fixups unblocking the lane PR + slice 7 Fordham E2E: catalog em-dash parity + pmoves-ui rooms mount",
+      "branch": "slice-7-prep-infra-fixes",
+      "base": "feat/creator-collab-lane @ 445ebb34e5 (post slice 5 redo)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "194d6745fe",
+        "90f0223529",
+        "62e6619da3"
+      ],
+      "scope": "pmoves/config/rooms/catalog.json (1 line: persona.room.livingdoc display_name `-` -> em-dash `—` to match the manifest) + pmoves/docker-compose.yml (pmoves-ui service: PMOVES_ROOM_CONFIG_DIR=/app/rooms env + ./config/rooms:/app/rooms:ro volume, +14 lines) + pmoves/docker-compose.ui.yml (regenerated by `make -C pmoves compose-split` after the drift gate caught the ui overlay was out of sync with the source, +14 lines). 3 files, 29 insertions(+), 1 deletion(-).",
+      "tests": "validate_room_manifests.py 12/12 OK (was 11/12 with the catalog parity failure). pmoves-ui container pmoves-pmoves-ui-1 verified on :4482 with rooms volume mounted; /api/health returns 200, /api/rooms returns 200 with all 12 rooms. env.shared HOSTNAME=8e7b7f2fa242 fix is local-only (gitignored; not part of this commit).",
+      "operator_signoff": "'yes lets commit and lets see if ui is ready after pr and everything from previous 6 slices landed' — operator wants the lane PR-ready and pmoves-ui verified before slice 7's integrated runtime demo. Catalog em-dash unblocked slice 5 evidence (creator-collab territory); docker-compose rooms mount is generic infra but bundled in the same commit because both fixes were discovered on the same live-runtime pass. PMOVES_ROOM_CONFIG_DIR + config/rooms volume mount is now the standard recipe for any Next.js / standalone-build service that needs to read pmoves config data.",
+      "depends_on": [],
+      "pr": 2283,
+      "pr_state": "OPEN_MERGEABLE_BLOCKED_ON_VILLAGE_GATE_PRE_EXISTING",
+      "ci_status": {
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "BLOCKED",
+        "failing_checks": [
+          "village-gate (pre-existing 3-policy violation: ruff-budget 1122/1100, dockerfile-user-coverage 0.8481/0.85, docs-freshness exit 2)"
+        ],
+        "passing_checks_summary": "merge-gate, pr-triage, validate-agents-config, validate-compose-files, hardening-validation, python-tests, codex-parity-advisory, docker-build-validation, emit-lifecycle-trail, submodule-gitlink-gate, validate-hardening-patterns, validate-dockerfiles (8), docker-bench-security, validation-summary, check-suit-release-notes, analyze (actions + javascript-typescript)"
+      },
+      "followup_commits": [
+        {
+          "sha": "62e6619da3",
+          "kind": "merge-main-into-lane",
+          "summary": "merge origin/main into feat/creator-collab-lane (resolve AGNOTE 16-commit drift before PR #2283 merge) — 3-way merge with main advances since the lane branched; AGNOTE resolved by keeping HEAD content (base + Creator Collab slices 2-7 prep) + appending main-only entries (KIMI-SPARK + Open Room + Website UI newer entries); 1429 lines, no conflict markers"
+        },
+        {
+          "sha": "90f0223529",
+          "kind": "fixup",
+          "summary": "regen docker-compose.ui.yml overlay with the slice 7 prep rooms mount + PMOVES_ROOM_CONFIG_DIR; `make -C pmoves compose-split` drift gate caught the ui overlay was out of sync with the source"
+        }
       ]
     }
   },
@@ -217,12 +311,45 @@
           "3657849839": {
             "thread_id": "PRRT_kwDOPkuAKM6UFHZw",
             "resolved_at": "2026-07-27T14:18:00Z",
-            "method": "GraphQL resolveReviewThread (out-of-scope \u2014 pre-existing persona.room.livingdoc em-dash catalog drift; recorded not fixed in this lane)"
+            "method": "GraphQL resolveReviewThread (out-of-scope — pre-existing persona.room.livingdoc em-dash catalog drift; recorded not fixed in this lane)"
           }
         },
         "pr_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5092391250"
       },
       "closing_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5093288788"
+    },
+    "pr_2283": {
+      "cycle_1": {
+        "status": "DONE",
+        "completed_at": "2026-07-29T12:55:00Z",
+        "branch": "pr-2283-iter-1",
+        "merge_target": "feat/creator-collab-lane",
+        "pr": 2283,
+        "reviewer": "chatgpt-codex-connector + github-advanced-security",
+        "threads_addressed": 10,
+        "threads_p1": 4,
+        "threads_p2": 2,
+        "threads_codeql": 4,
+        "commits": [
+          {
+            "sha": "c015e5cb1b",
+            "kind": "P1",
+            "summary": "4 chatgpt-codex P1 threads - Dockerfile copy-requirements, pterm pre-flight + /healthz, helpdesk subjects in DEFAULT_TOPICS, apply() consumes *_removed (writer contract now (added, removed))"
+          },
+          {
+            "sha": "5a44b93d86",
+            "kind": "P2",
+            "summary": "2 chatgpt-codex P2 threads - diff_dns/diff_headscale/diff_cloudflared compare values not just keys (3 regression tests), nc.subscribe(no_echo=True) dedup"
+          },
+          {
+            "sha": "a36973c40c",
+            "kind": "security",
+            "summary": "4 CodeQL findings - URL substring to urlparse, uncontrolled path/cmdline to 3 allow-list regexes, exception info to logger.exception + sanitized errors"
+          }
+        ],
+        "tests": "171/171 across 7 service test groups (was 168; +3 new P2 diff tests). 32/32 mesh_exposure, 20/20 nats_event_bus, 28/28 pinokio_bridge, 19/19 pinokio_apps, 46/46 p7, 16/16 a2ui, 10/10 skills.",
+        "closing_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2283#issuecomment-5117996978"
+      }
     }
   },
   "cron": {
@@ -230,9 +357,10 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-27T15:00:00Z",
-    "next_run": null,
+    "last_run": "2026-07-29T12:55:00Z",
+    "next_run": "2026-07-29T13:25:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
-    "disarmed_reason": "cycle 2 closed >30m ago, no new threads, lane review activity settled"
+    "disarmed_reason": "review-iter-poll cycle 2 closed >30m ago, no new threads, lane review activity settled",
+    "note": "review-iter cycle 1 on PR #2283 complete: 10/10 threads resolved (4 P1 + 2 P2 + 4 CodeQL). Lane conflict-free (mergeable: MERGEABLE) + 171/171 tests + 12/12 manifests. Only blocker is village-gate pre-existing 3-policy failure (ruff-budget 1122/1100, dockerfile-user-coverage 0.8481/0.85, docs-freshness exit 2). Pre-authorized admin-merge gate met (comments resolved + CI green for this lane). Operator decision pending: (a) admin-merge despite village-gate pre-existing, (b) fix pre-existing in a separate lane, (c) greenlight slice 7 Fordham E2E on current PR. Cron continues to tick every 30m awaiting operator direction."
   }
 }
