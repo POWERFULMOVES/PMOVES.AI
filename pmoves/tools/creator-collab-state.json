@@ -317,6 +317,39 @@
         "pr_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5092391250"
       },
       "closing_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2264#issuecomment-5093288788"
+    },
+    "pr_2283": {
+      "cycle_1": {
+        "status": "DONE",
+        "completed_at": "2026-07-29T12:55:00Z",
+        "branch": "pr-2283-iter-1",
+        "merge_target": "feat/creator-collab-lane",
+        "pr": 2283,
+        "reviewer": "chatgpt-codex-connector + github-advanced-security",
+        "threads_addressed": 10,
+        "threads_p1": 4,
+        "threads_p2": 2,
+        "threads_codeql": 4,
+        "commits": [
+          {
+            "sha": "c015e5cb1b",
+            "kind": "P1",
+            "summary": "4 chatgpt-codex P1 threads - Dockerfile copy-requirements, pterm pre-flight + /healthz, helpdesk subjects in DEFAULT_TOPICS, apply() consumes *_removed (writer contract now (added, removed))"
+          },
+          {
+            "sha": "5a44b93d86",
+            "kind": "P2",
+            "summary": "2 chatgpt-codex P2 threads - diff_dns/diff_headscale/diff_cloudflared compare values not just keys (3 regression tests), nc.subscribe(no_echo=True) dedup"
+          },
+          {
+            "sha": "a36973c40c",
+            "kind": "security",
+            "summary": "4 CodeQL findings - URL substring to urlparse, uncontrolled path/cmdline to 3 allow-list regexes, exception info to logger.exception + sanitized errors"
+          }
+        ],
+        "tests": "171/171 across 7 service test groups (was 168; +3 new P2 diff tests). 32/32 mesh_exposure, 20/20 nats_event_bus, 28/28 pinokio_bridge, 19/19 pinokio_apps, 46/46 p7, 16/16 a2ui, 10/10 skills.",
+        "closing_comment_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2283#issuecomment-5117996978"
+      }
     }
   },
   "cron": {
@@ -324,10 +357,10 @@
     "enabled": true,
     "schedule": "*/30 * * * *",
     "session": "mvs_09c9b116c675418b9d8b1a48b10867dc",
-    "last_run": "2026-07-29T11:40:00Z",
-    "next_run": "2026-07-29T12:10:00Z",
+    "last_run": "2026-07-29T12:55:00Z",
+    "next_run": "2026-07-29T13:25:00Z",
     "disarmed_at": "2026-07-27T15:00:00Z",
     "disarmed_reason": "review-iter-poll cycle 2 closed >30m ago, no new threads, lane review activity settled",
-    "note": "all 6 numbered slices + slice 5 redo + slice 7 prep SHIPPED on feat/creator-collab-lane; PR #2283 OPEN (MERGEABLE, BLOCKED on village-gate pre-existing 3-policy failure). Catalog 12/12 OK (was 11/12 with the pre-existing persona.room.livingdoc em-dash catalog drift — fixed in index). pmoves-ui on :4482 verified with rooms volume mounted; /api/rooms returns 12 rooms JSON. Validate Compose Files + 19+ other checks pass; only village-gate blocks. 2026-07-29 update: main merged into lane (62e6619da3, 16-commit AGNOTE drift resolved) + UI overlay regen (90f0223529, drift gate fix). Operator decision pending: (a) admin-merge despite the pre-existing village-gate failures (which are not from this lane), (b) address the pre-existing failures in a separate lane before merging, (c) greenlight slice 7 Fordham E2E on the current PR without waiting for the merge. The PR is technically MERGEABLE — it is only the policy gates on main that block the auto-merge. The slice-7 Fordham E2E work itself is the only remaining numbered slice."
+    "note": "review-iter cycle 1 on PR #2283 complete: 10/10 threads resolved (4 P1 + 2 P2 + 4 CodeQL). Lane conflict-free (mergeable: MERGEABLE) + 171/171 tests + 12/12 manifests. Only blocker is village-gate pre-existing 3-policy failure (ruff-budget 1122/1100, dockerfile-user-coverage 0.8481/0.85, docs-freshness exit 2). Pre-authorized admin-merge gate met (comments resolved + CI green for this lane). Operator decision pending: (a) admin-merge despite village-gate pre-existing, (b) fix pre-existing in a separate lane, (c) greenlight slice 7 Fordham E2E on current PR. Cron continues to tick every 30m awaiting operator direction."
   }
 }
