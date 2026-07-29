@@ -431,17 +431,27 @@ def apply(
         result.headscale_written = plan_obj.headscale_added
         result.headscale_removed = plan_obj.headscale_removed
     except Exception as e:  # noqa: BLE001
-        result.errors.append(f"headscale: {e}")
+        # Sanitize: the writer may be a real production implementation
+        # that connects to Headscale / Cloudflare / Hostinger APIs over
+        # SSH or HTTPS — exception messages can include URLs,
+        # hostnames, tokens, or stack traces. Log the full exception
+        # server-side and surface a stable error code to the client
+        # (CodeQL thread 3657849876 — information exposure through
+        # exception).
+        logger.exception("headscale writer failed: %s", e)
+        result.errors.append(f"headscale: write failed ({type(e).__name__})")
     try:
         cloudflared_writer(plan_obj.cloudflared_added, plan_obj.cloudflared_removed)
         result.cloudflared_written = plan_obj.cloudflared_added
         result.cloudflared_removed = plan_obj.cloudflared_removed
     except Exception as e:  # noqa: BLE001
-        result.errors.append(f"cloudflared: {e}")
+        logger.exception("cloudflared writer failed: %s", e)
+        result.errors.append(f"cloudflared: write failed ({type(e).__name__})")
     try:
         dns_writer(plan_obj.dns_added, plan_obj.dns_removed)
         result.dns_written = plan_obj.dns_added
         result.dns_removed = plan_obj.dns_removed
     except Exception as e:  # noqa: BLE001
-        result.errors.append(f"dns: {e}")
+        logger.exception("dns writer failed: %s", e)
+        result.errors.append(f"dns: write failed ({type(e).__name__})")
     return result

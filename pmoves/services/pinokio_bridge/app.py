@@ -22,6 +22,7 @@ the only consumer that mutates state.
 # FastAPI Body() need real class refs at runtime, not PEP 563 strings.
 import logging
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -235,6 +236,17 @@ def create_app(
         env: Dict[str, str] = Field(default_factory=dict)
         argv_extra: List[str] = Field(default_factory=list)
 
+    # Strict allow-list for the {slug} path component. Pinokio slugs
+    # are filesystem-friendly identifiers (a-z, 0-9, underscore, hyphen,
+    # dot). Anything outside this set is rejected with 400 before we
+    # touch the filesystem or build a subprocess argv. Without this,
+    # a caller could pass "../../etc/passwd" or "foo;rm -rf /" as a
+    # slug and the launch endpoint would build a path / argv from it
+    # (CodeQL thread 3657849874 — uncontrolled data in path / cmdline).
+    _SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+    _SCRIPT_RE = re.compile(r"^[A-Za-z0-9_./-]{1,256}$")
+    _ARGV_ITEM_RE = re.compile(r"^[A-Za-z0-9_=./:@,+%-]{1,256}$")
+
     @app.post("/v1/apps/{slug}/launch", dependencies=[Depends(require_token)])
     def launch_app(slug: str, req: LaunchRequest) -> Dict[str, Any]:
         """Launch a Pinokio app with structured `shell.run` argv.
@@ -251,6 +263,28 @@ def create_app(
         either include pterm in its image or have pterm bind-mounted
         from the host. The /healthz endpoint surfaces the pterm status.
         """
+        if not _SLUG_RE.match(slug):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid slug '{slug}': must match {_SLUG_RE.pattern}"
+                ),
+            )
+        if not _SCRIPT_RE.match(req.script):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid script '{req.script}': must match {_SCRIPT_RE.pattern}"
+                ),
+            )
+        for i, item in enumerate(req.argv_extra):
+            if not _ARGV_ITEM_RE.match(item):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Invalid argv_extra[{i}]='{item}': must match {_ARGV_ITEM_RE.pattern}"
+                    ),
+                )
         if not PTERM_AVAILABLE:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

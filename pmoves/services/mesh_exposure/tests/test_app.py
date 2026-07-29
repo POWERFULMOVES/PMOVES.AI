@@ -232,7 +232,12 @@ def test_desired_cloudflared_entries_for_l4_app(registry_dir) -> None:
     assert len(entries) == 1
     assert entries[0]["tunnel"] == "pmoves-edge"
     assert entries[0]["hostname"] == "l4-app.pmoves.ai"
-    assert "l4-app.powerfulmoves-1.ts.pmoves.net" in entries[0]["service"]
+    # Check the service URL hostname component, not a substring of the
+    # whole URL (CodeQL thread 3657849873 — incomplete URL substring
+    # sanitization). Parse the URL, then assert on the hostname field.
+    from urllib.parse import urlparse
+    parsed = urlparse(entries[0]["service"])
+    assert parsed.hostname == "l4-app.powerfulmoves-1.ts.pmoves.net"
 
 
 def test_desired_cloudflared_entries_for_non_l4_app(registry_dir) -> None:
