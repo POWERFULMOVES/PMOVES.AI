@@ -82,4 +82,4 @@ local video understanding + search + summarization tools.
   should set it).
 - ~~Add `hf-mcp-server` to `pmoves/config/agent_registry.yaml`.~~ Done.
 - ~~Update CATALOG.md to add `:8203 hf-mcp-server`.~~ Done.
-- Submodule / wire PM-Spark-VSS for Claw.
+- ~~Submodule / wire PM-Spark-VSS for Claw.~~ Claimed — see `pmoves/docs/handoffs/SPARK_VSS_INTEGRATION_2026-07-29.md`.
