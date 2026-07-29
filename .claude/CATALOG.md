@@ -33,6 +33,8 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
 
+**HF MCP Server** `:8203` (host) / `:8096` (container) — HuggingFace Hub MCP server. Tools: `hf.model.search/info/download/list/convert_gguf`. SSE MCP at `/mcp/sse` (real JSON-RPC over SSE via `mcp.server.MCPServer`; POST messages to `/mcp/messages/`), REST API at `/api/*`, publishes `hf.model.downloaded.v1`. Downloads to `${HF_HOME:-./data/models}`:/models; inference services can mount the same path or import converted GGUF artifacts. Health: `GET /healthz`. Profile: `agents`/`research`.
+
 **Cipher Memory** `:8105` (host) / `:3000` (container) — Agent memory service. Submodule `Pmoves-cipher` forked from `campfirein/byterover-cli` v3.16.1 (formerly Cipher) with PMOVES additive shim (`src/pmoves/`). REST: `/api/memory` CRUD (POST/GET/search/DELETE — PMOVES PR #5 + A1-Shim), `GET /health` (NOT `/healthz`). MCP: SSE at `/mcp/sse` (4 tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`), POST `/mcp/messages`. **Auth:** `Authorization: Bearer ${CIPHER_API_TOKEN}` on all routes except `/health` (dev-skip if unset). NATS: emits `cipher.memory.stored.v1`, `.searched.v1`, `cipher.reasoning.stored.v1` + `services.announce.v1` (discovery mesh). Python bridge (`pmoves-cipher-mcp/`) DISABLED since 2026-05-15 — agents connect direct SSE. See `pmoves/docs/TAC/TAC_CIPHER.md` for architecture decision + A1-Shim workorder. BoTZ variant: separate instance at `:8081`, own `botz.cipher.*` NATS namespace. DoX variant: native Python CipherService at `:8096`.
 
 ## Retrieval & Knowledge Services
