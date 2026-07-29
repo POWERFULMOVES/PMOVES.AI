@@ -118,16 +118,28 @@ class ServiceState:
 # overrides via env or runbook)
 # --------------------------------------------------------------------------
 
-def noop_headscale_writer(rules: List[Dict[str, Any]]) -> None:
-    logger.info("noop_headscale_writer called with %d rules (production runbook handles the actual write)", len(rules))
+def noop_headscale_writer(added: List[Dict[str, Any]], removed: List[Dict[str, Any]]) -> None:
+    logger.info(
+        "noop_headscale_writer called with %d added, %d removed "
+        "(production runbook handles the actual write)",
+        len(added), len(removed),
+    )
 
 
-def noop_cloudflared_writer(rules: List[Dict[str, Any]]) -> None:
-    logger.info("noop_cloudflared_writer called with %d entries (production runbook handles the actual write)", len(rules))
+def noop_cloudflared_writer(added: List[Dict[str, Any]], removed: List[Dict[str, Any]]) -> None:
+    logger.info(
+        "noop_cloudflared_writer called with %d added, %d removed "
+        "(production runbook handles the actual write)",
+        len(added), len(removed),
+    )
 
 
-def noop_dns_writer(records: List[Dict[str, Any]]) -> None:
-    logger.info("noop_dns_writer called with %d records (production runbook handles the actual write)", len(records))
+def noop_dns_writer(added: List[Dict[str, Any]], removed: List[Dict[str, Any]]) -> None:
+    logger.info(
+        "noop_dns_writer called with %d added, %d removed "
+        "(production runbook handles the actual write)",
+        len(added), len(removed),
+    )
 
 
 # --------------------------------------------------------------------------

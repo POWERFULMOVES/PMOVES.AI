@@ -232,7 +232,12 @@ def test_desired_cloudflared_entries_for_l4_app(registry_dir) -> None:
     assert len(entries) == 1
     assert entries[0]["tunnel"] == "pmoves-edge"
     assert entries[0]["hostname"] == "l4-app.pmoves.ai"
-    assert "l4-app.powerfulmoves-1.ts.pmoves.net" in entries[0]["service"]
+    # Check the service URL hostname component, not a substring of the
+    # whole URL (CodeQL thread 3657849873 — incomplete URL substring
+    # sanitization). Parse the URL, then assert on the hostname field.
+    from urllib.parse import urlparse
+    parsed = urlparse(entries[0]["service"])
+    assert parsed.hostname == "l4-app.powerfulmoves-1.ts.pmoves.net"
 
 
 def test_desired_cloudflared_entries_for_non_l4_app(registry_dir) -> None:
@@ -287,6 +292,41 @@ def test_diff_dns_keyed_by_name_and_type() -> None:
     current = [{"name": "x.pmoves.ai", "type": "CNAME", "content": "t.cfargotunnel.com"}]
     a, r, u = diff_dns(desired, current)
     assert a == [] and r == [] and u == 1
+
+
+def test_diff_dns_value_change_triggers_replace() -> None:
+    """When the (name, type) key matches but content/ttl/proxied
+    differ, the plan must be a remove-then-add (not unchanged).
+    The previous contract left the live record pointing at the
+    stale target (PR #2283 chatgpt-codex thread 3657849871)."""
+    desired = [{"name": "x.pmoves.ai", "type": "CNAME", "content": "new.cfargotunnel.com", "ttl": 60}]
+    current = [{"name": "x.pmoves.ai", "type": "CNAME", "content": "old.cfargotunnel.com", "ttl": 300}]
+    a, r, u = diff_dns(desired, current)
+    assert u == 0
+    assert a == desired
+    assert r == current
+
+
+def test_diff_cloudflared_value_change_triggers_replace() -> None:
+    """Same value-comparison guarantee for the cloudflared diff:
+    a tunnel target move is a replace, not a no-op."""
+    desired = [{"tunnel": "pmoves-edge", "hostname": "x.pmoves.ai", "service": "http://new:8188"}]
+    current = [{"tunnel": "pmoves-edge", "hostname": "x.pmoves.ai", "service": "http://old:8188"}]
+    a, r, u = diff_cloudflared(desired, current)
+    assert u == 0
+    assert a == desired
+    assert r == current
+
+
+def test_diff_headscale_value_change_triggers_replace() -> None:
+    """Same value-comparison guarantee for the headscale diff: a
+    src/dst change is a replace, not a no-op."""
+    desired = [{"port": 8188, "src": ["group:admins"], "dst": ["b"]}]
+    current = [{"port": 8188, "src": ["group:users"], "dst": ["a"]}]
+    a, r, u = diff_headscale(desired, current)
+    assert u == 0
+    assert a == desired
+    assert r == current
 
 
 # --------------------------------------------------------------------------
@@ -478,9 +518,9 @@ def test_apply_in_apply_writer_mode_records_last_apply(client, monkeypatch) -> N
         headscale_reader=lambda: [],
         cloudflared_reader=lambda: [],
         dns_reader=lambda: [],
-        headscale_writer=lambda rules: written["h"].extend(rules),
-        cloudflared_writer=lambda rules: written["c"].extend(rules),
-        dns_writer=lambda recs: written["d"].extend(recs),
+        headscale_writer=lambda added, removed: written["h"].extend(added),
+        cloudflared_writer=lambda added, removed: written["c"].extend(added),
+        dns_writer=lambda added, removed: written["d"].extend(added),
     )
     # The fixture's app has WRITER_MODE=noop. We need to reload to get
     # the apply mode without monkeypatching the module-level constant.
@@ -494,9 +534,9 @@ def test_apply_in_apply_writer_mode_records_last_apply(client, monkeypatch) -> N
         headscale_reader=lambda: [],
         cloudflared_reader=lambda: [],
         dns_reader=lambda: [],
-        headscale_writer=lambda rules: written["h"].extend(rules),
-        cloudflared_writer=lambda rules: written["c"].extend(rules),
-        dns_writer=lambda recs: written["d"].extend(recs),
+        headscale_writer=lambda added, removed: written["h"].extend(added),
+        cloudflared_writer=lambda added, removed: written["c"].extend(added),
+        dns_writer=lambda added, removed: written["d"].extend(added),
     )
     c = TestClient(a2)
     r = c.post(

@@ -260,6 +260,13 @@ def _key(d: Dict[str, Any], fields: Tuple[str, ...]) -> Tuple:
     return tuple(d.get(f) for f in fields)
 
 
+def _value_dict(d: Dict[str, Any], exclude: Tuple[str, ...] = ()) -> Dict[str, Any]:
+    """Return a value-comparable view of `d` excluding the key fields.
+    Two records with the same key but different value_dicts are a
+    value-changed pair (the writer replaces)."""
+    return {k: v for k, v in d.items() if k not in exclude}
+
+
 def diff_headscale(
     desired: List[Dict[str, Any]], current: List[Dict[str, Any]]
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], int]:
@@ -270,7 +277,14 @@ def diff_headscale(
         if k not in cur_by_key:
             added.append(d)
         else:
-            unchanged += 1
+            # Same key; compare the rest of the fields. A change in
+            # src or dst means the rule logically changed and must
+            # be replaced (removed-then-added via the writer).
+            if _value_dict(d, ("port",)) == _value_dict(cur_by_key[k], ("port",)):
+                unchanged += 1
+            else:
+                added.append(d)
+                removed.append(cur_by_key[k])
     for k, c in cur_by_key.items():
         if k not in des_by_key:
             removed.append(c)
@@ -287,7 +301,13 @@ def diff_cloudflared(
         if k not in cur_by_key:
             added.append(d)
         else:
-            unchanged += 1
+            # Same (tunnel, hostname); compare the rest of the fields.
+            # A change in `service` means the tunnel target moved.
+            if _value_dict(d, ("tunnel", "hostname")) == _value_dict(cur_by_key[k], ("tunnel", "hostname")):
+                unchanged += 1
+            else:
+                added.append(d)
+                removed.append(cur_by_key[k])
     for k, c in cur_by_key.items():
         if k not in des_by_key:
             removed.append(c)
@@ -304,7 +324,16 @@ def diff_dns(
         if k not in cur_by_key:
             added.append(d)
         else:
-            unchanged += 1
+            # Same (name, type); compare content/ttl/proxied. The
+            # previous contract incremented `unchanged` on any
+            # key match, leaving stale records live when the tunnel
+            # target or TTL changed. Now a value mismatch is a
+            # replace (removed-then-added via the writer).
+            if _value_dict(d, ("name", "type")) == _value_dict(cur_by_key[k], ("name", "type")):
+                unchanged += 1
+            else:
+                added.append(d)
+                removed.append(cur_by_key[k])
     for k, c in cur_by_key.items():
         if k not in des_by_key:
             removed.append(c)
@@ -355,25 +384,39 @@ class ApplyResult:
     """The result of an apply. Each section reports what changed."""
     def __init__(self):
         self.headscale_written: List[Dict[str, Any]] = []
+        self.headscale_removed: List[Dict[str, Any]] = []
         self.cloudflared_written: List[Dict[str, Any]] = []
+        self.cloudflared_removed: List[Dict[str, Any]] = []
         self.dns_written: List[Dict[str, Any]] = []
+        self.dns_removed: List[Dict[str, Any]] = []
         self.errors: List[str] = []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "headscale_written": self.headscale_written,
+            "headscale_removed": self.headscale_removed,
             "cloudflared_written": self.cloudflared_written,
+            "cloudflared_removed": self.cloudflared_removed,
             "dns_written": self.dns_written,
+            "dns_removed": self.dns_removed,
             "errors": self.errors,
         }
 
 
 # These callables do the actual writes. Default no-ops in the service
 # (the writer is the operator's runbook); tests inject mocks that
-# record the writes.
-HeadscaleWriter = Callable[[List[Dict[str, Any]]], None]
-CloudflaredWriter = Callable[[List[Dict[str, Any]]], None]
-DnsWriter = Callable[[List[Dict[str, Any]]], None]
+# record the writes. Each writer receives (added, removed) so a
+# retraction actually removes the live record — the previous contract
+# that only took `added` left stale entries live on retraction.
+HeadscaleWriter = Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], None]
+CloudflaredWriter = Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], None]
+"""Writer for cloudflared tunnel ingress. Receives (added, removed) lists
+so a retraction actually removes the tunnel entry; the previous contract
+that only took `added` left stale entries live on retraction."""
+
+DnsWriter = Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], None]
+"""Writer for DNS records. Receives (added, removed) lists; same
+retraction rationale as CloudflaredWriter."""
 
 
 def apply(
@@ -384,18 +427,31 @@ def apply(
 ) -> ApplyResult:
     result = ApplyResult()
     try:
-        headscale_writer(plan_obj.headscale_added)
+        headscale_writer(plan_obj.headscale_added, plan_obj.headscale_removed)
         result.headscale_written = plan_obj.headscale_added
+        result.headscale_removed = plan_obj.headscale_removed
     except Exception as e:  # noqa: BLE001
-        result.errors.append(f"headscale: {e}")
+        # Sanitize: the writer may be a real production implementation
+        # that connects to Headscale / Cloudflare / Hostinger APIs over
+        # SSH or HTTPS — exception messages can include URLs,
+        # hostnames, tokens, or stack traces. Log the full exception
+        # server-side and surface a stable error code to the client
+        # (CodeQL thread 3657849876 — information exposure through
+        # exception).
+        logger.exception("headscale writer failed: %s", e)
+        result.errors.append(f"headscale: write failed ({type(e).__name__})")
     try:
-        cloudflared_writer(plan_obj.cloudflared_added)
+        cloudflared_writer(plan_obj.cloudflared_added, plan_obj.cloudflared_removed)
         result.cloudflared_written = plan_obj.cloudflared_added
+        result.cloudflared_removed = plan_obj.cloudflared_removed
     except Exception as e:  # noqa: BLE001
-        result.errors.append(f"cloudflared: {e}")
+        logger.exception("cloudflared writer failed: %s", e)
+        result.errors.append(f"cloudflared: write failed ({type(e).__name__})")
     try:
-        dns_writer(plan_obj.dns_added)
+        dns_writer(plan_obj.dns_added, plan_obj.dns_removed)
         result.dns_written = plan_obj.dns_added
+        result.dns_removed = plan_obj.dns_removed
     except Exception as e:  # noqa: BLE001
-        result.errors.append(f"dns: {e}")
+        logger.exception("dns writer failed: %s", e)
+        result.errors.append(f"dns: write failed ({type(e).__name__})")
     return result
