@@ -231,3 +231,36 @@ yt-playlist-stats: ## Show crawled video statistics from Supabase
 		FROM youtube_videos WHERE duration_seconds IS NOT NULL
 		GROUP BY 1 ORDER BY cnt DESC;
 	"
+
+# ---------------------------------------------------------------------------
+# Cross-node JuiceFS mount (mesh shared storage)
+# Run on remote nodes to mount the shared JuiceFS media filesystem.
+# ---------------------------------------------------------------------------
+
+.PHONY: juicefs-cross-node-setup juicefs-status juicefs-mount-local
+
+JUICEFS_HOST_IP ?= 100.122.182.3
+
+juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST_IP=<host-ts-ip> DB_PASS=<supabase-db-pass>
+	@JUICEFS_HOST=$(JUICEFS_HOST_IP) DB_PASS=$(or $(DB_PASS),$(error DB_PASS required)) bash scripts/juicefs-cross-node-setup.sh
+
+juicefs-status: ## Show JuiceFS mount status
+	@echo "=== JuiceFS Mount ==="
+	@docker ps --filter name=juicefs-mount --format "{{.Names}} {{.Status}}" 2>/dev/null || echo "juicefs-mount not running"
+	@echo ""
+	@echo "=== Content Dirs ==="
+	@docker exec juicefs-mount find /mnt/media -maxdepth 2 -type d 2>/dev/null | sort || echo "Mount not accessible"
+
+juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
+	@echo "Starting JuiceFS mount (local DB)..."
+	@docker run -d \
+	    --name juicefs-mount \
+	    --restart unless-stopped \
+	    --privileged \
+	    --network host \
+	    --entrypoint sh \
+	    -v $$HOME/.local/share/juicefs-data:/data \
+	    -v $$HOME/pmoves-fs:$$HOME/pmoves-fs:rshared \
+	    juicedata/mount:ce-v1.3.0 \
+	    -c 'exec juicefs mount --enable-xattr "postgres://supabase_admin:$(SUPABASE_DB_PASSWORD)@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" $$HOME/pmoves-fs' 2>/dev/null || echo "Already running or failed"
+	@echo "Use 'make juicefs-status' to verify"
