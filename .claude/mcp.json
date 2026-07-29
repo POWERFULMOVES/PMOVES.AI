@@ -4,7 +4,7 @@
     "pmoves-cipher": {
       "_note": "Cipher SSE requires bearer auth when the API token is set (hardened container, post-#2005 recreate). The claude-pmoves launcher injects the token env var; without it the header expands empty and cipher returns 401 (same as before this header existed - no regression).",
       "type": "sse",
-      "url": "http://localhost:8105/mcp/sse",
+      "url": "http://localhost:8105/api/mcp/sse",
       "headers": {
         "Authorization": "Bearer ${CIPHER_API_TOKEN}"
       }
