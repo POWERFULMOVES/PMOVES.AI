@@ -362,3 +362,7 @@
 	url = https://github.com/POWERFULMOVES/Pmoves-pretext.git
 	branch = PMOVES.AI-Edition-Hardened
 	ignore = all
+[submodule "PMOVES-Spark-VSS"]
+	path = PMOVES-Spark-VSS
+	url = https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git
+	branch = main

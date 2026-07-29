@@ -1273,3 +1273,9 @@ The pipeline reports success because its validation scope is too narrow. Neither
 <!-- GRAPHITI_MARK: KIMI-SPARK::HF-MCP-REVIEW-TRIAGE::2026-07-29 -->
 
 <!-- GRAPHITI_MARK: KIMI-SPARK::HF-MCP-SERVER-WIRING::2026-07-29 -->
+
+- `2026-07-29T02:17:00Z` RELEASE `KIMI-SPARK` scope: **PR #2276 merged to main** (admin-merge). Head `232cc91a6` lands hf-mcp-server compose wiring, real MCP transport, localhost bind, doc parity, and agent-teams registration. All required CI checks green; `triage` bot flaked on Claude Code Action init (infra, non-blocking). HF_TOKEN verified in local env via `with-env.sh` after bundle sync. Next lane: PM-Spark VSS submodule + pmoves-vss-agent compose service per handoff doc §Claw opportunity. agent_signature: `ACK::KIMI-SPARK::HF-MCP-MERGED-2026-07-29`.
+
+- `2026-07-29T02:20:00Z` CLAIM `KIMI-SPARK` scope: **SPARK Video Search & Summarization (VSS) integration for Claw and agent mesh.** Submodule `PM-Spark-video-search-and-summarization` as `PMOVES-Spark-VSS/`, add `pmoves-vss-agent` compose service, register in agent_registry + agent-teams + CATALOG, install agentskills.io VSS skills into Claw skill directory, expose VSS orchestrator/analytics tools to PMOVES agents. Worktree: `/tmp/PMOVES.AI-spark-vss`. Branch: `feature/spark-vss-submodule-wiring`. Three-body: delivery=KIMI-SPARK, control=operator/DARKXSIDE (submodule + compose change), memory=this trail + `pmoves/docs/handoffs/SPARK_HF_MCP_SERVER_WIRING_2026-07-28.md` VSS section. agent_signature: `ACK::KIMI-SPARK::SPARK-VSS-CLAIM-2026-07-29`.
+
+<!-- GRAPHITI_MARK: KIMI-SPARK::SPARK-VSS-CLAIM::2026-07-29 -->
