@@ -319,13 +319,11 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
     flow = _build_flow(client_id, client_secret, scope)
 
     print("Opening browser for Google OAuth2 consent (loopback, ephemeral port)...")
-    # Don't log the scope value itself: CodeQL flags OAuth-derived parameters in
-    # any log line (clear-text-logging-sensitive-data). Show the count + the first
-    # scope's tail instead so the operator can confirm the config without
-    # exposing the taint path.
-    scope_count = len(scope.split())
-    scope_tail = scope.rsplit("/", 1)[-1] if scope else ""
-    print(f"  Scopes: {scope_count} requested (last: {scope_tail})")
+    # Scope intentionally NOT logged: CodeQL flags any print that traces to an
+    # OAuth-derived parameter (clear-text-logging-sensitive-data). The scope
+    # value is set via --scopes arg or OAUTH_SCOPES default; run with --help
+    # to see the configured value.
+    print("  Scopes: configured (use --scopes to override; see --help)")
 
     # oauthlib refuses HTTP (even localhost) by default; the loopback flow
     # always uses plain HTTP, so opt in explicitly.
