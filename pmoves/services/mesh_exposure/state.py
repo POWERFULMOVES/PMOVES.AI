@@ -260,6 +260,13 @@ def _key(d: Dict[str, Any], fields: Tuple[str, ...]) -> Tuple:
     return tuple(d.get(f) for f in fields)
 
 
+def _value_dict(d: Dict[str, Any], exclude: Tuple[str, ...] = ()) -> Dict[str, Any]:
+    """Return a value-comparable view of `d` excluding the key fields.
+    Two records with the same key but different value_dicts are a
+    value-changed pair (the writer replaces)."""
+    return {k: v for k, v in d.items() if k not in exclude}
+
+
 def diff_headscale(
     desired: List[Dict[str, Any]], current: List[Dict[str, Any]]
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], int]:
@@ -270,7 +277,14 @@ def diff_headscale(
         if k not in cur_by_key:
             added.append(d)
         else:
-            unchanged += 1
+            # Same key; compare the rest of the fields. A change in
+            # src or dst means the rule logically changed and must
+            # be replaced (removed-then-added via the writer).
+            if _value_dict(d, ("port",)) == _value_dict(cur_by_key[k], ("port",)):
+                unchanged += 1
+            else:
+                added.append(d)
+                removed.append(cur_by_key[k])
     for k, c in cur_by_key.items():
         if k not in des_by_key:
             removed.append(c)
@@ -287,7 +301,13 @@ def diff_cloudflared(
         if k not in cur_by_key:
             added.append(d)
         else:
-            unchanged += 1
+            # Same (tunnel, hostname); compare the rest of the fields.
+            # A change in `service` means the tunnel target moved.
+            if _value_dict(d, ("tunnel", "hostname")) == _value_dict(cur_by_key[k], ("tunnel", "hostname")):
+                unchanged += 1
+            else:
+                added.append(d)
+                removed.append(cur_by_key[k])
     for k, c in cur_by_key.items():
         if k not in des_by_key:
             removed.append(c)
@@ -304,7 +324,16 @@ def diff_dns(
         if k not in cur_by_key:
             added.append(d)
         else:
-            unchanged += 1
+            # Same (name, type); compare content/ttl/proxied. The
+            # previous contract incremented `unchanged` on any
+            # key match, leaving stale records live when the tunnel
+            # target or TTL changed. Now a value mismatch is a
+            # replace (removed-then-added via the writer).
+            if _value_dict(d, ("name", "type")) == _value_dict(cur_by_key[k], ("name", "type")):
+                unchanged += 1
+            else:
+                added.append(d)
+                removed.append(cur_by_key[k])
     for k, c in cur_by_key.items():
         if k not in des_by_key:
             removed.append(c)

@@ -193,7 +193,12 @@ class NatsSubscriber:
                     await self._cache.append(msg.subject, env)
 
                 for t in self._topics:
-                    await nc.subscribe(t, cb=handler)
+                    # no_echo=True prevents this connection from
+                    # receiving its own publishes on /v1/publish, which
+                    # would otherwise cause every published envelope
+                    # to be appended to the cache twice (local append
+                    # in the request handler + echo via the subscriber).
+                    await nc.subscribe(t, cb=handler, no_echo=True)
 
                 # Park until disconnect; nats-py will call us back if it dies.
                 while not self._stopped and nc.is_connected:

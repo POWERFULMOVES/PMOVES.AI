@@ -289,6 +289,41 @@ def test_diff_dns_keyed_by_name_and_type() -> None:
     assert a == [] and r == [] and u == 1
 
 
+def test_diff_dns_value_change_triggers_replace() -> None:
+    """When the (name, type) key matches but content/ttl/proxied
+    differ, the plan must be a remove-then-add (not unchanged).
+    The previous contract left the live record pointing at the
+    stale target (PR #2283 chatgpt-codex thread 3657849871)."""
+    desired = [{"name": "x.pmoves.ai", "type": "CNAME", "content": "new.cfargotunnel.com", "ttl": 60}]
+    current = [{"name": "x.pmoves.ai", "type": "CNAME", "content": "old.cfargotunnel.com", "ttl": 300}]
+    a, r, u = diff_dns(desired, current)
+    assert u == 0
+    assert a == desired
+    assert r == current
+
+
+def test_diff_cloudflared_value_change_triggers_replace() -> None:
+    """Same value-comparison guarantee for the cloudflared diff:
+    a tunnel target move is a replace, not a no-op."""
+    desired = [{"tunnel": "pmoves-edge", "hostname": "x.pmoves.ai", "service": "http://new:8188"}]
+    current = [{"tunnel": "pmoves-edge", "hostname": "x.pmoves.ai", "service": "http://old:8188"}]
+    a, r, u = diff_cloudflared(desired, current)
+    assert u == 0
+    assert a == desired
+    assert r == current
+
+
+def test_diff_headscale_value_change_triggers_replace() -> None:
+    """Same value-comparison guarantee for the headscale diff: a
+    src/dst change is a replace, not a no-op."""
+    desired = [{"port": 8188, "src": ["group:admins"], "dst": ["b"]}]
+    current = [{"port": 8188, "src": ["group:users"], "dst": ["a"]}]
+    a, r, u = diff_headscale(desired, current)
+    assert u == 0
+    assert a == desired
+    assert r == current
+
+
 # --------------------------------------------------------------------------
 # Plan: end-to-end
 # --------------------------------------------------------------------------
