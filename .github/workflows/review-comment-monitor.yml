@@ -43,7 +43,11 @@ jobs:
       - name: Triage automated review
         uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Use the direct Anthropic API key, not CLAUDE_CODE_OAUTH_TOKEN. The
+          # OAuth token is the Pro/Max subscription credential and expires; the
+          # repo's ANTHROPIC_API_KEY (rotated 2026-02-27) is the persistent path.
+          # Same fix applied to claude-code-review.yml and review-autofix.yml.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # claude-code-action rejects bot-triggered runs by default; this job is
           # *intentionally* triggered by bot reviews, so allow exactly those bots.
           allowed_bots: 'coderabbitai[bot],chatgpt-codex-connector[bot]'
