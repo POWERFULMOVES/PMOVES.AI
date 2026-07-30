@@ -234,7 +234,11 @@ services:
     - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_API_PORT:-8091}:3090
     volumes:
     - archon-data:/.archon
-    - archon-user-home:/home/appuser
+    # archon-user-home replaced with tmpfs on Windows nodes — named volume
+    # breaks entrypoint find+chown (permission denied). tmpfs supports POSIX
+    # ownership correctly. archon-data persists workspaces/worktrees.
+    - type: tmpfs
+      target: /home/appuser
     networks:
       pmoves_app:
         aliases:
@@ -739,7 +743,6 @@ services:
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
     - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external
-    command: ["sh", "-c", "node dist/src/app/index.cjs --mode api --port 8105 --host 0.0.0.0 --agent memAgent/cipher.yml --mcp-transport-type sse"]
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
@@ -901,10 +904,10 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     - PYTHONUNBUFFERED=1
-    - PMOVES_NETWORKS=pmoves_app
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports: ["${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app]
+    networks: [pmoves_app, pmoves_bus]
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8106/healthz').raise_for_status()\" || exit 1"]
       interval: 30s

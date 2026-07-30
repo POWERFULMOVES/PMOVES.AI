@@ -206,7 +206,6 @@ jobs:
             context: ./pmoves/services/channel-monitor
           - name: archon
             context: ./pmoves
-            dockerfile: pmoves/services/archon/Dockerfile
           - name: ffmpeg-whisper
             context: ./pmoves/services/ffmpeg-whisper
           - name: hirag-gateway-v2

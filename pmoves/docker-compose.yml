@@ -3038,9 +3038,6 @@ services:
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
     - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external
-    # Use Dockerfile CMD (dist/pmoves/rest-server.js) — the ByteRover native
-    # entrypoint (dist/src/app/index.cjs) does not exist in the PMOVES shim build.
-    # command: ["sh", "-c", "node dist/src/app/index.cjs --mode api --port 8105 --host 0.0.0.0 --agent memAgent/cipher.yml --mcp-transport-type sse"]
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
