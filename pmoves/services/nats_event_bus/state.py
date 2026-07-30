@@ -178,7 +178,18 @@ class NatsSubscriber:
         while not self._stopped:
             try:
                 nc = NATS()
-                await nc.connect(servers=[self._nats_url], connect_timeout=2)
+                # no_echo is a client-level option in nats-py (>= 2.6); it
+                # prevents this connection from receiving its own publishes
+                # via /v1/publish, which would otherwise cause every published
+                # envelope to be appended to the cache twice (local append
+                # in the request handler + echo via the subscriber).
+                # nats-py's subscribe() does NOT take a no_echo kwarg -- it
+                # must be set on the connect options.
+                await nc.connect(
+                    servers=[self._nats_url],
+                    connect_timeout=2,
+                    no_echo=True,
+                )
                 self._nc = nc
                 self._connected = True
                 logger.info("nats_event_bus subscriber connected to %s", self._nats_url)
@@ -193,12 +204,7 @@ class NatsSubscriber:
                     await self._cache.append(msg.subject, env)
 
                 for t in self._topics:
-                    # no_echo=True prevents this connection from
-                    # receiving its own publishes on /v1/publish, which
-                    # would otherwise cause every published envelope
-                    # to be appended to the cache twice (local append
-                    # in the request handler + echo via the subscriber).
-                    await nc.subscribe(t, cb=handler, no_echo=True)
+                    await nc.subscribe(t, cb=handler)
 
                 # Park until disconnect; nats-py will call us back if it dies.
                 while not self._stopped and nc.is_connected:
