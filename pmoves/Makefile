@@ -4082,6 +4082,14 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
 
+.PHONY: docs-render-living
+docs-render-living: ## Render living docs dashboard via a2ui-renderer (requires creator profile)
+	@echo "🎨 Rendering living docs dashboard via a2ui-renderer..."
+	@if ! docker ps --format '{{.Names}}' | grep -q a2ui-renderer; then \
+		echo "⚠️  a2ui-renderer not running. Start with: make -C pmoves up-a2ui-renderer"; exit 1; \
+	fi
+	@$(PYTHON) tools/render_living_docs.py $(ARGS)
+
 # =============================================================================
 # GitHub App Credential Management
 # =============================================================================
