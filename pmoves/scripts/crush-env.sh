@@ -61,7 +61,9 @@ for var in \
   CIPHER_API_TOKEN \
   CHIT_PASSPHRASE \
   HF_TOKEN \
-  OLLAMA_BASE_URL; do
+  OLLAMA_BASE_URL \
+  TAILSCALE_API_KEY \
+  TAILSCALE_TAILNET; do
   if [ -n "${ENV_MAP[$var]:-}" ] && [ -z "${!var:-}" ]; then
     export "$var"="${ENV_MAP[$var]}"
   fi
