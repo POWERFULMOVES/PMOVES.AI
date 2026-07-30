@@ -7,7 +7,6 @@ Following PMOVES.AI patterns:
 - Basic publish/subscribe (JetStream can be added later)
 """
 
-import asyncio
 import json
 import logging
 from typing import Any, Callable, Optional

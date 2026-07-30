@@ -117,7 +117,15 @@ def _ruff_argv() -> List[str]:
 def check_ruff_budget(params: Dict[str, Any]) -> Dict[str, float]:
     paths = [str(REPO_ROOT / p) for p in params.get("paths", [])]
     argv = _ruff_argv() + ["check", *paths, "--output-format", "json", "--exit-zero"]
-    proc = subprocess.run(argv, capture_output=True, text=True, cwd=REPO_ROOT, timeout=300)
+    # text=True defaults to the platform's encoding (cp1252 on Windows), which
+    # chokes on ruff output that contains non-ASCII characters. Pin to UTF-8
+    # so the gate returns the real count on every host — without it, a
+    # Windows-local run silently reports 0 violations and masks the budget
+    # state from the operator.
+    proc = subprocess.run(
+        argv, capture_output=True, text=True, encoding="utf-8",
+        cwd=REPO_ROOT, timeout=300,
+    )
     # With --exit-zero, a non-zero exit means ruff ITSELF failed (bad config,
     # incompatible version) — that must be a gate error, never "0 violations".
     if proc.returncode != 0:
@@ -150,15 +158,20 @@ def check_dockerfile_user_coverage(params: Dict[str, Any]) -> Dict[str, float]:
 
 
 def check_command_exit(params: Dict[str, Any]) -> Dict[str, float]:
+    # Pin encoding to UTF-8 for the same reason as check_ruff_budget
+    # (the docs-reconcile check can emit non-ASCII characters in
+    # commit/drift messages).
     proc = subprocess.run(
-        params["command"], capture_output=True, text=True, cwd=REPO_ROOT, timeout=600
+        params["command"], capture_output=True, text=True, encoding="utf-8",
+        cwd=REPO_ROOT, timeout=600,
     )
     return {"exit_code": float(proc.returncode)}
 
 
 def check_command_metric(params: Dict[str, Any]) -> Dict[str, float]:
     proc = subprocess.run(
-        params["command"], capture_output=True, text=True, cwd=REPO_ROOT, timeout=600
+        params["command"], capture_output=True, text=True, encoding="utf-8",
+        cwd=REPO_ROOT, timeout=600,
     )
     match = re.search(params["metric_regex"], proc.stdout + proc.stderr)
     if not match:

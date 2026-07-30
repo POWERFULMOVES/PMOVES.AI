@@ -579,7 +579,7 @@ jobs:
         id: login_ghcr_pat
         if: ${{ env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
@@ -589,7 +589,7 @@ jobs:
         id: login_ghcr_app
         if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.app_token.outputs.token != '' }}
         continue-on-error: true
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
         with:
           registry: ${{ env.REGISTRY }}
           username: x-access-token
@@ -599,7 +599,7 @@ jobs:
         id: login_ghcr_actions
         if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' }}
         continue-on-error: true
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -613,7 +613,7 @@ jobs:
 
       - name: Optional login to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}

@@ -67,6 +67,7 @@ SERVICE_GROUPS = {
         "evo-controller",
         "hf-agent",
         "hf-research-agent",
+        "hf-mcp-server",
     ],
     "media": [
         "media-video",

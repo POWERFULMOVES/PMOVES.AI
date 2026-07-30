@@ -8,7 +8,6 @@ Tests the Constellation Geometry Protocol mapper including:
 - Constellation anchoring
 """
 
-import math
 import pytest
 from unittest import mock
 

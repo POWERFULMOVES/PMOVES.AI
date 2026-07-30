@@ -31,11 +31,12 @@ concurrency:
 
 jobs:
   claude-review:
-    if: |
-      github.event.pull_request.draft == false &&
-      (github.event.pull_request.author_association == 'OWNER' ||
-       github.event.pull_request.author_association == 'MEMBER' ||
-       github.event.pull_request.author_association == 'COLLABORATOR')
+    # Disabled: fleet review model uses Codex bot + CodeRabbit + CLI agents
+    # (Crush/Kimi/Claude on self-hosted runners orchestrated by Agent Zero/Archon),
+    # not the Anthropic API key OAuth path. The CLAUDE_CODE_OAUTH_TOKEN expired
+    # and won't be rotated — reviews happen via coding plans and local models.
+    # Kept as workflow_dispatch for manual runs if an operator re-enables OAuth.
+    if: false
     runs-on: ubuntu-latest
     # Least-privilege for a comment-only reviewer: it reads the diff and posts
     # PR review comments — it does not push commits or write attestations.

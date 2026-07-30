@@ -32,6 +32,7 @@
 | Mesh Agent | -- | -- | -- | -- | `mesh.announce.*` | -- | -- | L3 |
 | Channel Monitor | 8097 | -- | `pmoves/services/channel-monitor/` | -- | -- | `/healthz` | -- | L3 |
 | Cipher Memory | 8105 | `Pmoves-cipher/CLAUDE.md` | `Pmoves-cipher/README.md` | Inline | `cipher.*` | `/health` | -- | L3 |
+| HF MCP Server | 8203 | -- | `pmoves/services/hf-mcp-server/README.md` | `pmoves/services/hf-mcp-server/CLAUDE.md` | `hf.model.downloaded.v1` | `/healthz` | -- | L3 |
 
 ## Retrieval & Knowledge Services
 

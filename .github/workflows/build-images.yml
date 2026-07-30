@@ -89,14 +89,14 @@ jobs:
           permission-packages: write
 
       - name: Login GHCR
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4
         with:
           registry: ghcr.io
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Login DockerHub (optional)
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}

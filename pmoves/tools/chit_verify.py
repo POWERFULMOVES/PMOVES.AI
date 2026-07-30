@@ -14,7 +14,6 @@ Standalone tool — no PMOVES-internal imports.
 
 import argparse
 import json
-import math
 import statistics
 import sys
 from difflib import SequenceMatcher

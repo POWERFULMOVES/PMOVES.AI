@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from getpass import getpass
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 
@@ -608,7 +608,7 @@ def _stage_6_dashboard(result: CascadeResult) -> StageResult:
 
     lines.append("=" * 50)
     if result.success:
-        lines.append(f"★ PMOVES morphed: +1 cloud provider")
+        lines.append("★ PMOVES morphed: +1 cloud provider")
         if result.functions_updated:
             lines.append(f"  Functions: {', '.join(result.functions_updated)}")
         if result.coding_stacks_activated:

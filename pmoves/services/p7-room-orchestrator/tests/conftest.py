@@ -12,9 +12,7 @@ nats_url is unreachable; logs-only mode kicks in and asserts still pass).
 from __future__ import annotations
 
 import json
-import os
 import sys
-import textwrap
 from pathlib import Path
 
 import pytest

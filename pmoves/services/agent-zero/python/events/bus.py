@@ -31,12 +31,11 @@ import uuid
 import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, Optional, Set
 from urllib.parse import urlparse, urlunparse
 
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
-import nats
 
 logger = logging.getLogger("pmoves.agent_zero.events.bus")
 
@@ -397,7 +396,7 @@ class EventBus:
         try:
             if self.use_jetstream and self.js:
                 # JetStream push subscription
-                sub = await self.js.subscribe(
+                await self.js.subscribe(
                     subject,
                     queue=queue_group,
                     cb=wrapper,

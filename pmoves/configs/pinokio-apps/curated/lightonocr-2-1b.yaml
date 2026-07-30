@@ -1,0 +1,42 @@
+schema_version: "1.0.0"
+slug: lightonocr-2-1b
+title: "LightOnOCR 2.1B"
+description: "Vision-language OCR. Small footprint (~2GB VRAM). Concurrently co-hosted with comfyui-desktop and ace-step on a 32GB 5090."
+owner: pinokio
+version_seen: "0.1.4"
+runtime:
+  launcher_script: start.js
+  autostart: true
+  gpu_required: true
+  min_vram_mb: 2048
+  gpu_arch: [sm_120, sm_110, sm_89]
+  gpu_reservation_mb: 2048
+  gpu_reservation_mode: concurrent
+  dependencies: []
+  requires_hf_login: true
+endpoints:
+  primary:
+    port: 0  # dynamic, resolved via pinokio_bridge /v1/apps/{slug}/status
+    protocol: http
+    health: "/gradio_api/info"
+  alt: []
+pinokio_skill_ref: null
+network_exposure:
+  l1_venv:
+    reachable: true
+  l2_container_same_host:
+    reachable: true
+    address: null
+  l3_mesh:
+    reachable: true
+    address: null
+    headscale_acl_ports: []
+    tags_required: []
+  l4_public:
+    reachable: false
+    tunnel: null
+    dns_record: null
+    public_url: null
+notes:
+  - "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record"
+  - "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"

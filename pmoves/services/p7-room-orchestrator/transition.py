@@ -44,11 +44,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 _THIS_DIR = str(Path(__file__).resolve().parent)
 if _THIS_DIR not in sys.path:
@@ -56,7 +55,7 @@ if _THIS_DIR not in sys.path:
 
 import yaml
 
-from catalog import CatalogError, CatalogLoader, ManifestError
+from catalog import CatalogLoader
 from config import P7Settings
 from nats_pub import NATSPublisher
 

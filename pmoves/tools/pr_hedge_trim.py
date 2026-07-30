@@ -8,7 +8,7 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List
@@ -466,8 +466,8 @@ def cmd_analyze(repo: str, pr_number: int, *, json_out: Path | None = None) -> T
     # Print classification table
     print(f"\n## PR #{pr_number} — Hedge Trim Analysis")
     print(f"Total threads: {report.total_threads} | Unresolved: {report.unresolved_threads}")
-    print(f"| # | Classification | Path | Line | Excerpt |")
-    print(f"|--:|---|---|---:|---|")
+    print("| # | Classification | Path | Line | Excerpt |")
+    print("|--:|---|---|---:|---|")
     for i, thread in enumerate(unresolved, 1):
         excerpt = " ".join((thread.comments[0].body if thread.comments else "").split())[:120]
         if len(excerpt) == 120:
@@ -540,8 +540,8 @@ def cmd_report(repo: str, pr_number: int, *, md_out: Path | None = None) -> None
     lines.append("")
     lines.append("## Summary")
     lines.append("")
-    lines.append(f"| Metric | Count |")
-    lines.append(f"|---|---:|")
+    lines.append("| Metric | Count |")
+    lines.append("|---|---:|")
     lines.append(f"| Total threads | {report.total_threads} |")
     lines.append(f"| Unresolved | {report.unresolved_threads} |")
     lines.append(f"| Actionable | {report.actionable} |")
@@ -665,7 +665,7 @@ def main(argv: list[str] | None = None) -> int:
         classifications = ["false-positive", "design-decision"]
         if args.include_actionable:
             classifications.append("actionable")
-        resolved = cmd_resolve(repo, args.pr, dry_run=args.dry_run, classifications=tuple(classifications))
+        cmd_resolve(repo, args.pr, dry_run=args.dry_run, classifications=tuple(classifications))
         # Fetch remaining unresolved to detect failures
         remaining = [t for t in fetch_threads(repo, args.pr) if not t.is_resolved]
         target_threads = [t for t in remaining if t.classification in classifications]

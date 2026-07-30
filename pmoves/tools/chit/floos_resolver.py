@@ -660,7 +660,6 @@ def check_health(url: str, timeout: int = 5) -> tuple[bool, str]:
     """Check a health endpoint. Returns (healthy, message)."""
     try:
         from urllib.request import urlopen
-        from urllib.error import URLError
 
         resp = urlopen(url, timeout=timeout)
         status = resp.getcode()

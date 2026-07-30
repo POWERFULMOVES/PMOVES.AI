@@ -1,5 +1,8 @@
 # pmoves/services/sso-auth/oidc.py
-import hmac, os, secrets, time
+import hmac
+import os
+import secrets
+import time
 from pathlib import Path
 from urllib.parse import urlencode
 from jose import jwt

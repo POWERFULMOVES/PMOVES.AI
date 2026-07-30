@@ -33,6 +33,8 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
 
+**HF MCP Server** `:8203` (host) / `:8096` (container) — HuggingFace Hub MCP server. Tools: `hf.model.search/info/download/list/convert_gguf`. SSE MCP at `/mcp/sse` (real JSON-RPC over SSE via `mcp.server.MCPServer`; POST messages to `/mcp/messages/`), REST API at `/api/*`, publishes `hf.model.downloaded.v1`. Downloads to `${HF_HOME:-./data/models}`:/models; inference services can mount the same path or import converted GGUF artifacts. Health: `GET /healthz`. Profile: `agents`/`research`.
+
 **Cipher Memory** `:8105` (host) / `:3000` (container) — Agent memory service. Submodule `Pmoves-cipher` forked from `campfirein/byterover-cli` v3.16.1 (formerly Cipher) with PMOVES additive shim (`src/pmoves/`). REST: `/api/memory` CRUD (POST/GET/search/DELETE — PMOVES PR #5 + A1-Shim), `GET /health` (NOT `/healthz`). MCP: SSE at `/mcp/sse` (4 tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`), POST `/mcp/messages`. **Auth:** `Authorization: Bearer ${CIPHER_API_TOKEN}` on all routes except `/health` (dev-skip if unset). NATS: emits `cipher.memory.stored.v1`, `.searched.v1`, `cipher.reasoning.stored.v1` + `services.announce.v1` (discovery mesh). Python bridge (`pmoves-cipher-mcp/`) DISABLED since 2026-05-15 — agents connect direct SSE. See `pmoves/docs/TAC/TAC_CIPHER.md` for architecture decision + A1-Shim workorder. BoTZ variant: separate instance at `:8081`, own `botz.cipher.*` NATS namespace. DoX variant: native Python CipherService at `:8096`.
 
 ## Retrieval & Knowledge Services
@@ -48,6 +50,8 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 **Open Notebook** (external, SurrealDB) — Accessed via `$OPEN_NOTEBOOK_API_URL` + token.
 
 **clap-embed** `:8108` — Deterministic CLAP audio/text embedder (MOF lattice node, `laion/larger_clap_music`). `POST /embed/audio`, `POST /embed/text`, `GET /healthz`, `GET /metrics`. Optional NATS `audio.embed.request.v1`/`audio.embed.result.v1`. WS-A grounding layer.
+
+**clip-embed** `:8109` — Deterministic CLIP image/text embedder (`openai/clip-vit-large-patch14`, MIT). `POST /embed/image` (multipart), `POST /embed/text`, `GET /healthz`, `GET /metrics`. 768-d, L2-normalised. Used for keyframe embeddings in media pipeline.
 
 **A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.** Wired into `docker-compose.yml` under the **`creator`** profile (opt-in — heavy Remotion/Chromium image): `make -C pmoves up-a2ui-renderer` (#2228).
 

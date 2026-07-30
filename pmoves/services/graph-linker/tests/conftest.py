@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import os
 from typing import Generator
@@ -14,12 +13,6 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import Settings
-from models import (
-    NATSMessage,
-    GenImageResultMessage,
-    AnalysisTopicsMessage,
-    KBUpsertMessage,
-)
 from neo4j_client import Neo4jClient
 from nats_handler import NATSHandler
 

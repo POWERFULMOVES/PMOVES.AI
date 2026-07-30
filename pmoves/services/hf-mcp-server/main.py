@@ -17,12 +17,10 @@ MCP Tools:
 - hf.model.convert_gguf: Convert to GGUF for Ollama
 """
 
-import asyncio
 import json
 import logging
 import os
 import re
-import shutil
 import threading
 import time
 from dataclasses import dataclass, field
@@ -33,15 +31,14 @@ from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
 
 import nats as nats_lib
-import aiohttp
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 from huggingface_hub import (
     HfApi,
-    hf_hub_download,
     snapshot_download,
 )
 from huggingface_hub.utils import tqdm as hf_tqdm
+from mcp.server import MCPServer
 
 # Configure logging
 logging.basicConfig(
@@ -512,6 +509,9 @@ app = FastAPI(title="Hugging Face MCP Server", version="1.0.0", lifespan=lifespa
 # Hugging Face API client
 hf_api = HfApi()
 
+# MCP server (SSE endpoint exposed via app.mount at /mcp)
+mcp_server = MCPServer("hf-mcp-server")
+
 
 # =============================================================================
 # MCP Tool Handlers
@@ -838,6 +838,74 @@ async def _publish_download_event(model_id: str, path: str):
 
 
 # =============================================================================
+# MCP Server Registration
+# =============================================================================
+
+@mcp_server.tool(name="hf.model.search")
+async def mcp_model_search(
+    task: str | None = None,
+    size: str | None = None,
+    architecture: str | None = None,
+    tier: str | None = None,
+    use_case: str | None = None,
+) -> str:
+    """Search the PMOVES model catalog by task, size, architecture, tier, or use case."""
+    result = await hf_model_search(
+        task=task, size=size, architecture=architecture, tier=tier, use_case=use_case
+    )
+    return json.dumps(result, default=str)
+
+
+@mcp_server.tool(name="hf.model.info")
+async def mcp_model_info(model_id: str) -> str:
+    """Get metadata and requirements for a model by its catalog key or HuggingFace ID."""
+    result = await hf_model_info(model_id)
+    return json.dumps(result, default=str)
+
+
+@mcp_server.tool(name="hf.model.download")
+async def mcp_model_download(
+    model_id: str,
+    variant: str | None = None,
+    quantization: str | None = None,
+) -> str:
+    """Download a model from HuggingFace Hub to the local cache."""
+    result = await hf_model_download(
+        model_id=model_id,
+        variant=variant,
+        quantization=quantization,
+    )
+    return json.dumps(result, default=str)
+
+
+@mcp_server.tool(name="hf.model.list")
+async def mcp_model_list() -> str:
+    """List all models currently cached in the local HF Hub cache."""
+    result = await hf_model_list()
+    return json.dumps(result, default=str)
+
+
+@mcp_server.tool(name="hf.model.convert_gguf")
+async def mcp_model_convert_gguf(
+    model_id: str,
+    quantize: str = "q4_0",
+    output_dir: str | None = None,
+) -> str:
+    """Initiate GGUF conversion for a cached model (requires llama.cpp integration)."""
+    result = await hf_model_convert_gguf(
+        model_id=model_id,
+        quantize=quantize,
+        output_dir=output_dir,
+    )
+    return json.dumps(result, default=str)
+
+
+# Mount the MCP SSE transport under /mcp so clients connect at /mcp/sse and
+# POST JSON-RPC messages to /mcp/messages/.
+app.mount("/mcp", mcp_server.sse_app(sse_path="/sse", message_path="/messages/"))
+
+
+# =============================================================================
 # HTTP API Endpoints (FastAPI)
 # =============================================================================
 
@@ -912,7 +980,6 @@ hf_mcp_cached_models_total {cached_count}
 # TYPE hf_mcp_downloads_total counter
 hf_mcp_downloads_total {_download_count}
 """
-    from fastapi.responses import Response
     return Response(
         content=metrics_text,
         media_type="text/plain",
@@ -974,78 +1041,6 @@ async def api_tensorzero_config():
     """Generate TensorZero config for catalog models."""
     result = await hf_tensorzero_config()
     return result
-
-
-# =============================================================================
-# SSE MCP Transport (for MCP clients)
-# =============================================================================
-
-@app.get("/sse")
-async def sse_endpoint():
-    """Server-Sent Events endpoint for MCP protocol."""
-    from fastapi.responses import StreamingResponse
-
-    async def event_stream():
-        """Stream MCP events."""
-        # Send initial endpoint announcement
-        import json
-
-        endpoints = [
-            {
-                "name": "hf.model.search",
-                "description": "Search for models in the catalog",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "task": {"type": "string"},
-                        "size": {"type": "string", "enum": ["small", "medium", "large"]},
-                        "use_case": {"type": "string"},
-                    },
-                },
-            },
-            {
-                "name": "hf.model.info",
-                "description": "Get model metadata",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "model_id": {"type": "string"},
-                    },
-                    "required": ["model_id"],
-                },
-            },
-            {
-                "name": "hf.model.download",
-                "description": "Download model to local cache",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "model_id": {"type": "string"},
-                        "variant": {"type": "string"},
-                    },
-                    "required": ["model_id"],
-                },
-            },
-            {
-                "name": "hf.model.list",
-                "description": "List cached models",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {},
-                },
-            },
-        ]
-
-        yield f"event: tools\ndata: {json.dumps(endpoints)}\n\n"
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    )
 
 
 # =============================================================================

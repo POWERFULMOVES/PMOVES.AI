@@ -9,7 +9,6 @@ import os
 import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pathlib import Path
 from uuid import UUID
 
 import httpx
@@ -285,7 +284,7 @@ dataset = load_dataset('{os.path.abspath(dataset_dir)}')
 
         try:
             # Create repository
-            repo_url = api.create_repo(
+            api.create_repo(
                 repo_id=full_repo_name,
                 private=private,
                 repo_type="dataset",

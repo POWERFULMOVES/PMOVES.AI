@@ -8,12 +8,10 @@ Provides HTTP endpoints for:
 4. Health monitoring
 """
 
-import asyncio
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import nats
@@ -25,7 +23,6 @@ from pydantic import BaseModel, Field
 from cgp_mapper import CGPMapper
 from chr_algorithm import (
     CHRConfig,
-    CHRResult,
     chit_signature_required,
     chr_result_to_cgp,
     get_chit_signing_key,

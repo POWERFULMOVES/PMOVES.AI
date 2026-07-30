@@ -407,7 +407,7 @@ async def handle_user_action(action: dict[str, Any]) -> None:
     """
     action_name = action.get("name", "unknown")
     surface_id = action.get("surfaceId", "")
-    context = action.get("context", {})
+    action.get("context", {})
 
     logger.info(f"User action: {action_name} on surface {surface_id}")
 

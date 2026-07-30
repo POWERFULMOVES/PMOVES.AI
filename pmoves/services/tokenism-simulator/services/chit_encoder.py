@@ -11,7 +11,6 @@ Following CHIT/Geometry Bus patterns:
 """
 
 import logging
-import os
 from typing import Any
 from datetime import datetime
 import json

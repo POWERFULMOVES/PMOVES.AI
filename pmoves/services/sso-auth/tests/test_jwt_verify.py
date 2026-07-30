@@ -1,5 +1,6 @@
 # pmoves/services/sso-auth/tests/test_jwt_verify.py
-import time, pytest
+import time
+import pytest
 from jose import jwt
 import config
 from jwt_verify import verify_session, SessionInvalid

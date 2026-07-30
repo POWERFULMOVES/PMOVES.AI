@@ -82,7 +82,6 @@ _ensure_supabase_env()
 # TensorZero helpers — imported from shared module
 from services.common.tensorzero import (
     sync_openai_compat_env as _sync_openai_compat_env,
-    check_tensorzero_connectivity as _check_tensorzero_connectivity,
 )
 
 
@@ -289,14 +288,11 @@ FastAPI server. The goal is to provide a drop-in compatible process for the
 Archon UI/IDE clients so all REST and streaming endpoints work as expected.
 """
 
-import asyncio
 import logging
 import os
-import sys
 from contextlib import suppress
 from importlib import import_module
 from pathlib import Path
-from typing import Optional
 
 import uvicorn
 import httpx

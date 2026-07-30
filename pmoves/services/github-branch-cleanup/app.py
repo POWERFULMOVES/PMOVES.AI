@@ -7,15 +7,12 @@ Publishes events to NATS for observability.
 Port: 8100
 """
 
-import asyncio
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import nats
 from nats.aio.client import Client as NATS
@@ -456,7 +453,7 @@ async def cleanup_stale_branches(
         ).observe(duration)
 
         logger.info(
-            f"Cleanup completed: {len(deleted_branches} deleted, "
+            f"Cleanup completed: {len(deleted_branches)} deleted, "
             f"{len(protected_skipped)} protected skipped, "
             f"duration={duration:.2f}s"
         )

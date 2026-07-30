@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from services.common.chakra import CHAKRA_BANDS, chakra_to_band
+from services.common.chakra import chakra_to_band
 
 from .types import BoundaryType, ProsodicChunk
 
@@ -125,7 +125,7 @@ def encode_bpm_timeline(
 
     return {
         "spec": "chit.cgp.v0.2",
-        "summary": f"Prosodic BPM timeline for voice attribution",
+        "summary": "Prosodic BPM timeline for voice attribution",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "super_nodes": [{
             "id": f"flute:prosodic:{utterance_id}",

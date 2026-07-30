@@ -70,7 +70,7 @@ services:
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/api/mcp/sse}
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
     - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
@@ -231,6 +231,7 @@ services:
     # UI compat: keep the historical 3737 host port pointing at the unified server
     # (NEXT_PUBLIC_ARCHON_UI_URL default is http://localhost:3737).
     - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_UI_PORT:-3737}:3090
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_API_PORT:-8091}:3090
     volumes:
     - archon-data:/.archon
     - archon-user-home:/home/appuser
@@ -827,11 +828,6 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
-  # A2UI Renderer — turns A2UI/ProvenanceLivingDoc JSON specs into MP4/GIF/WebM
-  # via Remotion (Chromium in-image), uploads to MinIO, and publishes
-  # a2ui.render.completed.v1. Heavy image (bundled Chromium) → its own `creator`
-  # profile so it is opt-in (`make -C pmoves up-a2ui-renderer`), not pulled into
-  # the default agents bring-up. Companion to a2ui-nats-bridge above (#2228).
   nats-echo-req:
     <<: *tier-agent-hardened-ro
     build:
@@ -1016,7 +1012,7 @@ services:
   hf-agent:
     # HF Agent — autonomous HuggingFace model patrol. Publishes
     # hf.model.discovered.v1. Polls HF Hub on HF_POLL_INTERVAL (default 300s).
-    <<:
+    <<: &tier-agent-hardened-rw
       env_file:
       - env.shared
       - env.tier-agent
@@ -1102,5 +1098,51 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
+  hf-mcp-server:
+    # HF MCP Server — Model Context Protocol tools for HuggingFace Hub.
+    # Provides hf.model.search/info/download/list/convert_gguf and publishes
+    # hf.model.downloaded.v1. Models download to /models; inference services
+    # can mount the same host path or import converted GGUF artifacts.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/hf-mcp-server
+      dockerfile: Dockerfile
+    image: ${HF_MCP_SERVER_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-mcp-server:pmoves-latest}
+    container_name: pmoves-hf-mcp-server
+    hostname: hf-mcp-server
+    restart: unless-stopped
+    environment:
+    - PORT=8096
+    - NATS_URL=${NATS_URL}
+    - HF_HOME=/models
+    - HF_HUB_CACHE=/models/hub
+    - HF_HUB_ENABLE_HF_TRANSFER=${HF_HUB_ENABLE_HF_TRANSFER:-1}
+    - HF_TOKEN=${HF_TOKEN:-}
+    - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    ports:
+    - ${HF_MCP_SERVER_BIND:-127.0.0.1}:${HF_MCP_SERVER_PORT:-8203}:8096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
+    volumes:
+    - ${HF_MODELS_HOST_PATH:-./data/models}:/models
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   # Tier: agent (NotebookLM Agent - Google NotebookLM integration)

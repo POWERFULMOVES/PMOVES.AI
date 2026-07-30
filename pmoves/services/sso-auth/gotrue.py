@@ -22,8 +22,12 @@ def password_grant(email: str, password: str) -> dict:
     return _post("/token?grant_type=password",
                  json={"email": email, "password": password}).json()
 
-def github_authorize_url(redirect_to: str) -> str:
-    q = urlencode({"provider": "github", "redirect_to": redirect_to})
+def provider_authorize_url(provider: str, redirect_to: str) -> str:
+    # GoTrue external-provider handshake entrypoint. `provider` is one of
+    # GoTrue's configured externals ("github", "google", ...); the browser is
+    # sent here, GoTrue bounces to the provider, then back to `redirect_to`
+    # (our /callback) with the auth code. Same shape for every provider.
+    q = urlencode({"provider": provider, "redirect_to": redirect_to})
     return f"{settings.gotrue_url}/authorize?{q}"
 
 def exchange_code(code: str) -> dict:

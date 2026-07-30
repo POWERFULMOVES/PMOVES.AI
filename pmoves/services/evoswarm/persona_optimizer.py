@@ -30,7 +30,6 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from uuid import UUID
 
 import httpx
 from nats.aio.client import Client as NATS
@@ -297,7 +296,7 @@ class PersonaOptimizer:
             # Publish result
             await self._publish_result(result, correlation_id)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error handling optimization request")
 
     async def optimize_persona_parameters(self, persona_id: str) -> OptimizationResult:
@@ -906,7 +905,7 @@ class PersonaOptimizer:
                 }
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to publish optimization result")
 
 

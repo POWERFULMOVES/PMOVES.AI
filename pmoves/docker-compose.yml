@@ -720,7 +720,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
     - PMOVES_NETWORKS=pmoves_api,pmoves_public
-    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
+    entrypoint: ["/bin/bash", "-c", "for i in $$(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($$i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -1673,6 +1673,24 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  clip-embed:
+    <<: *tier-api-hardened
+    build:
+      context: ./services/clip-embed
+      dockerfile: Dockerfile
+    image: pmoves/clip-embed:latest
+    environment:
+    - CLIP_MODEL_ID=${CLIP_MODEL_ID:-openai/clip-vit-large-patch14}
+    - CLIP_MODEL_REVISION=${CLIP_MODEL_REVISION:-main}
+    - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
+    - CLIP_EMBED_PORT=8109
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    ports:
+    - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    restart: unless-stopped
+    profiles:
+    - orchestration
   clap-embed:
     <<: *tier-api-hardened
     build:
@@ -2731,7 +2749,7 @@ services:
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/api/mcp/sse}
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
     - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
@@ -2920,6 +2938,7 @@ services:
     # UI compat: keep the historical 3737 host port pointing at the unified server
     # (NEXT_PUBLIC_ARCHON_UI_URL default is http://localhost:3737).
     - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_UI_PORT:-3737}:3090
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_API_PORT:-8091}:3090
     volumes:
     - archon-data:/.archon
     - archon-user-home:/home/appuser
@@ -2946,6 +2965,52 @@ services:
           cpus: '2.0'
           memory: 2G
   # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+  hf-mcp-server:
+    # HF MCP Server — Model Context Protocol tools for HuggingFace Hub.
+    # Provides hf.model.search/info/download/list/convert_gguf and publishes
+    # hf.model.downloaded.v1. Models download to /models; inference services
+    # can mount the same host path or import converted GGUF artifacts.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/hf-mcp-server
+      dockerfile: Dockerfile
+    image: ${HF_MCP_SERVER_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-mcp-server:pmoves-latest}
+    container_name: pmoves-hf-mcp-server
+    hostname: hf-mcp-server
+    restart: unless-stopped
+    environment:
+    - PORT=8096
+    - NATS_URL=${NATS_URL}
+    - HF_HOME=/models
+    - HF_HUB_CACHE=/models/hub
+    - HF_HUB_ENABLE_HF_TRANSFER=${HF_HUB_ENABLE_HF_TRANSFER:-1}
+    - HF_TOKEN=${HF_TOKEN:-}
+    - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    ports:
+    - ${HF_MCP_SERVER_BIND:-127.0.0.1}:${HF_MCP_SERVER_PORT:-8203}:8096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
+    volumes:
+    - ${HF_MODELS_HOST_PATH:-./data/models}:/models
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
   cipher-api:
     <<: *tier-agent-hardened
     build:
@@ -3343,69 +3408,6 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
-  # A2UI Renderer — turns A2UI/ProvenanceLivingDoc JSON specs into MP4/GIF/WebM
-  # via Remotion (Chromium in-image), uploads to MinIO, and publishes
-  # a2ui.render.completed.v1. Heavy image (bundled Chromium) → its own `creator`
-  # profile so it is opt-in (`make -C pmoves up-a2ui-renderer`), not pulled into
-  # the default agents bring-up. Companion to a2ui-nats-bridge above (#2228).
-  a2ui-renderer:
-    <<: *tier-agent-hardened
-    build:
-      # The renderer Dockerfile COPYs from its own dir (COPY package.json ./ ;
-      # COPY . .), so the build context is the service dir — NOT pmoves/ like the
-      # a2ui-nats-bridge (whose Dockerfile uses repo-relative COPY paths).
-      context: services/a2ui-renderer
-      dockerfile: Dockerfile
-    image: ${A2UI_RENDERER_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-renderer:pmoves-latest}
-    container_name: pmoves-a2ui-renderer
-    hostname: a2ui-renderer
-    restart: unless-stopped
-    environment:
-    - PORT=8107
-    - NODE_ENV=production
-    # NATS_URL from env.shared/env.tier-agent carries credentials.
-    - NATS_URL=${NATS_URL}
-    # NOTE: the renderer publishes the fixed subject a2ui.render.completed.v1
-    # (hardcoded in src/index.ts) — no configurable subject env is wired, so we
-    # don't advertise one here to avoid implying consumers can rename it.
-    # JWT fail-closed on /render, /render/chart, /render/provenance.
-    - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
-    # MinIO output sink — map the renderer's S3 creds onto the canonical root creds.
-    - MINIO_ENDPOINT=${A2UI_MINIO_ENDPOINT:-http://minio:9000}
-    - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
-    - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
-    - MINIO_BUCKET=${A2UI_MINIO_BUCKET:-outputs}
-    - PMOVES_NETWORKS=pmoves_bus
-    ports:
-    - ${A2UI_RENDERER_BIND:-127.0.0.1}:${A2UI_RENDERER_PORT:-8107}:8107
-    # Chromium needs more shared memory than Docker's 64MB default.
-    shm_size: 512m
-    depends_on:
-      nats:
-        condition: service_healthy
-      nats-init:
-        condition: service_completed_successfully
-      minio:
-        condition: service_healthy
-    profiles:
-    - creator
-    networks:
-    - pmoves_bus
-    healthcheck:
-      test:
-      - CMD
-      - curl
-      - -fsS
-      - http://localhost:8107/healthz
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2048M
   p7-room-orchestrator:
     <<: *tier-agent-hardened-ro
     build:
@@ -3600,7 +3602,7 @@ services:
     environment:
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
-    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1}
+    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
       nats:
@@ -4293,15 +4295,19 @@ services:
     build:
       context: ./ui
       dockerfile: Dockerfile
-      args:
-        # NEXT_PUBLIC_* is inlined into the browser bundle at build time —
-        # runtime env never reaches client code (PR #2261 review).
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
     environment:
     - NODE_ENV=production
+      # Room manifests — the rooms API reads catalog.json + the per-room
+      # manifests from this directory. Without it, the Rooms tab on the
+      # home page renders "Room manifests are not available yet" and
+      # /api/rooms returns 500. PMOVES_ROOM_CONFIG_DIR overrides the
+      # default (cwd/../config/rooms) to a path inside the container
+      # where the rooms data is mounted. The volume below maps the host
+      # pmoves/config/rooms to /app/rooms:ro so the standalone Next.js
+      # build can read the room data.
+    - PMOVES_ROOM_CONFIG_DIR=/app/rooms
       # Supabase
     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
@@ -4336,12 +4342,14 @@ services:
     - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
     - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
-    - PMOVES_UI_THEME=${PMOVES_UI_THEME:-pmoves-armor}
-    # Next standalone binds to HOSTNAME; docker injects the container id there
-    - HOSTNAME=0.0.0.0
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
     extra_hosts:
     - "host.docker.internal:host-gateway"
+    # Room manifests: the standalone Next.js build can't read host
+    # files by default; mount pmoves/config/rooms read-only at /app/rooms
+    # so the rooms API (/api/rooms) and the home-page Rooms tab work.
+    volumes:
+    - ./config/rooms:/app/rooms:ro
     ports:
     - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.

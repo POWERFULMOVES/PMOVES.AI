@@ -42,6 +42,7 @@ try:  # pragma: no cover - optional shared helper
 except Exception:  # pragma: no cover - fallback used in tests without dependency
     import datetime
     import uuid
+    from datetime import timezone
 
     def envelope(
         topic: str,
@@ -77,7 +78,6 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev testi
 
 from services.common.telemetry import (
     PublisherMetrics,
-    PublishTelemetry,
     compute_publish_telemetry,
 )
 
