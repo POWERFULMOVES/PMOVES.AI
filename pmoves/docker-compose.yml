@@ -1205,13 +1205,15 @@ services:
     - ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
     networks:
     - pmoves_data
+    - pmoves_api
+    - pmoves_bus
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - QDRANT__SERVICE__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus
     volumes:
     - qdrant-data:/qdrant/storage
     healthcheck:
@@ -1236,11 +1238,13 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus
     ports:
     - ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
     networks:
     - pmoves_data
+    - pmoves_api
+    - pmoves_bus
     volumes:
     - meilisearch-data:/meili_data
     healthcheck:
