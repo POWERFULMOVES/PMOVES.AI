@@ -316,9 +316,6 @@ services:
     - NATS_EVENT_BUS_URL=${NATS_EVENT_BUS_URL:-http://nats_event_bus:8131}
     - NATS_EVENT_BUS_TOKEN=${NATS_EVENT_BUS_TOKEN:-}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
-    # The bridge returns 503 with a clear error if pterm is missing on
-    # the host. We don't try to install Pinokio inside the container - the
-    # bridge just talks to the on-host pterm over the bind mount.
     ports:
     - ${PINOKIO_BRIDGE_BIND:-127.0.0.1}:${PINOKIO_BRIDGE_PORT:-8130}:8130
     volumes:
