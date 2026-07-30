@@ -3510,7 +3510,7 @@ services:
     restart: unless-stopped
     environment:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
-    - NATS_URL=${NATS_DOCKER_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
@@ -3598,7 +3598,7 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_DOCKER_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external

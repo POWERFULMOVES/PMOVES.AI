@@ -264,7 +264,7 @@ def classify_video(video: dict) -> dict:
 # Supabase read/write
 # ---------------------------------------------------------------------------
 
-def fetch_videos(rest_url: str, key: str, video_id: str | None = None) -> list[dict]:
+def fetch_videos(rest_url: str, key: str, video_id: str | None = None, limit: int = 500) -> list[dict]:
     base = rest_url.rstrip("/")
     if not base.endswith("/rest/v1"):
         base = f"{base}/rest/v1"
@@ -278,7 +278,7 @@ def fetch_videos(rest_url: str, key: str, video_id: str | None = None) -> list[d
     if video_id:
         url = f"{base}/youtube_videos?select={select}&video_id=eq.{video_id}"
     else:
-        url = f"{base}/youtube_videos?select={select}&resonance_domain=is.null&limit=500"
+        url = f"{base}/youtube_videos?select={select}&resonance_domain=is.null&limit={limit}"
     resp = requests.get(url, headers=headers, timeout=30)
     if resp.status_code != 200:
         log.error(f"Fetch failed: {resp.status_code} {resp.text[:200]}")
@@ -342,22 +342,23 @@ def main():
     parser.add_argument("--limit", type=int, default=500, help="Max videos to process")
     args = parser.parse_args()
 
-    rest_url = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_URL", "")
-    rest_url = rest_url.rstrip("/")
-    if not rest_url.endswith("/rest/v1"):
-        rest_url = f"{rest_url}/rest/v1"
+    raw_rest_url = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_URL", "")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY", "")
 
-    if not key or not rest_url:
+    if not key or not raw_rest_url:
         log.error("Missing SUPA_REST_URL and SUPABASE_SERVICE_ROLE_KEY")
         sys.exit(1)
+
+    rest_url = raw_rest_url.rstrip("/")
+    if not rest_url.endswith("/rest/v1"):
+        rest_url = f"{rest_url}/rest/v1"
 
     if args.stats:
         stats = fetch_stats(rest_url, key)
         print(json.dumps(stats, indent=2, sort_keys=True))
         return
 
-    videos = fetch_videos(rest_url, key, args.video_id)
+    videos = fetch_videos(rest_url, key, args.video_id, args.limit)
     if not videos:
         log.info("No videos to enrich")
         return

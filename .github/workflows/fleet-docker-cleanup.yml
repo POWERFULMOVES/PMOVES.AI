@@ -36,8 +36,8 @@ jobs:
 
       - name: Safe Docker cleanup (images + build cache, NEVER volumes)
         run: |
-          # Phase 1: Stopped containers
-          docker container prune -f || true
+          # Phase 1: Stopped containers older than 24h (preserve recently used)
+          docker container prune -f --filter "until=24h" || true
 
           # Phase 2: Build cache (biggest reclaim — the 148GB BuildKit state issue)
           docker builder prune -af || true
@@ -73,8 +73,11 @@ jobs:
           for workdir in /tmp/runner/_work /home/*/actions-runner/_work /tmp/runner-kvm/_work; do
             if [ -d "$workdir" ]; then
               echo "Cleaning stale workspaces in $workdir (>3 days)..."
-              # Only remove top-level repo dirs older than 3 days that have no lock file
-              find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 \! -name '.*' -exec rm -rf {} \; 2>/dev/null || true
+              # Remove top-level repo dirs older than 3 days; skip hidden dirs and locked workspaces
+              find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 \
+                \! -name '.*' \
+                \! -name '_temp' \
+                -exec test -f '{}/.cleanup-lock' -prune -o -rm -rf {} \; 2>/dev/null || true
             fi
           done
 

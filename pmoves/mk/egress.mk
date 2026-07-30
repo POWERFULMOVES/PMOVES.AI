@@ -205,14 +205,16 @@ yt-playlist-crawl: ## Crawl YouTube playlist metadata via Data API: make yt-play
 	@echo "[yt-crawl] Copying crawl script to container..."
 	@docker cp tools/yt_playlist_crawl.py pmoves-pmoves-yt-1:/app/yt_playlist_crawl.py
 	@echo "[yt-crawl] Starting playlist crawl (playlist: $(YT_PLAYLIST_ID), namespace: $(YT_CRAWL_NAMESPACE))..."
-	@docker exec \
-		-e SUPA_REST_URL=$${SUPA_REST_URL:-http://supabase-kong:8000} \
-		-e SUPABASE_SERVICE_ROLE_KEY=$$(grep SUPABASE_SERVICE_ROLE_KEY env.tier-agent 2>/dev/null | cut -d= -f2) \
-		-e GOOGLE_CLIENT_ID=$$(grep CHANNEL_MONITOR_GOOGLE_CLIENT_ID env.tier-agent 2>/dev/null | cut -d= -f2) \
-		-e GOOGLE_CLIENT_SECRET=$$(grep CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET env.tier-agent 2>/dev/null | cut -d= -f2) \
-		pmoves-pmoves-yt-1 python3 /app/yt_playlist_crawl.py \
+	@# Write secrets to a temporary env-file to avoid leaking via /proc/pid/cmdline
+	@tmpenv=$$(mktemp); \
+	echo "SUPA_REST_URL=$${SUPA_REST_URL:-http://supabase-kong:8000}" > $$tmpenv; \
+	echo "SUPABASE_SERVICE_ROLE_KEY=$$(grep SUPABASE_SERVICE_ROLE_KEY env.tier-agent 2>/dev/null | cut -d= -f2)" >> $$tmpenv; \
+	echo "GOOGLE_CLIENT_ID=$$(grep CHANNEL_MONITOR_GOOGLE_CLIENT_ID env.tier-agent 2>/dev/null | cut -d= -f2)" >> $$tmpenv; \
+	echo "GOOGLE_CLIENT_SECRET=$$(grep CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET env.tier-agent 2>/dev/null | cut -d= -f2)" >> $$tmpenv; \
+	docker exec --env-file /dev/stdin pmoves-pmoves-yt-1 python3 /app/yt_playlist_crawl.py \
 		--playlist "$(YT_PLAYLIST_ID)" \
-		--namespace "$(YT_CRAWL_NAMESPACE)"
+		--namespace "$(YT_CRAWL_NAMESPACE)" < $$tmpenv; \
+	rm -f $$tmpenv
 
 yt-playlist-stats: ## Show crawled video statistics from Supabase
 	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-supabase-db-1$$'; then \

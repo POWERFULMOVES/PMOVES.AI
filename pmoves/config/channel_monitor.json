@@ -433,7 +433,7 @@
       "write_info_json": true,
       "extractor_args": {
         "youtubepot-bgutilhttp": {
-          "base_url": ["http://bgutil-pot-provider:4416"]
+          "base_url": ["http://bgutil-pot-provider:4417"]
         }
       }
     },
