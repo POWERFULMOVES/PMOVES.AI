@@ -1,16 +1,12 @@
 #EXTM3U
 # DARKXSIDE Sonic Group: Allegro_balanced_Bright_c3
-# Tracks: 6
+# Tracks: 4
 
-#EXTINF:191,Whosupnext - 01
-pmoves/data/beats/soundcloud/darkxside/Whosupnext - 01.m4a
-#EXTINF:178,IMCRAZY
-pmoves/data/beats/soundcloud/darkxside/IMCRAZY.opus
-#EXTINF:201,HERE
-pmoves/data/beats/soundcloud/darkxside/HERE.opus
-#EXTINF:93,SIRIUSSADHAPPYMIX
-pmoves/data/beats/soundcloud/darkxside/SIRIUSSADHAPPYMIX.opus
-#EXTINF:183,Star Dreams ⧸ Wild Far
-pmoves/data/beats/soundcloud/darkxside/Star Dreams ⧸ Wild Far.opus
-#EXTINF:169,Ice Cream 3 In 1
-pmoves/data/beats/soundcloud/darkxside/Ice Cream 3 In 1.opus
+#EXTINF:254,Final Chrono Dark Rev A
+pmoves/data/beats/soundcloud/darkxside/Final Chrono Dark Rev A.opus
+#EXTINF:66,808 Low
+pmoves/data/beats/soundcloud/darkxside/808 Low.m4a
+#EXTINF:200,Final Chrono 3
+pmoves/data/beats/soundcloud/darkxside/Final Chrono 3.opus
+#EXTINF:51,808 SIGNS
+pmoves/data/beats/soundcloud/darkxside/808 SIGNS.opus
