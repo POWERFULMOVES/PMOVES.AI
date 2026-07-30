@@ -53,6 +53,7 @@ class ServerSpec:
     clients: Optional[List[str]] = None
     endpoint: Optional[str] = None
     endpoint_prefix: Optional[str] = None
+    disabled: bool = False
 
     def supports_client(self, client: str) -> bool:
         if self.clients is None:
@@ -157,6 +158,7 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
                 clients=server.get("clients"),
                 endpoint=server.get("endpoint"),
                 endpoint_prefix=server.get("endpoint_prefix"),
+                disabled=server.get("disabled", False),
             )
             if not spec.supports_client(client):
                 continue
@@ -288,6 +290,8 @@ def render_crush(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) ->
             continue
         if spec.timeout:
             entry["timeout"] = spec.timeout
+        if spec.disabled:
+            entry["disabled"] = True
         mcp[spec.key] = entry
     return {"mcp": mcp}
 

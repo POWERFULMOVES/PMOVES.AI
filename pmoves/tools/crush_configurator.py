@@ -307,10 +307,11 @@ MCP_SPECS: List[MCPSpec] = [
     MCPSpec(
         key="agent-zero",
         config={
-            "type": "http",
-            "url": "http://${TS_Z890}:8080/mcp",
+            "type": "sse",
+            "url": "http://localhost:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
             "timeout": 30,
         },
+        required_env="AGENT_ZERO_MCP_TOKEN",
     ),
     MCPSpec(
         key="pmoves-nats-fleet",
@@ -436,6 +437,14 @@ MCP_SPECS: List[MCPSpec] = [
         },
         required_commands=["docker"],
         required_env="HOSTINGER_API_TOKEN",
+    ),
+    MCPSpec(
+        key="archon",
+        config={
+            "type": "http",
+            "url": "http://localhost:3090",
+            "timeout": 30,
+        },
     ),
 ]
 
@@ -639,6 +648,11 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
                 config["url"] = "http://localhost:8105/mcp/sse"
             elif spec.key == "agent-zero":
                 config["url"] = "http://localhost:8093/mcp"
+        if spec.key == "agent-zero" and "${TS_Z890}" in str(config.get("url", "")):
+            config["url"] = "http://localhost:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse"
+            config["type"] = "sse"
+        if spec.key == "archon":
+            config["url"] = "http://localhost:3090"
         disabled = False
         if spec.required_commands and not all(shutil.which(cmd) for cmd in spec.required_commands):
             disabled = True
