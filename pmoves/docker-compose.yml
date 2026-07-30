@@ -3041,7 +3041,7 @@ services:
     - QDRANT_COLLECTION=pmoves_cipher_memory
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
-    - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external
+    - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external,pmoves_api
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
@@ -3052,7 +3052,7 @@ services:
     profiles: ["agents", "cipher"]
     extra_hosts:
     - "host.docker.internal:host-gateway"
-    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
+    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external, pmoves_api]
     healthcheck:
       test: ["CMD", "node", "-e", "const http=require('http');http.get('http://127.0.0.1:8105/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 30s
