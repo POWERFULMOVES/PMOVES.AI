@@ -10,6 +10,45 @@
 
 ---
 
+<!-- graphiti:crush phase:fordham-cataclysm-enrichment ts:2026-07-30T12:36:00Z -->
+
+## ◇ Crush — B850 Knuckles Convergence: PR #2288 Merged — Full Pipeline Chain Verified
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, infrastructure, darkxside-playlist, geometry-bus
+**Voice:** Companion
+
+### Done
+- **PR #2288 merged to main** (squash, 27 commits, 88 files, +3464/-49): JuiceFS mesh, YT tooling, service fixes, cross-node MCP, DARKXSIDE playlist enrichment, all 18 Codex+CodeRabbit review comments addressed.
+- **Crush config**: cipher SSE URL fixed (`/api/mcp/sse`), Tailscale node IP resolver added to `crush-env.sh`, dead `pmoves-cipher-local` duplicate removed from crush.json.
+- **Submodule promotions**: PMOVES-Archon → `e4c407593` (CodeQL + nested pointers), PMOVES-BoTZ → `7b2128c` (auth_enabled class attribute fix, curl→python healthcheck).
+- **Service chain repairs**: SupaSerch NATS (localhost→nats:4222), consciousness-service geometry bus (added pmoves_bus network), publisher-discord NATS (same localhost fix), bgutil PO token port 4416→4417 (frees port for Tokenism UI on 5090), cookie-writer 0o660 group-based permissions, activepieces AP_ENCRYPTION_KEY hex format, yt_batch_download 2GB max_filesize.
+- **DARKXSIDE playlist enrichment**: 2017 videos classified across 11 resonance domains (ai-ml 503, energy 124, media-creative 101, dev-tools 81, science-philosophy 50, business 48, health-fitness 31, security-privacy 24, infrastructure 17, hardware-makers 13, community 8), 5 persona signals, 90 health-tagged, 290 wealth-tagged, resource_links JSONB extracted from descriptions. School of PowerfulMoves curriculum tracks: ai-engineering, physical-systems, creative-arts, software-craft, liberal-arts, wealth-building, health-wellness, digital-defense, infrastructure, hardware-lab, civic-engagement.
+- **Review fixes**: with-env.sh BASH_SOURCE guard, fleet-docker-cleanup runner_label + workspace safety + container prune filter, egress.mk secrets via env-file not cmdline, yt_playlist_crawl/batch REST URL normalization + Content-Profile: pmoves_core headers, supabase migration mirrored, JuiceFS $HOME resolved via Make eval, NATS_URL credential preservation pattern.
+- **Full chain verified end-to-end**: NATS JetStream → geometry.cgp.v1 → consciousness-service (nats_connected: true) → SupaSerch (nats: true) → publisher-discord (NATS content.published.v1 → Discord webhook 2/2 success) → bgutil PO token (:4417/ping 200) → yt-dlp + cookies + bgutil chain.
+
+### Left Behind
+- **SupaSerch container** was manually recreated via `docker run` (compose env interpolation issue with tier env files). Needs proper compose recreate on next `make up-agents`.
+- **Consciousness-service** manually connected to pmoves_bus via `docker network connect`. Compose fix committed but container not yet recreated via compose.
+- **Publisher-discord** same — manually recreated, compose fix committed but not applied via compose recreate.
+- **DARKXSIDE room** at rehearsal stage in catalog — needs CHIT activation checklist to go live.
+- **bgutil-pot-provider** image ignores PORT env; uses `command: ["build/main.js", "--port", ...]` override. Upstream image fix would remove the workaround.
+- **Cookie file permissions** — yt-cookie-writer now chmod 0o660, but the shared volume directory itself may need group ownership adjustment for non-root containers.
+
+### For Next Agent
+- Run `make -C pmoves up-agents` to properly recreate all containers with the committed compose fixes (SupaSerch, consciousness, publisher-discord currently running from manual `docker run`).
+- Verify the JuiceFS mount path fix works via `make -C pmoves juicefs-mount-local` on a clean recreate.
+- The DARKXSIDE playlist enrichment is live in Supabase (pmoves DB). Use `make -C pmoves yt-playlist-stats` for classification audit.
+- Discord webhook verified working — agent loop can publish to `content.published.v1` and it will deliver.
+- Geometry bus is live — `geometry.cgp.v1` events reach consciousness-service.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:crush phase:visual-ecosystem-convergence ts:2026-07-18T05:10:00Z -->
 
 ## ◇ Crush — Visual Ecosystem Convergence: Current Upstream + Launchers Reconciled
