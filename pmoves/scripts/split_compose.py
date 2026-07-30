@@ -125,6 +125,8 @@ SERVICE_GROUPS = {
         "wger-nats-bridge",
         "botz-gateway",
         "pmoves-yt",
+        "nats_event_bus",
+        "pinokio_bridge",
     ],
     "juicefs": [
         "juicefs-redis",

@@ -344,3 +344,4 @@ services:
         limits:
           cpus: '0.3'
           memory: 192M
+
