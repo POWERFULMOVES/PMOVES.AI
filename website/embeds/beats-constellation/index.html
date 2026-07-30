@@ -191,6 +191,7 @@ let fftData = new Float32Array(FFT_BARS);
 let meydaAnalyzer = null;
 let audioCtx = null;
 let mediaSource = null;
+let playingGroup = null;
 
 function resize(){ const r=canvas.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2); W=r.width; Hh=r.height;
   canvas.width=Math.round(W*DPR); canvas.height=Math.round(Hh*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
@@ -198,6 +199,7 @@ const X=(s)=>s.nx*W, Y=(s)=>s.ny*Hh;
 
 async function playTrack(star) {
   if (!star.audio_url) { console.warn("No audio_url for", star.name); return; }
+  playingGroup = star.group;
   // Stop current analyzer
   if (meydaAnalyzer) { try { meydaAnalyzer.stop(); } catch(e){} meydaAnalyzer = null; }
   player.pause();
@@ -254,6 +256,7 @@ async function playTrack(star) {
 
 player.addEventListener("ended", () => {
   if (meydaAnalyzer) { try { meydaAnalyzer.stop(); } catch(e){} meydaAnalyzer = null; }
+  playingGroup = null;
   fftOverlay.classList.remove("on");
   nowPlaying.classList.remove("on");
 });
@@ -271,7 +274,7 @@ function draw(t){
   // Live audio reactivity: pulse stars in the playing group
   const playingRms = fftData.reduce((s,v)=>s+v,0) / FFT_BARS;
   stars.forEach(s=>{ if(disabled.has(s.family)) return; const c=famColor(s.family); const isH=hovered===s;
-    const groupPulse = playingRms > 0.01 ? 1 + playingRms * 2 * (s.group === hovered?.group ? 1 : 0.3) : 1;
+    const groupPulse = playingRms > 0.01 ? 1 + playingRms * 2 * (s.group === playingGroup ? 1 : 0.3) : 1;
     const tw=reduce?1:(0.82+0.18*Math.sin(t/900+s.phase)*s.twk); const r=(isH?4.6:2.4)*(0.9+0.2*tw)*groupPulse;
     ctx.shadowColor=c; ctx.shadowBlur=(isH?18:9)*glow*groupPulse; ctx.fillStyle=c; ctx.globalAlpha=isH?1:0.55+0.4*tw;
     ctx.beginPath(); ctx.arc(X(s),Y(s),r,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;

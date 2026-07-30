@@ -1026,7 +1026,7 @@ def _build_tracks_json(groups: list[dict],
     import os
     audio_rel = os.environ.get(
         "BEATS_AUDIO_REL",
-        "../../../pmoves/data/beats/soundcloud/darkxside")
+        "/audio/beats/darkxside")
     tracks = []
     for g in groups:
         gname = g["group"]
