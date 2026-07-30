@@ -1,18 +1,10 @@
 #EXTM3U
 # DARKXSIDE Sonic Group: Presto_balanced_Bright_c6
-# Tracks: 7
+# Tracks: 3
 
-#EXTINF:22,ARCANE NIGHT
-pmoves/data/beats/soundcloud/darkxside/ARCANE NIGHT.opus
+#EXTINF:102,Happy Practice
+pmoves/data/beats/soundcloud/darkxside/Happy Practice.opus
 #EXTINF:222,Krukky 18drums 6frek 4premaster 4b
 pmoves/data/beats/soundcloud/darkxside/Krukky 18drums 6frek 4premaster 4b.opus
-#EXTINF:83,Lately
-pmoves/data/beats/soundcloud/darkxside/Lately.opus
-#EXTINF:108,Strange things
-pmoves/data/beats/soundcloud/darkxside/Strange things.opus
-#EXTINF:68,TALK SLOW
-pmoves/data/beats/soundcloud/darkxside/TALK SLOW.opus
-#EXTINF:114,Ask Me
-pmoves/data/beats/soundcloud/darkxside/Ask Me.opus
-#EXTINF:83,Shaelamix1loudLONG 183bpm
-pmoves/data/beats/soundcloud/darkxside/Shaelamix1loudLONG 183bpm.mp3
+#EXTINF:180,FLATTERY 4
+pmoves/data/beats/soundcloud/darkxside/FLATTERY 4.opus

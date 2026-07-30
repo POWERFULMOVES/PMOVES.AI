@@ -1,132 +1,132 @@
 [
   {
-    "group": "Moderato_balanced_Bright_c2",
-    "count": 27,
-    "tracks": [
-      "Absynth Club mix",
-      "Arcade Low - 2",
-      "Ask You",
-      "BOLLYWOOD MADNESS",
-      "Crush no # 71",
-      "Guitary Dwstro 3busy 4",
-      "Harbinger",
-      "Like you a lot",
-      "MATTER COMMANDER",
-      "MULTI BIT DARK",
-      "MULTIBIT",
-      "NICE BABY",
-      "RAKS LIT",
-      "RAKS SLOW",
-      "Ree 3b 25",
-      "SCARD",
-      "Shrooms 9 Low slow change",
-      "Sketch 5 116.44 LOUD",
-      "Storms",
-      "Street Fighter Lower",
-      "the empath",
-      "The Harbringer",
-      "the legend of Rattlesnake Jake",
-      "THE SMALLEST VIOLINS",
-      "THEY'LL KILL YOU (OOMPA LOOMPA mix)",
-      "WACK",
-      "When"
-    ]
-  },
-  {
-    "group": "Allegro_warm_Bright_c1",
-    "count": 18,
-    "tracks": [
-      "14 Track 14",
-      "808 Low",
-      "Aquary 4",
-      "Asylum 2 nice",
-      "BoomBap Low Long",
-      "Darque 8",
-      "Final Chrono Dark Rev A",
-      "FIRST BOSS",
-      "Happy Practice",
-      "Hip Hops n Star Snaps",
-      "inquiringcuriousmind",
-      "Lira 9",
-      "Lost Tapes A Side B Side - 1",
-      "Rak no# 10 mix issue no# 4",
-      "Rav Low",
-      "Sketch 8 B Loud Dark",
-      "Strange Love",
-      "WEIRD v1"
-    ]
-  },
-  {
-    "group": "Presto_balanced_Bright_c0",
-    "count": 15,
-    "tracks": [
-      "808 SIGNS",
-      "CLANK",
-      "Final Chrono 3",
-      "FLATTERY 4",
-      "Gone till remember",
-      "Jazz2loud",
-      "Looops 6long",
-      "Piano Wax 76 Bpm dnb Dark",
-      "Piano Wax Loud",
-      "Reminiscence",
-      "SOUL MOVES",
-      "STARBLAST",
-      "Starscreams and Loud Scars",
-      "The Calm Storm",
-      "The Setup Just Leave Me Alone \u29f8 Don't Leave Me Alone"
-    ]
-  },
-  {
-    "group": "Andante_warm_Bright_c4",
-    "count": 7,
-    "tracks": [
-      "Aquary Rnb",
-      "Frayed",
-      "Johnny 5",
-      "LITTY",
-      "Mood no# 3",
-      "Shae lullaby",
-      "Sketchy tech 11"
-    ]
-  },
-  {
-    "group": "Presto_balanced_Bright_c6",
-    "count": 7,
+    "group": "Allegro_balanced_Bright_c5",
+    "count": 20,
     "tracks": [
       "ARCANE NIGHT",
       "Ask Me",
-      "Krukky 18drums 6frek 4premaster 4b",
-      "Lately",
-      "Shaelamix1loudLONG 183bpm",
-      "Strange things",
-      "TALK SLOW"
-    ]
-  },
-  {
-    "group": "Allegro_balanced_Bright_c3",
-    "count": 6,
-    "tracks": [
+      "Asylum 2 nice",
+      "Frayed",
+      "Gone till remember",
+      "Harbinger",
       "HERE",
       "Ice Cream 3 In 1",
       "IMCRAZY",
+      "Johnny 5",
+      "Like you a lot",
       "SIRIUSSADHAPPYMIX",
+      "Sketch 5 116.44 LOUD",
+      "SOUL MOVES",
       "Star Dreams \u29f8 Wild Far",
+      "Street Fighter Lower",
+      "THE ALIEN IN THE WINDOW",
+      "The Harbringer",
+      "THE SMALLEST VIOLINS",
       "Whosupnext - 01"
     ]
   },
   {
-    "group": "Allegro_electric_Bright_c5",
-    "count": 1,
+    "group": "Allegro_balanced_Bright_c1",
+    "count": 16,
     "tracks": [
-      "Life Ex Machina"
+      "14 Track 14",
+      "Aquary Rnb",
+      "Guitary Dwstro 3busy 4",
+      "Life Ex Machina",
+      "Looops 6long",
+      "MATTER COMMANDER",
+      "Mood no# 3",
+      "Rak no# 10 mix issue no# 4",
+      "Reminiscence",
+      "Shae lullaby",
+      "Shaelamix1loudLONG 183bpm",
+      "Sketchy tech 11",
+      "Strange Love",
+      "Strange things",
+      "TALK SLOW",
+      "the empath"
     ]
   },
   {
-    "group": "Presto_bass-heavy_Deep_c7",
+    "group": "Allegro_balanced_Bright_c0",
+    "count": 16,
+    "tracks": [
+      "Ask You",
+      "CLANK",
+      "Crush no # 71",
+      "FIRST BOSS",
+      "inquiringcuriousmind",
+      "Jazz2loud",
+      "LITTY",
+      "Lost Tapes A Side B Side - 1",
+      "NICE BABY",
+      "Ree 3b 25",
+      "Sketch 8 B Loud Dark",
+      "STARBLAST",
+      "Starscreams and Loud Scars",
+      "The Setup Just Leave Me Alone \u29f8 Don't Leave Me Alone",
+      "THEY'LL KILL YOU (OOMPA LOOMPA mix)",
+      "WACK"
+    ]
+  },
+  {
+    "group": "Moderato_balanced_Bright_c2",
+    "count": 14,
+    "tracks": [
+      "Absynth Club mix",
+      "Arcade Low - 2",
+      "BoomBap Low Long",
+      "Darque 8",
+      "Lira 9",
+      "MULTI BIT DARK",
+      "MULTIBIT",
+      "RAKS LIT",
+      "RAKS SLOW",
+      "Rav Low",
+      "SCARD",
+      "the legend of Rattlesnake Jake",
+      "WEIRD v1",
+      "When"
+    ]
+  },
+  {
+    "group": "Allegro_balanced_Bright_c7",
+    "count": 8,
+    "tracks": [
+      "Aquary 4",
+      "Hip Hops n Star Snaps",
+      "Lately",
+      "Piano Wax 76 Bpm dnb Dark",
+      "Piano Wax Loud",
+      "Shrooms 9 Low slow change",
+      "Storms",
+      "The Calm Storm"
+    ]
+  },
+  {
+    "group": "Allegro_balanced_Bright_c3",
+    "count": 4,
+    "tracks": [
+      "808 Low",
+      "808 SIGNS",
+      "Final Chrono 3",
+      "Final Chrono Dark Rev A"
+    ]
+  },
+  {
+    "group": "Presto_balanced_Bright_c6",
+    "count": 3,
+    "tracks": [
+      "FLATTERY 4",
+      "Happy Practice",
+      "Krukky 18drums 6frek 4premaster 4b"
+    ]
+  },
+  {
+    "group": "Moderato_balanced_Bright_c4",
     "count": 1,
     "tracks": [
-      "THE ALIEN IN THE WINDOW"
+      "BOLLYWOOD MADNESS"
     ]
   }
 ]
