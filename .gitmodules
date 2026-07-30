@@ -45,7 +45,7 @@
 [submodule "PMOVES-BoTZ"]
 	path = PMOVES-BoTZ
 	url = https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 [submodule "PMOVES-BotZ-gateway"]
 	path = PMOVES-BotZ-gateway
@@ -153,7 +153,7 @@
 [submodule "PMOVES-transcribe-and-fetch"]
 	path = PMOVES-transcribe-and-fetch
 	url = https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 # =============================================================================
 # Media & Content Services
@@ -286,7 +286,7 @@
 [submodule "Pmoves-cipher"]
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "pmoves/integrations/archon"]
 	path = pmoves/integrations/archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
@@ -352,6 +352,21 @@
 	path = pmoves-hirag-mcp
 	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
 	branch = main
+[submodule "PMOVES-OpenRoom"]
+	path = PMOVES-OpenRoom
+	url = https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all
+[submodule "Pmoves-pretext"]
+	path = Pmoves-pretext
+	url = https://github.com/POWERFULMOVES/Pmoves-pretext.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all
+[submodule "PMOVES-Spark-VSS"]
+	path = PMOVES-Spark-VSS
+	url = https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git
+	branch = main
+
 [submodule "pbnj"]
 	path = pbnj
 	url = https://github.com/POWERFULMOVES/PMOVES-pinokio.git

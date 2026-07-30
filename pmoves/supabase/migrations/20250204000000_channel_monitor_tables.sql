@@ -46,9 +46,13 @@ CREATE TABLE IF NOT EXISTS pmoves.user_sources (
     last_check_at TIMESTAMPTZ,
     last_ingest_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, provider, COALESCE(source_identifier, ''), COALESCE(source_url, ''))
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Uniqueness across identity + source. Postgres forbids expressions in a
+-- table-level UNIQUE constraint, so it lives as a separate unique index.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_sources_unique_identity
+    ON pmoves.user_sources (user_id, provider, COALESCE(source_identifier, ''), COALESCE(source_url, ''));
 
 -- Indexes for user_sources
 CREATE INDEX IF NOT EXISTS idx_user_sources_user_id ON pmoves.user_sources(user_id);
@@ -88,47 +92,57 @@ ALTER TABLE pmoves.user_sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pmoves.channel_monitoring ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for user_tokens
+DROP POLICY IF EXISTS "Users can view their own tokens" ON pmoves.user_tokens;
 CREATE POLICY "Users can view their own tokens"
     ON pmoves.user_tokens FOR SELECT
     USING (auth.uid()::text = user_id::text);
 
+DROP POLICY IF EXISTS "Users can insert their own tokens" ON pmoves.user_tokens;
 CREATE POLICY "Users can insert their own tokens"
     ON pmoves.user_tokens FOR INSERT
     WITH CHECK (auth.uid()::text = user_id::text);
 
+DROP POLICY IF EXISTS "Users can update their own tokens" ON pmoves.user_tokens;
 CREATE POLICY "Users can update their own tokens"
     ON pmoves.user_tokens FOR UPDATE
     USING (auth.uid()::text = user_id::text);
 
+DROP POLICY IF EXISTS "Service role can manage all tokens" ON pmoves.user_tokens;
 CREATE POLICY "Service role can manage all tokens"
     ON pmoves.user_tokens FOR ALL
-    USING (jwt_claim_role() = 'service_role');
+    USING (auth.role() = 'service_role');
 
 -- RLS Policies for user_sources
+DROP POLICY IF EXISTS "Users can view their own sources" ON pmoves.user_sources;
 CREATE POLICY "Users can view their own sources"
     ON pmoves.user_sources FOR SELECT
     USING (auth.uid()::text = user_id::text);
 
+DROP POLICY IF EXISTS "Users can insert their own sources" ON pmoves.user_sources;
 CREATE POLICY "Users can insert their own sources"
     ON pmoves.user_sources FOR INSERT
     WITH CHECK (auth.uid()::text = user_id::text);
 
+DROP POLICY IF EXISTS "Users can update their own sources" ON pmoves.user_sources;
 CREATE POLICY "Users can update their own sources"
     ON pmoves.user_sources FOR UPDATE
     USING (auth.uid()::text = user_id::text);
 
+DROP POLICY IF EXISTS "Users can delete their own sources" ON pmoves.user_sources;
 CREATE POLICY "Users can delete their own sources"
     ON pmoves.user_sources FOR DELETE
     USING (auth.uid()::text = user_id::text);
 
+DROP POLICY IF EXISTS "Service role can manage all sources" ON pmoves.user_sources;
 CREATE POLICY "Service role can manage all sources"
     ON pmoves.user_sources FOR ALL
-    USING (jwt_claim_role() = 'service_role');
+    USING (auth.role() = 'service_role');
 
 -- RLS Policies for channel_monitoring
+DROP POLICY IF EXISTS "Service role full access to monitoring" ON pmoves.channel_monitoring;
 CREATE POLICY "Service role full access to monitoring"
     ON pmoves.channel_monitoring FOR ALL
-    USING (jwt_claim_role() = 'service_role');
+    USING (auth.role() = 'service_role');
 
 -- ==============================================================================
 -- FUNCTIONS AND TRIGGERS
@@ -144,17 +158,17 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Triggers for updated_at
-CREATE TRIGGER update_user_tokens_updated_at
+CREATE OR REPLACE TRIGGER update_user_tokens_updated_at
     BEFORE UPDATE ON pmoves.user_tokens
     FOR EACH ROW
     EXECUTE FUNCTION pmoves.update_updated_at();
 
-CREATE TRIGGER update_user_sources_updated_at
+CREATE OR REPLACE TRIGGER update_user_sources_updated_at
     BEFORE UPDATE ON pmoves.user_sources
     FOR EACH ROW
     EXECUTE FUNCTION pmoves.update_updated_at();
 
-CREATE TRIGGER update_channel_monitoring_updated_at
+CREATE OR REPLACE TRIGGER update_channel_monitoring_updated_at
     BEFORE UPDATE ON pmoves.channel_monitoring
     FOR EACH ROW
     EXECUTE FUNCTION pmoves.update_updated_at();

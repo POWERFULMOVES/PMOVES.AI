@@ -21,9 +21,12 @@ services:
     build:
       context: ./services/yt-cookie-refresher
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     environment:
       - PORT=8115
-      - NATS_URL=${NATS_URL}
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
       - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
@@ -41,7 +44,7 @@ services:
     ports:
       - "${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:8115:8115"
     profiles: ["yt-cookies"]
-    networks: [pmoves_api, pmoves_bus]
+    networks: [pmoves_api, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8115/healthz', timeout=5)"]
       interval: 30s
@@ -57,6 +60,7 @@ services:
   yt-cookie-writer:
     build:
       context: ./services/yt-cookie-writer
+    user: root
     # main.py now touches /tmp/healthy after NATS subscription is active,
     # matching the Dockerfile healthcheck. This override keeps it consistent.
     healthcheck:
@@ -67,11 +71,12 @@ services:
       start_period: 15s
     restart: unless-stopped
     environment:
-      - NATS_URL=${NATS_URL}
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
       - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
       - YT_COOKIE_OUTPUT_PATH=/cookies/yt-cookies.txt
+      - YT_PO_TOKEN_OUTPUT_PATH=/cookies/yt-po-token.txt
       - LOG_LEVEL=${YT_COOKIE_WRITER_LOG_LEVEL:-INFO}
       - SSL_CERT_FILE=
       - SSL_CERT_DIR=
@@ -82,22 +87,41 @@ services:
     volumes:
       - yt-cookies-vol:/cookies
     profiles: ["yt-cookies"]
-    networks: [pmoves_bus, pmoves_api]
+    networks: [pmoves_bus, pmoves_api, pmoves_external]
     deploy:
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
 
-  # Override pmoves-yt to mount the shared cookie volume (read-only).
+  # Override pmoves-yt to mount the shared cookie volume.
   # Path alignment: yt-cookie-writer outputs /cookies/yt-cookies.txt inside its
   # own container; the same volume mounted here exposes that file at
   # /app/config/cookies/yt-cookies.txt. YT_COOKIES is overridden to point at
   # this location so the base compose default
   # (/app/config/cookies/darkxside.youtube.cookies.txt — placeholder filename)
   # does not silently shadow the writer's output.
+  # Mounted rw because yt-dlp updates the cookiejar during extraction.
   pmoves-yt:
+    volumes:
+      - yt-cookies-vol:/app/config/cookies:rw
+      - ${JUICEFS_HOST_MOUNT:-/home/pmoves-knuckles/pmoves-fs}:/mnt/pmoves/media:rshared
     environment:
       - YT_COOKIES=/app/config/cookies/yt-cookies.txt
-    volumes:
-      - yt-cookies-vol:/app/config/cookies:ro
+      - YT_PO_TOKEN_FILE=/app/config/cookies/yt-po-token.txt
+      - JUICEFS_MEDIA_ROOT=/mnt/pmoves/media
+    # Load the harvested PO token from the cookie-writer volume before
+    # starting uvicorn. yt.py reads YT_PO_TOKEN_VALUE at module-import
+    # time, so it must be in the environment at launch. If the file does
+    # not exist yet (no refresh completed), bgutil-pot-provider remains
+    # the active PO token backend.
+    command: >-
+      sh -c '
+        if [ -f /app/config/cookies/yt-po-token.txt ] && [ -s /app/config/cookies/yt-po-token.txt ]; then
+          export YT_PO_TOKEN_VALUE="$$(cat /app/config/cookies/yt-po-token.txt)";
+          echo "Loaded harvested PO token from cookie-writer volume";
+        else
+          echo "No harvested PO token — bgutil-pot-provider remains active";
+        fi;
+        exec uvicorn pmoves_yt_service.yt:app --host 0.0.0.0 --port 8077;
+      '

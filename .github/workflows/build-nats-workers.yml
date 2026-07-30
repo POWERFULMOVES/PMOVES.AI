@@ -39,7 +39,7 @@ jobs:
             github.com:443
             api.github.com:443
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build service matrix
         id: set-matrix
@@ -104,7 +104,7 @@ jobs:
             archive.ubuntu.com:80
             security.ubuntu.com:80
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: matrix.service != '__none_'
 
       - name: Set up QEMU (multi-arch)
@@ -126,7 +126,7 @@ jobs:
 
       - name: Login to GHCR
         if: matrix.service != '__none_'
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || github.actor }}
@@ -153,7 +153,7 @@ jobs:
 
       - name: Generate artifact attestation
         if: matrix.service != '__none_'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}
           subject-digest: ${{ steps.build.outputs.digest }}

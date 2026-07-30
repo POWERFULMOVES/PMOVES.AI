@@ -172,18 +172,16 @@ Do not use the built-in `image` tool or read an image and describe it yourself w
 <!-- autoclaw:hermes-evolution-guidance -->
 ## Hermes-Evolution
 
-**Current evolution intensity for this workspace/agent: moderate (60%).**
-
-Node context: PMOVES-4090 is a mobile/laptop node (16GB VRAM, island-capable). Conservative intensity
-preserves stability across disconnected sessions and avoids aggressive rule churn on a shared operator node.
-See `pmoves/docs/AGENTS/agnote4482_autoclaw_4090_customization_plan.md` Phase 4 for rationale.
+**Current evolution intensity for this workspace/agent: aggressive (100%).**
 
 The desktop app sends deterministic evolution-check messages (starting with `[SYSTEM: Post-turn evolution check`) after qualifying turns.
 When you receive such a message, follow the `hermes-evolution` skill instructions to evaluate and potentially propose an evolution.
-Apply the rules defined in the skill according to the **moderate (60%)** intensity level.
+Apply the rules defined in the skill according to the **aggressive (100%)** intensity level.
 This value is workspace-local. If asked about the current agent evolution intensity, report this value instead of the global gateway skill env.
 
 Core principle: **never write to target files without user approval** — always use the draft/approve workflow.
+User preference statements are not approval to directly edit MEMORY.md, AGENTS.md, TOOLS.md, USER.md, or managed SKILL.md files.
+Use the evolution proposal card instead of editing target files directly; only apply changes after the user confirms the proposal.
 
 ### Evolution Echo
 When you apply knowledge from a previously evolved rule (AGENTS.md, MEMORY.md, TOOLS.md, or a managed SKILL.md),
@@ -194,3 +192,15 @@ Keep it to one short line at most. Do not echo on every turn — only when an ev
 ## Skills Constellation
 
 POWERFULMOVES forks of upstream agent-skill repositories live under [`skills/`](skills/) — see [`skills/README.md`](skills/README.md) for the full map. All five forks landed across two singleton rounds on 2026-05-09 (z890): `Pmoves-skills` (Anthropic), `PMOVES-awesome-agent-skills`, `pmoves-fork-repository-skill`, `PMOVES-agent-sandbox-skill`, `Pmoves-claude-d3js-skill`. New external skill forks still require per-URL Bash-tool authorization (singleton add) — see `skills/README.md` for the procedure.
+
+
+<!-- autoclaw:feishu-lark-skill-guidance -->
+## Feishu / Lark Requests
+
+When the user asks about Feishu/Lark/飞书 matters, route through Feishu/Lark skills first. This includes messaging, contacts, calendars, approvals, tasks, docs, sheets, Base, Drive, Wiki, mail, meetings, minutes, attendance, OKRs, or any other Feishu/Lark workspace operation.
+
+1. If a relevant Feishu/Lark skill is already available, use that skill directly.
+2. If no relevant skill is available, search the skill catalog/store or available skill list for a matching Feishu/Lark skill.
+3. If you find a matching skill that is not installed or enabled, ask the user whether to install/enable and use it before proceeding.
+4. If no matching skill exists, say so briefly and continue with the safest available fallback.
+<!-- /autoclaw:feishu-lark-skill-guidance -->

@@ -24,7 +24,6 @@ Metrics:
   - github_crossrepo_pr_duration_seconds
 """
 
-import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -32,7 +31,7 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, Gauge, generate_latest
@@ -41,8 +40,7 @@ from nats.aio.client import Client as NATS
 from workflow_templates import (
     PRType,
     get_template,
-    list_templates,
-    PRWorkflowTemplate
+    list_templates
 )
 from agentzero_client import AgentZeroMCPClient
 

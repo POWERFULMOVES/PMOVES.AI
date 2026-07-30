@@ -62,7 +62,7 @@ async def publish_and_wait() -> dict[str, object]:
 
 
 def main():
-    result = asyncio.run(publish_and_wait())
+    asyncio.run(publish_and_wait())
     host_port = os.getenv("SUPASERCH_HOST_PORT", os.getenv("SUPASERCH_PORT", "8099"))
     http_url = f"http://localhost:{host_port}/v1/search?q=supaserch+smoke+http"
     try:

@@ -11,7 +11,6 @@ Checks:
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 
@@ -41,7 +40,7 @@ def check_existence() -> list[str]:
             continue
         if example.exists():
             print(f"WARN: {env_file} missing (example exists)")
-            print(f"   Fix: run 'make bootstrap-tier-envs' or 'make secrets-funnel'")
+            print("   Fix: run 'make bootstrap-tier-envs' or 'make secrets-funnel'")
         else:
             print(f"ERROR: {env_file} missing (no example found)")
             missing_hard.append(str(env_file))
@@ -64,8 +63,8 @@ def check_drift() -> list[str]:
             drift.append(f"DRIFT env.tier-{tier}: {len(missing)} keys in .example but not in runtime")
             for key in missing:
                 drift.append(f"  - {key}")
-            drift.append(f"  Fix: run 'make secrets-funnel' to regenerate from CHIT source,")
-            drift.append(f"       or add missing keys to secrets_manifest_v2.yaml")
+            drift.append("  Fix: run 'make secrets-funnel' to regenerate from CHIT source,")
+            drift.append("       or add missing keys to secrets_manifest_v2.yaml")
     return drift
 
 

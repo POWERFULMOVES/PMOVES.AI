@@ -25,6 +25,7 @@ tagowners:
   tag:dgx: [group:admin]          # preparatory — no ACL rules yet
   tag:monitoring: [group:admin]
   tag:pmoves: [group:admin]
+  tag:storage: [group:admin]
   tag:pve: [group:admin]
 
 # ── Groups ──────────────────────────────────────────────────
@@ -151,6 +152,24 @@ acls:
     src: [group:admin]
     dst: [tag:pmoves]
     ports: [8200]
+
+  # Storage: JuiceFS S3 gateway + Jellyfin media playback
+  # tag:pmoves nodes can reach storage for S3 API (9000) and Jellyfin (9096)
+  - action: accept
+    src: [tag:pmoves]
+    dst: [tag:storage]
+    ports: [9000, 9096]
+
+  # Storage: admin full access (SSH + management)
+  - action: accept
+    src: [group:admin]
+    dst: [tag:storage]
+
+  # Storage: users can access Jellyfin for media playback
+  - action: accept
+    src: [group:users]
+    dst: [tag:storage]
+    ports: [9096]
 
 # ── SSH ─────────────────────────────────────────────────────
 ssh:

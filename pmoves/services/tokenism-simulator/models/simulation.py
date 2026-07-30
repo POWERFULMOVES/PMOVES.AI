@@ -7,7 +7,6 @@ Defines data structures for:
 - Wealth distribution metrics
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 from enum import Enum

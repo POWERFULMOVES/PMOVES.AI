@@ -79,7 +79,11 @@ async def _lifespan(app: FastAPI):
     if Config.NATS_URL:
         try:
             from nats_responder import run_responder
-            app.state.nats_conn = await run_responder(get_embedder())
+            try:
+                get_embedder()
+            except Exception:
+                pass
+            app.state.nats_conn = await run_responder(get_embedder)
         except Exception as exc:
             # HTTP endpoints still serve, but the advertised NATS path is dead —
             # log it so the silent degradation is debuggable. Redact the URL and

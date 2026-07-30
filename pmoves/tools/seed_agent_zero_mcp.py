@@ -76,9 +76,11 @@ def _resolve_supabase_key() -> str:
 
 def _build_default_entries() -> list[tuple[str, str]]:
     fs_roots = os.environ.get("A0_MCP_FILESYSTEM_ROOTS", "/data").strip() or "/data"
+    # Archon 0.6.0 serves API/UI/MCP on the unified port 3090 (the :8051 Python
+    # MCP bridge was removed in the TS rewrite — #2217).
     archon_endpoint = (
-        os.environ.get("A0_MCP_ARCHON_ENDPOINT", "http://archon-server:8051").strip()
-        or "http://archon-server:8051"
+        os.environ.get("A0_MCP_ARCHON_ENDPOINT", "http://archon-server:3090").strip()
+        or "http://archon-server:3090"
     )
     neo4j_url = os.environ.get("A0_MCP_NEO4J_URL", "bolt://neo4j:7687").strip() or "bolt://neo4j:7687"
     neo4j_user = os.environ.get("A0_MCP_NEO4J_USER", os.environ.get("NEO4J_USER", "neo4j")).strip() or "neo4j"

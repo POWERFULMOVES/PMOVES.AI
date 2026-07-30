@@ -7,9 +7,18 @@ type SupabaseClientOptions = {
   serviceRole?: boolean;
 };
 
+// During `next build` (e.g. inside `docker build`) no live env exists, and
+// several client pages construct a Supabase client at module scope or during
+// the prerender pass. Throwing there kills the image build. In the build
+// phase only, hand back inert placeholders; at runtime the strict throws
+// below still fire on real misconfiguration.
+const isBuildPhase = (): boolean =>
+  process.env.NEXT_PHASE === 'phase-production-build';
+
 const ensureUrl = (): string => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   if (!url) {
+    if (isBuildPhase()) return 'http://supabase-placeholder.invalid';
     throw new Error(
       'SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) is not configured. Run `make supa-start` + `make supa-status` and sync the values into pmoves/.env.local.'
     );
@@ -20,6 +29,7 @@ const ensureUrl = (): string => {
 const ensureAnonKey = (): string => {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   if (!key) {
+    if (isBuildPhase()) return 'build-phase-placeholder';
     throw new Error(
       'SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) is missing. Export the publishable key from `make supa-status` and add it to pmoves/.env.local.'
     );

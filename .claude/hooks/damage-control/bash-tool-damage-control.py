@@ -77,7 +77,9 @@ MOVE_COPY_PATTERNS = [
 ]
 
 DELETE_PATTERNS = [
-    (r'\brm\s+.*{path}', "delete"),
+    # `git rm` is a reversible git-index removal, not a filesystem delete —
+    # exclude it (mirrors the docker/podman/git exclusion in patterns.yaml).
+    (r'(?<!git\s)\brm\s+.*{path}', "delete"),
     (r'\bunlink\s+.*{path}', "delete"),
     (r'\brmdir\s+.*{path}', "delete"),
     (r'\bshred\s+.*{path}', "delete"),

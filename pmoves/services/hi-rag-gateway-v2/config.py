@@ -5,16 +5,7 @@ Heavy dependencies (torch, qdrant_client, etc.) are wrapped in try/except Import
 """
 
 import os
-import time
-import math
-import json
 import logging
-import re
-import sys
-import copy
-import threading
-import socket
-import ipaddress
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -58,9 +49,6 @@ try:
 except ImportError:
     fuzz = None  # type: ignore
 
-import requests
-import urllib3
-from urllib.parse import quote_plus, urlparse
 
 # ---------------------------------------------------------------------------
 # Environment variables

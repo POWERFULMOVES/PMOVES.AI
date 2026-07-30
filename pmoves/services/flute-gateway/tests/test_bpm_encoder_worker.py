@@ -58,7 +58,7 @@ def test_build_cgp_packet_structure():
     profile = {"chunks": [{"text": "Hi", "boundary": "SENTENCE", "bpm": 60}], "avg_bpm": 60.0, "total_chunks": 1}
     source = {"model": "qwen2.5-coder:32b"}
     packet = _build_cgp_packet(profile, source)
-    assert packet["spec"] == "cgp_v0.2"
+    assert packet["spec"] == "chit.cgp.v0.2"
     assert "id" in packet
     assert "timestamp" in packet
     assert packet["source"]["agent"] == "bpm-encoder-worker"
@@ -87,3 +87,30 @@ def test_redact_url_with_password():
 def test_redact_url_no_password():
     url = "nats://nats:4222"
     assert _redact_url(url) == url
+
+def test_redact_url_token_only():
+    # Token auth (nats://TOKEN@host) puts the secret in `username` with no
+    # password — it must still be redacted.
+    url = "nats://s3cr3t-token@nats:4222"
+    redacted = _redact_url(url)
+    assert "s3cr3t-token" not in redacted
+    assert "nats:4222" in redacted
+
+def test_redact_url_user_and_password():
+    url = "nats://user:p4ss@nats:4222"
+    redacted = _redact_url(url)
+    assert "p4ss" not in redacted
+    assert "user" not in redacted
+
+def test_cgp_packet_validates_against_schema():
+    # The emitted packet must satisfy contracts/schemas/geometry/cgp.v2.schema.json.
+    jsonschema = pytest.importorskip("jsonschema")
+    schema_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "contracts", "schemas", "geometry", "cgp.v2.schema.json",
+    )
+    with open(schema_path) as fh:
+        schema = json.load(fh)
+    profile = _encode_prosodic_profile("Hello world. How are you today?")
+    packet = _build_cgp_packet(profile, {"result": {"text": "Hello world."}})
+    jsonschema.validate(packet, schema)

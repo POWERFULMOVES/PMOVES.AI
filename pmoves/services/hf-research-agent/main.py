@@ -175,7 +175,7 @@ class HFResearchAgent:
             return
 
         if not isinstance(model, dict):
-            print(f"[hf-research] dropping non-object message", file=sys.stderr)
+            print("[hf-research] dropping non-object message", file=sys.stderr)
             return
 
         evaluation = self._evaluate_model(model)

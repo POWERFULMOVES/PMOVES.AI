@@ -124,7 +124,7 @@ jobs:
       names: ${{ steps.resolve.outputs.names }}
     steps:
       - name: Checkout (matrix config)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Resolve integration matrix
         id: resolve
@@ -180,7 +180,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout (stub)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Load integration config
         id: cfg
@@ -402,7 +402,7 @@ jobs:
           echo "Build-host disk after /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
 
       - name: Checkout (stub)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Load integration config
         id: cfg
@@ -579,7 +579,7 @@ jobs:
         id: login_ghcr_pat
         if: ${{ env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
@@ -589,7 +589,7 @@ jobs:
         id: login_ghcr_app
         if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.app_token.outputs.token != '' }}
         continue-on-error: true
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
         with:
           registry: ${{ env.REGISTRY }}
           username: x-access-token
@@ -599,7 +599,7 @@ jobs:
         id: login_ghcr_actions
         if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' }}
         continue-on-error: true
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -613,7 +613,7 @@ jobs:
 
       - name: Optional login to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}

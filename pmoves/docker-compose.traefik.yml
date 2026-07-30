@@ -1,0 +1,33 @@
+services:
+  traefik:
+    image: ${TRAEFIK_IMAGE:-traefik:v3.3}
+    container_name: pmoves-traefik
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --certificatesresolvers.cf.acme.dnschallenge=true
+      - --certificatesresolvers.cf.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.cf.acme.email=${ACME_EMAIL:-ops@pmoves.ai}
+      - --certificatesresolvers.cf.acme.storage=/letsencrypt/acme.json
+    environment:
+      CF_DNS_API_TOKEN: ${CLOUDFLARE_DNS_API_TOKEN}
+    ports: ["443:443", "80:80"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - traefik-acme:/letsencrypt
+    networks: { pmoves_external: {} }
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.auth.rule=Host(`auth.pmoves.ai`)
+      - traefik.http.routers.auth.entrypoints=websecure
+      - traefik.http.routers.auth.tls.certresolver=cf
+      - traefik.http.routers.auth.service=sso-auth@docker
+volumes: { traefik-acme: {} }
+networks:
+  pmoves_external: { external: true }

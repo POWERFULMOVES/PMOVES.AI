@@ -34,7 +34,7 @@ CHIT Geometry Bus solves this by providing:
 
 ### Core Concepts
 
-**CHIT (Context-Hybrid Information Token)**
+**CHIT (Compressed Hierarchical Information Transfer)**
 - Represents a single unit of contextual information
 - Can contain: text, embeddings, metadata, relationships
 - Type-safe schema for validation

@@ -1,6 +1,6 @@
 # CHIT Documentation
 
-**CHIT (Cymatic-Holographic Information Transfer)** encodes meaning as geometry instead of token streams. A compact "shape packet" (CGP) captures the direction, density, and hierarchy of information — and that shape is enough to reconstruct meaning on the receiving end.
+**CHIT (Cymatic Holographic Information Theory)** encodes meaning as geometry instead of token streams. A compact "shape packet" (CGP) captures the direction, density, and hierarchy of information — and that shape is enough to reconstruct meaning on the receiving end.
 
 CHIT is the encoding. The **GEOMETRY BUS** is the transport. **EVO SWARM** is the fairness optimizer. Together they form the geometric communication backbone of PMOVES.AI.
 

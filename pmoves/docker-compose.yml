@@ -556,6 +556,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 20s
@@ -618,6 +619,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # DNS configuration - Docker embedded DNS (default)
+    - PMOVES_NETWORKS=pmoves_api
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 15s
@@ -669,6 +671,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -716,7 +719,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
-    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
+    entrypoint: ["/bin/bash", "-c", "for i in $$(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($$i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -783,6 +787,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
     # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
+    - PMOVES_NETWORKS=pmoves_api
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:4000/ > /dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -837,6 +842,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
+    - PMOVES_NETWORKS=pmoves_api
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
       interval: 5s
@@ -901,6 +907,7 @@ services:
     # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
     # Note: Official Supabase uses node -e fetch but their image has different network config
     # We rely on container being started successfully (logs show "Ready in Xms")
+    - PMOVES_NETWORKS=pmoves_api
     healthcheck:
       test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
       interval: 30s
@@ -939,6 +946,7 @@ services:
     - IMGPROXY_USE_ETAG=true
     - IMGPROXY_ENABLE_WEBP_DETECTION=${IMGPROXY_ENABLE_WEBP_DETECTION:-true}
     - IMGPROXY_MAX_SRC_RESOLUTION=16.8
+    - PMOVES_NETWORKS=pmoves_api
     healthcheck:
       test: ["CMD", "imgproxy", "health"]
       interval: 5s
@@ -972,6 +980,7 @@ services:
     - PG_META_DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
     - PG_META_DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
+    - PMOVES_NETWORKS=pmoves_data
     healthcheck:
       test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
       interval: 20s
@@ -1005,6 +1014,7 @@ services:
     - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY in env.tier-supabase}
     - SUPABASE_DB_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     - VERIFY_JWT=${FUNCTIONS_VERIFY_JWT:-true}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
     command: ["start", "--main-service", "/home/deno/functions/main"]
     volumes:
     - ../PMOVES-supabase/docker/volumes/functions:/home/deno/functions:ro
@@ -1065,6 +1075,7 @@ services:
     - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - POSTGRES_BACKEND_SCHEMA=_analytics
     - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
+    - PMOVES_NETWORKS=pmoves_data
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:4000/health -o /dev/null || exit 1"]
       interval: 15s
@@ -1094,6 +1105,15 @@ services:
     - supabase-local
     environment:
     - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    # Pass-through (no `=`) so these resolve to ABSENT from the host, overriding
+    # the empty-string values the supabase env files set. vector 0.28.1 fails to
+    # build its logflare proxy connector from an empty-string HTTP_PROXY ("Failed
+    # to build Proxy connector: empty string") and crash-loops; an ABSENT var is
+    # fine. (An `=` here would re-set the empty string and reintroduce the crash.)
+    - HTTP_PROXY
+    - HTTPS_PROXY
+    - NO_PROXY
+    - PMOVES_NETWORKS=pmoves_data
     volumes:
     - supabase-vector-data:/var/lib/vector
     - ../PMOVES-supabase/docker/volumes/logs/vector.yml:/etc/vector/vector.yml:ro
@@ -1144,6 +1164,7 @@ services:
     - POOLER_MAX_CLIENT_CONN=${POOLER_MAX_CLIENT_CONN:-100}
     - POOLER_POOL_MODE=transaction
     - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
+    - PMOVES_NETWORKS=pmoves_data
     command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found, skipping tenant seeding'; fi && /app/bin/server"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
@@ -1190,6 +1211,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - QDRANT__SERVICE__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
+    - PMOVES_NETWORKS=pmoves_data
     volumes:
     - qdrant-data:/qdrant/storage
     healthcheck:
@@ -1214,6 +1236,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data
     ports:
     - ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
     networks:
@@ -1261,6 +1284,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data
     ports:
     - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
     - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
@@ -1305,6 +1329,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_bus
     ports:
     - ${MINIO_BIND:-0.0.0.0}:${MINIO_PORT:-9000}:9000
     - ${MINIO_CONSOLE_BIND:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001
@@ -1357,6 +1382,8 @@ services:
           cpus: '0.5'
           memory: 512M
 
+    environment:
+    - PMOVES_NETWORKS=pmoves_data
   juicefs-format:  # one-time FS format (idempotent); gateway waits on this
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -1376,6 +1403,8 @@ services:
     networks:
     - pmoves_data
 
+    environment:
+    - PMOVES_NETWORKS=pmoves_data
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -1390,6 +1419,7 @@ services:
     # juicefs gateway uses the MinIO gateway code: these are the S3 access/secret keys.
     - MINIO_ROOT_USER=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
     - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
+    - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
     - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
@@ -1418,6 +1448,7 @@ services:
     environment:
     # Same credential chain as juicefs-gateway (no baked-in secret) so smoke auth always matches.
     - MC_HOST_jfs=http://${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}:${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}@juicefs-gateway:9000
+    - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
     - "set -e; mc mb -p jfs/assets jfs/outputs; printf 'hello-juicefs-2026' | mc pipe jfs/assets/smoke.txt; echo '--- GET ---'; mc cat jfs/assets/smoke.txt; echo; echo '--- multi-bucket list (assets+outputs => --multi-buckets works) ---'; mc ls jfs/"
@@ -1466,6 +1497,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     ports:
     - ${HIRAG_V1_BIND:-127.0.0.1}:${HIRAG_V1_HOST_PORT:-8089}:8086
     depends_on:
@@ -1498,6 +1530,7 @@ services:
     environment:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
     depends_on:
     - hi-rag-gateway-v2
     ports:
@@ -1533,6 +1566,7 @@ services:
     - MINIO_SECURE=false
     - AWS_DEFAULT_REGION=us-east-1
     - ALLOWED_BUCKETS=${ALLOWED_BUCKETS:-assets,outputs}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - ${PRESIGN_BIND:-0.0.0.0}:${PRESIGN_PORT:-8088}:8080
     profiles:
@@ -1566,6 +1600,7 @@ services:
     - SUPABASE_ANON_KEY=${RENDER_WEBHOOK_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-${ANON_KEY:-}}}
     - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external,pmoves_bus
     ports:
     - ${RENDER_WEBHOOK_BIND:-0.0.0.0}:${RENDER_WEBHOOK_PORT:-8085}:8085
     profiles:
@@ -1606,6 +1641,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - ${MODEL_REGISTRY_BIND:-0.0.0.0}:${MODEL_REGISTRY_PORT:-8110}:8110
     depends_on:
@@ -1637,6 +1673,24 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  clip-embed:
+    <<: *tier-api-hardened
+    build:
+      context: ./services/clip-embed
+      dockerfile: Dockerfile
+    image: pmoves/clip-embed:latest
+    environment:
+    - CLIP_MODEL_ID=${CLIP_MODEL_ID:-openai/clip-vit-large-patch14}
+    - CLIP_MODEL_REVISION=${CLIP_MODEL_REVISION:-main}
+    - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
+    - CLIP_EMBED_PORT=8109
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    ports:
+    - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    restart: unless-stopped
+    profiles:
+    - orchestration
   clap-embed:
     <<: *tier-api-hardened
     build:
@@ -1644,14 +1698,15 @@ services:
       dockerfile: Dockerfile
     image: pmoves/clap-embed:latest
     environment:
-      - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
-      - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
-      - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
-      - CLAP_EMBED_PORT=8108
-      - NATS_URL=${NATS_URL:-}
-      - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
+    - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
+    - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
+    - CLAP_EMBED_PORT=8108
+    - NATS_URL=${NATS_URL:-}
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
     ports:
-      - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
+    - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
     restart: unless-stopped
     depends_on:
       nats:
@@ -1702,6 +1757,7 @@ services:
     - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
     ports:
     - ${EXTRACT_WORKER_BIND:-0.0.0.0}:${EXTRACT_WORKER_PORT:-8083}:8083
     profiles:
@@ -1750,6 +1806,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     profiles:
     - workers
     - orchestration
@@ -1787,6 +1844,7 @@ services:
     - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
     - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
     - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
     depends_on:
       extract-worker:
         condition: service_started
@@ -1836,6 +1894,8 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+    environment:
+    - PMOVES_NETWORKS=pmoves_app
   notebook-sync:
     <<: *tier-worker-hardened
     build: ./services/notebook-sync
@@ -1848,6 +1908,7 @@ services:
     - NOTEBOOK_SYNC_DB_PATH=${NOTEBOOK_SYNC_DB_PATH:-/data/notebook_sync.db}
     - LANGEXTRACT_URL=${LANGEXTRACT_URL:-http://langextract:8084}
     - EXTRACT_WORKER_URL=${EXTRACT_WORKER_URL:-http://extract-worker:8083}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     depends_on:
       langextract:
         condition: service_started
@@ -1898,6 +1959,7 @@ services:
     - NATS_URL=${NATS_URL}
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -1913,6 +1975,7 @@ services:
     - pmoves_bus
     - pmoves_api
     - pmoves_data  # MinIO access (minio:9000)
+    - pmoves_external  # host port publish (tier nets are internal:true)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
       interval: 30s
@@ -1920,6 +1983,50 @@ services:
       retries: 3
       start_period: 30s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  transcribe-frontend:
+    <<: *tier-worker-hardened
+    build:
+      context: ../PMOVES-transcribe-and-fetch
+      dockerfile: Dockerfile
+    image: ${TRANSCRIBE_FRONTEND_IMAGE:-pmoves-transcribe-frontend:local}
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    # Browser-facing base = backend host port; server-side calls stay in-network
+    - NEXT_PUBLIC_API_BASE=${TRANSCRIBE_PUBLIC_API_BASE:-http://localhost:8074}
+    # Next standalone binds to HOSTNAME; docker injects the container id there
+    - HOSTNAME=0.0.0.0
+    - INTERNAL_BACKEND_URL=http://transcribe-backend:8000
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
+    depends_on:
+      transcribe-backend:
+        condition: service_healthy
+    ports:
+    - ${TRANSCRIBE_FRONTEND_BIND:-0.0.0.0}:${TRANSCRIBE_FRONTEND_HOST_PORT:-448}:448
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_external  # host port publish (tier nets are internal:true)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:448/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -1950,6 +2057,7 @@ services:
     - NO_PROXY=
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
     deploy:
       resources:
         reservations:
@@ -1992,6 +2100,7 @@ services:
     - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
     - YOLO_CONFIDENCE=${YOLO_CONFIDENCE:-0.25}
     - FRAME_SAMPLE_RATE=${FRAME_SAMPLE_RATE:-5}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     deploy:
       resources:
         reservations:
@@ -2028,6 +2137,7 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     deploy:
       resources:
         reservations:
@@ -2086,7 +2196,7 @@ services:
     - YT_ENABLE_PO_TOKEN=${YT_ENABLE_PO_TOKEN:-true}
     - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
-    - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}
+    - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4417}
     - BGUTIL_DISABLE_INNERTUBE=${BGUTIL_DISABLE_INNERTUBE:-1}
     - INVIDIOUS_BASE_URL=${INVIDIOUS_BASE_URL:-http://invidious:3000}
     - INVIDIOUS_COMPANION_URL=${INVIDIOUS_COMPANION_URL:-http://invidious-companion:8282}
@@ -2111,6 +2221,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_data,pmoves_external
     volumes:
     - ./config:/app/config
     - pmoves-yt-data:/data
@@ -2141,8 +2252,10 @@ services:
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
+    command: ["build/main.js", "--port", "${BGUTIL_PORT:-4417}"]
     environment:
-    - PORT=4416
+    - PORT=${BGUTIL_PORT:-4417}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
     - minio
     profiles:
@@ -2188,6 +2301,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     volumes:
@@ -2281,6 +2395,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     ports:
@@ -2356,6 +2471,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     deploy:
       resources:
         reservations:
@@ -2472,6 +2588,7 @@ services:
     - HTTPS_PROXY=
     - NO_PROXY=
     - HF_HOME=/data/huggingface
+    - PMOVES_NETWORKS=pmoves_api,pmoves_data,pmoves_bus,pmoves_external
     gpus: all
     deploy:
       resources:
@@ -2541,6 +2658,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_external
     healthcheck:
       test:
       - CMD-SHELL
@@ -2559,6 +2677,7 @@ services:
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
     environment:
     - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_bus
     volumes:
     - ./scripts/nats:/scripts:ro
     networks:
@@ -2591,7 +2710,11 @@ services:
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
-    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
+    # --dockerized=true is REQUIRED on A0 2.5: runtime.is_development() is
+    # simply "not --dockerized", and a development-mode inner routes file
+    # browsing + prompt extensions through RFC calls that die with
+    # "No RFC password" inside the container.
+    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0 --dockerized=true}
     - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
@@ -2626,12 +2749,16 @@ services:
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/api/mcp/sse}
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
     - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
     - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    # Same placeholder for the A0 2.5 preset plugin: get_api_key() resolves
+    # TENSORZERO_API_KEY for provider "tensorzero"; without it the UI banners
+    # "Missing API Key for model presets" even though the gateway needs none.
+    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-tensorzero-routed}
     - A0_SET_chat_model_provider=openai
     # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
     - A0_SET_chat_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
@@ -2667,6 +2794,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external,pmoves_api
     depends_on:
       nats:
         condition: service_healthy
@@ -2683,6 +2811,16 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # A0 2.5 user-config tree (same pattern as the sidecars' ./usr mount).
+    # Carries usr/plugins/_model_config/presets.yaml — WITHOUT it the
+    # _model_config plugin bootstrap downloads the stock agent0ai/a0-presets
+    # collection and the instance chats via openrouter/gpt-5.6-terra instead
+    # of TensorZero (observed on first 2.5 boot). Seed from
+    # pmoves/config/agent-zero/model-presets-docked.yaml. Mount the WHOLE
+    # usr tree, not a nested subdir: a nested bind makes Docker pre-create
+    # /a0/usr path components as root before init-a0.sh populates /a0,
+    # breaking the runtime user's write to /a0/usr/.env (PermissionError).
+    - ${AGENT_ZERO_USR_DIR:-./data/agent-zero/usr}:/a0/usr
     # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
     # Read-only: forms are introspective metadata; runtime never rewrites them.
     - ./configs/agents/forms:/app/configs/agents/forms:ro
@@ -2722,46 +2860,65 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+  # Archon 0.6.0 — TypeScript/Bun remote-coding-agent, built from the PMOVES-Archon
+  # submodule (0.6.0 rewrote the old Python service to TS; the vendored Python
+  # wrapper under services/archon/ is dead — see #2217). Serves HTTP + UI + MCP on
+  # a single port (3090, /api/health). Backed by a dedicated Postgres (pg_notify
+  # realtime); Archon auto-inits its schema on first boot.
+  archon-postgres:
+    image: ${ARCHON_POSTGRES_IMAGE:-postgres:17-alpine}
+    container_name: pmoves-archon-postgres
+    hostname: archon-postgres
+    restart: unless-stopped
+    environment:
+    - POSTGRES_DB=${ARCHON_DB_NAME:-remote_coding_agent}
+    - POSTGRES_USER=${ARCHON_DB_USER:-archon}
+    - POSTGRES_PASSWORD=${ARCHON_DB_PASSWORD:-archon}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    - PMOVES_NETWORKS=pmoves_app
+    volumes:
+    - archon-pg-data:/var/lib/postgresql/data
+    networks:
+    - pmoves_app
+    profiles:
+    - agents
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   archon:
     <<: *tier-agent-hardened
     build:
-      context: .
-      dockerfile: ./services/archon/Dockerfile
-      args:
-      - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
-      - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
+      context: ../PMOVES-Archon
+      dockerfile: Dockerfile
+    image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
+    # No container_name: keep the compose-default `${PROJECT}-archon-1` name that
+    # `wait-agents` and the REST policy probe (Makefile) inspect by that exact name.
+    hostname: archon
     restart: unless-stopped
     environment:
-      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
-    - PORT=8091
-    - ENVIRONMENT=${ENVIRONMENT:-production}
-    - ARCHON_ENV=${ARCHON_ENV:-production}
-    - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
-    - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
-    - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
-    - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
-    - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-    - ENVIRONMENT=${ENVIRONMENT:-production}
-    - ARCHON_ENV=${ARCHON_ENV:-production}
-      # Compose-first Archon Supabase wiring. CLI mode can override via
-      # ARCHON_SUPABASE_* / SUPABASE_* env values.
-    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}}
-    - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-kong:8000}}
-    - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
-    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    - NATS_URL=${NATS_URL}
-    - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-      # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
-      # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
-    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
-    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      # GitHub App credentials — archon MCP cross-repo cloning (planned)
-    - GH_APP_ID=${GH_APP_ID:-}
-    - GH_APP_SEC=${GH_APP_SEC:-}
-    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
-      # Host environment leak guard (see x-host-leak-guard docs above)
+    - PORT=3090
+    - HOST=0.0.0.0
+    - NODE_ENV=production
+    - ARCHON_DOCKER=true
+    # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
+    - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
+    - BETTER_AUTH_SECRET=${ARCHON_BETTER_AUTH_SECRET:-${BETTER_AUTH_SECRET:-}}
+    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://nats:pmoves@nats:4222}
+    # Claude auth — the TS server exits(1) at boot if none of these is present.
+    - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+    - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-false}
+    # gh auth — non-fatal warning if absent.
+    - GH_TOKEN=${GH_TOKEN:-}
+    # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - REQUESTS_CA_BUNDLE=
@@ -2770,46 +2927,94 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
+      archon-postgres:
+        condition: service_healthy
       nats:
         condition: service_healthy
-      tensorzero-gateway:
-        condition: service_healthy
-    command:
-    - python
-    - -c
-    - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')
     ports:
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_PORT:-8091}:8091
-    # Canonical UI port — the PMOVES archon image builds upstream static assets
-    # and serves them from the same HTTP server (see services/archon/main.py).
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_UI_PORT:-3737}:8091
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_MCP_PORT:-8051}:8051
-    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_WS_PORT:-8052}:8052
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_PORT:-3090}:3090
+    # UI compat: keep the historical 3737 host port pointing at the unified server
+    # (NEXT_PUBLIC_ARCHON_UI_URL default is http://localhost:3737).
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_UI_PORT:-3737}:3090
+    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_API_PORT:-8091}:3090
+    volumes:
+    - archon-data:/.archon
+    # archon-user-home replaced with tmpfs on Windows nodes — named volume
+    # breaks entrypoint find+chown (permission denied). tmpfs supports POSIX
+    # ownership correctly. archon-data persists workspaces/worktrees.
+    - type: tmpfs
+      target: /home/appuser
     networks:
       pmoves_app:
         aliases:
         - archon-server
-      pmoves_api:
       pmoves_bus:
+      # Archon needs egress to reach the Claude API + GitHub with the configured
+      # credentials; pmoves_app/pmoves_bus are internal-only.
       pmoves_external:
-    extra_hosts:
-    - host.docker.internal:host-gateway
+    profiles:
+    - agents
     healthcheck:
-      test:
-      - CMD-SHELL
-      - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)"
-      interval: 20s
-      timeout: 5s
-      retries: 12
-      start_period: 15s
-
-  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3090/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First boot runs bun install + Postgres schema init — allow generous slack.
+      start_period: 90s
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 2G
+  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+  hf-mcp-server:
+    # HF MCP Server — Model Context Protocol tools for HuggingFace Hub.
+    # Provides hf.model.search/info/download/list/convert_gguf and publishes
+    # hf.model.downloaded.v1. Models download to /models; inference services
+    # can mount the same host path or import converted GGUF artifacts.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/hf-mcp-server
+      dockerfile: Dockerfile
+    image: ${HF_MCP_SERVER_IMAGE:-ghcr.io/powerfulmoves/pmoves-hf-mcp-server:pmoves-latest}
+    container_name: pmoves-hf-mcp-server
+    hostname: hf-mcp-server
+    restart: unless-stopped
+    environment:
+    - PORT=8096
+    - NATS_URL=${NATS_URL}
+    - HF_HOME=/models
+    - HF_HUB_CACHE=/models/hub
+    - HF_HUB_ENABLE_HF_TRANSFER=${HF_HUB_ENABLE_HF_TRANSFER:-1}
+    - HF_TOKEN=${HF_TOKEN:-}
+    - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    ports:
+    - ${HF_MCP_SERVER_BIND:-127.0.0.1}:${HF_MCP_SERVER_PORT:-8203}:8096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus, pmoves_external]  # HuggingFace API
+    volumes:
+    - ${HF_MODELS_HOST_PATH:-./data/models}:/models
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
   cipher-api:
     <<: *tier-agent-hardened
     build:
@@ -2832,7 +3037,10 @@ services:
     - QDRANT_COLLECTION=pmoves_cipher_memory
     - EMBEDDING_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local
     - EMBEDDING_DIM=2560
-    command: ["sh", "-c", "node dist/src/app/index.cjs --mode api --port 8105 --host 0.0.0.0 --agent memAgent/cipher.yml --mcp-transport-type sse"]
+    - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_bus,pmoves_external
+    # Use Dockerfile CMD (dist/pmoves/rest-server.js) — the ByteRover native
+    # entrypoint (dist/src/app/index.cjs) does not exist in the PMOVES shim build.
+    # command: ["sh", "-c", "node dist/src/app/index.cjs --mode api --port 8105 --host 0.0.0.0 --agent memAgent/cipher.yml --mcp-transport-type sse"]
     ports:
     - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:8105"
     depends_on:
@@ -2858,6 +3066,65 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  p7:
+    # PMOVES P7 — room-aware stage manager (open-room lane, 2026-07-20).
+    # Mediates room lifecycle (rehearsal → live → review → archive), with CHIT
+    # activation gating on rehearsal→live, atomic catalog writeback, and signed
+    # NATS control-plane events. See:
+    #   pmoves/docs/specs/p7-service-spec-2026-07-20.md
+    #   pmoves/docs/ROOMS_ON_A_STAGE.md
+    #   pmoves/services/p7-room-orchestrator/README.md
+    build:
+      context: .
+      dockerfile: services/p7-room-orchestrator/Dockerfile
+    container_name: pmoves-p7
+    restart: unless-stopped
+    environment:
+    - P7_HOST=0.0.0.0
+    - P7_HTTP_PORT=8120
+      # Broker requires auth (documented default creds convention) — without
+      # them P7 boots in log-only fallback (nats_connected:false, no signed
+      # lifecycle events on the control plane).
+    - P7_NATS_URL=${P7_NATS_URL:-nats://nats:pmoves@nats:4222}
+    - P7_PMOVES_ROOT=/etc/pmoves
+    - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
+    - P7_ROOMS_DIR=/etc/pmoves/rooms
+    - P7_ROOM_MANIFEST_SCHEMA=/etc/pmoves/schemas/room/room.manifest.v1.schema.json
+    - P7_SIGNING_CARDS_PATH=/etc/pmoves/config/signing_identity_cards.yaml
+    - P7_AGENT_REGISTRY_PATH=/etc/pmoves/config/agent_registry.yaml
+    - P7_SERVICE_CARD_ID=${P7_SERVICE_CARD_ID:-}
+    - P7_SIGNING_KEY=${P7_SIGNING_KEY:-}
+    - P7_SIGNING_KEY_FILE=${P7_SIGNING_KEY_FILE:-}
+    - P7_CHIT_REQUIRE_SIGNATURE=${P7_CHIT_REQUIRE_SIGNATURE:-true}
+    - P7_ALLOW_UNSIGNED_LOCAL=${P7_ALLOW_UNSIGNED_LOCAL:-true}
+    - P7_LOG_LEVEL=INFO
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    volumes:
+      # Catalog + per-room manifests: read-write so transitions can writeback current_stage
+    - ./config/rooms:/etc/pmoves/rooms:rw
+      # Schema + signing cards + agent registry: read-only (operator edits via git)
+    - ./contracts/schemas:/etc/pmoves/schemas:ro
+    - ./config/signing_identity_cards.yaml:/etc/pmoves/config/signing_identity_cards.yaml:ro
+    - ./config/agent_registry.yaml:/etc/pmoves/config/agent_registry.yaml:ro
+    - ./env.shared:/etc/pmoves/env.shared:ro
+    ports:
+    - "${P7_BIND:-127.0.0.1}:${P7_PORT:-8120}:8120"
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks: [pmoves_app, pmoves_bus, pmoves_external]
+    profiles: ["agents", "p7"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   mesh-agent:
     <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent
@@ -2866,6 +3133,7 @@ services:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     depends_on: [nats]
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
@@ -2898,6 +3166,7 @@ services:
     - GH_APP_ID=${GH_APP_ID:-}
     - GH_APP_SEC=${GH_APP_SEC:-}
     - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     volumes:
     - ./config/agent_signatures.yaml:/app/config/agent_signatures.yaml:ro
     depends_on:
@@ -2938,6 +3207,7 @@ services:
     - GH_APP_ID=${GH_APP_ID:-}
     - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     ports:
     - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
     - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
@@ -2978,6 +3248,7 @@ services:
     - INDEX_HISTORICAL_ISSUES=${INDEX_HISTORICAL_ISSUES:-true}
     - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     ports:
     - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
     - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
@@ -3018,6 +3289,7 @@ services:
     - HF_TAGS=${HF_TAGS:-}
     - HF_AUTHOR=${HF_AUTHOR:-}
     - HF_LIMIT=${HF_LIMIT:-50}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
     - ${HF_AGENT_BIND:-0.0.0.0}:${HF_AGENT_PORT:-8201}:8201
     depends_on:
@@ -3058,6 +3330,7 @@ services:
     - HF_MIN_SCORE=${HF_MIN_SCORE:-50}
     - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-}
     - HF_AVOID_TAGS=${HF_AVOID_TAGS:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
     depends_on:
@@ -3088,9 +3361,10 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+    - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+    - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+    - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_external]
 
@@ -3112,6 +3386,7 @@ services:
     # CHIT fail-closed verification gate (house pattern, mirrors hi-rag-gateway*)
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${A2UI_BIND:-0.0.0.0}:9224:9224
     depends_on:
@@ -3158,6 +3433,7 @@ services:
     - SUPABASE_SERVICE_ROLE_KEY_FILE=${SUPABASE_SERVICE_ROLE_KEY_FILE:-}
     - P7_SUPABASE_SCHEMA=${P7_SUPABASE_SCHEMA:-pmoves_core}
     - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
     ports:
     - ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
     depends_on:
@@ -3167,6 +3443,10 @@ services:
         condition: service_completed_successfully
       supabase-kong:
         condition: service_healthy
+        # kong is profile-gated (supabase-local); without required:false any
+        # --profile agents invocation fails project-wide as "depends on
+        # undefined service" when the supabase profile isn't active.
+        required: false
     profiles: ["agents", "orchestration"]
     networks: [pmoves_app, pmoves_api, pmoves_bus]
     healthcheck:
@@ -3206,6 +3486,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -3237,11 +3518,12 @@ services:
     restart: unless-stopped
     environment:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
-    - NATS_URL=${NATS_URL}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${SUPASERCH_BIND:-127.0.0.1}:${SUPASERCH_PORT:-8099}:8099
     networks:
@@ -3270,6 +3552,7 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+    - PMOVES_NETWORKS=pmoves_bus
     depends_on:
     - nats
     profiles:
@@ -3297,6 +3580,7 @@ services:
     environment:
     - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
+    - PMOVES_NETWORKS=pmoves_bus
     depends_on:
     - nats
     profiles:
@@ -3322,9 +3606,10 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
-    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1}
+    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
       nats:
         condition: service_healthy
@@ -3355,6 +3640,7 @@ services:
     environment:
     - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
     - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:8093:8093
     profiles:
@@ -3396,6 +3682,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external
     volumes:
     - pmoves-ollama-models:/root/.ollama/models
     # Prevent transient Docker embedded-DNS failures from blocking model pull.
@@ -3436,6 +3723,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data
     ports:
     - ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
     volumes:
@@ -3471,6 +3759,12 @@ services:
     - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
     - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
     - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
+    # Kimi Code SUBSCRIPTION key (canonical manifest/tier name, 2026-07-24).
+    # Read by models.chat_kimi_for_coding on api.kimi.com/coding/v1 — the
+    # subscription platform is ISOLATED from pay-per-token api.moonshot.ai,
+    # so this key must NOT be funneled into the legacy Moonshot location
+    # (it 401s there; verified live).
+    - KIMI_CODING_API=${KIMI_CODING_API:-local-disabled}
     - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
     - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
     - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
@@ -3487,6 +3781,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_data,pmoves_monitoring,pmoves_external
     volumes:
     - ./tensorzero/config:/app/config:ro
     depends_on:
@@ -3535,6 +3830,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_external
     volumes:
     - ./tensorzero/config:/app/config:ro
     depends_on:
@@ -3581,6 +3877,7 @@ services:
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
       # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
@@ -3633,23 +3930,24 @@ services:
     environment:
       # Keep base compose validation non-fatal when the nim profile is unused.
       # Operators launching NIM should still set NGC_API_KEY explicitly.
-      - NGC_API_KEY=${NGC_API_KEY:-}
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - NGC_API_KEY=${NGC_API_KEY:-}
+    - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     ports:
-      - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8200}:8000"
+    - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8200}:8000"
     profiles: ["gpu", "nim"]
     networks:
-      - pmoves_api
+    - pmoves_api
       # pmoves_bus: publish mesh.gpu.model.loaded.v1 / .unloaded.v1 for model-registry sync
-      - pmoves_bus
-      - pmoves_monitoring
+    - pmoves_bus
+    - pmoves_monitoring
     deploy:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health/ready"]
       interval: 30s
@@ -3678,6 +3976,7 @@ services:
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
     ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:8113:8113"]
     profiles: ["orchestration"]
     # Docker Desktop does not publish host ports for services attached only to internal networks.
@@ -3714,6 +4013,7 @@ services:
     - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_monitoring,pmoves_external
     ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
     profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
@@ -3782,6 +4082,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_external
     ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", "${FLUTE_BIND:-127.0.0.1}:8056:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
@@ -3805,7 +4106,7 @@ services:
     build:
       context: .
       dockerfile: services/tokenism-simulator/Dockerfile
-    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-simulator:edge}
     restart: unless-stopped
     <<: *tier-agent-hardened-ro
     environment:
@@ -3829,6 +4130,7 @@ services:
     - CHIT_ENABLED=${CHIT_ENABLED:-true}
     - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-${NATS_URL}}
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring
     ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
     depends_on: [nats]
@@ -3857,6 +4159,7 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
+    - PMOVES_NETWORKS=pmoves_app
     ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
@@ -3890,9 +4193,10 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     - PYTHONUNBUFFERED=1
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports: ["${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app]
+    networks: [pmoves_app, pmoves_bus]
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8106/healthz').raise_for_status()\" || exit 1"]
       interval: 30s
@@ -3927,6 +4231,7 @@ services:
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_external
     ports: ["${CAST_TTS_BIND:-0.0.0.0}:${CAST_TTS_PORT:-8060}:8060"]
     profiles: ["cast", "media"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
@@ -3966,6 +4271,7 @@ services:
     - NATS_URL=${NATS_URL}
     - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
     - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
+    - PMOVES_NETWORKS=pmoves_bus
     ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
     profiles: ["cast", "media"]
     networks: [pmoves_bus]
@@ -3999,6 +4305,15 @@ services:
     env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
     environment:
     - NODE_ENV=production
+      # Room manifests — the rooms API reads catalog.json + the per-room
+      # manifests from this directory. Without it, the Rooms tab on the
+      # home page renders "Room manifests are not available yet" and
+      # /api/rooms returns 500. PMOVES_ROOM_CONFIG_DIR overrides the
+      # default (cwd/../config/rooms) to a path inside the container
+      # where the rooms data is mounted. The volume below maps the host
+      # pmoves/config/rooms to /app/rooms:ro so the standalone Next.js
+      # build can read the room data.
+    - PMOVES_ROOM_CONFIG_DIR=/app/rooms
       # Supabase
     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
@@ -4033,8 +4348,14 @@ services:
     - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
     - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
     extra_hosts:
     - "host.docker.internal:host-gateway"
+    # Room manifests: the standalone Next.js build can't read host
+    # files by default; mount pmoves/config/rooms read-only at /app/rooms
+    # so the rooms API (/api/rooms) and the home-page Rooms tab work.
+    volumes:
+    - ./config/rooms:/app/rooms:ro
     ports:
     - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
@@ -4064,6 +4385,7 @@ services:
     - PORT=8100
     - NATS_URL=${NATS_URL}
     - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
     profiles:
@@ -4134,6 +4456,7 @@ services:
     - POSTGRES_USER=wger
     - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:?set WGER_DB_PASSWORD in env.tier-data}
     - PGDATA=/var/lib/postgresql/data/pgdata
+    - PMOVES_NETWORKS=pmoves_data
     volumes:
     - wger-db:/var/lib/postgresql/data
     profiles: ["health", "wger"]
@@ -4166,6 +4489,7 @@ services:
     - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
     - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-${S3_PUBLIC_BASE_URL:-http://${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}}}
     - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_data
     depends_on:
       nats:
         condition: service_healthy
@@ -4203,6 +4527,7 @@ services:
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
     - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_app,pmoves_bus
     ports:
     - "${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"    # Default 8111; 8110 reserved for model-registry
     profiles: ["agents"]
@@ -4235,6 +4560,7 @@ services:
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - REQUESTS_CA_BUNDLE=
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     depends_on: [nats]
     ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
     volumes:
@@ -4261,6 +4587,7 @@ services:
     - POSTGRES_DB=${INVIDIOUS_PG_DB:-invidious}
     - POSTGRES_USER=${INVIDIOUS_PG_USER:-kemal}
     - POSTGRES_PASSWORD=${INVIDIOUS_PG_PASSWORD:-kemal}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_app
     volumes:
     - invidious-postgres-data:/var/lib/postgresql/data
     - ./services/invidious/config/sql:/config/sql:ro
@@ -4298,6 +4625,7 @@ services:
     - YOUTUBE_API_KEY=${INVIDIOUS_COMPANION_YOUTUBE_API_KEY:-}
     - YOUTUBEI_CLIENT=${INVIDIOUS_COMPANION_YOUTUBEI_CLIENT:-IOS}
     - YOUTUBEI_API_BASE=${INVIDIOUS_COMPANION_CA_URL:-https://www.youtube.com}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     volumes:
     - invidious-companion-cache:/var/tmp/youtubei.js
     ports:
@@ -4333,6 +4661,7 @@ services:
     - INVIDIOUS_HMAC_KEY=${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}
     - INVIDIOUS_COMPANION_KEY=${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}
     - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port: 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port: ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\nhmac_key: \"${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}\"\ninvidious_companion:\n  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\n"
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
     - ${INVIDIOUS_BIND:-127.0.0.1}:${INVIDIOUS_PORT:-3000}:3000
     depends_on:
@@ -4377,6 +4706,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
     profiles:
@@ -4414,6 +4744,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
     depends_on:
@@ -4451,6 +4782,7 @@ services:
     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     - CLOUDFLARE_TUNNEL_NAME=${CLOUDFLARE_TUNNEL_NAME:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
     volumes:
     - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
     profiles:
@@ -4487,6 +4819,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || wget -qO- http://localhost:80/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -4513,6 +4846,7 @@ services:
     - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8105}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring
     volumes:
     - ${LLAMA_MODELS_PATH:-./models}:/models:ro
     - llama-results:/results
@@ -4561,6 +4895,7 @@ services:
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
     - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8112:8102
     profiles:
@@ -4602,6 +4937,7 @@ services:
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
     - WORKDIR=${WORKDIR:-/tmp/github-crossrepo-sync}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
     - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8113:8103
     profiles:
@@ -4642,6 +4978,7 @@ services:
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
     ports:
     - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8114:8104
     profiles:
@@ -4671,6 +5008,9 @@ services:
           memory: 256M
 volumes:
   neo4j-data: {}
+  archon-data: {}          # Archon /.archon workspaces + SQLite/state (#2217)
+  archon-user-home: {}     # Archon /home/appuser (Claude/gh creds, git config)
+  archon-pg-data: {}       # Archon dedicated Postgres data (pg_notify realtime)
   cipher-data: {}
   qdrant-data: {}
   meilisearch-data: {}

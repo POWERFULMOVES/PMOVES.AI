@@ -128,7 +128,7 @@ def _run_openrouter(response: Dict[str, Any]) -> str:
 """Deep Research worker utilities."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 
 class InvalidResearchRequest(ValueError):
@@ -258,13 +258,11 @@ def _handle_request(payload: Dict[str, Any]) -> Tuple[Optional[ResearchRequest],
     return request, dict(request.metadata)
 
 import asyncio
-import json
 import logging
 import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from nats.aio.client import Client as NATS
@@ -963,7 +961,7 @@ async def main() -> None:
     async def cb(msg: Msg) -> None:
         await _handle_request(msg, runner, publisher, nc)
 
-    sub = await nc.subscribe(REQUEST_SUBJECT, cb=cb)
+    await nc.subscribe(REQUEST_SUBJECT, cb=cb)
     LOGGER.info("Subscribed to %s", REQUEST_SUBJECT)
 
     # diagnostic endpoint to publish a local request

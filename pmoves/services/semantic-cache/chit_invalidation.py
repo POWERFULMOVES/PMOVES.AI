@@ -103,8 +103,6 @@ PMOVES Semantic Cache Team (issue #1427)
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import os
@@ -361,7 +359,7 @@ class CircuitBreaker:
             result = await fn(*args, **kwargs)
             await self.record_success()
             return result
-        except Exception as exc:
+        except Exception:
             await self.record_failure()
             raise
 

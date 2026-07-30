@@ -163,7 +163,7 @@ def generate_webhook_secret():
     webhook_secret = secrets.token_urlsafe(40)
 
     print_success(f"Generated webhook secret ({len(webhook_secret)} chars)")
-    print(f"  Secret stored in env.shared (not displayed for security)")
+    print("  Secret stored in env.shared (not displayed for security)")
     return webhook_secret
 
 
@@ -192,15 +192,15 @@ def update_env_shared(webhook_secret):
             # Replace the line with the new secret
             output_lines.append(f'GH_WEBHOOK_SECRET={webhook_secret}\n')
             updated = True
-            print_success(f"Updated GH_WEBHOOK_SECRET in env.shared")
+            print_success("Updated GH_WEBHOOK_SECRET in env.shared")
         else:
             output_lines.append(line)
 
     if not updated:
         # Append to end of file if not found
-        output_lines.append(f'\n# GitHub App Webhook Secret - Auto-generated\n')
+        output_lines.append('\n# GitHub App Webhook Secret - Auto-generated\n')
         output_lines.append(f'GH_WEBHOOK_SECRET={webhook_secret}\n')
-        print_success(f"Added GH_WEBHOOK_SECRET to env.shared")
+        print_success("Added GH_WEBHOOK_SECRET to env.shared")
 
     # Write back to env.shared
     with open(env_shared, 'w') as f:
@@ -562,7 +562,7 @@ def display_webhook_instructions(webhook_url):
     print("   https://github.com/organizations/POWERFULMOVES/settings/apps/PMOVES.AI/webhooks")
 
     print("\n2. Under 'Webhook', configure:")
-    print(f"   - Active: [CHECKED]")
+    print("   - Active: [CHECKED]")
     print(f"   - URL: {webhook_url}")
     print("   - Content type: application/json")
     print("   - Secret: [retrieve from env.shared GH_WEBHOOK_SECRET]")

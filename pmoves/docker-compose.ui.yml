@@ -15,6 +15,15 @@ services:
     env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
     environment:
     - NODE_ENV=production
+      # Room manifests — the rooms API reads catalog.json + the per-room
+      # manifests from this directory. Without it, the Rooms tab on the
+      # home page renders "Room manifests are not available yet" and
+      # /api/rooms returns 500. PMOVES_ROOM_CONFIG_DIR overrides the
+      # default (cwd/../config/rooms) to a path inside the container
+      # where the rooms data is mounted. The volume below maps the host
+      # pmoves/config/rooms to /app/rooms:ro so the standalone Next.js
+      # build can read the room data.
+    - PMOVES_ROOM_CONFIG_DIR=/app/rooms
       # Supabase
     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
@@ -49,8 +58,14 @@ services:
     - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
     - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
     extra_hosts:
     - "host.docker.internal:host-gateway"
+    # Room manifests: the standalone Next.js build can't read host
+    # files by default; mount pmoves/config/rooms read-only at /app/rooms
+    # so the rooms API (/api/rooms) and the home-page Rooms tab work.
+    volumes:
+    - ./config/rooms:/app/rooms:ro
     ports:
     - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
@@ -92,6 +107,7 @@ services:
     - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
     - NODE_ENV=production
     - PORT=8504
+    - PMOVES_NETWORKS=pmoves_app
     ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
@@ -112,7 +128,7 @@ services:
     build:
       context: .
       dockerfile: services/tokenism-simulator/Dockerfile
-    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-simulator:edge}
     restart: unless-stopped
     <<:
       env_file:
@@ -148,6 +164,7 @@ services:
     - CHIT_ENABLED=${CHIT_ENABLED:-true}
     - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-${NATS_URL}}
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring
     ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
     depends_on: [nats]
@@ -180,6 +197,7 @@ services:
       \ninvidious_companion:\n  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\
       \nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}\n\
       \  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\n"
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     ports:
     - ${INVIDIOUS_BIND:-127.0.0.1}:${INVIDIOUS_PORT:-3000}:3000
     depends_on:
@@ -221,6 +239,7 @@ services:
     - YOUTUBE_API_KEY=${INVIDIOUS_COMPANION_YOUTUBE_API_KEY:-}
     - YOUTUBEI_CLIENT=${INVIDIOUS_COMPANION_YOUTUBEI_CLIENT:-IOS}
     - YOUTUBEI_API_BASE=${INVIDIOUS_COMPANION_CA_URL:-https://www.youtube.com}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     volumes:
     - invidious-companion-cache:/var/tmp/youtubei.js
     ports:
@@ -263,6 +282,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || wget -qO- http://localhost:80/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -294,6 +314,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
     profiles:
@@ -331,6 +352,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
     depends_on:

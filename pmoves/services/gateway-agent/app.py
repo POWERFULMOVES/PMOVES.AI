@@ -21,7 +21,6 @@ Architecture:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import logging
@@ -32,14 +31,13 @@ from typing import Any, Dict, List, Optional
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Security
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import uvicorn
 
 # NATS integration
 from nats_integration import (
     nats_integration,
     infer_skill_level,
-    GATEWAY_TOOL_EXECUTED,
 )
 
 # Configure logging
@@ -583,7 +581,6 @@ async def _route_to_upstream(tool: ToolDefinition, parameters: Dict[str, Any]) -
 
     # For stdio-based MCP servers (containers), use docker exec
     if tool.mcp_server.startswith("docker-compose-") or tool.mcp_server.startswith("pmoves-"):
-        container_name = tool.mcp_server
 
         # For container-based MCP servers, we'd call their HTTP API if available
         # or use Agent Zero's MCP proxy

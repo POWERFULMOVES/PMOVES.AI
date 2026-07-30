@@ -3,7 +3,6 @@
 import json
 import os
 import sys
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -348,7 +347,7 @@ class TestMessageParsing:
             supabase_service_role_key="test-key",
             health_port=8102
         )
-        service = ChatRelayService(config)
+        ChatRelayService(config)
 
         # Test that 'content' has highest priority
         data1 = {"content": "A", "response": "B", "message": "C"}

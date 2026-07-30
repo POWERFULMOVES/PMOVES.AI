@@ -64,7 +64,7 @@ class JaegerTracingSpecialist:
             List of trace metadata
         """
         end = datetime.now()
-        start = end - timedelta(hours=lookback_hours)
+        end - timedelta(hours=lookback_hours)
 
         params = {
             "service": service,
@@ -325,14 +325,14 @@ def main():
 
         elif args.command == "compare":
             comparison = specialist.compare_traces(args.trace_id1, args.trace_id2)
-            print(f"[+] Trace Comparison:")
-            print(f"\n  Total Duration:")
+            print("[+] Trace Comparison:")
+            print("\n  Total Duration:")
             print(f"    Trace 1: {comparison['total_duration_ms']['trace1']:.2f}ms")
             print(f"    Trace 2: {comparison['total_duration_ms']['trace2']:.2f}ms")
             print(f"    Difference: {comparison['total_duration_ms']['diff_ms']:+.2f}ms "
                   f"({comparison['total_duration_ms']['diff_percent']:+.1f}%)")
 
-            print(f"\n  Operation Breakdown:")
+            print("\n  Operation Breakdown:")
             for op_comp in comparison['operation_comparison']:
                 print(f"    {op_comp['operation']}:")
                 print(f"      Trace 1: {op_comp['trace1_ms']:.2f}ms")

@@ -331,7 +331,7 @@ async def get_service_info(
         return ServiceInfo(
             slug=slug,
             name=f"{slug} (from env)",
-            description=f"Service URL from environment variable",
+            description="Service URL from environment variable",
             health_check_url=env_url,
             default_port=default_port,
             env_var=None,
@@ -353,7 +353,7 @@ async def get_service_info(
     return ServiceInfo(
         slug=slug,
         name=f"{slug} (fallback)",
-        description=f"Service resolved via Docker DNS fallback",
+        description="Service resolved via Docker DNS fallback",
         health_check_url=fallback_url,
         default_port=default_port,
         env_var=None,
@@ -535,7 +535,7 @@ def update_nats_cache(announcement: ServiceAnnouncement) -> None:
     info = ServiceInfo(
         slug=announcement.slug,
         name=announcement.name,
-        description=f"Service from NATS announcement",
+        description="Service from NATS announcement",
         health_check_url=announcement.health_check,
         default_port=announcement.port,
         env_var=None,

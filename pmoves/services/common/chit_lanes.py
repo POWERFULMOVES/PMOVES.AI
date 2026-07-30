@@ -20,12 +20,11 @@ See Also:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import math
 import time
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -42,14 +41,9 @@ except ImportError:
 # Local imports
 from pmoves.services.common.geometry_models import (
     CGP_VERSION_V02,
-    Constellation,
-    Point,
-    SuperNode,
 )
 from pmoves.services.common.geometry_decoder import (
     GeometryDecoder,
-    sign_cgp,
-    _canon,
 )
 
 
@@ -549,7 +543,7 @@ class CHITMultiLane:
         source_lt = LaneType(source_lane)
         source = self.lanes[source_lt]
         delta_ratio = target.params.delta / max(1e-9, source.params.delta)
-        kappa_ratio = target.params.kappa / max(1e-9, source.params.kappa)
+        target.params.kappa / max(1e-9, source.params.kappa)
 
         for sn in remapped.get("super_nodes", []):
             for const in sn.get("constellations", []):

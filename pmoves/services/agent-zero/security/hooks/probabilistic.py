@@ -7,7 +7,6 @@ Based on PMOVES-BoTZ probabilistic hook pattern.
 """
 
 import os
-from pathlib import Path
 from typing import Literal
 
 # Lazy load Anthropic to avoid dependency in non-hook contexts
@@ -106,7 +105,7 @@ if __name__ == "__main__":
         status = result
         print(f"{status}: {cmd}")
         if result == "RISKY":
-            print(f"  This command was flagged as risky")
+            print("  This command was flagged as risky")
         print()
 
     sys.exit(0)

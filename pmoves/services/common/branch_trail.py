@@ -34,7 +34,7 @@ import logging
 from pmoves.services.common.env import get_secret
 import re
 import time
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

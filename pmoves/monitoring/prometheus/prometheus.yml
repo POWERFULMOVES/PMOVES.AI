@@ -53,6 +53,17 @@ scrape_configs:
     static_configs:
       - targets: ["gpu-orchestrator:8200"]
 
+  # otel-collector liveness: the image is distroless so Docker healthchecks
+  # can't run inside it (docker-compose.tracing.yml disables them) — this
+  # scrape of the collector's Prometheus exporter is the external liveness
+  # probe: up{job="otel-collector"} drops to 0 if the collector dies.
+  # Container name (not service name): prometheus lives in the monitoring
+  # compose project and reaches the collector over the shared
+  # pmoves_monitoring network.
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["pmoves-otel-collector:8889"]
+
   # === Tier 2 Services (Added 2025-12-24) ===
 
   - job_name: hi-rag-gateway-v2

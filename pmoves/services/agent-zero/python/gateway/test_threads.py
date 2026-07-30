@@ -14,7 +14,6 @@ Run: python -m gateway.test_threads
 """
 
 import asyncio
-import json
 import sys
 from datetime import datetime
 

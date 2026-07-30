@@ -99,7 +99,7 @@ def sanitize(env_path: Path, dry_run: bool = False) -> dict:
     env_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
     print(f"Sanitized: kept {len(kept)} lines, removed {len(removed)} non-allowlisted vars")
     if removed:
-        print(f"Removed (first 10):")
+        print("Removed (first 10):")
         for r in removed[:10]:
             print(f"  - {r[:80]}")
         if len(removed) > 10:

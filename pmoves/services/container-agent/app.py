@@ -18,7 +18,7 @@ import os
 import platform
 import socket
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from aiohttp import web
 

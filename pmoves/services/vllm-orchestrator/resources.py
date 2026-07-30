@@ -12,11 +12,9 @@ from typing import Dict, List, Optional
 
 from ..resource_detector.hardware import (
     HardwareProfile,
-    NodeTier,
-    ResourceAllocator,
 )
 
-from .config import MODEL_CONFIGS, VLLMConfig, ModelConfig
+from .config import MODEL_CONFIGS, ModelConfig
 
 logger = logging.getLogger(__name__)
 

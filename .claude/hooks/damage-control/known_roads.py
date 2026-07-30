@@ -78,6 +78,27 @@ def _is_schema_target(normalized_fwd: str) -> bool:
     return "contracts" in parts and "schemas" in parts
 
 
+def _is_topic_target(normalized_fwd: str) -> bool:
+    """topic domain: the PMOVES NATS subject registry pmoves/contracts/topics.json.
+
+    topics.json is readOnly because a change to the subject contract ripples to
+    every publisher/subscriber and the shared `events.publish` topic validator.
+    It is NOT a *.schema.json, so the schema domain does not cover it; this domain
+    opens ONLY that one file under a `contracts` segment in a PMOVES-owned tree,
+    and — like schema — still requires a provable reason (pr:/issue:/handoff:).
+    """
+    basename = os.path.basename(normalized_fwd).lower()
+    if basename != "topics.json":
+        return False
+    parts = normalized_fwd.lower().split("/")
+    if not any(
+        p == "pmoves" or p.startswith("pmoves-") or p.startswith("pmoves.")
+        for p in parts
+    ):
+        return False
+    return "contracts" in parts
+
+
 def _is_dockerfile_target(normalized_fwd: str) -> bool:
     """dockerfile domain: PMOVES service Dockerfiles (and .dockerignore).
 
@@ -107,12 +128,40 @@ def _is_dockerfile_target(normalized_fwd: str) -> bool:
     )
 
 
+def _is_migrations_target(normalized_fwd: str) -> bool:
+    """migrations domain: PMOVES Supabase migration/seed SQL under a
+    `supabase/migrations` or `supabase/initdb` segment.
+
+    Migration and seed SQL define the database schema-and-seed contract: a change
+    ripples to every fresh `db reset` / `supabase-bootstrap` and to every node's DB,
+    which is why they are readOnly. This domain opens ONLY *.sql files under a
+    `supabase/migrations` or `supabase/initdb` segment in a PMOVES-owned tree, and —
+    like the other domains — still requires a provable reason (pr:/issue:/handoff:).
+    It widens *which* SQL files can be opened under a recorded, versioned
+    justification, not the bar to open them. Non-SQL files and SQL elsewhere in the
+    tree are deliberately excluded.
+    """
+    parts = normalized_fwd.lower().split("/")
+    if not any(
+        p == "pmoves" or p.startswith("pmoves-") or p.startswith("pmoves.")
+        for p in parts
+    ):
+        return False
+
+    basename = os.path.basename(normalized_fwd).lower()
+    if not basename.endswith(".sql"):
+        return False
+    return "supabase" in parts and ("migrations" in parts or "initdb" in parts)
+
+
 # domain name -> predicate(normalized_forward_slash_path) -> bool
 # Extend here to open a new readOnlyPath class to Known Roads.
 DOMAIN_PATTERNS: Dict[str, Callable[[str], bool]] = {
     "compose": _is_compose_target,
     "schema": _is_schema_target,
+    "topic": _is_topic_target,
     "dockerfile": _is_dockerfile_target,
+    "migrations": _is_migrations_target,
 }
 
 _REASON_RE = re.compile(r"^(handoff:[^/\\]+|pr:[0-9]+|issue:[0-9]+)$")

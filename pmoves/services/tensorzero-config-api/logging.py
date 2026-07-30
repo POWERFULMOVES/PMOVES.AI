@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from clickhouse_driver import Client as ClickHouseClient
 from difflib import unified_diff
 

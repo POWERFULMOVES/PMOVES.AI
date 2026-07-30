@@ -1,6 +1,5 @@
 # pmoves/tools/tests/test_beats_to_cgp_v2.py
 import json
-import os
 from pathlib import Path
 
 import jsonschema

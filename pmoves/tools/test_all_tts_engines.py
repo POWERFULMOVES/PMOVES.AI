@@ -310,7 +310,7 @@ def print_gpu_delta(
     # Per-process breakdown from after snapshot
     procs = after.get("processes", [])
     if procs:
-        print(f"    Processes:")
+        print("    Processes:")
         for p in procs[:5]:  # Show top 5
             pid = p.get("pid", "?")
             name = p.get("name", p.get("container", "unknown"))
@@ -825,7 +825,7 @@ def main():
         print(f"\n  [{i}/{len(engines_to_test)}] {engine['name']}")
 
         # ── Load ──
-        print(f"      Loading...", end=" ", flush=True)
+        print("      Loading...", end=" ", flush=True)
         gpu_before = capture_gpu_metrics() if args.metrics else None
 
         start = time.time()
@@ -894,10 +894,10 @@ def main():
                     play_audio(output_path, skip_play=args.no_play)
 
         # ── Unload — free VRAM for next engine ──
-        print(f"      Unloading...", end=" ", flush=True)
+        print("      Unloading...", end=" ", flush=True)
         ul_ok, ul_msg, client = unload_engine(client, engine, url)
         if ul_ok:
-            print(f"✓ VRAM freed")
+            print("✓ VRAM freed")
         else:
             print(f"⚠ {ul_msg}")
 
@@ -910,7 +910,7 @@ def main():
 
     loaded = sum(1 for v in load_results.values() if v)
     if args.load_only:
-        print(f"\n  (--load-only mode, all engines unloaded after metrics)")
+        print("\n  (--load-only mode, all engines unloaded after metrics)")
         return 0 if loaded > 0 else 1
 
     # ── Summary ───────────────────────────────────────────────────────

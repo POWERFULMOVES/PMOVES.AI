@@ -37,7 +37,7 @@ jobs:
       TRIVY_IMAGE: aquasec/trivy:0.57.1
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Resolve current and candidate versions
         id: versions
@@ -46,7 +46,7 @@ jobs:
           INPUT_WHEEL_VERSION: ${{ github.event.inputs.wheel_version || '' }}
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           import pathlib
@@ -107,7 +107,7 @@ jobs:
           CANDIDATE_WHEEL: ${{ steps.versions.outputs.candidate_wheel }}
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python3 - <<'PY'
           import os
           import pathlib
           import re

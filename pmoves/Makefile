@@ -454,10 +454,10 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 		$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 			-e KONG_DATABASE=postgres \
 			-e KONG_PG_HOST=supabase-db \
-			-e KONG_PG_DATABASE=postgres \
-			-e KONG_PG_USER=$${SUPABASE_DB_USER:-postgres} \
-			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
-			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
+			-e KONG_PG_DATABASE=$${POSTGRES_DB:-$${SUPABASE_DB_NAME:-postgres}} \
+			-e KONG_PG_USER=$${POSTGRES_USER:-$${SUPABASE_DB_USER:-postgres}} \
+			-e KONG_PG_PASSWORD=$${POSTGRES_PASSWORD:-$${SUPABASE_DB_PASSWORD:-postgres}} \
+			kong/kong:3.9.1 sh -c "kong migrations bootstrap --yes 2>/dev/null || true; kong migrations up --yes 2>/dev/null || true" >/dev/null 2>&1 || true; \
 		$(MAKE) --no-print-directory supa-bootstrap-db; \
 		$(DC) --profile supabase-local up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
@@ -681,40 +681,29 @@ supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase D
 supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in public.pmoves_bootstrap_history)
 	@echo "🗄️ Applying Supabase schema + seeds..."
 	@$(MAKE) --no-print-directory supa-start >/dev/null
-	@set -euo pipefail; \
+	@set -uo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
-	if [ -d "supabase/migrations" ]; then \
-		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
-			[ -f "$$migration" ] || continue; \
-			name=$$(basename "$$migration"); \
-			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
-			if [ "$$applied" = "1" ]; then \
-				echo "   Skipping migration (already applied): $$name"; \
-				continue; \
-			fi; \; echo "   Applying migration: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$migration"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+	PGDB=$${POSTGRES_DB:-pmoves}; \
+	: "Run psql as the privileged supabase_admin role over TCP, sourcing the DB"; \
+	: "password from the container env. supabase_admin is the self-hosted superuser;"; \
+	: "the plain 'postgres' role is NOT superuser and lacks CREATE on public."; \
+	admin_psql() { docker exec -i "$$db" sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -w -h 127.0.0.1 -U supabase_admin -d "'"$$PGDB"'" -v ON_ERROR_STOP=1 "$$@"' _ "$$@"; }; \
+	admin_psql -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));" >/dev/null; \
+	apply_dir() { akind="$$1"; adir="$$2"; \
+		if [ ! -d "$$adir" ]; then echo "   ⚠️  No $$adir directory found"; return 0; fi; \
+		ok=0; skip=0; fail=0; \
+		for f in $$(find "$$adir" -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$f" ] || continue; \
+			name=$$(basename "$$f"); \
+			if [ "$$(admin_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='$$akind' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]')" = "1" ]; then skip=$$((skip+1)); continue; fi; \
+			if admin_psql < "$$f" >/tmp/sb_apply.log 2>&1; then \
+				admin_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('$$akind', '$$name') ON CONFLICT DO NOTHING;" >/dev/null; ok=$$((ok+1)); \
+			else fail=$$((fail+1)); echo "   ⚠️  $$akind FAILED (skipped): $$name :: $$(grep -iE 'ERROR' /tmp/sb_apply.log | head -1 | cut -c1-100)"; fi; \
 		done; \
-	else \
-		echo "   ⚠️  No migrations directory found"; \
-	fi; \
-	if [ -d "supabase/initdb" ]; then \
-		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
-			[ -f "$$seed" ] || continue; \
-			name=$$(basename "$$seed"); \
-			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
-			if [ "$$applied" = "1" ]; then \
-				echo "   Skipping seed (already applied): $$name"; \
-				continue; \
-			fi; \; echo "   Applying seed: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$seed"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
-		done; \
-	else \
-		echo "   ⚠️  No initdb directory found"; \
-	fi
+		echo "   $$akind: applied=$$ok skipped=$$skip failed=$$fail"; }; \
+	apply_dir migration supabase/migrations; \
+	apply_dir seed supabase/initdb
 	@echo "✅ Supabase bootstrap complete"
 
 .PHONY: supabase-bootstrap-no-start
@@ -849,7 +838,7 @@ seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 		echo "⚠️  Qdrant not running. Starting data tier..."; \
 		$(MAKE) --no-print-directory up-data-tier; \
 	fi
-	@$(DC) up -d --no-deps --build --recreate hi-rag-gateway-v2
+	@$(DC) up -d --no-deps --build --force-recreate hi-rag-gateway-v2
 	@sleep 5
 	@$(DC) exec -T hi-rag-gateway-v2 python /app/scripts/seed_local.py 2>/dev/null || \
 		$(DC) exec -T hi-rag-gateway-v2 python3 /app/scripts/seed_local.py 2>/dev/null || \
@@ -1031,6 +1020,17 @@ up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 	@$(MAKE) --no-print-directory wait-data
 	@echo "✅ Data tier ready"
 
+.PHONY: reset-data-tier
+reset-data-tier: ## DANGEROUS: stop data tier and wipe its volumes, then recreate with current credentials
+	@echo "⚠️  This will DELETE all data-tier volumes (Neo4j, Qdrant, Meilisearch, MinIO)."
+	@echo "⚠️  Press Ctrl+C to abort. Continuing in 3 seconds..."
+	@sleep 3
+	@$(DC) stop $(DATA_SERVICES) 2>/dev/null || true
+	@$(DC) rm -f $(DATA_SERVICES) 2>/dev/null || true
+	@docker volume rm $(PROJECT)_neo4j-data $(PROJECT)_qdrant-data $(PROJECT)_meilisearch-data $(PROJECT)_minio-data 2>/dev/null || true
+	@$(MAKE) --no-print-directory up-data-tier
+	@echo "✅ Data tier reset with current env.tier-data credentials"
+
 .PHONY: up-minio
 up-minio: ## Start MinIO object storage (port 9000) + Presign
 	@echo "📦 Starting MinIO..."
@@ -1185,18 +1185,60 @@ health-dormant: ## Health-check dormant/newly-activated services
 # =============================================================================
 
 .PHONY: down-all
-down-all: ## Stop ALL services in graceful reverse order
+down-all: ## Stop ALL services in graceful reverse order (voice, search, inference, agents, data)
 	@echo "🛑 Graceful shutdown starting..."
-	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
-	@-$(MAKE) --no-print-directory down-tensorzero
-	@-$(MAKE) --no-print-directory down-agents
-	@-$(MAKE) --no-print-directory down-model-management
-	@-$(MAKE) --no-print-directory down-workers
-	@-$(MAKE) --no-print-directory down-bus
-	@-$(MAKE) --no-print-directory down-data
-	@-$(MAKE) --no-print-directory down-obs
-	@-$(MAKE) --no-print-directory down-supabase
+	$(MAKE) --no-print-directory down-integrations 2>/dev/null || true
+	$(MAKE) --no-print-directory down-tensorzero || true
+	$(MAKE) --no-print-directory down-agents || true
+	$(MAKE) --no-print-directory down-voice || true
+	$(MAKE) --no-print-directory down-search || true
+	$(MAKE) --no-print-directory down-model-management || true
+	$(MAKE) --no-print-directory down-workers || true
+	$(MAKE) --no-print-directory down-inference || true
+	$(MAKE) --no-print-directory down-bus || true
+	$(MAKE) --no-print-directory down-data || true
+	$(MAKE) --no-print-directory down-obs || true
+	$(MAKE) --no-print-directory down-supabase || true
 	@echo "✅ All services stopped gracefully"
+
+# Shutdown order is the reverse of startup, and the ordering is load-bearing:
+# TensorZero is a GATEWAY in front of the inference backends, and Ollama comes
+# up BEFORE TensorZero. So TZ must go down EARLY (position 2) and the backends
+# LATE (down-inference) — otherwise the gateway is briefly live with its
+# backend already gone, and in-flight requests fail instead of draining.
+# Likewise down-voice/down-search run before down-inference: they are callers.
+
+# vibevoice lives in docker-compose.voice.yml, which is NOT in STACK_FILES, so a
+# bare `$(DC) stop vibevoice` cannot resolve it — docker compose errors, `|| true`
+# swallows it, and the container keeps running while the target reports success.
+# It therefore needs the voice overlay appended explicitly. (The pre-existing
+# `stop-vibevoice` target has this same latent bug; see VOICE_OVERLAY use below.)
+VOICE_SERVICES := flute-gateway voice-relay cast-tts-gateway ultimate-tts-studio
+VOICE_OVERLAY := -f docker-compose.voice.yml
+VOICE_OVERLAY_SERVICES := vibevoice
+SEARCH_SERVICES := hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-gateway-v2-gpu
+INFERENCE_SERVICES := pmoves-ollama comfyui
+
+.PHONY: down-voice
+down-voice: ## Stop voice fabric (Flute-Gateway, Voice-Relay, VibeVoice, TTS studio, OmniVoice)
+	@echo "🔇 Stopping voice fabric..."
+	@$(DC) stop $(VOICE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(VOICE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) rm -f $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
+	@-docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice down 2>/dev/null || true
+
+.PHONY: down-search
+down-search: ## Stop Hi-RAG gateways (all CPU/GPU/v2 variants). Used by down-all.
+	@echo "🔎 Stopping Hi-RAG gateways..."
+	@$(DC) stop $(SEARCH_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(SEARCH_SERVICES) >/dev/null 2>&1 || true
+
+.PHONY: down-inference
+down-inference: ## Stop local inference backends (Ollama, ComfyUI) — frees VRAM. Used by down-all.
+	@echo "🧊 Stopping inference backends (frees VRAM)..."
+	@$(DC) stop $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(INFERENCE_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-integrations
 down-integrations: ## Stop external integrations
@@ -1461,30 +1503,31 @@ archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARC
 up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 	@$(DC) up -d archon
 
-# Native Archon: run Archon's OWN compose (server + mcp + frontend) against local
-# Supabase, fed by pipeline-emitted env.shared. Replaces the broken hand-rolled
-# archon*.submodule.yml wrapper. Frontend :3737, MCP :8051, server :8181.
+# Native Archon 0.6.0: TS/SQLite-native, runs from its OWN compose + own env file.
+# 0.6.0 upstream rewrote Python -> TypeScript and does NOT use Supabase — it uses
+# SQLite by default (~/.archon), or its own Postgres via Archon's `--profile
+# with-db`. The server self-allocates port 3090 and IGNORES the compose PORT (PORT
+# is not injected into the container), so the published mapping must target 3090.
+# Requires the operator to seed Archon's own env file from its example first (that
+# file is secrets-domain and not machine-emitted by the PMOVES pipeline).
+# See memory project_archon_060_native. Standalone for now; deeper main-compose
+# integration is tracked as the "#5 Archon integration" follow-up.
 ARCHON_NATIVE_DIR := $(CURDIR)/../PMOVES-Archon
-# SUPABASE_URL is injected as a shell-env override scoped to THIS compose only
-# (compose precedence: shell env > --env-file). It is deliberately absent from the
-# global env.shared so it never clobbers the in-compose ${SUPABASE_URL:-http://supabase-kong:8000}
-# default other services use (Codex #1984 P1). host.docker.internal reaches the
-# host-published Kong gateway from Archon's standalone compose network.
-ARCHON_NATIVE_SUPABASE_URL ?= http://host.docker.internal:8000
-ARCHON_NATIVE_DC := SUPABASE_URL=$(ARCHON_NATIVE_SUPABASE_URL) docker compose --env-file $(CURDIR)/env.shared \
+ARCHON_NATIVE_PORT ?= 3090
+ARCHON_NATIVE_DC := PORT=$(ARCHON_NATIVE_PORT) docker compose \
 	--project-directory $(ARCHON_NATIVE_DIR) -f $(ARCHON_NATIVE_DIR)/docker-compose.yml
 
-.PHONY: archon-native-config up-archon-native down-archon-native
-# secrets-runtime-hydrate fills SUPABASE_SERVICE_KEY from the freshest canonical
-# source (live Supabase container's SERVICE_ROLE_KEY) before Archon reads it.
-archon-native-config: secrets-runtime-hydrate ## Render native Archon config + confirm Supabase env is populated
-	@$(ARCHON_NATIVE_DC) config 2>/dev/null | grep -E "SUPABASE_URL|SUPABASE_SERVICE_KEY" | sed -E 's/(KEY: ).{12}.*/\1<set>/' | sort -u
-
-up-archon-native: secrets-runtime-hydrate ## Build+start native Archon (server+mcp+frontend) on local Supabase
-	@$(ARCHON_NATIVE_DC) up --build -d
+.PHONY: up-archon-native down-archon-native archon-native-health
+up-archon-native: ## Build+start native Archon 0.6.0 (TS/SQLite) standalone on :3090
+	@test -f "$(ARCHON_NATIVE_DIR)/.env" || { echo "ERROR: Archon env file missing. Seed it first: cp $(ARCHON_NATIVE_DIR)/.env.example $(ARCHON_NATIVE_DIR)/.env"; exit 1; }
+	@$(ARCHON_NATIVE_DC) up --build -d app
+	@echo "✔ Archon 0.6.0 native starting → http://localhost:$(ARCHON_NATIVE_PORT)/api/health"
 
 down-archon-native: ## Stop native Archon stack
 	@$(ARCHON_NATIVE_DC) down
+
+archon-native-health: ## Check native Archon 0.6.0 health (:3090)
+	@curl -sf http://localhost:$(ARCHON_NATIVE_PORT)/api/health && echo " ✔ archon 0.6.0 healthy" || (echo "✗ archon unhealthy" && exit 1)
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
@@ -1671,6 +1714,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^NEO4J_AUTH=neo4j/.*|NEO4J_AUTH=neo4j/$${NEO4J_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		grep -q "^MEILI_API_KEY=" env.tier-data 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-data; \
 		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		echo "✓ Populated env.tier-data"; \
 	fi; \
@@ -1707,6 +1752,8 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=$${MINIO_SECRET_KEY:-minioadmin}|" env.tier-api; \
 		sed -i "s|^PRESIGN_SHARED_SECRET=.*|PRESIGN_SHARED_SECRET=$${PRESIGN_SHARED_SECRET:-$(shell openssl rand -hex 32)}|" env.tier-api; \
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		sed -i "s|^MEILI_API_KEY=.*|MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		grep -q "^MEILI_API_KEY=" env.tier-api 2>/dev/null || echo "MEILI_API_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}" >> env.tier-api; \
 		echo "✓ Populated env.tier-api"; \
 	fi; \
 	if [ -f "env.tier-llm" ]; then \
@@ -2866,10 +2913,15 @@ ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
 up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
 
-# Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
+# Bring up agents stack (NATS, Agent Zero, Mesh Agent) and publisher-discord.
+# NOTE: `archon` is intentionally omitted here — the in-compose `archon` service is
+# the pre-0.6.0 Python wrapper (imports server.main), which the 0.6.0 TS rewrite
+# broke (crash-loops). Archon 0.6.0 runs standalone via `make up-archon-native`
+# (:3090). Re-integrating a first-class 0.6.0 archon service into this compose is
+# the tracked "#5 Archon integration" follow-up.
 .PHONY: up-agents up-agents-stack
-up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, Cipher Memory, etc.) preferring submodule builds
-	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord cipher-api
+up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
+	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
 
 .PHONY: up-notebooklm
 up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
@@ -2880,6 +2932,31 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
+
+.PHONY: up-p7
+up-p7: ## Start P7 room-aware stage manager (room lifecycle orchestration, port 8120)
+	@# --profile p7 ONLY: adding --profile agents activates the legacy
+	@# p7-room-orchestrator whose supabase-kong dependency is profile-gated
+	@# (supabase-local) — compose then fails the whole project as "depends on
+	@# undefined service". The new p7 service needs no agents-profile peer.
+	@$(DC) --profile p7 up -d --build p7
+	@$(MAKE) p7-health
+
+.PHONY: p7-health
+p7-health: ## Check P7 service health
+	@# Retry loop: up-p7 chains straight into this and the container needs a
+	@# few seconds to boot — a single immediate probe false-fails the target.
+	@ok=0; for i in 1 2 3 4 5 6 7 8 9 10; do \
+	  if curl -sf http://localhost:$${P7_PORT:-8120}/healthz >/dev/null 2>&1; then ok=1; break; fi; \
+	  sleep 3; \
+	done; \
+	if [ "$$ok" = "1" ]; then echo " ✔ p7 healthy at http://localhost:$${P7_PORT:-8120}"; else echo "✗ p7 unhealthy" && exit 1; fi
+
+.PHONY: smoke-p7
+smoke-p7: ## Run P7 service smoke tests (catalog load + transition gate + idempotency)
+	@# Tests import the service's flat modules (main/catalog/config) — pytest
+	@# must run from the service dir or those imports shadow/miss.
+	@cd services/p7-room-orchestrator && $(PYTHON) -m pytest -q tests/ -x
 
 .PHONY: up-cipher-full
 up-cipher-full: ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
@@ -3062,7 +3139,7 @@ GHCR_PREPUBLISH_SCRIPT ?= tools/ghcr_local_prepublish.py
 GHCR_MATRIX_FILE ?= ../.github/workflows/integrations-ghcr.matrix.json
 GHCR_PREPUBLISH_TAG_SUFFIX ?= local-smoke
 GHCR_PREPUBLISH_PLATFORM ?= linux/amd64
-GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge session-context-worker tokenism-ui
+GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge a2ui-renderer session-context-worker tokenism-ui
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -3251,6 +3328,57 @@ down-n8n: ## Stop n8n workflow services
 	@$(N8N_DC) stop n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 	@$(N8N_DC) rm -f n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 
+# ---- ActivePieces (standalone self-host — low-code automation companion to n8n) ----
+# Known Road wrappers so the standalone stack is never brought up via raw
+# `docker compose up` (which would bypass the env-injection convention). Its
+# secrets live in its own gitignored env.activepieces (self-managed instance keys,
+# seeded from env.activepieces.example + hydrated via the secrets pipeline).
+AP_DIR := $(CURDIR)/activepieces
+AP_DC := docker compose --project-directory $(AP_DIR) -f $(AP_DIR)/docker-compose.yml --env-file $(AP_DIR)/env.activepieces -p pmoves-activepieces
+
+.PHONY: up-activepieces down-activepieces activepieces-health
+up-activepieces: ## Start the standalone ActivePieces self-host (:8087)
+	@test -f "$(AP_DIR)/env.activepieces" || { echo "ERROR: activepieces/env.activepieces missing — seed it: 'cp activepieces/env.activepieces.example activepieces/env.activepieces' then hydrate the SECRET values (see activepieces/README.md). Never hand-commit secrets."; exit 1; }
+	@$(AP_DC) up -d
+	@echo "✔ ActivePieces starting → http://localhost:$${AP_APP_PORT:-8087}/  (check: make -C pmoves activepieces-health)"
+
+down-activepieces: ## Stop the ActivePieces self-host
+	@$(AP_DC) down
+
+activepieces-health: ## Check ActivePieces app health
+	@curl -sf "http://localhost:$${AP_APP_PORT:-8087}/api/v1/flags" >/dev/null && echo "✔ activepieces healthy" || (echo "✗ activepieces unhealthy" && exit 1)
+
+# --- Persona living-doc room (Phase 5 host cutover) — PUBLIC static site at
+# persona.pmoves.ai behind the Traefik edge (docker-compose.traefik.yml, #2221).
+# Serves the RENDERED living-doc, NOT the OpenRoom operator desktop (private).
+# See docs/handoffs/persona-room-public-edge.md.
+PERSONA_DIST := $(CURDIR)/rooms/persona/dist
+PERSONA_DC := docker compose -p $(PROJECT)-persona --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.persona.yml
+
+.PHONY: persona-render up-persona down-persona persona-health
+persona-render: ## Render the persona living-doc (PreTeXt + Remotion) into rooms/persona/dist
+	@echo "→ PreTeXt case study …"
+	@cd rooms/persona/pretext && uv run --no-project --with pretext pretext build web
+	@echo "→ Remotion walkthrough (pulls deps + headless chromium) …"
+	@cd services/a2ui-renderer && (npm ci >/dev/null 2>&1 || npm install) && npm run render:provenance:file -- --default-input demos/persona_walkthrough.request.json --default-output demos/persona_walkthrough.preview.mp4
+	@echo "→ assembling static bundle → rooms/persona/dist"
+	@rm -rf "$(PERSONA_DIST)" && mkdir -p "$(PERSONA_DIST)/pretext"
+	@cp rooms/persona/index.html "$(PERSONA_DIST)/index.html"
+	@cp -r rooms/persona/pretext/output/web/. "$(PERSONA_DIST)/pretext/" 2>/dev/null || echo "  (pretext output missing — check the build above)"
+	@cp services/a2ui-renderer/demos/persona_walkthrough.preview.mp4 "$(PERSONA_DIST)/walkthrough.mp4" 2>/dev/null || echo "  (walkthrough render missing — slot degrades to 'authored' link)"
+	@echo "✔ persona bundle staged at rooms/persona/dist"
+
+up-persona: ## Serve the persona living-doc at persona.pmoves.ai (Traefik edge must be up)
+	@test -f "$(PERSONA_DIST)/index.html" || { echo "ERROR: no rendered bundle — run 'make persona-render' first"; exit 1; }
+	@$(PERSONA_DC) up -d
+	@echo "✔ persona-room up — Traefik serves https://persona.pmoves.ai (ensure the DNS record + edge are live)"
+
+down-persona: ## Stop the persona living-doc service
+	@$(PERSONA_DC) down
+
+persona-health: ## Check the persona-room container status
+	@$(PERSONA_DC) ps persona-room
+
 n8n-api-bootstrap: ## Create/login the n8n owner and mint a fresh Public API key into the local env file
 	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/bootstrap_n8n_api.py" \
 		--base-url "$(N8N_BASE_URL)" \
@@ -3381,7 +3509,7 @@ up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights
 
 .PHONY: stop-vibevoice
 stop-vibevoice: ## Stop VibeVoice realtime container (keeps model volume)
-	@$(DC) stop vibevoice >/dev/null 2>&1 || true
+	@$(DC) $(VOICE_OVERLAY) stop $(VOICE_OVERLAY_SERVICES) >/dev/null 2>&1 || true
 	@echo "✔ VibeVoice stopped"
 
 .PHONY: vibevoice-smoke
@@ -3573,6 +3701,24 @@ up-voice-relay: ## Start voice-relay NATS bridge (port 8121, CPU only)
 voice-relay-smoke: ## Smoke test voice-relay health
 	@echo "voice-relay smoke test..."
 	@curl -sf http://localhost:8121/healthz || { echo "voice-relay not responding at http://localhost:8121/healthz"; exit 1; }
+
+# ────────────────────────────────────────────────────────────────────────────
+# A2UI RENDERER (Remotion living-doc renderer, creator profile, port 8107)
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-a2ui-renderer a2ui-renderer-smoke
+A2UI_RENDERER_PORT ?= 8107
+up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port $(A2UI_RENDERER_PORT), creator profile)
+	@echo "Starting a2ui-renderer (heavy Chromium image — first build is slow)..."
+	@$(DC) --profile creator up -d --build a2ui-renderer
+	@sleep 5
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz > /dev/null 2>&1 \
+	  && echo "a2ui-renderer ready at http://localhost:$(A2UI_RENDERER_PORT)" \
+	  || echo "a2ui-renderer may still be starting (check: curl http://localhost:$(A2UI_RENDERER_PORT)/healthz)"
+
+a2ui-renderer-smoke: ## Smoke test a2ui-renderer health
+	@echo "a2ui-renderer smoke test..."
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz || { echo "a2ui-renderer not responding at http://localhost:$(A2UI_RENDERER_PORT)/healthz"; exit 1; }
 
 # ────────────────────────────────────────────────────────────────────────────
 # HI-RAG GATEWAY (Hybrid RAG v2)
@@ -3793,6 +3939,11 @@ down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@$(JELLYFIN_AI_DC) --profile jellyfin-ai down
 	@echo "✔ Jellyfin AI overlay down"
 
+.PHONY: jellyfin-ai-compose
+jellyfin-ai-compose: ensure-env-shared ## Run docker compose against the Jellyfin AI overlay. Usage: make jellyfin-ai-compose ARGS="up -d --build jellyfin-audio-processor"
+	@if [ -z "$(strip $(ARGS))" ]; then 		echo "Usage: make jellyfin-ai-compose ARGS=\"<docker compose args>\""; 		exit 1; 	fi
+	@$(JELLYFIN_AI_DC) --profile jellyfin-ai $(ARGS)
+
 .PHONY: up-jellyfin-ai-nvenc
 up-jellyfin-ai-nvenc: ensure-env-shared ## Start Jellyfin AI with NVENC hardware transcoding (RTX 4090)
 	@echo "→ Starting Jellyfin AI overlay with NVENC..."
@@ -3992,8 +4143,8 @@ neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_alia
 	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
 
 neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
-	@echo "→ Bootstrapping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j bootstrap
+	@echo "→ Bootstrapping Neo4j..."
+	@bash "$(CURDIR)/scripts/neo4j_bootstrap.sh"
 
 neo4j-status: ## Check Neo4j status from submodule
 	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
@@ -4125,6 +4276,20 @@ compose-split-check: ## Drift gate: fail if committed overlays differ from regen
 	    git status --porcelain -- $(COMPOSE_SPLIT_FILES); \
 	    exit 1; \
 	  fi
+
+# PMOVES_NETWORKS wiring: mirror each service's networks: into PMOVES_NETWORKS= in
+# its own environment: so topology.TopologyContext.from_env() sees a non-empty
+# docker_networks (backs on_network()/has_external_egress()). Source-mutating, so
+# run BEFORE compose-split. See scripts/inject_pmoves_networks.py.
+COMPOSE_NETWORKS_RUN := uv run --no-project --with ruamel.yaml==0.19.1 python scripts/inject_pmoves_networks.py
+
+.PHONY: compose-networks compose-networks-check
+compose-networks: ## Wire PMOVES_NETWORKS into docker-compose.yml, then regenerate overlays
+	@cd $(CURDIR) && $(COMPOSE_NETWORKS_RUN)
+	@$(MAKE) --no-print-directory compose-split
+
+compose-networks-check: ## Drift gate: fail if PMOVES_NETWORKS is out of sync with services' networks:
+	@cd $(CURDIR) && $(COMPOSE_NETWORKS_RUN) --check
 
 .PHONY: validate-service-tools-packaging
 validate-service-tools-packaging: ## Audit that services importing pmoves.tools copy them into Docker images
@@ -4276,7 +4441,7 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 	  kimi --config-file "$(CURDIR)/../.kimi/config.toml"; \
 	fi
 
-.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves
+.PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
 	@bash $(CURDIR)/scripts/claude-pmoves.sh delivery-agent
 
@@ -4288,3 +4453,23 @@ kilo-pmoves: ## Launch KiloCode/OpenCode with PMOVES 5090 node config
 
 codex-pmoves: ## Launch Codex CLI with PMOVES context
 	@bash $(CURDIR)/scripts/codex-pmoves.sh
+
+cipher-mint-token: ## Mint a new per-agent cipher token: AGENT=crush-spark [SCOPES="memory:read,memory:write"]
+	@if [ -z "$(AGENT)" ]; then echo "Usage: make -C pmoves cipher-mint-token AGENT=crush-spark [SCOPES='memory:read,memory:write']"; exit 1; fi
+	@$(PYTHON) $(CURDIR)/scripts/mint_cipher_token.py --agent "$(AGENT)" --scopes "$(or $(SCOPES),memory:read,memory:write,reasoning:read,reasoning:write,session:read,session:write)"
+
+.PHONY: beats-analyze beats-hyperdim beats-pipeline
+beats-analyze: ## Re-run DARKXSIDE sonic fingerprint analysis (librosa + ffmpeg lavfi)
+	@echo "[beats] Running sonic fingerprint analysis (glaze mode)..."
+	@rm -f $(CURDIR)/data/beats/soundcloud/darkxside/.fingerprints.json
+	@cd $(CURDIR)/.. && uv run pmoves/tools/analyze_beats.py analyze --sense-mode glaze
+
+beats-hyperdim: ## Export analysis to Hyperdimensions saves + constellation embed
+	@echo "[beats] Exporting to Hyperdimensions..."
+	@cd $(CURDIR)/.. && uv run pmoves/tools/beats_to_cgp.py export-hyperdim
+
+beats-pipeline: ## Full pipeline: analyze -> cluster -> export to Hyperdimensions
+	@echo "[beats] Full DARKXSIDE beats -> Hyperdimensions pipeline..."
+	@$(MAKE) -C $(CURDIR) beats-analyze
+	@$(MAKE) -C $(CURDIR) beats-hyperdim
+	@echo "[beats] Done. Open website/hyperdim/ or website/embeds/beats-constellation/"

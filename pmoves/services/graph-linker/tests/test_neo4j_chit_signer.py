@@ -5,10 +5,8 @@ Covers:
 - CHIT_SIGN_NEO4J gating
 - Dev mode (no passphrase) graceful handling
 """
-import os
 import sys
 import importlib
-import pytest
 
 sys.path.insert(0, "pmoves/services/graph-linker")
 

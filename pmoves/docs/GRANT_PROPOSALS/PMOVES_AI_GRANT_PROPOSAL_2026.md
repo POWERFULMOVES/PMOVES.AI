@@ -37,7 +37,7 @@ PMOVES.AI is a **Metal-Organic Framework (MOF) for distributed machine intellige
 | Layer | Name | What it is in code |
 |---|---|---|
 | L1 | **MOF Lattice** | Agent Zero hierarchy + Archon coordination define pore geometry across the fleet |
-| L2 | **CHIT** | Cymatic-Holographic Information Theory — geometry-encoded packets (CGPs) replace token streams between agents |
+| L2 | **CHIT** | Cymatic Holographic Information Theory — geometry-encoded packets (CGPs) replace token streams between agents |
 | L3 | **GEOMETRY BUS** | NATS JetStream transport for CGPs across nodes; subjects catalogued in [`.claude/context/geometry-nats-subjects.md`](https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/.claude/context/geometry-nats-subjects.md) |
 | L4 | **EVO SWARM** | Evolutionary policy optimization across the agent population ([`EVOSWARM_OPERATIONS_GUIDE.md`](https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/docs/EVOSWARM_OPERATIONS_GUIDE.md)) |
 | L5 | **ToKenism** | Economic and attribution layer (compute credits, contributor weights, community currency) |

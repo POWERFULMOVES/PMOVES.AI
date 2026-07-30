@@ -182,8 +182,9 @@ bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/Bot
 		fi; \
 	}; \
 	trap cleanup EXIT INT TERM; \
-	PARALLEL=$${PARALLEL:-1} WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) --no-print-directory bringup-with-ui; \
-	RETRO_THEME=$${RETRO_THEME:-galaxy} $(MAKE) --no-print-directory flight-check-retro; \
+	$(MAKE) --no-print-directory up-obs && \
+	PARALLEL=$${PARALLEL:-1} WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) --no-print-directory bringup-with-ui && \
+	RETRO_THEME=$${RETRO_THEME:-galaxy} RETRO_FLAGS=--strict $(MAKE) --no-print-directory flight-check-retro && \
 	$(MAKE) --no-print-directory codex-health-quick || true; \
 	$(MAKE) --no-print-directory showtime-links || true; \
 	cleanup; \
@@ -210,7 +211,7 @@ smoke-showtime: ## Run smoke tests with live Showtime watcher (core + monitoring
 	if [ "$${SHOWTIME_SMOKE_GPU:-0}" = "1" ]; then \
 		GPU_SMOKE_STRICT="$${GPU_SMOKE_STRICT:-true}" $(MAKE) --no-print-directory smoke-gpu; \
 	fi; \
-	RETRO_THEME=$${RETRO_THEME:-galaxy} $(MAKE) --no-print-directory flight-check-retro; \
+	RETRO_THEME=$${RETRO_THEME:-galaxy} RETRO_FLAGS=--strict $(MAKE) --no-print-directory flight-check-retro; \
 	$(MAKE) --no-print-directory showtime-links-strict; \
 	cleanup; \
 	trap - EXIT INT TERM; \
@@ -260,6 +261,33 @@ pr-trim: ## Full hedge trim cycle: analyze + resolve + trail sign
 	@$(MAKE) --no-print-directory pr-trim-analyze PR="$${PR:-0}"
 	@$(MAKE) --no-print-directory pr-trim-resolve PR="$${PR:-0}" RESOLVE_ACTIONABLE="$${RESOLVE_ACTIONABLE:-}"
 	@$(MAKE) --no-print-directory sign-trail SUMMARY="PR Hedge Trim: trimmed PR #$${PR:-0}" AGENT="$${AGENT:-claude-opus}"
+
+pr-closeout-audit: ## Fail-closed closeout audit for an exact PR head (PR=N EXPECTED_HEAD=full-sha)
+	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
+	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
+	@$(PRECHECK_PY) tools/pr_closeout.py audit \
+		--pr "$$PR" \
+		--expected-head "$$EXPECTED_HEAD" \
+		--base "$${PR_CLOSEOUT_BASE:-main}" \
+		$${ADMIN_REVIEW_BYPASS:+--admin-review-bypass} \
+		$${ADMIN_REVIEW_BYPASS:+--admin-author "$${PR_ADMIN_AUTHOR:-POWERFULMOVES}"} \
+		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
+		$(ARGS)
+
+pr-closeout-merge: ## Audit + guarded admin squash merge (PR=N EXPECTED_HEAD=sha CONFIRM='MERGE #N @ sha')
+	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
+	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
+	@test -n "$${CONFIRM:-}" || { echo "ERROR: CONFIRM is required"; exit 2; }
+	@$(PRECHECK_PY) tools/pr_closeout.py merge \
+		--pr "$$PR" \
+		--expected-head "$$EXPECTED_HEAD" \
+		--base "$${PR_CLOSEOUT_BASE:-main}" \
+		--method "$${MERGE_METHOD:-squash}" \
+		--admin \
+		--admin-author "$${PR_ADMIN_AUTHOR:-POWERFULMOVES}" \
+		--confirm "$$CONFIRM" \
+		$${ALLOW_ADVISORY_FAILURE:+--allow-advisory-failure "$$ALLOW_ADVISORY_FAILURE"} \
+		$(ARGS)
 
 floos-status: ## Show FlOO$ pairing status
 	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)

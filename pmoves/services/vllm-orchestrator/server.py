@@ -11,9 +11,7 @@ from typing import Dict, List, Optional
 
 from .config import (
     VLLMConfig,
-    MODEL_CONFIGS,
     create_vllm_config,
-    ParallelismStrategy,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,7 +75,6 @@ class VLLMOrchestrator:
 
     async def _subscribe_work_requests(self):
         """Subscribe to vLLM work requests."""
-        import nats
         import json
 
         async def on_request(msg):
@@ -400,7 +397,6 @@ async def run_orchestrator(
 
 
 if __name__ == "__main__":
-    import sys
 
     logging.basicConfig(
         level=logging.INFO,

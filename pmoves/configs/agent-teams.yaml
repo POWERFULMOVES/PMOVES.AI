@@ -47,6 +47,7 @@ teams:
       - hirag_v2          # Port 8086/8087 — Hybrid RAG
       - hf_agent
       - hf_research_agent
+      - hf_mcp_server     # Port 8203 — HuggingFace Hub MCP server
       - deep_research     # Port 8098 — Research planner
       - extract_worker    # Port 8083 — Text embedding + indexing
       - langextract       # Port 8084 — Language detection/NLP

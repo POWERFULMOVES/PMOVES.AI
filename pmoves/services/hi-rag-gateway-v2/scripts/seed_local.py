@@ -1,4 +1,5 @@
-import os, json, time
+import os
+import json
 from typing import List, Dict, Any
 
 from qdrant_client import QdrantClient
@@ -7,10 +8,20 @@ from sentence_transformers import SentenceTransformer
 import requests
 
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
-COLL = os.environ.get("QDRANT_COLLECTION", "pmoves_chunks")
+QDRANT_API_KEY = os.environ.get("QDRANT__API_KEY", "")
+COLL = os.environ.get("QDRANT_COLLECTION", "pmoves_chunks_qwen3")
 MODEL = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
+COLLECTION_DIM = int(os.environ.get("QDRANT_COLLECTION_DIM", "384"))
+# Codex P1: use the embedding model's native dimension, not zero-padded.
+# If QDRANT_COLLECTION_DIM differs from the model output, re-embed with the
+# correct model instead of padding/truncating (which destroys semantic meaning).
+MODEL_DIM = int(os.environ.get("SENTENCE_MODEL_DIM", "384"))
+if COLLECTION_DIM != MODEL_DIM:
+    print(f"WARNING: QDRANT_COLLECTION_DIM={COLLECTION_DIM} != MODEL_DIM={MODEL_DIM}. "
+          f"Seed vectors will be created at model native dim ({MODEL_DIM}) and "
+          f"the collection will be created to match. Set SENTENCE_MODEL_DIM to override.")
 MEILI_URL = os.environ.get("MEILI_URL", "http://meilisearch:7700")
-MEILI_API_KEY = os.environ.get("MEILI_API_KEY", "")
+MEILI_API_KEY = os.environ.get("MEILI_API_KEY") or os.environ.get("MEILI_MASTER_KEY", "")
 NAMESPACE = os.environ.get("INDEXER_NAMESPACE", "pmoves")
 
 def seed_docs() -> List[Dict[str, Any]]:
@@ -32,7 +43,7 @@ def seed_docs() -> List[Dict[str, Any]]:
 
 def ensure_qdrant_collection(client: QdrantClient, dim: int):
     try:
-        info = client.get_collection(COLL)
+        client.get_collection(COLL)
         # If exists, assume OK
         return
     except Exception:
@@ -46,11 +57,27 @@ def seed_qdrant(docs: List[Dict[str, Any]]):
     embedder = SentenceTransformer(MODEL)
     vecs = embedder.encode([d["text"] for d in docs], normalize_embeddings=True)
 
-    client = QdrantClient(url=QDRANT_URL, timeout=30.0)
-    ensure_qdrant_collection(client, vecs.shape[1])
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None, timeout=30.0)
+    ensure_qdrant_collection(client, MODEL_DIM)
+    # Pad or trim embedding vectors to match the collection dimension.
+    dim = MODEL_DIM  # use the embedding model's native dim, not the collection dim
+    padded = []
+    for v in vecs:
+        v = v.tolist()
+        if len(v) < dim:
+            v = v + [0.0] * (dim - len(v))
+        elif len(v) > dim:
+            v = v[:dim]
+        # L2-normalize
+        norm = sum(x * x for x in v) ** 0.5
+        if norm:
+            v = [x / norm for x in v]
+        padded.append(v)
+    vecs = padded
     points = []
     for i, (d, v) in enumerate(zip(docs, vecs), start=1):
-        points.append(PointStruct(id=i, vector=v.tolist(), payload=d))
+        vector = v.tolist() if hasattr(v, "tolist") else v
+        points.append(PointStruct(id=i, vector=vector, payload=d))
     client.upsert(collection_name=COLL, points=points)
     return len(points)
 

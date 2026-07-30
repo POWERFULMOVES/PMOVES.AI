@@ -231,6 +231,30 @@ Activation paths and cross-references live in `skills/README.md`.
 - **Relevant Skills:** `/search:deepresearch`, `/db:query`, `/deploy:up`, `/health:quick`
 - **README:** [PMOVES-Open-Notebook/README.md](../../../PMOVES-Open-Notebook/README.md)
 
+### PMOVES-OpenRoom
+- **Path:** `PMOVES-OpenRoom/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
+- **Branch:** `PMOVES.AI-Edition-Hardened`
+- **Purpose:** Room-experience shell — browser desktop where an agent operates a room's apps (fork of MiniMax-AI/OpenRoom). The missing fourth layer of rooms-on-a-stage: manifests/catalog + P7 lifecycle + stage cards exist; this is the desktop you enter.
+- **Integration Points:**
+  - `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` — room manifest is the browser-desktop declaration layer (`shell.layout` → window/panel composition, `apps[]` → operable apps)
+  - P7 room sessions (#2158) — entering a room should open a P7 session on the existing control plane
+  - `/stage/` catalog cards — the "enter room" action targets this shell
+- **Status:** Wired 2026-07-20; adapter work UNSTARTED — lane assigned to Mavis-5090 (operator-directed)
+- **README:** [PMOVES-OpenRoom/README.md](../../../PMOVES-OpenRoom/README.md)
+
+### Pmoves-pretext
+- **Path:** `Pmoves-pretext/`
+- **Repository:** https://github.com/POWERFULMOVES/Pmoves-pretext.git
+- **Branch:** `PMOVES.AI-Edition-Hardened`
+- **Purpose:** Deterministic text-layout engine (fork of chenglou/pretext) — the layout half of the Remotion+Pretext combo that gives living docs their animated qualities: browser-accurate wrap, caption fit, and living-doc overlays inside the A2UI Renderer's Remotion runtime.
+- **Integration Points:**
+  - `pmoves/services/a2ui-renderer/src/remotion/pretextLayout.ts` — runtime consumer (currently via npm `@chenglou/pretext@0.0.6`; the submodule is the alignment/patch surface until fork releases replace the npm dep)
+  - `pmoves/docs/CREATOR_PIPELINE.md` §2a Living Docs Text Layout — the lane contract (`text_layout.engine=pretext`, `POST /render/provenance`, `ProvenanceLivingDoc`)
+  - Living-doc animated render proof: `npm run render:provenance:still` / `:file` in `pmoves/services/a2ui-renderer/` (verified 2026-07-25: 411-frame 1080p MP4 + still)
+- **Status:** Wired 2026-07-25 (hardened branch minted @ upstream main `bb224e08`); fork patches + npm-dep replacement are follow-up lane work
+- **README:** [Pmoves-pretext/README.md](../../../Pmoves-pretext/README.md)
+
 ---
 
 ## Document Processing

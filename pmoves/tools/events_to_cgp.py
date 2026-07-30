@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, json, os, sys
-from typing import Any, Dict
+import argparse
+import json
+import os
+import sys
 
 here = os.path.dirname(os.path.abspath(__file__))
 repo = os.path.normpath(os.path.join(here, "..", ".."))

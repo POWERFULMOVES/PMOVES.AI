@@ -94,6 +94,43 @@ docker-prune-all: ## Aggressive cleanup: also removes unused images older than 7
 	@echo "Volumes NOT pruned. Use 'make volume-reset SERVICE=...' for targeted resets."
 	@echo "=== Docker prune-all complete ==="
 
+# ── Fleet Docker Cleanup (scheduled + on-demand) ─────────────────────
+# Installs a systemd timer on the current node for daily Docker cleanup.
+# Prevents BuildKit cache accumulation (root cause of 148GB disk-full events).
+# NEVER prunes volumes (fleet data is co-hosted).
+CLEANUP_SCRIPT := ../deploy/provision/docker-fleet-cleanup.sh
+CLEANUP_SERVICE := ../deploy/provision/docker-fleet-cleanup.service
+CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
+
+.PHONY: docker-fleet-cleanup-install docker-fleet-cleanup-status docker-fleet-cleanup-run
+
+docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
+	@echo "=== Installing Docker Fleet Cleanup Timer ==="
+	@if [ "$$(id -u)" -ne 0 ]; then \
+		echo "ERROR: Must run as root (sudo make docker-fleet-cleanup-install)"; \
+		exit 1; \
+	fi
+	@cp $(CLEANUP_SCRIPT) /usr/local/bin/docker-fleet-cleanup.sh
+	@chmod +x /usr/local/bin/docker-fleet-cleanup.sh
+	@cp $(CLEANUP_SERVICE) /etc/systemd/system/
+	@cp $(CLEANUP_TIMER) /etc/systemd/system/
+	@systemctl daemon-reload
+	@systemctl enable --now docker-fleet-cleanup.timer
+	@echo "✓ Timer installed. Next run: $$(systemctl show docker-fleet-cleanup.timer -p NextElapseUSecRealtime --value)"
+	@echo "  Manual run: systemctl start docker-fleet-cleanup.service"
+	@echo "  Logs: journalctl -u docker-fleet-cleanup"
+
+docker-fleet-cleanup-status: ## Show cleanup timer status + last/next run
+	@echo "=== Docker Fleet Cleanup Timer ==="
+	@systemctl status docker-fleet-cleanup.timer 2>/dev/null \
+		|| echo "Timer not installed. Run: sudo make docker-fleet-cleanup-install"
+	@echo ""
+	@echo "Last run log (tail):"
+	@journalctl -u docker-fleet-cleanup --no-pager -n 5 2>/dev/null || true
+
+docker-fleet-cleanup-run: ## Run cleanup immediately (no sudo needed — uses docker group)
+	@bash $(CLEANUP_SCRIPT)
+
 # ── Tailscale Docker Container ────────────────────────────────────────
 # NOTE: Host-level tailscale-* targets are in the main Makefile.
 # These targets manage the Docker-containerized Tailscale node.

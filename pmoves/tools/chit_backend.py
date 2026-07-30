@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-from jsonschema import Draft202012Validator, validate as jsonschema_validate
+from jsonschema import Draft202012Validator
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 

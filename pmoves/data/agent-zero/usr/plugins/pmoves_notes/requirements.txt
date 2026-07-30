@@ -1,0 +1,11 @@
+# PMOVES.Notes plugin runtime dependencies.
+#
+# aiohttp ships with the Agent Zero runtime (used by helpers/rfc.py,
+# helpers/mcp_handler.py, etc.), so it is normally already present. The floor is
+# pinned to 3.13.4, the first release fixing the critical advisories affecting
+# <=3.13.3 (GHSA-2vrm-gr82-f7m5, GHSA-w2fm-2cpv-w7v5, GHSA-9x8q-7h8h-wcw9, etc.).
+# nats-py is optional: NATS event publishing degrades gracefully (the plugin
+# logs a warning and continues) when it is not installed.
+
+aiohttp>=3.13.4
+nats-py>=2.7.0
