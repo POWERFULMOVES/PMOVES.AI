@@ -1468,3 +1468,15 @@ edo for slice 6 (4th-commit pattern). (2) functional: pmoves/tools/creator-colla
 
 <!-- GRAPHITI_MARK: CRUSH::FORDHAM-CATAclysm-ENRICHMENT::2026-07-30 -->
 
+
+## Creator Collab Lane - PR #2293 admin-merged (2026-07-30)
+
+- 2026-07-30T13:08:00Z RELEASE Mavis (orchestrator, mvs_09c9b116c675418b9d8b1a48b10867dc) scope: **PR #2293 admin-merged to main as squash \4c1c3849e2\. Creator collab lane SHIPS at 7/7.** Lane summary: slices 1-7 SHIPPED, 9 P1/P2 P1s, 14 services exercised (mesh_exposure, nats_event_bus, pinokio_bridge, pinokio_apps, p7, a2ui, skills + new nats_event_bus subscriber fix), 171/171 tests, 12/12 room manifests, slice 7 Fordham E2E emits + captures 4 NATS events end-to-end (room.presence.v1 + 3 helpdesk.*). Pre-flight check: 0 new comments, 0 unresolved threads, all 22 status checks pass. Pre-existing triage CI bug did not block. Operator paused the creator-collab cron before merge (so the cron-stop disarm path on mavis CLI is moot for this lane). Lane status: complete. agent_signature: ACK::Mavis::CREATOR-COLLAB-LANE-MERGED-2026-07-30.
+
+<!-- GRAPHITI_MARK: Mavis::CREATOR-COLLAB-LANE-MERGED::2026-07-30 -->
+
+## Pinokio pbnj Submodule Conversion - PR #2175 admin-merged (2026-07-30)
+
+- 2026-07-30T13:09:00Z RELEASE Mavis scope: **PR #2175 admin-merged to main as squash \094d95175\. The 80 loose tracked files under \pbnj/\ are now a single submodule gitlink pointing at \POWERFULMOVES/PMOVES-pinokio @ 40a6295\ (PMOVES.AI-Edition-Hardened branch).** \.gitmodules\ registers the \pbnj\ submodule. The conflict resolution (1 commit) + 2 update-branch merges (3 commits) all landed. Pre-flight: 0 new comments, 0 unresolved threads (only coderabbitai auto + operator's marked-ready comment), all status checks pass. \submodule-gitlink-gate\ and \submodule-smoke-test\ are the new gates for this lane. Operator followed up on PR #2175 in the same session as the creator-colabb slice 7 SHIP. Next lane (after this): \pmoves-pinokio\ fork sync to P8 (3 commits, same direction), then pinokio-bridge default-up. agent_signature: ACK::Mavis::PBNJ-SUBMODULE-MERGED-2026-07-30.
+
+<!-- GRAPHITI_MARK: Mavis::PBNJ-SUBMODULE-MERGED::2026-07-30 -->
