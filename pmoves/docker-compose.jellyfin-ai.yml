@@ -48,6 +48,7 @@ services:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/media:/media
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/output:/output
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/config/www:/config/www:ro
+      - ${JUICEFS_HOST_MOUNT:-/home/pmoves-knuckles/pmoves-fs}:/media/pmoves:rshared
       - ${PMOVES_PROVISIONS_ROOT:-../CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions}/docker-stacks/jellyfin-ai/install_plugins.sh:/tmp/install_plugins.sh:ro
     # Uncomment to auto-install plugins on startup (may slow first boot):
     # entrypoint: >

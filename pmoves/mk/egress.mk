@@ -185,3 +185,152 @@ exit-node-obs-install: ## Deploy continuous exit-node obs to a node: make exit-n
 		$(OBS_INSTALL) $(EXIT_OBS) root@$$node:/opt/pmoves-obs-stage/; \
 	ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes root@$$node \
 		'chmod +x /opt/pmoves-obs-stage/*.sh && BW_CAP_TB=$(or $(BW_CAP_TB),16) bash /opt/pmoves-obs-stage/install-exit-node-obs.sh'
+
+# ---------------------------------------------------------------------------
+# YouTube playlist metadata crawl via Data API v3 (IP-agnostic).
+# Crawls all videos in a playlist and stores metadata in Supabase.
+# Script: pmoves/tools/yt_playlist_crawl.py (runs inside pmoves-yt container).
+# ---------------------------------------------------------------------------
+
+YT_PLAYLIST_ID ?= PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8
+YT_CRAWL_NAMESPACE ?= darkxside
+
+.PHONY: yt-playlist-crawl yt-playlist-stats
+
+yt-playlist-crawl: ## Crawl YouTube playlist metadata via Data API: make yt-playlist-crawl [YT_PLAYLIST_ID=...] [YT_CRAWL_NAMESPACE=...]
+	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-pmoves-yt-1$$'; then \
+		echo "ERROR: pmoves-yt container not running. Start with 'make -C pmoves up'." >&2; \
+		exit 1; \
+	fi
+	@echo "[yt-crawl] Copying crawl script to container..."
+	@docker cp tools/yt_playlist_crawl.py pmoves-pmoves-yt-1:/app/yt_playlist_crawl.py
+	@echo "[yt-crawl] Starting playlist crawl (playlist: $(YT_PLAYLIST_ID), namespace: $(YT_CRAWL_NAMESPACE))..."
+	@# Write secrets to a temporary env-file to avoid leaking via /proc/pid/cmdline
+	@tmpenv=$$(mktemp); \
+	echo "SUPA_REST_URL=$${SUPA_REST_URL:-http://supabase-kong:8000}" > $$tmpenv; \
+	echo "SUPABASE_SERVICE_ROLE_KEY=$$(grep SUPABASE_SERVICE_ROLE_KEY env.tier-agent 2>/dev/null | cut -d= -f2)" >> $$tmpenv; \
+	echo "GOOGLE_CLIENT_ID=$$(grep CHANNEL_MONITOR_GOOGLE_CLIENT_ID env.tier-agent 2>/dev/null | cut -d= -f2)" >> $$tmpenv; \
+	echo "GOOGLE_CLIENT_SECRET=$$(grep CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET env.tier-agent 2>/dev/null | cut -d= -f2)" >> $$tmpenv; \
+	docker exec --env-file /dev/stdin pmoves-pmoves-yt-1 python3 /app/yt_playlist_crawl.py \
+		--playlist "$(YT_PLAYLIST_ID)" \
+		--namespace "$(YT_CRAWL_NAMESPACE)" < $$tmpenv; \
+	rm -f $$tmpenv
+
+yt-playlist-stats: ## Show crawled video statistics from Supabase
+	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-supabase-db-1$$'; then \
+		echo "ERROR: Supabase DB container not running." >&2; \
+		exit 1; \
+	fi
+	@echo "=== YouTube Playlist Video Stats ==="
+	@docker exec -e PGPASSWORD=$$(grep POSTGRES_PASSWORD env.tier-data 2>/dev/null | cut -d= -f2) \
+		pmoves-supabase-db-1 psql -U supabase_admin -d postgres -c "
+		SET search_path TO pmoves_core;
+		SELECT count(*) AS total, count(DISTINCT video_id) AS unique_videos,
+		       count(*) FILTER (WHERE downloaded) AS downloaded,
+		       count(*) FILTER (WHERE duration_seconds > 0) AS with_duration
+		FROM youtube_videos;
+		SELECT
+		    CASE WHEN duration_seconds < 300 THEN 'short(<5m)'
+		         WHEN duration_seconds < 1200 THEN 'medium(5-20m)'
+		         WHEN duration_seconds < 3600 THEN 'long(20-60m)'
+		         ELSE 'very_long(1h+)' END AS duration_bucket,
+		    count(*) AS cnt
+		FROM youtube_videos WHERE duration_seconds IS NOT NULL
+		GROUP BY 1 ORDER BY cnt DESC;
+	"
+
+# ---------------------------------------------------------------------------
+# DARKXSIDE Playlist Enrichment — resonance taxonomy + School of PowerfulMoves
+# ---------------------------------------------------------------------------
+
+.PHONY: yt-playlist-enrich yt-playlist-stats yt-playlist-curriculum yt-health-videos yt-wealth-videos
+
+yt-playlist-enrich: ## Classify playlist videos by resonance domain + curriculum track
+	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-pmoves-yt-1$$'; then \
+		echo "ERROR: pmoves-yt not running" >&2; exit 1; \
+	fi
+	@echo "[enrich] Copying enrichment script..."
+	@docker cp tools/yt_playlist_enrich.py pmoves-pmoves-yt-1:/app/yt_playlist_enrich.py
+	@echo "[enrich] Running classification (multi-pass for >500 videos)..."
+	@for i in 1 2 3 4 5; do \
+		docker exec \
+			-e SUPA_REST_URL=http://supabase-kong:8000 \
+			-e SUPABASE_SERVICE_ROLE_KEY=$$(grep SUPABASE_SERVICE_ROLE_KEY env.tier-agent 2>/dev/null | cut -d= -f2) \
+			pmoves-pmoves-yt-1 python3 /app/yt_playlist_enrich.py 2>&1 | tail -2; \
+	done
+
+yt-playlist-stats: ## Show playlist enrichment statistics (resonance, curriculum, persona)
+	@docker exec \
+		-e SUPA_REST_URL=http://supabase-kong:8000 \
+		-e SUPABASE_SERVICE_ROLE_KEY=$$(grep SUPABASE_SERVICE_ROLE_KEY env.tier-agent 2>/dev/null | cut -d= -f2) \
+		pmoves-pmoves-yt-1 python3 /app/yt_playlist_enrich.py --stats
+
+yt-playlist-curriculum: ## Show School of PowerfulMoves curriculum tracks
+	@docker exec -e PGPASSWORD=$$(grep POSTGRES_PASSWORD env.tier-data 2>/dev/null | head -1 | cut -d= -f2) \
+		pmoves-supabase-db-1 psql -U supabase_admin -d pmoves -c "
+	SET search_path TO pmoves_core;
+	SELECT curriculum_track, curriculum_subject, count(*) as videos,
+	       round(avg(duration_seconds)/60,1) as avg_min,
+	       count(*) FILTER (WHERE downloaded) as downloaded
+	FROM youtube_videos WHERE curriculum_track IS NOT NULL
+	GROUP BY curriculum_track, curriculum_subject ORDER BY videos DESC;
+	"
+
+yt-health-videos: ## Show health-tagged videos (nutrition, fitness, wellness)
+	@docker exec -e PGPASSWORD=$$(grep POSTGRES_PASSWORD env.tier-data 2>/dev/null | head -1 | cut -d= -f2) \
+		pmoves-supabase-db-1 psql -U supabase_admin -d pmoves -c "
+	SET search_path TO pmoves_core;
+	SELECT health_topic, count(*) as videos,
+	       round(avg(duration_seconds)/60,1) as avg_min,
+	       count(*) FILTER (WHERE downloaded) as downloaded
+	FROM youtube_videos WHERE health_topic IS NOT NULL
+	GROUP BY health_topic ORDER BY videos DESC;
+	"
+
+yt-wealth-videos: ## Show wealth-tagged videos (investing, entrepreneurship, budget)
+	@docker exec -e PGPASSWORD=$$(grep POSTGRES_PASSWORD env.tier-data 2>/dev/null | head -1 | cut -d= -f2) \
+		pmoves-supabase-db-1 psql -U supabase_admin -d pmoves -c "
+	SET search_path TO pmoves_core;
+	SELECT wealth_topic, count(*) as videos,
+	       round(avg(duration_seconds)/60,1) as avg_min,
+	       count(*) FILTER (WHERE view_count > 1000000) as viral
+	FROM youtube_videos WHERE wealth_topic IS NOT NULL
+	GROUP BY wealth_topic ORDER BY videos DESC;
+	"
+
+# ---------------------------------------------------------------------------
+# Cross-node JuiceFS mount (mesh shared storage)
+# Run on remote nodes to mount the shared JuiceFS media filesystem.
+# ---------------------------------------------------------------------------
+
+.PHONY: juicefs-cross-node-setup juicefs-status juicefs-mount-local
+
+JUICEFS_HOST_IP ?= 100.122.182.3
+
+juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST_IP=<host-ts-ip> DB_PASS=<supabase-db-pass>
+	@JUICEFS_HOST=$(JUICEFS_HOST_IP) DB_PASS=$(or $(DB_PASS),$(error DB_PASS required)) bash scripts/juicefs-cross-node-setup.sh
+
+juicefs-status: ## Show JuiceFS mount status
+	@echo "=== JuiceFS Mount ==="
+	@docker ps --filter name=juicefs-mount --format "{{.Names}} {{.Status}}" 2>/dev/null || echo "juicefs-mount not running"
+	@echo ""
+	@echo "=== Content Dirs ==="
+	@docker exec juicefs-mount find /mnt/media -maxdepth 2 -type d 2>/dev/null | sort || echo "Mount not accessible"
+
+juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
+	@echo "Starting JuiceFS mount (local DB)..."
+	$(eval JFS_HOST_HOME := $(HOME))
+	$(eval JFS_MOUNT_POINT := $(JFS_HOST_HOME)/pmoves-fs)
+	@mkdir -p "$(JFS_MOUNT_POINT)"
+	@docker run -d \
+	    --name juicefs-mount \
+	    --restart unless-stopped \
+	    --privileged \
+	    --network host \
+	    --entrypoint sh \
+	    -e JFS_MOUNT="$(JFS_MOUNT_POINT)" \
+	    -v $(JFS_HOST_HOME)/.local/share/juicefs-data:/data \
+	    -v $(JFS_MOUNT_POINT):$(JFS_MOUNT_POINT):rshared \
+	    juicedata/mount:ce-v1.3.0 \
+	    -c 'exec juicefs mount --enable-xattr "postgres://supabase_admin:$(SUPABASE_DB_PASSWORD)@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$$JFS_MOUNT"' 2>/dev/null || echo "Already running or failed"
+	@echo "Use 'make juicefs-status' to verify"

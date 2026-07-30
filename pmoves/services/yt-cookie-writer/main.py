@@ -135,6 +135,9 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
     try:
         tmp.write_text(cookies_str)
         tmp.replace(output)
+        # Ensure shared-group read/write so non-root containers (pmoves-yt uid 65532)
+        # can read AND yt-dlp can write back during extraction.
+        output.chmod(0o660)
     except OSError as e:
         logger.error(f"Cookie write failed: {e}")
         tmp.unlink(missing_ok=True)

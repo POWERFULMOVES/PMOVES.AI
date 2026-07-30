@@ -72,3 +72,23 @@ export SUPABASE_URL="${SUPABASE_URL:-http://localhost:8000}"
 if [[ "${SUPABASE_URL}" == *"supabase-kong"* ]]; then
   export SUPABASE_URL="http://localhost:8000"
 fi
+
+# Resolve Tailscale node IPs for cross-node MCP URLs (crush.json uses ${TS_*})
+if command -v tailscale >/dev/null 2>&1; then
+  while IFS=' ' read -r ip hostname; do
+    case "$hostname" in
+      pmoves-z890)     export TS_Z890="$ip" ;;
+      pmoves-5090)     export TS_5090="$ip" ;;
+      pmoves-laptop)   export TS_4090="$ip" ;;
+      pmoves-spark)    export TS_SPARK="$ip" ;;
+      pmoves-b850-*)   export TS_B850="$ip" ;;
+      pmoves-kvm4-1)   export TS_KVM4_1="$ip" ;;
+      pmoves-kvm4-2)   export TS_KVM4_2="$ip" ;;
+      pmoves-kvm2)     export TS_KVM2="$ip" ;;
+    esac
+  done < <(tailscale status 2>/dev/null | awk '{print $1" "$2}')
+fi
+
+# Export local node identity
+export TS_LOCAL_IP="$(tailscale ip -4 2>/dev/null || echo '127.0.0.1')"
+export TS_LOCAL_HOST="$(hostname -s 2>/dev/null || echo 'localhost')"
