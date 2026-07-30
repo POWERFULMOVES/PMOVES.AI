@@ -1,0 +1,140 @@
+{
+  "question": "Hey, I'm a Fordham resident - how do I render an image with PMOVES?",
+  "intents": [
+    "render",
+    "community",
+    "render-2d"
+  ],
+  "candidates": [
+    {
+      "room_id": "pmoves.room.helpdesk",
+      "display_name": "PMOVES Helpdesk (Intake & Routing)",
+      "room_purpose": "intake",
+      "score": 0.457,
+      "intent_match": 0.333,
+      "persona_bonus": 0.3,
+      "capability_coverage": 1.0,
+      "default_route": "/helpdesk/intake"
+    },
+    {
+      "room_id": "persona.room.livingdoc",
+      "display_name": "Russell Richardson \u2014 Applied AI Architect (Living Doc)",
+      "room_purpose": "unknown",
+      "score": 0.367,
+      "intent_match": 0.333,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/persona/livingdoc"
+    },
+    {
+      "room_id": "creator-studio.room.collab",
+      "display_name": "Creator Studio (Collaborative)",
+      "room_purpose": "studio",
+      "score": 0.367,
+      "intent_match": 0.333,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/notebook-workbench"
+    },
+    {
+      "room_id": "4090-field.room.control",
+      "display_name": "4090 Field Control Room",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/dashboard/notebook/runtime"
+    },
+    {
+      "room_id": "5090-voice.room.studio",
+      "display_name": "5090 Voice Studio",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/dashboard/notebook/runtime"
+    },
+    {
+      "room_id": "z890-infra.room.fabric",
+      "display_name": "Z890 Infra Fabric Room",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/dashboard/services"
+    },
+    {
+      "room_id": "5090-kilocode.room.studio",
+      "display_name": "5090 KiloCode GLM Workstation",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/dashboard/notebook/runtime"
+    },
+    {
+      "room_id": "demo.room.rehearsal",
+      "display_name": "PMOVES Demo Room",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/dashboard/demo"
+    },
+    {
+      "room_id": "hermes-agent.room.control",
+      "display_name": "HERMES Agent Control Room",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/dashboard/hermes"
+    },
+    {
+      "room_id": "fordham.room.community",
+      "display_name": "Fordham Hill Community Room",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/dashboard/fordham"
+    },
+    {
+      "room_id": "darkxsides.room",
+      "display_name": "DARKXSIDES",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/darkxside/mind"
+    },
+    {
+      "room_id": "tokenism.room.exchange",
+      "display_name": "ToKenism Exchange",
+      "room_purpose": "unknown",
+      "score": 0.2,
+      "intent_match": 0.0,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/dashboard/tokenism"
+    }
+  ],
+  "chosen": {
+    "room_id": "pmoves.room.helpdesk",
+    "display_name": "PMOVES Helpdesk (Intake & Routing)",
+    "room_purpose": "intake",
+    "score": 0.457,
+    "intent_match": 0.333,
+    "persona_bonus": 0.3,
+    "capability_coverage": 1.0,
+    "default_route": "/helpdesk/intake"
+  }
+}

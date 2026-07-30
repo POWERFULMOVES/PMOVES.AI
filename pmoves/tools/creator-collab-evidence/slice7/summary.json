@@ -1,0 +1,74 @@
+{
+  "slice": "7_fordham_e2e",
+  "actor": "fordham-resident-001",
+  "ts_started": "2026-07-30T13:16:04Z",
+  "elapsed_s": 4.74,
+  "visitor_question": "Hey, I'm a Fordham resident - how do I render an image with PMOVES?",
+  "intents": [
+    "render",
+    "community",
+    "render-2d"
+  ],
+  "directory_rooms_loaded": 12,
+  "pinokio_apps_loaded": 12,
+  "top_3_candidates": [
+    {
+      "room_id": "pmoves.room.helpdesk",
+      "display_name": "PMOVES Helpdesk (Intake & Routing)",
+      "room_purpose": "intake",
+      "score": 0.457,
+      "intent_match": 0.333,
+      "persona_bonus": 0.3,
+      "capability_coverage": 1.0,
+      "default_route": "/helpdesk/intake"
+    },
+    {
+      "room_id": "persona.room.livingdoc",
+      "display_name": "Russell Richardson \u2014 Applied AI Architect (Living Doc)",
+      "room_purpose": "unknown",
+      "score": 0.367,
+      "intent_match": 0.333,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/persona/livingdoc"
+    },
+    {
+      "room_id": "creator-studio.room.collab",
+      "display_name": "Creator Studio (Collaborative)",
+      "room_purpose": "studio",
+      "score": 0.367,
+      "intent_match": 0.333,
+      "persona_bonus": 0.0,
+      "capability_coverage": 1.0,
+      "default_route": "/notebook-workbench"
+    }
+  ],
+  "chosen": {
+    "room_id": "pmoves.room.helpdesk",
+    "display_name": "PMOVES Helpdesk (Intake & Routing)",
+    "room_purpose": "intake",
+    "score": 0.457,
+    "intent_match": 0.333,
+    "persona_bonus": 0.3,
+    "capability_coverage": 1.0,
+    "default_route": "/helpdesk/intake"
+  },
+  "intake_id": "04308a09-d524-4ce8-b17d-42fc5fdb75fd",
+  "directory_version": "16460b3f-091a-4144-8c92-1e232de094c6",
+  "events_published": [
+    "room.presence.v1",
+    "helpdesk.intake.opened.v1",
+    "helpdesk.intake.routed.v1",
+    "helpdesk.room.suggested.v1"
+  ],
+  "events_captured": {
+    "room.presence.v1": "2026-07-30T13:16:00Z",
+    "helpdesk.intake.opened.v1": "2026-07-30T13:16:01Z",
+    "helpdesk.intake.routed.v1": "2026-07-30T13:16:01Z",
+    "helpdesk.room.suggested.v1": "2026-07-30T13:16:02Z"
+  },
+  "events_capture_count": 4,
+  "events_capture_all": true,
+  "nats_event_bus_url": "http://127.0.0.1:8131",
+  "nats_url": "nats://nats:pmoves@127.0.0.1:4222"
+}

@@ -6,14 +6,16 @@
     "worktree": ".worktrees/feat-creator-collab-lane",
     "branch": "feat/creator-collab-lane",
     "pr": 2264,
-    "ship_count": 6,
+    "ship_count": 7,
     "total_slices": 7,
-    "status": "in_progress",
+    "status": "complete",
     "started_at": "2026-07-27T09:23:00Z",
+    "finished_at": "2026-07-30T13:18:00Z",
     "operator": "darkxside",
     "model_anchor": "creator-steward",
     "merged_at": "2026-07-27T15:29:02Z",
-    "pr_state": "MERGED"
+    "pr_state": "MERGED",
+    "closing_summary": "All 7 creator-collab slices SHIPPED. Slice 7 (Fordham E2E) emitted 4 NATS events (room.presence.v1 + 3 helpdesk.*) end-to-end against the live nats_event_bus + NATS broker; visual evidence in pmoves/tools/creator-collab-evidence/slice7/. Slice 7 also fixed a slice 6 follow-up bug (nats-py no_echo kwarg was on subscribe() instead of connect()). Cron self-disarmed at ship_count==7 with closing summary posted."
   },
   "slices": {
     "1_contract_extension": {
@@ -136,8 +138,39 @@
       ]
     },
     "7_fordham_e2e": {
-      "status": "pending",
-      "title": "Fordham â†” PMOVES-helpdesk E2E (full cross-room flow + visual evidence)",
+      "status": "SHIPPED",
+      "shipped_at": "2026-07-30T13:18:00Z",
+      "title": "Fordham <-> PMOVES-helpdesk E2E (real nats_event_bus + NATS round-trip + 4/4 events captured + visual evidence)",
+      "branch": "slice-7-fordham-e2e",
+      "base": "origin/main @ a886e18816 (Kimi K2.7-code activation)",
+      "merge_target": "feat/creator-collab-lane",
+      "commits": [
+        "p1_no_echo_fix",
+        "functional_evidence_script",
+        "docs_agnote_state_spec"
+      ],
+      "scope": "P1 (state.py: nats-py no_echo kwarg moved from subscribe() to connect() — slice 6 follow-up bug, slice 7 depends on it for NATS round-trip) + functional (slice7_fordham_e2e.py: 488-line evidence script that reads the live 12-room catalog, loads the 12-entry pinokio-apps registry, runs the slice 6 helpdesk ranking algorithm, publishes 4 NATS events through nats_event_bus, and captures all 4 via a direct NATS subscriber in the same process; slice7_capture_screenshots.py: 4 Playwright screenshots of live pmoves-ui + nats_event_bus dashboards) + docs (spec doc + state file + AGNOTE entry). 8 files (1 P1, 2 functional, 5 docs/evidence), +~1100 lines, -0.",
+      "evidence": {
+        "summary_json": "pmoves/tools/creator-collab-evidence/slice7/summary.json",
+        "directory_snapshot": "pmoves/tools/creator-collab-evidence/slice7/directory_snapshot.json",
+        "pinokio_registry": "pmoves/tools/creator-collab-evidence/slice7/pinokio_registry.json",
+        "routing_decision": "pmoves/tools/creator-collab-evidence/slice7/routing_decision.json",
+        "raw_events": "pmoves/tools/creator-collab-evidence/slice7/raw_events.json",
+        "published_events": "pmoves/tools/creator-collab-evidence/slice7/published_events.json",
+        "screenshots_dir": "pmoves/tools/creator-collab-evidence/slice7/screenshots/",
+        "spec_doc": "pmoves/docs/specs/creator-collab-slice-7-fordham-e2e-2026-07-30.md"
+      },
+      "tests": "171/171 existing service tests still green (no regressions). validate_room_manifests.py 12/12 OK. New evidence script runs end-to-end in <5s, captures 4/4 NATS events. Screenshots generated without errors (chromium headless, 1440x900 viewport).",
+      "events_capture_summary": {
+        "room.presence.v1": "1/1 published, 1/1 captured",
+        "helpdesk.intake.opened.v1": "1/1 published, 1/1 captured",
+        "helpdesk.intake.routed.v1": "1/1 published, 1/1 captured",
+        "helpdesk.room.suggested.v1": "1/1 published, 1/1 captured"
+      },
+      "routing_decision_summary": "Visitor: Fordham resident. Question: 'How do I render an image with PMOVES?'. Extracted intents: [render, community, render-2d]. Top 3 candidates: pmoves.room.helpdesk (0.457), persona.room.livingdoc (0.367), creator-studio.room.collab (0.367). Chosen: pmoves.room.helpdesk (intake + persona_bonus wins). Deep-link: /helpdesk/intake.",
+      "scope_decision": "Option A (synthetic room.presence) + Option C value where reachable without pinokio_bridge/ComfyUI/pinokio_live: real helpdesk routing algorithm, real nats_event_bus HTTP publish, real NATS broker pub/sub round-trip, real schema-validated envelopes, real pmoves-ui /api/rooms read, real Playwright visual evidence. Path-to-C documented in spec doc (next session: start pinokio_bridge + ComfyUI + replace synthetic emit with real pmoves-ui session-open).",
+      "p1_bug_fix": "pmoves/services/nats_event_bus/state.py:201 — nats-py (>=2.6) accepts `no_echo` only on `Client.connect()`, not on `Client.subscribe()`. Slice 6 review-iter-1 landed with `await nc.subscribe(t, cb=handler, no_echo=True)` which raises TypeError on every retry. Result: bus nats_connected=false for 24+ hours, /v1/publish cached envelopes locally but didn't push to NATS, cross-service subscribers (a2ui-nats-bridge, future pinokio_bridge) received no slice 3+6 events. Fix: move no_echo=True to connect() options. This is bucketed as `redo` for slice 6 (4th-commit pattern).",
+      "operator_signoff": "'i like a but value in c plus we need to pr draft for pinokio to pr for review' — operator picked Option A scope-down but with Option C value where reachable. Slice 7 captures the C value at the helpdesk-routing layer (the slice 6 algorithm + the real room directory + the real pinokio-apps registry) without requiring live ComfyUI/Pinokio launch.",
       "depends_on": [
         "all_above"
       ]
