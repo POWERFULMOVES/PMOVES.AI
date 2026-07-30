@@ -22,12 +22,14 @@ RUN pip install --no-cache-dir --upgrade pip
 # Build context is ./services/media-video (service directory)
 # Security: Reproducible builds from lockfile
 COPY requirements.txt requirements.lock ./
-# Install torch from cu128 index (ARM64 wheels available, proven by Hi-RAG GPU on SPARK)
+# Install torch from cu128 index FIRST (matching Hi-RAG GPU pattern).
 ARG TORCH_CUDA=cu128
+ARG TORCH_VERSION=2.9.0
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TORCH_CUDA} \
+      torch==${TORCH_VERSION}
+
+# Then install remaining deps
 RUN --mount=type=cache,target=/root/.cache/pip \
-    # amd64 uses the x86-resolved lock (reproducible); arm64/Jetson
-    # falls back to marker-aware requirements.txt.
-    # cu128 has ARM64 wheels (verified on SPARK GB10 via Hi-RAG GPU).
     if [ "$(uname -m)" = "x86_64" ]; then \
       pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.lock; \
     else \
