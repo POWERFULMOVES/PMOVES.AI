@@ -123,6 +123,7 @@ def download_and_upload(
         "writethumbnail": True,
         "quiet": True,
         "noprogress": True,
+        "max_filesize": 2_000_000_000,  # 2GB — skip 10h+ lectures that OOM postprocessing
         "postprocessors": [
             {"key": "FFmpegMetadata"},
             {"key": "EmbedThumbnail"},

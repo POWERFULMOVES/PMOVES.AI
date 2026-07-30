@@ -238,6 +238,65 @@ yt-playlist-stats: ## Show crawled video statistics from Supabase
 	"
 
 # ---------------------------------------------------------------------------
+# DARKXSIDE Playlist Enrichment — resonance taxonomy + School of PowerfulMoves
+# ---------------------------------------------------------------------------
+
+.PHONY: yt-playlist-enrich yt-playlist-stats yt-playlist-curriculum yt-health-videos yt-wealth-videos
+
+yt-playlist-enrich: ## Classify playlist videos by resonance domain + curriculum track
+	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-pmoves-yt-1$$'; then \
+		echo "ERROR: pmoves-yt not running" >&2; exit 1; \
+	fi
+	@echo "[enrich] Copying enrichment script..."
+	@docker cp tools/yt_playlist_enrich.py pmoves-pmoves-yt-1:/app/yt_playlist_enrich.py
+	@echo "[enrich] Running classification (multi-pass for >500 videos)..."
+	@for i in 1 2 3 4 5; do \
+		docker exec \
+			-e SUPA_REST_URL=http://supabase-kong:8000 \
+			-e SUPABASE_SERVICE_ROLE_KEY=$$(grep SUPABASE_SERVICE_ROLE_KEY env.tier-agent 2>/dev/null | cut -d= -f2) \
+			pmoves-pmoves-yt-1 python3 /app/yt_playlist_enrich.py 2>&1 | tail -2; \
+	done
+
+yt-playlist-stats: ## Show playlist enrichment statistics (resonance, curriculum, persona)
+	@docker exec \
+		-e SUPA_REST_URL=http://supabase-kong:8000 \
+		-e SUPABASE_SERVICE_ROLE_KEY=$$(grep SUPABASE_SERVICE_ROLE_KEY env.tier-agent 2>/dev/null | cut -d= -f2) \
+		pmoves-pmoves-yt-1 python3 /app/yt_playlist_enrich.py --stats
+
+yt-playlist-curriculum: ## Show School of PowerfulMoves curriculum tracks
+	@docker exec -e PGPASSWORD=$$(grep POSTGRES_PASSWORD env.tier-data 2>/dev/null | head -1 | cut -d= -f2) \
+		pmoves-supabase-db-1 psql -U supabase_admin -d pmoves -c "
+	SET search_path TO pmoves_core;
+	SELECT curriculum_track, curriculum_subject, count(*) as videos,
+	       round(avg(duration_seconds)/60,1) as avg_min,
+	       count(*) FILTER (WHERE downloaded) as downloaded
+	FROM youtube_videos WHERE curriculum_track IS NOT NULL
+	GROUP BY curriculum_track, curriculum_subject ORDER BY videos DESC;
+	"
+
+yt-health-videos: ## Show health-tagged videos (nutrition, fitness, wellness)
+	@docker exec -e PGPASSWORD=$$(grep POSTGRES_PASSWORD env.tier-data 2>/dev/null | head -1 | cut -d= -f2) \
+		pmoves-supabase-db-1 psql -U supabase_admin -d pmoves -c "
+	SET search_path TO pmoves_core;
+	SELECT health_topic, count(*) as videos,
+	       round(avg(duration_seconds)/60,1) as avg_min,
+	       count(*) FILTER (WHERE downloaded) as downloaded
+	FROM youtube_videos WHERE health_topic IS NOT NULL
+	GROUP BY health_topic ORDER BY videos DESC;
+	"
+
+yt-wealth-videos: ## Show wealth-tagged videos (investing, entrepreneurship, budget)
+	@docker exec -e PGPASSWORD=$$(grep POSTGRES_PASSWORD env.tier-data 2>/dev/null | head -1 | cut -d= -f2) \
+		pmoves-supabase-db-1 psql -U supabase_admin -d pmoves -c "
+	SET search_path TO pmoves_core;
+	SELECT wealth_topic, count(*) as videos,
+	       round(avg(duration_seconds)/60,1) as avg_min,
+	       count(*) FILTER (WHERE view_count > 1000000) as viral
+	FROM youtube_videos WHERE wealth_topic IS NOT NULL
+	GROUP BY wealth_topic ORDER BY videos DESC;
+	"
+
+# ---------------------------------------------------------------------------
 # Cross-node JuiceFS mount (mesh shared storage)
 # Run on remote nodes to mount the shared JuiceFS media filesystem.
 # ---------------------------------------------------------------------------
