@@ -4089,6 +4089,9 @@ docs-render-living: ## Render living docs dashboard via a2ui-renderer (requires 
 		echo "⚠️  a2ui-renderer not running. Start with: make -C pmoves up-a2ui-renderer"; exit 1; \
 	fi
 	@$(PYTHON) tools/render_living_docs.py $(ARGS)
+.PHONY: sync-hyperdim
+sync-hyperdim: ## Sync website/hyperdim/ from Pmoves-hyperdimensions fork (run before CF Pages deploy)
+	@bash scripts/sync_hyperdim_from_fork.sh
 
 # =============================================================================
 # GitHub App Credential Management
