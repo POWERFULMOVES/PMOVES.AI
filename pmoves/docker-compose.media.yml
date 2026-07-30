@@ -487,8 +487,9 @@ services:
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
+    command: ["build/main.js", "--port", "${BGUTIL_PORT:-4417}"]
     environment:
-    - PORT=4416
+    - PORT=${BGUTIL_PORT:-4417}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
     - minio
