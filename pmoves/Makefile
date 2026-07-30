@@ -3569,6 +3569,69 @@ up-voicebox: ## Start Voicebox via Pinokio (host-side, NOT docker-compose)
 	@echo "  expected URL: http://localhost:$${VOICEBOX_HOST_PORT:-17493}"
 	@echo "  flute-gateway uses: VOICEBOX_URL=$${VOICEBOX_URL:-http://host.docker.internal:$${VOICEBOX_HOST_PORT:-17493}}"
 
+# ────────────────────────────────────────────────────────────────────────────
+# PINOKIO BRIDGE + nats_event_bus (Creator-Collab lane slices 2 + 3)
+# ────────────────────────────────────────────────────────────────────────────
+# pinokio_bridge is the HTTP-fronted bridge from PMOVES to the host's
+# Pinokio 8 install (or any ComfyUI launcher). It reads on-host
+# $PINOKIO_HOME and (via pterm) drives app launches. Without a live
+# pterm the bridge returns 503 with a clear error; it does NOT install
+# Pinokio itself.
+#
+# nats_event_bus is the slice-3 HTTP-fronted event bus for the
+# creator-collab subjects (comfy.collab.*, room.presence.v1,
+# room.directory.v1, helpdesk.*). pinokio_bridge publishes a
+# room.presence.v1 on every successful app launch.
+#
+# Both services profile: [apps, pinokio] so they are skipped by
+# default `make up` (too Pinokio-specific) but included by
+# `make up-pinokio` and `make up-creator-collab`.
+
+.PHONY: up-pinokio up-creator-collab pinokio-bridge-smoke nats-event-bus-smoke
+up-pinokio: ## Start nats_event_bus + pinokio_bridge (creator-collab slices 2 + 3)
+	@echo "?? Starting creator-collab event bus + pinokio bridge..."
+	@$(DC) --profile apps --profile pinokio up -d nats_event_bus pinokio_bridge
+	@$(MAKE) --no-print-directory nats-event-bus-smoke
+	@$(MAKE) --no-print-directory pinokio-bridge-smoke
+	@echo "? Pinokio stack ready (nats_event_bus :8131, pinokio_bridge :8130)"
+
+up-creator-collab: up-pinokio ## Alias for up-pinokio (the creator-collab runtime deps)
+	@echo "  creator-collab slices 2 + 3 are up; pmoves-helpdesk-skill + room-suggest-skill can now be exercised via slice 7's E2E script"
+
+nats-event-bus-smoke: ## Smoke check nats_event_bus /healthz
+	@port=$${NATS_EVENT_BUS_PORT:-8131}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$$port/healthz 2>/dev/null || echo "000"); \
+	if [ "$$code" != "200" ]; then \
+	  echo "? nats_event_bus /healthz => $$code (check: docker logs pmoves-nats-event-bus)"; \
+	  exit 1; \
+	fi; \
+	echo "? nats_event_bus /healthz 200"; \
+	curl -sS http://127.0.0.1:$$port/healthz | python -c "import sys,json; d=json.load(sys.stdin); print(f'  status={d.get(\"status\")} topics={len(d.get(\"topics\",[]))} nats_connected={d.get(\"nats_connected\")} writes_enabled={d.get(\"writes_enabled\")}')"
+
+pinokio-bridge-smoke: ## Smoke check pinokio_bridge /healthz
+	@port=$${PINOKIO_BRIDGE_PORT:-8130}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$$port/healthz 2>/dev/null || echo "000"); \
+	if [ "$$code" != "200" ]; then \
+	  body=$$(curl -sS http://127.0.0.1:$$port/healthz 2>/dev/null); \
+	  if echo "$$body" | grep -qi "pterm"; then \
+	    echo "? pinokio_bridge /healthz returned non-200 but the body mentions pterm - this is the expected 'pterm not available on host' 503."; \
+	    echo "  body: $$body"; \
+	    echo "  to fix: install pterm on the host (Pinokio 8 ships it) or set PINOKIO_HOME to a valid Pinokio install"; \
+	  else \
+	    echo "? pinokio_bridge /healthz => $$code (check: docker logs pmoves-pinokio-bridge)"; \
+	    exit 1; \
+	  fi; \
+	else \
+	  echo "? pinokio_bridge /healthz 200"; \
+	  curl -sS http://127.0.0.1:$$port/healthz; \
+	fi
+
+# alias: make bringup-creator-collab for the full creator-collab runtime
+.PHONY: bringup-creator-collab
+bringup-creator-collab: up-pinokio ## Full creator-collab runtime (nats_event_bus + pinokio_bridge)
+	@echo "? Creator-collab runtime ready. To run slice 7's E2E:"
+	@echo "    python pmoves/tools/creator-collab-evidence/slice7_fordham_e2e.py"
+
 .PHONY: voicebox-smoke
 voicebox-smoke: ## Smoke check Voicebox /health (expects 200, reports profile count)
 	@which jq >/dev/null 2>&1 || (echo "jq is required for voicebox-smoke" && exit 1)
