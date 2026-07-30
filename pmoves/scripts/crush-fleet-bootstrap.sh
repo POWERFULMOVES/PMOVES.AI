@@ -24,7 +24,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PMOVES_DIR="${REPO_ROOT}/pmoves"
 CRUSH_CONFIG="${CRUSH_CONFIG:-${HOME}/.config/crush/crush.json}"
-CRUSH_NODE="${CRUSH_NODE:-$(hostname -s)}"
+
+# Cross-platform hostname short name (hostname -s is Linux/macOS only)
+_hostname_short() {
+  local h
+  h="${HOSTNAME:-}"          # bash builtin on most platforms
+  if [ -z "$h" ]; then
+    h="$(hostname 2>/dev/null || echo unknown)"
+  fi
+  echo "${h%%.*}"
+}
+CRUSH_NODE="${CRUSH_NODE:-$(_hostname_short)}"
 
 info()  { printf '\033[1;34m[crush-bootstrap]\033[0m %s\n' "$*"; }
 warn()  { printf '\033[1;33m[crush-bootstrap] WARN:\033[0m %s\n' "$*" >&2; }
