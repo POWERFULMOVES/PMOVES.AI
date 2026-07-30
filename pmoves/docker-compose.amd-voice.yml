@@ -34,7 +34,7 @@ services:
     deploy:
       resources:
         reservations:
-          devices: []
+          devices: !reset []
         limits:
           memory: 16G
           cpus: '8.0'
