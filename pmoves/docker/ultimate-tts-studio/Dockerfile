@@ -51,7 +51,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Step 1: Conda packages first (pynini + portaudio + scipy/numpy from conda-forge)
 # CRITICAL: Install scipy/numpy from conda for proper ABI compatibility
 # scipy 1.11.x works with numpy 1.26.x; scipy 1.14+ requires numpy 2.x
-RUN conda install -c conda-forge pynini==2.1.6 portaudio scipy=1.11.4 numpy=1.26.4 -y && \
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null; \
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null; \
+    conda install --override-channels -c conda-forge pynini==2.1.6 portaudio scipy=1.11.4 numpy=1.26.4 -y && \
     conda clean -afy
 
 # Step 2: Clone from PMOVES fork (same requirements.txt as SUP3RMASS1VE)
@@ -87,6 +89,12 @@ RUN echo "onnx==1.16.0" > /tmp/constraints.txt && \
 # Step 5c: Install requirements.txt with strict constraints
 RUN pip install -c /tmp/constraints.txt -r requirements.txt || \
     pip install --use-deprecated=legacy-resolver -c /tmp/constraints.txt -r requirements.txt
+
+# Step 5c.1: Install supplementary PMOVES requirements (einops, omegaconf, etc.)
+# These are TTS engine dependencies not included in the upstream repo's requirements.txt
+COPY requirements-ultimate-tts.txt /tmp/requirements-ultimate-tts.txt
+RUN pip install -c /tmp/constraints.txt -r /tmp/requirements-ultimate-tts.txt || \
+    echo "WARN: Some supplementary deps failed (non-fatal — engines will lazy-load)"
 
 # Step 5d: Skipped deepspeed compilation (removing it later to avoid runtime crashes)
 
