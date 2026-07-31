@@ -257,7 +257,7 @@ root:
             expect:
               - "PMOVES-Longbow/services/longbow-router/app.py"
               - "pmoves/docs/architecture/PMOVES_LONGBOW_DEPRECATED.md"
-          status: pending
+          status: done
 
     # =========================================================================
     # Stage 5: Visualization (v1.1)
