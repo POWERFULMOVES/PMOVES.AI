@@ -1,6 +1,6 @@
 # PMOVES Model Lifecycle Pipeline — Design Spec
 
-**Status:** DRAFT — awaiting operator approval
+**Status:** APPROVED — operator decisions resolved 2026-07-30, proceeding with implementation
 **Date:** 2026-07-30
 **Author:** Crush (GLM-5.2 via Crush)
 **Scope:** Full end-to-end model lifecycle: HF discovery → Unsloth fine-tune → GGUF convert → multi-engine serving (llama.cpp/vLLM/NIM/Ollama) → throughput benchmark → fitness scoring → TensorZero routing → AgentGym evaluation → Archon agent mint → CHIT attestation
@@ -407,14 +407,19 @@ async def rebalance_tensorzero_weights():
 
 ---
 
-## 10. Operator Decisions Required
+## 10. Operator Decisions — RESOLVED (2026-07-30)
 
-1. **Serving tier scope on SPARK:** Build all 3 (llama.cpp + vLLM + NIM) or start with just llama.cpp?
-2. **NIM NGC API key:** Do you have an NGC key for the initial NIM container pull?
-3. **Fitness bridge port:** I propose `:8120` (next after P7's `:8122`). OK?
-4. **G3 Unsloth scope:** Include in this spec as follow-on, or defer to a separate lane?
-5. **KVM CPU-only llama.cpp:** Skip entirely (recommended) or build minimal?
-6. **Approval to proceed with implementation against this spec?**
+1. **Serving tier scope on SPARK:** ✅ **All 3** — build llama.cpp + vLLM + NIM
+2. **NIM NGC API key:** ✅ Operator will add via GH secrets → secrets-funnel → CHIT manifest. Add `NGC_API_KEY` to `pmoves/chit/secrets_manifest.yaml` + `env.tier-llm.example`.
+3. **Port allocation:** ✅ **All proposed ports (8120, 8082-8084) were TAKEN.** Revised:
+   - `llama.cpp` → **8111** (host) / container-internal only
+   - `vLLM` → **8112** (host) / container-internal only
+   - `NIM` → **8113** (host) / container-internal only
+   - `model-fitness-bridge` → **8114** (host) / container-internal only
+   - **Key principle:** internal services (only consumed by TensorZero) should have **no host `ports:` at all** — TensorZero reaches them by Docker service name (`http://llamacpp:8080`, `http://vllm:8000`, `http://nim:8000`) on the shared Docker network. Host ports only for operator debugging.
+4. **G3 Unsloth scope:** ✅ **Via Pinokio — PMOVES fork needed.** Unsloth already supports GB10/DGX-Spark natively (UMA, NVFP4). The "fork" is a thin Pinokio launcher wrapper (`install.js`/`start.js`/`pinokio.js`) + the wired `unsloth_finetune.py`, not a library fork. NVIDIA NeMo/RTX-AI-Toolkit are heavier alternatives — Unsloth wins for local-first. Included in this spec as a follow-on sub-phase.
+5. **KVM CPU-only llama.cpp:** ✅ **YES — for AST + voice agents.** Deployment: native build + systemd (not Docker, matches rdna4 pattern). Models: Qwen2.5-3B Q4 (LLM, ~10 tok/s) + faster-whisper base int8 (ASR, ~6-8× realtime) + Kokoro (TTS, already deployed on KVM4-2). Voice agent topology: KVM handles STT+LLM+Kokoro floor; GPU nodes handle expressive TTS via host_affinity routing.
+6. **Approval to proceed:** ✅ **Yes, once research threads completed.** Research complete as of this update.
 
 ---
 
@@ -428,3 +433,145 @@ async def rebalance_tensorzero_weights():
 - `pmoves/docs/SPARK_MODEL_STRATEGY.md` — SPARK model deployment strategy
 - `pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md` — Knuckles/RDNA4 setup
 - Big Ball 5090 CODEX Gap Closure (AGNOTE4482.md) — "Remaining 5090 CODEX Work" §3 model-fitness integration
+
+---
+
+## 11. Port Registry + Docker Networking (resolved 2026-07-30)
+
+### Port allocations
+
+All ports verified against `pmoves/scripts/port_allocator.py` + `pmoves/docs/operations/PORT_REGISTRY.md`:
+
+| Service | Host Port | Container Port | Notes |
+|---|---|---|---|
+| `llamacpp` (SPARK build) | 8111 | 8082 | Native binary + systemd or Docker |
+| `vllm` (SPARK community image) | 8112 | 8000 | `lharillo/vllm-blackwell-gb10-spark` |
+| `nim` (DGX-Spark container) | 8113 | 8000 | `nvcr.io/nim/meta/llama-3.1-8b-instruct-dgx-spark` |
+| `model-fitness-bridge` | 8114 | 8080 | New service (G1 fix) |
+| `llamacpp-kvm` (KVM CPU) | 8082 | 8082 | Native + systemd on KVM4-1 |
+
+### Docker "smart ports" principle
+
+**Key insight:** Docker containers on the same network resolve each other by **service name** on the **container port**. Host port binding is only needed for external (host/browser) access. Two services can both use container port `8080` internally with zero conflict.
+
+**Implementation for this pipeline:**
+- TensorZero (container `pmoves-tensorzero-gateway-1`) calls `http://llamacpp:8082`, `http://vllm:8000`, `http://nim:8000` by Docker DNS
+- No `ports:` block on these services unless we need host debugging
+- This **eliminates all port-conflict risk** for internal-only inference services
+- The port registry (`port_allocator.py`) remains the SSOT for the few services that DO need stable host ports
+
+### Port registry updates needed
+
+Add to `pmoves/scripts/port_allocator.py` `DEFAULT_PORTS`:
+```python
+"llamacpp": 8111,
+"vllm": 8112,
+"nim": 8113,
+"model-fitness-bridge": 8114,
+```
+
+---
+
+## 12. KVM Voice Agent Stack (resolved 2026-07-30)
+
+### Architecture
+
+```
+[Audio in]
+  → VAD (Silero)
+  → STT (faster-whisper base, int8 CPU)         ~0.5s on KVM4-1 4 vCPU
+  → LLM (llama.cpp Qwen2.5-3B Q4 CPU)           ~1-2s streaming
+  → TTS (Kokoro CPU floor on KVM4-2)             ~1-2s
+[Audio out]                                       Total: ~3-4.5s round-trip
+```
+
+**Split approach (GPU for expressive TTS):** KVM handles STT+LLM, GPU nodes handle expressive TTS (VibeVoice, Ultimate-TTS) via existing `host_affinity` routing in `tts-engine-capabilities.yaml`.
+
+### Models for CPU on 4 vCPU / 16GB KVM
+
+| Role | Model | Size | RAM | Speed | Notes |
+|---|---|---|---|---|---|
+| **ASR** | faster-whisper base | ~150 MB | ~1 GB | 6-8× realtime | CTranslate2 int8; existing ffmpeg-whisper container, just `device=cpu` |
+| **LLM** | Qwen2.5-3B-Instruct Q4_K_M | ~2 GB | ~4 GB | ~10 tok/s | Best quality/speed balance on CPU |
+| **LLM fallback** | Llama-3.2-1B-Instruct Q4_K_M | ~750 MB | ~2 GB | ~20-35 tok/s | Ultra-fast fallback |
+| **TTS** | Kokoro-82M (ONNX) | ~330 MB | ~1 GB | ~1-2s | Already deployed via `pmoves/services/kokoro-tts/`; already routed to KVM4-2 |
+
+### Deployment: native build + systemd (not Docker)
+
+Matches the rdna4 installer pattern but without ROCm. CPU llama.cpp build:
+```bash
+cmake -S /opt/llama.cpp -B /opt/llama.cpp/build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=ON  # AVX2/AVX512 auto-detect
+cmake --build /opt/llama.cpp/build --parallel 4
+install -m 0755 /opt/llama.cpp/build/bin/llama-server /usr/local/bin/llama-server
+```
+
+systemd unit on KVM4-1, `:8082`:
+```ini
+[Service]
+ExecStart=/usr/local/bin/llama-server \
+  --model /var/lib/llama-models/qwen2.5-3b-instruct-q4_k_m.gguf \
+  --host 0.0.0.0 --port 8082 --threads 4 --ctx-size 4096
+```
+
+### What's already wired (no new work needed)
+
+| Component | Status |
+|---|---|
+| Kokoro on KVM4-2 | ✅ `tts-engine-capabilities.yaml:708` already routes kokoro → kvm4-2 preferred |
+| Flute-Gateway STT | ✅ `WhisperSTTProcessor` → `ffmpeg-whisper:8078` already uses faster-whisper |
+| Voice-cast self-heal | ✅ `voice_cast_on_sign.py:292` falls back to Kokoro CPU floor |
+| TensorZero on KVM4-1 | ✅ Already runs at `:3030`; add CPU model variants to config |
+
+### What's missing
+
+| Component | Action |
+|---|---|
+| llama-server CPU on KVM | Add `install_cpu_llama_stack()` to `deploy/provision/hostinger-kvm-setup.sh` |
+| Small GGUF models on KVM | `huggingface-cli download Qwen/Qwen2.5-3B-Instruct-GGUF` |
+| TensorZero CPU model routing | Add `[models.qwen2_5_3b_kvm_cpu]` to tensorzero.toml (weight=0.0 safe rollout) |
+| faster-whisper CPU mode on KVM | Deploy ffmpeg-whisper with `FFW_COMPUTE_TYPE=int8 FFW_DEVICE=cpu` |
+
+---
+
+## 13. Unsloth on Pinokio — PMOVES Fork Design (resolved 2026-07-30)
+
+### What exists
+
+| Component | Status |
+|---|---|
+| `pmoves/configs/pinokio-apps/curated/unsloth.yaml` | ✅ Pinokio app entry (24GB exclusive, GPU arch sm_90/110/120) |
+| `pmoves/tools/unsloth_finetune.py` | ⏳ Scaffold (model loading + LoRA setup, **training loop commented out**) |
+| `pmoves/mk/unsloth.mk` | ✅ 4 Make targets (finetune, status, upload, list-adapters) |
+| model-registry `source="unsloth"` | ✅ Fitness schema accepts it; no code emits it yet |
+| PMOVES-BoTZ `skills/huggingface-llm-trainer/scripts/unsloth_sft_example.py` | ✅ 508-line production SFT reference script |
+| POWERFULMOVES Unsloth fork | ❌ None in `.gitmodules` |
+
+### NVIDIA version finding
+
+Unsloth **already supports GB10/DGX-Spark natively** — UMA (Unified Memory Architecture) patching, NVFP4 Blackwell optimization, BF16 detection. There is **no separate NVIDIA fork** to investigate. NVIDIA's NeMo/RTX-AI-Toolkit are heavier alternatives — Unsloth wins for local-first PMOVES.
+
+### PMOVES fork = thin Pinokio wrapper (not a library fork)
+
+The fork should be a **launcher repo** (`PMOVES-unsloth` or `pmoves-unsloth.git`) containing:
+
+| File | Purpose |
+|---|---|
+| `install.js` | UV-based install (`uv pip install unsloth`), CUDA/xformers check, HF login |
+| `start.js` | Launch `unsloth_finetune.py` CLI or Gradio training UI; URL capture via Pinokio `on` event |
+| `pinokio.js` | Dynamic menu: Install → Train → Upload → Pipeline |
+| `pinokio.json` | Metadata |
+| `pmoves_finetune.py` | Wired version of `unsloth_finetune.py` with: dataset loading, SFTTrainer call, `push_to_hub`, `POST /api/model-fitness` webhook |
+
+### Pipeline hooks to wire in the fork
+
+```
+pmoves_finetune.py (wired)
+  ├── loads model from HF (e.g. unsloth/gemma-4-31B-it)
+  ├── trains LoRA adapter (SFTTrainer.train())
+  ├── saves adapter → local dir
+  ├── push_to_hub → HF Hub model repo
+  └── POST model-registry:8110/api/model-fitness (source="unsloth")
+        └── NATS: model.fitness.recorded.v1
+              └── TensorZero reads new adapter for A/B weight rollout
+```
