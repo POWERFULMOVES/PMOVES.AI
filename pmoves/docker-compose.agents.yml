@@ -95,6 +95,9 @@ services:
     - A0_SET_browser_model_name=tensorzero::function_name::${AGENT_ZERO_TZ_FUNCTION:-agent_zero}
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_a2a_server_enabled=true
+    # Expose Agent Zero's MCP SSE server so external clients (Crush, Archon,
+    # other nodes) can connect via standard MCP transport at /t-{token}/sse.
+    - A0_SET_mcp_server_enabled=true
     # A0_SET_mcp_server_token: soft default (CANONICAL_NAMES.md §5). The previous
     # ${MCP_SERVER_TOKEN:?...} hard-require made *every* compose invocation on the
     # shared file fail interpolation on nodes without the var — blocking bring-up

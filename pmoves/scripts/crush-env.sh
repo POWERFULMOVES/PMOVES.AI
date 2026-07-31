@@ -63,7 +63,8 @@ for var in \
   HF_TOKEN \
   OLLAMA_BASE_URL \
   TAILSCALE_API_KEY \
-  TAILSCALE_TAILNET; do
+  TAILSCALE_TAILNET \
+  AGENT_ZERO_MCP_TOKEN; do
   if [ -n "${ENV_MAP[$var]:-}" ] && [ -z "${!var:-}" ]; then
     export "$var"="${ENV_MAP[$var]}"
   fi

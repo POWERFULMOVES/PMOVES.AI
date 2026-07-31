@@ -22,6 +22,10 @@
 # RDNA2 (gfx1030/1031, RX6000): set HSA_OVERRIDE_GFX_VERSION=10.3.0
 services:
   ultimate-tts-studio:
+    build:
+      context: ./docker/ultimate-tts-studio
+      dockerfile: Dockerfile.rocm
+    image: ${ULTIMATE_TTS_ROCM_IMAGE:-ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:rocm-latest}
     environment:
     - HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE_GFX_VERSION:-12.0.1}
     - PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.6,max_split_size_mb:512
@@ -34,7 +38,7 @@ services:
     deploy:
       resources:
         reservations:
-          devices: []
+          devices: !reset []
         limits:
           memory: 16G
           cpus: '8.0'

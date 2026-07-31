@@ -307,10 +307,11 @@ MCP_SPECS: List[MCPSpec] = [
     MCPSpec(
         key="agent-zero",
         config={
-            "type": "http",
-            "url": "http://${TS_Z890}:8080/mcp",
+            "type": "sse",
+            "url": "http://localhost:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
             "timeout": 30,
         },
+        required_env="AGENT_ZERO_MCP_TOKEN",
     ),
     MCPSpec(
         key="pmoves-nats-fleet",
@@ -436,6 +437,15 @@ MCP_SPECS: List[MCPSpec] = [
         },
         required_commands=["docker"],
         required_env="HOSTINGER_API_TOKEN",
+    ),
+    MCPSpec(
+        key="archon",
+        config={
+            "type": "http",
+            "url": "http://localhost:8051",
+            "timeout": 30,
+            "disabled": True,
+        },
     ),
 ]
 
@@ -639,7 +649,13 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
                 config["url"] = "http://localhost:8105/mcp/sse"
             elif spec.key == "agent-zero":
                 config["url"] = "http://localhost:8093/mcp"
-        disabled = False
+        # Normalize agent-zero to SSE with token auth on every node (Spark uses :8093,
+        # others use :8081). Only applies if the URL hasn't already been set to SSE.
+        if spec.key == "agent-zero" and "/t-" not in str(config.get("url", "")):
+            port = "8093" if node == "spark" else "8081"
+            config["url"] = f"http://localhost:{port}/mcp/t-${{AGENT_ZERO_MCP_TOKEN}}/sse"
+            config["type"] = "sse"
+        disabled = config.pop("disabled", False)
         if spec.required_commands and not all(shutil.which(cmd) for cmd in spec.required_commands):
             disabled = True
         if spec.missing_envs(env_cache):
