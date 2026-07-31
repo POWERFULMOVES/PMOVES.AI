@@ -502,3 +502,26 @@ else
 	@echo ""
 	@echo "Dry-run only. Set EXECUTE=1 to perform cleanup."
 endif
+
+# ── TensorZero Config Render ──────────────────────────────────────────
+# Substitutes the Ollama embedding api_base in tensorzero.toml so each
+# node points at its own backend. TensorZero api_base does NOT support
+# env:: substitution (only credential fields do) and the config dir is
+# mounted :ro — so we render host-side before starting the gateway.
+#
+# Set OLLAMA_EMBED_BASE_URL in env.tier-llm per node:
+#   CUDA native:  http://host.docker.internal:11434/v1
+#   B850 ROCm:    http://host.docker.internal:8080/v1
+#   KVM (no GPU): leave unset (cloud fallback)
+
+TZ_CONFIG := tensorzero/config/tensorzero.toml
+
+.PHONY: tensorzero-render
+tensorzero-render: ## Render tensorzero.toml Ollama api_base from OLLAMA_EMBED_BASE_URL
+	@TZ_URL="$${OLLAMA_EMBED_BASE_URL:-http://host.docker.internal:11434/v1}"; \
+	if [ -f "$(TZ_CONFIG)" ]; then \
+		sed -i "s|api_base = \"http://[^\"]*11434/v1\"|api_base = \"$$TZ_URL\"|g; s|api_base = \"http://[^\"]*8080/v1\"|api_base = \"$$TZ_URL\"|g" "$(TZ_CONFIG)"; \
+		echo "✓ TensorZero Ollama api_base → $$TZ_URL"; \
+	else \
+		echo "⚠ $(TZ_CONFIG) not found — skipping render"; \
+	fi
