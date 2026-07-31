@@ -204,7 +204,9 @@ def _ensure_integration_credentials(text: str) -> str:
     # compose invocation project-wide, so mint it with the other node-local
     # service tokens.
     neb_token = _get_kv(text, "NATS_EVENT_BUS_TOKEN")
-    if _is_blank_or_placeholder(neb_token):
+    # env.shared.example carries an inline "# REQUIRED - generate: ..." comment
+    # as the value on fresh setups; treat comment-looking values as unset.
+    if _is_blank_or_placeholder(neb_token) or neb_token.startswith("#"):
         text = _set_kv(text, "NATS_EVENT_BUS_TOKEN", "pm_neb_" + _strong_random(24))
 
     # n8n owner password: auto-generate and persist in env.shared so it survives
