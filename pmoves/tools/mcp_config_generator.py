@@ -215,6 +215,8 @@ def render_claude_kimi(specs: List[ServerSpec], context: Dict[str, str], **kw: A
                 entry["timeout"] = spec.timeout
         else:
             continue
+        if spec.disabled:
+            entry["disabled"] = True
         servers[spec.key] = entry
     return {"mcpServers": servers}
 
@@ -238,6 +240,8 @@ def render_kilocode(specs: List[ServerSpec], context: Dict[str, str], **kw: Any)
                 entry["environment"] = _render_env(spec.env, context, **kw)
         else:
             continue
+        if spec.disabled:
+            entry["disabled"] = True
         mcp[spec.key] = entry
         permissions[f"{spec.key}_*"] = "allow"
     return {"mcp": mcp, "permission": permissions}
@@ -247,7 +251,7 @@ def render_hermes(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) -
     """Render Hermes Agent config.yaml mcp_servers block."""
     servers: Dict[str, Any] = {}
     for spec in specs:
-        entry: Dict[str, Any] = {"enabled": True}
+        entry: Dict[str, Any] = {"enabled": not spec.disabled}
         if spec.transport in ("sse", "http"):
             entry["type"] = spec.transport
             entry["url"] = _expand(spec.url or "", context, **kw)
@@ -286,6 +290,8 @@ def render_crush(specs: List[ServerSpec], context: Dict[str, str], **kw: Any) ->
             entry["type"] = "stdio"
             entry["command"] = command
             entry["args"] = _render_args(args, context, **kw)
+            if spec.env:
+                entry["env"] = _render_env(spec.env, context, **kw)
         else:
             continue
         if spec.timeout:

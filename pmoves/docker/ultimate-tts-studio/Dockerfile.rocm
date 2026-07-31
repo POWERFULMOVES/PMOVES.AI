@@ -151,6 +151,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsox3 \
     sox \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

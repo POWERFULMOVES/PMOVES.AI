@@ -174,6 +174,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsox3 \
     sox \
     curl \
+    ca-certificates \
     # CUDA runtime libraries for ONNX GPU provider
     cuda-nvrtc-12-4 \
     && rm -rf /var/lib/apt/lists/* \
