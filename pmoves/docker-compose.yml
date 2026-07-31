@@ -2737,9 +2737,15 @@ services:
     - -m
     - '8222'
     - --user
-    - ${NATS_USER}
+    # Default to the canonical nats:pmoves creds when the runtime env doesn't
+    # supply NATS_USER/NATS_PASSWORD. Without a default, a blank env var starts
+    # the server with empty creds while every client (tier envs + init script)
+    # authenticates as nats:pmoves -> "Authorization Violation" for the whole
+    # bus. These are the documented weak defaults (env.shared.example, tier
+    # envs); a real NATS_PASSWORD still overrides. Keep in sync with clients.
+    - ${NATS_USER:-nats}
     - --pass
-    - ${NATS_PASSWORD}
+    - ${NATS_PASSWORD:-pmoves}
     restart: unless-stopped
     ports:
     # NATS is the mesh-wide event bus — credential-guarded (nats:***@),
@@ -2777,7 +2783,13 @@ services:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
     environment:
-    - NATS_URL=${NATS_URL}
+    # Pin the internal bus URL explicitly. This one-shot has no env_file, so
+    # ${NATS_URL} would inherit compose's default env — which can carry a stale
+    # localhost value (e.g. a host-exported NATS_URL) and make the init
+    # unreachable (a container's localhost is itself, not the nats service).
+    # nats-init always runs on pmoves_bus where NATS is reachable as nats:4222,
+    # so hardcode it (matches the script default and env.shared.example).
+    - NATS_URL=nats://nats:pmoves@nats:4222
     - PMOVES_NETWORKS=pmoves_bus
     volumes:
     - ./scripts/nats:/scripts:ro
