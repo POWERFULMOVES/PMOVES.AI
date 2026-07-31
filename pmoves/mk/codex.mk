@@ -113,7 +113,7 @@ secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env
 
 .PHONY: secrets-pull secrets-funnel-from-prod
 secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
-	@bash scripts/secrets/pull_chit_bundle.sh
+	@bash scripts/pull_chit_bundle.sh
 
 secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull newest CI bundle, then materialize tier files from it
 

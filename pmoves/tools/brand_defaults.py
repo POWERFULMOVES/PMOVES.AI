@@ -199,6 +199,16 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(n8n_runners):
         text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
 
+    # nats_event_bus service token: local bridge<->bus auth (creator-collab
+    # lane). Compose requires it with :? — an unminted value fails EVERY
+    # compose invocation project-wide, so mint it with the other node-local
+    # service tokens.
+    neb_token = _get_kv(text, "NATS_EVENT_BUS_TOKEN")
+    # env.shared.example carries an inline "# REQUIRED - generate: ..." comment
+    # as the value on fresh setups; treat comment-looking values as unset.
+    if _is_blank_or_placeholder(neb_token) or neb_token.startswith("#"):
+        text = _set_kv(text, "NATS_EVENT_BUS_TOKEN", "pm_neb_" + _strong_random(24))
+
     # n8n owner password: auto-generate and persist in env.shared so it survives
     # env file regeneration. This is the password for the n8n owner account created
     # by `make n8n-bootstrap`. Previously only written to .env.local which was
