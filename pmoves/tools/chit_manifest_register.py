@@ -55,6 +55,10 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "required": False,
         "aliases": ["MOONSHOT_API_KEY"],
     },
+    # Exported by sync-secrets-local since early on, but never registered —
+    # so bundle materialization silently dropped it and transcribe-backend
+    # (which hard-requires it at import) crash-loops on rehydrated nodes.
+    "GROQ_API_KEY": {"tier": "llm", "required": False},
     "KILOCODE_API_KEY": {"tier": "llm", "required": False},
     "OLLAMA_API_KEY": {"tier": "llm", "required": False},
     "MINIMAX_API_KEY": {"tier": "llm", "required": False},
