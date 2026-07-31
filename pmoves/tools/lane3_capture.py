@@ -49,9 +49,18 @@ openapi = run(f'curl -s -H "apikey: {new_jwt}" -H "Authorization: Bearer {new_jw
 print(openapi[:300])
 (evidence_dir / "04_postgrest_openapi.json").write_text(openapi, encoding="utf-8")
 
-# 5. docker ps supabase state
+# 5. docker ps supabase state (use python filter — cross-platform, no shell pipe issues)
 print("\n=== 5. docker ps supabase state ===")
-ps_state = run('docker ps --format "table {{.Names}}\t{{.Status}}" 2>&1 | Select-String "supabase"')
+ps_out = subprocess.run(
+    'docker ps --format "table {{.Names}}\\t{{.Status}}"',
+    shell=True,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    errors="replace",
+).stdout
+ps_state = "\n".join(line for line in ps_out.splitlines() if "supabase" in line or "NAMES" in line) + "\n"
+print(ps_state)
 (evidence_dir / "05_docker_ps.txt").write_text(ps_state, encoding="utf-8")
 
 # 6. summary

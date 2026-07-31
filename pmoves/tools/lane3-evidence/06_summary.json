@@ -1,6 +1,6 @@
 {
   "lane": "supabase-stack-default-up",
-  "timestamp_utc": "2026-07-31T20:45:11.956590+00:00",
+  "timestamp_utc": "2026-07-31T21:19:35.406249+00:00",
   "services_healthy": [
     "pmoves-supabase-db-1 (healthy)",
     "pmoves-supabase-kong-1 (healthy)",
@@ -19,7 +19,7 @@
   "pmoves_ui_health": {
     "status": "degraded",
     "service": "pmoves-ui",
-    "timestamp": "2026-07-31T20:45:03.358Z",
+    "timestamp": "2026-07-31T21:19:27.723Z",
     "version": "0.1.0",
     "checks": {
       "database": {
