@@ -53,8 +53,12 @@ Build what you need. Scale what works. Sign every line.
 
 ## 3. FEATURED SECTION (6 Items)
 
-### Featured Item 1: PMOVES.AI — Multi-Agent Orchestration Platform
-**Link:** `https://github.com/POWERFULMOVES/PMOVES.AI`  
+### Featured Item 1: Russell Richardson — Living Doc Room (Persona)
+**Link:** `https://persona.pmoves.ai`
+**Description:** The interactive living-doc room — the LinkedIn profile as a first-class OpenRoom. Architecture walkthrough, PreTeXt technical panels, code evidence, and the DARKXSIDE 5-dimension persona (Architect, Material Scientist, Sovereign, Phase-Hunter, Cultural Microbiome Guardian). Auto-researches the 2,028-video AI Playlist across 11 resonance domains. The better version of this profile.
+
+### Featured Item 1b: PMOVES.AI — Multi-Agent Orchestration Platform
+**Link:** `https://github.com/POWERFULMOVES/PMOVES.AI`
 **Description:** 97 agents. 13 teams. 57 submodules. 12 rooms. Metal-Organic Framework architecture with CHIT cryptographic identity, Consciousness Service (CGP mapping), full voice infrastructure, audio-reactive Hyperdimensions (CLAP-grounded beats visualization), and an SSO forward-auth gateway. Production-hardened with multiple critical security resolutions and 37/37 CHIT signoff items complete. Local-first, sovereign, and culturally alive.
 
 ### Featured Item 2: DARKXSIDE Beats → Hyperdimensions — Audio-Reactive Visualization
