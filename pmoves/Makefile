@@ -491,6 +491,18 @@ pooler-recreate: ## Force-recreate supabase-pooler container to pick up env file
 	@$(DC) --profile supabase-local up -d --force-recreate supabase-pooler
 	@echo "✓ pooler recreated — give it 30s for health check"
 
+.PHONY: supa-stack-default-up
+supa-stack-default-up: ## Lane 3 — bring supabase stack up cleanly (regen secrets, fix env files, run migrations, configure kong routes)
+	@$(PYTHON) tools/bootstrap-supabase-stack.py
+	@echo "✓ supabase stack default-up complete. Evidence: pmoves/tools/lane3-evidence/"
+
+supa-env-doctor-strict:
+.PHONY: supa-env-fix-shared supa-env-fix-tier-ui
+supa-env-fix-shared: ## One-shot: replace ${SERVICE_ROLE_KEY}/${ANON_KEY}/${JWT_SECRET} in env.shared with literals
+	@$(PYTHON) tools/fix-env-shared.py
+supa-env-fix-tier-ui: ## One-shot: populate empty SUPABASE_* in env.tier-ui from env.tier-supabase
+	@$(PYTHON) tools/fix-env-tier-ui.py
+
 supa-status: ## Show Supabase status for selected runtime and export env snapshot when available
 	@echo "🔍 Supabase status (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME)):"
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \

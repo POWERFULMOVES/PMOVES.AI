@@ -1,0 +1,10 @@
+NAMES                              STATUS
+pmoves-supabase-db-1               Up 58 minutes (healthy)
+pmoves-supabase-vector-1           Restarting (78) 16 seconds ago
+pmoves-supabase-pooler-1           Up 55 minutes (healthy)
+pmoves-supabase-edge-functions-1   Restarting (1) 7 seconds ago
+pmoves-supabase-kong-1             Up 38 minutes (healthy)
+pmoves-supabase-postgrest-1        Up 55 minutes
+pmoves-supabase-studio-1           Up About an hour (healthy)
+pmoves-supabase-meta-1             Up 2 hours (healthy)
+pmoves-supabase-analytics-1        Up 25 seconds (health: starting)
