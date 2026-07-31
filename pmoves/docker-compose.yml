@@ -4160,6 +4160,14 @@ services:
     - PIPECAT_ENABLED=${PIPECAT_ENABLED:-false}
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
     - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
+    # Host-affinity routing (opt-in, #2305): with VOICE_HOST_AFFINITY=1 a cast
+    # host-swaps the configured engine URL to the selected fleet node's Tailscale
+    # hostname (pmoves-<node>, port/path preserved) via resolve_engine_target().
+    # VOICE_FLEET_NODES (comma-sep up-node ids) restricts routing to nodes that
+    # are up; unset → optimistic preferred. Fail-open to the configured URL by
+    # default (both unset) — zero behaviour change unless explicitly enabled.
+    - VOICE_HOST_AFFINITY=${VOICE_HOST_AFFINITY:-}
+    - VOICE_FLEET_NODES=${VOICE_FLEET_NODES:-}
     - FLUTE_API_KEY=${FLUTE_API_KEY:-}
     # CHIT voice attribution: publishes CGP events to tokenism.geometry.event.v1
     # NATS subject for every voice synthesis. Enables downstream consumers
