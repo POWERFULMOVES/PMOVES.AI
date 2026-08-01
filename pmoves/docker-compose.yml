@@ -643,7 +643,10 @@ services:
           memory: 512M
   supabase-postgrest:
     <<: *tier-supabase-hardened-ro
-    image: postgrest/postgrest:v14.12
+    # v14.12+ enforces JWT secrets >=32 chars; nodes still on the legacy short
+    # fleet secret can pin back (SUPABASE_POSTGREST_IMAGE=postgrest/postgrest:v14.3)
+    # until the operator-gated secret rotation lands.
+    image: ${SUPABASE_POSTGREST_IMAGE:-postgrest/postgrest:v14.12}
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -651,7 +654,7 @@ services:
     # Database connection (from env.tier-supabase)
     - PGRST_DB_URI=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     # JWT secret (must match gotrue) - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - PGRST_JWT_SECRET_IS_BASE64=false
     # PostgREST v14+ settings
@@ -859,7 +862,7 @@ services:
     - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
     - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
     # JWT secret - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     # PostgREST connection
     - POSTGREST_URL=http://supabase-postgrest:3000
