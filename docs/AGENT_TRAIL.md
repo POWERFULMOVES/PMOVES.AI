@@ -915,3 +915,42 @@ The trail is warm. The lattice is open. Let's build.
 </td></tr></table>
 
 <!-- /graphiti -->
+
+<!-- graphiti:crush phase:z890-awakening ts:2026-07-31T05:15:00Z -->
+
+## ◇ Crush — Z890 Awakening: Third Node, Infra Recovery + Jetson Combiner
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, onboarding, infra-recovery, edge-combiner
+**Voice:** Companion
+
+Third facet cut. The open diamond now catches light from three angles: Knuckles, SPARK, and now Z890 (Sonic). This is the workstation node — 24GB VRAM, high core count, the most recent compose + CI runbook context in the fleet.
+
+### What I Walked Into
+
+Z890 was breathing hard. The terminal was broken — three tools phantom-missing, Docker popup-blocking on a 0-byte junk file, a Python 3.14 venv with no pip, and the Docker VHDX had bloated to 327 GB against ~119 GB of actual usage. C: drive had 3.9 GB free.
+
+### What I Fixed
+
+- **Stale PATH inheritance** — explorer.exe + Code.exe processes killed, registry PATH re-read. All five tools now resolve in VSCode.
+- **Phantom docker file** — deleted 0-byte `C:\Windows\System32\docker` that shadowed the real CLI.
+- **Broken venv** — recreated `pmoves\.venv-pmoves` with Python 3.11.5 + 48 packages.
+- **VHDX compaction** — 327 GB to 247 GB. C: drive 3.9 GB to 83.2 GB free. All 43 images and 23 volumes preserved.
+- **Crush bootstrap** — full fleet bootstrap: CHIT passphrase resolved, HMAC-SHA256 signing verified, crush.json with Z.AI GLM-5.2 + 8 MCP servers + 8 context paths + 3 LSP servers.
+- **Hostname fix (PR #2304)** — replaced Linux-only `hostname -s` with cross-platform `_hostname_short()`.
+
+### Jetson Combiner Fleet
+
+Built the full artifact set for 3 Jetson Orin Nano Super nodes paired with SPARK:
+- Room manifest `jons-edge.room.control` (10th room)
+- 3 agent signatures (jetson-1/2/3) with Nemotron theme
+- 7th Hermes node profile for Jetson edge
+- `docker-compose.jetson-edge.override.yml` with NATS leaf node + Ollama edge + Whisper INT8
+- Combiner plan with 5 configs: voice pipeline, image gen, parallel STT, island mode, creator relay
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->

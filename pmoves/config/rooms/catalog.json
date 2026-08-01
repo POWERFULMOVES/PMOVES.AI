@@ -145,6 +145,18 @@
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (slice 6 SHIPPED; runtime smoke lands in slice 7)",
       "stage_verified_at": "2026-07-28T00:00:00Z"
+    },
+    {
+      "room_id": "jons-edge.room.control",
+      "agent_id": "jetson-1",
+      "alter": "jons-edge",
+      "display_name": "Jetson Edge Combiner Room",
+      "stage": "rehearsal",
+      "manifest": "jons-edge.room.control.json",
+      "summary": "Edge inference combiner room for 3 Jetson Orin Nano Super nodes paired with SPARK (GB10 128GB). Distributed STT, lightweight LLM, image preprocess, NATS relay.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest stage field (new room, no P7 session yet)",
+      "stage_verified_at": "2026-07-31T00:00:00Z"
     }
   ]
 }
