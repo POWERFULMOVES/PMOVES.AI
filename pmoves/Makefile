@@ -411,7 +411,8 @@ up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong
 
 .PHONY: kong-routes-check
 KONG_ADMIN_URL ?= http://localhost:8001
-kong-routes-check: ## Assert the Kong gateway actually has routes loaded (not just alive)
+KONG_CONTAINER ?= pmoves-supabase-kong-1
+kong-routes-check: ## Assert the Kong gateway is actually WIRED: routes loaded + every upstream resolvable
 	@echo "=== Kong: route table check ($(KONG_ADMIN_URL)) ==="
 	@n=$$(curl -sf $(KONG_ADMIN_URL)/routes 2>/dev/null \
 	  | $(PYTHON) -c 'import sys,json; print(len(json.load(sys.stdin).get("data",[])))' 2>/dev/null || echo ""); \
@@ -427,11 +428,28 @@ kong-routes-check: ## Assert the Kong gateway actually has routes loaded (not ju
 	  exit 1; \
 	fi; \
 	echo "✓ Kong has $$n routes loaded"
-	@printf '  /rest/v1 proxy probe -> '; \
-	code=$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/rest/v1/ 2>/dev/null); \
-	if [ "$$code" = "404" ]; then \
-	  echo "$$code (NO rest-v1 route — PostgREST is unreachable through the gateway)"; exit 1; \
-	else echo "$$code (route present; 401/200 both mean it is wired)"; fi
+	@echo "  --- route probes (404 = route missing; 401/200 = wired) ---"; \
+	rc=0; \
+	for p in /rest/v1/ /auth/v1/health /storage/v1/status /realtime/v1/ /pg/health; do \
+	  code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://localhost:8000$$p" 2>/dev/null); \
+	  if [ "$$code" = "404" ]; then printf '  ✗ %-22s %s (no route)\n' "$$p" "$$code"; rc=1; \
+	  else printf '  ✓ %-22s %s\n' "$$p" "$$code"; fi; \
+	done; exit $$rc
+	@echo "  --- upstream reachability FROM Kong ---"; \
+	echo "  (a route can match and still 503 'name resolution failed' if the"; \
+	echo "   upstream name in kong.yml does not resolve — routes alone prove nothing)"; \
+	rc=0; \
+	for hp in rest:3000 auth:9999 storage:5000 studio:3000 functions:9000 meta:8080 \
+	          analytics:4000 realtime-dev.supabase-realtime:4000; do \
+	  h=$${hp%:*}; p=$${hp##*:}; \
+	  if docker exec $(KONG_CONTAINER) bash -c "exec 3<>/dev/tcp/$$h/$$p" 2>/dev/null; then \
+	    printf '  ✓ %-34s reachable\n' "$$hp"; \
+	  else printf '  ✗ %-34s UNREACHABLE\n' "$$hp"; rc=1; fi; \
+	done; \
+	if [ $$rc -ne 0 ]; then \
+	  echo "  → add the upstream name as a pmoves_api network alias on that service" >&2; \
+	  echo "    (do NOT edit the vendored PMOVES-supabase kong.yml)" >&2; \
+	fi; exit $$rc
 
 .PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh supa-bootstrap-db
 supa-bootstrap-db: ensure-env-shared ## Bootstrap Supabase DB roles, schemas, and passwords from env

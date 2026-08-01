@@ -263,7 +263,14 @@ services:
     ports:
     - ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
     networks:
-    - pmoves_api
+      pmoves_api:
+        aliases:
+        # kong.yml addresses realtime by its upstream compose name
+        # `realtime-dev.supabase-realtime` (Supabase uses a dotted container_name
+        # there), so the /realtime/v1 websocket route 503s without this alias.
+        # Load-bearing for realtime voice + chat over WebRTC in pmoves-ui and
+        # flute-gateway, which subscribe through the Kong websocket route.
+        - realtime-dev.supabase-realtime
 
     deploy:
       resources:
@@ -391,7 +398,7 @@ services:
     - PG_META_DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
     - PG_META_DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
     healthcheck:
       test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
       interval: 20s
@@ -402,7 +409,15 @@ services:
       supabase-db:
         condition: service_healthy
     networks:
-    - pmoves_data
+      pmoves_data:
+      # supabase-meta was on pmoves_data ONLY, so it was unreachable from both
+      # Kong and Studio (both on pmoves_api). Studio's STUDIO_PG_META_URL points
+      # straight at supabase-meta:8080, so the schema browser and table editor
+      # could not work at all. This is the same both-legs pattern supabase-db and
+      # supabase-postgrest already use — meta simply never got the API leg.
+      pmoves_api:
+        aliases:
+        - meta   # upstream Supabase name used by vendored kong.yml
 
   # ---------------------------------------------------------------------------
   # Supabase Edge Runtime — Deno edge functions
@@ -681,7 +696,7 @@ services:
     - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - POSTGRES_BACKEND_SCHEMA=_analytics
     - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:4000/health -o /dev/null || exit 1"]
       interval: 15s
@@ -692,7 +707,13 @@ services:
       supabase-db:
         condition: service_healthy
     networks:
-    - pmoves_data
+      pmoves_data:
+      # Same missing-API-leg bug as supabase-meta above: Studio's LOGFLARE_URL
+      # points at supabase-analytics:4000 and Kong declares an analytics route,
+      # but neither could reach it while this sat on pmoves_data alone.
+      pmoves_api:
+        aliases:
+        - analytics   # upstream Supabase name used by vendored kong.yml
 
   # ---------------------------------------------------------------------------
   # Supabase Vector — log collection pipeline (ships to Analytics)
