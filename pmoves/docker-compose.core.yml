@@ -916,15 +916,22 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_data,pmoves_bus,pmoves_external
     ports:
     - ${MINIO_BIND:-0.0.0.0}:${MINIO_PORT:-9000}:9000
     - ${MINIO_CONSOLE_BIND:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001
     volumes:
-    - minio-data:/data
+    # MINIO_DATA_DIR lets the object store live off C: (which fills up) — set it to
+    # a host path (e.g. D:/pmoves-storage/minio, fast NVMe) for the content studio;
+    # defaults to the named volume for portability. Media/bulk goes to I: separately.
+    - ${MINIO_DATA_DIR:-minio-data}:/data
     networks:
     - pmoves_data
     - pmoves_bus
+    # pmoves_external gives MinIO host connectivity so its ports: mapping actually
+    # publishes (internal-only nets silently drop it) — required for multi-node
+    # JuiceFS: remote nodes reach the object store via MINIO_BIND (z890 tailnet IP).
+    - pmoves_external
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
       interval: 30s
