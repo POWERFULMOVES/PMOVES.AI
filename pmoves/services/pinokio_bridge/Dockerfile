@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY services/pinokio_bridge /app/pinokio_bridge
 COPY services/common /app/services/common
 
-RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+RUN id -u pmoves >/dev/null 2>&1 || useradd --create-home --shell /bin/bash pmoves
 
 # Entrypoint: resolve Docker gateway IP and write ~/.pinokio/config.json
 # so pterm (Node.js) can reach the host's Pinokio control plane (:42000)

@@ -40,14 +40,14 @@ def _resolve_gateway() -> str:
 
     # Probe each candidate for an open :42000
     for ip in candidates:
+        s = socket.socket()
+        s.settimeout(1)
         try:
-            s = socket.socket()
-            s.settimeout(1)
             s.connect((ip, 42000))
             s.close()
             return ip
         except Exception:
-            pass
+            s.close()
 
     return candidates[0] if candidates else "172.30.2.1"
 
