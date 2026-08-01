@@ -23,60 +23,62 @@ persona maps to specific BPM bias, speaking rate, temperature, and
 | `powerpuff-blossom` | Joy, warmth | 80 | 0.95 | 0.7 | warm/expressive |
 | `powerpuff-buttercup` | Action, drive | 150 | 1.2 | 0.2 | energetic/focused |
 
+> **Source of truth = the resolver, not this doc.** The values above are
+> illustrative. The live suit → engine/voice_id/prosody/node mapping is resolved
+> by `persona_selector.resolve_agent_voice()`, exposed at
+> `GET /v1/voice/binding` (see `pmoves/docs/voice/AGENT_VOICE_BINDING_CONTRACT.md`).
+> Binding the CLI through it means a session speaks with the *same* voice the
+> OpenRoom helper agents resolve — one contract, two surfaces. MiniMax owns the
+> concrete suit values in `pmoves/configs/agent-profiles/minimax_edition.yaml`.
+
 ## Bind a Persona
 
+Resolve live from the gateway and apply to the current shell:
+
 ```bash
-# Set for current shell session
-export BEATS_VOICE=dr-bean
+# Resolve <suit> via /v1/voice/binding and export BEATS_VOICE + resolved params.
+eval "$(bash .claude/skills/persona-bind/bind.sh mr-clean)"
+#   optional 2nd arg = agent identity (default $PMOVES_AGENT_ID or 4090-claude):
+#   eval "$(bash .claude/skills/persona-bind/bind.sh dr-bean 4090-claude)"
+
+# Dry run (prints the exports + a summary on stderr, applies nothing):
+bash .claude/skills/persona-bind/bind.sh mr-clean
 
 # Verify binding
-echo "Active persona: ${BEATS_VOICE:-default}"
+echo "Active persona: ${BEATS_VOICE:-default}  engine=${BEATS_ENGINE:-?} node=${BEATS_NODE:-configured}"
 
 # Run pipeline with bound persona
 uv run python -m pmoves.tools.beats_to_voice from-bpm \
-  --bpm 60 \
+  --bpm "${BEATS_BPM:-60}" \
   --text "Analysis complete." \
   --nats-url "${NATS_URL:-nats://nats:pmoves@localhost:4222}"
 ```
 
+`bind.sh` is **fail-open**: if the gateway is unreachable it still exports
+`BEATS_VOICE=<suit>` (the pipeline derives params / kokoro floor) and warns.
+Env: `GATEWAY_URL` (default `http://localhost:8055`), `FLUTE_API_KEY` (if the
+gateway enforces it).
+
+Manual fallback (no gateway): `export BEATS_VOICE=dr-bean`.
+
 ## CGP control_plane.param_surface Overrides
 
-These are the per-persona param_surface values injected into CGP v0.2 packets:
+The per-persona `param_surface` values injected into CGP v0.2 packets are
+**resolved live**, not hardcoded here. `bind.sh` exports them from the binding
+endpoint as `BEATS_*` env vars:
 
-```python
-PERSONA_PARAMS = {
-    "dr-bean": {
-        "speaking_rate": 0.85,
-        "temperature": 0.3,
-        "bpm_bias": 60,
-        "voice_id": "bean_analytical_v1"
-    },
-    "mr-clean": {
-        "speaking_rate": 1.1,
-        "temperature": 0.1,
-        "bpm_bias": 120,
-        "voice_id": "clean_command_v1"
-    },
-    "powerpuff-bubbles": {
-        "speaking_rate": 1.0,
-        "temperature": 0.6,
-        "bpm_bias": 90,
-        "voice_id": "bubbles_coord_v1"
-    },
-    "powerpuff-blossom": {
-        "speaking_rate": 0.95,
-        "temperature": 0.7,
-        "bpm_bias": 80,
-        "voice_id": "blossom_joy_v1"
-    },
-    "powerpuff-buttercup": {
-        "speaking_rate": 1.2,
-        "temperature": 0.2,
-        "bpm_bias": 150,
-        "voice_id": "buttercup_action_v1"
-    }
-}
-```
+| BEATS_* env | VoiceBinding field | CGP param_surface |
+|-------------|--------------------|-------------------|
+| `BEATS_ENGINE` | `engine` | engine selection |
+| `BEATS_VOICE_ID` | `voice_id` | `voice_id` |
+| `BEATS_BPM` | `prosody.bpm` | `bpm_bias` |
+| `BEATS_RATE` | `prosody.rate` | `speaking_rate` |
+| `BEATS_EXPRESSIVITY` | `prosody.expressivity` | `temperature` |
+| `BEATS_NODE` | `node` | host-affinity target |
+
+To change a suit's values, edit `pmoves/configs/agent-profiles/minimax_edition.yaml`
+(the resolver reads + overrides its `param_surface`) — do **not** re-add a
+hardcoded table here (that reintroduces the drift this wiring removed).
 
 ## Check Active Persona
 
