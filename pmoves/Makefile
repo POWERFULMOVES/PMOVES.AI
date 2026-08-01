@@ -2061,6 +2061,22 @@ chit-tour-data: ## Regenerate the CHIT tour's LIVE tables (roster + subjects) fr
 	  || python scripts/gen_chit_tour_data.py \
 	  || py -3 scripts/gen_chit_tour_data.py
 
+# --- CHIT Visual Tour public edge (chit.pmoves.ai, behind the Traefik edge).
+# See docs/handoffs/chit-tour-public-edge.md. Serves the static tour with live
+# data; PUBLIC route (no forward-auth). Prereq: Traefik edge up + DNS record.
+CHIT_TOUR_DC := docker compose -p $(PROJECT)-chit-tour --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.chit-tour.yml
+
+.PHONY: up-chit-tour down-chit-tour chit-tour-health
+up-chit-tour: chit-tour-data ## Serve the CHIT tour at chit.pmoves.ai (Traefik edge must be up)
+	@$(CHIT_TOUR_DC) up -d
+	@echo "✔ chit-tour up — Traefik serves https://chit.pmoves.ai (ensure the DNS record + edge are live)"
+
+down-chit-tour: ## Stop the CHIT tour service
+	@$(CHIT_TOUR_DC) down
+
+chit-tour-health: ## Check the chit-tour container status
+	@$(CHIT_TOUR_DC) ps chit-tour
+
 .PHONY: chit-tour-data pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
 pmoves-ai-dev: pmoves-ai-sync-hyperdim chit-tour-data ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
 	@echo "→ Previewing $(PMOVES_AI_PROJECT) at http://localhost:$(PMOVES_AI_PORT)"
