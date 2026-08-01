@@ -61,8 +61,21 @@ Created by `nats-init` sidecar (`pmoves/scripts/nats/init_streams.sh`):
 | Stream                 | Subject      | Retention | Max Age | Max Size |
 |------------------------|--------------|-----------|---------|----------|
 | `GEOMETRY_CGP`         | `geometry.>` | limits    | 30d     | 1 GB     |
-| `TOKENISM_ATTRIBUTION` | `tokenism.>` | interest  | 90d     | 2 GB     |
+| `TOKENISM_ATTRIBUTION` | `tokenism.>` | limits    | 90d     | 2 GB     |
 | `BOTZ_COORDINATION`    | `botz.>`     | limits    | 7d      | 500 MB   |
+| `MESH_GPU`             | `mesh.gpu.>` | limits    | 7d      | 1 GB     |
+| `CONTENT_PROVENANCE`   | `content.>`  | limits    | 90d     | 2 GB     |
+
+> **Retention is immutable in JetStream.** `stream add` is a no-op once a stream
+> exists, so changing a retention value in `init_streams.sh` does **not** migrate
+> already-deployed nodes. The script's `assert_retention()` guard fails
+> initialisation on a mismatch rather than reporting success — when it fires,
+> confirm the stream is empty (`nats stream info <name>`), remove it
+> (`nats stream rm <name> -f`), and re-run the script.
+>
+> `TOKENISM_ATTRIBUTION` was previously `interest`, which silently discards
+> messages published while no consumer is bound — unacceptable for the
+> attribution records that feed settlement. It is `limits` as of #2331.
 
 ## Debugging
 

@@ -9,13 +9,10 @@
 #   TOKENISM_ATTRIBUTION   tokenism.>    limits   90d  2GB
 #   BOTZ_COORDINATION      botz.>        limits   7d   500MB
 #   MESH_GPU               mesh.gpu.>    limits   7d   1GB   (DGX Spark GB10 GPU mesh)
-#   CONTENT_PROVENANCE     content.>     interest 90d  2GB   (SPARK shaped packets / provenance)
+#   CONTENT_PROVENANCE     content.>     limits   90d  2GB   (SPARK shaped packets / provenance)
 #
-# FLAGGED, NOT CHANGED: CONTENT_PROVENANCE still uses `interest` retention and
-# also has 0 bound consumers, so it has the same silent-discard hazard described
-# on TOKENISM_ATTRIBUTION below. Provenance is audit data and probably wants
-# `limits` too, but that is the SPARK lane's call — raising rather than changing
-# it here to keep this commit to one concern.
+# This table is checked against the actual add_stream calls below by
+# assert_retention() at runtime — a drifted comment cannot silently mislead.
 #
 # NOTE: The catch-all MESH_GPU and CONTENT_PROVENANCE streams supersede the
 # reference-only YAMLs in pmoves/nats/mesh_gpu_streams.yaml and
@@ -52,10 +49,62 @@ done
 
 echo "NATS reachable at $NATS_URL — creating streams"
 
+# Helper: read a stream's live retention policy. Empty output if unreadable.
+stream_retention() {
+  info=$(nats -s "$NATS_URL" stream info "$1" --json 2>/dev/null) || return 1
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$info" | jq -r '.config.retention // empty' 2>/dev/null
+  else
+    # Fallback: first "retention":"<word>" in the config blob.
+    printf '%s' "$info" | tr -d ' \n' | sed -n 's/.*"retention":"\([a-z]*\)".*/\1/p' | head -n1
+  fi
+}
+
+# Guard: a pre-existing stream keeps whatever retention it was created with.
+# `stream add` is a no-op once the stream exists, so changing a --retention value
+# in this script does NOT migrate deployed nodes — and JetStream retention is
+# IMMUTABLE, so the only fix is remove + recreate. Left unchecked that is a
+# silent divergence between this script and reality, which is exactly how
+# TOKENISM_ATTRIBUTION sat on `interest` (discarding attribution events with no
+# consumer bound) while the script implied otherwise. Fail the init loudly
+# instead, so an unattended Compose bring-up surfaces the mismatch rather than
+# reporting success.
+assert_retention() {
+  name="$1"; want="$2"
+  [ -n "$want" ] || return 0
+  have=$(stream_retention "$name") || {
+    echo "WARN: $name: could not read retention to verify (skipping check)" >&2
+    return 0
+  }
+  [ -n "$have" ] || {
+    echo "WARN: $name: retention not present in stream info (skipping check)" >&2
+    return 0
+  }
+  if [ "$have" != "$want" ]; then
+    echo "ERROR: $name: retention is '$have' but this script declares '$want'." >&2
+    echo "       JetStream retention is immutable — 'stream add' cannot migrate it." >&2
+    echo "       Operator migration (data loss if non-empty — check first):" >&2
+    echo "         nats stream info $name          # confirm messages == 0" >&2
+    echo "         nats stream rm  $name -f        # only when empty" >&2
+    echo "       then re-run this script. See pmoves/docs/NATS_CONFIGURATION.md." >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    return 1
+  fi
+  return 0
+}
+
 # Helper: create stream idempotently — distinguish "already exists" from real errors
 FAIL_COUNT=0
 add_stream() {
   name="$1"; shift
+  # Capture the retention this script declares, so the assertion below can never
+  # drift from the actual arguments (no second source of truth to keep in sync).
+  want_retention=""
+  prev=""
+  for a in "$@"; do
+    [ "$prev" = "--retention" ] && want_retention="$a"
+    prev="$a"
+  done
   output=$(nats -s "$NATS_URL" stream add "$name" "$@" --defaults 2>&1) && {
     echo "$name: created"
     return 0
@@ -64,6 +113,7 @@ add_stream() {
   case "$output" in
     *"already in use"*|*"already exists"*)
       echo "$name: already exists (ok)"
+      assert_retention "$name" "$want_retention" || return 1
       return 0
       ;;
     *)
@@ -100,7 +150,10 @@ add_stream GEOMETRY_CGP \
 #
 # MIGRATION: JetStream retention is immutable after creation, so `stream add` on
 # an existing TOKENISM_ATTRIBUTION is a no-op ("already exists (ok)") and this
-# change alone will NOT fix a live stream. On each node that already has it:
+# change alone does NOT fix an already-deployed stream. That is not left to a
+# comment: assert_retention() above compares the live policy against the value
+# declared here and FAILS this init on a mismatch, so an unattended Compose
+# bring-up surfaces it instead of reporting success. When it fires:
 #   nats stream info TOKENISM_ATTRIBUTION      # confirm messages == 0
 #   nats stream rm  TOKENISM_ATTRIBUTION -f    # only when empty
 # then re-run this script. See pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md §4.
