@@ -1845,6 +1845,41 @@ nats server report connections
   {"creator_id": "<supabase auth.users.id>", "handle": "darkxside", "role": "operator", "email_hash": "<sha256>", "provider": "google", "default_room": "4090-field.room.control", "github_username": "<optional>", "ts": "2026-08-01T00:00:00Z"}
   ```
 
+## Token Work Attestation Subjects
+
+> The input side of the economy: cryptographic proof that a contributor performed a unit of work.
+> Schema: `pmoves/contracts/schemas/token/work.attested.v1.schema.json`. Chain analysis:
+> `pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md` §6a.
+>
+> **Status: contract + recorder service + ledger migration all exist; NONE of it is deployed.**
+> `pmoves/services/token-stub/app.py` (dry-run recorder) is in no compose file, and
+> `pmoves/supabase/migrations/20260425000300_work_attestations.sql` has never been applied — the relation
+> `pmoves_core.work_attestations` does not exist on the live Supabase.
+
+**`token.work.attested.v1`** — Signed work attestation (contributor/agent → attestation recorder)
+
+- **Direction:** Published on completion of a unit of work → Consumed by `token-stub` (and, once wired, the
+  attribution stage)
+- **Purpose:** Establish *who did what*, verifiably, as the input to attribution and eventually settlement.
+- **Crypto note:** this contract specifies **Ed25519** (asymmetric, 128-hex signature) — deliberately
+  different from the live CHIT trail's **symmetric HMAC** with a single operator-held passphrase.
+  Asymmetric is the right model for attribution a contributor should be able to prove independently. The
+  divergence is unresolved and needs an explicit decision, not a silent merge.
+- **Identity note:** `contributor` is a UUID that lands in `work_attestations.contributor_id`, which the
+  migration's RLS policy binds to Supabase `auth.uid()`. **This is the only payable human anchor in the
+  repo** — the Archon mint contract's `creator_id`/`owning_persona` is a separate, unimplemented model.
+- **Payload:**
+  ```json
+  {
+    "work_id": "<uuid>",
+    "contributor": "<uuid — Supabase auth.users.id>",
+    "attestation_sig": "<128 hex chars, Ed25519>",
+    "merkle_root": "0x<64 hex>",
+    "attested_at": "2026-08-01T00:00:00Z",
+    "metadata": {}
+  }
+  ```
+
 ## CHIT Economics Subjects
 
 > Cost/usage metering for the tokenomics layer. Design rationale and the full value-chain analysis:
