@@ -58,6 +58,21 @@ PYTHON ?= python3
 ifeq ($(OS),Windows_NT)
 PYTHON := python
 endif
+
+# Prefer the canonical bringup venv when it exists, so targets that shell out to
+# tools/*.py (yt-cookies-*, etc.) pick up tool deps declared in tools/requirements.txt
+# instead of whatever bare `python3` resolves to on PATH. Without this, a system
+# python missing google-auth-oauthlib makes `yt-cookies-auth` fail with an install
+# hint even though `make venv-bringup` already installed it.
+# Only applies when PYTHON was not explicitly supplied: $(origin) is "default" or
+# "file" here, but "command line"/"environment" when the operator set it, so both
+# `make <target> PYTHON=/path` and `PYTHON=/path make <target>` still win.
+venv_python := $(CURDIR)/.venv-pmoves/bin/python
+ifneq ($(wildcard $(venv_python)),)
+ifeq ($(filter command\ line environment,$(origin PYTHON)),)
+PYTHON := $(venv_python)
+endif
+endif
 SCRIPTS := scripts
 SINGLE_ENV_MODE ?= 1
 SCRIPTS := scripts
