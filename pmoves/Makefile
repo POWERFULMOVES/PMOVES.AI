@@ -1119,7 +1119,7 @@ up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
 .PHONY: up-tokenism down-tokenism
 up-tokenism: ## Start the Tokenism simulator + Next.js UI (dashboard :8504, API :8103)
 	@echo "🪙 Starting Tokenism simulator + Next.js UI..."
-	@$(DC) --profile agents up -d tokenism-simulator tokenism-ui
+	@$(LOAD_ENV_SHARED); $(DC) --profile agents up -d tokenism-simulator tokenism-ui
 	@timeout 120 bash -c 'until curl -sf http://localhost:$(or $(TOKENISM_UI_HOST_PORT),8504)/ >/dev/null 2>&1; do sleep 3; done' || echo "⚠️ UI may still be starting (check: docker logs pmoves-tokenism-ui-1)"
 	@echo "✅ Tokenism UI (Next.js): http://localhost:$(or $(TOKENISM_UI_HOST_PORT),8504)  |  simulator API: http://localhost:$(or $(TOKENISM_HOST_PORT),8103)"
 
