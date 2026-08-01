@@ -11,6 +11,32 @@ x-env-tier-worker: &env-tier-worker
       required: false
 
 services:
+  open-notebook-surrealdb:
+    # Managed replacement for the previously hand-run, IN-MEMORY surrealdb
+    # container (data survived only as long as that container lived).
+    # rocksdb on a named volume = durable; same -ext alias the app expects.
+    image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
+    container_name: pmoves-open-notebook-surrealdb
+    restart: unless-stopped
+    # Upstream's own compose does this too: the surreal image's non-root user
+    # cannot create RocksDB dirs on a fresh named volume.
+    user: root
+    command:
+      - start
+      - --log
+      - info
+      - --user
+      - ${OPEN_NOTEBOOK_SURREAL_USER:-${SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER or SURREAL_USER}}
+      - --pass
+      - ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
+      - rocksdb:/mydata/database.db
+    volumes:
+      - open_notebook_surreal_data:/mydata
+    networks:
+      pmoves_app:
+        aliases:
+          - open-notebook-surrealdb-ext
+
   open-notebook:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default points at the PMOVES.AI-Edition-v1.13 fork image built from
@@ -30,6 +56,11 @@ services:
       HOSTNAME: 0.0.0.0
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-${OPEN_NOTEBOOK_API_TOKEN:?Set OPEN_NOTEBOOK_PASSWORD or OPEN_NOTEBOOK_API_TOKEN}}
       OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-${OPEN_NOTEBOOK_PASSWORD:?Set OPEN_NOTEBOOK_API_TOKEN or OPEN_NOTEBOOK_PASSWORD}}
+      # Enable the SSO Remote-User path (fork RemoteUserAuthMiddleware). Safe
+      # to default on: fail-closed — also requires SSO_FORWARD_AUTH_SECRET +
+      # the Traefik-injected X-Forward-Auth-Secret header; direct :8503 hits
+      # still fall back to the password check.
+      TRUST_REMOTE_USER_HEADER: ${TRUST_REMOTE_USER_HEADER:-true}
       NOTEBOOK_PROVIDER_MODE: ${NOTEBOOK_PROVIDER_MODE:-tensorzero}
       TENSORZERO_BASE_URL: ${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000/v1}
       TENSORZERO_API_KEY: ${TENSORZERO_API_KEY:-pmoves-internal}
@@ -67,6 +98,9 @@ services:
           - pmoves-open-notebook
           - open-notebook
           - cataclysm-open-notebook
+volumes:
+  open_notebook_surreal_data:
+
 networks:
   cataclysm:
     external: true
