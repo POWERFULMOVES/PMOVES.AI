@@ -1333,15 +1333,22 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_data,pmoves_bus,pmoves_external
     ports:
     - ${MINIO_BIND:-0.0.0.0}:${MINIO_PORT:-9000}:9000
     - ${MINIO_CONSOLE_BIND:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001
     volumes:
-    - minio-data:/data
+    # MINIO_DATA_DIR lets the object store live off C: (which fills up) — set it to
+    # a host path (e.g. D:/pmoves-storage/minio, fast NVMe) for the content studio;
+    # defaults to the named volume for portability. Media/bulk goes to I: separately.
+    - ${MINIO_DATA_DIR:-minio-data}:/data
     networks:
     - pmoves_data
     - pmoves_bus
+    # pmoves_external gives MinIO host connectivity so its ports: mapping actually
+    # publishes (internal-only nets silently drop it) — required for multi-node
+    # JuiceFS: remote nodes reach the object store via MINIO_BIND (z890 tailnet IP).
+    - pmoves_external
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
       interval: 30s
@@ -1374,6 +1381,12 @@ services:
     - juicefs-meta:/data
     networks:
     - pmoves_data
+    - pmoves_external
+    # Multi-node JuiceFS: expose the metadata engine on the TAILNET only
+    # (JUICEFS_META_BIND = z890 tailnet IP, set inline; defaults to loopback so
+    # a plain up doesn't accidentally expose redis on all interfaces).
+    ports:
+    - ${JUICEFS_META_BIND:-127.0.0.1}:6379:6379
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -1387,7 +1400,7 @@ services:
           memory: 512M
 
     environment:
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_external
   juicefs-format:  # one-time FS format (idempotent); gateway waits on this
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -1401,14 +1414,20 @@ services:
     # No `|| true`: juicefs format is idempotent (re-run on a formatted FS exits 0),
     # so a non-zero exit here is a REAL error and must fail the service_completed_successfully
     # gate rather than releasing the gateway against an unformatted volume.
-    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
+    # Network-backed multi-node: blocks live in MinIO (reachable by every node
+    # over the tailnet), not z890-local files. JUICEFS_S3_ENDPOINT = the tailnet-
+    # reachable MinIO endpoint (z890 tailnet IP:9000) so the URL recorded in
+    # metadata resolves from remote nodes too; falls back to internal minio:9000
+    # for single-node. Creds embed into metadata at format time.
+    - "juicefs format --storage minio --bucket http://${JUICEFS_S3_ENDPOINT:-minio:9000}/${JUICEFS_BUCKET:-juicefs} --access-key ${JUICEFS_S3_USER:-${MINIO_USER}} --secret-key ${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD}} ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
     volumes:
     - juicefs-data:/data
     networks:
     - pmoves_data
+    - pmoves_external
 
     environment:
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_external
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
