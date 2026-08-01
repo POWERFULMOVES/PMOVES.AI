@@ -53,6 +53,10 @@ services:
     # (pmoves/docs/ARC/network_fabric.md, tools/topology_chit_gate.py).
     container_name: pmoves-open-notebook
     restart: unless-stopped
+    # The documented `make up-open-notebook` target starts only this service;
+    # depends_on pulls the managed database up with it on clean hosts.
+    depends_on:
+      - open-notebook-surrealdb
     <<: *env-tier-worker
     environment:
       # UI talks to API on localhost inside container.

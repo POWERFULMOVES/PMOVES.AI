@@ -169,6 +169,9 @@ services:
       # SSO_FORWARD_AUTH_SECRET plus the Traefik-injected X-Forward-Auth-Secret
       # header, so direct :8503 hits still fall back to the password check.
       TRUST_REMOTE_USER_HEADER: ${TRUST_REMOTE_USER_HEADER:-true}
+      # The -ext stanza has no env_file chain, so the proof-of-proxy secret
+      # must be passed explicitly or header trust can never engage.
+      SSO_FORWARD_AUTH_SECRET: ${SSO_FORWARD_AUTH_SECRET:-}
       # Ensure notebook can reach SurrealDB over the compose network.
       SURREAL_URL: ws://open-notebook-surrealdb-ext:8000/rpc
       SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
