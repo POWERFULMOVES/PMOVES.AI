@@ -536,7 +536,35 @@ async def hf_model_search(
     Returns:
         List of matching model metadata dictionaries
     """
-    # Filter models from catalog
+    # Query the live model-registry first; fall back to static catalog if unreachable.
+    import os as _os
+    _REGISTRY_URL = _os.environ.get("MODEL_REGISTRY_URL", "http://model-registry:8110")
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=10) as _client:
+            _resp = await _client.get(f"{_REGISTRY_URL}/api/models")
+            _resp.raise_for_status()
+            _live = _resp.json()
+            if isinstance(_live, list) and _live:
+                # Filter the live registry results
+                results = []
+                for m in _live:
+                    model_type = (m.get("model_type") or m.get("type") or "").lower()
+                    if task and task.lower() not in model_type:
+                        continue
+                    if architecture and architecture.lower() not in (m.get("id") or m.get("name") or "").lower():
+                        continue
+                    results.append({
+                        "key": m.get("id") or m.get("name"),
+                        "model_id": m.get("hf_id") or m.get("id"),
+                        "source": "registry",
+                        **{k: v for k, v in m.items() if k not in ("id", "name", "hf_id")},
+                    })
+                return results
+    except Exception:
+        pass  # fall through to static catalog
+
+    # Filter models from static catalog (fallback)
     results = []
 
     for model_key, model_data in MODEL_CATALOG.items():
@@ -555,6 +583,7 @@ async def hf_model_search(
 
         results.append({
             "key": model_key,
+            "source": "catalog",
             **model_data,
         })
 
