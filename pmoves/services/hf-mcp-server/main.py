@@ -773,12 +773,10 @@ async def hf_model_convert_gguf(
     Returns:
         Conversion result with output path
     """
-    # This is a placeholder - actual GGUF conversion requires llama.cpp
-    # In production, this would spawn a conversion job or call an external service
-
+    # Resolve the HF model cache path via _safe_model_path (path-injection sanitized)
     cache_dir = _safe_model_path(model_id)
 
-    if not cache_dir.exists():  # CodeQL path-injection: sanitized by _safe_model_path (basename + regex allowlist)
+    if not cache_dir.exists():
         raise HTTPException(
             status_code=404,
             detail=f"Model {model_id} not found in cache. Download first.",
@@ -792,13 +790,89 @@ async def hf_model_convert_gguf(
     else:
         output_path = str(cache_dir / "gguf")
 
+    os.makedirs(output_path, exist_ok=True)
+
+    # --- G2 fix: real llama.cpp convert_hf_to_gguf.py + quantize subprocess ---
+    convert_script = os.environ.get("LLAMA_CONVERT_SCRIPT", "/opt/llama.cpp/convert_hf_to_gguf.py")
+    quantize_bin = os.environ.get("LLAMA_QUANTIZE_BIN", "/usr/local/bin/llama-quantize")
+    model_cache = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface/hub"))
+
+    gguf_name = f"{model_id.replace('/', '--')}-{quantize}.gguf"
+    gguf_f16_name = f"{model_id.replace('/', '--')}-f16.gguf"
+    gguf_f16_path = os.path.join(output_path, gguf_f16_name)
+    gguf_final_path = os.path.join(output_path, gguf_name)
+
+    import asyncio
+    import shutil
+
+    # Step 1: convert HF → GGUF (F16)
+    if not os.path.exists(gguf_f16_path):
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "python3", convert_script,
+                str(cache_dir),
+                "--outfile", gguf_f16_path,
+                "--outtype", "f16",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                err = stderr.decode(errors="replace")[-500:] if stderr else "unknown"
+                raise HTTPException(status_code=500, detail=f"convert_hf_to_gguf failed: {err}")
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=503,
+                detail=f"llama.cpp convert script not found at {convert_script}. Set LLAMA_CONVERT_SCRIPT env.",
+            )
+
+    # Step 2: quantize if not f16
+    if quantize != "f16":
+        if not os.path.exists(quantize_bin):
+            raise HTTPException(
+                status_code=503,
+                detail=f"llama-quantize not found at {quantize_bin}. Install llama.cpp.",
+            )
+        proc = await asyncio.create_subprocess_exec(
+            quantize_bin,
+            gguf_f16_path,
+            gguf_final_path,
+            quantize.upper(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err = stderr.decode(errors="replace")[-500:] if stderr else "unknown"
+            raise HTTPException(status_code=500, detail=f"llama-quantize failed: {err}")
+        final_path = gguf_final_path
+    else:
+        final_path = gguf_f16_path
+
+    # Step 3: publish completion event
+    try:
+        from nats.aio.client import Client as NATSClient
+        nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+        nc = NATSClient()
+        await nc.connect(nats_url, max_reconnect_attempts=1, connect_timeout=5)
+        import json as _json
+        await nc.publish("hf.model.gguf.converted.v1", _json.dumps({
+            "model_id": model_id,
+            "gguf_path": final_path,
+            "quantize": quantize,
+            "size_mb": round(os.path.getsize(final_path) / (1024 * 1024), 1),
+        }).encode())
+        await nc.close()
+    except Exception:
+        pass  # NATS publish is best-effort
+
     return {
         "ok": True,
         "model_id": model_id,
         "quantize": quantize,
-        "output_path": output_path,
-        "message": "GGUF conversion initiated. Check /status/{job_id} for progress.",
-        "note": "Actual GGUF conversion requires llama.cpp integration",
+        "output_path": final_path,
+        "size_mb": round(os.path.getsize(final_path) / (1024 * 1024), 1),
+        "message": f"GGUF conversion complete: {gguf_name}",
     }
 
 
