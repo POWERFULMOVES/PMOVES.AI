@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY services/pinokio_bridge /app/pinokio_bridge
 COPY services/common /app/services/common
 
-RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+RUN id -u pmoves >/dev/null 2>&1 || useradd --create-home --shell /bin/bash pmoves
 USER pmoves
 
 CMD ["uvicorn", "pinokio_bridge.app:app", \

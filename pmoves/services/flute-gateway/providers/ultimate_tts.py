@@ -274,8 +274,16 @@ class UltimateTTSProvider(VoiceProvider):
                 data[24] = 0.05; data[25] = 0.95; data[26] = 300; data[27] = 0
         elif engine == "kokoro":
             data[28] = voice or "af_heart"; data[29] = 1.0
-        elif engine in ("fish_speech", "fish"):
+        elif engine == "fish":
             data[31] = ""; data[32] = 0.8; data[33] = 0.8; data[34] = 1.1; data[35] = 1024; data[36] = 0
+        # fish_s2: 4 synth params from tools/test_all_tts_engines.py.
+        # NOTE: slot allocation is v1 — verify against the upstream TTS app's
+        # launch.py (handle_setup_fish_s2 / handle_load_fish_s2 / unified
+        # /generate_unified_tts) for the exact 101-param positions. The gaps in
+        # the 101 layout (data[9, 19, 30, 37, 40, 60, 66, 87]) are used
+        # to fit fish_s2, qwen, and the audio effects' non-enable flags.
+        elif engine == "fish_s2":
+            data[9] = 0.8; data[19] = 0.8; data[30] = 1.1; data[37] = 2048
         elif engine == "indextts":
             data[38] = 0.8; data[39] = 0
         elif engine == "indextts2":
@@ -284,7 +292,7 @@ class UltimateTTSProvider(VoiceProvider):
             data[55] = 50; data[56] = 1.1; data[57] = 1500; data[58] = 0; data[59] = False
         elif engine == "f5_tts":
             data[61] = ""; data[62] = 1.0; data[63] = 0.15; data[64] = False; data[65] = 0
-        elif engine == "higgs_audio":
+        elif engine == "higgs":
             data[67] = ""; data[68] = "EMPTY"; data[69] = ""; data[70] = 1.0
             data[71] = 0.95; data[72] = 50; data[73] = 1024; data[74] = 7; data[75] = 2
         elif engine == "kitten_tts":
@@ -292,6 +300,26 @@ class UltimateTTSProvider(VoiceProvider):
         elif engine == "voxcpm":
             data[78] = ""; data[79] = 2.0; data[80] = 10; data[81] = True
             data[82] = True; data[83] = True; data[84] = 3; data[85] = 6.0; data[86] = -1
+        # qwen: 5 synth params from tools/test_all_tts_engines.py (load_kwargs
+        # go to /handle_load_qwen, not _build_params). See fish_s2 comment
+        # above for the v1 slot allocation rationale.
+        elif engine == "qwen":
+            data[40] = "voice_design"; data[60] = "1.7B"; data[66] = 200
+            data[87] = "Ryan"; data[100] = "Auto"
+        # vibevoice: NO positional slots. Per tools/test_all_tts_engines.py,
+        # VibeVoice uses a separate panel (handle_vibevoice_generation), NOT
+        # the unified /generate_unified_tts endpoint. Reject explicitly so
+        # flute-gateway callers get a clear error instead of silent breakage.
+        elif engine == "vibevoice":
+            raise UltimateTTSError(
+                "vibevoice is not supported via the unified /generate_unified_tts "
+                "endpoint. Use the dedicated VibeVoice panel (handle_vibevoice_generation) "
+                "via gradio_client, or pick a different engine."
+            )
+        else:
+            raise UltimateTTSError(
+                f"Unknown engine '{engine}'. Supported: {list(self.ENGINE_NAMES)}."
+            )
 
         # [87-100] Audio effects — only set the enable flags to False (safe defaults)
         data[88] = False  # enable_eq
