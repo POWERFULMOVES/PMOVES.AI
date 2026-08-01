@@ -1845,6 +1845,56 @@ nats server report connections
   {"creator_id": "<supabase auth.users.id>", "handle": "darkxside", "role": "operator", "email_hash": "<sha256>", "provider": "google", "default_room": "4090-field.room.control", "github_username": "<optional>", "ts": "2026-08-01T00:00:00Z"}
   ```
 
+## CHIT Economics Subjects
+
+> Cost/usage metering for the tokenomics layer. Design rationale and the full value-chain analysis:
+> `pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md` §2, §8.
+>
+> **Status: contract registered, publisher not yet implemented.** Registered ahead of code deliberately —
+> `archon-qa-agent` check 3 rejects manifests referencing unregistered subjects, and this is the subject an
+> economically-accountable agent will declare.
+
+**`chit.economics.usage.v1`** — Content-free LLM usage/cost record (any metered service → economics consumers)
+
+- **Direction:** Published per inference by the metering shim → Consumed by settlement / audit / dashboards
+- **Purpose:** Make agent cost measurable **without recording what was said.** This exists because
+  TensorZero's own observability is disabled by policy (`pmoves/tensorzero/config/tensorzero.toml:8-30`,
+  Cyber Defence Initiative 2026-04-25): enabling it auto-creates ClickHouse tables holding full prompt and
+  response text with no TTL, which violates Data Retention Policy T0 and creates a warrantable store of
+  user content. Tokenomics needs **counts, not content** — so this subject carries counts only and trips
+  none of the six documented re-enable conditions.
+
+- **HARD INVARIANT — this payload MUST NOT carry prompt text, response text, message content, tool
+  arguments, or any user-supplied string.** Only identifiers, counts, and money. A publisher that adds a
+  content field re-creates exactly the retention hazard the policy was written to prevent. Treat any such
+  field as a blocking review failure.
+
+- **Payload:**
+  ```json
+  {
+    "agent_name": "fordham-transaction",
+    "tensorzero_function": "pmoves_worker_glm",
+    "model_name": "glm-5.2",
+    "provider_name": "zai",
+    "node": "z890",
+    "prompt_tokens": 1840,
+    "completion_tokens": 412,
+    "estimated_cost_usd": 0.0031,
+    "ts": "2026-08-01T00:00:00Z"
+  }
+  ```
+
+- **Field notes:**
+  - `tensorzero_function` — the `[functions.X]` block the call routed through (29 exist; see
+    `tensorzero.toml:763-1734`). This is the **join key** that lets cost roll up per lane. It is
+    function-granular, not per-agent-instance: agents sharing a function are indistinguishable in the
+    rollup. True per-instance attribution needs TensorZero-side request tagging — a follow-up, not this
+    subject's job.
+  - `node` — which fleet node served the call. Present so node-operator hosting cost can eventually be
+    accounted; no compensation mechanism exists today.
+  - `estimated_cost_usd` — explicitly an *estimate*. Rates are not authoritative
+    (`llm_observability_specialist.py:154-161` currently hardcodes placeholder rates).
+
 ## CGP Version Naming Clarification
 
 > **Note:** The apparent version mismatch between NATS subjects and payload specs is **intentional** — they operate at different layers:
