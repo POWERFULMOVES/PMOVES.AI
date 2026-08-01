@@ -42,6 +42,8 @@ class UltimateTTSProvider(VoiceProvider):
     """
 
     # Engine name mapping (internal -> API)
+    # Includes common aliases so callers can use either the internal key
+    # or the registered name (e.g. "higgs_audio" → "higgs", "fish_s2_pro" → "fish_s2")
     ENGINE_NAMES = {
         "kitten_tts": "KittenTTS",
         "kokoro": "Kokoro TTS",
@@ -50,12 +52,15 @@ class UltimateTTSProvider(VoiceProvider):
         "indextts": "IndexTTS",
         "fish": "Fish Speech S1",
         "fish_s2": "Fish Speech S2 Pro",
+        "fish_s2_pro": "Fish Speech S2 Pro",  # alias
         "chatterbox": "ChatterboxTTS",
         "chatterbox_turbo": "Chatterbox Turbo",
         "chatterbox_multilingual": "Chatterbox Multilingual",
         "voxcpm": "VoxCPM",
         "higgs": "Higgs Audio",
+        "higgs_audio": "Higgs Audio",  # alias — Codex P2: callers using the registered name
         "qwen": "Qwen Voice Design",
+        "qwen_voice": "Qwen Voice Design",  # alias
         "vibevoice": "VibeVoice",
     }
 
@@ -252,6 +257,17 @@ class UltimateTTSProvider(VoiceProvider):
         """
         api_engine = self.ENGINE_NAMES.get(engine, engine)
 
+        # Codex P2: normalize aliases to canonical internal keys for the param switch.
+        # ENGINE_NAMES handles the API-side name; _ENGINE_ALIASES maps common
+        # caller variants (registered names, _pro suffixes) back to the canonical
+        # key used in the _build_params switch below.
+        _ENGINE_ALIASES = {
+            "higgs_audio": "higgs",
+            "fish_s2_pro": "fish_s2",
+            "qwen_voice": "qwen",
+        }
+        canonical_engine = _ENGINE_ALIASES.get(engine, engine)
+
         # Total 101 parameters (Gradio 4.x API, post-S2-Pro-consolidation)
         # Initialize all to None — Gradio handles None for optional params
         data: list = [None] * 101
@@ -263,54 +279,41 @@ class UltimateTTSProvider(VoiceProvider):
 
         # Set ONLY the params for the selected engine. Setting params for
         # other engines causes Gradio widget validation errors (null event).
-        if engine in ("chatterbox", "chatterbox_turbo", "chatterbox_multilingual"):
-            if engine == "chatterbox":
+        if canonical_engine in ("chatterbox", "chatterbox_turbo", "chatterbox_multilingual"):
+            if canonical_engine == "chatterbox":
                 data[4] = 0.5; data[5] = 0.8; data[6] = 0.5; data[7] = 300; data[8] = 0
-            elif engine == "chatterbox_multilingual":
+            elif canonical_engine == "chatterbox_multilingual":
                 data[10] = "en"; data[11] = 0.5; data[12] = 0.8; data[13] = 0.5
                 data[14] = 2.0; data[15] = 0.05; data[16] = 1.0; data[17] = 300; data[18] = 0
-            elif engine == "chatterbox_turbo":
+            elif canonical_engine == "chatterbox_turbo":
                 data[20] = 0.5; data[21] = 0.8; data[22] = 0.5; data[23] = 1.2
                 data[24] = 0.05; data[25] = 0.95; data[26] = 300; data[27] = 0
-        elif engine == "kokoro":
+        elif canonical_engine == "kokoro":
             data[28] = voice or "af_heart"; data[29] = 1.0
-        elif engine == "fish":
+        elif canonical_engine == "fish":
             data[31] = ""; data[32] = 0.8; data[33] = 0.8; data[34] = 1.1; data[35] = 1024; data[36] = 0
-        # fish_s2: 4 synth params from tools/test_all_tts_engines.py.
-        # NOTE: slot allocation is v1 — verify against the upstream TTS app's
-        # launch.py (handle_setup_fish_s2 / handle_load_fish_s2 / unified
-        # /generate_unified_tts) for the exact 101-param positions. The gaps in
-        # the 101 layout (data[9, 19, 30, 37, 40, 60, 66, 87]) are used
-        # to fit fish_s2, qwen, and the audio effects' non-enable flags.
-        elif engine == "fish_s2":
+        elif canonical_engine == "fish_s2":
             data[9] = 0.8; data[19] = 0.8; data[30] = 1.1; data[37] = 2048
-        elif engine == "indextts":
+        elif canonical_engine == "indextts":
             data[38] = 0.8; data[39] = 0
-        elif engine == "indextts2":
+        elif canonical_engine == "indextts2":
             data[41] = "audio_reference"; data[43] = ""; data[44] = 1.0
             data[45] = 0.5; data[52] = 1.0; data[53] = 0.8; data[54] = 0.9
             data[55] = 50; data[56] = 1.1; data[57] = 1500; data[58] = 0; data[59] = False
-        elif engine == "f5_tts":
+        elif canonical_engine == "f5_tts":
             data[61] = ""; data[62] = 1.0; data[63] = 0.15; data[64] = False; data[65] = 0
-        elif engine == "higgs":
+        elif canonical_engine == "higgs":
             data[67] = ""; data[68] = "EMPTY"; data[69] = ""; data[70] = 1.0
             data[71] = 0.95; data[72] = 50; data[73] = 1024; data[74] = 7; data[75] = 2
-        elif engine == "kitten_tts":
+        elif canonical_engine == "kitten_tts":
             data[76] = voice or "expr-voice-2-f"
-        elif engine == "voxcpm":
+        elif canonical_engine == "voxcpm":
             data[78] = ""; data[79] = 2.0; data[80] = 10; data[81] = True
             data[82] = True; data[83] = True; data[84] = 3; data[85] = 6.0; data[86] = -1
-        # qwen: 5 synth params from tools/test_all_tts_engines.py (load_kwargs
-        # go to /handle_load_qwen, not _build_params). See fish_s2 comment
-        # above for the v1 slot allocation rationale.
-        elif engine == "qwen":
+        elif canonical_engine == "qwen":
             data[40] = "voice_design"; data[60] = "1.7B"; data[66] = 200
             data[87] = "Ryan"; data[100] = "Auto"
-        # vibevoice: NO positional slots. Per tools/test_all_tts_engines.py,
-        # VibeVoice uses a separate panel (handle_vibevoice_generation), NOT
-        # the unified /generate_unified_tts endpoint. Reject explicitly so
-        # flute-gateway callers get a clear error instead of silent breakage.
-        elif engine == "vibevoice":
+        elif canonical_engine == "vibevoice":
             raise UltimateTTSError(
                 "vibevoice is not supported via the unified /generate_unified_tts "
                 "endpoint. Use the dedicated VibeVoice panel (handle_vibevoice_generation) "
@@ -318,7 +321,7 @@ class UltimateTTSProvider(VoiceProvider):
             )
         else:
             raise UltimateTTSError(
-                f"Unknown engine '{engine}'. Supported: {list(self.ENGINE_NAMES)}."
+                f"Unknown engine '{canonical_engine}'. Supported: {list(self.ENGINE_NAMES)}."
             )
 
         # [87-100] Audio effects — only set the enable flags to False (safe defaults)
