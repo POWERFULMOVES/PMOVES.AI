@@ -29,9 +29,13 @@ services:
       - ${OPEN_NOTEBOOK_SURREAL_USER:-${SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER or SURREAL_USER}}
       - --pass
       - ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
-      - rocksdb:/mydata/database.db
+      - rocksdb:/mydata/surreal.db
     volumes:
-      - open_notebook_surreal_data:/mydata
+      # Same host path as docker-compose.external.yml's -ext stanza — the two
+      # files describe alternative topologies of the SAME database; sharing
+      # storage keeps them interchangeable (same container_name enforces
+      # only-one-running).
+      - ./data/open-notebook/surreal_data:/mydata
     networks:
       pmoves_app:
         aliases:
@@ -98,9 +102,6 @@ services:
           - pmoves-open-notebook
           - open-notebook
           - cataclysm-open-notebook
-volumes:
-  open_notebook_surreal_data:
-
 networks:
   cataclysm:
     external: true
