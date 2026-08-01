@@ -2967,8 +2967,15 @@ services:
       start_period: 30s
     # Grant the runtime user (uid/gid 65532) access to the mounted Docker socket
     # (root:docker 0660 on Linux hosts) so the docker MCP (mcp/docker) can reach
-    # the daemon without weakening socket perms. DOCKER_GID must match the host's
-    # docker group gid; Docker Desktop (Win/Mac) proxies the socket and ignores it.
+    # the daemon without weakening socket perms. DOCKER_GID must match the gid
+    # that owns the socket *as seen inside the container* — verify per node with
+    #   docker exec <ctr> ls -ln /var/run/docker.sock
+    # Linux: the host docker group (commonly 999/998), hence the default.
+    # Docker Desktop (Windows/macOS): the proxied socket appears as root:root
+    # 0660, i.e. gid 0 — 999 grants nothing and the docker MCP fails with
+    # "permission denied ... /var/run/docker.sock". Set DOCKER_GID=0 on those
+    # nodes. (An earlier comment here claimed Desktop "ignores" group_add; that
+    # is wrong — the gid is enforced, it is simply 0 rather than the docker group.)
     group_add:
     - "${DOCKER_GID:-999}"
     networks:
