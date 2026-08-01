@@ -1789,6 +1789,62 @@ nats server report connections
 **`a2ui.event.v1`** — UI event for real-time display (any agent → A2UI NATS bridge)
 **`a2ui.command.v1`** — User command from UI (UI → A2UI NATS bridge)
 
+## Archon Mint Subjects
+
+> The PMOVES agent-factory contract. Ritual: `.claude/commands/archon/{mint-agent,mint-skill,creator-onboard}.md`.
+> QA gate: `.claude/agents/archon-qa-agent.md` — `archon.qa.result.v1` **blocks** `archon.mint.confirmed.v1`.
+> Design review + landing plan: `pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md`.
+>
+> **Status: contract registered, publishers not yet implemented.** Archon 0.6.0 (TS) carries no NATS
+> client; these subjects go live with the planned `archon-nats-bridge`. Registered here ahead of
+> implementation because `archon-qa-agent` check 3 rejects any manifest referencing an unregistered
+> subject — including the mint contract's own.
+
+**`archon.mint.agent.v1`** — Proposed agent mint spec (mint ritual → Archon factory)
+- **Direction:** Published by `/archon:mint-agent` → Consumed by Archon factory + `archon-qa-agent`
+- **Purpose:** Submit an `AgentMintSpec` for scaffolding. Full manifest schema (metadata + spec with
+  role, team_ref, node_affinity, model routing, capabilities, skills, nats, guardrails) in
+  `pmoves/docs/pilots/fordham-hill/05-room-agents-mint-specs.md`.
+- **Payload:**
+  ```json
+  {"agent_id": "<uuid>", "agent_name": "geometry-curator", "room_id": "4090-field.room.control", "owning_persona": "delivery-agent", "manifest_url": "https://archon.pmoves.ai/<id>", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.qa.result.v1`** — Blocking QA verdict (archon-qa-agent → Archon factory)
+- **Direction:** Published by `archon-qa-agent` → Consumed by Archon factory
+- **Purpose:** Gate between `mint.agent` and `mint.confirmed`. Seven checks: schema, NATS subject
+  registration + branded namespace, CHIT tier, name collision, branded defaults/no-SaaS, OAuth identity,
+  env tier. **Archon must never publish `mint.confirmed` without an explicit `pass`.**
+- **Payload (pass):**
+  ```json
+  {"status": "pass", "agent": "geometry-curator", "checks": ["schema", "nats", "chit", "collision", "branded", "auth", "tier"]}
+  ```
+- **Payload (fail):** `{"status": "fail", "agent": "<name>", "reasons": ["<reason with path:line>"]}`
+
+**`archon.mint.confirmed.v1`** — Mint confirmation (Archon → fleet)
+- **Direction:** Published by Archon factory → Consumed by registry consumers / monitoring
+- **Purpose:** Agent is live and registered. Emitted only after `archon.qa.result.v1` = pass.
+- **Payload:**
+  ```json
+  {"agent_id": "<uuid>", "confirmed_at": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.mint.skill.v1`** — Skill mint (mint ritual → Archon)
+- **Direction:** Published by `/archon:mint-skill` → Consumed by Archon factory
+- **Payload:**
+  ```json
+  {"skill_id": "<uuid|null>", "skill_name": "pmoves-chit-sign", "path": ".claude/skills/pmoves-chit-sign/SKILL.md", "user_invocable": true, "owning_persona": "delivery-agent", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.mint.creator.v1`** — Human creator onboarding (mint ritual → Archon)
+- **Direction:** Published by `/archon:creator-onboard` → Consumed by Archon factory
+- **Purpose:** Provision a human creator identity. `creator_id` is the Supabase `auth.users.id`; email is
+  carried as a SHA-256 hash, never in clear.
+- **Payload:**
+  ```json
+  {"creator_id": "<supabase auth.users.id>", "handle": "darkxside", "role": "operator", "email_hash": "<sha256>", "provider": "google", "default_room": "4090-field.room.control", "github_username": "<optional>", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
 ## CGP Version Naming Clarification
 
 > **Note:** The apparent version mismatch between NATS subjects and payload specs is **intentional** — they operate at different layers:
