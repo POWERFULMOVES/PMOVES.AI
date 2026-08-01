@@ -521,3 +521,56 @@ class TestProviders:
         provider = WhisperProvider("http://localhost:8078")
         with pytest.raises(NotImplementedError):
             await provider.synthesize("text")
+
+
+@requires_deps
+class TestVoiceBindingEndpoint:
+    """Tests for /v1/voice/binding — the agent→voice resolution HTTP seam."""
+
+    _AUTH = {"X-API-Key": "test-api-key"}
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        with patch("main.nats_client", None):
+            from fastapi.testclient import TestClient
+            from main import app
+            self.client = TestClient(app)
+            yield
+
+    def test_binding_requires_api_key(self):
+        """Read-only but topology-bearing → gated behind the API key."""
+        r = self.client.get("/v1/voice/binding", params={"agent_id": "claude-opus"})
+        assert r.status_code == 401
+
+    def test_binding_returns_voicebinding_shape(self):
+        """A known agent resolves to a complete VoiceBinding."""
+        r = self.client.get(
+            "/v1/voice/binding", params={"agent_id": "claude-opus"}, headers=self._AUTH
+        )
+        assert r.status_code == 200
+        d = r.json()
+        for k in ("agent_id", "alter", "engine", "voice_id", "provider",
+                  "prosody", "node", "target_url", "floos_suit", "source"):
+            assert k in d, f"missing key: {k}"
+        assert d["agent_id"] == "claude-opus"
+        assert d["engine"]  # some engine always resolves
+
+    def test_binding_unknown_agent_is_failopen(self):
+        """An unregistered agent falls open to the provider default, not a 500."""
+        r = self.client.get(
+            "/v1/voice/binding", params={"agent_id": "no-such-agent-xyz"}, headers=self._AUTH
+        )
+        assert r.status_code == 200
+        assert r.json()["engine"]
+
+    def test_binding_floos_alter_carries_prosody(self):
+        """A FlOO$ suit alter surfaces its prosody + floos_suit tag."""
+        r = self.client.get(
+            "/v1/voice/binding",
+            params={"agent_id": "kilocode", "alter": "mr-clean"},
+            headers=self._AUTH,
+        )
+        assert r.status_code == 200
+        d = r.json()
+        assert d["floos_suit"] == "mr-clean"
+        assert d["prosody"] and d["prosody"]["bpm"] == 120

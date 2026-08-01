@@ -701,6 +701,59 @@ async def get_config():
 
 
 # TTS synthesis endpoint
+class VoiceBindingResponse(BaseModel):
+    """Resolved agent→voice binding (see AGENT_VOICE_BINDING_CONTRACT.md).
+
+    Read-only metadata — which engine/voice/provider an agent uses, its FlOO$
+    prosody, and the host-affinity node + target URL. Consumed by the CLI
+    (persona-bind) and OpenRoom helper agents so both resolve identically.
+    """
+    agent_id: str
+    alter: Optional[str] = None
+    engine: str
+    voice_id: Optional[str] = None
+    provider: str
+    prosody: Optional[Dict[str, float]] = None
+    node: Optional[str] = None
+    target_url: Optional[str] = None
+    floos_suit: Optional[str] = None
+    source: str
+
+
+def _configured_url_for_provider(provider: str) -> Optional[str]:
+    """Configured base URL for a provider, used to host-swap under host-affinity."""
+    return {
+        "ultimate_tts": ULTIMATE_TTS_URL,
+        "omnivoice": OMNIVOICE_URL,
+        "vibevoice": VIBEVOICE_URL,
+        "voicebox": VOICEBOX_URL,
+    }.get(provider) or None
+
+
+@app.get("/v1/voice/binding", response_model=VoiceBindingResponse, dependencies=[Depends(verify_api_key)])
+async def voice_binding(agent_id: str, alter: Optional[str] = None, intent: Optional[str] = None):
+    """Resolve an agent identity to its VoiceBinding — the HTTP consumption seam
+    for the CLI (persona-bind) and OpenRoom helper agents.
+
+    Read-only. When ``VOICE_HOST_AFFINITY`` is enabled the ``target_url`` is
+    host-swapped to the selected fleet node (``pmoves-<node>``); otherwise it is
+    the provider's configured URL. Fail-open: unresolved layers fall through to
+    the provider default, so this never errors on an unknown agent.
+    """
+    from persona_selector import resolve_agent_voice, resolve_engine_target
+
+    binding = await resolve_agent_voice(agent_id, alter=alter, intent=intent)
+    configured = _configured_url_for_provider(binding.get("provider", ""))
+    if configured:
+        target_url, node = resolve_engine_target(binding["engine"], configured)
+        binding["target_url"] = target_url
+        binding["node"] = node
+        if node and "affinity" not in binding["source"]:
+            binding["source"] = f"{binding['source']}+affinity"
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/binding", status="200").inc()
+    return VoiceBindingResponse(**binding)
+
+
 def _route_engine_provider(singleton, provider_cls, engine: str, configured_url: str):
     """Host-affinity seam: pick the provider instance for this cast.
 
