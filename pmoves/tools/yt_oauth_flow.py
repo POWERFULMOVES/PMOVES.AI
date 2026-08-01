@@ -103,7 +103,10 @@ def _service_role_key() -> str:
     """Supabase service-role key, accepting SERVICE_ROLE_KEY (canonical local name)
     or SUPABASE_SERVICE_ROLE_KEY (the GitHub-secret / secrets-sync name).
     """
-    key = _env("SERVICE_ROLE_KEY") or _env("SUPABASE_SERVICE_ROLE_KEY")
+    # Prefer the secrets-sync name: it is refreshed by the funnel every run.
+    # The legacy local name has been observed carrying a stale key signed by
+    # a retired JWT secret (fails PostgREST verification -> 401 upserts).
+    key = _env("SUPABASE_SERVICE_ROLE_KEY") or _env("SERVICE_ROLE_KEY")
     if not key:
         print(
             "ERROR: SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY) not set. "
