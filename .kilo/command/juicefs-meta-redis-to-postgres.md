@@ -42,7 +42,7 @@ Files:
 ## Related
 
 - `pmoves/docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md`
-- `pmoves/mk/egress.mk` — `juicefs-mount-local` (the Postgres DSN precedent), `juicefs-cross-node-setup`, `juicefs-status`
+- `pmoves/mk/egress.mk` — `juicefs-mount-local` (the Postgres DSN precedent), `juicefs-cross-node-setup`, `juicefs-mount-status` (renamed from `juicefs-status`, which now unambiguously means the S3-gateway PoC target in `pmoves/Makefile`)
 - `pmoves/scripts/juicefs-cross-node-setup.sh`
 - multi-engine voice design §1a (metadata=Postgres decision) + §5 (voice catalog on JuiceFS, MinIO-interim until this lands)
 
