@@ -2056,8 +2056,13 @@ pmoves-ai-sync-hyperdim: ## Sync Pmoves-hyperdimensions submodule → website/hy
 	  || python tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
 	  || py -3 tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)"
 
-.PHONY: pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
-pmoves-ai-dev: pmoves-ai-sync-hyperdim ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
+chit-tour-data: ## Regenerate the CHIT tour's LIVE tables (roster + subjects) from the agent registry (generated; run before deploy)
+	@$(PYTHON) scripts/gen_chit_tour_data.py \
+	  || python scripts/gen_chit_tour_data.py \
+	  || py -3 scripts/gen_chit_tour_data.py
+
+.PHONY: chit-tour-data pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
+pmoves-ai-dev: pmoves-ai-sync-hyperdim chit-tour-data ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
 	@echo "→ Previewing $(PMOVES_AI_PROJECT) at http://localhost:$(PMOVES_AI_PORT)"
 	npx wrangler pages dev "$(PMOVES_AI_DIR)" --port $(PMOVES_AI_PORT)
 
@@ -2079,7 +2084,7 @@ pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project
 	  || { echo "❌ wrangler project create failed"; exit 1; }; \
 	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
 
-pmoves-ai-deploy: pmoves-ai-sync-hyperdim ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
+pmoves-ai-deploy: pmoves-ai-sync-hyperdim chit-tour-data ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
 	@$(LOAD_ENV_SHARED); \
 	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
 	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
