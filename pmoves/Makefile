@@ -409,6 +409,30 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
+.PHONY: kong-routes-check
+KONG_ADMIN_URL ?= http://localhost:8001
+kong-routes-check: ## Assert the Kong gateway actually has routes loaded (not just alive)
+	@echo "=== Kong: route table check ($(KONG_ADMIN_URL)) ==="
+	@n=$$(curl -sf $(KONG_ADMIN_URL)/routes 2>/dev/null \
+	  | $(PYTHON) -c 'import sys,json; print(len(json.load(sys.stdin).get("data",[])))' 2>/dev/null || echo ""); \
+	if [ -z "$$n" ]; then \
+	  echo "✗ Kong admin API unreachable at $(KONG_ADMIN_URL) — is supabase-kong up?" >&2; exit 1; \
+	fi; \
+	if [ "$$n" -eq 0 ]; then \
+	  echo "✗ Kong has 0 routes — the declarative config did not load." >&2; \
+	  echo "  Every /rest/v1, /auth/v1 and /storage/v1 request will 404 with" >&2; \
+	  echo "  'no Route matched with those values', while 'kong health' still" >&2; \
+	  echo "  reports healthy. Check KONG_DATABASE=off + KONG_DECLARATIVE_CONFIG" >&2; \
+	  echo "  and the kong.yml / kong-entrypoint.sh mounts in docker-compose.core.yml." >&2; \
+	  exit 1; \
+	fi; \
+	echo "✓ Kong has $$n routes loaded"
+	@printf '  /rest/v1 proxy probe -> '; \
+	code=$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/rest/v1/ 2>/dev/null); \
+	if [ "$$code" = "404" ]; then \
+	  echo "$$code (NO rest-v1 route — PostgREST is unreachable through the gateway)"; exit 1; \
+	else echo "$$code (route present; 401/200 both mean it is wired)"; fi
+
 .PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh supa-bootstrap-db
 supa-bootstrap-db: ensure-env-shared ## Bootstrap Supabase DB roles, schemas, and passwords from env
 	@bash scripts/supabase/bootstrap_db.sh

@@ -205,7 +205,9 @@ services:
     ports:
     - ${SUPABASE_AUTH_BIND:-127.0.0.1}:${SUPABASE_GOTRUE_PORT:-9999}:9999
     networks:
-    - pmoves_api
+      pmoves_api:
+        aliases:
+        - auth   # upstream Supabase name used by vendored kong.yml
 
     deploy:
       resources:
@@ -322,7 +324,9 @@ services:
     ports:
     - ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
     networks:
-    - pmoves_api
+      pmoves_api:
+        aliases:
+        - storage   # upstream Supabase name used by vendored kong.yml
 
     deploy:
       resources:
@@ -413,13 +417,32 @@ services:
     image: kong/kong:3.9.1
     profiles:
     - supabase-local
+    volumes:
+    # Upstream Supabase shape: the raw declarative config is mounted at temp.yml,
+    # and kong-entrypoint.sh env-substitutes it into KONG_DECLARATIVE_CONFIG.
+    - ../PMOVES-supabase/docker/volumes/api/kong.yml:/home/kong/temp.yml:ro
+    - ../PMOVES-supabase/docker/volumes/api/kong-entrypoint.sh:/home/kong/kong-entrypoint.sh:ro
     environment:
-    # Database configuration (Kong uses Postgres for config storage)
-    - KONG_DATABASE=postgres
-    - KONG_PG_HOST=supabase-db
-    - KONG_PG_DATABASE=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
-    - KONG_PG_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
-    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    # DB-less declarative mode. This was previously KONG_DATABASE=postgres, which
+    # made Kong store routing config in Postgres — and NOTHING ever seeded it, so
+    # Kong booted with 0 services / 0 routes and 404'd ("no Route matched with
+    # those values") every /rest/v1, /auth/v1 and /storage/v1 request while still
+    # reporting healthy. Declarative mode is what upstream Supabase ships and it
+    # makes the route table a reviewable file instead of unmanaged DB state.
+    - KONG_DATABASE=off
+    - KONG_DECLARATIVE_CONFIG=/usr/local/kong/kong.yml
+    # Supabase's CLI issue #14: force LAST so service short-names resolve.
+    - KONG_DNS_ORDER=LAST,A,CNAME
+    - KONG_DNS_NOT_FOUND_TTL=1
+    # Consumed by kong-entrypoint.sh when substituting temp.yml -> kong.yml.
+    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
+    - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
+    - ANON_KEY_ASYMMETRIC=${ANON_KEY_ASYMMETRIC:-}
+    - SERVICE_ROLE_KEY_ASYMMETRIC=${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+    - DASHBOARD_USERNAME=${DASHBOARD_USERNAME:-supabase}
+    - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-}
     # Kong configuration
     - KONG_PROXY_ACCESS_LOG=/dev/stdout
     - KONG_ADMIN_ACCESS_LOG=/dev/stdout
@@ -440,11 +463,19 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
     - PMOVES_NETWORKS=pmoves_api,pmoves_public
-    entrypoint: ["/bin/bash", "-c", "for i in $$(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($$i/30)...\"; sleep 2; done; kong
-        migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
+    # Upstream Supabase entrypoint: env-substitutes /home/kong/temp.yml into
+    # KONG_DECLARATIVE_CONFIG, then execs kong docker-start. Replaces the old
+    # DB-mode entrypoint (wait-for-Postgres + `kong migrations bootstrap`), which
+    # is meaningless in DB-less mode — and which only ever created empty Kong
+    # schema tables, never any routes.
+    entrypoint: /home/kong/kong-entrypoint.sh
     healthcheck:
+      # NOTE: liveness only — `kong health` reports the Kong PROCESS, not whether
+      # any routes are loaded. A route-less Kong passes this check while 404'ing
+      # every request, which is exactly how the empty-config regression stayed
+      # green. Assert function separately with `make kong-routes-check`; an
+      # inline HTTP probe is not viable here (the image ships no curl/wget/nc).
       test: ["CMD", "kong", "health"]
       interval: 15s
       timeout: 5s
@@ -504,11 +535,13 @@ services:
       supabase-analytics:
         condition: service_healthy
     networks:
-    - pmoves_api  # supabase-db and analytics reachable via kong on pmoves_api
+      pmoves_api:  # supabase-db and analytics reachable via kong on pmoves_api
+        aliases:
+        - functions   # upstream Supabase name used by vendored kong.yml
     # pmoves_public is required, not optional: pmoves_api is internal:true,
     # so edge-runtime cannot reach external Deno imports unless it also joins
     # the egress-capable bridge. DNS pins alone do not create an egress route.
-    - pmoves_public
+      pmoves_public:
     # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
     # image fetches https://deno.land/std@...` at worker-bootstrap time;
     # Docker's embedded DNS (127.0.0.11) intermittently fails to forward
@@ -566,8 +599,10 @@ services:
     ports:
     - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
     networks:
-    - pmoves_api
-    - pmoves_public
+      pmoves_api:
+        aliases:
+        - rest   # upstream Supabase name used by vendored kong.yml
+      pmoves_public:
 
     deploy:
       resources:
@@ -723,7 +758,9 @@ services:
     ports:
     - ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
     networks:
-    - pmoves_api  # supabase-meta and analytics reachable via kong on pmoves_api
+      pmoves_api:  # supabase-meta and analytics reachable via kong on pmoves_api
+        aliases:
+        - studio   # upstream Supabase name used by vendored kong.yml
 
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
