@@ -1903,6 +1903,12 @@ nats server report connections
   arguments, or any user-supplied string.** Only identifiers, counts, and money. A publisher that adds a
   content field re-creates exactly the retention hazard the policy was written to prevent. Treat any such
   field as a blocking review failure.
+  > ⚠️ **Currently prose-only — NOT yet machine-enforced.** The envelope path validates a payload only when
+  > the subject is registered in `pmoves/contracts/topics.json` with a schema. Until
+  > `pmoves/contracts/schemas/chit/economics.usage.v1.schema.json` exists with
+  > `"additionalProperties": false` and a matching `topics.json` entry, this invariant can be violated
+  > without any failure. **Land the schema before the first publisher.** (Blocked on an operator-set
+  > `KNOWN_ROAD=schema:...` — `pmoves/contracts/schemas/` is a damage-control read-only path.)
 
 - **Payload:**
   ```json
