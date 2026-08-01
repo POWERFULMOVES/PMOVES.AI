@@ -244,145 +244,88 @@ class UltimateTTSProvider(VoiceProvider):
         engine: str,
         voice: Optional[str] = None
     ) -> list:
-        """Build the full 121-parameter list for generate_unified_tts.
+        """Build the full 101-parameter list for generate_unified_tts.
 
         Parameter positions are derived from the Gradio API info endpoint.
+        The upstream TTS app reduced from 121 to 101 params (Fish Speech S2
+        Pro consolidated, VoxCPM simplified).
         """
         api_engine = self.ENGINE_NAMES.get(engine, engine)
 
-        # Total 121 parameters (Gradio 4.x API)
-        data: list = [None] * 121
+        # Total 101 parameters (Gradio 4.x API, post-S2-Pro-consolidation)
+        # Initialize all to None — Gradio handles None for optional params
+        data: list = [None] * 101
 
         # [0-2] Core params
         data[0] = text          # text_input
         data[1] = api_engine    # tts_engine
         data[2] = "wav"         # audio_format
 
-        # [3-8] Chatterbox
-        data[4] = 0.5    # exaggeration
-        data[5] = 0.8    # temperature
-        data[6] = 0.5    # cfg_weight
-        data[7] = 300    # chunk_size
-        data[8] = 0      # seed
+        # Set ONLY the params for the selected engine. Setting params for
+        # other engines causes Gradio widget validation errors (null event).
+        if engine in ("chatterbox", "chatterbox_turbo", "chatterbox_multilingual"):
+            if engine == "chatterbox":
+                data[4] = 0.5; data[5] = 0.8; data[6] = 0.5; data[7] = 300; data[8] = 0
+            elif engine == "chatterbox_multilingual":
+                data[10] = "en"; data[11] = 0.5; data[12] = 0.8; data[13] = 0.5
+                data[14] = 2.0; data[15] = 0.05; data[16] = 1.0; data[17] = 300; data[18] = 0
+            elif engine == "chatterbox_turbo":
+                data[20] = 0.5; data[21] = 0.8; data[22] = 0.5; data[23] = 1.2
+                data[24] = 0.05; data[25] = 0.95; data[26] = 300; data[27] = 0
+        elif engine == "kokoro":
+            data[28] = voice or "af_heart"; data[29] = 1.0
+        elif engine == "fish":
+            data[31] = ""; data[32] = 0.8; data[33] = 0.8; data[34] = 1.1; data[35] = 1024; data[36] = 0
+        # fish_s2: 4 synth params from tools/test_all_tts_engines.py.
+        # NOTE: slot allocation is v1 — verify against the upstream TTS app's
+        # launch.py (handle_setup_fish_s2 / handle_load_fish_s2 / unified
+        # /generate_unified_tts) for the exact 101-param positions. The gaps in
+        # the 101 layout (data[9, 19, 30, 37, 40, 60, 66, 87]) are used
+        # to fit fish_s2, qwen, and the audio effects' non-enable flags.
+        elif engine == "fish_s2":
+            data[9] = 0.8; data[19] = 0.8; data[30] = 1.1; data[37] = 2048
+        elif engine == "indextts":
+            data[38] = 0.8; data[39] = 0
+        elif engine == "indextts2":
+            data[41] = "audio_reference"; data[43] = ""; data[44] = 1.0
+            data[45] = 0.5; data[52] = 1.0; data[53] = 0.8; data[54] = 0.9
+            data[55] = 50; data[56] = 1.1; data[57] = 1500; data[58] = 0; data[59] = False
+        elif engine == "f5_tts":
+            data[61] = ""; data[62] = 1.0; data[63] = 0.15; data[64] = False; data[65] = 0
+        elif engine == "higgs":
+            data[67] = ""; data[68] = "EMPTY"; data[69] = ""; data[70] = 1.0
+            data[71] = 0.95; data[72] = 50; data[73] = 1024; data[74] = 7; data[75] = 2
+        elif engine == "kitten_tts":
+            data[76] = voice or "expr-voice-2-f"
+        elif engine == "voxcpm":
+            data[78] = ""; data[79] = 2.0; data[80] = 10; data[81] = True
+            data[82] = True; data[83] = True; data[84] = 3; data[85] = 6.0; data[86] = -1
+        # qwen: 5 synth params from tools/test_all_tts_engines.py (load_kwargs
+        # go to /handle_load_qwen, not _build_params). See fish_s2 comment
+        # above for the v1 slot allocation rationale.
+        elif engine == "qwen":
+            data[40] = "voice_design"; data[60] = "1.7B"; data[66] = 200
+            data[87] = "Ryan"; data[100] = "Auto"
+        # vibevoice: NO positional slots. Per tools/test_all_tts_engines.py,
+        # VibeVoice uses a separate panel (handle_vibevoice_generation), NOT
+        # the unified /generate_unified_tts endpoint. Reject explicitly so
+        # flute-gateway callers get a clear error instead of silent breakage.
+        elif engine == "vibevoice":
+            raise UltimateTTSError(
+                "vibevoice is not supported via the unified /generate_unified_tts "
+                "endpoint. Use the dedicated VibeVoice panel (handle_vibevoice_generation) "
+                "via gradio_client, or pick a different engine."
+            )
+        else:
+            raise UltimateTTSError(
+                f"Unknown engine '{engine}'. Supported: {list(self.ENGINE_NAMES)}."
+            )
 
-        # [9-18] Chatterbox MTL
-        data[10] = "en"
-        data[11] = 0.5
-        data[12] = 0.8
-        data[13] = 0.5
-        data[14] = 2.0
-        data[15] = 0.05
-        data[16] = 1.0
-        data[17] = 300
-        data[18] = 0
-
-        # [19-27] Chatterbox Turbo
-        data[20] = 0.5   # turbo_exaggeration
-        data[21] = 0.8   # turbo_temperature
-        data[22] = 0.5   # turbo_cfg_weight
-        data[23] = 1.2   # turbo_repetition_penalty
-        data[24] = 0.05  # turbo_min_p
-        data[25] = 0.95  # turbo_top_p
-        data[26] = 300   # turbo_chunk_size
-        data[27] = 0     # turbo_seed
-
-        # [28-29] Kokoro
-        data[28] = voice if engine == "kokoro" else "af_heart"
-        data[29] = 1.0   # speed
-
-        # [30-36] Fish Speech S1
-        data[31] = ""     # ref_text
-        data[32] = 0.8   # temperature
-        data[33] = 0.8   # top_p
-        data[34] = 1.1   # repetition_penalty
-        data[35] = 1024  # max_tokens
-        data[36] = 0     # seed
-
-        # [37-43] Fish Speech S2 Pro
-        data[38] = ""     # ref_text
-        data[39] = 0.8   # temperature
-        data[40] = 0.8   # top_p
-        data[41] = 1.1   # repetition_penalty
-        data[42] = 2048  # max_tokens
-        data[43] = 0     # seed
-
-        # [44-46] IndexTTS
-        data[45] = 0.8   # temperature
-        data[46] = 0     # seed
-
-        # [47-66] IndexTTS2
-        data[48] = "audio_reference"  # emotion_mode
-        data[50] = ""     # emotion_description (REQUIRED)
-        data[51] = 1.0   # emo_alpha
-        data[59] = 1.0   # calm
-        data[60] = 0.8   # temperature
-        data[61] = 0.9   # top_p
-        data[62] = 50    # top_k
-        data[63] = 1.1   # repetition_penalty
-        data[64] = 1500  # max_mel_tokens
-        data[65] = 0     # seed
-        data[66] = False  # use_random
-
-        # [67-72] F5-TTS
-        data[68] = ""     # ref_text
-        data[69] = 1.0   # speed
-        data[70] = 0.15  # cross_fade
-        data[71] = False  # remove_silence
-        data[72] = 0     # seed
-
-        # [73-82] Higgs Audio
-        data[74] = ""     # ref_text
-        data[75] = "EMPTY"  # voice_preset
-        data[76] = ""     # system_prompt (REQUIRED)
-        data[77] = 1.0   # temperature
-        data[78] = 0.95  # top_p
-        data[79] = 50    # top_k
-        data[80] = 1024  # max_tokens
-        data[81] = 7     # ras_win_len
-        data[82] = 2     # ras_win_max_num_repeat
-
-        # [83] KittenTTS voice
-        data[83] = voice if engine == "kitten_tts" else "expr-voice-2-f"
-
-        # [84-93] VoxCPM
-        data[85] = ""     # ref_text
-        data[86] = 2.0   # cfg_value
-        data[87] = 10    # inference_timesteps
-        data[88] = True   # normalize
-        data[89] = True   # denoise
-        data[90] = True   # retry_badcase
-        data[91] = 3     # retry_badcase_max_times
-        data[92] = 6.0   # retry_badcase_ratio_threshold
-        data[93] = -1    # seed
-
-        # [94-106] Qwen TTS
-        data[94] = "voice_design"  # mode
-        data[95] = "A warm, clear, professional English-speaking voice"  # voice_description (REQUIRED)
-        data[97] = ""     # ref_text (REQUIRED)
-        data[99] = "1.7B"  # clone_model_size
-        data[100] = 200   # chunk_size
-        data[101] = 10    # chunk_gap
-        data[102] = "Ryan"  # speaker
-        data[103] = "1.7B"  # custom_model_size
-        data[104] = ""     # style_instruct (REQUIRED)
-        data[105] = "Auto"  # language
-        data[106] = 0     # seed
-
-        # [107-120] Audio effects
-        data[107] = 0      # gain_db
-        data[108] = False  # enable_eq
-        data[109] = 0      # eq_bass
-        data[110] = 0      # eq_mid
-        data[111] = 0      # eq_treble
-        data[112] = False  # enable_reverb
-        data[113] = 0.3   # reverb_room
-        data[114] = 0.5   # reverb_damping
-        data[115] = 0.3   # reverb_wet
-        data[116] = False  # enable_echo
-        data[117] = 0.3   # echo_delay
-        data[118] = 0.5   # echo_decay
-        data[119] = False  # enable_pitch
-        data[120] = 0     # pitch_semitones
+        # [87-100] Audio effects — only set the enable flags to False (safe defaults)
+        data[88] = False  # enable_eq
+        data[92] = False  # enable_reverb
+        data[96] = False  # enable_echo
+        data[99] = False  # enable_pitch_shift
 
         return data
 

@@ -1893,7 +1893,8 @@ STACK_FILES ?= \
 	-f docker-compose.yml \
 	-f docker-compose.comfyui.yml \
 	-f docker-compose.ultimate-tts-studio.yml \
-	-f docker-compose.archon.submodule.yml
+	-f docker-compose.archon.submodule.yml \
+	-f docker-compose.apps.yml
 
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.

@@ -152,6 +152,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GRADIO_SERVER_PORT=7861 \
     GRADIO_MCP_SERVER=true \
     HF_HOME=/data/hf \
+    HF_HUB_DISABLE_XET=1 \
     HUGGINGFACE_HUB_CACHE=/data/hf \
     XDG_CACHE_HOME=/data/cache \
     # CUDA library paths for ONNX and PyTorch
