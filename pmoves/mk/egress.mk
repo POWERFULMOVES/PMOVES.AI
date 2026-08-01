@@ -195,7 +195,7 @@ exit-node-obs-install: ## Deploy continuous exit-node obs to a node: make exit-n
 YT_PLAYLIST_ID ?= PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8
 YT_CRAWL_NAMESPACE ?= darkxside
 
-.PHONY: yt-playlist-crawl yt-playlist-stats
+.PHONY: yt-playlist-crawl yt-playlist-ingest-stats
 
 yt-playlist-crawl: ## Crawl YouTube playlist metadata via Data API: make yt-playlist-crawl [YT_PLAYLIST_ID=...] [YT_CRAWL_NAMESPACE=...]
 	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-pmoves-yt-1$$'; then \
@@ -216,7 +216,11 @@ yt-playlist-crawl: ## Crawl YouTube playlist metadata via Data API: make yt-play
 		--namespace "$(YT_CRAWL_NAMESPACE)" < $$tmpenv; \
 	rm -f $$tmpenv
 
-yt-playlist-stats: ## Show crawled video statistics from Supabase
+# Renamed from yt-playlist-stats: it collided with the enrichment-stats target
+# below (line ~262) and make silently kept the LAST definition, so this INGESTION
+# query was unreachable. Distinct names now — this one answers "did the crawl
+# land rows?", the other answers "how are those rows classified?".
+yt-playlist-ingest-stats: ## Show crawled video ingestion stats from Supabase (row counts, downloaded, durations)
 	@if ! docker ps --format '{{.Names}}' | grep -q '^pmoves-supabase-db-1$$'; then \
 		echo "ERROR: Supabase DB container not running." >&2; \
 		exit 1; \
@@ -303,14 +307,19 @@ yt-wealth-videos: ## Show wealth-tagged videos (investing, entrepreneurship, bud
 # Run on remote nodes to mount the shared JuiceFS media filesystem.
 # ---------------------------------------------------------------------------
 
-.PHONY: juicefs-cross-node-setup juicefs-status juicefs-mount-local
+.PHONY: juicefs-cross-node-setup juicefs-mount-status juicefs-mount-local
 
 JUICEFS_HOST_IP ?= 100.122.182.3
 
 juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST_IP=<host-ts-ip> DB_PASS=<supabase-db-pass>
 	@JUICEFS_HOST=$(JUICEFS_HOST_IP) DB_PASS=$(or $(DB_PASS),$(error DB_PASS required)) bash scripts/juicefs-cross-node-setup.sh
 
-juicefs-status: ## Show JuiceFS mount status
+# Renamed from juicefs-status: it collided with the JuiceFS *PoC gateway* target
+# in Makefile:292, and make kept that one — so this MOUNT check was unreachable
+# and `make juicefs-status` on a mount node silently reported gateway state
+# instead. Distinct names now: juicefs-status = S3 gateway PoC health,
+# juicefs-mount-status = is the JuiceFS mount up and are content dirs visible.
+juicefs-mount-status: ## Show JuiceFS mount status (mount container + content dirs)
 	@echo "=== JuiceFS Mount ==="
 	@docker ps --filter name=juicefs-mount --format "{{.Names}} {{.Status}}" 2>/dev/null || echo "juicefs-mount not running"
 	@echo ""
@@ -333,4 +342,4 @@ juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	    -v $(JFS_MOUNT_POINT):$(JFS_MOUNT_POINT):rshared \
 	    juicedata/mount:ce-v1.3.0 \
 	    -c 'exec juicefs mount --enable-xattr "postgres://supabase_admin:$(SUPABASE_DB_PASSWORD)@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$$JFS_MOUNT"' 2>/dev/null || echo "Already running or failed"
-	@echo "Use 'make juicefs-status' to verify"
+	@echo "Use 'make juicefs-mount-status' to verify"
