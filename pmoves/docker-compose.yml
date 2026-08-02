@@ -3975,6 +3975,9 @@ services:
     - ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
     volumes:
     - tensorzero-clickhouse-data:/var/lib/clickhouse
+    # Cap ClickHouse self-telemetry (Debug logging + no TTL flooded the vhdx at
+    # ~2.4 GB/min and filled the host drive — incident 2026-08-02). Fleet-wide fix.
+    - ./config/clickhouse/pmoves-system-log-limits.xml:/etc/clickhouse-server/config.d/pmoves-system-log-limits.xml:ro
     healthcheck:
       test:
       - CMD-SHELL
