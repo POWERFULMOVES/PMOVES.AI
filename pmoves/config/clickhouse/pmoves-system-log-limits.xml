@@ -32,4 +32,17 @@
     <query_log>
         <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
     </query_log>
+    <!-- Remaining system.*_log sections that are enabled by default in this image.
+         ClickHouse has no wildcard, so each enabled table needs its own TTL or it
+         keeps unlimited growth. Only enabled tables are listed — adding a block for
+         a disabled table would inadvertently enable it. -->
+    <error_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </error_log>
+    <query_metric_log>
+        <ttl>event_date + INTERVAL 2 DAY DELETE</ttl>
+    </query_metric_log>
+    <processors_profile_log>
+        <ttl>event_date + INTERVAL 2 DAY DELETE</ttl>
+    </processors_profile_log>
 </clickhouse>
