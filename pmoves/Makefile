@@ -3872,19 +3872,57 @@ voice-relay-smoke: ## Smoke test voice-relay health
 # A2UI RENDERER (Remotion living-doc renderer, creator profile, port 8107)
 # ────────────────────────────────────────────────────────────────────────────
 
-.PHONY: up-a2ui-renderer a2ui-renderer-smoke
+.PHONY: up-a2ui-renderer down-a2ui-renderer a2ui-renderer-smoke a2ui-renderer-render docs-render-living
 A2UI_RENDERER_PORT ?= 8107
-up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port $(A2UI_RENDERER_PORT), creator profile)
-	@echo "Starting a2ui-renderer (heavy Chromium image — first build is slow)..."
-	@$(DC) --profile creator up -d --build a2ui-renderer
+A2UI_RENDERER_TOKEN ?= ${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
+A2UI_RENDERER_RENDER_DIR ?= pmoves/docs/living-docs/rendered
+up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port $(A2UI_RENDERER_PORT), agents+media+docs profiles)
+	@echo "Starting a2ui-renderer (heavy Chromium image - first build is slow)..."
+	@$(DC) --profile agents --profile media --profile docs up -d --build a2ui-renderer
 	@sleep 5
 	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz > /dev/null 2>&1 \
 	  && echo "a2ui-renderer ready at http://localhost:$(A2UI_RENDERER_PORT)" \
 	  || echo "a2ui-renderer may still be starting (check: curl http://localhost:$(A2UI_RENDERER_PORT)/healthz)"
 
-a2ui-renderer-smoke: ## Smoke test a2ui-renderer health
+down-a2ui-renderer: ## Stop a2ui-renderer (and remove the container)
+	@echo "Stopping a2ui-renderer..."
+	@$(DC) --profile agents --profile media --profile docs stop a2ui-renderer || true
+	@$(DC) --profile agents --profile media --profile docs rm -f a2ui-renderer || true
+
+a2ui-renderer-smoke: ## Smoke test a2ui-renderer health + sample render
 	@echo "a2ui-renderer smoke test..."
 	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz || { echo "a2ui-renderer not responding at http://localhost:$(A2UI_RENDERER_PORT)/healthz"; exit 1; }
+	@echo "✅ healthz OK; metrics:"
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/metrics | grep -E '^a2ui_' | head -5
+
+# Helper: render a single living-doc entry through the a2ui-renderer.
+# Used by docs-render-living (the registry iterator) and for ad-hoc renders.
+# Usage: make a2ui-renderer-render DOC=pmoves/docs/handoffs/X.md
+A2UI_RENDERER_RENDER_INPUT  ?= $(DOC)
+A2UI_RENDERER_RENDER_OUTPUT ?= $(A2UI_RENDERER_RENDER_DIR)/$(notdir $(basename $(DOC))).mp4
+a2ui-renderer-render: ## Render a single markdown doc as a living-doc MP4 via a2ui-renderer
+	@echo "Rendering $(A2UI_RENDERER_RENDER_INPUT) -> $(A2UI_RENDERER_RENDER_OUTPUT)..."
+	@mkdir -p $(dir $(A2UI_RENDERER_RENDER_OUTPUT))
+	@uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	    --doc $(A2UI_RENDERER_RENDER_INPUT) \
+	    --output $(A2UI_RENDERER_RENDER_OUTPUT) \
+	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
+	    --token "$${A2UI_RENDERER_TOKEN}" \
+	    --format mp4
+
+# Render every entry in pmoves/config/living_docs_registry.yaml.
+# Each entry: { id, source_doc, output_key, format, ttl_days }.
+# Outputs go to $${A2UI_RENDERER_RENDER_DIR}/<id>.<format> and are uploaded
+# to MinIO bucket $${MINIO_BUCKET}/a2ui/living-docs/<id>.<format>.
+docs-render-living: ## Render all LIVING_DOCS_INDEX-registered docs through a2ui-renderer
+	@echo "Rendering living docs from pmoves/config/living_docs_registry.yaml..."
+	@mkdir -p $(A2UI_RENDERER_RENDER_DIR)
+	@uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	    --registry pmoves/config/living_docs_registry.yaml \
+	    --output-dir $(A2UI_RENDERER_RENDER_DIR) \
+	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
+	    --token "$${A2UI_RENDERER_TOKEN}" \
+	    --minio-bucket "$${MINIO_BUCKET:-outputs}"
 
 # ────────────────────────────────────────────────────────────────────────────
 # HI-RAG GATEWAY (Hybrid RAG v2)

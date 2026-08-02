@@ -104,3 +104,50 @@ tracked:
     freshness_days: 30
     severity: P2
     description: "A2UI Renderer (port 8107) — Remotion animation engine for creator pipeline"
+
+
+# ============================================================================
+# Renderable entries (Lane 2228, 2026-08-02)
+# ============================================================================
+# These docs are rendered to MP4 living-doc artifacts via the a2ui-renderer
+# service (port 8107) by `make docs-render-living` (see pmoves/Makefile).
+# The output goes to:
+#   - $${A2UI_RENDERER_RENDER_DIR}/<id>.<format>     (local working copy)
+#   - s3://$${MINIO_BUCKET}/a2ui/living-docs/<id>.<format>  (MinIO)
+# Each entry: id, source_doc, output_key, format (mp4|gif|webm), ttl_days.
+# ============================================================================
+renderable:
+  - id: chit-visual-tour-walkthrough
+    source_doc: pmoves/docs/PMOVESCHIT/VISUAL_TOUR.md
+    output_key: chit-visual-tour
+    format: mp4
+    ttl_days: 14
+    description: "Interactive code-walkthrough tour of CHIT (8 sections, 60 min read-time)"
+
+  - id: agnote-active-claims
+    source_doc: pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md
+    output_key: agnote-active-claims
+    format: mp4
+    ttl_days: 3
+    description: "Active claim register - fastest-moving doc, re-render weekly"
+
+  - id: services-catalog-dashboard
+    source_doc: .claude/context/services-catalog.md
+    output_key: services-catalog
+    format: mp4
+    ttl_days: 14
+    description: "Service catalog (ports, URLs, health endpoints) - drift-detected via recon"
+
+  - id: a2ui-renderer-readme
+    source_doc: pmoves/services/a2ui-renderer/README.md
+    output_key: a2ui-renderer-readme
+    format: mp4
+    ttl_days: 30
+    description: "A2UI renderer readme - the renderer that produces these artifacts"
+
+  - id: chit-tour-public
+    source_doc: pmoves/docs/handoffs/chit-tour-public-edge.md
+    output_key: chit-tour-public-edge
+    format: mp4
+    ttl_days: 30
+    description: "CHIT tour public-edge handoff - hosting + DNS + cache config"
