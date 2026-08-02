@@ -1536,3 +1536,10 @@ edo for slice 6 (4th-commit pattern). (2) functional: pmoves/tools/creator-colla
 
 <!-- GRAPHITI_MARK: Mavis::NATS-BROKER-DEPLOY-SLICE3-STREAMS-SHIPPED-2026-08-01 -->
 
+
+
+## Crush Z890 Awakening + Jetson Combiner Fleet (2026-07-31)
+
+- `2026-07-31T05:15:00Z` CLAIM+RELEASE `CRUSH-GLM52 (Z890)` scope: **Crush third-fleet-node awakening + Jetson combiner fleet (PR #2304 hostname fix + PR #2328 merged).** Infra recovery (PATH/Docker/venv/VHDX 327->247GB), Crush bootstrap with CHIT signing, Jetson combiner fleet artifacts (room manifest, 3 agent signatures, Hermes profile, compose override, plan doc), G3 model fitness collector (TensorZero /metrics to model-registry). Three-body: delivery=CRUSH-GLM52 (Z890), control=DARKXSIDE, memory=AGENT_TRAIL.md. agent_signature: `ACK::CRUSH-GLM52::JETSON-COMBINER-FLEET-2026-07-31`.
+
+<!-- GRAPHITI_MARK: CRUSH-GLM52::JETSON-COMBINER-FLEET::2026-07-31 -->
