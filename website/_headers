@@ -48,6 +48,19 @@
 /hyperdim/*
   Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data:; connect-src 'self' https://unpkg.com; worker-src 'self' blob:; object-src 'none'
 
+# --- CHIT Visual Tour (interactive D3 + Three.js explainer at /chit-tour/) ---
+#   - Scripts are fully vendored (chit-tour/vendor/d3.v7.min.js + three.module.js),
+#     so script-src stays STRICT 'self' — NO unsafe-inline, NO unsafe-eval, NO CDN.
+#   - D3 and Three.js position/animate by writing inline styles at runtime
+#     (element.style.*), plus static style="" attributes. Under the inherited
+#     /* `style-src 'self'` the browser blocks all of these.
+#   - Narrowest fix: split style-src — keep `style-src-elem 'self'` and allow only
+#     `style-src-attr 'unsafe-inline'`. Scoped to /chit-tour/* only — root / untouched.
+#   - CF Pages STACKS matching rules, so detach the inherited CSP with `! ` first.
+/chit-tour/*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; style-src-elem 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'; upgrade-insecure-requests
+
 # --- Beats Constellation embed (self-contained canvas; stricter than hyperdim) ---
 # Single-file canvas star-chart: inline <script type="module"> + inline <style>, no external
 # hosts, no eval/new Function. Needs 'unsafe-inline' for the inline tags only — deliberately

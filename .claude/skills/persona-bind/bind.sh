@@ -48,10 +48,12 @@ resp="$(curl -sS --max-time 10 "${auth[@]}" "$url" 2>/dev/null || true)"
 
 # Parse the VoiceBinding and emit export lines (BEATS_VOICE + resolved params
 # for downstream CGP param_surface). Prosody keys → BEATS_* env for the pipeline.
-python3 - "$SUIT" <<PY 2>/dev/null || _failopen "could not parse binding response"
-import json, sys
+# Response body passes via env, NOT source interpolation, and the heredoc
+# terminator is quoted: a hostile/odd resolver response cannot become code.
+RESP="$resp" python3 - "$SUIT" <<'PY' 2>/dev/null || _failopen "could not parse binding response"
+import json, os, sys
 suit = sys.argv[1]
-raw = '''${resp}'''
+raw = os.environ.get("RESP", "")
 try:
     b = json.loads(raw)
 except Exception as e:

@@ -1789,6 +1789,153 @@ nats server report connections
 **`a2ui.event.v1`** — UI event for real-time display (any agent → A2UI NATS bridge)
 **`a2ui.command.v1`** — User command from UI (UI → A2UI NATS bridge)
 
+## Archon Mint Subjects
+
+> The PMOVES agent-factory contract. Ritual: `.claude/commands/archon/{mint-agent,mint-skill,creator-onboard}.md`.
+> QA gate: `.claude/agents/archon-qa-agent.md` — `archon.qa.result.v1` **blocks** `archon.mint.confirmed.v1`.
+> Design review + landing plan: `pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md`.
+>
+> **Status: contract registered, publishers not yet implemented.** Archon 0.6.0 (TS) carries no NATS
+> client; these subjects go live with the planned `archon-nats-bridge`. Registered here ahead of
+> implementation because `archon-qa-agent` check 3 rejects any manifest referencing an unregistered
+> subject — including the mint contract's own.
+
+**`archon.mint.agent.v1`** — Proposed agent mint spec (mint ritual → Archon factory)
+- **Direction:** Published by `/archon:mint-agent` → Consumed by Archon factory + `archon-qa-agent`
+- **Purpose:** Submit an `AgentMintSpec` for scaffolding. Full manifest schema (metadata + spec with
+  role, team_ref, node_affinity, model routing, capabilities, skills, nats, guardrails) in
+  `pmoves/docs/pilots/fordham-hill/05-room-agents-mint-specs.md`.
+- **Payload:**
+  ```json
+  {"agent_id": "<uuid>", "agent_name": "geometry-curator", "room_id": "4090-field.room.control", "owning_persona": "delivery-agent", "manifest_url": "https://archon.pmoves.ai/<id>", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.qa.result.v1`** — Blocking QA verdict (archon-qa-agent → Archon factory)
+- **Direction:** Published by `archon-qa-agent` → Consumed by Archon factory
+- **Purpose:** Gate between `mint.agent` and `mint.confirmed`. Seven checks: schema, NATS subject
+  registration + branded namespace, CHIT tier, name collision, branded defaults/no-SaaS, OAuth identity,
+  env tier. **Archon must never publish `mint.confirmed` without an explicit `pass`.**
+- **Payload (pass):**
+  ```json
+  {"status": "pass", "agent": "geometry-curator", "checks": ["schema", "nats", "chit", "collision", "branded", "auth", "tier"]}
+  ```
+- **Payload (fail):** `{"status": "fail", "agent": "<name>", "reasons": ["<reason with path:line>"]}`
+
+**`archon.mint.confirmed.v1`** — Mint confirmation (Archon → fleet)
+- **Direction:** Published by Archon factory → Consumed by registry consumers / monitoring
+- **Purpose:** Agent is live and registered. Emitted only after `archon.qa.result.v1` = pass.
+- **Payload:**
+  ```json
+  {"agent_id": "<uuid>", "confirmed_at": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.mint.skill.v1`** — Skill mint (mint ritual → Archon)
+- **Direction:** Published by `/archon:mint-skill` → Consumed by Archon factory
+- **Payload:**
+  ```json
+  {"skill_id": "<uuid|null>", "skill_name": "pmoves-chit-sign", "path": ".claude/skills/pmoves-chit-sign/SKILL.md", "user_invocable": true, "owning_persona": "delivery-agent", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
+**`archon.mint.creator.v1`** — Human creator onboarding (mint ritual → Archon)
+- **Direction:** Published by `/archon:creator-onboard` → Consumed by Archon factory
+- **Purpose:** Provision a human creator identity. `creator_id` is the Supabase `auth.users.id`; email is
+  carried as a SHA-256 hash, never in clear.
+- **Payload:**
+  ```json
+  {"creator_id": "<supabase auth.users.id>", "handle": "darkxside", "role": "operator", "email_hash": "<sha256>", "provider": "google", "default_room": "4090-field.room.control", "github_username": "<optional>", "ts": "2026-08-01T00:00:00Z"}
+  ```
+
+## Token Work Attestation Subjects
+
+> The input side of the economy: cryptographic proof that a contributor performed a unit of work.
+> Schema: `pmoves/contracts/schemas/token/work.attested.v1.schema.json`. Chain analysis:
+> `pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md` §6a.
+>
+> **Status: contract + recorder service + ledger migration all exist; NONE of it is deployed.**
+> `pmoves/services/token-stub/app.py` (dry-run recorder) is in no compose file, and
+> `pmoves/supabase/migrations/20260425000300_work_attestations.sql` has never been applied — the relation
+> `pmoves_core.work_attestations` does not exist on the live Supabase.
+
+**`token.work.attested.v1`** — Signed work attestation (contributor/agent → attestation recorder)
+
+- **Direction:** Published on completion of a unit of work → Consumed by `token-stub` (and, once wired, the
+  attribution stage)
+- **Purpose:** Establish *who did what*, verifiably, as the input to attribution and eventually settlement.
+- **Crypto note:** this contract specifies **Ed25519** (asymmetric, 128-hex signature) — deliberately
+  different from the live CHIT trail's **symmetric HMAC** with a single operator-held passphrase.
+  Asymmetric is the right model for attribution a contributor should be able to prove independently. The
+  divergence is unresolved and needs an explicit decision, not a silent merge.
+- **Identity note:** `contributor` is a UUID that lands in `work_attestations.contributor_id`, which the
+  migration's RLS policy binds to Supabase `auth.uid()`. **This is the only payable human anchor in the
+  repo** — the Archon mint contract's `creator_id`/`owning_persona` is a separate, unimplemented model.
+- **Payload:**
+  ```json
+  {
+    "work_id": "<uuid>",
+    "contributor": "<uuid — Supabase auth.users.id>",
+    "attestation_sig": "<128 hex chars, Ed25519>",
+    "merkle_root": "0x<64 hex>",
+    "attested_at": "2026-08-01T00:00:00Z",
+    "metadata": {}
+  }
+  ```
+
+## CHIT Economics Subjects
+
+> Cost/usage metering for the tokenomics layer. Design rationale and the full value-chain analysis:
+> `pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md` §2, §8.
+>
+> **Status: contract registered, publisher not yet implemented.** Registered ahead of code deliberately —
+> `archon-qa-agent` check 3 rejects manifests referencing unregistered subjects, and this is the subject an
+> economically-accountable agent will declare.
+
+**`chit.economics.usage.v1`** — Content-free LLM usage/cost record (any metered service → economics consumers)
+
+- **Direction:** Published per inference by the metering shim → Consumed by settlement / audit / dashboards
+- **Purpose:** Make agent cost measurable **without recording what was said.** This exists because
+  TensorZero's own observability is disabled by policy (`pmoves/tensorzero/config/tensorzero.toml:8-30`,
+  Cyber Defence Initiative 2026-04-25): enabling it auto-creates ClickHouse tables holding full prompt and
+  response text with no TTL, which violates Data Retention Policy T0 and creates a warrantable store of
+  user content. Tokenomics needs **counts, not content** — so this subject carries counts only and trips
+  none of the six documented re-enable conditions.
+
+- **HARD INVARIANT — this payload MUST NOT carry prompt text, response text, message content, tool
+  arguments, or any user-supplied string.** Only identifiers, counts, and money. A publisher that adds a
+  content field re-creates exactly the retention hazard the policy was written to prevent. Treat any such
+  field as a blocking review failure.
+  > ⚠️ **Currently prose-only — NOT yet machine-enforced.** The envelope path validates a payload only when
+  > the subject is registered in `pmoves/contracts/topics.json` with a schema. Until
+  > `pmoves/contracts/schemas/chit/economics.usage.v1.schema.json` exists with
+  > `"additionalProperties": false` and a matching `topics.json` entry, this invariant can be violated
+  > without any failure. **Land the schema before the first publisher.** (Blocked on an operator-set
+  > `KNOWN_ROAD=schema:...` — `pmoves/contracts/schemas/` is a damage-control read-only path.)
+
+- **Payload:**
+  ```json
+  {
+    "agent_name": "fordham-transaction",
+    "tensorzero_function": "pmoves_worker_glm",
+    "model_name": "glm-5.2",
+    "provider_name": "zai",
+    "node": "z890",
+    "prompt_tokens": 1840,
+    "completion_tokens": 412,
+    "estimated_cost_usd": 0.0031,
+    "ts": "2026-08-01T00:00:00Z"
+  }
+  ```
+
+- **Field notes:**
+  - `tensorzero_function` — the `[functions.X]` block the call routed through (29 exist; see
+    `tensorzero.toml:763-1734`). This is the **join key** that lets cost roll up per lane. It is
+    function-granular, not per-agent-instance: agents sharing a function are indistinguishable in the
+    rollup. True per-instance attribution needs TensorZero-side request tagging — a follow-up, not this
+    subject's job.
+  - `node` — which fleet node served the call. Present so node-operator hosting cost can eventually be
+    accounted; no compensation mechanism exists today.
+  - `estimated_cost_usd` — explicitly an *estimate*. Rates are not authoritative
+    (`llm_observability_specialist.py:154-161` currently hardcodes placeholder rates).
+
 ## CGP Version Naming Clarification
 
 > **Note:** The apparent version mismatch between NATS subjects and payload specs is **intentional** — they operate at different layers:

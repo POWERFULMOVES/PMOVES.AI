@@ -10,6 +10,42 @@
 
 ---
 
+<!-- graphiti:crush phase:b850-voice-convergence ts:2026-08-01T00:00:00Z -->
+
+## ◇ Crush — B850 ROCm Voice Convergence: First Chatterbox Synthesis on AMD + MCP + Pinokio Bridge + Supabase UI
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, voice-pipeline, rocm-data-tier, infrastructure
+**Voice:** Companion
+
+### Done
+- **PR #2303 merged**: MCP config convergence — agent-zero SSE (port 8081 with token auth), archon disabled (REST-only MCP), hostinger added to inventory, tailscale secrets in manifest, disabled field support in mcp_config_generator for all renderers, ROCm TTS Dockerfile.rocm (torch 2.10.0.dev+rocm6.3 on dual R9700), supplementary requirements install (einops/omegaconf), `!reset` for Docker Compose v5 device merge, conda ToS fix.
+- **PR #2322 opened**: Lane 2 (pinokio_bridge + nats_event_bus default-up — fixed Dockerfiles, STACK_FILES, NATS_URL localhost bug), Lane 3 (pmoves-ui HOSTNAME=0.0.0.0 fix, upload_events table creation, Supabase healthy), Flute TTS provider 121→101 param rewrite (engine-scoped param setting — only set params for the selected engine, not all engines at once).
+- **First chatterbox synthesis through Flute on B850 ROCm**: 200 OK, 5.96s audio at 24kHz. Torch 2.10.0.dev+rocm6.3, HIP 6.3, `torch.cuda.is_available()=True`, device: AMD Radeon AI PRO R9700 x2.
+- **Secrets funnel**: TAILSCALE_API_KEY + TAILSCALE_TAILNET populated via manifest (label TAILSCALE_APIKEY matching GH secret).
+- **Docker cleanup**: 192GB reclaimed (build cache 107GB + unused images 52GB + stale containers).
+- **Review fixes**: all 10 CodeRabbit+Codex findings on PR #2303 addressed (Spark SSE URL normalization, archon disabled in configurator, disabled field in all renderers, env serialization for stdio, CA certs in Dockerfiles).
+- **4090 coordination**: rebased cleanly onto 4090's voice binding resolver work (persona_selector.py + /v1/voice/binding endpoint). No conflicts.
+
+### Left Behind
+- **Flute `DEFAULT_VOICE_PROVIDER`**: hardcoded to `ultimate_tts` in amd-voice override (env_file was winning over `${}` interpolation). Fix is in PR #2322.
+- **TTS CA certs**: `HF_HUB_DISABLE_XET=1` + `SSL_CERT_FILE` added to Dockerfiles but running image was patched via `docker build` overlay, not full rebuild. Next full rebuild picks them up natively.
+- **Pinokio bridge pterm**: bridge container can't reach pterm (not in PATH). Pinokio is running on host — needs volume mount or wrapper script.
+- **PR #2322 CI**: compose overlay drift fixed (regenerated splits), triage failure is the known OAuth→API-key CI bug.
+
+### For Next Agent
+- Run `make -C pmoves secrets-funnel` after pulling main to populate tailscale secrets on your node.
+- The ROCm TTS image is `ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:rocm-latest` — use `ULTIMATE_TTS_IMAGE` env var to select it.
+- 4090's voice binding resolver (`/v1/voice/binding`) is live on main — test it against the B850 ROCm TTS to validate the full agent→voice→synthesis chain.
+- The Flute `_build_params` now uses engine-scoped param setting — when adding new engines, add them to the `if/elif` chain in `_build_params`, don't set params for all engines globally.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:crush phase:fordham-cataclysm-enrichment ts:2026-07-30T12:36:00Z -->
 
 ## ◇ Crush — B850 Knuckles Convergence: PR #2288 Merged — Full Pipeline Chain Verified
