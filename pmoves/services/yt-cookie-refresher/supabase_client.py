@@ -72,6 +72,10 @@ def _headers() -> dict:
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
         "Prefer": "return=representation",
+        # yt_oauth_cookies lives in pmoves_core; PostgREST only consults the
+        # FIRST schema in PGRST_DB_SCHEMAS unless told otherwise.
+        "Accept-Profile": "pmoves_core",
+        "Content-Profile": "pmoves_core",
     }
 
 

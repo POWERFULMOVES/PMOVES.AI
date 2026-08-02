@@ -91,6 +91,11 @@ def _supabase_headers() -> dict:
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
+        # yt_oauth_cookies lives in pmoves_core; PostgREST only consults the
+        # FIRST schema in PGRST_DB_SCHEMAS (public) unless told otherwise —
+        # these headers select the schema for reads and writes respectively.
+        "Accept-Profile": "pmoves_core",
+        "Content-Profile": "pmoves_core",
     }
 
 
