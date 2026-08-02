@@ -58,6 +58,21 @@ PYTHON ?= python3
 ifeq ($(OS),Windows_NT)
 PYTHON := python
 endif
+
+# Prefer the canonical bringup venv when it exists, so targets that shell out to
+# tools/*.py (yt-cookies-*, etc.) pick up tool deps declared in tools/requirements.txt
+# instead of whatever bare `python3` resolves to on PATH. Without this, a system
+# python missing google-auth-oauthlib makes `yt-cookies-auth` fail with an install
+# hint even though `make venv-bringup` already installed it.
+# Only applies when PYTHON was not explicitly supplied: $(origin) is "default" or
+# "file" here, but "command line"/"environment" when the operator set it, so both
+# `make <target> PYTHON=/path` and `PYTHON=/path make <target>` still win.
+venv_python := $(CURDIR)/.venv-pmoves/bin/python
+ifneq ($(wildcard $(venv_python)),)
+ifeq ($(filter command\ line environment,$(origin PYTHON)),)
+PYTHON := $(venv_python)
+endif
+endif
 SCRIPTS := scripts
 SINGLE_ENV_MODE ?= 1
 SCRIPTS := scripts
@@ -395,6 +410,48 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 .PHONY: up-supabase
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
+
+.PHONY: kong-routes-check
+KONG_ADMIN_URL ?= http://localhost:8001
+KONG_CONTAINER ?= pmoves-supabase-kong-1
+kong-routes-check: ## Assert the Kong gateway is actually WIRED: routes loaded + every upstream resolvable
+	@echo "=== Kong: route table check ($(KONG_ADMIN_URL)) ==="
+	@n=$$(curl -sf $(KONG_ADMIN_URL)/routes 2>/dev/null \
+	  | $(PYTHON) -c 'import sys,json; print(len(json.load(sys.stdin).get("data",[])))' 2>/dev/null || echo ""); \
+	if [ -z "$$n" ]; then \
+	  echo "✗ Kong admin API unreachable at $(KONG_ADMIN_URL) — is supabase-kong up?" >&2; exit 1; \
+	fi; \
+	if [ "$$n" -eq 0 ]; then \
+	  echo "✗ Kong has 0 routes — the declarative config did not load." >&2; \
+	  echo "  Every /rest/v1, /auth/v1 and /storage/v1 request will 404 with" >&2; \
+	  echo "  'no Route matched with those values', while 'kong health' still" >&2; \
+	  echo "  reports healthy. Check KONG_DATABASE=off + KONG_DECLARATIVE_CONFIG" >&2; \
+	  echo "  and the kong.yml / kong-entrypoint.sh mounts in docker-compose.core.yml." >&2; \
+	  exit 1; \
+	fi; \
+	echo "✓ Kong has $$n routes loaded"
+	@echo "  --- route probes (404 = route missing; 401/200 = wired) ---"; \
+	rc=0; \
+	for p in /rest/v1/ /auth/v1/health /storage/v1/status /realtime/v1/ /pg/health; do \
+	  code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://localhost:8000$$p" 2>/dev/null); \
+	  if [ "$$code" = "404" ]; then printf '  ✗ %-22s %s (no route)\n' "$$p" "$$code"; rc=1; \
+	  else printf '  ✓ %-22s %s\n' "$$p" "$$code"; fi; \
+	done; exit $$rc
+	@echo "  --- upstream reachability FROM Kong ---"; \
+	echo "  (a route can match and still 503 'name resolution failed' if the"; \
+	echo "   upstream name in kong.yml does not resolve — routes alone prove nothing)"; \
+	rc=0; \
+	for hp in rest:3000 auth:9999 storage:5000 studio:3000 functions:9000 meta:8080 \
+	          analytics:4000 realtime-dev.supabase-realtime:4000; do \
+	  h=$${hp%:*}; p=$${hp##*:}; \
+	  if docker exec $(KONG_CONTAINER) bash -c "exec 3<>/dev/tcp/$$h/$$p" 2>/dev/null; then \
+	    printf '  ✓ %-34s reachable\n' "$$hp"; \
+	  else printf '  ✗ %-34s UNREACHABLE\n' "$$hp"; rc=1; fi; \
+	done; \
+	if [ $$rc -ne 0 ]; then \
+	  echo "  → add the upstream name as a pmoves_api network alias on that service" >&2; \
+	  echo "    (do NOT edit the vendored PMOVES-supabase kong.yml)" >&2; \
+	fi; exit $$rc
 
 .PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh supa-bootstrap-db
 supa-bootstrap-db: ensure-env-shared ## Bootstrap Supabase DB roles, schemas, and passwords from env
