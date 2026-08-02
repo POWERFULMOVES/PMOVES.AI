@@ -5,6 +5,31 @@ TensorZero LLM Observability Specialist - Observability Layer Agent
 Analyzes LLM performance metrics, costs, and model usage patterns from TensorZero ClickHouse.
 Provides insights for model selection optimization and cost management.
 
+.. warning::
+   **NON-FUNCTIONAL IN THIS DEPLOYMENT — do not treat its output as cost truth,
+   and do not "fix" it by tweaking the SQL.** Two independent reasons:
+
+   1. TensorZero observability is disabled by policy
+      (``pmoves/tensorzero/config/tensorzero.toml`` ``[gateway.observability]``,
+      Cyber Defence Initiative 2026-04-25 — enabling it stores full prompt and
+      response text with no TTL). Verified live: the ClickHouse instance has no
+      ``tensorzero`` database and zero tables. Nothing writes inference data.
+   2. All four queries below read ``FROM requests``. No migration in this repo
+      creates a ``requests`` table, and TensorZero does not create one — so these
+      queries would not resolve even if observability were switched on.
+
+   Additionally the cost rates below are hardcoded placeholders, and the cost
+   query groups only by ``model_name``/``provider_name`` — it never selects
+   ``function_name``, so results could not be attributed to an agent or lane
+   even with data present.
+
+   **The supported path for agent cost metering is the content-free
+   ``chit.economics.usage.v1`` NATS subject** (registered in
+   ``.claude/context/nats-subjects.md``), which carries counts and never prompt
+   text — satisfying the tokenomics requirement without re-creating the
+   retention hazard the policy exists to prevent. See
+   ``pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md`` §2 and §8.
+
 Usage:
     python pmoves/tools/observability/llm_observability_specialist.py query <sql>
     python pmoves/tools/observability/llm_observability_specialist.py performance --model <model_name>
@@ -93,7 +118,7 @@ class TensorZeroObservabilitySpecialist:
             Performance metrics
         """
         end = datetime.now()
-        start = end - timedelta(hours=hours)
+        end - timedelta(hours=hours)
 
         model_filter = f"AND model_name = '{model}'" if model else ""
 
@@ -347,7 +372,7 @@ def main():
 
             if "comparison" in comp:
                 c = comp['comparison']
-                print(f"\n  Differences:")
+                print("\n  Differences:")
                 print(f"    Latency: {c['latency_diff_ms']:+.2f}ms")
                 print(f"    Tokens: {c['token_diff']:+,}")
                 print(f"    Requests: {c['request_count_diff']:+,}")

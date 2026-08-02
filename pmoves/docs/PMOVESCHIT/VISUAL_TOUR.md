@@ -1,6 +1,6 @@
 # CHIT — A Visual Tour of PMOVES.AI
 
-> **From boundary geometry to working packets.** This tour walks you through CHIT (Cymatic-Holographic Information Transfer) as it actually exists in the codebase — not as theory, but as code you can run.
+> **From boundary geometry to working packets.** This tour walks you through CHIT (Cymatic Holographic Information Theory) as it actually exists in the codebase — not as theory, but as code you can run.
 
 **Assumptions:** You know what a vector embedding is. Everything else gets explained.
 

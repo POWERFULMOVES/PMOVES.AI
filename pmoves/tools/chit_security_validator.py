@@ -275,7 +275,7 @@ class CGPValidator:
             CGPValidationError: If validation fails and exceptions are enabled
         """
         start_time = time.time()
-        validation_time = datetime.now(timezone.utc).isoformat()
+        datetime.now(timezone.utc).isoformat()
 
         try:
             # Determine required security level
@@ -581,7 +581,7 @@ def main():
         )
 
         if is_valid:
-            print(f"✓ CGP is valid")
+            print("✓ CGP is valid")
             print(f"  Spec: {cgp.get('spec')}")
             print(f"  Super nodes: {len(cgp.get('super_nodes', []))}")
             return 0

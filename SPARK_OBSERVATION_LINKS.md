@@ -76,6 +76,11 @@ Agent Zero mounts the A2A protocol router on its main HTTP port. On SPARK the ma
 - Agent card: `http://localhost:5082/.well-known/agent-card.json`
 - A2A v1 tasks: `http://localhost:5082/a2a/v1/...`
 
+Inside the PMOVES compose stack the same A2A endpoints are available on the Agent Zero service ports:
+
+- Agent card: `http://localhost:8080/.well-known/agent-card.json`
+- Agent card (UI port): `http://localhost:8081/.well-known/agent-card.json`
+
 No separate A2A port is required.
 
 ## Visual evidence

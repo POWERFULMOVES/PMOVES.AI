@@ -29,9 +29,11 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Mesh Agent** (no HTTP) — Distributed node announcer; publishes host presence/capabilities on NATS every 15s.
 
-**Archon** `:8091` API, `:3737` UI — Supabase-driven agent service, prompt/form management. Connects to Agent Zero MCP. Health: `GET http://localhost:8091/healthz`.
+**Archon** `:3090` API/UI/MCP (unified), `:3737` host alias → 3090 — Archon 0.6.0 (TypeScript/Bun) remote-coding-agent, Postgres-backed (pg_notify), prompt/form management. Connects to Agent Zero MCP. Health: `GET http://localhost:3090/api/health`. _(0.6.0 rewrote the old Python `:8091`/`:8051` service — #2217.)_
 
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
+
+**HF MCP Server** `:8203` (host) / `:8096` (container) — HuggingFace Hub MCP server. Tools: `hf.model.search/info/download/list/convert_gguf`. SSE MCP at `/mcp/sse` (real JSON-RPC over SSE via `mcp.server.MCPServer`; POST messages to `/mcp/messages/`), REST API at `/api/*`, publishes `hf.model.downloaded.v1`. Downloads to `${HF_HOME:-./data/models}`:/models; inference services can mount the same path or import converted GGUF artifacts. Health: `GET /healthz`. Profile: `agents`/`research`.
 
 **Cipher Memory** `:8105` (host) / `:3000` (container) — Agent memory service. Submodule `Pmoves-cipher` forked from `campfirein/byterover-cli` v3.16.1 (formerly Cipher) with PMOVES additive shim (`src/pmoves/`). REST: `/api/memory` CRUD (POST/GET/search/DELETE — PMOVES PR #5 + A1-Shim), `GET /health` (NOT `/healthz`). MCP: SSE at `/mcp/sse` (4 tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`), POST `/mcp/messages`. **Auth:** `Authorization: Bearer ${CIPHER_API_TOKEN}` on all routes except `/health` (dev-skip if unset). NATS: emits `cipher.memory.stored.v1`, `.searched.v1`, `cipher.reasoning.stored.v1` + `services.announce.v1` (discovery mesh). Python bridge (`pmoves-cipher-mcp/`) DISABLED since 2026-05-15 — agents connect direct SSE. See `pmoves/docs/TAC/TAC_CIPHER.md` for architecture decision + A1-Shim workorder. BoTZ variant: separate instance at `:8081`, own `botz.cipher.*` NATS namespace. DoX variant: native Python CipherService at `:8096`.
 
@@ -49,7 +51,9 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **clap-embed** `:8108` — Deterministic CLAP audio/text embedder (MOF lattice node, `laion/larger_clap_music`). `POST /embed/audio`, `POST /embed/text`, `GET /healthz`, `GET /metrics`. Optional NATS `audio.embed.request.v1`/`audio.embed.result.v1`. WS-A grounding layer.
 
-**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.** ℹ️ *Note: runs as an on-demand headless render (see `reference_a2ui_remotion_render`); it is **not** currently wired into any `docker-compose*.yml` as a long-running service — the port/health-endpoint spec applies when it is run as a service.*
+**clip-embed** `:8109` — Deterministic CLIP image/text embedder (`openai/clip-vit-large-patch14`, MIT). `POST /embed/image` (multipart), `POST /embed/text`, `GET /healthz`, `GET /metrics`. 768-d, L2-normalised. Used for keyframe embeddings in media pipeline.
+
+**A2UI Renderer** `:8107` — Remotion animation engine for the creator pipeline. Converts A2UI animation JSON specs into MP4/GIF/WebM, uploads to MinIO, publishes NATS events. `POST /render`, `/render/chart`, `/render/provenance` (JWT fail-closed), `GET /healthz`, `GET /metrics`. Skill: `/remotion-render`. **Was 8105 — moved to avoid collision with Cipher Memory's host-published 8105.** Wired into `docker-compose.yml` under the **`creator`** profile (opt-in — heavy Remotion/Chromium image): `make -C pmoves up-a2ui-renderer` (#2228).
 
 ## Voice & Speech
 
@@ -112,7 +116,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 
 | Host | Tailscale name | Role | Key services | Hub flag |
 |------|---------------|------|--------------|----------|
-| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086` (⚠ NOT currently deployed — :8086 down / no container, verified 2026-07-04), Archon `:8091`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
+| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086` (⚠ NOT currently deployed — :8086 down / no container, verified 2026-07-04), Archon `:3090`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
 | `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, DNS `nats.pmoves.ai`)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
 | `pmoves-kvm2` | `pmoves-kvm2` | Reverse proxy + relay | nginx `:80/443` (SSL termination), RustDesk `hbbs/hbbr` (rendezvous + relay) | — |
 

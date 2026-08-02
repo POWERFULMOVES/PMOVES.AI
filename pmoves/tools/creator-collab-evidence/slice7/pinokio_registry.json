@@ -1,0 +1,702 @@
+{
+  "apps": [
+    {
+      "schema_version": "1.0.0",
+      "slug": "ace-step",
+      "title": "ACE-Step Music",
+      "description": "Music generation (lyrics + instrumental). Gradio. Concurrent with comfyui-desktop on a 32GB 5090.",
+      "owner": "pinokio",
+      "version_seen": "0.5.0",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": true,
+        "gpu_required": true,
+        "min_vram_mb": 8192,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110"
+        ],
+        "gpu_reservation_mb": 8192,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": "/gradio_api/info"
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "ace-step.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "comfyui-desktop",
+      "title": "ComfyUI Desktop",
+      "description": "Node-based Stable Diffusion / SDXL / Flux workflow runner (Gradio). The primary creator-collab rendering surface for image and video work.",
+      "owner": "pinokio",
+      "version_seen": "0.3.41",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": true,
+        "gpu_required": true,
+        "min_vram_mb": 16384,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110"
+        ],
+        "gpu_reservation_mb": 16384,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 8188,
+          "protocol": "http",
+          "health": "/system_stats"
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": "http://host.docker.internal:8188"
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": "http://comfyui-desktop.powerfulmoves-1.ts.pmoves.net:8188",
+          "headscale_acl_ports": [
+            8188
+          ],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": true,
+          "tunnel": "pmoves-edge",
+          "dns_record": "comfyui-desktop.pmoves.ai",
+          "public_url": "https://comfyui-desktop.pmoves.ai"
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "comfyui-desktop.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "customokio",
+      "title": "CustomOkio Scaffold",
+      "description": "PMOVES-side scaffold for new Pinokio launchers (gepeto output). No runtime cost; lives in the registry so creator-studio smoke can reference it as the launchers-author target.",
+      "owner": "pinokio",
+      "version_seen": "0.1.0",
+      "runtime": {
+        "launcher_script": "pinokio.js",
+        "autostart": false,
+        "gpu_required": false,
+        "min_vram_mb": 0,
+        "gpu_arch": [],
+        "gpu_reservation_mb": 0,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": false
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": null
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=pmoves-z890; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "customokio.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "lightonocr-2-1b",
+      "title": "LightOnOCR 2.1B",
+      "description": "Vision-language OCR. Small footprint (~2GB VRAM). Concurrently co-hosted with comfyui-desktop and ace-step on a 32GB 5090.",
+      "owner": "pinokio",
+      "version_seen": "0.1.4",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": true,
+        "gpu_required": true,
+        "min_vram_mb": 2048,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110",
+          "sm_89"
+        ],
+        "gpu_reservation_mb": 2048,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": "/gradio_api/info"
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "lightonocr-2-1b.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "n8n",
+      "title": "n8n Workflow Automation",
+      "description": "n8n workflow engine. CPU-only. Always-on baseline on the 5090; bridges to NATS via webhook nodes for PMOVES event flow.",
+      "owner": "pinokio",
+      "version_seen": "1.45.1",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": true,
+        "gpu_required": false,
+        "min_vram_mb": 0,
+        "gpu_arch": [],
+        "gpu_reservation_mb": 0,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": false
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": "/healthz"
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "n8n.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "qwen3-tts",
+      "title": "Qwen3 TTS",
+      "description": "Qwen3 standalone TTS with VoiceDesign mode. On-demand; launched by the helpdesk-skill (slice 6) or the creator-canvas-primary surface.",
+      "owner": "pinokio",
+      "version_seen": "0.6.2",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": false,
+        "gpu_required": true,
+        "min_vram_mb": 4096,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110"
+        ],
+        "gpu_reservation_mb": 4096,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": "/gradio_api/info"
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "qwen3-tts.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "sillytavern",
+      "title": "SillyTavern",
+      "description": "Chat UI for local LLMs. On-demand; pairs with Ollama on the same node.",
+      "owner": "pinokio",
+      "version_seen": "1.12.7",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": false,
+        "gpu_required": true,
+        "min_vram_mb": 4096,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110"
+        ],
+        "gpu_reservation_mb": 4096,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": false
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": null
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "sillytavern.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "ultimate-tts-studio",
+      "title": "Ultimate TTS Studio",
+      "description": "14-engine TTS hub (Gradio). Always-on baseline voice surface on the 5090.",
+      "owner": "pinokio",
+      "version_seen": "3.1.7",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": true,
+        "gpu_required": true,
+        "min_vram_mb": 6144,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110"
+        ],
+        "gpu_reservation_mb": 6144,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 7860,
+          "protocol": "http",
+          "health": "/gradio_api/info"
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": "http://host.docker.internal:7860"
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": "http://ultimate-tts-studio.powerfulmoves-1.ts.pmoves.net:7860",
+          "headscale_acl_ports": [
+            7860
+          ],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": true,
+          "tunnel": "pmoves-edge",
+          "dns_record": "ultimate-tts-studio.pmoves.ai",
+          "public_url": "https://ultimate-tts-studio.pmoves.ai"
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "ultimate-tts-studio.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "unsloth",
+      "title": "Unsloth LLM Training",
+      "description": "LLM fine-tuning (Unsloth). On-demand only; 24GB exclusive claim goes to DGX Spark for the actual training runs.",
+      "owner": "pinokio",
+      "version_seen": "2024.10",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": false,
+        "gpu_required": true,
+        "min_vram_mb": 24000,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110",
+          "sm_90"
+        ],
+        "gpu_reservation_mb": 24000,
+        "gpu_reservation_mode": "exclusive",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": null
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "unsloth.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "vibevoice-realtime",
+      "title": "VibeVoice Realtime",
+      "description": "WebSocket streaming TTS (uvicorn). On-demand; the realtime voice lane prefers this over Ultimate-TTS-Studio when latency matters.",
+      "owner": "pinokio",
+      "version_seen": "0.3.0",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": false,
+        "gpu_required": true,
+        "min_vram_mb": 4096,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110"
+        ],
+        "gpu_reservation_mb": 4096,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "ws",
+          "health": null
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "vibevoice-realtime.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "voxforge-pro",
+      "title": "VoxForge Pro",
+      "description": "PDF-to-audiobook pipeline. On-demand; the long-form voice lane. Bookmarks + chapter splits live in the Gradio UI.",
+      "owner": "pinokio",
+      "version_seen": "1.0.2",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": false,
+        "gpu_required": true,
+        "min_vram_mb": 4096,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110"
+        ],
+        "gpu_reservation_mb": 4096,
+        "gpu_reservation_mode": "concurrent",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": "/gradio_api/info"
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "voxforge-pro.yaml",
+      "_source": "curated"
+    },
+    {
+      "schema_version": "1.0.0",
+      "slug": "wan",
+      "title": "Wan Video",
+      "description": "Video generation (WanGP). On-demand only; 24GB exclusive claim goes to DGX Spark per the slice-1 review-iter-2 cycle-2 4-quadrant autostart x gpu_reservation_mode matrix.",
+      "owner": "pinokio",
+      "version_seen": "1.2.0",
+      "runtime": {
+        "launcher_script": "start.js",
+        "autostart": false,
+        "gpu_required": true,
+        "min_vram_mb": 24000,
+        "gpu_arch": [
+          "sm_120",
+          "sm_110",
+          "sm_90"
+        ],
+        "gpu_reservation_mb": 24000,
+        "gpu_reservation_mode": "exclusive",
+        "dependencies": [],
+        "requires_hf_login": true
+      },
+      "endpoints": {
+        "primary": {
+          "port": 0,
+          "protocol": "http",
+          "health": null
+        },
+        "alt": []
+      },
+      "pinokio_skill_ref": null,
+      "network_exposure": {
+        "l1_venv": {
+          "reachable": true
+        },
+        "l2_container_same_host": {
+          "reachable": true,
+          "address": null
+        },
+        "l3_mesh": {
+          "reachable": true,
+          "address": null,
+          "headscale_acl_ports": [],
+          "tags_required": []
+        },
+        "l4_public": {
+          "reachable": false,
+          "tunnel": null,
+          "dns_record": null,
+          "public_url": null
+        }
+      },
+      "notes": [
+        "node tailscale_host=powerfulmoves-1; runtime facts from slice-1 review-iter-2 cycle-2 record",
+        "mesh_exposure (slice 4) reconciles L3 ACL ports + L4 tunnel + L4 DNS from this entry"
+      ],
+      "_file": "wan.yaml",
+      "_source": "curated"
+    }
+  ],
+  "count": 12
+}

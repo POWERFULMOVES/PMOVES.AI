@@ -950,7 +950,7 @@ def credentials_fetch(
         if github_owner and github_repo:
             typer.echo(f"  GitHub: {github_owner}/{github_repo}")
         if include_docker:
-            typer.echo(f"  Docker: enabled")
+            typer.echo("  Docker: enabled")
 
     try:
         credentials = cf.fetch_credentials_to_env_shared(
@@ -1289,7 +1289,6 @@ def env_init(
     ),
 ) -> None:
     """Initialize environment by decoding CHIT secrets and applying to tier files."""
-    import sys
     from pmoves.chit import decode_secret_map, load_cgp, apply_manifest_v2
 
     pmoves_dir = REPO_ROOT / "pmoves"
@@ -1382,7 +1381,6 @@ def env_doctor(
     import subprocess
     from pmoves.tools.env_validator import (
         validate_all_tiers,
-        run_connectivity_checks,
         TIER_DEFINITIONS,
     )
 
@@ -1548,12 +1546,12 @@ def env_migrate(
             written[tier] = len(tier_vars)
             typer.echo(f"   ✅ env.tier-{tier}: {len(tier_vars)} variables")
 
-    typer.echo(f"\n✅ Migration complete!")
+    typer.echo("\n✅ Migration complete!")
     typer.echo(f"   Migrated {sum(written.values())} variables to {len(written)} tier files")
-    typer.echo(f"\n💡 Next steps:")
-    typer.echo(f"   1. Run 'pmoves env validate' to check tier files")
-    typer.echo(f"   2. Run 'pmoves secrets encode' to update CHIT")
-    typer.echo(f"   3. Consider removing legacy .env.generated after verification")
+    typer.echo("\n💡 Next steps:")
+    typer.echo("   1. Run 'pmoves env validate' to check tier files")
+    typer.echo("   2. Run 'pmoves secrets encode' to update CHIT")
+    typer.echo("   3. Consider removing legacy .env.generated after verification")
 
 
 # Agent SDK Commands
@@ -1640,7 +1638,7 @@ def agent_sdk_create(
                     if 1 <= idx <= 5:
                         selected_role = role_map[idx]
                         break
-                    typer.echo(f"❌ Invalid choice. Please enter 1-5")
+                    typer.echo("❌ Invalid choice. Please enter 1-5")
                 except ValueError:
                     typer.echo("❌ Please enter a number.")
                 except KeyboardInterrupt:
@@ -1722,10 +1720,10 @@ def agent_sdk_create(
             typer.echo(f"   • {subagent}")
         typer.echo()
         typer.echo("📡 NATS Events:")
-        typer.echo(f"   • botz.agent.registered.v1 - Registration announcement")
-        typer.echo(f"   • botz.agent.heartbeat.v1 - Presence (every 30s)")
-        typer.echo(f"   • agent.task.start.v1 - Task execution start")
-        typer.echo(f"   • botz.work.completed.v1 - Task completion")
+        typer.echo("   • botz.agent.registered.v1 - Registration announcement")
+        typer.echo("   • botz.agent.heartbeat.v1 - Presence (every 30s)")
+        typer.echo("   • agent.task.start.v1 - Task execution start")
+        typer.echo("   • botz.work.completed.v1 - Task completion")
         typer.echo()
 
         # Usage example

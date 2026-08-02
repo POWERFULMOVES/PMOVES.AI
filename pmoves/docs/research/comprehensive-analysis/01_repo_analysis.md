@@ -157,7 +157,7 @@ The `provisions/` subdirectory contains ~50 infrastructure files:
 
 ### CHIT Geometry Bus as Through-Line
 
-The CHIT (Compressed Hierarchical Information Transmission) system is the **mathematical backbone** connecting all five tiers:
+The CHIT (Compressed Hierarchical Information Transfer) system is the **mathematical backbone** connecting all five tiers:
 
 ```
 L1 Research signals

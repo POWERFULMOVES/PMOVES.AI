@@ -6,10 +6,16 @@
 #
 # Streams created:
 #   GEOMETRY_CGP           geometry.>    limits   30d  1GB
-#   TOKENISM_ATTRIBUTION   tokenism.>    interest 90d  2GB
+#   TOKENISM_ATTRIBUTION   tokenism.>    limits   90d  2GB
 #   BOTZ_COORDINATION      botz.>        limits   7d   500MB
 #   MESH_GPU               mesh.gpu.>    limits   7d   1GB   (DGX Spark GB10 GPU mesh)
 #   CONTENT_PROVENANCE     content.>     interest 90d  2GB   (SPARK shaped packets / provenance)
+#
+# FLAGGED, NOT CHANGED: CONTENT_PROVENANCE still uses `interest` retention and
+# also has 0 bound consumers, so it has the same silent-discard hazard described
+# on TOKENISM_ATTRIBUTION below. Provenance is audit data and probably wants
+# `limits` too, but that is the SPARK lane's call — raising rather than changing
+# it here to keep this commit to one concern.
 #
 # NOTE: The catch-all MESH_GPU and CONTENT_PROVENANCE streams supersede the
 # reference-only YAMLs in pmoves/nats/mesh_gpu_streams.yaml and
@@ -80,10 +86,28 @@ add_stream GEOMETRY_CGP \
   --replicas 1
 
 # ---------- TOKENISM_ATTRIBUTION ----------
+# Retention is `limits`, NOT `interest`. Under interest retention a message with
+# no *currently bound* consumer is accepted and immediately discarded — no error
+# to the publisher. This stream carries `tokenism.attribution.recorded.v1`, the
+# record of who did what work, which feeds settlement: silent loss is the worst
+# possible failure mode for it. Today the stream has 0 bound consumers, so under
+# interest retention every attribution event published would vanish.
+#
+# `limits` (not `workqueue`) because attribution is expected to fan out to
+# several independent readers — settlement, audit, the publisher-discord
+# notifier — and workqueue delivers each message to exactly one consumer.
+# 90d/2GB is an audit-ledger window, unchanged.
+#
+# MIGRATION: JetStream retention is immutable after creation, so `stream add` on
+# an existing TOKENISM_ATTRIBUTION is a no-op ("already exists (ok)") and this
+# change alone will NOT fix a live stream. On each node that already has it:
+#   nats stream info TOKENISM_ATTRIBUTION      # confirm messages == 0
+#   nats stream rm  TOKENISM_ATTRIBUTION -f    # only when empty
+# then re-run this script. See pmoves/docs/handoffs/PMOVES_VALUE_CHAIN_REVIEW.md §4.
 add_stream TOKENISM_ATTRIBUTION \
   --subjects "tokenism.>" \
   --storage file \
-  --retention interest \
+  --retention limits \
   --max-age 2160h \
   --max-bytes 2147483648 \
   --discard old \

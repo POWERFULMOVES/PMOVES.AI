@@ -785,6 +785,80 @@ rg -n '[a-z]+:[a-z]' .claude/skills/*/SKILL.md --glob '!*.py'
 
 **Fix lane:** Add a `ZAI_SPEC` ProviderSpec (~40 lines), emit Z.AI alongside TensorZero when `Z_AI_API_KEY` is present, add `"glm"` to role-inference patterns. Also add `chat_zai_glm52` to `provider_catalog.yaml` (currently GLM-5.2 only listed under `ollama_cloud`).
 
+## Cipher Village Phase B — Stacked PR Learnings (2026-07-28)
+
+**Context:** `Pmoves-cipher` `feat/cipher-agent-scope` accumulated six concerns. Crush is active on that worktree, so all branch surgery was done in isolated `/tmp/Pmoves-cipher-pr*` worktrees.
+
+**Worktree split flow:**
+- Base: `d9fab9a8` on `PMOVES.AI-Edition-Hardened`.
+- PR1 `feat/cipher-agent-scope-rebased` — `agentId` parameter on all MCP tools + REST routes.
+- PR2 `feat/cipher-per-agent-tokens` — Supabase token registry + auth middleware enforcement.
+- PR3 `feat/cipher-mcp-catalog` — gateway-agent catalog bridge + MCP tool wiring.
+- PR4 `feat/cipher-session-cache` — `session_save` / `session_recall` tools.
+- PR5 `feat/cipher-neo4j-graph` — graph client + `graph_expand` tool.
+- PR6 `feat/cipher-hirag-bridge` — HiRAG `hybrid_search` proxy.
+
+**Singleton-stub hygiene in cipher tests:**
+- `getEmbeddingSidecar()`, `getHiragClient()`, and `getMCPCatalogClient()` are process-wide singletons. Tests that stub them with `Object.assign` must save/restore the original methods and reset cached state (`collectionReady`, `cache`, `cacheTime`, `fetching`, `gpuAvailable`) in cleanup, otherwise later test files see the stub and fail with misleading "returns empty list" or unreachable-gateway symptoms. Use a `stubSingleton<T>` helper that records originals and restores them.
+
+**MemoryManager.list does not accept `tags`:**
+- `ListMemoriesOptionsSchema` rejects `tags`. Fallbacks that need tag filtering must load all memories via `memoryManager.list({})` and filter in-memory. Affected: `reasoning_patterns` and `session_recall` tool implementations.
+
+**MCP catalog wiring gap:**
+- Defining the `pmoves_cipher_mcp_list` / `pmoves_cipher_mcp_get` tool schemas is not enough; they must also be registered in `buildMcpServer()` and dispatched in the tool handler. PR3 commit `c5d7ec6d` only added `src/pmoves/mcp-catalog.ts`; the tool wiring was added in the PR3 worktree.
+
+**Per-agent token enforcement pattern:**
+- Token middleware resolves `req.agentId` from the Supabase token registry. Both `mcp-sse.ts` and `memory-routes.ts` must call `assertAgentId(req, args)` and reject with 403 when `req.agentId` is present and does not match `args.agentId` (including wildcard cross-agent search). Pass auth context from `rest-server.ts` into the route handlers.
+
+**Per-agent token superproject support:**
+- Migration: `pmoves/supabase/migrations/20260728100000_cipher_agent_tokens.sql` for `pmoves_core.cipher_agent_tokens` and `pmoves_core.cipher_access_log`.
+- Make target: `cipher-mint-token` in `pmoves/Makefile` + `pmoves/scripts/mint_cipher_token.py`.
+
+**Verification recipe:**
+```bash
+# In each /tmp/Pmoves-cipher-pr* worktree
+npm test
+npm run typecheck
+```
+
+## SPARK HF MCP Server Wiring (2026-07-29)
+
+**Context:** Finish the open handoff to wire `pmoves/services/hf-mcp-server/` into the
+agents compose overlay on host port 8203.
+
+**Compose wiring pattern:**
+- Add new services to `pmoves/docker-compose.yml` (the source of truth), then
+  regenerate overlays with `python scripts/split_compose.py`.
+- Keep internal container port (`8096`) and host-published port (`8203`) distinct
+  in docs/CATALOG to avoid collision with Headscale (`8096` in remote overlay)
+  and Jellyfin.
+- Use `*tier-agent-hardened-rw` for services that write to a host-mounted model
+  cache (`${HF_HOME:-./data/models}:/models`).
+- Profile membership: `["agents", "research"]` so both `up-agents` and research
+  bring-up paths include the MCP server.
+
+**Registry/catalog parity:**
+- Add the service to `pmoves/config/agent_registry.yaml` under the HF Agent
+  services block, including `nats.publishes: ["hf.model.downloaded.v1"]`.
+- Update `.claude/CATALOG.md` and `pmoves/docs/SERVICE_DOCS_MATRIX.md` in the
+  same edit so future agents find the port/health/docs surface.
+
+**Validation shortcuts:**
+- `docker compose -f docker-compose.base.yml -f docker-compose.agents.yml --profile agents config` requires a lot of tier secrets; for a focused check,
+  extract the single service into a temporary compose file that includes
+  `docker-compose.base.yml` for networks/anchors and stub `nats`/`nats-init`.
+- The existing `pmoves-hf-mcp-server:spark-local` container on port 8203 can
+  serve as a live health reference when NATS is reachable.
+
+**PM-Spark VSS opportunity for Claw:**
+- `https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git`
+  ships agentskills.io-compatible skills (`vss-ask-video`,
+  `vss-search-archive`, `vss-generate-video-report`, `vss-deploy-profile`, etc.).
+- Easiest integration path for Claw: install the skill directories under
+  `~/.openclaw-autoclaw/skills/` and point them at a running VSS deployment.
+- Longer path: submodule as `PMOVES-Spark-VSS/`, add a `pmoves-vss-agent`
+  compose service, and expose the VSS agent/orchestrator tools as MCP.
+
 ## Review Comment Verification Protocol
 
 **Before fixing any review comment (including nitpicks):**
@@ -793,3 +867,25 @@ rg -n '[a-z]+:[a-z]' .claude/skills/*/SKILL.md --glob '!*.py'
 3. If pre-existing: reply with evidence, resolve as out-of-scope, open a separate lane
 4. Cross-check automated findings against each other (CodeRabbit catches body-text drift, Codex catches contract/schema issues — they're complementary, not redundant)
 5. After fixing the flagged issue, grep for the same pattern across adjacent files — reviewers sample, you exhaust
+
+## MCP / SSE Service Review Patterns
+
+**Host bind:** For MCP services that publish a host port, default the bind to
+`127.0.0.1` unless the design explicitly needs LAN exposure. This mirrors the
+Cipher fix in PR #1512 and prevents silent `0.0.0.0` exposure on shared nodes.
+Set via the compose `ports:` form `"127.0.0.1:${HOST_PORT}:${CONTAINER_PORT}"`.
+
+**Real transport before advertising:** Do not expose `/sse` or `/mcp/sse` as an
+MCP endpoint until the server implements the JSON-RPC over SSE contract. Use
+`mcp.server.MCPServer`, decorate tools with `@mcp_server.tool()`, and mount the
+resulting ASGI app under `/mcp` so clients reach `GET /mcp/sse` and
+`POST /mcp/messages/`. Verify with an actual initialize + tools/list exchange.
+
+**Shared-cache wording:** When a service writes to a host-mounted model cache,
+state that downloads land in the mounted path and that *other* inference
+services can mount the same path or import converted artifacts. Avoid implying
+automatic cross-container sharing.
+
+**Doc-path exhaustiveness:** A path change (e.g. `/sse` → `/mcp/sse`) must be
+grepped across `README.md`, service `CLAUDE.md`, `.claude/CATALOG.md`, handoff
+notes, and `agent_registry.yaml` endpoint fields in the same commit set.

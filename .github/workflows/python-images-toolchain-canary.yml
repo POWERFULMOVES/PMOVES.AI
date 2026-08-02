@@ -37,7 +37,7 @@ jobs:
       TRIVY_IMAGE: aquasec/trivy:0.57.1
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Resolve current and candidate versions
         id: versions
@@ -117,7 +117,6 @@ jobs:
               pathlib.Path("pmoves/services/supaserch/Dockerfile"),
               pathlib.Path("pmoves/services/deepresearch/Dockerfile"),
               pathlib.Path("pmoves/services/pmoves-yt/Dockerfile"),
-              pathlib.Path("pmoves/services/archon/Dockerfile"),
           ]
 
           pin = (
@@ -184,7 +183,6 @@ jobs:
             "supaserch|pmoves/services|pmoves/services/supaserch/Dockerfile|local/pmoves-supaserch:toolchain-canary"
             "deepresearch|pmoves|pmoves/services/deepresearch/Dockerfile|local/pmoves-deepresearch:toolchain-canary"
             "pmoves-yt|pmoves/services/pmoves-yt|pmoves/services/pmoves-yt/Dockerfile|local/pmoves-yt:toolchain-canary"
-            "archon|pmoves|pmoves/services/archon/Dockerfile|local/pmoves-archon:toolchain-canary"
           )
 
           for entry in "${targets[@]}"; do
@@ -239,4 +237,3 @@ jobs:
             pmoves/services/supaserch/Dockerfile
             pmoves/services/deepresearch/Dockerfile
             pmoves/services/pmoves-yt/Dockerfile
-            pmoves/services/archon/Dockerfile

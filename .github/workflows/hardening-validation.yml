@@ -44,7 +44,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Run hardening validation
         id: hardening-check
@@ -99,7 +99,6 @@ jobs:
       max-parallel: 2
       matrix:
         dockerfile:
-          - pmoves/services/archon/Dockerfile
           - pmoves/services/agent-zero/Dockerfile
           - pmoves/services/flute-gateway/Dockerfile
           - pmoves/services/hi-rag-gateway/Dockerfile
@@ -115,7 +114,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Check USER directive
         run: |
@@ -180,7 +179,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       # ---- GitHub-hosted Linux runner checks ----
       - name: Check Docker daemon security config
@@ -345,7 +344,18 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Check PMOVES_NETWORKS wiring is in sync with services' networks (drift gate)
+        run: |
+          # Each service's networks: is mirrored into its own PMOVES_NETWORKS= env so
+          # topology.TopologyContext.from_env() sees a non-empty docker_networks (backs
+          # on_network()/has_external_egress()). --check fails if a service's networks:
+          # changed without re-running the injector. Run BEFORE the split gate since the
+          # injector mutates the SOURCE the overlays are generated from. ruamel pinned to
+          # match the Makefile COMPOSE_NETWORKS_RUN / COMPOSE_SPLIT_RUN pin.
+          python3 -m pip install --quiet "ruamel.yaml==0.19.1"
+          python3 pmoves/scripts/inject_pmoves_networks.py --check
 
       - name: Check split overlays are in sync with source (drift gate)
         run: |

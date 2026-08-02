@@ -1,6 +1,8 @@
 # Media Audio Analyzer - GPU-enabled for PyTorch/Whisper
 # Uses CUDA runtime for emotion detection and audio analysis models
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# Base image: cu128 required for ARM64 (GB10/Jetson) — cu124 has no ARM64 wheels
+ARG CUDA_IMAGE=nvidia/cuda:12.8.1-runtime-ubuntu22.04
+FROM ${CUDA_IMAGE}
 
 # Install Python 3.11 and required system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -21,16 +23,17 @@ RUN pip install --no-cache-dir --upgrade pip
 # Build context is ./services/media-audio (service directory)
 # Security: Reproducible builds from lockfile
 COPY requirements.txt requirements.lock ./
-# Install from lockfile for reproducible builds (includes hash validation)
-# Security: PyTorch extra-index-url required for CUDA packages (+cu124 variants)
+# Install torch from cu128 index (ARM64 wheels available, proven by Hi-RAG GPU on SPARK)
+# Security: PyTorch extra-index-url required for CUDA packages (+cu128 variants)
+ARG TORCH_CUDA=cu128
 RUN --mount=type=cache,target=/root/.cache/pip \
     # amd64 uses the x86-resolved lock (reproducible); arm64/Jetson
-    # falls back to marker-aware requirements.txt — the lock hard-pins
-    # torch+cu124 wheels that do not exist for arm64 (review #2071 P2).
+    # falls back to marker-aware requirements.txt.
+    # cu128 has ARM64 wheels (verified on SPARK GB10 via Hi-RAG GPU).
     if [ "$(uname -m)" = "x86_64" ]; then \
-      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.lock; \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.lock; \
     else \
-      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt; \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.txt; \
     fi
 # Diarization deps (pyannote) installed separately so they land regardless of the
 # lock-vs-requirements.txt path above — the x86_64 lock does not pin pyannote, which

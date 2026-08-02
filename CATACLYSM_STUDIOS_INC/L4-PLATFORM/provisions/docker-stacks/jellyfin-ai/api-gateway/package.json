@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.4",
-    "axios": "^1.16.0",
+    "axios": "^1.18.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.22.1",
@@ -20,7 +20,7 @@
     "multer": "^2.2.0",
     "neo4j-driver": "^5.15.0",
     "redis": "^4.6.10",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   },
   "overrides": {
     "qs": "6.14.2"

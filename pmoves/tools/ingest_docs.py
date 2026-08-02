@@ -15,7 +15,6 @@ Options:
 
 import os
 import sys
-import json
 import hashlib
 import argparse
 import requests

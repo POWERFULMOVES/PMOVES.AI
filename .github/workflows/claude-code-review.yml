@@ -31,11 +31,12 @@ concurrency:
 
 jobs:
   claude-review:
-    if: |
-      github.event.pull_request.draft == false &&
-      (github.event.pull_request.author_association == 'OWNER' ||
-       github.event.pull_request.author_association == 'MEMBER' ||
-       github.event.pull_request.author_association == 'COLLABORATOR')
+    # Disabled: fleet review model uses Codex bot + CodeRabbit + CLI agents
+    # (Crush/Kimi/Claude on self-hosted runners orchestrated by Agent Zero/Archon),
+    # not the Anthropic API key OAuth path. The CLAUDE_CODE_OAUTH_TOKEN expired
+    # and won't be rotated — reviews happen via coding plans and local models.
+    # Kept as workflow_dispatch for manual runs if an operator re-enables OAuth.
+    if: false
     runs-on: ubuntu-latest
     # Least-privilege for a comment-only reviewer: it reads the diff and posts
     # PR review comments — it does not push commits or write attestations.
@@ -49,15 +50,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342 # v1.0.171
+        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Use the direct Anthropic API key, not CLAUDE_CODE_OAUTH_TOKEN (expired).
+          # See review-comment-monitor.yml for the full rationale.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'

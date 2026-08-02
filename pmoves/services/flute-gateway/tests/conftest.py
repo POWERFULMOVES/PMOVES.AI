@@ -3,7 +3,6 @@
 import os
 import sys
 
-import pytest
 
 # Add parent directory to path for imports
 _parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

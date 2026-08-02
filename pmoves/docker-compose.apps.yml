@@ -64,6 +64,7 @@ services:
     - POSTGRES_USER=wger
     - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:?set WGER_DB_PASSWORD in env.tier-data}
     - PGDATA=/var/lib/postgresql/data/pgdata
+    - PMOVES_NETWORKS=pmoves_data
     volumes:
     - wger-db:/var/lib/postgresql/data
     profiles: ["health", "wger"]
@@ -123,6 +124,7 @@ services:
     - GH_APP_ID=${GH_APP_ID:-}
     - GH_APP_SEC=${GH_APP_SEC:-}
     - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
     volumes:
     - ./config/agent_signatures.yaml:/app/config/agent_signatures.yaml:ro
     depends_on:
@@ -190,7 +192,7 @@ services:
     - YT_ENABLE_PO_TOKEN=${YT_ENABLE_PO_TOKEN:-true}
     - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
-    - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}
+    - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4417}
     - BGUTIL_DISABLE_INNERTUBE=${BGUTIL_DISABLE_INNERTUBE:-1}
     - INVIDIOUS_BASE_URL=${INVIDIOUS_BASE_URL:-http://invidious:3000}
     - INVIDIOUS_COMPANION_URL=${INVIDIOUS_COMPANION_URL:-http://invidious-companion:8282}
@@ -215,6 +217,7 @@ services:
     - HTTP_PROXY=
     - HTTPS_PROXY=
     - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_data,pmoves_external
     volumes:
     - ./config:/app/config
     - pmoves-yt-data:/data
@@ -242,3 +245,100 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+
+  # ##############################################################################
+  # Creator-Collab Lane Slice 2/3: nats_event_bus + pinokio_bridge
+  # ##############################################################################
+  # nats_event_bus is the HTTP-fronted event bus for the slice-3 creator-collab
+  # subjects (comfy.collab.{prompt,progress,artifact}.v1, room.presence.v1,
+  # room.directory.v1) + slice-6 helpdesk subjects. Reads are open; writes
+  # require the X-PMOVES-NatsBus-Token header (fail-closed if env unset).
+  # Subscriber connects to NATS_URL when set; HTTP publish path is independent.
+  nats_event_bus:
+    build:
+      context: .
+      dockerfile: services/nats_event_bus/Dockerfile
+    image: ${NATS_EVENT_BUS_IMAGE:-ghcr.io/powerfulmoves/pmoves-nats-event-bus:pmoves-latest}
+    container_name: pmoves-nats-event-bus
+    hostname: nats_event_bus
+    restart: unless-stopped
+    environment:
+    - PORT=8131
+    - NATS_EVENT_BUS_HOST=0.0.0.0
+    - NATS_EVENT_BUS_PORT=8131
+    - NATS_URL=${NATS_URL}
+    - NATS_EVENT_BUS_TOKEN=${NATS_EVENT_BUS_TOKEN:?set NATS_EVENT_BUS_TOKEN in env.shared}
+    - NATS_EVENT_BUS_DISABLE_SUBSCRIBER=${NATS_EVENT_BUS_DISABLE_SUBSCRIBER:-false}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    ports:
+    - ${NATS_EVENT_BUS_BIND:-127.0.0.1}:${NATS_EVENT_BUS_PORT:-8131}:8131
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["apps", "events", "pinokio"]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8131/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 192M
+
+  # pinokio_bridge is the HTTP-fronted bridge to the on-host Pinokio 8 install
+  # (or a future ComfyUI launcher). Reads Pinokio state from $PINOKIO_HOME
+  # (default: ~/pinokio on the host, mounted read-only). Writes require
+  # X-PMOVES-Bridge-Token (loaded from PMOVES_BRIDGE_TOKEN at service start;
+  # fail-closed 503 if unset). Fires room.presence.v1 events to the bus
+  # on every successful launch.
+  pinokio_bridge:
+    build:
+      context: .
+      dockerfile: services/pinokio_bridge/Dockerfile
+    image: ${PINOKIO_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-pinokio-bridge:pmoves-latest}
+    container_name: pmoves-pinokio-bridge
+    hostname: pinokio_bridge
+    restart: unless-stopped
+    # Run as the host's pmoves user so the bind-mounted PINOKIO_HOME stays
+    # owned correctly. UID/GID are 1000 by default; override via env if the
+    # host account is different.
+    user: "${PINOKIO_BRIDGE_UID:-1000}:${PINOKIO_BRIDGE_GID:-1000}"
+    environment:
+    - PORT=8130
+    - PINOKIO_BRIDGE_HOST=0.0.0.0
+    - PINOKIO_BRIDGE_PORT=8130
+    - PMOVES_BRIDGE_TOKEN=${PMOVES_BRIDGE_TOKEN:?set PMOVES_BRIDGE_TOKEN in env.shared}
+    - PINOKIO_HOME=${PINOKIO_HOME:-/pinokio}
+    - NATS_EVENT_BUS_URL=${NATS_EVENT_BUS_URL:-http://nats_event_bus:8131}
+    - NATS_EVENT_BUS_TOKEN=${NATS_EVENT_BUS_TOKEN:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    ports:
+    - ${PINOKIO_BRIDGE_BIND:-127.0.0.1}:${PINOKIO_BRIDGE_PORT:-8130}:8130
+    volumes:
+    # Bind the host's Pinokio install so the bridge can read state and
+    # (via pterm) drive app launches. RO because the bridge should not
+    # mutate the host install.
+    - ${PINOKIO_HOME:-~/pinokio}:/pinokio:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats_event_bus:
+        condition: service_healthy
+    profiles: ["apps", "pinokio"]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8130/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 192M
+

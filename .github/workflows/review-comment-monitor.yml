@@ -36,14 +36,18 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Triage automated review
-        uses: anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342 # v1.0.171
+        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Use the direct Anthropic API key, not CLAUDE_CODE_OAUTH_TOKEN. The
+          # OAuth token is the Pro/Max subscription credential and expires; the
+          # repo's ANTHROPIC_API_KEY (rotated 2026-02-27) is the persistent path.
+          # Same fix applied to claude-code-review.yml and review-autofix.yml.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # claude-code-action rejects bot-triggered runs by default; this job is
           # *intentionally* triggered by bot reviews, so allow exactly those bots.
           allowed_bots: 'coderabbitai[bot],chatgpt-codex-connector[bot]'

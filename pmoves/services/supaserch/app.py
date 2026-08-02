@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import ipaddress
 import json
 import logging
@@ -29,6 +28,12 @@ from prometheus_client import (
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+# CGP (CHIT Geometry Packet) publish configuration.
+# When CGP_PUBLISH_ENABLED is False, _emit_cgp_packet short-circuits and returns False.
+# CGP_SUBJECT is the NATS subject the geometry bus listens on (default geometry.cgp.v1).
+CGP_PUBLISH_ENABLED = os.getenv("CGP_PUBLISH_ENABLED", "true").strip().lower() == "true"
+CGP_SUBJECT = os.getenv("CGP_SUBJECT", "geometry.cgp.v1")
 
 
 def _redact_url(url: str) -> str:
@@ -548,7 +553,7 @@ async def search(q: str = Query(..., min_length=1, description="Search query")) 
     try:
         result = await process_request(q, context=context, envelope={"query": q, "channel": channel})
         return result
-    except ValueError as exc:
+    except ValueError:
         REQUEST_ERRORS.labels(channel=channel, reason="ValueError").inc()
         raise HTTPException(status_code=400, detail="Invalid search request") from None
     except Exception as exc:  # noqa: BLE001

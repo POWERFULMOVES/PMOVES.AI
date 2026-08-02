@@ -61,3 +61,15 @@
    verified correct in pm-metric-tile / pm-space-agent-card.
 9. No secrets, internal hostnames, or topology in the diff. `--pm-signature`
    untouched; darkxside theme sets `--pm-accent` only.
+
+## fixture-provenance (post-merge, resolved)
+
+10. **Fordham-resident-legitimacy — 2 attributed quotes in `fordham-hill.json`
+    with no recorded consent or provenance, pinned to a real, identifiable
+    Bronx housing cooperative.** A trim cycle that only reads diffs misses
+    fixture-content questions — this needed a fixture-content audit step.
+    **Resolved (PR #2269):** quotes rewritten to obviously-synthetic personas
+    ("Sample voice — Maya R." / "Sample voice — Devon A." with `illustrative
+    persona (not a real resident)` role). A 3rd quote-block added as a "share
+    your story" CTA inviting real Fordham Hill residents to contribute — when
+    they do with consent, their quote replaces the placeholder (option C path).

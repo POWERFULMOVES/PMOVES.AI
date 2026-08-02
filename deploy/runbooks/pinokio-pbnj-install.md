@@ -32,11 +32,11 @@ vncserver :1 -geometry 1920x1080 -depth 24
 
 ### 2. Configure PBNJ Launchers
 
-PBNJ launcher configs are at `pbnj/pinokio/api/pmoves-services/`.
+PBNJ launcher configs are at `pbnj/api/pmoves-services/`.
 
 If the submodule is populated:
 ```bash
-cd pbnj/pinokio/api/pmoves-services/
+cd pbnj/api/pmoves-services/
 # Each service has a pinokio.js launcher file
 ls *.js
 ```
@@ -92,7 +92,7 @@ Configure launcher startup order in Pinokio or use Docker Compose `depends_on`.
 
 | Service | Launcher | Status | Notes |
 |---------|----------|--------|-------|
-| Gateway | pbnj/pinokio/api/pmoves-services/ | Check submodule | CHIT signing enabled |
+| Gateway | pbnj/api/pmoves-services/ | Check submodule | CHIT signing enabled |
 | Postgres | docker-compose | Existing | Tier data |
 | MinIO | docker-compose | Existing | Tier data |
 | NATS | docker-compose | Existing | Message bus |
@@ -110,7 +110,7 @@ Configure launcher startup order in Pinokio or use Docker Compose `depends_on`.
 ## References
 
 - Pinokio: https://pinokio.computer/
-- PBNJ configs: `pbnj/pinokio/api/pmoves-services/`
+- PBNJ configs: `pbnj/api/pmoves-services/`
 - Docker Compose: `pmoves/docker/docker-compose.yml`
 - Tier configs: `pmoves/env.tier-*.example`
 

@@ -23,7 +23,6 @@ Called via Make targets:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -117,7 +116,12 @@ def _supabase_url() -> str:
     TABLE_PATH already contains '/rest/v1/...', so strip any '/rest/v1' tail
     from SUPA_REST_URL (which often includes it) to avoid '/rest/v1/rest/v1/'.
     """
-    url = _env("SUPABASE_URL", _env("SUPA_REST_URL", "http://supabase-kong:8000"))
+    url = _env("SUPABASE_URL", _env("SUPA_REST_URL", "http://localhost:8000"))
+    # This tool always runs on the host (via `make yt-cookies-auth`), not in a
+    # container. The tier env files set SUPABASE_URL=http://supabase-kong:8000
+    # which is the in-compose hostname and won't resolve from the host process.
+    if "supabase-kong" in url:
+        url = url.replace("supabase-kong", "localhost")
     # Strip trailing /rest/v1 or /rest/v1/ to get base URL
     for suffix in ("/rest/v1/", "/rest/v1"):
         if url.endswith(suffix):
@@ -315,9 +319,73 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
     flow = _build_flow(client_id, client_secret, scope)
 
     print("Opening browser for Google OAuth2 consent (loopback, ephemeral port)...")
-    # Scope logged as plain concat (breaks CodeQL taint path on OAuth f-strings).
-    print("  Scopes: " + scope)
-    creds = flow.run_local_server(port=0, prompt="consent", access_type="offline")
+    # Scope intentionally NOT logged: CodeQL flags any print that traces to an
+    # OAuth-derived parameter (clear-text-logging-sensitive-data). The scope
+    # value is set via --scopes arg or OAUTH_SCOPES default; run with --help
+    # to see the configured value.
+    print("  Scopes: configured (use --scopes to override; see --help)")
+
+    # oauthlib refuses HTTP (even localhost) by default; the loopback flow
+    # always uses plain HTTP, so opt in explicitly.
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+
+    # Pinokio web UI probes stdout URLs with a FOO HTTP method on localhost.
+    # run_local_server's WSGI handler treats any request as the OAuth callback,
+    # so the probe triggers MismatchingStateError. Use a custom loop that
+    # ignores non-OAuth requests (paths without code= or state= query params).
+    import http.server
+    import urllib.parse as _urlparse
+
+    class _ProbesIgnoredHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = _urlparse.urlparse(self.path)
+            qs = _urlparse.parse_qs(parsed.query)
+            if "code" not in qs or "state" not in qs:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"Waiting for OAuth callback...")
+                return
+            flow.redirect_uri = flow.redirect_uri.rstrip("/") + "/"
+            self.server.last_request_uri = self.path
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(
+                b"<h1>Authorization received.</h1>"
+                b"<p>You can close this tab.</p>"
+            )
+        def log_message(self, *a): pass
+
+    httpd = http.server.HTTPServer(("localhost", 0), _ProbesIgnoredHandler)
+    port = httpd.server_address[1]
+    redirect_uri = f"http://localhost:{port}/"
+    flow.redirect_uri = redirect_uri
+
+    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+    print(f"\n>>> Open this URL in your browser:\n{auth_url}\n")
+    print(f">>> Waiting for callback on {redirect_uri} (5 min timeout)...")
+
+    import time
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        httpd.timeout = 2
+        httpd.handle_request()
+        if hasattr(httpd, "last_request_uri"):
+            break
+    else:
+        print("ERROR: OAuth callback timed out after 5 minutes.", file=sys.stderr)
+        sys.exit(1)
+
+    if not hasattr(httpd, "last_request_uri"):
+        print("ERROR: No OAuth callback received.", file=sys.stderr)
+        sys.exit(1)
+
+    flow.fetch_token(
+        authorization_response=f"http://localhost:{port}{httpd.last_request_uri}",
+        prompt="consent", access_type="offline",
+    )
+    creds = flow.credentials
 
     refresh_token = creds.refresh_token
     access_token = creds.token

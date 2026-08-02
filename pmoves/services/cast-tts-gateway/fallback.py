@@ -4,11 +4,9 @@ Fallback Strategies
 Multi-level TTS and device fallback with graceful degradation.
 """
 
-import asyncio
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Callable, Any
-from datetime import datetime
 
 
 @dataclass
@@ -253,7 +251,7 @@ class TTSGatewayFallback:
                         duration_ms=duration_ms,
                     )
 
-            except Exception as e:
+            except Exception:
                 # Record failure with circuit breaker (isolated)
                 try:
                     if self.recovery_manager:
@@ -363,7 +361,7 @@ class DeviceFallback:
                         duration_ms=duration_ms,
                     )
 
-            except Exception as e:
+            except Exception:
                 # Try next device
                 continue
 

@@ -5,10 +5,9 @@ Access control, rate limiting, and audit logging for production security.
 """
 
 import asyncio
-import json
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Any
+from typing import Optional
 from datetime import datetime
 from collections import deque
 

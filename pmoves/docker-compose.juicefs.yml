@@ -30,6 +30,12 @@ services:
     - juicefs-meta:/data
     networks:
     - pmoves_data
+    - pmoves_external
+    # Multi-node JuiceFS: expose the metadata engine on the TAILNET only
+    # (JUICEFS_META_BIND = z890 tailnet IP, set inline; defaults to loopback so
+    # a plain up doesn't accidentally expose redis on all interfaces).
+    ports:
+    - ${JUICEFS_META_BIND:-127.0.0.1}:6379:6379
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -42,6 +48,8 @@ services:
           cpus: '0.5'
           memory: 512M
 
+    environment:
+    - PMOVES_NETWORKS=pmoves_data,pmoves_external
   juicefs-format:  # one-time FS format (idempotent); gateway waits on this
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -55,12 +63,21 @@ services:
     # No `|| true`: juicefs format is idempotent (re-run on a formatted FS exits 0),
     # so a non-zero exit here is a REAL error and must fail the service_completed_successfully
     # gate rather than releasing the gateway against an unformatted volume.
-    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
+    # Network-backed multi-node: blocks live in MinIO (reachable by every node
+    # over the tailnet), not z890-local files. JUICEFS_S3_ENDPOINT = the tailnet-
+    # reachable MinIO endpoint (z890 tailnet IP:9000) so the URL recorded in
+    # metadata resolves from remote nodes too; falls back to internal minio:9000
+    # for single-node. Creds embed into metadata at format time.
+    - "juicefs format --storage minio --bucket http://${JUICEFS_S3_ENDPOINT:-minio:9000}/${JUICEFS_BUCKET:-juicefs} --access-key ${JUICEFS_S3_USER:-${MINIO_USER}} --secret-key ${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD}}
+      ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
     volumes:
     - juicefs-data:/data
     networks:
     - pmoves_data
+    - pmoves_external
 
+    environment:
+    - PMOVES_NETWORKS=pmoves_data,pmoves_external
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -75,6 +92,7 @@ services:
     # juicefs gateway uses the MinIO gateway code: these are the S3 access/secret keys.
     - MINIO_ROOT_USER=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
     - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
+    - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
     - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
@@ -103,6 +121,7 @@ services:
     environment:
     # Same credential chain as juicefs-gateway (no baked-in secret) so smoke auth always matches.
     - MC_HOST_jfs=http://${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}:${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}@juicefs-gateway:9000
+    - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
     - "set -e; mc mb -p jfs/assets jfs/outputs; printf 'hello-juicefs-2026' | mc pipe jfs/assets/smoke.txt; echo '--- GET ---'; mc cat jfs/assets/smoke.txt; echo; echo '--- multi-bucket list (assets+outputs

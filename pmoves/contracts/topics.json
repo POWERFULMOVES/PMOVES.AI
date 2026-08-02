@@ -175,6 +175,11 @@
       "schema": "schemas/geometry/cgp.v2.schema.json",
       "description": "CHIT Geometry Packet v2 with attribution, Merkle proofs, and hyperbolic encoding"
     },
+    "bpm.encoded.v1": {
+      "schema": "schemas/geometry/cgp.v2.schema.json",
+      "description": "Prosodic BPM-encoded CGP v0.2 packet emitted by bpm-encoder-worker from mesh.gpu.inference.result.v1.",
+      "publisher": ["bpm-encoder-worker"]
+    },
     "geometry.swarm.meta.v1": {
       "schema": "schemas/geometry/swarm.meta.v1.schema.json"
     },
@@ -350,6 +355,54 @@
       "schema": "schemas/room/p7.command.failed.v1.schema.json",
       "description": "P7 rejected or failed a room command.",
       "publisher": ["p7-room-orchestrator"]
+    },
+    "comfy.collab.prompt.v1": {
+      "schema": "schemas/comfy/collab.prompt.v1.schema.json",
+      "description": "Creator-collab slice 3: a creative prompt was submitted to a ComfyUI collab session in a room. Carries parent_prompt_id for chain-of-edits. Published by creator-collab surfaces (notebook-workbench, creator-canvas-primary); consumed by comfy-watcher / comfyui / pinokio_bridge.",
+      "publisher": ["creator-canvas-primary", "notebook-workbench", "pinokio_bridge"],
+      "subscriber": ["comfy-watcher", "comfyui", "nats_event_bus"]
+    },
+    "comfy.collab.progress.v1": {
+      "schema": "schemas/comfy/collab.progress.v1.schema.json",
+      "description": "Creator-collab slice 3: progress update for a running ComfyUI workflow (phase, percent, current_node, step). Linked to the parent prompt via prompt_id. Published by comfy-watcher / comfyui; consumed by nats_event_bus and the room sidebar.",
+      "publisher": ["comfy-watcher", "comfyui"],
+      "subscriber": ["nats_event_bus", "notebook-workbench", "creator-canvas-primary"]
+    },
+    "comfy.collab.artifact.v1": {
+      "schema": "schemas/comfy/collab.artifact.v1.schema.json",
+      "description": "Creator-collab slice 3: a ComfyUI workflow produced an artifact (image/video/audio/model/text). Linked to the parent prompt via prompt_id. Published by comfy-watcher / comfyui; consumed by notebook-workbench + creator-canvas-primary to surface the artifact in the room.",
+      "publisher": ["comfy-watcher", "comfyui"],
+      "subscriber": ["nats_event_bus", "notebook-workbench", "creator-canvas-primary", "minio-gateway"]
+    },
+    "room.presence.v1": {
+      "schema": "schemas/room/room.presence.v1.schema.json",
+      "description": "Creator-collab slice 3: presence event for a room — join/leave/focus/blur/active. Emitted by room UIs and P7. Consumed by nats_event_bus + room sidebar to render the active collaborator list.",
+      "publisher": ["notebook-workbench", "creator-canvas-primary", "p7-room-orchestrator"],
+      "subscriber": ["nats_event_bus", "room-sidebar", "pmoves-helpdesk-skill"]
+    },
+    "room.directory.v1": {
+      "schema": "schemas/room/room.directory.v1.schema.json",
+      "description": "Creator-collab slice 3: snapshot of the room directory (every known room with its stage, hardware summary, apps_count, skills_count). Published by p7-room-orchestrator on catalog reload or stage transition. Consumed by nats_event_bus, dashboard, room-suggest-skill, pmoves-helpdesk-skill.",
+      "publisher": ["p7-room-orchestrator"],
+      "subscriber": ["nats_event_bus", "dashboard", "room-suggest-skill", "pmoves-helpdesk-skill"]
+    },
+    "helpdesk.intake.opened.v1": {
+      "schema": "schemas/helpdesk/helpdesk.intake.opened.v1.schema.json",
+      "description": "Creator-collab slice 6: a visitor opened an intake session in pmoves.room.helpdesk. Carries the intake_id, agent_id, optional intent hint, and the room directory snapshot version used for routing. Emitted by pmoves-helpdesk-skill at session-open. Consumed by nats_event_bus + dashboard to render intake traffic.",
+      "publisher": ["pmoves-helpdesk-skill"],
+      "subscriber": ["nats_event_bus", "dashboard", "helpdesk-log"]
+    },
+    "helpdesk.intake.routed.v1": {
+      "schema": "schemas/helpdesk/helpdesk.intake.routed.v1.schema.json",
+      "description": "Creator-collab slice 6: the helpdesk routed an intake to a target room + optional fleet node. Carries the parent intake_id, target room_id, routing rationale, and the structured intent match for debugging + persona-aware ranking. Emitted by pmoves-helpdesk-skill after visitor acceptance or auto-route. Consumed by nats_event_bus + dashboard to surface intake outcomes.",
+      "publisher": ["pmoves-helpdesk-skill"],
+      "subscriber": ["nats_event_bus", "dashboard", "helpdesk-log", "room-suggest-skill"]
+    },
+    "helpdesk.room.suggested.v1": {
+      "schema": "schemas/helpdesk/helpdesk.room.suggested.v1.schema.json",
+      "description": "Creator-collab slice 6: room-suggest-skill produced a ranked list of candidate rooms for a persona + intent. Carries the suggestion_id, persona context (agent_id + role), the ranked candidates with persona-aware scores, and the directory snapshot version. Emitted by room-suggest-skill on every chat turn (ambient) or on the room-suggest UI (explicit). Consumed by nats_event_bus + room-suggestions panel.",
+      "publisher": ["room-suggest-skill"],
+      "subscriber": ["nats_event_bus", "room-suggestions", "pmoves-helpdesk-skill", "dashboard"]
     }
   }
 }

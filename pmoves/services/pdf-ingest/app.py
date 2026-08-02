@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, HTTPException
 from minio import Minio
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
 try:

@@ -189,22 +189,22 @@ class CastNotebookLogger:
 
         if error:
             lines.append("## Error")
-            lines.append(f"```")
+            lines.append("```")
             lines.append(error)
-            lines.append(f"```")
+            lines.append("```")
             lines.append("")
 
         lines.append("## Text")
-        lines.append(f"```")
+        lines.append("```")
         lines.append(text)
-        lines.append(f"```")
+        lines.append("```")
         lines.append("")
 
         if metadata:
             lines.append("## Metadata")
-            lines.append(f"```json")
+            lines.append("```json")
             lines.append(json.dumps(metadata, indent=2))
-            lines.append(f"```")
+            lines.append("```")
 
         return "\n".join(lines)
 

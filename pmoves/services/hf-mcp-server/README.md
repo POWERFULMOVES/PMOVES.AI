@@ -56,8 +56,8 @@ Model Context Protocol (MCP) server for Hugging Face Hub integration with PMOVES
 ### Docker Compose
 
 ```bash
-# Standalone (HF MCP server only)
-docker compose -f pmoves/docker-compose/hf-mcp-server.yml up -d
+# Standalone within the agents overlay
+docker compose -f pmoves/docker-compose.base.yml -f pmoves/docker-compose.agents.yml --profile research up -d hf-mcp-server
 
 # Or as part of the full agents profile
 docker compose -f pmoves/docker-compose.yml --profile agents --profile research up -d hf-mcp-server
@@ -65,28 +65,31 @@ docker compose -f pmoves/docker-compose.yml --profile agents --profile research 
 
 ### Direct API Usage
 
+When running through the agents overlay, the host-published port is `8203`.
+When running the container standalone, the internal port is `8096`.
+
 ```bash
 # Health check
-curl http://localhost:8096/health
+curl http://localhost:8203/healthz
 
 # Search models
-curl -X POST http://localhost:8096/api/model/search \
+curl -X POST http://localhost:8203/api/model/search \
   -H "Content-Type: application/json" \
   -d '{"tier": "medium", "use_case": "coding"}'
 
 # Get model info
-curl http://localhost:8096/api/model/qwen2.5-7b
+curl http://localhost:8203/api/model/qwen2.5-7b
 
 # List cached models
-curl http://localhost:8096/api/models
+curl http://localhost:8203/api/models
 
 # Download model
-curl -X POST http://localhost:8096/api/model/download \
+curl -X POST http://localhost:8203/api/model/download \
   -H "Content-Type: application/json" \
   -d '{"model_id": "qwen2.5-7b"}'
 
 # Generate TensorZero config
-curl http://localhost:8096/api/config/tensorzero
+curl http://localhost:8203/api/config/tensorzero
 ```
 
 ### MCP Integration
@@ -96,7 +99,7 @@ Add to your MCP client configuration:
 ```yaml
 mcp_servers:
   huggingface:
-    url: "http://localhost:8096/sse"
+    url: "http://localhost:8203/mcp/sse"
     transport: "sse"
 ```
 
@@ -130,7 +133,7 @@ The server publishes events to:
 Generate TensorZero configuration with:
 
 ```bash
-curl http://localhost:8096/api/config/tensorzero
+curl http://localhost:8203/api/config/tensorzero
 ```
 
 This generates TOML configuration for all catalog models that can be appended to `tensorzero.toml`.

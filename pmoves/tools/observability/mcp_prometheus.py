@@ -232,9 +232,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     anomalies.append({
                         "type": "high_error_rate",
                         "severity": "critical",
-                        "description": f"Error rate exceeding 5% threshold"
+                        "description": "Error rate exceeding 5% threshold"
                     })
-            except Exception as e:
+            except Exception:
                 pass  # Check failed, skip
 
             # Check for high latency
@@ -245,9 +245,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     anomalies.append({
                         "type": "high_latency",
                         "severity": "warning",
-                        "description": f"Latency percentile p95 above threshold"
+                        "description": "Latency percentile p95 above threshold"
                     })
-            except Exception as e:
+            except Exception:
                 pass  # Check failed, skip
 
             # Check for resource saturation
@@ -258,9 +258,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     anomalies.append({
                         "type": "cpu_saturation",
                         "severity": "warning",
-                        "description": f"CPU usage above 80%"
+                        "description": "CPU usage above 80%"
                     })
-            except Exception as e:
+            except Exception:
                 pass  # Check failed, skip
 
             output = [f"Anomaly Detection for {service} (last {hours}h):"]

@@ -40,10 +40,6 @@ if str(_tools_dir) not in sys.path:
 from bpm_encoder import (  # noqa: E402
     encode_prosodic_profile,
     build_cgp_packet,
-    midi_to_freq,
-    midi_to_note_name,
-    boundary_to_bpm,
-    bpm_to_tempo_label,
 )
 
 # analyze_beats is optional (heavy deps: numpy, sklearn, etc.)

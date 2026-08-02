@@ -67,12 +67,14 @@ SERVICE_GROUPS = {
         "evo-controller",
         "hf-agent",
         "hf-research-agent",
+        "hf-mcp-server",
     ],
     "media": [
         "media-video",
         "media-audio",
         "ffmpeg-whisper",
         "transcribe-backend",
+        "transcribe-frontend",
         "jellyfin-bridge",
         "ultimate-tts-studio",
         "flute-gateway",
@@ -123,6 +125,8 @@ SERVICE_GROUPS = {
         "wger-nats-bridge",
         "botz-gateway",
         "pmoves-yt",
+        "nats_event_bus",
+        "pinokio_bridge",
     ],
     "juicefs": [
         "juicefs-redis",

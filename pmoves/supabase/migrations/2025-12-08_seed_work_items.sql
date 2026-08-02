@@ -1,7 +1,33 @@
 -- PMOVES-BoTZ Work Items - Initial Seed Data
 -- Seeds work items for all integrations based on Phase 8 backlog
 
--- PMOVES-Crush Work Items (C1-C8)
+-- The table this seed populates. Documented as created by this file
+-- (docs/services/supabase/SUPABASE_MIGRATIONS.md) but the CREATE was missing,
+-- so the seed always failed with: relation "integration_work_items" does not exist.
+CREATE TABLE IF NOT EXISTS public.integration_work_items (
+    work_item_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    integration_name     TEXT NOT NULL,
+    title                TEXT NOT NULL,
+    description          TEXT,
+    priority             TEXT NOT NULL DEFAULT 'p3_low',
+    status               TEXT NOT NULL DEFAULT 'ready',
+    required_skill_level TEXT,
+    estimated_complexity TEXT,
+    files_to_modify      JSONB NOT NULL DEFAULT '[]'::jsonb,
+    files_to_create      JSONB NOT NULL DEFAULT '[]'::jsonb,
+    acceptance_criteria  JSONB NOT NULL DEFAULT '[]'::jsonb,
+    assigned_to          TEXT,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at         TIMESTAMPTZ,
+    CONSTRAINT integration_work_items_name_title_key UNIQUE (integration_name, title)
+);
+
+CREATE INDEX IF NOT EXISTS idx_integration_work_items_status
+    ON public.integration_work_items (status);
+CREATE INDEX IF NOT EXISTS idx_integration_work_items_integration
+    ON public.integration_work_items (integration_name);
+
 INSERT INTO integration_work_items (integration_name, title, description, priority, status, required_skill_level, estimated_complexity, files_to_modify, files_to_create, acceptance_criteria) VALUES
 (
     'pmoves-crush',
@@ -98,7 +124,8 @@ INSERT INTO integration_work_items (integration_name, title, description, priori
     '[]',
     '["PMOVES-crush/.github/workflows/release.yml"]',
     '["Workflow triggers on tag push", "Multi-arch builds (amd64, arm64)", "Published to ghcr.io/powerfulmoves/pmoves-crush", "Release notes generated"]'
-);
+)
+ON CONFLICT (integration_name, title) DO NOTHING;
 
 -- Jellyfin Integration Work Items (J1-J3)
 INSERT INTO integration_work_items (integration_name, title, description, priority, status, required_skill_level, estimated_complexity, files_to_modify, files_to_create, acceptance_criteria) VALUES
@@ -137,7 +164,8 @@ INSERT INTO integration_work_items (integration_name, title, description, priori
     '["pmoves/services/jellyfin-bridge/main.py"]',
     '[]',
     '["Events published to jellyfin.*.v1 subjects", "Playback events include user/item info", "Library events include item metadata"]'
-);
+)
+ON CONFLICT (integration_name, title) DO NOTHING;
 
 -- Firefly III Integration Work Items (F1-F3)
 INSERT INTO integration_work_items (integration_name, title, description, priority, status, required_skill_level, estimated_complexity, files_to_modify, files_to_create, acceptance_criteria) VALUES
@@ -176,7 +204,8 @@ INSERT INTO integration_work_items (integration_name, title, description, priori
     '[]',
     '["pmoves/grafana/dashboards/wealth-overview.json"]',
     '["Dashboard shows account balances", "Transaction trends visible", "Budget progress displayed", "Refreshes automatically"]'
-);
+)
+ON CONFLICT (integration_name, title) DO NOTHING;
 
 -- wger Integration Work Items (W1-W2)
 INSERT INTO integration_work_items (integration_name, title, description, priority, status, required_skill_level, estimated_complexity, files_to_modify, files_to_create, acceptance_criteria) VALUES
@@ -203,7 +232,8 @@ INSERT INTO integration_work_items (integration_name, title, description, priori
     '["pmoves/services/wger-sync/main.py"]',
     '[]',
     '["Workout descriptions indexed", "Nutrition notes searchable", "Temporal queries work", "Results include metadata"]'
-);
+)
+ON CONFLICT (integration_name, title) DO NOTHING;
 
 -- Open Notebook Integration Work Items (O1-O2)
 INSERT INTO integration_work_items (integration_name, title, description, priority, status, required_skill_level, estimated_complexity, files_to_modify, files_to_create, acceptance_criteria) VALUES
@@ -230,7 +260,8 @@ INSERT INTO integration_work_items (integration_name, title, description, priori
     '["pmoves/services/hirag-gateway/main.py"]',
     '[]',
     '["Save to notebook endpoint exists", "Note includes search context", "Backlinks created", "Tags from query preserved"]'
-);
+)
+ON CONFLICT (integration_name, title) DO NOTHING;
 
 -- BoTZ Ecosystem Work Items
 INSERT INTO integration_work_items (integration_name, title, description, priority, status, required_skill_level, estimated_complexity, files_to_modify, files_to_create, acceptance_criteria) VALUES
@@ -269,7 +300,8 @@ INSERT INTO integration_work_items (integration_name, title, description, priori
     '[]',
     '["pmoves/grafana/dashboards/botz-ecosystem.json"]',
     '["Active BoTZ count shown", "Work items by status", "Completion rate trends", "Skill level distribution"]'
-);
+)
+ON CONFLICT (integration_name, title) DO NOTHING;
 
 -- Add comments
 COMMENT ON TABLE integration_work_items IS 'Seeded with initial Phase 8 backlog items for PMOVES integrations';

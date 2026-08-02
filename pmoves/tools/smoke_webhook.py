@@ -15,7 +15,10 @@ Usage:
 Exit codes:
   0 success, 1 failure.
 """
-import os, sys, json, time, base64
+import os
+import sys
+import json
+import time
 import argparse
 from urllib import request, error
 

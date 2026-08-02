@@ -7,7 +7,6 @@ unavailable dependencies degrade to passthrough, never block inference.
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 from typing import Any
 

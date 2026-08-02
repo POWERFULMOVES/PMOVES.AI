@@ -1,8 +1,0 @@
-# Pinokio runtime logs
-logs/
-
-# Per-user AI tool configs
-.clinerules
-.cursorrules
-.windsurfrules
-.geminiignore

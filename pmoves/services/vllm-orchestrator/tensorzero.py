@@ -31,7 +31,6 @@ Usage:
     )
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -511,7 +510,7 @@ def generate_docker_compose_override(
         "",
         "services:",
         "  tensorzero-gateway:",
-        f"    ports:",
+        "    ports:",
         f'      - "{tensorzero_port}:3030"',
         "    environment:",
         "      - TENSORZERO_MODEL_CONFIG_FILE=/config/tensorzero.json",
@@ -530,7 +529,7 @@ def generate_docker_compose_override(
             f"  {name}:",
             "    image: vllm/vllm-openai:latest",
             f"    command: '--model {model_name} --port 8000'",
-            f"    ports:",
+            "    ports:",
             f'      - "{port}:8000"',
             "    deploy:",
             "      resources:",

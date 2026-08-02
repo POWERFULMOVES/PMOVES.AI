@@ -10,7 +10,7 @@ from difflib import SequenceMatcher
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 import httpx
 from urllib.parse import urlencode
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -577,7 +577,7 @@ def _publish_to_notebook_sync(
 
         # Run async publisher from sync context
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # If we're in an async context, schedule on the existing loop
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
@@ -993,7 +993,7 @@ def yt_channels(request: Request):
         return {"ok": True, "channels": r.json()}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="list_channels", status="error").inc()
         raise HTTPException(status_code=502, detail="Failed to list channels")
 
@@ -1028,7 +1028,7 @@ async def yt_create_station(
         return {"ok": True, "station": station}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="create_station", status="error").inc()
         raise HTTPException(status_code=502, detail="Station creation failed")
 
@@ -1050,7 +1050,7 @@ async def yt_delete_station(channel_id: str, request: Request):
         return {"ok": True, "channel_id": channel_id}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="delete_station", status="error").inc()
         raise HTTPException(status_code=502, detail="Station deletion failed")
 
@@ -1068,7 +1068,7 @@ def yt_stations(request: Request):
         return {"ok": True, "stations": r.json()}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="list_stations", status="error").inc()
         raise HTTPException(status_code=502, detail="Failed to list stations")
 

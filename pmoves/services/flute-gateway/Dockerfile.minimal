@@ -1,0 +1,4 @@
+USER pmoves
+RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+
+CMD ["python", "decoded_consumer.py"]

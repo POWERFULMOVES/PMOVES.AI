@@ -199,6 +199,16 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(n8n_runners):
         text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
 
+    # nats_event_bus service token: local bridge<->bus auth (creator-collab
+    # lane). Compose requires it with :? — an unminted value fails EVERY
+    # compose invocation project-wide, so mint it with the other node-local
+    # service tokens.
+    neb_token = _get_kv(text, "NATS_EVENT_BUS_TOKEN")
+    # env.shared.example carries an inline "# REQUIRED - generate: ..." comment
+    # as the value on fresh setups; treat comment-looking values as unset.
+    if _is_blank_or_placeholder(neb_token) or neb_token.startswith("#"):
+        text = _set_kv(text, "NATS_EVENT_BUS_TOKEN", "pm_neb_" + _strong_random(24))
+
     # n8n owner password: auto-generate and persist in env.shared so it survives
     # env file regeneration. This is the password for the n8n owner account created
     # by `make n8n-bootstrap`. Previously only written to .env.local which was
@@ -272,6 +282,41 @@ def _ensure_integration_credentials(text: str) -> str:
         # SUPABASE_DB_PASSWORD is canonical (DB container reads it directly)
         text = _set_kv(text, "POSTGRES_PASSWORD", supa_db_pass)
 
+    return text
+
+
+def _ensure_sso_credentials(text: str) -> str:
+    """SSO forward-auth gateway: branded config defaults + generated secrets.
+
+    Config (idempotent branded defaults): auth base URL, cookie domain, GoTrue
+    URL, the Jellyfin OIDC client_id + redirect allowlist, ACME email.
+
+    Secrets (generated once when blank/placeholder): SSO_FORWARD_AUTH_SECRET /
+    JELLYFIN_OIDC_CLIENT_SECRET — random url-safe. (These must also be registered
+    in secrets_manifest_v2.yaml so the funnel keeps them through CGP hydration.)
+    The RSA OIDC signing key is NOT handled here — sso-auth self-provisions it.
+    """
+    config_defaults = {
+        "SSO_PUBLIC_BASE_URL": "https://auth.pmoves.ai",
+        "SSO_COOKIE_DOMAIN": ".pmoves.ai",
+        "GOTRUE_URL": "http://supabase-gotrue:9999",
+        "JELLYFIN_OIDC_CLIENT_ID": "pmoves-jellyfin",
+        "JELLYFIN_OIDC_REDIRECT_URIS": "https://media.pmoves.ai/sso/OID/redirect/pmoves",
+        "ACME_EMAIL": "pmoves@pmoves.ai",
+    }
+    for key, value in config_defaults.items():
+        if _is_blank_or_placeholder(_get_kv(text, key)):
+            text = _set_kv(text, key, value)
+
+    for key in ("SSO_FORWARD_AUTH_SECRET", "JELLYFIN_OIDC_CLIENT_SECRET"):
+        if _is_blank_or_placeholder(_get_kv(text, key)):
+            text = _set_kv(text, key, _strong_random(32))
+
+    # NOTE: OIDC_SIGNING_KEY (the RSA id_token signing key) is intentionally NOT
+    # generated here. A large multi-line PEM doesn't fit the url-safe CHIT/env
+    # pipeline; sso-auth self-provisions it (load-or-generate to a persisted key
+    # file — see oidc._load_or_generate_private_key). Set OIDC_SIGNING_KEY only as
+    # an explicit override / for multi-node shared keys.
     return text
 
 
@@ -455,6 +500,10 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
 
     # Generate integration credentials (Firefly III, n8n, Wger) if missing.
     text = _ensure_integration_credentials(text)
+
+    # SSO forward-auth gateway: branded config + generated secrets (incl. the
+    # RSA OIDC signing key, stored \n-escaped for env_file safety).
+    text = _ensure_sso_credentials(text)
 
     # Alias generic Google OAuth credentials into the channel-monitor / yt-cookies
     # namespace. Phase 9C: yt-cookies pipeline + channel-monitor both look for

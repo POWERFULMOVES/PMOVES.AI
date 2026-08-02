@@ -246,7 +246,6 @@ def _resolve_whoami() -> str:
     # 3. Gateway fallback
     try:
         from urllib.request import urlopen, Request
-        from urllib.error import URLError
         req = Request(f"{_BOTZ_GATEWAY_URL}/v1/agent/whoami")
         req.add_header("Accept", "application/json")
         with urlopen(req, timeout=3) as resp:
@@ -407,7 +406,7 @@ def main() -> int:
         if agent:
             print(f"{_DIM}(remote: {_BOTZ_GATEWAY_URL}){_RESET}", file=sys.stderr)
         else:
-            print(f"WARNING: Gateway unreachable, falling back to local YAML", file=sys.stderr)
+            print("WARNING: Gateway unreachable, falling back to local YAML", file=sys.stderr)
     if not agent:
         agent = load_agent(args.agent)
     if not agent:

@@ -1,69 +1,80 @@
 # Russell Richardson (DARKXSIDE) — LinkedIn Profile Update
 
-> **Last Updated:** July 2026  
-> **Target Roles:** Founder visibility, technical leadership, strategic partnerships, investor conversations  
-> **Voice:** First-person, DARKXSIDE persona — authentic, multidisciplinary, sovereign, technically deep
+> **Last Updated:** July 30, 2026 (post-convergence refresh: 97 agents, audio-reactive Hyperdimensions, CLAP grounding, JuiceFS, SSO)  
+> **Target Roles:** Founder visibility + **employer-facing** — Principal/Staff/Senior Applied AI Architect, AI Deployment Engineer, AI Solutions Architect, Head of Applied AI, Technical Product Lead (AI), Applied AI Technical Evangelist  
+> **Positioning:** Building PMOVES.AI / hiring contributors **and** open to mission-aligned embedded, fractional, and full-time Applied AI roles  
+> **Voice:** First-person, DARKXSIDE persona — authentic, multidisciplinary, sovereign, technically deep. Employer-facing sections lead with standard systems language, then introduce PMOVES internal terms (see §7 translation).
 
 ---
 
 ## 1. HEADLINE
 
-**Character count:** 219 / 220
+**Primary — Dual positioning (recommended; best for both role conversations and proposals). ~155 / 220**
 
 ```
-Founder & CEO @ CATACLYSM STUDIOS INC | Building PMOVES.AI — 91-agent multi-agent orchestration with Metal-Organic Framework architecture | Bronx beat-architect turned infrastructure builder | Local-first AI sovereignty
+Founder, PMOVES.AI | Principal Applied AI Architect | Agentic Systems, RAG, AI Deployment & Local-First Infrastructure | Hiring + Open to Mission-Aligned Roles
 ```
 
-**Alternative (more compact):**
+**Alt A — Broader job conversations (slightly less senior framing). ~127 / 220**
 
 ```
-Founder & CEO @ CATACLYSM STUDIOS INC | PMOVES.AI: 91-agent MOF-orchestrated platform with CHIT cryptographic identity | Beats → Code → Infrastructure | Local-first AI
+Founder, PMOVES.AI | Applied AI Architect | Agentic Systems, RAG, AI Deployment, Creative Automation & Local-First Infrastructure
 ```
+
+**Alt B — Founder-forward (investors / partnerships). 219 / 220**
+
+```
+Founder & CEO @ CATACLYSM STUDIOS INC | Building PMOVES.AI — 97-agent multi-agent orchestration with Metal-Organic Framework architecture | Bronx beat-architect turned infrastructure builder | Local-first AI sovereignty
+```
+
+> Pick Primary for the broadest reach (roles + proposals + founder). notes2.md rationale: lead with the conventional role (Applied AI Architect) so an employer can immediately place you, keep the distinctive founder + local-first signal, and make availability explicit.
 
 ---
 
 ## 2. ABOUT
 
-**Character count:** 2,597 / 2,600
+**Character count:** 2,108 / 2,600 (dual-positioning rewrite — availability + plain-language lead, PMOVES specifics as support)
 
-I started making beats because I needed something to listen to. 82 tracks and 15 years later, that same impulse — build the infrastructure you need — became PMOVES.AI.
+I build the infrastructure I need. 82 tracks and 15 years of beat-making taught me a BPM is a state vector and a sketch is a prototype — then I turned that instinct on AI systems.
 
-PMOVES.AI is a local-first, multi-agent orchestration platform with 91 registered agents across 13 functional teams, deployed over 50 gitlinked submodules, operating in 5 active rooms — from a Z890 infra fabric to a 5090 voice studio to the Fordham Hill community room in the Bronx. We went from topology audit to production-hardened convergence in under 5 months. Zero registry drift. Every agent documented and signed.
+What I do, in plain terms: I design and ship local-first, event-driven AI platforms — coordinating specialized agents, retrieval, multimodal data pipelines, model routing, observability, security controls, and human-approval workflows — and take them from scattered experiments to bounded, observable systems with working code, evaluations, documentation, and a path to production.
 
-The architecture is a Metal-Organic Framework — not as metaphor, but as structural isomorphism. CHIT (Cryptographic Handshake for Identity & Trust) is the mathematical backbone: 37/37 signoff items complete, a Consciousness Service bridging symbolic and geometric domains via CGP packets, and a Geometry Bus (NATS JetStream) moving information the way a traveling wave maintains oscillation. We resolved multiple critical security issues — authentication hardening, credential management across the fleet, and infrastructure segmentation.
+Availability: I'm building PMOVES.AI and assembling collaborators around CATACLYSM STUDIOS — and I'm open to embedded, fractional, contract, or full-time roles in Applied AI architecture, agentic workflows, AI deployment, technical product, or developer education.
 
-The voice layer is first-class: Flute Gateway (dual-port HTTP/WebSocket), VibeVoice realtime synthesis, MiniMax integration with FlOO$ character personas, and a BPM-to-prosodic CGP pipeline that converts beats into voice state vectors. Every CGP packet carries {delta, Hz, kappa, A, F} — mood, tempo, posture. Agents don't parse numbers. They read the room.
+PMOVES.AI is that platform, built in the open: 97 agents across 13 teams over 57 gitlinked submodules, 12 rooms, topology audit → production-hardened in under 6 months, zero registry drift. A 34-flow n8n fabric plus an ActivePieces low-code workspace (with LinkedIn, Google, and Slack integrations live) connect services, SaaS, and the event bus. The architecture is a Metal-Organic Framework — NATS JetStream as traveling wave, TensorZero as impedance matcher, CHIT (cryptographic identity + signed audit trails) as self-stabilizing equilibrium. Voice is first-class: Flute Gateway, realtime synthesis, and a BPM→prosodic pipeline where agents read the room, not just the numbers. The DARKXSIDE beats pipeline — 82 SoundCloud tracks analyzed with librosa + CLAP embeddings, clustered into sonic groups, visualized as audio-reactive 3D parametric surfaces with live Meyda FFT — is the proof point that creative work and infrastructure are the same act. CATACLYSM STUDIOS is the vehicle — a 5-tier structure with a Fordham Hill cooperative pilot in the Bronx.
 
-CATACLYSM STUDIOS INC is the corporate vehicle — a 5-tier L1-L5 structure with a Fordham Hill cooperative pilot, a 5-year financial model projecting $68.4M revenue, and governance designed for distributed resilience. The Infra Cloud Guild, the DAO Constitution, the CHIT attribution chain — all the same thing: infrastructure for coordination without centralization.
+Before this I was DARKXSIDE — Bronx-born beat architect across Hip-hop, R&B, EDM, and Drum & Bass. Same person who made the beats. Same philosophy, different frequency: build what you need, and turn a complicated AI opportunity into an architecture, a working system, and an operating capability.
 
-Before this I was DARKXSIDE — Bronx-born beat architect, 82 tracks across Hip-hop, R&B, EDM, Drum & Bass. I learned BPM is a state vector, a sketch is a prototype, the CLI output is a score. Now I build agents that read prosody, orchestrate across mesh networks, and maintain cryptographic identity trails. Same person. Same philosophy. Different frequency.
-
-I want to connect with engineers who think in systems, founders building local-first infrastructure, researchers working on holographic memory or phase transitions in AI, and anyone who believes intelligence is distributed, sovereign, culturally alive.
+I want to connect with engineers who think in systems, founders building local-first infrastructure, and teams who need someone to move AI from research and fragmented tools to production.
 
 Build what you need. Scale what works. Sign every line.
 
 ---
 
-## 3. FEATURED SECTION (5 Items)
+## 3. FEATURED SECTION (6 Items)
 
 ### Featured Item 1: PMOVES.AI — Multi-Agent Orchestration Platform
 **Link:** `https://github.com/POWERFULMOVES/PMOVES.AI`  
-**Description:** 91 agents. 13 teams. 50 submodules. 5 rooms. Metal-Organic Framework architecture with CHIT cryptographic identity, Consciousness Service (CGP mapping), and full voice infrastructure. Production-hardened with multiple critical security resolutions and 37/37 CHIT signoff items complete. Local-first, sovereign, and culturally alive.
+**Description:** 97 agents. 13 teams. 57 submodules. 12 rooms. Metal-Organic Framework architecture with CHIT cryptographic identity, Consciousness Service (CGP mapping), full voice infrastructure, audio-reactive Hyperdimensions (CLAP-grounded beats visualization), and an SSO forward-auth gateway. Production-hardened with multiple critical security resolutions and 37/37 CHIT signoff items complete. Local-first, sovereign, and culturally alive.
 
-### Featured Item 2: The Convergence Wave — From Topology Audit to Production
-**Link:** (GitHub releases or blog post URL)  
-**Description:** A 5-month technical narrative (Feb–July 2026) documenting how PMOVES.AI went from pre-convergence to production-ready multi-agent orchestration. Agent fleet grew to 91 with zero drift. Critical security issues resolved. Voice infrastructure fully integrated. Community room at Fordham Hill brought online. 67 agent docs written, AGNOTE4482 master coordination doc established. The blueprint for building agent infrastructure at scale.
+### Featured Item 2: DARKXSIDE Beats → Hyperdimensions — Audio-Reactive Visualization
+**Link:** `https://pmoves.ai/embeds/beats-constellation/`  
+**Description:** 82 SoundCloud tracks analyzed with librosa (BPM, chroma, MFCC, spectral features) + CLAP 512-dim embeddings (laion/larger_clap_music), key/scale detection (Krumhansl-Schmuckler), and cymatic symmetry analysis. Clustered into 8 sonic groups, each rendered as a unique 3D parametric surface in Three.js with audio-reactive FFT via Meyda. Click any star to hear the track and watch the constellation pulse live. The proof that creative work and infrastructure are the same act.
 
-### Featured Item 3: CATACLYSM STUDIOS INC — 5-Year Financial Model
-**Link:** (Internal or investor-facing document)  
-**Description:** $68.4M revenue projection across a 5-tier L1-L5 corporate structure. Fordham Hill cooperative pilot serving as the community validation layer. Tokenomics design bridging cooperative buying systems with agent-to-agent value exchange. Infrastructure-as-code across 50+ provisioning files. The business model behind the Metal-Organic Framework.
+### Featured Item 3: SSO Forward-Auth Gateway + Media Pipeline
+**Link:** `https://github.com/POWERFULMOVES/PMOVES.AI/tree/main/pmoves/docker-compose.sso.yml`  
+**Description:** Single sign-on forward-auth gateway (RS256/JWKS OIDC) protecting Jellyfin, Open-Notebook, and all PMOVES services behind one auth layer. Phase 2 per-app integration with Layer-2 proof-of-proxy. Paired with a full media analysis pipeline: CLIP-embed service (port 8109), CLAP-embed service (port 8108, 512-dim audio grounding), DETR object detection, FFmpeg-Whisper transcription, and Jellyfin AI bridge.
 
 ### Featured Item 4: DARKXSIDE — 82 Tracks, 15 Years
 **Link:** `https://soundcloud.com/darkxside`  
 **Description:** From "the legend of Rattlesnake Jake" (191 plays, 12th iteration of a guitar series) to "SOUL MOVES" (the track that named the ecosystem) to "SIRIUSSADHAPPYMIX" (emotional superposition in audio form). Bronx-born beat architecture spanning Hip-hop, R&B, EDM, Drum & Bass. BPM as state vector. The sketch as prototype. The catalog as codebase. Beats before code — the philosophy that built PMOVES.
 
+### Featured Item 6: Automation Fabric — 34 n8n Flows + ActivePieces
+**Link:** `https://github.com/POWERFULMOVES/PMOVES.AI/tree/main/pmoves/n8n/flows`  
+**Description:** 34 production n8n workflows wiring PMOVES services to each other, to the CHIT geometry bus, and to external SaaS — finance sync (Firefly-III → Supabase → CGP), health tracking (wger → weekly CGP), media pipelines (audio/video analysis, ComfyUI generation, social publishing, content-approval gates), voice agents (Discord/Telegram, platform router, vibevoice/qwen/wan → CGP), CI/infra (GitHub runner autoscaler, webhook processor), and research/ingestion (DeepResearch, LangExtract, YouTube docs diff). Paired with an ActivePieces low-code workspace for cross-SaaS orchestration. Automation as first-class infrastructure — not glue, but connective tissue.
+
 ### Featured Item 5: CHIT Geometry Bus — 37/37 Signoff Complete
-**Link:** (Technical documentation or PR)  
+**Link:** `https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md`  
 **Description:** The Cryptographic Handshake for Identity & Trust — a 5-layer Grand Convergence Stack (L1 Structure → L2 Information → L3 Transport → L4 Optimization → L5 Economics) that connects every subsystem in PMOVES. Dirichlet-weighted, Merkle-secured, Poincare-encoded, Zeta-filtered. Consciousness Service publishing signed CGP packets to the geometry event bus. The mathematical backbone of sovereign multi-agent coordination.
 
 ---
@@ -77,7 +88,15 @@ Build what you need. Scale what works. Sign every line.
 
 #### Key Achievements (10-15 high-impact bullets):
 
-- **Architected and shipped PMOVES.AI** — a 91-agent multi-agent orchestration platform across 13 functional teams, deployed over 50 gitlinked submodules, operating in 5 active rooms with zero registry drift after validation gate implementation
+- **Architected and shipped PMOVES.AI** — a 97-agent multi-agent orchestration platform across 13 functional teams, deployed over 57 gitlinked submodules, operating in 12 rooms with zero registry drift after validation gate implementation
+
+- **Built the audio-reactive Hyperdimensions pipeline** — 82 DARKXSIDE SoundCloud tracks analyzed with librosa (BPM, chroma, MFCC, spectral contrast, cymatic symmetry) and CLAP 512-dim semantic embeddings, with Krumhansl-Schmuckler key detection, clustered into sonic groups and rendered as real-time 3D parametric surfaces with live Meyda FFT — the creative-to-infrastructure bridge
+
+- **Shipped an SSO forward-auth gateway** (RS256/JWKS OIDC) with per-app integration for Jellyfin, Open-Notebook, and PMOVES services — auth once, access all, with Layer-2 proof-of-proxy
+
+- **Delivered the full media analysis pipeline** — CLIP-embed (image grounding, port 8109), CLAP-embed (audio grounding, port 8108), DETR object detection, FFmpeg-Whisper transcription, and Jellyfin AI bridge — multimodal ingest to CGP event bus
+
+- **Wired JuiceFS as the object store backbone** — Phase 1 PoC + Phase 2 S3 endpoint flip + Phase 3 cutover runbook replacing EOL MinIO with a distributed filesystem gateway
 
 - **Designed the Metal-Organic Framework (MOF) architecture** — a physics-isomorphic systems architecture mapping PMOVES components to material science analogies: NATS JetStream as traveling wave, TensorZero as impedance matcher, CHIT as self-stabilizing equilibrium, Neo4j as high-surface-area adsorption framework
 
@@ -91,15 +110,19 @@ Build what you need. Scale what works. Sign every line.
 
 - **Built full voice infrastructure:** Flute Gateway (HTTP/WebSocket dual port), VibeVoice realtime synthesis, MiniMax Token Plan integration (M2.7/M2.1 model suits, multiple NATS subjects), FlOO$ character persona system (Dr. Bean, Mr. Clean, PowerPuff Girls), and BPM-to-prosodic CGP pipeline
 
+- **Built a 34-flow n8n automation fabric** spanning finance (Firefly-III → Supabase → CGP), health (wger sync → weekly CGP), media/content (audio + video analysis, ComfyUI generation, social publishing, content-approval gates), voice (Discord/Telegram voice agents, platform router, vibevoice/qwen/wan → CGP webhooks), CI/infra (GitHub runner autoscaler, webhook processor, approval poller), and research/ingestion (DeepResearch orchestrator, LangExtract, ingestion hub, YouTube docs diff) — the low-code connective tissue between PMOVES services, external SaaS, and the geometry bus
+
+- **Operate a complementary ActivePieces (low-code automation) workspace** for cross-SaaS orchestration — 22 cloud flows including LinkedIn social publishing, paired with the self-hosted n8n fabric for mesh-native integrations
+
 - **Established the Three-Body Governance Pattern** — every production operation requires a Delivery body (can edit), a Control body (read-only review), and a Memory body (CHIT trail + attribution), enforced at the tool level via Claude Code agent frontmatter
 
-- **Created the Agent ACK Protocol and GRAPHITI Mark system** — non-repudiable proof of work with signed agent acknowledgments and immutable audit trail footers, establishing forensic accountability across all 91 agents
+- **Created the Agent ACK Protocol and GRAPHITI Mark system** — non-repudiable proof of work with signed agent acknowledgments and immutable audit trail footers, establishing forensic accountability across all 97 agents
 
 - **Onboarded 5 rooms on a stage:** z890-infra (live), 4090-field (live), 5090-voice (live), 5090-kilocode (rehearsal), fordham-community (rehearsal) — with full stage lifecycle management (rehearsal → live → review → archive)
 
 - **Built the Fordham Hill community pilot** — a Bronx-based cooperative room in rehearsal stage with multiple apps, skill bindings, and token-gated vote paths, connecting multi-agent infrastructure to real-world community coordination
 
-- **Established 6 CI/CD enforcement gates** — CodeQL, CHIT Contract, SQL Policy, Docker Hardening, Integration Contract, and Python Tests — maintaining hardened-branch invariant (`hardened ⊇ default`) across 38 submodules
+- **Established 6 CI/CD enforcement gates** — CodeQL, CHIT Contract, SQL Policy, Docker Hardening, Integration Contract, and Python Tests — maintaining hardened-branch invariant (`hardened ⊇ default`) across 57 submodules
 
 - **Integrated 6 GLM model suits + KIMI via Moonshot API** — full provider cascade across Z890, 5090, 4090, Spark, B850, and KVM node profiles with TensorZero function routing, TAC tree task allocation, and semantic worker lane assignment
 
@@ -148,7 +171,7 @@ If Russell held technical positions before founding, they should be framed as bu
 
 ---
 
-## 5. SKILLS (25 Recommended)
+## 5. SKILLS (29 Recommended)
 
 ### Core Architecture & Engineering
 1. Multi-Agent Orchestration
@@ -177,11 +200,17 @@ If Russell held technical positions before founding, they should be framed as bu
 20. Infrastructure as Code (50+ provisioning files)
 21. Observability (Prometheus, Grafana, Loki, ClickHouse)
 
+### Automation & Workflow Orchestration
+22. n8n Workflow Automation (34-flow production fabric)
+23. ActivePieces Low-Code Automation
+24. Webhook & Event-Driven Integration
+25. Cross-SaaS Orchestration (finance, health, media, CI)
+
 ### Leadership & Vision
-22. Technical Team Coordination (91-agent fleet)
-23. Tokenomics & Cooperative Economics
-24. Community-Driven Pilot Design
-25. First-Principles Systems Thinking
+26. Technical Team Coordination (97-agent fleet)
+27. Tokenomics & Cooperative Economics
+28. Community-Driven Pilot Design
+29. First-Principles Systems Thinking
 
 ---
 
@@ -200,7 +229,7 @@ I'm updating my LinkedIn profile to reflect the PMOVES.AI convergence work we've
 shipped over the past 5 months. You worked directly with me on [specific component:
 agent registry validation / CHIT signoff / Three-Body governance / voice
 infrastructure / etc.], and your perspective on how we got from topology audit to
-91 agents with zero drift would mean a lot.
+97 agents with zero drift would mean a lot.
 
 If you have a few minutes, I'd appreciate a recommendation focusing on:
 - How the MOF architecture held up under real production load
@@ -244,11 +273,39 @@ No rush — and thank you for being part of this from the start.
 
 ---
 
+## 7. PMOVES → EMPLOYER LANGUAGE (Translation)
+
+Per notes2.md: for employer-facing sections, **lead with the conventional description, then introduce the distinctive PMOVES term.** Keep the internal names — they're memorable — but don't make a hiring manager decode them.
+
+**Lead line (use this instead of opening with internal vocabulary):**
+> Designed a local-first, event-driven AI platform coordinating specialized agents, retrieval systems, multimodal data pipelines, model routing, observability, security controls, and human-approval workflows.
+
+**Translation table:**
+
+| PMOVES term | Employer-facing meaning |
+|-------------|-------------------------|
+| Rooms on a stage | Purpose-built AI workspaces with explicit tools, data, ownership, permissions, and lifecycle states |
+| P7 stage manager | Orchestration and runtime-routing layer |
+| Agent suits | Configurable model, persona, tool, and policy bindings |
+| Geometry Bus | Event-driven structured-context exchange |
+| CHIT | Cryptographic agent identity + signed, non-repudiable audit trails |
+| CGP packets | Structured state vectors (mood/tempo/posture) carried on the event bus |
+| Consciousness Service | Symbolic↔geometric mapping service over a graph store |
+| School of PMOVES | Developer education, research synthesis, workshops, technical enablement |
+| Research Crate | Multimodal research intake, transcription, annotation, retrieval, knowledge management |
+| Creator Pipeline | Human-reviewed multimodal generation, storage, indexing, and publishing workflow |
+| Fordham Community Room | Bounded applied-AI community pilot with consent, governance, and measurement controls |
+| n8n / ActivePieces fabric | Workflow-automation + low-code integration layer (event-driven, versioned as code) |
+
+**What I am (one line):** a 0-to-1 AI systems builder who connects architecture, product, infrastructure, creative workflows, and human operations — the person who assembles the whole operating system around a problem. **What I'm not:** pure ML researcher, model-training specialist, conventional data scientist, pure DevOps/SRE, generic PM, or "prompt engineer."
+
+---
+
 ## APPENDIX: LinkedIn Profile Optimization Notes
 
 ### Why This Profile Works
 
-1. **Headline optimization:** Lead with founder title, then PMOVES.AI with specific metrics (91 agents, MOF), then the unique origin story (Bronx beat architect), then the mission (local-first AI sovereignty). Every keyword an engineer, investor, or partner would search for.
+1. **Headline optimization:** Lead with founder title, then PMOVES.AI with specific metrics (97 agents, MOF), then the unique origin story (Bronx beat architect), then the mission (local-first AI sovereignty). Every keyword an engineer, investor, or partner would search for.
 
 2. **About section structure:** Opens with the "beats → code" origin hook that no other founder can claim. Transitions to what PMOVES is with specific metrics. Deep-dives the MOF architecture with enough technical detail to impress engineers. Covers voice infrastructure (differentiator). Connects to CATACLYSM business model. Closes with the personal origin story and a CTA. The "Build what you need. Scale what works. Sign every line." closer is the DARKXSIDE philosophy in 9 words.
 
@@ -263,7 +320,7 @@ No rush — and thank you for being part of this from the start.
 ### Keywords and SEO Optimization
 
 **Primary keywords (in headline + about):** multi-agent orchestration, Metal-Organic Framework, local-first AI, CHIT, CGP, sovereign AI, CATACLYSM STUDIOS, PMOVES.AI  
-**Secondary keywords (in experience):** NATS JetStream, TensorZero, Neo4j, voice AI, Three-Body governance, agent registry, cryptographic identity, MiniMax, GLM, KIMI, Moonshot, Fordham Hill  
+**Secondary keywords (in experience):** NATS JetStream, TensorZero, Neo4j, voice AI, Three-Body governance, agent registry, cryptographic identity, MiniMax, GLM, KIMI, Moonshot, Fordham Hill, n8n, ActivePieces, workflow automation, low-code, webhook orchestration  
 **Differentiator keywords:** consciousness service, prosodic CGP, BPM encoder, Flute Gateway, GRAPHITI Mark, Agent ACK, MOF architecture, Metal-Organic Framework  
 
 ### Content Calendar for Profile Activity

@@ -309,9 +309,9 @@ class ShapeStore:
         rest_url = rest_url.rstrip("/")
         if not rest_url.endswith("/rest/v1"):
             # Allow PostgREST direct host (e.g., http://postgrest:3000)
-            endpoint_base = f"{rest_url}/constellations"
+            pass
         else:
-            endpoint_base = f"{rest_url}/constellations"
+            pass
 
         try:
             import httpx
@@ -332,7 +332,7 @@ class ShapeStore:
             headers["apikey"] = api_key
             headers["Authorization"] = f"Bearer {api_key}"
 
-        params = {
+        {
             "select": "*,anchor:anchors(*),points:shape_points(*)",
             "order": "created_at.desc",
             "limit": str(max(1, int(limit))),

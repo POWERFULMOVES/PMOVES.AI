@@ -38,6 +38,18 @@ A2UI_REQUEST_SUBJECT = os.getenv("A2UI_REQUEST_SUBJECT", "a2ui.request.v1")
 GEOMETRY_WILDCARD = os.getenv("GEOMETRY_WILDCARD", "geometry.>")
 GEOMETRY_CGP_SUBJECT = os.getenv("GEOMETRY_CGP_SUBJECT", "geometry.cgp.v1")
 GEOMETRY_WS_ROOM = os.getenv("GEOMETRY_WS_ROOM", "geometry")
+# P7 room-aware stage manager subjects (open-room lane, 2026-07-20).
+# `room.session.updated.v1` is emitted on every room stage transition;
+# `pmoves.config.rooms.reloaded.v1` is emitted when the catalog is re-read
+# from disk. The A2UI bridge subscribes per-client and forwards both as
+# room envelopes so the A2UI renderer can show room lifecycle in real-time.
+P7_ROOM_SESSION_UPDATED_SUBJECT = os.getenv(
+    "P7_ROOM_SESSION_UPDATED_SUBJECT", "room.session.updated.v1"
+)
+P7_CONFIG_RELOADED_SUBJECT = os.getenv(
+    "P7_CONFIG_RELOADED_SUBJECT", "pmoves.config.rooms.reloaded.v1"
+)
+P7_WS_ROOM = os.getenv("P7_WS_ROOM", "p7-rooms")
 PORT = int(os.getenv("PORT", "9224"))
 
 # Logging
@@ -111,6 +123,14 @@ a2ui_events_received = Counter("a2ui_events_received_total", "Events received fr
 a2ui_events_forwarded = Counter("a2ui_events_forwarded_total", "A2UI events forwarded to WebSocket clients")
 geometry_events_forwarded = Counter("a2ui_geometry_events_forwarded_total", "Geometry CGP events forwarded to WebSocket clients")
 geometry_events_rejected = Counter("a2ui_geometry_events_rejected_total", "Geometry CGP events dropped by the CHIT signature gate", ["reason"])
+room_session_events_forwarded = Counter(
+    "a2ui_room_session_events_forwarded_total",
+    "P7 room.session.updated.v1 events forwarded to WebSocket clients",
+)
+room_config_reloaded_events_forwarded = Counter(
+    "a2ui_room_config_reloaded_events_forwarded_total",
+    "P7 pmoves.config.rooms.reloaded.v1 events forwarded to WebSocket clients",
+)
 active_websockets = Gauge("a2ui_active_websockets", "Active WebSocket connections")
 nats_connected = Gauge("a2ui_nats_connected", "NATS connection status")
 
@@ -123,6 +143,59 @@ A2UI_UPDATE_DATA_MODEL = "updateDataModel"
 A2UI_DATA_MODEL_UPDATE = "dataModelUpdate"
 A2UI_USER_ACTION = "userAction"
 A2UI_CLOSE_SURFACE = "closeSurface"
+
+
+# --------------------------------------------------------------------------- #
+# P7 room-lifecycle handlers (module-level so unit tests can call them directly)
+# --------------------------------------------------------------------------- #
+
+async def forward_room_session_event(msg, websocket) -> None:
+    """Forward P7 ``room.session.updated.v1`` events to a WebSocket client.
+
+    Wraps the payload in a ``p7-rooms`` envelope so the A2UI renderer can
+    route it to the room-lifecycle surface. The payload (per P7 service
+    spec §6.3) carries ``room_id``, ``previous_stage``, ``new_stage``,
+    ``reason``, ``requester``, and a ``chit`` envelope; clients use the
+    ``previous_stage`` → ``new_stage`` delta to update their room card /
+    list / detail views.
+
+    Module-level (not a closure) so unit tests in
+    ``tests/test_room_envelope.py`` can call it directly. Named
+    ``forward_*`` (not ``*_handler``) to avoid shadowing the per-client
+    closure in ``client_websocket``.
+    """
+    try:
+        payload = json.loads(msg.data.decode())
+        envelope = {
+            "room": P7_WS_ROOM,
+            "subject": msg.subject,
+            "data": payload,
+        }
+        await websocket.send_text(json.dumps(envelope) + "\n")
+        room_session_events_forwarded.inc()
+    except Exception as e:
+        logger.warning(f"Failed to forward {msg.subject}: {e}")
+
+
+async def forward_config_reloaded_event(msg, websocket) -> None:
+    """Forward P7 ``pmoves.config.rooms.reloaded.v1`` events to a WebSocket client.
+
+    Carries ``schema_version`` + ``rooms_loaded``; the A2UI renderer uses
+    this to invalidate cached catalog snapshots and re-fetch.
+
+    Module-level (not a closure) so unit tests can call it directly.
+    """
+    try:
+        payload = json.loads(msg.data.decode())
+        envelope = {
+            "room": P7_WS_ROOM,
+            "subject": msg.subject,
+            "data": payload,
+        }
+        await websocket.send_text(json.dumps(envelope) + "\n")
+        room_config_reloaded_events_forwarded.inc()
+    except Exception as e:
+        logger.warning(f"Failed to forward {msg.subject}: {e}")
 
 
 @dataclass
@@ -334,7 +407,7 @@ async def handle_user_action(action: dict[str, Any]) -> None:
     """
     action_name = action.get("name", "unknown")
     surface_id = action.get("surfaceId", "")
-    context = action.get("context", {})
+    action.get("context", {})
 
     logger.info(f"User action: {action_name} on surface {surface_id}")
 
@@ -571,8 +644,22 @@ async def client_websocket(websocket: WebSocket):
         except Exception as e:
             logger.warning(f"Failed to forward geometry message: {e}")
 
+    async def room_session_handler(msg):
+        """Per-client NATS callback. Delegates to the module-level
+        ``forward_room_session_event`` so unit tests can call the canonical
+        implementation directly. The closure captures ``websocket`` so the
+        nats-py callback signature is preserved.
+        """
+        return await forward_room_session_event(msg, websocket)
+
+    async def config_reloaded_handler(msg):
+        """Per-client NATS callback. Same pattern as ``room_session_handler``."""
+        return await forward_config_reloaded_event(msg, websocket)
+
     sub = None
     geom_sub = None
+    room_session_sub = None
+    config_reloaded_sub = None
     try:
         if nc:
             # Subscribe to all A2UI events
@@ -584,6 +671,25 @@ async def client_websocket(websocket: WebSocket):
             if not _js_geom_sub_active:
                 geom_sub = await nc.subscribe(GEOMETRY_CGP_SUBJECT, cb=geometry_handler)
                 logger.info(f"Forwarding {GEOMETRY_CGP_SUBJECT} -> room '{GEOMETRY_WS_ROOM}' to {client_id}")
+
+            # P7 room lifecycle (open-room lane, 2026-07-20).
+            # Per-client subscription mirrors the geometry pattern; the A2UI
+            # renderer can subscribe to the p7-rooms envelope and reflect
+            # room stage transitions in real-time.
+            room_session_sub = await nc.subscribe(
+                P7_ROOM_SESSION_UPDATED_SUBJECT, cb=room_session_handler
+            )
+            logger.info(
+                f"Forwarding {P7_ROOM_SESSION_UPDATED_SUBJECT} -> room "
+                f"'{P7_WS_ROOM}' to {client_id}"
+            )
+            config_reloaded_sub = await nc.subscribe(
+                P7_CONFIG_RELOADED_SUBJECT, cb=config_reloaded_handler
+            )
+            logger.info(
+                f"Forwarding {P7_CONFIG_RELOADED_SUBJECT} -> room "
+                f"'{P7_WS_ROOM}' to {client_id}"
+            )
 
             # Keep connection alive
             while True:
@@ -599,6 +705,10 @@ async def client_websocket(websocket: WebSocket):
             await sub.unsubscribe()
         if geom_sub:
             await geom_sub.unsubscribe()
+        if room_session_sub:
+            await room_session_sub.unsubscribe()
+        if config_reloaded_sub:
+            await config_reloaded_sub.unsubscribe()
 
 
 def main() -> None:

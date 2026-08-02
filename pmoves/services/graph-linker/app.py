@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from fastapi.responses import Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
-from config import Settings, get_settings
+from config import get_settings
 from models import HealthResponse, ReadyResponse
 from nats_handler import NATSHandler
 from neo4j_client import Neo4jClient

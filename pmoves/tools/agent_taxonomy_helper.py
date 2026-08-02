@@ -165,9 +165,9 @@ def cmd_show(registry, args):
     toggles = agent.get("chit_toggles", {})
     nats = agent.get("nats", {})
 
-    print(f"╔══════════════════════════════════════════╗")
+    print("╔══════════════════════════════════════════╗")
     print(f"║  {agent.get('name', agent_id):^38}  ║")
-    print(f"╠══════════════════════════════════════════╣")
+    print("╠══════════════════════════════════════════╣")
     print(f"║  ID:        {agent_id:<28} ║")
     print(f"║  Class:     {cls:<12} ({cls_info.get('prefix', '?')})       ║")
     type_display = f"{primary}/{secondary}" if secondary else primary
@@ -180,13 +180,13 @@ def cmd_show(registry, args):
     print(f"║  Layers:    {', '.join(layers):<28} ║")
     if agent.get("submodule"):
         print(f"║  Submodule: {agent['submodule']:<28} ║")
-    print(f"╠══════════════════════════════════════════╣")
-    print(f"║  CHIT Toggles:                           ║")
+    print("╠══════════════════════════════════════════╣")
+    print("║  CHIT Toggles:                           ║")
     for k, v in toggles.items():
         icon = "●" if v else "○"
         print(f"║    {icon} {k:<36} ║")
-    print(f"╠══════════════════════════════════════════╣")
-    print(f"║  NATS Subjects:                          ║")
+    print("╠══════════════════════════════════════════╣")
+    print("║  NATS Subjects:                          ║")
     pubs = nats.get("publishes", [])
     subs = nats.get("subscribes", [])
     if pubs:
@@ -196,8 +196,8 @@ def cmd_show(registry, args):
         for s in subs:
             print(f"║    SUB  {s:<32} ║")
     if not pubs and not subs:
-        print(f"║    (none)                                ║")
-    print(f"╠══════════════════════════════════════════╣")
+        print("║    (none)                                ║")
+    print("╠══════════════════════════════════════════╣")
     desc = agent.get("description", "")
     # Word-wrap description to 38 chars
     words = desc.split()
@@ -213,7 +213,7 @@ def cmd_show(registry, args):
         lines.append(current)
     for line in lines:
         print(f"║  {line:<38}  ║")
-    print(f"╚══════════════════════════════════════════╝")
+    print("╚══════════════════════════════════════════╝")
 
 
 def cmd_connections(registry, args):
@@ -434,7 +434,7 @@ def cmd_render_card(registry, args):
     voice = sig.get("voice", "unknown")
     co_author = sig.get("co_author", "")
     resonance = sig.get("resonance", [])
-    description = sig.get("description", "")
+    sig.get("description", "")
     alters = sig.get("alters", [])
 
     def box_line(text, pad=w - 4):

@@ -4,11 +4,9 @@ Supports in-memory and Supabase backends for node capability storage.
 Provides persistent node catalog with Supabase for multi-host deployments.
 """
 
-import asyncio
 import dataclasses
 import json
 import logging
-import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 
@@ -467,7 +465,7 @@ class SupabaseNodeStore(InMemoryNodeStore):
 
         try:
             # Check if table exists by attempting a query
-            result = client.table(self._table_name).select("node_id").limit(1).execute()
+            client.table(self._table_name).select("node_id").limit(1).execute()
 
             if self._load_on_startup:
                 await self._load_from_supabase()
