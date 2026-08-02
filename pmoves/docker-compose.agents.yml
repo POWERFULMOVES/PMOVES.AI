@@ -841,6 +841,12 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  # A2UI Renderer - Remotion-based animation engine (port 8107)
+  # Lane 2228 (2026-08-02): first-class compose service so the living-doc
+  # animation lane is a fleet capability rather than npm-scripts-only.
+  # Issue #2228: previously the Dockerfile existed at services/a2ui-renderer/
+  # but no compose service anywhere - this stanza fixes that.
+  # See pmoves/docs/specs/a2ui-renderer-compose-2026-08-02.md for the spec.
   nats-echo-req:
     <<: *tier-agent-hardened-ro
     build:
