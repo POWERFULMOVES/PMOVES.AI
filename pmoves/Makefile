@@ -1133,6 +1133,32 @@ nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Ro
 nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
 	@bash -lc '. ./scripts/with-env.sh; exec uv run --script tools/nats_agent_inbox.py'
 
+# ----------------------------------------------------------------------------
+# Lane 5 (2026-08-01): JetStream stream management
+#   nats-streams-init    - re-run init_streams.sh (idempotent; safe to re-run)
+#   nats-streams-validate - assert the 8 expected streams exist post-init
+# ----------------------------------------------------------------------------
+.PHONY: nats-streams-init nats-streams-validate nats-streams-list
+nats-streams-init: ## Idempotently create JetStream streams via the nats-init sidecar script (Known Road)
+	@echo "🔧 Initializing NATS JetStream streams (idempotent)..."
+	@bash scripts/nats/init_streams.sh
+	@echo "✅ NATS stream init complete"
+
+nats-streams-validate: ## Assert the 8 expected streams exist (CI-runnable)
+	@echo "🔍 Validating NATS JetStream streams..."
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
+	    -c "nats -s \"$$NATS_URL\" stream ls -n" > /tmp/nats_streams_actual.txt 2>&1
+	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.txt
+	@rm -f /tmp/nats_streams_actual.txt
+
+nats-streams-list: ## List current JetStream streams (ad-hoc)
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" \
+	    nats -s "$$NATS_URL" stream ls -n
+
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
