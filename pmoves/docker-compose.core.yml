@@ -169,7 +169,7 @@ services:
     - GOTRUE_DB_DRIVER=postgres
     - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
     # JWT configuration — standard names with legacy fallbacks
-    - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
+    - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
     - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
     # 2025 key naming (service_role_key from PMOVES-supabase standard)
@@ -240,9 +240,9 @@ services:
     - ERL_AFLAGS=-proto_dist inet_tcp
     - DNS_NODES=''
     # JWT secret (must match gotrue) - standard variable name
-    - API_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - API_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:-${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}}
-    - METRICS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - METRICS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -288,7 +288,7 @@ services:
     - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
     - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
     # JWT secret - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     # PostgREST connection
     - POSTGREST_URL=http://supabase-postgrest:3000
@@ -522,7 +522,7 @@ services:
     profiles:
     - supabase-local
     environment:
-    - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
+    - JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:?Set SUPABASE_JWT_SECRET or JWT_SECRET in env.tier-supabase}}
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_ANON_KEY=${ANON_KEY:?Set ANON_KEY in env.tier-supabase}
     - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY in env.tier-supabase}
@@ -572,7 +572,11 @@ services:
           memory: 512M
   supabase-postgrest:
     <<: *tier-supabase-hardened-ro
-    image: postgrest/postgrest:v14.12
+    # PostgREST v14 documents a >=32-char minimum for symmetric JWT secrets
+    # (enforced as a hard startup error in newer tags). SUPABASE_POSTGREST_IMAGE
+    # exists for emergency pinning only — the fix for short-secret nodes is
+    # rotating to a >=32-char secret, not an older image.
+    image: ${SUPABASE_POSTGREST_IMAGE:-postgrest/postgrest:v14.12}
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -580,12 +584,12 @@ services:
     # Database connection (from env.tier-supabase)
     - PGRST_DB_URI=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     # JWT secret (must match gotrue) - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - PGRST_JWT_SECRET_IS_BASE64=false
     # PostgREST v14+ settings
     - PGRST_DB_USE_LEGACY_GUCS=false
-    - PGRST_APP_SETTINGS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_APP_SETTINGS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}}
     # Extra search_path so pmoves_core and pmoves_kb objects are addressable
     # without fully-qualified names. Must match env.tier-supabase.example.
@@ -640,9 +644,9 @@ services:
     - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - CLUSTER_POSTGRES=true
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
-    - METRICS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - METRICS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
-    - API_JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
+    - API_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:?Set SUPABASE_JWT_SECRET or JWT_SECRET in env.tier-supabase}}
     - REGION=local
     - ERL_AFLAGS=-proto_dist inet_tcp
     - POOLER_TENANT_ID=${POOLER_TENANT_ID:-default-tenant}
@@ -740,7 +744,7 @@ services:
     - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
     - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
     - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - AUTH_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - AUTH_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PG_META_CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
     # Analytics (Logflare) integration
     - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
