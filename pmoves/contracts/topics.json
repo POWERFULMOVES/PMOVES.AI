@@ -403,6 +403,24 @@
       "description": "Creator-collab slice 6: room-suggest-skill produced a ranked list of candidate rooms for a persona + intent. Carries the suggestion_id, persona context (agent_id + role), the ranked candidates with persona-aware scores, and the directory snapshot version. Emitted by room-suggest-skill on every chat turn (ambient) or on the room-suggest UI (explicit). Consumed by nats_event_bus + room-suggestions panel.",
       "publisher": ["room-suggest-skill"],
       "subscriber": ["nats_event_bus", "room-suggestions", "pmoves-helpdesk-skill", "dashboard"]
+    },
+    "chit.economics.usage.v1": {
+      "schema": "schemas/chit/economics.usage.v1.schema.json"
+    },
+    "archon.mint.agent.v1": {
+      "schema": "schemas/archon/mint.agent.v1.schema.json"
+    },
+    "archon.qa.result.v1": {
+      "schema": "schemas/archon/qa.result.v1.schema.json"
+    },
+    "archon.mint.confirmed.v1": {
+      "schema": "schemas/archon/mint.confirmed.v1.schema.json"
+    },
+    "archon.mint.skill.v1": {
+      "schema": "schemas/archon/mint.skill.v1.schema.json"
+    },
+    "archon.mint.creator.v1": {
+      "schema": "schemas/archon/mint.creator.v1.schema.json"
     }
   }
 }
