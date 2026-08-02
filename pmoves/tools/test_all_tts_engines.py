@@ -14,6 +14,18 @@ Per-engine client isolation: each engine load/synth reconnects the Gradio
 client on connection errors, preventing cascade failures when one engine
 OOM-crashes the server.
 
+Pinokio integration (Lane 4 redo, 2026-08-01):
+  * pterm pre-flight — auto-starts Ultimate-TTS-Studio via the real pterm CLI
+    (subcommands: list, status, start, running). Falls back to direct
+    connection at http://127.0.0.1:7860/ if pterm is not installed.
+  * gepeto launcher — `pmoves/tools/test_all_tts_engines/pinokio/` provides
+    a 1-click Pinokio UI (install.js, start.js, start-one.js, pinokio.js,
+    pinokio.json) that drives this script. The launcher adds pterm push
+    notifications + clipboard sharing of the run summary.
+  * Per-engine review READMEs — `pmoves/tools/test_all_tts_engines/engines/`
+    captures the contract an implementer/reviewer needs without re-reading
+    launch.py.
+
 Usage:
     python pmoves/tools/test_all_tts_engines.py [--no-play] [--engine ENGINE] [--load-only]
 
@@ -24,6 +36,8 @@ Options:
     --url URL       Override TTS Studio URL (default: http://127.0.0.1:7860/)
     --no-pterm      Skip pterm pre-flight (auto-start via Pinokio)
     --metrics       Capture GPU VRAM via GPU Orchestrator (port 8200)
+    --notify        Send a pterm desktop notification when the run finishes
+    --clip-report   Copy the run summary to the system clipboard via pterm
 """
 
 import argparse
@@ -571,188 +585,210 @@ def play_audio(filepath: Path, skip_play: bool = False) -> None:
     print("      (no audio player available)")
 
 
-def _resolve_pterm() -> str | None:
-    """Resolve the pterm binary path.
+# ---------------------------------------------------------------------------
+# Pinokio pterm pre-flight (Lane 4 redo, 2026-08-01)
+# ---------------------------------------------------------------------------
+# Replaces the original hand-rolled 180-line wrapper that called `pterm search`
+# and `pterm run` (subcommands that do NOT exist in the real pterm CLI) and
+# had a 50-line JSON→key=value→colon-separated text fallback parser.
+#
+# Per the pterm skill (pmoves/AGENTS.md → pterm), pterm is the Pinokio CLI
+# for managing apps, clipboard, and notifications. The real subcommands:
+#
+#   pterm list                     — discover installed apps (JSON array)
+#   pterm status <id>              — JSON { state, ready, ready_url, path }
+#   pterm start <id>               — daemon: boot the app, returns immediately
+#   pterm running <id>             — JSON { running, ready_url } (truthful poll)
+#   pterm push "msg" --title "..."  — desktop notification
+#   pterm clipboard write "..."    — system clipboard
+#
+# This is the wrap-don't-reinvent path: pterm does the work, we just orchestrate
+# the subcommands. We don't reimplement PATH resolution (pterm knows itself),
+# don't reimplement status parsing (pterm outputs JSON), and don't reimplement
+# polling (pterm running is the truthful source of truth).
+# ---------------------------------------------------------------------------
 
-    Per Pinokio-SKILL.md Control Plane: check PATH first, then
-    platform-specific fallback locations.
+# TTS Studio app identifiers we search for in `pterm list`. The curated
+# YAML at pmoves/configs/pinokio-apps/curated/ultimate-tts-studio.yaml is the
+# source of truth for the canonical slug.
+TTS_APP_HINTS = ("ultimate-tts-studio", "ultimate_tts", "tts-studio")
+PTERM_READY_TIMEOUT_S = 180
+PTERM_POLL_INTERVAL_S = 2
+
+
+def _pterm_path() -> str | None:
+    """Return the pterm binary path, or None if not installed.
+
+    pterm is bundled with Pinokio (per the pterm skill). We don't try
+    platform-specific candidate paths — pterm itself is the right place to
+    know where it lives, and `shutil.which` is the standard discovery.
     """
-    # 1. Check if pterm is already on PATH
-    found = shutil.which("pterm")
-    if found:
-        return found
-
-    # 2. Windows: check Pinokio install locations
-    if platform.system() == "Windows":
-        candidates = [
-            Path("D:/pinokio/bin/npm/pterm.cmd"),
-            Path(os.environ.get("LOCALAPPDATA", ""), "pinokio/bin/npm/pterm.cmd"),
-            Path(os.environ.get("APPDATA", ""), "pinokio/bin/npm/pterm.cmd"),
-        ]
-        for p in candidates:
-            if p.exists():
-                return str(p)
-
-    # 3. Linux/macOS: common locations
-    for p in [Path.home() / ".pinokio" / "bin" / "pterm", Path("/usr/local/bin/pterm")]:
-        if p.exists():
-            return str(p)
-
-    return None
+    return shutil.which("pterm")
 
 
-def _run_pterm(pterm: str, args: list[str], timeout: int = 30) -> subprocess.CompletedProcess | None:
-    """Run a pterm command and return the result, or None on failure."""
+def _pterm_call(args: list[str], timeout: int = 30) -> dict | list | None:
+    """Run a pterm subcommand and return parsed JSON output.
+
+    Returns None on: pterm missing, non-zero exit, non-JSON output, timeout.
+    Per the original hand-rolled code's learnings, ALWAYS pin
+    `encoding="utf-8"` on Windows — the default `text=True` masks real
+    numbers with the system code page.
+    """
+    pterm = _pterm_path()
+    if not pterm:
+        return None
     try:
-        return subprocess.run(
+        result = subprocess.run(
             [pterm, *args],
             capture_output=True, text=True, timeout=timeout,
             encoding="utf-8", errors="replace",
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None
-
-
-def _parse_pterm_status(output: str) -> dict:
-    """Parse key=value fields from pterm status output.
-
-    Handles both JSON and plain-text output formats.
-    """
-    # Try JSON first
+    if result.returncode != 0:
+        return None
     try:
-        data = json.loads(output)
-        if isinstance(data, dict):
-            return data
-        if isinstance(data, list) and data:
-            return data[0] if isinstance(data[0], dict) else {}
+        data = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
-        pass
-
-    # Fall back to key=value parsing
-    result = {}
-    for line in output.splitlines():
-        line = line.strip()
-        if "=" in line:
-            key, _, value = line.partition("=")
-            result[key.strip()] = value.strip()
-        elif ":" in line:
-            key, _, value = line.partition(":")
-            result[key.strip()] = value.strip()
-    return result
+        return None
+    return data if isinstance(data, (dict, list)) else None
 
 
-def pterm_preflight(skip: bool = False) -> str | None:
-    """Use pterm to check/start TTS Studio per Pinokio-SKILL.md lifecycle.
+def _pterm_find_tts_app() -> dict | None:
+    """Find the TTS Studio app in `pterm list` output.
 
-    Returns the ready_url if TTS Studio is running, or None to fall back
-    to direct connection.
+    pterm list output schema varies across Pinokio versions — check all the
+    typical identifier fields and match on the curated YAML's slug.
     """
-    if skip:
+    data = _pterm_call(["list"])
+    if not isinstance(data, list):
         return None
-
-    pterm = _resolve_pterm()
-    if not pterm:
-        print("  Pterm: not found (will connect directly)")
-        return None
-
-    print(f"  Pterm: {pterm}")
-
-    # 1. Search for TTS Studio app
-    result = _run_pterm(pterm, ["search", "ultimate tts"])
-    if not result or result.returncode != 0:
-        print("  Pterm: search failed (will connect directly)")
-        return None
-
-    # Parse app_id from search results — look for first line with an app path/id
-    app_id = None
-    app_path = None
-    for line in result.stdout.splitlines():
-        line = line.strip()
-        if not line:
+    for app in data:
+        if not isinstance(app, dict):
             continue
-        # Try JSON
-        try:
-            items = json.loads(result.stdout)
-            if isinstance(items, list) and items:
-                item = items[0]
-                app_id = item.get("app_id") or item.get("id")
-                app_path = item.get("path")
-                break
-        except (json.JSONDecodeError, ValueError):
-            pass
-        # Plain text: look for path-like lines containing "tts" or "ultimate"
-        lower = line.lower()
-        if "ultimate" in lower or "tts" in lower:
-            # Could be "app_id: xxx" or just a path
-            if ":" in line and not line.startswith("/") and not line[1:2] == ":":
-                _, _, val = line.partition(":")
-                app_id = val.strip()
-            else:
-                app_path = line
-            break
+        # Slug is the canonical id; name/title/path are fallbacks
+        joined = " ".join(
+            str(app.get(k, "")) for k in ("slug", "name", "title", "path", "app_id", "id")
+        ).lower()
+        if any(hint in joined for hint in TTS_APP_HINTS):
+            return app
+    return None
 
-    if not app_id and not app_path:
-        print("  Pterm: TTS Studio not found in local apps")
-        return None
 
-    identifier = app_id or app_path
+def _pterm_wait_ready(
+    identifier: str, timeout_s: int = PTERM_READY_TIMEOUT_S,
+) -> str | None:
+    """Poll `pterm running <id>` until the app is serving HTTP or we time out.
+
+    Per the pterm skill, `pterm running` is the truthful polling primitive —
+    it doesn't lie about "started" until the app is actually serving traffic.
+    Returns the ready_url (e.g., http://127.0.0.1:7860/) or None.
+    """
+    deadline = time.time() + timeout_s
+    poll_interval = PTERM_POLL_INTERVAL_S
+    while time.time() < deadline:
+        data = _pterm_call(["running", identifier])
+        if isinstance(data, dict) and data.get("running") is True:
+            ready_url = data.get("ready_url") or data.get("url")
+            if ready_url:
+                return str(ready_url)
+        time.sleep(poll_interval)
+        # Back off slightly so we don't hammer the running daemon
+        poll_interval = min(poll_interval + 1, 5)
+    return None
+
+
+def pterm_bring_up_tts_studio() -> tuple[str | None, str | None]:
+    """Discover, start, and wait for Ultimate-TTS-Studio via pterm.
+
+    Returns (ready_url, identifier) on success, (None, None) on failure.
+    On failure, the harness falls back to direct connection at the curated
+    YAML's documented port (http://127.0.0.1:7860/).
+    """
+    if not _pterm_path():
+        print("  Pterm: not installed (will connect directly)")
+        return None, None
+    print(f"  Pterm: {_pterm_path()}")
+
+    app = _pterm_find_tts_app()
+    if not app:
+        print("  Pterm: TTS Studio not found in app list")
+        return None, None
+
+    # Prefer the slug (canonical id), fall back to path
+    identifier = str(
+        app.get("slug") or app.get("app_id") or app.get("id") or app.get("path", "")
+    )
+    if not identifier:
+        print("  Pterm: TTS Studio found but has no identifier")
+        return None, None
     print(f"  Pterm: found app -> {identifier}")
 
-    # 2. Check status
-    status_arg = app_id or app_path
-    result = _run_pterm(pterm, ["status", status_arg])
-    if not result or result.returncode != 0:
-        print("  Pterm: status check failed")
-        return None
+    # 1. Check status — if already running, we're done
+    status = _pterm_call(["status", identifier])
+    if isinstance(status, dict):
+        ready_url = str(status.get("ready_url") or status.get("url") or "")
+        if bool(status.get("ready")) and ready_url:
+            print(f"  Pterm: already running at {ready_url}")
+            return ready_url, identifier
 
-    status = _parse_pterm_status(result.stdout)
-    ready = str(status.get("ready", "")).lower() == "true"
-    ready_url = status.get("ready_url", "")
-    state = status.get("state", "offline")
-    path_val = status.get("path", app_path or "")
+    # 2. Boot the app — pterm start is daemon, returns immediately
+    print(f"  Pterm: starting {identifier}...")
+    started = _pterm_call(["start", identifier])
+    # pterm start returns { ok: bool, ... } on success/failure;
+    # `None` here means pterm is unreachable, which is already a fail
+    if started is None:
+        print("  Pterm: start call failed")
+        return None, identifier
 
-    if ready and ready_url:
-        print(f"  Pterm: already running at {ready_url}")
-        return ready_url
+    # 3. Poll for readiness via pterm running (truthful)
+    print(f"  Pterm: waiting for readiness (timeout {PTERM_READY_TIMEOUT_S}s)...")
+    ready_url = _pterm_wait_ready(identifier)
+    if ready_url:
+        print(f"  Pterm: ready at {ready_url}")
+        return ready_url, identifier
 
-    # 3. If offline, start it
-    if state == "offline" or not ready:
-        run_target = path_val or status_arg
-        print(f"  Pterm: app is {state}, starting via pterm run...")
-        run_result = _run_pterm(pterm, ["run", run_target], timeout=60)
-        if not run_result or run_result.returncode != 0:
-            stderr = (run_result.stderr[:100] if run_result else "timeout").strip()
-            print(f"  Pterm: run failed — {stderr}")
-            return None
+    print(f"  Pterm: {identifier} did not become ready in {PTERM_READY_TIMEOUT_S}s")
+    return None, identifier
 
-        # 4. Poll status until ready (180s timeout per SKILL.md)
-        deadline = time.time() + 180
-        poll_interval = 2
-        while time.time() < deadline:
-            time.sleep(poll_interval)
-            result = _run_pterm(pterm, ["status", status_arg])
-            if not result:
-                continue
-            status = _parse_pterm_status(result.stdout)
-            ready = str(status.get("ready", "")).lower() == "true"
-            ready_url = status.get("ready_url", "")
-            state = status.get("state", "")
 
-            if ready and ready_url:
-                print(f"  Pterm: started successfully at {ready_url}")
-                return ready_url
+def pterm_notify(title: str, message: str) -> bool:
+    """Push a desktop notification via `pterm push`. Returns True on success.
 
-            if state == "offline":
-                print("  Pterm: app dropped back to offline during startup")
-                return None
+    Used by the gepeto launcher (pinokio/start.js) and the --notify flag.
+    """
+    pterm = _pterm_path()
+    if not pterm:
+        return False
+    try:
+        result = subprocess.run(
+            [pterm, "push", message, "--title", title],
+            capture_output=True, text=True, timeout=10,
+            encoding="utf-8", errors="replace",
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
 
-            # Ramp up poll interval slightly
-            poll_interval = min(poll_interval + 1, 5)
 
-        print("  Pterm: startup timed out (180s)")
-        return None
+def pterm_clipboard_write(text: str) -> bool:
+    """Copy text to the system clipboard via `pterm clipboard write`.
 
-    return None
+    Used by the gepeto launcher (pinokio/start.js) and the --clip-report flag.
+    """
+    pterm = _pterm_path()
+    if not pterm:
+        return False
+    try:
+        result = subprocess.run(
+            [pterm, "clipboard", "write", text],
+            input=text,
+            capture_output=True, text=True, timeout=10,
+            encoding="utf-8", errors="replace",
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
 
 
 def main():
@@ -765,6 +801,10 @@ def main():
     parser.add_argument("--no-pterm", action="store_true", help="Skip pterm pre-flight")
     parser.add_argument("--metrics", action="store_true",
                         help="Capture GPU VRAM via GPU Orchestrator (port 8200)")
+    parser.add_argument("--notify", action="store_true",
+                        help="Send a pterm desktop notification when the run finishes")
+    parser.add_argument("--clip-report", action="store_true",
+                        help="Copy the run summary to the system clipboard via pterm")
     args = parser.parse_args()
 
     url = args.url.rstrip("/") + "/"
@@ -774,15 +814,17 @@ def main():
     print(f"  Target: {url}")
     print(f"  Output: {OUTPUT_DIR}")
 
-    # Pterm pre-flight: auto-start TTS Studio if possible
+    # Pterm pre-flight: auto-start TTS Studio if possible.
     # Skip pterm if user explicitly provided --url or set ULTIMATE_TTS_URL env var
+    # (the gepeto launcher also wires this via start.js; see pinokio/).
     env_url_set = "ULTIMATE_TTS_URL" in os.environ
     skip_pterm = args.no_pterm or (args.url != DEFAULT_URL) or env_url_set
-    print("\n  Pterm pre-flight...")
-    ready_url = pterm_preflight(skip=skip_pterm)
-    if ready_url:
-        url = ready_url.rstrip("/") + "/"
-        print(f"  Using pterm-resolved URL: {url}")
+    if not skip_pterm:
+        print("\n  Pterm pre-flight...")
+        ready_url, _identifier = pterm_bring_up_tts_studio()
+        if ready_url:
+            url = ready_url.rstrip("/") + "/"
+            print(f"  Using pterm-resolved URL: {url}")
 
     # Connect to Gradio
     print("\n  Connecting to Gradio...")
@@ -940,6 +982,30 @@ def main():
                 print(f"    ❌ {name} ({loaded_str})")
 
     print(f"\n  Audio files: {OUTPUT_DIR}")
+
+    # Build a single-line run summary for notify + clipboard.
+    run_summary = (
+        f"TTS test: {synth_pass} pass / {synth_fail} fail / {synth_skip} skip "
+        f"({loaded} loaded) → {OUTPUT_DIR}"
+    )
+
+    # Pterm notify — pterm push is the right primitive for desktop notifications.
+    # The gepeto launcher (pinokio/start.js) does this after the shell.run, so
+    # the --notify flag is for direct CLI users.
+    if args.notify:
+        if pterm_notify("PMOVES TTS Test", run_summary):
+            print(f"  Notify: ✓ pterm push sent")
+        else:
+            print(f"  Notify: ⚠ pterm not available (skip)")
+
+    # Pterm clipboard — copy the summary so it's paste-able from anywhere.
+    # Same rationale: the gepeto launcher does this, --clip-report is for CLI.
+    if args.clip_report:
+        if pterm_clipboard_write(run_summary):
+            print(f"  Clipboard: ✓ pterm clipboard write done")
+        else:
+            print(f"  Clipboard: ⚠ pterm not available (skip)")
+
     return 0 if (loaded > 0 if args.load_only else synth_pass > 0) else 1
 
 
