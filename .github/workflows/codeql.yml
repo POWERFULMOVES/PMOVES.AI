@@ -126,6 +126,10 @@ jobs:
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
+        # Analysis-scope exclusions (vendored JS, venvs, node_modules, ...).
+        # The negated patterns under `on.paths` above are only a TRIGGER filter —
+        # they do not narrow what CodeQL scans once the workflow starts.
+        config-file: ./.github/codeql-config.yml
         # If you wish to specify custom queries, you can do so here or in a config file.
         # By default, queries listed here will override any specified in a config file.
         # Prefix the list here with "+" to use these queries and those in the config file.
