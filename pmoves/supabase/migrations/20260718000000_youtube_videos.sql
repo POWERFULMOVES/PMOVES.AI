@@ -35,7 +35,9 @@ DROP POLICY IF EXISTS youtube_videos_service_role ON youtube_videos;
 CREATE POLICY youtube_videos_service_role ON youtube_videos
     FOR ALL USING (auth.role() = 'service_role');
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON youtube_videos TO anon, authenticated, service_role;
+-- RLS above is service_role-only; the public API role never passes a policy,
+-- so granting it privileges was inert surface area (flagged by sql-policy-lint).
+GRANT SELECT, INSERT, UPDATE, DELETE ON youtube_videos TO authenticated, service_role;
 
 CREATE INDEX IF NOT EXISTS idx_yv_playlist ON youtube_videos(playlist_id);
 CREATE INDEX IF NOT EXISTS idx_yv_not_downloaded ON youtube_videos(downloaded) WHERE downloaded = FALSE;
