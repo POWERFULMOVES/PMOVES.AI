@@ -94,6 +94,10 @@ def check_provenance_gate(
 ) -> ProvenanceResult:
     """Check the provenance gate for a voice synthesis request.
 
+    Evaluates ALL active provenance sources — if any source fails its
+    rights check, synthesis is rejected. Blended voices (multiple sources)
+    must have every source cleared.
+
     Args:
         voice_profile_id: UUID of the voice profile
         voice_name: Slug name of the voice (for error messages)
@@ -121,21 +125,32 @@ def check_provenance_gate(
             f"cannot synthesize without rights/consent documentation",
         )
 
+    for record in active_provenance:
+        rights = record.get("rights_basis", "")
+
+        if rights in ("CONSENTED", "LICENSED"):
+            artifact = (record.get("consent_artifact_uri") or "").strip()
+            if not artifact:
+                raise ProvenanceGateError(
+                    voice_profile_id,
+                    f"Voice '{voice_name}': {rights} provenance record has "
+                    f"blank consent_artifact_uri — cannot synthesize",
+                )
+
+        if rights == "CHARACTER_OWNED":
+            if not character_context or not character_context.get("authorized"):
+                raise ProvenanceGateError(
+                    voice_profile_id,
+                    f"CHARACTER_OWNED voice '{voice_name}' requires active "
+                    f"character context authorization (source: "
+                    f"{record.get('source_type', '?')})",
+                )
+
     primary = active_provenance[0]
-    rights = primary.get("rights_basis", "")
-
-    if rights == "CHARACTER_OWNED":
-        if not character_context or not character_context.get("authorized"):
-            raise ProvenanceGateError(
-                voice_profile_id,
-                f"CHARACTER_OWNED voice '{voice_name}' requires active "
-                f"character context authorization",
-            )
-
     return ProvenanceResult(
         allowed=True,
         voice_profile_id=voice_profile_id,
-        rights_basis=rights,
+        rights_basis=primary.get("rights_basis"),
         consent_date=str(primary.get("consent_date", "")) or None,
         capturer_identity=primary.get("capturer_identity"),
         attribution_url=primary.get("attribution_url"),

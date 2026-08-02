@@ -298,6 +298,7 @@ async def _publish_chit_voice_event(
     text_length: int,
     audio_duration: float,
     voice: Optional[str] = None,
+    voice_provenance_meta: Optional[dict] = None,
 ) -> None:
     """Publish voice synthesis event to CHIT geometry bus (best-effort).
 
@@ -308,6 +309,9 @@ async def _publish_chit_voice_event(
     when `FLUTE_GEOMETRY_DUAL_PUBLISH` is true (default), so canonical
     consumers (graphiti, matrix monitor, cymatic visualizer) get a
     schema-valid packet.
+
+    When voice_provenance_meta is supplied (from provenance_gate.build_cgp_meta),
+    it is injected into the CGP v0.2 `meta` field per §8 provenance attribution.
 
     Both publishes are gated by `CHIT_VOICE_ATTRIBUTION`. Errors on either
     publish are logged but do not fail the request.
@@ -360,7 +364,7 @@ async def _publish_chit_voice_event(
         geometry_bridge = GeometryBridge()
     canonical_subject = cgp_subject()
     try:
-        cgp_packet = geometry_bridge.encode_packet(payload)
+        cgp_packet = geometry_bridge.encode_packet(payload, meta=voice_provenance_meta)
         await nats_client.publish(
             canonical_subject,
             json.dumps(cgp_packet).encode("utf-8"),

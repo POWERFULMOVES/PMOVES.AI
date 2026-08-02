@@ -50,14 +50,14 @@ CREATE TABLE IF NOT EXISTS pmoves_core.voice_cloning_provenance (
         'OWNED', 'LICENSED', 'CONSENTED', 'PUBLIC_DOMAIN', 'CHARACTER_OWNED')),
     CONSTRAINT vcprov_consent_required_chk CHECK (
         (rights_basis NOT IN ('CONSENTED', 'LICENSED'))
-        OR consent_artifact_uri IS NOT NULL
+        OR NULLIF(btrim(consent_artifact_uri), '') IS NOT NULL
     ),
     CONSTRAINT vcprov_ts_chk CHECK (
         source_timestamp_start IS NULL
         OR source_timestamp_end IS NULL
         OR source_timestamp_end >= source_timestamp_start
     ),
-    CONSTRAINT vcprov_unique UNIQUE (
+    CONSTRAINT vcprov_unique UNIQUE NULLS NOT DISTINCT (
         voice_profile_id, source_url, source_timestamp_start
     )
 );
@@ -73,7 +73,10 @@ DROP POLICY IF EXISTS vcprov_service_bypass ON pmoves_core.voice_cloning_provena
 CREATE POLICY vcprov_service_bypass ON pmoves_core.voice_cloning_provenance
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Read: follows voice_profiles visibility — owner or grantee (subquery to voice_profiles)
+-- Read: consent/provenance is ALWAYS private — owner or explicit grantee only.
+-- Public voices are still selectable in voice_profiles, but their provenance
+-- records (consent_artifact_uri, capturer_identity, notes) are never exposed
+-- to anon or other users. This prevents leaking signed consent documents.
 DROP POLICY IF EXISTS vcprov_read ON pmoves_core.voice_cloning_provenance;
 CREATE POLICY vcprov_read ON pmoves_core.voice_cloning_provenance
     FOR SELECT USING (
@@ -81,8 +84,7 @@ CREATE POLICY vcprov_read ON pmoves_core.voice_cloning_provenance
             SELECT 1 FROM pmoves_core.voice_profiles vp
             WHERE vp.id = voice_cloning_provenance.voice_profile_id
               AND vp.is_active AND vp.deleted_at IS NULL AND (
-                vp.is_public
-                OR vp.created_by = auth.uid()
+                vp.created_by = auth.uid()
                 OR EXISTS (
                     SELECT 1 FROM pmoves_core.voice_profile_grants g
                     WHERE g.voice_profile_id = vp.id AND g.grantee = auth.uid()
@@ -113,7 +115,7 @@ CREATE POLICY vcprov_owner_update ON pmoves_core.voice_cloning_provenance
 -- PostgREST grants
 DO $$
 BEGIN
-    EXECUTE 'GRANT SELECT ON pmoves_core.voice_cloning_provenance TO anon, authenticated, service_role';
+    EXECUTE 'GRANT SELECT ON pmoves_core.voice_cloning_provenance TO authenticated, service_role';
     EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.voice_cloning_provenance TO authenticated';
     EXECUTE 'GRANT INSERT, UPDATE, DELETE ON pmoves_core.voice_cloning_provenance TO service_role';
 END $$;
