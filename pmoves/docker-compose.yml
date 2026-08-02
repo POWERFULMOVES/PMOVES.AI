@@ -690,6 +690,13 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  # entrypoint below is upstream Supabase's kong-entrypoint.sh: it env-substitutes
+  # /home/kong/temp.yml into KONG_DECLARATIVE_CONFIG, then execs kong docker-start.
+  # It replaces the old DB-mode entrypoint (wait-for-Postgres + `kong migrations
+  # bootstrap`), which is meaningless in DB-less mode and only ever created empty
+  # Kong schema tables, never any routes.
+  # (Kept here rather than inline above `entrypoint:` — inject_pmoves_networks.py
+  #  strips comments trailing the `environment:` sequence on its round-trip.)
   supabase-kong:
     <<: *tier-supabase-hardened
     image: kong/kong:3.9.1
@@ -742,11 +749,6 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - PMOVES_NETWORKS=pmoves_api,pmoves_public
-    # Upstream Supabase entrypoint: env-substitutes /home/kong/temp.yml into
-    # KONG_DECLARATIVE_CONFIG, then execs kong docker-start. Replaces the old
-    # DB-mode entrypoint (wait-for-Postgres + `kong migrations bootstrap`), which
-    # is meaningless in DB-less mode — and which only ever created empty Kong
-    # schema tables, never any routes.
     entrypoint: /home/kong/kong-entrypoint.sh
     healthcheck:
       # NOTE: liveness only — `kong health` reports the Kong PROCESS, not whether
