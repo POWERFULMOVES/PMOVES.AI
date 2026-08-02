@@ -1,6 +1,6 @@
 # CHIT — A Visual Tour of PMOVES.AI
 
-> **From boundary geometry to working packets.** This tour walks you through CHIT (Cymatic Holographic Information Theory) as it actually exists in the codebase — not as theory, but as code you can run.
+> **From boundary geometry to working packets.** This tour walks you through CHIT (Cymatic-Holographic Information Transfer) as it actually exists in the codebase — not as theory, but as code you can run.
 
 **Assumptions:** You know what a vector embedding is. Everything else gets explained.
 
@@ -170,7 +170,9 @@ CGP (CHIT Geometry Packet)
 
 ### Step 1: Document → Units
 
-From `pmoves/tools/chit_backend.py`:
+From the CHR reference prototype `pmoves/docs/PMOVESCHIT/Constellation-Harvest-Regularization/app.py` (the docx → CHR research path — a Gradio prototype, not a CLI):
+
+> **Production note:** the runnable auto-mapper is `pmoves/tools/chit_backend.py`, which takes a *different* path — consciousness-chunk **JSONL** → SentenceTransformer embeddings → per-category **KMeans** → CGP (`spec: "chit.cgp.v1.0"`), validated against `pmoves/contracts/schemas/geometry/cgp.v1.schema.json`. The `build_cgp_from_docx` / CHR code shown below lives **only** in the prototype above. See the [CLI Cheat Sheet](#cli-cheat-sheet) for the real command.
 
 ```python
 def build_cgp_from_docx(docx_path: str,
@@ -536,7 +538,9 @@ decrypted_cgp = decrypt_anchors(encrypted_cgp, passphrase="your_secret")
 From `pmoves/services/graph-linker/chit_signer.py`:
 
 ```python
-from pmoves.services.graph-linker.chit_signer import sign_neo4j_node, verify_neo4j_node
+import sys
+sys.path.insert(0, "pmoves/services/graph-linker")  # dir name has a hyphen — not a valid module path, so add it to sys.path
+from chit_signer import sign_neo4j_node, verify_neo4j_node
 
 # Node signing is gated by CHIT_SIGN_NEO4J env var
 # When disabled (default), returns node unchanged
@@ -731,8 +735,8 @@ CHIT rests on five mathematical foundations:
 ### CLI Cheat Sheet
 
 ```bash
-# Generate CGP from docx
-python pmoves/tools/chit_backend.py yourfile.docx --out cgp.json --K 8 --S 3
+# Generate CGP from consciousness-chunk JSONL (production auto-mapper; --input/--output are required)
+python pmoves/tools/chit_backend.py --input consciousness-chunks.jsonl --output geometry_payload.json --K 3 --bins 8
 
 # Terminal visualization
 python pmoves/tools/chit_terminal_viz.py --mode cgp --input cgp.json
@@ -746,7 +750,7 @@ CHIT_PASSPHRASE=your_secret python pmoves/tools/chit_encode_secrets.py
 # Decode geometry
 curl -X POST http://localhost:8086/geometry/decode/text \
   -H "Content-Type: application/json" \
-  -d '{"constellation_ids": ["urban_farming"], "per_constellation": 5}'
+  -d '{"constellation_id": "urban_farming", "k": 5}'   # handler reads constellation_id (singular) + k; requires CHIT_DECODE_TEXT=true
 ```
 
 ### Environment Variables
@@ -830,17 +834,14 @@ description: "Render A2UI animation specs into MP4/GIF/WebM via the Remotion ren
 
 # Input: A2UI animation JSON spec
 input:
-  required: [a2ui_spec]
+  # The request body IS the A2UI spec itself — there is NO `a2ui_spec` wrapper (handler: `const spec = req.body`).
+  required: [version, animation, scenes]   # top-level fields the handler validates (else HTTP 400)
   properties:
-    a2ui_spec:
-      type: object
-      # Text elements may opt into text_layout.engine=pretext
-    format:
-      enum: [mp4, gif, webm]
-      default: mp4
-    quality:
-      enum: [draft, standard, high]
-      default: standard
+    version:   { type: string }
+    animation: { type: object }  # text elements may opt into text_layout.engine=pretext
+    scenes:    { type: array }
+  # `format` is a QUERY param, not a body field:  POST /render?format=mp4|gif|webm  (default mp4)
+  # there is no `quality` field — the handler ignores it
 
 # Output
 output:
@@ -854,9 +855,9 @@ output:
 
 # Service
 service:
-  url: "http://localhost:8105/render"
+  url: "http://localhost:8107/render?format=mp4"
   alternates:
-    - "http://localhost:8105/render/provenance"  # Direct living-doc renders
+    - "http://localhost:8107/render/provenance"  # Direct living-doc renders
 
 agent: creator
 theme: megaman/dr-wily
@@ -866,7 +867,7 @@ theme: megaman/dr-wily
 
 From `pmoves/services/a2ui-renderer/src/index.ts`:
 
-**Port:** 8105 | **Health:** `/healthz` | **Auth:** JWT (fail-closed)
+**Port:** 8107 | **Health:** `/healthz` | **Auth:** JWT (fail-closed)
 
 ```typescript
 // Remotion imports
@@ -875,7 +876,9 @@ import { renderMedia, selectComposition } from '@remotion/renderer';
 
 // Render endpoint
 app.post('/render', requireAuth, async (req, res) => {
-  const { a2ui_spec, format = 'mp4', quality = 'standard' } = req.body;
+  const spec = req.body;                              // the whole body IS the A2UI spec (no wrapper)
+  const format = normalizeRenderFormat(req.query.format); // format comes from ?format= query (default mp4)
+  // requires spec.version, spec.animation, spec.scenes  → else HTTP 400. `quality` is not read.
   
   // Bundle Remotion composition
   const bundleLocation = await ensureBundle();
@@ -896,11 +899,14 @@ app.post('/render', requireAuth, async (req, res) => {
   
   // Emit NATS event
   publishNats('a2ui.render.completed.v1', {
-    job_id: jobId,
-    url: presignedUrl,
+    render_key,        // NOT job_id
     format,
     duration_ms,
-  });
+    scenes,
+    composition_id,
+    layout_summary,
+    timestamp,
+  });                  // the presigned url is returned in the HTTP response body, NOT on the NATS event
   
   res.json({ ok: true, url: presignedUrl });
 });
@@ -950,7 +956,7 @@ interface TextLayoutConfig {
   "text_layout": {
     "engine": "pretext",             // ← Pretext engine
     "maxWidth": 720,
-    "lineHeight": 1.4,
+    "lineHeight": 44,                // PIXELS, not a CSS multiplier (~36px font × 1.2); 1.4 would overlap lines
     "maxLines": 2,
     "shrinkWrap": true,
     "debugBoxes": false
@@ -1017,12 +1023,12 @@ function summarizeLayoutUsage(spec: any): LayoutSummary {
 
 ```bash
 # Render a chart via A2UI → Remotion
-curl -X POST http://localhost:8105/render \
+curl -X POST 'http://localhost:8107/render?format=mp4' \
   -H "Authorization: Bearer $JWT" \
-  -d '{"a2ui_spec": {...}, "format": "mp4", "quality": "high"}'
+  -d '{"version": "...", "animation": {...}, "scenes": [...]}'   # body IS the spec; format via ?format= query
 
 # Render provenance living doc directly
-curl -X POST http://localhost:8105/render/provenance \
+curl -X POST http://localhost:8107/render/provenance \
   -H "Authorization: Bearer $JWT" \
   -d '{"title": "...", "sections": [...], "merkle_root": "..."}'
 
@@ -1038,7 +1044,6 @@ npm run render:provenance:file -- demos/provenance_living_doc.mof_example.json o
 
 | Subject | Payload |
 |---------|---------|
-| `a2ui.render.started.v1` | job_id, spec_hash, format |
-| `a2ui.render.completed.v1` | job_id, url, duration_ms, layout_summary |
+| `a2ui.render.completed.v1` | render_key, format, duration_ms, scenes, composition_id, layout_summary, timestamp |
 | `skills.pipeline.model-benchmark-viz.v1` | Chart spec → Remotion render |
 | `skills.pipeline.research-render.v1` | Research summary → Remotion render |
