@@ -36,11 +36,11 @@ S3 consumers ──S3──▶ juicefs-gateway (:9000, S3-compatible)
 - **Metadata engine:** transactional KV/DB holding the filesystem tree + chunk index.
 - **Data backend:** where chunks live.
 
-### 4.1 Component choices (proposed, confirm in review)
+### 4.1 Component choices (confirmed)
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Metadata engine | **Postgres** (dedicated DB on `supabase-db`, or a small standalone) | Already in the stack; transactional; supports the multi-node vision better than SQLite. Redis is the alternative (faster, but another stateful service + persistence config). |
+| Metadata engine | **Postgres** on `supabase-db` (schema `juicefs_meta`) | Operator decision 2026-06-28. Already in the stack; transactional; supports the multi-node vision. The Redis PoC metadata engine has been retired — the compose now defaults to the Postgres DSN. The `juicefs_meta` schema ships in `supabase/initdb/00_2_juicefs_meta_schema.sql`. |
 | Data backend | **local volume** initially (`file://` on a hardened named volume) | Simplest durable single-node store; the multi-node dual-write/replicated backend is the follow-on vision. |
 | S3 gateway | `juicefs gateway --multi-buckets --keep-etag` on **:9000** | Drop-in endpoint; `--multi-buckets` is REQUIRED on CE to keep the multiple buckets `assets`/`outputs`/`pmoves-comfyui` (else only one FS-named bucket is exposed). |
 | Image | pinned `juicedata/juicefs` (or build) per F-07 supply-chain | Maintained, unlike MinIO community. |
@@ -59,7 +59,7 @@ For existing data: `mc mirror` (or `rclone`) from the running MinIO (`local/<buc
 
 ## 7. Dependency ordering & hardening
 
-Bring-up order: **metadata engine (healthy) → juicefs format (one-time) → juicefs-gateway (healthy) → S3 consumers**. Wire `depends_on: condition: service_healthy`. Apply the `*tier-data-hardened` anchor (non-root 65532, read-only rootfs + tmpfs, `cap_drop: ALL`, `no-new-privileges`) to the gateway, mirroring MinIO. Fits the capable-tier data layer (`up-core-capable`).
+Bring-up order: **supabase-db (healthy) → juicefs format (one-time, retry loop) → juicefs-gateway (healthy) → S3 consumers**. The `juicefs-format` service has a built-in 15-retry wait loop (2s interval) for Postgres readiness. `make up-juicefs` pre-checks that `supabase-db` is running. Apply the `*tier-data-hardened` anchor to the gateway, mirroring MinIO.
 
 ## 8. Rollback
 
@@ -80,7 +80,7 @@ Keep MinIO (last-real-tag pin from #1862) **available behind a profile/flag** th
 
 ## 11. Open questions (resolve in review)
 
-- Metadata engine: dedicated Postgres DB vs Redis vs reuse `supabase-db` (blast-radius/coupling).
+- ~~Metadata engine: dedicated Postgres DB vs Redis vs reuse `supabase-db` (blast-radius/coupling).~~ **Resolved 2026-06-28: Postgres on `supabase-db`, schema `juicefs_meta` (namespaced, no coupling to app schemas). Redis PoC retired.**
 - Backend durability single-node now vs jumping to a replicated backend for multi-node.
 - Naming: keep `minio:9000` DNS (drop-in) vs new `juicefs-gateway` endpoint var.
 - Presigned-URL semantics parity (expiry, signature) between MinIO and the JuiceFS gateway.

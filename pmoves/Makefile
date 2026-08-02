@@ -274,23 +274,25 @@ rebuild-bots: ## Rebuild + restart botz-gateway from current source (theme route
 # not PARSE — so isolation requires a separate file set, not just --profile.
 JUICEFS_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.base.yml -f docker-compose.juicefs.yml
 .PHONY: up-juicefs down-juicefs juicefs-status
-up-juicefs: ensure-env-shared bootstrap-tier-envs ## Start the JuiceFS PoC: redis metadata + one-time format + S3 gateway (base+juicefs overlays)
-	@$(JUICEFS_DC) --profile juicefs up -d juicefs-redis juicefs-format juicefs-gateway
-	@echo "✔ JuiceFS PoC started (base+juicefs overlays — no monolith secrets needed)."
+up-juicefs: ensure-env-shared bootstrap-tier-envs ## Start the JuiceFS PoC: Postgres metadata + one-time format + S3 gateway (requires supabase-db running)
+	@docker ps --filter name=supabase-db --format '{{.Names}}' | grep -q supabase-db \
+		|| (echo "❌ supabase-db must be running for JuiceFS Postgres metadata. Start it: make up-supabase" && exit 1)
+	@$(JUICEFS_DC) --profile juicefs up -d juicefs-format juicefs-gateway
+	@echo "✔ JuiceFS PoC started (Postgres metadata on supabase-db)."
 	@echo "  S3 endpoint: juicefs-gateway:9000 (drop-in for minio:9000)."
 	@echo "  Creds: JUICEFS_S3_USER/PASSWORD (fallback MINIO_USER/PASSWORD — run 'make brand-defaults' if unset)."
 	@echo "  Check:  make juicefs-status   |   Stop: make down-juicefs"
 
-down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-meta/juicefs-data volumes preserved)
-	@$(JUICEFS_DC) --profile juicefs stop juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
-	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
-	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-meta $(PROJECT)_juicefs-data)."
+down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-data volume preserved)
+	@$(JUICEFS_DC) --profile juicefs stop juicefs-gateway juicefs-format 2>/dev/null || true
+	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format 2>/dev/null || true
+	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-data)."
 
 juicefs-smoke: ## S3 round-trip + multi-bucket smoke test against a running gateway (needs: make up-juicefs)
 	@$(JUICEFS_DC) --profile juicefs --profile juicefs-smoke run --rm juicefs-smoke
 
 juicefs-status: ## Show JuiceFS PoC container state + gateway health
-	@$(JUICEFS_DC) --profile juicefs ps juicefs-redis juicefs-format juicefs-gateway
+	@$(JUICEFS_DC) --profile juicefs ps juicefs-format juicefs-gateway
 	@echo "--- gateway health probe ---"
 	@$(JUICEFS_DC) --profile juicefs exec -T juicefs-gateway sh -lc 'curl -fsS http://localhost:9000/minio/health/live && echo " GATEWAY S3 HEALTHY"' 2>/dev/null || echo "gateway not healthy yet (give it ~15s after up; check 'make juicefs-status')"
 
