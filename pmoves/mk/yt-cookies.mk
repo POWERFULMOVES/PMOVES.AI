@@ -141,6 +141,11 @@ up-yt-cookies-recreate: ## Force-recreate cookie services to pick up env.shared 
 	@$(COOKIES_DC) --profile yt-cookies up -d --force-recreate yt-cookie-refresher yt-cookie-writer
 	@echo "✅ Cookie services recreated. Refresher API: http://localhost:8115/healthz"
 
+up-yt-cookies-rebuild: ## Rebuild images + force-recreate cookie services (code changes)
+	@echo "🍪 Rebuilding + force-recreating yt-cookie services (code refresh)..."
+	@$(COOKIES_DC) --profile yt-cookies up -d --build --force-recreate yt-cookie-refresher yt-cookie-writer
+	@echo "✅ Cookie services rebuilt + recreated. Refresher API: http://localhost:8115/healthz"
+
 # Skip-egress variant — runs cookies + multi-client only. Use when the
 # Tailscale exit node is offline/unapproved, to test whether cookies +
 # yt-dlp internal player_client rotation alone clears the 403s.
