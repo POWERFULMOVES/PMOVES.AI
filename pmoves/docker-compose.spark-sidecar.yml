@@ -9,8 +9,14 @@
 # Agent Zero sidecar points to local Ollama, not host.docker.internal.
 #
 # Usage:
-#   docker compose -f docker-compose.spark-sidecar.yml up -d
-#   docker compose -f docker-compose.spark-sidecar.yml down
+#   cp pmoves/env.spark-sidecar.example pmoves/env.spark-sidecar   # one-time, then edit
+#   docker compose -f pmoves/docker-compose.spark-sidecar.yml --env-file pmoves/env.spark-sidecar up -d
+#   docker compose -f pmoves/docker-compose.spark-sidecar.yml --env-file pmoves/env.spark-sidecar down
+#
+# The `--env-file pmoves/env.spark-sidecar` flag is REQUIRED so PMOVES_OLLAMA_IMAGE
+# (and the topology / DNS / model defaults) are loaded for `${VAR:-default}` interpolation.
+# Without it, the compose falls back to the in-file default
+# (ollama/ollama:0.31.2@sha256:509fdf54...) — still pinned, but operator overrides ignored.
 #
 # Prerequisites:
 #   - NVIDIA Container Toolkit installed (nvidia-container-runtime)
