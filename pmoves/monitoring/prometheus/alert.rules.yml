@@ -278,3 +278,47 @@ groups:
         annotations:
           summary: "GitHub API rate limit running low"
           description: "Less than 100 API calls remaining - may need to wait for reset."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Resource Pressure — the "faucet gauge" (would have caught the ClickHouse
+  # 2.4 GB/min disk-fill that filled C: then D: unseen, 2026-08-02).
+  # Metrics from cAdvisor (Linux nodes). z890/Windows needs an alt source
+  # (see handoff monitoring-mount-path-fix-2026-08-02.md follow-up).
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: resource_pressure
+    rules:
+      - alert: ContainerWriteRunaway
+        expr: sum by (name, instance) (rate(container_fs_writes_bytes_total{name!=""}[10m])) > 20e6
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} sustained high disk write-rate"
+          description: "{{ $labels.name }} on {{ $labels.instance }} has written >20 MB/s for 10m — a disk faucet (e.g. unbounded logs). It will fill the disk if left running."
+
+      - alert: ContainerWriteRunawayCritical
+        expr: sum by (name, instance) (rate(container_fs_writes_bytes_total{name!=""}[10m])) > 50e6
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} write-rate runaway (>50 MB/s)"
+          description: "{{ $labels.name }} on {{ $labels.instance }} writing >50 MB/s for 10m — imminent disk-fill. Investigate now (logs/merges/ingest loop)."
+
+      - alert: HostFilesystemAlmostFull
+        expr: container_fs_usage_bytes{id="/"} / container_fs_limit_bytes{id="/"} > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Filesystem on {{ $labels.instance }} above 85%"
+          description: "Docker host filesystem on {{ $labels.instance }} is {{ $value | humanizePercentage }} full."
+
+      - alert: HostFilesystemCritical
+        expr: container_fs_usage_bytes{id="/"} / container_fs_limit_bytes{id="/"} > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Filesystem on {{ $labels.instance }} above 95% — disk-fill imminent"
+          description: "Docker host filesystem on {{ $labels.instance }} is {{ $value | humanizePercentage }} full. Reclaim now or services will wedge."
