@@ -657,8 +657,8 @@ services:
     - POOLER_POOL_MODE=transaction
     - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
     - PMOVES_NETWORKS=pmoves_data
-    command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found,
-        skipping tenant seeding'; fi && /app/bin/server"]
+    command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found,\
+        \ skipping tenant seeding'; fi && /app/bin/server"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
       interval: 20s
