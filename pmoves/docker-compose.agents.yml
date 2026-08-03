@@ -69,7 +69,9 @@ services:
     # BoTZ-gateway (persona/forms) and Hi-RAG are added by their owning lanes once
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
-    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
     - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
@@ -747,7 +749,6 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
-    - PORT=8105
     - PMOVES_HOST=0.0.0.0
     - OLLAMA_URL=http://host.docker.internal:11434
     - OLLAMA_BASE_URL=http://host.docker.internal:11434

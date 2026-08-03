@@ -26,6 +26,14 @@ RUN groupadd -r pmoves --gid=65532 && \
 
 # Install curl for healthcheck
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# JS runtime for YouTube player-response decoding. yt-dlp deprecated JS-less
+# YouTube extraction (2026): without a runtime, format extraction fails even
+# with valid cookies ("No supported JavaScript runtime could be found").
+# deno is yt-dlp's default-enabled runtime. Pin via DENO_VERSION (e.g. "v2.6.4")
+# for reproducible builds; "latest" tracks upstream.
+ARG DENO_VERSION=latest
+RUN set -eux;     if [ "$DENO_VERSION" = "latest" ]; then       url="https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip";     else       url="https://github.com/denoland/deno/releases/download/${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip";     fi;     curl -fsSL "$url" -o /tmp/deno.zip;     python -c "import zipfile,os; zipfile.ZipFile('/tmp/deno.zip').extractall('/usr/local/bin'); os.chmod('/usr/local/bin/deno',0o755)";     rm /tmp/deno.zip;     deno --version
 USER pmoves:pmoves
 
 EXPOSE 8077
