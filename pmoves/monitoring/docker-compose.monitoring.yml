@@ -9,7 +9,7 @@ services:
     ports:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
     volumes:
-      - ./monitoring/prometheus:/etc/prometheus:ro
+      - ./prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
     networks: [monitoring_tier, pmoves_api, pmoves_app, pmoves_data, pmoves_net]
     extra_hosts:
@@ -25,9 +25,9 @@ services:
       - "${GRAFANA_HOST_PORT:-3002}:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning/dashboards:ro
     networks: [monitoring_tier, pmoves_net]
 
   loki:
@@ -37,7 +37,7 @@ services:
     ports: ["${LOKI_HOST_PORT:-3100}:3100"]
     volumes:
       # Mount the entire config directory to avoid file-vs-dir bind issues on Windows/WSL paths.
-      - ./monitoring/loki:/etc/loki:ro
+      - ./loki:/etc/loki:ro
       - loki-data:/loki
     networks: [monitoring_tier, pmoves_net]
 
@@ -49,7 +49,7 @@ services:
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./monitoring/promtail:/etc/promtail:ro
+      - ./promtail:/etc/promtail:ro
     networks: [monitoring_tier]
 
   blackbox:
@@ -59,7 +59,7 @@ services:
       - --config.file=/etc/blackbox_exporter/blackbox.yml
     ports: ["${BLACKBOX_HOST_PORT:-9115}:9115"]
     volumes:
-      - ./monitoring/blackbox:/etc/blackbox_exporter:ro
+      - ./blackbox:/etc/blackbox_exporter:ro
     networks: [monitoring_tier, pmoves_api, pmoves_app, pmoves_data, pmoves_net]
     extra_hosts:
       - "host.docker.internal:host-gateway"
