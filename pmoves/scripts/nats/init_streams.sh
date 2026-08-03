@@ -9,7 +9,10 @@
 #   TOKENISM_ATTRIBUTION   tokenism.>    limits   90d  2GB
 #   BOTZ_COORDINATION      botz.>        limits   7d   500MB
 #   MESH_GPU               mesh.gpu.>    limits   7d   1GB   (DGX Spark GB10 GPU mesh)
-#   CONTENT_PROVENANCE     content.>     interest 90d  2GB   (SPARK shaped packets / provenance)
+#   CONTENT_PROVENANCE     content.>     limits  90d  2GB   (SPARK shaped packets / provenance)
+#   COMFY_COLLAB           comfy.collab.> limits 7d  1GB    (Creator Collab slice 3)
+#   ROOMS                  room.>        limits 7d  500MB   (P7 room presence/directory/manifest)
+#   HELPDESK               helpdesk.>    limits 30d 1GB    (PMOVES-helpdesk intake/routed/suggested)
 #
 # FLAGGED, NOT CHANGED: CONTENT_PROVENANCE still uses `interest` retention and
 # also has 0 bound consumers, so it has the same silent-discard hazard described
@@ -21,6 +24,12 @@
 # reference-only YAMLs in pmoves/nats/mesh_gpu_streams.yaml and
 # pmoves/nats/content_provenance_streams.yaml. No service currently creates
 # those granular streams; this script is the canonical creator.
+#
+# Lane 5 (2026-08-01): added COMFY_COLLAB, ROOMS, HELPDESK for the slice 3/6
+# subject families (comfy.collab.*, room.*, helpdesk.*) that were publishing
+# into the void — schemas were defined in pmoves/contracts/schemas/{comfy,room}
+# but no backing JetStream stream. These three streams use `limits` retention
+# (not `interest`) to avoid the silent-discard hazard on TOKENISM_ATTRIBUTION.
 
 set -u
 # Note: set -e intentionally omitted — add_stream returns non-zero on real
@@ -142,6 +151,49 @@ add_stream CONTENT_PROVENANCE \
   --retention limits \
   --max-age 2160h \
   --max-bytes 2147483648 \
+  --discard old \
+  --replicas 1
+
+# ---------- COMFY_COLLAB (Creator Collab slice 3: comfy.collab.{prompt,progress,artifact}.v1) ----------
+# Without this stream, comfy-watcher and comfyui publish into the void and
+# nats_event_bus only has the most recent cache. Limits retention so events
+# from an offline comfyui are recoverable on reconnect (7d window matches
+# Creator Collab's typical retry horizon).
+add_stream COMFY_COLLAB \
+  --subjects "comfy.collab.>" \
+  --storage file \
+  --retention limits \
+  --max-age 168h \
+  --max-bytes 1073741824 \
+  --discard old \
+  --replicas 1
+
+# ---------- ROOMS (P7 room presence/directory/manifest) ----------
+# Catches room.presence.v1, room.directory.v1, room.manifest.v1. Note: p7.room.*
+# is intentionally NOT covered here — those events are routed through the
+# P7 control plane and use a separate stream in p7-room-orchestrator's own
+# sidecar init. Keeping room.> and p7.room.> in separate streams lets P7
+# evolve its control-plane retention independently of the room sidebar's
+# presence/directory cache.
+add_stream ROOMS \
+  --subjects "room.>" \
+  --storage file \
+  --retention limits \
+  --max-age 168h \
+  --max-bytes 524288000 \
+  --discard old \
+  --replicas 1
+
+# ---------- HELPDESK (PMOVES-helpdesk intake/routed/suggested) ----------
+# helpdesk.intake.{opened,routed,room.suggested}.v1 — the helpdesk-skill's
+# authoritative event log. 30d window is the audit-ledger horizon; the
+# dashboard reads from nats_event_bus's in-memory cache, the log persists.
+add_stream HELPDESK \
+  --subjects "helpdesk.>" \
+  --storage file \
+  --retention limits \
+  --max-age 720h \
+  --max-bytes 1073741824 \
   --discard old \
   --replicas 1
 
