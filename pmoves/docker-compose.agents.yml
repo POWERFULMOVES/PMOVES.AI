@@ -219,6 +219,11 @@ services:
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-false}
+    # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
+    # Default empty (uses $PATH). The upstream Archon Dockerfile installs
+    # Claude at /usr/local/bin/claude; set this only if the image builds
+    # Claude at a non-standard path or you want to pin a specific binary.
+    - CLAUDE_BIN_PATH=${CLAUDE_BIN_PATH:-}
     # gh auth — non-fatal warning if absent.
     - GH_TOKEN=${GH_TOKEN:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
@@ -742,6 +747,7 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
+    - PORT=8105
     - PMOVES_HOST=0.0.0.0
     - OLLAMA_URL=http://host.docker.internal:11434
     - OLLAMA_BASE_URL=http://host.docker.internal:11434

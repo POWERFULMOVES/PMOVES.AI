@@ -3068,6 +3068,11 @@ up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agen
 	@$(DC) --profile agents up -d --build cipher-api
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
 
+.PHONY: up-cipher-nobuild
+up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
+	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
+	@echo "✔ Cipher Memory recreated (no rebuild) at http://localhost:$${CIPHER_PORT:-8105}"
+
 .PHONY: up-p7
 up-p7: ## Start P7 room-aware stage manager (room lifecycle orchestration, port 8120)
 	@# --profile p7 ONLY: adding --profile agents activates the legacy
