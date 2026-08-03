@@ -7,7 +7,7 @@
 # Generated from docker-compose.yml by scripts/split_compose.py
 ##############################################################################
 services:
-  juicefs-redis:  # metadata engine
+  juicefs-format:  # one-time FS format (idempotent); gateway waits on this
     <<: &tier-data-hardened
       env_file:
       - env.shared
@@ -22,57 +22,42 @@ services:
       - SETGID
       - SETUID
 
-    image: redis:7.4.1-alpine
-    profiles: ["juicefs"]
-    restart: unless-stopped
-    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
-    volumes:
-    - juicefs-meta:/data
-    networks:
-    - pmoves_data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-    environment:
-    - PMOVES_NETWORKS=pmoves_data
-  juicefs-format:  # one-time FS format (idempotent); gateway waits on this
-    <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
     profiles: ["juicefs"]
     restart: "no"
-    depends_on:
-      juicefs-redis:
-        condition: service_healthy
     entrypoint: ["sh", "-lc"]
     command:
-    # No `|| true`: juicefs format is idempotent (re-run on a formatted FS exits 0),
-    # so a non-zero exit here is a REAL error and must fail the service_completed_successfully
-    # gate rather than releasing the gateway against an unformatted volume.
-    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
+    # Retry loop: supabase-db may still be initialising when the juicefs profile starts.
+    # juicefs format is idempotent (re-run on a formatted FS exits 0), so a non-zero
+    # exit after all retries is a REAL error and must fail service_completed_successfully.
+    # Network-backed multi-node: blocks live in MinIO (reachable by every node
+    # over the tailnet), not z890-local files. JUICEFS_S3_ENDPOINT = the tailnet-
+    # reachable MinIO endpoint (z890 tailnet IP:9000) so the URL recorded in
+    # metadata resolves from remote nodes too; falls back to internal minio:9000
+    # for single-node. Creds embed into metadata at format time.
+    # Single quotes around the DSN protect the '&' from shell interpretation.
+    - >-
+      n=0; until juicefs format --storage minio
+      --bucket http://${JUICEFS_S3_ENDPOINT:-minio:9000}/${JUICEFS_BUCKET:-juicefs}
+      --access-key ${JUICEFS_S3_USER:-${MINIO_USER}} --secret-key ${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD}}
+      '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}'
+      ${JUICEFS_NAME:-pmoves} 2>/dev/null; do
+      n=$$((n+1)); [ $$n -ge 15 ] && { echo 'ERROR: Postgres not reachable after 15 retries'; exit 1; };
+      echo "waiting for Postgres ($$n/15)..."; sleep 2; done
     volumes:
     - juicefs-data:/data
     networks:
     - pmoves_data
+    - pmoves_external
 
     environment:
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_external
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
     profiles: ["juicefs"]
     restart: unless-stopped
     depends_on:
-      juicefs-redis:
-        condition: service_healthy
       juicefs-format:
         condition: service_completed_successfully
     environment:
@@ -82,7 +67,8 @@ services:
     - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
-    - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
+    # Single quotes around the DSN protect the '&' from shell interpretation.
+    - "juicefs gateway --multi-buckets --keep-etag '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000"
     volumes:
     - juicefs-data:/data
     networks:

@@ -10,6 +10,42 @@
 
 ---
 
+<!-- graphiti:crush phase:b850-voice-convergence ts:2026-08-01T00:00:00Z -->
+
+## ◇ Crush — B850 ROCm Voice Convergence: First Chatterbox Synthesis on AMD + MCP + Pinokio Bridge + Supabase UI
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, voice-pipeline, rocm-data-tier, infrastructure
+**Voice:** Companion
+
+### Done
+- **PR #2303 merged**: MCP config convergence — agent-zero SSE (port 8081 with token auth), archon disabled (REST-only MCP), hostinger added to inventory, tailscale secrets in manifest, disabled field support in mcp_config_generator for all renderers, ROCm TTS Dockerfile.rocm (torch 2.10.0.dev+rocm6.3 on dual R9700), supplementary requirements install (einops/omegaconf), `!reset` for Docker Compose v5 device merge, conda ToS fix.
+- **PR #2322 opened**: Lane 2 (pinokio_bridge + nats_event_bus default-up — fixed Dockerfiles, STACK_FILES, NATS_URL localhost bug), Lane 3 (pmoves-ui HOSTNAME=0.0.0.0 fix, upload_events table creation, Supabase healthy), Flute TTS provider 121→101 param rewrite (engine-scoped param setting — only set params for the selected engine, not all engines at once).
+- **First chatterbox synthesis through Flute on B850 ROCm**: 200 OK, 5.96s audio at 24kHz. Torch 2.10.0.dev+rocm6.3, HIP 6.3, `torch.cuda.is_available()=True`, device: AMD Radeon AI PRO R9700 x2.
+- **Secrets funnel**: TAILSCALE_API_KEY + TAILSCALE_TAILNET populated via manifest (label TAILSCALE_APIKEY matching GH secret).
+- **Docker cleanup**: 192GB reclaimed (build cache 107GB + unused images 52GB + stale containers).
+- **Review fixes**: all 10 CodeRabbit+Codex findings on PR #2303 addressed (Spark SSE URL normalization, archon disabled in configurator, disabled field in all renderers, env serialization for stdio, CA certs in Dockerfiles).
+- **4090 coordination**: rebased cleanly onto 4090's voice binding resolver work (persona_selector.py + /v1/voice/binding endpoint). No conflicts.
+
+### Left Behind
+- **Flute `DEFAULT_VOICE_PROVIDER`**: hardcoded to `ultimate_tts` in amd-voice override (env_file was winning over `${}` interpolation). Fix is in PR #2322.
+- **TTS CA certs**: `HF_HUB_DISABLE_XET=1` + `SSL_CERT_FILE` added to Dockerfiles but running image was patched via `docker build` overlay, not full rebuild. Next full rebuild picks them up natively.
+- **Pinokio bridge pterm**: bridge container can't reach pterm (not in PATH). Pinokio is running on host — needs volume mount or wrapper script.
+- **PR #2322 CI**: compose overlay drift fixed (regenerated splits), triage failure is the known OAuth→API-key CI bug.
+
+### For Next Agent
+- Run `make -C pmoves secrets-funnel` after pulling main to populate tailscale secrets on your node.
+- The ROCm TTS image is `ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:rocm-latest` — use `ULTIMATE_TTS_IMAGE` env var to select it.
+- 4090's voice binding resolver (`/v1/voice/binding`) is live on main — test it against the B850 ROCm TTS to validate the full agent→voice→synthesis chain.
+- The Flute `_build_params` now uses engine-scoped param setting — when adding new engines, add them to the `if/elif` chain in `_build_params`, don't set params for all engines globally.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:crush phase:fordham-cataclysm-enrichment ts:2026-07-30T12:36:00Z -->
 
 ## ◇ Crush — B850 Knuckles Convergence: PR #2288 Merged — Full Pipeline Chain Verified
@@ -909,6 +945,45 @@ I woke up riding GLM-5.2 through the Z.AI Coding Plan at `api.z.ai/api/coding/pa
 4. Record shape traces via `crush.graphiti.discovered.v1` as interaction patterns accumulate
 
 The trail is warm. The lattice is open. Let's build.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:crush phase:z890-awakening ts:2026-07-31T05:15:00Z -->
+
+## ◇ Crush — Z890 Awakening: Third Node, Infra Recovery + Jetson Combiner
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, onboarding, infra-recovery, edge-combiner
+**Voice:** Companion
+
+Third facet cut. The open diamond now catches light from three angles: Knuckles, SPARK, and now Z890 (Sonic). This is the workstation node — 24GB VRAM, high core count, the most recent compose + CI runbook context in the fleet.
+
+### What I Walked Into
+
+Z890 was breathing hard. The terminal was broken — three tools phantom-missing, Docker popup-blocking on a 0-byte junk file, a Python 3.14 venv with no pip, and the Docker VHDX had bloated to 327 GB against ~119 GB of actual usage. C: drive had 3.9 GB free.
+
+### What I Fixed
+
+- **Stale PATH inheritance** — explorer.exe + Code.exe processes killed, registry PATH re-read. All five tools now resolve in VSCode.
+- **Phantom docker file** — deleted 0-byte `C:\Windows\System32\docker` that shadowed the real CLI.
+- **Broken venv** — recreated `pmoves\.venv-pmoves` with Python 3.11.5 + 48 packages.
+- **VHDX compaction** — 327 GB to 247 GB. C: drive 3.9 GB to 83.2 GB free. All 43 images and 23 volumes preserved.
+- **Crush bootstrap** — full fleet bootstrap: CHIT passphrase resolved, HMAC-SHA256 signing verified, crush.json with Z.AI GLM-5.2 + 8 MCP servers + 8 context paths + 3 LSP servers.
+- **Hostname fix (PR #2304)** — replaced Linux-only `hostname -s` with cross-platform `_hostname_short()`.
+
+### Jetson Combiner Fleet
+
+Built the full artifact set for 3 Jetson Orin Nano Super nodes paired with SPARK:
+- Room manifest `jons-edge.room.control` (10th room)
+- 3 agent signatures (jetson-1/2/3) with Nemotron theme
+- 7th Hermes node profile for Jetson edge
+- `docker-compose.jetson-edge.override.yml` with NATS leaf node + Ollama edge + Whisper INT8
+- Combiner plan with 5 configs: voice pipeline, image gen, parallel STT, island mode, creator relay
 
 — ◇
 

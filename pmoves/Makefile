@@ -58,6 +58,21 @@ PYTHON ?= python3
 ifeq ($(OS),Windows_NT)
 PYTHON := python
 endif
+
+# Prefer the canonical bringup venv when it exists, so targets that shell out to
+# tools/*.py (yt-cookies-*, etc.) pick up tool deps declared in tools/requirements.txt
+# instead of whatever bare `python3` resolves to on PATH. Without this, a system
+# python missing google-auth-oauthlib makes `yt-cookies-auth` fail with an install
+# hint even though `make venv-bringup` already installed it.
+# Only applies when PYTHON was not explicitly supplied: $(origin) is "default" or
+# "file" here, but "command line"/"environment" when the operator set it, so both
+# `make <target> PYTHON=/path` and `PYTHON=/path make <target>` still win.
+venv_python := $(CURDIR)/.venv-pmoves/bin/python
+ifneq ($(wildcard $(venv_python)),)
+ifeq ($(filter command\ line environment,$(origin PYTHON)),)
+PYTHON := $(venv_python)
+endif
+endif
 SCRIPTS := scripts
 SINGLE_ENV_MODE ?= 1
 SCRIPTS := scripts
@@ -274,23 +289,25 @@ rebuild-bots: ## Rebuild + restart botz-gateway from current source (theme route
 # not PARSE — so isolation requires a separate file set, not just --profile.
 JUICEFS_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.base.yml -f docker-compose.juicefs.yml
 .PHONY: up-juicefs down-juicefs juicefs-status
-up-juicefs: ensure-env-shared bootstrap-tier-envs ## Start the JuiceFS PoC: redis metadata + one-time format + S3 gateway (base+juicefs overlays)
-	@$(JUICEFS_DC) --profile juicefs up -d juicefs-redis juicefs-format juicefs-gateway
-	@echo "✔ JuiceFS PoC started (base+juicefs overlays — no monolith secrets needed)."
+up-juicefs: ensure-env-shared bootstrap-tier-envs ## Start the JuiceFS PoC: Postgres metadata + one-time format + S3 gateway (requires supabase-db running)
+	@docker ps --filter name=supabase-db --format '{{.Names}}' | grep -q supabase-db \
+		|| (echo "❌ supabase-db must be running for JuiceFS Postgres metadata. Start it: make up-supabase" && exit 1)
+	@$(JUICEFS_DC) --profile juicefs up -d juicefs-format juicefs-gateway
+	@echo "✔ JuiceFS PoC started (Postgres metadata on supabase-db)."
 	@echo "  S3 endpoint: juicefs-gateway:9000 (drop-in for minio:9000)."
 	@echo "  Creds: JUICEFS_S3_USER/PASSWORD (fallback MINIO_USER/PASSWORD — run 'make brand-defaults' if unset)."
 	@echo "  Check:  make juicefs-status   |   Stop: make down-juicefs"
 
-down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-meta/juicefs-data volumes preserved)
-	@$(JUICEFS_DC) --profile juicefs stop juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
-	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
-	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-meta $(PROJECT)_juicefs-data)."
+down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-data volume preserved)
+	@$(JUICEFS_DC) --profile juicefs stop juicefs-gateway juicefs-format 2>/dev/null || true
+	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format 2>/dev/null || true
+	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-data)."
 
 juicefs-smoke: ## S3 round-trip + multi-bucket smoke test against a running gateway (needs: make up-juicefs)
 	@$(JUICEFS_DC) --profile juicefs --profile juicefs-smoke run --rm juicefs-smoke
 
 juicefs-status: ## Show JuiceFS PoC container state + gateway health
-	@$(JUICEFS_DC) --profile juicefs ps juicefs-redis juicefs-format juicefs-gateway
+	@$(JUICEFS_DC) --profile juicefs ps juicefs-format juicefs-gateway
 	@echo "--- gateway health probe ---"
 	@$(JUICEFS_DC) --profile juicefs exec -T juicefs-gateway sh -lc 'curl -fsS http://localhost:9000/minio/health/live && echo " GATEWAY S3 HEALTHY"' 2>/dev/null || echo "gateway not healthy yet (give it ~15s after up; check 'make juicefs-status')"
 
@@ -394,6 +411,48 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
+.PHONY: kong-routes-check
+KONG_ADMIN_URL ?= http://localhost:8001
+KONG_CONTAINER ?= pmoves-supabase-kong-1
+kong-routes-check: ## Assert the Kong gateway is actually WIRED: routes loaded + every upstream resolvable
+	@echo "=== Kong: route table check ($(KONG_ADMIN_URL)) ==="
+	@n=$$(curl -sf $(KONG_ADMIN_URL)/routes 2>/dev/null \
+	  | $(PYTHON) -c 'import sys,json; print(len(json.load(sys.stdin).get("data",[])))' 2>/dev/null || echo ""); \
+	if [ -z "$$n" ]; then \
+	  echo "✗ Kong admin API unreachable at $(KONG_ADMIN_URL) — is supabase-kong up?" >&2; exit 1; \
+	fi; \
+	if [ "$$n" -eq 0 ]; then \
+	  echo "✗ Kong has 0 routes — the declarative config did not load." >&2; \
+	  echo "  Every /rest/v1, /auth/v1 and /storage/v1 request will 404 with" >&2; \
+	  echo "  'no Route matched with those values', while 'kong health' still" >&2; \
+	  echo "  reports healthy. Check KONG_DATABASE=off + KONG_DECLARATIVE_CONFIG" >&2; \
+	  echo "  and the kong.yml / kong-entrypoint.sh mounts in docker-compose.core.yml." >&2; \
+	  exit 1; \
+	fi; \
+	echo "✓ Kong has $$n routes loaded"
+	@echo "  --- route probes (404 = route missing; 401/200 = wired) ---"; \
+	rc=0; \
+	for p in /rest/v1/ /auth/v1/health /storage/v1/status /realtime/v1/ /pg/health; do \
+	  code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://localhost:8000$$p" 2>/dev/null); \
+	  if [ "$$code" = "404" ]; then printf '  ✗ %-22s %s (no route)\n' "$$p" "$$code"; rc=1; \
+	  else printf '  ✓ %-22s %s\n' "$$p" "$$code"; fi; \
+	done; exit $$rc
+	@echo "  --- upstream reachability FROM Kong ---"; \
+	echo "  (a route can match and still 503 'name resolution failed' if the"; \
+	echo "   upstream name in kong.yml does not resolve — routes alone prove nothing)"; \
+	rc=0; \
+	for hp in rest:3000 auth:9999 storage:5000 studio:3000 functions:9000 meta:8080 \
+	          analytics:4000 realtime-dev.supabase-realtime:4000; do \
+	  h=$${hp%:*}; p=$${hp##*:}; \
+	  if docker exec $(KONG_CONTAINER) bash -c "exec 3<>/dev/tcp/$$h/$$p" 2>/dev/null; then \
+	    printf '  ✓ %-34s reachable\n' "$$hp"; \
+	  else printf '  ✗ %-34s UNREACHABLE\n' "$$hp"; rc=1; fi; \
+	done; \
+	if [ $$rc -ne 0 ]; then \
+	  echo "  → add the upstream name as a pmoves_api network alias on that service" >&2; \
+	  echo "    (do NOT edit the vendored PMOVES-supabase kong.yml)" >&2; \
+	fi; exit $$rc
+
 .PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh supa-bootstrap-db
 supa-bootstrap-db: ensure-env-shared ## Bootstrap Supabase DB roles, schemas, and passwords from env
 	@bash scripts/supabase/bootstrap_db.sh
@@ -478,6 +537,12 @@ supa-stop-all: ## Stop both Supabase runtimes (CLI and compose) to clear mixed-s
 	@supabase stop --workdir "." >/dev/null 2>&1 || true
 	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true
 	@echo "✅ All Supabase runtimes stopped"
+
+supa-recreate-svc: ## Surgical recreate of ONE Supabase service with current env: make supa-recreate-svc SVC=supabase-kong
+	@test -n "$(SVC)" || { echo "Usage: make supa-recreate-svc SVC=<compose-service>"; exit 1; }
+	@echo "Recreating $(SVC) with current env (no deps)..."
+	@$(DC) up -d --force-recreate --no-deps $(SVC)
+	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
 
 supa-restart: ## Restart Supabase stack for selected runtime
 	@echo "🔄 Restarting Supabase stack..."
@@ -1073,6 +1138,32 @@ nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Ro
 .PHONY: nats-agent-inbox
 nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
 	@bash -lc '. ./scripts/with-env.sh; exec uv run --script tools/nats_agent_inbox.py'
+
+# ----------------------------------------------------------------------------
+# Lane 5 (2026-08-01): JetStream stream management
+#   nats-streams-init    - re-run init_streams.sh (idempotent; safe to re-run)
+#   nats-streams-validate - assert the 8 expected streams exist post-init
+# ----------------------------------------------------------------------------
+.PHONY: nats-streams-init nats-streams-validate nats-streams-list
+nats-streams-init: ## Idempotently create JetStream streams via the nats-init sidecar script (Known Road)
+	@echo "🔧 Initializing NATS JetStream streams (idempotent)..."
+	@bash scripts/nats/init_streams.sh
+	@echo "✅ NATS stream init complete"
+
+nats-streams-validate: ## Assert the 8 expected streams exist (CI-runnable)
+	@echo "🔍 Validating NATS JetStream streams..."
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" --entrypoint /bin/sh "$(NATS_BOX_IMAGE)" \
+	    -c "nats -s \"$$NATS_URL\" stream ls -n" > /tmp/nats_streams_actual.txt 2>&1
+	@uv run --script scripts/nats/validate_streams.py /tmp/nats_streams_actual.txt
+	@rm -f /tmp/nats_streams_actual.txt
+
+nats-streams-list: ## List current JetStream streams (ad-hoc)
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" \
+	    nats -s "$$NATS_URL" stream ls -n
 
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
@@ -1893,7 +1984,8 @@ STACK_FILES ?= \
 	-f docker-compose.yml \
 	-f docker-compose.comfyui.yml \
 	-f docker-compose.ultimate-tts-studio.yml \
-	-f docker-compose.archon.submodule.yml
+	-f docker-compose.archon.submodule.yml \
+	-f docker-compose.apps.yml
 
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
@@ -2124,8 +2216,29 @@ pmoves-ai-sync-hyperdim: ## Sync Pmoves-hyperdimensions submodule → website/hy
 	  || python tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
 	  || py -3 tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)"
 
-.PHONY: pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
-pmoves-ai-dev: pmoves-ai-sync-hyperdim ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
+chit-tour-data: ## Regenerate the CHIT tour's LIVE tables (roster + subjects) from the agent registry (generated; run before deploy)
+	@$(PYTHON) scripts/gen_chit_tour_data.py \
+	  || python scripts/gen_chit_tour_data.py \
+	  || py -3 scripts/gen_chit_tour_data.py
+
+# --- CHIT Visual Tour public edge (chit.pmoves.ai, behind the Traefik edge).
+# See docs/handoffs/chit-tour-public-edge.md. Serves the static tour with live
+# data; PUBLIC route (no forward-auth). Prereq: Traefik edge up + DNS record.
+CHIT_TOUR_DC := docker compose -p $(PROJECT)-chit-tour --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.chit-tour.yml
+
+.PHONY: up-chit-tour down-chit-tour chit-tour-health
+up-chit-tour: chit-tour-data ## Serve the CHIT tour at chit.pmoves.ai (Traefik edge must be up)
+	@$(CHIT_TOUR_DC) up -d
+	@echo "✔ chit-tour up — Traefik serves https://chit.pmoves.ai (ensure the DNS record + edge are live)"
+
+down-chit-tour: ## Stop the CHIT tour service
+	@$(CHIT_TOUR_DC) down
+
+chit-tour-health: ## Check the chit-tour container status
+	@$(CHIT_TOUR_DC) ps chit-tour
+
+.PHONY: chit-tour-data pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
+pmoves-ai-dev: pmoves-ai-sync-hyperdim chit-tour-data ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
 	@echo "→ Previewing $(PMOVES_AI_PROJECT) at http://localhost:$(PMOVES_AI_PORT)"
 	npx wrangler pages dev "$(PMOVES_AI_DIR)" --port $(PMOVES_AI_PORT)
 
@@ -2147,7 +2260,7 @@ pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project
 	  || { echo "❌ wrangler project create failed"; exit 1; }; \
 	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
 
-pmoves-ai-deploy: pmoves-ai-sync-hyperdim ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
+pmoves-ai-deploy: pmoves-ai-sync-hyperdim chit-tour-data ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
 	@$(LOAD_ENV_SHARED); \
 	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
 	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
@@ -2230,7 +2343,12 @@ up-workers-core:
 
 # YouTube ingest + whisper stack
 up-yt:
-	@$(DC) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	# COOKIES_DC (base + yt-cookies overlay), NOT $(DC): STACK_FILES omits the
+	# overlay, so plain DC starts pmoves-yt WITHOUT the harvested-cookie volume
+	# (/app/config/cookies) - downloads then run cookie-less and bot-gate.
+	# JuiceFS media overlay is opt-in: only nodes with a host-side FUSE mount
+	# (JUICEFS_HOST_MOUNT set) can satisfy its rshared bind.
+	@extra=""; if [ -n "$${JUICEFS_HOST_MOUNT:-}" ]; then extra="-f docker-compose.yt-media.yml"; fi; $(COOKIES_DC) $$extra --profile data --profile workers --profile yt --profile yt-cookies up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 
 .PHONY: channel-monitor-up
 channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
@@ -2954,6 +3072,11 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
+
+.PHONY: up-cipher-nobuild
+up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
+	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
+	@echo "✔ Cipher Memory recreated (no rebuild) at http://localhost:$${CIPHER_PORT:-8105}"
 
 .PHONY: up-p7
 up-p7: ## Start P7 room-aware stage manager (room lifecycle orchestration, port 8120)
@@ -3791,19 +3914,57 @@ voice-relay-smoke: ## Smoke test voice-relay health
 # A2UI RENDERER (Remotion living-doc renderer, creator profile, port 8107)
 # ────────────────────────────────────────────────────────────────────────────
 
-.PHONY: up-a2ui-renderer a2ui-renderer-smoke
+.PHONY: up-a2ui-renderer down-a2ui-renderer a2ui-renderer-smoke a2ui-renderer-render docs-render-living
 A2UI_RENDERER_PORT ?= 8107
-up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port $(A2UI_RENDERER_PORT), creator profile)
-	@echo "Starting a2ui-renderer (heavy Chromium image — first build is slow)..."
-	@$(DC) --profile creator up -d --build a2ui-renderer
+A2UI_RENDERER_TOKEN ?= ${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
+A2UI_RENDERER_RENDER_DIR ?= pmoves/docs/living-docs/rendered
+up-a2ui-renderer: ## Start a2ui-renderer (Remotion→MP4/MinIO, port $(A2UI_RENDERER_PORT), agents+media+docs profiles)
+	@echo "Starting a2ui-renderer (heavy Chromium image - first build is slow)..."
+	@$(DC) --profile agents --profile media --profile docs up -d --build a2ui-renderer
 	@sleep 5
 	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz > /dev/null 2>&1 \
 	  && echo "a2ui-renderer ready at http://localhost:$(A2UI_RENDERER_PORT)" \
 	  || echo "a2ui-renderer may still be starting (check: curl http://localhost:$(A2UI_RENDERER_PORT)/healthz)"
 
-a2ui-renderer-smoke: ## Smoke test a2ui-renderer health
+down-a2ui-renderer: ## Stop a2ui-renderer (and remove the container)
+	@echo "Stopping a2ui-renderer..."
+	@$(DC) --profile agents --profile media --profile docs stop a2ui-renderer || true
+	@$(DC) --profile agents --profile media --profile docs rm -f a2ui-renderer || true
+
+a2ui-renderer-smoke: ## Smoke test a2ui-renderer health + sample render
 	@echo "a2ui-renderer smoke test..."
 	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/healthz || { echo "a2ui-renderer not responding at http://localhost:$(A2UI_RENDERER_PORT)/healthz"; exit 1; }
+	@echo "✅ healthz OK; metrics:"
+	@curl -sf http://localhost:$(A2UI_RENDERER_PORT)/metrics | grep -E '^a2ui_' | head -5
+
+# Helper: render a single living-doc entry through the a2ui-renderer.
+# Used by docs-render-living (the registry iterator) and for ad-hoc renders.
+# Usage: make a2ui-renderer-render DOC=pmoves/docs/handoffs/X.md
+A2UI_RENDERER_RENDER_INPUT  ?= $(DOC)
+A2UI_RENDERER_RENDER_OUTPUT ?= $(A2UI_RENDERER_RENDER_DIR)/$(notdir $(basename $(DOC))).mp4
+a2ui-renderer-render: ## Render a single markdown doc as a living-doc MP4 via a2ui-renderer
+	@echo "Rendering $(A2UI_RENDERER_RENDER_INPUT) -> $(A2UI_RENDERER_RENDER_OUTPUT)..."
+	@mkdir -p $(dir $(A2UI_RENDERER_RENDER_OUTPUT))
+	@uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	    --doc $(A2UI_RENDERER_RENDER_INPUT) \
+	    --output $(A2UI_RENDERER_RENDER_OUTPUT) \
+	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
+	    --token "$${A2UI_RENDERER_TOKEN}" \
+	    --format mp4
+
+# Render every entry in pmoves/config/living_docs_registry.yaml.
+# Each entry: { id, source_doc, output_key, format, ttl_days }.
+# Outputs go to $${A2UI_RENDERER_RENDER_DIR}/<id>.<format> and are uploaded
+# to MinIO bucket $${MINIO_BUCKET}/a2ui/living-docs/<id>.<format>.
+docs-render-living: ## Render all LIVING_DOCS_INDEX-registered docs through a2ui-renderer
+	@echo "Rendering living docs from pmoves/config/living_docs_registry.yaml..."
+	@mkdir -p $(A2UI_RENDERER_RENDER_DIR)
+	@uv run --script pmoves/tools/a2ui_renderer/render_living_doc.py \
+	    --registry pmoves/config/living_docs_registry.yaml \
+	    --output-dir $(A2UI_RENDERER_RENDER_DIR) \
+	    --renderer-url http://localhost:$(A2UI_RENDERER_PORT) \
+	    --token "$${A2UI_RENDERER_TOKEN}" \
+	    --minio-bucket "$${MINIO_BUCKET:-outputs}"
 
 # ────────────────────────────────────────────────────────────────────────────
 # HI-RAG GATEWAY (Hybrid RAG v2)

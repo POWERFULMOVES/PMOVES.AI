@@ -117,12 +117,12 @@ fi
 if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && [ -n "${SERVICE_ROLE_KEY:-}" ]; then
   export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
 fi
-if [ -z "${SUPABASE_PUBLISHABLE_KEY:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
-  export SUPABASE_PUBLISHABLE_KEY="$SUPABASE_ANON_KEY"
-fi
-if [ -z "${SUPABASE_SECRET_KEY:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-  export SUPABASE_SECRET_KEY="$SUPABASE_SERVICE_ROLE_KEY"
-fi
+# Do NOT back-fill SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY from the
+# legacy JWT keys. They are the NEW opaque API-key model (sb_publishable_*/
+# sb_secret_*): Kong's declarative config registers all four as distinct
+# keyauth credentials, so aliasing them to the legacy values is a uniqueness
+# violation that crash-loops Kong at init. Empty = legacy-only mode (the
+# kong-entrypoint strips the empty credential lines).
 
 export PMOVES_ENV_LOADER=1
 

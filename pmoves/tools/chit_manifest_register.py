@@ -70,6 +70,18 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "required": False,
         "aliases": ["MCP_SERVER_TOKEN"],
     },
+    # Tier: supabase — Studio basic-auth through the Kong gateway. These became
+    # HARD-REQUIRED when supabase-kong moved to DB-less declarative mode: the
+    # vendored kong.yml declares a `basicauth_credentials` entry, and Kong
+    # VALIDATES its declarative config at boot, so an empty password makes the
+    # gateway refuse to start ("in 'password': length must be at least 1") —
+    # taking /rest/v1, /auth/v1 and /storage/v1 down with it. Under the previous
+    # DB-backed mode Kong booted happily with no config at all, which is why
+    # neither name existed in any env file before now.
+    # required:False so a node without them still materializes tier files; the
+    # boot failure is loud and self-describing if they are genuinely absent.
+    "DASHBOARD_USERNAME": {"tier": "supabase", "required": False},
+    "DASHBOARD_PASSWORD": {"tier": "supabase", "required": False},
 }
 
 

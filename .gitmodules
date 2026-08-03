@@ -371,3 +371,9 @@
 	path = pbnj
 	url = https://github.com/POWERFULMOVES/PMOVES-pinokio.git
 	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-ollama"]
+	path = PMOVES-ollama
+	url = https://github.com/POWERFULMOVES/PMOVES-ollama.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all

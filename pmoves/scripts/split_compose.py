@@ -129,7 +129,6 @@ SERVICE_GROUPS = {
         "pinokio_bridge",
     ],
     "juicefs": [
-        "juicefs-redis",
         "juicefs-format",
         "juicefs-gateway",
         "juicefs-smoke",

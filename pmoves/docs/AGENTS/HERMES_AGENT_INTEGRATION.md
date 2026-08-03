@@ -391,6 +391,28 @@ hermes profile use pmoves-hermes-kvm
 - **No TTS/STT** (headless)
 - **NATS leaf node** to `pmoves-nats`
 
+#### Jetson Edge (JONS-1/2/3)
+```bash
+hermes profile create pmoves-hermes-jetson --clone-from pmoves-hermes
+hermes profile use pmoves-hermes-jetson
+```
+- **Hardware**: Jetson Orin Nano Super 8GB unified memory, SM_87, 67 TOPS, ARM64
+- **Role**: Edge inference combiner — STT, lightweight LLM, image preprocess, NATS relay
+- **Gateway port**: 7700
+- **Ollama**: localhost:11434 (phi3-mini only — 8GB unified memory limit)
+- **Local models**:
+  - `phi3:mini` (3.8B, ~3GB VRAM — primary edge LLM)
+  - `gemma3:2b` (via TensorRT, ~2GB VRAM)
+  - `whisper-small-int8` (via Faster-Whisper, not Ollama)
+- **Fallback**: `pmoves-gb10-spark:11434` for larger models (70B delegation via NATS)
+- **Toolsets**: `web`, `terminal`, `file`, `code_execution` (NO `image_gen`/`video`/`rl`/`moa` — SPARK handles those)
+- **TTS**: none on-device (SPARK handles via Flute-Gateway)
+- **STT**: faster-whisper (`small-int8`, on-device Orin GPU)
+- **NATS**: leaf node upstream to `ts:powerfulmoves:4222`; publishes `mesh.edge.heartbeat.v1`
+- **Combiner pairing**: SPARK (GB10 128GB) is the heavy layer — Jetsons do edge STT/LLM/detection, SPARK does 70B inference + ComfyUI + TTS
+- **Island mode**: when SPARK is offline, Jetsons fall back to phi3-mini round-robin via NATS
+- **IMPORTANT**: Keep total model + runtime VRAM under 6GB (8GB unified shared with CPU). TensorRT optimization critical for 2-5x speedup.
+
 ## NATS Subject Catalog (Hermes-specific)
 
 New subjects introduced by this integration:

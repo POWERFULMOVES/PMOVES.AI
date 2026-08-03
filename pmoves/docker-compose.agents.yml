@@ -69,7 +69,9 @@ services:
     # BoTZ-gateway (persona/forms) and Hi-RAG are added by their owning lanes once
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
-    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
     - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
@@ -219,6 +221,11 @@ services:
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-false}
+    # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
+    # Default empty (uses $PATH). The upstream Archon Dockerfile installs
+    # Claude at /usr/local/bin/claude; set this only if the image builds
+    # Claude at a non-standard path or you want to pin a specific binary.
+    - CLAUDE_BIN_PATH=${CLAUDE_BIN_PATH:-}
     # gh auth — non-fatal warning if absent.
     - GH_TOKEN=${GH_TOKEN:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
@@ -841,6 +848,12 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  # A2UI Renderer - Remotion-based animation engine (port 8107)
+  # Lane 2228 (2026-08-02): first-class compose service so the living-doc
+  # animation lane is a fleet capability rather than npm-scripts-only.
+  # Issue #2228: previously the Dockerfile existed at services/a2ui-renderer/
+  # but no compose service anywhere - this stanza fixes that.
+  # See pmoves/docs/specs/a2ui-renderer-compose-2026-08-02.md for the spec.
   nats-echo-req:
     <<: *tier-agent-hardened-ro
     build:

@@ -221,7 +221,9 @@ services:
       - ./data/jellyfin/config:/config
       - ./data/jellyfin/cache:/cache
       - ./data/jellyfin/transcode:/transcodes
-      - ./data/jellyfin/media:/media
+      # Media library → I: (9TB bulk) for the content studio; keeps media off C:/D:.
+      # JELLYFIN_MEDIA_DIR set inline (I:/pmoves-media); defaults to the repo path.
+      - ${JELLYFIN_MEDIA_DIR:-./data/jellyfin/media}:/media
 
 networks:
   pmoves_app:

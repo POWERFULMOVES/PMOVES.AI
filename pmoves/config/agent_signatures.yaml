@@ -496,6 +496,91 @@ signatures:
       - self-governance
       - accessible-voice
 
+  # ---- Jetson Edge Combiner Agents ----
+  # Three Jetson Orin Nano Super (JONS) nodes paired with SPARK (GB10 128GB)
+  # NVIDIA Nemotron theme per memory/project_jetson_nemotron_unfcu.md
+
+  jetson-1:
+    agent_id: "jetson-1"
+    display_name: "Jetson Edge Alpha"
+    glyph: "\u2B1B"              # ⬛ Black Large Square
+    color: "#16A34A"             # Green-600 (edge/inference)
+    accent: "#4ADE80"            # Green-400
+    voice: analytical
+    co_author: "Jetson Edge Alpha (pmoves-jons-1) <jetson-1@pmoves.ai>"
+    node: "pmoves-jons-1"
+    specialization: edge-stt-preprocess
+    routes_to: [whisper-local, ollama-edge, tensorrt, yolov8]
+    resonance:
+      - edge-inference
+      - speech-to-text
+      - image-preprocess
+      - nats-relay
+      - spark-pairing
+    description: "JONS-1 edge combiner — Whisper INT8 STT, YOLOv8 safety check, image preprocessing. Pairs with SPARK for heavy inference and ComfyUI."
+    capabilities:
+      - whisper_int8_stt
+      - yolov8_detection
+      - phi3_mini_inference
+      - nats_leaf_node
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000041"
+    status: active
+
+  jetson-2:
+    agent_id: "jetson-2"
+    display_name: "Jetson Edge Beta"
+    glyph: "\u2B1C"              # ⬜ White Large Square
+    color: "#2563EB"             # Blue-600
+    accent: "#60A5FA"            # Blue-400
+    voice: analytical
+    co_author: "Jetson Edge Beta (pmoves-jons-2) <jetson-2@pmoves.ai>"
+    node: "pmoves-jons-2"
+    specialization: edge-llm-detection
+    routes_to: [ollama-edge, phi3-mini, tensorrt, yolov8]
+    resonance:
+      - edge-inference
+      - lightweight-llm
+      - object-detection
+      - nats-relay
+      - spark-pairing
+    description: "JONS-2 edge combiner — phi3-mini prompt expansion, YOLOv8 TensorRT detection, parallel Whisper. Pairs with SPARK for 70B LLM."
+    capabilities:
+      - phi3_mini_inference
+      - yolov8_tensorrt
+      - whisper_parallel
+      - nats_leaf_node
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000042"
+    status: active
+
+  jetson-3:
+    agent_id: "jetson-3"
+    display_name: "Jetson Edge Gamma"
+    glyph: "\u25FC"              # ◼ Black Medium Square
+    color: "#D97706"             # Amber-600
+    accent: "#FBBF24"            # Amber-400
+    voice: analytical
+    co_author: "Jetson Edge Gamma (pmoves-jons-3) <jetson-3@pmoves.ai>"
+    node: "pmoves-jons-3"
+    specialization: edge-voice-relay
+    routes_to: [whisper-local, ollama-edge, nat-relay, comfyui-queue]
+    resonance:
+      - edge-inference
+      - voice-relay
+      - nats-queue-management
+      - comfyui-bridge
+      - spark-pairing
+    description: "JONS-3 edge combiner — voice relay, ComfyUI NATS queue manager, island-mode coordinator. Pairs with SPARK for TTS and image gen."
+    capabilities:
+      - whisper_stt
+      - nats_relay_queue
+      - comfyui_request_forwarding
+      - island_mode_coordination
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000043"
+    status: active
+
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
 #   architectural:  Blueprint format, mode/state descriptions, integration maps

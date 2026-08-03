@@ -15,6 +15,7 @@ services:
     env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
     environment:
     - NODE_ENV=production
+    - HOSTNAME=0.0.0.0
       # Room manifests — the rooms API reads catalog.json + the per-room
       # manifests from this directory. Without it, the Rooms tab on the
       # home page renders "Room manifests are not available yet" and

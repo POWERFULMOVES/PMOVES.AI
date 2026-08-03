@@ -48,9 +48,11 @@ yt-cookies-auth: yt-cookies-check ## One-time OAuth2 consent flow (opens browser
 	@echo "✓ Refresh token stored in Supabase Vault."
 	@echo "Next: make yt-cookies-refresh  (to harvest initial cookie set)"
 
-yt-cookies-refresh: ## Force a cookie refresh cycle (Playwright harvest + encrypt + store)
-	@echo "=== YT Cookies: manual refresh ==="
-	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py refresh
+yt-cookies-refresh: ## Force a cookie refresh cycle (Playwright harvest + encrypt + store + NATS notify)
+	@echo "=== YT Cookies: manual refresh (via refresher service) ==="
+	@curl -sf -X POST -m 10 http://localhost:$${YT_COOKIE_REFRESHER_PORT:-8115}/refresh \n		|| { echo "refresher API unreachable - is the service up? (make up-yt-cookies)"; exit 1; }
+	@echo ""
+	@echo "Triggered. Status after ~60s: make yt-cookies-status"
 
 yt-cookies-status: ## Show cookie refresh state (last refresh, expiry, vault entry)
 	@echo "=== YT Cookies: status ==="
@@ -140,6 +142,11 @@ up-yt-cookies-recreate: ## Force-recreate cookie services to pick up env.shared 
 	@echo "🍪 Force-recreating yt-cookie services (env refresh)..."
 	@$(COOKIES_DC) --profile yt-cookies up -d --force-recreate yt-cookie-refresher yt-cookie-writer
 	@echo "✅ Cookie services recreated. Refresher API: http://localhost:8115/healthz"
+
+up-yt-cookies-rebuild: ## Rebuild images + force-recreate cookie services (code changes)
+	@echo "🍪 Rebuilding + force-recreating yt-cookie services (code refresh)..."
+	@$(COOKIES_DC) --profile yt-cookies up -d --build --force-recreate yt-cookie-refresher yt-cookie-writer
+	@echo "✅ Cookie services rebuilt + recreated. Refresher API: http://localhost:8115/healthz"
 
 # Skip-egress variant — runs cookies + multi-client only. Use when the
 # Tailscale exit node is offline/unapproved, to test whether cookies +

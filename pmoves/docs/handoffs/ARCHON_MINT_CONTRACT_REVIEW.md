@@ -12,13 +12,14 @@ Minting is a **7-step ritual** (`.claude/commands/archon/mint-agent.md`) across 
 
 | Subject | Role | Registered in `nats-subjects.md`? |
 |---|---|---|
-| `archon.mint.agent.v1` | Proposed `AgentMintSpec` | **NO** |
-| `archon.qa.result.v1` | Blocking QA verdict | **NO** |
-| `archon.mint.confirmed.v1` | Confirmation after QA pass | **NO** |
-| `archon.mint.skill.v1` / `archon.mint.creator.v1` | Sibling rituals (skill, creator onboarding) | **NO** |
+| `archon.mint.agent.v1` | Proposed `AgentMintSpec` | yes — registered by this PR |
+| `archon.qa.result.v1` | Blocking QA verdict | yes — registered by this PR |
+| `archon.mint.confirmed.v1` | Confirmation after QA pass | yes — registered by this PR |
+| `archon.mint.skill.v1` / `archon.mint.creator.v1` | Sibling rituals (skill, creator onboarding) | yes — registered by this PR |
 
-**None of the mint family is registered.** The catalog carries exactly three `archon.*` subjects —
-`archon.crawl.request.v1`, `archon.crawl.result.v1`, `archon.work_order.github.v1`. See §4.1.
+**Before this PR none of the mint family was registered** — the catalog carried exactly three `archon.*`
+subjects (`archon.crawl.request.v1`, `archon.crawl.result.v1`, `archon.work_order.github.v1`). §4.1 records
+why that was self-blocking and is now **resolved**; it is retained as the rationale, not as an open task.
 
 Flow: `collect manifest → Archon factory → QA gate → scaffold persona doc + agent def → publish mint event → confirm`.
 
@@ -91,7 +92,7 @@ a hard runtime block, not a convention.
 
 ## 4. Gaps found
 
-### 4.1 The entire mint subject family is unregistered — BLOCKING
+### 4.1 The entire mint subject family was unregistered — RESOLVED in this PR
 
 `.claude/context/nats-subjects.md` carries only three `archon.*` subjects: `archon.crawl.request.v1`,
 `archon.crawl.result.v1`, `archon.work_order.github.v1`. Absent: `archon.mint.agent.v1`,
@@ -100,7 +101,11 @@ a hard runtime block, not a convention.
 This matters twice over. `pmoves-nats-subject-audit` will flag every one as an orphan the moment a
 publisher goes live. And `archon-qa-agent` check 3 requires that *every* subject an agent publishes or
 consumes already appear in the catalog — so the QA gate would reject a mint manifest for using the mint
-contract's own subjects. Register all five before any mint code lands.
+contract's own subjects. All five are registered by this PR, so this no longer blocks mint code.
+
+Still owed (blocked on an operator-set `KNOWN_ROAD`, see §8): a JSON Schema per subject under
+`pmoves/contracts/schemas/archon/` plus `pmoves/contracts/topics.json` entries. Catalog registration makes
+the subjects *declarable*; only a registered schema makes a payload *validated*.
 
 ### 4.2 The ritual produces artifacts that fail the repo's own validation gate
 

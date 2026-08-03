@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archon Mint Agent",
+  "description": "Proposed AgentMintSpec submitted to the Archon factory. Full manifest (metadata + spec with role, team_ref, node_affinity, model, capabilities, skills, nats, guardrails) is documented in pmoves/docs/pilots/fordham-hill/05-room-agents-mint-specs.md. This event is the submission envelope; archon-qa-agent gates it via archon.qa.result.v1 before archon.mint.confirmed.v1 may be published.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agent_id", "agent_name", "room_id", "owning_persona", "ts"],
+  "properties": {
+    "agent_id": { "type": "string", "format": "uuid" },
+    "agent_name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "room_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "owning_persona": { "type": "string" },
+    "creator_id": { "type": "string" },
+    "manifest_url": { "type": "string", "format": "uri" },
+    "ts": { "type": "string", "format": "date-time" }
+  }
+}

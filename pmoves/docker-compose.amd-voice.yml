@@ -59,6 +59,7 @@ services:
 
   flute-gateway:
     environment:
-    - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-ultimate_tts}
+    - DEFAULT_VOICE_PROVIDER=ultimate_tts
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://ultimate-tts-studio:7861}
     - ULTIMATE_TTS_DEFAULT_ENGINE=${ULTIMATE_TTS_DEFAULT_ENGINE:-chatterbox}
+    - NATS_URL=${NATS_URL}

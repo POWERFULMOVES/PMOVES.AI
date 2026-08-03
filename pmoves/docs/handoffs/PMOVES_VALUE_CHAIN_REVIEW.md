@@ -15,15 +15,18 @@ money" is broken in **six independent places**, and one of those breaks is a pri
 and should not be reverted to unblock the others.
 
 Crucially (§6a, added on review): a **complete end-to-end value chain is already designed** under
-`pmoves/contracts/schemas/` — work attestation with Ed25519 signatures and merkle roots, an attestation
-ledger table with RLS binding `contributor_id` to Supabase `auth.uid()`, attribution records, and dual-rail
-settlement carrying both a Firefly transaction id and an on-chain tx hash with deterministic idempotency
-keys. A 211-line recorder service exists for it. **None of it runs** — the service is in no compose file
-and the migration has never been applied.
+`pmoves/contracts/schemas/` — work attestation with merkle roots, an attestation ledger table, attribution
+records, and dual-rail settlement carrying both a Firefly transaction id and an on-chain tx hash with
+deterministic idempotency keys. A 211-line recorder service exists for it. **None of it runs**, and per
+§6b none of it is trustworthy yet either: the recorder's insert payload does not match its own table, no
+signature is ever verified, and the ledger's RLS policy grants blanket authenticated read rather than
+binding a row to its contributor.
 
-So the accurate framing is not "the economy is unbuilt" and not "it half-works." It is: **good components
-and a sound contract design that were never joined or deployed, plus one genuine decision — which of two
-rival identity models is the economic anchor — that needs an answer before more code is written.**
+So the accurate framing is not "the economy is unbuilt" and not "it half-works." It is: **a sound contract
+design exists on paper; the implementing pieces are unjoined, undeployed, and in three specific places
+unsound. Economic ownership is not yet expressible anywhere in this repo** — §6a found a better plan, not a
+working mechanism. The genuine decision that gates further code is which identity model becomes the
+economic anchor, and what must be true of it before anything settles against it.
 
 ## 1. The chain, and every break in it
 
@@ -47,11 +50,13 @@ agent does work
   └─ [7] PAY A HUMAN ............................ two rival identity models, neither running (§6, §6a)
 ```
 
-**Read §6a first.** A complete designed chain (`token.work.attested.v1` → `work_attestations` →
+**Read §6a and §6b first.** A complete designed chain (`token.work.attested.v1` → `work_attestations` →
 `attribution.recorded` → `settlement.requested` → `settlement.recorded`, with dual Firefly/on-chain legs
-and idempotency keys) exists under `pmoves/contracts/schemas/` and was missed by the entire fan-out. It
-does not close any of the breaks below — nothing in it runs — but it means the task is **joining and
-deploying existing design**, not inventing one.
+and idempotency keys) exists under `pmoves/contracts/schemas/` and was missed by the entire fan-out — so
+the task is **joining existing design**, not inventing one. But §6b records three claims about that chain
+that did not survive review: nothing verifies attestation signatures, the ledger's RLS grants blanket
+authenticated read rather than binding rows to contributors, and the recorder cannot write to its own
+table. It is a better plan, not a working mechanism.
 
 ## 2. Break 1 — metering is blocked by a privacy policy, and the policy is right
 
@@ -163,11 +168,11 @@ a `user_group_id` omission, an env-var mismatch (`02-wealth-community-statements
 No Solidity contract is deployed to any network — source plus Hardhat unit tests against the default
 in-memory chain only. `GROTOKEN_USD_VALUE` is a simulation parameter, not a conversion rate.
 
-> **CORRECTION (added after first publication — see §6a).** The claim that economic ownership is
-> inexpressible is **wrong as originally written**. It is true of the four *mint/registry* identity fields
-> below, but a separate and better-designed identity path exists that the fan-out missed: the
-> `token.work.attested.v1` contract and the `pmoves_core.work_attestations` table, whose `contributor_id`
-> is bound to Supabase `auth.uid()` by RLS policy. Read §6a before relying on this section.
+> **See §6a/§6b.** A second, better-designed identity path exists that the fan-out missed — the
+> `token.work.attested.v1` contract and the `pmoves_core.work_attestations` table. It is a stronger *plan*
+> than anything below, but §6b shows it is not yet a working anchor either (no signature verification, no
+> ownership constraint, recorder cannot write to its own table). The section heading below therefore still
+> holds for the repo as a whole.
 
 **In the mint/registry surface, economic ownership is inexpressible.** Four identity fields, none economic:
 
@@ -196,38 +201,69 @@ materially better than §6 implies:
 
 | Stage | Contract | State |
 |---|---|---|
-| Work attested | `pmoves/contracts/schemas/token/work.attested.v1.schema.json` | [DESIGNED] — `work_id`, `contributor` (uuid), `attestation_sig` (**Ed25519**, 128 hex), `merkle_root`, `attested_at` |
-| Recorded to ledger | `pmoves/services/token-stub/app.py` (211 LOC) | [BUILT] — FastAPI dry-run attestation recorder, JSONL evidence log, `TOKEN_STUB_ENABLED` kill switch, writes to Supabase |
+| Work attested | `pmoves/contracts/schemas/token/work.attested.v1.schema.json` | [DESIGNED] — `work_id`, `contributor` (uuid), `attestation_sig` (128-hex **format check only**, see §6b), `merkle_root`, `attested_at` |
+| Recorded to ledger | `pmoves/services/token-stub/app.py` (211 LOC) | [BUILT but non-functional] — FastAPI recorder with JSONL evidence log and `TOKEN_STUB_ENABLED` kill switch, but its insert payload does not match the table (§6b) |
 | Ledger table | `pmoves/supabase/migrations/20260425000300_work_attestations.sql` | [BUILT] as SQL — `pmoves_core.work_attestations`, RLS on, `chain_status` ∈ pending/confirmed/failed |
 | Attribution | `pmoves/contracts/schemas/tokenism/attribution.recorded.v1.schema.json` | [DESIGNED] — `chit_id`, `address`, `action`, `amount`, `week`, `merkle_root` |
 | Settlement request | `.../settlement.requested.v1.schema.json` | [DESIGNED] — `settlement_id`, `cgp_hash`, `settlement_profile`, `instructions`, `totals`, `agent_id`, `signature` |
 | Settlement result | `.../settlement.recorded.v1.schema.json` (+ `.failed.`) | [DESIGNED] — `idempotency_key`, `amount`, `asset`, **`firefly_transaction_id`**, **`tx_hash`** |
 
-Two things this changes:
-
-1. **A payable human identity IS expressible.** The migration's RLS policy reads
-   `USING (auth.uid() = contributor_id OR auth.uid() IS NOT NULL)` — `contributor_id` is explicitly a
-   Supabase `auth.users.id`. That is precisely the durable human anchor §6 said did not exist. It is not
-   reachable from the mint/registry fields, but it exists.
-2. **Settlement is designed dual-rail with idempotency.** `settlement.recorded.v1` carries *both*
-   `firefly_transaction_id` (fiat/ledger leg) and `tx_hash` (on-chain leg), plus a deterministic
-   `idempotency_key` — a serious design, not a sketch.
+**What this genuinely changes:** an end-to-end chain has been *designed*, including a dual-rail settlement
+stage — `settlement.recorded.v1` carries both `firefly_transaction_id` (fiat/ledger leg) and `tx_hash`
+(on-chain leg) plus a deterministic `idempotency_key`. That is a serious design, not a sketch, and it means
+the task is joining and deploying existing design rather than inventing one.
 
 **What is still true:** nothing runs.
-- `token-stub` appears in **no compose file** — grep across `pmoves/docker-compose*.yml` returns nothing. It is never deployed.
-- The migration has **never been applied**: `SELECT to_regclass('pmoves_core.work_attestations')` on the live Supabase returns null; the relation does not exist.
-- `token.work.attested.v1` is **not registered** in `.claude/context/nats-subjects.md`.
+- `token-stub` appears in **no compose file** — grep across `pmoves/docker-compose*.yml` returns nothing.
+- The migration has **never been applied**: `SELECT to_regclass('pmoves_core.work_attestations')` on the live Supabase returns null.
+- `token.work.attested.v1` was **not registered** in `.claude/context/nats-subjects.md` (added by this PR).
 
-So the corrected verdict is better than §6 but not by as much as it first appears: the chain is **designed
-end-to-end and partially implemented**, rather than absent — but no stage of it is running, and the two
-halves (mint/registry identity vs `contributor_id` identity) are not joined to each other. The real
-question is no longer "what should we design" but "**which of the two identity models wins, and who
-applies the migration.**"
+## 6b. Corrections to §6a — three claims that did not survive review
 
-Note also the crypto split: `work.attested.v1` specifies **Ed25519** (asymmetric, per-contributor
-verifiable), while the live CHIT trail uses **symmetric HMAC** with a single operator-held passphrase
-(§3). Those are different trust models — asymmetric is the right one for attribution a contributor should
-be able to prove independently. That divergence needs an explicit decision, not a silent merge.
+An earlier revision of §6a asserted that a payable human identity is expressible and recommended
+`contributor_id` as the stronger anchor. **Codex review (#2332) refuted three claims and it was right on
+all three.** Recorded here rather than silently edited, because the original claims were the sort that get
+built on.
+
+**1. The RLS policy does not bind rows to contributors.** The policy is:
+
+```sql
+FOR SELECT TO authenticated USING (auth.uid() = contributor_id OR auth.uid() IS NOT NULL)
+```
+
+For *any* authenticated user `auth.uid() IS NOT NULL` is true, so the `OR` short-circuits the whole
+predicate to true — every authenticated user can read **every** attestation. It is also a `SELECT` policy
+only: there is no INSERT/ownership constraint, and **no foreign key** ties `contributor_id` to
+`auth.users`. So this establishes neither ownership nor a durable human anchor. It is a blanket
+authenticated-read policy that merely *mentions* `contributor_id`.
+
+**2. Nothing verifies the attestation signature.** `work.attested.v1` constrains `attestation_sig` to
+`^[0-9a-fA-F]{128}$` — a **format check, not a verification**. The schema carries no signer public key and
+defines no signed-message payload, and `token-stub` performs no cryptographic verification at all: grep for
+`ed25519|nacl|cryptography|verify|public_key` in `pmoves/services/token-stub/app.py` returns **nothing**;
+the only validator is `non_empty()`. Consequence: **any caller can attribute arbitrary work to any
+contributor** by posting 128 arbitrary hex characters. Calling this an independently-verifiable Ed25519
+trust model was wrong, and it must not be adopted as a payout anchor until key binding and real
+verification exist.
+
+**3. The recorder cannot write to its own ledger.** `record_to_supabase()`
+(`pmoves/services/token-stub/app.py:112-119`) posts `contributor` and an extra `recorded_at`; the migration
+defines `contributor_id` and has **no** `recorded_at` column. PostgREST rejects every such insert. So
+applying the migration and adding the service to Compose would *not* produce a working ledger — the payload
+and table must be reconciled first. `token-stub` is code that exists, not a component that works.
+
+**Revised verdict.** The chain is designed end-to-end but **no stage of it is trustworthy or running yet**.
+`contributor_id` remains the most *promising* anchor — it is the only field intended to denote a human —
+but it is a **candidate, not a safe choice**, and adopting it requires, at minimum: a foreign key to
+`auth.users`, an INSERT/ownership RLS policy (not the current blanket read), a defined signed-message
+format with signer key binding, and actual signature verification in the recorder. Until then the honest
+statement is the one §6 made about the mint surface: **economic ownership is not yet expressible anywhere
+in this repo** — §6a found a better *plan*, not a working mechanism.
+
+Note also the crypto split: `work.attested.v1` *specifies* an Ed25519-shaped signature while the live CHIT
+trail uses **symmetric HMAC** with a single operator-held passphrase (§3). Asymmetric is the right target —
+a contributor should be able to prove their own attribution without the operator's secret — but since
+neither end verifies anything today, this is a decision to make, not a property to rely on.
 
 ## 7. Corrections made during this review
 
@@ -242,7 +278,15 @@ reality," flagged as a CHIT intrusion.
    several already-fixed items as gaps. Corrected in `ARCHON_MINT_CONTRACT_REVIEW.md`.
 3. Two researchers could not read `PMOVES-ToKenism-Multi` / `PMOVES-Wealth` (uninitialized submodules in
    that worktree) and correctly declined to guess. Those files were verified from the main checkout instead.
-4. **The largest miss: all five researchers, and my own first synthesis, overlooked
+5. **Codex review on #2332 refuted three §6a claims, all correctly** — see §6b. The RLS policy does not
+   bind rows to contributors (the `OR auth.uid() IS NOT NULL` disjunct grants blanket authenticated read);
+   nothing anywhere verifies an attestation signature, so the "Ed25519, independently verifiable" framing
+   was wrong and unsafe as a payout-anchor recommendation; and the recorder's insert payload does not match
+   its own table. Two of these were claims *this document* made confidently after already correcting
+   itself once. Same root cause as #4 and #2: reading a schema/policy and inferring intent instead of
+   evaluating what it actually does. `auth.uid() = contributor_id OR auth.uid() IS NOT NULL` reads like
+   ownership and is not.
+6. **The largest miss: all five researchers, and my own first synthesis, overlooked
    `pmoves/contracts/schemas/`.** Every search targeted `archon.mint.*` and `tokenism.*`; nobody searched
    `token.*` or listed the schema directory. That directory holds a complete designed value chain plus a
    built service and an unapplied migration (§6a), which falsified the headline "economic ownership is
@@ -261,7 +305,16 @@ Ordered, each independently reviewable:
 
 1. **Fix the transport before any publisher ships.** `TOKENISM_ATTRIBUTION` → workqueue/limits + a durable
    consumer. Cheap, and prevents silent loss of the first real attribution events.
-2. **Register + emit content-free usage.** Add `chit.economics.usage.v1` to `nats-subjects.md` first, then
+2. **Enforce the content-free invariant in a schema, not prose — OWED.** The catalog entry for
+   `chit.economics.usage.v1` states the no-prompt-text invariant in Markdown only. The event-envelope path
+   validates a payload only when the subject is registered in `pmoves/contracts/topics.json` with a schema,
+   so as written a future publisher could add a `prompt` field and nothing would stop it. Needed:
+   `pmoves/contracts/schemas/chit/economics.usage.v1.schema.json` with `"additionalProperties": false`,
+   plus a `topics.json` entry. **Blocked in this session:** `pmoves/contracts/schemas/` is a
+   damage-control `readOnlyPath` requiring an operator-set `KNOWN_ROAD=schema:pr:2332` in the launching
+   shell; self-granting it was declined. Same applies to the `archon.mint.*` schemas.
+
+   Then **emit** it. Add `chit.economics.usage.v1` to `nats-subjects.md` first (done), then
    publish it. (Same discipline the mint review flagged: catalog before code.)
 3. **Add the join key.** `spec.economics.tensorzero_function` in `AgentMintSpec`, and the matching field in
    `agent_registry.yaml` — the landed 97-agent registry has no economic fields either, so both must change.
@@ -271,19 +324,23 @@ Ordered, each independently reviewable:
 4. **Join Dirichlet to distribution.** Replace the `Math.random()` draw in `distributeWeekly()` with the
    computed weights. This is the difference between a fair economy and a lottery.
 5. **Decide which economic identity model wins** — the one genuine design question, not an implementation
-   task. Per §6a there are now **two** competing anchors, and they are not joined:
-   - `contributor_id` = Supabase `auth.uid()`, RLS-enforced, Ed25519-attested (`work.attested.v1` +
-     `work_attestations`) — designed for payouts, and the stronger model;
-   - `creator_id` / `owning_persona` in the Archon mint contract — unimplemented, and HMAC-adjacent.
+   task. Per §6a there are **two** candidate anchors, and they are not joined:
+   - `contributor_id` in `work_attestations` — intended to denote a human, and the more promising target;
+   - `creator_id` / `owning_persona` in the Archon mint contract — unimplemented.
 
-   Recommend adopting `contributor_id` as the economic anchor and having mint *reference* it rather than
-   inventing a parallel identity. Whatever is chosen must preserve the ballot/wealth unlinkability
-   invariant (§6) and resolve the Ed25519-vs-HMAC split. Resolve this **before** building settlement.
+   `contributor_id` is the better *direction*, but §6b is explicit that it is not yet safe. **Do not
+   deploy or settle against it until all four hold:** a foreign key to `auth.users`; an INSERT/ownership
+   RLS policy replacing the current blanket authenticated-read; a defined signed-message format with
+   signer key binding; and real signature verification in the recorder. Today any caller can attribute
+   arbitrary work to any contributor.
 
-   Two concrete unblocking steps that need an owner: **apply the `work_attestations` migration** (it has
-   never been run — the relation does not exist on the live Supabase) and **add `token-stub` to a compose
-   file** (it is in no compose file today, so it never starts). Both are prerequisites to any of this being
-   testable, and neither is a design decision.
+   Whatever is chosen must also preserve the ballot/wealth unlinkability invariant (§6).
+
+   **Do not apply the migration or add `token-stub` to Compose yet.** Those look like easy unblocking
+   steps, but §6b shows the recorder's insert payload (`contributor`, `recorded_at`) does not match the
+   table (`contributor_id`, no such column) — PostgREST would reject every insert. Reconcile the
+   payload/table and add verification *first*; deploying now would produce a ledger that silently records
+   nothing while appearing live.
 6. **Leave settlement last.** It is correctly gated: `dryRun` default, nothing deployed, and a long
    legal-review list (dues authority, securities characterization of GroToken, NY Cooperative Corporation
    Law, e-voting validity, resident PII, telecom ToS). None of that should be unblocked by engineering.

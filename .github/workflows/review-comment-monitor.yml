@@ -10,6 +10,7 @@ name: Review Comment Monitor
 on:
   pull_request_review:
     types: [submitted]
+  workflow_dispatch:
 
 concurrency:
   group: review-monitor-${{ github.event.pull_request.number }}-${{ github.event.review.id }}
@@ -17,15 +18,20 @@ concurrency:
 
 jobs:
   triage:
-    # React only to known automated reviewers. Do NOT also require a non-empty
-    # review body: bots often post findings as inline comments with no top-level
-    # summary, and those are exactly the line-level comments we want to triage —
-    # the action fetches the review's comments itself.
-    if: |
-      github.event.review.user.login == 'coderabbitai' ||
-      github.event.review.user.login == 'coderabbitai[bot]' ||
-      github.event.review.user.login == 'chatgpt-codex-connector' ||
-      github.event.review.user.login == 'chatgpt-codex-connector[bot]'
+    # Disabled: the fleet review model moved off the Anthropic API key path
+    # (same as claude-code-review.yml). The ANTHROPIC_API_KEY secret is empty
+    # and won't be maintained — reviews happen via CodeRabbit + Codex bot +
+    # coding plans and local models. Every bot review was producing a failing
+    # `triage` check that is NOT a required status gate, just noise on the PR
+    # checks list. Re-enable by setting a valid ANTHROPIC_API_KEY secret and
+    # changing `if: false` back to the bot-filter guard below.
+    if: false
+    # Original trigger guard (restore when re-enabling):
+    # if: |
+    #   github.event.review.user.login == 'coderabbitai' ||
+    #   github.event.review.user.login == 'coderabbitai[bot]' ||
+    #   github.event.review.user.login == 'chatgpt-codex-connector' ||
+    #   github.event.review.user.login == 'chatgpt-codex-connector[bot]'
     runs-on: ubuntu-latest
     # Least-privilege: reads the diff, posts ONE summary comment. No contents:write
     # (it must not be able to push), no thread-resolution scope.

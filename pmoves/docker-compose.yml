@@ -596,7 +596,7 @@ services:
     - GOTRUE_DB_DRIVER=postgres
     - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
     # JWT configuration — standard names with legacy fallbacks
-    - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
+    - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
     - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
     # 2025 key naming (service_role_key from PMOVES-supabase standard)
@@ -632,7 +632,9 @@ services:
     ports:
     - ${SUPABASE_AUTH_BIND:-127.0.0.1}:${SUPABASE_GOTRUE_PORT:-9999}:9999
     networks:
-    - pmoves_api
+      pmoves_api:
+        aliases:
+        - auth   # upstream Supabase name used by vendored kong.yml
 
     deploy:
       resources:
@@ -641,7 +643,11 @@ services:
           memory: 512M
   supabase-postgrest:
     <<: *tier-supabase-hardened-ro
-    image: postgrest/postgrest:v14.12
+    # PostgREST v14 documents a >=32-char minimum for symmetric JWT secrets
+    # (enforced as a hard startup error in newer tags). SUPABASE_POSTGREST_IMAGE
+    # exists for emergency pinning only — the fix for short-secret nodes is
+    # rotating to a >=32-char secret, not an older image.
+    image: ${SUPABASE_POSTGREST_IMAGE:-postgrest/postgrest:v14.12}
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -649,12 +655,12 @@ services:
     # Database connection (from env.tier-supabase)
     - PGRST_DB_URI=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     # JWT secret (must match gotrue) - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - PGRST_JWT_SECRET_IS_BASE64=false
     # PostgREST v14+ settings
     - PGRST_DB_USE_LEGACY_GUCS=false
-    - PGRST_APP_SETTINGS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_APP_SETTINGS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}}
     # Extra search_path so pmoves_core and pmoves_kb objects are addressable
     # without fully-qualified names. Must match env.tier-supabase.example.
@@ -678,26 +684,56 @@ services:
     ports:
     - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
     networks:
-    - pmoves_api
-    - pmoves_public
+      pmoves_api:
+        aliases:
+        - rest   # upstream Supabase name used by vendored kong.yml
+      pmoves_public:
 
     deploy:
       resources:
         limits:
           cpus: '1.0'
           memory: 512M
+  # entrypoint below is upstream Supabase's kong-entrypoint.sh: it env-substitutes
+  # /home/kong/temp.yml into KONG_DECLARATIVE_CONFIG, then execs kong docker-start.
+  # It replaces the old DB-mode entrypoint (wait-for-Postgres + `kong migrations
+  # bootstrap`), which is meaningless in DB-less mode and only ever created empty
+  # Kong schema tables, never any routes.
+  # (Kept here rather than inline above `entrypoint:` — inject_pmoves_networks.py
+  #  strips comments trailing the `environment:` sequence on its round-trip.)
   supabase-kong:
     <<: *tier-supabase-hardened
     image: kong/kong:3.9.1
     profiles:
     - supabase-local
+    volumes:
+    # Upstream Supabase shape: the raw declarative config is mounted at temp.yml,
+    # and kong-entrypoint.sh env-substitutes it into KONG_DECLARATIVE_CONFIG.
+    - ../PMOVES-supabase/docker/volumes/api/kong.yml:/home/kong/temp.yml:ro
+    - ../PMOVES-supabase/docker/volumes/api/kong-entrypoint.sh:/home/kong/kong-entrypoint.sh:ro
     environment:
-    # Database configuration (Kong uses Postgres for config storage)
-    - KONG_DATABASE=postgres
-    - KONG_PG_HOST=supabase-db
-    - KONG_PG_DATABASE=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
-    - KONG_PG_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
-    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    # DB-less declarative mode. This was previously KONG_DATABASE=postgres, which
+    # made Kong store routing config in Postgres — and NOTHING ever seeded it, so
+    # Kong booted with 0 services / 0 routes and 404'd ("no Route matched with
+    # those values") every /rest/v1, /auth/v1 and /storage/v1 request while still
+    # reporting healthy. Declarative mode is what upstream Supabase ships and it
+    # makes the route table a reviewable file instead of unmanaged DB state.
+    - KONG_DATABASE=off
+    - KONG_DECLARATIVE_CONFIG=/usr/local/kong/kong.yml
+    # Supabase's CLI issue #14: force LAST so service short-names resolve.
+    - KONG_DNS_ORDER=LAST,A,CNAME
+    - KONG_DNS_NOT_FOUND_TTL=1
+    # Consumed by kong-entrypoint.sh when substituting temp.yml -> kong.yml.
+    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
+    - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
+    - ANON_KEY_ASYMMETRIC=${ANON_KEY_ASYMMETRIC:-}
+    - SERVICE_ROLE_KEY_ASYMMETRIC=${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+    - DASHBOARD_USERNAME=${DASHBOARD_USERNAME:-supabase}
+    - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-}
     # Kong configuration
     - KONG_PROXY_ACCESS_LOG=/dev/stdout
     - KONG_ADMIN_ACCESS_LOG=/dev/stdout
@@ -718,10 +754,14 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
     - PMOVES_NETWORKS=pmoves_api,pmoves_public
-    entrypoint: ["/bin/bash", "-c", "for i in $$(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($$i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /entrypoint.sh kong docker-start"]
+    entrypoint: /home/kong/kong-entrypoint.sh
     healthcheck:
+      # NOTE: liveness only — `kong health` reports the Kong PROCESS, not whether
+      # any routes are loaded. A route-less Kong passes this check while 404'ing
+      # every request, which is exactly how the empty-config regression stayed
+      # green. Assert function separately with `make kong-routes-check`; an
+      # inline HTTP probe is not viable here (the image ships no curl/wget/nc).
       test: ["CMD", "kong", "health"]
       interval: 15s
       timeout: 5s
@@ -777,9 +817,9 @@ services:
     - ERL_AFLAGS=-proto_dist inet_tcp
     - DNS_NODES=''
     # JWT secret (must match gotrue) - standard variable name
-    - API_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - API_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:-${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}}
-    - METRICS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - METRICS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -800,7 +840,14 @@ services:
     ports:
     - ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
     networks:
-    - pmoves_api
+      pmoves_api:
+        aliases:
+        # kong.yml addresses realtime by its upstream compose name
+        # `realtime-dev.supabase-realtime` (Supabase uses a dotted container_name
+        # there), so the /realtime/v1 websocket route 503s without this alias.
+        # Load-bearing for realtime voice + chat over WebRTC in pmoves-ui and
+        # flute-gateway, which subscribe through the Kong websocket route.
+        - realtime-dev.supabase-realtime
 
     deploy:
       resources:
@@ -818,7 +865,7 @@ services:
     - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
     - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
     # JWT secret - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     # PostgREST connection
     - POSTGREST_URL=http://supabase-postgrest:3000
@@ -861,7 +908,9 @@ services:
     ports:
     - ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
     networks:
-    - pmoves_api
+      pmoves_api:
+        aliases:
+        - storage   # upstream Supabase name used by vendored kong.yml
 
     deploy:
       resources:
@@ -882,8 +931,10 @@ services:
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
     - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
-    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
-    - AUTH_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - AUTH_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PG_META_CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
     # Analytics (Logflare) integration
     - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
@@ -924,7 +975,9 @@ services:
     ports:
     - ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
     networks:
-    - pmoves_api  # supabase-meta and analytics reachable via kong on pmoves_api
+      pmoves_api:  # supabase-meta and analytics reachable via kong on pmoves_api
+        aliases:
+        - studio   # upstream Supabase name used by vendored kong.yml
 
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
@@ -980,7 +1033,7 @@ services:
     - PG_META_DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
     - PG_META_DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
     healthcheck:
       test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
       interval: 20s
@@ -991,7 +1044,15 @@ services:
       supabase-db:
         condition: service_healthy
     networks:
-    - pmoves_data
+      pmoves_data:
+      # supabase-meta was on pmoves_data ONLY, so it was unreachable from both
+      # Kong and Studio (both on pmoves_api). Studio's STUDIO_PG_META_URL points
+      # straight at supabase-meta:8080, so the schema browser and table editor
+      # could not work at all. This is the same both-legs pattern supabase-db and
+      # supabase-postgrest already use — meta simply never got the API leg.
+      pmoves_api:
+        aliases:
+        - meta   # upstream Supabase name used by vendored kong.yml
 
   # ---------------------------------------------------------------------------
   # Supabase Edge Runtime — Deno edge functions
@@ -1008,7 +1069,7 @@ services:
     profiles:
     - supabase-local
     environment:
-    - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
+    - JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:?Set SUPABASE_JWT_SECRET or JWT_SECRET in env.tier-supabase}}
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_ANON_KEY=${ANON_KEY:?Set ANON_KEY in env.tier-supabase}
     - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY in env.tier-supabase}
@@ -1031,11 +1092,13 @@ services:
       supabase-analytics:
         condition: service_healthy
     networks:
-    - pmoves_api  # supabase-db and analytics reachable via kong on pmoves_api
+      pmoves_api:  # supabase-db and analytics reachable via kong on pmoves_api
+        aliases:
+        - functions   # upstream Supabase name used by vendored kong.yml
     # pmoves_public is required, not optional: pmoves_api is internal:true,
     # so edge-runtime cannot reach external Deno imports unless it also joins
     # the egress-capable bridge. DNS pins alone do not create an egress route.
-    - pmoves_public
+      pmoves_public:
     # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
     # image fetches https://deno.land/std@...` at worker-bootstrap time;
     # Docker's embedded DNS (127.0.0.11) intermittently fails to forward
@@ -1075,7 +1138,7 @@ services:
     - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - POSTGRES_BACKEND_SCHEMA=_analytics
     - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:4000/health -o /dev/null || exit 1"]
       interval: 15s
@@ -1086,7 +1149,13 @@ services:
       supabase-db:
         condition: service_healthy
     networks:
-    - pmoves_data
+      pmoves_data:
+      # Same missing-API-leg bug as supabase-meta above: Studio's LOGFLARE_URL
+      # points at supabase-analytics:4000 and Kong declares an analytics route,
+      # but neither could reach it while this sat on pmoves_data alone.
+      pmoves_api:
+        aliases:
+        - analytics   # upstream Supabase name used by vendored kong.yml
 
   # ---------------------------------------------------------------------------
   # Supabase Vector — log collection pipeline (ships to Analytics)
@@ -1154,9 +1223,9 @@ services:
     - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - CLUSTER_POSTGRES=true
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
-    - METRICS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - METRICS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
-    - API_JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
+    - API_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:?Set SUPABASE_JWT_SECRET or JWT_SECRET in env.tier-supabase}}
     - REGION=local
     - ERL_AFLAGS=-proto_dist inet_tcp
     - POOLER_TENANT_ID=${POOLER_TENANT_ID:-default-tenant}
@@ -1333,15 +1402,22 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_data,pmoves_bus,pmoves_external
     ports:
     - ${MINIO_BIND:-0.0.0.0}:${MINIO_PORT:-9000}:9000
     - ${MINIO_CONSOLE_BIND:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001
     volumes:
-    - minio-data:/data
+    # MINIO_DATA_DIR lets the object store live off C: (which fills up) — set it to
+    # a host path (e.g. D:/pmoves-storage/minio, fast NVMe) for the content studio;
+    # defaults to the named volume for portability. Media/bulk goes to I: separately.
+    - ${MINIO_DATA_DIR:-minio-data}:/data
     networks:
     - pmoves_data
     - pmoves_bus
+    # pmoves_external gives MinIO host connectivity so its ports: mapping actually
+    # publishes (internal-only nets silently drop it) — required for multi-node
+    # JuiceFS: remote nodes reach the object store via MINIO_BIND (z890 tailnet IP).
+    - pmoves_external
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
       interval: 30s
@@ -1358,65 +1434,48 @@ services:
   # See docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md. PROFILE-GATED ("juicefs")
   # so it is purely additive — it does NOT start with the default data tier and does
   # not touch existing MinIO consumers yet (consumer repoint = Phase 2).
-  # ⚠️ DRAFT / not yet live-verified (deploy-env drift blocks a live run on Z890 —
-  # see handoff z890-deploy-spine-mcp-env-2026-06-22.md). Validate on first run:
-  #   (a) `juicefs` CLI entrypoint in juicedata/mount:ce-v1.3.0,
-  #   (b) `juicefs format`/`gateway` flag syntax + cache dir,
-  #   (c) --multi-buckets exposes assets/outputs/pmoves-comfyui,
-  #   (d) the gateway's S3 creds (MINIO_ROOT_USER/PASSWORD env) match consumers.
-  juicefs-redis:  # metadata engine
-    <<: *tier-data-hardened
-    image: redis:7.4.1-alpine
-    profiles: ["juicefs"]
-    restart: unless-stopped
-    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
-    volumes:
-    - juicefs-meta:/data
-    networks:
-    - pmoves_data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-    environment:
-    - PMOVES_NETWORKS=pmoves_data
+  #
+  # Metadata engine: POSTGRES on supabase-db (operator decision 2026-06-28).
+  # The juicefs_meta schema ships in supabase/initdb/00_2_juicefs_meta_schema.sql.
+  # Requires supabase-db to be running (make up-supabase before make up-juicefs).
   juicefs-format:  # one-time FS format (idempotent); gateway waits on this
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
     profiles: ["juicefs"]
     restart: "no"
-    depends_on:
-      juicefs-redis:
-        condition: service_healthy
     entrypoint: ["sh", "-lc"]
     command:
-    # No `|| true`: juicefs format is idempotent (re-run on a formatted FS exits 0),
-    # so a non-zero exit here is a REAL error and must fail the service_completed_successfully
-    # gate rather than releasing the gateway against an unformatted volume.
-    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
+    # Retry loop: supabase-db may still be initialising when the juicefs profile starts.
+    # juicefs format is idempotent (re-run on a formatted FS exits 0), so a non-zero
+    # exit after all retries is a REAL error and must fail service_completed_successfully.
+    # Network-backed multi-node: blocks live in MinIO (reachable by every node
+    # over the tailnet), not z890-local files. JUICEFS_S3_ENDPOINT = the tailnet-
+    # reachable MinIO endpoint (z890 tailnet IP:9000) so the URL recorded in
+    # metadata resolves from remote nodes too; falls back to internal minio:9000
+    # for single-node. Creds embed into metadata at format time.
+    # Single quotes around the DSN protect the '&' from shell interpretation.
+    - >-
+      n=0; until juicefs format --storage minio
+      --bucket http://${JUICEFS_S3_ENDPOINT:-minio:9000}/${JUICEFS_BUCKET:-juicefs}
+      --access-key ${JUICEFS_S3_USER:-${MINIO_USER}} --secret-key ${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD}}
+      '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}'
+      ${JUICEFS_NAME:-pmoves} 2>/dev/null; do
+      n=$$((n+1)); [ $$n -ge 15 ] && { echo 'ERROR: Postgres not reachable after 15 retries'; exit 1; };
+      echo "waiting for Postgres ($$n/15)..."; sleep 2; done
     volumes:
     - juicefs-data:/data
     networks:
     - pmoves_data
+    - pmoves_external
 
     environment:
-    - PMOVES_NETWORKS=pmoves_data
+    - PMOVES_NETWORKS=pmoves_data,pmoves_external
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
     profiles: ["juicefs"]
     restart: unless-stopped
     depends_on:
-      juicefs-redis:
-        condition: service_healthy
       juicefs-format:
         condition: service_completed_successfully
     environment:
@@ -1426,7 +1485,8 @@ services:
     - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
-    - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
+    # Single quotes around the DSN protect the '&' from shell interpretation.
+    - "juicefs gateway --multi-buckets --keep-etag '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000"
     volumes:
     - juicefs-data:/data
     networks:
@@ -2866,7 +2926,9 @@ services:
     # BoTZ-gateway (persona/forms) and Hi-RAG are added by their owning lanes once
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
-    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
     - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
@@ -3044,6 +3106,11 @@ services:
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-false}
+    # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
+    # Default empty (uses $PATH). The upstream Archon Dockerfile installs
+    # Claude at /usr/local/bin/claude; set this only if the image builds
+    # Claude at a non-standard path or you want to pin a specific binary.
+    - CLAUDE_BIN_PATH=${CLAUDE_BIN_PATH:-}
     # gh auth — non-fatal warning if absent.
     - GH_TOKEN=${GH_TOKEN:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
@@ -3539,6 +3606,72 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  # A2UI Renderer - Remotion-based animation engine (port 8107)
+  # Lane 2228 (2026-08-02): first-class compose service so the living-doc
+  # animation lane is a fleet capability rather than npm-scripts-only.
+  # Issue #2228: previously the Dockerfile existed at services/a2ui-renderer/
+  # but no compose service anywhere - this stanza fixes that.
+  # See pmoves/docs/specs/a2ui-renderer-compose-2026-08-02.md for the spec.
+  a2ui-renderer:
+    build:
+      context: .
+      dockerfile: services/a2ui-renderer/Dockerfile
+    image: ${A2UI_RENDERER_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-renderer:pmoves-latest}
+    container_name: pmoves-a2ui-renderer
+    hostname: a2ui-renderer
+    restart: unless-stopped
+    <<: *tier-agent-hardened-ro
+    environment:
+    - PORT=8107
+    - NODE_ENV=production
+    # NATS (slice 3 publisher: emits a2ui.render.completed.v1 on success)
+    - NATS_URL=${NATS_URL}
+    # MinIO output mount per the creator pipeline doc - the renderer
+    # writes MP4/GIF/WebM to a2ui/* keys and publishes the S3 URI
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
+    - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
+    - MINIO_BUCKET=${A2UI_RENDERER_BUCKET:-outputs}
+    # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    # Supabase JWT for /render, /render/chart, /render/provenance (fail-closed)
+    - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
+    # Provenance agent identity for graphiti events
+    - PROVENANCE_AGENT_ID=${PROVENANCE_AGENT_ID:-a2ui-renderer}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${A2UI_RENDERER_BIND:-0.0.0.0}:${A2UI_RENDERER_PORT:-8107}:8107
+    profiles:
+    - agents
+    - media
+    - docs  # living-docs hook (make docs-render-living) needs the renderer up
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8107/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+
   p7-room-orchestrator:
     <<: *tier-agent-hardened-ro
     build:
@@ -3853,6 +3986,9 @@ services:
     - ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
     volumes:
     - tensorzero-clickhouse-data:/var/lib/clickhouse
+    # Cap ClickHouse self-telemetry (Debug logging + no TTL flooded the vhdx at
+    # ~2.4 GB/min and filled the host drive — incident 2026-08-02). Fleet-wide fix.
+    - ./config/clickhouse/pmoves-system-log-limits.xml:/etc/clickhouse-server/config.d/pmoves-system-log-limits.xml:ro
     healthcheck:
       test:
       - CMD-SHELL
@@ -4438,6 +4574,7 @@ services:
     env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
     environment:
     - NODE_ENV=production
+    - HOSTNAME=0.0.0.0
       # Room manifests — the rooms API reads catalog.json + the per-room
       # manifests from this directory. Without it, the Rooms tab on the
       # home page renders "Room manifests are not available yet" and
@@ -5148,7 +5285,6 @@ volumes:
   qdrant-data: {}
   meilisearch-data: {}
   minio-data: {}
-  juicefs-meta: {}   # JuiceFS metadata engine (Redis) persistence (profile: juicefs)
   juicefs-data: {}   # JuiceFS object-store backend (profile: juicefs)
   # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}

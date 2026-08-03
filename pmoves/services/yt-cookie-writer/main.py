@@ -91,7 +91,27 @@ def _supabase_headers() -> dict:
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
+        # yt_oauth_cookies lives in pmoves_core; PostgREST only consults the
+        # FIRST schema in PGRST_DB_SCHEMAS (public) unless told otherwise —
+        # these headers select the schema for reads and writes respectively.
+        "Accept-Profile": "pmoves_core",
+        "Content-Profile": "pmoves_core",
     }
+
+
+# pmoves-yt runs as this non-root uid (Dockerfile useradd 65532); the writer
+# runs as root, so files land root:root and 0o660 alone is unreadable there.
+CONSUMER_UID = int(os.environ.get("YT_COOKIES_CONSUMER_UID", "65532"))
+CONSUMER_GID = int(os.environ.get("YT_COOKIES_CONSUMER_GID", "65532"))
+
+
+def _share_with_consumer(path: Path) -> None:
+    """chown+chmod a shared-volume file so the pmoves-yt user can read/write it."""
+    try:
+        os.chown(path, CONSUMER_UID, CONSUMER_GID)
+    except (PermissionError, OSError) as e:
+        logger.warning(f"chown {path} to consumer uid failed (non-root writer?): {e}")
+    path.chmod(0o660)
 
 
 async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
@@ -135,9 +155,7 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
     try:
         tmp.write_text(cookies_str)
         tmp.replace(output)
-        # Ensure shared-group read/write so non-root containers (pmoves-yt uid 65532)
-        # can read AND yt-dlp can write back during extraction.
-        output.chmod(0o660)
+        _share_with_consumer(output)
     except OSError as e:
         logger.error(f"Cookie write failed: {e}")
         tmp.unlink(missing_ok=True)
@@ -163,6 +181,7 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
             try:
                 po_tmp.write_text(po_token.strip())
                 po_tmp.replace(po_output)
+                _share_with_consumer(po_output)
                 logger.info(f"Wrote PO token ({len(po_token)} bytes) to {po_output}")
             except OSError as e:
                 logger.warning(f"PO token write failed (cookies still valid): {e}")
@@ -179,6 +198,7 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
                 tmp_tok = token_path.with_suffix(".txt.tmp")
                 tmp_tok.write_text(refresh_token.strip())
                 tmp_tok.replace(token_path)
+                _share_with_consumer(token_path)
                 logger.info(f"Wrote refresh token to {token_path}")
         except (RuntimeError, OSError) as e:
             logger.warning(f"Refresh token write failed: {e}")

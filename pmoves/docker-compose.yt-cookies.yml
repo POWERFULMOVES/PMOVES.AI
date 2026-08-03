@@ -25,7 +25,10 @@ services:
       - PORT=8115
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
-      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      # Prefer the secrets-sync name: the legacy local SERVICE_ROLE_KEY has been
+      # observed carrying a stale key signed by a retired JWT secret (401s).
+      # Same preference the OAuth tool adopted in #2333.
+      - SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY}}
       - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
       - CHANNEL_MONITOR_GOOGLE_CLIENT_ID=${CHANNEL_MONITOR_GOOGLE_CLIENT_ID}
       - CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET=${CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET}
@@ -70,7 +73,10 @@ services:
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
-      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      # Prefer the secrets-sync name: the legacy local SERVICE_ROLE_KEY has been
+      # observed carrying a stale key signed by a retired JWT secret (401s).
+      # Same preference the OAuth tool adopted in #2333.
+      - SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY}}
       - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
       - YT_COOKIE_OUTPUT_PATH=/cookies/yt-cookies.txt
       - YT_PO_TOKEN_OUTPUT_PATH=/cookies/yt-po-token.txt
@@ -102,11 +108,14 @@ services:
   pmoves-yt:
     volumes:
       - yt-cookies-vol:/app/config/cookies:rw
-      - ${JUICEFS_HOST_MOUNT:-/home/pmoves-knuckles/pmoves-fs}:/mnt/pmoves/media:rshared
+      # JuiceFS media mount moved to docker-compose.yt-media.yml (opt-in):
+      # the rshared bind is host-topology-specific (fails on Docker Desktop
+      # Windows and on nodes without a host JuiceFS mount) and has nothing
+      # to do with cookie plumbing. up-yt adds the overlay automatically
+      # when JUICEFS_HOST_MOUNT is set.
     environment:
       - YT_COOKIES=/app/config/cookies/yt-cookies.txt
       - YT_PO_TOKEN_FILE=/app/config/cookies/yt-po-token.txt
-      - JUICEFS_MEDIA_ROOT=/mnt/pmoves/media
     # Load the harvested PO token from the cookie-writer volume before
     # starting uvicorn. yt.py reads YT_PO_TOKEN_VALUE at module-import
     # time, so it must be in the environment at launch. If the file does
