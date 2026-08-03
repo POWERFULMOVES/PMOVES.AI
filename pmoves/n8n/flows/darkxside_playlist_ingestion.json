@@ -1,0 +1,82 @@
+{
+  "name": "PMOVES DARKXSIDE Playlist Ingestion",
+  "nodes": [
+    {
+      "parameters": { "path": "pmoves/darkxside-playlist", "responseMode": "responseNode", "options": {} },
+      "id": "trigger-webhook", "name": "Playlist Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 1, "position": [240, 300],
+      "webhookId": "darkxside-playlist-trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "http://pmoves-yt:8077/yt/info", "sendBody": true,
+        "bodyParameters": { "parameters": [
+          { "name": "url", "value": "={{ $json.playlist_url || 'https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8' }}" },
+          { "name": "extract_flat", "value": true }
+        ]},
+        "options": { "timeout": 120000 }
+      },
+      "id": "get-playlist-info", "name": "Get Playlist Info", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.first().json.info?.entries || [];\nreturn items.map((entry, i) => ({\n  json: {\n    video_id: entry.id,\n    title: entry.title,\n    url: `https://www.youtube.com/watch?v=${entry.id}`,\n    duration: entry.duration || 0,\n    playlist_index: i + 1,\n    playlist_id: 'PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8',\n    playlist_title: 'DARKXSIDE School of Powerful Moves',\n    namespace: 'darkxside',\n    persona: 'darkxside',\n    room_id: 'darkxsides.room'\n  }\n}));"
+      },
+      "id": "split-videos", "name": "Split Into Videos", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "http://pmoves-yt:8077/yt/ingest", "sendBody": true,
+        "bodyParameters": { "parameters": [
+          { "name": "url", "value": "={{ $json.url }}" },
+          { "name": "transcribe", "value": true },
+          { "name": "summarize", "value": true },
+          { "name": "index_to_hirag", "value": true },
+          { "name": "namespace", "value": "={{ $json.namespace }}" },
+          { "name": "persona", "value": "={{ $json.persona }}" },
+          { "name": "room_id", "value": "={{ $json.room_id }}" }
+        ]},
+        "options": { "timeout": 600000 }
+      },
+      "id": "ingest-each-video", "name": "Ingest Video", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "http://agent-zero:8080/events/publish", "sendBody": true,
+        "bodyParameters": { "parameters": [
+          { "name": "topic", "value": "ingest.transcript.ready.v1" },
+          { "name": "data", "value": "={{ JSON.stringify($json) }}" }
+        ]}
+      },
+      "id": "publish-nats-event", "name": "Publish NATS Event", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "http://pmoves-yt:8077/yt/emit", "sendBody": true,
+        "bodyParameters": { "parameters": [
+          { "name": "spec", "value": "chit.cgp.v1.0" },
+          { "name": "meta.source", "value": "darkxside.playlist.ingestion" },
+          { "name": "meta.persona", "value": "darkxside" },
+          { "name": "meta.room_id", "value": "darkxsides.room" },
+          { "name": "meta.video_id", "value": "={{ $json.video_id }}" },
+          { "name": "meta.title", "value": "={{ $json.title }}" }
+        ]}
+      },
+      "id": "emit-cgp", "name": "Emit CGP", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'triggered', videos_queued: $('Split Into Videos').all().length, message: 'DARKXSIDE playlist ingestion started' } }}"
+      },
+      "id": "respond", "name": "Respond", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [240, 480]
+    }
+  ],
+  "connections": {
+    "Playlist Webhook": { "main": [[{ "node": "Get Playlist Info", "type": "main", "index": 0 }]] },
+    "Get Playlist Info": { "main": [[{ "node": "Split Into Videos", "type": "main", "index": 0 }]] },
+    "Split Into Videos": { "main": [[{ "node": "Ingest Video", "type": "main", "index": 0 }]] },
+    "Ingest Video": { "main": [[{ "node": "Publish NATS Event", "type": "main", "index": 0 }]] },
+    "Publish NATS Event": { "main": [[{ "node": "Emit CGP", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
