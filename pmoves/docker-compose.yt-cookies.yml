@@ -108,11 +108,14 @@ services:
   pmoves-yt:
     volumes:
       - yt-cookies-vol:/app/config/cookies:rw
-      - ${JUICEFS_HOST_MOUNT:-/home/pmoves-knuckles/pmoves-fs}:/mnt/pmoves/media:rshared
+      # JuiceFS media mount moved to docker-compose.yt-media.yml (opt-in):
+      # the rshared bind is host-topology-specific (fails on Docker Desktop
+      # Windows and on nodes without a host JuiceFS mount) and has nothing
+      # to do with cookie plumbing. up-yt adds the overlay automatically
+      # when JUICEFS_HOST_MOUNT is set.
     environment:
       - YT_COOKIES=/app/config/cookies/yt-cookies.txt
       - YT_PO_TOKEN_FILE=/app/config/cookies/yt-po-token.txt
-      - JUICEFS_MEDIA_ROOT=/mnt/pmoves/media
     # Load the harvested PO token from the cookie-writer volume before
     # starting uvicorn. yt.py reads YT_PO_TOKEN_VALUE at module-import
     # time, so it must be in the environment at launch. If the file does

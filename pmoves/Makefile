@@ -2343,7 +2343,12 @@ up-workers-core:
 
 # YouTube ingest + whisper stack
 up-yt:
-	@$(DC) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	# COOKIES_DC (base + yt-cookies overlay), NOT $(DC): STACK_FILES omits the
+	# overlay, so plain DC starts pmoves-yt WITHOUT the harvested-cookie volume
+	# (/app/config/cookies) - downloads then run cookie-less and bot-gate.
+	# JuiceFS media overlay is opt-in: only nodes with a host-side FUSE mount
+	# (JUICEFS_HOST_MOUNT set) can satisfy its rshared bind.
+	@extra=""; if [ -n "$${JUICEFS_HOST_MOUNT:-}" ]; then extra="-f docker-compose.yt-media.yml"; fi; $(COOKIES_DC) $$extra --profile data --profile workers --profile yt --profile yt-cookies up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 
 .PHONY: channel-monitor-up
 channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring

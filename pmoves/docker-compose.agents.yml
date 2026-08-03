@@ -747,7 +747,6 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     - PMOVES_STORAGE_DIR=/data/cipher
     - PMOVES_PORT=8105
-    - PORT=8105
     - PMOVES_HOST=0.0.0.0
     - OLLAMA_URL=http://host.docker.internal:11434
     - OLLAMA_BASE_URL=http://host.docker.internal:11434
