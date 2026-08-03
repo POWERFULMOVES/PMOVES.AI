@@ -25,7 +25,10 @@ services:
       - PORT=8115
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
-      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      # Prefer the secrets-sync name: the legacy local SERVICE_ROLE_KEY has been
+      # observed carrying a stale key signed by a retired JWT secret (401s).
+      # Same preference the OAuth tool adopted in #2333.
+      - SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY}}
       - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
       - CHANNEL_MONITOR_GOOGLE_CLIENT_ID=${CHANNEL_MONITOR_GOOGLE_CLIENT_ID}
       - CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET=${CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET}
@@ -70,7 +73,10 @@ services:
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
-      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      # Prefer the secrets-sync name: the legacy local SERVICE_ROLE_KEY has been
+      # observed carrying a stale key signed by a retired JWT secret (401s).
+      # Same preference the OAuth tool adopted in #2333.
+      - SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY}}
       - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
       - YT_COOKIE_OUTPUT_PATH=/cookies/yt-cookies.txt
       - YT_PO_TOKEN_OUTPUT_PATH=/cookies/yt-po-token.txt
