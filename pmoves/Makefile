@@ -538,6 +538,12 @@ supa-stop-all: ## Stop both Supabase runtimes (CLI and compose) to clear mixed-s
 	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true
 	@echo "✅ All Supabase runtimes stopped"
 
+supa-recreate-svc: ## Surgical recreate of ONE Supabase service with current env: make supa-recreate-svc SVC=supabase-kong
+	@test -n "$(SVC)" || { echo "Usage: make supa-recreate-svc SVC=<compose-service>"; exit 1; }
+	@echo "Recreating $(SVC) with current env (no deps)..."
+	@$(DC) up -d --force-recreate --no-deps $(SVC)
+	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
+
 supa-restart: ## Restart Supabase stack for selected runtime
 	@echo "🔄 Restarting Supabase stack..."
 	@$(MAKE) --no-print-directory supa-stop

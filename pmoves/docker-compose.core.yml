@@ -451,7 +451,9 @@ services:
     - KONG_DNS_NOT_FOUND_TTL=1
     # Consumed by kong-entrypoint.sh when substituting temp.yml -> kong.yml.
     - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
-    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
     - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
     - ANON_KEY_ASYMMETRIC=${ANON_KEY_ASYMMETRIC:-}
@@ -743,7 +745,9 @@ services:
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
     - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
-    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     - AUTH_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
     - PG_META_CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
     # Analytics (Logflare) integration
