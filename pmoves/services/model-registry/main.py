@@ -536,11 +536,14 @@ class RegistryNatsClient:
             lane = data.get("lane", "chat")
             logger.info(f"G4: registering candidate {model_id} (score={score})")
 
-            await self.supabase.upsert_model_candidate(
+            await self.supabase.create_model_candidate(ModelCandidateRecord(
                 hf_id=model_id,
-                lane=lane,
+                model_id=model_id,
                 source="hf-autoresearch",
-                status="candidate",
+                lane=lane,
+                intended_lane=lane,
+                pipeline_tag="text-generation",
+                validation_status="candidate",
                 metadata={
                     "hf_score": score,
                     "downloads": data.get("downloads"),
@@ -548,7 +551,7 @@ class RegistryNatsClient:
                     "tags": data.get("tags"),
                     "reasons": data.get("reasons"),
                 },
-            )
+            ))
             await self.publish_catalog_change("create", "model_candidate", model_id)
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(f"Malformed NATS message on {self.SUB_HF_EVALUATED}: {e}")
@@ -563,7 +566,12 @@ class RegistryNatsClient:
         """
         try:
             data = json.loads(msg.data.decode())
-            hf_id = data.get("hf_id") or data.get("model_repo") or ""
+            # Codex P1: AgentGym publishes model_id, dataset_id, repo_url
+            # (not hf_id or model_repo)
+            hf_id = data.get("hf_id") or data.get("repo_url") or ""
+            model_id = data.get("model_id") or ""
+            if not hf_id and model_id:
+                hf_id = model_id
             if not hf_id:
                 return
 

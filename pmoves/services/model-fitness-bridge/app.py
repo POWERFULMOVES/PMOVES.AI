@@ -60,18 +60,18 @@ async def call_model_fitness(
     training_metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """POST to model-registry /api/model-fitness with the fitness payload."""
+    # Codex P1: use the registry's actual field contract
     payload: dict[str, Any] = {
         "model_id": model_id,
         "source": source,
         "lane": lane,
         "score": max(0.0, min(1.0, score)),
-        "metrics": metrics,
+        "tensorzero_metrics": metrics if source in ("tensorzero", "pinokio") else {},
+        "training_metrics": training_metrics or (metrics if source == "evoswarm" else {}),
         "agent_id": BRIDGE_AGENT_ID,
     }
     if run_id:
         payload["run_id"] = run_id
-    if training_metrics:
-        payload["training_metrics"] = training_metrics
 
     async with httpx.AsyncClient(timeout=30) as client:
         try:
@@ -90,12 +90,20 @@ async def call_model_candidates(
     hf_id: str,
     lane: str,
     trail_ref: str | None = None,
+    model_id: str | None = None,
+    source: str = "hf-autoresearch",
+    pipeline_tag: str = "text-generation",
 ) -> dict[str, Any]:
     """POST to model-registry /api/model-candidates to register a new model."""
+    # Codex P2: provide all required ModelCandidateRecord fields
     payload: dict[str, Any] = {
         "hf_id": hf_id,
+        "model_id": model_id or hf_id,
+        "source": source,
         "lane": lane,
         "intended_lane": lane,
+        "pipeline_tag": pipeline_tag,
+        "validation_status": "candidate",
         "agent_id": BRIDGE_AGENT_ID,
     }
     if trail_ref:
