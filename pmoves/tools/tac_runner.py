@@ -151,6 +151,19 @@ def evaluate_node(node: dict) -> dict:
         elif action_type == "manual":
             result["status"] = "pending"
             result["detail"] = "requires manual review"
+        else:
+            # Unknown action type — was silently staying at "pending" with no
+            # detail, hiding every mis-typed / mis-named / future action in the
+            # same bucket as legitimate "manual" review items. Surface as FAIL
+            # so the operator sees the gap and can either (a) add the new type
+            # to this runner or (b) correct the YAML. This is what made the
+            # 141 inert assertions invisible — they counted as pending and
+            # the operator trusted the pending count.
+            result["status"] = "fail"
+            result["detail"] = (
+                f"unknown action.type: '{action_type}' "
+                f"(allowed: file_exists, grep, command, manual)"
+            )
 
     # Recurse into children
     for child in node.get("children", []):
