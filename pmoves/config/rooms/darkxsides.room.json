@@ -259,10 +259,12 @@
         "require_approval": true,
         "max_runtime_sec": 300,
         "fail_open": false,
-        "one_active_run": true
+        "one_active_run": true,
+        "provenance_table": "pmoves_core.voice_cloning_provenance",
+        "provenance_check": "is_active=true AND rights_basis IN ('CONSENTED','LICENSED') AND consent_artifact_uri IS NOT NULL"
       },
       "enabled": true,
-      "tags": ["voice", "tts", "persona", "provenance-gated"]
+      "tags": ["voice", "tts", "persona", "provenance-gated", "voice_cloning_provenance"]
     },
     {
       "binding_id": "e2b-shared-desktop",
