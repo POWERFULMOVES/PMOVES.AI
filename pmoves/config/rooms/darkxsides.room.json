@@ -263,6 +263,33 @@
       },
       "enabled": true,
       "tags": ["voice", "tts", "persona", "provenance-gated"]
+    },
+    {
+      "binding_id": "e2b-shared-desktop",
+      "skill_id": "e2b-desktop",
+      "room_id": "darkxsides.room",
+      "display_name": "Shared Desktop (E2B)",
+      "intent": ["review", "desktop", "browser", "co-review", "transform"],
+      "activation": {
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["open shared desktop", "show me the browser", "co-review this", "launch desktop view"],
+        "requires_selection": true
+      },
+      "surface": { "app_id": "hyperdimensions-viewer", "target": "panel", "route": "/hyperdimensions/app" },
+      "execution": { "mode": "workflow", "run_as": "agent", "stream": "status", "max_steps": 10 },
+      "context": {
+        "sources": ["notebook-selection", "room-state", "persona"],
+        "include_last_turns": 4,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json", "image"]
+      },
+      "outputs": [
+        { "target": "nats-event", "delivery": "emit", "subject": "room.desktop.session.opened.v1", "artifact_type": "json" },
+        { "target": "notebook-entry", "delivery": "append", "path": "threads/desktop-sessions", "artifact_type": "text" }
+      ],
+      "guardrails": { "require_approval": true, "max_runtime_sec": 1800, "fail_open": false, "one_active_run": true },
+      "enabled": false,
+      "tags": ["desktop", "e2b", "co-review", "browser", "disabled-pending-e2b-key"]
     }
   ],
   "policies": {
@@ -306,7 +333,8 @@
     "tokenism",
     "pinokio-bridge",
     "flute-gateway",
-    "comfyui"
+    "comfyui",
+    "e2b-mcp"
   ],
   "launcher_refs": [
     "up-agents",
