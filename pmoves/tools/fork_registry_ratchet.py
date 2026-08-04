@@ -6,6 +6,11 @@ Reads `pmoves/config/fork_registry.json` and enforces:
   2. No fork uses the deprecated `skip` field (it predates the
      sync/reason schema and is no longer the source of truth).
   3. The total is consistent with the documented coverage target.
+  4. Every fork submodule in .gitmodules is declared in the registry (or in
+     `_first_party`). This is the cross-check the registry cannot make about
+     itself —
+     an undeclared submodule-fork is invisible to rules 1-3, which is exactly
+     how PMOVES.YT sat 206 commits behind.
 
 Exits 0 if every fork is decided, 1 if any fork is missing a decision
 or still has the deprecated `skip` field. Designed to be wired into a
@@ -30,6 +35,7 @@ from pathlib import Path
 
 
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "config" / "fork_registry.json"
+GITMODULES_PATH = Path(__file__).resolve().parents[2] / ".gitmodules"
 
 
 def _validate(registry: dict) -> tuple[int, int, list[str]]:
@@ -63,6 +69,69 @@ def _validate(registry: dict) -> tuple[int, int, list[str]]:
     return decided, total, problems
 
 
+def _submodule_repos(gitmodules: Path) -> dict[str, str]:
+    """casefolded repo name -> canonical name, parsed from submodule URLs.
+
+    Keys on the URL, never the submodule name or path. Five submodules are
+    registered under a path that differs from the repo (pbnj -> PMOVES-pinokio,
+    PMOVES-Spark-VSS -> PM-Spark-video-search-and-summarization, plus three that
+    differ only in case), so keying on path false-fires on all of them.
+    PMOVES-Archon is registered at two paths, so the dict also dedupes.
+    """
+    repos: dict[str, str] = {}
+    if not gitmodules.exists():
+        return repos
+    for raw in gitmodules.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line.startswith("url"):
+            continue
+        _, _, url = line.partition("=")
+        url = url.strip().rstrip("/")
+        if not url:
+            continue
+        name = url.rsplit("/", 1)[-1]
+        if name.endswith(".git"):
+            name = name[: -len(".git")]
+        repos[name.casefold()] = name
+    return repos
+
+
+def _validate_coverage(registry: dict, gitmodules: Path) -> list[str]:
+    """Cross-check the registry against .gitmodules.
+
+    This is the assertion the registry cannot make about itself. _validate()
+    proves every DECLARED fork carries sync + reason — but a submodule-fork that
+    was never added to the registry is invisible to it, and that is precisely
+    how PMOVES.YT sat 206 commits behind on its hardened branch: the fork-sync
+    lists, the registry and .gitmodules were three separate hand-maintained
+    facts with nothing tying them together.
+
+    Non-fork submodules (first-party repos with no upstream) are expected to be
+    absent from the registry, so they are declared in `_first_party` rather than
+    inferred — inferring would need a GitHub API call and make a PR gate depend
+    on the network.
+    """
+    problems: list[str] = []
+    declared = {k.casefold() for k in (registry.get("forks") or {})}
+    declared |= {k.casefold() for k in (registry.get("_excluded") or {})}
+    first_party = {str(n).casefold() for n in (registry.get("_first_party") or [])}
+    subs = _submodule_repos(gitmodules)
+
+    for cf, name in sorted(subs.items()):
+        if cf not in declared and cf not in first_party:
+            problems.append(
+                f"{name}: submodule is not in the registry. Add it under 'forks' "
+                f"with sync + reason, or under '_first_party' if it has no upstream."
+            )
+
+    # Deliberately NOT the converse. A registry entry naming a repo that is not a
+    # submodule is legitimate: PMOVES-ClawRouter, PMOVES-FinceptTerminal and
+    # PMOVES-hermes-agent are synced forks that this repo does not vendor. The
+    # registry is "forks we have decided about", which is a superset of "forks we
+    # vendor". Flagging those would train people to ignore the gate.
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -76,6 +145,12 @@ def main() -> int:
         action="store_true",
         help="emit JSON instead of human-readable text",
     )
+    parser.add_argument(
+        "--gitmodules",
+        type=Path,
+        default=GITMODULES_PATH,
+        help=f"Path to .gitmodules for the coverage cross-check (default: {GITMODULES_PATH})",
+    )
     args = parser.parse_args()
 
     if not args.registry.exists():
@@ -86,6 +161,15 @@ def main() -> int:
         registry = json.load(f)
 
     decided, total, problems = _validate(registry)
+
+    # The coverage cross-check asserts a relationship between THIS repo's
+    # registry and THIS repo's submodules. Running it against an arbitrary
+    # registry file is a category error — every real submodule would report as
+    # undeclared — so it is scoped to the default registry. Rules 1-3 are
+    # properties of a registry in isolation and always apply.
+    coverage_checked = args.registry.resolve() == REGISTRY_PATH.resolve()
+    if coverage_checked:
+        problems += _validate_coverage(registry, args.gitmodules)
     coverage = f"{decided}/{total}"
 
     payload = {
@@ -94,6 +178,7 @@ def main() -> int:
         "decided": decided,
         "total": total,
         "problems": problems,
+        "coverage_cross_check": coverage_checked,
     }
 
     if args.json:
@@ -105,7 +190,11 @@ def main() -> int:
             for p in problems:
                 print(f"    - {p}")
         else:
-            print("  (every fork has sync + reason; no deprecated 'skip' fields)")
+            if coverage_checked:
+                print("  (every fork has sync + reason; every submodule-fork is declared)")
+            else:
+                print("  (every fork has sync + reason; .gitmodules cross-check skipped "
+                      "— non-default registry)")
 
     # 0 problems = pass; any problem = fail (the ratchet only goes down).
     return 0 if not problems else 1
