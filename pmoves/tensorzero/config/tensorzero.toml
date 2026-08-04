@@ -655,33 +655,33 @@ api_key_location = "env::GLM_API_KEY"
 # All three expose OpenAI-compatible endpoints. Weight=0.0 for safe rollout.
 # Flip weights after throughput-lab benchmarks confirm fitness.
 
-# llama.cpp (native ARM64+CUDA build, :8111)
+# llama.cpp (native ARM64+CUDA build, :8130)
 [models.llamacpp_spark_qwen30b]
 routing = ["llamacpp_spark"]
 
 [models.llamacpp_spark_qwen30b.providers.llamacpp_spark]
 type = "openai"
-api_base = "http://host.docker.internal:8111/v1"
+api_base = "http://host.docker.internal:8130/v1"
 model_name = "qwen3"
 api_key_location = "none"
 
-# vLLM (community GB10 image, :8112)
+# vLLM (community GB10 image, :8131)
 [models.vllm_spark_qwen35]
 routing = ["vllm_spark"]
 
 [models.vllm_spark_qwen35.providers.vllm_spark]
 type = "openai"
-api_base = "http://host.docker.internal:8112/v1"
+api_base = "http://host.docker.internal:8131/v1"
 model_name = "qwen3.5"
 api_key_location = "none"
 
-# NIM (DGX-Spark model-free container, :8113)
+# NIM (DGX-Spark model-free container, :8132)
 [models.nim_spark_llama8b]
 routing = ["nim_spark"]
 
 [models.nim_spark_llama8b.providers.nim_spark]
 type = "openai"
-api_base = "http://host.docker.internal:8113/v1"
+api_base = "http://host.docker.internal:8132/v1"
 model_name = "meta/llama-3.1-8b-instruct"
 api_key_location = "none"
 
