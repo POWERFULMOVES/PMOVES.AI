@@ -47,7 +47,7 @@ routing = ["ollama_local"]
 
 [models.qwen35_9b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3.5:9b"
 api_key_location = "none"
 
@@ -56,7 +56,7 @@ routing = ["ollama_local"]
 
 [models.qwen35_4b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3.5:4b"
 api_key_location = "none"
 
@@ -65,7 +65,7 @@ routing = ["ollama_local"]
 
 [models.qwen35_27b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3.5:27b"
 api_key_location = "none"
 
@@ -74,7 +74,7 @@ routing = ["ollama_local"]
 
 [models.qwen35_0_8b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3.5:0.8b"
 api_key_location = "none"
 
@@ -83,7 +83,7 @@ routing = ["ollama_local"]
 
 [models.lfm2_24b_a2b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "lfm2:24b"
 api_key_location = "none"
 
@@ -111,7 +111,7 @@ routing = ["ollama_local"]
 
 [models.langextract_qwen7b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3:8b"
 api_key_location = "none"
 
@@ -120,7 +120,7 @@ routing = ["ollama_local"]
 
 [models.chat_ollama_llama3.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "llama3.1"
 api_key_location = "none"
 
@@ -130,7 +130,7 @@ routing = ["ollama_local"]
 
 [models.qwen2_5_32b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen2.5:32b"
 api_key_location = "none"
 
@@ -140,7 +140,7 @@ routing = ["ollama_local"]
 
 [models.qwen2_5_14b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen2.5:14b"
 api_key_location = "none"
 
@@ -150,7 +150,7 @@ routing = ["ollama_local"]
 
 [models.qwen2_vl_7b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen2-vl:7b"
 api_key_location = "none"
 
@@ -160,7 +160,7 @@ routing = ["ollama_local"]
 
 [models.qwen3_reranker_4b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-reranker:4b"
 api_key_location = "none"
 
@@ -170,7 +170,7 @@ routing = ["ollama_local"]
 
 [models.nemotron_mini.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "nemotron-mini"
 api_key_location = "none"
 
@@ -180,7 +180,7 @@ routing = ["ollama_local"]
 
 [models.qwen3_8b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3:8b"
 api_key_location = "none"
 
@@ -336,7 +336,7 @@ routing = ["ollama_local"]
 
 [models.coding_qwen3_coder_30b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-coder:30b"
 api_key_location = "none"
 
@@ -346,7 +346,7 @@ routing = ["ollama_local"]
 
 [models.reasoning_deepseek_r1_14b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "deepseek-r1:14b"
 api_key_location = "none"
 
@@ -367,7 +367,7 @@ routing = ["ollama_local"]
 
 [models.coding_qwen3_coder_next_80b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-coder-next:80b"
 api_key_location = "none"
 
@@ -390,7 +390,7 @@ routing = ["ollama_local"]
 
 [models.gemma_3n_e4b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "gemma3n:e4b"
 api_key_location = "none"
 
@@ -415,7 +415,7 @@ routing = ["ollama_local"]
 
 [models.gemma_4_e2b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "gemma4:e2b"
 api_key_location = "none"
 
@@ -425,7 +425,7 @@ routing = ["ollama_local"]
 
 [models.gemma_4_e4b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "gemma4:e4b"
 api_key_location = "none"
 
@@ -435,7 +435,7 @@ routing = ["ollama_local"]
 
 [models.gemma_4_26b_a4b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 # Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
 # Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
 model_name = "gemma4:26b"
@@ -447,7 +447,7 @@ routing = ["ollama_local"]
 
 [models.gemma_4_31b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "gemma4:31b"
 api_key_location = "none"
 
@@ -651,6 +651,40 @@ api_base = "https://open.bigmodel.cn/api/paas/v4"
 model_name = "glm-4-long"
 api_key_location = "env::GLM_API_KEY"
 
+# --- Multi-engine serving tier (llama.cpp / vLLM / NIM on SPARK) -----------
+# All three expose OpenAI-compatible endpoints. Weight=0.0 for safe rollout.
+# Flip weights after throughput-lab benchmarks confirm fitness.
+
+# llama.cpp (native ARM64+CUDA build, :8111)
+[models.llamacpp_spark_qwen30b]
+routing = ["llamacpp_spark"]
+
+[models.llamacpp_spark_qwen30b.providers.llamacpp_spark]
+type = "openai"
+api_base = "http://host.docker.internal:8111/v1"
+model_name = "qwen3"
+api_key_location = "none"
+
+# vLLM (community GB10 image, :8112)
+[models.vllm_spark_qwen35]
+routing = ["vllm_spark"]
+
+[models.vllm_spark_qwen35.providers.vllm_spark]
+type = "openai"
+api_base = "http://host.docker.internal:8112/v1"
+model_name = "qwen3.5"
+api_key_location = "none"
+
+# NIM (DGX-Spark model-free container, :8113)
+[models.nim_spark_llama8b]
+routing = ["nim_spark"]
+
+[models.nim_spark_llama8b.providers.nim_spark]
+type = "openai"
+api_base = "http://host.docker.internal:8113/v1"
+model_name = "meta/llama-3.1-8b-instruct"
+api_key_location = "none"
+
 # --- Embedding models ------------------------------------------------------
 
 [embedding_models.qwen3_embedding_4b_local]
@@ -658,7 +692,7 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.qwen3_embedding_4b_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-embedding:4b"
 api_key_location = "none"
 
@@ -668,7 +702,7 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.qwen3_embedding_8b_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-embedding:8b"
 api_key_location = "none"
 
@@ -681,14 +715,14 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.bge_m3_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "bge-m3"
 api_key_location = "none"
 
 
 [embedding_models.gemma_embed_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "embeddinggemma:300m"
 api_key_location = "none"
 
@@ -697,7 +731,7 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.archon_nomic_embed_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "nomic-embed-text"
 api_key_location = "none"
 
@@ -1206,7 +1240,7 @@ api_key_location = "env::CLOUDFLARE_API_TOKEN"
 routing = ["ollama_local"]
 [models.vl_sentinel_qwen3vl_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-vl:8b"
 api_key_location = "none"
 
@@ -1598,7 +1632,7 @@ routing = ["local_active"]
 
 [models.registry_worker_qwen.providers.local_active]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 # qwen3.5:35b-a3b (q4_K_M GGUF, 24GB, MoE 3B-active): current-gen open worker,
 # replaces stale qwen3-coder:30b (never pulled on 5090). Needs ollama >= 0.31.
 # NOTE: the smaller -int4 tag is an MLX quant — macOS-only (412 on Linux).
