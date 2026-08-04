@@ -26,10 +26,42 @@ RUN apt-get update && \
 
 WORKDIR /tmp
 
-RUN git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git && \
+# whisper.cpp PINNED. This was `git clone --depth 1` with no tag, i.e. always
+# upstream HEAD, and it broke the image the moment whisper.cpp gained a new
+# component:
+#
+#   CMake Error at whisper.cpp/build/cmake_install.cmake:114 (file):
+#     file INSTALL cannot find "/tmp/whisper.cpp/build/bin/libparakeet.so.1.9.1"
+#
+# `--target whisper` builds ONLY that target, but `cmake --install` walks the
+# full install manifest, which now includes libparakeet (Parakeet ASR support).
+# So the narrow build and the wide install disagreed and the layer failed.
+#
+# Two changes, both needed:
+#   1. pin the tag — an unpinned upstream is a build that breaks on someone
+#      else's release schedule, with no diff on our side to explain it
+#   2. drop `--target whisper` and build the default target set, so every
+#      artifact the install step expects actually exists
+ARG WHISPER_CPP_REF=v1.9.1
+# Baked ASR model. Defaults to large-v3 because this service's own CLAUDE.md is
+# explicit: "Default: large-v3" and "PMOVES.YT batch: large-v3 always; ingest
+# speed is not user-facing", alongside "NEVER silently swap models". The image
+# previously baked ggml-small, which contradicted all three — and because the
+# model is baked, WHISPER_MODEL could not override it at runtime.
+#
+# It matters most for timestamps. small is the tier where segment boundaries,
+# numbers and proper nouns drift, and those segments are used as clip points
+# and as quotable source, so a boundary error is a bad cut or a misquote.
+# large-v3 is ~3.1GB (vs ~488MB) and fits comfortably in 16GB VRAM.
+#
+# Latency-bound callers (live voice agents) legitimately want small/medium —
+# build them a variant with --build-arg WHISPER_GGML_MODEL=small rather than
+# regressing the batch default.
+ARG WHISPER_GGML_MODEL=large-v3
+RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggerganov/whisper.cpp.git && \
     cmake -S whisper.cpp -B whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
         -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF && \
-    cmake --build whisper.cpp/build --config Release --target whisper && \
+    cmake --build whisper.cpp/build --config Release && \
     cmake --install whisper.cpp/build --config Release --prefix /usr/local && \
     rm -rf whisper.cpp && \
     git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg && \
@@ -45,8 +77,8 @@ RUN git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git && \
     strip /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe && \
     mkdir -p /opt/ffmpeg/share/whisper && \
     curl -fsSL \
-      https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin \
-      -o /opt/ffmpeg/share/whisper/ggml-small.bin && \
+      "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${WHISPER_GGML_MODEL}.bin" \
+      -o "/opt/ffmpeg/share/whisper/ggml-${WHISPER_GGML_MODEL}.bin" && \
     rm -rf /tmp/ffmpeg
 
 # Runtime image
