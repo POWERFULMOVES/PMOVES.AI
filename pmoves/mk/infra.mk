@@ -504,10 +504,15 @@ else
 endif
 
 # ── TensorZero Config Render ──────────────────────────────────────────
-# Substitutes the Ollama embedding api_base in tensorzero.toml so each
-# node points at its own backend. TensorZero api_base does NOT support
+# Substitutes ONLY the Ollama EMBEDDING api_base in tensorzero.toml so
+# each node points at its own backend. TensorZero api_base does NOT support
 # env:: substitution (only credential fields do) and the config dir is
 # mounted :ro — so we render host-side before starting the gateway.
+#
+# Codex P1: uses with-env.sh to load tier files (env.tier-llm is NOT
+#   sourced into Make recipes by default — it's a compose --env-file).
+# Codex P1: targets embedding providers ONLY — replacing all 11434
+#   endpoints would also rewrite chat/reranker/vision providers.
 #
 # Set OLLAMA_EMBED_BASE_URL in env.tier-llm per node:
 #   CUDA native:  http://host.docker.internal:11434/v1
@@ -517,11 +522,13 @@ endif
 TZ_CONFIG := tensorzero/config/tensorzero.toml
 
 .PHONY: tensorzero-render
-tensorzero-render: ## Render tensorzero.toml Ollama api_base from OLLAMA_EMBED_BASE_URL
-	@TZ_URL="$${OLLAMA_EMBED_BASE_URL:-http://host.docker.internal:11434/v1}"; \
-	if [ -f "$(TZ_CONFIG)" ]; then \
-		sed -i "s|api_base = \"http://[^\"]*11434/v1\"|api_base = \"$$TZ_URL\"|g; s|api_base = \"http://[^\"]*8080/v1\"|api_base = \"$$TZ_URL\"|g" "$(TZ_CONFIG)"; \
-		echo "✓ TensorZero Ollama api_base → $$TZ_URL"; \
-	else \
-		echo "⚠ $(TZ_CONFIG) not found — skipping render"; \
-	fi
+tensorzero-render: ## Render tensorzero.toml Ollama EMBEDDING api_base from OLLAMA_EMBED_BASE_URL
+	@bash scripts/with-env.sh bash -c '
+		TZ_URL="$${OLLAMA_EMBED_BASE_URL:-http://host.docker.internal:11434/v1}"; \
+		if [ -f "$(TZ_CONFIG)" ]; then \
+			sed -i "/^\[embedding_models.*ollama_local_embedding\]$$/,/^\[/ s|api_base = \"http://[^\"]*\"|api_base = \"$$TZ_URL\"|" "$(TZ_CONFIG)"; \
+			echo "✓ TensorZero embedding api_base → $$TZ_URL"; \
+		else \
+			echo "⚠ $(TZ_CONFIG) not found — skipping render"; \
+		fi
+	'
