@@ -43,10 +43,16 @@ PLACEHOLDER_VALUES: frozenset[str] = frozenset({
 
 
 def normalize_env_value(value: str) -> str:
-    """Strip whitespace and unquote matching outer single/double quotes."""
+    """Strip whitespace and unquote matching outer single/double quotes.
+
+    Also unescapes \\" → " so repeated _set_kv calls are idempotent
+    (Codex P2: quote escaping must not accumulate on re-runs).
+    """
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1].strip()
+        value = value[1:-1].strip()
+    # Unescape any backslash-escaped quotes from prior _set_kv runs
+    value = value.replace('\\"', '"').replace("\\'", "'")
     return value
 
 

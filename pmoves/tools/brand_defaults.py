@@ -105,6 +105,19 @@ def _set_kv(text: str, key: str, value: str) -> str:
             f"alternative (e.g., secrets.token_urlsafe instead of "
             f"base64.b64encode with MIME-style wrapping)."
         )
+    # env.shared has TWO consumers: Docker Compose env_file parsing AND
+    # bash `source` via scripts/with-env.sh. Unquoted values containing
+    # whitespace source-break bash (the VALUE's second word runs as a
+    # command: the "Mesh: command not found" incident, 2026-08-04). Both
+    # consumers strip surrounding double quotes, so quote when whitespace
+    # or # is present — unless the value carries $ (interpolation intent).
+    if (
+        value
+        and "$" not in value
+        and not (value.startswith('"') and value.endswith('"'))
+        and re.search(r"[\s#]", value)
+    ):
+        value = '"' + value.replace('"', '\\"') + '"'
     pat = rf"^(\s*{re.escape(key)}\s*=).*$"
     if re.search(pat, text, re.M):
         return re.sub(pat, lambda m: m.group(1) + value, text, flags=re.M)
