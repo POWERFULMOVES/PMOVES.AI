@@ -307,12 +307,29 @@ yt-wealth-videos: ## Show wealth-tagged videos (investing, entrepreneurship, bud
 # Run on remote nodes to mount the shared JuiceFS media filesystem.
 # ---------------------------------------------------------------------------
 
-.PHONY: juicefs-cross-node-setup juicefs-mount-status juicefs-mount-local
+.PHONY: juicefs-cross-node-setup juicefs-mount-status juicefs-mount-local juicefs-storage-check
 
-JUICEFS_HOST_IP ?= 100.122.182.3
+# MagicDNS hostname, not a literal Tailscale IP — committed files carry no IPs, and
+# the DARKXSIDE room's own egress_redaction_floor lists no-literal-lan-or-tailscale-ips
+# as a fail-closed rule. JUICEFS_HOST_IP is kept as a deprecated alias so existing
+# invocations keep working; prefer JUICEFS_HOST.
+JUICEFS_HOST ?= $(or $(JUICEFS_HOST_IP),pmoves-b850-ai-top)
 
-juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST_IP=<host-ts-ip> DB_PASS=<supabase-db-pass>
-	@JUICEFS_HOST=$(JUICEFS_HOST_IP) DB_PASS=$(or $(DB_PASS),$(error DB_PASS required)) bash scripts/juicefs-cross-node-setup.sh
+juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST=<hostname> DB_PASS=<supabase-db-pass>
+	@JUICEFS_HOST=$(JUICEFS_HOST) DB_PASS=$(or $(DB_PASS),$(error DB_PASS required)) bash scripts/juicefs-cross-node-setup.sh
+
+# The check that would have caught the cross-node blocker months earlier. Storage is
+# baked into a volume at format time: "file" means the data blocks live on the
+# formatting host's local disk, so no other node can read them no matter how the
+# metadata is wired. See
+# pmoves/docs/handoffs/juicefs-cross-node-storage-blocker-2026-08-04.md
+juicefs-storage-check: ## Report the JuiceFS volume's storage backend (file = single-node!)
+	@echo "=== JuiceFS volume storage backend ==="
+	@docker exec juicefs-mount sh -c 'juicefs status "$$(tr "\0" "\n" < /proc/1/cmdline | grep -m1 -E "^(postgres|redis|mysql)://")" 2>/dev/null' 2>/dev/null \
+	    | grep -iE '"(Name|Storage|Bucket)"' \
+	    | sed -E 's#(://)[^/ "]*@#\1[REDACTED]@#g' \
+	    || echo "  juicefs-mount not running — nothing to check"
+	@echo "  NOTE: Storage:\"file\" means this volume is single-node by construction."
 
 # Renamed from juicefs-status: it collided with the JuiceFS *PoC gateway* target
 # in Makefile:292, and make kept that one — so this MOUNT check was unreachable
@@ -321,25 +338,35 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 # juicefs-mount-status = is the JuiceFS mount up and are content dirs visible.
 juicefs-mount-status: ## Show JuiceFS mount status (mount container + content dirs)
 	@echo "=== JuiceFS Mount ==="
-	@docker ps --filter name=juicefs-mount --format "{{.Names}} {{.Status}}" 2>/dev/null || echo "juicefs-mount not running"
+	@# `docker ps` exits 0 with EMPTY output when nothing matches, so the old
+	@# `|| echo "not running"` never fired and this target printed two blank
+	@# headings on a node with no mount at all — indistinguishable from a healthy
+	@# mount holding no dirs. Test the output, not the exit code.
+	@out="$$(docker ps --filter name=juicefs-mount --format '{{.Names}} {{.Status}}' 2>/dev/null)"; \
+	  if [ -n "$$out" ]; then echo "$$out"; \
+	  else echo "  juicefs-mount NOT RUNNING on this node"; \
+	       echo "  (z890 runs only the S3 gateway - see juicefs-cross-node-storage-blocker-2026-08-04.md)"; fi
 	@echo ""
 	@echo "=== Content Dirs ==="
-	@docker exec juicefs-mount find /mnt/media -maxdepth 2 -type d 2>/dev/null | sort || echo "Mount not accessible"
+	@dirs="$$(docker exec juicefs-mount find /mnt/media -maxdepth 2 -type d 2>/dev/null | sort)"; \
+	  if [ -n "$$dirs" ]; then echo "$$dirs"; else echo "  mount not accessible / no dirs"; fi
 
 juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	@echo "Starting JuiceFS mount (local DB)..."
 	$(eval JFS_HOST_HOME := $(HOME))
 	$(eval JFS_MOUNT_POINT := $(JFS_HOST_HOME)/pmoves-fs)
 	@mkdir -p "$(JFS_MOUNT_POINT)"
-	@docker run -d \
+	@test -n "$(SUPABASE_DB_PASSWORD)" || { echo "ERROR: SUPABASE_DB_PASSWORD not set — source it from the CHIT secrets pipeline"; exit 1; }
+	@META_PASSWORD='$(SUPABASE_DB_PASSWORD)' docker run -d \
 	    --name juicefs-mount \
 	    --restart unless-stopped \
 	    --privileged \
 	    --network host \
 	    --entrypoint sh \
+	    -e META_PASSWORD \
 	    -e JFS_MOUNT="$(JFS_MOUNT_POINT)" \
 	    -v $(JFS_HOST_HOME)/.local/share/juicefs-data:/data \
 	    -v $(JFS_MOUNT_POINT):$(JFS_MOUNT_POINT):rshared \
 	    juicedata/mount:ce-v1.3.0 \
-	    -c 'exec juicefs mount --enable-xattr "postgres://supabase_admin:$(SUPABASE_DB_PASSWORD)@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$$JFS_MOUNT"' 2>/dev/null || echo "Already running or failed"
+	    -c 'exec juicefs mount --enable-xattr "postgres://supabase_admin@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$$JFS_MOUNT"'
 	@echo "Use 'make juicefs-mount-status' to verify"

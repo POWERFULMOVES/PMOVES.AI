@@ -5,22 +5,38 @@
 # Prerequisites:
 #   - Node is on the Tailscale mesh
 #   - Docker installed
-#   - Supabase DB reachable (via Tailscale IP of the JuiceFS host node)
+#   - Supabase DB reachable at the JuiceFS host node (MagicDNS hostname, not an IP)
 #
 # Usage:
-#   JUICEFS_HOST=100.122.182.3 bash juicefs-cross-node-setup.sh
+#   DB_PASS=... bash juicefs-cross-node-setup.sh
+#   JUICEFS_HOST=pmoves-b850-ai-top DB_PASS=... bash juicefs-cross-node-setup.sh
+#
+# !! READ FIRST: this cannot currently give you a working cross-node mount. The
+# !! pmoves-media volume is formatted with Storage:"file", so its data blocks sit on
+# !! the host node's local disk. A remote mount enumerates filenames and then fails
+# !! every read with an I/O error. See
+# !! pmoves/docs/handoffs/juicefs-cross-node-storage-blocker-2026-08-04.md — the
+# !! volume has to be reformatted onto tailnet MinIO first. The preflight below
+# !! refuses to proceed on a file-backed volume unless you override it.
 
 set -euo pipefail
 
-JUICEFS_HOST="${JUICEFS_HOST:-100.122.182.3}"
+# MagicDNS hostname, never a literal Tailscale IP (committed files carry no IPs).
+JUICEFS_HOST="${JUICEFS_HOST:-pmoves-b850-ai-top}"
 DB_PORT="${DB_PORT:-5432}"
 DB_PASS="${DB_PASS:-}"
 MOUNT_POINT="${MOUNT_POINT:-$HOME/pmoves-fs}"
 DATA_DIR="${DATA_DIR:-$HOME/.local/share/juicefs-data}"
+# Escape hatch for the storage preflight, e.g. when deliberately standing up a
+# node-local FS rather than joining the shared one.
+ALLOW_FILE_STORAGE="${ALLOW_FILE_STORAGE:-0}"
 
 if [ -z "$DB_PASS" ]; then
     echo "ERROR: DB_PASS required (the Supabase DB password)"
-    echo "  Find it in: pmoves/env.tier-supabase (SUPABASE_DB_PASSWORD)"
+    echo "  Source it from the CHIT secrets pipeline — do not paste it on the CLI,"
+    echo "  and do not read env.shared directly. It is exported to this script as an"
+    echo "  environment variable and handed to JuiceFS via META_PASSWORD, so it never"
+    echo "  appears in the container command line or in 'ps'."
     exit 1
 fi
 
@@ -35,21 +51,53 @@ mkdir -p "$MOUNT_POINT" "$DATA_DIR"
 # Pull JuiceFS image
 docker pull juicedata/mount:ce-v1.3.0
 
+# The credential is passed via META_PASSWORD, so the URL below carries no secret and
+# is safe to appear in `ps` / `docker inspect`. This is the fix for the exposure
+# recorded in the 2026-08-01 metadata note (b850's mount still has the password
+# inline in its command line).
+META_URL="postgres://supabase_admin@${JUICEFS_HOST}:${DB_PORT}/postgres?search_path=juicefs_meta&sslmode=disable"
+
+# Preflight: refuse to join a file-backed volume from a remote node. Storage is baked
+# in at format time, so `file` means the blocks are local to the formatting host and
+# no remote mount can read them — you would get a filesystem that lists correctly and
+# errors on every open, which is far harder to debug than an upfront refusal.
+echo "Preflight: checking the volume's storage backend ..."
+STORAGE="$(META_PASSWORD="$DB_PASS" docker run --rm --network host \
+    -e META_PASSWORD \
+    --entrypoint sh juicedata/mount:ce-v1.3.0 \
+    -c "juicefs status \"$META_URL\" 2>/dev/null" \
+    | sed -n 's/.*"Storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+
+echo "  Storage backend: ${STORAGE:-<unreadable>}"
+if [ "$STORAGE" = "file" ] && [ "$ALLOW_FILE_STORAGE" != "1" ]; then
+    echo ""
+    echo "REFUSING: volume is formatted with Storage:\"file\" — its data blocks live on"
+    echo "the host node's local disk and are not reachable from here. Mounting would"
+    echo "give you filenames plus an I/O error on every read."
+    echo ""
+    echo "Fix: reformat the volume against tailnet MinIO, then re-run. See"
+    echo "  pmoves/docs/handoffs/juicefs-cross-node-storage-blocker-2026-08-04.md"
+    echo ""
+    echo "To stand up a deliberately node-local FS instead: ALLOW_FILE_STORAGE=1"
+    exit 2
+fi
+
 # Stop existing mount if any
 docker rm -f juicefs-mount 2>/dev/null || true
 
 # Start JuiceFS mount (foreground, persistent container)
 echo "Starting JuiceFS mount..."
-docker run -d \
+META_PASSWORD="$DB_PASS" docker run -d \
     --name juicefs-mount \
     --restart unless-stopped \
     --network host \
     --privileged \
     --entrypoint sh \
+    -e META_PASSWORD \
     -v "$DATA_DIR:/data" \
     -v "$MOUNT_POINT:$MOUNT_POINT:rshared" \
     juicedata/mount:ce-v1.3.0 \
-    -c "exec juicefs mount --enable-xattr \"postgres://supabase_admin:${DB_PASS}@${JUICEFS_HOST}:${DB_PORT}/postgres?search_path=juicefs_meta&sslmode=disable\" $MOUNT_POINT"
+    -c "exec juicefs mount --enable-xattr \"$META_URL\" $MOUNT_POINT"
 
 echo ""
 echo "Waiting for mount..."
