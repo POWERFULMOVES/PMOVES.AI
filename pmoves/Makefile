@@ -26,7 +26,7 @@ endif
 # -------- External-mode → Compose profiles ----------
 # If EXTERNAL_* is true, we skip the corresponding local service profile.
 # Profiles are defined on services in docker-compose.yml.
-compose_profiles = data,workers,gateway
+compose_profiles = data,workers,gateway,pinokio
 SUPABASE_RUNTIME ?= compose
 SUPA_PROVIDER := $(SUPABASE_RUNTIME)
 ifeq ($(EXTERNAL_NEO4J),true)
@@ -1897,7 +1897,7 @@ clean-networks: ## Remove stale Docker Compose networks (fixes WSL2 "incorrect l
 .PHONY: up up-gpu up-both-gateways
 up: check-tier-envs ensure-env-shared clean-networks ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
-	@$(DC) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
+	@$(DC) --profile data --profile workers --profile pinokio up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval nats_event_bus pinokio_bridge
 	@echo "Starting GPU gateway variant (if GPU available)..."
 	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
 	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
