@@ -76,22 +76,43 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           echo "=== Fork Drift Audit ==="
-          gh repo list POWERFULMOVES --fork --json name,parent --jq '.[] | "\(.name)|\(.parent.owner.login)/\(.parent.name)"' | while IFS='|' read fork upstream; do
+          # `gh repo list` defaults to 30 results. Without --limit this audited 30
+          # of the org's ~374 forks (~8%), ordered by push recency, with no
+          # guarantee submodule-forks were in the window — which is how forks like
+          # PMOVES.YT sat 206 commits behind while this step reported "clean".
+          #
+          # Fed via process substitution, NOT a pipe: `... | while` runs the loop
+          # body in a subshell, so counter mutations are discarded at the pipe
+          # boundary and the summary is always zero.
+          SYNCED_N=0; STALE_N=0; CRIT_N=0; ERR_N=0
+          while IFS='|' read -r fork upstream; do
+            [ -z "$fork" ] && continue
             fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || continue
             ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || continue
-            bh=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.behind_by' 2>/dev/null) || echo '-1'
-            ah=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.ahead_by' 2>/dev/null) || echo '-1'
-            if [ "$bh" = "0" ] 2>/dev/null; then
-              echo "  $fork: synced"
-            elif [ "$bh" -gt 999 ] 2>/dev/null; then
-              echo "  CRITICAL $fork: $bh behind, $ah ahead"
-            elif [ "$bh" -gt 0 ] 2>/dev/null; then
-              echo "  STALE   $fork: $bh behind, $ah ahead"
+            # One compare call, both fields. Previously this endpoint was hit twice
+            # per fork; at 374 forks that is ~374 wasted calls per run. The old
+            # `|| echo '-1'` also wrote to stdout instead of assigning, leaving the
+            # var EMPTY on failure and polluting the audit with stray "-1" lines.
+            cmp=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '"\(.behind_by)|\(.ahead_by)"' 2>/dev/null) || cmp=""
+            if [ -z "$cmp" ]; then
+              bh=-1; ah=-1
             else
-              echo "  ERROR    $fork: unable to compare"
+              bh="${cmp%%|*}"; ah="${cmp##*|}"
+            fi
+            if [ "$bh" = "0" ] 2>/dev/null; then
+              SYNCED_N=$((SYNCED_N + 1))
+            elif [ "$bh" -gt 999 ] 2>/dev/null; then
+              CRIT_N=$((CRIT_N + 1)); echo "  CRITICAL $fork: $bh behind, $ah ahead"
+            elif [ "$bh" -gt 0 ] 2>/dev/null; then
+              STALE_N=$((STALE_N + 1)); echo "  STALE    $fork: $bh behind, $ah ahead"
+            else
+              # Includes forks with no common ancestor (compare returns 404) —
+              # those can never be merge-synced and need a re-fork, not a retry.
+              ERR_N=$((ERR_N + 1)); echo "  ERROR    $fork: unable to compare"
             fi
             sleep 1
-          done
+          done < <(gh repo list POWERFULMOVES --fork --limit 1000 --json name,parent --jq '.[] | "\(.name)|\(.parent.owner.login)/\(.parent.name)"')
+          echo "--- audit: $SYNCED_N synced, $STALE_N stale, $CRIT_N critical, $ERR_N uncomparable ---"
 
       - name: Sync forks
         if: ${{ !inputs.dry_run }}
@@ -146,7 +167,14 @@ jobs:
           jellyfin/jellyfin|PMOVES-Jellyfin|PMOVES.AI-Edition-Hardened
           "
 
-          echo "$FORKS" | grep '|' | while IFS='|' read upstream fork branch_override; do
+          # Process substitution, NOT `echo "$FORKS" | grep '|' | while`: a pipe
+          # runs the loop body in a subshell, so SYNCED/SKIPPED/CONFLICTS/ERRORS
+          # and RESULTS mutations die at the pipe boundary. The run summary below
+          # therefore reported "0 synced" with an empty result list on EVERY run,
+          # no matter how many PRs were opened. MAX_FORKS was affected too — its
+          # check read a SYNCED that could never increment, so the cap never
+          # engaged and the "Reached max" break was unreachable.
+          while IFS='|' read -r upstream fork branch_override; do
             [ -z "$fork" ] && continue
 
             # Check max
@@ -260,11 +288,11 @@ jobs:
             fi
 
             sleep 2
-          done
+          done < <(echo "$FORKS" | grep '|')
 
           echo ""
-          echo "=== Results: $SYNCED synced ==="
-          echo "$RESULTS"
+          echo "=== Results: $SYNCED synced, $SKIPPED skipped, $CONFLICTS conflicts, $ERRORS errors ==="
+          printf '%b\n' "$RESULTS"
 
       - name: Create issue if attention needed
         if: ${{ !inputs.dry_run }}
