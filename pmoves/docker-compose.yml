@@ -3040,6 +3040,8 @@ services:
     # is wrong — the gid is enforced, it is simply 0 rather than the docker group.)
     group_add:
     - "${DOCKER_GID:-999}"
+    extra_hosts:
+    - host.docker.internal:host-gateway
     networks:
     - pmoves_app
     - pmoves_bus
