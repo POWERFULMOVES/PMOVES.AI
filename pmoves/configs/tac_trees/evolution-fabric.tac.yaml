@@ -1,0 +1,339 @@
+# TAC Tree: PMOVES Evolution Fabric
+# Coordinates PMOVES-Crush, Hermes Agent, Hermes Self-Evolution, AgentGym-RL,
+# Archon, Agent Zero/P7, CHIT/Graphiti, SPARK, Supabase, MinIO, NATS, and GitHub.
+#
+# This tree is additive. It must not create duplicate controllers where existing
+# P7, Agent Zero, AgentGym, Hermes, or Crush extension points are sufficient.
+
+name: TAC_EVOLUTION_FABRIC
+version: "0.1.0"
+description: >
+  Governed agent-improvement loop for bounded tasks, normalized attempts,
+  AgentGym evaluation, independent Archon review, optional Hermes skill
+  evolution, and human-reviewed GitHub promotion.
+
+metadata:
+  stage: rehearsal
+  owner: powerfulmoves
+  planner: agent_zero
+  reviewer: archon
+  initial_node: spark
+  branch: agent/evolution-fabric-rfc
+  first_pilot: experience-layer-skin-manifest
+  minimum_score: 0.85
+  hard_gates:
+    - tests_pass
+    - no_secret_leak
+    - reviewer_independent
+    - task_hash_matches
+    - chit_graphiti_present
+    - human_review_required
+  references:
+    - pmoves/docs/architecture/EVOLUTION_FABRIC_RFC.md
+    - pmoves/docs/architecture/EVOLUTION_FABRIC_DEPENDENCY_GRAPH.md
+    - pmoves/docs/contracts/EVOLUTION_FABRIC_NATS_CONTRACTS.md
+    - pmoves/docs/database/EVOLUTION_FABRIC_SUPABASE_SCHEMA.md
+    - pmoves/docs/implementation/EVOLUTION_FABRIC_IMPLEMENTATION_PLAN.md
+    - pmoves/docs/handoffs/SPARK_EVOLUTION_FABRIC_HANDOFF_2026-08-04.md
+    - CRUSH.md
+    - pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md
+    - pmoves/configs/tac_trees/node-hermes-agent.tac.yaml
+    - pmoves/docs/AGENTGYM_RL_OPERATIONS.md
+    - .claude/context/nats-subjects.md
+
+root:
+  id: evolution.fabric
+  task: Establish PMOVES Evolution Fabric
+  context: >
+    Extend existing PMOVES runtimes into a governed specify-delegate-attempt-
+    evaluate-review-evolve-promote loop. Production promotion remains bounded by
+    signed provenance, independent review, required checks, and human-reviewed PRs.
+  agent_hint: agent-zero-codex
+  status: in_progress
+  children:
+
+    - id: evolution.fabric.wave0
+      task: RFC, contracts, schema proposal, implementation plan, and SPARK handoff
+      context: Docs/config only. No Wave 1 implementation in this branch.
+      agent_hint: codex
+      owner: agent-zero-codex
+      status: ready_for_review
+      children:
+        - id: evolution.fabric.wave0.rfc
+          task: Architecture RFC
+          path: pmoves/docs/architecture/EVOLUTION_FABRIC_RFC.md
+          status: done
+          owner: agent-zero-codex
+        - id: evolution.fabric.wave0.graph
+          task: Dependency graph
+          path: pmoves/docs/architecture/EVOLUTION_FABRIC_DEPENDENCY_GRAPH.md
+          status: done
+          owner: agent-zero-codex
+        - id: evolution.fabric.wave0.events
+          task: NATS contract proposal
+          path: pmoves/docs/contracts/EVOLUTION_FABRIC_NATS_CONTRACTS.md
+          status: done
+          owner: agent-zero-codex
+        - id: evolution.fabric.wave0.schema
+          task: Supabase schema proposal
+          path: pmoves/docs/database/EVOLUTION_FABRIC_SUPABASE_SCHEMA.md
+          status: done
+          owner: agent-zero-codex
+        - id: evolution.fabric.wave0.plan
+          task: Implementation plan
+          path: pmoves/docs/implementation/EVOLUTION_FABRIC_IMPLEMENTATION_PLAN.md
+          status: done
+          owner: agent-zero-codex
+        - id: evolution.fabric.wave0.spark_handoff
+          task: SPARK review handoff
+          path: pmoves/docs/handoffs/SPARK_EVOLUTION_FABRIC_HANDOFF_2026-08-04.md
+          status: done
+          owner: agent-zero-codex
+        - id: evolution.fabric.wave0.spark_review
+          task: Local Crush + Hermes + AgentGym compatibility review with Archon gate
+          expected_output: pmoves/docs/reviews/EVOLUTION_FABRIC_WAVE0_SPARK_REVIEW_2026-08-XX.md
+          status: planned
+          owner: spark-codex
+          agent_hint: crush
+          blocked_by:
+            - docs_pr_open
+            - spark_persistent_inbox_verified
+
+    - id: evolution.fabric.wave1
+      task: Event schemas and additive Supabase persistence
+      context: >
+        Implement versioned evolution.* schemas and storage after the Wave 0
+        review confirms actual AgentGym table types and subject compatibility.
+      status: planned
+      owner: spark-codex
+      agent_hint: crush
+      blocked_by:
+        - evolution.fabric.wave0.spark_review
+        - human_wave1_approval
+      children:
+        - id: evolution.fabric.wave1.contracts
+          task: Add JSON Schemas and contract tests for evolution.* facts
+          status: planned
+          owner: spark-codex
+        - id: evolution.fabric.wave1.migration
+          task: Add evolution task/attempt/evaluation/review/candidate/promotion tables
+          status: planned
+          owner: spark-codex
+        - id: evolution.fabric.wave1.rpcs
+          task: Add idempotent task, attempt, review, and promotion RPCs
+          status: planned
+          owner: spark-codex
+        - id: evolution.fabric.wave1.catalog
+          task: Update canonical NATS subject catalogs and registries
+          status: planned
+          owner: z890-claude
+        - id: evolution.fabric.wave1.security
+          task: Add RLS, redaction, signature, and duplicate-event tests
+          status: planned
+          owner: botz-auditor
+
+    - id: evolution.fabric.wave2
+      task: PMOVES-Crush attempt adapter
+      context: Use hooks, existing bootstrap, and Graphiti trail; avoid a duplicate runtime.
+      status: planned
+      owner: crush
+      agent_hint: crush
+      blocked_by:
+        - evolution.fabric.wave1
+      children:
+        - id: evolution.fabric.wave2.exporter
+          task: Export normalized start/completion envelopes and durable artifacts
+          status: planned
+          owner: crush
+        - id: evolution.fabric.wave2.redaction
+          task: Redact secrets/private paths and compute checksums
+          status: planned
+          owner: botz-auditor
+        - id: evolution.fabric.wave2.tests
+          task: Test exit codes, path scope, idempotency, and signed trail inclusion
+          status: planned
+          owner: crush
+        - id: evolution.fabric.wave2.vhs
+          task: Record reproducible PMOVES-Crush evolution attempt tape
+          status: planned
+          owner: crush
+
+    - id: evolution.fabric.wave3
+      task: Hermes Agent NATS/MCP and attempt adapter
+      context: Implement planned Hermes integration TAC tasks; keep sidecar thin if needed.
+      status: planned
+      owner: hermes-agent
+      agent_hint: hermes-agent
+      blocked_by:
+        - evolution.fabric.wave1
+      children:
+        - id: evolution.fabric.wave3.nats
+          task: Implement planned Hermes gateway, tool, skill, cron, and delegation facts
+          status: planned
+          owner: hermes-agent
+        - id: evolution.fabric.wave3.normalizer
+          task: Normalize Hermes/delegate completion into evolution attempt facts
+          status: planned
+          owner: hermes-agent
+        - id: evolution.fabric.wave3.memory
+          task: Isolate evolution memory from user/private/domain memory
+          status: planned
+          owner: hermes-agent
+        - id: evolution.fabric.wave3.spark_profile
+          task: Validate SPARK PMOVES Hermes profile and local model routing
+          status: planned
+          owner: spark-codex
+
+    - id: evolution.fabric.wave4
+      task: AgentGym software-attempt evaluation adapter
+      context: Extend existing coordinator; do not create a second AgentGym service.
+      status: planned
+      owner: spark-codex
+      agent_hint: agent-zero-codex
+      blocked_by:
+        - evolution.fabric.wave2
+        - evolution.fabric.wave3
+      children:
+        - id: evolution.fabric.wave4.subscription
+          task: Consume evolution.attempt.completed.v1
+          status: planned
+          owner: spark-codex
+        - id: evolution.fabric.wave4.deterministic
+          task: Run checksums, tests, path, redaction, and architecture gates first
+          status: planned
+          owner: spark-codex
+        - id: evolution.fabric.wave4.scoring
+          task: Persist component scores and publish evaluation facts
+          status: planned
+          owner: spark-codex
+        - id: evolution.fabric.wave4.replay
+          task: Add deterministic replay and score-variance evidence
+          status: planned
+          owner: spark-codex
+
+    - id: evolution.fabric.wave5
+      task: Archon independent review gate
+      context: Fresh review context; reviewer cannot edit candidate.
+      status: planned
+      owner: archon
+      agent_hint: archon
+      blocked_by:
+        - evolution.fabric.wave4
+      children:
+        - id: evolution.fabric.wave5.pack
+          task: Build versioned review grounding pack
+          status: planned
+          owner: archon
+        - id: evolution.fabric.wave5.rubric
+          task: Apply versioned rubric and cite evidence
+          status: planned
+          owner: archon
+        - id: evolution.fabric.wave5.fact
+          task: Persist and publish approve/revise/reject review fact
+          status: planned
+          owner: archon
+
+    - id: evolution.fabric.wave6
+      task: Hermes Agent Self-Evolution candidate lane
+      context: Skill-first DSPy/GEPA optimization with fixed datasets and PR-only output.
+      status: planned
+      owner: hermes-agent
+      agent_hint: hermes-agent
+      blocked_by:
+        - evolution.fabric.wave5
+        - baseline_candidate_approved_for_experiment
+      children:
+        - id: evolution.fabric.wave6.dataset
+          task: Export approved/experimental trajectories into versioned eval data
+          status: planned
+          owner: hermes-agent
+        - id: evolution.fabric.wave6.optimize
+          task: Run bounded skill optimization with spend/iteration limits
+          status: planned
+          owner: hermes-agent
+        - id: evolution.fabric.wave6.compare
+          task: Compare baseline and evolved candidates under identical rubric
+          status: planned
+          owner: spark-codex
+        - id: evolution.fabric.wave6.guardrails
+          task: Enforce tests, size, semantic preservation, caching, and redaction
+          status: planned
+          owner: botz-auditor
+
+    - id: evolution.fabric.wave7
+      task: GitHub draft PR and human promotion boundary
+      status: planned
+      owner: agent-zero-codex
+      agent_hint: codex
+      blocked_by:
+        - evolution.fabric.wave5
+      children:
+        - id: evolution.fabric.wave7.evidence
+          task: Build PR body from durable task, attempt, score, review, and provenance records
+          status: planned
+          owner: agent-zero-codex
+        - id: evolution.fabric.wave7.draft_pr
+          task: Open draft PR only when hard gates pass
+          status: planned
+          owner: agent-zero-codex
+        - id: evolution.fabric.wave7.human_review
+          task: Require human approval and merge
+          status: planned
+          owner: powerfulmoves
+        - id: evolution.fabric.wave7.archive
+          task: Publish promotion fact, run post-merge smoke, archive room, store lessons
+          status: planned
+          owner: hermes-agent
+
+    - id: evolution.fabric.wave8
+      task: Operator experience and dashboard
+      status: planned
+      owner: botz-builder
+      agent_hint: crush
+      blocked_by:
+        - evolution.fabric.wave7
+      children:
+        - id: evolution.fabric.wave8.gum
+          task: Gum task/node/runtime/approval launcher menus
+          status: planned
+          owner: crush
+        - id: evolution.fabric.wave8.glow
+          task: Glow scorecard, review, and handoff reports
+          status: planned
+          owner: crush
+        - id: evolution.fabric.wave8.vhs
+          task: VHS bootstrap, benchmark, review, and promotion tapes
+          status: planned
+          owner: crush
+        - id: evolution.fabric.wave8.ui
+          task: Existing PMOVES UI/Open Notebook task and attempt dashboard
+          status: planned
+          owner: botz-builder
+
+    - id: evolution.fabric.pilot
+      task: Experience Layer skin manifest comparative benchmark
+      status: planned
+      owner: spark-codex
+      agent_hint: crush
+      blocked_by:
+        - evolution.fabric.wave1
+        - evolution.fabric.wave2
+        - evolution.fabric.wave3
+        - evolution.fabric.wave4
+        - evolution.fabric.wave5
+      candidates:
+        - runtime: pmoves-crush
+          agent: crush
+        - runtime: hermes-agent
+          agent: hermes-agent
+        - runtime: codex
+          agent: agent-zero-codex
+      acceptance:
+        minimum_score: 0.85
+        checks:
+          - json_schema
+          - typecheck
+          - unit
+          - security
+          - backwards_compatibility
+          - deterministic_seed_replay
