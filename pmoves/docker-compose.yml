@@ -2818,7 +2818,13 @@ services:
     # NATS is the mesh-wide event bus — credential-guarded (nats:***@),
     # so 0.0.0.0 default is intentional to allow Tailscale mesh peers to connect.
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
-    - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
+    # Monitoring (8222) is NOT credential-guarded — it answered HTTP 200
+    # unauthenticated on the LAN IP, exposing /varz, /connz (connected clients)
+    # and /subsz (subject subscriptions). It shared NATS_BIND with 4222, so it
+    # inherited a 0.0.0.0 default that is only justified for the GATED data port.
+    # Loopback by default; set NATS_MONITORING_BIND explicitly (ideally to the
+    # tailnet IP, not 0.0.0.0) if a node genuinely needs remote NATS monitoring.
+    - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
     networks:
     # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
     # internal-only network gets NO published-port DNAT rules from Docker, so the
