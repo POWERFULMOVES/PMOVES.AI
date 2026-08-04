@@ -1,9 +1,6 @@
 // data.js — All data is grounded in PMOVES.AI repo docs.
 // Path references shown in UI link to the source files in the repo.
 
-// AGENT_ROSTER + NATS_SUBJECTS are LIVE — generated from the agent registry
-// into data.generated.js (loaded first). Regenerate: make -C pmoves chit-tour-data
-
 const SOURCES = {
   whatIsChit: "pmoves/docs/PMOVESCHIT/01_WHAT_IS_CHIT.md",
   glossary: "pmoves/docs/PMOVESCHIT/00_GLOSSARY.md",
@@ -231,6 +228,26 @@ const AGENT_TYPES = [
 ];
 
 // --- Roster (subset from §2 Type Chart) used for the type-graph ---
+const AGENT_ROSTER = [
+  { name: "Agent Zero", cls: "Standard", primary: "Agent", secondary: "API", tier: 6, stage: "Mega", layers: 7 },
+  { name: "Archon", cls: "Standard", primary: "Agent", secondary: "LLM", tier: 6, stage: "Stage 2", layers: 6 },
+  { name: "Hi-RAG v2", cls: "Standard", primary: "Worker", secondary: "Data", tier: 4, stage: "Stage 2", layers: 5 },
+  { name: "DeepResearch", cls: "Standard", primary: "LLM", secondary: "Worker", tier: 3, stage: "Stage 1", layers: 4 },
+  { name: "SupaSerch", cls: "Standard", primary: "Agent", secondary: "LLM", tier: 6, stage: "Stage 2", layers: 5 },
+  { name: "PMOVES.YT", cls: "Standard", primary: "Media", secondary: "Worker", tier: 5, stage: "Stage 1", layers: 4 },
+  { name: "Flute-Gateway", cls: "Standard", primary: "API", secondary: "Media", tier: 2, stage: "Stage 1", layers: 4 },
+  { name: "TensorZero Gateway", cls: "Standard", primary: "API", secondary: "LLM", tier: 2, stage: "Stage 1", layers: 3 },
+  { name: "ClaWZ", cls: "Standard", primary: "Agent", secondary: "API", tier: 6, stage: "Stage 1", layers: 4 },
+  { name: "Cipher Memory", cls: "Specialized", primary: "Data", secondary: "Agent", tier: 1, stage: "Base", layers: 2 },
+  { name: "Hyperdimensions", cls: "Specialized", primary: "UI", secondary: "Data", tier: 7, stage: "Base", layers: 2 },
+  { name: "Extract Worker", cls: "Standard", primary: "Worker", secondary: "Data", tier: 4, stage: "Stage 1", layers: 4 },
+  { name: "EvoSwarm Controller", cls: "Standard", primary: "Worker", secondary: "Agent", tier: 4, stage: "Stage 1", layers: 4 },
+  { name: "Swarm Attribution", cls: "Specialized", primary: "Worker", secondary: "Data", tier: 4, stage: "Stage 1", layers: 4 },
+  { name: "Mesh Agent", cls: "Standard", primary: "Agent", secondary: "Data", tier: 6, stage: "Stage 1", layers: 4 },
+  { name: "Channel Monitor", cls: "Standard", primary: "Worker", secondary: "Media", tier: 4, stage: "Base", layers: 2 },
+  { name: "BoTZ Gateway", cls: "Standard", primary: "Agent", secondary: "Worker", tier: 6, stage: "Stage 1", layers: 4 },
+  { name: "MAI-UI", cls: "Standard", primary: "UI", secondary: "Agent", tier: 7, stage: "Stage 1", layers: 3 },
+];
 
 // --- Evolution stages (§4) ---
 const EVOLUTION_STAGES = [
@@ -355,6 +372,16 @@ const TOUR_STEPS = [
 ];
 
 // --- NATS subjects table ---
+const NATS_SUBJECTS = [
+  { subject: "tokenism.cgp.ready.v1", dir: "Pub → Hi-RAG, Discord, ShapeStore", purpose: "Generic CGP packet ready" },
+  { subject: "tokenism.cgp.weekly.v1", dir: "Pub → Discord, Hi-RAG", purpose: "Weekly ToKenism attribution export" },
+  { subject: "tokenism.attribution.recorded.v1", dir: "Pub → Discord, analytics", purpose: "Real-time attribution notification" },
+  { subject: "tokenism.geometry.event.v1", dir: "Pub → Hi-RAG", purpose: "Voice/modality attribution events" },
+  { subject: "tokenism.swarm.population.v1", dir: "Pub → analytics, Discord", purpose: "EVO SWARM population state" },
+  { subject: "geometry.cgp.v1", dir: "Pub → Hi-RAG (Supabase RT)", purpose: "CGP via Supabase Realtime" },
+  { subject: "geometry.event.v1", dir: "Pub → ShapeStore", purpose: "Raw geometry events" },
+  { subject: "geometry.swarm.meta.v1", dir: "Pub → Hi-RAG", purpose: "Decoder pack metadata for swarm" },
+];
 
 // --- assumptions / coverage ---
 const COVERAGE_NOTES = [
