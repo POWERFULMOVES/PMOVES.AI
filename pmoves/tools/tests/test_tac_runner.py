@@ -80,3 +80,98 @@ def test_unknown_action_does_not_swallow_children_pass():
         result = evaluate_node(parent)
         assert result["status"] == "fail", result
         assert "unknown action.type" in result["detail"]
+
+
+# ---------------------------------------------------------------------------
+# http probe: SSRF guard and fail-closed behaviour
+#
+# The first version of _http_host_allowed blocked only the dotted-quad spelling
+# of the cloud metadata address. Every alternate encoding of the same address
+# walked straight through to it. These tests enumerate the spellings so the hole
+# cannot silently reopen — the original guard passed its own suite precisely
+# because that suite only ever tried the one literal.
+#
+# Non-loopback examples use RFC 5737 documentation space (203.0.113.0/24), never
+# real fleet addressing: committed files must not carry LAN topology.
+# ---------------------------------------------------------------------------
+
+import pytest
+
+from pmoves.tools.tac_runner import _http_host_allowed
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "169.254.169.254",            # canonical instance-metadata endpoint
+        "2852039166",                 # same address, decimal (glibc resolves it)
+        "0xa9fea9fe",                 # same address, hex
+        "::ffff:169.254.169.254",     # IPv4-mapped IPv6 — is_link_local is False on v6
+        "[::ffff:169.254.169.254]",   # ...and bracketed, as a URL would carry it
+        "169.254.1.1",                # link-local generally, not just metadata
+        "fe80::1",                    # IPv6 link-local
+    ],
+)
+def test_link_local_blocked_in_every_spelling(host):
+    """Every encoding of a link-local address must be refused."""
+    assert _http_host_allowed(host) is False
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "localhost",
+        "127.0.0.1",
+        "7860.localhost",       # loopback subdomain used by real nodes
+        "headscale.pmoves.ai",  # public DNS, our own infrastructure
+        "pmoves-z890",          # tailnet hostname
+        "203.0.113.10",         # RFC 5737 documentation address
+    ],
+)
+def test_legitimate_fleet_targets_still_allowed(host):
+    """The guard must not regress the 38 real http nodes it exists to enable."""
+    assert _http_host_allowed(host) is True
+
+
+def test_empty_host_refused():
+    assert _http_host_allowed("") is False
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"method": "POST"},                             # pinokio-p8 shape
+        {"body": "{}"},
+        {"headers": {"Authorization": "Bearer x"}},     # public-tunnel shape
+        {"json": {"text": "hi"}},                       # voice-agents shape
+        {"expect_json": {"cycles": []}},                # content predicate
+        {"expect_contains": "reconciled_at"},
+    ],
+)
+def test_unsupported_http_fields_fail_closed(extra):
+    """A node the probe cannot honour must FAIL, never PASS on status alone.
+
+    The probe sends an unauthenticated GET and reads only the status code. A
+    node declaring a different request, or asserting on a body that is never
+    read, would otherwise be evaluated against a request it did not describe —
+    green on an assertion nobody checked.
+    """
+    action = {"type": "http", "url": "http://127.0.0.1:9/x"}
+    action.update(extra)
+    result = evaluate_node(_node(action))
+    assert result["status"] == "fail"
+    assert "cannot honour" in result["detail"]
+
+
+def test_prose_expect_does_not_fail_closed():
+    """`expect` is human prose on all 38 existing nodes — it must still probe.
+
+    Treating it as a machine-readable predicate would fail-close every node this
+    change set out to wire up. Connection-refused here is the correct, truthful
+    FAIL: the node was evaluated, the service is down.
+    """
+    result = evaluate_node(
+        _node({"type": "http", "url": "http://127.0.0.1:9/healthz", "expect": "200 OK"})
+    )
+    assert result["status"] == "fail"
+    assert "cannot honour" not in result["detail"]

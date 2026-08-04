@@ -15,6 +15,7 @@ import json
 import re
 import ipaddress
 import shlex
+import socket
 import subprocess
 import sys
 import urllib.error
@@ -100,6 +101,33 @@ def _check_grep(target: str, pattern: str, multiline: bool = False) -> tuple[str
         return "fail", f"error reading {target}: {e}", True
 
 
+# Keys that change the request this probe would send, or assert on content it
+# never reads. Declaring any of them makes the node unsupported (see the http
+# branch in evaluate_node) rather than silently probed a different way.
+#
+# `expect` is deliberately NOT here: it is free-form prose present on the
+# existing 38 nodes ("200 OK", "Prometheus metrics for ..."), documentation
+# rather than a machine-readable predicate. Listing it would fail-close every
+# node this PR set out to wire up. The numeric assertion is `expect_status`,
+# which IS honoured.
+_HTTP_UNSUPPORTED_KEYS = (
+    # request shape
+    "method",
+    "headers",
+    "body",
+    "json",
+    "data",
+    "auth",
+    # content predicates
+    "expect_body",
+    "expect_json",
+    "expect_contains",
+    "expect_match",
+    "expect_jsonpath",
+    "assert",
+)
+
+
 def _check_http(url: str, expect_status: int = 200, timeout: int = 10) -> tuple[str, str, bool]:
     """Returns (status, detail, is_error).
 
@@ -150,6 +178,55 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _addr_blocked(ip: ipaddress._BaseAddress) -> bool:
+    """True if this resolved address must not be probed.
+
+    Link-local only — see _http_host_allowed for why the block is deliberately
+    this narrow. IPv4-mapped IPv6 (::ffff:169.254.169.254) is unwrapped first:
+    IPv6Address.is_link_local tests fe80::/10, so a mapped v4 link-local address
+    answers False and would otherwise sail straight through.
+    """
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    return ip.is_link_local
+
+
+def _numeric_host_to_ip(host: str) -> ipaddress.IPv4Address | None:
+    """Parse inet_aton-style numeric hosts that `ipaddress` rejects but libc accepts.
+
+    169.254.169.254 is also spelled 2852039166 (decimal) and 0xa9fea9fe (hex).
+    `ipaddress.ip_address` raises ValueError on both, so treating a parse failure
+    as "must be a hostname" hands IMDS straight to the caller. glibc's resolver
+    accepts these forms, so on Linux — where this runner actually executes — they
+    resolve and connect. Parse them here so the block does not depend on whether
+    the local resolver happens to expand them.
+    """
+    for base in (10, 16, 8):
+        try:
+            value = int(host, base)
+        except ValueError:
+            continue
+        if 0 <= value <= 0xFFFFFFFF:
+            return ipaddress.IPv4Address(value)
+    return None
+
+
+def _resolve_all(host: str) -> list[ipaddress._BaseAddress]:
+    """Every address `host` resolves to. Empty list if resolution fails."""
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return []
+    out: list[ipaddress._BaseAddress] = []
+    for info in infos:
+        try:
+            out.append(ipaddress.ip_address(info[4][0]))
+        except (ValueError, IndexError):
+            continue
+    return out
+
+
 def _http_host_allowed(host: str) -> bool:
     """Block link-local; allow everything else.
 
@@ -167,14 +244,37 @@ def _http_host_allowed(host: str) -> bool:
     services across the mesh is the entire purpose of these nodes, so a
     private-only allowlist fights the feature. Trees are repo-controlled and
     PR-reviewed, which is a materially different threat model from user input.
+
+    The block must hold for every *spelling* of a blocked address, not just the
+    canonical one. An earlier version of this function checked only the dotted
+    quad, so `2852039166`, `0xa9fea9fe` and `::ffff:169.254.169.254` all reached
+    IMDS. Three layers now: numeric literal, IP literal, then resolution — and a
+    hostname is rejected if ANY address it resolves to is blocked.
+
+    Known limitation: resolution here and connection in urllib are two separate
+    lookups, so a DNS-rebinding responder could answer differently for each.
+    Closing that needs connecting to a pinned address, which urllib does not
+    expose; it is out of scope while trees are repo-controlled and PR-reviewed.
     """
     if not host:
         return False
+    host = host.strip("[]").casefold()
+
+    numeric = _numeric_host_to_ip(host)
+    if numeric is not None:
+        return not _addr_blocked(numeric)
+
     try:
-        ip = ipaddress.ip_address(host.casefold())
+        literal = ipaddress.ip_address(host)
     except ValueError:
-        return True  # hostname — resolution is the network's business
-    return not ip.is_link_local
+        pass
+    else:
+        return not _addr_blocked(literal)
+
+    # A hostname. Reject if any address it maps to is blocked. Resolution
+    # failure yields an empty list and is allowed through — the probe itself
+    # then fails to connect, which is a truthful FAIL rather than a fake block.
+    return not any(_addr_blocked(ip) for ip in _resolve_all(host))
 
 
 def _check_command(target: str) -> tuple[str, str, bool]:
@@ -256,12 +356,35 @@ def evaluate_node(node: dict) -> dict:
             # 22 in `target`. Accept either. Note `expect` is free-form prose
             # ("200 OK", "Prometheus metrics for ...") and is NOT a status code —
             # the numeric override is the separate `expect_status` key.
-            status, detail, is_error = _check_http(
-                action.get("url") or action.get("target") or "",
-                int(action.get("expect_status", 200) or 200),
-            )
-            result["status"] = status
-            result["detail"] = detail
+            #
+            # FAIL CLOSED on anything this probe cannot actually perform. The
+            # probe sends an unauthenticated GET and reads only the status code,
+            # so a node declaring a method/body/headers or a content assertion
+            # would have its request quietly replaced by a different one and
+            # then be reported PASS on the strength of the status alone:
+            #   * pinokio-p8.tac.yaml   POSTs a body to assert 401/503 on an
+            #     unauthenticated write, and separately requires `cycles: []`
+            #   * voice-agents.tac.yaml POSTs a synthesis request
+            #   * public-tunnel.tac.yaml sends auth headers and requires a
+            #     recent reconciliation timestamp
+            # Green on an assertion that was never evaluated is precisely the
+            # fail-open this runner exists to remove, so refuse the node instead.
+            unsupported = [k for k in _HTTP_UNSUPPORTED_KEYS if action.get(k)]
+            if unsupported:
+                result["status"] = "fail"
+                result["detail"] = (
+                    f"http probe cannot honour {sorted(unsupported)} — it sends an "
+                    f"unauthenticated GET and asserts on the status code only. "
+                    f"Node is unsupported rather than passing; implement these "
+                    f"fields or convert the node to `command`."
+                )
+            else:
+                status, detail, is_error = _check_http(
+                    action.get("url") or action.get("target") or "",
+                    int(action.get("expect_status", 200) or 200),
+                )
+                result["status"] = status
+                result["detail"] = detail
         elif action_type == "manual":
             result["status"] = "pending"
             result["detail"] = "requires manual review"
