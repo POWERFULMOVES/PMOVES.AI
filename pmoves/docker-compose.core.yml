@@ -1192,7 +1192,8 @@ services:
     - env.shared.generated
     - env.shared
     - .env.generated
-    - .env.local
+    - path: .env.local
+      required: false
     environment:
     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}

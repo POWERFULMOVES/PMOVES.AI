@@ -4573,10 +4573,27 @@ services:
       context: ./ui
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
+    env_file:
+    - path: env.shared.generated
+      required: false
+    - path: env.shared
+      required: false
+    - path: env.tier-ui
+      required: false
+    - path: .env.generated
+      required: false
+    # .env.local is a per-node opt-in; short-form listing made it REQUIRED
+    # and hard-failed bring-up on nodes without it.
+    - path: .env.local
+      required: false
     environment:
     - NODE_ENV=production
     - HOSTNAME=0.0.0.0
+      # Server-side Supabase client (health check, service routes): the shared
+      # env carries host-oriented SUPABASE_URL=http://localhost:8000, which is
+      # unreachable from inside the container. supabaseServer.ts checks
+      # SUPABASE_SERVICE_URL first for exactly this split.
+    - SUPABASE_SERVICE_URL=${PMOVES_UI_SUPABASE_SERVICE_URL:-http://supabase-kong:8000}
       # Room manifests — the rooms API reads catalog.json + the per-room
       # manifests from this directory. Without it, the Rooms tab on the
       # home page renders "Room manifests are not available yet" and
@@ -4966,7 +4983,8 @@ services:
     - env.shared.generated
     - env.shared
     - .env.generated
-    - .env.local
+    - path: .env.local
+      required: false
     environment:
     - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
     - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
@@ -5007,7 +5025,8 @@ services:
     - env.shared.generated
     - env.shared
     - .env.generated
-    - .env.local
+    - path: .env.local
+      required: false
     environment:
     - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
     - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-127.0.0.1}
@@ -5049,7 +5068,8 @@ services:
     - env.shared.generated
     - env.shared
     - .env.generated
-    - .env.local
+    - path: .env.local
+      required: false
     environment:
     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
