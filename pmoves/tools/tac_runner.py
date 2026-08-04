@@ -151,6 +151,32 @@ def evaluate_node(node: dict) -> dict:
         elif action_type == "manual":
             result["status"] = "pending"
             result["detail"] = "requires manual review"
+        else:
+            # Fail closed on unrecognised action types.
+            #
+            # Previously there was no else branch, so an unknown type fell
+            # through to the initial status "pending" with an empty detail. That
+            # is indistinguishable from a deliberate `manual` node, so a typo or
+            # an aspirational action type silently asserted NOTHING while the
+            # tree still reported green — you could not tell a passing tree from
+            # a hollow one.
+            #
+            # This is not hypothetical: 141 nodes across 18 of the 43 trees use
+            # types this runner has never implemented — `shell` (72), `http`
+            # (38), `file` (7), plus supabase_migration/script/env_check/edit/
+            # nats_subject/pytest/pr_state/web/gh_issue/file_or/
+            # nats_messages_seen. Roughly a fifth of every assertion in the
+            # estate was inert.
+            #
+            # Note these are not simple aliases: `shell` nodes carry their
+            # command in `action.command` and `http` nodes in `action.url`,
+            # neither of which is `action.target`. Implementing them is a
+            # separate change; this one only stops them passing silently.
+            result["status"] = "fail"
+            result["detail"] = (
+                f"unsupported action type '{action_type}' — asserts nothing. "
+                f"Supported: file_exists, grep, command, manual."
+            )
 
     # Recurse into children
     for child in node.get("children", []):
