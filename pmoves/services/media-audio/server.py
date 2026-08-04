@@ -319,11 +319,25 @@ async def _maybe_publish(result: Dict[str, Any]) -> None:
         )
         return
 
+    # Adapt the native result to the event contract before validating. These are
+    # deliberately different documents (issue #2186): the contract wants a top-level
+    # `emotions` array, but full() nests it under `emotion`, so publishing the native
+    # result unmapped could never satisfy the schema — every publish was dropped.
+    try:
+        from analysis_event import build_analysis_event
+    except Exception:
+        logger.warning(
+            "not publishing to %s: analysis_event adapter is unavailable",
+            MEDIA_AUDIO_SUBJECT,
+            exc_info=True,
+        )
+        return
+
     # Validate exactly what goes on the wire. Coercing first matters: `default=str`
     # turns datetimes into strings at serialization time, so validating the raw dict
     # would be validating a different document than the one published.
     try:
-        payload = json.loads(json.dumps(result, default=str))
+        payload = json.loads(json.dumps(build_analysis_event(result), default=str))
     except (TypeError, ValueError):
         logger.warning(
             "skipping %s publish: payload is not JSON-serializable",
