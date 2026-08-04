@@ -293,3 +293,19 @@ scrape_configs:
     # reachability panel, i.e. manufacture the exact false "offline" this fixes.
     # Re-add once the exporter is installed on that node.
     #     - pmoves-4090:9100
+    metric_relabel_configs:
+      # Drop the systemd collector's per-unit state matrix: 5 states x ~220 units x 3
+      # nodes = ~3300 series, 41% of everything this job ingests, and nothing in
+      # monitoring/ queries it. Measured on enable: node-exporter came in at 8115
+      # series against a total head of 11527 — one job at 70% of the TSDB, on a
+      # Prometheus running the default 15d retention with no explicit cap. This fleet
+      # has a documented history of disk-fill incidents (KVM4-1 /tmp balloon, the
+      # ClickHouse syslog runaway), so unbounded growth here is not a theoretical cost.
+      #
+      # The rest of node_exporter is deliberately KEPT, not trimmed to just the
+      # dashboard's tailscaled_*/pmoves_exit_* — node_filesystem_*, CPU and memory on
+      # the exit nodes are precisely the signals that would have caught both of those
+      # incidents before they took a service stack down.
+      - source_labels: [__name__]
+        regex: node_systemd_unit_state
+        action: drop
