@@ -2230,7 +2230,9 @@ services:
       start_period: 60s
   media-audio:
     <<: *tier-media-hardened
-    build: ./services/media-audio
+    build:
+      context: ..
+      dockerfile: pmoves/services/media-audio/Dockerfile
     restart: unless-stopped
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
