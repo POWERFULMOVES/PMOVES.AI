@@ -1,0 +1,53 @@
+name: Fork Registry Ratchet
+
+# Hard gate: every fork in pmoves/config/fork_registry.json must have an
+# explicit `sync` decision + `reason`. The ratchet enforces 100% decision
+# coverage on the current registry; new forks may be ADDED (coverage stays
+# or grows), but a decision may never be REMOVED (coverage can only
+# stay flat or grow — never go down). The deprecated `skip` field is
+# a hard fail until migrated.
+#
+# This is a no-network check (reads a static JSON, <100ms) so it runs
+# cheaply on every PR touching the registry, the ratchet script, or
+# the workflow itself.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/config/fork_registry.json"
+      - "pmoves/tools/fork_registry_ratchet.py"
+      - "pmoves/tools/tests/test_fork_registry_ratchet.py"
+      - ".github/workflows/fork-registry-ratchet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  fork-registry-ratchet:
+    name: fork-registry-ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Run ratchet (read-only, no network)
+        run: python pmoves/tools/fork_registry_ratchet.py
+
+      - name: Pytest the ratchet (regression net for the ratchet itself)
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest pmoves/tools/tests/test_fork_registry_ratchet.py -v
