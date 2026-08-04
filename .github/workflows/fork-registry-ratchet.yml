@@ -50,8 +50,10 @@ jobs:
       - name: Pytest the ratchet (regression net for the ratchet itself)
         run: |
           # pmoves/conftest.py is shared across the tools/tests suite and
-          # imports pytest_asyncio (asyncio_mode=auto in pyproject.toml), so
-          # the ratchet-only test file inherits that requirement even though
-          # the ratchet tests themselves are sync.
-          python -m pip install --quiet pytest pytest-asyncio
+          # imports pytest_asyncio (asyncio_mode=auto in pyproject.toml) AND
+          # pyyaml. The ratchet-only test file inherits both requirements
+          # even though the ratchet tests are sync + json-only — there's no
+          # way to import from pmoves.tools.* without the conftest import
+          # chain resolving, so install everything conftest pulls in.
+          python -m pip install --quiet pytest pytest-asyncio pyyaml
           python -m pytest pmoves/tools/tests/test_fork_registry_ratchet.py -v
