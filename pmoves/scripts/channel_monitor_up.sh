@@ -5,7 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 ROOT_DIR_DOCKER="$(pwd -W 2>/dev/null || pwd)"
 
-. ./scripts/with-env.sh "$ROOT_DIR/env.shared"
+# Source WITHOUT arguments: with-env.sh in wrapper mode (any arg) does
+# `exec "$@"` - so passing the env file path made the sourced script
+# exec env.shared as a program and die before docker compose ever ran.
+# The env chain (env.shared included) loads on plain source.
+. ./scripts/with-env.sh
 
 # Git Bash/MSYS rewrites POSIX-looking env values (for example /app/config/...)
 # into host paths unless path conversion is disabled for docker compose.
@@ -25,12 +29,19 @@ DC_CMD=(
   --env-file env.tier-media
   --env-file env.tier-agent
   --env-file env.tier-ui
-  --env-file env.tier-supabase.urlencoded
   -f docker-compose.yml
   -f docker-compose.comfyui.yml
   -f docker-compose.ultimate-tts-studio.yml
   -f docker-compose.archon.submodule.yml
+  # Keep the pmoves-yt view consistent with up-yt (cookie volume + env);
+  # without this, a recreate from THIS file set strips the overlay.
+  -f docker-compose.yt-cookies.yml
 )
+
+# Generated URL-encoded overlay is optional - append only when present.
+if [ -f env.tier-supabase.urlencoded ]; then
+  DC_CMD+=(--env-file env.tier-supabase.urlencoded)
+fi
 
 runtime="${SUPABASE_RUNTIME:-compose}"
 if docker ps --format '{{.Names}}' | grep -Eq '^supabase_db_'; then
@@ -68,8 +79,8 @@ fi
 
 echo "-> Starting channel-monitor (runtime=$runtime)"
 if [[ -n "$db_url" ]]; then
-  CHANNEL_MONITOR_DATABASE_URL="$db_url" "${DC_CMD[@]}" --profile workers --profile yt up -d --force-recreate channel-monitor
+  CHANNEL_MONITOR_DATABASE_URL="$db_url" "${DC_CMD[@]}" --profile workers --profile yt up -d --force-recreate --no-deps channel-monitor
 else
-  "${DC_CMD[@]}" --profile workers --profile yt up -d --force-recreate channel-monitor
+  "${DC_CMD[@]}" --profile workers --profile yt up -d --force-recreate --no-deps channel-monitor
 fi
 echo "OK Channel monitor up"
