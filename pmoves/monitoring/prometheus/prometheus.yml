@@ -258,19 +258,38 @@ scrape_configs:
   #   static_configs:
   #     - targets: ["channel-monitor:8097"]
 
-  # === Tailscale fleet metrics (Added 2026-06-15) ===
-  # DISABLED by default. Tailscale client metrics (tailscaled_inbound_bytes_total,
+  # === Tailscale fleet metrics (Added 2026-06-15, ENABLED 2026-08-04) ===
+  # Tailscale client metrics (tailscaled_inbound_bytes_total,
   # tailscaled_outbound_bytes_total, tailscaled_*_packets_total, advertised/approved
   # routes, health) are exported per node via node-exporter's textfile collector.
   # Each node runs `tailscale metrics write` on a systemd timer; node-exporter on
   # :9100 surfaces the result; Prometheus scrapes node-exporter over the tailnet.
   # This avoids opening the Tailscale local API (:5252) or needing a Tailscale API key.
   # Setup + unit files: tailscale-textfile-collector.md (this directory).
-  # To enable: confirm node-exporter + timer on each node, then uncomment.
-  # - job_name: node-exporter
-  #   static_configs:
-  #     - targets:
-  #         - pmoves-kvm2:9100
-  #         - pmoves-kvm4-1:9100
-  #         - pmoves-kvm4-2:9100
-  #         - pmoves-4090:9100
+  #
+  # The job name MUST stay "node-exporter" — the Tailscale Network Health dashboard
+  # (grafana/dashboards/tailscale-network.json) keys its node-reachability panel off
+  # up{job="node-exporter"}. Producers were deployed to the KVMs by #2012; this
+  # consumer half was never enabled, so the board rendered empty and read as
+  # "exit node offline" even while all three nodes were up.
+  #
+  # Enable precondition (verified 2026-08-04 on all three KVMs): node_exporter live on
+  # :9100, tailscale-metrics.timer + exit-node-observer.timer active, 27 tailscaled_*
+  # and 9 pmoves_exit_* series present, reachable from inside this container by
+  # tailnet hostname.
+  #
+  # scrape_interval is 60s, not the 15s global: both writer timers fire once a minute,
+  # so faster scraping resamples identical values across the mesh for nothing.
+  - job_name: node-exporter
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    static_configs:
+      - targets:
+          - pmoves-kvm2:9100
+          - pmoves-kvm4-1:9100
+          - pmoves-kvm4-2:9100
+    # pmoves-4090:9100 intentionally omitted — no node_exporter deployed there yet
+    # (connection times out). Adding it would pin a permanently-down node on the
+    # reachability panel, i.e. manufacture the exact false "offline" this fixes.
+    # Re-add once the exporter is installed on that node.
+    #     - pmoves-4090:9100
