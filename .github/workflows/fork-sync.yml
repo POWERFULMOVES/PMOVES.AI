@@ -154,7 +154,14 @@ jobs:
           jellyfin/jellyfin|PMOVES-Jellyfin|PMOVES.AI-Edition-Hardened
           "
 
-          echo "$FORKS" | grep '|' | while IFS='|' read upstream fork branch_override; do
+          # Process substitution (`< <(...)`) instead of `echo | grep | while`
+          # — the pipeline form runs the `while` in a subshell, so any
+          # updates to SYNCED / SKIPPED / CONFLICTS / ERRORS / RESULTS
+          # inside the loop are lost when the subshell exits. That is the
+          # reason "Results: $SYNCED synced" has always printed 0. The
+          # process substitution form runs the `while` in the parent shell
+          # so the counters survive the loop.
+          while IFS='|' read upstream fork branch_override; do
             [ -z "$fork" ] && continue
 
             # Check max
@@ -269,11 +276,11 @@ jobs:
             fi
 
             sleep 2
-          done
+          done < <(echo "$FORKS" | grep '|')
 
           echo ""
           echo "=== Results: $SYNCED synced ==="
-          echo "$RESULTS"
+          echo -e "$RESULTS"
 
       - name: Create issue if attention needed
         if: ${{ !inputs.dry_run }}
