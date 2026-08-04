@@ -26,10 +26,27 @@ RUN apt-get update && \
 
 WORKDIR /tmp
 
-RUN git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git && \
+# whisper.cpp PINNED. This was `git clone --depth 1` with no tag, i.e. always
+# upstream HEAD, and it broke the image the moment whisper.cpp gained a new
+# component:
+#
+#   CMake Error at whisper.cpp/build/cmake_install.cmake:114 (file):
+#     file INSTALL cannot find "/tmp/whisper.cpp/build/bin/libparakeet.so.1.9.1"
+#
+# `--target whisper` builds ONLY that target, but `cmake --install` walks the
+# full install manifest, which now includes libparakeet (Parakeet ASR support).
+# So the narrow build and the wide install disagreed and the layer failed.
+#
+# Two changes, both needed:
+#   1. pin the tag — an unpinned upstream is a build that breaks on someone
+#      else's release schedule, with no diff on our side to explain it
+#   2. drop `--target whisper` and build the default target set, so every
+#      artifact the install step expects actually exists
+ARG WHISPER_CPP_REF=v1.9.1
+RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggerganov/whisper.cpp.git && \
     cmake -S whisper.cpp -B whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
         -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF && \
-    cmake --build whisper.cpp/build --config Release --target whisper && \
+    cmake --build whisper.cpp/build --config Release && \
     cmake --install whisper.cpp/build --config Release --prefix /usr/local && \
     rm -rf whisper.cpp && \
     git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg && \
