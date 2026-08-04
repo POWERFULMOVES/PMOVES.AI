@@ -79,8 +79,8 @@ fi
 
 echo "-> Starting channel-monitor (runtime=$runtime)"
 if [[ -n "$db_url" ]]; then
-  CHANNEL_MONITOR_DATABASE_URL="$db_url" "${DC_CMD[@]}" --profile workers --profile yt up -d --force-recreate --no-deps channel-monitor
+  CHANNEL_MONITOR_DATABASE_URL="$db_url" "${DC_CMD[@]}" --profile workers --profile yt up -d --force-recreate channel-monitor
 else
-  "${DC_CMD[@]}" --profile workers --profile yt up -d --force-recreate --no-deps channel-monitor
+  "${DC_CMD[@]}" --profile workers --profile yt up -d --force-recreate channel-monitor
 fi
 echo "OK Channel monitor up"
