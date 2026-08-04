@@ -70,6 +70,11 @@ jobs:
             PMOVES-ClawRouter
             PMOVES-AgentGym
             PMOVES-Jellyfin
+            PMOVES-n8n
+            PMOVES-YT
+            PMOVES-ToKenism-Multi
+            PMOVES-BoTZ
+            PMOVES-crush
 
       - name: Discover forks
         env:
@@ -152,6 +157,11 @@ jobs:
           BlockRunAI/ClawRouter|PMOVES-ClawRouter|
           WooooDyy/AgentGym|PMOVES-AgentGym|
           jellyfin/jellyfin|PMOVES-Jellyfin|PMOVES.AI-Edition-Hardened
+          n8n-io/n8n|PMOVES-n8n|PMOVES.AI-Edition-Hardened
+          yt-dlp/yt-dlp|PMOVES-YT|PMOVES.AI-Edition-Hardened
+          POWERFULMOVES/PMOVES-ToKenism-Multi|PMOVES-ToKenism-Multi|
+          POWERFULMOVES/PMOVES-BoTZ|PMOVES-BoTZ|
+          charmbracelet/crush|PMOVES-crush|
           "
 
           # Process substitution (`< <(...)`) instead of `echo | grep | while`
