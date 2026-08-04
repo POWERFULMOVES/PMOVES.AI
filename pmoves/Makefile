@@ -4341,8 +4341,11 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
 
-.PHONY: docs-render-living
-docs-render-living: ## Render living docs dashboard via a2ui-renderer (requires creator profile)
+# Renamed from docs-render-living: it silently shadowed the Lane 2228
+# registry iterator (make keeps the LAST single-colon recipe) — same
+# duplicate-target class as the #2339 fix for juicefs-status et al.
+.PHONY: docs-render-living-dashboard
+docs-render-living-dashboard: ## Render living docs DASHBOARD via a2ui-renderer (legacy renderer)
 	@echo "🎨 Rendering living docs dashboard via a2ui-renderer..."
 	@if ! docker ps --format '{{.Names}}' | grep -q a2ui-renderer; then \
 		echo "⚠️  a2ui-renderer not running. Start with: make -C pmoves up-a2ui-renderer"; exit 1; \
