@@ -76,11 +76,19 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           echo "=== Fork Drift Audit ==="
-          gh repo list POWERFULMOVES --fork --json name,parent --jq '.[] | "\(.name)|\(.parent.owner.login)/\(.parent.name)"' | while IFS='|' read fork upstream; do
+          # --limit 1000 is the P1: `gh repo list` defaults to 30, which is ~8% of
+          # the ~374 forks in the org, so audits have been silently missing ~92%.
+          # 1000 covers the full set with headroom; org growth won't break this
+          # until we cross 1k forks, at which point a paginated call replaces it.
+          gh repo list POWERFULMOVES --fork --limit 1000 --json name,parent --jq '.[] | "\(.name)|\(.parent.owner.login)/\(.parent.name)"' | sort -u | while IFS='|' read fork upstream; do
             fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || continue
             ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || continue
-            bh=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.behind_by' 2>/dev/null) || echo '-1'
-            ah=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.ahead_by' 2>/dev/null) || echo '-1'
+            # One compare call (was 2 — both .behind_by and .ahead_by in one response).
+            # Saves 1 API call per fork = 374 calls/audit at current org size; without
+            # this dedup we burn the secondary rate limit within ~3 audits.
+            cmp=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '{bh: .behind_by, ah: .ahead_by}' 2>/dev/null) || cmp='{"bh":-1,"ah":-1}'
+            bh=$(echo "$cmp" | jq -r '.bh')
+            ah=$(echo "$cmp" | jq -r '.ah')
             if [ "$bh" = "0" ] 2>/dev/null; then
               echo "  $fork: synced"
             elif [ "$bh" -gt 999 ] 2>/dev/null; then
@@ -146,7 +154,14 @@ jobs:
           jellyfin/jellyfin|PMOVES-Jellyfin|PMOVES.AI-Edition-Hardened
           "
 
-          echo "$FORKS" | grep '|' | while IFS='|' read upstream fork branch_override; do
+          # Process substitution (`< <(...)`) instead of `echo | grep | while`
+          # — the pipeline form runs the `while` in a subshell, so any
+          # updates to SYNCED / SKIPPED / CONFLICTS / ERRORS / RESULTS
+          # inside the loop are lost when the subshell exits. That is the
+          # reason "Results: $SYNCED synced" has always printed 0. The
+          # process substitution form runs the `while` in the parent shell
+          # so the counters survive the loop.
+          while IFS='|' read upstream fork branch_override; do
             [ -z "$fork" ] && continue
 
             # Check max
@@ -174,9 +189,10 @@ jobs:
             ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no upstream branch"; continue; }
             uo=$(echo "$upstream" | cut -d/ -f1)
 
-            # Get drift
-            bh=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.behind_by' 2>/dev/null)
-            ah=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.ahead_by' 2>/dev/null)
+            # Get drift (one call, both fields — dedup'd from 2 calls to 1)
+            cmp=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '{bh: .behind_by, ah: .ahead_by}' 2>/dev/null) || cmp='{"bh":-1,"ah":-1}'
+            bh=$(echo "$cmp" | jq -r '.bh')
+            ah=$(echo "$cmp" | jq -r '.ah')
             [ -z "$bh" ] && { echo "SKIP $fork: compare failed"; continue; }
             [ "$bh" -lt 1 ] 2>/dev/null && { echo "SKIP $fork: synced ($bh behind)"; continue; }
 
@@ -260,11 +276,11 @@ jobs:
             fi
 
             sleep 2
-          done
+          done < <(echo "$FORKS" | grep '|')
 
           echo ""
           echo "=== Results: $SYNCED synced ==="
-          echo "$RESULTS"
+          echo -e "$RESULTS"
 
       - name: Create issue if attention needed
         if: ${{ !inputs.dry_run }}

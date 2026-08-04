@@ -1165,6 +1165,19 @@ nats-streams-list: ## List current JetStream streams (ad-hoc)
 	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" \
 	    nats -s "$$NATS_URL" stream ls -n
 
+# ----------------------------------------------------------------------------
+# Fork registry ratchet (2026-08-03)
+#   fork-registry-ratchet       - assert every fork has sync+reason
+#   fork-registry-ratchet-json  - same, machine-readable
+# ----------------------------------------------------------------------------
+.PHONY: fork-registry-ratchet fork-registry-ratchet-json
+fork-registry-ratchet: ## Assert every fork in pmoves/config/fork_registry.json has a sync+reason decision (no network, <100ms)
+	@echo "🔒 Fork-registry ratchet..."
+	@$(PYTHON) tools/fork_registry_ratchet.py
+
+fork-registry-ratchet-json: ## Same as fork-registry-ratchet, but JSON output (for CI annotation)
+	@$(PYTHON) tools/fork_registry_ratchet.py --json
+
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."

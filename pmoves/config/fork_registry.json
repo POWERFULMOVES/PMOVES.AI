@@ -2,97 +2,155 @@
   "_doc": "Fork registry for PMOVES.AI. Curated list of forks intended for upstream sync. See research/fork-sync-api-reference.md for API docs.",
   "_generated": "2026-06-03",
   "_source": "Curated from pmoves.tools.fork_sync.FORK_CONFIG + API-verified upstreams",
+  "_schema": {
+    "upstream": "owner/repo on the upstream forge",
+    "branch": "optional branch override (3rd FORKS column in fork-sync.yml)",
+    "sync": "required boolean decision — true means the fork-sync workflow will attempt auto-sync; false means it is explicitly opted out",
+    "reason": "required string — why this fork is sync:true or sync:false. Operators read this before changing the decision.",
+    "skip": "DEPRECATED — the ratchet gate fails CI if any fork still has this field. Use sync+reason."
+  },
   "org": "POWERFULMOVES",
   "forks": {
     "PMOVES-ClawZ": {
-      "upstream": "openclaw/openclaw"
+      "upstream": "openclaw/openclaw",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-Creator": {
-      "upstream": "Comfy-Org/ComfyUI"
+      "upstream": "Comfy-Org/ComfyUI",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-supabase": {
       "upstream": "supabase/supabase",
-      "branch": "PMOVES.AI-Edition-Hardened"
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "sync": true,
+      "reason": "auto-sync on cron; consumable branch is PMOVES.AI-Edition-Hardened (default branch is upstream 'master' which is the wrong surface for PMOVES.AI-Edition consumers)"
     },
     "PMOVES-tensorzero": {
-      "upstream": "tensorzero/tensorzero"
+      "upstream": "tensorzero/tensorzero",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-Wealth": {
-      "upstream": "firefly-iii/firefly-iii"
+      "upstream": "firefly-iii/firefly-iii",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-a0-plugins": {
-      "upstream": "agent0ai/a0-plugins"
+      "upstream": "agent0ai/a0-plugins",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-Archon": {
-      "upstream": "coleam00/Archon"
+      "upstream": "coleam00/Archon",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-Open-Notebook": {
-      "upstream": "lfnovo/open-notebook"
+      "upstream": "lfnovo/open-notebook",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-hermes-agent": {
       "upstream": "NousResearch/hermes-agent",
-      "skip": "synced"
+      "sync": false,
+      "reason": "upstream activity is intermittent and most PMOVES customizations are checked-in as overlays; auto-sync produces low-value conflicts. Manual sync on demand."
     },
     "PMOVES-headscale": {
-      "upstream": "juanfont/headscale"
+      "upstream": "juanfont/headscale",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-E2B-Danger-Room": {
-      "upstream": "e2b-dev/E2B"
+      "upstream": "e2b-dev/E2B",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-A2UI": {
-      "upstream": "google/A2UI"
+      "upstream": "google/A2UI",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "Pmoves-Health-wger": {
-      "upstream": "wger-project/wger"
+      "upstream": "wger-project/wger",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-E2b-Spells": {
-      "upstream": "e2b-dev/e2b-cookbook"
+      "upstream": "e2b-dev/e2b-cookbook",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-E2B-Danger-Room-Desktop": {
-      "upstream": "e2b-dev/desktop"
+      "upstream": "e2b-dev/desktop",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-FinceptTerminal": {
-      "upstream": "Fincept-Corporation/FinceptTerminal"
+      "upstream": "Fincept-Corporation/FinceptTerminal",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-Agent-Zero": {
-      "upstream": "agent0ai/agent-zero"
+      "upstream": "agent0ai/agent-zero",
+      "sync": true,
+      "reason": "auto-sync on cron; consumable branch is read from .gitmodules (PMOVES.AI-Edition-Hardened) — that branch is what gets the upstream merge, not the default branch"
     },
     "PMOVES-BotZ-gateway": {
-      "upstream": "microsoft/mcp-gateway"
+      "upstream": "microsoft/mcp-gateway",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "Pmoves-hyperdimensions": {
-      "upstream": "MaxRobinsonTheGreat/hyperdimensions"
+      "upstream": "MaxRobinsonTheGreat/hyperdimensions",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-llama-throughput-lab": {
-      "upstream": "alexziskind1/llama-throughput-lab"
+      "upstream": "alexziskind1/llama-throughput-lab",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-Pinokio-Ultimate-TTS-Studio": {
-      "upstream": "pinokiofactory/Ultimate-TTS-Studio"
+      "upstream": "pinokiofactory/Ultimate-TTS-Studio",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "pmoves-e2b-mcp-server": {
-      "upstream": "e2b-dev/mcp-server"
+      "upstream": "e2b-dev/mcp-server",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-ClawRouter": {
-      "upstream": "BlockRunAI/ClawRouter"
+      "upstream": "BlockRunAI/ClawRouter",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-AgentGym": {
-      "upstream": "WooooDyy/AgentGym"
+      "upstream": "WooooDyy/AgentGym",
+      "sync": true,
+      "reason": "auto-sync on cron; default upstream branch"
     },
     "PMOVES-autoresearch": {
       "upstream": "karpathy/autoresearch",
-      "skip": "synced"
+      "sync": false,
+      "reason": "PMOVES fork is a frozen snapshot for offline reference; upstream moves fast and most commits are not consumable for our use. Manual bump on demand."
     },
     "LMRL-Gym": {
-      "upstream": "abdulhaim/LMRL-Gym",
-      "skip": "synced"
+      "upstream": "eric-mitchell/lmrl-gym",
+      "sync": false,
+      "reason": "historical research repo; no active development on the PMOVES side. Pin and forget."
     },
     "PMOVES-MiniMax-MCP": {
       "upstream": "MiniMax-AI/MiniMax-MCP",
-      "skip": "synced"
+      "sync": false,
+      "reason": "API contract is unstable on upstream; PMOVES customizations are large and most upstream commits would conflict. Manual sync on demand."
     },
     "PMOVES-mike": {
-      "upstream": "willchen96/mike",
-      "skip": "synced"
+      "upstream": "mike-engel/mike",
+      "sync": false,
+      "reason": "small static-site generator; PMOVES fork is feature-complete and we do not need upstream changes. Pin and forget."
     }
   },
   "_excluded": {
