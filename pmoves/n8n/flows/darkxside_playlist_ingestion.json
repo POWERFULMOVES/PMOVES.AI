@@ -70,7 +70,7 @@
     {
       "parameters": {
         "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [{ "id": "already-ingested", "leftValue": "={{ JSON.stringify($json) }}", "rightValue": "[]", "operator": { "type": "string", "operation": "notEquals", "name": "filter:operator:not-equals" } }],
+          "conditions": [{ "id": "already-ingested", "leftValue": "={{ JSON.stringify($json) }}", "rightValue": "[]", "operator": { "type": "string", "operation": "equals", "name": "filter:operator:equals" } }],
           "combinator": "and"
         },
         "options": {}
@@ -98,7 +98,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 30000,
-      "onError": "continueRegularOutput"
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
