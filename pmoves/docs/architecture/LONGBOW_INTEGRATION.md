@@ -2,7 +2,7 @@
 
 **Status:** v1.1 deferral — Milestone M6  
 **TAC Ref:** `pmoves/configs/tac_trees/pmoves-launch-readiness.tac.yaml` stage-4.longbow-or-deprecated  
-**Decision:** Define (not deprecate) — Owner Decision #1, default: Define
+**Decision:** Deprecated — see `PMOVES_LONGBOW_DEPRECATED.md`. BM25/hybrid capability delivered via Qdrant sparse + Meilisearch instead.
 
 ## Purpose
 
