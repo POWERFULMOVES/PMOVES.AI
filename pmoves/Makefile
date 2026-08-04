@@ -538,6 +538,23 @@ supa-stop-all: ## Stop both Supabase runtimes (CLI and compose) to clear mixed-s
 	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true
 	@echo "✅ All Supabase runtimes stopped"
 
+build-svc: ## Build ONE service image from current source: make build-svc SVC=flute-gateway
+	@test -n "$(SVC)" || { echo "Usage: make build-svc SVC=<compose-service>"; exit 1; }
+	@echo "Building $(SVC) from current source..."
+	@$(DC) build $(SVC)
+	@echo "Built. Recreate to deploy: make recreate-svc SVC=$(SVC)"
+
+recreate-svc: ## Surgical recreate of ONE service with current env+image: make recreate-svc SVC=flute-gateway
+	@test -n "$(SVC)" || { echo "Usage: make recreate-svc SVC=<compose-service>"; exit 1; }
+	@echo "Recreating $(SVC) with current env (no deps)..."
+	@$(DC) up -d --force-recreate --no-deps $(SVC)
+	@echo "Done. If Kong fronts it, bounce kong too (cached upstream DNS): docker restart pmoves-supabase-kong-1"
+
+rebuild-svc: ## build-svc + recreate-svc in one move (the stale-container-object killer)
+	@$(MAKE) --no-print-directory build-svc SVC=$(SVC)
+	@$(MAKE) --no-print-directory recreate-svc SVC=$(SVC)
+
+# Back-compat alias: the recreate primitive predates the generic name.
 supa-recreate-svc: ## Surgical recreate of ONE Supabase service with current env: make supa-recreate-svc SVC=supabase-kong
 	@test -n "$(SVC)" || { echo "Usage: make supa-recreate-svc SVC=<compose-service>"; exit 1; }
 	@echo "Recreating $(SVC) with current env (no deps)..."
