@@ -57,6 +57,20 @@ PREFERRED_TAGS = {t.strip().lower() for t in PREFERRED_TAGS_RAW.split(",") if t.
 AVOID_TAGS_RAW = os.environ.get("HF_AVOID_TAGS", "")
 AVOID_TAGS = {t.strip().lower() for t in AVOID_TAGS_RAW.split(",") if t.strip()}
 
+# L3: Local-model compatibility scoring — rewards models that can run on SPARK (GB10/ARM64)
+# Tags/keywords that indicate local runnability
+LOCAL_COMPAT_TAGS = {
+    "gguf", "ggml", "ollama", "llama.cpp", "llamacpp",
+    "q4_k_m", "q4_0", "q5_k_m", "q8_0", "q4_k_s",
+    "text-generation", "text2text-generation", "feature-extraction",
+    "conversational", "chat",
+}
+LOCAL_COMPAT_KEYWORDS = {"gguf", "ggml", "ollama", "llama.cpp", "exl2", "awq", "gptq", "bitsandbytes"}
+# ARM64 compatibility signals
+ARM64_TAGS = {"arm64", "aarch64", "jetson", "edge", "mobile", "embedded"}
+# Max model size that fits SPARK 128GB unified memory (with context room)
+SPARK_MAX_MODEL_GB = 80
+
 SUBSCRIBE_SUBJECT = "hf.model.discovered.v1"
 PUBLISH_SUBJECT = "hf.model.evaluated.v1"
 
@@ -141,6 +155,36 @@ class HFResearchAgent:
             score += 15
             reasons.append(f"pipeline_tag: {pipeline_tag}")
 
+        # L3: Criterion 5 — Local compatibility for SPARK GB10/ARM64 (0-10 bonus points)
+        # Rewards models that can actually run on this node.
+        local_compat: list[str] = []
+        model_id_lower = model_id.lower()
+
+        # Check for GGUF/quantized formats (directly runnable via llama.cpp/Ollama)
+        quant_tags = tags & LOCAL_COMPAT_TAGS
+        if quant_tags:
+            local_compat.append(f"quant tags: {sorted(quant_tags)}")
+
+        # Check model_id for quantization keywords
+        for kw in LOCAL_COMPAT_KEYWORDS:
+            if kw in model_id_lower:
+                local_compat.append(f"format: {kw}")
+                break
+
+        # Check for ARM64/edge compatibility
+        arm_tags = tags & ARM64_TAGS
+        if arm_tags:
+            local_compat.append(f"arm64 tags: {sorted(arm_tags)}")
+
+        # Pipeline compatibility (text-generation is the sweet spot for AZ/Archon workers)
+        if pipeline_tag in ("text-generation", "text2text-generation", "feature-extraction"):
+            local_compat.append(f"compatible pipeline: {pipeline_tag}")
+
+        if local_compat:
+            bonus = min(10, len(local_compat) * 3)
+            score += bonus
+            reasons.append(f"local-compatible (+{bonus}): {'; '.join(local_compat)}")
+
         # Penalty: Avoid tags (-10 points each)
         matched_avoid = tags & AVOID_TAGS
         if matched_avoid:
@@ -159,6 +203,8 @@ class HFResearchAgent:
             "downloads": downloads,
             "likes": likes,
             "pipeline_tag": pipeline_tag,
+            "local_compatible": bool(local_compat),
+            "local_compat_details": local_compat,
             "hf_url": model.get("hf_url", f"https://huggingface.co/{model_id}"),
             "discovered_at": model.get("discovered_at", ""),
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
@@ -185,6 +231,10 @@ class HFResearchAgent:
         self._evaluated_count += 1
         if evaluation["passed"]:
             self._passed_count += 1
+            local_tag = " 🏠LOCAL" if evaluation.get("local_compatible") else ""
+            print(f"[hf-research] PASS {model_id} (score={evaluation['score']}/100){local_tag}", file=sys.stderr)
+        else:
+            print(f"[hf-research] SKIP {model_id} (score={evaluation['score']}/100)", file=sys.stderr)
 
         self._last_evaluated = datetime.now(timezone.utc).isoformat()
         if not self._healthy:
