@@ -82,6 +82,17 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # boot failure is loud and self-describing if they are genuinely absent.
     "DASHBOARD_USERNAME": {"tier": "supabase", "required": False},
     "DASHBOARD_PASSWORD": {"tier": "supabase", "required": False},
+    # Internal fleet tokens — required ${VAR:?} compose vars that were absent from
+    # the v2 manifest, so `docker compose up` file-wide interpolation aborted on
+    # the field laptop. Randomly minted into env.shared; registering here
+    # materializes them into the tier env files the funnel emits, so no service is
+    # gated from a field node.
+    "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
+    "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
+    "SECRET_KEY_BASE": {"tier": "supabase", "required": True},
+    "VAULT_ENC_KEY": {"tier": "supabase", "required": True},
+    "LOGFLARE_PRIVATE_ACCESS_TOKEN": {"tier": "supabase", "required": True},
+    "LOGFLARE_PUBLIC_ACCESS_TOKEN": {"tier": "supabase", "required": True},
 }
 
 
