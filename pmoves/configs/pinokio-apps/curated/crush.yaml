@@ -1,27 +1,43 @@
+schema_version: "1.0.0"
 slug: crush
-display_name: "Crush (PMOVES)"
-category: agent
-description: >
-  Charm Crush CLI with full PMOVES bootstrap — TensorZero provider,
-  MCP servers, CHIT trail signing, context paths, LSP diagnostics.
-  The companion at the terminal where Human, AI, and System converge.
+title: "Crush (PMOVES)"
+description: "Charm Crush CLI with full PMOVES bootstrap — TensorZero provider, MCP servers, CHIT trail signing, context paths, LSP diagnostics. The companion at the terminal where Human, AI, and System converge."
 owner: pmoves
-launcher_script: plugin/code/crush/pinokio.js
-launcher_type: plugin
-gpu_required: false
-gpu_reservation_mb: 0
-autostart: false
+version_seen: "0.86.0"
+runtime:
+  launcher_script: plugin/code/crush/pinokio.js
+  autostart: false
+  gpu_required: false
+  min_vram_mb: 0
+  gpu_arch: []
+  gpu_reservation_mb: 0
+  gpu_reservation_mode: concurrent
+  dependencies: []
+  requires_hf_login: false
+endpoints:
+  primary:
+    port: 0
+    protocol: tcp
+    health: null
+  alt: []
+pinokio_skill_ref: null
 network_exposure:
-  layer_1:
+  l1_venv:
     reachable: true
-    description: "venv — no external deps beyond npx/node"
-  layer_2:
-    reachable: false
-    description: "not a containerized service"
-  layer_3:
+  l2_container_same_host:
     reachable: true
-    description: "reaches TensorZero :3030, NATS :4222, Cipher :8105 via Docker network"
-  layer_4:
+    address: "http://host.docker.internal:0"
+  l3_mesh:
+    reachable: true
+    address: null
+    headscale_acl_ports: []
+    tags_required: []
+  l4_public:
     reachable: false
-    description: "not publicly exposed (terminal agent)"
-tags: [agent, terminal, companion, pmoves-native]
+    tunnel: null
+    dns_record: null
+    public_url: null
+notes:
+  - "Crush is a terminal agent, not an HTTP service — port 0 reflects that it has no listening endpoint"
+  - "Bootstrap runs make -C pmoves crush-bootstrap before exec crush (generates crush.json + CHIT signing)"
+  - "Reaches TensorZero :3030, NATS :4222, Cipher :8105, Agent Zero :8080 via Docker network at runtime"
