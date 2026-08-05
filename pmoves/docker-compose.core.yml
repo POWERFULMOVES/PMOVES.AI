@@ -192,6 +192,29 @@ services:
     - GOTRUE_EXTERNAL_GOOGLE_SECRET=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET:-}
     - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=${SUPABASE_AUTH_EXTERNAL_GOOGLE_REDIRECT_URI:-}
     - GOTRUE_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK:-false}
+    # Mailer. With NO SMTP configured, gotrue accepts a signup, fails to send
+    # the confirmation, leaves confirmed_at NULL, and then refuses the login —
+    # a user that exists and cannot get in, which reads as "signup is broken".
+    # Password reset is likewise impossible; the only recovery is the admin API.
+    #
+    # Every value below defaults EMPTY so an unconfigured node behaves exactly
+    # as it does today. Fill these via `make secrets-funnel` (SMTP_PASS is
+    # registered in tools/chit_manifest_register.py) — never hand-edit tier envs.
+    #
+    # SMTP_HOST/PORT for Titan Mail are smtp.titan.email:587 (STARTTLS) or :465
+    # (implicit TLS); confirm against Titan's own docs before relying on them.
+    - GOTRUE_SMTP_HOST=${SMTP_HOST:-}
+    - GOTRUE_SMTP_PORT=${SMTP_PORT:-587}
+    - GOTRUE_SMTP_USER=${SMTP_USER:-}
+    - GOTRUE_SMTP_PASS=${SMTP_PASS:-}
+    # Must be a real mailbox on the sending domain, or providers reject the mail.
+    - GOTRUE_SMTP_ADMIN_EMAIL=${SMTP_ADMIN_EMAIL:-}
+    - GOTRUE_SMTP_SENDER_NAME=${SMTP_SENDER_NAME:-PMOVES}
+    # Pinned to its current EFFECTIVE value (gotrue defaults this false when
+    # unset), so adding the knob changes nothing on its own. Flip to true ONLY
+    # on nodes with no working SMTP — it lets signup succeed but accepts
+    # unverified addresses. With SMTP working, leave it false.
+    - GOTRUE_MAILER_AUTOCONFIRM=${GOTRUE_MAILER_AUTOCONFIRM:-false}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -991,14 +1014,6 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     - PMOVES_NETWORKS=pmoves_data,pmoves_bus,pmoves_external
-    # Loopback default, explicit opening (Safe-Activation Clause 3) — matches the
-    # Supabase services rather than the 0.0.0.0 default used elsewhere. To let
-    # remote fleet nodes reach the object store (multi-node JuiceFS), set
-    # MINIO_BIND to THIS node's Tailscale address in env.shared; ufw already
-    # admits all of tailscale0, so no firewall change is needed.
-    # NOTE: a running container created before minio gained its pmoves_external
-    # leg publishes NOTHING regardless of these values — internal-only networks
-    # silently drop a ports: mapping. Recreate minio after changing MINIO_BIND.
     ports:
     - ${MINIO_BIND:-127.0.0.1}:${MINIO_PORT:-9000}:9000
     - ${MINIO_CONSOLE_BIND:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001

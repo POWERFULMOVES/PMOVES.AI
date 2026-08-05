@@ -93,6 +93,12 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     "VAULT_ENC_KEY": {"tier": "supabase", "required": True},
     "LOGFLARE_PRIVATE_ACCESS_TOKEN": {"tier": "supabase", "required": True},
     "LOGFLARE_PUBLIC_ACCESS_TOKEN": {"tier": "supabase", "required": True},
+    # Tier: Supabase — gotrue's outbound mailer credential. Without it gotrue
+    # cannot send confirmation or password-reset mail, so signup produces
+    # permanently-unconfirmed rows and the only account recovery is the admin
+    # API. Only the password is a secret; SMTP_HOST/PORT/USER/ADMIN_EMAIL are
+    # plain config and live in env.shared.
+    "SMTP_PASS": {"tier": "supabase", "required": False},
 }
 
 
