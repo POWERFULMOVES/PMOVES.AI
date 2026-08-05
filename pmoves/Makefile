@@ -4179,6 +4179,123 @@ down-external: ## Stop external integration services
 	@$(EXTERNAL_DC) down
 	@echo "✔ External stacks down"
 
+# ---------------------------------------------------------------------------
+# Edge: Traefik + sso-auth.
+#
+# docker-compose.traefik.yml and docker-compose.sso.yml have existed since #2221
+# with NO make target to start them, so the edge was never brought up through the
+# pipeline. Consequences observed 2026-08-05: no Traefik container on z890 at all,
+# so media.pmoves.ai / auth.pmoves.ai resolve to nothing, every traefik.* label in
+# the fleet is inert, and pmoves-sso-auth sits healthy while protecting nothing.
+# Services fall back to their own password prompts (Open Notebook's
+# RemoteUserAuthMiddleware is fail-closed and needs the Traefik-injected
+# X-Forward-Auth-Secret header, so a direct hit gets the password check by design).
+#
+# Both overlays go up together on purpose: the auth.pmoves.ai router is declared on
+# the traefik container but points at `sso-auth@docker`, so Traefik without sso-auth
+# is an edge whose own login route 404s.
+# ---------------------------------------------------------------------------
+EDGE_DC := docker compose -p $(PROJECT)-edge --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
+
+.PHONY: edge-preflight
+edge-preflight: ## Check edge prerequisites (networks, 80/443, dynamic.yml) without starting anything
+	@# The SSO overlay declares three external networks. Compose fails with
+	@# network-not-found before starting anything if any is missing.
+	@# pmoves_external is ours to create — same as up-external does.
+	@docker network inspect pmoves_external >/dev/null 2>&1 || docker network create --driver bridge pmoves_external
+	@# pmoves_app / pmoves_api are NOT auto-created here on purpose. Both are
+	@# `internal: true` in the core stack (docker-compose.yml:5364,5373). Creating
+	@# them here with a plain `docker network create --driver bridge` would make them
+	@# NON-internal, and the core stack would then silently attach to a network that
+	@# no longer blocks egress — turning a missing-network error into a quiet
+	@# security regression. Require the core stack instead.
+	@for n in pmoves_app pmoves_api; do \
+	  docker network inspect $$n >/dev/null 2>&1 || { \
+	    echo "ERROR: network $$n missing — sso-auth needs it to reach GoTrue."; \
+	    echo "  It is internal:true in the core stack; bring that up first (make up) rather"; \
+	    echo "  than creating it here, which would create it non-internal."; exit 1; }; \
+	done
+	@# Traefik publishes 80/443 directly. Fail loudly here rather than let compose emit
+	@# a bind error that scrolls past. Two traps this avoids:
+	@#  1. Check the OUTPUT, not the exit code — a pipeline ending in `head` exits 0 on
+	@#     no matches and would report every port as occupied.
+	@#  2. Be OS-aware. Windows netstat prints LISTENING, Linux/BSD print LISTEN. The
+	@#     first version of this matched only LISTENING, so on the Linux hosts where the
+	@#     edge actually runs it silently passed and protected nothing.
+	@# Skipped entirely when OUR traefik already holds the ports, so up-edge stays
+	@# idempotent — a rerun to pick up config changes must not be blocked by its own
+	@# listener. Compose handles the recreate/handoff.
+	@if [ -n "$$(docker ps --filter name=pmoves-traefik --format '{{.Names}}' 2>/dev/null)" ]; then \
+	  echo "  (pmoves-traefik already running — skipping port preflight, compose will recreate)"; \
+	elif command -v ss >/dev/null 2>&1; then \
+	  for p in 80 443; do \
+	    busy="$$(ss -ltn 2>/dev/null | awk -v p=":$$p" 'NR>1 && $$4 ~ p"$$"' | head -2)"; \
+	    if [ -n "$$busy" ]; then echo "ERROR: port $$p already in use — Traefik cannot bind:"; echo "$$busy"; exit 1; fi; \
+	  done; \
+	elif command -v netstat >/dev/null 2>&1; then \
+	  for p in 80 443; do \
+	    busy="$$(netstat -an 2>/dev/null | grep -E "[.:]$$p[[:space:]]+.*(LISTENING|LISTEN)[[:space:]]*$$" | head -2)"; \
+	    if [ -n "$$busy" ]; then echo "ERROR: port $$p already in use — Traefik cannot bind:"; echo "$$busy"; exit 1; fi; \
+	  done; \
+	else \
+	  echo "  WARNING: neither ss nor netstat found — cannot preflight 80/443."; \
+	  echo "  Continuing; compose will surface a bind error if they are taken."; \
+	fi
+	@test -f config/traefik/dynamic.yml || { echo "ERROR: config/traefik/dynamic.yml missing — forward-auth middleware would not load"; exit 1; }
+	@echo "✔ Edge preflight passed"
+
+.PHONY: up-edge
+up-edge: ensure-env-shared edge-preflight ## Start the Traefik edge + sso-auth (media./auth.pmoves.ai, forward-auth)
+	@echo "→ Starting edge (Traefik + sso-auth)..."
+	@$(EDGE_DC) up -d
+	@echo "✔ Edge up — verify with 'make edge-health'"
+
+.PHONY: down-edge
+down-edge: ## Stop the Traefik edge + sso-auth
+	@$(EDGE_DC) down
+	@echo "✔ Edge down"
+
+.PHONY: edge-health
+edge-health: ## Show edge status: containers, published ports, and which routers use forward-auth
+	@# Check each component separately. A combined filter passes when only ONE of
+	@# the two is up, which is the exact state that looks fine and is not: sso-auth
+	@# healthy behind a Traefik that does not exist.
+	@echo "=== Edge containers ==="
+	@for svc in pmoves-traefik pmoves-sso-auth; do \
+	  st="$$(docker ps --filter name=$$svc --format '{{.Status}}' 2>/dev/null | head -1)"; \
+	  if [ -n "$$st" ]; then printf '  %-18s %s\n' "$$svc" "$$st"; \
+	  else printf '  %-18s NOT RUNNING\n' "$$svc"; fi; \
+	done
+	@echo ""
+	@echo "=== Traefik published ports ==="
+	@p="$$(docker inspect pmoves-traefik --format '{{json .NetworkSettings.Ports}}' 2>/dev/null)"; \
+	  if [ -n "$$p" ]; then echo "  $$p"; else echo "  (no traefik container)"; fi
+	@echo "  NOTE: an EMPTY [] binding list means the publish silently no-oped."
+	@echo "  On Windows that is the same-subnet ghost-adapter pattern -"
+	@echo "  see docs/operations/SAME_SUBNET_GHOST_PATTERN.md"
+	@echo ""
+	@# Read the actual router middleware LABELS rather than grepping the whole inspect
+	@# blob for the string — the old version matched anywhere (an env var or a comment
+	@# would count) and printed only the container, so you could not tell WHICH router
+	@# was protected on a container serving several.
+	@echo "=== Routers attached to pmoves-forward-auth ==="
+	@found=0; for c in $$(docker ps --format '{{.Names}}' 2>/dev/null); do \
+	  hits="$$(docker inspect $$c --format '{{range $$k,$$v := .Config.Labels}}{{$$k}}={{$$v}}{{println}}{{end}}' 2>/dev/null \
+	          | grep -E '^traefik\.http\.routers\.[^.]+\.middlewares=' \
+	          | grep -F 'pmoves-forward-auth' \
+	          | sed -E 's/^traefik\.http\.routers\.([^.]+)\.middlewares=(.*)$$/\1 [\2]/')"; \
+	  if [ -n "$$hits" ]; then \
+	    echo "$$hits" | while IFS= read -r h; do [ -n "$$h" ] && printf '  %-22s router %s\n' "$$c" "$$h"; done; \
+	    found=1; \
+	  fi; \
+	done; \
+	  if [ "$$found" != 1 ]; then \
+	    echo "  NONE - the middleware is defined in config/traefik/dynamic.yml but"; \
+	    echo "  no RUNNING container's router references it, so sso-auth protects nothing."; \
+	    echo "  NOTE: docker-compose.external.yml DOES set it on health/wealth/notebook."; \
+	    echo "  If those are running, they predate the labels and need recreating."; \
+	  fi
+
 .PHONY: up-jellyfin-ai
 up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
 	@echo "→ Starting Jellyfin AI overlay..."
