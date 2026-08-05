@@ -197,6 +197,12 @@ add_stream HELPDESK \
   --discard old \
   --replicas 1
 
+# ARCHON (2026-08-04): the archon.mint.* family (#2336 closed schemas:
+# mint.agent/skill/creator/confirmed) had NO backing stream - a mint would
+# void-publish, the exact Lane 5 bug class. `limits` retention; 30d: mint
+# events are governance records (persona x room x agent), not telemetry.
+add_stream ARCHON   --subjects "archon.>"   --storage file   --retention limits   --max-age 720h   --max-bytes 536870912   --discard old   --replicas 1
+
 if [ "$FAIL_COUNT" -gt 0 ]; then
   echo "ERROR: $FAIL_COUNT stream(s) failed to create" >&2
   exit 1

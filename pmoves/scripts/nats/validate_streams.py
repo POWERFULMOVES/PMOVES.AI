@@ -3,7 +3,7 @@
 # requires-python = ">=3.10"
 # ///
 """
-NATS JetStream stream validation — asserts the 8 expected PMOVES streams exist.
+NATS JetStream stream validation — asserts the 9 expected PMOVES streams exist.
 
 Lane 5 (2026-08-01): the slice 3 + slice 6 subject families
 (comfy.collab.*, room.*, helpdesk.*) used to publish into the void because
@@ -19,7 +19,7 @@ Usage:
     uv run --script validate_streams.py /tmp/streams.txt
 
     # Exit codes:
-    #   0 — all 8 expected streams present (with their expected subject filters)
+    #   0 — all 9 expected streams present (with their expected subject filters)
     #   1 — one or more streams missing or misconfigured
 """
 
@@ -48,6 +48,7 @@ EXPECTED_STREAMS: list[tuple[str, str, str]] = [
     ("COMFY_COLLAB", "comfy.collab.>", "limits"),
     ("ROOMS", "room.>", "limits"),
     ("HELPDESK", "helpdesk.>", "limits"),
+    ("ARCHON", "archon.>", "limits"),  # mint family (#2336) — added 2026-08-04
 ]
 
 # Streams the validator does NOT require (control-plane / p7.* / voice.*) — present
