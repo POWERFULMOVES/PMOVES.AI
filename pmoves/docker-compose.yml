@@ -397,6 +397,11 @@ x-tier-agent-hardened: &tier-agent-hardened
   - CHOWN
   - SETGID
   - SETUID
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 x-tier-agent-hardened-ro: &tier-agent-hardened-ro
   env_file:
@@ -472,6 +477,11 @@ x-tier-data-hardened: &tier-data-hardened
   - FOWNER
   - SETGID
   - SETUID
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 x-tier-media-hardened: &tier-media-hardened
   env_file:
