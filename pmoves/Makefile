@@ -4200,15 +4200,35 @@ EDGE_DC := docker compose -p $(PROJECT)-edge --project-directory $(CURDIR) $(COM
 .PHONY: up-edge
 up-edge: ensure-env-shared ## Start the Traefik edge + sso-auth (media./auth.pmoves.ai, forward-auth)
 	@echo "→ Starting edge (Traefik + sso-auth)..."
+	@# The SSO overlay declares three external networks. Compose fails with
+	@# network-not-found before starting anything if any is missing (Codex P2).
+	@# pmoves_external is ours to create — same as up-external does.
 	@docker network inspect pmoves_external >/dev/null 2>&1 || docker network create --driver bridge pmoves_external
+	@# pmoves_app / pmoves_api are NOT auto-created here on purpose. Both are
+	@# `internal: true` in the core stack (docker-compose.yml:5364,5373). Creating
+	@# them here with a plain `docker network create --driver bridge` would make them
+	@# NON-internal, and the core stack would then silently attach to a network that
+	@# no longer blocks egress — turning a missing-network error into a quiet
+	@# security regression. Require the core stack instead.
+	@for n in pmoves_app pmoves_api; do \
+	  docker network inspect $$n >/dev/null 2>&1 || { \
+	    echo "ERROR: network $$n missing — sso-auth needs it to reach GoTrue."; \
+	    echo "  It is internal:true in the core stack; bring that up first (make up) rather"; \
+	    echo "  than creating it here, which would create it non-internal."; exit 1; }; \
+	done
 	@# Traefik publishes 80/443 directly. Fail loudly here rather than let compose
 	@# emit a bind error that scrolls past — and check the OUTPUT, not the exit code:
 	@# a pipeline ending in `head` exits 0 on no matches and would report every port
 	@# as occupied.
-	@for p in 80 443; do \
-	  busy="$$(netstat -ano 2>/dev/null | grep -E "^ *TCP +[0-9.]+:$$p +.*LISTENING" | head -2)"; \
-	  if [ -n "$$busy" ]; then echo "ERROR: port $$p already in use — Traefik cannot bind:"; echo "$$busy"; exit 1; fi; \
-	done
+	@# Skipped entirely when OUR traefik already holds the ports, so `up-edge` stays
+	@# idempotent — otherwise a rerun to pick up config/env changes would be blocked
+	@# by its own listener (Codex P2). Compose handles the recreate/handoff.
+	@if [ -z "$$(docker ps --filter name=pmoves-traefik --format '{{.Names}}' 2>/dev/null)" ]; then \
+	  for p in 80 443; do \
+	    busy="$$(netstat -ano 2>/dev/null | grep -E "^ *TCP +[0-9.]+:$$p +.*LISTENING" | head -2)"; \
+	    if [ -n "$$busy" ]; then echo "ERROR: port $$p already in use — Traefik cannot bind:"; echo "$$busy"; exit 1; fi; \
+	  done; \
+	else echo "  (pmoves-traefik already running — skipping port preflight, compose will recreate)"; fi
 	@test -f config/traefik/dynamic.yml || { echo "ERROR: config/traefik/dynamic.yml missing — forward-auth middleware would not load"; exit 1; }
 	@$(EDGE_DC) up -d
 	@echo "✔ Edge up — verify with 'make edge-health'"
