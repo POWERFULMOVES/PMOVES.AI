@@ -7,7 +7,8 @@
     "branch": "optional branch override (3rd FORKS column in fork-sync.yml)",
     "sync": "required boolean decision — true means the fork-sync workflow will attempt auto-sync; false means it is explicitly opted out",
     "reason": "required string — why this fork is sync:true or sync:false. Operators read this before changing the decision.",
-    "skip": "DEPRECATED — the ratchet gate fails CI if any fork still has this field. Use sync+reason."
+    "skip": "DEPRECATED — the ratchet gate fails CI if any fork still has this field. Use sync+reason.",
+    "_first_party": "submodules that are NOT forks (no upstream); declared so the coverage cross-check can tell \"no upstream\" from \"undeclared\""
   },
   "org": "POWERFULMOVES",
   "forks": {
@@ -151,9 +152,170 @@
       "upstream": "mike-engel/mike",
       "sync": false,
       "reason": "small static-site generator; PMOVES fork is feature-complete and we do not need upstream changes. Pin and forget."
+    },
+    "PM-Spark-video-search-and-summarization": {
+      "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-agent-sandbox-skill": {
+      "upstream": "disler/agent-sandbox-skill",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "Pmoves-AgentGym-RL": {
+      "upstream": "WooooDyy/AgentGym-RL",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-awesome-agent-skills": {
+      "upstream": "heilcheng/awesome-agent-skills",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "Pmoves-claude-d3js-skill": {
+      "upstream": "chrisvoncsefalvay/claude-d3js-skill",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-crush": {
+      "upstream": "charmbracelet/crush",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Danger-infra": {
+      "upstream": "e2b-dev/infra",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Deep-Serch": {
+      "upstream": "Alibaba-NLP/DeepResearch",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "no common ancestor with upstream (compare returns HTTP 404) - hardened branch built from orphan/squashed history; needs a re-fork, not a retry"
+    },
+    "pmoves-fork-repository-skill": {
+      "upstream": "disler/fork-repository-skill",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-HiRAG": {
+      "upstream": "hhy-huang/HiRAG",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-jcodemunch-mcp": {
+      "upstream": "jgravelle/jcodemunch-mcp",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Jellyfin": {
+      "upstream": "jellyfin/jellyfin",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-MAI-UI": {
+      "upstream": "Tongyi-MAI/MAI-UI",
+      "sync": false,
+      "branch": "main",
+      "reason": "no common ancestor with upstream (compare returns HTTP 404) - hardened branch built from orphan/squashed history; needs a re-fork, not a retry"
+    },
+    "PMOVES-neo4j": {
+      "upstream": "neo4j/neo4j",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-ollama": {
+      "upstream": "ollama/ollama",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-OpenRoom": {
+      "upstream": "MiniMax-AI/OpenRoom",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-pinokio": {
+      "upstream": "pinokiocomputer/pinokio",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "pmoves-pipecat": {
+      "upstream": "pipecat-ai/pipecat",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "Pmoves-pretext": {
+      "upstream": "chenglou/pretext",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Remote-View": {
+      "upstream": "rustdesk/rustdesk-server",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "Pmoves-skills": {
+      "upstream": "anthropics/skills",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-surf": {
+      "upstream": "e2b-dev/surf",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Tailscale": {
+      "upstream": "tailscale/tailscale",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Ultimate-TTS-Studio": {
+      "upstream": "SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES.YT": {
+      "upstream": "yt-dlp/yt-dlp",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     }
   },
   "_excluded": {
-    "Pmoves-cipher": "No common ancestor with upstream \u2014 cannot sync via merge API"
-  }
+    "Pmoves-cipher": "No common ancestor with upstream — cannot sync via merge API"
+  },
+  "_first_party": [
+    "PMOVES-BoTZ",
+    "pmoves-cipher-mcp",
+    "PMOVES-DoX",
+    "pmoves-hirag-mcp",
+    "Pmoves-Jellyfin-AI-Media-Stack",
+    "PMOVES-n8n",
+    "PMOVES-space-agent",
+    "PMOVES-ToKenism-Multi",
+    "PMOVES-transcribe-and-fetch"
+  ]
 }
