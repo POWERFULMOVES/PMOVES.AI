@@ -130,6 +130,29 @@
       "artifact_prefix": "rooms/darkxside"
     }
   },
+  "storage": {
+    "provider": "juicefs",
+    "volume": "pmoves-media",
+    "mounts": [
+      {
+        "mount_id": "inbox",
+        "role": "inbox",
+        "path": "rooms/darkxside/inbox",
+        "access": "read-write",
+        "watch": true,
+        "emit_subject": "room.storage.arrived.v1",
+        "visibility": "private"
+      },
+      {
+        "mount_id": "outbox",
+        "role": "outbox",
+        "path": "rooms/darkxside/outbox",
+        "access": "read-write",
+        "watch": false,
+        "visibility": "room"
+      }
+    ]
+  },
   "skill_bindings": [
     {
       "binding_id": "pub-gate-approve",

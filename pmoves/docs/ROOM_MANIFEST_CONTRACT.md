@@ -4,9 +4,10 @@ _Last updated: 2026-03-27_
 ## Purpose
 Define one interface contract for agent-owned rooms so OpenRoom-style browser desktops and Open Notebook-style durable workspaces can converge on a shared PMOVES control plane.
 
-This contract makes four things explicit:
+This contract makes five things explicit:
 - the room shell an agent sees
 - the notebook state the room reads and writes
+- the file storage the room draws from and delivers into
 - the apps/actions available inside the room
 - the skills bound to those surfaces
 
@@ -43,7 +44,23 @@ It owns:
 
 A room may mirror notebook state or treat it as authoritative, but it should not replace it.
 
-### 3. Apps and Actions
+### 3. Storage
+The storage plane is the durable **file** plane. The notebook owns *structured* state; storage owns *opaque files* — media, inbound drops, exports.
+
+It owns:
+- logical mounts declared by role: `inbox`, `outbox`, `library`, `scratch`
+- the volume those mounts resolve against
+- whether arrivals raise an event, and on which subject
+
+It does **not** own host paths, node names, or absolute filesystem locations. Those are per-node runtime concerns; a manifest that hardcodes them stops being portable across the fleet. A room says *"my inbox is `rooms/<room>/inbox` on volume `pmoves-media`"* and the runtime decides where that actually lives.
+
+Guarantees enforced by the schema:
+- `path` is volume-relative. Absolute paths and any `..` segment are rejected — a room cannot escape its volume.
+- `visibility` describes reach only. It never widens `access.visibility`, and it never bypasses `policies.publish.egress_redaction_floor`. A `public` mount in a private room is still gated by the floor.
+
+Rooms without files omit `storage` entirely; it is optional.
+
+### 4. Apps and Actions
 Apps are surface providers inside the room. They expose structured actions instead of free-form UI assumptions.
 
 Examples:
@@ -55,7 +72,7 @@ Examples:
 
 The room manifest declares which apps are present and which action namespace they speak.
 
-### 4. Skill Bindings
+### 5. Skill Bindings
 Skills are reusable capabilities. A room binding makes a skill executable in context.
 
 A binding answers:
@@ -103,6 +120,7 @@ The room manifest declares:
 - shell: theme, layout, panels
 - apps: routes, capabilities, action namespaces
 - notebook: provider, workspace/thread refs, sync mode
+- storage: optional file plane — provider, volume, and role-tagged logical mounts (`inbox`/`outbox`/`library`/`scratch`)
 - skill bindings: room-local binding records
 - policies: model routing, publish policy, memory policy
 - stage: required persistent lifecycle state (`rehearsal` | `live` | `review` | `archive`)
