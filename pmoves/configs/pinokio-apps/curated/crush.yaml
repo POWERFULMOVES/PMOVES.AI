@@ -1,0 +1,27 @@
+slug: crush
+display_name: "Crush (PMOVES)"
+category: agent
+description: >
+  Charm Crush CLI with full PMOVES bootstrap — TensorZero provider,
+  MCP servers, CHIT trail signing, context paths, LSP diagnostics.
+  The companion at the terminal where Human, AI, and System converge.
+owner: pmoves
+launcher_script: plugin/code/crush/pinokio.js
+launcher_type: plugin
+gpu_required: false
+gpu_reservation_mb: 0
+autostart: false
+network_exposure:
+  layer_1:
+    reachable: true
+    description: "venv — no external deps beyond npx/node"
+  layer_2:
+    reachable: false
+    description: "not a containerized service"
+  layer_3:
+    reachable: true
+    description: "reaches TensorZero :3030, NATS :4222, Cipher :8105 via Docker network"
+  layer_4:
+    reachable: false
+    description: "not publicly exposed (terminal agent)"
+tags: [agent, terminal, companion, pmoves-native]
