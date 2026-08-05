@@ -3,7 +3,14 @@ services:
     image: postgres:16-alpine
     container_name: pmoves-n8n-db
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    env_file:
+      - env.shared.generated
+      - env.shared
+      - .env.generated
+      # .env.local is a per-node opt-in; short-form listing made it REQUIRED
+      # and hard-failed bring-up on nodes without it.
+      - path: .env.local
+        required: false
     environment:
       - POSTGRES_DB=${N8N_DB_NAME:?set N8N_DB_NAME}
       - POSTGRES_USER=${N8N_DB_USER:?set N8N_DB_USER}
