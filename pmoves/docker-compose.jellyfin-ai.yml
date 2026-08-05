@@ -120,18 +120,22 @@ services:
     restart: unless-stopped
 
   jellyfin-qwen-audio:
-    # Using Ollama with quantized Qwen2-Audio-7B-Instruct GGUF model
-    # Download model: ollama pull hf.co/second-state/Qwen2-Audio-7B-Instruct-GGUF:Q4_K_M
+    # OPT-IN fallback for nodes WITHOUT a native Ollama. The default path is
+    # the MODEL SEAT on jellyfin-audio-processor (AUDIO_MODEL_URL/_ID below):
+    # media-analysis models are a swappable seat served by native Ollama or
+    # HF-pulled GGUFs (ollama pull hf.co/...), curated by the HF agent — not
+    # a dedicated per-model container. Enable with profile jellyfin-audio-local.
     image: ollama/ollama:latest
     container_name: ${JELLYFIN_QWEN_CONTAINER_NAME:-pmoves-jellyfin-qwen}
-    profiles: ["default", "jellyfin-ai"]
+    profiles: ["jellyfin-audio-local"]
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
       - OLLAMA_MODELS=/root/.ollama/models
     volumes:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/qwen/models:/root/.ollama/models
     ports:
-      - "11434:11434"
+      # 11435 host-side: never collide with native Ollama on 11434.
+      - "${JELLYFIN_QWEN_PORT:-11435}:11434"
     networks:
       pmoves:
         aliases:
@@ -158,7 +162,14 @@ services:
       - ./env.jellyfin-ai
     environment:
       - JELLYFIN_URL=${JELLYFIN_URL:-http://${JELLYFIN_SERVICE_HOST:-jellyfin}:8096}
-      - QWEN_AUDIO_URL=${QWEN_AUDIO_URL:-http://jellyfin-qwen-audio:11434}
+      # MODEL SEAT: swappable multi-modal media-analysis model. Defaults to
+      # native host Ollama; point AUDIO_MODEL_URL at any OpenAI/Ollama-style
+      # endpoint (jellyfin-qwen-audio:11434 with the jellyfin-audio-local
+      # profile, an HF TGI endpoint, ...). AUDIO_MODEL_ID names the occupant;
+      # the HF agent keeps the seat current. Legacy var name feeds the
+      # audio-processor code unchanged.
+      - QWEN_AUDIO_URL=${AUDIO_MODEL_URL:-${QWEN_AUDIO_URL:-http://host.docker.internal:11434}}
+      - AUDIO_MODEL_ID=${AUDIO_MODEL_ID:-qwen3-vl:8b}
       - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://jellyfin-neo4j:7687}
       - NEO4J_USER=${JELLYFIN_NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
@@ -176,11 +187,17 @@ services:
       pmoves_data:
         aliases:
           - jellyfin-audio-processor
+    extra_hosts:
+      # host-gateway keeps the native-Ollama default working on Linux nodes
+      # (Docker Desktop resolves host.docker.internal natively).
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     depends_on:
+      # NOTE: no depends_on for the model seat — the occupant may live on the
+      # host (native Ollama) or a profile-gated container; the processor
+      # retries its endpoint instead of pinning a container dependency.
       - ${JELLYFIN_STACK_SERVICE:-jellyfin}
       - jellyfin-neo4j
-      - jellyfin-qwen-audio
 
   jellyfin-redis:
     image: redis:7-alpine
