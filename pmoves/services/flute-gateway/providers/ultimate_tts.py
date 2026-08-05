@@ -94,6 +94,7 @@ class UltimateTTSProvider(VoiceProvider):
         Args:
             base_url: Gradio server URL (e.g., 'http://localhost:7860')
         """
+        self._schema_params = None  # lazy /gradio_api/info cache
         super().__init__(base_url)
         # Gradio 4.x+ uses event-based API at /gradio_api/call/.
         # The old /api/ synchronous predict endpoint is removed (404).
@@ -238,94 +239,96 @@ class UltimateTTSProvider(VoiceProvider):
             logger.warning("Failed to load %s model: %s", engine, exc)
             return False
 
+    async def _get_schema_params(self, client: "httpx.AsyncClient") -> list:
+        """Fetch the LIVE parameter schema for /generate_unified_tts.
+
+        Discovery over hardcoding: the positional layout has drifted twice
+        (121 -> "101" -> 121) and every drift null-crashed synthesis. The
+        studio publishes its own schema at /gradio_api/info — consume it.
+        Cached per provider instance; a studio restart with a changed schema
+        needs a flute recreate (or TTL, future). Raises loudly on failure:
+        guessing positions is exactly the bug class this replaces.
+        """
+        if self._schema_params is not None:
+            return self._schema_params
+        resp = await client.get(f"{self.base_url}/gradio_api/info", timeout=15.0)
+        resp.raise_for_status()
+        info = resp.json()
+        ep = (info.get("named_endpoints") or {}).get("/generate_unified_tts")
+        if not ep or not ep.get("parameters"):
+            raise UltimateTTSError(
+                "/generate_unified_tts not present in /gradio_api/info — "
+                "studio version incompatible or endpoint renamed"
+            )
+        self._schema_params = ep["parameters"]
+        logger.info(
+            "Ultimate-TTS schema discovered: %d params for generate_unified_tts",
+            len(self._schema_params),
+        )
+        return self._schema_params
+
+    # Per-engine opinionated overrides, resolved BY PARAMETER NAME against the
+    # live schema (never by position). Values may be callables taking `voice`.
+    ENGINE_NAME_OVERRIDES = {
+        "kokoro": {"kokoro_voice": (lambda v: v or "af_heart"), "kokoro_speed": 1.0},
+        "kitten_tts": {"kitten_voice": (lambda v: v or "expr-voice-2-f")},
+    }
+
     def _build_params(
         self,
+        schema_params: list,
         text: str,
         engine: str,
-        voice: Optional[str] = None
+        voice: Optional[str] = None,
     ) -> list:
-        """Build the full 101-parameter list for generate_unified_tts.
+        """Build the generate_unified_tts arg list FROM THE LIVE SCHEMA.
 
-        Parameter positions are derived from the Gradio API info endpoint.
-        The upstream TTS app reduced from 121 to 101 params (Fish Speech S2
-        Pro consolidated, VoxCPM simplified).
+        Every slot takes the studio's own parameter_default; we override only
+        by name: the three core params plus the selected engine's named
+        opinions (ENGINE_NAME_OVERRIDES). Unknown-to-us engines run entirely
+        on studio defaults — the engine author's defaults beat our guesses.
+        Positional drift (121 vs "101") can no longer break the call; a
+        RENAMED core param fails loudly below instead of null-crashing.
         """
         api_engine = self.ENGINE_NAMES.get(engine, engine)
-
-        # Total 101 parameters (Gradio 4.x API, post-S2-Pro-consolidation)
-        # Initialize all to None — Gradio handles None for optional params
-        data: list = [None] * 101
-
-        # [0-2] Core params
-        data[0] = text          # text_input
-        data[1] = api_engine    # tts_engine
-        data[2] = "wav"         # audio_format
-
-        # Set ONLY the params for the selected engine. Setting params for
-        # other engines causes Gradio widget validation errors (null event).
-        if engine in ("chatterbox", "chatterbox_turbo", "chatterbox_multilingual"):
-            if engine == "chatterbox":
-                data[4] = 0.5; data[5] = 0.8; data[6] = 0.5; data[7] = 300; data[8] = 0
-            elif engine == "chatterbox_multilingual":
-                data[10] = "en"; data[11] = 0.5; data[12] = 0.8; data[13] = 0.5
-                data[14] = 2.0; data[15] = 0.05; data[16] = 1.0; data[17] = 300; data[18] = 0
-            elif engine == "chatterbox_turbo":
-                data[20] = 0.5; data[21] = 0.8; data[22] = 0.5; data[23] = 1.2
-                data[24] = 0.05; data[25] = 0.95; data[26] = 300; data[27] = 0
-        elif engine == "kokoro":
-            data[28] = voice or "af_heart"; data[29] = 1.0
-        elif engine == "fish":
-            data[31] = ""; data[32] = 0.8; data[33] = 0.8; data[34] = 1.1; data[35] = 1024; data[36] = 0
-        # fish_s2: 4 synth params from tools/test_all_tts_engines.py.
-        # NOTE: slot allocation is v1 — verify against the upstream TTS app's
-        # launch.py (handle_setup_fish_s2 / handle_load_fish_s2 / unified
-        # /generate_unified_tts) for the exact 101-param positions. The gaps in
-        # the 101 layout (data[9, 19, 30, 37, 40, 60, 66, 87]) are used
-        # to fit fish_s2, qwen, and the audio effects' non-enable flags.
-        elif engine == "fish_s2":
-            data[9] = 0.8; data[19] = 0.8; data[30] = 1.1; data[37] = 2048
-        elif engine == "indextts":
-            data[38] = 0.8; data[39] = 0
-        elif engine == "indextts2":
-            data[41] = "audio_reference"; data[43] = ""; data[44] = 1.0
-            data[45] = 0.5; data[52] = 1.0; data[53] = 0.8; data[54] = 0.9
-            data[55] = 50; data[56] = 1.1; data[57] = 1500; data[58] = 0; data[59] = False
-        elif engine == "f5_tts":
-            data[61] = ""; data[62] = 1.0; data[63] = 0.15; data[64] = False; data[65] = 0
-        elif engine == "higgs":
-            data[67] = ""; data[68] = "EMPTY"; data[69] = ""; data[70] = 1.0
-            data[71] = 0.95; data[72] = 50; data[73] = 1024; data[74] = 7; data[75] = 2
-        elif engine == "kitten_tts":
-            data[76] = voice or "expr-voice-2-f"
-        elif engine == "voxcpm":
-            data[78] = ""; data[79] = 2.0; data[80] = 10; data[81] = True
-            data[82] = True; data[83] = True; data[84] = 3; data[85] = 6.0; data[86] = -1
-        # qwen: 5 synth params from tools/test_all_tts_engines.py (load_kwargs
-        # go to /handle_load_qwen, not _build_params). See fish_s2 comment
-        # above for the v1 slot allocation rationale.
-        elif engine == "qwen":
-            data[40] = "voice_design"; data[60] = "1.7B"; data[66] = 200
-            data[87] = "Ryan"; data[100] = "Auto"
-        # vibevoice: NO positional slots. Per tools/test_all_tts_engines.py,
-        # VibeVoice uses a separate panel (handle_vibevoice_generation), NOT
-        # the unified /generate_unified_tts endpoint. Reject explicitly so
-        # flute-gateway callers get a clear error instead of silent breakage.
-        elif engine == "vibevoice":
+        if engine == "vibevoice":
             raise UltimateTTSError(
                 "vibevoice is not supported via the unified /generate_unified_tts "
-                "endpoint. Use the dedicated VibeVoice panel (handle_vibevoice_generation) "
-                "via gradio_client, or pick a different engine."
+                "endpoint. Use the dedicated VibeVoice panel "
+                "(handle_vibevoice_generation) via gradio_client, or pick a "
+                "different engine."
             )
-        else:
+        if engine not in self.ENGINE_NAMES:
             raise UltimateTTSError(
                 f"Unknown engine '{engine}'. Supported: {list(self.ENGINE_NAMES)}."
             )
 
-        # [87-100] Audio effects — only set the enable flags to False (safe defaults)
-        data[88] = False  # enable_eq
-        data[92] = False  # enable_reverb
-        data[96] = False  # enable_echo
-        data[99] = False  # enable_pitch_shift
+        data = [p.get("parameter_default") for p in schema_params]
+        name_to_idx = {
+            p.get("parameter_name"): i for i, p in enumerate(schema_params)
+        }
+
+        def set_by_name(name: str, value, required: bool = False) -> None:
+            idx = name_to_idx.get(name)
+            if idx is None:
+                if required:
+                    raise UltimateTTSError(
+                        f"Core param '{name}' missing from live schema — "
+                        f"studio API changed shape; refusing to guess"
+                    )
+                logger.warning(
+                    "Ultimate-TTS schema drift: param '%s' not in live schema; "
+                    "using studio default", name,
+                )
+                return
+            data[idx] = value
+
+        set_by_name("text_input", text, required=True)
+        set_by_name("tts_engine", api_engine, required=True)
+        set_by_name("audio_format", "wav")
+
+        for name, value in self.ENGINE_NAME_OVERRIDES.get(engine, {}).items():
+            set_by_name(name, value(voice) if callable(value) else value)
 
         return data
 
@@ -354,8 +357,10 @@ class UltimateTTSProvider(VoiceProvider):
             # Ensure model is loaded
             await self._load_model(client, engine)
 
-            # Build full parameter list
-            data = self._build_params(text, engine, voice)
+            # Build full parameter list from the LIVE schema (discovery
+            # over hardcoding — see _get_schema_params).
+            schema_params = await self._get_schema_params(client)
+            data = self._build_params(schema_params, text, engine, voice)
 
             try:
                 # Use Gradio's event-based API (/gradio_api/call/).
