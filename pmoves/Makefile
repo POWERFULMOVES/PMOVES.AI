@@ -4179,6 +4179,74 @@ down-external: ## Stop external integration services
 	@$(EXTERNAL_DC) down
 	@echo "✔ External stacks down"
 
+# ---------------------------------------------------------------------------
+# Edge: Traefik + sso-auth.
+#
+# docker-compose.traefik.yml and docker-compose.sso.yml have existed since #2221
+# with NO make target to start them, so the edge was never brought up through the
+# pipeline. Consequences observed 2026-08-05: no Traefik container on z890 at all,
+# so media.pmoves.ai / auth.pmoves.ai resolve to nothing, every traefik.* label in
+# the fleet is inert, and pmoves-sso-auth sits healthy while protecting nothing.
+# Services fall back to their own password prompts (Open Notebook's
+# RemoteUserAuthMiddleware is fail-closed and needs the Traefik-injected
+# X-Forward-Auth-Secret header, so a direct hit gets the password check by design).
+#
+# Both overlays go up together on purpose: the auth.pmoves.ai router is declared on
+# the traefik container but points at `sso-auth@docker`, so Traefik without sso-auth
+# is an edge whose own login route 404s.
+# ---------------------------------------------------------------------------
+EDGE_DC := docker compose -p $(PROJECT)-edge --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
+
+.PHONY: up-edge
+up-edge: ensure-env-shared ## Start the Traefik edge + sso-auth (media./auth.pmoves.ai, forward-auth)
+	@echo "→ Starting edge (Traefik + sso-auth)..."
+	@docker network inspect pmoves_external >/dev/null 2>&1 || docker network create --driver bridge pmoves_external
+	@# Traefik publishes 80/443 directly. Fail loudly here rather than let compose
+	@# emit a bind error that scrolls past — and check the OUTPUT, not the exit code:
+	@# a pipeline ending in `head` exits 0 on no matches and would report every port
+	@# as occupied.
+	@for p in 80 443; do \
+	  busy="$$(netstat -ano 2>/dev/null | grep -E "^ *TCP +[0-9.]+:$$p +.*LISTENING" | head -2)"; \
+	  if [ -n "$$busy" ]; then echo "ERROR: port $$p already in use — Traefik cannot bind:"; echo "$$busy"; exit 1; fi; \
+	done
+	@test -f config/traefik/dynamic.yml || { echo "ERROR: config/traefik/dynamic.yml missing — forward-auth middleware would not load"; exit 1; }
+	@$(EDGE_DC) up -d
+	@echo "✔ Edge up — verify with 'make edge-health'"
+
+.PHONY: down-edge
+down-edge: ## Stop the Traefik edge + sso-auth
+	@$(EDGE_DC) down
+	@echo "✔ Edge down"
+
+.PHONY: edge-health
+edge-health: ## Show edge status: containers, published ports, and which routers use forward-auth
+	@# Check each component separately. A combined filter passes when only ONE of
+	@# the two is up, which is the exact state that looks fine and is not: sso-auth
+	@# healthy behind a Traefik that does not exist.
+	@echo "=== Edge containers ==="
+	@for svc in pmoves-traefik pmoves-sso-auth; do \
+	  st="$$(docker ps --filter name=$$svc --format '{{.Status}}' 2>/dev/null | head -1)"; \
+	  if [ -n "$$st" ]; then printf '  %-18s %s\n' "$$svc" "$$st"; \
+	  else printf '  %-18s NOT RUNNING\n' "$$svc"; fi; \
+	done
+	@echo ""
+	@echo "=== Traefik published ports ==="
+	@p="$$(docker inspect pmoves-traefik --format '{{json .NetworkSettings.Ports}}' 2>/dev/null)"; \
+	  if [ -n "$$p" ]; then echo "  $$p"; else echo "  (no traefik container)"; fi
+	@echo "  NOTE: an EMPTY [] binding list means the publish silently no-oped."
+	@echo "  On Windows that is the same-subnet ghost-adapter pattern -"
+	@echo "  see docs/operations/SAME_SUBNET_GHOST_PATTERN.md"
+	@echo ""
+	@echo "=== Routers attached to pmoves-forward-auth ==="
+	@found=0; for c in $$(docker ps --format '{{.Names}}' 2>/dev/null); do \
+	  m="$$(docker inspect $$c 2>/dev/null | grep -o 'pmoves-forward-auth' | head -1)"; \
+	  if [ -n "$$m" ]; then echo "  $$c"; found=1; fi; \
+	done; \
+	  if [ "$$found" != 1 ]; then \
+	    echo "  NONE - the middleware is defined in config/traefik/dynamic.yml but"; \
+	    echo "  no router references it, so sso-auth protects nothing yet."; \
+	  fi
+
 .PHONY: up-jellyfin-ai
 up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
 	@echo "→ Starting Jellyfin AI overlay..."
