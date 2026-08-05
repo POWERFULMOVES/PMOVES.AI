@@ -1,0 +1,362 @@
+{
+  "room_id": "spark-showcase.room.live",
+  "version": "1.0.0",
+  "display_name": "SPARK Autonomous Showcase",
+  "description": "Live multi-agent showcase: Agent Zero orchestration, Archon PR review, Danger Room Desktop, HF model discovery, fleet topology, and ComfyUI art generation. Visible on SPARK + 3 Jetsons + Z890.",
+  "stage": "rehearsal",
+  "agent_id": "darkxside-persona",
+  "alter": "darkxside",
+  "room_type": "operator",
+  "room_purpose": "operator",
+  "creator_surface": "background",
+  "owner_mode": "shared",
+  "access": {
+    "visibility": "unlisted",
+    "invite_list": [
+      "darkxside-persona",
+      "creator-steward",
+      "5090-claude",
+      "4090-claude",
+      "z890-claude",
+      "crush"
+    ]
+  },
+  "meta": {
+    "chit": {
+      "card_id": "00000000-0000-4000-8000-000000000002"
+    },
+    "tags": [
+      "showcase",
+      "spark",
+      "autonomous",
+      "multi-agent",
+      "webrtc"
+    ]
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "spark-showcase",
+      "accent_color": "#7C3AED",
+      "skin": "showcase-grid",
+      "icon": "sparkles"
+    },
+    "layout": {
+      "default_route": "/showcase/dashboard",
+      "panels": [
+        {
+          "panel_id": "agent-zero-chat",
+          "kind": "browser",
+          "position": "center",
+          "size": 40,
+          "pinned": true
+        },
+        {
+          "panel_id": "danger-room-desktop",
+          "kind": "browser",
+          "position": "right",
+          "size": 35,
+          "pinned": true
+        },
+        {
+          "panel_id": "archon-review",
+          "kind": "browser",
+          "position": "left",
+          "size": 25,
+          "pinned": true
+        },
+        {
+          "panel_id": "hf-agent-feed",
+          "kind": "custom",
+          "position": "bottom",
+          "size": 20,
+          "pinned": false
+        },
+        {
+          "panel_id": "fleet-topology",
+          "kind": "custom",
+          "position": "bottom",
+          "size": 20,
+          "pinned": false
+        },
+        {
+          "panel_id": "comfyui-art",
+          "kind": "browser",
+          "position": "floating",
+          "size": 30,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "agent-zero-chat",
+      "kind": "browser",
+      "route": "/showcase/agent-zero",
+      "provider": "pmoves-openroom",
+      "action_namespace": "agent-zero",
+      "capabilities": [
+        "chat",
+        "mcp-tools",
+        "a2a",
+        "task-delegation"
+      ],
+      "status": "active"
+    },
+    {
+      "app_id": "danger-room-desktop",
+      "kind": "browser",
+      "route": "/showcase/desktop",
+      "provider": "pmoves-openroom",
+      "action_namespace": "danger-room",
+      "capabilities": [
+        "vnc",
+        "desktop",
+        "coding",
+        "art"
+      ],
+      "status": "active"
+    },
+    {
+      "app_id": "archon-review",
+      "kind": "browser",
+      "route": "/showcase/archon",
+      "provider": "pmoves-openroom",
+      "action_namespace": "archon",
+      "capabilities": [
+        "pr-review",
+        "workflows",
+        "code-analysis"
+      ],
+      "status": "active"
+    },
+    {
+      "app_id": "hf-agent-feed",
+      "kind": "custom",
+      "route": "/showcase/hf-feed",
+      "provider": "pmoves-ui",
+      "action_namespace": "hf-agent",
+      "capabilities": [
+        "model-discovery",
+        "scoring",
+        "local-compat"
+      ],
+      "status": "active"
+    },
+    {
+      "app_id": "fleet-topology",
+      "kind": "custom",
+      "route": "/showcase/fleet",
+      "provider": "pmoves-ui",
+      "action_namespace": "fleet",
+      "capabilities": [
+        "health",
+        "topology",
+        "nats"
+      ],
+      "status": "active"
+    },
+    {
+      "app_id": "comfyui-art",
+      "kind": "browser",
+      "route": "/showcase/art",
+      "provider": "pmoves-openroom",
+      "action_namespace": "comfyui",
+      "capabilities": [
+        "image-gen",
+        "video-gen",
+        "music-gen"
+      ],
+      "status": "planned"
+    }
+  ],
+  "skill_bindings": [
+    {
+      "binding_id": "agentgym-run-spark-showcase.room.live",
+      "skill_id": "agentgym-run",
+      "room_id": "spark-showcase.room.live",
+      "display_name": "Agentgym Run",
+      "intent": [
+        "showcase",
+        "monitor"
+      ],
+      "activation": {
+        "invocation_mode": "explicit",
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "fleet-topology",
+        "target": "panel",
+        "route": "/showcase/fleet"
+      },
+      "context": {
+        "sources": [
+          "room-state",
+          "agent-registry"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "showcase.agentgym.result.v1",
+          "artifact_type": "json"
+        },
+        {
+          "target": "app-action",
+          "delivery": "replace",
+          "subject": "fleet-topology",
+          "artifact_type": "json"
+        }
+      ],
+      "guardrails": {},
+      "enabled": true,
+      "execution": {
+        "mode": "background"
+      }
+    },
+    {
+      "binding_id": "pmoves-mesh-preflight-spark-showcase.room.live",
+      "skill_id": "pmoves-mesh-preflight",
+      "room_id": "spark-showcase.room.live",
+      "display_name": "Pmoves Mesh Preflight",
+      "intent": [
+        "showcase",
+        "monitor"
+      ],
+      "activation": {
+        "invocation_mode": "explicit",
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "fleet-topology",
+        "target": "panel",
+        "route": "/showcase/fleet"
+      },
+      "context": {
+        "sources": [
+          "room-state",
+          "agent-registry"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "app-action",
+          "delivery": "replace",
+          "subject": "fleet-topology",
+          "artifact_type": "json"
+        }
+      ],
+      "guardrails": {},
+      "enabled": true,
+      "execution": {
+        "mode": "background"
+      }
+    }
+  ],
+  "hardware_requirements": {
+    "gpu": true,
+    "min_vram_mb": 16384,
+    "gpu_arch": [
+      "sm_120",
+      "sm_110",
+      "sm_87"
+    ],
+    "node_roles": [
+      "infra-coordinator"
+    ],
+    "cpu_arch": [
+      "arm64",
+      "x86_64"
+    ]
+  },
+  "pinokio_app_refs": [
+    {
+      "slug": "comfyui-desktop",
+      "role": "primary",
+      "gpu_reservation_mb": 8000,
+      "autostart": false
+    },
+    {
+      "slug": "ultimate-tts-studio",
+      "role": "primary",
+      "gpu_reservation_mb": 4000,
+      "autostart": false
+    }
+  ],
+  "policies": {
+    "model_routing": "tensorzero",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "showcase.agentgym.result.v1",
+        "room.session.updated.v1",
+        "hf.model.evaluated.v1",
+        "autonomous.wake.v1",
+        "agent.graphiti.signed.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "spark-showcase",
+    "thread_ref": "spark-showcase-trail",
+    "default_page": "overview",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": [
+        "entries",
+        "pages"
+      ]
+    }
+  },
+  "persona": {
+    "signature_ref": "darkxside",
+    "voice": "witness",
+    "glyph": "\u2726",
+    "resonance": [
+      "showcase",
+      "autonomous",
+      "operator"
+    ]
+  },
+  "provenance": {
+    "source": "spark-showcase-2026-08-05",
+    "updated_at": "2026-08-05T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/specs/spark-autonomous-showcase-2026-08-04.md"
+    ]
+  },
+  "telemetry": {
+    "graphiti_phase": "showcase",
+    "room_events_subject": "showcase.room.events.v1",
+    "healthcheck_route": "/showcase/health"
+  },
+  "team_refs": [
+    "orchestration",
+    "infra",
+    "sandbox",
+    "evolution"
+  ],
+  "service_refs": [
+    "agent-zero",
+    "archon",
+    "flute-gateway",
+    "cipher-api",
+    "hi-rag-gateway-v2",
+    "hf-agent",
+    "model-registry",
+    "agent-desktop"
+  ],
+  "launcher_refs": [
+    "pinokio",
+    "gepeto",
+    "comfyui-desktop"
+  ]
+}

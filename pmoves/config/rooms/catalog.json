@@ -1,6 +1,6 @@
 {
   "schema_version": "1.2.0",
-  "_version_notes": "1.2.0 (2026-07-20) — added `current_stage` per room row for P7 fast-lookup. Sourced from each manifest's `p7.stage` block (if present) or `pmoves/docs/ROOMS_ON_A_STAGE.md` typical-stage table. Refresh on `room.session.updated.v1` NATS subject; see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md §3 and open-room-lane CLAIM in AGNOTE4482PHI.t1.md.",
+  "_version_notes": "1.2.0 (2026-07-20) \u2014 added `current_stage` per room row for P7 fast-lookup. Sourced from each manifest's `p7.stage` block (if present) or `pmoves/docs/ROOMS_ON_A_STAGE.md` typical-stage table. Refresh on `room.session.updated.v1` NATS subject; see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md \u00a73 and open-room-lane CLAIM in AGNOTE4482PHI.t1.md.",
   "rooms": [
     {
       "room_id": "4090-field.room.control",
@@ -95,7 +95,7 @@
       "manifest": "darkxsides.room.json",
       "summary": "Private, owner-only persona room (co-creator + witness -> eventual digital twin). Uncensored/unrestricted authentic expression; houses the dedicated publish-gate surfaced in Open Notebook, with a fail-closed public-egress redaction floor.",
       "current_stage": "archive",
-      "stage_source": "inferred: private persona room, not serving external traffic (defaulted to archive; operator can flip to 'live' if active). See open-room-lane spec §6 stretch checklist.",
+      "stage_source": "inferred: private persona room, not serving external traffic (defaulted to archive; operator can flip to 'live' if active). See open-room-lane spec \u00a76 stretch checklist.",
       "stage_verified_at": "2026-07-20T18:00:00Z"
     },
     {
@@ -114,7 +114,7 @@
       "room_id": "persona.room.livingdoc",
       "agent_id": "darkxside-persona",
       "alter": "persona-livingdoc",
-      "display_name": "Russell Richardson — Applied AI Architect (Living Doc)",
+      "display_name": "Russell Richardson \u2014 Applied AI Architect (Living Doc)",
       "stage": "live",
       "manifest": "persona.room.livingdoc.json",
       "summary": "Public, audience-facing living-doc room: the LinkedIn-aligned persona profile as a first-class OpenRoom the Mavis-5090 adapter serves. a2ui profile shell + authored PreTeXt case studies + planned Remotion walkthrough; content single-sourced in persona.json.",
@@ -129,7 +129,7 @@
       "display_name": "Creator Studio (Collaborative)",
       "stage": "rehearsal",
       "manifest": "creator-studio.room.collab.json",
-      "summary": "Full-surface creator studio: shared prompt queue + live ComfyUI render + artifact gallery + multi-user whiteboard. P7 routes the session to 5090 (RTX 5090 32GB) by default, escalates to DGX Spark for >24GB jobs (video gen, LoRA training), falls back to cloud.comfy.org MCP if no fleet GPU is up. creator-collab-lane slice 5 — 2026-07-27.",
+      "summary": "Full-surface creator studio: shared prompt queue + live ComfyUI render + artifact gallery + multi-user whiteboard. P7 routes the session to 5090 (RTX 5090 32GB) by default, escalates to DGX Spark for >24GB jobs (video gen, LoRA training), falls back to cloud.comfy.org MCP if no fleet GPU is up. creator-collab-lane slice 5 \u2014 2026-07-27.",
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (slice 5 SHIPPED; runtime smoke lands in slice 5d)",
       "stage_verified_at": "2026-07-27T00:00:00Z"
@@ -141,7 +141,7 @@
       "display_name": "PMOVES Helpdesk (Intake & Routing)",
       "stage": "rehearsal",
       "manifest": "pmoves.room.helpdesk.json",
-      "summary": "First-stop intake room: 'how can PMOVES help?' Reads slice-3 room.directory.v1 + slice-4 pinokio-apps registry to route a resident to the right room and the right fleet GPU. Ambient mesh-render button (creator_surface=ambient) hands off to creator-studio rather than rendering inline. CPU-only — runs on the infra-coordinator node (z890). creator-collab-lane slice 6 — 2026-07-28.",
+      "summary": "First-stop intake room: 'how can PMOVES help?' Reads slice-3 room.directory.v1 + slice-4 pinokio-apps registry to route a resident to the right room and the right fleet GPU. Ambient mesh-render button (creator_surface=ambient) hands off to creator-studio rather than rendering inline. CPU-only \u2014 runs on the infra-coordinator node (z890). creator-collab-lane slice 6 \u2014 2026-07-28.",
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (slice 6 SHIPPED; runtime smoke lands in slice 7)",
       "stage_verified_at": "2026-07-28T00:00:00Z"
@@ -157,6 +157,18 @@
       "current_stage": "rehearsal",
       "stage_source": "manifest stage field (new room, no P7 session yet)",
       "stage_verified_at": "2026-07-31T00:00:00Z"
+    },
+    {
+      "room_id": "spark-showcase.room.live",
+      "agent_id": "darkxside-persona",
+      "alter": "darkxside",
+      "display_name": "SPARK Autonomous Showcase",
+      "stage": "rehearsal",
+      "manifest": "spark-showcase.room.live.json",
+      "summary": "Live multi-agent showcase: AZ orchestration, Archon PR review, Danger Room Desktop, HF model discovery, fleet topology, ComfyUI art.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest",
+      "stage_verified_at": "2026-08-05T00:00:00Z"
     }
   ]
 }
