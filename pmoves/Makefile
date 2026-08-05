@@ -1195,6 +1195,38 @@ fork-registry-ratchet: ## Assert every fork in pmoves/config/fork_registry.json 
 fork-registry-ratchet-json: ## Same as fork-registry-ratchet, but JSON output (for CI annotation)
 	@$(PYTHON) tools/fork_registry_ratchet.py --json
 
+# ----------------------------------------------------------------------------
+# Validate-composes ratchet (2026-08-05)
+#   validate-composes        - assert no short-form .env.local in any overlay
+#   validate-composes-json   - same, JSON output
+#   validate-composes-images - same, with --check-images (digest pinning)
+# ----------------------------------------------------------------------------
+.PHONY: validate-composes validate-composes-json validate-composes-images
+validate-composes: ## Assert no docker-compose overlay has short-form .env.local (no network, ~100ms)
+	@echo "🔒 Validate-composes ratchet..."
+	@$(PYTHON) tools/validate_composes.py
+
+validate-composes-json: ## Same as validate-composes, but JSON output (for CI annotation)
+	@$(PYTHON) tools/validate_composes.py --json
+
+validate-composes-images: ## validate-composes with --check-images (off by default; flag moving tags / no-digest refs)
+	@$(PYTHON) tools/validate_composes.py --check-images
+
+# ----------------------------------------------------------------------------
+# Validate-tac ratchet (2026-08-05)
+#   validate-tac        - assert every TAC node's action.type is implemented
+#                        (file_exists, grep, command, http, manual) or in
+#                        the operator-acknowledged baseline
+#   validate-tac-json   - same, JSON output
+# ----------------------------------------------------------------------------
+.PHONY: validate-tac validate-tac-json
+validate-tac: ## Assert no TAC tree has unknown action.type outside the operator baseline (no network, ~100ms)
+	@echo "🔒 Validate-tac ratchet..."
+	@$(PYTHON) tools/validate_tac.py
+
+validate-tac-json: ## Same as validate-tac, but JSON output (for CI annotation)
+	@$(PYTHON) tools/validate_tac.py --json
+
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
