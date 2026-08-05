@@ -1,4 +1,95 @@
+# Dockerfile.omnivoice — OmniVoice production voice server deploy unit.
+#
+# Multi-arch aware (linux/amd64 + linux/arm64). The arm64 variant is the SPARK
+# hook: SPARK is an NVIDIA DGX Spark (GB10 Grace-Blackwell, ARM64 + CUDA, 128GB
+# unified). GPU support is provided by the NVIDIA container runtime at deploy
+# time (`--gpus` / a compose `deploy.resources.reservations.devices` block), NOT
+# baked into the base image — mirrors services/agent-zero/Dockerfile.multiarch.
+#
+# Build context: the creator-operator service directory. omnivoice_server.py does
+# NOT import services.common, so the narrow service-dir context is sufficient and
+# keeps the build fast.
+#
+#   docker build -f services/creator-operator/Dockerfile.omnivoice \
+#     -t pmoves-omnivoice:latest services/creator-operator
+#
+# or multi-arch via buildx (see pmoves/Makefile: omnivoice-build):
+#   docker buildx build --platform linux/amd64,linux/arm64 \
+#     -f services/creator-operator/Dockerfile.omnivoice \
+#     -t pmoves-omnivoice:latest services/creator-operator
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Torch/torchaudio are NOT in requirements-prod.txt — they are the per-node CUDA
+# build, installed here via an ARG-driven index URL (TORCH_INDEX_URL).
+#
+#   amd64 NVIDIA (4090/5090/z890): default cu128 wheel index works as-is.
+#   arm64 SPARK (GB10 Blackwell):  needs the arm64/sbsa CUDA wheel (CUDA 12.8+).
+#                                  The exact wheel tag / sbsa index URL is
+#                                  TODO-confirm-on-node — do NOT hardcode a guess.
+#                                  Override at build time, e.g.:
+#                                    --build-arg TORCH_INDEX_URL=<sbsa-cu12x-index>
+#                                    --build-arg TORCH_SPEC="torch torchaudio"
+#                                  See services/creator-operator/SPARK_DEPLOY.md
+#                                  (§ "arm64/sbsa CUDA torch wheel swap").
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Base CUDA image. The runtime-ubuntu22.04 family publishes both amd64 and
+# arm64/sbsa variants, so buildx selects the right arch per --platform.
+# Pinned via ARG so SPARK can swap to the exact CUDA minor confirmed on-node.
+ARG CUDA_BASE_TAG=12.8.1-runtime-ubuntu22.04
+FROM nvidia/cuda:${CUDA_BASE_TAG}
+
+# Torch wheel controls (see header). Default = cu128 amd64; SPARK overrides.
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
+# Pin nothing by default so the index's current cu128 build is selected; callers
+# may pass e.g. TORCH_SPEC="torch==2.8.0 torchaudio==2.8.0" to pin exactly.
+ARG TORCH_SPEC="torch torchaudio"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    OMNIVOICE_DEVICE=cuda:0 \
+    OMNIVOICE_HOST=0.0.0.0 \
+    OMNIVOICE_PORT=8002 \
+    HF_HOME=/cache/huggingface
+
+# System deps: python, libsndfile for soundfile, curl for the healthcheck.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-pip python3-venv \
+      libsndfile1 ffmpeg curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/local/bin/python
+
+WORKDIR /app
+
+# 1) Torch/torchaudio first (largest layer, changes least) via the ARG index.
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && python -m pip install --no-cache-dir ${TORCH_SPEC} --index-url ${TORCH_INDEX_URL}
+
+# 2) The rest of the production deps (omnivoice, soundfile, fastapi, uvicorn,
+#    prometheus_client). torch/torchaudio are intentionally absent from this file.
+COPY requirements-prod.txt ./requirements-prod.txt
+RUN python -m pip install --no-cache-dir -r requirements-prod.txt
+
+# 3) The server itself. No secrets are baked — OMNIVOICE_TOKEN et al. are passed
+#    at runtime via compose env passthrough.
+COPY omnivoice_server.py ./omnivoice_server.py
+
+# HF model cache lives on a mounted volume (see docker-compose.creator.yml) so the
+# ~several-GB k2-fsa/OmniVoice download persists across restarts.
+RUN mkdir -p /cache/huggingface
+
+# Non-root runtime user (village-gate policy — the intent of the #2285 change
+# that accidentally truncated this file to 4 lines; restored + done properly:
+# useradd BEFORE USER, with cache ownership so the HF download can write).
+RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true &&     chown -R pmoves:pmoves /cache /app
 USER pmoves
-RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+
+EXPOSE 8002
+
+# Bind 0.0.0.0 so the service is reachable in-compose / over the tailnet. The
+# server honors OMNIVOICE_HOST / OMNIVOICE_PORT (see omnivoice_server.py __main__).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 \
+    CMD curl -fsS http://localhost:8002/healthz || exit 1
 
 CMD ["python", "omnivoice_server.py"]
