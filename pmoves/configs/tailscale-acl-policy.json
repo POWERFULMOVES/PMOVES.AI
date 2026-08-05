@@ -117,6 +117,41 @@
       ],
       "users": ["root", "autogroup:nonroot"]
     },
+    // Fleet-management exception: tag:lab nodes may root-SSH the VPS/exit nodes.
+    //
+    // WHY THIS EXISTS (deliberate, scoped deviation from "tags never get root"):
+    // the management/inference workstations (z890, B850-AI-TOP, SPARK) are TAGGED
+    // compute nodes — tag:gpu+tag:lab, because they also serve Ollama to the fleet.
+    // A tagged device's SSH identity IS the tag; it has no user identity, so it can
+    // NEVER match the autogroup:admin/owner rule above. Without this rule no fleet
+    // node can reach the KVM exit nodes as root, which is what has kept the Mullvad
+    // L4 upstream from #1945 unactivated (exit traffic still leaves the raw Hostinger
+    // uplink) and blocks exit-node observability maintenance.
+    //
+    // WHY NOT UNTAG THE WORKSTATIONS INSTEAD: that was tried. #1972 proposed this
+    // same rule and was closed in favour of untagging pmoves-4090 so it would match
+    // autogroup:owner. Measured 2026-08-04, that untag silently removed 4090 from the
+    // fleet: from a tagged node, TCP to PMOVES-4090:11434 fails to connect while the
+    // identical request to still-tagged pmoves-5090:11434 returns 200 in 23ms — the
+    // node pongs fine at the disco layer, so this is the ACL, not a dead service.
+    // Untagging drops a node out of tag:gpu (a DESTINATION in five rules: fleet
+    // Ollama :11434, gpu-orchestrator :8200, partner :3030/:8080/:8081, guest :8081)
+    // and out of the tag:pmoves/tag:lab src list for autogroup:internet, which also
+    // costs it exit-node egress — the owner rule's "*:*" does not cover
+    // autogroup:internet. Repeating that on z890/B850/SPARK would take the whole
+    // inference pool offline to buy SSH access this one rule provides for free.
+    //
+    // SCOPE: src tag:lab (the workstations and the KVMs themselves — fleet infra).
+    // dst is ONLY tag:vps + tag:exit, the KVM concentrators. NOT tag:pmoves or
+    // tag:gpu — this grants no root anywhere else on the mesh. Silent accept, no
+    // check mode: a tagged source has no user to re-auth as. The network layer
+    // already permits port 22 via the tag:pmoves full-mesh rule above.
+    {
+      "action": "accept",
+      "src": ["tag:lab"],
+      "dst": ["tag:vps", "tag:exit"],
+      "users": ["root", "autogroup:nonroot"]
+    },
     // Tenants SSH into their OWN devices in check mode (browser re-auth). checkPeriod
     // omitted: it is Premium/Enterprise-gated in the policy-syntax reference and the
     // value we wanted (12h) is already the default, so omitting it keeps the policy
