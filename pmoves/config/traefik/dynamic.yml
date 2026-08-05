@@ -1,5 +1,18 @@
 http:
   middlewares:
+    # Strips client-supplied auth headers from ALL inbound requests BEFORE any
+    # forward-auth middleware runs. On forward-auth routes, authResponseHeaders
+    # re-adds the trusted values afterwards, so nothing changes for SSO routes.
+    # On non-forward-auth routes (e.g. /api/ token-auth paths), this ensures a
+    # client cannot smuggle Remote-User / X-Auth-* headers to bypass auth.
+    # This is the template for every native-client app (wger, Jellyfin, etc.).
+    strip-client-auth-headers:
+      headers:
+        customRequestHeaders:
+          Remote-User: ""
+          X-Auth-Email: ""
+          X-Auth-Subject: ""
+          X-Forward-Auth-Secret: ""
     pmoves-forward-auth:
       forwardAuth:
         address: "http://pmoves-sso-auth:8080/auth/verify"
