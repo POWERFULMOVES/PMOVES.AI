@@ -258,6 +258,14 @@
         },
         "one_active_run": {
           "type": "boolean"
+        },
+        "provenance_table": {
+          "type": "string",
+          "description": "Table consulted before the skill may run, e.g. pmoves_core.voice_cloning_provenance. Used for rights-basis gates where execution requires a recorded consent artifact."
+        },
+        "provenance_check": {
+          "type": "string",
+          "description": "Predicate that must hold in provenance_table for the run to proceed, e.g. is_active=true AND rights_basis IN ('CONSENTED','LICENSED') AND consent_artifact_uri IS NOT NULL. Pair with fail_open:false so an unverifiable provenance lookup denies rather than allows."
         }
       },
       "additionalProperties": false
