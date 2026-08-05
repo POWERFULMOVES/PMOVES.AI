@@ -1,0 +1,120 @@
+# Baseline for `pmoves/tools/validate_dockerfile_paths.py` — operator-
+# acknowledged orphan Dockerfiles. The ratchet only fails on
+# orphans that are NOT in this file, so the count only goes DOWN
+# over time. To remove an entry, either:
+#   1. Wire the Dockerfile into a compose `build:` stanza (the right
+#      answer when the service is actually being built locally), or
+#   2. Delete the Dockerfile (the right answer when the service has
+#      been retired).
+#
+# Initial seed: 2026-08-05, validate-dockerfile-paths ratchet PR.
+# Each entry has a one-line reason; replace "needs-review" with a
+# specific reason when you next touch that file.
+
+# 4-line stub Dockerfile, never wired up. The n8n service in
+# compose is built from the sibling `PMOVES-n8n` submodule, not
+# from this stub. Retiring would be a one-line delete.
+pmoves/compose/n8n/Dockerfile: 4-line stub Dockerfile referencing n8nio/n8n:2.1.0; the n8n compose service builds from the sibling PMOVES-n8n submodule, this file is unused. Safe to delete.
+
+# Base image used as `FROM <path>/cuda-base` in other Dockerfiles
+# (cuda-base appears in several multi-stage builds across the
+# services/ tree). It's not a build target itself, just a layer
+# source. Wiring it into a compose `build:` stanza would be wrong;
+# the right answer is to keep it as a base.
+pmoves/docker/cuda-base/Dockerfile: base image; pulled in as `FROM` by other multi-stage Dockerfiles. Not a build target itself.
+
+# Service with Dockerfile but no compose wiring. May be a future
+# candidate, retired lane, or side-channel CI service. Operator
+# should decide (wire / delete) on next touch.
+pmoves/docker/e2b-mcp-server/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Same as e2b-mcp-server — service with Dockerfile but no compose
+# wiring.
+pmoves/docker/e2b-surf/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# PMOVES 4090 web frontend Dockerfile. The actual frontend is
+# built by the operator's web build pipeline (not a compose
+# service). Kept here as a fallback for the laptop-4090 profile.
+pmoves/docker/pmoves-4090-web/Dockerfile: standalone build for the pmoves-4090-web frontend; not built by compose today (the laptop profile uses a prebuilt image). Kept as the source of truth for the image.
+
+# Firefly III is a finance app that's not part of the active
+# fleet. Kept as a local-only service.
+pmoves/images/firefly-iii/Dockerfile: finance app image; not part of the active fleet today. Kept as a future-candidate build target.
+
+# Jellyfin is built from the sibling `PMOVES-Jellyfin` submodule
+# in compose; this Dockerfile is the source for that build but
+# isn't called directly by any compose stanza.
+pmoves/images/jellyfin/Dockerfile: jellyfin image source; compose builds from the sibling PMOVES-Jellyfin submodule (which contains a copy of this Dockerfile + entrypoint). Kept as the upstream source.
+
+# Alternative variant Dockerfile for multiarch builds. The
+# main `Dockerfile` is what compose builds; this is the alternative.
+pmoves/services/agent-zero/Dockerfile.multiarch: alternative multiarch variant; compose builds pmoves/services/agent-zero/Dockerfile. Kept for the multiarch lane.
+
+# Service with Dockerfile but no compose wiring. The Python
+# service is run as a one-shot or external process, not a
+# docker compose service.
+pmoves/services/analysis-echo/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Same as analysis-echo.
+pmoves/services/audio-reprocess/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Same as analysis-echo.
+pmoves/services/chat-relay/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Same as analysis-echo.
+pmoves/services/content-provenance-gate/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Alternative variant Dockerfile for omnivoice builds. The main
+# `Dockerfile` is what compose builds; this is the omnivoice-specific
+# alternative. (The `Dockerfile.omnivoice` was restored in PR #2402
+# after a truncation in #2285.)
+pmoves/services/creator-operator/Dockerfile.omnivoice: alternative omnivoice variant; compose builds pmoves/services/creator-operator/Dockerfile. Kept for the omnivoice lane.
+
+# Alternative variant Dockerfile for BPM (beats-per-minute) builds.
+pmoves/services/flute-gateway/Dockerfile.bpm: alternative BPM variant; compose builds pmoves/services/flute-gateway/Dockerfile. Kept for the BPM feature.
+
+# Alternative variant Dockerfile for minimal builds.
+pmoves/services/flute-gateway/Dockerfile.minimal: alternative minimal variant; compose builds pmoves/services/flute-gateway/Dockerfile. Kept for the minimal-fleet lane.
+
+# Service with Dockerfile but no compose wiring. The Python
+# service is part of the legacy gateway stack.
+pmoves/services/gateway/Dockerfile: legacy gateway service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Service with Dockerfile but no compose wiring.
+pmoves/services/graph-linker/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Alternative variant Dockerfile for kokoro TTS builds.
+pmoves/services/kokoro-tts/Dockerfile.kokoro: alternative kokoro TTS variant; compose builds pmoves/services/kokoro-tts/Dockerfile. Kept for the kokoro lane.
+
+# Service with Dockerfile but no compose wiring.
+pmoves/services/mesh_exposure/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Service with Dockerfile but no compose wiring.
+pmoves/services/model-fitness-bridge/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Service with Dockerfile but no compose wiring. The uvicorn
+# app.py is run as a side-channel process (e.g., directly on the
+# host for low-latency). Not a compose service today.
+pmoves/services/owner-presence/Dockerfile: owner-presence service run as a side-channel process (not compose); Dockerfile kept as the source for the standalone binary.
+
+# PMOVES.YT is built from the sibling `PMOVES.YT` submodule
+# in compose (the `pmoves-yt` service). This Dockerfile is the
+# source for that build but isn't called directly by any compose
+# stanza.
+pmoves/services/pmoves-yt/Dockerfile: pmoves-yt image source; compose builds from the sibling PMOVES.YT submodule. Kept as the upstream source.
+
+# The `publisher-discord` service in compose uses
+# `./services/publisher-discord/Dockerfile` (note the `-discord`
+# suffix). The bare `publisher/` directory has its own Dockerfile
+# for the original publisher (which the operator runs as a
+# side-channel process, not a compose service).
+pmoves/services/publisher/Dockerfile: bare publisher service run as a side-channel process (not compose); the compose service is `publisher-discord` (separate dir). Kept for the standalone publisher.
+
+# Service with Dockerfile but no compose wiring.
+pmoves/services/replay-compressor/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Service with Dockerfile but no compose wiring.
+pmoves/services/shape-attestation-bridge/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
+
+# Service with Dockerfile but no compose wiring.
+pmoves/services/token-stub/Dockerfile: service with Dockerfile but no compose wiring; needs-review (wire or retire)
