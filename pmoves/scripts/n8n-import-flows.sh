@@ -3,7 +3,10 @@ set -e
 
 BASE="${N8N_BASE_URL:-http://n8n:5678}"
 AUTH_USER="${N8N_USER:-admin}"
-AUTH_PASS="${N8N_PASS:-adminpass}"
+# Fail closed — see n8n-flows-watcher.sh. Defaulting to `adminpass` meant a fresh
+# clone could authenticate to n8n with a credential that is public in git.
+: "${N8N_PASS:?Set N8N_PASS - refusing to run with a default credential}"
+AUTH_PASS="${N8N_PASS}"
 
 import_dir () {
   DIR="$1"
