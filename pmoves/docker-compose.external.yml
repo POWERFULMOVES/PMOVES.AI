@@ -42,8 +42,32 @@ services:
       - traefik.http.routers.health.rule=Host(`health.pmoves.ai`)
       - traefik.http.routers.health.entrypoints=websecure
       - traefik.http.routers.health.tls.certresolver=cf
-      - traefik.http.routers.health.middlewares=pmoves-forward-auth@file,pmoves-auth-redirect@file
+      # strip-client-auth-headers runs FIRST so a client-supplied Remote-User never
+      # reaches wger; pmoves-forward-auth then re-adds the trusted value from the auth
+      # response. Order matters — reversing these would let a forged header survive.
+      - traefik.http.routers.health.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file,pmoves-auth-redirect@file
       - traefik.http.services.health.loadbalancer.server.port=80
+      # --- API route for the PMOVES-Health phone app ---
+      # The wger mobile app authenticates with `Authorization: Token <key>` against
+      # /api/v2/. It has no browser session and cannot follow an interactive redirect,
+      # so under forward-auth its 401 becomes an HTML login page via
+      # pmoves-auth-redirect and the app breaks. Same reason Jellyfin is excluded from
+      # forward-auth (see the jellyfin stanza below).
+      #
+      # This route deliberately does NOT run forward-auth — but it MUST still run
+      # strip-client-auth-headers. wger sets WGER_ALLOW_REMOTE_USER=True and Django's
+      # RemoteUserMiddleware is not path-scoped, so without the strip an exempt route
+      # would let anyone send `Remote-User: <someone>` and authenticate with no token
+      # at all. The strip is what makes this exemption safe instead of a bypass.
+      #
+      # Explicit priority rather than relying on Traefik's rule-length ordering, so the
+      # intent survives a future edit to either rule.
+      - traefik.http.routers.health-api.rule=Host(`health.pmoves.ai`) && PathPrefix(`/api/`)
+      - traefik.http.routers.health-api.entrypoints=websecure
+      - traefik.http.routers.health-api.tls.certresolver=cf
+      - traefik.http.routers.health-api.priority=100
+      - traefik.http.routers.health-api.service=health
+      - traefik.http.routers.health-api.middlewares=strip-client-auth-headers@file
     volumes:
       - wger-static:/wger/static:ro
       - wger-media:/wger/media:ro

@@ -1,5 +1,32 @@
 http:
   middlewares:
+    # Remove client-supplied auth headers from INBOUND requests. Put this FIRST on
+    # every router, forward-auth or not.
+    #
+    # Why it must exist: apps behind this edge trust Remote-User. wger runs
+    # WGER_ALLOW_REMOTE_USER=True with WGER_REMOTE_USER_HEADER=Remote-User, and
+    # Django's RemoteUserMiddleware applies to EVERY path — there is no path scoping.
+    # Until now the only thing stopping header forgery was authResponseHeaders below,
+    # which overwrites these values — but that protection exists ONLY on routes that
+    # actually run forward-auth. Any route that skips it (an API exemption for a
+    # native mobile client, say) would let an unauthenticated client send
+    # `Remote-User: <anyone>` and be authenticated as that user with no token.
+    #
+    # Neither of the other candidate chokepoints strips it: the mounted wger nginx
+    # conf sets only Host/X-Real-IP/X-Forwarded-* and forwards unknown hyphenated
+    # headers, and nothing else in this file touched inbound headers.
+    #
+    # On forward-auth routes this is a no-op in effect: strip runs first, then
+    # pmoves-forward-auth re-adds the trusted values from the auth response. What it
+    # buys is that the invariant no longer depends on every future author remembering
+    # to attach forward-auth to a new router.
+    strip-client-auth-headers:
+      headers:
+        customRequestHeaders:
+          Remote-User: ""
+          X-Auth-Email: ""
+          X-Auth-Subject: ""
+          X-Forward-Auth-Secret: ""
     pmoves-forward-auth:
       forwardAuth:
         address: "http://pmoves-sso-auth:8080/auth/verify"
