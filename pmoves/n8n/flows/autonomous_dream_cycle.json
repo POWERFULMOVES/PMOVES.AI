@@ -1,0 +1,44 @@
+{
+  "name": "PMOVES Autonomous Dream Cycle",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "0 22 * * *"}]
+        }
+      },
+      "name": "Dream Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://cipher-api:8105/api/memory",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {"name": "content", "value": "DREAM CYCLE: consolidating day's agent activities into reasoning patterns"},
+            {"name": "category", "value": "dream"},
+            {"name": "agentId", "value": "autonomous-scheduler"},
+            {"name": "tags", "value": "[\"dream\", \"consolidation\"]"}
+          ]
+        },
+        "options": {}
+      },
+      "name": "Cipher Consolidate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Dream Trigger": {
+      "main": [[{"node": "Cipher Consolidate", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "tags": [{"name": "autonomous"}]
+}

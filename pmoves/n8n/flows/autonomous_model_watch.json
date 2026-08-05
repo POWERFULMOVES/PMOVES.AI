@@ -1,0 +1,49 @@
+{
+  "name": "PMOVES Autonomous Model Watch",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "*/30 6-21 * * *"}]
+        }
+      },
+      "name": "Model Watch Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://hf-agent:8201/healthz",
+        "options": {}
+      },
+      "name": "Verify HF Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://hf-research-agent:8202/healthz",
+        "options": {}
+      },
+      "name": "Verify HF Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Model Watch Trigger": {
+      "main": [[{"node": "Verify HF Agent", "type": "main", "index": 0}]]
+    },
+    "Verify HF Agent": {
+      "main": [[{"node": "Verify HF Research", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "tags": [{"name": "autonomous"}]
+}

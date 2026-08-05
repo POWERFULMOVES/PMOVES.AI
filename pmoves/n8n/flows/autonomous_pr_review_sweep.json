@@ -1,0 +1,35 @@
+{
+  "name": "PMOVES Autonomous PR Review Sweep",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "0 */2 6-21 * * *"}]
+        }
+      },
+      "name": "PR Review Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://archon:3090/api/health",
+        "options": {}
+      },
+      "name": "Verify Archon",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "PR Review Trigger": {
+      "main": [[{"node": "Verify Archon", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "tags": [{"name": "autonomous"}]
+}

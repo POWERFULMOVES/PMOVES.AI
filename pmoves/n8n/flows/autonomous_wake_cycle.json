@@ -1,0 +1,71 @@
+{
+  "name": "PMOVES Autonomous Wake Cycle",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "0 6 * * *"}]
+        }
+      },
+      "name": "Wake Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://nats:8222",
+        "options": {}
+      },
+      "name": "NATS Wake Broadcast",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://agent-zero:8080/healthz",
+        "options": {}
+      },
+      "name": "Check Agent Zero",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://hf-agent:8201/healthz",
+        "options": {}
+      },
+      "name": "Check HF Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 420]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://archon:3090/api/health",
+        "options": {}
+      },
+      "name": "Check Archon",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 540]
+    }
+  ],
+  "connections": {
+    "Wake Trigger": {
+      "main": [[{"node": "NATS Wake Broadcast", "type": "main", "index": 0}]]
+    },
+    "NATS Wake Broadcast": {
+      "main": [[{"node": "Check Agent Zero", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "tags": [{"name": "autonomous"}]
+}

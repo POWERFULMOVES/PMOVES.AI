@@ -2905,8 +2905,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # A2A protocol — Agent-to-Agent interoperability (AGNOTE4482 Item 2)
-    - A2A_DISCOVERY_PUBLIC=${A2A_DISCOVERY_PUBLIC:-false}
-    - A2A_TASKS_PUBLIC=${A2A_TASKS_PUBLIC:-false}
+    - A2A_DISCOVERY_PUBLIC=${A2A_DISCOVERY_PUBLIC:-true}
+    - A2A_TASKS_PUBLIC=${A2A_TASKS_PUBLIC:-true}
     # Inbound-MCP credential. Fleet-canonical AGENT_ZERO_MCP_TOKEN (Prod env
     # secret via secrets-funnel, issue #2056) pins the token A0 would otherwise
     # derive per-instance; empty default preserves the derive-on-unset behavior.
@@ -2930,7 +2930,12 @@ services:
     # observed stale (retired-secret signature); same preference as #2333/#2346.
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
+    # MCP servers: cipher (SSE) + pmoves-supabase (stdio). Docker MCP removed
+    # (stale mcp/docker image from Jul 2025 hangs on stdio init >10s timeout).
+    # AZ already has docker.sock mounted for code_execution — no MCP needed for that.
+    - A0_SET_mcp_client_init_timeout=30
+    - A0_SET_mcp_client_tool_timeout=60
+    - 'A0_SET_mcp_servers={"mcpServers":{"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:8105/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
