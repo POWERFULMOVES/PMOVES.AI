@@ -15,7 +15,8 @@
     "PMOVES-ClawZ": {
       "upstream": "openclaw/openclaw",
       "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
+      "reason": "re-forked 2026-08-05 from upstream/main; auto-sync on trigger; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-Creator": {
       "upstream": "Comfy-Org/ComfyUI",
@@ -55,8 +56,9 @@
     },
     "PMOVES-hermes-agent": {
       "upstream": "NousResearch/hermes-agent",
-      "sync": false,
-      "reason": "upstream activity is intermittent and most PMOVES customizations are checked-in as overlays; auto-sync produces low-value conflicts. Manual sync on demand."
+      "sync": true,
+      "reason": "re-forked 2026-08-05 from upstream/main; hardened branch tracks NousResearch/hermes-agent; auto-sync enabled",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-headscale": {
       "upstream": "juanfont/headscale",
