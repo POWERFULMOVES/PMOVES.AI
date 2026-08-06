@@ -26,7 +26,7 @@ Damage-control hooks block raw `docker`, `netsh`, `tailscale`, and `gh workflow`
 | Raw command (blocked) | Known Road |
 |---|---|
 | `docker volume rm <svc>` | `make -C pmoves volume-reset SERVICE=<svc>` |
-| `docker compose up -d <svc>` | `make -C pmoves up-<svc>` |
+| `docker compose up -d <svc>` | `make -C pmoves up-<svc>` (some services use **grouped** targets — e.g. Firefly/Wger/Open-Notebook/Jellyfin are `up-external`; Agent Zero/Archon are `up-agents`; run `make -C pmoves help` to find the real target) |
 | `docker compose restart <svc>` | `make -C pmoves secrets-funnel && make -C pmoves up` |
 | `tailscale status` (leaks raw IPs) | `make -C pmoves fleet-status` |
 | `gh workflow run sync-secrets-local` | `make -C pmoves secrets-sync-trigger` |
@@ -152,7 +152,8 @@ All make targets live in `pmoves/Makefile`. Run with `make -C pmoves <target>`.
 - Framework: `pytest` — tests per service in `pmoves/tests/` (unit, smoke, integration, hardening) and inline `pmoves/services/<svc>/tests/`
 - Mock external systems (NATS, Supabase, Neo4j); validate with sample payloads
 - Run a single service suite: `pytest -q pmoves/services/<svc>/tests/` — run under env: `bash pmoves/scripts/with-env.sh pytest pmoves/tests/unit/`
-- Full verification: `cd pmoves && make verify-all` (smoke + health). Targeted: `make -C pmoves smoke`, `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu`, `make -C pmoves model-readiness`
+- **Full-stack bring-up + verify** (mutating — starts Supabase, core, agents, media, TensorZero, n8n, Jellyfin, monitoring via `bringup-with-ui`): `cd pmoves && make verify-all`. For routine pre-push checks, prefer the targeted targets below instead.
+- Targeted checks (read-only): `make -C pmoves smoke`, `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu`, `make -C pmoves model-readiness`
 - Docstring coverage **≥ 80%** on new Python (CI gate; enforced by CodeRabbit)
 - Local CI mirror: `docs/LOCAL_CI_CHECKS.md`
 - Before pushing: run `/test:pr` (or the smoke targets above) and paste a **Testing** section into the PR description
@@ -172,7 +173,7 @@ All make targets live in `pmoves/Makefile`. Run with `make -C pmoves <target>`.
 - Shared defaults in `env.shared`, machine-specific in `.env.local` (long-form `path: .env.local / required: false` in compose — the short-form `env_file: .env.local` is REQUIRED by default and hard-fails bring-up on nodes without the file)
 - Production secrets in GitHub Actions secrets and team vault
 - Onboarding: `docs/SECRETS_ONBOARDING.md`. Bootstrap: `make -C pmoves env-setup && make -C pmoves secrets-funnel && make -C pmoves auth-alignment`
-- **Never paste API keys in chat.** Secrets flow through `env.tier-*` → `make -C pmoves secrets-funnel`. The funnel is the only supported path into CHIT storage.
+- **Never paste API keys in chat.** Inputs to the secrets pipeline are `env.shared` / `local.env` (or the production CHIT bundle); `env.tier-*` files are **generated outputs** materialized by `make -C pmoves secrets-funnel` — placing a key directly in an `env.tier-*` file will be silently overwritten on the next funnel run. The funnel is the only supported path into CHIT storage.
 - `*_FILE` secret support is wired across focus services via `pmoves/services/common/env.py::get_secret` — prefer the `_FILE` form for compose-injected secrets.
 
 **The canonical secrets pipeline is `make -C pmoves secrets-funnel`.** It is defined in `pmoves/mk/codex.mk` — **not** in `pmoves/Makefile`. A grep of the root Makefile alone will not find it. Before adding any secrets tooling, run `grep -rn 'secrets-funnel' pmoves/Makefile pmoves/mk/` and `make -C pmoves help`. A duplicate funnel has been written twice by agents who checked only the root Makefile and concluded the target did not exist.
