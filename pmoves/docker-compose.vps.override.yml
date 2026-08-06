@@ -41,7 +41,8 @@ services:
   agent-zero:
     <<: [*cpu-only, *vps-healthcheck]
     build:
-      dockerfile: Dockerfile  # CPU-only version
+      context: .
+      dockerfile: ./services/agent-zero/Dockerfile  # CPU-only version (matches the build in pmoves/docker-compose.yml:2911-2913)
     environment:
       - AGENTZERO_MODE=api
       - TENSORZERO_URL=http://tensorzero-gateway:3000

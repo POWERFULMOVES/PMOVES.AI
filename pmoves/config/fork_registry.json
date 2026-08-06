@@ -15,7 +15,8 @@
     "PMOVES-ClawZ": {
       "upstream": "openclaw/openclaw",
       "sync": true,
-      "reason": "auto-sync on cron; default upstream branch"
+      "reason": "re-forked 2026-08-05 from upstream/main; auto-sync on trigger; default upstream branch",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-Creator": {
       "upstream": "Comfy-Org/ComfyUI",
@@ -55,8 +56,9 @@
     },
     "PMOVES-hermes-agent": {
       "upstream": "NousResearch/hermes-agent",
-      "sync": false,
-      "reason": "upstream activity is intermittent and most PMOVES customizations are checked-in as overlays; auto-sync produces low-value conflicts. Manual sync on demand."
+      "sync": true,
+      "reason": "re-forked 2026-08-05 from upstream/main; hardened branch tracks NousResearch/hermes-agent; auto-sync enabled",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "PMOVES-headscale": {
       "upstream": "juanfont/headscale",
@@ -216,7 +218,7 @@
     "PMOVES-jcodemunch-mcp": {
       "upstream": "jgravelle/jcodemunch-mcp",
       "sync": false,
-      "branch": "main",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "PMOVES-Jellyfin": {
@@ -228,7 +230,7 @@
     "PMOVES-MAI-UI": {
       "upstream": "Tongyi-MAI/MAI-UI",
       "sync": false,
-      "branch": "main",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "no common ancestor with upstream (compare returns HTTP 404) - hardened branch built from orphan/squashed history; needs a re-fork, not a retry"
     },
     "PMOVES-neo4j": {
@@ -302,6 +304,30 @@
       "sync": false,
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-Headscale": {
+      "upstream": "juanfont/headscale",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (no PMOVES hardening layer identified)"
+    },
+    "PMOVES-Pipecat": {
+      "upstream": "pipecat-ai/pipecat",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false until triaged (used as reference, no PMOVES overlay)"
+    },
+    "PMOVES-Spark-VSS": {
+      "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false (Spark-specific integration, manual updates)"
+    },
+    "pmoves-hirag-mcp": {
+      "upstream": "_first_party",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "PMOVES first-party MCP bridge; no upstream to sync"
     }
   },
   "_excluded": {
