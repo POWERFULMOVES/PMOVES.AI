@@ -27,8 +27,17 @@ def provider_authorize_url(provider: str, redirect_to: str) -> str:
     # GoTrue's configured externals ("github", "google", ...); the browser is
     # sent here, GoTrue bounces to the provider, then back to `redirect_to`
     # (our /callback) with the auth code. Same shape for every provider.
+    #
+    # gotrue_PUBLIC_url, not gotrue_url. This string is rendered into the login
+    # page as an href and followed by the USER'S BROWSER — unlike every other
+    # call in this module, which is a server-side POST from inside the Docker
+    # network. Using gotrue_url here produced a dead link to
+    # `http://supabase-gotrue:9999/authorize`, which no browser can resolve;
+    # the login page loaded fine, so nothing looked broken until someone
+    # clicked. gotrue_public_url falls back to gotrue_url when unset, so
+    # deployments where GoTrue is already browser-reachable are unaffected.
     q = urlencode({"provider": provider, "redirect_to": redirect_to})
-    return f"{settings.gotrue_url}/authorize?{q}"
+    return f"{settings.gotrue_public_url}/authorize?{q}"
 
 def exchange_code(code: str) -> dict:
     # GoTrue PKCE/code exchange: POST /token?grant_type=pkce (auth code flow).
