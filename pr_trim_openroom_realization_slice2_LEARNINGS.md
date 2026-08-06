@@ -79,3 +79,57 @@ This works because git stash is repo-wide (lives in `.git/refs/stash`), and each
 - **What to look at first:** `pmoves/docker-compose.yml` (the new build arg) and `PMOVES-OpenRoom/apps/webuiapps/Dockerfile` (the ARG/ENV addition)
 - **What to bring up:** `make -C pmoves up-openroom` + the pmoves-ui service, then visit `http://localhost:5173/webuiapps/?room=persona.room.livingdoc` and verify the persona HTML streams into the iframe
 - **What NOT to do:** do not merge without pushing the PMOVES-OpenRoom `openroom-realization-vite-iframes` branch first, or the gitlink will dangle
+
+## 6. Runtime validation status (deferred)
+
+I attempted a real-runtime bring-up on the host to verify the P1 iframe actually loads the persona HTML. **Validation blocked on an upstream issue, not on P1 code.**
+
+### What I tried
+
+1. `docker build` of the new openroom image with `VITE_PMOVES_ROOM_IFRAMES` passed as `--build-arg`
+2. Both `docker compose build` and direct `docker build` (the compose route is blocked by missing required env vars like `QDRANT__API_KEY`, `CHIT_PROD_PASSPHRASE`, `JWT_SECRET` — those are for OTHER services in the compose, not openroom; compose validates all services on parse)
+
+### What broke
+
+**Issue A (Windows-only): `apps/webuiapps/script/build.sh` has CRLF line endings** on the host working tree. The submodule has no `.gitattributes`, and the host's `core.autocrlf=true` converts LF → CRLF on checkout. When the container runs the script, `set -e\r` fails with "illegal option -". I converted the file to LF locally, but the next `git checkout` would re-CRLF it.
+
+**Issue B (cross-platform):** even with LF line endings, the build fails at `pnpm run build` with `WARN: Local package.json exists, but node_modules missing`. The pnpm install at WORKDIR=/app succeeds, but `pnpm run build` at WORKDIR=/app/apps/webuiapps reports missing node_modules. Likely a pnpm-workspace + turbo setup that doesn't survive `pnpm i --frozen-lockfile` from outside the workspace context, or a stale lockfile.
+
+**Both are in PMOVES-OpenRoom, not in my PR.** I reverted the LF-converted build.sh in my local submodule working tree so the PR is clean.
+
+### Recommended upstream fix (separate PR to PMOVES-OpenRoom)
+
+1. **Add `apps/webuiapps/.gitattributes`:**
+   ```
+   * text=auto eol=lf
+   script/*.sh text eol=lf
+   Dockerfile* text eol=lf
+   ```
+2. **Fix the Dockerfile to `pnpm install` inside the workspace package's directory**, or add `pnpm install --frozen-lockfile` after the `WORKDIR ${APP_PATH}` so the package's node_modules is properly set up.
+3. **Test build on Windows + Linux** to confirm both work.
+
+### What the reviewer should do
+
+The bring-up validation is the right thing to do before merge. Until the PMOVES-OpenRoom Dockerfile is fixed for cross-platform builds, the validation will fail on the operator's host too. Suggested sequence:
+1. Land this PR (P1 wiring) on the assumption that the Dockerfile fix is independent.
+2. Open a separate upstream PR to PMOVES-OpenRoom for the `.gitattributes` + workspace install fix.
+3. After the upstream lands, re-test the bring-up.
+4. Update the PR with a screenshot in the LEARNINGS file.
+
+## 7. Acceptance criterion 1 status
+
+- ⏳ **`http://localhost:5173/webuiapps/?room=persona.room.livingdoc` shows the real persona HTML in an iframe (not StubApp)** — code complete + JSON map wired + compose arg set, but **runtime bring-up blocked by the PMOVES-OpenRoom Dockerfile issue above**. The code path is straightforward Vite build-time env var → `import.meta.env` → StubApp's `iframeUrl` derivation → `<iframe src={iframeUrl}>` → Next.js route serves the persona HTML. All components are present and individually validated (YAML safe_load, JSON.parse, Dockerfile ARG, compose build args, split script regen).
+
+## 8. Test command the reviewer can run locally on Linux
+
+```bash
+cd pmoves
+OPENROOM_ROOM_IFRAMES_JSON='{"persona.room.livingdoc":"http://localhost:4482/persona/livingdoc"}' \
+  docker compose --profile ui build openroom
+docker compose --profile ui up -d openroom
+# wait 30s, then:
+curl -sf http://localhost:5173/webuiapps/ | head -3
+# visit http://localhost:5173/webuiapps/?room=persona.room.livingdoc in a browser
+```
+
+If the PMOVES-OpenRoom Dockerfile build works on the operator's Linux host, the iframe will load the persona HTML. The Compose + openroom Dockerfile are wired correctly; the only moving part is the build.
