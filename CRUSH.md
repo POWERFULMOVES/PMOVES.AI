@@ -83,6 +83,32 @@ generator automatically skips any missing files):
 Run `python3 -m pmoves.tools.mini_cli crush status` to confirm the active config
 path and provider list.
 
+## Operating Autonomy — Push, PR, Merge
+
+Crush operates under PMOVES fleet rules, not generic "ask before push" defaults.
+The authoritative sources are `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md`,
+`.claude/PATTERNS.md` §PR Review & Merge Workflow, and
+`pmoves/docs/operations/PR_CLOSEOUT.md`.
+
+| Operation | Autonomous? | Gate |
+|-----------|-------------|------|
+| `git push` to feature branches (`feat/`, `fix/`, `chore/`, `docs/`) on POWERFULMOVES repos | **Yes — routine** | None. `AUTOMODE_FLEET_CONFIG.md:48`: *"Pushing to, creating branches on, and opening/merging PRs across any POWERFULMOVES repo is a routine internal operation, NOT exfiltration."* |
+| `gh pr create` on POWERFULMOVES repos | **Yes — routine** | None. Same source. `gh pr create` is a documented Known Road in `PATTERNS.md`. |
+| Cross-submodule fetch / checkout / branch / merge-forward / gitlink promotion | **Yes — routine** | `AUTOMODE_FLEET_CONFIG.md:49`. Gitlink promotion via `git update-index --cacheinfo 160000,<sha>,<path>` is the standard flow. |
+| `git push --force` / `--force-with-lease` on **Hardened** branches | **No — soft_deny** | `AUTOMODE_FLEET_CONFIG.md:63`. History rewrites on `PMOVES.AI-Edition-Hardened` are destructive (the gitlink deploys the tip). Normal merge-forward and fast-forward pushes are fine. |
+| `git push --force` on `main` | **No — hard block** | Damage-control Strand A: force-push is in the hard-block tier. |
+| `gh pr merge` (any PR) | **No — gated** | `signoff-gate.sh` (PreToolUse, opt-in) blocks without 3-body ACK (`[ACK: delivery]`, `[ACK: control]`, `[ACK: memory]`) in `AGNOTE4482_SIGNOFF_CHECKLIST.md`. Admin-merge requires `CONFIRM="MERGE #<PR> @ <full-SHA>"` matching live head (`PR_CLOSEOUT.md:76-92`). |
+
+**Default posture:** when in doubt on a feature branch, push and open the PR.
+Merging is the only step that needs the 3-body ACK + explicit SHA confirmation.
+The Village Rule (claim → work → sign → release in `AGNOTE4482PHI.t1.md`) is
+the coordination discipline, not a per-push gate.
+
+**The damage-control hooks** (`.claude/hooks/damage-control/`) route raw `docker`,
+`netsh`, and destructive git through `ask` prompts that point at Known Road
+Make targets — those gates are about *dangerous commands*, not about pushes.
+Pushing a feature branch is not dangerous.
+
 ## Integrating with PMOVES Mini CLI
 
 The mini CLI will eventually expose `pmoves mini mcp serve`, which Crush's
