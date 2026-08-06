@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseProxyClient } from '@/lib/supabaseServer';
 
-const MARKETING_ROUTES = ['/community'];
+const MARKETING_ROUTES = ['/community', '/persona'];
 const PUBLIC_PATHS = new Set(['/', '/login', '/callback', '/icon.svg', '/favicon.ico', ...MARKETING_ROUTES]);
 const PUBLIC_PATH_PREFIXES = [...MARKETING_ROUTES];
 
