@@ -15,8 +15,12 @@ DAEMON_JSON = "/etc/docker/daemon.json"
 try:
     with open(DAEMON_JSON, "r") as f:
         d = json.load(f)
-except Exception:
+except FileNotFoundError:
     d = {}
+except (json.JSONDecodeError, PermissionError) as e:
+    import sys
+    print(f"ABORT: cannot read {DAEMON_JSON}: {e}", file=sys.stderr)
+    sys.exit(1)
 
 d["log-driver"] = "json-file"
 d["log-opts"] = {"max-size": "10m", "max-file": "3"}

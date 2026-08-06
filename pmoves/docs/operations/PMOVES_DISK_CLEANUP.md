@@ -8,9 +8,6 @@ Prevents the recurring disk-fill issue across all PMOVES nodes (Linux + Windows)
 
 ```bash
 # From any PMOVES.AI checkout:
-make -C pmoves disk-cleanup
-
-# Or directly:
 bash pmoves/scripts/pmoves-disk-cleanup.sh
 
 # For daemon-level log rotation (needs root):

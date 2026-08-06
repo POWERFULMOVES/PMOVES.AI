@@ -33,12 +33,13 @@ docker image prune -f 2>/dev/null | tail -1
 info "Pruning build cache..."
 docker builder prune --all --force 2>/dev/null | tail -1
 
-# ── 4. Prune dangling volumes (named volumes that no container references) ──
-#     SAFE: only removes volumes not attached to any container.
-#     Data volumes (postgres, qdrant, minio, etc.) that are attached to
-#     stopped services survive because they're still "in use" by compose.
-info "Pruning dangling volumes..."
-docker volume prune -f 2>/dev/null | tail -1
+# ── 4. Volume prune is intentionally OMITTED ────────────────────────────────
+#     docker volume prune is banned by damage-control (patterns.yaml) because
+#     fleet hosts co-host data volumes (postgres, qdrant, minio, etc.) that
+#     can be temporarily unreferenced when their container is removed.
+#     Use `make -C pmoves volume-list` to inspect, or
+#     `make -C pmoves volume-reset SERVICE=<name>` for targeted resets.
+info "Skipping volume prune (banned by fleet policy — use make volume-reset SERVICE=<name>)"
 
 echo ""
 info "=== Disk after cleanup ==="
@@ -63,11 +64,15 @@ if [ "$NEEDS_DAEMON_UPDATE" = "true" ]; then
 
   if [ "$(id -u)" -eq 0 ]; then
     python3 -c "
-import json
+import json, sys
 try:
     with open('$DAEMON_JSON', 'r') as f:
         d = json.load(f)
-except: d = {}
+except FileNotFoundError:
+    d = {}
+except (json.JSONDecodeError, PermissionError) as e:
+    print(f'ABORT: cannot read $DAEMON_JSON: {e}', file=sys.stderr)
+    sys.exit(1)
 d['log-driver'] = 'json-file'
 d['log-opts'] = {'max-size': '10m', 'max-file': '3'}
 with open('$DAEMON_JSON', 'w') as f:
@@ -87,47 +92,11 @@ else
   info "daemon.json already has log rotation."
 fi
 
-# ── 6. Add log rotation to compose tier anchors ─────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-COMPOSE_FILE="${REPO_ROOT}/pmoves/docker-compose.yml"
-
-info "Checking compose tier anchors log rotation..."
-if [ -f "$COMPOSE_FILE" ]; then
-  LOG_COUNT=$(grep -c "max-size" "$COMPOSE_FILE" 2>/dev/null || echo 0)
-  if [ "$LOG_COUNT" -lt 9 ]; then
-    info "Adding log rotation to tier anchors in $COMPOSE_FILE..."
-    python3 -c "
-import re
-with open('$COMPOSE_FILE', 'r') as f:
-    content = f.read()
-logging_block = '''    - no-new-privileges:true
-  logging:
-    driver: json-file
-    options:
-      max-size: \"10m\"
-      max-file: \"3\"
-'''
-result = re.sub(
-    r'(  security_opt:\n    - no-new-privileges:true)\n\n(x-tier-)',
-    lambda m: logging_block + '\n' + m.group(2),
-    content
-)
-result = result.replace(
-    '    - no-new-privileges:true\n\n# ======================================================================',
-    logging_block + '\n# ======================================================================'
-)
-with open('$COMPOSE_FILE', 'w') as f:
-    f.write(result)
-count = result.count('max-size: \"10m\"')
-print(f'  Added log rotation to {count} tier anchors')
-"
-  else
-    info "  Already has $LOG_COUNT log rotation blocks."
-  fi
-else
-  warn "  $COMPOSE_FILE not found"
-fi
+# ── 6. Compose tier anchor log rotation ─────────────────────────────────────
+# As of #2420, log rotation is baked into the tier anchors in docker-compose.yml
+# at the source level. This script no longer patches the compose file.
+# If on an older checkout, run `git pull origin main` to get #2420.
+info "Compose log rotation is handled by #2420 in docker-compose.yml (no patch needed)."
 
 echo ""
 info "=== Done ==="
