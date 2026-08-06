@@ -103,11 +103,40 @@ RUN mkdir -p /opt/ffmpeg/share/whisper && \
 # and ships, and the failure only appears as "mysteriously slow" in production.
 # Fail at build time instead.
 #
-# Arch list covers the fleet nodes this image can serve today: 86 = 3090Ti
-# (Z890), 89 = 4090. Ampere cubins run on Ada (same major version), verified
-# empirically. The 5090 is sm_120 and CANNOT be covered here — Blackwell needs
-# CUDA >= 12.8 and this image pins 12.6.2. Narrow to one arch when iterating
-# (--build-arg CUDA_ARCHS=89); each extra arch is another kernel compile.
+# Arch list is DEPLOYMENT-TARGETED, not universal. Every additional arch is a
+# full extra kernel compile baked into the image, so a "covers everything" list
+# makes every node carry cubins for GPUs it will never see. Build the variant
+# for the node you are deploying to.
+#
+# Fleet targets, from pmoves/config/profiles/*.yaml (the authoritative
+# declaration, not guesswork):
+#
+#   x86_64 — this default:
+#     86   Z890 3090Ti           CUDA 12.6.2 ok
+#     89   4090 laptop           CUDA 12.6.2 ok
+#
+#   arm64 — set by docker-compose.arm64.override.yml build args:
+#     87   Jetson Orin           REQUIRES CUDA >= 12.8 (no arm64 wheels below)
+#     110  DGX Spark GB10        REQUIRES CUDA >= 12.8 (Grace-Blackwell)
+#
+#   not covered by any current variant:
+#     120  5090 consumer Blackwell — needs CUDA >= 12.8 on x86:
+#          --build-arg CUDA_VERSION=12.8.1 --build-arg CUDA_ARCHS=120
+#
+# Ampere cubins run on Ada (same major version) — verified empirically on the
+# 4090 against an 86-only build. Do NOT assume that across major versions.
+#
+# VERIFY before trusting a node you have not built for. Ground truth is
+#   nvidia-smi --query-gpu=compute_cap --format=csv
+# on that node. The Spark value here is taken from the repo profile
+# (dgx-spark-grace-blackwell.yaml: compute_capability "11.0") and has NOT been
+# confirmed against hardware in this lane. A wrong arch is a silent CPU
+# fallback, which is the exact failure this file already exists to prevent —
+# the libggml-cuda.so guard above proves the backend was BUILT, not that its
+# cubins match the GPU it lands on.
+#
+# Narrow to one arch when iterating (--build-arg CUDA_ARCHS=89) — it is the
+# single biggest lever on build time.
 ARG CUDA_ARCHS="86;89"
 RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggerganov/whisper.cpp.git && \
     cmake -S whisper.cpp -B whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \

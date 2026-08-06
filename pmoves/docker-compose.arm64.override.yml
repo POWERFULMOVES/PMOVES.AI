@@ -7,6 +7,32 @@ services:
     platform: linux/arm64
   ffmpeg-whisper:
     platform: linux/arm64
+    # platform alone is not enough for this image. It compiles CUDA kernels, and
+    # its x86 defaults are wrong here in two independent ways:
+    #
+    #   CUDA_VERSION 12.6.2 has no arm64 wheels for the stack these nodes need.
+    #   media-audio's Dockerfile already carries the same note ("cu128 required
+    #   for ARM64 (GB10/Jetson)"), proven on SPARK via Hi-RAG GPU.
+    #
+    #   CUDA_ARCHS "86;89" are the Z890/4090 architectures. Neither Jetson Orin
+    #   (sm_87) nor Spark GB10 (sm_110) is in that list, so the build would
+    #   succeed, ship, and silently fall back to CPU on both — the exact failure
+    #   the libggml-cuda.so build guard cannot catch, because the backend IS
+    #   built; it just has no cubins for the GPU it lands on.
+    #
+    # 87 and 110 are both listed because this one override serves Jetson and
+    # Spark alike. For a single-node deployment, narrow it — each arch is another
+    # kernel compile and more image weight for a GPU that node will never have:
+    #   Jetson only:  ARM64_CUDA_ARCHS=87
+    #   Spark only:   ARM64_CUDA_ARCHS=110
+    #
+    # Confirm on the node before trusting: nvidia-smi --query-gpu=compute_cap
+    build:
+      context: ..
+      dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
+      args:
+        CUDA_VERSION: ${ARM64_CUDA_VERSION:-12.8.1}
+        CUDA_ARCHS: ${ARM64_CUDA_ARCHS:-87;110}
   channel-monitor:
     platform: linux/arm64
   archon-server:
