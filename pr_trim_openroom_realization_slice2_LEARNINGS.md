@@ -1,21 +1,38 @@
-# LEARNINGS — openroom-realization slice 2 (P1 iframe wiring)
+# LEARNINGS — openroom-realization slice 2 (P1 iframe wiring + P2/P3/P4/P5/P6 follow-ups)
 
 > Per the 4-bucket taxonomy: missed-signal / fix-pattern / wrong-suggestion / already-addressed.
 > Captured during implementation, before any review. Add more buckets as review threads land.
 
-## 1. The P1 work itself
+## 1. The slice 2 work as a whole
 
-**Goal:** turn the persona living-doc room from a `StubApp` metadata card into a real served surface embedded in the OpenRoom desktop. Lowest-risk, highest-signal first deliverable per the handoff's 6 priorities.
+**Goal:** turn the persona living-doc room from a `StubApp` metadata card into a real served surface embedded in the OpenRoom desktop, plus the 5 follow-up priorities from the 2026-08-06 handoff. Lowest-risk, highest-signal first deliverable; the other 5 are progressive enhancements on top.
 
-**3 commits on `feat/mavis-openroom-realization` (off `feat/persona-livingdoc-rooms`):**
+**10 commits on `feat/mavis-openroom-realization` (off `feat/persona-livingdoc-rooms`):**
 
-| # | SHA | What | Files |
-|---|-----|------|-------|
-| 1 | `a198e1cf3f` | (cherry-pick from `feat/persona-livingdoc-rooms`) persona route + greeting + null guard | 4 |
-| 2 | `ade63dffe9` | slice 2 scaffold — openroom service, UI auth refactor, AGNOTE claim, first trail entry, 5090 sitrep skill | 10 |
-| 3 | `7900a98fe4` | P1 iframe wiring — Dockerfile ARG + compose build args + split script update | 3 + 1 submodule bump |
+| # | SHA | What | Priority |
+|---|-----|------|----------|
+| 1 | `a198e1cf3f` | (cherry-pick from `feat/persona-livingdoc-rooms`) persona route + greeting + null guard | scaffold |
+| 2 | `ade63dffe9` | slice 2 scaffold — openroom service, UI auth refactor, AGNOTE claim, first trail entry, 5090 sitrep skill (+471/-11) | scaffold |
+| 3 | `7900a98fe4` | **P1 iframe wiring** — Dockerfile ARG + compose build args + split script update | P1 |
+| 4 | `dbf9b66f3f` | LEARNINGS.md per pr-trim protocol | docs |
+| 5 | `500aff4f46` | LEARNINGS addendum — runtime validation deferred (upstream build issue) | docs |
+| 6 | `4ab0cd431f` | **P3 Enter button on each room card** — stage_data.py emits A2UI Button, stage.js handles a2ui.action event, index.html adds OPENROOM_BASE_URL meta tag, public-rooms.json regenerated | P3 |
+| 7 | `f2083c5d37` | **P5 P7 session endpoint** — POST /api/p7/rooms/{id}/session (Pydantic SessionRequest, NATS publish_room_session extended) + 5 tests | P5 |
+| 8 | `86fc198902` | chore(submodule): bump PMOVES-OpenRoom for P2 stock-app hiding | P2 |
+| 9 | `94808093f7` | chore(submodule): bump PMOVES-OpenRoom for P4 model-fabric wiring ('pmoves' provider) | P4 |
+| 10 | `d5e2b9acdd` | chore(submodule): bump PMOVES-OpenRoom for P6 persona theming (theme.skin/icon/wallpaper) | P6 |
 
-**Acceptance criterion 1 (P1):** `?room=persona.room.livingdoc` renders the real persona HTML in an iframe, not a StubApp metadata card. **Defer to bring-up validation** — the build-arg pattern is standard Vite; when `make -C pmoves up-openroom` is run with pmoves-ui already on `:4482`, the iframe URL resolves and the persona HTML streams in.
+**Acceptance criteria status (per the 2026-08-06 handoff):**
+
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | `?room=persona.room.livingdoc` shows the real persona HTML in an iframe | Code complete (P1). Runtime blocked on upstream PMOVES-OpenRoom Dockerfile CRLF + pnpm-workspace issues (LEARNINGS addendum). |
+| 2 | Stock OpenRoom apps hidden when a PMOVES room is active | **Code complete (P2).** Shell filters by appId >= PMOVES_DYNAMIC_APP_ID_BASE=1000. |
+| 3 | `/stage/` Enter buttons | **Code complete (P3).** stage_data.py emits Button, stage.js handles click, public-rooms.json regenerated. Tests: 6/6 pass. |
+| 4 | At least 3 rooms render real content via iframe | Deferred (depends on P1 runtime + 3 rooms configured in VITE_PMOVES_ROOM_IFRAMES). P3 added the wire path; P1 is the only room configured. |
+| 5 | P7 session open/close succeeds (no 404) | **Code complete (P5).** New `POST /api/p7/rooms/{id}/session` endpoint with Pydantic validation + NATS publish. Tests: 5/5 new + 51/51 total pass. |
+| 6 | Persona theming beyond `--pm-accent` (consume `theme.skin` / `theme.icon`) | **Code complete (P6).** Adapter now consumes skin/icon/wallpaper and sets both data-attrs + CSS vars on document root. |
+| 7 | Signed graphiti trail entry in `docs/AGENT_TRAIL.md` | **Done (commit 2 in scaffold).** |
 
 ## 2. Patterns / fixes
 
