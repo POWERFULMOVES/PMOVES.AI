@@ -3146,12 +3146,18 @@ services:
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
-    - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-false}
+    - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
     # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
     # Default empty (uses $PATH). The upstream Archon Dockerfile installs
     # Claude at /usr/local/bin/claude; set this only if the image builds
     # Claude at a non-standard path or you want to pin a specific binary.
+    # ARM64 (SPARK): the SDK installs at the path below — set in env.tier-agent.
     - CLAUDE_BIN_PATH=${CLAUDE_BIN_PATH:-}
+    # TensorZero as OpenAI-compatible provider for Archon's LLM calls.
+    # Archon reads OPENAI_API_KEY / OPENAI_API_BASE for its model calls.
+    # Derives from the canonical TENSORZERO_BASE_URL used across the fleet.
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    - OPENAI_API_BASE=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}/openai/v1
     # gh auth — non-fatal warning if absent.
     - GH_TOKEN=${GH_TOKEN:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
