@@ -2,7 +2,7 @@
 
 > **Generated:** July 30, 2026
 > **Pipeline:** ActivePieces (LinkedIn connected) → persona.pmoves.ai → pmoves.ai exhibits
-> **11 Resonance Domains:** 2,028 AI Playlist videos classified
+> **11 Resonance Domains:** 2,028 crawled (2,017 classified) classified
 
 ---
 
@@ -96,7 +96,7 @@ YouTube AI Playlist (2,028 videos)
 
 ## Prerequisites
 
-- [ ] **CHIT Tour merge**: PR #2076 needs visual sign-off → then LinkedIn posts can link to `pmoves.ai/chit-tour/`
+- [x] **CHIT Tour merge**: PR #2076 merged to main — `pmoves.ai/chit-tour/` is live
 - [ ] **persona.pmoves.ai live**: Traefik edge + DNS for the persona room (Phase 5 operator step)
 - [ ] **ActivePieces content queue**: Wire the 7 artifacts into the AP scheduler
 - [ ] **Auto-research cron**: Weekly DeepResearch run on highest-video-count domain
