@@ -56,6 +56,11 @@ services:
       - FOWNER
       - SETGID
       - SETUID
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
 
     image: postgres:15-alpine
     restart: unless-stopped

@@ -21,6 +21,11 @@ services:
       - FOWNER
       - SETGID
       - SETUID
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
 
     image: juicedata/mount:ce-v1.3.0
     profiles: ["juicefs"]
