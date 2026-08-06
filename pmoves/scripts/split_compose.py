@@ -96,6 +96,7 @@ SERVICE_GROUPS = {
         "invidious-companion-proxy",
         "grayjay-plugin-host",
         "grayjay-server",
+        "openroom",
     ],
     "workers": [
         "extract-worker",
