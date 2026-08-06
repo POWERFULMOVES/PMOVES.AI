@@ -5231,7 +5231,7 @@ services:
     environment:
     - SERVICE_PORT=8102
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
@@ -5273,7 +5273,7 @@ services:
     environment:
     - SERVICE_PORT=8103
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
@@ -5315,7 +5315,7 @@ services:
     environment:
     - SERVICE_PORT=8104
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
