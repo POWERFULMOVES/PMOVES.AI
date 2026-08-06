@@ -4264,7 +4264,7 @@ down-external: ## Stop external integration services
 # the traefik container but points at `sso-auth@docker`, so Traefik without sso-auth
 # is an edge whose own login route 404s.
 # ---------------------------------------------------------------------------
-EDGE_DC := docker compose -p $(PROJECT)-edge --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
+EDGE_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
 
 .PHONY: edge-preflight
 edge-preflight: ## Check edge prerequisites (networks, 80/443, dynamic.yml) without starting anything
