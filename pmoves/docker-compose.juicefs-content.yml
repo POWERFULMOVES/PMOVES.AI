@@ -1,0 +1,42 @@
+##############################################################################
+# PMOVES.AI - JuiceFS content sharing overlay for ActivePieces + n8n
+##############################################################################
+# Adds the JuiceFS-shared /mnt/shared volume to ActivePieces and n8n services.
+# This is the cross-node content store (LinkedIn drafts, media artifacts,
+# workflow exports, beats audio). No service-internal state — that stays
+# in named volumes for local persistence.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.n8n.yml \
+#     -f docker-compose.juicefs-content.yml --profile juicefs up -d
+#
+# Requires: juicefs-gateway running (make -C pmoves up-juicefs)
+##############################################################################
+
+services:
+  activepieces-app:
+    volumes:
+      - juicefs-content:/mnt/shared
+
+  activepieces-worker:
+    volumes:
+      - juicefs-content:/mnt/shared
+
+  n8n:
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - ../PMOVES-n8n/workflows:/flows:ro
+      - juicefs-content:/mnt/shared
+
+  n8n-runners:
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - juicefs-content:/mnt/shared
+
+volumes:
+  juicefs-content:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${JUICEFS_CONTENT_MOUNT:-/tmp/pmoves-juicefs-content}
+      o: bind

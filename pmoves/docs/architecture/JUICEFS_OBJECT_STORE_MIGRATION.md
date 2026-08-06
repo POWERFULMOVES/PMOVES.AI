@@ -36,14 +36,31 @@ S3 consumers ──S3──▶ juicefs-gateway (:9000, S3-compatible)
 - **Metadata engine:** transactional KV/DB holding the filesystem tree + chunk index.
 - **Data backend:** where chunks live.
 
-### 4.1 Component choices (confirmed)
+### 4.1 Component choices
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Metadata engine | **Postgres** on `supabase-db` (schema `juicefs_meta`) | Operator decision 2026-06-28. Already in the stack; transactional; supports the multi-node vision. The Redis PoC metadata engine has been retired — the compose now defaults to the Postgres DSN. The `juicefs_meta` schema ships in `supabase/initdb/00_2_juicefs_meta_schema.sql`. |
+| Metadata engine | **Postgres** (dedicated schema `juicefs_meta` on `supabase-db`) | Already in the stack; transactional; supports the multi-node vision. **Must use `META_PASSWORD` env var pattern** — see below. |
 | Data backend | **local volume** initially (`file://` on a hardened named volume) | Simplest durable single-node store; the multi-node dual-write/replicated backend is the follow-on vision. |
 | S3 gateway | `juicefs gateway --multi-buckets --keep-etag` on **:9000** | Drop-in endpoint; `--multi-buckets` is REQUIRED on CE to keep the multiple buckets `assets`/`outputs`/`pmoves-comfyui` (else only one FS-named bucket is exposed). |
-| Image | pinned `juicedata/juicefs` (or build) per F-07 supply-chain | Maintained, unlike MinIO community. |
+| Image | pinned `juicedata/mount:ce-v1.3.0` | Maintained CE image from juicedata. |
+
+### 4.2 META_PASSWORD pattern (critical)
+
+Per [JuiceFS docs §databases_for_metadata](https://juicefs.com/docs/community/databases_for_metadata/):
+
+When using Postgres with passwords containing special characters (`/`, `+`, `?`, `&`, `@`),
+**do NOT embed the password in `JUICEFS_META_URL`**. The compose `sh -lc` entrypoint
+shell-expands these characters, corrupting the connection string (manifest: `sh: 1: pmoves: not found`).
+
+Instead:
+1. Set `JUICEFS_META_URL` to a **passwordless** URL: `postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable`
+2. Set `META_PASSWORD` to the raw DB password (from `generate-keys.sh` / `secrets-funnel`)
+3. JuiceFS reads `META_PASSWORD` and injects it into the connection
+
+Both `juicefs format` and `juicefs gateway` honor this pattern. The compose `environment:` block
+passes `META_PASSWORD` into the container. When `META_PASSWORD` is unset, JuiceFS falls back to
+the password embedded in the URL (or no password for Redis).
 
 ## 5. Drop-in strategy (minimal churn)
 
@@ -59,7 +76,7 @@ For existing data: `mc mirror` (or `rclone`) from the running MinIO (`local/<buc
 
 ## 7. Dependency ordering & hardening
 
-Bring-up order: **supabase-db (healthy) → juicefs format (one-time, retry loop) → juicefs-gateway (healthy) → S3 consumers**. The `juicefs-format` service has a built-in 15-retry wait loop (2s interval) for Postgres readiness. `make up-juicefs` pre-checks that `supabase-db` is running. Apply the `*tier-data-hardened` anchor to the gateway, mirroring MinIO.
+Bring-up order: **metadata engine (healthy) → juicefs format (one-time) → juicefs-gateway (healthy) → S3 consumers**. Wire `depends_on: condition: service_healthy`. Apply the `*tier-data-hardened` anchor (non-root 65532, read-only rootfs + tmpfs, `cap_drop: ALL`, `no-new-privileges`) to the gateway, mirroring MinIO. Fits the capable-tier data layer (`up-core-capable`).
 
 ## 8. Rollback
 
@@ -80,7 +97,7 @@ Keep MinIO (last-real-tag pin from #1862) **available behind a profile/flag** th
 
 ## 11. Open questions (resolve in review)
 
-- ~~Metadata engine: dedicated Postgres DB vs Redis vs reuse `supabase-db` (blast-radius/coupling).~~ **Resolved 2026-06-28: Postgres on `supabase-db`, schema `juicefs_meta` (namespaced, no coupling to app schemas). Redis PoC retired.**
+- Metadata engine: dedicated Postgres DB vs Redis vs reuse `supabase-db` (blast-radius/coupling).
 - Backend durability single-node now vs jumping to a replicated backend for multi-node.
 - Naming: keep `minio:9000` DNS (drop-in) vs new `juicefs-gateway` endpoint var.
 - Presigned-URL semantics parity (expiry, signature) between MinIO and the JuiceFS gateway.

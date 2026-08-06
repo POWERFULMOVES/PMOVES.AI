@@ -11,15 +11,36 @@ revisit Redis-vs-Postgres when the multi-node replicated backend (Phase 4) is de
 
 ## 0. Metadata engine — Postgres
 The PoC used Redis. For production use Postgres on the existing `supabase-db`:
-- Create the metadata schema once (idempotent seed, ships with this PR):
-  `supabase/initdb/00_2_juicefs_meta_schema.sql` → `create schema if not exists juicefs_meta`.
-- Set the meta URL (env.shared / deploy):
-  ```
-  # single-quote the value: the `&` before sslmode would otherwise background the shell command
-  JUICEFS_META_URL='postgres://<SUPABASE_DB_USER>:<SUPABASE_DB_PASSWORD>@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable'
-  ```
-  (Both `juicefs format` and `juicefs gateway` read `JUICEFS_META_URL`; default is the redis PoC.)
-- `juicefs-redis` is then unused — leave it in the `juicefs` profile for PoC/fallback, or drop it from the bring-up service list once Postgres is validated.
+
+### Critical: META_PASSWORD pattern
+
+Per [JuiceFS docs](https://juicefs.com/docs/community/databases_for_metadata/), when the
+Postgres password contains special characters (`/`, `+`, `?`, `&`, `@`), **do NOT embed it
+in the `JUICEFS_META_URL`**. The compose `sh -lc` entrypoint will shell-expand these characters
+and corrupt the connection string.
+
+Instead, use the `META_PASSWORD` environment variable pattern:
+- Set `JUICEFS_META_URL` to a **passwordless** URL (host-only)
+- Set `META_PASSWORD` to the raw DB password
+- JuiceFS reads `META_PASSWORD` and injects it into the connection automatically
+
+### Setup
+
+1. Create the metadata schema once (idempotent seed):
+   `supabase/initdb/00_2_juicefs_meta_schema.sql` → `create schema if not exists juicefs_meta`.
+
+2. In `env.shared` (or `env.tier-supabase`), set:
+   ```
+   # Passwordless URL — META_PASSWORD provides credentials separately
+   JUICEFS_META_URL=postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable
+   META_PASSWORD=<SUPABASE_DB_PASSWORD>
+   ```
+   Both `juicefs format` and `juicefs gateway` read these env vars via the compose
+   `environment:` block. The default (no `META_PASSWORD`) falls back to Redis on
+   `juicefs-redis:6379`.
+
+3. `juicefs-redis` is kept in the `juicefs` profile for PoC/fallback. When using Postgres,
+   the Redis container starts but is unused by the format/gateway commands.
 
 ## 1. Stand up JuiceFS (Postgres metadata)
 ```
