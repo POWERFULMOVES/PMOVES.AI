@@ -1,0 +1,83 @@
+name: Review Collect
+
+# Collects PR review threads (CodeRabbit, Codex, human) into LLM-readable
+# JSON + Markdown artifacts using the GitHub App token for auth.
+#
+# REPLACES the disabled review-comment-monitor.yml (which depended on
+# ANTHROPIC_API_KEY for Claude triage). This workflow is pure Python —
+# no API key needed beyond the App token. The App token provides
+# pull-requests:read scope to fetch review threads via GraphQL.
+#
+# Artifacts are uploaded for download and optionally committed to
+# pmoves/docs/logs/review-dumps/ for searchability.
+#
+# Ingestion into Hi-RAG/Cipher is OPT-IN via repository variables
+# (PMOVES_REVIEW_INGEST_HIRAG / PMOVES_REVIEW_INGEST_CIPHER).
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+  schedule:
+    # Every 2 hours — catches threads posted between events
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repo name (default: PMOVES.AI)"
+        required: false
+        default: PMOVES.AI
+      pr:
+        description: "Single PR number (blank = all open)"
+        required: false
+
+concurrency:
+  group: review-collect-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint GitHub App token
+        id: app-token
+        uses: ./.github/workflows/_app-token.yml
+        with:
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-pull-requests: read
+          permission-contents: read
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Collect review threads
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PMOVES_GITHUB_ORG: ${{ github.repository_owner }}
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          PR="${{ github.event.inputs.pr || github.event.pull_request.number || '' }}"
+
+          if [ -n "$PR" ]; then
+            python -m pmoves.tools.review_dump --repo "$REPO" --pr "$PR" --dry-run
+          else
+            python -m pmoves.tools.review_dump --repo "$REPO" --state open --limit 20 --dry-run
+          fi
+
+      - name: Upload review dump artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540549a92f48b1e6c2f0c043 # v4.6.2
+        with:
+          name: review-dumps-${{ github.event.pull_request.number || github.run_id }}
+          path: pmoves/docs/logs/review-dumps/
+          retention-days: 90
+          if-no-files-found: warn
