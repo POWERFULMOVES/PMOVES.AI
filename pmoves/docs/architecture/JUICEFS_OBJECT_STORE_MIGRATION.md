@@ -36,14 +36,31 @@ S3 consumers ──S3──▶ juicefs-gateway (:9000, S3-compatible)
 - **Metadata engine:** transactional KV/DB holding the filesystem tree + chunk index.
 - **Data backend:** where chunks live.
 
-### 4.1 Component choices (proposed, confirm in review)
+### 4.1 Component choices
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Metadata engine | **Postgres** (dedicated DB on `supabase-db`, or a small standalone) | Already in the stack; transactional; supports the multi-node vision better than SQLite. Redis is the alternative (faster, but another stateful service + persistence config). |
+| Metadata engine | **Postgres** (dedicated schema `juicefs_meta` on `supabase-db`) | Already in the stack; transactional; supports the multi-node vision. **Must use `META_PASSWORD` env var pattern** — see below. |
 | Data backend | **local volume** initially (`file://` on a hardened named volume) | Simplest durable single-node store; the multi-node dual-write/replicated backend is the follow-on vision. |
 | S3 gateway | `juicefs gateway --multi-buckets --keep-etag` on **:9000** | Drop-in endpoint; `--multi-buckets` is REQUIRED on CE to keep the multiple buckets `assets`/`outputs`/`pmoves-comfyui` (else only one FS-named bucket is exposed). |
-| Image | pinned `juicedata/juicefs` (or build) per F-07 supply-chain | Maintained, unlike MinIO community. |
+| Image | pinned `juicedata/mount:ce-v1.3.0` | Maintained CE image from juicedata. |
+
+### 4.2 META_PASSWORD pattern (critical)
+
+Per [JuiceFS docs §databases_for_metadata](https://juicefs.com/docs/community/databases_for_metadata/):
+
+When using Postgres with passwords containing special characters (`/`, `+`, `?`, `&`, `@`),
+**do NOT embed the password in `JUICEFS_META_URL`**. The compose `sh -lc` entrypoint
+shell-expands these characters, corrupting the connection string (manifest: `sh: 1: pmoves: not found`).
+
+Instead:
+1. Set `JUICEFS_META_URL` to a **passwordless** URL: `postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable`
+2. Set `META_PASSWORD` to the raw DB password (from `generate-keys.sh` / `secrets-funnel`)
+3. JuiceFS reads `META_PASSWORD` and injects it into the connection
+
+Both `juicefs format` and `juicefs gateway` honor this pattern. The compose `environment:` block
+passes `META_PASSWORD` into the container. When `META_PASSWORD` is unset, JuiceFS falls back to
+the password embedded in the URL (or no password for Redis).
 
 ## 5. Drop-in strategy (minimal churn)
 

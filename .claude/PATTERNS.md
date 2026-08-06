@@ -56,6 +56,8 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Submodule working-tree wipe | `git -C <sub> restore --source=HEAD --staged --worktree :/` | — |
 | `docker compose -f <overlay>.yml up` raw | `make -C pmoves overlay-up-<tier>` (see Compose Overlay Layering below) | — |
 | MinIO restart | `make -C pmoves up-minio` | `/minio:status` |
+| JuiceFS bring-up (Postgres metadata) | `make -C pmoves up-juicefs` | — |
+| JuiceFS cross-node mount | `pmoves/scripts/juicefs-cross-node-setup.sh` | — |
 | Supabase stack restart (13 services) | `make -C pmoves supa-restart` | — |
 | Supabase crash-loop diagnosis | `pmoves/docs/operations/SUPABASE_OPERATIONS.md` | — |
 | Kong port bind silent-fail | `docker events --filter container=X` — check OOM FIRST | — |
@@ -68,6 +70,8 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 - `docker-prune-all` — aggressive: also removes unused images >72h, volumes still untouched
 
 **`secrets-sync-trigger`** triggers the `sync-secrets-local.yml` workflow (on `self-hosted, ai-lab`), waits, hydrates `local.env` → `env.shared`, runs `brand-defaults`. Host volume mount is `$APPDATA/pmoves` (Windows) or `~/.config/pmoves` (Linux). If creds missing after sync, check runner volume mount — see `local_cert_runners.py`.
+
+**JuiceFS META_PASSWORD pattern (critical):** When using Postgres metadata (production), set `JUICEFS_META_URL` to a passwordless URL and pass the DB password via `META_PASSWORD` env var. Embedding special chars (`/`, `+`, `?`) in the URL causes `sh -lc` to shell-expand them, producing `sh: 1: pmoves: not found`. The compose `environment:` block passes `META_PASSWORD` to both `juicefs-format` and `juicefs-gateway`. When unset, falls back to Redis on `juicefs-redis:6379`. See `docs/operations/JUICEFS_PHASE3_CUTOVER.md §0` for full instructions.
 
 **When raw commands are appropriate:** only when the user explicitly directs. The `ask` prompt surfaces to user for approval.
 

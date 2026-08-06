@@ -1401,14 +1401,23 @@ services:
     # No `|| true`: juicefs format is idempotent (re-run on a formatted FS exits 0),
     # so a non-zero exit here is a REAL error and must fail the service_completed_successfully
     # gate rather than releasing the gateway against an unformatted volume.
-    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
+    #
+    # META_PASSWORD pattern (JuiceFS docs §databases_for_metadata):
+    # When JUICEFS_META_URL points at Postgres with special chars in the password,
+    # pass the password via META_PASSWORD env var instead of embedding it in the URL.
+    # The URL should be passwordless (host-only) when META_PASSWORD is set.
+    # Default fallback: Redis on juicefs-redis (no password needed).
+    - "META_PASSWORD=$${META_PASSWORD:-} juicefs format --storage file --bucket /data $${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} $${JUICEFS_NAME:-pmoves}"
+    environment:
+    - PMOVES_NETWORKS=pmoves_data
+    - META_PASSWORD=${META_PASSWORD:-}
+    - JUICEFS_META_URL=${JUICEFS_META_URL:-redis://juicefs-redis:6379/1}
+    - JUICEFS_NAME=${JUICEFS_NAME:-pmoves}
     volumes:
     - juicefs-data:/data
     networks:
     - pmoves_data
 
-    environment:
-    - PMOVES_NETWORKS=pmoves_data
   juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
     <<: *tier-data-hardened
     image: juicedata/mount:ce-v1.3.0
@@ -1420,13 +1429,14 @@ services:
       juicefs-format:
         condition: service_completed_successfully
     environment:
-    # juicefs gateway uses the MinIO gateway code: these are the S3 access/secret keys.
     - MINIO_ROOT_USER=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
     - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
     - PMOVES_NETWORKS=pmoves_data
+    - META_PASSWORD=${META_PASSWORD:-}
+    - JUICEFS_META_URL=${JUICEFS_META_URL:-redis://juicefs-redis:6379/1}
     entrypoint: ["sh", "-lc"]
     command:
-    - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
+    - "META_PASSWORD=$${META_PASSWORD:-} juicefs gateway --multi-buckets --keep-etag $${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
     volumes:
     - juicefs-data:/data
     networks:
