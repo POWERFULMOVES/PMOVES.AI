@@ -1,3 +1,15 @@
+> [!CAUTION]
+> **SUPERSEDED — targets endpoints that no longer exist (marked 2026-08-06).**
+>
+> References `/healthz`, `/ready`, `/mcp/describe`, an MCP bridge on `:8051`, and a
+> clone-at-build `ARCHON_VENDOR_ROOT` / `ARCHON_GIT_REF` pattern. None of these exist in
+> Archon 0.6.0, whose Dockerfile builds directly from the submodule source with no such ARG.
+>
+> Current surface: `/api/health`, `/api/workflows*`, `/api/codebases*`, `/api/conversations*`,
+> `/api/providers*`, `/api/auth/*`, `/api/runs/:id/artifacts`, `/webhooks/github`.
+>
+> **Canonical:** `.claude/CATALOG.md`.
+
 Archon Headless Bring‑Up — MCP/API Self‑Connectivity
 
 Targets
