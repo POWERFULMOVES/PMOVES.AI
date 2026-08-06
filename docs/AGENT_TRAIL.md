@@ -10,6 +10,7 @@
 
 ---
 
+<<<<<<< HEAD
 <!-- graphiti:mavis phase:creative-pipeline-v0 ts:2026-08-06T18:30:00Z -->
 
 ## ⬡ Mavis — Creative Pipeline v0: Sketch Archive + 82 Beats Find Their Substrate
@@ -48,6 +49,43 @@ The substrate. DARKXSIDE's 2023-11-03 6-eye third-eye horned-helmet character, t
 - **CHIT trail unsigned-local** (no `CHIT_PASSPHRASE` loaded in Mavis session) per session convention.
 
 - ⬡
+=======
+<!-- graphiti:mavis phase:openroom-realization-slice-2 ts:2026-08-06T11:50:00Z -->
+
+## ⬡ Mavis — OpenRoom Realization: First Wave-Function Collapse, 13 Rooms Awake, All StubApp
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** openroom-adapter, room-experience, hyperdimensional-ops, agent-trails, character-persona-synthesis
+**Voice:** Dimensional
+
+First collapse. The wave function was a superposition of 13 room manifests, all pointing at the same `StubApp` placeholder. Today it collapses: the manifests gain real iframes, the desktop gains real apps, the operator (DARKXSIDE / Russell Richardson) gains a private workspace where rooms come alive.
+
+### Done (slice 2 - lane pickup)
+
+- **First trail entry ever** for `Mavis / MiniMax` alter - ⬡ on the trail, dimensional voice on the wire, 1M-context M2.7 model on the 5090 RTX node, deep violet banner up.
+- **CLAIM** the openroom-realization slice 2 in `AGNOTE4482PHI.t1.md` per the three-body collision-avoidance protocol.
+- **Read** the handoff from CRUSH (2026-08-06) - 6 priorities, clear acceptance criteria, lane already proven by 2026-07-20 slice 1 SHIPPED entry. Standing on shoulders, not rebuilding.
+- **Verified** the KiloCode worktree `feat/auto-20260806-58ea992b` is already MERGED (PR #2101) - no PR needed there, safe to archive after housekeeping.
+- **Verified** the main repo's uncommitted scaffold (compose + Makefile + persona route + UI auth refactor + jons-edge policies) - moves cleanly to the new worktree via `git stash` + worktree + `git stash pop`.
+
+### Left Behind (intentional, per handoff)
+
+- **P2 stock-app hiding** - 11 sample apps (Twitter, Music Player, Diary, Album, Gomoku, FreeCell, Email, Chess, Evidence Vault, CyberNews, Aoi chatbot) still render in the desktop grid. Filter by `isPmovesRoom` is the fix.
+- **P3 `/stage/` Enter buttons** - cards link out but no navigate. One component, one URL pattern.
+- **P4 model-fabric wiring** - OpenRoom's own LLM client not yet pointed at TensorZero (:3030).
+- **P5 P7 session 404** - nginx points at `pmoves-p7:8120` but the route is wrong. The P7 service from slice 1 may need re-verification.
+- **P6 persona theming beyond accent** - only `--pm-accent` is consumed today; `theme.skin: "waveform-editorial"` and `theme.icon: "waveform"` are declared but not yet applied.
+
+### For Next Agent
+
+- The `VITE_PMOVES_ROOM_IFRAMES` JSON env var is the P1 escape hatch. Set it in `pmoves/docker-compose.yml` `openroom` service `environment:` block (or via a `.env` file bind-mounted into the container). Pattern: `{ "<room_id>": "<iframe_url>", ... }`. The persona room target is `http://localhost:4482/persona/livingdoc` (Next.js route at `pmoves/ui/app/persona/livingdoc/route.ts`).
+- The `Mavis::OPEN-ROOM-LANE-CLAIM::2026-07-20` first slice (commit `374ee88ca7`) shipped 9/9 room manifest validation + schema extensions. Read that entry before touching manifests.
+- Crush's adapter code lives in `PMOVES-OpenRoom/apps/webuiapps/src/lib/pmovesRoomAdapter.ts` (the manifest→shell translator) and `PMOVES-OpenRoom/apps/webuiapps/src/pages/StubApp/index.tsx` (the iframe escape hatch - read it first to see exactly what URL pattern it expects).
+- CHIT_PASSPHRASE was not loaded in this session - all trail entries are unsigned-local per Mavis session convention.
+
+— ⬡
+>>>>>>> ade63dffe9 (feat(openroom): realization scaffold - openroom service, persona route, UI auth, AGNOTE claim, 5090 sitrep skill)
 
 </td></tr></table>
 
