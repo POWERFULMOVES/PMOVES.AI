@@ -21,6 +21,11 @@ services:
       - FOWNER
       - SETGID
       - SETUID
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
 
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
     image: nats:2.11.8-alpine
