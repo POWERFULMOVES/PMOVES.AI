@@ -53,6 +53,37 @@
           }
         },
         {
+          "id": "room0_enter",
+          "component": {
+            "Button": {
+              "child": "room0_enter_label",
+              "primary": true,
+              "action": {
+                "name": "openroom.enter",
+                "context": [
+                  {
+                    "key": "room_id",
+                    "value": {
+                      "literalString": "fordham.room.community"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "room0_enter_label",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Enter \u2192"
+              },
+              "usageHint": "body"
+            }
+          }
+        },
+        {
           "id": "room0_column",
           "component": {
             "Column": {
@@ -61,7 +92,8 @@
                   "room0_title",
                   "room0_meta",
                   "room0_desc",
-                  "room0_apps"
+                  "room0_apps",
+                  "room0_enter"
                 ]
               },
               "alignment": "start"
@@ -120,6 +152,37 @@
           }
         },
         {
+          "id": "room1_enter",
+          "component": {
+            "Button": {
+              "child": "room1_enter_label",
+              "primary": true,
+              "action": {
+                "name": "openroom.enter",
+                "context": [
+                  {
+                    "key": "room_id",
+                    "value": {
+                      "literalString": "demo.room.rehearsal"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "room1_enter_label",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Enter \u2192"
+              },
+              "usageHint": "body"
+            }
+          }
+        },
+        {
           "id": "room1_column",
           "component": {
             "Column": {
@@ -128,7 +191,8 @@
                   "room1_title",
                   "room1_meta",
                   "room1_desc",
-                  "room1_apps"
+                  "room1_apps",
+                  "room1_enter"
                 ]
               },
               "alignment": "start"
@@ -148,7 +212,7 @@
           "component": {
             "Text": {
               "text": {
-                "literalString": "\u266b ToKenism Exchange"
+                "literalString": "\u25c8 Russell Richardson \u2014 Applied AI Architect (Living Doc)"
               },
               "usageHint": "h3"
             }
@@ -159,7 +223,7 @@
           "component": {
             "Text": {
               "text": {
-                "literalString": "hybrid \u00b7 5090-claude / 5090-tokenism"
+                "literalString": "viewer \u00b7 darkxside-persona / persona-livingdoc"
               },
               "usageHint": "caption"
             }
@@ -170,7 +234,7 @@
           "component": {
             "Text": {
               "text": {
-                "literalString": "Token-economy simulation floor: run business-idea scenarios in the ToKenism simulator, then export the results into PMOVES-Wealth (Firefly III) as browsable ledgers. The audience-facing face of the L5 Economics layer."
+                "literalString": "Public, audience-facing living-doc room for the DARKXSIDE / Russell Richardson persona. Renders the LinkedIn-aligned profile as a first-class OpenRoom the Mavis-5090 adapter can serve: the a2ui profile shell, authored PreTeXt technical case studies, and a planned Remotion architecture walkthrough. Content model is single-source in persona.json (kept in sync with docs/research/persona/06_linkedin_profile.md)."
               }
             }
           }
@@ -180,9 +244,40 @@
           "component": {
             "Text": {
               "text": {
-                "literalString": "Apps: tokenism-simulator \u00b7 wealth-ledger"
+                "literalString": "Apps: persona-shell \u00b7 pretext-casestudies \u00b7 remotion-walkthrough (planned)"
               },
               "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room2_enter",
+          "component": {
+            "Button": {
+              "child": "room2_enter_label",
+              "primary": true,
+              "action": {
+                "name": "openroom.enter",
+                "context": [
+                  {
+                    "key": "room_id",
+                    "value": {
+                      "literalString": "persona.room.livingdoc"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "room2_enter_label",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Enter \u2192"
+              },
+              "usageHint": "body"
             }
           }
         },
@@ -195,7 +290,8 @@
                   "room2_title",
                   "room2_meta",
                   "room2_desc",
-                  "room2_apps"
+                  "room2_apps",
+                  "room2_enter"
                 ]
               },
               "alignment": "start"
@@ -211,6 +307,105 @@
           }
         },
         {
+          "id": "room3_title",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "\u266b ToKenism Exchange"
+              },
+              "usageHint": "h3"
+            }
+          }
+        },
+        {
+          "id": "room3_meta",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "hybrid \u00b7 5090-claude / 5090-tokenism"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room3_desc",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Token-economy simulation floor: run business-idea scenarios in the ToKenism simulator, then export the results into PMOVES-Wealth (Firefly III) as browsable ledgers. The audience-facing face of the L5 Economics layer."
+              }
+            }
+          }
+        },
+        {
+          "id": "room3_apps",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Apps: tokenism-simulator \u00b7 wealth-ledger"
+              },
+              "usageHint": "caption"
+            }
+          }
+        },
+        {
+          "id": "room3_enter",
+          "component": {
+            "Button": {
+              "child": "room3_enter_label",
+              "primary": true,
+              "action": {
+                "name": "openroom.enter",
+                "context": [
+                  {
+                    "key": "room_id",
+                    "value": {
+                      "literalString": "tokenism.room.exchange"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "room3_enter_label",
+          "component": {
+            "Text": {
+              "text": {
+                "literalString": "Enter \u2192"
+              },
+              "usageHint": "body"
+            }
+          }
+        },
+        {
+          "id": "room3_column",
+          "component": {
+            "Column": {
+              "children": {
+                "explicitList": [
+                  "room3_title",
+                  "room3_meta",
+                  "room3_desc",
+                  "room3_apps",
+                  "room3_enter"
+                ]
+              },
+              "alignment": "start"
+            }
+          }
+        },
+        {
+          "id": "room3_card",
+          "component": {
+            "Card": {
+              "child": "room3_column"
+            }
+          }
+        },
+        {
           "id": "stage_root",
           "component": {
             "Column": {
@@ -218,7 +413,8 @@
                 "explicitList": [
                   "room0_card",
                   "room1_card",
-                  "room2_card"
+                  "room2_card",
+                  "room3_card"
                 ]
               },
               "alignment": "stretch"

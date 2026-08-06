@@ -14,6 +14,12 @@
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/assets/favicon.ico" sizes="any" />
 
+  <!-- P3 (openroom-realization slice 2): Enter button on each room card
+       navigates to this URL + ?room=<id>. stage.js reads the content attribute
+       and uses it as the OpenRoom base URL. The default is for local dev;
+       production deployments override via the same meta tag in the build. -->
+  <meta name="pmoves-openroom-base-url" content="http://localhost:5173/webuiapps" />
+
   <link rel="stylesheet" href="/stage/stage.css" />
   <link rel="modulepreload" href="/stage/vendor/a2ui.mjs" />
 </head>
