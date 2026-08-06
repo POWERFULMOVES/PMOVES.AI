@@ -147,9 +147,10 @@ def create_app() -> FastAPI:
             suffix = os.path.splitext(file.filename or ".wav")[1] or ".wav"
             tmp_path = None
             try:
-                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                    tmp.write(raw)
-                    tmp_path = tmp.name
+                fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+                os.close(fd)
+                with open(tmp_path, "wb") as f:
+                    f.write(raw)
                 audio, sr = await run_in_threadpool(librosa.load, tmp_path, sr=None, mono=True)
             finally:
                 if tmp_path and os.path.exists(tmp_path):
