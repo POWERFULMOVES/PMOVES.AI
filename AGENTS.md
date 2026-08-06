@@ -27,7 +27,7 @@ Damage-control hooks block raw `docker`, `netsh`, `tailscale`, and `gh workflow`
 |---|---|
 | `docker volume rm <svc>` | `make -C pmoves volume-reset SERVICE=<svc>` |
 | `docker compose up -d <svc>` | `make -C pmoves up-<svc>` (some services use **grouped** targets — e.g. Firefly/Wger/Open-Notebook/Jellyfin are `up-external`; Agent Zero/Archon are `up-agents`; run `make -C pmoves help` to find the real target) |
-| `docker compose restart <svc>` | `make -C pmoves secrets-funnel && make -C pmoves up` |
+| `docker compose restart <svc>` | `make -C pmoves secrets-funnel && make -C pmoves up-<svc>` (re-injects secrets, then restarts the single service) |
 | `tailscale status` (leaks raw IPs) | `make -C pmoves fleet-status` |
 | `gh workflow run sync-secrets-local` | `make -C pmoves secrets-sync-trigger` |
 | raw `-f docker-compose.<overlay>.yml up` | `make -C pmoves overlay-up-<tier>` (see layering trap below) |
@@ -43,11 +43,11 @@ bash pmoves/scripts/with-env.sh <command>          # run any command with env.sh
 bash pmoves/scripts/with-env.sh pytest pmoves/tests/...  # pytest with service env
 ```
 
-To extract a single variable from a shell snippet: `grep '^MY_VAR=' pmoves/env.shared | cut -d= -f2 | tr -d '"'`.
+To extract a single variable: `bash pmoves/scripts/with-env.sh bash -c 'printf "%s\n" "$MY_VAR"'` (the canonical loader — do not use `cut -d= -f2` which truncates values containing `=`, e.g. JWTs / base64 padding).
 
 ### Compose overlay layering — the single-file trap
 
-The stack is split into `docker-compose.base.yml` (networks + anchors) + 6 tier overlays (`core` / `agents` / `media` / `ui` / `workers` / `apps`). Invoking `docker compose -f docker-compose.<overlay>.yml up -d` raw fails with `service "<svc>" refers to undefined network <name>` because the base layer is missing. Always use `make -C pmoves overlay-up-<tier>` (or `overlay-up-full`). Safe read-only validation: `docker compose -f pmoves/docker-compose.<overlay>.yml config`. Full runbook: `pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md`.
+The stack is split into `docker-compose.base.yml` (networks + anchors) + 6 tier overlays (`core` / `agents` / `media` / `ui` / `workers` / `apps`). Invoking `docker compose -f docker-compose.<overlay>.yml up -d` raw fails with `service "<svc>" refers to undefined network <name>` because the base layer is missing. Always use `make -C pmoves overlay-up-<tier>` (or `overlay-up-full`). Safe read-only validation (include base layer so networks/volumes resolve): `docker compose -f pmoves/docker-compose.base.yml -f pmoves/docker-compose.<overlay>.yml config`. Full runbook: `pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md`.
 
 ### `secrets-funnel` is in `pmoves/mk/codex.mk`, not the root Makefile
 
