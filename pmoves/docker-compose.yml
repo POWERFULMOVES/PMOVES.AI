@@ -5221,9 +5221,11 @@ services:
   # =============================================================================
 
   github-branch-naming:
-    build:
-      context: ./services/github-branch-naming
-      dockerfile: Dockerfile
+    # No `build:` block — the service sources live in a separate
+    # `pmoves-github-branch-naming` repo (operator-implementation).
+    # Local builds would fail: pmoves/services/github-branch-naming/
+    # does not exist. Pull the prebuilt image from ghcr.io via the
+    # env-var default; `GITHUB_BRANCH_NAMING_IMAGE` overrides as needed.
     image: ${GITHUB_BRANCH_NAMING_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-naming:pmoves-latest}
     restart: unless-stopped
     environment:
@@ -5261,9 +5263,11 @@ services:
           cpus: '0.5'
           memory: 256M
   github-crossrepo-sync:
-    build:
-      context: ./services/github-crossrepo-sync
-      dockerfile: Dockerfile
+    # No `build:` block — the service sources live in a separate
+    # `pmoves-github-crossrepo-sync` repo (operator-implementation).
+    # Local builds would fail: pmoves/services/github-crossrepo-sync/
+    # does not exist. Pull the prebuilt image from ghcr.io via the
+    # env-var default; `GITHUB_CROSSREPO_SYNC_IMAGE` overrides as needed.
     image: ${GITHUB_CROSSREPO_SYNC_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-sync:pmoves-latest}
     restart: unless-stopped
     environment:

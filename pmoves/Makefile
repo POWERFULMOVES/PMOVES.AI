@@ -1227,6 +1227,26 @@ validate-tac: ## Assert no TAC tree has unknown action.type outside the operator
 validate-tac-json: ## Same as validate-tac, but JSON output (for CI annotation)
 	@$(PYTHON) tools/validate_tac.py --json
 
+# ----------------------------------------------------------------------------
+# Validate-dockerfile-paths ratchet (2026-08-05)
+#   validate-dockerfile-paths        - assert every compose `build:` points at
+#                                      a real Dockerfile, and every Dockerfile
+#                                      is either referenced or in the baseline
+#   validate-dockerfile-paths-json   - same, JSON output
+#   validate-dockerfile-paths-list-orphans - diagnostic: print orphan list
+#                                           without failing
+# ----------------------------------------------------------------------------
+.PHONY: validate-dockerfile-paths validate-dockerfile-paths-json validate-dockerfile-paths-list-orphans
+validate-dockerfile-paths: ## Assert every compose `build:` points at a real Dockerfile; orphans must be in baseline (no network, ~100ms)
+	@echo "?? Validate-dockerfile-paths ratchet..."
+	@$(PYTHON) tools/validate_dockerfile_paths.py
+
+validate-dockerfile-paths-json: ## Same as validate-dockerfile-paths, but JSON output (for CI annotation)
+	@$(PYTHON) tools/validate_dockerfile_paths.py --json
+
+validate-dockerfile-paths-list-orphans: ## Diagnostic: list orphan Dockerfiles not in the baseline; never fails
+	@$(PYTHON) tools/validate_dockerfile_paths.py --list-orphans
+
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
