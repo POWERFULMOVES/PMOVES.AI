@@ -234,8 +234,9 @@ services:
     - CLAUDE_BIN_PATH=${CLAUDE_BIN_PATH:-}
     # TensorZero as OpenAI-compatible provider for Archon's LLM calls.
     # Archon reads OPENAI_API_KEY / OPENAI_API_BASE for its model calls.
+    # Derives from the canonical TENSORZERO_BASE_URL used across the fleet.
     - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
-    - OPENAI_API_BASE=${ARCHON_OPENAI_API_BASE:-http://tensorzero-gateway:3000/openai/v1}
+    - OPENAI_API_BASE=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}/openai/v1
     # gh auth — non-fatal warning if absent.
     - GH_TOKEN=${GH_TOKEN:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
