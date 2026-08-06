@@ -100,7 +100,12 @@ The authoritative sources are `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md`,
 | `gh pr merge` (any PR) | **No — gated** | `signoff-gate.sh` (PreToolUse, opt-in) blocks without 3-body ACK (`[ACK: delivery]`, `[ACK: control]`, `[ACK: memory]`) in `AGNOTE4482_SIGNOFF_CHECKLIST.md`. Admin-merge requires `CONFIRM="MERGE #<PR> @ <full-SHA>"` matching live head (`PR_CLOSEOUT.md:76-92`). |
 
 **Default posture:** when in doubt on a feature branch, push and open the PR.
-Merging is the only step that needs the 3-body ACK + explicit SHA confirmation.
+Merging is gated — the 3-body ACK + SHA confirmation above is the *minimum*;
+the full closeout contract (`pmoves/docs/operations/PR_CLOSEOUT.md`) also
+requires: current branch (rebased onto latest main), all review threads
+resolved, all checklist tasks completed, all required CI checks settled,
+and a passing live-head audit before `make pr-closeout-merge`. Do not
+shortcut to a raw `gh pr merge` — use the closeout flow.
 The Village Rule (claim → work → sign → release in `AGNOTE4482PHI.t1.md`) is
 the coordination discipline, not a per-push gate.
 
