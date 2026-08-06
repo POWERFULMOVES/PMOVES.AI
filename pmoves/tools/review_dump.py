@@ -49,7 +49,7 @@ CIPHER_URL = os.environ.get("CIPHER_API_URL", "http://localhost:8105")
 CIPHER_TOKEN = os.environ.get("CIPHER_API_TOKEN", "")
 OUTPUT_DIR = Path(os.environ.get("REVIEW_DUMP_DIR", _REPO_ROOT / "pmoves" / "docs" / "logs" / "review-dumps"))
 
-SEVERITY_RE = re.compile(r"(?:P(\d)\s+Badge|severity[:\s]*(P\d))", re.IGNORECASE)
+SEVERITY_RE = re.compile(r"(?:P(\d)\s+Badge|severity[:\s]*P(\d))", re.IGNORECASE)
 SUGGESTION_RE = re.compile(r"```suggestion\n(.*?)```", re.DOTALL)
 NITPICK_RE = re.compile(r"\b(nitpick|nit\b)", re.IGNORECASE)
 
@@ -256,7 +256,7 @@ def _record_to_text(r: dict[str, Any], pr_data: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-def ingest_hirag(records: list[dict[str, Any]], pr_data: dict[str, Any]) -> int:
+def ingest_hirag_records(records: list[dict[str, Any]], pr_data: dict[str, Any]) -> int:
     items = [{
         "id": f"review-{pr_data['repo']}-{pr_data['pr_number']}-{r['thread_id'][-12:]}",
         "content": _record_to_text(r, pr_data),
@@ -274,7 +274,7 @@ def ingest_hirag(records: list[dict[str, Any]], pr_data: dict[str, Any]) -> int:
         return 0
 
 
-def ingest_cipher(records: list[dict[str, Any]], pr_data: dict[str, Any]) -> int:
+def ingest_cipher_records(records: list[dict[str, Any]], pr_data: dict[str, Any]) -> int:
     if not CIPHER_TOKEN:
         print("  [cipher] skip: CIPHER_API_TOKEN not set", file=sys.stderr)
         return 0
@@ -300,7 +300,7 @@ def ingest_cipher(records: list[dict[str, Any]], pr_data: dict[str, Any]) -> int
     return count
 
 
-def dump_pr(repo: str, pr_number: int, dry_run: bool, ingest: bool) -> dict[str, Any]:
+def dump_pr(repo: str, pr_number: int, dry_run: bool, ingest_hirag: bool = False, ingest_cipher: bool = False) -> dict[str, Any]:
     full_repo = f"{GITHUB_ORG}/{repo}" if "/" not in repo else repo
     print(f"[review-dump] {full_repo}#{pr_number}")
     data = fetch_threads(full_repo, pr_number)
@@ -316,10 +316,11 @@ def dump_pr(repo: str, pr_number: int, dry_run: bool, ingest: bool) -> dict[str,
     print(f"  threads: {len(records)} ({sum(1 for r in records if r['is_resolved'])} resolved, "
           f"{sum(1 for r in records if r['severity'] in ('P1','P2') and not r['is_resolved'])} open P1/P2, "
           f"{sum(len(r['suggestions']) for r in records)} suggestions)")
-    if ingest and not dry_run:
-        n = ingest_hirag(records, data)
+    if ingest_hirag and not dry_run:
+        n = ingest_hirag_records(records, data)
         print(f"  [hirag] ingested {n} records")
-        n = ingest_cipher(records, data)
+    if ingest_cipher and not dry_run:
+        n = ingest_cipher_records(records, data)
         print(f"  [cipher] ingested {n} P1/P2 learnings")
     return data
 
@@ -334,18 +335,17 @@ def main() -> None:
     parser.add_argument("--ingest-hirag", action="store_true", help="Fan out to Hi-RAG")
     parser.add_argument("--ingest-cipher", action="store_true", help="Fan out to Cipher memory")
     args = parser.parse_args()
-    ingest = args.ingest_hirag or args.ingest_cipher
     if args.pr:
-        dump_pr(args.repo, args.pr, args.dry_run, ingest)
+        dump_pr(args.repo, args.pr, args.dry_run, ingest_hirag=args.ingest_hirag, ingest_cipher=args.ingest_cipher)
         return
-    gh_state = "open" if args.state == "open" else "closed"
+    gh_state = "open" if args.state == "open" else ("all" if args.state == "all" else "closed")
     full_repo = f"{GITHUB_ORG}/{args.repo}" if "/" not in args.repo else args.repo
     prs = gh_rest(f"/repos/{full_repo}/pulls?state={gh_state}&per_page={min(args.limit, 100)}&sort=updated&direction=desc")
     if args.state == "merged":
         prs = [p for p in prs if p.get("merged_at")]
     print(f"[review-dump] {full_repo}: {len(prs)} PRs ({args.state})")
     for pr in prs:
-        dump_pr(args.repo, pr["number"], args.dry_run, ingest)
+        dump_pr(args.repo, pr["number"], args.dry_run, ingest_hirag=args.ingest_hirag, ingest_cipher=args.ingest_cipher)
 
 
 if __name__ == "__main__":

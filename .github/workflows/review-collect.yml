@@ -25,9 +25,9 @@ on:
   workflow_dispatch:
     inputs:
       repo:
-        description: "Repo name (default: PMOVES.AI)"
+        description: "Repo name (default: current repo)"
         required: false
-        default: PMOVES.AI
+        default: ""
       pr:
         description: "Single PR number (blank = all open)"
         required: false
@@ -41,37 +41,60 @@ permissions:
   pull-requests: read
 
 jobs:
+  # P1 fix: _app-token.yml is a reusable workflow — must be called at job
+  # level via `uses:`, not as a step-level action. This is the same pattern
+  # used by pat-health-check.yml and pr-closeout.yml.
+  token:
+    uses: ./.github/workflows/_app-token.yml
+    with:
+      owner: ${{ github.repository_owner }}
+      repositories: ${{ inputs.repo || github.event.repository.name }}
+      permission-pull-requests: read
+      permission-contents: read
+    secrets: inherit
+
   collect:
+    needs: token
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Mint GitHub App token
-        id: app-token
-        uses: ./.github/workflows/_app-token.yml
-        with:
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-pull-requests: read
-          permission-contents: read
-
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ needs.token.outputs.token }}
           fetch-depth: 0
 
       - name: Collect review threads
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ needs.token.outputs.token }}
           PMOVES_GITHUB_ORG: ${{ github.repository_owner }}
+          # P2 fix: wire opt-in ingestion variables into the command
+          INGEST_HIRAG: ${{ vars.PMOVES_REVIEW_INGEST_HIRAG }}
+          INGEST_CIPHER: ${{ vars.PMOVES_REVIEW_INGEST_CIPHER }}
         run: |
-          REPO="${{ github.event.repository.name }}"
-          PR="${{ github.event.inputs.pr || github.event.pull_request.number || '' }}"
+          # P2 fix: honor workflow_dispatch repo input; fall back to event repo
+          REPO="${{ inputs.repo || github.event.repository.name }}"
+          PR="${{ inputs.pr || github.event.pull_request.number || '' }}"
+
+          # Build ingestion flags from opt-in variables
+          INGEST_FLAGS=""
+          if [ "$INGEST_HIRAG" = "true" ]; then
+            INGEST_FLAGS="$INGEST_FLAGS --ingest-hirag"
+          fi
+          if [ "$INGEST_CIPHER" = "true" ]; then
+            INGEST_FLAGS="$INGEST_FLAGS --ingest-cipher"
+          fi
+
+          # Only pass --dry-run when no ingestion is requested
+          DRY_RUN="--dry-run"
+          if [ -n "$INGEST_FLAGS" ]; then
+            DRY_RUN=""
+          fi
 
           if [ -n "$PR" ]; then
-            python -m pmoves.tools.review_dump --repo "$REPO" --pr "$PR" --dry-run
+            python -m pmoves.tools.review_dump --repo "$REPO" --pr "$PR" $DRY_RUN $INGEST_FLAGS
           else
-            python -m pmoves.tools.review_dump --repo "$REPO" --state open --limit 20 --dry-run
+            python -m pmoves.tools.review_dump --repo "$REPO" --state open --limit 20 $DRY_RUN $INGEST_FLAGS
           fi
 
       - name: Upload review dump artifacts
