@@ -404,7 +404,7 @@ def main() -> int:
         if not rel:
             continue
         abs_p = REPO_ROOT / rel
-        if abs_p.exists():
+        if abs_p.is_file():
             continue
         if not _is_in_scope_build_target(abs_p):
             # Sibling submodule / vendor / provisions — out of scope.
