@@ -114,7 +114,7 @@
 [submodule "PMOVES-E2B-Danger-Room"]
 	path = PMOVES-E2B-Danger-Room
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 [submodule "PMOVES-E2B-Danger-Room-Desktop"]
 	path = PMOVES-E2B-Danger-Room-Desktop
@@ -124,7 +124,7 @@
 [submodule "PMOVES-Danger-infra"]
 	path = PMOVES-Danger-infra
 	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 [submodule "PMOVES-E2b-Spells"]
 	path = PMOVES-E2b-Spells
@@ -138,7 +138,7 @@
 [submodule "PMOVES-Pipecat"]
 	path = PMOVES-Pipecat
 	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
 	path = PMOVES-Pinokio-Ultimate-TTS-Studio
@@ -209,7 +209,7 @@
 [submodule "PMOVES-crush"]
 	path = PMOVES-crush
 	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 # =============================================================================
 # LLM Gateway & Model Services
@@ -241,7 +241,7 @@
 [submodule "PMOVES-MAI-UI"]
 	path = PMOVES-MAI-UI
 	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 # =============================================================================
 # Networking & Infrastructure
@@ -260,7 +260,7 @@
 [submodule "PMOVES-Headscale"]
 	path = PMOVES-Headscale
 	url = https://github.com/POWERFULMOVES/PMOVES-headscale.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 # =============================================================================
 # Data Storage & Database
@@ -315,7 +315,7 @@
 [submodule "PMOVES-ClawZ"]
 	path = PMOVES-ClawZ
 	url = https://github.com/POWERFULMOVES/PMOVES-ClawZ.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-space-agent"]
 	path = PMOVES-space-agent
 	url = https://github.com/POWERFULMOVES/PMOVES-space-agent.git
@@ -347,11 +347,11 @@
 [submodule "PMOVES-jcodemunch-mcp"]
 	path = PMOVES-jcodemunch-mcp
 	url = https://github.com/POWERFULMOVES/PMOVES-jcodemunch-mcp.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "pmoves-hirag-mcp"]
 	path = pmoves-hirag-mcp
 	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-OpenRoom"]
 	path = PMOVES-OpenRoom
 	url = https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
@@ -365,7 +365,7 @@
 [submodule "PMOVES-Spark-VSS"]
 	path = PMOVES-Spark-VSS
 	url = https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 [submodule "pbnj"]
 	path = pbnj
@@ -377,3 +377,7 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-ollama.git
 	branch = PMOVES.AI-Edition-Hardened
 	ignore = all
+[submodule "PMOVES-hermes-agent"]
+	path = PMOVES-hermes-agent
+	url = https://github.com/POWERFULMOVES/PMOVES-hermes-agent.git
+	branch = PMOVES.AI-Edition-Hardened

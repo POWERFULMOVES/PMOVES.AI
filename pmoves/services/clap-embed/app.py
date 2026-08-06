@@ -145,13 +145,16 @@ def create_app() -> FastAPI:
             # audioread (ffmpeg) fallback handles m4a/opus/mp3 that soundfile
             # (libsndfile) can't decode from a BytesIO buffer.
             suffix = os.path.splitext(file.filename or ".wav")[1] or ".wav"
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                tmp.write(raw)
-                tmp_path = tmp.name
+            tmp_path = None
             try:
+                fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+                os.close(fd)
+                with open(tmp_path, "wb") as f:
+                    f.write(raw)
                 audio, sr = await run_in_threadpool(librosa.load, tmp_path, sr=None, mono=True)
             finally:
-                os.unlink(tmp_path)
+                if tmp_path and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
             vec = await run_in_threadpool(
                 emb.embed_audio, np.asarray(audio, dtype="float32"), int(sr)
             )

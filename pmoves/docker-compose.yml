@@ -397,6 +397,11 @@ x-tier-agent-hardened: &tier-agent-hardened
   - CHOWN
   - SETGID
   - SETUID
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 x-tier-agent-hardened-ro: &tier-agent-hardened-ro
   env_file:
@@ -472,6 +477,11 @@ x-tier-data-hardened: &tier-data-hardened
   - FOWNER
   - SETGID
   - SETUID
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 x-tier-media-hardened: &tier-media-hardened
   env_file:
@@ -3136,12 +3146,18 @@ services:
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
-    - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-false}
+    - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
     # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
     # Default empty (uses $PATH). The upstream Archon Dockerfile installs
     # Claude at /usr/local/bin/claude; set this only if the image builds
     # Claude at a non-standard path or you want to pin a specific binary.
+    # ARM64 (SPARK): the SDK installs at the path below — set in env.tier-agent.
     - CLAUDE_BIN_PATH=${CLAUDE_BIN_PATH:-}
+    # TensorZero as OpenAI-compatible provider for Archon's LLM calls.
+    # Archon reads OPENAI_API_KEY / OPENAI_API_BASE for its model calls.
+    # Derives from the canonical TENSORZERO_BASE_URL used across the fleet.
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    - OPENAI_API_BASE=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}/openai/v1
     # gh auth — non-fatal warning if absent.
     - GH_TOKEN=${GH_TOKEN:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
@@ -5205,15 +5221,17 @@ services:
   # =============================================================================
 
   github-branch-naming:
-    build:
-      context: ./services/github-branch-naming
-      dockerfile: Dockerfile
+    # No `build:` block — the service sources live in a separate
+    # `pmoves-github-branch-naming` repo (operator-implementation).
+    # Local builds would fail: pmoves/services/github-branch-naming/
+    # does not exist. Pull the prebuilt image from ghcr.io via the
+    # env-var default; `GITHUB_BRANCH_NAMING_IMAGE` overrides as needed.
     image: ${GITHUB_BRANCH_NAMING_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-naming:pmoves-latest}
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8102
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
@@ -5245,15 +5263,17 @@ services:
           cpus: '0.5'
           memory: 256M
   github-crossrepo-sync:
-    build:
-      context: ./services/github-crossrepo-sync
-      dockerfile: Dockerfile
+    # No `build:` block — the service sources live in a separate
+    # `pmoves-github-crossrepo-sync` repo (operator-implementation).
+    # Local builds would fail: pmoves/services/github-crossrepo-sync/
+    # does not exist. Pull the prebuilt image from ghcr.io via the
+    # env-var default; `GITHUB_CROSSREPO_SYNC_IMAGE` overrides as needed.
     image: ${GITHUB_CROSSREPO_SYNC_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-sync:pmoves-latest}
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8103
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
@@ -5295,7 +5315,7 @@ services:
     environment:
     - SERVICE_PORT=8104
     - NATS_URL=${NATS_URL}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
