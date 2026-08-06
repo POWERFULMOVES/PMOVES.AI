@@ -185,6 +185,7 @@ def thread_to_record(thread: dict[str, Any]) -> dict[str, Any]:
         "body": body, "suggestions": extract_suggestions(body),
         "diff_hunk": first.get("diffHunk", ""), "replies": replies,
         "url": first.get("url", ""), "created_at": first.get("createdAt"),
+        "comments_truncated": len(comments) >= 20,
     }
 
 
@@ -311,8 +312,8 @@ def dump_pr(repo: str, pr_number: int, dry_run: bool, ingest_hirag: bool = False
     md_path = OUTPUT_DIR / f"{slug}-{pr_number}.md"
     export_json(data, json_path)
     export_markdown(data, md_path)
-    print(f"  exported: {json_path.relative_to(_REPO_ROOT)}")
-    print(f"  exported: {md_path.relative_to(_REPO_ROOT)}")
+    print(f"  exported: {os.path.relpath(json_path, _REPO_ROOT)}")
+    print(f"  exported: {os.path.relpath(md_path, _REPO_ROOT)}")
     print(f"  threads: {len(records)} ({sum(1 for r in records if r['is_resolved'])} resolved, "
           f"{sum(1 for r in records if r['severity'] in ('P1','P2') and not r['is_resolved'])} open P1/P2, "
           f"{sum(len(r['suggestions']) for r in records)} suggestions)")

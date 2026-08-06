@@ -25,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       repo:
-        description: "Repo name (default: current repo)"
+        description: "Repo name (default: current repo; restricted to POWERFULMOVES org)"
         required: false
         default: ""
       pr:
@@ -41,14 +41,14 @@ permissions:
   pull-requests: read
 
 jobs:
-  # P1 fix: _app-token.yml is a reusable workflow — must be called at job
-  # level via `uses:`, not as a step-level action. This is the same pattern
-  # used by pat-health-check.yml and pr-closeout.yml.
+  # _app-token.yml is a reusable workflow — must be called at job level.
+  # Token is always scoped to the current repository (event-triggered)
+  # or the manually-requested repo (workflow_dispatch), never both.
   token:
     uses: ./.github/workflows/_app-token.yml
     with:
       owner: ${{ github.repository_owner }}
-      repositories: ${{ inputs.repo || github.event.repository.name }}
+      repositories: ${{ github.event.repository.name }}
       permission-pull-requests: read
       permission-contents: read
     secrets: inherit
@@ -65,16 +65,29 @@ jobs:
           fetch-depth: 0
 
       - name: Collect review threads
+        # CR-3 fix: pass workflow inputs through env, never inline template
+        # expansion in bash — prevents shell injection via inputs.repo/pr.
         env:
           GH_TOKEN: ${{ needs.token.outputs.token }}
           PMOVES_GITHUB_ORG: ${{ github.repository_owner }}
-          # P2 fix: wire opt-in ingestion variables into the command
+          DISPATCH_REPO: ${{ github.event.repository.name }}
+          DISPATCH_PR: ${{ github.event.pull_request.number || '' }}
+          # CR-2 fix: wire ingestion service config from vars/secrets
+          HIRAG_UPSERT_URL: ${{ vars.HIRAG_UPSERT_URL }}
+          CIPHER_API_URL: ${{ vars.CIPHER_API_URL }}
+          CIPHER_API_TOKEN: ${{ secrets.CIPHER_API_TOKEN }}
           INGEST_HIRAG: ${{ vars.PMOVES_REVIEW_INGEST_HIRAG }}
           INGEST_CIPHER: ${{ vars.PMOVES_REVIEW_INGEST_CIPHER }}
         run: |
-          # P2 fix: honor workflow_dispatch repo input; fall back to event repo
-          REPO="${{ inputs.repo || github.event.repository.name }}"
-          PR="${{ inputs.pr || github.event.pull_request.number || '' }}"
+          # CR-3 fix: reference env vars, not ${{ inputs.* }} in bash
+          REPO="$DISPATCH_REPO"
+          PR="$DISPATCH_PR"
+
+          # CR-1 fix: validate repo is a bare name (no shell metacharacters)
+          if ! echo "$REPO" | grep -qE '^[A-Za-z0-9._-]+$'; then
+            echo "ERROR: invalid repo name: $REPO"
+            exit 1
+          fi
 
           # Build ingestion flags from opt-in variables
           INGEST_FLAGS=""

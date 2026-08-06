@@ -1,6 +1,6 @@
 # review.mk — Review collection and dump targets
 
-.PHONY: review-dump review-dump-all review-dump-latest review-collect-help
+.PHONY: review-dump review-dump-all review-dump-ingest review-collect-help
 
 REVIEW_REPO ?= PMOVES.AI
 REVIEW_PR ?=
@@ -25,10 +25,12 @@ endif
 
 ## Dump all open PRs across the org
 review-dump-all:
-	@for repo in PMOVES.AI PMOVES-Agent-Zero PMOVES-Archon PMOVES-BoTZ PMOVES-Creator PMOVES-HiRAG PMOVES-ToKenism-Multi PMOVES-DoX; do \
+	@FAILED=0; \
+	for repo in PMOVES.AI PMOVES-Agent-Zero PMOVES-Archon PMOVES-BoTZ PMOVES-Creator PMOVES-HiRAG PMOVES-ToKenism-Multi PMOVES-DoX; do \
 		echo "--- $$repo ---"; \
-		bash scripts/with-env.sh python -m pmoves.tools.review_dump --repo $$repo --state open --limit 5 --dry-run 2>/dev/null || true; \
-	done
+		bash scripts/with-env.sh python -m pmoves.tools.review_dump --repo $$repo --state open --limit 5 --dry-run || { echo "FAILED: $$repo"; FAILED=1; }; \
+	done; \
+	[ "$$FAILED" -eq 0 ]
 
 review-collect-help:
 	@echo "Review collection targets:"
