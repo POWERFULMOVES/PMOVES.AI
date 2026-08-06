@@ -377,3 +377,7 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-ollama.git
 	branch = PMOVES.AI-Edition-Hardened
 	ignore = all
+[submodule "PMOVES-hermes-agent"]
+	path = PMOVES-hermes-agent
+	url = https://github.com/POWERFULMOVES/PMOVES-hermes-agent.git
+	branch = PMOVES.AI-Edition-Hardened
