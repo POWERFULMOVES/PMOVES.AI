@@ -183,3 +183,92 @@ def test_reload(client):
     body = r.json()
     assert body["status"] == "reloaded"
     assert body["rooms_loaded"] == 2
+
+
+def test_session_open_returns_session_id_and_publishes(client):
+    """P5 (openroom-realization slice 2): the OpenRoom desktop adapter
+    calls POST /api/p7/rooms/{id}/session with action=open when entering
+    a room. The endpoint is unauthenticated (the adapter is a public
+    browser module); it returns a session_id and publishes a NATS event.
+    """
+    r = client.post(
+        "/api/p7/rooms/ready.room.test/session",
+        json={
+            "action": "open",
+            "agent_id": "5090-claude",
+            "alter": "minimax",
+            "room_stage": "live",
+            "timestamp": "2026-08-06T12:00:00Z",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "opened"
+    assert body["room_id"] == "ready.room.test"
+    assert body["agent_id"] == "5090-claude"
+    assert body["alter"] == "minimax"
+    assert body["room_stage"] == "live"
+    assert body["timestamp"] == "2026-08-06T12:00:00Z"
+    # session_id is a uuid (hex + dashes, 36 chars)
+    assert isinstance(body["session_id"], str)
+    assert len(body["session_id"]) == 36
+
+
+def test_session_close_returns_status_and_publishes(client):
+    """The adapter calls action=close when leaving a room."""
+    r = client.post(
+        "/api/p7/rooms/ready.room.test/session",
+        json={
+            "action": "close",
+            "agent_id": "5090-claude",
+            "alter": "minimax",
+            "room_stage": "live",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "closed"
+    # Default timestamp filled in server-side when client omits
+    assert body["timestamp"]  # non-empty
+
+
+def test_session_invalid_action_rejected(client):
+    """The endpoint accepts only 'open' or 'close' actions. Anything else
+    is a 400 — the adapter is a single source of truth for action values,
+    so a non-conforming caller indicates a wiring bug, not a recoverable
+    error.
+    """
+    r = client.post(
+        "/api/p7/rooms/ready.room.test/session",
+        json={"action": "heartbeat", "agent_id": "x"},
+    )
+    assert r.status_code == 400
+    body = r.json()
+    assert "heartbeat" in body["detail"]
+
+
+def test_session_missing_action_rejected(client):
+    """action is required (Pydantic validation)."""
+    r = client.post(
+        "/api/p7/rooms/ready.room.test/session",
+        json={"agent_id": "x", "room_stage": "live"},
+    )
+    assert r.status_code == 422  # pydantic validation
+
+
+def test_session_unauthenticated_succeeds(client):
+    """P5 security note: the endpoint is intentionally unauthenticated.
+    The OpenRoom adapter is a public browser module — auth would block
+    the openroom reverse proxy from forwarding the call. For real auth,
+    deploy a forward-auth gateway in front of /api/p7/. This test
+    pins the no-auth contract.
+    """
+    # Strip the default bearer auth header that the client fixture sets
+    client.headers = {}
+    r = client.post(
+        "/api/p7/rooms/ready.room.test/session",
+        json={"action": "open", "agent_id": "anon"},
+    )
+    assert r.status_code == 200
+    # Restore for any later tests in the same fixture
+    client.headers = {"Authorization": "Bearer test-control-token"}
