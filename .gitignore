@@ -350,3 +350,5 @@ pmoves/rooms/persona/pretext/output/
 # Persona living-doc rendered static bundle (make persona-render → served by nginx)
 pmoves/rooms/persona/dist/
 pmoves/data/yt-playlists/
+
+pmoves/docs/logs/review-dumps/

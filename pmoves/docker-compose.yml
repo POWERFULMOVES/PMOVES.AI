@@ -4692,6 +4692,10 @@ services:
     # so the rooms API (/api/rooms) and the home-page Rooms tab work.
     volumes:
     - ./config/rooms:/app/rooms:ro
+      # P1 fix: persona living-doc route serves from rooms/persona/dist (rendered
+      # walkthrough.mp4 + pretext/index.html). Without this mount, every request
+      # to /persona/livingdoc hits the line 38 404 in production.
+    - ./rooms/persona:/app/data/rooms/persona:ro
     ports:
     - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
