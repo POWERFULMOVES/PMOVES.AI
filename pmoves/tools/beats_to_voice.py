@@ -244,15 +244,55 @@ def synthesize_prosodic(
             "position_ratio": chunk.get("position_ratio", 0.0),
         })
 
-    # Flute-Gateway /v1/voice/synthesize/prosodic accepts: text, voice, format
+    # Flute-Gateway /v1/voice/synthesize/prosodic accepts: text, voice, format, provider, engine
+    # Kokoro handles short chunks reliably; KittenTTS crashes on short fragments.
     payload = {
-        "text":    profile.get("text", ""),
-        "voice":   voice,
-        "format":  "wav",
+        "text":     profile.get("text", ""),
+        "voice":    voice or "af_heart",
+        "format":   "wav",
+        "provider": "ultimate_tts",
+        "engine":   "kokoro",
     }
 
     url = f"{flute_url}/v1/voice/synthesize/prosodic"
-    return _post_json(url, payload, timeout=60)
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            content_type = resp.headers.get("content-type", "")
+            if "audio" in content_type:
+                # Raw WAV response — save to file
+                audio_bytes = resp.read()
+                out_path = f"/tmp/beats_to_voice_{int(time.time())}.wav"
+                with open(out_path, "wb") as f:
+                    f.write(audio_bytes)
+                return {
+                    "status": "synthesized",
+                    "output": out_path,
+                    "size_bytes": len(audio_bytes),
+                    "bpm_header": resp.headers.get("X-Prosodic-BPM", "?"),
+                    "chunks_header": resp.headers.get("X-Prosodic-Chunks", "?"),
+                }
+            else:
+                return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err_body = ""
+        try:
+            err_body = e.read().decode("utf-8")[:200]
+        except Exception:
+            pass
+        sys.stderr.write(
+            f"[beats_to_voice] HTTP {e.code} from {url}: {err_body}\n"
+        )
+        return None
+    except (urllib.error.URLError, OSError) as e:
+        sys.stderr.write(f"[beats_to_voice] Connection failed to {url}: {e}\n")
+        return None
 
 
 # ---------------------------------------------------------------------------
