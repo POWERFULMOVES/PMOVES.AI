@@ -217,13 +217,17 @@ fleet-stale-audit: ## List stale Tailscale nodes (offline > 60 days)
 
 # ── Secrets Sync ────────────────────────────────────────────────────
 # Triggers the sync-secrets-local.yml GitHub Actions workflow on the
-# self-hosted ai-lab runner, which hydrates local.env from GH Secrets.
+# self-hosted ai-lab runner(s) named by TARGETS (comma-separated runner
+# sub-labels; the workflow's own default is spark). Runnerless nodes
+# (5090, Z890) instead pull the uploaded bundle afterwards via
+# `make secrets-funnel-from-prod` — see SECRETS_DISTRIBUTION_PATTERNS.md
+# Pattern B.
 
-secrets-sync-trigger: ## Trigger GH Actions secrets sync to local runner
-	@echo "=== Triggering secrets sync workflow ==="
+secrets-sync-trigger: ## Trigger GH Actions secrets sync (TARGETS=spark[,z890...], OUTPUT_FORMAT=env|cgp)
+	@echo "=== Triggering secrets sync workflow (targets: $(or $(TARGETS),spark)) ==="
 	@gh workflow run sync-secrets-local.yml \
-		--field output_format=env \
-		--field target_os=$$(case "$$(uname -s)" in MINGW*|MSYS*|CYGWIN*) echo Windows;; Linux) echo Linux;; *) echo any;; esac)
+		--field output_format=$(or $(OUTPUT_FORMAT),env) \
+		--field targets=$(or $(TARGETS),spark)
 	@echo "Waiting for workflow to start..."
 	@sleep 8
 	@gh run list --workflow=sync-secrets-local.yml --limit=1 --json status,conclusion,createdAt,displayTitle \
