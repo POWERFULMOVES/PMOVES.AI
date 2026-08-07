@@ -36,12 +36,13 @@ services:
       - OMNIVOICE_TOKEN=${OMNIVOICE_TOKEN:-}
       - OMNIVOICE_MODEL=${OMNIVOICE_MODEL:-k2-fsa/OmniVoice}
       - OMNIVOICE_LOAD_ASR=${OMNIVOICE_LOAD_ASR:-0}
-      - OMNIVOICE_REFERENCE_VOICE_DIR=${OMNIVOICE_REFERENCE_VOICE_DIR:-}
+      - OMNIVOICE_REFERENCE_VOICE_DIR=${OMNIVOICE_REFERENCE_VOICE_DIR:-/voices}
       - HF_HOME=/cache/huggingface
     volumes:
       - omnivoice-hf-cache:/cache/huggingface
-      # Optional ref-voice catalog (clone mode), read-only host bind:
-      # - ${OMNIVOICE_REFERENCE_VOICE_HOST_DIR:-./voices}:/voices:ro
+      # Ref-voice catalog (clone mode), read-only host bind. Catalog ids resolve to
+      # files under this dir; empty dir = clone mode present but no voices approved.
+      - ${OMNIVOICE_REFERENCE_VOICE_HOST_DIR:-./voices}:/voices:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8002/healthz"]
       interval: 30s

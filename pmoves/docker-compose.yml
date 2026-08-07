@@ -2241,6 +2241,14 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
+    # env.shared blanks SSL_CERT_FILE/SSL_CERT_DIR/*_CA_BUNDLE to stop Windows
+    # host cert paths leaking in — but for Python/OpenSSL an EMPTY value means
+    # "trust nothing" and HF model downloads fail TLS verify. Re-point at the
+    # container's own CA store (same anti-leak intent, working trust chain).
+    - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    - SSL_CERT_DIR=/etc/ssl/certs
+    - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     deploy:
       resources:
