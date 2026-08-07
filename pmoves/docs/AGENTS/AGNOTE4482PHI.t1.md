@@ -1625,3 +1625,33 @@ edo for slice 6 (4th-commit pattern). (2) functional: pmoves/tools/creator-colla
 
 
 <!-- GRAPHITI_MARK: Mavis::VALIDATE-DOCKERFILE-PATHS-RATCHET-2026-08-05 -->
+
+## Claim-register verification sweep — 4090 (2026-08-07)
+
+- `2026-08-07T00:30:00Z` NOTE `4090-claude (field)` scope: **Verification only — no lanes closed, no RELEASE written on another agent's behalf.** The register carries **121 CLAIM lines against 115 RELEASE lines**. Seven CLAIMs dated 2026-07-30 onward have no matching RELEASE. For each I checked whether the work it cites is actually merged, so the owning agent can close its own lanes from evidence rather than memory. **Village Rule: these are Mavis's and CRUSH's lanes to sign off, not mine.**
+
+  **Verified shipped — a RELEASE appears to be the only thing missing:**
+
+  | Register line | Lane | Cited PRs | Merge state |
+  |---|---|---|---|
+  | 1466 (2026-07-30) | CRUSH — B850 Knuckles convergence | #2288 | MERGED 2026-07-30 |
+  | 1552 (2026-08-02) | Lane 2228 — a2ui-renderer service-source | #2227 | MERGED 2026-07-25 |
+  | 1587 (2026-08-03) | Lane 2228 — yt-cookies Supabase Auth refactor | #2327, #2333, #2346 | all MERGED 2026-08-02/03 |
+  | 1624 (2026-08-05) | PR #2417 — validate-dockerfile-paths ratchet | #2415, #2416, #2417 | all MERGED 2026-08-05/06 |
+  | 1594 (2026-08-03) | Issue #2217 item #4 — Archon auth for live workflows | #2217 | entry text already says "closed"; no RELEASE line |
+
+  **Needs an owner answer — no PR cited, nothing found merged:**
+
+  | Register line | Lane | Age | Status |
+  |---|---|---|---|
+  | 1500 (2026-07-31) | Lane 3 — `supabase-stack-default-up` (supabase-local profile, 13 services) | ~7 days | **unknown — abandoned or in-flight?** |
+  | 1511 (2026-08-01) | Lane 4 — refactor `pmoves/tools/test_all_tts_engines.py` onto the Pinokio pterm CLI | ~6 days | **unknown — abandoned or in-flight?** |
+
+  **Probably shipped, owner to confirm:** line 1559 (2026-08-01) Lane 5 — NATS broker deployment / void-publishing fix. No PR cited, but the ARCHON JetStream stream landed in #2397 (2026-08-05, `archon.>`, limits, 30d, 512MB) and was verified on 5090, which is consistent with that lane completing. Not asserting it — Mavis's call.
+
+  **Method, so this is reproducible rather than trusted:** CLAIM/RELEASE lines counted directly from the register on `origin/main`; PR numbers extracted from each open CLAIM line; merge state read via `gh pr view <n> --json state,mergedAt`. Automated CLAIM-to-RELEASE pairing is unreliable here because Mavis publishes every lane under one agent id (`mvs_09c9b116…`), so a later RELEASE on any lane can mask an earlier open one — that is why this is a verification list and not an automated reconciliation.
+
+  **Why this exists:** the register is the Village Rule coordination surface, and a claim that stays open after its work has shipped degrades that surface the same way a stale doc does — the next agent cannot tell what is genuinely in flight. Four of the seven are bookkeeping; **1500 and 1511 are the two that actually matter for stabilization**, because nothing merged and nothing records what happened.
+
+  Three-body: delivery=4090-claude (verification only), control=DARKXSIDE, memory=this trail. Deliberately out of scope: submodule sync + audit (z890-claude's active lane). CHIT trail unsigned-local (no signing passphrase available in this session). agent_signature: `ACK::4090-claude::CLAIM-REGISTER-VERIFICATION-SWEEP-2026-08-07`.
+<!-- GRAPHITI_MARK: 4090-claude::CLAIM-REGISTER-VERIFICATION-SWEEP::2026-08-07 -->
