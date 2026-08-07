@@ -33,7 +33,53 @@ docker image prune -f 2>/dev/null | tail -1
 info "Pruning build cache..."
 docker builder prune --all --force 2>/dev/null | tail -1
 
-# ── 4. Volume prune is intentionally OMITTED ────────────────────────────────
+# ── 4. Reclaim stale buildx builders ────────────────────────────────────────
+#     This is the leak that filled kvm4-1 to 100% and held 33GB on kvm2 for
+#     four weeks. setup-buildx-action creates a NEW builder per CI run and
+#     never removes it; each one is a running container plus a named `*_state`
+#     volume, and the build cache lives INSIDE that volume. That is why step 3
+#     above can report a large reclaim while `docker system df` still shows
+#     "Build Cache: 0B" and the disk keeps filling — `docker builder prune`
+#     clears cache inside builders but leaves the builders standing, and a
+#     volume attached to a RUNNING container cannot be removed at all.
+#
+#     Scoped to the `buildx_buildkit_builder-` name prefix, so it can never
+#     touch a `pmoves_*` data volume. 24h floor so a build in flight on this
+#     host is never killed.
+info "Reclaiming stale buildx builders (older than 24h)..."
+CUTOFF=$(( $(date +%s) - 86400 ))
+RECLAIMED=0
+for c in $(docker ps -a --filter 'name=^buildx_buildkit_builder-' --format '{{.Names}}' 2>/dev/null); do
+  created="$(docker inspect -f '{{.Created}}' "$c" 2>/dev/null)" || continue
+  ts="$(date -d "$created" +%s 2>/dev/null)" || continue
+  [ -n "$ts" ] || continue
+  if [ "$ts" -ge "$CUTOFF" ]; then
+    echo "  keep $c (less than 24h old — may be in flight)"
+    continue
+  fi
+  # Container name is "buildx_buildkit_<builder><node-index>"; strip the
+  # prefix and the trailing index to recover the builder name.
+  builder="${c#buildx_buildkit_}"
+  builder="${builder%0}"
+  if docker buildx rm "$builder" >/dev/null 2>&1; then
+    echo "  reclaimed builder $builder"
+  else
+    # Orphan: the container outlived its entry in ~/.docker/buildx (different
+    # user, or state file wiped). Remove it directly so its state volume
+    # becomes detached and reclaimable.
+    docker stop "$c" >/dev/null 2>&1 || true
+    docker rm "$c" >/dev/null 2>&1 || true
+    echo "  reclaimed orphaned builder container $c"
+  fi
+  RECLAIMED=$((RECLAIMED + 1))
+done
+# Sweep `*_state` volumes left behind by builders that were already gone.
+# Name-scoped, so this is targeted reclaim — NOT the banned `volume prune`.
+docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
+  | while read -r v; do docker volume rm "$v" >/dev/null 2>&1 || true; done || true
+echo "  $RECLAIMED builder(s) reclaimed"
+
+# ── 5. Volume prune is intentionally OMITTED ────────────────────────────────
 #     docker volume prune is banned by damage-control (patterns.yaml) because
 #     fleet hosts co-host data volumes (postgres, qdrant, minio, etc.) that
 #     can be temporarily unreferenced when their container is removed.
@@ -48,7 +94,7 @@ echo ""
 docker system df 2>/dev/null | head -5
 echo ""
 
-# ── 5. Add log rotation to docker daemon.json (needs root) ──────────────────
+# ── 6. Add log rotation to docker daemon.json (needs root) ──────────────────
 DAEMON_JSON="/etc/docker/daemon.json"
 info "Checking Docker daemon log rotation..."
 
@@ -92,7 +138,7 @@ else
   info "daemon.json already has log rotation."
 fi
 
-# ── 6. Compose tier anchor log rotation ─────────────────────────────────────
+# ── 7. Compose tier anchor log rotation ─────────────────────────────────────
 # As of #2420, log rotation is baked into the tier anchors in docker-compose.yml
 # at the source level. This script no longer patches the compose file.
 # If on an older checkout, run `git pull origin main` to get #2420.

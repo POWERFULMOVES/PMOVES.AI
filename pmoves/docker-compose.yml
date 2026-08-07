@@ -2230,7 +2230,9 @@ services:
       start_period: 60s
   media-audio:
     <<: *tier-media-hardened
-    build: ./services/media-audio
+    build:
+      context: ..
+      dockerfile: pmoves/services/media-audio/Dockerfile
     restart: unless-stopped
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
@@ -3364,6 +3366,24 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  openroom:
+    build:
+      context: ../PMOVES-OpenRoom
+      dockerfile: apps/webuiapps/Dockerfile
+      args:
+        ENV: production
+        APP_PATH: /app/apps/webuiapps
+    image: pmoves-openroom:latest
+    container_name: pmoves-openroom
+    restart: unless-stopped
+    volumes:
+    - ./config/rooms:/etc/pmoves/rooms:ro
+    ports:
+    - "${OPENROOM_BIND:-0.0.0.0}:${OPENROOM_PORT:-5173}:3000"
+    networks: [pmoves_app, pmoves_external]
+    profiles: ["ui", "p7"]
+    environment:
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
   mesh-agent:
     <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent
@@ -3567,8 +3587,8 @@ services:
     - HF_MIN_DOWNLOADS=${HF_MIN_DOWNLOADS:-100}
     - HF_MIN_LIKES=${HF_MIN_LIKES:-10}
     - HF_MIN_SCORE=${HF_MIN_SCORE:-50}
-    - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-}
-    - HF_AVOID_TAGS=${HF_AVOID_TAGS:-}
+    - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-text-generation,text2text-generation,feature-extraction,code-generation,chat,conversational}
+    - HF_AVOID_TAGS=${HF_AVOID_TAGS:-text-to-image,image-generation,image-segmentation,object-detection,automatic-speech-recognition}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
@@ -4690,6 +4710,10 @@ services:
     # so the rooms API (/api/rooms) and the home-page Rooms tab work.
     volumes:
     - ./config/rooms:/app/rooms:ro
+      # P1 fix: persona living-doc route serves from rooms/persona/dist (rendered
+      # walkthrough.mp4 + pretext/index.html). Without this mount, every request
+      # to /persona/livingdoc hits the line 38 404 in production.
+    - ./rooms/persona:/app/data/rooms/persona:ro
     ports:
     - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.

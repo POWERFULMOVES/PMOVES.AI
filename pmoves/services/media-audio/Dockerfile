@@ -20,9 +20,15 @@ ENV TORCH_FORCE_WEIGHTS_ONLY_LOAD=1
 
 RUN pip install --no-cache-dir --upgrade pip
 
-# Build context is ./services/media-audio (service directory)
+# Build context is the REPO ROOT (compose: `context: ..`), not the service directory.
+# This is load-bearing, not cosmetic. The service publishes to the registered
+# `analysis.audio.v1` topic, which requires two things from outside this directory:
+# `pmoves/services/common` (the validated-envelope helper) and `pmoves/contracts`
+# (topics.json + the schemas it points at). A service-directory context can reach
+# neither — which is exactly why _maybe_publish used to hand-roll a partial contract
+# check and publish a bare payload instead of going through services.common.events.
 # Security: Reproducible builds from lockfile
-COPY requirements.txt requirements.lock ./
+COPY pmoves/services/media-audio/requirements.txt pmoves/services/media-audio/requirements.lock ./
 # Install torch from cu128 index (ARM64 wheels available, proven by Hi-RAG GPU on SPARK)
 # Security: PyTorch extra-index-url required for CUDA packages (+cu128 variants)
 ARG TORCH_CUDA=cu128
@@ -40,7 +46,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # would leave diarization broken on the GPU image (Codex #2181 P1). Full pip-compile
 # regeneration of the lock with pyannote is the ideal follow-up.
 RUN pip install --no-cache-dir "pyannote.audio>=3.3.0" "pydub>=0.25.1"
-COPY . ./
+COPY pmoves/services/media-audio/ ./
+# Shared envelope helper + contract registry. events.py resolves its contracts
+# directory by probing /app/contracts first (see events._contracts_dir), so the
+# registry must land exactly there for envelope()/validate_payload() to work.
+# PYTHONPATH=/app (set above) makes `services.common.events` importable.
+COPY pmoves/services/common/ ./services/common/
+COPY pmoves/contracts/ ./contracts/
 
 # Security: Run as non-root user (GPU services need video group)
 RUN groupadd -r pmoves --gid=65532 && \

@@ -1435,6 +1435,24 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  openroom:
+    build:
+      context: ../PMOVES-OpenRoom
+      dockerfile: apps/webuiapps/Dockerfile
+      args:
+        ENV: production
+        APP_PATH: /app/apps/webuiapps
+    image: pmoves-openroom:latest
+    container_name: pmoves-openroom
+    restart: unless-stopped
+    volumes:
+    - ./config/rooms:/etc/pmoves/rooms:ro
+    ports:
+    - "${OPENROOM_BIND:-0.0.0.0}:${OPENROOM_PORT:-5173}:3000"
+    networks: [pmoves_app, pmoves_external]
+    profiles: ["ui", "p7"]
+    environment:
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
   a2ui-renderer:
     build:
       context: .
