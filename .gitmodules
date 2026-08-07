@@ -381,3 +381,7 @@
 	path = PMOVES-hermes-agent
 	url = https://github.com/POWERFULMOVES/PMOVES-hermes-agent.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-pinokio"]
+	path = PMOVES-pinokio
+	url = https://github.com/POWERFULMOVES/PMOVES-pinokio.git
+	branch = PMOVES.AI-Edition-Hardened
