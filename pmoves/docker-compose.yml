@@ -3384,7 +3384,6 @@ services:
     profiles: ["ui", "p7"]
     environment:
     - PMOVES_NETWORKS=pmoves_app,pmoves_external
-
   mesh-agent:
     <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent

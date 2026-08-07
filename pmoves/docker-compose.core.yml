@@ -1453,7 +1453,6 @@ services:
     profiles: ["ui", "p7"]
     environment:
     - PMOVES_NETWORKS=pmoves_app,pmoves_external
-
   a2ui-renderer:
     build:
       context: .
