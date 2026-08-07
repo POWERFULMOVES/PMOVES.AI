@@ -922,7 +922,13 @@ supabase-up: ## Alias for up-supabase (shim removed — all services in main com
 supabase-stop: ## Alias for supa-stop (shim removed — all services in main compose)
 	@$(MAKE) --no-print-directory supa-stop
 
-supabase-clean: ## Stop + remove Supabase containers and volumes
+supabase-clean: ## DESTRUCTIVE — stop + remove Supabase containers AND their volumes
+	@echo "⚠️  Removes the Supabase stack INCLUDING its volumes (auth.users, all"
+	@echo "   app schemas, and the juicefs_meta schema the JuiceFS mount depends on)."
+	@echo "   Losing juicefs_meta makes the media filesystem unrecoverable."
+	@echo ""
+	@printf "   Type DESTROY to proceed: "; read ans; \
+	  [ "$$ans" = "DESTROY" ] || { echo "aborted"; exit 1; }
 	@$(DC) --profile supabase-local down -v --remove-orphans >/dev/null 2>&1 || true
 	@echo "✅ Supabase stack cleaned"
 
@@ -2133,7 +2139,22 @@ AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-
 down:
 	@$(DC) down
 
+# DESTRUCTIVE. `-v` removes named volumes — every database, object store and
+# cache on this node. The name is a trap: everywhere else in software `clean`
+# means "remove build artifacts", so it invites exactly the reflex that
+# destroys the fleet's data. Kept as an alias for muscle memory, but it now
+# requires typed confirmation.
 clean:
+	@echo "⚠️  'make clean' DESTROYS DATA on this node:"
+	@echo "     • stops and removes every container in project '$(PROJECT)'"
+	@echo "     • removes NAMED VOLUMES (-v): supabase-db, minio, qdrant, neo4j, ..."
+	@echo "     • removes containers not in the current file set (--remove-orphans)"
+	@echo ""
+	@echo "   To stop services WITHOUT destroying data:  make down"
+	@echo "   To reset ONE service's volume:             make volume-reset SERVICE=<name>"
+	@echo ""
+	@printf "   Type DESTROY to proceed: "; read ans; \
+	  [ "$$ans" = "DESTROY" ] || { echo "aborted"; exit 1; }
 	@$(DC) down -v --remove-orphans
 
 smoke: ## Canonical smoke harness (PowerShell on Windows, bash elsewhere)
@@ -4765,6 +4786,27 @@ compose-networks-check: ## Drift gate: fail if PMOVES_NETWORKS is out of sync wi
 validate-service-tools-packaging: ## Audit that services importing pmoves.tools copy them into Docker images
 	@$(PYTHON) $(CURDIR)/scripts/validate_service_tools_packaging.py
 
+# ---------------------------------------------------------------------------
+# ⚠️  NEVER add --remove-orphans to an overlay target, and never accept docker
+# compose's own suggestion to do so.
+#
+# Every scoped overlay run prints:
+#     "Found orphan containers (...) for this project. ... you can run this
+#      command with the --remove-orphans flag to clean it up."
+#
+# That advice is WRONG here. Compose defines "orphan" as "in the project but not
+# in the current file set" — which, with split overlays, is every service in
+# every OTHER overlay. Those containers are healthy and intentional, not debris.
+#
+# Taking the suggestion on an app-tier command (base+ui+agents+media) silently
+# destroys ALL of docker-compose.core.yml: nats, minio, qdrant, neo4j,
+# meilisearch and the whole Supabase stack. Observed on B850 2026-08-07 — 72
+# containers to 41, data tier gone, and it wedged the JuiceFS mount for 5 days
+# because the metadata engine (supabase-db) vanished from DNS.
+#
+# The flag is safe in single-file compose. It is a stack-destroyer here.
+# To remove a genuinely stale container, name it: docker rm -f <name>.
+# ---------------------------------------------------------------------------
 OVERLAY_BASE    := -f docker-compose.base.yml
 OVERLAY_CORE    := -f docker-compose.core.yml
 OVERLAY_AGENTS  := -f docker-compose.agents.yml
