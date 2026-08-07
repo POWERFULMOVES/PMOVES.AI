@@ -6,7 +6,17 @@ services:
     restart: unless-stopped
     environment:
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
+      # Server-to-server only: token exchange, code exchange, logout. A compose
+      # service name is correct here and no browser ever sees it.
       GOTRUE_URL: ${GOTRUE_URL:-http://supabase-gotrue:9999}
+      # Browser-facing GoTrue origin, used ONLY to build the external-provider
+      # /authorize link rendered on the login page. Must be an address the user's
+      # BROWSER can reach. Unset falls back to GOTRUE_URL, which is why the
+      # "Sign in with GitHub" button pointed at http://supabase-gotrue:9999 —
+      # a link that renders fine and dies on click. There is deliberately no
+      # public default: the operator must publish a GoTrue route (Supabase Kong
+      # at /auth/v1, or a Traefik route on auth.pmoves.ai) and name it here.
+      GOTRUE_PUBLIC_URL: ${GOTRUE_PUBLIC_URL:-}
       PUBLIC_BASE_URL: ${SSO_PUBLIC_BASE_URL:-https://auth.pmoves.ai}
       SSO_COOKIE_DOMAIN: ${SSO_COOKIE_DOMAIN:-.pmoves.ai}
       JELLYFIN_OIDC_CLIENT_ID: ${JELLYFIN_OIDC_CLIENT_ID}
