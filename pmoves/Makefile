@@ -196,6 +196,7 @@ include mk/creator.mk
 include mk/kilo.mk
 include mk/voice.mk
 include mk/kong.mk
+include mk/review.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs

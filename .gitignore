@@ -351,4 +351,5 @@ pmoves/rooms/persona/pretext/output/
 pmoves/rooms/persona/dist/
 pmoves/data/yt-playlists/
 
+# Review dump runtime output
 pmoves/docs/logs/review-dumps/
