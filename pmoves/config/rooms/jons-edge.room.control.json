@@ -174,5 +174,10 @@
     "pair_target": "spark",
     "fallback_mode": "island-phi3",
     "nats_upstream": "ts:powerfulmoves:4222"
+  },
+  "policies": {
+    "model_routing": "native",
+    "publish": { "allow_nats_emit": true, "allow_external_publish": false },
+    "memory": { "graphiti": false, "notebook_writeback": true, "chit_handoff": false }
   }
 }

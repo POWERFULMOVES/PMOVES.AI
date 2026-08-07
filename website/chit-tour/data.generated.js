@@ -1,11 +1,11 @@
 // data.generated.js — LIVE tour data, generated from the agent registry (SSOT).
 // DO NOT EDIT BY HAND. Regenerate: make -C pmoves chit-tour-data
-// source: pmoves/config/agent_registry.yaml · agents: 96 · subjects: 109 · generated: 2026-08-01
+// source: pmoves/config/agent_registry.yaml · agents: 97 · subjects: 109 · generated: 2026-08-01
 
 const LIVE_META = {
   "generated_at": "2026-08-01",
   "source": "pmoves/config/agent_registry.yaml",
-  "agent_count": 96,
+  "agent_count": 97,
   "subject_count": 109,
   "taxonomy_version": "1.5.0"
 };

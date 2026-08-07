@@ -65,7 +65,7 @@
         </p>
         <div class="pillrow">
           <span class="pill"><span class="dot"></span> chit.cgp.v1.0 — production CGP spec</span>
-          <span class="pill amber"><span class="dot"></span> 96 agents in the live registry (taxonomy doc still says 76 — doc lag, noted in §12)</span>
+          <span class="pill amber"><span class="dot"></span> 97 agents in the live registry (taxonomy doc still says 76 — doc lag, noted in §12)</span>
           <span class="pill"><span class="dot"></span> 7 layers (L0–L5 + L2.5) · 5 canonical planes</span>
           <span class="pill amber"><span class="dot"></span> Built from <span class="mono u-ml-4">PMOVESCHIT/*</span> + <span class="mono">AGENTS/*</span></span>
         </div>
@@ -79,7 +79,7 @@
         <div class="kpi"><div class="label">Agent Classes</div><div class="value">4<small>by prefix</small></div></div>
         <div class="kpi"><div class="label">Service Types</div><div class="value">7<small>tiers</small></div></div>
         <div class="kpi"><div class="label">Stack Layers</div><div class="value">L0–L5<small>+ L2.5</small></div></div>
-        <div class="kpi"><div class="label">Agents (registry)</div><div class="value">96<small>agent_registry.yaml, counted 2026-07-26</small></div></div>
+        <div class="kpi"><div class="label">Agents (registry)</div><div class="value">97<small>agent_registry.yaml, counted 2026-07-26</small></div></div>
       </div>
     </section>
 
@@ -390,7 +390,7 @@
       <p class="lede">
         Pillar 2 of CHIT is hyperbolic geometry with curvature <span class="mono">K = −1</span>. Everything on this
         disk is <strong>computed in your browser right now</strong> from the real agent registry
-        (<span class="mono">agent_registry.yaml</span>, taxonomy v1.5.0, 96 agents): the tree
+        (<span class="mono">agent_registry.yaml</span>, taxonomy v1.5.0, 97 agents): the tree
         registry → class → type → agent is embedded with <strong>Sarkar's construction</strong>
         (Möbius-translate each node to the origin, fan its children at hyperbolic distance τ,
         translate back), and every edge is a true geodesic — an arc of a circle orthogonal to the
@@ -436,7 +436,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
 
       <div class="viz-card u-mb-24">
         <div class="viz-head">
-          <h3>Sarkar embedding of the live registry · 96 agents</h3>
+          <h3>Sarkar embedding of the live registry · 97 agents</h3>
           <div class="legend">
             <span style="color:#7C3AED">● standard (43)</span>
             <span style="color:#9a6fdf">● specialized (28)</span>
@@ -473,7 +473,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
 
       <p class="u-caption u-mt-10">
         ▸ math: 01_WHAT_IS_CHIT.md (Pillar 2, K = −1, Möbius addition, O(log n) tree distortion) ·
-        tree data: pmoves/config/agent_registry.yaml (taxonomy v1.5.0, 96 agents, extracted 2026-07-26) ·
+        tree data: pmoves/config/agent_registry.yaml (taxonomy v1.5.0, 97 agents, extracted 2026-07-26) ·
         embedding: Sarkar (2011) scaled variant, τ = [1.1, 1.7, 2.3] per level, computed client-side on load
       </p>
     </section>
@@ -946,7 +946,7 @@ T_a(z) = (z + a) / (1 + ā·z)      (Möbius translation, the isometry Sarkar us
           <div class="card card-accent-tint">
             <div class="meta">3D Geometry (this tour)</div>
             <h4 class="u-font-grotesk">CHIT Visual Tour</h4>
-            <p>The Poincaré disk computes a real Sarkar embedding of 96 agents. The hyperboloid lift shows what
+            <p>The Poincaré disk computes a real Sarkar embedding of 97 agents. The hyperboloid lift shows what
             flattening costs. The pillar labs run Dirichlet, Merkle, Zeta, and swarm math live.</p>
             <p class="u-caption">§03 Five Pillars · §04 Geometry Bus · §08 Poincaré Disk</p>
           </div>

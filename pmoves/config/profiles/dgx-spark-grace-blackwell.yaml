@@ -3,9 +3,11 @@ name: "NVIDIA DGX Spark (GB10 Grace-Blackwell)"
 description: >
   NVIDIA DGX Spark workstation — ARM64 node with GB10 Grace-Blackwell SoC.
   20-core Arm CPU (10x Cortex-X925 + 10x Cortex-A725) + Blackwell GPU sharing
-  128 GB unified LPDDR5X memory (SM_110). Stock DGX OS provides CUDA-on-ARM.
-  Target hardware for 120B-class models at NVFP4/FP8 quantization — unified
-  memory eliminates VRAM copies. Inference backend: Ollama (ARM64 CUDA build).
+  128 GB unified LPDDR5X memory (SM_121 / compute 12.1). DGX OS 7.5.0 provides
+  CUDA 13.0.2 on ARM64. Target hardware for 200B-class models at NVFP4/FP4 —
+  unified memory eliminates VRAM copies. Torch MUST be built against cu130 with
+  compute_121 kernels (torch 2.8+ or worldmirror torch 2.11.0+cu130).
+  nvidia-smi reports 'Memory-Usage: Not Supported' — expected on UMA.
 hardware:
   cpu:
     vendor: NVIDIA
@@ -17,12 +19,16 @@ hardware:
     type: nvidia-blackwell
     models: ["GB10 Blackwell (integrated)"]
     memory_gb: 128                # Unified with CPU (LPDDR5X)
-    compute_capability: "11.0"    # SM_110 Blackwell
-    cuda_version: "13.0"
+    compute_capability: "12.1"    # SM_121 — unique to GB10, NOT sm_120
+    cuda_version: "13.0.2"
+    driver_version: "580.159.03"
+    dgx_os: "7.5.0"
+    kernel: "6.17"
+    nccl: "2.30u1"
   ram_gb: 128                     # Unified memory shared with GPU
   unified_memory_gb: 128
   storage: "NVMe SSD"
-  tags: [workstation, dgx, arm64, grace-blackwell, sm_110, unified-memory]
+  tags: [workstation, dgx, arm64, grace-blackwell, sm_121, unified-memory, cuda130]
 compose_overrides:
   - docker-compose.arm64.override.yml
 model_bundles:
@@ -32,7 +38,7 @@ model_bundles:
   # P1 — Quality + general (optional, deploy after P0 soak)
   - gemma-4-31b-fp16            # Spark flagship multimodal
   - llama3.3-70b-q4km           # Quality-critical orchestration, ~40GB
-  # P2 — Future evaluation (NVFP4 when Ollama supports SM_110)
+  # P2 — Future evaluation (NVFP4 when Ollama supports SM_121)
   # - nemotron-3-super-nvfp4    # 120B-A12B NVFP4 — requires NVFP4 support on GB10
 
 # Which coding agent stacks this node supports
@@ -96,8 +102,30 @@ messaging:
 tailscale:
   role: gpu-node
   hostname_pattern: "pmoves-gb10-spark"
+torch_requirements:
+  minimum_version: "2.8"
+  cuda_variant: "cu130"
+  compute_target: "compute_121"
+  torch_index: "https://download.pytorch.org/whl/cu130"
+  pip_install: "pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu130"
+  notes:
+    - "torch 2.7+cu128 does NOT support sm_121 — iSTFTNet/deepspeed/flash-attn JIT all fail"
+    - "torch 2.11.0+cu130 confirmed working on this node (worldmirror Pinokio env)"
+    - "Kokoro TTS iSTFTNet requires cu130 for GPU inference; CPU mode works as fallback"
+    - "llama.cpp must be built with GGML_CUDA_SM_121 or GGML_CUDA_ARCHITECTURES=121"
+spark_specifics:
+  nvidia_container_toolkit: pre-installed
+  docker_gpu_flag: "--gpus=all"
+  ngc_containers: arm64_only
+  nim_support: "Check build.nvidia.com/spark/nim-llm for Spark-compatible NIM images"
+  connectx7_clustering:
+    max_dual_spark: "405B params"
+    qsfp_cables: ["Amphenol NJAAKK-N911", "Luxshare LMTQF022-SD-R"]
+  playbooks: "https://build.nvidia.com/spark"
+  recovery_image: "developer.nvidia.com (NOT Enterprise DGX OS ISO)"
 notes:
-  - "Unified 128 GB LPDDR5X — GPU and CPU share the pool. Fits 120B-class models at NVFP4 without VRAM copies."
+  - "Unified 128 GB LPDDR5X — GPU and CPU share the pool. Fits 200B-class models at FP4 without VRAM copies."
+  - "nvidia-smi shows 'Memory-Usage: Not Supported' — expected on UMA, not an error."
   - "ARM64 platform — requires arm64 image variants (Phase D multi-arch CI work)."
   - "Docker must use --runtime nvidia. Set in /etc/docker/daemon.json."
   - "Inference backend: Ollama (ARM64 build with CUDA-on-ARM, stock DGX OS)."
