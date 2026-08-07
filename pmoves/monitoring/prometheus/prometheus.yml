@@ -107,7 +107,13 @@ scrape_configs:
     params:
       module: [http_2xx]
     static_configs:
-      - targets: ["http://archon:8091/healthz"]
+      # Archon 0.6.0 (TS/Bun rewrite, #2217) serves everything on a single port,
+      # 3090, and its health route is /api/health. This probe runs on the compose
+      # network, so it must use the CONTAINER port: the 8091 alias in
+      # docker-compose.agents.yml maps HOST 8091 -> container 3090 and does not
+      # exist inside the network. Probing 8091 here was connection-refused, not a
+      # 404, so blackbox reported Archon permanently DOWN.
+      - targets: ["http://archon:3090/api/health"]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -192,7 +198,7 @@ scrape_configs:
           - http://hi-rag-gateway-v2:8086/hirag/admin/stats # hi-rag v2 CPU
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://presign:8080/healthz                    # presign
-          - http://archon:8091/healthz                     # archon
+          - http://archon:3090/api/health                  # archon (0.6.0: single port 3090, /api/health)
           - http://pmoves-firefly:8080/                      # firefly-iii (upstream Laravel, no /healthz)
           - http://host.docker.internal:8097/healthz        # channel monitor
           - http://host.docker.internal:4000                # tensorzero playground
