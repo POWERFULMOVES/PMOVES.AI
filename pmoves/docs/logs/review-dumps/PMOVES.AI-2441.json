@@ -1,0 +1,190 @@
+{
+  "repo": "POWERFULMOVES/PMOVES.AI",
+  "pr_number": 2441,
+  "title": "feat(ui): persona living-doc route + user greeting + rooms null guard",
+  "state": "OPEN",
+  "merged_at": null,
+  "branch": "feat/persona-livingdoc-rooms",
+  "base": "main",
+  "additions": 108,
+  "deletions": 1,
+  "changed_files": 4,
+  "author": "POWERFULMOVES",
+  "collected_at": "2026-08-06T23:53:32.695075+00:00",
+  "threads": [
+    {
+      "id": "PRRT_kwDOPkuAKM6XEUJg",
+      "isResolved": false,
+      "isOutdated": false,
+      "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+      "line": 36,
+      "comments": {
+        "nodes": [
+          {
+            "databaseId": 3730823702,
+            "author": {
+              "login": "chatgpt-codex-connector"
+            },
+            "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Exempt the public persona route from authentication**\n\nFor unauthenticated visitors, the checked `pmoves/ui/proxy.ts` allows only its `PUBLIC_PATHS`/prefixes and redirects this new route to `/login`; this conflicts with `persona.room.livingdoc.json`, which declares the room public and owner-only false, and with the public-edge runbook's LinkedIn-facing use case. Add `/persona/livingdoc` and its asset prefix to the proxy's public paths so the intended audience can access the route without a Supabase session or boot JWT.\n\nUseful? React with 👍 / 👎.",
+            "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+            "line": 36,
+            "originalLine": 36,
+            "diffHunk": "@@ -0,0 +1,92 @@\n+import fs from 'fs';\n+import path from 'path';\n+\n+export const dynamic = 'force-dynamic';\n+\n+const PERSONA_DIR_CANDIDATES = [\n+  path.join(process.cwd(), 'data', 'rooms', 'persona'),\n+  path.join(process.cwd(), 'rooms', 'persona'),\n+  path.join(process.cwd(), '..', 'rooms', 'persona'),\n+];\n+\n+const MIME_TYPES: Record<string, string> = {\n+  '.html': 'text/html; charset=utf-8',\n+  '.css': 'text/css; charset=utf-8',\n+  '.js': 'application/javascript; charset=utf-8',\n+  '.json': 'application/json; charset=utf-8',\n+  '.svg': 'image/svg+xml',\n+  '.png': 'image/png',\n+  '.jpg': 'image/jpeg',\n+  '.woff2': 'font/woff2',\n+  '.mp4': 'video/mp4',\n+  '.webm': 'video/webm',\n+  '.woff': 'font/woff',\n+  '.ttf': 'font/ttf',\n+};\n+\n+function resolvePersonaDir(): string | null {\n+  for (const p of PERSONA_DIR_CANDIDATES) {\n+    try {\n+      if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return p;\n+    } catch { /* continue */ }\n+  }\n+  return null;\n+}\n+\n+export async function GET(request: Request) {",
+            "createdAt": "2026-08-06T17:31:32Z",
+            "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2441#discussion_r3730823702"
+          }
+        ]
+      }
+    },
+    {
+      "id": "PRRT_kwDOPkuAKM6XEUJn",
+      "isResolved": false,
+      "isOutdated": false,
+      "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+      "line": 10,
+      "comments": {
+        "nodes": [
+          {
+            "databaseId": 3730823711,
+            "author": {
+              "login": "chatgpt-codex-connector"
+            },
+            "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Mount the persona bundle into the production UI**\n\nIn the checked Compose deployment, `pmoves-ui` builds with context `./ui` and mounts only `./config/rooms` at `/app/rooms`; the standalone image likewise copies no `pmoves/rooms/persona` content. With production `cwd` `/app`, none of these candidates therefore contains the persona directory, so every request reaches the line 38 404. Copy or mount the rendered persona bundle into the runtime and point resolution at that explicit location.\n\nUseful? React with 👍 / 👎.",
+            "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+            "line": 10,
+            "originalLine": 10,
+            "diffHunk": "@@ -0,0 +1,92 @@\n+import fs from 'fs';\n+import path from 'path';\n+\n+export const dynamic = 'force-dynamic';\n+\n+const PERSONA_DIR_CANDIDATES = [\n+  path.join(process.cwd(), 'data', 'rooms', 'persona'),\n+  path.join(process.cwd(), 'rooms', 'persona'),\n+  path.join(process.cwd(), '..', 'rooms', 'persona'),\n+];",
+            "createdAt": "2026-08-06T17:31:33Z",
+            "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2441#discussion_r3730823711"
+          }
+        ]
+      }
+    },
+    {
+      "id": "PRRT_kwDOPkuAKM6XEUJq",
+      "isResolved": false,
+      "isOutdated": false,
+      "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+      "line": 57,
+      "comments": {
+        "nodes": [
+          {
+            "databaseId": 3730823715,
+            "author": {
+              "login": "chatgpt-codex-connector"
+            },
+            "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Route persona asset paths through a catch-all**\n\nThis subpath-serving branch cannot receive asset requests because `app/persona/livingdoc/route.ts` registers only the exact `/persona/livingdoc` route; the built Next route manifest confirms the exact-match regex. Moreover, from the slashless document URL, relative references such as `walkthrough.mp4` and `pretext/index.html` resolve under `/persona/`, while even `/persona/livingdoc/...` would not match this handler. Use an optional catch-all route and make the document's asset base agree with it, otherwise the walkthrough and PreTeXt surfaces return 404.\n\nUseful? React with 👍 / 👎.",
+            "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+            "line": 57,
+            "originalLine": 57,
+            "diffHunk": "@@ -0,0 +1,92 @@\n+import fs from 'fs';\n+import path from 'path';\n+\n+export const dynamic = 'force-dynamic';\n+\n+const PERSONA_DIR_CANDIDATES = [\n+  path.join(process.cwd(), 'data', 'rooms', 'persona'),\n+  path.join(process.cwd(), 'rooms', 'persona'),\n+  path.join(process.cwd(), '..', 'rooms', 'persona'),\n+];\n+\n+const MIME_TYPES: Record<string, string> = {\n+  '.html': 'text/html; charset=utf-8',\n+  '.css': 'text/css; charset=utf-8',\n+  '.js': 'application/javascript; charset=utf-8',\n+  '.json': 'application/json; charset=utf-8',\n+  '.svg': 'image/svg+xml',\n+  '.png': 'image/png',\n+  '.jpg': 'image/jpeg',\n+  '.woff2': 'font/woff2',\n+  '.mp4': 'video/mp4',\n+  '.webm': 'video/webm',\n+  '.woff': 'font/woff',\n+  '.ttf': 'font/ttf',\n+};\n+\n+function resolvePersonaDir(): string | null {\n+  for (const p of PERSONA_DIR_CANDIDATES) {\n+    try {\n+      if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return p;\n+    } catch { /* continue */ }\n+  }\n+  return null;\n+}\n+\n+export async function GET(request: Request) {\n+  const personaDir = resolvePersonaDir();\n+  if (!personaDir) {\n+    return new Response('Persona room not found', { status: 404 });\n+  }\n+\n+  const url = new URL(request.url);\n+  const pathname = url.pathname;\n+\n+  if (pathname === '/persona/livingdoc' || pathname === '/persona/livingdoc/') {\n+    const indexPath = path.join(personaDir, 'index.html');\n+    try {\n+      const html = fs.readFileSync(indexPath, 'utf-8');\n+      return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });\n+    } catch {\n+      return new Response('Persona index.html not found', { status: 404 });\n+    }\n+  }\n+\n+  // Serve static assets from the persona directory (pretext/, walkthrough.mp4, etc.)\n+  const subPath = pathname.replace(/^\\/persona\\/livingdoc\\//, '');\n+  const requestedFile = path.join(personaDir, subPath);",
+            "createdAt": "2026-08-06T17:31:33Z",
+            "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2441#discussion_r3730823715"
+          }
+        ]
+      }
+    },
+    {
+      "id": "PRRT_kwDOPkuAKM6XEUJv",
+      "isResolved": false,
+      "isOutdated": false,
+      "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+      "line": 9,
+      "comments": {
+        "nodes": [
+          {
+            "databaseId": 3730823723,
+            "author": {
+              "login": "chatgpt-codex-connector"
+            },
+            "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Resolve the rendered persona directory**\n\nIn local development the first existing candidate is `pmoves/rooms/persona`, but `make persona-render` places the generated `walkthrough.mp4` and compiled `pretext/index.html` under the gitignored `pmoves/rooms/persona/dist` directory; the source directory contains neither artifact. Even after asset routing is corrected, this handler will select the raw source tree and report those generated files missing, so resolve `dist` first or configure the rendered bundle path explicitly.\n\nUseful? React with 👍 / 👎.",
+            "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+            "line": 9,
+            "originalLine": 9,
+            "diffHunk": "@@ -0,0 +1,92 @@\n+import fs from 'fs';\n+import path from 'path';\n+\n+export const dynamic = 'force-dynamic';\n+\n+const PERSONA_DIR_CANDIDATES = [\n+  path.join(process.cwd(), 'data', 'rooms', 'persona'),\n+  path.join(process.cwd(), 'rooms', 'persona'),\n+  path.join(process.cwd(), '..', 'rooms', 'persona'),",
+            "createdAt": "2026-08-06T17:31:33Z",
+            "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2441#discussion_r3730823723"
+          }
+        ]
+      }
+    }
+  ],
+  "reviews": [
+    {
+      "author": "chatgpt-codex-connector",
+      "state": "COMMENTED",
+      "body": "\n### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `a198e1cf3f`\n    \n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with 👍.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+      "submitted_at": "2026-08-06T17:31:32Z"
+    }
+  ],
+  "thread_records": [
+    {
+      "thread_id": "PRRT_kwDOPkuAKM6XEUJg",
+      "is_resolved": false,
+      "is_outdated": false,
+      "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+      "line": 36,
+      "severity": "P1",
+      "author": "chatgpt-codex-connector",
+      "author_type": "bot",
+      "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Exempt the public persona route from authentication**\n\nFor unauthenticated visitors, the checked `pmoves/ui/proxy.ts` allows only its `PUBLIC_PATHS`/prefixes and redirects this new route to `/login`; this conflicts with `persona.room.livingdoc.json`, which declares the room public and owner-only false, and with the public-edge runbook's LinkedIn-facing use case. Add `/persona/livingdoc` and its asset prefix to the proxy's public paths so the intended audience can access the route without a Supabase session or boot JWT.\n\nUseful? React with 👍 / 👎.",
+      "suggestions": [],
+      "diff_hunk": "@@ -0,0 +1,92 @@\n+import fs from 'fs';\n+import path from 'path';\n+\n+export const dynamic = 'force-dynamic';\n+\n+const PERSONA_DIR_CANDIDATES = [\n+  path.join(process.cwd(), 'data', 'rooms', 'persona'),\n+  path.join(process.cwd(), 'rooms', 'persona'),\n+  path.join(process.cwd(), '..', 'rooms', 'persona'),\n+];\n+\n+const MIME_TYPES: Record<string, string> = {\n+  '.html': 'text/html; charset=utf-8',\n+  '.css': 'text/css; charset=utf-8',\n+  '.js': 'application/javascript; charset=utf-8',\n+  '.json': 'application/json; charset=utf-8',\n+  '.svg': 'image/svg+xml',\n+  '.png': 'image/png',\n+  '.jpg': 'image/jpeg',\n+  '.woff2': 'font/woff2',\n+  '.mp4': 'video/mp4',\n+  '.webm': 'video/webm',\n+  '.woff': 'font/woff',\n+  '.ttf': 'font/ttf',\n+};\n+\n+function resolvePersonaDir(): string | null {\n+  for (const p of PERSONA_DIR_CANDIDATES) {\n+    try {\n+      if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return p;\n+    } catch { /* continue */ }\n+  }\n+  return null;\n+}\n+\n+export async function GET(request: Request) {",
+      "replies": [],
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2441#discussion_r3730823702",
+      "created_at": "2026-08-06T17:31:32Z",
+      "comments_truncated": false
+    },
+    {
+      "thread_id": "PRRT_kwDOPkuAKM6XEUJn",
+      "is_resolved": false,
+      "is_outdated": false,
+      "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+      "line": 10,
+      "severity": "P1",
+      "author": "chatgpt-codex-connector",
+      "author_type": "bot",
+      "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Mount the persona bundle into the production UI**\n\nIn the checked Compose deployment, `pmoves-ui` builds with context `./ui` and mounts only `./config/rooms` at `/app/rooms`; the standalone image likewise copies no `pmoves/rooms/persona` content. With production `cwd` `/app`, none of these candidates therefore contains the persona directory, so every request reaches the line 38 404. Copy or mount the rendered persona bundle into the runtime and point resolution at that explicit location.\n\nUseful? React with 👍 / 👎.",
+      "suggestions": [],
+      "diff_hunk": "@@ -0,0 +1,92 @@\n+import fs from 'fs';\n+import path from 'path';\n+\n+export const dynamic = 'force-dynamic';\n+\n+const PERSONA_DIR_CANDIDATES = [\n+  path.join(process.cwd(), 'data', 'rooms', 'persona'),\n+  path.join(process.cwd(), 'rooms', 'persona'),\n+  path.join(process.cwd(), '..', 'rooms', 'persona'),\n+];",
+      "replies": [],
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2441#discussion_r3730823711",
+      "created_at": "2026-08-06T17:31:33Z",
+      "comments_truncated": false
+    },
+    {
+      "thread_id": "PRRT_kwDOPkuAKM6XEUJq",
+      "is_resolved": false,
+      "is_outdated": false,
+      "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+      "line": 57,
+      "severity": "P1",
+      "author": "chatgpt-codex-connector",
+      "author_type": "bot",
+      "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Route persona asset paths through a catch-all**\n\nThis subpath-serving branch cannot receive asset requests because `app/persona/livingdoc/route.ts` registers only the exact `/persona/livingdoc` route; the built Next route manifest confirms the exact-match regex. Moreover, from the slashless document URL, relative references such as `walkthrough.mp4` and `pretext/index.html` resolve under `/persona/`, while even `/persona/livingdoc/...` would not match this handler. Use an optional catch-all route and make the document's asset base agree with it, otherwise the walkthrough and PreTeXt surfaces return 404.\n\nUseful? React with 👍 / 👎.",
+      "suggestions": [],
+      "diff_hunk": "@@ -0,0 +1,92 @@\n+import fs from 'fs';\n+import path from 'path';\n+\n+export const dynamic = 'force-dynamic';\n+\n+const PERSONA_DIR_CANDIDATES = [\n+  path.join(process.cwd(), 'data', 'rooms', 'persona'),\n+  path.join(process.cwd(), 'rooms', 'persona'),\n+  path.join(process.cwd(), '..', 'rooms', 'persona'),\n+];\n+\n+const MIME_TYPES: Record<string, string> = {\n+  '.html': 'text/html; charset=utf-8',\n+  '.css': 'text/css; charset=utf-8',\n+  '.js': 'application/javascript; charset=utf-8',\n+  '.json': 'application/json; charset=utf-8',\n+  '.svg': 'image/svg+xml',\n+  '.png': 'image/png',\n+  '.jpg': 'image/jpeg',\n+  '.woff2': 'font/woff2',\n+  '.mp4': 'video/mp4',\n+  '.webm': 'video/webm',\n+  '.woff': 'font/woff',\n+  '.ttf': 'font/ttf',\n+};\n+\n+function resolvePersonaDir(): string | null {\n+  for (const p of PERSONA_DIR_CANDIDATES) {\n+    try {\n+      if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return p;\n+    } catch { /* continue */ }\n+  }\n+  return null;\n+}\n+\n+export async function GET(request: Request) {\n+  const personaDir = resolvePersonaDir();\n+  if (!personaDir) {\n+    return new Response('Persona room not found', { status: 404 });\n+  }\n+\n+  const url = new URL(request.url);\n+  const pathname = url.pathname;\n+\n+  if (pathname === '/persona/livingdoc' || pathname === '/persona/livingdoc/') {\n+    const indexPath = path.join(personaDir, 'index.html');\n+    try {\n+      const html = fs.readFileSync(indexPath, 'utf-8');\n+      return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });\n+    } catch {\n+      return new Response('Persona index.html not found', { status: 404 });\n+    }\n+  }\n+\n+  // Serve static assets from the persona directory (pretext/, walkthrough.mp4, etc.)\n+  const subPath = pathname.replace(/^\\/persona\\/livingdoc\\//, '');\n+  const requestedFile = path.join(personaDir, subPath);",
+      "replies": [],
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2441#discussion_r3730823715",
+      "created_at": "2026-08-06T17:31:33Z",
+      "comments_truncated": false
+    },
+    {
+      "thread_id": "PRRT_kwDOPkuAKM6XEUJv",
+      "is_resolved": false,
+      "is_outdated": false,
+      "path": "pmoves/ui/app/persona/livingdoc/route.ts",
+      "line": 9,
+      "severity": "P2",
+      "author": "chatgpt-codex-connector",
+      "author_type": "bot",
+      "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Resolve the rendered persona directory**\n\nIn local development the first existing candidate is `pmoves/rooms/persona`, but `make persona-render` places the generated `walkthrough.mp4` and compiled `pretext/index.html` under the gitignored `pmoves/rooms/persona/dist` directory; the source directory contains neither artifact. Even after asset routing is corrected, this handler will select the raw source tree and report those generated files missing, so resolve `dist` first or configure the rendered bundle path explicitly.\n\nUseful? React with 👍 / 👎.",
+      "suggestions": [],
+      "diff_hunk": "@@ -0,0 +1,92 @@\n+import fs from 'fs';\n+import path from 'path';\n+\n+export const dynamic = 'force-dynamic';\n+\n+const PERSONA_DIR_CANDIDATES = [\n+  path.join(process.cwd(), 'data', 'rooms', 'persona'),\n+  path.join(process.cwd(), 'rooms', 'persona'),\n+  path.join(process.cwd(), '..', 'rooms', 'persona'),",
+      "replies": [],
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/2441#discussion_r3730823723",
+      "created_at": "2026-08-06T17:31:33Z",
+      "comments_truncated": false
+    }
+  ]
+}
