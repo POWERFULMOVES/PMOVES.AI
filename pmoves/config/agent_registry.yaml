@@ -1003,11 +1003,11 @@ agents:
   mai_ui:
     name: "MAI-UI"
     class: standard
-    primary_type: ui
-    secondary_type: agent
+    primary_type: agent
+    secondary_type: llm
     port: null
     health: null
-    layers: [L0, L4, L5]
+    layers: [L0, L2, L4, L5]
     evolution_stage: base
     nats:
       publishes: []
@@ -1020,11 +1020,20 @@ agents:
       attribution_gated: false
     submodule: "PMOVES-MAI-UI"
     topology:
-      node_affinity: [z890, 5090]
-      team: ui
+      node_affinity: [spark, 5090, z890]
+      team: sandbox
       ci_runner: ubuntu-latest
       compose_profile: null
-    description: "Main user interface"
+    models:
+      - "Tongyi-MAI/MAI-UI-2B"
+      - "Tongyi-MAI/MAI-UI-8B"
+    capabilities:
+      - gui_grounding
+      - screenshot_understanding
+      - browser_automation
+      - desktop_navigation
+      - mobile_navigation
+    description: "Foundation GUI agent model (2B/8B/32B/235B-A22B variants) for screenshot understanding, GUI grounding, browser automation, and desktop/mobile navigation. SOTA ScreenSpot-Pro 73.5%. Built on Qwen3-VL architecture."
 
   crush:
     name: "Crush"
@@ -1755,11 +1764,11 @@ agents:
   a2ui:
     name: "A2UI"
     class: standard
-    primary_type: ui
-    secondary_type: agent
+    primary_type: agent
+    secondary_type: llm
     port: null
     health: null
-    layers: [L0, L4, L5]
+    layers: [L0, L2, L4, L5]
     evolution_stage: base
     nats:
       publishes: []
