@@ -38,6 +38,35 @@ PORT = int(os.environ.get("MAI_UI_PORT", "8220"))
 HOST = os.environ.get("MAI_UI_HOST", "0.0.0.0")
 MAX_TOKENS = int(os.environ.get("MAI_UI_MAX_TOKENS", "512"))
 
+# ── Backend selection ────────────────────────────────────────────────────────
+# The fleet is heterogeneous: SPARK GB10 (arm64, unified memory) can hold the 2.1B
+# weights resident, while other nodes should point at an OpenAI-compatible endpoint
+# instead of pulling ~4GB of bfloat16 they will use intermittently.
+#
+# MAI_UI_MODEL_PATH alone cannot express that — it only swaps WHICH LOCAL snapshot
+# loads. Without this switch, "cloud variant on the 4090, resident on SPARK" has
+# nothing to configure.
+#
+#   MAI_UI_BACKEND=local  (default)  load weights, GPU singleton
+#   MAI_UI_BACKEND=remote            proxy to MAI_UI_BASE_URL (OpenAI-compatible)
+#
+# The point is that /v1/gui/ground and /v1/gui/describe keep their SHAPE either way.
+# Callers — Archon workflows, a browser-driving agent — never learn where inference
+# happened, so node placement stays a deployment decision rather than a code path.
+BACKEND = os.environ.get("MAI_UI_BACKEND", "local").strip().lower()
+BASE_URL = os.environ.get("MAI_UI_BASE_URL", "").rstrip("/")
+REMOTE_MODEL = os.environ.get("MAI_UI_REMOTE_MODEL", "MAI-UI-2B")
+# Optional; local runtimes (Ollama, LM Studio, llama.cpp) generally need no key.
+REMOTE_API_KEY = os.environ.get("MAI_UI_API_KEY", "")
+REMOTE_TIMEOUT = float(os.environ.get("MAI_UI_REMOTE_TIMEOUT", "120"))
+
+if BACKEND not in ("local", "remote"):
+    raise SystemExit(f"MAI_UI_BACKEND must be 'local' or 'remote', got {BACKEND!r}")
+if BACKEND == "remote" and not BASE_URL:
+    # Fail at import, not on first request: a misconfigured remote backend that only
+    # surfaces when an agent is mid-workflow is far more expensive to diagnose.
+    raise SystemExit("MAI_UI_BACKEND=remote requires MAI_UI_BASE_URL (OpenAI-compatible endpoint)")
+
 # ── Model singleton ──────────────────────────────────────────────────────────
 
 _model = None
@@ -49,7 +78,12 @@ def get_model():
     if _model is None:
         from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
-        log.info(f"Loading MAI-UI-2B from {MODEL_PATH} on {torch.cuda.get_device_name(0)}...")
+        # torch.cuda.get_device_name(0) RAISES on a machine with no CUDA device, and
+        # it sits inside the log call — so an un-guarded version dies here, before the
+        # model load, with a CUDA error rather than a legible "no GPU" message. The
+        # /healthz probe below already guards the same call; match it.
+        device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+        log.info(f"Loading MAI-UI-2B from {MODEL_PATH} on {device_name}...")
         t0 = time.time()
         _processor = AutoProcessor.from_pretrained(MODEL_PATH, trust_remote_code=True)
         _model = Qwen3VLForConditionalGeneration.from_pretrained(
@@ -73,7 +107,53 @@ def decode_image(image_data: str) -> Image.Image:
     return Image.open(io.BytesIO(raw)).convert("RGB")
 
 
+def encode_image(img: Image.Image) -> str:
+    """PNG data-URI. The OpenAI image_url contract is what every compatible runtime speaks."""
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def generate_remote(images: list[Image.Image], prompt: str, max_tokens: int) -> str:
+    """Proxy inference to an OpenAI-compatible endpoint (MAI_UI_BACKEND=remote)."""
+    import requests
+
+    content: list[dict[str, Any]] = [
+        {"type": "image_url", "image_url": {"url": encode_image(img)}} for img in images
+    ]
+    content.append({"type": "text", "text": prompt})
+
+    headers = {"Content-Type": "application/json"}
+    if REMOTE_API_KEY:
+        headers["Authorization"] = f"Bearer {REMOTE_API_KEY}"
+
+    resp = requests.post(
+        f"{BASE_URL}/v1/chat/completions",
+        headers=headers,
+        json={
+            "model": REMOTE_MODEL,
+            "messages": [{"role": "user", "content": content}],
+            "max_tokens": max_tokens,
+            # Grounding must be reproducible: the same screenshot has to yield the same
+            # click coordinates, or a retry lands somewhere else on the page.
+            "temperature": 0,
+        },
+        timeout=REMOTE_TIMEOUT,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    try:
+        return (data["choices"][0]["message"]["content"] or "").strip()
+    except (KeyError, IndexError, TypeError) as exc:
+        # Surface the shape we actually got — a silently-empty grounding result is
+        # worse than a loud failure, because the caller would click at (0,0).
+        raise RuntimeError(f"unexpected response from {BASE_URL}: {str(data)[:200]}") from exc
+
+
 def generate_response(images: list[Image.Image], prompt: str, max_tokens: int = MAX_TOKENS) -> str:
+    if BACKEND == "remote":
+        return generate_remote(images, prompt, max_tokens)
+
     model, processor = get_model()
 
     content = []
@@ -151,9 +231,25 @@ _request_count = 0
 
 @app.get("/healthz")
 async def health():
+    # Report the backend, so an operator can tell WHY a node has no model resident.
+    # Under remote, model_loaded is legitimately False and gpu is legitimately absent —
+    # without this a proxying node looks broken rather than correctly configured.
+    if BACKEND == "remote":
+        return {
+            "status": "healthy",
+            "backend": "remote",
+            "model_loaded": False,
+            "upstream": BASE_URL,
+            "model": REMOTE_MODEL,
+        }
     model_loaded = _model is not None
     gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
-    return {"status": "healthy", "model_loaded": model_loaded, "gpu": gpu_name}
+    return {
+        "status": "healthy",
+        "backend": "local",
+        "model_loaded": model_loaded,
+        "gpu": gpu_name,
+    }
 
 
 @app.get("/metrics")
