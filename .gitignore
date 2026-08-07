@@ -350,3 +350,11 @@ pmoves/rooms/persona/pretext/output/
 # Persona living-doc rendered static bundle (make persona-render → served by nginx)
 pmoves/rooms/persona/dist/
 pmoves/data/yt-playlists/
+
+# Review dump runtime output
+pmoves/docs/logs/review-dumps/
+# Runtime model weights + checkpoints (never commit)
+indextts/
+checkpoints/
+pmoves/data/models/
+20.md

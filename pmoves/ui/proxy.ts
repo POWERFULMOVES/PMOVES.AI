@@ -2,8 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseProxyClient } from '@/lib/supabaseServer';
 
 const MARKETING_ROUTES = ['/community'];
+// P1 fix: /persona/livingdoc is declared public in persona.room.livingdoc.json
+// (access.visibility=public, owner_only=false). Must be exempt from auth.
+const PUBLIC_PERSONA_PREFIX = '/persona/livingdoc';
 const PUBLIC_PATHS = new Set(['/', '/login', '/callback', '/icon.svg', '/favicon.ico', ...MARKETING_ROUTES]);
-const PUBLIC_PATH_PREFIXES = [...MARKETING_ROUTES];
+const PUBLIC_PATH_PREFIXES = [...MARKETING_ROUTES, PUBLIC_PERSONA_PREFIX];
 
 const isPublicPath = (pathname: string) => {
   if (PUBLIC_PATHS.has(pathname)) {
