@@ -1,6 +1,15 @@
 services:
   traefik:
-    image: ${TRAEFIK_IMAGE:-traefik:v3.3}
+    # v3.6 is a FLOOR, not a preference. Traefik's Docker provider pins Docker API
+    # v1.24 until v3.6; Docker Engine 29 sets MinAPIVersion 1.40 and answers v1.24
+    # with a 400 whose body is empty — which surfaces as the unhelpful
+    # `Error response from daemon: ` with nothing after the colon, once a minute,
+    # while EVERY route 404s because no container label is ever read.
+    # Measured on Engine 29.6.2: v3.4 → 7 provider errors/10s, v3.5 → 6, v3.6 → 0.
+    # DOCKER_API_VERSION=1.44 does NOT help; Traefik ignores it.
+    # Do not downgrade below v3.6. See
+    # docs/handoffs/traefik-docker-provider-api-version-2026-08-06.md
+    image: ${TRAEFIK_IMAGE:-traefik:v3.6@sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d}
     container_name: pmoves-traefik
     restart: unless-stopped
     command:

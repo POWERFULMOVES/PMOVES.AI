@@ -304,6 +304,11 @@ down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-data volume preserv
 	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format 2>/dev/null || true
 	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-data)."
 
+up-juicefs-recreate: ensure-env-shared bootstrap-tier-envs ## Force-recreate the JuiceFS gateway with current env (rotation-drift recovery)
+	@echo "Force-recreating juicefs-gateway with current env..."
+	@$(JUICEFS_DC) --profile juicefs up -d --force-recreate --no-deps juicefs-gateway
+	@echo "Done. Check: make juicefs-status"
+
 juicefs-smoke: ## S3 round-trip + multi-bucket smoke test against a running gateway (needs: make up-juicefs)
 	@$(JUICEFS_DC) --profile juicefs --profile juicefs-smoke run --rm juicefs-smoke
 
@@ -1271,6 +1276,12 @@ up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@$(DC) up -d $(AGENT_SERVICES)
 	@$(MAKE) --no-print-directory wait-agents
 	@echo "✅ Agents ready"
+
+.PHONY: up-evo
+up-evo: ## Start the EVO SWARM controller (evolutionary optimizer :8113) — builds locally (no ghcr image published). Loads env.shared for CHIT prod signing.
+	@echo "🧬 Starting EVO SWARM controller (:8113)..."
+	@$(LOAD_ENV_SHARED); $(DC) --profile agents up -d --build evo-controller
+	@echo "✅ EVO SWARM controller starting on :8113 (publishes evoswarm.training.genome.v1 / .fitness.v1)"
 
 .PHONY: archon-db-setup
 archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZero LLM config)
@@ -4275,7 +4286,7 @@ down-external: ## Stop external integration services
 # the traefik container but points at `sso-auth@docker`, so Traefik without sso-auth
 # is an edge whose own login route 404s.
 # ---------------------------------------------------------------------------
-EDGE_DC := docker compose -p $(PROJECT)-edge --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
+EDGE_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
 
 .PHONY: edge-preflight
 edge-preflight: ## Check edge prerequisites (networks, 80/443, dynamic.yml) without starting anything
