@@ -1248,6 +1248,16 @@ validate-dockerfile-paths-list-orphans: ## Diagnostic: list orphan Dockerfiles n
 	@$(PYTHON) tools/validate_dockerfile_paths.py --list-orphans
 
 .PHONY: up-workers up-workers-core
+
+.PHONY: up-openroom
+up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
+	@echo "🚪 Starting OpenRoom desktop..."
+	@$(DC) --profile ui up -d openroom
+	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
+	@echo "✅ OpenRoom ready"
+	@echo "   Desktop:      http://localhost:5173/webuiapps/"
+	@echo "   Try a room:   http://localhost:5173/webuiapps/?room=persona.room.livingdoc"
+
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
 	@$(DC) up -d $(WORKER_SERVICES)
