@@ -3382,7 +3382,8 @@ services:
     - "${OPENROOM_BIND:-0.0.0.0}:${OPENROOM_PORT:-5173}:3000"
     networks: [pmoves_app, pmoves_external]
     profiles: ["ui", "p7"]
-
+    environment:
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
   mesh-agent:
     <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent
