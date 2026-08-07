@@ -1,14 +1,21 @@
 name: Fork Sync
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.gitmodules'
+      - 'pmoves/config/fork_registry.json'
   schedule:
-    - cron: '0 6 * * 1'  # Monday 06:00 UTC
+    - cron: '0 6 * * *'  # Daily 06:00 UTC safety net (catches upstream changes we didn't get a dispatch for)
+  repository_dispatch:
+    types: [upstream-sync]  # Triggered by fork PRs or external upstream release webhooks
   workflow_dispatch:
     inputs:
       max_forks:
         description: 'Max forks to sync per run (0 = unlimited)'
         required: false
-        default: '3'
+        default: '20'
       dry_run:
         description: 'Dry run (no changes)'
         required: false
