@@ -70,8 +70,9 @@ jobs:
         env:
           GH_TOKEN: ${{ needs.token.outputs.token }}
           PMOVES_GITHUB_ORG: ${{ github.repository_owner }}
-          DISPATCH_REPO: ${{ github.event.repository.name }}
-          DISPATCH_PR: ${{ github.event.pull_request.number || '' }}
+          # CR-1 fix: honor workflow_dispatch inputs (repo/pr), fall back to event context
+          DISPATCH_REPO: ${{ inputs.repo || github.event.repository.name }}
+          DISPATCH_PR: ${{ inputs.pr || github.event.pull_request.number || '' }}
           # CR-2 fix: wire ingestion service config from vars/secrets
           HIRAG_UPSERT_URL: ${{ vars.HIRAG_UPSERT_URL }}
           CIPHER_API_URL: ${{ vars.CIPHER_API_URL }}
@@ -79,11 +80,11 @@ jobs:
           INGEST_HIRAG: ${{ vars.PMOVES_REVIEW_INGEST_HIRAG }}
           INGEST_CIPHER: ${{ vars.PMOVES_REVIEW_INGEST_CIPHER }}
         run: |
-          # CR-3 fix: reference env vars, not ${{ inputs.* }} in bash
+          # Reference env vars for dispatch inputs (not inline template expansion)
           REPO="$DISPATCH_REPO"
           PR="$DISPATCH_PR"
 
-          # CR-1 fix: validate repo is a bare name (no shell metacharacters)
+          # Validate repo is a bare name (no shell metacharacters)
           if ! echo "$REPO" | grep -qE '^[A-Za-z0-9._-]+$'; then
             echo "ERROR: invalid repo name: $REPO"
             exit 1

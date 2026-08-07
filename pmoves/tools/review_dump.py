@@ -55,12 +55,14 @@ NITPICK_RE = re.compile(r"\b(nitpick|nit\b)", re.IGNORECASE)
 
 
 def _gh_headers() -> dict[str, str]:
+    """Build GitHub API auth headers from the configured token."""
     if not GITHUB_TOKEN:
         raise SystemExit("ERROR: GH_TOKEN or GITHUB_TOKEN not set")
     return {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
 
 
 def gh_rest(path: str) -> Any:
+    """Call a GitHub REST API endpoint and return parsed JSON (empty list on 404)."""
     req = urllib.request.Request(f"https://api.github.com{path}", headers=_gh_headers())
     try:
         return json.loads(urllib.request.urlopen(req, timeout=30).read())
@@ -71,6 +73,7 @@ def gh_rest(path: str) -> Any:
 
 
 def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    """Execute a GitHub GraphQL query and return the parsed response."""
     body = json.dumps({"query": query, "variables": variables}).encode()
     req = urllib.request.Request(
         "https://api.github.com/graphql",
@@ -139,6 +142,7 @@ def fetch_threads(repo: str, pr_number: int) -> dict[str, Any]:
 
 
 def extract_severity(body: str) -> str:
+    """Classify a review comment as P1/P2/P3/nitpick/praise/question/unclassified."""
     m = SEVERITY_RE.search(body)
     if m:
         for g in m.groups():
@@ -155,16 +159,19 @@ def extract_severity(body: str) -> str:
 
 
 def extract_suggestions(body: str) -> list[str]:
+    """Extract CodeRabbit committable suggestion blocks from a comment body."""
     return [m.group(1).rstrip() for m in SUGGESTION_RE.finditer(body)]
 
 
 def classify_author(author: str) -> str:
+    """Classify a GitHub user as 'bot' or 'human' based on username."""
     if "[bot]" in author or author in {"coderabbitai", "chatgpt-codex-connector", "github-actions", "dependabot"}:
         return "bot"
     return "human"
 
 
 def thread_to_record(thread: dict[str, Any]) -> dict[str, Any]:
+    """Flatten a GraphQL review thread into a structured record for export/ingestion."""
     comments = thread.get("comments", {}).get("nodes", [])
     if not comments:
         return {}
@@ -190,11 +197,13 @@ def thread_to_record(thread: dict[str, Any]) -> dict[str, Any]:
 
 
 def export_json(data: dict[str, Any], path: Path) -> None:
+    """Write the collected review data as structured JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def export_markdown(data: dict[str, Any], path: Path) -> None:
+    """Render a human/LLM-readable Markdown summary of the PR's review threads."""
     lines: list[str] = []
     repo, pr = data["repo"], data["pr_number"]
     lines.append(f"# Review Dump — {repo}#{pr}\n\n**{data['title']}**\n\n")
@@ -258,6 +267,7 @@ def _record_to_text(r: dict[str, Any], pr_data: dict[str, Any]) -> str:
 
 
 def ingest_hirag_records(records: list[dict[str, Any]], pr_data: dict[str, Any]) -> int:
+    """POST review records to Hi-RAG upsert-batch. Returns count stored (0 on failure)."""
     items = [{
         "id": f"review-{pr_data['repo']}-{pr_data['pr_number']}-{r['thread_id'][-12:]}",
         "content": _record_to_text(r, pr_data),
@@ -276,6 +286,7 @@ def ingest_hirag_records(records: list[dict[str, Any]], pr_data: dict[str, Any])
 
 
 def ingest_cipher_records(records: list[dict[str, Any]], pr_data: dict[str, Any]) -> int:
+    """POST P1/P2 review learnings to Cipher memory for persistent agent recall."""
     if not CIPHER_TOKEN:
         print("  [cipher] skip: CIPHER_API_TOKEN not set", file=sys.stderr)
         return 0
@@ -302,6 +313,7 @@ def ingest_cipher_records(records: list[dict[str, Any]], pr_data: dict[str, Any]
 
 
 def dump_pr(repo: str, pr_number: int, dry_run: bool, ingest_hirag: bool = False, ingest_cipher: bool = False) -> dict[str, Any]:
+    """Collect, export, and optionally ingest all review threads for a single PR."""
     full_repo = f"{GITHUB_ORG}/{repo}" if "/" not in repo else repo
     print(f"[review-dump] {full_repo}#{pr_number}")
     data = fetch_threads(full_repo, pr_number)
@@ -320,9 +332,13 @@ def dump_pr(repo: str, pr_number: int, dry_run: bool, ingest_hirag: bool = False
     if ingest_hirag and not dry_run:
         n = ingest_hirag_records(records, data)
         print(f"  [hirag] ingested {n} records")
+        if n == 0:
+            print("  [hirag] WARNING: ingestion requested but 0 records stored", file=sys.stderr)
     if ingest_cipher and not dry_run:
         n = ingest_cipher_records(records, data)
         print(f"  [cipher] ingested {n} P1/P2 learnings")
+        if n == 0:
+            print("  [cipher] WARNING: ingestion requested but 0 records stored", file=sys.stderr)
     return data
 
 
