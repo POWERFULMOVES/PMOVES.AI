@@ -11,6 +11,13 @@ services:
     platform: linux/arm64
   archon-server:
     platform: linux/arm64
+  mai-ui-agent:
+    platform: linux/arm64
+    # SPARK GB10 has the unified memory to hold MAI-UI-2B resident (verified: 2.1B
+    # bfloat16, ~22s lazy load, GB10 ARM64/Blackwell), so it runs the weights rather
+    # than proxying. Other nodes keep the compose default of MAI_UI_BACKEND=remote.
+    environment:
+    - MAI_UI_BACKEND=local
   agent-zero:
     platform: linux/arm64
 

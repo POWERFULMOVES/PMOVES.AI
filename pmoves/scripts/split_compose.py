@@ -65,6 +65,7 @@ SERVICE_GROUPS = {
         "consciousness-service",
         "p7-room-orchestrator",
         "evo-controller",
+        "mai-ui-agent",
         "hf-agent",
         "hf-research-agent",
         "hf-mcp-server",

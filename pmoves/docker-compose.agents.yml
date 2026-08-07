@@ -1049,6 +1049,49 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+
+  # MAI-UI agent — GUI grounding + screenshot OCR (Tongyi-MAI/MAI-UI-2B, Qwen3-VL 2.1B).
+  # /v1/gui/ground returns pixel click coordinates; /v1/gui/describe does OCR; there is
+  # also an OpenAI-compatible /v1/chat/completions so any agent can use it as a drop-in.
+  #
+  # MAI_UI_BACKEND decides where inference happens WITHOUT changing the API surface:
+  #   local   load the ~2.1B bfloat16 weights (SPARK GB10 holds these comfortably)
+  #   remote  proxy MAI_UI_BASE_URL, an OpenAI-compatible endpoint (Ollama cloud, etc.)
+  # Default is remote here so a node without the weights cached starts clean instead of
+  # pulling ~4GB on first request; docker-compose.arm64.override.yml flips SPARK to local.
+  mai-ui-agent:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/mai-ui-agent/Dockerfile
+    image: ${MAI_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-mai-ui-agent:latest}
+    restart: unless-stopped
+    environment:
+    - MAI_UI_PORT=8220
+    - MAI_UI_BACKEND=${MAI_UI_BACKEND:-remote}
+    - MAI_UI_BASE_URL=${MAI_UI_BASE_URL:-}
+    - MAI_UI_REMOTE_MODEL=${MAI_UI_REMOTE_MODEL:-MAI-UI-2B}
+    - MAI_UI_MAX_TOKENS=${MAI_UI_MAX_TOKENS:-512}
+    # Neutralize the leaked Windows SSL_CERT_FILE / REQUESTS_CA_BUNDLE so the remote
+    # backend's httpx/requests calls fall back to bundled certifi (house pattern —
+    # the same leak crash-looped evo-controller, see #2470).
+    - SSL_CERT_FILE=
+    - REQUESTS_CA_BUNDLE=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_external
+    ports: ["${MAI_UI_BIND:-127.0.0.1}:8220:8220"]
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_api, pmoves_external]
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8220/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Local backend loads weights lazily on first request, not at boot, so /healthz
+      # answers quickly either way — no long start_period needed.
+      start_period: 20s
+
   hf-agent:
     # HF Agent — autonomous HuggingFace model patrol. Publishes
     # hf.model.discovered.v1. Polls HF Hub on HF_POLL_INTERVAL (default 300s).
