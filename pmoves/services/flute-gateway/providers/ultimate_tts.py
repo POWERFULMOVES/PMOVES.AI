@@ -272,6 +272,23 @@ class UltimateTTSProvider(VoiceProvider):
     ENGINE_NAME_OVERRIDES = {
         "kokoro": {"kokoro_voice": (lambda v: v or "af_heart"), "kokoro_speed": 1.0},
         "kitten_tts": {"kitten_voice": (lambda v: v or "expr-voice-2-f")},
+        # IndexTTS2 emotion vectors — 8 emotions [0,1].
+        # Caller passes emotion as voice="indextts2:{happy}:{angry}:{sad}:{afraid}:{disgusted}:{melancholic}:{surprised}:{calm}"
+        # or use presets: voice="happy", voice="angry", voice="excited", voice="calm"
+    }
+
+    # IndexTTS2 emotion presets — 8-vector [happy, angry, sad, afraid, disgusted, melancholic, surprised, calm]
+    INDEXTTS2_EMOTION_PRESETS = {
+        "neutral":  [0, 0, 0, 0, 0, 0, 0, 1.0],
+        "happy":    [0.8, 0, 0, 0, 0, 0, 0.3, 0.5],
+        "excited":  [1.0, 0, 0, 0, 0, 0, 0.6, 0.3],
+        "angry":    [0, 1.0, 0, 0, 0, 0, 0, 0],
+        "sad":      [0, 0, 1.0, 0, 0, 0, 0, 0],
+        "afraid":   [0, 0, 0, 1.0, 0, 0, 0, 0],
+        "disgusted":[0, 0, 0, 0, 1.0, 0, 0, 0],
+        "melancholic":[0, 0, 0.3, 0, 0, 1.0, 0, 0.3],
+        "surprised":[0.3, 0, 0, 0, 0, 0, 1.0, 0.3],
+        "calm":     [0, 0, 0, 0, 0, 0, 0, 1.0],
     }
 
     def _build_params(
@@ -303,7 +320,12 @@ class UltimateTTSProvider(VoiceProvider):
                 f"Unknown engine '{engine}'. Supported: {list(self.ENGINE_NAMES)}."
             )
 
-        data = [p.get("parameter_default") for p in schema_params]
+        data = []
+        for p in schema_params:
+            val = p.get("parameter_default")
+            if val is None and p.get("python_type", {}).get("type") == "str":
+                val = ""
+            data.append(val)
         name_to_idx = {
             p.get("parameter_name"): i for i, p in enumerate(schema_params)
         }
@@ -329,6 +351,30 @@ class UltimateTTSProvider(VoiceProvider):
 
         for name, value in self.ENGINE_NAME_OVERRIDES.get(engine, {}).items():
             set_by_name(name, value(voice) if callable(value) else value)
+
+        # IndexTTS2 emotion vector support
+        if engine == "indextts2" and voice:
+            preset = self.INDEXTTS2_EMOTION_PRESETS.get(voice)
+            if preset:
+                emotion_names = ["indextts2_happy", "indextts2_angry", "indextts2_sad",
+                                 "indextts2_afraid", "indextts2_disgusted", "indextts2_melancholic",
+                                 "indextts2_surprised", "indextts2_calm"]
+                for ename, eval in zip(emotion_names, preset):
+                    set_by_name(ename, eval)
+                set_by_name("indextts2_emotion_mode", "vector_control")
+            elif voice.startswith("indextts2:"):
+                # Custom 8-vector: "indextts2:0.8:0:0:0:0:0:0.3:0.5"
+                parts = voice.split(":")
+                if len(parts) == 9:
+                    emotion_names = ["indextts2_happy", "indextts2_angry", "indextts2_sad",
+                                     "indextts2_afraid", "indextts2_disgusted", "indextts2_melancholic",
+                                     "indextts2_surprised", "indextts2_calm"]
+                    for ename, eval in zip(emotion_names, parts[1:]):
+                        try:
+                            set_by_name(ename, float(eval))
+                        except ValueError:
+                            pass
+                    set_by_name("indextts2_emotion_mode", "vector_control")
 
         return data
 
