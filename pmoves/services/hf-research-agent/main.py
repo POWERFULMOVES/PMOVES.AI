@@ -141,6 +141,19 @@ class HFResearchAgent:
             score += 15
             reasons.append(f"pipeline_tag: {pipeline_tag}")
 
+        # Criterion 5: Local-model compatibility (0-10 bonus)
+        # Rewards GGUF/ARM64/quantized variants that can run on fleet nodes
+        # without conversion. On SPARK (sm_121, ARM64, 128GB UMA) this is
+        # the difference between a model that works immediately vs one that
+        # needs a full recompile.
+        compat_keywords = {"gguf", "arm64", "aarch64", "q4_k_m", "q4_k_s", "q5_k_m",
+                           "q8_0", "q4_0", "exl2", "awq", "gptq", "mxfp4", "nvfp4"}
+        model_id_lower = model_id.lower()
+        matched_compat = {kw for kw in compat_keywords if kw in model_id_lower or kw in tags}
+        if matched_compat:
+            score += 10
+            reasons.append(f"local-compat (+10): {sorted(matched_compat)}")
+
         # Penalty: Avoid tags (-10 points each)
         matched_avoid = tags & AVOID_TAGS
         if matched_avoid:
@@ -152,7 +165,7 @@ class HFResearchAgent:
         return {
             "model_id": model_id,
             "score": score,
-            "max_score": max_score,
+            "max_score": max_score + 10,  # +10 from Criterion 5
             "passed": passed,
             "reasons": reasons,
             "tags": model.get("tags", []),
