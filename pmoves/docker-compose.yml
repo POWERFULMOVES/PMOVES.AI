@@ -3586,8 +3586,8 @@ services:
     - HF_MIN_DOWNLOADS=${HF_MIN_DOWNLOADS:-100}
     - HF_MIN_LIKES=${HF_MIN_LIKES:-10}
     - HF_MIN_SCORE=${HF_MIN_SCORE:-50}
-    - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-}
-    - HF_AVOID_TAGS=${HF_AVOID_TAGS:-}
+    - HF_PREFERRED_TAGS=${HF_PREFERRED_TAGS:-text-generation,text2text-generation,feature-extraction,code-generation,chat,conversational}
+    - HF_AVOID_TAGS=${HF_AVOID_TAGS:-text-to-image,image-generation,image-segmentation,object-detection,automatic-speech-recognition}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${HF_RESEARCH_BIND:-0.0.0.0}:${HF_RESEARCH_PORT:-8202}:8202
