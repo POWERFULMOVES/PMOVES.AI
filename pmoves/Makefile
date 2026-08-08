@@ -1311,6 +1311,15 @@ up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
 	@echo "   Dashboard:    http://localhost:4482"
 	@echo "   Services:     http://localhost:4482/dashboard/services"
 
+.PHONY: up-openroom
+up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
+	@echo "🚪 Starting OpenRoom desktop..."
+	@$(DC) --profile ui up -d openroom
+	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
+	@echo "✅ OpenRoom ready"
+	@echo "   Desktop:      http://localhost:5173/webuiapps/"
+	@echo "   Try a room:   http://localhost:5173/webuiapps/?room=persona.room.livingdoc"
+
 .PHONY: up-tokenism down-tokenism
 up-tokenism: ## Start the Tokenism simulator + Next.js UI (dashboard :8504, API :8103)
 	@echo "🪙 Starting Tokenism simulator + Next.js UI..."
