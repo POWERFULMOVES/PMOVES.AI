@@ -10,9 +10,22 @@ Generated against `origin/main` @ `22c78fbca`.
 
 ## Read the reference counts correctly
 
-`refs` = files outside `pmoves/Makefile` and `pmoves/mk/` that mention the target — docs, skills, workflows, scripts, the claim register.
+Two independent counts, and **a target is only a retirement candidate when both are zero**:
 
-**A count of 0 does not mean the target is dead.** It means nothing in the repo writes it down. Targets exist for humans who type them, and shell history is not in the repo. Two of the eleven zero-reference targets below are already known to be load-bearing:
+- **`refs`** — files *outside* the makefiles that mention the target: docs, skills, workflows, scripts, the claim register.
+- **makefile callers** — other targets that invoke it via `$(MAKE)`. Counted separately, excluding the target's own definition line and its `.PHONY` declaration.
+
+**The second count was missing from the first revision of this file, and that made its retire list dangerous.** Excluding the makefiles to avoid counting definitions also excluded every *call site*. Three targets listed as zero-reference are in fact load-bearing links in a live chain:
+
+```text
+up-core-capable  ->  up-core-hardened   (Makefile:2542)
+                        |-> up-workers-hardened   (Makefile:2506)
+                        `-> up-agents-hardened    (Makefile:2507, 2533)
+```
+
+Retiring `up-core-hardened` on the strength of its zero external count breaks `up-core-capable`. Caught in review by Codex on #2486; corrected here.
+
+**Even both-zero does not mean dead.** It means nothing in the repo writes it down and no other target calls it. Targets exist for humans who type them, and shell history is not in the repo. Two of the eight both-zero targets are already known to be load-bearing:
 
 - **`up-cipher-nobuild`** — the gitlink-drift workaround for `cipher-api`. Its recipe is `--no-build --force-recreate`, and `cipher-api` declares only a `build:` stanza with no `image:`, so it reuses an image Compose already built **locally**. Its help text is accurate: "applies env/port changes when the `Pmoves-cipher` submodule build is unavailable (gitlink drift)." It solves a real problem and has no substitute. **Keep regardless of count.**
 
@@ -52,7 +65,7 @@ The widest family. `up-agents` dominates; the seven variants split along two ind
 | `up-yt-cookies-recreate` | 1 |
 | `up-yt-cookies-rebuild` | **0** |
 
-`up-yt-cookies-rebuild` vs `up-yt-cookies-recreate` is the clearest near-duplicate pair in the whole set — one at 0 refs, one at 1. First thing to look at.
+`up-yt-cookies-rebuild` and `up-yt-cookies-recreate` **look** like a near-duplicate pair and are not — `--build` for code changes vs `--force-recreate` for env changes (`mk/yt-cookies.mk:141-149`). Keep both; see the candidates section.
 
 ### `up-core-*` — 4
 
@@ -61,7 +74,7 @@ The widest family. `up-agents` dominates; the seven variants split along two ind
 | `up-core` | 21 |
 | `up-core-capable` | 2 |
 | `up-core-gpu` | 1 |
-| `up-core-hardened` | **0** |
+| `up-core-hardened` | **0 ext** — but called by `up-core-capable` (`Makefile:2542`) |
 
 ### `up-workers-*` — 3
 
@@ -69,15 +82,15 @@ The widest family. `up-agents` dominates; the seven variants split along two ind
 |---|---|
 | `up-workers` | 19 |
 | `up-workers-core` | **0** |
-| `up-workers-hardened` | **0** |
+| `up-workers-hardened` | **0 ext** — but called by `up-core-hardened` (`Makefile:2506`) |
 
-Two of three orphaned. Alongside `up-core-hardened` and `up-agents-hardened` (4 refs), the `-hardened` suffix looks like an abandoned convention that only partly took — worth a single decision across all of them rather than four separate ones.
+`up-workers-hardened` shows 0 external refs but is **called by `up-core-hardened`** (`Makefile:2506`). `up-workers-core` is the only genuinely unreferenced one. The `-hardened` suffix is **not** an abandoned convention — it is a live dependency-ordered bring-up chain rooted at `up-core-capable`.
 
 ### Smaller families
 
 | Family | Targets |
 |---|---|
-| `up-cipher-*` (3) | `up-cipher` 8 · `up-cipher-full` 2 · `up-cipher-nobuild` **0 — keep** |
+| `up-cipher-*` (3) | `up-cipher` 8 · `up-cipher-full` 2 · `up-cipher-nobuild` **both-zero — keep** |
 | `up-gpu-*` (3) | `up-gpu` 22 · `up-gpu-gateways` 5 · `up-gpu-orchestrator` 2 |
 | `up-jellyfin-*` (3) | `up-jellyfin` 20 · `up-jellyfin-ai` 11 · `up-jellyfin-ai-nvenc` 2 |
 | `up-voice-*` (3) | `up-voice` 19 · `up-voice-amd` 4 · `up-voice-relay` 6 |
@@ -94,7 +107,7 @@ Two of three orphaned. Alongside `up-core-hardened` and `up-agents-hardened` (4 
 
 ```text
 up-a2ui-renderer  up-activepieces  up-both-gateways  up-bots  up-bus
-up-chit-tour  up-cloudflare  up-comfyui  up-creator-collab*
+up-chit-tour  up-cloudflare  up-comfyui  up-creator-collab 
 up-darkxside-sidecar  up-data-tier  up-edge  up-evo  up-external
 up-ffmpeg-whisper  up-flute-gateway  up-hirag  up-integrations
 up-invidious  up-legacy-both  up-media  up-minimal  up-minio
@@ -105,52 +118,80 @@ up-supabase  up-tokenism*  up-tracing*  up-tts-studio  up-ui
 up-vibevoice  up-vllm  up-voicebox*  up-z890
 ```
 
-`*` = zero references. These are one-service bring-ups and are mostly not sprawl — `up-hirag`, `up-minio`, `up-obs` are exactly what a per-service target should look like. `up-legacy-both` is the one name that advertises its own obsolescence.
+`*` = zero external references (all four also have no makefile caller; `up-creator-collab` does — `Makefile:3846` — so it is not starred). These are one-service bring-ups and are mostly not sprawl — `up-hirag`, `up-minio`, `up-obs` are exactly what a per-service target should look like. `up-legacy-both` is the one name that advertises its own obsolescence.
 
 ---
 
-## Zero-reference targets (11)
+## Retirement candidates — both counts zero (8)
+
+Down from eleven once makefile callers are counted. `up-core-hardened`, `up-workers-hardened`, and `up-creator-collab` are removed from this list: all three are called by other targets.
 
 | Target | Note |
 |---|---|
 | `up-cipher-nobuild` | **KEEP** — gitlink-drift workaround, no substitute |
 | `up-tokenism` | **KEEP** — deliberate Known Road (#2326, #2334), paired `down-tokenism` |
-| `up-yt-cookies-rebuild` | near-duplicate of `up-yt-cookies-recreate` (1 ref) |
-| `up-core-hardened` | `-hardened` convention, partly adopted |
-| `up-workers-core` | |
-| `up-workers-hardened` | `-hardened` convention, partly adopted |
-| `up-juicefs-recreate` | |
-| `up-creator-collab` | |
+| `up-yt-cookies-rebuild` | **KEEP** — *not* a duplicate of `-recreate`; see below |
 | `up-rustdesk` | RustDesk is a live fleet service (`project_rustdesk_relay_fix`) — check before retiring |
+| `up-workers-core` | |
+| `up-juicefs-recreate` | |
 | `up-tracing` | |
 | `up-voicebox` | |
+
+### `up-yt-cookies-rebuild` is not a near-duplicate
+
+The first revision of this file called it "the clearest near-duplicate pair in the whole set" and put it first in the retire order. Reading the bodies (`mk/yt-cookies.mk:141-149`) shows two distinct flows:
+
+| Target | Flag | For |
+|---|---|---|
+| `up-yt-cookies-recreate` | `--force-recreate` | picking up env changes |
+| `up-yt-cookies-rebuild` | `--build --force-recreate` | picking up **code** changes |
+
+Consolidating either direction is a real loss: drop `-rebuild` and there is no image-rebuild path; drop `-recreate` and every routine env refresh pays for a rebuild. The suffixes name the difference accurately. Keep both.
 
 ---
 
 ## Suggested order for the follow-up
 
-1. **`up-yt-cookies-rebuild` / `-recreate`** — one pair, one decision, lowest risk.
-2. **The `-hardened` suffix** — `up-core-hardened` (0), `up-workers-hardened` (0), `up-agents-hardened` (4), `up-yt-hardened` (2). One convention decision covers four targets. Note that hardening also lives in `docker-compose.hardened.yml` and the `hardening-validation` workflow, so retiring the targets does not retire the concept.
-3. **`up-all` vs `up-all-new`** — needs a name decision more than a delete.
-4. **`up-agents-*` axes** — the biggest surface, and the one most likely to break someone's habit. Last.
+The two items the first revision led with are both withdrawn — one was a false duplicate, the other a live dependency chain. What remains is smaller and softer.
 
-Nothing here should move without the operator naming it. A `make` target costs one line; a removed target someone relies on costs a debugging session.
+1. **`up-all` vs `up-all-new`** — both referenced (21 / 5), and the names give no clue which supersedes which. That ambiguity *is* the cost. Per `project_obs_first_and_per_node_mcp`, `up-all-new` is the obs-first bring-up path, which suggests `up-all` is legacy. This needs a **naming** decision, not a delete.
+2. **`up-workers-core`, `up-juicefs-recreate`, `up-tracing`, `up-voicebox`** — the four both-zero targets with no known keeper reason. Ask the operator whether each is still typed; retire only on a yes-it's-dead.
+3. **`up-agents-*` axes (8)** — splits along image source (`published`/`integrations`/`standalone`) and profile (`ui`/`stack`/`hardened`/`auto`). Possibly flags on one target rather than seven. Biggest surface, most likely to break a habit, so last — and note `up-agents-hardened` is called from two places, so it is not free to move.
+
+**Withdrawn from this list:**
+
+- ~~`up-yt-cookies-rebuild` / `-recreate`~~ — distinct flows (`--build` vs env-only). See above.
+- ~~The `-hardened` suffix as an abandoned convention~~ — `up-core-hardened` is invoked by `up-core-capable`, and itself invokes `up-workers-hardened` and `up-agents-hardened`. The convention is not abandoned; it is a working dependency-ordered bring-up chain.
+
+Nothing here should move without the operator naming it. A `make` target costs one line; a removed target someone relies on costs a debugging session — and a removed target *another target calls* costs a broken bring-up.
 
 ---
 
 ## Reproducing this
 
+Two scans. Run them against the **parent** of the commit that added this file, or exclude this file — it names every target, so on the committed tree every "zero" becomes a one.
+
 ```bash
 # enumerate
-grep -hoE "^up-[a-z0-9-]+:" pmoves/Makefile pmoves/mk/*.mk | sed 's/:$//' | sort -u
+grep -hoE "^up-[a-z0-9-]+:" pmoves/Makefile pmoves/mk/*.mk | sed 's/:$//' | sort -u > targets.txt
 
-# count references outside the makefiles
+# (1) external references — docs, CI, scripts, register
 while read t; do
-  n=$(grep -rl "\b$t\b" --include="*.md" --include="*.yml" --include="*.yaml" \
-        --include="*.sh" --include="*.py" --include="*.json" . 2>/dev/null \
-      | grep -vE "^\./pmoves/(Makefile|mk/)" | grep -v "^\./\.git" | wc -l)
-  printf "%s\t%s\n" "$n" "$t"
+  n=$(grep -rl "$t" --include="*.md" --include="*.yml" --include="*.yaml"         --include="*.sh" --include="*.py" --include="*.json" . 2>/dev/null       | grep -vE "^\./pmoves/(Makefile|mk/)"       | grep -v "UP_TARGET_INVENTORY.md"       | grep -v "^\./\.git" | wc -l)
+  printf "%s	%s
+" "$n" "$t"
+done < targets.txt | sort -n
+
+# (2) intra-makefile callers — skip the definition line and .PHONY
+while read t; do
+  n=$(grep -nE "$t" pmoves/Makefile pmoves/mk/*.mk       | grep -vE ":[0-9]+:$t:" | grep -v "\.PHONY" | wc -l)
+  printf "%s	%s
+" "$n" "$t"
 done < targets.txt | sort -n
 ```
 
-Word-boundary matching means a prefix target inflates on its own suffixes (`up-yt` matches inside `up-yt-egress`). That biases the *high* counts upward, never the zeros — so the zero list is trustworthy and the ordering among high-count targets is not.
+### Known biases
+
+- **Prefix inflation.** Word-boundary matching lets a prefix target match inside its own suffixes (`up-yt` matches in `up-yt-egress`). This inflates **high** counts and never creates a false zero, so ordering among frequently-referenced targets is unreliable while the zero determinations are not.
+- **Scan (1) alone is not sufficient**, and treating it as such is what made the first revision of this file wrong. It answers "does anything written down mention this", not "is anything broken if this disappears". Only scan (2) answers the second question.
+- **Neither scan sees a human.** A target typed weekly and never written down scores zero on both.
