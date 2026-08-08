@@ -14,7 +14,9 @@ Generated against `origin/main` @ `22c78fbca`.
 
 **A count of 0 does not mean the target is dead.** It means nothing in the repo writes it down. Targets exist for humans who type them, and shell history is not in the repo. Two of the eleven zero-reference targets below are already known to be load-bearing:
 
-- **`up-cipher-nobuild`** — the documented escape hatch for the submodule build gap (`SUBMODULE_BUILD_AND_MOUNT_GAP.md`). It runs `cipher-api` from a published image instead of building from the `Pmoves-cipher` submodule, which is the only way that service comes up from a worktree. **Keep regardless of count.**
+- **`up-cipher-nobuild`** — the gitlink-drift workaround for `cipher-api`. Its recipe is `--no-build --force-recreate`, and `cipher-api` declares only a `build:` stanza with no `image:`, so it reuses an image Compose already built **locally**. Its help text is accurate: "applies env/port changes when the `Pmoves-cipher` submodule build is unavailable (gitlink drift)." It solves a real problem and has no substitute. **Keep regardless of count.**
+
+  (An earlier revision of this file called it a fresh-worktree escape hatch. That was wrong — with no published image to pull, it cannot start Cipher on a node that never built it. Corrected here and in `SUBMODULE_BUILD_AND_MOUNT_GAP.md`.)
 - **`up-tokenism`** — landed deliberately as a Known Road in #2326 (`up-tokenism` / `down-tokenism` for the Tokenism Next.js UI), and #2334 later fixed its env sourcing. Recent, intentional, and paired with a `down-` target.
 
 The counts are a starting point for a conversation, not a kill list.
@@ -90,7 +92,7 @@ Two of three orphaned. Alongside `up-core-hardened` and `up-agents-hardened` (4 
 
 ### Singletons — 46
 
-```
+```text
 up-a2ui-renderer  up-activepieces  up-both-gateways  up-bots  up-bus
 up-chit-tour  up-cloudflare  up-comfyui  up-creator-collab*
 up-darkxside-sidecar  up-data-tier  up-edge  up-evo  up-external
@@ -111,7 +113,7 @@ up-vibevoice  up-vllm  up-voicebox*  up-z890
 
 | Target | Note |
 |---|---|
-| `up-cipher-nobuild` | **KEEP** — submodule-gap escape hatch |
+| `up-cipher-nobuild` | **KEEP** — gitlink-drift workaround, no substitute |
 | `up-tokenism` | **KEEP** — deliberate Known Road (#2326, #2334), paired `down-tokenism` |
 | `up-yt-cookies-rebuild` | near-duplicate of `up-yt-cookies-recreate` (1 ref) |
 | `up-core-hardened` | `-hardened` convention, partly adopted |
