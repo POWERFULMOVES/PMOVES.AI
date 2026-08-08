@@ -8,6 +8,13 @@ services:
       - HF_HOME=/data/hf
       - HUGGINGFACE_HUB_CACHE=/data/hf
       - XDG_CACHE_HOME=/data/cache
+      # Empty SSL_CERT_FILE/_DIR means "trust nothing" to Python/OpenSSL and
+      # breaks HF weight downloads — re-point at the container CA store (same
+      # anti-host-leak intent as the env.shared blanks, working trust chain).
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+      - SSL_CERT_DIR=/etc/ssl/certs
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+      - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     volumes:
       - ultimate-tts-data:/data
     ports:
