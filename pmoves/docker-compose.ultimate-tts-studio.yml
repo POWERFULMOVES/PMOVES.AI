@@ -20,7 +20,9 @@ services:
             - driver: nvidia
               capabilities: [compute,utility]
               count: ${GPU_COUNT:-all}
-    networks: [api_tier, data_tier]
+    # pmoves_external: engines lazy-download weights from HuggingFace on first
+    # load — without egress every handle_load_* returns "Failed to load".
+    networks: [api_tier, data_tier, pmoves_external]
 
 volumes:
   ultimate-tts-data: {}

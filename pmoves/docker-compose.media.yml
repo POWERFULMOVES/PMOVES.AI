@@ -365,7 +365,7 @@ services:
     # Realtime duplex voice agent (/v1/voice/agent: mic→Whisper→LLM→VibeVoice).
     # Off by default — requires pipecat-ai installed + VibeVoice (7860) running.
     - PIPECAT_ENABLED=${PIPECAT_ENABLED:-false}
-    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}  # compose publishes UTS on 7861 (ULTIMATE_TTS_STUDIO_HOST_PORT); 7860 was the silent-unhealthy-provider trap
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://ultimate-tts-studio:7860}  # direct container route on pmoves_app (host.docker.internal bind is unreliable on Docker Desktop Windows; 7860-vs-7861 was the old silent-unhealthy trap)
     - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
     # Host-affinity routing (opt-in, #2305): with VOICE_HOST_AFFINITY=1 a cast
     # host-swaps the configured engine URL to the selected fleet node's Tailscale
@@ -425,7 +425,7 @@ services:
     environment:
     - PORT=8060
     - FLUTE_GATEWAY_URL=http://flute-gateway:8055
-    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}  # compose publishes UTS on 7861 (ULTIMATE_TTS_STUDIO_HOST_PORT); 7860 was the silent-unhealthy-provider trap
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://ultimate-tts-studio:7860}  # direct container route on pmoves_app (host.docker.internal bind is unreliable on Docker Desktop Windows; 7860-vs-7861 was the old silent-unhealthy trap)
     - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
     - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
