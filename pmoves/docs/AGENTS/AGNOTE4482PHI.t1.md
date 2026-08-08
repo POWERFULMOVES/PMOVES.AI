@@ -1712,3 +1712,21 @@ edo for slice 6 (4th-commit pattern). (2) functional: pmoves/tools/creator-colla
 
   Three-body: delivery=4090-claude, control=DARKXSIDE, memory=this trail + [[project_creator_operator_lattice]]. Deliberately out of scope: submodule sync + audit (z890-claude), the `archon.mint.*` family, and the crawl wiring itself. CHIT trail unsigned-local (no signing passphrase in this session). agent_signature: `ACK::4090-claude::MAI-UI-SERVING-CLAIM-2026-08-07`.
 <!-- GRAPHITI_MARK: 4090-claude::CRAWL-GAP-VL-GROUNDING::2026-08-07 -->
+
+## WS2 tooling audit — coordination pickup from z890 — 4090 (2026-08-08)
+
+- `2026-08-08T13:00:00Z` CLAIM `4090-claude (field)` branch: `docs/ws2-audit-claim-handoff` · scope: **Workstream 2 of z890's cleanup + tooling-audit + lane-review coordination plan, bounded to five enumerated items — not to "tooling" as an area.** Assigned by node affinity (this node runs Archon :3090 and spent 2026-08-07/08 in compose/fork/CI verification). **Affinity, not lane** — adjacent tooling work stays open to any node; this claim reserves only the items below. Handoff doc: `pmoves/docs/handoffs/WS2_TOOLING_AUDIT_4090_2026-08-08.md`.
+
+  **Claimed (5 items, one PR each):** (2) `.claude/skills/ci-expedition/SKILL.md` — two independent errors in one file: line 29 wrongly lists `pull_request_review` as resolving the workflow from the default branch, and line 69's runner-hygiene block never received the #2473 buildx fix; plus a new row for the `_app-token.yml` cross-job trap fixed in #2479. (3) reconcile the two divergent `claude-pmoves.sh` (`deploy/provision/` 6523 B vs `pmoves/scripts/` 642 B). (4) **runbook, not code** for the sibling-submodule build gap. (5) `up-*` sprawl — **inventory only, no Makefile edits**; operator picks the retire list.
+
+  **Explicitly NOT claimed:** `pmoves/mk/infra.mk:89` (`docker-prune-all`, still missing `--all-inactive`) — that is z890's declared sub-fix and this node is not touching it. Also not claimed: WS1 worktree cleanup, WS3 register bookkeeping, WS4 mesh/JuiceFS (z890), and WS4-B living-docs/persona (recommended to Mavis-5090, whose OpenRoom slice-2 claim already covers the "rooms pull portals" model).
+
+  **Three corrections to the handed-over enumeration, verified against `origin/main` @ `22c78fbca`:** (a) it is **2 leaking copies, not 4 drifting implementations** — both shell scripts (`pmoves-disk-cleanup.sh:52`, `docker-fleet-cleanup.sh:43`) already carry the #2473 fix; only `infra.mk:89` and `SKILL.md:69` lack it. (b) 4090's own earlier **"13 of 15" fork-build figure was wrong** — it double-counted services re-declared across the generated split overlays; the correct count is **7** unique sibling-context builds in `docker-compose.yml`, plus `n8n`, plus `hf-mcp-server.yml` (which the handed-over list missed). (c) the ci-expedition fix is **narrower than "PR head, not default"** — `issue_comment` and `push` are correct in that row; only `pull_request_review` is wrong. Also: the four `.worktrees/*` skill copies are checkouts of the same tracked file, so no reconciliation step is needed.
+
+  **Evidence for (c), empirical not reasoned:** run `31257145963` (PR head `5d0e3d379`, pre-fix, while `main` already carried the #2479 fix) executed the **old** workflow and failed at checkout; run `31257247543` (head rebased onto main) executed the **new** workflow and went green. Default-branch resolution would have produced the opposite.
+
+  **Method note carried into the handoff:** the first verification pass ran against this node's stale working tree (`67aed7fe8`) and reported `pmoves-disk-cleanup.sh` as missing and `docker-fleet-cleanup.sh` as unfixed. Both false. All claims re-derived from `origin/main` via `git show`; on Windows this needs `MSYS_NO_PATHCONV=1` or the ref is silently mangled to `origin\main;...` and git reports a misleading "ambiguous argument".
+
+  Three-body: delivery=4090-claude (field), control=DARKXSIDE + z890-claude (coordination plan author), memory=this trail + the handoff doc. CHIT trail **unsigned-local** (no signing passphrase in this session). agent_signature: `ACK::4090-claude::WS2-TOOLING-AUDIT-CLAIM-2026-08-08`.
+
+<!-- GRAPHITI_MARK: 4090-claude::WS2-TOOLING-AUDIT::2026-08-08 -->
