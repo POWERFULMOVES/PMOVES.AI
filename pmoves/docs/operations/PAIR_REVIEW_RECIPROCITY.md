@@ -209,3 +209,89 @@ The skill loads this doc and walks the workflow. Pairs naturally with `pmoves-ch
 - **AGNOTE:** `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` § Active Claim Register — where review rows are signed
 - **Skill:** `.claude/skills/pmoves-pair-review/SKILL.md` — invocable workflow that walks this doc
 - **Skill:** `.claude/skills/pmoves-chit-sign/SKILL.md` — pairs with this for AGNOTE signing
+
+## Lessons from the 2026-08-08 3-PR pass (Mavis harness v0)
+
+The Mavis harness v0 slice was a 3-PR coordinated effort: PMOVES.AI
+PR #2477 (writer) + PMOVES-hermes-agent PR #4 (agent) + PMOVES-pinokio
+PR #1 (app launcher). All 3 cross-fork vendors of the same CGP
+schema. The verifier surfaced 14 observations across the 3 PRs;
+all 13 pre-merge candidates were addressed in cleanup commits; the
+14th was deferred. Six concrete lessons for future review passes:
+
+### 1. Byte-compare vendored schemas against canonical
+
+When a PR vendors a copy of a file (e.g. a CGP schema) from a
+canonical source, the reviewer should byte-compare the vendored
+copy against the canonical at review time. The cross-fork
+`v1.schema.json` in PMOVES-hermes-agent and PMOVES-pinokio both
+survived this check (SHA-256 `427611C4...4BD3`, 10028/10028 bytes
+on PMOVES-pinokio; same on PMOVES-hermes-agent after CRLF strip).
+This is the highest-confidence signal that the fork is in sync;
+without it, the fork could silently drift.
+
+**How to run it:**
+
+```bash
+# From the fork's worktree, byte-compare the vendored copy against canonical
+gh api repos/POWERFULMOVES/PMOVES.AI/contents/pmoves/contracts/schemas/pmoves-bootstrap/v1.schema.json \
+  --jq '.content' | base64 -d > /tmp/canonical.json
+diff -q /tmp/canonical.json pmoves_bootstrap/cgp_schema/v1.schema.json
+sha256sum /tmp/canonical.json pmoves_bootstrap/cgp_schema/v1.schema.json
+```
+
+A `text eol=lf` line in `.gitattributes` for the vendored file
+prevents the Windows-CRLF false-positive drift signal.
+
+### 2. Schema descriptions that say "MUST" should map to `required`
+
+The CGP schema's `super_nodes` field description said
+"MUST be the empty array" but the field wasn't in the top-level
+`required` array. A CGP without the field would silently pass
+validation. **The fix:** treat schema `description` fields as
+normative unless explicitly marked "advisory" or "optional". The
+reviewer should cross-check: for every "MUST" in a description,
+is the field in `required`?
+
+### 3. Tighten `additionalProperties: false` on the well-defined leaf objects only
+
+Top-level + the open-extension objects (`meta`, the array of
+`tools`, the array of `mcps`, the dict of `routing` as a list of
+future agents) should stay `additionalProperties: true` for
+forward-compat. The well-defined leaf objects (`services.tailscale`,
+`services.rustdesk`, `services.hostinger`, `services.cloudflare`,
+the routing entries `kiloclaw` / `hermes`) should be
+`additionalProperties: false` to catch typos. The PMOVES.AI
+schema now does this for `services` + `routing` at the top level
+(the leaf services are well-defined; routing entries are
+well-defined but extensible in the future).
+
+### 4. Normalize CRLF before byte-comparing
+
+On Windows checkouts, the vendored copy of a JSON file often picks
+up CRLF. The SHA-256 won't match between CRLF and LF copies, even
+though the content is byte-equivalent. Normalize before comparing
+(or add `text eol=lf` to `.gitattributes` for the vendored file).
+
+### 5. The `key=str` trick for mixed-type sorted lists
+
+When a loader skips malformed entries to a list (e.g. non-string
+`tool_id` values), the list might end up with mixed types
+(str + int + None + dict). `sorted()` on mixed types raises
+`TypeError`. Use `sorted(list, key=str)` to sort by string
+representation. The Hermes bridge's `LOG.info(skipped)` was
+crashing on this; the fix was 1 character.
+
+### 6. The "stub vs real" bootstrap pattern needs a deterministic stub
+
+The PMOVES-pinokio stub bootstrap uses hard-coded
+`created_at: '1970-01-01T00:00:00+00:00'` so the no-CGP fallback
+is reproducible. The downside: SHA-256(canonical_json) of the
+stub collides across processes. The PMOVES.AI side has the same
+pattern. The fix is to make the stub's `bootstrap_id` unique
+(e.g. `import uuid; uuid.uuid4()`) only if a downstream consumer
+ever derives session IDs from the stub. v0 doesn't, so the
+collision is theoretical; a follow-up could add uniqueness.
+
+These six lessons are also captured in the per-slice LEARNINGS
+files (e.g. `pmoves/tools/LEARNINGS/mavis-harness-v0-multi-fork_LEARNINGS.md`).
