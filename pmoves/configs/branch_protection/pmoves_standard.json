@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PMOVES standard branch protection",
+  "description": "Canonical branch-protection profile schema for the PMOVES org. Consumed by `pmoves/tools/branch_protection.py` to apply + audit + drift-check across the 8+ PMOVES forks. Each profile is a per-repo declaration of: required status checks, required PR review policy, branch-protection ruleset shape, and optional bypass actors. The shape mirrors the GitHub REST API: branches/{branch}/protection + rulesets endpoints, so a profile maps 1:1 to API calls. The schema is strict on the profile keys (additionalProperties: false) so an unintended typo fails the validator before the tool hits the network.",
+  "spec": "pmoves.branch_protection/v1",
+  "encoder_version": "1.0.0",
+  "profiles": {
+    "monorepo": {
+      "description": "The PMOVES.AI monorepo profile. 4 required status checks from the PMOVES GitHub App, 1 reviewer with code-owner enforcement, linear history + signed commits + conversation resolution. Admins are NOT enforced (operator preauthorized --admin override for hot lanes). The [main] ruleset layers on top of classic protection with explicit bypass actors for the PMOVES GitHub App + the Copilot integration.",
+      "branch": "main",
+      "required_status_checks": {
+        "strict": true,
+        "checks": [
+          { "context": "merge-gate" },
+          { "context": "python-tests" },
+          { "context": "hardening-validation" },
+          { "context": "verify" }
+        ]
+      },
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": true,
+        "require_code_owner_reviews": true,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 1
+      },
+      "required_linear_history": true,
+      "required_signatures": true,
+      "required_conversation_resolution": true,
+      "enforce_admins": false,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "restrictions": null,
+      "rulesets": [
+        {
+          "name": "[ main ]",
+          "target": "branch",
+          "enforcement": "active",
+          "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+          "rules": [
+            { "type": "deletion" },
+            { "type": "non_fast_forward" },
+            { "type": "pull_request", "parameters": { "require_code_owner_review": false, "require_last_push_approval": false, "dismiss_stale_reviews_on_push": true, "required_approving_review_count": 0, "required_review_thread_resolution": true } },
+            { "type": "copilot_code_review" }
+          ],
+          "bypass_actors": [
+            { "actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always" }
+          ]
+        }
+      ]
+    },
+    "fork": {
+      "description": "The PMOVES fork profile (used for PMOVES-hermes-agent, PMOVES-pinokio, and any future PMOVES-* fork). The per-repo required status checks are declared in the fork's own config — this profile is the SHAPE. A fork consumer passes its own required status checks + this profile as the layered structure. Linear history is required (no merge commits); signatures are NOT required (forks often receive upstream commits that aren't signed by the fork's contributors); conversation resolution is required; admins are NOT enforced (the operator preauthorized --admin for hot lanes). No bypass actors (forks have no Copilot integration, no PMOVES GitHub App).",
+      "branch": "main",
+      "required_status_checks": {
+        "strict": true,
+        "checks": []
+      },
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": true,
+        "require_code_owner_reviews": false,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 1
+      },
+      "required_linear_history": true,
+      "required_signatures": false,
+      "required_conversation_resolution": true,
+      "enforce_admins": false,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "restrictions": null,
+      "rulesets": [
+        {
+          "name": "[ main ]",
+          "target": "branch",
+          "enforcement": "active",
+          "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+          "rules": [
+            { "type": "deletion" },
+            { "type": "non_fast_forward" },
+            { "type": "pull_request", "parameters": { "require_code_owner_review": false, "require_last_push_approval": false, "dismiss_stale_reviews_on_push": true, "required_approving_review_count": 1, "required_review_thread_resolution": true } }
+          ],
+          "bypass_actors": []
+        }
+      ]
+    }
+  },
+  "per_repo_overrides": {
+    "POWERFULMOVES/PMOVES-hermes-agent": {
+      "profile": "fork",
+      "required_status_checks": {
+        "strict": true,
+        "checks": [
+          { "context": "check-attribution" },
+          { "context": "check-common-ancestor" },
+          { "context": "ruff + ty diff" },
+          { "context": "ruff enforcement (blocking)" },
+          { "context": "Windows footguns (blocking)" },
+          { "context": "changes" },
+          { "context": "e2e" },
+          { "context": "Check PyPI dependency upper bounds" },
+          { "context": "Scan PR for critical supply chain risks" }
+        ]
+      }
+    },
+    "POWERFULMOVES/PMOVES-pinokio": {
+      "profile": "fork",
+      "required_status_checks": {
+        "strict": true,
+        "checks": [
+          { "context": "CodeRabbit" }
+        ]
+      }
+    }
+  }
+}
