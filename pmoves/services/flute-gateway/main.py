@@ -610,6 +610,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# MCP bridge (mcp_bridge.py) — the curated 6-tool surface over all 14 engines
+# (tts_list_engines/intents/synthesize/engine_status/load/unload). Written for
+# the vei.contract.mcp-bridge TAC contract (:8055/sse) but never mounted until
+# now. Callables defer to the module globals set during lifespan startup.
+from mcp_bridge import create_mcp_router  # noqa: E402
+
+app.include_router(
+    create_mcp_router(
+        get_provider=lambda: ultimate_tts_provider,
+        get_nats_client=lambda: nats_client,
+    )
+)
+
 
 # Health check endpoint
 @app.get("/healthz", response_model=HealthResponse)
