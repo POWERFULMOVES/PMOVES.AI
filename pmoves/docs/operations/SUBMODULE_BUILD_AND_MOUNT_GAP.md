@@ -27,7 +27,7 @@ Eight services build from seven registered submodules:
 
 The split overlays re-declare the same contexts as `docker-compose.yml`; they are not additional services. Jellyfin is **not** in this list — it builds locally.
 
-Note the second n8n path: `pmoves/compose/docker-compose.core.yml` sits one directory deeper, so its context is `../../PMOVES-n8n`. It is live — `.github/workflows/pmoves-integrations-ci.yml:73` invokes it. Scanning for a single `../` prefix misses it, and matching on the prefix *shape* rather than resolving the first segment against `.gitmodules` produces false positives in the other direction (`pmoves/docker-compose/hf-mcp-server.yml` uses `../../pmoves/services/hf-mcp-server`, which resolves back *inside* this repo and is not a submodule at all).
+Note the second n8n path: `pmoves/compose/docker-compose.core.yml` sits one directory deeper, so its context is `../../PMOVES-n8n`. It is live — `pmoves/.github/workflows/pmoves-integrations-ci.yml:73` invokes it. Scanning for a single `../` prefix misses it, and matching on the prefix *shape* rather than resolving the first segment against `.gitmodules` produces false positives in the other direction (`pmoves/docker-compose/hf-mcp-server.yml` uses `../../pmoves/services/hf-mcp-server`, which resolves back *inside* this repo and is not a submodule at all).
 
 Class A fails at build time with a missing context or Dockerfile. Annoying, but visible.
 

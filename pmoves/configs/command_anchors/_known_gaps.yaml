@@ -5,7 +5,6 @@
 # The list may shrink. Adding to it should require saying why.
 known_gaps:
   - "GHOST_PATH|pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md|pmoves/services/flute-gateway/pipecat/pipelines/voice_agent.py"
-  - "GHOST_PATH|pmoves/docs/operations/SUBMODULE_BUILD_AND_MOUNT_GAP.md|.github/workflows/pmoves-integrations-ci.yml"
   - "GHOST_PATH|pmoves/docs/reviews/2026-03-01/tokenism-multi-review.md|.claude/skills/pmoves-integration/tools/nats-monitor.ts"
   - "GHOST_PATH|pmoves/docs/reviews/2026-03-01/tokenism-multi-review.md|.github/workflows/ci.yml"
   - "GHOST_TARGET|.claude/skills/agentgym-run/SKILL.md|agentgym-results"
