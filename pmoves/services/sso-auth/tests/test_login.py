@@ -36,6 +36,32 @@ def test_login_page_renders():
     r = client.get("/login?rd=https://health.pmoves.ai")
     assert r.status_code == 200 and b"Sign in with GitHub" in r.content
 
+def test_authorize_url_falls_back_to_internal_when_public_unset():
+    # No GOTRUE_PUBLIC_URL in the fixture => behaviour is exactly as before, so
+    # single-host deployments where GoTrue is already reachable don't change.
+    assert gotrue.provider_authorize_url("github", "https://auth.pmoves.ai/callback") \
+        .startswith("http://gotrue:9999/authorize?")
+
+def test_authorize_url_uses_public_url_when_set(monkeypatch):
+    # The regression this guards: the /authorize link is rendered into the login
+    # page and followed by the USER'S BROWSER, so it must never carry the compose
+    # service name. Server-side calls keep using GOTRUE_URL.
+    monkeypatch.setenv("GOTRUE_PUBLIC_URL", "https://auth.pmoves.ai/gotrue")
+    config.settings._reset()
+    url = gotrue.provider_authorize_url("github", "https://auth.pmoves.ai/callback")
+    assert url.startswith("https://auth.pmoves.ai/gotrue/authorize?")
+    assert "gotrue:9999" not in url
+    # ...and the internal URL is untouched for server-to-server use.
+    assert config.settings.gotrue_url == "http://gotrue:9999"
+
+def test_login_page_link_is_browser_reachable_when_public_url_set(monkeypatch):
+    monkeypatch.setenv("GOTRUE_PUBLIC_URL", "https://auth.pmoves.ai/gotrue")
+    config.settings._reset()
+    r = client.get("/login?rd=https://health.pmoves.ai")
+    assert r.status_code == 200
+    assert b"supabase-gotrue:9999" not in r.content and b"gotrue:9999" not in r.content
+    assert b"https://auth.pmoves.ai/gotrue/authorize" in r.content
+
 def test_google_button_hidden_by_default():
     # SSO_GOOGLE_ENABLED unset (the _env fixture doesn't set it) => no button,
     # so we never bounce a user off a GoTrue "provider disabled" error.

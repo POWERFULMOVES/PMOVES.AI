@@ -1,3 +1,18 @@
+> [!CAUTION]
+> **SUPERSEDED for API/subject detail (marked 2026-08-06).**
+>
+> The endpoint and NATS-subject tables in this TAC repeat the invented API from
+> `.claude/context/agent-zero-orchestration.md` — `/mcp/health`, `/mcp/agents`,
+> `/mcp/subordinate/create`, and the `agent.zero.*` subject family. None exist in
+> `pmoves/services/agent-zero/main.py`.
+>
+> Real endpoints: `/healthz`, `/config/environment`, `/metrics`, `/mcp/commands`,
+> `POST /mcp/execute` `{cmd, arguments}`, `/tasks`, `/jobs/{context_id}`, `/sessions`,
+> `/memory` CRUD, `/events/publish`.
+> Real subjects: `agentzero.task.v1`, `agentzero.memory.update`.
+>
+> **Canonical:** `pmoves/docs/operations/AGENT_ZERO_API.md`. TAC roadmap items below remain valid.
+
 # TAC Tree: Agent Zero
 
 > Technology-Architecture-Context tree for the Agent Zero control-plane orchestrator — the primary L1 coordinator with embedded agent runtime and MCP API.

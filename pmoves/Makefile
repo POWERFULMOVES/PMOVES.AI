@@ -304,6 +304,11 @@ down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-data volume preserv
 	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format 2>/dev/null || true
 	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-data)."
 
+up-juicefs-recreate: ensure-env-shared bootstrap-tier-envs ## Force-recreate the JuiceFS gateway with current env (rotation-drift recovery)
+	@echo "Force-recreating juicefs-gateway with current env..."
+	@$(JUICEFS_DC) --profile juicefs up -d --force-recreate --no-deps juicefs-gateway
+	@echo "Done. Check: make juicefs-status"
+
 juicefs-smoke: ## S3 round-trip + multi-bucket smoke test against a running gateway (needs: make up-juicefs)
 	@$(JUICEFS_DC) --profile juicefs --profile juicefs-smoke run --rm juicefs-smoke
 
@@ -1305,6 +1310,15 @@ up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
 	@echo "✅ PMOVES UI ready"
 	@echo "   Dashboard:    http://localhost:4482"
 	@echo "   Services:     http://localhost:4482/dashboard/services"
+
+.PHONY: up-openroom
+up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
+	@echo "🚪 Starting OpenRoom desktop..."
+	@$(DC) --profile ui up -d openroom
+	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
+	@echo "✅ OpenRoom ready"
+	@echo "   Desktop:      http://localhost:5173/webuiapps/"
+	@echo "   Try a room:   http://localhost:5173/webuiapps/?room=persona.room.livingdoc"
 
 .PHONY: up-tokenism down-tokenism
 up-tokenism: ## Start the Tokenism simulator + Next.js UI (dashboard :8504, API :8103)

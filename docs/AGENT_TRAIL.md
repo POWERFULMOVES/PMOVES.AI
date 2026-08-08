@@ -10,6 +10,87 @@
 
 ---
 
+<<<<<<< HEAD
+<!-- graphiti:mavis phase:creative-pipeline-v0 ts:2026-08-06T18:30:00Z -->
+
+## ⬡ Mavis — Creative Pipeline v0: Sketch Archive + 82 Beats Find Their Substrate
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** creative-pipeline, comfyui-integration, pinokio-bridge, theme-skin, sketch-archive, music-video-fabric
+**Voice:** Dimensional
+
+The substrate. DARKXSIDE's 2023-11-03 6-eye third-eye horned-helmet character, the 2011-07-15 x4 Mega Man X pose studies, the 82 SoundCloud tracks, the FL Studio Producer XXL, the Ace Studio AI singing pipeline, the IDW/Transformers-style comic LoRAs, the Veo cinematic blueprints - all of it was waiting for a wire that goes from `Pictures\cyber.png` into a live PMOVES room. Today's wire is a Python HTTP client + a Pinokio launcher + a render glue script + the actual Aitrepreneur MiniMax H3 ULTRA installers + workflow JSONs from the SEAP folder. The render itself happens later (operator runs the installer on an H3-capable host, Mavis submits the prompt). But the foundation is now in `pmoves/tools/`, self-explanatory, cross-agent pickup-ready, and respects the "sketch is the finished piece" framing.
+
+### Done (creative-pipeline v0 - foundation)
+
+- **Worktree** `feat/mavis-creative-pipeline-v0` off `feat/persona-livingdoc-rooms` @ `a198e1cf3f`. Branch named explicitly (not detached HEAD) for gitlink durability per the openroom-s2 review pattern.
+- **CLAIM** the creative-pipeline v0 lane in `AGNOTE4482PHI.t1.md` per three-body collision-avoidance. Companion to today's `Mavis::OPENROOM-REALIZATION-SLICE-2-CLAIM::2026-08-06`.
+- **Read all 5 SEAP files** (RunPod .sh installer, Windows safe .bat, Windows one-click .bat, H3 ULTRA standard workflow JSON, H3 ULTRA + TURBO-LORA workflow JSON) + the Aitrepreneur YouTube page context. Model: MiniMax H3 ULTRA, FL2VA T2V/I2V + REF2VA reference video + Qwen3-VL 32B text encoder + 4-step turbo LoRA, models from `Aitrepreneur/FLX` HuggingFace repo.
+- **Copied installers with attribution** into `pmoves/tools/comfyui/install/` - RunPod, Windows portable one-click, Windows safe model/nodes. README explains the three install paths + the model provenance + the H3-ULTRA-specific requirements (CUDA 12.8, PyTorch 2.8.0, transformers 4.50.3 pinned for custom-node compat).
+- **Copied workflows** into `pmoves/tools/comfyui/workflows/` - standard + turbo-LoRA. Both have 5-second video duration at 720p, the turbo variant swaps in the 4-step `minimax_h3_turbo_4step_ckpt500_comfyui_pruned.safetensors` LoRA.
+- **`comfyui_client.py`** - thin Python HTTP wrapper. Submit prompt via `/prompt`, poll `/history/{prompt_id}` until `completed` or `failed`, fetch the output images. Env-driven, no hardcoded host. Smoke-tested against a mock server.
+- **`pinokio_launch.sh`** - shell wrapper that wraps `pinokio start <app>` + readiness check. Idempotent (no-op if already running), timeout-bounded, returns the URL when ready. Pinokio gives us Veo, Ace Studio, and a stable SD/ComfyUI host - all from the same launcher.
+- **`render_skin.py`** - the pipeline glue. Inputs: sketch path + prompt + workflow override. Process: load workflow JSON, inject the sketch, submit to ComfyUI, poll until done, fetch the outputs, write a `theme.skin` JSON that the `pmovesRoomAdapter.applyTheme` consumer (PR #2437 P6) can pick up. First target: `cyber.png` -> Pillar 4 encoding pillar skin.
+- **Tests** in `pmoves/tools/tests/test_comfyui_client.py` + `test_pinokio_launch.sh` - mock-based smoke tests, runnable without an actual ComfyUI host.
+
+### Left Behind (intentional, follow-up slices)
+
+- **The actual `cyber.png` render** - needs a ComfyUI host with MiniMax H3 downloaded. Operator runs the Aitrepreneur installer (~30 min for model downloads), then `pmoves/tools/render_skin.py cyber.png "Pillar 4 encoding visual, dark void, neon violet, third eye, 6-eye motif, 720x720" --output pmoves/design/skins/pillar4-encoding.json`. Result becomes the Pillar 4 room manifest `theme.skin` in PMOVES-OpenRoom (submodule, separate worktree).
+- **The beat -> room manifest generator** - takes the 82 SoundCloud tracks, generates a `public-rooms.json` entry per beat. Medium slice, the render_skin.py pipeline is reusable per-track. `pmoves/tools/beat_to_room.py` is the next commit in this branch.
+- **CHIT tour re-skin pass** - Warhammer/IDW/Mega Man X aesthetic across `pillars-lab.js`, `tenant-renderer`, living-doc. Bigger slice, A2UI surfaces already componentized from the OpenRoom work.
+- **Pinokio MCP adapter** - the user mentioned Pinokio can be accessed from this client; the shell wrapper covers the immediate need, MCP adapter is the cleaner path for the next slice.
+
+### For Next Agent
+
+- **H3 host setup:** the operator has the Aitrepreneur installers in `pmoves/tools/comfyui/install/`. RunPod path is the fastest (`MINIMAX_H3_ULTRA-AUTO_INSTALL-RUNPOD.sh` on a CUDA 12.8 pod, ~30 min for model download). Windows path needs the portable 7z + git + python embedded. The model files are ~30GB total (FL2VA + REF2VA + Qwen3-VL 32B + audio VAE + video VAE + turbo LoRA).
+- **First render target:** `cyber.png` (2023-11-03 horned-helmet + third eye + 6-eye motif) -> Pillar 4 encoding skin. The prompt is in the operator's `Cataclysm Studios sketch archive` memory entry. The skin lands in `pmoves/design/skins/pillar4-encoding.json` with the `theme.skin` consumer wired in PR #2437.
+- **Pinokio from this client:** `pinokio_launch.sh <app>` is the wrapper. Apps to consider: `comfyui` (host the workflow), `ace-studio` (AI singing), `veo-blueprints` (cinematic video), `comfyui-manager` (model/node management).
+- **CHIT trail unsigned-local** (no `CHIT_PASSPHRASE` loaded in Mavis session) per session convention.
+
+- ⬡
+=======
+<!-- graphiti:mavis phase:openroom-realization-slice-2 ts:2026-08-06T11:50:00Z -->
+
+## ⬡ Mavis — OpenRoom Realization: First Wave-Function Collapse, 13 Rooms Awake, All StubApp
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** openroom-adapter, room-experience, hyperdimensional-ops, agent-trails, character-persona-synthesis
+**Voice:** Dimensional
+
+First collapse. The wave function was a superposition of 13 room manifests, all pointing at the same `StubApp` placeholder. Today it collapses: the manifests gain real iframes, the desktop gains real apps, the operator (DARKXSIDE / Russell Richardson) gains a private workspace where rooms come alive.
+
+### Done (slice 2 - lane pickup)
+
+- **First trail entry ever** for `Mavis / MiniMax` alter - ⬡ on the trail, dimensional voice on the wire, 1M-context M2.7 model on the 5090 RTX node, deep violet banner up.
+- **CLAIM** the openroom-realization slice 2 in `AGNOTE4482PHI.t1.md` per the three-body collision-avoidance protocol.
+- **Read** the handoff from CRUSH (2026-08-06) - 6 priorities, clear acceptance criteria, lane already proven by 2026-07-20 slice 1 SHIPPED entry. Standing on shoulders, not rebuilding.
+- **Verified** the KiloCode worktree `feat/auto-20260806-58ea992b` is already MERGED (PR #2101) - no PR needed there, safe to archive after housekeeping.
+- **Verified** the main repo's uncommitted scaffold (compose + Makefile + persona route + UI auth refactor + jons-edge policies) - moves cleanly to the new worktree via `git stash` + worktree + `git stash pop`.
+
+### Left Behind (intentional, per handoff)
+
+- **P2 stock-app hiding** - 11 sample apps (Twitter, Music Player, Diary, Album, Gomoku, FreeCell, Email, Chess, Evidence Vault, CyberNews, Aoi chatbot) still render in the desktop grid. Filter by `isPmovesRoom` is the fix.
+- **P3 `/stage/` Enter buttons** - cards link out but no navigate. One component, one URL pattern.
+- **P4 model-fabric wiring** - OpenRoom's own LLM client not yet pointed at TensorZero (:3030).
+- **P5 P7 session 404** - nginx points at `pmoves-p7:8120` but the route is wrong. The P7 service from slice 1 may need re-verification.
+- **P6 persona theming beyond accent** - only `--pm-accent` is consumed today; `theme.skin: "waveform-editorial"` and `theme.icon: "waveform"` are declared but not yet applied.
+
+### For Next Agent
+
+- The `VITE_PMOVES_ROOM_IFRAMES` JSON env var is the P1 escape hatch. Set it in `pmoves/docker-compose.yml` `openroom` service `environment:` block (or via a `.env` file bind-mounted into the container). Pattern: `{ "<room_id>": "<iframe_url>", ... }`. The persona room target is `http://localhost:4482/persona/livingdoc` (Next.js route at `pmoves/ui/app/persona/livingdoc/route.ts`).
+- The `Mavis::OPEN-ROOM-LANE-CLAIM::2026-07-20` first slice (commit `374ee88ca7`) shipped 9/9 room manifest validation + schema extensions. Read that entry before touching manifests.
+- Crush's adapter code lives in `PMOVES-OpenRoom/apps/webuiapps/src/lib/pmovesRoomAdapter.ts` (the manifest→shell translator) and `PMOVES-OpenRoom/apps/webuiapps/src/pages/StubApp/index.tsx` (the iframe escape hatch - read it first to see exactly what URL pattern it expects).
+- CHIT_PASSPHRASE was not loaded in this session - all trail entries are unsigned-local per Mavis session convention.
+
+— ⬡
+>>>>>>> ade63dffe9 (feat(openroom): realization scaffold - openroom service, persona route, UI auth, AGNOTE claim, 5090 sitrep skill)
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:crush phase:b850-voice-convergence ts:2026-08-01T00:00:00Z -->
 
 ## ◇ Crush — B850 ROCm Voice Convergence: First Chatterbox Synthesis on AMD + MCP + Pinokio Bridge + Supabase UI

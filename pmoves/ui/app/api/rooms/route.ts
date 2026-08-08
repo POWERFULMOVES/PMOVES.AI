@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ownerFromJwt } from '@/lib/jwtUtils';
+import { cookies } from 'next/headers';
+import { createSupabaseRouteHandlerClient } from '@/lib/supabaseServer';
 import { loadRoom, loadRooms } from '@/lib/rooms';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const { ownerId, error: authError } = ownerFromJwt('rooms');
-  if (authError || !ownerId) {
+  const cookieStore = await cookies();
+  const supabase = createSupabaseRouteHandlerClient(cookieStore);
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
