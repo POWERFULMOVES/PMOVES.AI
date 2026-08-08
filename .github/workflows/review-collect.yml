@@ -41,34 +41,45 @@ permissions:
   pull-requests: read
 
 jobs:
-  # _app-token.yml is a reusable workflow — must be called at job level.
-  # Token is always scoped to the current repository (event-triggered)
-  # or the manually-requested repo (workflow_dispatch), never both.
-  token:
-    uses: ./.github/workflows/_app-token.yml
-    with:
-      owner: ${{ github.repository_owner }}
-      repositories: ${{ github.event.repository.name }}
-      permission-pull-requests: read
-      permission-contents: read
-    secrets: inherit
-
   collect:
-    needs: token
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Mint INLINE in this job, NOT via the _app-token.yml reusable workflow.
+      # create-github-app-token revokes the installation token in its post-step,
+      # which fires when the minting JOB ends — `_app-token.yml:82` says so
+      # ("auto-revoked at job end"). Consuming it from a downstream job therefore
+      # gets a dead, masked-to-empty value, and `actions/checkout` fails hard with
+      # "Input required and not supplied: token". This workflow was the reusable's
+      # only cross-job consumer and failed on 100% of runs because of it.
+      #
+      # branch-protection-sync.yml:77-80 already documents this exact decision
+      # ("Mint INLINE in this job (not via _app-token.yml) on purpose ... the
+      # output-token auto-revoke nuance of the reusable"). Same pattern here.
+      #
+      # Token is always scoped to the current repository (event-triggered) or the
+      # manually-requested repo (workflow_dispatch), never both.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-pull-requests: read
+          permission-contents: read
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ needs.token.outputs.token }}
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
       - name: Collect review threads
         # CR-3 fix: pass workflow inputs through env, never inline template
         # expansion in bash — prevents shell injection via inputs.repo/pr.
         env:
-          GH_TOKEN: ${{ needs.token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PMOVES_GITHUB_ORG: ${{ github.repository_owner }}
           # CR-1 fix: honor workflow_dispatch inputs (repo/pr), fall back to event context
           DISPATCH_REPO: ${{ inputs.repo || github.event.repository.name }}
