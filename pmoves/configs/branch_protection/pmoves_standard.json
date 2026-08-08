@@ -14,7 +14,8 @@
           { "context": "merge-gate" },
           { "context": "python-tests" },
           { "context": "hardening-validation" },
-          { "context": "verify" }
+          { "context": "verify" },
+          { "context": "submodule-gitlink-gate" }
         ]
       },
       "required_pull_request_reviews": {
