@@ -1071,3 +1071,45 @@ Built the full artifact set for 3 Jetson Orin Nano Super nodes paired with SPARK
 </td></tr></table>
 
 <!-- /graphiti -->
+
+---
+
+<!-- graphiti:mavis phase:mavis-harness-v0 ts:2026-08-08T00:30:00Z -->
+
+## ⬡ Mavis - Mavis Harness v0: Three Repos, One CGP, One Lane
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** inter-agent-harness, cgp-bootstrap, bpm-cron, multi-fork, pinokio-bridge, hermes-fork, darkxide-public-pipeline
+**Voice:** Dimensional
+
+The room enhancements closed (#2437, #2443, #2450 all merged Sat Aug 8). This slice lands the next lane. The CGP (Compressed Geometric Packet) is the contract that ties three PMOVES forks together: PMOVES.AI writes it, PMOVES-hermes-agent reads it at session init, PMOVES-pinokio reads it when launching a PMOVES-tagged app. Same schema, three implementations, zero breaking changes on the consumer forks (the CGP is a manifest, not a config replacement).
+
+### Done (harness v0 - foundation)
+
+- **CLAIM** the harness v0 lane in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (post-3-PR close)
+- **Audited the skills** I have (mavis, mavis cron, pmoves-nats-mcp, pmoves-chit-sign, pinokio, hermes-agent-integration, hermes-pr-workflow, gh-address-comments, gh-fix-ci, code-review, cross-review, google-workspace, obsidian-brain) and **the docs** I need (`.claude/context/nats-subjects.md`, `.claude/context/submodules.md`, `pmoves/docs/AGENTS/AGNOTE4482*.md`, `pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json`, `pmoves/config/agent_signatures.yaml` L237-296, `pmoves/configs/agent-profiles/minimax_edition.yaml`, the CGP v1.0 spec at `pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md`, the Hermes + Pinokio fork READMEs)
+- **Found the PMOVES forks** in the org: `POWERFULMOVES/PMOVES-hermes-agent` (Hermes agent), `POWERFULMOVES/PMOVES-pinokio` (app launcher), `POWERFULMOVES/PMOVES-nats-server` (the actual NATS server, PMOVES-built not forked)
+- **Aligned the CGP profile** to the canonical v1.0 spec - same envelope (spec/meta/sig/super_nodes/...), `pmoves.bootstrap/v1` as the profile name, `super_nodes: []` keeps it CGP-valid
+
+### Left Behind (intentional, follow-up slices)
+
+- **Hermes fork consumer PRs** - the `bootstrap_loader.py` + `tools_bridge.py` + tests land after the PMOVES.AI side is reviewed
+- **Pinokio fork consumer PRs** - the `pmoves_loader.js` + `pmoves_apps/` starter manifests land in the same wave
+- **Ace Studio / Veo integrations** - app-level, follow-up slice once the harness is proven
+- **KVM control surface** - the operator's earlier flag; RustDesk is the control surface, not a harness concern unless we add RustDesk-NATS-dispatch in a later slice
+- **The actual Hermes subscriber** - v0 just sets up the wire; the subscriber lands when Hermes is installed on a target node
+
+### For Next Agent
+
+- **The CGP spec is at `pmoves/contracts/schemas/pmoves-bootstrap/v1.schema.json`** (next commit) - read it first before writing any loader code on a fork
+- **NATS subjects**: `pmoves.agent.task.v1` (Mavis publishes), `pmoves.agent.result.v1` (target agent publishes back), `pmoves.bpm.phase.v1` (BPM cron publishes), `pmoves.bpm.pomodoro.v1` (focus-block boundaries). Cross-check against `.claude/context/nats-subjects.md` for any new subjects.
+- **PMOVES forks are non-breaking** - the consumer-side PRs MUST prove (a) a no-CGP session = exact pre-change behavior, (b) a with-CGP session = PMOVES tools available alongside the fork's native tools. This is the test pair for both fork PRs.
+- **CHIT trail unsigned-local** (no `CHIT_PASSPHRASE` loaded in Mavis session) per session convention.
+
+- ⬡
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
