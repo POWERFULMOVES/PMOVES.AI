@@ -103,6 +103,34 @@ gh pr diff <PR-number> --repo POWERFULMOVES/PMOVES.AI | less
 gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { id isResolved } } }'
 ```
 
+### 7. The 6 lessons from the 2026-08-08 3-PR pass
+
+Codified from the Mavis harness v0 review pass (PMOVES.AI #2477 +
+PMOVES-hermes-agent #4 + PMOVES-pinokio #1, all cross-fork
+consumers of the same CGP schema). The full discussion is in
+`pmoves/docs/operations/PAIR_REVIEW_RECIPROCITY.md` § "Lessons
+from the 2026-08-08 3-PR pass"; the short version:
+
+1. **Byte-compare vendored schemas against canonical** (SHA-256 +
+   `diff -q`). Use `text eol=lf` in `.gitattributes` for vendored
+   JSON to avoid Windows-CRLF false-positives.
+2. **Schema descriptions that say "MUST" should map to `required`**.
+   Cross-check: for every "MUST" in a description, is the field in
+   the `required` array?
+3. **Tighten `additionalProperties: false` on well-defined leaf
+   objects only.** Top-level + open-extension objects stay `true`
+   for forward-compat.
+4. **Normalize CRLF before byte-comparing.** Or add `.gitattributes`.
+5. **`key=str` for mixed-type sorted lists.** A loader that skips
+   malformed entries to a list can leave mixed types; `sorted()`
+   on `str + int + None + dict` raises TypeError.
+6. **The "stub vs real" bootstrap pattern needs a deterministic
+   stub.** Hard-coded `created_at` in the no-CGP fallback means
+   SHA-256(canonical_json) collides across processes. Add
+   uniqueness only if a downstream consumer derives session IDs
+   from the stub.
+
+
 ## Anti-patterns
 
 - ❌ "LGTM" / "Looks good!" with no substance — collapses loop's value to zero
