@@ -400,3 +400,6 @@
 [submodule "PMOVES-fluidd"]
 	path = PMOVES-fluidd
 	url = https://github.com/POWERFULMOVES/PMOVES-fluidd.git
+[submodule "PMOVES-nats-server"]
+	path = PMOVES-nats-server
+	url = https://github.com/POWERFULMOVES/PMOVES-nats-server.git
