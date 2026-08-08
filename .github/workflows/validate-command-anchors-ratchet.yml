@@ -69,5 +69,10 @@ jobs:
 
       - name: Pytest the ratchet (regression net for the ratchet itself)
         run: |
-          python -m pip install --quiet pytest
+          # pmoves/conftest.py is shared across the tools/tests suite and imports
+          # pytest_asyncio + pyyaml. These ratchet tests are sync and stdlib-only,
+          # but the conftest import chain still has to resolve or collection dies
+          # before a single test runs. Same note as
+          # validate-dockerfile-paths-ratchet.yml, learned the same way.
+          python -m pip install --quiet pytest pytest-asyncio pyyaml
           python -m pytest pmoves/tools/tests/test_validate_command_anchors.py -v
