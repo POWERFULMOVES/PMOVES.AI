@@ -7,13 +7,13 @@
 
 z890's coordination plan splits post-backlog cleanup four ways and hands Workstream 2 to this node. This doc is the working surface for WS2: the corrected drift list, what ships, and what deliberately does not.
 
-Everything here was re-verified against `origin/main` via `git show`, not against a working tree. The first verification pass ran against a stale local checkout (`67aed7fe8`) and produced two wrong answers — see [Method](#method).
+Evidence here comes from three sources with three provenances, kept distinct on purpose: **repository content** from `origin/main` via `git show`; **CI behavior** from Actions run records via `gh api`; **node runtime state** from `docker inspect` / `git submodule status` on this node only. See [Method](#method) — the first pass conflated the first of those with the working tree and produced two wrong answers.
 
 ---
 
 ## Corrections to the enumeration
 
-Three items in the handed-over list needed adjusting before work started. These change the shape of the fix, so they are recorded before the fix rather than inside it.
+**WS2 enumerates five items; 4090 claims four of them (items 2–5).** Item 1 is z890's and is not reserved here. Five entries below adjust the handed-over list — recorded before the fix rather than inside it, because they change the shape of the work.
 
 ### 1. It is 2 leaking copies, not 4 drifting implementations
 
@@ -36,7 +36,7 @@ The two shell scripts are already coherent with each other. The drift is that th
 
 **7 unique sibling-context builds** in `pmoves/docker-compose.yml`:
 
-```
+```text
 transcribe-backend      ../PMOVES-transcribe-and-fetch
 transcribe-frontend     ../PMOVES-transcribe-and-fetch
 pmoves-yt               ../PMOVES.YT
@@ -76,7 +76,15 @@ A missing build context fails loudly. A missing bind source does not: **Docker c
 
 > workflow **uncompilable on default branch** (GitHub uses default-branch file for `issue_comment`/`pull_request_review`/push)
 
-`issue_comment` and `push` are **correct**. Only `pull_request_review` is wrong. This is a surgical removal from a parenthetical, not a rewrite of the row.
+`issue_comment` is **correct**. The other two are wrong in different ways, so the row became a table rather than a patched parenthetical:
+
+| Event | Workflow file comes from |
+|---|---|
+| `issue_comment` | default branch, always |
+| `push` | the **pushed ref** — default branch only when that is what was pushed |
+| `pull_request`, `pull_request_review` | PR head / merge ref |
+
+The `pull_request_review` half is empirical (see below). The `push` half came from Codex on #2483 and is Actions semantics — stated as behavior, not as something measured here. My first attempt at this fix removed only `pull_request_review` and left the `push` error standing.
 
 ### 4. The `.worktrees/*` skill copies are not a reconciliation problem
 
@@ -117,7 +125,9 @@ Each item is its own PR, one concern each.
 
 ### Why item 4 is a runbook
 
-The gap is a runtime-topology property, invisible in any diff, because CI checks out `submodules: recursive`. It is not theoretical — it took down services on this node on 2026-08-08:
+The gap is a runtime-topology property, invisible in any diff. **Corrected on review:** an earlier revision said CI is blind because the workflows check out with `submodules: recursive`. They do not check out submodules at all (`validate-dockerfile-paths-ratchet.yml:54`, `validate-composes-ratchet.yml:41`). They pass because `validate_dockerfile_paths.py` **deliberately excludes** sibling-submodule targets — "external repos the ratchet can't statically check" — and because `validate-composes` never inspects bind sources. A known, accepted blind spot rather than an accidental one, which is a better argument for the runbook, not a worse one.
+
+It is not theoretical — it took down services on this node on 2026-08-08:
 
 28 of 33 running containers were launched from a second clone (`GitHub/POWERFULMOVES/PMOVES.AI`) whose **57 submodules were all unpopulated**. Docker auto-created the missing bind sources as empty directories, so `PMOVES-supabase/docker/volumes/logs/vector.yml` existed as a *directory*. `supabase-vector` crash-looped 78 times with `Configuration error. error=Is a directory (os error 21)`; `supabase-edge-functions` failed with `could not find an appropriate entrypoint`.
 
@@ -149,7 +159,7 @@ Operator decision. "Zero textual references" cannot prove a target is unused —
 
 The plan names KIMI-SPARK VSS and CRUSH cipher Phase B as the stale claims needing a release-or-reclaim ping. Two Mavis-5090 claims belong on that list but in a **different category** — merged work missing only a RELEASE line, per the #2465 verification sweep. They need a release, not a re-claim:
 
-```
+```text
 Mavis-5090 — release-or-reclaim:
   creative-pipeline v0   verified merged (#2450)
   OpenRoom slice 2       verified merged (#2437)
@@ -183,7 +193,7 @@ Verify against `origin/main`, never the working tree. The local tree on this nod
 
 On Windows, `git show "origin/main:path"` requires `MSYS_NO_PATHCONV=1`. Without it, path conversion silently rewrites `origin/main:.claude/...` to `origin\main;.claude\...` and git reports:
 
-```
+```text
 fatal: ambiguous argument 'origin\main;.claude\skills\...': unknown revision or path not in the working tree
 ```
 
