@@ -49,11 +49,26 @@ llama-throughput-lab    ../PMOVES-llama-throughput-lab
 The overlays re-declare exactly those seven (`agents` 2 + `apps` 1 + `media` 3 + `ui` 1 = 7), which is where the inflation came from.
 
 Add to the enumeration:
-- `docker-compose.n8n.yml` — 1 (z890 already flagged this)
-- `hf-mcp-server.yml` — 1 (**not** in the handed-over list)
-- `docker-compose.archon.submodule.yml` — 1 (same `archon`, separate file)
+- `docker-compose.n8n.yml` — `n8n` from `../PMOVES-n8n` (z890 already flagged this); also re-declared in `compose/docker-compose.core.yml`
+- `docker-compose.archon.submodule.yml` — same `archon`, separate file
 
-Jellyfin correctly excluded — local build.
+**Retracted:** an earlier revision of this doc added `hf-mcp-server.yml` to the list. That was wrong. Its context is `../../pmoves/services/hf-mcp-server` — a two-level relative path back *into* `pmoves/services/`, i.e. a first-party service, not a submodule. A `context: ../` prefix is not sufficient to identify a submodule build; the first path segment has to be matched against `.gitmodules`.
+
+So: **7 registered submodules, 8 services.** Jellyfin correctly excluded — local build.
+
+### The class the enumeration missed entirely: bind mounts
+
+Build contexts are only half of it, and the less dangerous half. Five **bind-mount sources** also come from submodules:
+
+| Source | Mounted by | Kind |
+|---|---|---|
+| `../PMOVES-supabase/docker/volumes/logs/vector.yml` | `supabase-vector` | **file** |
+| `../PMOVES-supabase/docker/volumes/functions` | `supabase-edge-functions` | directory |
+| `../PMOVES-supabase/docker/volumes/api/kong.yml` | `supabase-kong` | **file** |
+| `../PMOVES-supabase/docker/volumes/api/kong-entrypoint.sh` | `supabase-kong` | **file** |
+| `../PMOVES-n8n/workflows` | `n8n` | directory |
+
+A missing build context fails loudly. A missing bind source does not: **Docker creates it as a directory**, so a file mount silently becomes a directory mount and the container fails on its own config instead. That is the class that took down services on this node, and it is why item 4 is a runbook rather than a code fix.
 
 ### 3. The ci-expedition correction is narrower than stated
 
@@ -96,7 +111,7 @@ Each item is its own PR, one concern each.
 |---|---|---|
 | 1 | `infra.mk` buildx leak | **z890's** — 4090 does not touch it |
 | 2 | ci-expedition skill: line 29 trigger error, line 69 buildx leak, new `_app-token` row | code fix |
-| 3 | Reconcile `deploy/provision/claude-pmoves.sh` (6523 B) vs `pmoves/scripts/claude-pmoves.sh` (642 B) | read both, then decide |
+| 3 | The two `claude-pmoves.sh` — **not duplicates**, see below | delegate, delete nothing |
 | 4 | Sibling-submodule build gap | **runbook, not a code fix** |
 | 5 | `up-*` sprawl | **inventory only** — no Makefile edits |
 
@@ -107,6 +122,22 @@ The gap is a runtime-topology property, invisible in any diff, because CI checks
 28 of 33 running containers were launched from a second clone (`GitHub/POWERFULMOVES/PMOVES.AI`) whose **57 submodules were all unpopulated**. Docker auto-created the missing bind sources as empty directories, so `PMOVES-supabase/docker/volumes/logs/vector.yml` existed as a *directory*. `supabase-vector` crash-looped 78 times with `Configuration error. error=Is a directory (os error 21)`; `supabase-edge-functions` failed with `could not find an appropriate entrypoint`.
 
 The diagnostic worth writing down: **a bind-mount source that is a directory where a file is expected means the submodule was unpopulated when `up` ran.** Fix requires clearing Docker's stub directories first — they make the submodule dir non-empty, so `git submodule update --init` refuses to clone.
+
+### Why item 3 does not "pick the authoritative one"
+
+The item was enumerated as *"two divergent `claude-pmoves.sh` — pick the authoritative one."* Reading both first: **they were never duplicates.** They share a name and do different, mutually exclusive things.
+
+| | `pmoves/scripts/` (642 B) | `deploy/provision/` (6523 B) |
+|---|---|---|
+| loads the shared env file | no | yes |
+| passes `--mcp-config=<roster>` | no | yes |
+| selects `--agent` | yes | no |
+
+Each ends in its own `exec claude`, so you could have a PMOVES agent **or** working MCP creds, never both. `make -C pmoves claude-pmoves` (`Makefile:4936`) calls the agent-selecting one — so the documented way to launch the delivery agent came up with every cred-dependent MCP empty, which is precisely the failure the provisioning script's header says it exists to prevent.
+
+Picking one and deleting the other would have removed a working capability either way. The fix is delegation: the shorthand forwards `--agent` into the real launcher and inherits creds. Nothing deleted, neither UI changed.
+
+Worth correcting in the enumeration so the next reader does not retry the delete.
 
 ### Why item 5 is inventory-only
 
