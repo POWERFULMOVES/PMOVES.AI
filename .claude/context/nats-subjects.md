@@ -816,6 +816,28 @@ Example: `ingest.transcript.ready.v1`
 - **Filter:** Only tasks with `meta.voice_mode: true` in the input payload are relayed
 - **Profiles:** `cast`, `media`
 
+## Voice Sampler Subjects
+
+Media-sourced voice references (VOICE_SAMPLER_SPEC.md; voice-sampler service, port 8124).
+Voice references are personal data: payloads carry JuiceFS keys only, never audio.
+
+**`voice.sample.candidates.v1`**
+- **Publisher:** voice-sampler (after diarize + segment cut + JuiceFS stage)
+- **Subscribers:** Voice Vault room app (audition lanes)
+- **Payload:** `{batch_id, bucket, prefix, speakers: [{speaker, clips: [{key, start, end, duration}]}], room, persona_id, source: {bucket, key}, diarization_model, timestamp}`
+
+**`voice.reference.approved.v1`**
+- **Publisher:** Voice Vault room app (owner-only pub-gate decision)
+- **Subscribers:** voice-sampler (executes PUBLISH: JuiceFS refs path + OmniVoice catalog + optional flute clone register)
+- **Payload:** `{batch_id, room, persona_id, owner_id, catalog_id?, clips: [candidate keys], chit_sig}`
+- **Gate:** sampler refuses unless `owner_id` matches `VOICE_SAMPLER_OWNER_ID` and `chit_sig` present (fail closed; full CHIT verification is the follow-up)
+
+**`voice.reference.published.v1`**
+- **Publisher:** voice-sampler (ANNOUNCE after successful publish)
+- **Subscribers:** room surfaces, H3/Maestro reference pickers
+- **Payload:** `{persona_id, catalog_id, room, refs: [keys], source_batch, chit_sig, timestamp}`
+- **Profiles:** `workers`, `voice`
+
 ## Cast TTS Subjects
 
 **`voice.cast.completed.v1`**

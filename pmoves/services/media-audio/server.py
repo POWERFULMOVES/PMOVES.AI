@@ -164,6 +164,17 @@ class AudioProcessor:
             try:
                 from pyannote.audio import Pipeline as PyannotePipeline
 
+                # torch>=2.6 weights-only unpickling rejects the non-tensor
+                # globals pyannote 3.x checkpoints embed. Allowlist exactly
+                # those instead of falling back to weights_only=False, so
+                # TORCH_FORCE_WEIGHTS_ONLY_LOAD=1 keeps protecting every
+                # other model load.
+                from pyannote.audio.core.task import Problem, Resolution, Specifications
+                from torch.torch_version import TorchVersion
+
+                torch.serialization.add_safe_globals(
+                    [TorchVersion, Specifications, Problem, Resolution]
+                )
                 try:
                     pipe = PyannotePipeline.from_pretrained(DIARIZATION_MODEL, token=HF_TOKEN)
                 except TypeError:

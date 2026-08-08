@@ -80,6 +80,7 @@ SERVICE_GROUPS = {
         "flute-gateway",
         "cast-tts-gateway",
         "voice-relay",
+        "voice-sampler",
         "bgutil-pot-provider",
         "pmoves-ollama",
         "nvidia-nim",

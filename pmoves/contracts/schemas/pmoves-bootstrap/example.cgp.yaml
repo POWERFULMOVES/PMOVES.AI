@@ -1,0 +1,111 @@
+# Example PMOVES bootstrap CGP - pmoves.bootstrap/v1
+# This is what a producer (typically the Mavis harness loader) emits.
+# Consumers (PMOVES-hermes-agent, PMOVES-pinokio) read it once at init
+# and run on their existing engines - this is a manifest, not a config
+# replacement.
+#
+# The schema for this file is at v1.schema.json (same dir). The CGP
+# envelope (spec/meta/sig/super_nodes/...) is aligned to the canonical
+# CHIT Geometry Packet spec at pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md.
+# super_nodes: [] keeps it CGP-valid for the empty-geometry case.
+
+spec: pmoves.bootstrap/v1
+
+# === Metadata ===
+meta:
+  created_at: "2026-08-08T00:30:00+00:00"
+  operator: darkxside
+  source: mavis
+  encoder_version: 0.1.0
+  # bootstrap_id omitted - consumers derive from SHA-256(canonical_json)
+
+# === Signature (optional) ===
+# The bootstrap CGP is not a security boundary, so signing is advisory.
+# When the operator turns on CHIT_REQUIRE_SIGNATURE on the consumer side,
+# uncomment + populate this block.
+# sig:
+#   alg: HMAC-SHA256
+#   kid: darkxside-mavis-v1
+#   ts: 1754614800
+#   hmac: <base64-digest>
+
+# === Identity (drives Mavis voice/skin/role) ===
+identity:
+  agent: minimax  # from pmoves/config/agent_signatures.yaml L237-296
+  role: implementer  # implementer | critic | renderer | curator | operator | dispatcher
+  skin: dimensional  # from pmoves/configs/agent-profiles/minimax_edition.yaml
+
+# === Tools (Mavis surface available in this session) ===
+# Consumer forks resolve these against their own tool registries. Missing
+# tools are silently skipped (no-override-existing-config + tagged-services-are-advisory).
+tools:
+  - mavis__agent__create
+  - mavis__cron__self
+  - mavis__cron__list
+  - mavis__cron__create
+  - comfyui_client        # from PR #2450, pmoves/tools/comfyui_client.py
+  - pinokio_launch        # from PR #2450, pmoves/tools/pinokio_launch.sh
+  - render_skin           # from PR #2450, pmoves/tools/render_skin.py
+  - gh                    # GitHub CLI (PRs, issues, releases)
+  - web_search
+  - web_fetch
+
+# === MCPs (servers loaded for this session) ===
+mcps:
+  - pmoves-nats-mcp       # NATS bridge - transport for inter-agent comms
+  - pmoves-chit-sign      # CHIT trail signing for state-changing actions
+  - google-workspace      # Drive, Docs, Sheets, Calendar, Gmail
+  - obsidian-brain        # Cross-session knowledge lookups
+  - pmoves-neo4j-mcp      # Graph queries (Pillar 4, CHIT tour data)
+  - pmoves-cipher-mcp     # Memory layer (Cipher agent)
+
+# === Services (tagged infrastructure) ===
+# All advisory - missing services are skipped, not failed.
+services:
+  tailscale:
+    host: powerfullmoves.tail.ts.net
+    ip: 100.x.y.z  # device's tailnet IP (placeholder)
+  rustdesk:
+    devices:
+      - pixel-10-xl-1
+      - pixel-10-xl-2
+      - pixel-10
+      - tab-ultra-s8
+      - tab-ultra-11
+  hostinger:
+    site: powerfullmoves.com
+    status: pending-mgmt  # operator hasn't managed the website yet
+  cloudflare:
+    account: powerfullmoves
+    zones: []  # populated when the operator wires CF zones
+
+# === Routing (peer agents in the fleet) ===
+# Mavis publishes to pmoves.agent.task.v1 with target=<agent>; the
+# matching agent subscribes and returns on pmoves.agent.result.v1.
+routing:
+  kiloclaw:
+    node: "5090"  # POWERFULMOVES node, RTX 5090 32GB
+    nats_subject: pmoves.agent.task.v1
+    target: glm-5.1  # GLM-5.1 model behind the KiloCode coding plan
+  hermes:
+    node: TBD  # operator hasn't stood Hermes up yet; wire is ready
+    nats_subject: pmoves.agent.task.v1
+    target: hermes-3  # NousResearch Hermes 3
+
+# === Constraints (non-breaking guarantees) ===
+# Consumers that violate a constraint are broken, not the producer.
+constraints:
+  - no-override-existing-config  # forks MUST NOT replace their own config with the CGP
+  - tagged-services-are-advisory  # services are hints, not requirements
+  - no-chit-bypass                # state-changing actions still go through pmoves-chit-sign
+  - no-force-push                 # lane rule (PRs use --force-with-lease, never raw --force)
+  - no-ci-bypass                  # lane rule (no --admin to skip CI; admin merge override is OK for already-green PRs)
+  - preserve-existing-tools       # forks MUST keep their native tool surface intact
+
+# === CGP-valid geometry payload (empty) ===
+# The bootstrap is metadata, not a data packet. Producers that want to
+# include geometry emit a CGP v1.0 packet instead. Consumers MUST treat
+# a non-empty super_nodes as a sign that this CGP is not a bootstrap and
+# route it to the CGP v1.0 ingestion path (pmoves/docs/PMOVESCHIT/04_API_REFERENCE.md
+# POST /geometry/event).
+super_nodes: []
