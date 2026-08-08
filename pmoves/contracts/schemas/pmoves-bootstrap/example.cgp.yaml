@@ -84,7 +84,7 @@ services:
 # matching agent subscribes and returns on pmoves.agent.result.v1.
 routing:
   kiloclaw:
-    node: 5090  # POWERFULMOVES node, RTX 5090 32GB
+    node: "5090"  # POWERFULMOVES node, RTX 5090 32GB
     nats_subject: pmoves.agent.task.v1
     target: glm-5.1  # GLM-5.1 model behind the KiloCode coding plan
   hermes:
