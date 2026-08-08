@@ -40,6 +40,9 @@ FINDING CLASSES
   UNKNOWN_HOST    a documented `ssh <host>` names a host absent from the fleet
                   topology (this also catches raw IPs, which must never appear
                   in committed docs)
+  STALE_BASELINE  a baselined key that no longer occurs — i.e. it was FIXED.
+                  Also a failure: leaving it in the file re-accepts the same
+                  defect if it returns, which is not "count only goes down".
 
 RATCHET SEMANTICS
 -----------------
@@ -213,7 +216,14 @@ def live_docs() -> List[Path]:
     return out
 
 
+# Two forms carry a documented make command, and BOTH are executable to a
+# reader: an inline span `make foo`, and a bare line inside a fenced block.
+# The fenced form is the more common one in runbooks, so keying only on the
+# backtick missed most of the surface (caught in review on #2488).
 MAKE_CITE_RE = re.compile(r"`make\s+(?:-C\s+\S+\s+)?([a-z][a-z0-9-]{2,})")
+MAKE_FENCED_RE = re.compile(r"^\s*(?:\$\s*)?make\s+(?:-C\s+\S+\s+)?([a-z][a-z0-9-]{2,})", re.M)
+FENCE_RE = re.compile(r"^```[a-zA-Z0-9]*\n(.*?)^```", re.M | re.S)
+INLINE_SPAN_RE = re.compile(r"`([^`\n]+)`")
 # Only LINE-NUMBERED citations. A bare `pmoves/foo` in a doc is as likely to be
 # an ollama model name, a runtime output dir, or a gitignored env file as it is
 # a source reference — flagging those buries the signal. "`path:123`" is
@@ -232,8 +242,10 @@ def scan(targets: Dict[str, Path], scopes: Dict[str, str]) -> List[dict]:
         rel = doc.relative_to(REPO_ROOT).as_posix()
         text = doc.read_text(encoding="utf-8", errors="replace")
 
-        for m in MAKE_CITE_RE.finditer(text):
-            t = m.group(1)
+        cited: Set[str] = {m.group(1) for m in MAKE_CITE_RE.finditer(text)}
+        for block in FENCE_RE.findall(text):
+            cited |= {m.group(1) for m in MAKE_FENCED_RE.finditer(block)}
+        for t in sorted(cited):
             if t in targets:
                 continue
             findings.append({
@@ -254,15 +266,20 @@ def scan(targets: Dict[str, Path], scopes: Dict[str, str]) -> List[dict]:
             # tool or the hook itself — both must name the patterns to work.
             if self_name in rel or "hooks/" in rel:
                 continue
+            # Command-shaped lines (fenced blocks, $-prefixed, bare invocations)
+            # AND inline code spans in prose. A reader copies both.
+            candidates: List[str] = []
             for line in text.splitlines():
-                s = line.strip()
-                if not (s.startswith("$") or s.startswith("ssh ") or s.startswith("docker ") or s.startswith("make ")):
-                    continue
-                if pat.lower() in s.lower():
+                stripped = line.strip()
+                if stripped.startswith(("$", "ssh ", "docker ", "make ", "sudo ")):
+                    candidates.append(stripped)
+            candidates.extend(m.group(1) for m in INLINE_SPAN_RE.finditer(text))
+            for cand in candidates:
+                if pat.lower() in cand.lower():
                     findings.append({
                         "kind": "UNRUNNABLE_DOC",
                         "doc": rel,
-                        "detail": f"{pat!r} in: {s[:80]}",
+                        "detail": f"{pat!r} in: {cand[:80]}",
                         "scope": "docker",
                     })
 
@@ -348,11 +365,22 @@ def main() -> int:
         return 0
 
     baseline = load_baseline()
+    live = {_key(f) for f in findings}
     new = [f for f in findings if _key(f) not in baseline]
+    # A baselined key that no longer occurs was FIXED. Leaving it in the file
+    # would re-accept the same defect if it came back, which contradicts the
+    # count-only-down claim this ratchet makes. Surfacing it is what makes the
+    # count actually go down instead of merely not going up.
+    stale = sorted(baseline - live)
 
     if args.json:
-        print(json.dumps({"total": len(findings), "baselined": len(findings) - len(new), "new": new}, indent=2))
-        return 1 if new else 0
+        print(json.dumps({
+            "total": len(findings),
+            "baselined": len(findings) - len(new),
+            "new": new,
+            "stale_baseline": stale,
+        }, indent=2))
+        return 1 if (new or stale) else 0
 
     by_scope: Dict[str, int] = {}
     for t, s in scopes.items():
@@ -360,9 +388,21 @@ def main() -> int:
     print("Make targets by scope: " + ", ".join(f"{k}={v}" for k, v in sorted(by_scope.items())))
     print(f"Anchor findings: {len(findings)} total, {len(findings) - len(new)} baselined, {len(new)} new")
 
-    if not new:
-        print("PASS — no findings outside the baseline.")
+    if stale:
+        print(f"\nSTALE BASELINE — {len(stale)} entr{'y' if len(stale) == 1 else 'ies'} no longer occur:")
+        for k in stale[:20]:
+            print(f"  {k}")
+        if len(stale) > 20:
+            print(f"  ... and {len(stale) - 20} more")
+        print("\nThese were fixed. Drop them so the same defect cannot return silently:")
+        print("  make -C pmoves validate-command-anchors-baseline")
+
+    if not new and not stale:
+        print("PASS — no findings outside the baseline, no stale entries.")
         return 0
+
+    if not new:
+        return 1
 
     print("\nNEW findings (not in baseline):")
     for f in sorted(new, key=lambda x: (x["kind"], x["doc"])):

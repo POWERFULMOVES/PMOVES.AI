@@ -140,3 +140,31 @@ def test_scopes_are_plural_in_practice():
     bodies = vca.target_bodies()
     scopes = {vca.classify_scope(bodies.get(t, [])) for t in targets}
     assert len(scopes) >= 4, f"expected a spread of scopes, got {scopes}"
+
+
+# ── review-driven regressions (#2488) ───────────────────────────────
+# Each of these encodes a gap the first revision shipped with.
+
+
+def test_fenced_make_commands_are_seen():
+    """The fenced form is the COMMON one in runbooks and was missed entirely."""
+    block = "make up-core\n$ make -C pmoves validate-composes\n"
+    found = {m.group(1) for m in vca.MAKE_FENCED_RE.finditer(block)}
+    assert found == {"up-core", "validate-composes"}
+
+
+def test_fence_regex_extracts_block_bodies():
+    doc = "text\n```bash\nmake ghost-target\n```\nmore\n"
+    blocks = vca.FENCE_RE.findall(doc)
+    assert any("ghost-target" in b for b in blocks)
+
+
+def test_inline_span_regex_finds_prose_commands():
+    """A blocked command inline in prose is still copy-pasteable."""
+    prose = "To roll back further, `docker volume rm <project>_traefik-acme` \u2014 but only if"
+    spans = vca.INLINE_SPAN_RE.findall(prose)
+    assert any("docker volume rm" in s for s in spans)
+
+
+def test_inline_span_does_not_span_newlines():
+    assert vca.INLINE_SPAN_RE.findall("`a\nb`") == []
