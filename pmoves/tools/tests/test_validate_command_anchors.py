@@ -168,3 +168,57 @@ def test_inline_span_regex_finds_prose_commands():
 
 def test_inline_span_does_not_span_newlines():
     assert vca.INLINE_SPAN_RE.findall("`a\nb`") == []
+
+
+# ── orientation coverage + guard self-check (#2494) ─────────────────
+
+
+def test_always_loaded_orientation_files_are_scanned():
+    """First contact must be verified. .claude/CLAUDE.md tells every agent that
+    `worktree-sitrep-strict` is authoritative; no such target exists."""
+    docs = {d.as_posix() for d in vca.live_docs()}
+    for must in ("CLAUDE.md", "BOOTSTRAP.md", "PATTERNS.md", "AGENTS.md"):
+        assert any(d.endswith(must) for d in docs), f"{must} not scanned"
+
+
+def test_learnings_are_excluded():
+    """A learnings file records what was true in a past session. Log, not promise."""
+    assert "learnings" in vca.DOC_EXCLUDE_PARTS
+
+
+def test_guard_routing_table_is_checked():
+    """The ratchet aimed one layer inward: where does a blocked agent get sent?"""
+    targets = vca.discover_targets()
+    findings = vca.scan_guard_roads(targets)
+    assert isinstance(findings, list)
+    for f in findings:
+        assert f["kind"] == "GHOST_ROAD"
+        assert f["scope"] == "guard"
+
+
+def test_guard_road_placeholders_are_not_flagged():
+    """`up-<service>` is a placeholder; the trailing hyphen is the tell."""
+    assert "up-" in vca.GUARD_ROAD_SKIP
+
+
+def test_naming_a_road_on_the_line_exempts_it():
+    """`.claude/PATTERNS.md` and AGENTS.md carry a blocked-command -> Known Road
+    table. Those are the cure; flagging them would punish the docs doing it right."""
+    row = "| `docker volume " + "rm` | `make -C pmoves volume-reset SERVICE=...` | `/deploy:services` |"
+    assert vca.ROAD_IN_LINE_RE.search(row)
+
+
+def test_describing_a_block_exempts_it():
+    for line in ("# Blocks: dangerous ops, etc.",
+                 "| Raw command (blocked) | Known Road |",
+                 "- NEVER do this anywhere"):
+        assert vca.DESCRIBES_BLOCK_RE.search(line), line
+
+
+def test_discriminators_carry_no_control_characters():
+    """A literal backslash-b in a heredoc escape-interprets to 0x08 and silently
+    turns the word boundary into a backspace. That happened here once; the regex
+    then matched nothing and the exemption looked broken rather than absent."""
+    for rx in (vca.DESCRIBES_BLOCK_RE, vca.ROAD_IN_LINE_RE, vca.GUARD_ROAD_RE):
+        assert chr(8) not in rx.pattern
+        assert chr(12) not in rx.pattern

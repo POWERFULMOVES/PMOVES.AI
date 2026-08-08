@@ -31,6 +31,18 @@ on:
     paths:
       - "pmoves/docs/**/*.md"
       - ".claude/skills/**/*.md"
+      # The always-loaded orientation layer — first contact for any agent
+      # entering this repo, and therefore the highest-cost place for a dead
+      # reference. .claude/CLAUDE.md currently names a target that does not exist.
+      - ".claude/*.md"
+      - "CLAUDE.md"
+      - "AGENTS.md"
+      - ".claude/context/**/*.md"
+      - ".claude/commands/**/*.md"
+      - ".claude/agents/**/*.md"
+      # The damage-control routing table: every "correct path" it offers is a
+      # promise made to an agent at its least recoverable moment.
+      - ".claude/hooks/damage-control/patterns.yaml"
       - "deploy/runbooks/**/*.md"
       - "pmoves/Makefile"
       - "pmoves/mk/*.mk"

@@ -40,6 +40,9 @@ FINDING CLASSES
   UNKNOWN_HOST    a documented `ssh <host>` names a host absent from the fleet
                   topology (this also catches raw IPs, which must never appear
                   in committed docs)
+  GHOST_ROAD      the damage-control guard offers a `make` target as the
+                  "correct path" and no such target exists — a blocked agent is
+                  routed into a wall at the moment it is least able to recover
   STALE_BASELINE  a baselined key that no longer occurs — i.e. it was FIXED.
                   Also a failure: leaving it in the file re-accepts the same
                   defect if it returns, which is not "count only goes down".
@@ -80,9 +83,36 @@ BASELINE = PMOVES / "configs" / "command_anchors" / "_known_gaps.yaml"
 DOC_ROOTS = [
     PMOVES / "docs",
     REPO_ROOT / ".claude" / "skills",
+    REPO_ROOT / ".claude" / "context",
+    REPO_ROOT / ".claude" / "commands",
+    REPO_ROOT / ".claude" / "agents",
     REPO_ROOT / "deploy" / "runbooks",
 ]
-DOC_EXCLUDE_PARTS = {"archive", "_archive", "node_modules", "pmoves_all_in_one_v10"}
+# The ALWAYS-LOADED orientation files. An agent entering this repo reads these
+# before it reads anything else, so a dead reference here is the highest-cost
+# kind there is: first contact is misdirection, the agent improvises, and the
+# breakage gets blamed on the model. `.claude/CLAUDE.md` currently tells every
+# agent that `make -C pmoves worktree-sitrep-strict` is "authoritative — prefer
+# this"; no such target exists.
+DOC_FILES = [
+    REPO_ROOT / ".claude" / "CLAUDE.md",
+    REPO_ROOT / ".claude" / "BOOTSTRAP.md",
+    REPO_ROOT / ".claude" / "PATTERNS.md",
+    REPO_ROOT / ".claude" / "CATALOG.md",
+    REPO_ROOT / ".claude" / "PINOKIO_LAUNCHER_GUIDE.md",
+    REPO_ROOT / ".claude" / "README.md",
+    REPO_ROOT / "CLAUDE.md",
+    REPO_ROOT / "AGENTS.md",
+]
+# `.claude/learnings/` is deliberately excluded alongside archive/: a learnings
+# file records what was true during a past session. It is a log, not a promise.
+DOC_EXCLUDE_PARTS = {"archive", "_archive", "node_modules", "pmoves_all_in_one_v10", "learnings"}
+
+# The damage-control guard's routing table. Every `make -C pmoves <t>` it offers
+# as a "correct path" is a promise made at the exact moment an agent is blocked
+# and least able to recover — so a dead road here routes a well-behaved agent
+# into a wall and then blames it for improvising.
+GUARD_PATTERNS = REPO_ROOT / ".claude" / "hooks" / "damage-control" / "patterns.yaml"
 
 MAKEFILES = [PMOVES / "Makefile"]
 
@@ -205,7 +235,7 @@ def blocked_patterns() -> List[str]:
 
 
 def live_docs() -> List[Path]:
-    out: List[Path] = []
+    out: List[Path] = [p for p in DOC_FILES if p.is_file()]
     for root in DOC_ROOTS:
         if not root.is_dir():
             continue
@@ -246,7 +276,9 @@ def scan(targets: Dict[str, Path], scopes: Dict[str, str]) -> List[dict]:
         for block in FENCE_RE.findall(text):
             cited |= {m.group(1) for m in MAKE_FENCED_RE.finditer(block)}
         for t in sorted(cited):
-            if t in targets:
+            # `up-<service>` / `overlay-up-<tier>` are placeholders, not targets.
+            # The trailing hyphen is the tell.
+            if t in targets or t.endswith("-"):
                 continue
             findings.append({
                 "kind": "GHOST_TARGET",
@@ -266,22 +298,30 @@ def scan(targets: Dict[str, Path], scopes: Dict[str, str]) -> List[dict]:
             # tool or the hook itself — both must name the patterns to work.
             if self_name in rel or "hooks/" in rel:
                 continue
-            # Command-shaped lines (fenced blocks, $-prefixed, bare invocations)
-            # AND inline code spans in prose. A reader copies both.
-            candidates: List[str] = []
-            for line in text.splitlines():
-                stripped = line.strip()
-                if stripped.startswith(("$", "ssh ", "docker ", "make ", "sudo ")):
-                    candidates.append(stripped)
-            candidates.extend(m.group(1) for m in INLINE_SPAN_RE.finditer(text))
-            for cand in candidates:
-                if pat.lower() in cand.lower():
-                    findings.append({
-                        "kind": "UNRUNNABLE_DOC",
-                        "doc": rel,
-                        "detail": f"{pat!r} in: {cand[:80]}",
-                        "scope": "docker",
-                    })
+            # Walk LINES, not spans. A span carries only the command; the
+            # discriminator lives on the line around it. Testing the span alone
+            # flagged `.claude/PATTERNS.md` and `AGENTS.md`, both of which carry
+            # a "| Raw command (blocked) | Known Road |" table — the two docs
+            # doing this exactly right.
+            for raw in text.splitlines():
+                line = raw.strip()
+                if not line:
+                    continue
+                # Documentation ABOUT the guard, not instruction THROUGH it:
+                # either it names the Known Road on the same line, or it frames
+                # the command as blocked/dangerous.
+                if ROAD_IN_LINE_RE.search(line) or DESCRIBES_BLOCK_RE.search(line):
+                    continue
+                forms = [line] if line.startswith(("$", "ssh ", "docker ", "make ", "sudo ")) else []
+                forms.extend(m.group(1) for m in INLINE_SPAN_RE.finditer(line))
+                for cand in forms:
+                    if pat.lower() in cand.lower():
+                        findings.append({
+                            "kind": "UNRUNNABLE_DOC",
+                            "doc": rel,
+                            "detail": f"{pat!r} in: {cand[:80]}",
+                            "scope": "docker",
+                        })
 
         for m in SSH_CITE_RE.finditer(text):
             host = m.group(1)
@@ -300,6 +340,43 @@ def scan(targets: Dict[str, Path], scopes: Dict[str, str]) -> List[dict]:
             if sibling:
                 f["scope"] = scopes.get(sibling, "-")
 
+    return findings
+
+
+# ── The guard's own routing table ───────────────────────────────────
+
+
+GUARD_ROAD_RE = re.compile(r"make\s+-C\s+pmoves\s+([a-z][a-z0-9-]{2,})")
+# Placeholders, not targets: the guard writes `up-<service>` to mean "the up-
+# target for whatever service you meant". Flagging those would be noise.
+GUARD_ROAD_SKIP = {"up-", "up-service"}
+# Used to tell "here is the correct path" apart from "run this".
+ROAD_IN_LINE_RE = re.compile(r"make\s+-C\s+pmoves\s+[a-z][a-z0-9-]{2,}|/deploy:|Known Road")
+# "Blocks: X, Y" / "Raw command (blocked)" / an anti-pattern bullet is a
+# description of the wall, not an instruction to walk into it.
+DESCRIBES_BLOCK_RE = re.compile(r"\bBlocks?:|\bblocked\b|\bDangerous Operation\b|\bNEVER\b|\banti-pattern\b|\bmass deletion\b|Raw command|❌", re.I)
+
+
+def scan_guard_roads(targets: Dict[str, Path]) -> List[dict]:
+    """A blocked agent is routed by patterns.yaml. Check where it gets sent.
+
+    This is the ratchet aimed one layer inward: the same GHOST_TARGET question,
+    asked of the thing that answers the question for everyone else.
+    """
+    if not GUARD_PATTERNS.is_file():
+        return []
+    rel = GUARD_PATTERNS.relative_to(REPO_ROOT).as_posix()
+    text = GUARD_PATTERNS.read_text(encoding="utf-8", errors="replace")
+    findings: List[dict] = []
+    for t in sorted({m.group(1) for m in GUARD_ROAD_RE.finditer(text)}):
+        if t in targets or t in GUARD_ROAD_SKIP or t.endswith("-"):
+            continue
+        findings.append({
+            "kind": "GHOST_ROAD",
+            "doc": rel,
+            "detail": f"guard offers `make -C pmoves {t}` as the correct path; no such target",
+            "scope": "guard",
+        })
     return findings
 
 
@@ -357,7 +434,7 @@ def main() -> int:
 
     bodies = target_bodies()
     scopes = {t: classify_scope(bodies.get(t, [])) for t in targets}
-    findings = scan(targets, scopes)
+    findings = scan(targets, scopes) + scan_guard_roads(targets)
 
     if args.write_baseline:
         write_baseline(findings)
