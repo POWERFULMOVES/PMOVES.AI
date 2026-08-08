@@ -231,10 +231,12 @@ def _validate(cgp: dict[str, Any], schema: dict[str, Any]) -> None:
     """Validate a CGP against the v1 schema. Raises BootstrapError on failure."""
     if not _JSONSCHEMA_AVAILABLE:
         # Fallback structural check: the schema's required top-level
-        # fields must all be present, and spec must be the literal
-        # pmoves.bootstrap/v1. This is a thin safety net for envs
-        # without jsonschema; the schema should still be the source
-        # of truth (this just catches the most common typos).
+        # fields must all be present, spec must be the literal
+        # pmoves.bootstrap/v1, and the well-defined object types
+        # (services, routing) reject unknown keys. This is a thin
+        # safety net for envs without jsonschema; the schema should
+        # still be the source of truth (this just catches the most
+        # common typos).
         required = schema.get("required", [])
         for field_name in required:
             if field_name not in cgp:
@@ -247,6 +249,20 @@ def _validate(cgp: dict[str, Any], schema: dict[str, Any]) -> None:
                 f"CGP spec must be {schema.get('properties', {}).get('spec', {}).get('const')!r}, "
                 f"got {cgp.get('spec')!r}"
             )
+        # Enforce additionalProperties:false on the well-defined
+        # object types. The schema is the source of truth; this just
+        # mirrors the constraint for envs without jsonschema.
+        for object_key in ("services", "routing"):
+            sub = cgp.get(object_key)
+            if not isinstance(sub, dict):
+                continue
+            declared = set(schema.get("properties", {}).get(object_key, {}).get("properties", {}).keys())
+            extra = set(sub.keys()) - declared
+            if extra:
+                raise BootstrapError(
+                    f"CGP {object_key} has unknown key(s) {sorted(extra)}; "
+                    f"declared: {sorted(declared)}"
+                )
         return
     try:
         jsonschema.validate(instance=cgp, schema=schema)

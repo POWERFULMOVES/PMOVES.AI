@@ -4,7 +4,7 @@
   "title": "pmoves.bootstrap/v1",
   "description": "Session-bootstrap CGP profile for PMOVES-aware agents. Carries the agent's identity, available tools + MCPs, service tags (Tailscale/RustDesk/Hostinger/Cloudflare), routing to peer agents, and operational constraints. Aligned to the canonical CHIT Geometry Packet spec at pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md - the same envelope (spec/meta/sig/super_nodes/...) but with pmoves.bootstrap/v1 as the profile name and super_nodes: [] (empty geometry payload - the bootstrap is metadata, not a data packet). The consumer forks (PMOVES-hermes-agent, PMOVES-pinokio) read this once at init, then run on their existing engines; this is a manifest, not a config replacement.",
   "type": "object",
-  "required": ["spec", "meta", "identity", "tools", "mcps", "services", "routing", "constraints"],
+  "required": ["spec", "meta", "identity", "tools", "mcps", "services", "routing", "constraints", "super_nodes"],
   "additionalProperties": true,
   "properties": {
     "spec": {
@@ -106,8 +106,8 @@
     },
     "services": {
       "type": "object",
-      "description": "Tagged services - hints to the consumer fork about which infrastructure surfaces are reachable. None of these are required; missing services are just skipped, not failed.",
-      "additionalProperties": true,
+      "description": "Tagged services - hints to the consumer fork about which infrastructure surfaces are reachable. None of these are required; missing services are just skipped, not failed. additionalProperties:false on the top-level services object so typo'd service names (e.g. 'tnailscale' instead of 'tailscale') are caught at the schema level rather than silently passing through.",
+      "additionalProperties": false,
       "properties": {
         "tailscale": {
           "type": "object",
@@ -154,8 +154,8 @@
     },
     "routing": {
       "type": "object",
-      "description": "Where to find the other agents in the fleet. Mavis publishes tasks to pmoves.agent.task.v1 with target=<agent>; the matching agent subscribes and returns on pmoves.agent.result.v1.",
-      "additionalProperties": true,
+      "description": "Where to find the other agents in the fleet. Mavis publishes tasks to pmoves.agent.task.v1 with target=<agent>; the matching agent subscribes and returns on pmoves.agent.result.v1. additionalProperties:false on the top-level routing object so typo'd agent names are caught at the schema level.",
+      "additionalProperties": false,
       "properties": {
         "kiloclaw": {
           "type": "object",

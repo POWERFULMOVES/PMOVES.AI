@@ -121,6 +121,7 @@ routing:
   hermes:
     target: hermes-3
 constraints: [no-chit-bypass]
+super_nodes: []
 """
         bs = load_bootstrap(source=cgp, export_env=False)
         self.assertEqual(bs.identity.role, "critic")
@@ -138,6 +139,7 @@ constraints: [no-chit-bypass]
             "services": {},
             "routing": {},
             "constraints": [],
+            "super_nodes": [],
         })
         bs = load_bootstrap(source=cgp, export_env=False)
         self.assertEqual(bs.identity.role, "renderer")
@@ -153,6 +155,7 @@ constraints: [no-chit-bypass]
             "services: {}\n"
             "routing: {}\n"
             "constraints: []\n"
+            "super_nodes: []\n"
         )
         bs = load_bootstrap(export_env=False)
         self.assertEqual(bs.identity.role, "curator")
@@ -178,6 +181,7 @@ class ValidationFailureTests(unittest.TestCase):
             "meta": {"created_at": "2026-08-08T00:00:00Z", "operator": "darkxside", "source": "test"},
             "identity": {"agent": "minimax", "role": "implementer"},
             "tools": [], "mcps": [], "services": {}, "routing": {}, "constraints": [],
+            "super_nodes": [],
         }
         with self.assertRaises(BootstrapError) as ctx:
             load_bootstrap_raw(cgp, export_env=False)
@@ -215,6 +219,35 @@ class ValidationFailureTests(unittest.TestCase):
         }
         bs = load_bootstrap_raw(cgp, export_env=False)
         self.assertEqual(bs.spec, "pmoves.bootstrap/v1")
+
+    def test_missing_super_nodes_rejected(self) -> None:
+        """The schema now lists super_nodes as required (per the
+        verifier's review). A CGP without the field must be rejected
+        at the structural-check level, not silently accepted."""
+        cgp = {
+            "spec": "pmoves.bootstrap/v1",
+            "meta": {"created_at": "2026-08-08T00:00:00Z", "operator": "darkxside", "source": "test"},
+            "identity": {"agent": "minimax", "role": "implementer"},
+            "tools": [], "mcps": [], "services": {}, "routing": {}, "constraints": [],
+            # super_nodes missing
+        }
+        with self.assertRaises(BootstrapError):
+            load_bootstrap_raw(cgp, export_env=False)
+
+    def test_typo_service_name_rejected(self) -> None:
+        """The schema tightened additionalProperties:false on the
+        services object. A typo'd service name (e.g. 'tnailscale')
+        must be rejected at the structural-check level."""
+        cgp = {
+            "spec": "pmoves.bootstrap/v1",
+            "meta": {"created_at": "2026-08-08T00:00:00Z", "operator": "darkxside", "source": "test"},
+            "identity": {"agent": "minimax", "role": "implementer"},
+            "tools": [], "mcps": [], "routing": {}, "constraints": [],
+            "services": {"tnailscale": {"host": "x", "ip": "100.0.0.1"}},  # typo
+            "super_nodes": [],
+        }
+        with self.assertRaises(BootstrapError):
+            load_bootstrap_raw(cgp, export_env=False)
 
 
 class ExportEnvTests(unittest.TestCase):
