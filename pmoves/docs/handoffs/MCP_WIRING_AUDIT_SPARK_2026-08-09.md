@@ -1,15 +1,36 @@
 # HANDOFF 5090 → SPARK — PMOVES-wide MCP wiring audit (2026-08-09)
 
-Operator directive (5090 session, 2026-08-09): **"all pmoves services with mcp
-should be wired for pmoves — that is the reason for the forks. that's for spark
-node to review and address."**
+Operator directive (5090 session, 2026-08-09, refined same day): audit **all
+PMOVES services with an MCP surface**, plus a **vendored-vs-forked inventory**
+and a **recommendations gap analysis**. (MCP wiring is one reason forks exist,
+not the sole one — the audit should say per-repo why we carry it and what the
+integration actually buys.)
 
 ## The ask
 
-Audit every PMOVES service and fork that ships an MCP surface, and close the
-gap between *"an MCP server exists in the tree"* and *"the fleet can actually
-call it."* The forks exist precisely so their MCP surfaces get wired into
-PMOVES — an unwired fork MCP is inventory, not capability.
+1. **MCP surface inventory** — every PMOVES service and fork that ships an MCP
+   surface: transport, auth, registration status. Close the gap between *"an
+   MCP server exists in the tree"* and *"the fleet can actually call it."* An
+   unwired MCP is inventory, not capability.
+2. **Vendored vs forked list** — for each external dependency: is it vendored,
+   forked (which branch model), or plain upstream? What PMOVES-specific value
+   does the fork carry (hardening, MCP surface, integration patches)? Flag
+   forks that could drop back to upstream and vendored copies that should be
+   forks.
+3. **Gap analysis + recommendations** — ranked: what to wire, what to retire,
+   what to upstream, what to leave.
+
+## The loadout frame (why this matters)
+
+BoTZ Gateway is the **store/configure/manage** layer for capability; Cipher
+can **load context tools** so a model rolls in and out with a working loadout.
+The Danger Room runs succeeded *because* agents weren't dropped in cold and
+handed tools that don't explain themselves — quite the opposite. Target state
+is the Matrix armory: when Neo and Trinity go to get Morpheus, the setup and
+orchestration happened **before** the drop. (Operator note: that scene is a
+promo analogue worth producing once the Jetson combiner fleet is deployed.)
+The audit's output feeds exactly that: a per-tool "what it does, how to call
+it, what it needs" surface that BoTZ stores and Cipher serves.
 
 ## Known state at handoff (5090 observations, single-node)
 
