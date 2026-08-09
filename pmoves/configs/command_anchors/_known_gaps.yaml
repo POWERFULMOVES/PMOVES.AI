@@ -218,7 +218,6 @@ known_gaps:
   - "GHOST_TARGET|pmoves/docs/evidence/submodule_test_matrix.md|test-be"
   - "GHOST_TARGET|pmoves/docs/evidence/submodule_test_matrix.md|test-smoke"
   - "GHOST_TARGET|pmoves/docs/evidence/submodule_test_matrix.md|test-standalone"
-  - "GHOST_TARGET|pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md|runs"
   - "GHOST_TARGET|pmoves/docs/handoffs/BOTZ_MCP_GATEWAY_DEPLOY_SPEC.md|up-botz-mcp"
   - "GHOST_TARGET|pmoves/docs/handoffs/DARKXSIDE_E2B_DESKTOP_FANOUT_2026-08-06.md|download-public-firecrackers"
   - "GHOST_TARGET|pmoves/docs/handoffs/DARKXSIDE_E2B_DESKTOP_FANOUT_2026-08-06.md|download-public-kernels"
