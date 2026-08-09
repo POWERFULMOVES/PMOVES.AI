@@ -3,6 +3,7 @@
   "nodes": [
     {
       "parameters": {
+        "httpMethod": "POST",
         "path": "pmoves/darkxside-playlist",
         "responseMode": "responseNode",
         "options": {}
@@ -20,7 +21,7 @@
         "url": "http://pmoves-yt:8077/yt/info",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ url: $json.playlist_url || 'https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8', extract_flat: true }) }}",
+        "jsonBody": "={{ JSON.stringify({ url: $json.body?.playlist_url || $json.playlist_url || 'https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8', extract_flat: true }) }}",
         "options": { "timeout": 120000 }
       },
       "id": "get-playlist-info",
@@ -34,7 +35,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.first().json.info?.entries || [];\nreturn items.map((entry, i) => ({\n  json: {\n    video_id: entry.id,\n    title: entry.title,\n    url: `https://www.youtube.com/watch?v=${entry.id}`,\n    duration: entry.duration || 0,\n    playlist_index: i + 1,\n    playlist_id: 'PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8',\n    playlist_title: 'DARKXSIDE School of Powerful Moves',\n    namespace: 'darkxside',\n    persona: 'darkxside',\n    room_id: 'darkxsides.room',\n    total_videos: items.length\n  }\n}));"
+        "jsCode": "const info = $input.first().json.info || {};\nconst entries = (info.entries || []).filter(e => e && e.id);\nconst playlistId = info.id || 'PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8';\nconst playlistTitle = info.title || 'DARKXSIDE School of Powerful Moves';\nreturn entries.map((entry, i) => ({\n  json: {\n    video_id: entry.id,\n    title: entry.title,\n    url: `https://www.youtube.com/watch?v=${entry.id}`,\n    duration: entry.duration || 0,\n    playlist_index: i + 1,\n    playlist_id: playlistId,\n    playlist_title: playlistTitle,\n    namespace: 'darkxside',\n    persona: 'darkxside',\n    room_id: 'darkxsides.room',\n    total_videos: entries.length\n  }\n}));"
       },
       "id": "split-videos",
       "name": "Split Into Videos",
@@ -45,7 +46,7 @@
     {
       "parameters": { "batchSize": 4, "options": {} },
       "id": "split-in-batches",
-      "name": "Batch (4 parallel)",
+      "name": "Batch (size 4)",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [900, 300]
@@ -53,13 +54,16 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "http://supabase-kong:8000/rest/v1/ingested_videos?video_id=eq.={{ $json.video_id }}&select=video_id,status",
+        "url": "=http://supabase-kong:8000/rest/v1/ingested_videos?video_id=eq.{{ $('Split Into Videos').item.json.video_id }}&select=video_id,status",
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-          { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
         ]},
-        "options": { "timeout": 10000 }
+        "options": {
+          "timeout": 10000,
+          "response": { "response": { "fullResponse": true, "neverError": true } }
+        }
       },
       "id": "check-dedup",
       "name": "Check Already Ingested?",
@@ -70,7 +74,7 @@
     {
       "parameters": {
         "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [{ "id": "already-ingested", "leftValue": "={{ JSON.stringify($json) }}", "rightValue": "[]", "operator": { "type": "string", "operation": "equals", "name": "filter:operator:equals" } }],
+          "conditions": [{ "id": "already-ingested", "leftValue": "={{ (Array.isArray($json.body) ? $json.body : []).length }}", "rightValue": 0, "operator": { "type": "number", "operation": "equals" } }],
           "combinator": "and"
         },
         "options": {}
@@ -87,7 +91,7 @@
         "url": "http://pmoves-yt:8077/yt/ingest",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ url: $json.url, transcribe: true, summarize: true, index_to_hirag: true, namespace: $json.namespace, persona: $json.persona, room_id: $json.room_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ url: $('Split Into Videos').item.json.url, transcribe: true, summarize: true, index_to_hirag: true, namespace: $('Split Into Videos').item.json.namespace, persona: $('Split Into Videos').item.json.persona, room_id: $('Split Into Videos').item.json.room_id }) }}",
         "options": { "timeout": 600000 }
       },
       "id": "ingest-video",
@@ -103,44 +107,46 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://supabase-kong:8000/rest/v1/ingested_videos",
+        "url": "http://supabase-kong:8000/rest/v1/ingested_videos?on_conflict=video_id",
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-          { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+          { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
           { "name": "Content-Type", "value": "application/json" },
-          { "name": "Prefer", "value": "return=minimal" }
+          { "name": "Prefer", "value": "resolution=merge-duplicates,return=minimal" }
         ]},
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ video_id: $json.video_id, title: $json.title, status: 'ingested', playlist_id: $json.playlist_id, persona: $json.persona, room_id: $json.room_id, duration: $json.duration, ingested_at: new Date().toISOString() }) }}"
+        "jsonBody": "={{ JSON.stringify({ video_id: $('Split Into Videos').item.json.video_id, title: $('Split Into Videos').item.json.title, status: 'ingested', playlist_id: $('Split Into Videos').item.json.playlist_id, persona: $('Split Into Videos').item.json.persona, room_id: $('Split Into Videos').item.json.room_id, duration: $('Split Into Videos').item.json.duration, ingested_at: new Date().toISOString() }) }}"
       },
       "id": "record-success",
       "name": "Record Success",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1740, 120]
+      "position": [1740, 120],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://supabase-kong:8000/rest/v1/ingested_videos",
+        "url": "http://supabase-kong:8000/rest/v1/ingested_videos?on_conflict=video_id",
         "sendHeaders": true,
         "headerParameters": { "parameters": [
           { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-          { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+          { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
           { "name": "Content-Type", "value": "application/json" },
-          { "name": "Prefer", "value": "return=minimal" }
+          { "name": "Prefer", "value": "resolution=merge-duplicates,return=minimal" }
         ]},
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ video_id: $json.video_id, title: $json.title, status: 'failed', playlist_id: $json.playlist_id, persona: $json.persona, room_id: $json.room_id, error: 'ingest_error', failed_at: new Date().toISOString() }) }}"
+        "jsonBody": "={{ JSON.stringify({ video_id: $('Split Into Videos').item.json.video_id, title: $('Split Into Videos').item.json.title, status: 'failed', playlist_id: $('Split Into Videos').item.json.playlist_id, persona: $('Split Into Videos').item.json.persona, room_id: $('Split Into Videos').item.json.room_id, error: (($json.error && ($json.error.message || $json.error.description)) || 'ingest_error'), failed_at: new Date().toISOString() }) }}"
       },
       "id": "record-failure",
       "name": "Record Failure (DLQ)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1740, 280]
+      "position": [1740, 280],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -148,13 +154,14 @@
         "url": "http://agent-zero:8080/events/publish",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ topic: 'ingest.transcript.ready.v1', data: $json }) }}"
+        "jsonBody": "={{ JSON.stringify({ topic: 'ingest.transcript.ready.v1', payload: $('Split Into Videos').item.json, source: 'darkxside.playlist.ingestion' }) }}"
       },
       "id": "publish-nats",
       "name": "Publish NATS Event",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1960, 120]
+      "position": [1960, 120],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -162,72 +169,92 @@
         "url": "http://pmoves-yt:8077/yt/emit",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ spec: 'chit.cgp.v1.0', meta: { source: 'darkxside.playlist.ingestion', persona: 'darkxside', room_id: 'darkxsides.room', video_id: $json.video_id, title: $json.title } }) }}"
+        "jsonBody": "={{ JSON.stringify({ spec: 'chit.cgp.v1.0', meta: { source: 'darkxside.playlist.ingestion', persona: $('Split Into Videos').item.json.persona, room_id: $('Split Into Videos').item.json.room_id, video_id: $('Split Into Videos').item.json.video_id, title: $('Split Into Videos').item.json.title } }) }}"
       },
       "id": "emit-cgp",
       "name": "Emit CGP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2180, 120]
+      "position": [2180, 120],
+      "onError": "continueRegularOutput"
     },
     {
-      "parameters": {
-        "jsCode": "const total = $('Split Into Videos').all().length;\nconst success = $('Record Success').all().length;\nconst failed = $('Record Failure (DLQ)').all().length;\nconst skipped = total - success - failed;\nreturn [{ json: { status: 'complete', total_videos: total, success, failed, skipped_duplicates: skipped, message: `DARKXSIDE playlist: ${success} ingested, ${failed} failed, ${skipped} skipped` } }];"
-      },
-      "id": "summary",
-      "name": "Summary",
+      "parameters": { "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'ingested' } }];" },
+      "id": "mark-ingested",
+      "name": "Mark Ingested",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2400, 200]
+      "position": [2400, 120]
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($('Summary').first().json) }}"
-      },
-      "id": "respond",
-      "name": "Respond",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [240, 480]
-    },
-    {
-      "parameters": { "jsCode": "return [{ json: { ...$json, skipped: true, reason: 'already_ingested' } }];" },
+      "parameters": { "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'skipped', reason: 'already_ingested' } }];" },
       "id": "log-skip",
       "name": "Log Skip",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1520, 360]
+    },
+    {
+      "parameters": { "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'failed' } }];" },
+      "id": "mark-failed",
+      "name": "Mark Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\nconst count = s => items.filter(i => i.status === s).length;\nconst success = count('ingested');\nconst failed = count('failed');\nconst skipped = count('skipped');\nreturn [{ json: { status: 'complete', total_videos: items.length, success, failed, skipped_duplicates: skipped, message: `DARKXSIDE playlist: ${success} ingested, ${failed} failed, ${skipped} skipped` } }];"
+      },
+      "id": "summary",
+      "name": "Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 480]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 480]
     }
   ],
   "connections": {
     "Playlist Webhook": { "main": [[{ "node": "Get Playlist Info", "type": "main", "index": 0 }]] },
     "Get Playlist Info": { "main": [[{ "node": "Split Into Videos", "type": "main", "index": 0 }]] },
-    "Split Into Videos": { "main": [[{ "node": "Batch (4 parallel)", "type": "main", "index": 0 }]] },
-    "Batch (4 parallel)": {
+    "Split Into Videos": { "main": [[{ "node": "Batch (size 4)", "type": "main", "index": 0 }]] },
+    "Batch (size 4)": {
       "main": [
-        [{ "node": "Check Already Ingested?", "type": "main", "index": 0 }],
-        [{ "node": "Summary", "type": "main", "index": 0 }]
+        [{ "node": "Summary", "type": "main", "index": 0 }],
+        [{ "node": "Check Already Ingested?", "type": "main", "index": 0 }]
       ]
     },
     "Check Already Ingested?": { "main": [[{ "node": "Is New Video?", "type": "main", "index": 0 }]] },
     "Is New Video?": {
       "main": [
         [{ "node": "Ingest Video", "type": "main", "index": 0 }],
-        [{ "node": "Log Skip", "type": "main", "index": 1 }]
+        [{ "node": "Log Skip", "type": "main", "index": 0 }]
       ]
     },
     "Ingest Video": {
       "main": [
         [{ "node": "Record Success", "type": "main", "index": 0 }],
-        [{ "node": "Record Failure (DLQ)", "type": "main", "index": 1 }]
+        [{ "node": "Record Failure (DLQ)", "type": "main", "index": 0 }]
       ]
     },
     "Record Success": { "main": [[{ "node": "Publish NATS Event", "type": "main", "index": 0 }]] },
     "Publish NATS Event": { "main": [[{ "node": "Emit CGP", "type": "main", "index": 0 }]] },
-    "Emit CGP": { "main": [[{ "node": "Batch (4 parallel)", "type": "main", "index": 0 }]] },
-    "Log Skip": { "main": [[{ "node": "Batch (4 parallel)", "type": "main", "index": 0 }]] },
-    "Record Failure (DLQ)": { "main": [[{ "node": "Batch (4 parallel)", "type": "main", "index": 0 }]] }
+    "Emit CGP": { "main": [[{ "node": "Mark Ingested", "type": "main", "index": 0 }]] },
+    "Mark Ingested": { "main": [[{ "node": "Batch (size 4)", "type": "main", "index": 0 }]] },
+    "Log Skip": { "main": [[{ "node": "Batch (size 4)", "type": "main", "index": 0 }]] },
+    "Record Failure (DLQ)": { "main": [[{ "node": "Mark Failed", "type": "main", "index": 0 }]] },
+    "Mark Failed": { "main": [[{ "node": "Batch (size 4)", "type": "main", "index": 0 }]] },
+    "Summary": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
 }
