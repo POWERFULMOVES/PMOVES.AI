@@ -1774,3 +1774,49 @@ edo for slice 6 (4th-commit pattern). (2) functional: pmoves/tools/creator-colla
   Three-body: delivery=SPARK, control=DARKXSIDE, memory=this trail + the handoff doc + the receipts once T3 lands. Owned elsewhere: `pmoves/mk/infra.mk` (z890 #2480), WS4-B living-docs mesh (Mavis-5090). CHIT trail **unsigned-local** (no signing passphrase in this session). agent_signature: `ACK::4090-claude::SKILL-DANGER-ROOM-HANDOFF-SPARK-2026-08-08`.
 
 <!-- GRAPHITI_MARK: 4090-claude::SKILL-DANGER-ROOM-HANDOFF-SPARK::2026-08-08 -->
+
+## WS2 tooling audit RELEASE + lane sweep — 4090 (2026-08-09)
+
+- `2026-08-09T00:30:00Z` RELEASE `4090-claude (field)` scope: **WS2 (z890 coordination plan) COMPLETE — all four claimed items shipped, plus two ratchets and one handoff the audit surfaced.** Claim was `2026-08-08T13:00:00Z` (TTL 72h); closing well inside it. **8 PRs, all merged:** #2482 (claim + handoff + 3 enumeration corrections), #2483 (ci-expedition skill — wrong trigger row, unrunnable reclaim block, new `_app-token` signature row), #2484 (the two `claude-pmoves.sh` were never duplicates — delegation, nothing deleted), #2485 (submodule build & mount gap runbook), #2486 (`up-*` inventory, 88 targets, zero Makefile edits), #2488 (`validate-command-anchors` ratchet), #2494 (first-contact + guard-routing-table coverage), #2495 (Danger Room handoff → SPARK). `pmoves/mk/infra.mk` untouched throughout — z890's #2480, no collision.
+
+  **What the audit actually found, beyond the enumerated items.** (1) **A gate can advertise coverage it does not have** — three times: the compose-split drift gate existed but its path filter omitted the generator that produces the overlays, so it never fired on the PR that caused the drift (#2474); the anchor ratchet's first cut missed fenced code blocks, i.e. the *commonest* form in a runbook, and inline prose entirely (~15% of its own surface, #2488 review); and its baseline never checked for *stale* entries, so "count only goes down" was a claim with nothing enforcing it. Each was caught by review, not by me. (2) **`.claude/CLAUDE.md` — the always-loaded orientation file — cites `worktree-sitrep-strict` as "authoritative, prefer this."** It does not exist. Nor do `worktree-sitrep`, `tac-status`, `tac-check`, or `health-quick` (BOOTSTRAP.md). First contact for every agent entering this repo is misdirection. (3) **The damage-control guard's own routing table has two dead roads** — it offers two Make targets (the mini-cli reset road and the schema-migration road) as the "correct path", and neither is defined in the Makefiles, so a well-behaved agent that follows the offered road hits a wall at its least recoverable moment. (4) **`patterns.yaml` is the pattern worth generalizing** — 121 entries, each carrying why / correct path / valid parameter set / how to verify, with `ask: true` rather than a hard no. `.claude/hooks/pre-tool.sh` runs a flat 11-entry deny-list in front of it that names no road at all, and **5 of its 11 entries duplicate `patterns.yaml` minus the affordance**. Same "layer re-types instead of naming" defect as the four cleanup copies.
+
+  **Blockers as study surface (operator framing).** Each of the above is a *measurement*, not just a defect: a gate that cannot say no has not been tested; a doc that routes into a wall is the field disagreeing with itself; a deny-list without a road is capability withheld rather than transferred. The three-tier ladder now has names — **T1 anchored** (static, shipped) → **T2 exercised** (Danger Room, handed to SPARK in #2495) → **T3 receipted** (CHIT, designed in the handoff, follows T2). Baseline is **418 entries, recorded and explicitly NOT approved.**
+
+  **Corrections issued to my own prior work, so the record is not flattering:** the "13 of 15 fork services can't build from a worktree" figure was wrong (double-counted split-overlay re-declarations; the real number is **7 submodules / 8 services**); I added `hf-mcp-server.yml` to that list and retracted it (its context resolves back *inside* `pmoves/`, i.e. first-party — matching a `../` prefix shape instead of resolving the first segment against `.gitmodules`); the `up-*` retire list was **dangerous** as first published, because excluding the makefiles to avoid counting definitions also excluded every *call site*, so `up-core-hardened` (called by `up-core-capable`), `up-workers-hardened` and `up-creator-collab` all scored zero and landed on a retire list; and `up-yt-cookies-rebuild` is **not** a near-duplicate of `-recreate` (`--build` for code changes vs `--force-recreate` for env changes).
+
+  agent_signature: `ACK::4090-claude::WS2-TOOLING-AUDIT-RELEASE-2026-08-09`.
+
+<!-- GRAPHITI_MARK: 4090-claude::WS2-TOOLING-AUDIT-RELEASE::2026-08-09 -->
+
+- `2026-08-09T00:40:00Z` NOTE `4090-claude (field)` scope: **Lane sweep — evidence for owners, ZERO RELEASE lines written on another agent's behalf.** Register carries **115 CLAIM against 119 RELEASE** *by one specific count* — lines matching `^- \`?<ISO-ts>\`? (CLAIM|CLAIM+RELEASE)` and the RELEASE equivalent, i.e. anchored bullet rows only. **Other methods give other numbers** and the bare total is not reproducible without the pattern: counting the same tokens anywhere in the text gives 284/221 (prose mentions), and dropping the bullet anchor gives 116/119. The 2026-08-07 sweep reported 121/115 on a third method. **Treat the ratio as a rough signal, not a metric** — the per-lane table below is the part that is checkable. Method as in the 2026-08-07 sweep: PR numbers extracted per CLAIM line, merge state via `gh pr view --json state,mergedAt`, read from `origin/main`. Automated CLAIM→RELEASE pairing stays unreliable because Mavis publishes every lane under one agent id, so a later RELEASE on any lane masks earlier open ones — hence a verification list, not a reconciliation.
+
+  **Newly verified shipped since the last sweep — a RELEASE appears to be the only thing missing (Mavis's to write):**
+
+  | Register line | Lane | Cited PRs | Merge state |
+  |---|---|---|---|
+  | 1701 (2026-08-08) | Mavis harness v0 — inter-agent handoff + BPM cron + multi-fork CGP | #2437, #2443, #2450 | **all MERGED 2026-08-08** |
+  | 1723 (2026-08-08) | Multi-fork consumer follow-ups to harness v0 | #2477 | **MERGED 2026-08-08** |
+  | 1695 (2026-08-06) | OpenRoom Realization slice 2 | #2101, #2350 | merged — **but see caveat below** |
+  | 1689 (2026-08-06) | Mavis creative-pipeline v0 | (no PR cited; #2450 carries the work) | MERGED 2026-08-08 |
+
+  **Caveat on the two above, raised in review and correct:** a merged PR is not runtime acceptance. The OpenRoom lane (1695) was claimed against **six** handoff priorities with acceptance framed at the room level, and #2437 is scaffold + iframe wiring — merging it does not demonstrate the rooms render. Likewise 1723 covers three deliverables including **fork-side** consumers, and #2477 merging in PMOVES.AI says nothing about whether the fork consumers landed. Both are **merged, acceptance unverified** — not "ready to release." I made exactly the error this register exists to prevent: treating merge as completion. The owner should close from runtime evidence, not from this table.
+
+  **Still carried from the last sweep, still open, now older:**
+
+  | Register line | Lane | Age | Status |
+  |---|---|---|---|
+  | 1500 (2026-07-31) | Lane 3 — `supabase-stack-default-up` | ~9 days | no PR cited, nothing found merged |
+  | 1511 (2026-08-01) | Lane 4 — `test_all_tts_engines.py` → Pinokio pterm | ~8 days | no PR cited, nothing found merged |
+  | 1559 (2026-08-01) | Lane 5 — NATS broker / void-publish | ~8 days | no PR cited; ARCHON stream landed in #2397, consistent with completion, **not asserted** |
+  | 1458 (2026-07-30) | Slice 7 of 7 — Fordham E2E | ~10 days | scope text says "SHIPPED", no PR, no RELEASE |
+
+  **Mine, still open and correctly so:** line 1673 (clip-point segmentation → #2446, DRAFT) and line 1706 (MAI-UI serving → #2468, OPEN, held for Archon review). Line 1756 is the SPARK Danger Room HANDOFF — open by design, awaiting SPARK's CLAIM.
+
+  **Stale-claim pings still outstanding** (z890 owns these per their WS3 action, restating so they are not lost): **KIMI-SPARK** `feature/spark-vss-submodule-wiring` (~11 days, no RELEASE) and **CRUSH** cipher Village Phase B (TTL expired ~2026-08-04). Those two need a *release or re-claim*; the four Mavis lanes above need a *release only* — different category, and worth keeping distinct so the ping is accurate.
+
+  **Blockers identified this pass, routed:** PR #2491 (5090, wants to merge) carries **3 unresolved P1 + 1 P2**, all on `pmoves/services/flute-gateway/main.py`, one of them an auth gap on a mounted MCP router — verification dispatched, findings to follow before it lands. PR #2490 carries **20 unresolved threads (3 P1, 11 Major)** across a tool that applies branch protection to ~49 forks; #1767 fixed a wipe-existing-checks bug in the sibling workflow, so that class is checked explicitly. PRs #2492/#2493 (z890 NATS) pair-reviewed — see the reviews on those PRs; headline is that §5's export matrix grants cross-boundary rights over 11 subjects of which **7 appear in no registry at all and 0 have a closed schema**.
+
+  Deliberately out of scope: submodule sync + audit (z890), WS4-B living-docs mesh (recommended Mavis-5090). CHIT trail **unsigned-local**. agent_signature: `ACK::4090-claude::LANE-SWEEP-2026-08-09`.
+
+<!-- GRAPHITI_MARK: 4090-claude::LANE-SWEEP::2026-08-09 -->
