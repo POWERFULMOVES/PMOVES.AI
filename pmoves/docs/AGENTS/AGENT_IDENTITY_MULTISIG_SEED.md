@@ -8,6 +8,12 @@ a pydantic model — they are model alts — and this is a two-parter that
 exercises the quorum mechanism, since PMOVES agents will multi-sig on work.
 
 **Canonical references this direction points into** (canon is not an island):
+- `pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md` — **the root**: Human, AI,
+  and System as a classical three-body problem stabilized by CHIT geometry;
+  without stabilization one body gets ejected. The register's role split is a
+  derived application. (This doc was orphaned from every modern discovery
+  surface until 2026-08-09 — which is exactly how visiting agents' three-body
+  framing drifted.)
 - `pmoves/docs/AGENTS/AGNOTE4482.md` §Village Rule — no agent operates alone;
   execution / control-review / memory-security bodies — and the Three-Body
   Pattern blocks used throughout the register.
