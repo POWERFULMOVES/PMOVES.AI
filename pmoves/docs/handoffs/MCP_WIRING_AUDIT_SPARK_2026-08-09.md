@@ -1,8 +1,9 @@
 # HANDOFF 5090 → SPARK — PMOVES-wide MCP wiring audit (2026-08-09)
 
-Operator directive (5090 session, 2026-08-09, refined same day): audit **all
-PMOVES services with an MCP surface**, plus a **vendored-vs-forked inventory**
-and a **recommendations gap analysis**. (MCP wiring is one reason forks exist,
+Operator directive (5090 session, messages 2026-08-09 16:30 EDT and 17:22 EDT;
+anchoring per the 17:32 EDT protocol note): audit **all PMOVES services with an
+MCP surface**, plus a **vendored-vs-forked inventory** and a
+**recommendations gap analysis**. (MCP wiring is one reason forks exist,
 not the sole one — the audit should say per-repo why we carry it and what the
 integration actually buys.)
 
