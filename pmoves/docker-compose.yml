@@ -2275,6 +2275,46 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+  voice-sampler:  # media-sourced voice references (VOICE_SAMPLER_SPEC.md): diarize → audition → owner-gated publish
+    <<: *tier-media-hardened
+    build:
+      context: ..
+      dockerfile: pmoves/services/voice-sampler/Dockerfile
+    restart: unless-stopped
+    environment:
+    - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
+    - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
+    - JUICEFS_ENDPOINT=${JUICEFS_ENDPOINT:-juicefs-gateway:9000}
+    - JUICEFS_ACCESS_KEY=${JUICEFS_S3_USER:-${MINIO_USER}}
+    - JUICEFS_SECRET_KEY=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD}}
+    - JUICEFS_BUCKET=${VOICE_REFS_BUCKET:-rooms}
+    # Owner-only pub-gate: empty = PUBLISH disabled (fail closed). Set per node.
+    - VOICE_SAMPLER_OWNER_ID=${VOICE_SAMPLER_OWNER_ID:-}
+    - OMNIVOICE_CATALOG_DIR=/omnivoice-voices
+    - VOICE_CLONE_REGISTER_ENABLED=${VOICE_CLONE_REGISTER_ENABLED:-0}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    volumes:
+    # Same host dir omnivoice-server mounts :ro as its ref-voice catalog —
+    # the sampler is the only writer (owner-approved references only).
+    - ./services/creator-operator/voices:/omnivoice-voices
+    ports:
+    - ${VOICE_SAMPLER_BIND:-127.0.0.1}:${VOICE_SAMPLER_PORT:-8124}:8124
+    profiles:
+    - workers
+    - voice
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data  # juicefs-gateway (candidate + reference storage) lives here
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8124/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
   pmoves-yt:
     <<: *tier-media-hardened
     image: ${PMOVES_YT_IMAGE:-}
