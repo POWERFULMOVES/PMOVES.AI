@@ -5,6 +5,7 @@ on:
     branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
+      - 'pmoves/scripts/split_compose.py'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
@@ -13,6 +14,7 @@ on:
     branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
+      - 'pmoves/scripts/split_compose.py'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
@@ -372,7 +374,7 @@ jobs:
               pmoves/docker-compose.base.yml pmoves/docker-compose.core.yml \
               pmoves/docker-compose.agents.yml pmoves/docker-compose.media.yml \
               pmoves/docker-compose.ui.yml pmoves/docker-compose.workers.yml \
-              pmoves/docker-compose.apps.yml)"
+              pmoves/docker-compose.apps.yml pmoves/docker-compose.juicefs.yml)"
           if [ -n "$DRIFT" ]; then
             echo "$DRIFT"
             echo "::error::Split overlays are out of sync with docker-compose.yml (modified or missing). Run 'make -C pmoves compose-split' and commit the regenerated overlays."

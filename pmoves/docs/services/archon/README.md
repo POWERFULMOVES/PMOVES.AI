@@ -1,3 +1,16 @@
+> [!CAUTION]
+> **SUPERSEDED — pre-0.6.0 architecture (marked 2026-08-06).**
+>
+> Claims here that are no longer true: Supabase-backed storage (`SUPABASE_URL` /
+> `SUPABASE_SERVICE_KEY`), `/healthz` on `:8091`, a separate MCP server on `:8051`, a
+> PydanticAI agents service on `:8052`, and a distinct UI service on `:3737`.
+>
+> Archon 0.6.0 is a single unified TypeScript/Bun server on **3090** with **`/api/health`**,
+> Postgres via `DATABASE_URL`, no MCP subserver. Host ports 3737 and 8091 are compat
+> aliases onto container 3090 — they are not separate services.
+>
+> **Canonical:** `.claude/CATALOG.md`.
+
 # Archon Service – Supabase Wiring, Bring-Up, and Smokes
 
 This guide documents how Archon is wired to Supabase in the PMOVES.AI stack, and how to bring it up and validate it alongside the rest of the agents.

@@ -85,8 +85,20 @@ docker-prune-all: ## Aggressive cleanup: also removes unused images older than 7
 	@echo "Step 2/3: Removing unused images older than 72h..."
 	@docker image prune -a -f --filter "until=72h"
 	@echo ""
-	@echo "Step 3/3: Removing unused build cache older than 72h..."
+	@echo "Step 3/4: Removing unused build cache older than 72h..."
 	@docker builder prune -f --filter "until=72h" || true
+	@echo ""
+	@echo "Step 4/4: Reclaiming inactive buildx builders + state volumes (parity with #2473)..."
+	@# `docker builder prune` clears cache INSIDE builders but leaves the builders
+	@# (and their named *_state volumes) standing — the exact 40G/28G leak found on
+	@# the KVMs 2026-08-07. `docker buildx rm --all-inactive` is name-agnostic and
+	@# can't kill an in-flight build (those stay ACTIVE). Mirrors the canonical fix
+	@# in pmoves/scripts/pmoves-disk-cleanup.sh + deploy/provision/docker-fleet-cleanup.sh.
+	@docker buildx rm --all-inactive --force 2>/dev/null || true
+	@# Sweep *_state volumes left by builders already gone. Name-filtered to
+	@# buildx_buildkit_ so pmoves_* data volumes are never touched (NOT volume prune).
+	@docker volume ls -q --filter dangling=true --filter name=buildx_buildkit_ 2>/dev/null \
+	  | while read -r v; do docker volume rm "$$v" >/dev/null 2>&1 || true; done || true
 	@echo ""
 	@echo "Final disk usage:"
 	@docker system df
@@ -217,13 +229,17 @@ fleet-stale-audit: ## List stale Tailscale nodes (offline > 60 days)
 
 # ── Secrets Sync ────────────────────────────────────────────────────
 # Triggers the sync-secrets-local.yml GitHub Actions workflow on the
-# self-hosted ai-lab runner, which hydrates local.env from GH Secrets.
+# self-hosted ai-lab runner(s) named by TARGETS (comma-separated runner
+# sub-labels; the workflow's own default is spark). Runnerless nodes
+# (5090, Z890) instead pull the uploaded bundle afterwards via
+# `make secrets-funnel-from-prod` — see SECRETS_DISTRIBUTION_PATTERNS.md
+# Pattern B.
 
-secrets-sync-trigger: ## Trigger GH Actions secrets sync to local runner
-	@echo "=== Triggering secrets sync workflow ==="
+secrets-sync-trigger: ## Trigger GH Actions secrets sync (TARGETS=spark[,z890...], OUTPUT_FORMAT=env|cgp)
+	@echo "=== Triggering secrets sync workflow (targets: $(or $(TARGETS),spark)) ==="
 	@gh workflow run sync-secrets-local.yml \
-		--field output_format=env \
-		--field target_os=$$(case "$$(uname -s)" in MINGW*|MSYS*|CYGWIN*) echo Windows;; Linux) echo Linux;; *) echo any;; esac)
+		--field output_format=$(or $(OUTPUT_FORMAT),env) \
+		--field targets=$(or $(TARGETS),spark)
 	@echo "Waiting for workflow to start..."
 	@sleep 8
 	@gh run list --workflow=sync-secrets-local.yml --limit=1 --json status,conclusion,createdAt,displayTitle \

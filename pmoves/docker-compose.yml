@@ -4341,6 +4341,9 @@ services:
     environment:
     # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - PORT=8113
+    # neutralize the leaked Windows SSL_CERT_FILE / REQUESTS_CA_BUNDLE (house pattern — httpx falls back to bundled certifi)
+    - SSL_CERT_FILE=
+    - REQUESTS_CA_BUNDLE=
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
     # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)

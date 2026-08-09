@@ -38,7 +38,7 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 - `PMOVES-agents.md/` — AGENTS.md format reference + agent taxonomy/persona docs (Tier-2 *always-relevant*: load when discussing agent class, taxonomy, or AGENTS.md format)
 - `PMOVES-Archon/.claude/CLAUDE.md` — agent service architecture
 - `PMOVES-BoTZ/.claude/CLAUDE.md` — skills marketplace framework (legacy/archived per 2026-04-19)
-- `PMOVES-Agent-Zero/.claude/CLAUDE.md` — orchestration patterns
+- Agent Zero — the submodule has **no** `.claude/CLAUDE.md` (verified 2026-08-06). Use `pmoves/services/agent-zero/README.md` for the service, and `pmoves/docs/operations/AGENT_ZERO_API.md` for the live API surface.
 - `skills/` — skills constellation (5 forks registered in `.gitmodules`: Pmoves-skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js — run `git submodule update --init skills/` to populate); load `skills/README.md` first
 - Load only when working directly on that subsystem.
 
@@ -64,7 +64,7 @@ Detail files live in `.claude/context/`:
 - `testing-strategy.md` — testing workflow + PR requirements
 - `security-patterns.md` — cross-cutting security patterns (auth, secrets, hardening)
 - `observability-patterns.md` — Prometheus, Grafana, Loki, TensorZero metrics
-- `agent-zero-orchestration.md` — MCP API reference, task flow, subordinate model
+- ~~`agent-zero-orchestration.md`~~ — **SUPERSEDED, do not use as an API reference.** It documents `/mcp/health`, `/mcp/agents`, `/mcp/subordinate/create` and an `agent.zero.*` NATS family that were never implemented. Canonical: `pmoves/docs/operations/AGENT_ZERO_API.md` (probed from `/openapi.json`).
 - `tier-architecture.md` — 7-tier env security model, network segmentation
 - `chrome-extension.md` — Chrome Extension integration (8 services, message protocol, auth)
 - `tensorzero.md` — TensorZero detailed documentation
@@ -116,7 +116,7 @@ When conflicts occur: main PMOVES.AI patterns take precedence; document exceptio
 **Solution:**
 - Each agent loads only its direct tier
 - Use MCP APIs for cross-agent communication, not shared context
-- Reference integration docs (e.g., `pmoves/docs/ARCHON_INTEGRATION.md`) instead of duplicating
+- Reference integration docs instead of duplicating (note: `pmoves/docs/integrations/ARCHON_INTEGRATION.md` is **superseded** — it describes the pre-0.6.0 Python/Supabase Archon; current state is `.claude/CATALOG.md` + `pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md`)
 
 Full audit: `pmoves/docs/CLAUDE_CONTEXT_AUDIT.md`.
 

@@ -304,6 +304,11 @@ down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-data volume preserv
 	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format 2>/dev/null || true
 	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-data)."
 
+up-juicefs-recreate: ensure-env-shared bootstrap-tier-envs ## Force-recreate the JuiceFS gateway with current env (rotation-drift recovery)
+	@echo "Force-recreating juicefs-gateway with current env..."
+	@$(JUICEFS_DC) --profile juicefs up -d --force-recreate --no-deps juicefs-gateway
+	@echo "Done. Check: make juicefs-status"
+
 juicefs-smoke: ## S3 round-trip + multi-bucket smoke test against a running gateway (needs: make up-juicefs)
 	@$(JUICEFS_DC) --profile juicefs --profile juicefs-smoke run --rm juicefs-smoke
 
@@ -1245,6 +1250,26 @@ validate-dockerfile-paths: ## Assert every compose `build:` points at a real Doc
 validate-dockerfile-paths-json: ## Same as validate-dockerfile-paths, but JSON output (for CI annotation)
 	@$(PYTHON) tools/validate_dockerfile_paths.py --json
 
+# ----------------------------------------------------------------------------
+# validate-command-anchors — a doc that says `make foo` is a promise; check it
+#   GHOST_TARGET   documented `make <t>` with no such target
+#   GHOST_PATH     documented `file:NNN` where the file does not exist
+#   UNRUNNABLE_DOC documented command matching a damage-control BLOCKED_PATTERN
+#   UNKNOWN_HOST   documented ssh host absent from the fleet topology
+# Scope-aware: make reaches docker/ssh/python/git/systemd/nats, not just docker.
+# Ratchet — baseline in configs/command_anchors/_known_gaps.yaml, count goes down.
+# ----------------------------------------------------------------------------
+.PHONY: validate-command-anchors validate-command-anchors-json validate-command-anchors-baseline
+validate-command-anchors: ## Assert every documented `make <t>` / `file:NNN` / ssh host resolves (no network)
+	@echo "?? Validate-command-anchors ratchet..."
+	@$(PYTHON) tools/validate_command_anchors.py
+
+validate-command-anchors-json: ## Same as validate-command-anchors, but JSON output
+	@$(PYTHON) tools/validate_command_anchors.py --json
+
+validate-command-anchors-baseline: ## Re-baseline the anchor gate (deliberate: say why in the PR)
+	@$(PYTHON) tools/validate_command_anchors.py --write-baseline
+
 validate-dockerfile-paths-list-orphans: ## Diagnostic: list orphan Dockerfiles not in the baseline; never fails
 	@$(PYTHON) tools/validate_dockerfile_paths.py --list-orphans
 
@@ -1271,6 +1296,12 @@ up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@$(DC) up -d $(AGENT_SERVICES)
 	@$(MAKE) --no-print-directory wait-agents
 	@echo "✅ Agents ready"
+
+.PHONY: up-evo
+up-evo: ## Start the EVO SWARM controller (evolutionary optimizer :8113) — builds locally (no ghcr image published). Loads env.shared for CHIT prod signing.
+	@echo "🧬 Starting EVO SWARM controller (:8113)..."
+	@$(LOAD_ENV_SHARED); $(DC) --profile agents up -d --build evo-controller
+	@echo "✅ EVO SWARM controller starting on :8113 (publishes evoswarm.training.genome.v1 / .fitness.v1)"
 
 .PHONY: archon-db-setup
 archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZero LLM config)
@@ -1299,6 +1330,15 @@ up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
 	@echo "✅ PMOVES UI ready"
 	@echo "   Dashboard:    http://localhost:4482"
 	@echo "   Services:     http://localhost:4482/dashboard/services"
+
+.PHONY: up-openroom
+up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
+	@echo "🚪 Starting OpenRoom desktop..."
+	@$(DC) --profile ui up -d openroom
+	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
+	@echo "✅ OpenRoom ready"
+	@echo "   Desktop:      http://localhost:5173/webuiapps/"
+	@echo "   Try a room:   http://localhost:5173/webuiapps/?room=persona.room.livingdoc"
 
 .PHONY: up-tokenism down-tokenism
 up-tokenism: ## Start the Tokenism simulator + Next.js UI (dashboard :8504, API :8103)
@@ -4275,7 +4315,7 @@ down-external: ## Stop external integration services
 # the traefik container but points at `sso-auth@docker`, so Traefik without sso-auth
 # is an edge whose own login route 404s.
 # ---------------------------------------------------------------------------
-EDGE_DC := docker compose -p $(PROJECT)-edge --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
+EDGE_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.traefik.yml -f docker-compose.sso.yml
 
 .PHONY: edge-preflight
 edge-preflight: ## Check edge prerequisites (networks, 80/443, dynamic.yml) without starting anything
