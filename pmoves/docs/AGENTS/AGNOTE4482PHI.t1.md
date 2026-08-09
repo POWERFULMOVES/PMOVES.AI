@@ -1785,7 +1785,7 @@ edo for slice 6 (4th-commit pattern). (2) functional: pmoves/tools/creator-colla
 
 <!-- GRAPHITI_MARK: 4090-claude::WS2-TOOLING-AUDIT-RELEASE::2026-08-09 -->
 
-- `2026-08-09T00:40:00Z` NOTE `4090-claude (field)` scope: **Lane sweep — evidence for owners, ZERO RELEASE lines written on another agent's behalf.** Register now carries **115 CLAIM against 119 RELEASE**. Method as in the 2026-08-07 sweep: PR numbers extracted per CLAIM line, merge state via `gh pr view --json state,mergedAt`, read from `origin/main`. Automated CLAIM→RELEASE pairing stays unreliable because Mavis publishes every lane under one agent id, so a later RELEASE on any lane masks earlier open ones — hence a verification list, not a reconciliation.
+- `2026-08-09T00:40:00Z` NOTE `4090-claude (field)` scope: **Lane sweep — evidence for owners, ZERO RELEASE lines written on another agent's behalf.** Register carries **115 CLAIM against 119 RELEASE** *by one specific count* — lines matching `^- \`?<ISO-ts>\`? (CLAIM|CLAIM+RELEASE)` and the RELEASE equivalent, i.e. anchored bullet rows only. **Other methods give other numbers** and the bare total is not reproducible without the pattern: counting the same tokens anywhere in the text gives 284/221 (prose mentions), and dropping the bullet anchor gives 116/119. The 2026-08-07 sweep reported 121/115 on a third method. **Treat the ratio as a rough signal, not a metric** — the per-lane table below is the part that is checkable. Method as in the 2026-08-07 sweep: PR numbers extracted per CLAIM line, merge state via `gh pr view --json state,mergedAt`, read from `origin/main`. Automated CLAIM→RELEASE pairing stays unreliable because Mavis publishes every lane under one agent id, so a later RELEASE on any lane masks earlier open ones — hence a verification list, not a reconciliation.
 
   **Newly verified shipped since the last sweep — a RELEASE appears to be the only thing missing (Mavis's to write):**
 
@@ -1793,8 +1793,10 @@ edo for slice 6 (4th-commit pattern). (2) functional: pmoves/tools/creator-colla
   |---|---|---|---|
   | 1701 (2026-08-08) | Mavis harness v0 — inter-agent handoff + BPM cron + multi-fork CGP | #2437, #2443, #2450 | **all MERGED 2026-08-08** |
   | 1723 (2026-08-08) | Multi-fork consumer follow-ups to harness v0 | #2477 | **MERGED 2026-08-08** |
-  | 1695 (2026-08-06) | OpenRoom Realization slice 2 | #2101, #2350 | MERGED 2026-07-13 / 2026-08-03 |
+  | 1695 (2026-08-06) | OpenRoom Realization slice 2 | #2101, #2350 | merged — **but see caveat below** |
   | 1689 (2026-08-06) | Mavis creative-pipeline v0 | (no PR cited; #2450 carries the work) | MERGED 2026-08-08 |
+
+  **Caveat on the two above, raised in review and correct:** a merged PR is not runtime acceptance. The OpenRoom lane (1695) was claimed against **six** handoff priorities with acceptance framed at the room level, and #2437 is scaffold + iframe wiring — merging it does not demonstrate the rooms render. Likewise 1723 covers three deliverables including **fork-side** consumers, and #2477 merging in PMOVES.AI says nothing about whether the fork consumers landed. Both are **merged, acceptance unverified** — not "ready to release." I made exactly the error this register exists to prevent: treating merge as completion. The owner should close from runtime evidence, not from this table.
 
   **Still carried from the last sweep, still open, now older:**
 
