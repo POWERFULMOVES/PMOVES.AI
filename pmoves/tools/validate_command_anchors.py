@@ -250,8 +250,8 @@ def live_docs() -> List[Path]:
 # reader: an inline span `make foo`, and a bare line inside a fenced block.
 # The fenced form is the more common one in runbooks, so keying only on the
 # backtick missed most of the surface (caught in review on #2488).
-MAKE_CITE_RE = re.compile(r"`make\s+(?:-C\s+\S+\s+)?([a-z][a-z0-9-]{2,})")
-MAKE_FENCED_RE = re.compile(r"^\s*(?:\$\s*)?make\s+(?:-C\s+\S+\s+)?([a-z][a-z0-9-]{2,})", re.M)
+MAKE_CITE_RE = re.compile(r"`make\s+(?:-C\s+[A-Za-z0-9_./-]+\s+)?([a-z][a-z0-9-]{2,})")
+MAKE_FENCED_RE = re.compile(r"^\s*(?:\$\s*)?make\s+(?:-C\s+[A-Za-z0-9_./-]+\s+)?([a-z][a-z0-9-]{2,})", re.M)
 FENCE_RE = re.compile(r"^```[a-zA-Z0-9]*\n(.*?)^```", re.M | re.S)
 INLINE_SPAN_RE = re.compile(r"`([^`\n]+)`")
 # Only LINE-NUMBERED citations. A bare `pmoves/foo` in a doc is as likely to be
