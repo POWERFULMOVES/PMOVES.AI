@@ -1,13 +1,15 @@
 [
   {
-    "name": "GitHub • Webhook → NATS v1",
+    "name": "GitHub \u2022 Webhook \u2192 NATS v1",
     "nodes": [
       {
         "parameters": {
           "httpMethod": "POST",
           "path": "github/webhooks/runner",
           "responseMode": "responseNode",
-          "options": { "rawBody": true }
+          "options": {
+            "rawBody": true
+          }
         },
         "id": "webhook_receiver",
         "name": "Webhook: GitHub Runner Events",
@@ -31,7 +33,8 @@
         "position": [
           660,
           280
-        ]
+        ],
+        "onError": "continueErrorOutput"
       },
       {
         "parameters": {
@@ -85,7 +88,9 @@
           "sendBody": true,
           "specifyBody": "json",
           "jsonBody": "={{ JSON.stringify({ topic: $json.nats_subject, payload: $json.nats_payload.payload, correlation_id: $json.nats_payload.correlation_id, source: 'github-webhook' }) }}",
-          "options": { "timeout": 10000 }
+          "options": {
+            "timeout": 10000
+          }
         },
         "id": "publish_nats",
         "name": "Publish to NATS (Agent Zero bridge)",
@@ -99,7 +104,7 @@
       },
       {
         "parameters": {
-          "functionCode": "const payload = $node['Create NATS Event Envelope'].json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nconst discordUrl = $env.DISCORD_WEBHOOK_URL;\nif (!discordUrl) {\n  throw new Error('DISCORD_WEBHOOK_URL not configured in n8n environment');\n}\n\nlet emoji = '⏳';\nif (status === 'in_progress') emoji = '🔄';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '✅' : conclusion === 'failure' ? '❌' : '⚠️';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: discordUrl,\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
+          "functionCode": "const payload = $node['Create NATS Event Envelope'].json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nconst discordUrl = $env.DISCORD_WEBHOOK_URL;\nif (!discordUrl) {\n  throw new Error('DISCORD_WEBHOOK_URL not configured in n8n environment');\n}\n\nlet emoji = '\u23f3';\nif (status === 'in_progress') emoji = '\ud83d\udd04';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '\u2705' : conclusion === 'failure' ? '\u274c' : '\u26a0\ufe0f';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: discordUrl,\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
         },
         "id": "prepare_notification",
         "name": "Prepare Discord Notification",
@@ -187,7 +192,9 @@
       },
       {
         "parameters": {
-          "options": { "responseCode": 500 },
+          "options": {
+            "responseCode": 500
+          },
           "responseBody": "={{ JSON.stringify({ status: 'error', node: $json.node, message: $json.message, timestamp: $json.timestamp }) }}"
         },
         "id": "respond_error",
@@ -217,6 +224,13 @@
           [
             {
               "node": "Check Event Type",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }

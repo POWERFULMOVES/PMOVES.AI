@@ -12,7 +12,10 @@
       "name": "Playlist Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "darkxside-playlist-trigger"
     },
     {
@@ -22,13 +25,18 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ url: $json.body?.playlist_url || $json.playlist_url || 'https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8', extract_flat: true }) }}",
-        "options": { "timeout": 120000 }
+        "options": {
+          "timeout": 120000
+        }
       },
       "id": "get-playlist-info",
       "name": "Get Playlist Info",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000
@@ -41,40 +49,80 @@
       "name": "Split Into Videos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
-      "parameters": { "batchSize": 4, "options": {} },
+      "parameters": {
+        "batchSize": 4,
+        "options": {}
+      },
       "id": "split-in-batches",
       "name": "Batch (size 4)",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "GET",
         "url": "=http://supabase-kong:8000/rest/v1/ingested_videos?video_id=eq.{{ $('Split Into Videos').item.json.video_id }}&select=video_id,status",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [
-          { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-          { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
-        ]},
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
+          ]
+        },
         "options": {
           "timeout": 10000,
-          "response": { "response": { "fullResponse": true, "neverError": true } }
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
         }
       },
       "id": "check-dedup",
       "name": "Check Already Ingested?",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1120, 240]
+      "position": [
+        1120,
+        240
+      ]
     },
     {
       "parameters": {
-        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [{ "id": "already-ingested", "leftValue": "={{ (Array.isArray($json.body) ? $json.body : []).length }}", "rightValue": 0, "operator": { "type": "number", "operation": "equals" } }],
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "already-ingested",
+              "leftValue": "={{ (Array.isArray($json.body) ? $json.body : []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
           "combinator": "and"
         },
         "options": {}
@@ -83,7 +131,10 @@
       "name": "Is New Video?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [1300, 240]
+      "position": [
+        1300,
+        240
+      ]
     },
     {
       "parameters": {
@@ -92,13 +143,18 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ url: $('Split Into Videos').item.json.url, transcribe: true, summarize: true, index_to_hirag: true, namespace: $('Split Into Videos').item.json.namespace, persona: $('Split Into Videos').item.json.persona, room_id: $('Split Into Videos').item.json.room_id }) }}",
-        "options": { "timeout": 600000 }
+        "options": {
+          "timeout": 600000
+        }
       },
       "id": "ingest-video",
       "name": "Ingest Video",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1520, 180],
+      "position": [
+        1520,
+        180
+      ],
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 30000,
@@ -109,12 +165,26 @@
         "method": "POST",
         "url": "http://supabase-kong:8000/rest/v1/ingested_videos?on_conflict=video_id",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [
-          { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-          { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-          { "name": "Content-Type", "value": "application/json" },
-          { "name": "Prefer", "value": "resolution=merge-duplicates,return=minimal" }
-        ]},
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ video_id: $('Split Into Videos').item.json.video_id, title: $('Split Into Videos').item.json.title, status: 'ingested', playlist_id: $('Split Into Videos').item.json.playlist_id, persona: $('Split Into Videos').item.json.persona, room_id: $('Split Into Videos').item.json.room_id, duration: $('Split Into Videos').item.json.duration, ingested_at: new Date().toISOString() }) }}"
@@ -123,20 +193,37 @@
       "name": "Record Success",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1740, 120],
-      "onError": "continueRegularOutput"
+      "position": [
+        1740,
+        120
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://supabase-kong:8000/rest/v1/ingested_videos?on_conflict=video_id",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [
-          { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-          { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-          { "name": "Content-Type", "value": "application/json" },
-          { "name": "Prefer", "value": "resolution=merge-duplicates,return=minimal" }
-        ]},
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ video_id: $('Split Into Videos').item.json.video_id, title: $('Split Into Videos').item.json.title, status: 'failed', playlist_id: $('Split Into Videos').item.json.playlist_id, persona: $('Split Into Videos').item.json.persona, room_id: $('Split Into Videos').item.json.room_id, error: (($json.error && ($json.error.message || $json.error.description)) || 'ingest_error'), failed_at: new Date().toISOString() }) }}"
@@ -145,7 +232,10 @@
       "name": "Record Failure (DLQ)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1740, 280],
+      "position": [
+        1740,
+        280
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -160,8 +250,11 @@
       "name": "Publish NATS Event",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1960, 120],
-      "onError": "continueRegularOutput"
+      "position": [
+        1960,
+        120
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -175,32 +268,50 @@
       "name": "Emit CGP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2180, 120],
-      "onError": "continueRegularOutput"
+      "position": [
+        2180,
+        120
+      ],
+      "onError": "continueErrorOutput"
     },
     {
-      "parameters": { "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'ingested' } }];" },
+      "parameters": {
+        "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'ingested' } }];"
+      },
       "id": "mark-ingested",
       "name": "Mark Ingested",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2400, 120]
+      "position": [
+        2400,
+        120
+      ]
     },
     {
-      "parameters": { "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'skipped', reason: 'already_ingested' } }];" },
+      "parameters": {
+        "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'skipped', reason: 'already_ingested' } }];"
+      },
       "id": "log-skip",
       "name": "Log Skip",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1520, 360]
+      "position": [
+        1520,
+        360
+      ]
     },
     {
-      "parameters": { "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'failed' } }];" },
+      "parameters": {
+        "jsCode": "return [{ json: { ...$('Split Into Videos').item.json, status: 'failed' } }];"
+      },
       "id": "mark-failed",
       "name": "Mark Failed",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1960, 280]
+      "position": [
+        1960,
+        280
+      ]
     },
     {
       "parameters": {
@@ -210,7 +321,10 @@
       "name": "Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 480]
+      "position": [
+        1120,
+        480
+      ]
     },
     {
       "parameters": {
@@ -221,40 +335,222 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1340, 480]
+      "position": [
+        1340,
+        480
+      ]
     }
   ],
   "connections": {
-    "Playlist Webhook": { "main": [[{ "node": "Get Playlist Info", "type": "main", "index": 0 }]] },
-    "Get Playlist Info": { "main": [[{ "node": "Split Into Videos", "type": "main", "index": 0 }]] },
-    "Split Into Videos": { "main": [[{ "node": "Batch (size 4)", "type": "main", "index": 0 }]] },
-    "Batch (size 4)": {
+    "Playlist Webhook": {
       "main": [
-        [{ "node": "Summary", "type": "main", "index": 0 }],
-        [{ "node": "Check Already Ingested?", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Get Playlist Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Check Already Ingested?": { "main": [[{ "node": "Is New Video?", "type": "main", "index": 0 }]] },
+    "Get Playlist Info": {
+      "main": [
+        [
+          {
+            "node": "Split Into Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Videos": {
+      "main": [
+        [
+          {
+            "node": "Batch (size 4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch (size 4)": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Already Ingested?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Already Ingested?": {
+      "main": [
+        [
+          {
+            "node": "Is New Video?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Is New Video?": {
       "main": [
-        [{ "node": "Ingest Video", "type": "main", "index": 0 }],
-        [{ "node": "Log Skip", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Ingest Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Ingest Video": {
       "main": [
-        [{ "node": "Record Success", "type": "main", "index": 0 }],
-        [{ "node": "Record Failure (DLQ)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Record Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Failure (DLQ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Record Success": { "main": [[{ "node": "Publish NATS Event", "type": "main", "index": 0 }]] },
-    "Publish NATS Event": { "main": [[{ "node": "Emit CGP", "type": "main", "index": 0 }]] },
-    "Emit CGP": { "main": [[{ "node": "Mark Ingested", "type": "main", "index": 0 }]] },
-    "Mark Ingested": { "main": [[{ "node": "Batch (size 4)", "type": "main", "index": 0 }]] },
-    "Log Skip": { "main": [[{ "node": "Batch (size 4)", "type": "main", "index": 0 }]] },
-    "Record Failure (DLQ)": { "main": [[{ "node": "Mark Failed", "type": "main", "index": 0 }]] },
-    "Mark Failed": { "main": [[{ "node": "Batch (size 4)", "type": "main", "index": 0 }]] },
-    "Summary": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Record Success": {
+      "main": [
+        [
+          {
+            "node": "Publish NATS Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish NATS Event": {
+      "main": [
+        [
+          {
+            "node": "Emit CGP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emit CGP": {
+      "main": [
+        [
+          {
+            "node": "Mark Ingested",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Ingested": {
+      "main": [
+        [
+          {
+            "node": "Batch (size 4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Skip": {
+      "main": [
+        [
+          {
+            "node": "Batch (size 4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Failure (DLQ)": {
+      "main": [
+        [
+          {
+            "node": "Mark Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failed": {
+      "main": [
+        [
+          {
+            "node": "Batch (size 4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }
