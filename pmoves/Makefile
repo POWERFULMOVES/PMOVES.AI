@@ -1250,6 +1250,26 @@ validate-dockerfile-paths: ## Assert every compose `build:` points at a real Doc
 validate-dockerfile-paths-json: ## Same as validate-dockerfile-paths, but JSON output (for CI annotation)
 	@$(PYTHON) tools/validate_dockerfile_paths.py --json
 
+# ----------------------------------------------------------------------------
+# validate-command-anchors — a doc that says `make foo` is a promise; check it
+#   GHOST_TARGET   documented `make <t>` with no such target
+#   GHOST_PATH     documented `file:NNN` where the file does not exist
+#   UNRUNNABLE_DOC documented command matching a damage-control BLOCKED_PATTERN
+#   UNKNOWN_HOST   documented ssh host absent from the fleet topology
+# Scope-aware: make reaches docker/ssh/python/git/systemd/nats, not just docker.
+# Ratchet — baseline in configs/command_anchors/_known_gaps.yaml, count goes down.
+# ----------------------------------------------------------------------------
+.PHONY: validate-command-anchors validate-command-anchors-json validate-command-anchors-baseline
+validate-command-anchors: ## Assert every documented `make <t>` / `file:NNN` / ssh host resolves (no network)
+	@echo "?? Validate-command-anchors ratchet..."
+	@$(PYTHON) tools/validate_command_anchors.py
+
+validate-command-anchors-json: ## Same as validate-command-anchors, but JSON output
+	@$(PYTHON) tools/validate_command_anchors.py --json
+
+validate-command-anchors-baseline: ## Re-baseline the anchor gate (deliberate: say why in the PR)
+	@$(PYTHON) tools/validate_command_anchors.py --write-baseline
+
 validate-dockerfile-paths-list-orphans: ## Diagnostic: list orphan Dockerfiles not in the baseline; never fails
 	@$(PYTHON) tools/validate_dockerfile_paths.py --list-orphans
 
