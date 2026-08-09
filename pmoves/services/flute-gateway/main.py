@@ -620,7 +620,8 @@ app.include_router(
     create_mcp_router(
         get_provider=lambda: ultimate_tts_provider,
         get_nats_client=lambda: nats_client,
-    )
+    ),
+    dependencies=[Depends(verify_api_key)],
 )
 
 
