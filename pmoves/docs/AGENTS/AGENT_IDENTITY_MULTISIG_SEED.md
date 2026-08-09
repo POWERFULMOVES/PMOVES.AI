@@ -1,11 +1,25 @@
 # Agent Identity + Multi-Sig Quorum — spec seed (2026-08-09)
 
-Operator anchor: 5090 session message 2026-08-09 18:03 EDT, refining the
-signing-lane sweep's canonicalization proposal (register entry
-`5090-CLAUDE::SIGNING-LANE-SWEEP::2026-08-09`).
+Operator anchor: 5090 session message 2026-08-09 18:03 EDT (paraphrased by
+5090-CLAUDE — not a verbatim quote; the operator's words are theirs to state),
+refining the signing-lane sweep's canonicalization proposal (register entry
+`5090-CLAUDE::SIGNING-LANE-SWEEP::2026-08-09`). Paraphrase: the variants need
+a pydantic model — they are model alts — and this is a two-parter that
+exercises the quorum mechanism, since PMOVES agents will multi-sig on work.
 
-> "needs pydantic — these are model alts. this is a two-parter that exercises
-> that quorum thing, since pmoves agents will multi-sig on work."
+**Canonical references this direction points into** (canon is not an island):
+- `pmoves/docs/AGENTS/AGNOTE4482.md` §Village Rule — no agent operates alone;
+  execution / control-review / memory-security bodies — and the Three-Body
+  Pattern blocks used throughout the register.
+- `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` — the collision-safe traversal
+  protocol (one branch one owner, handshake blocks, JOHNNY BLAZE three-way
+  fallback): the written form of bodies-move-freely-without-collision.
+- `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md` — trail/attribution substrate
+  the accord extends.
+- `pmoves/config/agent_signatures.yaml` (schema 1.1.0) — `alters` already
+  first-class; `pmoves/docs/AGENTS/AGNOTE4482.md` §signing-card /
+  `CANONICAL_NAMES.md` decision log + `audit_naming_drift.py` — the existing
+  canonical-naming machinery this seed plugs into rather than replaces.
 
 The drift survey's ACK variants (`4090-CLAUDE`/`4090-claude`,
 `Mavis`/`Mavis-5090`, `SPARK-KIMI`/`KIMI-SPARK`) are **not sloppiness to
@@ -54,13 +68,15 @@ them up without erasing which instrument signed. Relates:
 `vision_fullstack_per_node_degrees`, `vision_mirror_becomes_original`,
 Jetson combiner fleet.
 
-## Three-Body, stated precisely (correction of record)
+## Three-Body framing (paraphrase, referencing existing canon)
 
-Three-Body is **not ritual and not mere reference-keeping — it is a
-topological solution**: three bodies separated so each moves freely without
-collision, captured in retrospect for context. Foundational; on its own it
-seems small, but it scales — and the hops from there are easier and still map.
-(Operator, same anchor; supersedes looser phrasings in earlier entries.)
+Per the operator (same anchor, paraphrased): Three-Body is not ritual — it is
+a topological solution, captured in retrospect for context, so each body can
+move freely and not collide; foundational, it scales, and the hops from there
+are easier and still map. **This is not new canon** — it references the canon
+already written: the Village Rule and Three-Body Pattern (AGNOTE4482.md) and
+the collision-safe traversal topology (KRISS_KROSS_ACCORD.md). Canon authority
+is DARKXSIDE's; this doc records a pointer into it, not a replacement for it.
 
 ## Status
 
