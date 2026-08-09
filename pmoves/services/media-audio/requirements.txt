@@ -12,7 +12,10 @@ librosa>=0.10.0
 soundfile>=0.12.0
 pydub>=0.25.1
 # Speaker diarization — loaded only when HF_TOKEN is set (pyannote 3.1 is gated).
-pyannote.audio>=3.3.0
+# <4 is load-bearing: pyannote 4.x hard-requires torchcodec>=0.7, which aborts
+# on import (std::length_error) in this image — reproduced as a 202-restart
+# crash loop. The 3.4 stack is the documented, working path.
+pyannote.audio>=3.3.0,<4
 
 # API framework
 fastapi==0.114.2

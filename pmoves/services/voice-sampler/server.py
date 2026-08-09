@@ -94,6 +94,11 @@ def _juicefs():
     return _s3(JUICEFS_ENDPOINT, JUICEFS_ACCESS_KEY, JUICEFS_SECRET_KEY)
 
 
+def _safe_ident(val: str) -> bool:
+    """True when val is usable as a single path component — no separators, no traversal."""
+    return bool(val) and not any(c in val for c in ("/", "\\", ".."))
+
+
 # ── SOURCE → ANALYZE → AUDITION ─────────────────────────────────────────────
 class SampleRequest(BaseModel):
     bucket: str
@@ -222,6 +227,14 @@ async def _handle_approval(msg) -> None:
         return
     if any(c.startswith("/") or ".." in c for c in clips):
         logger.warning("approval REFUSED: clip key traversal attempt")
+        published_total.labels(status="rejected").inc()
+        return
+    # room/persona/catalog_id become JuiceFS key components and the OmniVoice
+    # catalog filename (<catalog_id>.wav on a host bind) — same fail-closed rule
+    # as the /sample validator, but this path takes them from a NATS payload.
+    catalog_id = payload.get("catalog_id") or persona
+    if not all(_safe_ident(v) for v in (room, persona, catalog_id)):
+        logger.warning("approval REFUSED: identifier contains path separators")
         published_total.labels(status="rejected").inc()
         return
     try:
