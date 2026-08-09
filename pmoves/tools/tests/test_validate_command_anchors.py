@@ -222,3 +222,32 @@ def test_discriminators_carry_no_control_characters():
     for rx in (vca.DESCRIBES_BLOCK_RE, vca.ROAD_IN_LINE_RE, vca.GUARD_ROAD_RE):
         assert chr(8) not in rx.pattern
         assert chr(12) not in rx.pattern
+
+
+# ── the -C argument must not swallow a closing backtick (#2499) ──────
+
+
+def test_dash_c_arg_does_not_eat_the_closing_backtick():
+    """`-C \S+` matched the backtick too, so prose that backticks the prefix
+    alone captured the FOLLOWING word as a target. Found by dogfooding: an
+    AGNOTE entry writing "it offers two `make -C pmoves` targets" produced a
+    GHOST_TARGET for `targets`."""
+    bt = chr(96)
+    assert vca.MAKE_CITE_RE.findall(bt + "make -C pmoves" + bt + " targets") == []
+
+
+def test_dash_c_still_matches_real_citations():
+    bt = chr(96)
+    for text, want in [
+        (bt + "make -C pmoves up-core" + bt, ["up-core"]),
+        (bt + "make up-core" + bt, ["up-core"]),
+        (bt + "make -C pmoves/mk validate-composes" + bt, ["validate-composes"]),
+        (bt + "make -C ../pmoves up-core" + bt, ["up-core"]),
+    ]:
+        assert vca.MAKE_CITE_RE.findall(text) == want, text
+
+
+def test_fenced_form_keeps_the_same_dash_c_handling():
+    """The fenced matcher shares the -C fragment; keep them in step."""
+    assert vca.MAKE_FENCED_RE.findall("make -C pmoves up-core") == ["up-core"]
+    assert vca.MAKE_FENCED_RE.findall("$ make -C ../pmoves validate-composes") == ["validate-composes"]
