@@ -2073,3 +2073,32 @@ This is analogous to HTTP path versioning (`/api/v1/`) vs content-type versionin
 - Runtime dependencies: `nats` CLI, `hbbs` / `hbbr` systemd journals, `/var/log/pmoves`, and a NATS broker reachable from KVM2
 - Auth split: `TAILSCALE_AUTHKEY` joins nodes; `TAILSCALE_API_KEY` is for admin API operations and is not used to publish watcher events
 - Reachability caveat: the repo-default NATS broker is localhost-only on port `4222`, so remote watcher publishes stay blocked until one broker is exposed on a Tailscale-reachable interface
+
+
+## Validation Subjects (MiSSinGLinC external peer review)
+
+> Namespace `validation.*` introduced by the MiSSinGLinC mint
+> (`pmoves/docs/AGENTS/MISSINGLINC_MINT_SPEC.md`, 2026-08-09). The branded
+> namespace table addition in `.claude/context/self-hosted-defaults.md` is
+> staged in the mint PR body — that file is damage-control protected, so the
+> table row lands via operator apply.
+
+**`validation.run.requested.v1`**
+- **Direction:** Published by rooms/agents requesting validation -> Consumed by missinglinc-validator
+- **Purpose:** Request an external peer-review validation run: `{claim_set, evidence_corpus_refs, validation_depth}`
+- **Status:** REGISTERED-AHEAD — publisher lands with the MiSSinGLinC service (mint spec Wave-0; no consumer live yet)
+
+**`validation.verdict.ready.v1`**
+- **Direction:** Published by missinglinc-validator -> Consumed by rooms, Makeda voice readout (persona.makeda.missinglinc), Hi-RAG ingest
+- **Purpose:** Structured validation verdict with per-claim evidence chains and CHIT CGP proof packet
+- **Status:** REGISTERED-AHEAD — see mint spec
+
+**`validation.evidence.chain.v1`**
+- **Direction:** Published by missinglinc-validator -> Consumed by graph persistence (Neo4j lane), audit surfaces
+- **Purpose:** Claim -> evidence -> source graph (JSON-LD) for a completed validation run
+- **Status:** REGISTERED-AHEAD — see mint spec
+
+**`validation.counter.evidence.v1`**
+- **Direction:** Published by missinglinc-validator (adversarial depth only) -> Consumed by rooms, alerting
+- **Purpose:** Counter-evidence report: contradictions found while red-teaming a claim set
+- **Status:** REGISTERED-AHEAD — see mint spec
