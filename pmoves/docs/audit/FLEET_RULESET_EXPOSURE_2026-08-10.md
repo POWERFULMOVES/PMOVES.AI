@@ -176,7 +176,7 @@ read-only audit:
 
 ## Structural findings
 
-These are not ruleset problems. They are reasons branch-policy tooling cannot reach certain forks at all. The first four are silent; the fifth is not, and is breaking CI across the repo right now.
+These are not ruleset problems. They are reasons branch-policy tooling cannot reach certain forks at all. The first four fail silently; the fifth fails loudly, but only intermittently.
 
 ### 1. Five entries have no `branch` key, and four of those repos have no `main` branch
 
@@ -222,7 +222,7 @@ Both pairs track the same branch, so there is no conflict today. It does mean an
 
 Confirmed: 65 registered paths, 64 gitlinks, and the difference is `PMOVES-ollama`. It is in scope for the workflow (which reads `.gitmodules`, not the tree) and Tier 1 ungated, but the monorepo does not actually pin it.
 
-### 5. `PMOVES-Archon` has four nested gitlinks and no `.gitmodules`, and it is breaking CI now
+### 5. `PMOVES-Archon` has four nested gitlinks and no `.gitmodules`
 
 Found while checking this audit's own PR. At the commit `PMOVES.AI@origin/main`
 pins for `PMOVES-Archon` (`1e02907ac3`), the repo contains four submodule
@@ -249,18 +249,28 @@ fatal: run_command returned non-zero status while recursing in the nested submod
 The process '/usr/bin/git' failed with exit code 128
 ```
 
-This is **not** caused by any single PR. It reproduces on every open PR whose
-workflow checks out with `submodules: recursive` — confirmed failing on #2490,
-#2515, and on this audit's own PR, none of which touch submodules. The
-`emit lifecycle trail` job is the one currently surfacing it.
+This is **not** caused by any single PR — it has been observed on #2490, #2515
+and on this audit's own PR, none of which touch submodules. The
+`emit lifecycle trail` job (`.github/workflows/branch-trail-emit.yml`) is what
+surfaces it.
+
+**It is conditional, not universal, and the distinction matters for triage.**
+The same job passed on a re-run of this audit's PR minutes after failing. All
+three runs were on ephemeral self-hosted runners (`pmoves-b850-*`); the failing
+ones had a workspace that already contained a `PMOVES-Archon` checkout — the
+failing log shows `actions/checkout` cleaning a leftover tree (`HEAD is now at
+7c3b6ac41 …`) and then descending recursively into it. A runner with a fresh
+workspace never reaches the nested descent and passes.
+
+So the registration gap is unconditional and verified above; the CI failure is
+a flake whose probability depends on runner workspace reuse. Do not read a
+green `emit lifecycle trail` as evidence that the gap is fixed.
 
 It is the same failure class as findings 2 and 4 — a registration and a tree
-that disagree — one level down, and it is the most disruptive instance,
-because it fails closed rather than silently. Fixing it means either
-committing a `.gitmodules` to `PMOVES-Archon` that registers the four
-`external/` gitlinks, or removing the gitlinks if the vendored copies are no
-longer wanted. That is a change to `PMOVES-Archon`, not to this repo, and it
-is out of scope here.
+that disagree — one level down. Fixing it means either committing a
+`.gitmodules` to `PMOVES-Archon` that registers the four `external/` gitlinks,
+or removing the gitlinks if the vendored copies are no longer wanted. That is a
+change to `PMOVES-Archon`, not to this repo, and it is out of scope here.
 
 ## A correction to the "55 of 60" framing
 
