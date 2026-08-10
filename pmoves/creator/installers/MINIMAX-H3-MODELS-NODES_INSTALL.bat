@@ -45,15 +45,37 @@ echo [INFO] UNET profile: %H3_PROFILE%   optional tail: %INSTALL_TAIL%
 
 :: ── PYTHON (ComfyUI portable) — used to bootstrap the hf CLI ─────
 set "PY=%COMFY%\..\python_embeded\python.exe"
-if not exist "%PY%" set "PY=python"
+set "PY_SCRIPTS="
+if exist "%PY%" (
+    rem  ~f / ~dp both resolve the ..\ segment, so Scripts\ below is absolute.
+    for %%P in ("%PY%") do (set "PY=%%~fP" & set "PY_SCRIPTS=%%~dpPScripts")
+) else (
+    set "PY=python"
+)
+echo [INFO] Python: !PY!
 
 git --version >nul 2>&1 || (echo [ERROR] Git not in PATH – install Git for Windows. & pause & exit /b 1)
-hf --version >nul 2>&1 || (
-    echo [INFO] Installing huggingface_hub CLI + hf_transfer into the embedded python...
-    "%PY%" -m pip install -U "huggingface_hub[cli]" hf_transfer
+
+:: ── hf CLI — resolve an ABSOLUTE path, never a bare `hf` ─────────
+:: pip drops console scripts into the TARGET interpreter's Scripts\ dir, and a
+:: stock ComfyUI portable never puts python_embeded\Scripts on PATH. So a bare
+:: `hf download` fails with "not recognized" in this installer's PRIMARY scenario
+:: — even though the pip install immediately below has just succeeded.
+call :resolve_hf
+if not defined HF (
+    echo [INFO] Installing huggingface_hub CLI + hf_transfer into "!PY!"...
+    "!PY!" -m pip install -U "huggingface_hub[cli]" hf_transfer
+    if errorlevel 1 (echo [ERROR] pip install of huggingface_hub failed. & pause & exit /b 1)
+    call :resolve_hf
 )
+if not defined HF (
+    echo [ERROR] hf CLI not found after install.
+    echo         Looked for "!PY_SCRIPTS!\hf.exe" and for hf on PATH.
+    pause & exit /b 1
+)
+echo [INFO] hf CLI: !HF!
 set "HF_HUB_ENABLE_HF_TRANSFER=1"
-rem  For gated/rate-limited pulls authenticate once first:  hf auth login
+rem  For gated/rate-limited pulls authenticate once first:  "%HF%" auth login
 
 :: ── VERIFIED SOURCES (hf_fs byte-exact, 2026-08-09 recon) ───────
 set "REPO_QUANTS=DmitryDB/MiniMax-H3-ComfyUI-Quants"
@@ -73,15 +95,28 @@ popd
 :: ── DOWNLOAD MODELS via hf (real repo names; flattened into subdir) ─
 echo(
 echo -------- Downloading MiniMax-H3 models --------
+:: Every download is checked. A failure here — auth, disk exhaustion, a bad
+:: profile name, a dropped connection mid-pull — must NOT fall through to the
+:: "models ready" banner below: a false success on a 55-63 GB install is
+:: expensive to discover later, usually at generation time.
 call :hf "%REPO_QUANTS%"  "FL2VA/MiniMax-H3_FL2VA-%H3_PROFILE%.safetensors"  "models\diffusion_models"
+if errorlevel 1 goto :download_failed
 call :hf "%REPO_QUANTS%"  "Ref2VA/MiniMax-H3_Ref2VA-%H3_PROFILE%.safetensors" "models\diffusion_models"
+if errorlevel 1 goto :download_failed
 call :hf "%REPO_QUANTS%"  "vae/MiniMax-H3_VideoVAE-FP16.safetensors"          "models\vae"
+if errorlevel 1 goto :download_failed
 call :hf "%REPO_QUANTS%"  "vae/MiniMax-H3_AudioVAE-FP32.safetensors"          "models\vae"
+if errorlevel 1 goto :download_failed
 echo   [REQUIRED] conditioning encoder (layers 0-49, ~24.6 GiB)
 call :hf "%REPO_ENCODER%" "%ENC_MAIN%" "models\text_encoders\MiniMax-H3"
+if errorlevel 1 goto :download_failed
 if "%INSTALL_TAIL%"=="1" (
-    echo   [OPTIONAL] prompt-enhancement tail (layers 50-63, ~7.1 GiB)
+    rem  Parens MUST be escaped inside a block: an unescaped ^) closed this if-body
+    rem  early, so the 7.1 GiB tail downloaded unconditionally and "[SKIP] optional
+    rem  tail" printed right after it. Verified before/after by running the script.
+    echo   [OPTIONAL] prompt-enhancement tail ^(layers 50-63, ~7.1 GiB^)
     call :hf "%REPO_ENCODER%" "%ENC_TAIL%" "models\text_encoders\MiniMax-H3"
+    if errorlevel 1 goto :download_failed
 ) else (
     echo   [SKIP] optional tail ^(set INSTALL_TAIL=1 to fetch^)
 )
@@ -92,10 +127,34 @@ echo   MiniMax-H3 models + support nodes ready.
 echo   Encoder dir: models\text_encoders\MiniMax-H3  (CLIPLoader type: minimax)
 echo -------------------------------------------------------------
 pause
-exit /b
+exit /b 0
+
+
+:download_failed
+echo(
+echo -------------------------------------------------------------
+echo   [ERROR] A model download FAILED — the install is INCOMPLETE.
+echo   Do NOT treat the models as ready. Fix the cause and re-run:
+echo     auth    : "!HF!" auth login   ^(gated or rate-limited repos^)
+echo     disk    : needs ~55.5 GB free ^(63 GB with INSTALL_TAIL=1^)
+echo     profile : H3_PROFILE must be NVFP4 or NVFP4-HQ
+echo     network : transient drops are common on multi-GiB pulls
+echo   Files already fetched are kept, so a re-run resumes.
+echo -------------------------------------------------------------
+pause
+exit /b 1
 
 
 :: ==================== SUBROUTINES ============================
+
+:resolve_hf
+rem  Prefer the CLI that ships next to the interpreter we install INTO — a stock
+rem  ComfyUI portable does not put that Scripts\ dir on PATH. Fall back to PATH
+rem  for venv / system installs where a bare `hf` does resolve.
+set "HF="
+if defined PY_SCRIPTS if exist "%PY_SCRIPTS%\hf.exe" set "HF=%PY_SCRIPTS%\hf.exe"
+if not defined HF (where hf >nul 2>&1 && set "HF=hf")
+goto :eof
 
 :get_node
 set "DIR=%~1"
@@ -114,11 +173,12 @@ set "H_FILE=%~2"
 set "H_DIR=%COMFY%\%~3"
 set "H_WIN=%H_FILE:/=\%"
 for %%A in ("%H_WIN%") do set "H_BASE=%%~nxA"
-if exist "%H_DIR%\%H_BASE%" (echo   • %H_BASE% already present – skip & goto :eof)
+if exist "%H_DIR%\%H_BASE%" (echo   • %H_BASE% already present – skip & exit /b 0)
 if not exist "%H_DIR%" mkdir "%H_DIR%"
 echo   • downloading %H_FILE%
-hf download "%H_REPO%" "%H_FILE%" --local-dir "%H_DIR%"
-if errorlevel 1 (echo     [!] Download failed: %H_FILE% & goto :eof)
+"%HF%" download "%H_REPO%" "%H_FILE%" --local-dir "%H_DIR%"
+rem  Propagate, do not warn-and-continue: the caller aborts the whole install.
+if errorlevel 1 (echo     [ERROR] Download failed: %H_FILE% & exit /b 1)
 rem  hf preserves the repo path — flatten the leaf up into H_DIR, drop empty subdir
 if not "%H_WIN%"=="%H_BASE%" (
     if exist "%H_DIR%\%H_WIN%" (
