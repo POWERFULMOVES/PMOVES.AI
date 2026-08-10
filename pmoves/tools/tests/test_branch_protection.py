@@ -4,15 +4,22 @@ Unit tests for pmoves.tools.branch_protection. Pure-stdlib; uses
 unittest.mock to intercept the `gh api` subprocess calls so the
 tests don't need network or a real gh binary.
 
+The tool owns RULESETS only (per operator ratification 2026-08-10).
+Classic branch protection is the responsibility of
+.github/workflows/branch-protection-sync.yml. The tests reflect the
+post-ratification API surface (SpecValidator, resolve_branch,
+_ruleset_matches, audit/apply/drift_check).
+
 Test groups:
-    A. SpecLoaderTests        — load + resolve_repo_profile
-    B. DiffLogicTests         — _diff_required_status_checks + _diff_review_policy
-                                + _diff_boolean_field + _diff_rulesets
-    C. ApplyBodyTests         — _build_classic_body + _build_ruleset_body
-    D. AuditTests             — audit() end-to-end with mocked gh
-    E. ApplyTests             — apply() end-to-end with mocked gh (dry + live)
-    F. DriftCheckTests        — drift_check() across the spec
-    G. CLITests               — main() argv parsing + output format
+    A. SpecValidatorTests        — strict spec validation
+    B. ResolveRepoProfileTests   — resolve_repo_profile + overrides
+    C. ResolveBranchTests        — resolve_branch (override + .gitmodules + default)
+    D. RulesetDiffTests          — _ruleset_matches deep diff
+    E. AuditTests                — audit() end-to-end with mocked gh
+    F. ApplyTests                — apply() end-to-end with mocked gh (dry + live)
+    G. DriftCheckTests           — drift_check() across the spec
+    H. CLITests                  — main() argv parsing + output format
+    I. GHErrorPathTests          — gh missing, timeout, 404
 """
 from __future__ import annotations
 
@@ -22,9 +29,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-# Make pmoves.tools importable when running from the worktree root.
 import sys
 
+# Make pmoves.tools importable when running from the worktree root.
 ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -35,77 +42,70 @@ from pmoves.tools import branch_protection as bp  # noqa: E402
 # --- Test fixtures: a minimal spec + repo state ---
 
 MINIMAL_SPEC = {
-    "spec": "pmoves.branch_protection/v1",
-    "encoder_version": "1.0.0",
+    "spec": "pmoves.rulesets/v2",
+    "encoder_version": "2.0.0",
     "profiles": {
         "monorepo": {
             "description": "test monorepo",
-            "branch": "main",
-            "required_status_checks": {
-                "strict": True,
-                "checks": [
-                    {"context": "merge-gate"},
-                    {"context": "python-tests"},
-                ],
-            },
-            "required_pull_request_reviews": {
-                "dismiss_stale_reviews": True,
-                "require_code_owner_reviews": True,
-                "require_last_push_approval": False,
-                "required_approving_review_count": 1,
-            },
-            "required_linear_history": True,
-            "required_signatures": True,
-            "required_conversation_resolution": True,
-            "enforce_admins": False,
-            "allow_force_pushes": False,
-            "allow_deletions": False,
-            "restrictions": None,
             "rulesets": [
                 {
                     "name": "[ main ]",
                     "target": "branch",
                     "enforcement": "active",
-                    "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+                    "conditions": {
+                        "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
+                    },
                     "rules": [
                         {"type": "deletion"},
                         {"type": "non_fast_forward"},
-                        {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},
+                        {
+                            "type": "required_status_checks",
+                            "parameters": {
+                                "required_status_checks": [
+                                    {"context": "merge-gate"},
+                                    {"context": "python-tests"},
+                                ],
+                                "strict_required_status_checks_policy": True,
+                            },
+                        },
+                        {
+                            "type": "pull_request",
+                            "parameters": {
+                                "require_code_owner_review": True,
+                                "dismiss_stale_reviews_on_push": True,
+                                "required_approving_review_count": 1,
+                                "required_review_thread_resolution": True,
+                            },
+                        },
                     ],
-                    "bypass_actors": [],
+                    "bypass_actors": [
+                        {"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}
+                    ],
                 }
             ],
         },
         "fork": {
             "description": "test fork",
-            "branch": "main",
-            "required_status_checks": {
-                "strict": True,
-                "checks": [{"context": "CodeRabbit"}],
-            },
-            "required_pull_request_reviews": {
-                "dismiss_stale_reviews": True,
-                "require_code_owner_reviews": False,
-                "require_last_push_approval": False,
-                "required_approving_review_count": 1,
-            },
-            "required_linear_history": True,
-            "required_signatures": False,
-            "required_conversation_resolution": True,
-            "enforce_admins": False,
-            "allow_force_pushes": False,
-            "allow_deletions": False,
-            "restrictions": None,
             "rulesets": [
                 {
                     "name": "[ main ]",
                     "target": "branch",
                     "enforcement": "active",
-                    "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+                    "conditions": {
+                        "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
+                    },
                     "rules": [
                         {"type": "deletion"},
                         {"type": "non_fast_forward"},
-                        {"type": "pull_request", "parameters": {"required_approving_review_count": 1}},
+                        {
+                            "type": "pull_request",
+                            "parameters": {
+                                "require_code_owner_review": False,
+                                "dismiss_stale_reviews_on_push": True,
+                                "required_approving_review_count": 0,
+                                "required_review_thread_resolution": True,
+                            },
+                        },
                     ],
                     "bypass_actors": [],
                 }
@@ -116,55 +116,62 @@ MINIMAL_SPEC = {
         "TEST/monorepo": {"profile": "monorepo"},
         "TEST/fork": {
             "profile": "fork",
-            "required_status_checks": {
-                "strict": True,
-                "checks": [
-                    {"context": "check-attribution"},
-                    {"context": "ruff + ty diff"},
-                ],
+            "branch": "main",
+            "ruleset_overrides": {
+                "[ main ]": {
+                    "rules": [
+                        {
+                            "type": "required_status_checks",
+                            "parameters": {
+                                "required_status_checks": [
+                                    {"context": "check-attribution"},
+                                    {"context": "ruff + ty diff"},
+                                ],
+                                "strict_required_status_checks_policy": True,
+                            },
+                        }
+                    ]
+                }
             },
         },
     },
 }
 
 
-COMPLIANT_CLASSIC = {
-    "required_status_checks": {
-        "strict": True,
-        "checks": [
-            {"context": "merge-gate"},
-            {"context": "python-tests"},
-        ],
-    },
-    "required_pull_request_reviews": {
-        "dismiss_stale_reviews": True,
-        "require_code_owner_reviews": True,
-        "require_last_push_approval": False,
-        "required_approving_review_count": 1,
-    },
-    "required_linear_history": {"enabled": True},
-    "required_signatures": {"enabled": True},
-    "required_conversation_resolution": {"enabled": True},
-    "enforce_admins": {"enabled": False},
-    "allow_force_pushes": {"enabled": False},
-    "allow_deletions": {"enabled": False},
-    "restrictions": None,
-}
-
-
+# GitHub API returns `main` (literal), not `~DEFAULT_BRANCH`.
 COMPLIANT_RULESETS = [
     {
         "id": 1,
         "name": "[ main ]",
         "target": "branch",
         "enforcement": "active",
-        "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+        "conditions": {"ref_name": {"include": ["main"], "exclude": []}},
         "rules": [
             {"type": "deletion"},
             {"type": "non_fast_forward"},
-            {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},
+            {
+                "type": "required_status_checks",
+                "parameters": {
+                    "required_status_checks": [
+                        {"context": "merge-gate"},
+                        {"context": "python-tests"},
+                    ],
+                    "strict_required_status_checks_policy": True,
+                },
+            },
+            {
+                "type": "pull_request",
+                "parameters": {
+                    "require_code_owner_review": True,
+                    "dismiss_stale_reviews_on_push": True,
+                    "required_approving_review_count": 1,
+                    "required_review_thread_resolution": True,
+                },
+            },
         ],
-        "bypass_actors": [],
+        "bypass_actors": [
+            {"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}
+        ],
     }
 ]
 
@@ -178,12 +185,11 @@ class _MockProc:
         self.stderr = stderr
 
 
-def _mock_subprocess_factory(responses: dict[tuple[str, str], Any]):
+def _mock_subprocess_factory(responses: dict):
     """Build a mock for subprocess.run that maps (method, path) to a
     parsed JSON response. path is matched as exact-or-prefix.
     """
-    def _run(cmd, input=None, capture_output=None, text=None, check=None):
-        # cmd layout: ["gh", "api", "--method", METHOD, PATH, ...]
+    def _run(cmd, input=None, capture_output=None, text=None, check=None, timeout=None):
         method = cmd[3]
         path = cmd[4]
         for (m, p), resp in responses.items():
@@ -197,425 +203,644 @@ def _mock_subprocess_factory(responses: dict[tuple[str, str], Any]):
     return _run
 
 
-# === A. SpecLoaderTests ===
+# === A. SpecValidatorTests ===
 
-class SpecLoaderTests(unittest.TestCase):
-    def test_A1_load_minimal_spec(self):
-        spec = MINIMAL_SPEC
-        self.assertIn("profiles", spec)
-        self.assertIn("per_repo_overrides", spec)
-        self.assertEqual(spec["spec"], "pmoves.branch_protection/v1")
+class SpecValidatorTests(unittest.TestCase):
+    def test_A1_valid_spec_passes(self):
+        # Should not raise.
+        bp.SpecValidator(MINIMAL_SPEC).validate()
 
-    def test_A2_resolve_repo_profile_default(self):
+    def test_A2_missing_top_level_spec_key_raises(self):
+        bad = {k: v for k, v in MINIMAL_SPEC.items() if k != "spec"}
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.SpecValidator(bad).validate()
+        self.assertIn("missing top-level 'spec' key", str(cm.exception))
+
+    def test_A3_missing_profiles_raises(self):
+        bad = {k: v for k, v in MINIMAL_SPEC.items() if k != "profiles"}
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.SpecValidator(bad).validate()
+        self.assertIn("missing or non-dict 'profiles'", str(cm.exception))
+
+    def test_A4_empty_profiles_raises(self):
+        bad = dict(MINIMAL_SPEC)
+        bad["profiles"] = {}
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.SpecValidator(bad).validate()
+        self.assertIn("'profiles' is empty", str(cm.exception))
+
+    def test_A5_invalid_rule_type_raises(self):
+        bad = json.loads(json.dumps(MINIMAL_SPEC))
+        bad["profiles"]["monorepo"]["rulesets"][0]["rules"].append(
+            {"type": "totally_made_up_rule"}
+        )
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.SpecValidator(bad).validate()
+        self.assertIn("not in VALID_RULESET_RULE_TYPES", str(cm.exception))
+
+    def test_A6_invalid_target_raises(self):
+        bad = json.loads(json.dumps(MINIMAL_SPEC))
+        bad["profiles"]["monorepo"]["rulesets"][0]["target"] = "commit"
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.SpecValidator(bad).validate()
+        self.assertIn(".target: 'commit' not in (branch, tag, push)", str(cm.exception))
+
+    def test_A7_invalid_enforcement_raises(self):
+        bad = json.loads(json.dumps(MINIMAL_SPEC))
+        bad["profiles"]["monorepo"]["rulesets"][0]["enforcement"] = "enforced"
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.SpecValidator(bad).validate()
+        self.assertIn("not in (active, disabled, evaluate)", str(cm.exception))
+
+    def test_A8_override_unknown_profile_raises(self):
+        bad = dict(MINIMAL_SPEC)
+        bad["per_repo_overrides"] = {"TEST/x": {"profile": "ghost"}}
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.SpecValidator(bad).validate()
+        self.assertIn("not in spec.profiles", str(cm.exception))
+
+    def test_A9_multiple_errors_collected(self):
+        bad = {"spec": "x"}  # missing profiles + per_repo_overrides
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.SpecValidator(bad).validate()
+        # Both errors should be in the message.
+        msg = str(cm.exception)
+        self.assertIn("missing or non-dict 'profiles'", msg)
+        self.assertIn("missing or non-dict 'per_repo_overrides'", msg)
+
+    def test_A10_load_spec_raises_for_missing_path(self):
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp.load_spec(Path("/nonexistent/spec.json"))
+        self.assertIn("spec not found at", str(cm.exception))
+
+    def test_A13_validator_accepts_required_conversation_resolution(self):
+        spec = json.loads(json.dumps(MINIMAL_SPEC))
+        # Make sure required_conversation_resolution is in the validator's set.
+        self.assertIn("required_conversation_resolution", bp.VALID_RULESET_RULE_TYPES)
+        # And the spec can carry it.
+        spec["profiles"]["monorepo"]["rulesets"][0]["rules"].append(
+            {"type": "required_conversation_resolution"}
+        )
+        bp.SpecValidator(spec).validate()  # should not raise
+
+    def test_A14_validator_accepts_required_linear_history(self):
+        # Caught a real bug: spec used "require_linear_history" (typo) but
+        # the API expects "required_linear_history". Validator must accept
+        # the correct spelling.
+        spec = json.loads(json.dumps(MINIMAL_SPEC))
+        spec["profiles"]["monorepo"]["rulesets"][0]["rules"].append(
+            {"type": "required_linear_history"}
+        )
+        bp.SpecValidator(spec).validate()  # should not raise
+
+    def test_A11_load_spec_validates_by_default(self):
+        with mock.patch.object(Path, "read_text", return_value=json.dumps({"spec": "x"})):
+            with self.assertRaises(bp.BranchProtectionError):
+                bp.load_spec(Path("/tmp/any.json"))
+
+    def test_A12_load_spec_skip_validation_with_flag(self):
+        bad_but_skip = {"spec": "x"}  # would fail validation
+        import tempfile
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            json.dump(bad_but_skip, f)
+            tmp_path = Path(f.name)
+        try:
+            spec = bp.load_spec(tmp_path, validate=False)
+        finally:
+            tmp_path.unlink()
+        self.assertEqual(spec, bad_but_skip)
+
+
+# === B. ResolveRepoProfileTests ===
+
+class ResolveRepoProfileTests(unittest.TestCase):
+    def test_B1_resolve_repo_profile_default(self):
         name, merged = bp.resolve_repo_profile(MINIMAL_SPEC, "TEST/monorepo")
         self.assertEqual(name, "monorepo")
-        self.assertEqual(merged["branch"], "main")
-        self.assertTrue(merged["required_linear_history"])
+        self.assertEqual(len(merged["rulesets"]), 1)
+        self.assertEqual(merged["rulesets"][0]["name"], "[ main ]")
 
-    def test_A3_resolve_repo_profile_with_override(self):
+    def test_B2_resolve_repo_profile_with_ruleset_override(self):
         name, merged = bp.resolve_repo_profile(MINIMAL_SPEC, "TEST/fork")
         self.assertEqual(name, "fork")
-        # The override replaced the required_status_checks.
-        contexts = {c["context"] for c in merged["required_status_checks"]["checks"]}
+        # The ruleset_overrides should inject the required_status_checks rule.
+        rs = merged["rulesets"][0]
+        types = [r["type"] for r in rs["rules"]]
+        self.assertIn("required_status_checks", types)
+        contexts = {
+            c["context"]
+            for r in rs["rules"]
+            if r["type"] == "required_status_checks"
+            for c in r["parameters"]["required_status_checks"]
+        }
         self.assertEqual(contexts, {"check-attribution", "ruff + ty diff"})
 
-    def test_A4_resolve_repo_profile_unknown_repo_raises(self):
+    def test_B3_resolve_repo_profile_unknown_repo_raises(self):
         with self.assertRaises(bp.BranchProtectionError) as cm:
             bp.resolve_repo_profile(MINIMAL_SPEC, "TEST/unknown")
         self.assertIn("no per_repo_overrides", str(cm.exception))
 
-    def test_A5_resolve_repo_profile_unknown_profile_raises(self):
+    def test_B4_resolve_repo_profile_unknown_profile_raises(self):
         bad_spec = dict(MINIMAL_SPEC)
         bad_spec["per_repo_overrides"] = {"TEST/x": {"profile": "ghost"}}
         with self.assertRaises(bp.BranchProtectionError) as cm:
             bp.resolve_repo_profile(bad_spec, "TEST/x")
         self.assertIn("not found in spec", str(cm.exception))
 
+    def test_B5_resolve_repo_profile_does_not_mutate_input(self):
+        # The function should deepcopy the profile so callers can safely mutate.
+        before = json.dumps(MINIMAL_SPEC)
+        _, merged = bp.resolve_repo_profile(MINIMAL_SPEC, "TEST/monorepo")
+        merged["rulesets"][0]["name"] = "MUTATED"
+        after = json.dumps(MINIMAL_SPEC)
+        self.assertEqual(before, after)
 
-# === B. DiffLogicTests ===
+    def test_B6_resolve_repo_profile_rules_override_merges_by_type(self):
+        # The ruleset_overrides for TEST/fork adds a `required_status_checks`
+        # rule. The base fork profile already has `deletion`, `non_fast_forward`,
+        # and `pull_request`. The merge must EXTEND (not replace) the rules
+        # list so the base rules survive.
+        _, merged = bp.resolve_repo_profile(MINIMAL_SPEC, "TEST/fork")
+        rs = merged["rulesets"][0]
+        types = [r["type"] for r in rs["rules"]]
+        self.assertIn("deletion", types)
+        self.assertIn("non_fast_forward", types)
+        self.assertIn("pull_request", types)
+        self.assertIn("required_status_checks", types)
+        self.assertEqual(len(types), 4)
 
-class DiffLogicTests(unittest.TestCase):
-    def test_B1_diff_status_checks_compliant(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["required_status_checks"]
-        drift = bp._diff_required_status_checks(expected, COMPLIANT_CLASSIC["required_status_checks"])
-        self.assertEqual(drift, [])
-
-    def test_B2_diff_status_checks_missing(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["required_status_checks"]
-        actual = {"strict": True, "checks": [{"context": "merge-gate"}]}
-        drift = bp._diff_required_status_checks(expected, actual)
-        self.assertEqual(len(drift), 1)
-        self.assertIn("python-tests", drift[0].field)
-        self.assertEqual(drift[0].severity, "block")
-
-    def test_B3_diff_status_checks_strict_mismatch(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["required_status_checks"]
-        actual = {"strict": False, "checks": [{"context": "merge-gate"}, {"context": "python-tests"}]}
-        drift = bp._diff_required_status_checks(expected, actual)
-        self.assertTrue(any(d.field == "required_status_checks.strict" for d in drift))
-
-    def test_B4_diff_status_checks_extra_is_warn(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["required_status_checks"]
-        actual = {
-            "strict": True,
-            "checks": [
-                {"context": "merge-gate"},
-                {"context": "python-tests"},
-                {"context": "extra-check"},
-            ],
-        }
-        drift = bp._diff_required_status_checks(expected, actual)
-        self.assertEqual(len(drift), 1)
-        self.assertEqual(drift[0].severity, "warn")
-        self.assertIn("extra-check", drift[0].field)
-
-    def test_B5_diff_status_checks_none_is_block(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["required_status_checks"]
-        drift = bp._diff_required_status_checks(expected, None)
-        self.assertEqual(len(drift), 1)
-        self.assertEqual(drift[0].severity, "block")
-
-    def test_B6_diff_review_policy_compliant(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["required_pull_request_reviews"]
-        drift = bp._diff_review_policy(expected, COMPLIANT_CLASSIC["required_pull_request_reviews"])
-        self.assertEqual(drift, [])
-
-    def test_B7_diff_review_policy_count_drift_is_block(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["required_pull_request_reviews"]
-        actual = dict(COMPLIANT_CLASSIC["required_pull_request_reviews"])
-        actual["required_approving_review_count"] = 0
-        drift = bp._diff_review_policy(expected, actual)
-        self.assertTrue(any(d.severity == "block" for d in drift))
-
-    def test_B8_diff_review_policy_dismiss_stale_drift_is_warn(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["required_pull_request_reviews"]
-        actual = dict(COMPLIANT_CLASSIC["required_pull_request_reviews"])
-        actual["dismiss_stale_reviews"] = False
-        drift = bp._diff_review_policy(expected, actual)
-        self.assertTrue(any(d.severity == "warn" for d in drift))
-
-    def test_B9_diff_boolean_field_compliant(self):
-        drift = bp._diff_boolean_field(
-            "required_linear_history", True,
-            {"required_linear_history": {"enabled": True}},
+    def test_B7_resolve_repo_profile_override_rule_replaces_base(self):
+        # When the override has a rule with the same type as a base rule,
+        # the override wins. (E.g. an override of `pull_request` would
+        # replace the base `pull_request`.)
+        spec = json.loads(json.dumps(MINIMAL_SPEC))
+        spec["per_repo_overrides"]["TEST/fork"]["ruleset_overrides"]["[ main ]"]["rules"].append(
+            {
+                "type": "pull_request",
+                "parameters": {
+                    "require_code_owner_review": True,
+                    "dismiss_stale_reviews_on_push": False,
+                    "required_approving_review_count": 5,
+                    "required_review_thread_resolution": False,
+                },
+            }
         )
-        self.assertEqual(drift, [])
+        _, merged = bp.resolve_repo_profile(spec, "TEST/fork")
+        rs = merged["rulesets"][0]
+        pr_rules = [r for r in rs["rules"] if r["type"] == "pull_request"]
+        self.assertEqual(len(pr_rules), 1)
+        self.assertEqual(pr_rules[0]["parameters"]["required_approving_review_count"], 5)
 
-    def test_B10_diff_boolean_field_drift_is_warn(self):
-        drift = bp._diff_boolean_field(
-            "required_signatures", True,
-            {"required_signatures": {"enabled": False}},
+
+# === C. ResolveBranchTests ===
+
+class ResolveBranchTests(unittest.TestCase):
+    def test_C1_override_branch_wins(self):
+        b = bp.resolve_branch(
+            "POWERFULMOVES/PMOVES.AI", "main", MINIMAL_SPEC
         )
-        self.assertEqual(len(drift), 1)
-        self.assertEqual(drift[0].severity, "warn")
+        self.assertEqual(b, "main")
 
-    def test_B11_diff_boolean_field_none_is_block(self):
-        drift = bp._diff_boolean_field("required_signatures", True, None)
-        self.assertEqual(drift[0].severity, "block")
+    def test_C2_gitmodules_branch_when_no_override(self):
+        # The branch-protection-sync.yml convention: track the gitlink
+        # branch (which is PMOVES.AI-Edition-Hardened for most forks).
+        fake_cfg = mock.MagicMock()
+        fake_cfg.sections.return_value = [
+            'submodule "PMOVES-foo"',
+            'submodule "PMOVES.AI"',
+        ]
 
-    def test_B12_diff_boolean_field_bare_bool_actual(self):
-        # The real GitHub API returns {"enabled": true} for these. The
-        # tool also tolerates a bare bool for tests / partial inputs.
-        drift = bp._diff_boolean_field(
-            "required_signatures", True, {"required_signatures": True}
-        )
-        self.assertEqual(drift, [])
+        def fake_get(section, key, **kwargs):
+            if key == "url":
+                return "https://github.com/POWERFULMOVES/" + section.split('"')[1]
+            if key == "branch":
+                return "PMOVES.AI-Edition-Hardened"
+            return kwargs.get("fallback", "")
 
-    def test_B12_diff_rulesets_compliant(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"]
-        drift = bp._diff_rulesets(expected, COMPLIANT_RULESETS)
-        self.assertEqual(drift, [])
+        fake_cfg.get.side_effect = fake_get
+        with mock.patch.object(bp, "_gitmodules_path", return_value=Path("/fake/.gitmodules")):
+            with mock.patch("configparser.ConfigParser", return_value=fake_cfg):
+                b = bp.resolve_branch(
+                    "POWERFULMOVES/PMOVES.AI", None, MINIMAL_SPEC
+                )
+        self.assertEqual(b, "PMOVES.AI-Edition-Hardened")
 
-    def test_B13_diff_rulesets_missing(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"]
-        drift = bp._diff_rulesets(expected, [])
-        self.assertEqual(len(drift), 1)
-        self.assertEqual(drift[0].severity, "block")
-
-    def test_B14_diff_rulesets_unexpected_extra_is_warn(self):
-        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"]
-        drift = bp._diff_rulesets(expected, COMPLIANT_RULESETS + [{"id": 2, "name": "extra"}])
-        self.assertEqual(len(drift), 1)
-        self.assertEqual(drift[0].severity, "warn")
-
-
-# === C. ApplyBodyTests ===
-
-class ApplyBodyTests(unittest.TestCase):
-    def test_C1_build_classic_body_has_all_keys(self):
-        body = bp._build_classic_body(MINIMAL_SPEC["profiles"]["monorepo"])
-        for key in (
-            "required_status_checks",
-            "required_pull_request_reviews",
-            "required_linear_history",
-            "required_signatures",
-            "required_conversation_resolution",
-            "enforce_admins",
-            "allow_force_pushes",
-            "allow_deletions",
-            "restrictions",
+    def test_C3_no_override_no_gitmodules_uses_default(self):
+        with mock.patch.object(
+            bp, "_gitmodules_path", return_value=Path("/nonexistent/.gitmodules")
         ):
-            self.assertIn(key, body)
+            b = bp.resolve_branch(
+                "POWERFULMOVES/PMOVES-newrepo", None, MINIMAL_SPEC
+            )
+        self.assertEqual(b, "main")
 
-    def test_C2_build_classic_body_preserves_values(self):
-        profile = MINIMAL_SPEC["profiles"]["monorepo"]
-        body = bp._build_classic_body(profile)
-        self.assertEqual(body["required_linear_history"], True)
-        self.assertEqual(body["required_signatures"], True)
-        self.assertEqual(body["enforce_admins"], False)
-
-    def test_C3_build_ruleset_body_has_required_keys(self):
-        rs = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
-        body = bp._build_ruleset_body(rs)
-        for key in ("name", "target", "enforcement", "conditions", "rules", "bypass_actors"):
-            self.assertIn(key, body)
-
-    def test_C4_build_ruleset_body_preserves_rules(self):
-        rs = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
-        body = bp._build_ruleset_body(rs)
-        self.assertEqual(len(body["rules"]), 3)
-        self.assertEqual(body["rules"][0]["type"], "deletion")
+    def test_C4_slug_extraction_handles_dot_in_name(self):
+        # "POWERFULMOVES/PMOVES.AI" -> slug = "PMOVES.AI"
+        with mock.patch.object(
+            bp, "_gitmodules_path", return_value=Path("/nonexistent/.gitmodules")
+        ):
+            b = bp.resolve_branch("POWERFULMOVES/PMOVES.AI", None, MINIMAL_SPEC)
+        self.assertEqual(b, "main")  # no .gitmodules, no override -> main
 
 
-# === D. AuditTests ===
+# === D. RulesetDiffTests ===
+
+class RulesetDiffTests(unittest.TestCase):
+    def test_D1_compliant_no_drift(self):
+        # GitHub API returns the default branch literal in conditions.
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        actual = COMPLIANT_RULESETS[0]
+        drift = bp._ruleset_matches(expected, actual)
+        # The ~DEFAULT_BRANCH comparison is skipped in the spec check,
+        # so the ruleset should be in-sync.
+        self.assertEqual(drift, [])
+
+    def test_D2_missing_required_status_check_is_block(self):
+        bad = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        bad["rules"] = [
+            r for r in bad["rules"] if r["type"] != "required_status_checks"
+        ]
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        drift = bp._ruleset_matches(expected, bad)
+        self.assertTrue(
+            any(
+                d.severity == "block"
+                and "required_status_checks" in d.field
+                for d in drift
+            )
+        )
+
+    def test_D3_extra_unexpected_rule_is_warn(self):
+        bad = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        bad["rules"].append({"type": "creation"})
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        drift = bp._ruleset_matches(expected, bad)
+        self.assertTrue(
+            any(
+                d.severity == "warn"
+                and "creation" in d.field
+                for d in drift
+            )
+        )
+
+    def test_D4_drifted_parameters_is_block(self):
+        bad = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        # Change required_approving_review_count from 1 to 0.
+        for r in bad["rules"]:
+            if r["type"] == "pull_request":
+                r["parameters"]["required_approving_review_count"] = 0
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        drift = bp._ruleset_matches(expected, bad)
+        self.assertTrue(
+            any(
+                d.severity == "block"
+                and "pull_request" in d.field
+                and "parameters" in d.field
+                for d in drift
+            )
+        )
+
+    def test_D5_drifted_bypass_actors_is_block(self):
+        bad = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        # Drop the RepositoryRole bypass actor.
+        bad["bypass_actors"] = []
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        drift = bp._ruleset_matches(expected, bad)
+        self.assertTrue(
+            any(
+                d.severity == "block" and "bypass_actors" in d.field
+                for d in drift
+            )
+        )
+
+    def test_D6_enforcement_mismatch_is_block(self):
+        bad = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        bad["enforcement"] = "disabled"
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        drift = bp._ruleset_matches(expected, bad)
+        self.assertTrue(
+            any(d.severity == "block" and "enforcement" in d.field for d in drift)
+        )
+
+    def test_D7_diff_skips_include_check_when_spec_uses_default_branch_sentinel(self):
+        # The spec uses "~DEFAULT_BRANCH" as a sentinel; the actual API
+        # returns the literal default branch (e.g. "main"). The diff must
+        # not report drift on conditions.ref_name.include in that case.
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        actual = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        # Sanity: ensure the actual has the literal "main" in include.
+        self.assertEqual(actual["conditions"]["ref_name"]["include"], ["main"])
+        drift = bp._ruleset_matches(expected, actual)
+        # The conditions.ref_name.include check is skipped because the
+        # spec uses the sentinel.
+        self.assertEqual(drift, [])
+
+
+# === E. AuditTests ===
 
 class AuditTests(unittest.TestCase):
     @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_D1_audit_compliant_repo(self, mock_api):
+    def test_E1_audit_compliant_repo(self, mock_api):
         mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/branches/main/protection"): COMPLIANT_CLASSIC,
             ("GET", "repos/TEST/monorepo/rulesets"): COMPLIANT_RULESETS,
-        }.get((m, p))
+            ("GET", "repos/TEST/monorepo/rulesets/"): None,
+        }.get((m, p)) or (
+            COMPLIANT_RULESETS[0] if m == "GET" and p == "repos/TEST/monorepo/rulesets/1" else None
+        )
+        # Override to re-fetch per ruleset
+        def side_effect(m, p, b=None):
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets":
+                return COMPLIANT_RULESETS
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets/1":
+                return COMPLIANT_RULESETS[0]
+            return None
+        mock_api.side_effect = side_effect
         result = bp.audit("TEST/monorepo", spec=MINIMAL_SPEC)
         self.assertTrue(result.is_compliant)
         self.assertEqual(result.drift, [])
 
     @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_D2_audit_no_classic_protection_is_block_drift(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/branches/main/protection"): None,
-            ("GET", "repos/TEST/monorepo/rulesets"): [],
-        }.get((m, p))
+    def test_E2_audit_no_rulesets_is_block_drift(self, mock_api):
+        mock_api.side_effect = lambda m, p, b=None: (
+            [] if m == "GET" and p == "repos/TEST/monorepo/rulesets" else None
+        )
         result = bp.audit("TEST/monorepo", spec=MINIMAL_SPEC)
         self.assertFalse(result.is_compliant)
         self.assertTrue(any(d.severity == "block" for d in result.drift))
 
     @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_D3_audit_missing_status_check_is_block(self, mock_api):
-        actual = dict(COMPLIANT_CLASSIC)
-        actual["required_status_checks"] = {"strict": True, "checks": [{"context": "merge-gate"}]}
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/branches/main/protection"): actual,
-            ("GET", "repos/TEST/monorepo/rulesets"): COMPLIANT_RULESETS,
-        }.get((m, p))
-        result = bp.audit("TEST/monorepo", spec=MINIMAL_SPEC)
-        self.assertFalse(result.is_compliant)
-        self.assertTrue(any("python-tests" in d.field for d in result.drift))
-
-    @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_D4_audit_extra_status_check_is_warn(self, mock_api):
-        actual = dict(COMPLIANT_CLASSIC)
-        actual["required_status_checks"] = {
-            "strict": True,
-            "checks": [
-                {"context": "merge-gate"},
-                {"context": "python-tests"},
-                {"context": "extra"},
-            ],
-        }
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/branches/main/protection"): actual,
-            ("GET", "repos/TEST/monorepo/rulesets"): COMPLIANT_RULESETS,
-        }.get((m, p))
-        result = bp.audit("TEST/monorepo", spec=MINIMAL_SPEC)
-        # The extra check is a warn, not a block — so is_compliant stays True.
-        self.assertTrue(result.is_compliant)
-        self.assertTrue(any(d.severity == "warn" for d in result.drift))
-
-    @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_D5_audit_with_explicit_profile(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/branches/main/protection"): COMPLIANT_CLASSIC,
-            ("GET", "repos/TEST/monorepo/rulesets"): COMPLIANT_RULESETS,
-        }.get((m, p))
+    def test_E3_audit_with_explicit_profile(self, mock_api):
+        def side_effect(m, p, b=None):
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets":
+                return COMPLIANT_RULESETS
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets/1":
+                return COMPLIANT_RULESETS[0]
+            return None
+        mock_api.side_effect = side_effect
         result = bp.audit("TEST/monorepo", profile="monorepo", spec=MINIMAL_SPEC)
         self.assertEqual(result.profile, "monorepo")
+        self.assertEqual(result.repo, "TEST/monorepo")
 
-    def test_D6_audit_unknown_repo_raises(self):
+    def test_E4_audit_unknown_repo_raises(self):
         with self.assertRaises(bp.BranchProtectionError):
             bp.audit("TEST/unknown", spec=MINIMAL_SPEC)
 
+    @mock.patch("pmoves.tools.branch_protection._gh_api")
+    def test_E5_audit_refetches_per_ruleset_for_bypass_actors(self, mock_api):
+        # Lesson #1: the list endpoint returns a SUMMARY without
+        # bypass_actors; the tool must re-fetch the per-ruleset body.
+        summary_no_bypass = {
+            k: v for k, v in COMPLIANT_RULESETS[0].items()
+            if k != "bypass_actors"
+        }
 
-# === E. ApplyTests ===
+        def side_effect(m, p, b=None):
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets":
+                return [summary_no_bypass]
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets/1":
+                return COMPLIANT_RULESETS[0]  # full body w/ bypass_actors
+            return None
+        mock_api.side_effect = side_effect
+        result = bp.audit("TEST/monorepo", spec=MINIMAL_SPEC)
+        # With the per-ruleset refetch, the ruleset is in sync.
+        self.assertTrue(result.is_compliant)
+
+
+# === F. ApplyTests ===
 
 class ApplyTests(unittest.TestCase):
     @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_E1_apply_dry_run_no_calls(self, mock_api):
+    def test_F1_apply_dry_run_creates_missing(self, mock_api):
+        mock_api.side_effect = lambda m, p, b=None: (
+            [] if m == "GET" and p == "repos/TEST/monorepo/rulesets" else None
+        )
         result = bp.apply("TEST/monorepo", dry_run=True, spec=MINIMAL_SPEC)
         self.assertTrue(result.dry_run)
         self.assertEqual(result.applied, [])
-        self.assertGreater(len(result.calls), 0)
-        # The classic PUT call should be in the list.
+        # The dry-run should have prepared a POST call for the ruleset.
         methods = [c["method"] for c in result.calls]
-        self.assertIn("PUT", methods)
-        # The POST for the ruleset should also be in the list.
         self.assertIn("POST", methods)
-        # But the live API was never called.
-        self.assertFalse(
-            any(
-                call.args == ("PUT", "repos/TEST/monorepo/branches/main/protection")
-                for call in mock_api.call_args_list
-            )
+        # But no live API was called.
+        self.assertEqual(mock_api.call_count, 1)  # only the GET
+
+    @mock.patch("pmoves.tools.branch_protection._gh_api")
+    def test_F2_apply_live_creates_missing(self, mock_api):
+        def side_effect(m, p, b=None):
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets":
+                return []
+            if m == "POST" and p == "repos/TEST/monorepo/rulesets":
+                return {"id": 42, "name": "[ main ]"}
+            return None
+        mock_api.side_effect = side_effect
+        result = bp.apply("TEST/monorepo", dry_run=False, spec=MINIMAL_SPEC)
+        self.assertFalse(result.dry_run)
+        self.assertIn("repos/TEST/monorepo/rulesets/42", result.applied)
+
+    @mock.patch("pmoves.tools.branch_protection._gh_api")
+    def test_F3_apply_updates_existing_with_drift(self, mock_api):
+        drifted = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        # Drop a rule so there's drift.
+        drifted["rules"] = [r for r in drifted["rules"] if r["type"] != "required_status_checks"]
+
+        def side_effect(m, p, b=None):
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets":
+                return [drifted]
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets/1":
+                return drifted
+            if m == "PUT" and p == "repos/TEST/monorepo/rulesets/1":
+                return {"id": 1, "name": "[ main ]"}
+            return None
+        mock_api.side_effect = side_effect
+        result = bp.apply("TEST/monorepo", dry_run=False, spec=MINIMAL_SPEC)
+        self.assertFalse(result.dry_run)
+        # A PUT was applied.
+        put_calls = [a for a in result.applied if "/rulesets/1" in a]
+        self.assertEqual(len(put_calls), 1)
+
+    @mock.patch("pmoves.tools.branch_protection._gh_api")
+    def test_F4_apply_skips_in_sync(self, mock_api):
+        def side_effect(m, p, b=None):
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets":
+                return COMPLIANT_RULESETS
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets/1":
+                return COMPLIANT_RULESETS[0]
+            return None
+        mock_api.side_effect = side_effect
+        result = bp.apply("TEST/monorepo", dry_run=False, spec=MINIMAL_SPEC)
+        self.assertFalse(result.dry_run)
+        self.assertEqual(result.calls, [])
+        self.assertEqual(result.applied, [])
+        self.assertTrue(
+            any("in sync" in s for s in result.skipped)
         )
 
     @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_E2_apply_live_calls(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("PUT", "repos/TEST/monorepo/branches/main/protection"): {"ok": True},
-            ("GET", "repos/TEST/monorepo/rulesets"): [],  # ruleset missing → create
-            ("POST", "repos/TEST/monorepo/rulesets"): {"id": 42, "name": "[ main ]"},
-        }.get((m, p))
-        result = bp.apply("TEST/monorepo", dry_run=False, spec=MINIMAL_SPEC)
-        self.assertFalse(result.dry_run)
-        self.assertGreater(len(result.applied), 0)
-        # The classic PUT was applied.
-        self.assertIn("repos/TEST/monorepo/branches/main/protection", result.applied)
-        # The ruleset was applied with the new id.
-        self.assertTrue(any("42" in a for a in result.applied))
-
-    @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_E3_apply_skips_existing_ruleset(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("PUT", "repos/TEST/monorepo/branches/main/protection"): {"ok": True},
-            ("GET", "repos/TEST/monorepo/rulesets"): COMPLIANT_RULESETS,
-        }.get((m, p))
-        result = bp.apply("TEST/monorepo", dry_run=False, spec=MINIMAL_SPEC)
-        self.assertTrue(any("already exists" in s for s in result.skipped))
-
-    @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_E4_apply_includes_per_repo_override_checks(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("PUT", "repos/TEST/fork/branches/main/protection"): {"ok": True},
-            ("GET", "repos/TEST/fork/rulesets"): [],
-            ("POST", "repos/TEST/fork/rulesets"): {"id": 7, "name": "[ main ]"},
-        }.get((m, p))
-        result = bp.apply("TEST/fork", dry_run=False, spec=MINIMAL_SPEC)
-        # The classic PUT body should carry the per-repo override checks.
-        put_call = next(c for c in result.calls if c["method"] == "PUT")
-        contexts = {ch["context"] for ch in put_call["body"]["required_status_checks"]["checks"]}
+    def test_F5_apply_includes_per_repo_ruleset_overrides(self, mock_api):
+        mock_api.side_effect = lambda m, p, b=None: (
+            [] if m == "GET" and p == "repos/TEST/fork/rulesets" else None
+        )
+        result = bp.apply("TEST/fork", dry_run=True, spec=MINIMAL_SPEC)
+        # The POST body should include the per-repo override's required_status_checks.
+        post_call = next(c for c in result.calls if c["method"] == "POST")
+        rs_rules = post_call["body"]["rules"]
+        rsc_rules = [r for r in rs_rules if r["type"] == "required_status_checks"]
+        self.assertEqual(len(rsc_rules), 1)
+        contexts = {c["context"] for c in rsc_rules[0]["parameters"]["required_status_checks"]}
         self.assertEqual(contexts, {"check-attribution", "ruff + ty diff"})
 
-    @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_E5_apply_unknown_repo_raises(self, mock_api):
+    def test_F6_apply_unknown_repo_raises(self):
         with self.assertRaises(bp.BranchProtectionError):
             bp.apply("TEST/unknown", spec=MINIMAL_SPEC)
 
+    @mock.patch("pmoves.tools.branch_protection._gh_api")
+    def test_F7_build_ruleset_body_strips_default_branch_sentinel(self, mock_api):
+        rs = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        body = bp._build_ruleset_body(rs)
+        # The body conditions should not contain ~DEFAULT_BRANCH.
+        includes = body["conditions"]["ref_name"]["include"]
+        self.assertNotIn("~DEFAULT_BRANCH", includes)
 
-# === F. DriftCheckTests ===
+
+# === G. DriftCheckTests ===
 
 class DriftCheckTests(unittest.TestCase):
     @mock.patch("pmoves.tools.branch_protection.audit")
-    def test_F1_drift_check_returns_one_report_per_repo(self, mock_audit):
+    def test_G1_drift_check_returns_one_report_per_repo(self, mock_audit):
         mock_audit.side_effect = lambda repo, profile=None, spec=None: bp.AuditResult(
-            repo=repo, profile=profile or "x", drift=[], checked_at="t", source_url="u"
+            repo=repo, profile=profile or "x", branch="main",
+            drift=[], checked_at="t", source_url="u"
         )
         report = bp.drift_check("TEST", spec=MINIMAL_SPEC)
         self.assertEqual(len(report.repos), 2)  # TEST/monorepo + TEST/fork
         self.assertEqual(report.org, "TEST")
 
     @mock.patch("pmoves.tools.branch_protection.audit")
-    def test_F2_drift_check_includes_only_org_repos(self, mock_audit):
+    def test_G2_drift_check_includes_only_org_repos(self, mock_audit):
         mock_audit.side_effect = lambda repo, profile=None, spec=None: bp.AuditResult(
-            repo=repo, profile=profile or "x", drift=[], checked_at="t", source_url="u"
+            repo=repo, profile=profile or "x", branch="main",
+            drift=[], checked_at="t", source_url="u"
         )
         report = bp.drift_check("OTHER_ORG", spec=MINIMAL_SPEC)
-        self.assertEqual(report.repos, [])  # No repos in OTHER_ORG
+        self.assertEqual(report.repos, [])
 
     @mock.patch("pmoves.tools.branch_protection.audit")
-    def test_F3_drift_check_surfaces_audit_error(self, mock_audit):
+    def test_G3_drift_check_surfaces_audit_error(self, mock_audit):
         def fake_audit(repo, profile=None, spec=None):
             if repo == "TEST/monorepo":
                 raise bp.BranchProtectionError("gh subprocess failed: token expired")
             return bp.AuditResult(
-                repo=repo, profile=profile or "x", drift=[], checked_at="t", source_url="u"
+                repo=repo, profile=profile or "x", branch="main",
+                drift=[], checked_at="t", source_url="u"
             )
         mock_audit.side_effect = fake_audit
         report = bp.drift_check("TEST", spec=MINIMAL_SPEC)
-        # The erroring repo should appear with a synthetic drift entry.
         errored = next(r for r in report.repos if r.repo == "TEST/monorepo")
         self.assertFalse(errored.is_compliant)
         self.assertEqual(errored.drift[0].field, "audit_error")
 
 
-# === G. CLITests ===
+# === H. CLITests ===
 
 class CLITests(unittest.TestCase):
     @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_G1_audit_cli_exits_0_when_compliant(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/branches/main/protection"): COMPLIANT_CLASSIC,
-            ("GET", "repos/TEST/monorepo/rulesets"): COMPLIANT_RULESETS,
-        }.get((m, p))
-        with mock.patch("sys.argv", ["bp", "--spec", "/tmp/none.json", "audit", "--repo", "TEST/monorepo"]):
-            with mock.patch("pmoves.tools.branch_protection.load_spec", return_value=MINIMAL_SPEC):
+    def test_H1_audit_cli_exits_0_when_compliant(self, mock_api):
+        def side_effect(m, p, b=None):
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets":
+                return COMPLIANT_RULESETS
+            if m == "GET" and p == "repos/TEST/monorepo/rulesets/1":
+                return COMPLIANT_RULESETS[0]
+            return None
+        mock_api.side_effect = side_effect
+        with mock.patch(
+            "sys.argv", ["bp", "--spec", "/tmp/none.json", "audit", "--repo", "TEST/monorepo"]
+        ):
+            with mock.patch(
+                "pmoves.tools.branch_protection.load_spec", return_value=MINIMAL_SPEC
+            ):
                 rc = bp.main()
         self.assertEqual(rc, 0)
 
     @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_G2_audit_cli_exits_1_when_drift(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/branches/main/protection"): None,
-            ("GET", "repos/TEST/monorepo/rulesets"): [],
-        }.get((m, p))
-        with mock.patch("sys.argv", ["bp", "--spec", "/tmp/none.json", "audit", "--repo", "TEST/monorepo"]):
-            with mock.patch("pmoves.tools.branch_protection.load_spec", return_value=MINIMAL_SPEC):
+    def test_H2_audit_cli_exits_1_when_drift(self, mock_api):
+        mock_api.side_effect = lambda m, p, b=None: (
+            [] if m == "GET" and "rulesets" in p else None
+        )
+        with mock.patch(
+            "sys.argv", ["bp", "--spec", "/tmp/none.json", "audit", "--repo", "TEST/monorepo"]
+        ):
+            with mock.patch(
+                "pmoves.tools.branch_protection.load_spec", return_value=MINIMAL_SPEC
+            ):
                 rc = bp.main()
         self.assertEqual(rc, 1)
 
     @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_G3_drift_check_cli_exits_2_when_any_repo_drift(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/branches/main/protection"): None,
-            ("GET", "repos/TEST/monorepo/rulesets"): [],
-            ("GET", "repos/TEST/fork/branches/main/protection"): COMPLIANT_CLASSIC,
-            ("GET", "repos/TEST/fork/rulesets"): COMPLIANT_RULESETS,
-        }.get((m, p))
-        with mock.patch("sys.argv", ["bp", "--spec", "/tmp/none.json", "drift-check", "--org", "TEST"]):
-            with mock.patch("pmoves.tools.branch_protection.load_spec", return_value=MINIMAL_SPEC):
+    def test_H3_drift_check_cli_exits_2_when_any_repo_drift(self, mock_api):
+        def side_effect(m, p, b=None):
+            if p == "repos/TEST/monorepo/rulesets":
+                return []  # drift
+            if p == "repos/TEST/fork/rulesets":
+                return COMPLIANT_RULESETS  # in sync
+            if p == "repos/TEST/fork/rulesets/1":
+                return COMPLIANT_RULESETS[0]
+            return None
+        mock_api.side_effect = side_effect
+        with mock.patch(
+            "sys.argv", ["bp", "--spec", "/tmp/none.json", "drift-check", "--org", "TEST"]
+        ):
+            with mock.patch(
+                "pmoves.tools.branch_protection.load_spec", return_value=MINIMAL_SPEC
+            ):
                 rc = bp.main()
         self.assertEqual(rc, 2)
 
-    def test_G4_apply_cli_default_is_dry_run(self):
-        with mock.patch("pmoves.tools.branch_protection._gh_api") as mock_api:
-            mock_api.side_effect = lambda m, p, b=None: {
-                ("GET", "repos/TEST/monorepo/rulesets"): [],
-            }.get((m, p), {"ok": True})
-            result = bp.apply("TEST/monorepo", dry_run=True, spec=MINIMAL_SPEC)
-            self.assertTrue(result.dry_run)
-            # dry-run does ONE read (the existing rulesets) so the output
-            # can accurately report skip-vs-create. No PUT or POST is issued.
-            methods_called = [c.args[0] for c in mock_api.call_args_list]
-            self.assertNotIn("PUT", methods_called)
-            self.assertNotIn("POST", methods_called)
-            # applied list is empty (no live changes).
-            self.assertEqual(result.applied, [])
+    @mock.patch("pmoves.tools.branch_protection._gh_api")
+    def test_H4_apply_cli_default_is_dry_run(self, mock_api):
+        mock_api.side_effect = lambda m, p, b=None: (
+            [] if m == "GET" and "rulesets" in p else None
+        )
+        with mock.patch(
+            "sys.argv", ["bp", "--spec", "/tmp/none.json", "apply", "--repo", "TEST/monorepo"]
+        ):
+            with mock.patch(
+                "pmoves.tools.branch_protection.load_spec", return_value=MINIMAL_SPEC
+            ):
+                rc = bp.main()
+        # dry-run exits 0, even though there's drift.
+        self.assertEqual(rc, 0)
 
 
-# --- Block-level check: gh missing ---
+# === I. GHErrorPathTests ===
 
-class GHMissingTests(unittest.TestCase):
+class GHErrorPathTests(unittest.TestCase):
     @mock.patch("pmoves.tools.branch_protection.shutil.which", return_value=None)
-    def test_H1_gh_missing_raises(self, mock_which):
+    def test_I1_gh_missing_raises(self, mock_which):
         with self.assertRaises(bp.BranchProtectionError) as cm:
             bp._gh_api("GET", "repos/foo")
         self.assertIn("gh CLI not found", str(cm.exception))
 
-
-# --- Block-level check: gh returns 404 for unprotected branch ---
-
-class GHNotProtectedTests(unittest.TestCase):
     @mock.patch("pmoves.tools.branch_protection.subprocess.run")
-    def test_H2_gh_404_for_unprotected_returns_none(self, mock_run):
+    def test_I2_gh_timeout_raises(self, mock_run):
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["gh"], timeout=30)
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp._gh_api("GET", "repos/foo/rulesets")
+        self.assertIn("timed out after 30s", str(cm.exception))
+
+    @mock.patch("pmoves.tools.branch_protection.subprocess.run")
+    def test_I3_gh_nonzero_returns_raises(self, mock_run):
+        mock_run.return_value = _MockProc(
+            returncode=1, stdout="", stderr="gh: not found"
+        )
+        with self.assertRaises(bp.BranchProtectionError) as cm:
+            bp._gh_api("GET", "repos/foo/rulesets")
+        self.assertIn("gh: not found", str(cm.exception))
+
+    @mock.patch("pmoves.tools.branch_protection.subprocess.run")
+    def test_I4_gh_unprotected_branch_returns_none(self, mock_run):
+        # "Branch not protected" is an expected state for an unprotected
+        # repo, not an error.
         mock_run.return_value = _MockProc(
             returncode=1, stdout="", stderr="Branch not protected"
         )
