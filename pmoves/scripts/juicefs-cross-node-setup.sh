@@ -90,7 +90,7 @@ docker rm -f juicefs-mount 2>/dev/null || true
 # fills the disk or self-disables caching so every read streams from tailnet MinIO.
 # Measure the /data volume's host backing dir ($DATA_DIR) and emit bounded flags.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CACHE_FLAGS="$(JFS_CACHE_DIR=/data JFS_CACHE_MEASURE_DIR="$DATA_DIR" \
+CACHE_FLAGS="$(JFS_CACHE_DIR=/data/jfsCache JFS_CACHE_MEASURE_DIR="$DATA_DIR" \
     bash "$SCRIPT_DIR/juicefs-cache-bounds.sh")"
 echo "Cache bounds: $CACHE_FLAGS"
 

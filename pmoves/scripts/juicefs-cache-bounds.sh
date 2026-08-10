@@ -87,7 +87,9 @@ while [ ! -d "$probe" ] && [ "$probe" != "/" ] && [ -n "$probe" ]; do
 done
 
 # ── df bracket (measure, don't assume) ──────────────────────────────────────
-read -r total_kib avail_kib < <(df -Pk "$probe" 2>/dev/null | awk 'NR==2{print $2, $4}')
+# `|| true` so a failed df (EOF on read) does not trip `set -e` before the
+# guard below can run — the guard is the safety net, it must be reachable.
+read -r total_kib avail_kib < <(df -Pk "$probe" 2>/dev/null | awk 'NR==2{print $2, $4}') || true
 if [ -z "${total_kib:-}" ] || [ -z "${avail_kib:-}" ]; then
   warn "df failed for '$probe' — emitting conservative floor bounds."
   total_kib=0; avail_kib=0

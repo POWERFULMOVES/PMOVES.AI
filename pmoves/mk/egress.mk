@@ -360,7 +360,10 @@ juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	@# Per-host bounded cache flags: measure the /data volume's host backing dir so
 	@# this node never inherits JuiceFS's 100 GiB default nor self-disables caching
 	@# on a near-full disk. Canonical logic: scripts/juicefs-cache-bounds.sh.
-	@JFS_CACHE_FLAGS="$$(JFS_CACHE_DIR=/data JFS_CACHE_MEASURE_DIR='$(JFS_HOST_HOME)/.local/share/juicefs-data' bash scripts/juicefs-cache-bounds.sh)"; \
+	@# Fail-safe guards: make runs this via `sh -c` (no -e), so an empty-failure
+	@# would chain straight into `docker run` with zero bounds. Refuse unbounded.
+	@JFS_CACHE_FLAGS="$$(JFS_CACHE_DIR=/data/jfsCache JFS_CACHE_MEASURE_DIR='$(JFS_HOST_HOME)/.local/share/juicefs-data' bash scripts/juicefs-cache-bounds.sh)" || { echo "ERROR: cache-bounds helper failed"; exit 1; }; \
+	test -n "$$JFS_CACHE_FLAGS" || { echo "ERROR: empty cache bounds — refusing unbounded mount"; exit 1; }; \
 	META_PASSWORD='$(SUPABASE_DB_PASSWORD)' docker run -d \
 	    --name juicefs-mount \
 	    --restart unless-stopped \
