@@ -22,6 +22,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 import time
 import urllib.request
 import urllib.error
@@ -133,6 +134,29 @@ async def _nats_publish_cgp(cgp_packet: dict, nats_url: str = NATS_URL) -> bool:
         return False
 
 
+def _discard_synthesized_audio(results: dict[str, Any]) -> None:
+    """Delete the WAV that run_pipeline synthesized, if there was one.
+
+    Listen mode publishes the CGP packet and never reads the audio, so without
+    this every trigger leaves another file behind and a sustained event stream
+    fills the disk.
+    """
+    out_path = (
+        results.get("stages", {})
+        .get("voice", {})
+        .get("synthesis", {})
+        .get("output")
+    )
+    if not out_path:
+        return
+    try:
+        os.unlink(out_path)
+    except OSError as exc:
+        sys.stderr.write(
+            f"[beats_to_voice] Could not remove {out_path}: {exc}\n"
+        )
+
+
 async def _listen_loop(
     nats_url: str,
     trigger_subject: str,
@@ -162,10 +186,13 @@ async def _listen_loop(
                     f"[beats_to_voice] Trigger received agent={aid} len={len(text)}\n"
                 )
                 results = run_pipeline(text=text, voice=voice, agent_id=aid, flute_url=flute_url)
-                cgp = results.get("cgp_packet", {})
-                if cgp:
-                    await nc.publish(NATS_SUBJECT, json.dumps(cgp).encode("utf-8"))
-                    sys.stderr.write(f"[beats_to_voice] CGP published to {NATS_SUBJECT}\n")
+                try:
+                    cgp = results.get("cgp_packet", {})
+                    if cgp:
+                        await nc.publish(NATS_SUBJECT, json.dumps(cgp).encode("utf-8"))
+                        sys.stderr.write(f"[beats_to_voice] CGP published to {NATS_SUBJECT}\n")
+                finally:
+                    _discard_synthesized_audio(results)
             except Exception as e:
                 sys.stderr.write(f"[beats_to_voice] Handler error: {e}\n")
 
@@ -268,8 +295,14 @@ def synthesize_prosodic(
             if "audio" in content_type:
                 # Raw WAV response — save to file
                 audio_bytes = resp.read()
-                out_path = f"/tmp/beats_to_voice_{int(time.time())}.wav"
-                with open(out_path, "wb") as f:
+                # tempfile, not a hard-coded POSIX path: honours TMPDIR/TEMP so
+                # this works on native Windows, and creates the file 0600 under
+                # an unpredictable name so concurrent calls cannot overwrite
+                # each other and a local actor cannot pre-create a symlink.
+                fd, out_path = tempfile.mkstemp(
+                    prefix="beats_to_voice_", suffix=".wav"
+                )
+                with os.fdopen(fd, "wb") as f:
                     f.write(audio_bytes)
                 return {
                     "status": "synthesized",
