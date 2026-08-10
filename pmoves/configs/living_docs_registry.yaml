@@ -14,6 +14,10 @@
 
 tracked:
   # ── Root keystones (CLAUDE.md fleet) ───────────────────────────────────
+  - path: pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md
+    freshness_days: 365
+    severity: INFO
+    description: "Foundational doctrine — Human/AI/System three-body problem stabilized by CHIT; root of the Village Rule and register Three-Body Pattern (rewired to discovery surfaces 2026-08-09 after going unfindable)"
   - path: CLAUDE.md
     freshness_days: 60
     severity: P2

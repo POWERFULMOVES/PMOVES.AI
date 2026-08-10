@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "stage": "rehearsal",
   "display_name": "DARKXSIDES",
-  "description": "Private, owner-only room. A window into the mind of the Founder where the DARKXSIDE persona resides \u2014 co-creator and witness, eventual digital twin. Uncensored/unrestricted: real, not corporate-speak-pretty-CHIT. Houses the dedicated publish-gate, surfaced in Open Notebook.",
+  "description": "Private, owner-only room. A window into the mind of the Founder where the DARKXSIDE persona resides — co-creator and witness, eventual digital twin. Uncensored/unrestricted: real, not corporate-speak-pretty-CHIT. Houses the dedicated publish-gate, surfaced in Open Notebook.",
   "agent_id": "darkxside-persona",
   "alter": "darkxside",
   "room_type": "creator",
@@ -13,7 +13,7 @@
     "owner_only": true,
     "invite_list": [],
     "content_rating": "uncensored",
-    "rating_note": "Unrestricted expression inside the room. NOT a porn flag \u2014 content is authentic/real. Public egress is governed separately by policies.publish.egress_redaction_floor."
+    "rating_note": "Unrestricted expression inside the room. NOT a porn flag — content is authentic/real. Public egress is governed separately by policies.publish.egress_redaction_floor."
   },
   "shell": {
     "theme": {
@@ -62,7 +62,7 @@
       "poetic",
       "bronx"
     ],
-    "glyph": "\u25c8",
+    "glyph": "◈",
     "resonance": [
       "founder-mind",
       "shape-attribution",
@@ -115,228 +115,34 @@
       "pinned": true
     },
     {
-      "binding_id": "pinokio-launch-comfyui",
-      "skill_id": "pinokio-bridge",
-      "room_id": "darkxsides.room",
-      "display_name": "Launch ComfyUI Render",
-      "intent": [
-        "creator",
-        "render",
-        "image",
-        "video"
+      "app_id": "tts-studio",
+      "kind": "media",
+      "route": "/dashboard/voice",
+      "provider": "flute-gateway",
+      "action_namespace": "voice",
+      "capabilities": [
+        "tts",
+        "engine-status",
+        "audition",
+        "prosody"
       ],
-      "activation": {
-        "invocation_mode": "workflow",
-        "trigger_phrases": [
-          "render this",
-          "generate image",
-          "launch comfyui",
-          "create visual"
-        ],
-        "requires_selection": false
-      },
-      "surface": {
-        "app_id": "hyperdimensions-viewer",
-        "target": "panel",
-        "route": "/hyperdimensions/app"
-      },
-      "execution": {
-        "mode": "workflow",
-        "run_as": "agent",
-        "stream": "status",
-        "max_steps": 8
-      },
-      "context": {
-        "sources": [
-          "room-state",
-          "notebook-thread",
-          "persona"
-        ],
-        "include_last_turns": 4,
-        "notebook_writeback": true,
-        "artifact_types": [
-          "text",
-          "json",
-          "image"
-        ]
-      },
-      "outputs": [
-        {
-          "target": "artifact-store",
-          "delivery": "append",
-          "path": "renders/comfyui-output",
-          "artifact_type": "image"
-        },
-        {
-          "target": "nats-event",
-          "delivery": "emit",
-          "subject": "studio.render.completed.v1",
-          "artifact_type": "json"
-        }
-      ],
-      "guardrails": {
-        "require_approval": false,
-        "max_runtime_sec": 600,
-        "fail_open": true,
-        "one_active_run": true
-      },
-      "enabled": true,
-      "tags": [
-        "creator",
-        "render",
-        "comfyui",
-        "visual"
-      ]
+      "pinned": false,
+      "status": "planned"
     },
     {
-      "binding_id": "pinokio-launch-tts",
-      "skill_id": "pinokio-bridge",
-      "room_id": "darkxsides.room",
-      "display_name": "Launch TTS Studio",
-      "intent": [
-        "voice",
-        "tts",
-        "audio",
-        "persona"
+      "app_id": "voice-vault",
+      "kind": "custom",
+      "route": "/dashboard/voice/vault",
+      "provider": "pmoves-ui",
+      "action_namespace": "voice.vault",
+      "capabilities": [
+        "voice-library",
+        "consent-artifacts",
+        "provenance-view",
+        "rights-basis"
       ],
-      "activation": {
-        "invocation_mode": "workflow",
-        "trigger_phrases": [
-          "voice this",
-          "read it aloud",
-          "launch tts",
-          "synthesize voice",
-          "narrate"
-        ],
-        "requires_selection": true
-      },
-      "surface": {
-        "app_id": "persona-console",
-        "target": "composer",
-        "route": "/darkxside/mind"
-      },
-      "execution": {
-        "mode": "workflow",
-        "run_as": "agent",
-        "stream": "status",
-        "max_steps": 5
-      },
-      "context": {
-        "sources": [
-          "notebook-selection",
-          "persona",
-          "room-state"
-        ],
-        "include_last_turns": 4,
-        "notebook_writeback": true,
-        "artifact_types": [
-          "audio",
-          "text"
-        ]
-      },
-      "outputs": [
-        {
-          "target": "artifact-store",
-          "delivery": "append",
-          "path": "voice/spoken-summaries",
-          "artifact_type": "audio"
-        },
-        {
-          "target": "nats-event",
-          "delivery": "emit",
-          "subject": "voice.synth.request.v1",
-          "artifact_type": "json"
-        }
-      ],
-      "guardrails": {
-        "require_approval": true,
-        "max_runtime_sec": 300,
-        "fail_open": false,
-        "one_active_run": true
-      },
-      "enabled": true,
-      "tags": [
-        "voice",
-        "tts",
-        "persona",
-        "provenance-gated"
-      ]
-    },
-    {
-      "binding_id": "e2b-shared-desktop",
-      "skill_id": "e2b-desktop",
-      "room_id": "darkxsides.room",
-      "display_name": "Shared Desktop (E2B)",
-      "intent": [
-        "review",
-        "desktop",
-        "browser",
-        "co-review",
-        "transform"
-      ],
-      "activation": {
-        "invocation_mode": "workflow",
-        "trigger_phrases": [
-          "open shared desktop",
-          "show me the browser",
-          "co-review this",
-          "launch desktop view"
-        ],
-        "requires_selection": true
-      },
-      "surface": {
-        "app_id": "hyperdimensions-viewer",
-        "target": "panel",
-        "route": "/hyperdimensions/app"
-      },
-      "execution": {
-        "mode": "workflow",
-        "run_as": "agent",
-        "stream": "status",
-        "max_steps": 10
-      },
-      "context": {
-        "sources": [
-          "notebook-selection",
-          "room-state",
-          "persona"
-        ],
-        "include_last_turns": 4,
-        "notebook_writeback": true,
-        "artifact_types": [
-          "text",
-          "json",
-          "image"
-        ]
-      },
-      "outputs": [
-        {
-          "target": "nats-event",
-          "delivery": "emit",
-          "subject": "room.desktop.session.opened.v1",
-          "artifact_type": "json"
-        },
-        {
-          "target": "notebook-entry",
-          "delivery": "append",
-          "path": "threads/desktop-sessions",
-          "artifact_type": "text"
-        }
-      ],
-      "guardrails": {
-        "require_approval": true,
-        "max_runtime_sec": 1800,
-        "fail_open": false,
-        "one_active_run": true
-      },
-      "enabled": false,
-      "tags": [
-        "desktop",
-        "e2b",
-        "co-review",
-        "browser",
-        "disabled-pending-e2b-key"
-      ]
+      "pinned": false,
+      "status": "planned"
     }
   ],
   "notebook": {
@@ -382,7 +188,7 @@
       "binding_id": "pub-gate-approve",
       "skill_id": "pmoves-publish-gate",
       "room_id": "darkxsides.room",
-      "display_name": "Publish Gate \u2014 Approve / Hold",
+      "display_name": "Publish Gate — Approve / Hold",
       "intent": [
         "publish",
         "approve",
@@ -698,7 +504,7 @@
           "no-literal-lan-or-tailscale-ips"
         ],
         "fail_closed": true,
-        "note": "Adults-only reflection space. The floor protects operator + collaborator PII and enforces operator final-say on egress \u2014 it is NOT a content-rating gate. Minor safety is handled by room separation (kids only ever in P7 Playground), not by scanning this room. Anything crossing to a PUBLIC surface passes this floor regardless of room rating; cannot be bypassed by opening the gate."
+        "note": "Adults-only reflection space. The floor protects operator + collaborator PII and enforces operator final-say on egress — it is NOT a content-rating gate. Minor safety is handled by room separation (kids only ever in P7 Playground), not by scanning this room. Anything crossing to a PUBLIC surface passes this floor regardless of room rating; cannot be bypassed by opening the gate."
       }
     },
     "memory": {
@@ -741,14 +547,5 @@
       "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
       "pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md"
     ]
-  },
-  "skills": [
-    "pinokio-bridge",
-    "flute-gateway",
-    "comfyui",
-    "e2b-mcp"
-  ],
-  "default_services": [
-    "up-comfyui"
-  ]
+  }
 }

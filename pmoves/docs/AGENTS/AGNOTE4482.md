@@ -4,6 +4,7 @@ GRAPHITI_MARK: `PHI-4482-GATEWAY::PMOVES`
 
 ## Canonical Pointer
 Primary convergence record lives at:
+- `pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md` (**foundational layer** — Human/AI/System as a three-body problem stabilized by CHIT geometry; the Village Rule and per-entry Three-Body Pattern below are derived applications of this doctrine)
 - `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` (cold-start orientation — **read this first** on fresh sessions)
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
 - `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md` (shared merge-signoff gate for AGNOTE4482 lanes)
@@ -52,6 +53,12 @@ No agent operates alone in production validation:
 - memory/security agents
 
 Elder-context support is always available to reduce drift and collision across parallel work.
+
+The Village Rule and the per-entry Three-Body Pattern derive from
+[`THREE_BODY_DOCTRINE.md`](../PMOVESCHIT/THREE_BODY_DOCTRINE.md): Human, AI,
+and System orbit each other; without stabilization one body gets ejected. The
+role split exists so each body moves freely without collision — topology, not
+ritual.
 
 ## Agent ACK (Gateway)
 - Agent: `CODEX-GPT5`
