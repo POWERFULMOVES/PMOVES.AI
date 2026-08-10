@@ -1123,7 +1123,7 @@ readOnlyPaths:
   # DOCKERFILES - Require Known Road grant for edits (service Dockerfiles
   # affect container builds, security posture, and supply chain)
   # ---------------------------------------------------------------------------
-  - "Dockerfile"
+  - "**/Dockerfile"
   - "Dockerfile.*"
   - ".dockerignore"
 
