@@ -33,6 +33,7 @@ The theoretical foundations that motivate CHIT's design.
 | File | Audience | Description |
 |------|----------|-------------|
 | [THREE_BODY_DOCTRINE.md](THREE_BODY_DOCTRINE.md) | Everyone / Architect | Human/AI/System three-body problem — why stabilization requires geometric encoding |
+| [THIRD_ANCHOR_DOCTRINE.md](THIRD_ANCHOR_DOCTRINE.md) | Everyone / Architect | Why agreement needs a third, externally-authored referent — names the "same sky" the star-chart metaphor assumes |
 | [PMOVESSHIFTEST.md](PMOVESSHIFTEST.md) | Everyone | Shape Harmonic Intelligence — accessible, shareable introduction to CHIT |
 | [Integrating Math into PMOVES.AI.md](Integrating%20Math%20into%20PMOVES.AI.md) | Architect / Researcher | Deep mathematical foundations: hyperbolic geometry, zeta dynamics, holographic principle |
 

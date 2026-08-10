@@ -48,7 +48,7 @@ The operator's framing, recorded as theirs: **PMOVES.YT provides a third anchor 
 | **PMOVES.YT** | Video + transcripts on an external platform, timestamped, authored by neither party | `PMOVES.YT` submodule; the consciousness-theory corpus in the `pmoves.consciousness.grounding` namespace; the transcribe/ingest lane |
 | **CHIT tour public edge** | The system explaining itself, served publicly, **regenerated live from the agent registry** rather than hand-written | `make -C pmoves up-chit-tour` / `chit-tour-data`; `docker-compose.chit-tour.yml` |
 | **LinkedIn** | Public professional record on a platform that neither party controls | persona lane, PR #2429 |
-| **DARKXSIDE persona** | A consistent creative identity expressed across rooms, beats, and voice — checkable across surfaces for drift | `pmoves/config/rooms/darkxsides.room.json`, `configs/agents/forms/DARKXSIDE.yaml`, `data/beats/soundcloud/darkxside/` |
+| **DARKXSIDE persona** | A consistent creative identity expressed across rooms, beats, and voice — checkable across surfaces for drift | `pmoves/config/rooms/darkxsides.room.json`, `pmoves/configs/agents/forms/DARKXSIDE.yaml`, `pmoves/data/beats/soundcloud/darkxside/` |
 
 A generated artifact is a stronger anchor than a written one, which is why `chit-tour-data` regenerates from the registry: a doc can drift from the system, a projection of the system cannot.
 
@@ -62,7 +62,14 @@ Once named, the pattern is visible everywhere in the repo — anchoring is not o
   in this bullet came back `GHOST_TARGET`, because the checker cannot tell an example from a promise
   — and should not try. Recorded rather than quietly fixed: a doc praising anchors that ships an
   unanchored command would be the exact defect it describes, and the gate caught it before a human did.
-- **CGP `content_hash` / `holographic_boundary`** — the packet anchors to its own content, so a receiver can detect substitution without reading it.
+- **CGP `content_hash` / `holographic_boundary`** — the packet carries a **fingerprint** of its own
+  content. Worth stating precisely, because the obvious reading is wrong: both are **unkeyed**
+  hashes stored *inside the packet they describe*, so a party who substitutes the content
+  recomputes them and the packet still self-agrees. They give identity, dedup, and detection of
+  *accidental* corruption — not protection against a substituting party. That requires the keyed
+  signature (`sign_cgp`'s HMAC), and today **no consumer verifies either field**. A fingerprint
+  presented as tamper-evidence is the anchor equivalent of a doc citing a command that does not
+  resolve — which is the whole subject of the bullet above.
 - **The Active Claim Register** — *"operator claims and quotes need to be anchored... always a reference"* (`5090-CLAUDE::SIGNING-LANE-SWEEP::2026-08-09`). A claim in the register that cannot be checked is not a claim.
 - **CHIT signatures** — a trail entry signs to a key, so provenance survives the session that wrote it.
 - **Known Roads** — a guard that blocks a command and names the correct one anchors the agent to a path that exists. A guard offering a nonexistent target is worse than no guard, because it consumes the operator's trust and returns nothing.
