@@ -73,9 +73,16 @@ Candidates:
 ## Stage C — Actualize the financials (substantive lane, not a file move)
 
 The CATACLYSM financials should be **real and verified**, not sitting projections. This connects to
-the **domino / value-engine thesis** (verified → CHIT-signed → real value; see
-`pmoves/docs/specs/value-engine-domino-v0-spec-2026-08-07.md` and the
-[[vision_value_engine_dominos_victory_stories]] memory).
+the **domino / value-engine thesis** (verified → CHIT-signed → real value).
+
+> **Correction (4090, at merge).** This originally cited
+> `pmoves/docs/specs/value-engine-domino-v0-spec-2026-08-07.md`. **No such file exists**, at
+> this commit or under any renamed equivalent — a repo-wide filename and content search
+> returns nothing. The thesis currently lives only in the
+> `[[vision_value_engine_dominos_victory_stories]]` memory, which is node-local and not
+> readable by whoever picks this lane up. **Writing that spec is therefore Stage C's first
+> task, not a reference it can lean on** — until it exists, Stage C has no recoverable
+> requirements.
 
 **This is its own follow-up** — a data/verification lane, not part of the Stage A binary offload.
 

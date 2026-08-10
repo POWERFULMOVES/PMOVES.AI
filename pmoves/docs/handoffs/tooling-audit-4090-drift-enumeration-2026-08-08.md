@@ -35,9 +35,19 @@ Captured from 4090's paste so the audit has one surface:
 - **Fork-completeness is uneven.** Archon / cipher / Open-Notebook carry Dockerfile + compose +
   examples; **Agent-Zero and surf are bare**; `mai-ui-agent` is a **PMOVES-authored shim** introduced
   in #2468 (not an upstream fork). Align the completeness bar or document the intended tiers.
-- **Worktree/submodule build gap** (see item 5) — 13 of 15 fork-building compose services can't build
-  from a worktree because submodules aren't populated there. **Invisible in diffs** (CI checks out
-  `submodules: recursive`). Runtime-topology property, not a code one.
+- **Worktree/submodule build gap** (see item 5) — **7 sibling submodules / 8 services** with a
+  sibling-context build can't build from a worktree because submodules aren't populated there.
+  **Invisible in diffs** (CI checks out `submodules: recursive`). Runtime-topology property, not a
+  code one.
+
+  > **Correction (4090, at merge).** This bullet originally read "13 of 15". That figure
+  > double-counted the same services re-declared across split overlays (agents 2 + apps 1 + media 3
+  > + ui 1 = the same 7). Verified unique sibling-context builds in `pmoves/docker-compose.yml`:
+  > `archon`, `cipher-api`, `pmoves-yt`, `openroom`, `llama-throughput-lab`, `transcribe-backend`,
+  > `transcribe-frontend` — plus `docker-compose.n8n.yml`. Jellyfin is correctly excluded (local
+  > build). The correction is also recorded at `AGNOTE4482PHI.t1.md:1787`; the stale headline is
+  > left visible here rather than silently overwritten, because the audit owner needs to know which
+  > number to stop chasing.
 - **`_app-token.yml` cross-job auto-revoke trap** — fixed in #2479; the pattern is already documented
   in `branch-protection-sync.yml:77-80`. Sweep other workflows for the same shape.
 - **ci-expedition skill error** — see item 2.
@@ -77,9 +87,21 @@ conflates them. The wrong row misdirects the next `startup_failure` triage.
 Pick the authoritative one; make the other a thin reference or delete. **Crush setup is similarly
 split** across `deploy/provision/` and `pmoves/scripts/` — same reconcile.
 
-### 4. `up-*` target sprawl (~90 targets)
+### 4. `up-*` target sprawl (89 targets)
 
-Consolidate/retire superseded siblings:
+> **Caveat (4090, at merge) — measure call sites before calling anything superseded.**
+> These are *inventory* candidates, **not** a retire list. The `up-core-*` family is a
+> dependency chain, not three siblings: `up-core-gpu` invokes `up-core-capable`
+> (`pmoves/Makefile:2567`), which invokes `up-core-hardened` (`:2562`). Retiring
+> `up-core-hardened` as "superseded" would break the canonical capable **and** GPU
+> bring-up roads. A textual reference count is not evidence of disuse — the first pass at
+> this list scored `up-core-hardened` at zero references precisely because the grep
+> excluded makefiles to skip *definitions*, and thereby excluded *call sites* too.
+> Same shape for `up-cipher-nobuild`, which is the existing workaround for item 5's build
+> gap and is a keeper regardless of reference count. Deliverable is an inventory; the
+> operator picks what dies.
+
+Inventory candidates by family:
 - `up-agents-{published,ui,stack,hardened,standalone,auto,integrations}`
 - `up-core-{hardened,capable,gpu}`
 - `up-all` vs `up-all-new`
