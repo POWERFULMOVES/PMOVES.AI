@@ -36,7 +36,8 @@ make -C pmoves juicefs-storage-check
 
 ## 1. Prerequisites (per node)
 
-- Node is on the Tailscale mesh (`tailscale status` shows it online).
+- Node is on the Tailscale mesh (`make -C pmoves fleet-status` shows it online —
+  the Known Road; it redacts IPs, unlike raw `tailscale status`).
 - Docker is installed and running.
 - The Supabase DB (JuiceFS meta) on B850 is reachable **by MagicDNS hostname**,
   never a literal Tailscale/LAN IP (committed docs carry no literal IPs; the

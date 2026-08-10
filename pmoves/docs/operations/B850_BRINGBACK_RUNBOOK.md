@@ -27,8 +27,11 @@ The enroll `DEVICE=` and the `tailscale up --hostname` **must match the name the
 node is actually registered under**. Confirm the live name before doing anything:
 
 ```bash
-# On any node already on the tailnet (read-only — changes nothing):
-tailscale status | grep -iE 'b850|knuckles|9850|rdna4'
+# On any node already on the tailnet (read-only — changes nothing).
+# fleet-status, not raw `tailscale status`: it prints the hostname column and
+# redacts IPs, which is the standing convention (BOOTSTRAP.md § Fleet view —
+# "never raw tailscale status for public IPs"). Hostnames are all this step needs.
+make -C pmoves fleet-status | grep -iE 'b850|knuckles|9850|rdna4'
 ```
 
 Set `CONFIRMED` to whatever that prints (expected: `pmoves-b850-ai-top`) and use
@@ -97,14 +100,27 @@ If Tailscale prompts for tag approval (device-auth or tag-owner approval), appro
 ## 4. Verify mesh + fleet visibility
 
 ```bash
-# From any node on the tailnet:
-tailscale status | grep "$CONFIRMED"     # expect: online, tags shown
+# From any node on the tailnet. fleet-status is the Known Road: it prints
+# hostname / OS / connection and redacts IPs (see BOOTSTRAP.md § Fleet view).
+make -C pmoves fleet-status | grep -i "$CONFIRMED"   # expect: present, online
 
-make -C pmoves fleet-status              # expect: B850 present, relay health green
+make -C pmoves fleet-status                          # expect: relay health green
 ```
 
-**T2 pass criteria:** `tailscale status` shows `$CONFIRMED` with
-`tag:pmoves, tag:gpu, tag:lab`; `make -C pmoves fleet-status` is green.
+**Tags are not in either of those.** `tailscale status` does not print per-node
+tags at all — its third column shows the *owner*, which for a tagged node reads
+`tagged-devices`, and `fleet-status` does not surface that column either. Tags
+live only in the JSON, so read them there and print nothing but hostname + tags
+(no addresses, so the no-IPs convention still holds):
+
+```bash
+tailscale status --json \
+  | jq -r --arg h "$CONFIRMED" '.Peer[] | select(.HostName==$h) | "\(.HostName): \(.Tags // ["<untagged>"] | join(", "))"'
+# expect: pmoves-b850-ai-top: tag:gpu, tag:lab, tag:pmoves
+```
+
+**T2 pass criteria:** `make -C pmoves fleet-status` shows `$CONFIRMED` online and
+relay health green; the JSON query above lists `tag:pmoves`, `tag:gpu`, `tag:lab`.
 
 ---
 
@@ -152,6 +168,26 @@ docker inspect juicefs-mount --format '{{json .Args}}'    # must NOT contain the
 docker inspect juicefs-mount --format '{{json .Config.Env}}' | grep -c META_PASSWORD   # expect 1
 ```
 
+> **This narrows the exposure — it does not close it. Read before signing off.**
+>
+> `docker run -e META_PASSWORD` (value-less, inherited from the shell) makes Docker
+> persist the **expanded** value into the container's `.Config.Env`. So this step
+> moves the credential out of `.Args` — where it was visible in **both** `ps` and
+> `docker inspect` — into `.Config.Env`, where it is still visible to
+> `docker inspect`. The second verification command above is itself the proof: it
+> greps `.Config.Env` and expects a hit.
+>
+> **Who can still read it:** any local user in the `docker` group (and thus root),
+> via `docker inspect juicefs-mount`. That is a smaller set than "anyone who can run
+> `ps`", which is the point of doing this — but it is not "no cleartext in inspect".
+>
+> **Real remediation:** file-mounted Docker secrets with a `*_FILE` indirection read
+> inside the entrypoint, which keeps the value out of `.Args` *and* `.Config.Env`.
+> The fleet already specifies this — see `#2492 § 8` (materialized per node as a
+> file-mounted secret, never committed, never in `ps`), following the `#1901`
+> precedent. Until that lands here, treat § 6a as *reduction*, not closure, and
+> rotate on the assumption the value is readable by the docker group.
+
 ### 6b. Rotate the exposed Supabase admin password
 
 Because the old password sat in process listings and container metadata for at
@@ -162,7 +198,10 @@ consumer of `SUPABASE_DB_PASSWORD` / the JuiceFS meta DSN (the gateway, cross-no
 mounts) picks up the new value on next `up`.
 
 **T2 security pass criteria:** `juicefs-mount` re-created with `META_PASSWORD`
-(no cleartext in `ps`/`inspect`); Supabase admin password rotated and funneled.
+(no cleartext in `ps`, and none in `.Args` — but **still readable in
+`.Config.Env`** via `docker inspect`, see the note in § 6a); Supabase admin
+password rotated and funneled. The file-mounted-secret work in `#2492 § 8` is
+what closes `inspect`; this pass does not.
 
 ---
 
