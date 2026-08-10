@@ -53,8 +53,11 @@ them silently (Known-Road / running-NATS territory) — operator confirms, then 
      a submodule) — give it the real-integration treatment (Dockerfile/compose/config), same
      standard as the complete forks. *(compose/config edit → Known Road.)*
 2. **Cross-node content FS** (optional for STT, required for file-based jetson compute): execute
-   `JUICEFS_MEDIA_MINIO_REFORMAT_RUNBOOK.md` so nano-1 can `juicefs mount` and read ingested
-   content. The NATS-streamed STT path (`voice.stt.edge.v1`) does **not** need this.
+   `pmoves/docs/operations/JUICEFS_MEDIA_MINIO_REFORMAT_RUNBOOK.md` so nano-1 can mount the
+   volume and read ingested content. **That runbook is not on `main` yet - it lands with
+   PR #2514**, so this prerequisite is blocked until #2514 merges. Do not improvise the
+   reformat: Step 1 destroys the volume, and the recovery path is the rest of that document.
+   The NATS-streamed STT path (`voice.stt.edge.v1`) does **not** need this.
 3. **nano-1 bootstrap decision:** clone repo to `/opt/pmoves` + `pmoves_bus` network + on-device
    `secrets-funnel` (CHIT passphrase, operator context) — OR run the edge stack fully standalone
    (leaf + prebuilt images, no repo). Recommend standalone-first to avoid dragging the full
