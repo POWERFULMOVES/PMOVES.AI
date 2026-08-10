@@ -1,4 +1,4 @@
-# Branch protection v0 - LEARNINGS (5-class taxonomy + 8 pair-review lessons + ownership split)
+# Branch protection v0 - LEARNINGS (5-class taxonomy + 9 pair-review lessons + ownership split)
 
 The companion LEARNINGS file to the PMOVES standard branch protection
 fan-out (Slice 1: tool + spec, Slice 2: 2-fork apply, Slice 2b:
@@ -41,6 +41,27 @@ The operator's ratification turn (2026-08-10): "sourced from current GitHub docs
 7. **Per-repo ruleset overrides should MERGE by `type` (not REPLACE the rules array).** When a `per_repo_overrides[repo].ruleset_overrides[rs_name]` entry has a `rules: [...]` list, the naive semantics is "replace the base profile's rules with the override's rules" — which is wrong, because it silently drops the base rules (deletion, non_fast_forward, pull_request, etc.). The right semantics: extend, keyed by `type`. Rules in the override replace rules of the same type in the base; rules in the base but not the override are kept. This is a list-of-dicts merge (think `dict.update` but keyed on the `type` field of each element). The "replace" semantic only makes sense for scalar fields (name, target, enforcement, conditions, bypass_actors). Test: `pmoves/tools/tests/test_branch_protection.py::ResolveRepoProfileTests::test_B6_resolve_repo_profile_rules_override_merges_by_type` and `test_B7_resolve_repo_profile_override_rule_replaces_base`.
 
 8. **A sentinel that a builder STRIPS but never SUBSTITUTES is a silent no-op — resolve it, don't skip it.** The spec writes `"include": ["~DEFAULT_BRANCH"]` in `conditions.ref_name.include` to mean "the branch this repo's gitlink tracks". The first version of `_build_ruleset_body` deleted the sentinel and inserted nothing, so every created ruleset went out with an EMPTY include list and matched no ref at all — the tool reported "applied" while protecting nothing. The matching diff bug was the mirror image: `_ruleset_matches` *skipped* the include comparison whenever the spec used the sentinel, so a ruleset pinned to `refs/heads/main` looked compliant for the 55 forks that track `PMOVES.AI-Edition-Hardened`. Two halves of one mistake — treating the sentinel as something to remove rather than something to RESOLVE. The fix: `_build_ruleset_body(rs, branch)` substitutes `refs/heads/<resolved branch>`, and `_ruleset_matches(expected, actual, branch)` resolves the sentinel on the EXPECTED side only. The actual side keeps its sentinel unresolved on purpose: a live `~DEFAULT_BRANCH` means "whatever GitHub currently calls default", which for a hardened fork is not the branch we mean, and that difference must surface as drift. Generalized: whenever a builder removes a placeholder, assert on what replaced it, not just on its absence — the original test asserted only `assertNotIn("~DEFAULT_BRANCH", includes)`, which an empty list satisfies. Tests: `RulesetDiffTests::test_D7_diff_resolves_default_branch_sentinel_against_resolved_branch`, `test_D8_diff_reports_include_drift_on_non_default_branch`, `test_D9_live_sentinel_is_not_silently_treated_as_a_match`, `ApplyTests::test_F7_build_ruleset_body_substitutes_resolved_branch_for_sentinel`.
+
+9. **A test that can only assert absence cannot say no. Assert the positive.** This is lesson #8's root cause promoted to its own entry, because the fix is a habit and the failure mode is silent.
+
+    The guard on the sentinel substitution was:
+
+    ```python
+    body = bp._build_ruleset_body(rs)
+    includes = body["conditions"]["ref_name"]["include"]
+    self.assertNotIn("~DEFAULT_BRANCH", includes)   # passes on []
+    ```
+
+    `assertNotIn` on an **empty list passes**. So the test held green across exactly the two states it was written to distinguish: the sentinel correctly replaced by a real ref, and the sentinel deleted with nothing put back. It could report success; it could never report failure. Meanwhile the artifact it guarded — a ruleset whose `conditions.ref_name.include` was `[]` — matched no ref, so `apply` printed "applied" over a branch that gained no protection at all.
+
+    **A test that cannot say no, guarding a ruleset that cannot match.** Both halves read as success. Neither reviewer caught it, because from the outside the test names the right concern and the tool reports the right outcome; only the live API state disagrees, and nothing was reading that.
+
+    The tell is structural, not domain-specific, so it generalizes: **an assertion whose predicate is satisfied by the empty/null/absent case is not a gate.** `assertNotIn`, `assertNotEqual`, `assertFalse`, "no error was raised", `grep -v` returning nothing, `rc == 0` on a command that no-ops when misconfigured — each admits a degenerate state alongside the intended one. Whenever a transform REMOVES something, the assertion belongs on **what replaced it**: `assertEqual(includes, ["refs/heads/PMOVES.AI-Edition-Hardened"])`, not `assertNotIn(sentinel, includes)`.
+
+    Practical checks, in order of cost: (a) for any "the bad thing is gone" assertion, ask what the empty case does — if it passes, the test is decorative; (b) mutate the implementation to the degenerate state (return `[]`) and confirm the test goes red — a guard that survives its own sabotage was never a guard; (c) for tools that write to an external system, verify against the **live** state once before declaring the capability real. Here, one `gh api repos/POWERFULMOVES/PMOVES-hermes-agent --jq .default_branch` returned `main` against a `.gitmodules` branch of `PMOVES.AI-Edition-Hardened` and collapsed the whole question in a single call.
+
+    Pairs with the disposition-verification lesson: a green test, a "FIXED" reply, and a passing CI run are all **claims about** the artifact, not the artifact. Read the tree; query the live system.
+
 
 ## Ratification: 6 of 6 P1s collapse to deletions (N1/N2/N3/P1-A/P1-C/N8)
 

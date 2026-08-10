@@ -232,4 +232,4 @@ The branch protection tool is part of the PMOVES harness:
 - [GitHub Docs — About protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) — the classic model (the workflow's domain)
 - [GraphQL `MergeStateStatus` enum](https://docs.github.com/v4/enum/mergestatestatus) — `UNSTABLE` = "mergeable with non-passing commit status; merge is still allowed"
 - `pmoves/tools/LEARNINGS/mavis-harness-v0-multi-fork_LEARNINGS.md` — the pattern-update LEARNINGS from the 3-PR review pass (where the harness + protection fan-out started)
-- `pmoves/tools/LEARNINGS/branch-protection-v0_LEARNINGS.md` — this PR's LEARNINGS (5-class taxonomy + 8 pair-review lessons + ownership-split ratification)
+- `pmoves/tools/LEARNINGS/branch-protection-v0_LEARNINGS.md` — this PR's LEARNINGS (5-class taxonomy + 9 pair-review lessons + ownership-split ratification)
