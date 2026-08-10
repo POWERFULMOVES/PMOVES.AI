@@ -79,7 +79,7 @@ import configparser
 import copy
 import dataclasses
 import json
-import os
+import re
 import shutil
 import subprocess
 import sys
@@ -369,7 +369,22 @@ def _gitmodules_path() -> Path:
     return Path(".gitmodules")
 
 
-def resolve_branch(repo: str, override_branch: Optional[str], spec: dict) -> str:
+def _submodule_section_name(section: str) -> str:
+    """Extract the submodule name from a .gitmodules section header.
+
+    configparser hands us the raw header text, e.g. ``submodule "PMOVES-Archon"``.
+    Return ``PMOVES-Archon``; return "" for a section that isn't a submodule.
+    """
+    m = re.match(r'^submodule\s+"(.*)"$', section.strip())
+    return m.group(1) if m else ""
+
+
+def resolve_branch(
+    repo: str,
+    override_branch: Optional[str],
+    spec: dict,
+    profile: Optional[str] = None,
+) -> str:
     """Resolve the target branch for a repo, in order:
 
       1. override_branch (from per_repo_overrides[repo].branch)
@@ -381,26 +396,45 @@ def resolve_branch(repo: str, override_branch: Optional[str], spec: dict) -> str
     workflow's logic in branch-protection-sync.yml (the canonical
     writer of classic protection) — so the two writers agree on
     which branch to target for each fork.
+
+    The submodule match is EXACT on the section name (or the url's last
+    path component). A substring match would let the slug ``PMOVES-nats``
+    select the section ``submodule "PMOVES-nats-server"`` and write the
+    ruleset to a different repo's branch (PR #2490 review).
+
+    ``profile`` is the RESOLVED profile name for this repo. Step 3 reads
+    only that profile's ``branch``; scanning every profile would let one
+    profile's branch leak onto every repo that has neither an override
+    nor a .gitmodules entry.
     """
     if override_branch:
         return override_branch
 
-    # 2. .gitmodules
+    # 2. .gitmodules — exact submodule-name (or url basename) match only.
     slug = repo.split("/", 1)[-1]  # "POWERFULMOVES/PMOVES.AI" -> "PMOVES.AI"
     try:
         cfg = configparser.ConfigParser()
         cfg.read(_gitmodules_path())
         for section in cfg.sections():
-            if cfg.get(section, "url", fallback="") and slug in section:
-                branch = cfg.get(section, "branch", fallback=None)
-                if branch:
-                    return branch
+            url = cfg.get(section, "url", fallback="")
+            if not url:
+                continue
+            name = _submodule_section_name(section)
+            url_slug = url.rstrip("/").rsplit("/", 1)[-1]
+            if url_slug.endswith(".git"):
+                url_slug = url_slug[: -len(".git")]
+            if slug not in (name, url_slug):
+                continue
+            branch = cfg.get(section, "branch", fallback=None)
+            if branch:
+                return branch
     except (configparser.Error, OSError):
         pass  # no .gitmodules or unreadable; fall through
 
-    # 3. spec default (rarely used; the fork profile omits branch)
-    for profile in spec.get("profiles", {}).values():
-        b = profile.get("branch")
+    # 3. spec default for THIS repo's profile (rarely used; the fork
+    #    profile omits branch).
+    if profile:
+        b = spec.get("profiles", {}).get(profile, {}).get("branch")
         if b:
             return b
 
@@ -481,10 +515,44 @@ def _list_rulesets(repo: str) -> list[dict]:
 
 # --- Diff logic ---
 
-def _ruleset_matches(expected: dict, actual: dict) -> list[DriftItem]:
-    """Deep-diff a single ruleset. Returns [] if the actual ruleset
-    matches the spec; otherwise a list of drift items identifying
-    which fields differ.
+DEFAULT_BRANCH_SENTINEL = "~DEFAULT_BRANCH"
+
+
+def _qualify_ref(ref: str, branch: str) -> str:
+    """Normalize one `conditions.ref_name.include` entry to the form the
+    GitHub API stores: fully-qualified `refs/heads/<name>`.
+
+    The `~DEFAULT_BRANCH` sentinel resolves to <branch>; other `~` tokens
+    (`~ALL`) and already-qualified refs pass through untouched.
+    """
+    if ref == DEFAULT_BRANCH_SENTINEL:
+        return f"refs/heads/{branch}"
+    if ref.startswith("~") or ref.startswith("refs/"):
+        return ref
+    return f"refs/heads/{ref}"
+
+
+def _expected_ref_includes(includes: list, branch: str) -> list:
+    """Resolve the spec's include list against <branch>, preserving order."""
+    return [_qualify_ref(c, branch) for c in includes]
+
+
+def _actual_ref_includes(includes: list) -> list:
+    """Qualify a live ruleset's include list WITHOUT resolving sentinels.
+
+    A live `~DEFAULT_BRANCH` means "whatever GitHub currently calls the
+    default branch", which is not necessarily the branch the spec targets.
+    Leaving it unresolved is what makes that case surface as drift.
+    """
+    return [c if c.startswith("~") else _qualify_ref(c, "") for c in includes]
+
+
+def _ruleset_matches(
+    expected: dict, actual: dict, branch: str = DEFAULT_BRANCH
+) -> list[DriftItem]:
+    """Deep-diff a single ruleset against <branch>. Returns [] if the
+    actual ruleset matches the spec; otherwise a list of drift items
+    identifying which fields differ.
     """
     drift: list[DriftItem] = []
     name = expected.get("name", "?")
@@ -505,28 +573,27 @@ def _ruleset_matches(expected: dict, actual: dict) -> list[DriftItem]:
         ))
 
     # Conditions: the API returns {ref_name: {include: [...], exclude: [...]}}
-    # (different shape than the spec's {ref_name: {include: ["~DEFAULT_BRANCH"], exclude: []}}).
-    # Normalize "~DEFAULT_BRANCH" to the actual default branch before comparing.
+    # with fully-qualified refs ("refs/heads/main"), while the spec writes
+    # the "~DEFAULT_BRANCH" sentinel. Resolve the sentinel against the
+    # RESOLVED branch on the expected side, then compare.
+    #
+    # The actual side is deliberately NOT sentinel-resolved: a live ruleset
+    # that still carries "~DEFAULT_BRANCH" targets whatever GitHub considers
+    # the repo default, which for the 55 forks tracking
+    # PMOVES.AI-Edition-Hardened is NOT the branch we mean. Reporting that as
+    # drift is the point — silently treating it as a match is the bug that
+    # left those branches unprotected (PR #2490 review).
     actual_conditions = actual.get("conditions", {}).get("ref_name", {})
-    expected_conditions = copy.deepcopy(expected.get("conditions", {}).get("ref_name", {}))
-    expected_includes = expected_conditions.get("include", [])
-    if "~DEFAULT_BRANCH" in expected_includes:
-        # The spec's "~DEFAULT_BRANCH" is a sentinel; the actual conditions
-        # carry the literal branch name. The diff cannot compare without
-        # knowing the actual default branch, so skip the include check
-        # entirely (the spec author already declared the target as
-        # "the default branch" by using the sentinel).
-        pass
-    else:
-        actual_includes = sorted(actual_conditions.get("include", []))
-        expected_includes_sorted = sorted(expected_includes)
-        if actual_includes != expected_includes_sorted:
-            drift.append(DriftItem(
-                field=f"rulesets[{name}].conditions.ref_name.include",
-                expected=expected_includes_sorted,
-                actual=actual_includes,
-                severity="warn",
-            ))
+    expected_includes = expected.get("conditions", {}).get("ref_name", {}).get("include", [])
+    actual_includes = sorted(_actual_ref_includes(actual_conditions.get("include", [])))
+    expected_includes_sorted = sorted(_expected_ref_includes(expected_includes, branch))
+    if actual_includes != expected_includes_sorted:
+        drift.append(DriftItem(
+            field=f"rulesets[{name}].conditions.ref_name.include",
+            expected=expected_includes_sorted,
+            actual=actual_includes,
+            severity="warn",
+        ))
 
     # Rules: compare by type + parameters
     actual_rules = {r.get("type"): r for r in actual.get("rules", [])}
@@ -541,11 +608,22 @@ def _ruleset_matches(expected: dict, actual: dict) -> list[DriftItem]:
             ))
             continue
         act_rule = actual_rules[rtype]
-        if exp_rule.get("parameters", {}) != act_rule.get("parameters", {}):
+        # SUBSET comparison, not equality: GitHub echoes back its own
+        # defaults (`required_reviewers: []`, `allowed_merge_methods`, ...)
+        # that the spec never declares. Strict equality made every audit
+        # report permanent drift and every apply re-PUT a ruleset that was
+        # already correct — the spec declares intent, and only the keys it
+        # declares are in scope.
+        exp_params = exp_rule.get("parameters", {}) or {}
+        act_params = act_rule.get("parameters", {}) or {}
+        differing = {
+            k: v for k, v in exp_params.items() if act_params.get(k) != v
+        }
+        if differing:
             drift.append(DriftItem(
                 field=f"rulesets[{name}].rules[type={rtype}].parameters",
-                expected=exp_rule.get("parameters"),
-                actual=act_rule.get("parameters"),
+                expected={k: exp_params[k] for k in differing},
+                actual={k: act_params.get(k) for k in differing},
                 severity="block",
             ))
 
@@ -592,7 +670,7 @@ def audit(repo: str, profile: Optional[str] = None, spec: Optional[dict] = None)
         expected_profile = copy.deepcopy(spec["profiles"][profile])
 
     override = spec.get("per_repo_overrides", {}).get(repo, {})
-    branch = resolve_branch(repo, override.get("branch"), spec)
+    branch = resolve_branch(repo, override.get("branch"), spec, profile)
 
     actual = _list_rulesets(repo)
     expected_by_name = {r.get("name"): r for r in expected_profile.get("rulesets", [])}
@@ -608,7 +686,7 @@ def audit(repo: str, profile: Optional[str] = None, spec: Optional[dict] = None)
                 severity="block",
             ))
             continue
-        drift.extend(_ruleset_matches(expected_rs, actual_by_name[name]))
+        drift.extend(_ruleset_matches(expected_rs, actual_by_name[name], branch))
 
     for name in actual_by_name:
         if name not in expected_by_name:
@@ -657,7 +735,7 @@ def apply(
         expected_profile = copy.deepcopy(spec["profiles"][profile])
 
     override = spec.get("per_repo_overrides", {}).get(repo, {})
-    branch = resolve_branch(repo, override.get("branch"), spec)
+    branch = resolve_branch(repo, override.get("branch"), spec, profile)
 
     calls: list[dict] = []
     applied: list[str] = []
@@ -672,7 +750,7 @@ def apply(
     for name, expected_rs in expected_by_name.items():
         if name not in actual_by_name:
             # CREATE
-            body = _build_ruleset_body(expected_rs)
+            body = _build_ruleset_body(expected_rs, branch)
             calls.append({
                 "method": "POST",
                 "path": f"repos/{repo}/rulesets",
@@ -680,15 +758,19 @@ def apply(
             })
             if not dry_run:
                 created = _gh_api("POST", f"repos/{repo}/rulesets", body)
-                applied.append(f"repos/{repo}/rulesets/{created.get('id', '?')}")
+                # _gh_api returns None on an empty response body. The write
+                # already happened, so record it rather than raising an
+                # AttributeError and leaving apply half-done (PR #2490 review).
+                rs_id = created.get("id", "?") if isinstance(created, dict) else "?"
+                applied.append(f"repos/{repo}/rulesets/{rs_id}")
         else:
             # UPDATE if drift
             existing = actual_by_name[name]
-            drift = _ruleset_matches(expected_rs, existing)
+            drift = _ruleset_matches(expected_rs, existing, branch)
             if not drift:
                 skipped.append(f"repos/{repo}/rulesets/{existing.get('id', '?')} (in sync)")
                 continue
-            body = _build_ruleset_body(expected_rs)
+            body = _build_ruleset_body(expected_rs, branch)
             calls.append({
                 "method": "PUT",
                 "path": f"repos/{repo}/rulesets/{existing.get('id')}",
@@ -709,11 +791,17 @@ def apply(
     )
 
 
-def _build_ruleset_body(rs: dict) -> dict:
+def _build_ruleset_body(rs: dict, branch: str) -> dict:
     """Build the body for POST /rulesets (or PUT /rulesets/{id}) from
-    a ruleset spec. Strips the local sentinel `~DEFAULT_BRANCH` from
-    conditions.ref_name.include (the GitHub API takes the literal
-    default-branch name, not the sentinel).
+    a ruleset spec, targeting <branch>.
+
+    The spec's `~DEFAULT_BRANCH` sentinel is REPLACED by the resolved
+    branch as a fully-qualified ref (`refs/heads/<branch>`) — not
+    dropped. Dropping it left `conditions.ref_name.include` empty, so
+    every created ruleset matched no ref and the 55 forks that track
+    `PMOVES.AI-Edition-Hardened` were left unprotected (PR #2490 review).
+    Substituting the resolved branch is also what makes the spec's
+    per-repo `branch` key load-bearing.
     """
     body = {
         "name": rs["name"],
@@ -723,11 +811,10 @@ def _build_ruleset_body(rs: dict) -> dict:
         "rules": copy.deepcopy(rs.get("rules", [])),
         "bypass_actors": copy.deepcopy(rs.get("bypass_actors", [])),
     }
-    includes = body.get("conditions", {}).get("ref_name", {}).get("include", [])
-    if "~DEFAULT_BRANCH" in includes:
-        body["conditions"]["ref_name"]["include"] = [
-            c for c in includes if c != "~DEFAULT_BRANCH"
-        ]
+    ref_name = body.setdefault("conditions", {}).setdefault("ref_name", {})
+    ref_name["include"] = _expected_ref_includes(
+        ref_name.get("include", []), branch
+    )
     return body
 
 
@@ -738,7 +825,6 @@ def drift_check(
     the union of drift. Use this from the Mavis cron to publish on
     pmoves.branch_protection.drift.v1.
     """
-    import datetime as _dt
     spec = spec or load_spec()
     results: list[AuditResult] = []
     for repo in sorted(spec.get("per_repo_overrides", {}).keys()):
@@ -760,13 +846,13 @@ def drift_check(
                             severity="block",
                         )
                     ],
-                    checked_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+                    checked_at=_now_iso(),
                     source_url=f"https://github.com/{repo}/settings/branches",
                 )
             )
     return DriftReport(
         org=org,
-        checked_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+        checked_at=_now_iso(),
         repos=results,
     )
 

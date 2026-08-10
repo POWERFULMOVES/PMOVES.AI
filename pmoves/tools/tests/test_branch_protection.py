@@ -185,24 +185,6 @@ class _MockProc:
         self.stderr = stderr
 
 
-def _mock_subprocess_factory(responses: dict):
-    """Build a mock for subprocess.run that maps (method, path) to a
-    parsed JSON response. path is matched as exact-or-prefix.
-    """
-    def _run(cmd, input=None, capture_output=None, text=None, check=None, timeout=None):
-        method = cmd[3]
-        path = cmd[4]
-        for (m, p), resp in responses.items():
-            if m == method and path.startswith(p):
-                if resp is None:
-                    return _MockProc(returncode=0, stdout="", stderr="")
-                return _MockProc(returncode=0, stdout=json.dumps(resp), stderr="")
-        return _MockProc(
-            returncode=1, stdout="", stderr=f"unmocked gh call: {method} {path}"
-        )
-    return _run
-
-
 # === A. SpecValidatorTests ===
 
 class SpecValidatorTests(unittest.TestCase):
@@ -294,9 +276,18 @@ class SpecValidatorTests(unittest.TestCase):
         bp.SpecValidator(spec).validate()  # should not raise
 
     def test_A11_load_spec_validates_by_default(self):
-        with mock.patch.object(Path, "read_text", return_value=json.dumps({"spec": "x"})):
-            with self.assertRaises(bp.BranchProtectionError):
+        """Patch exists() too — otherwise load_spec short-circuits on
+        "spec not found" and the test proves nothing about validation.
+        """
+        with mock.patch.object(Path, "exists", return_value=True), \
+                mock.patch.object(
+                    Path, "read_text", return_value=json.dumps({"spec": "x"})
+                ):
+            with self.assertRaises(bp.BranchProtectionError) as ctx:
                 bp.load_spec(Path("/tmp/any.json"))
+        msg = str(ctx.exception)
+        self.assertNotIn("spec not found", msg)
+        self.assertIn("profiles", msg)
 
     def test_A12_load_spec_skip_validation_with_flag(self):
         bad_but_skip = {"spec": "x"}  # would fail validation
@@ -436,13 +427,67 @@ class ResolveBranchTests(unittest.TestCase):
             )
         self.assertEqual(b, "main")
 
-    def test_C4_slug_extraction_handles_dot_in_name(self):
-        # "POWERFULMOVES/PMOVES.AI" -> slug = "PMOVES.AI"
+    def test_C4_no_gitmodules_entry_falls_back_to_default(self):
+        """A dotted slug with no .gitmodules file resolves to main."""
         with mock.patch.object(
             bp, "_gitmodules_path", return_value=Path("/nonexistent/.gitmodules")
         ):
             b = bp.resolve_branch("POWERFULMOVES/PMOVES.AI", None, MINIMAL_SPEC)
         self.assertEqual(b, "main")  # no .gitmodules, no override -> main
+
+    def test_C5_gitmodules_match_is_exact_not_substring(self):
+        """`PMOVES-nats` must NOT match `submodule "PMOVES-nats-server"`.
+        A substring match wrote the ruleset to another repo's branch.
+        """
+        fake_cfg = mock.MagicMock()
+        fake_cfg.sections.return_value = ['submodule "PMOVES-nats-server"']
+
+        def fake_get(section, key, **kwargs):
+            if key == "url":
+                return "https://github.com/POWERFULMOVES/PMOVES-nats-server.git"
+            if key == "branch":
+                return "PMOVES.AI-Edition-Hardened"
+            return kwargs.get("fallback", "")
+
+        fake_cfg.get.side_effect = fake_get
+        with mock.patch.object(bp, "_gitmodules_path", return_value=Path("/fake/.gitmodules")), \
+                mock.patch("configparser.ConfigParser", return_value=fake_cfg):
+            b = bp.resolve_branch("POWERFULMOVES/PMOVES-nats", None, MINIMAL_SPEC)
+        self.assertEqual(b, "main")
+
+    def test_C6_gitmodules_matches_on_url_basename(self):
+        """A section renamed away from the repo name still matches via url."""
+        fake_cfg = mock.MagicMock()
+        fake_cfg.sections.return_value = ['submodule "vendor/nats"']
+
+        def fake_get(section, key, **kwargs):
+            if key == "url":
+                return "https://github.com/POWERFULMOVES/PMOVES-nats-server.git"
+            if key == "branch":
+                return "PMOVES.AI-Edition-Hardened"
+            return kwargs.get("fallback", "")
+
+        fake_cfg.get.side_effect = fake_get
+        with mock.patch.object(bp, "_gitmodules_path", return_value=Path("/fake/.gitmodules")), \
+                mock.patch("configparser.ConfigParser", return_value=fake_cfg):
+            b = bp.resolve_branch(
+                "POWERFULMOVES/PMOVES-nats-server", None, MINIMAL_SPEC
+            )
+        self.assertEqual(b, "PMOVES.AI-Edition-Hardened")
+
+    def test_C7_profile_branch_read_only_from_the_repos_own_profile(self):
+        """Step 3 must read spec.profiles[<resolved profile>].branch. Scanning
+        every profile let one profile's branch leak onto unrelated repos.
+        """
+        spec = json.loads(json.dumps(MINIMAL_SPEC))
+        spec["profiles"]["monorepo"]["branch"] = "trunk"
+        with mock.patch.object(
+            bp, "_gitmodules_path", return_value=Path("/nonexistent/.gitmodules")
+        ):
+            leaked = bp.resolve_branch("TEST/fork-only", None, spec, "fork")
+            own = bp.resolve_branch("TEST/mono-only", None, spec, "monorepo")
+        self.assertEqual(leaked, "main")   # fork profile declares no branch
+        self.assertEqual(own, "trunk")
 
 
 # === D. RulesetDiffTests ===
@@ -524,18 +569,74 @@ class RulesetDiffTests(unittest.TestCase):
             any(d.severity == "block" and "enforcement" in d.field for d in drift)
         )
 
-    def test_D7_diff_skips_include_check_when_spec_uses_default_branch_sentinel(self):
-        # The spec uses "~DEFAULT_BRANCH" as a sentinel; the actual API
-        # returns the literal default branch (e.g. "main"). The diff must
-        # not report drift on conditions.ref_name.include in that case.
+    def test_D7_diff_resolves_default_branch_sentinel_against_resolved_branch(self):
+        """The spec's ~DEFAULT_BRANCH resolves to the RESOLVED branch, and the
+        actual include is qualified to refs/heads/<name> before comparing.
+        """
         expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
         actual = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
         # Sanity: ensure the actual has the literal "main" in include.
         self.assertEqual(actual["conditions"]["ref_name"]["include"], ["main"])
-        drift = bp._ruleset_matches(expected, actual)
-        # The conditions.ref_name.include check is skipped because the
-        # spec uses the sentinel.
+        drift = bp._ruleset_matches(expected, actual, "main")
         self.assertEqual(drift, [])
+
+    def test_D8_diff_reports_include_drift_on_non_default_branch(self):
+        """A ruleset targeting refs/heads/main is DRIFT for a fork whose
+        gitlink branch is PMOVES.AI-Edition-Hardened. Skipping the include
+        check (the pre-fix behavior) reported this as compliant while the
+        hardened branch was unprotected.
+        """
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        actual = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        drift = bp._ruleset_matches(expected, actual, "PMOVES.AI-Edition-Hardened")
+        self.assertTrue(
+            any("conditions.ref_name.include" in d.field for d in drift)
+        )
+
+    def test_D10_api_defaulted_parameters_are_not_drift(self):
+        """GitHub echoes back keys the spec never declares
+        (`required_reviewers`, `allowed_merge_methods`). Strict equality made
+        every audit report permanent drift and every apply re-PUT a correct
+        ruleset. Only spec-declared keys are in scope.
+        """
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        actual = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        for r in actual["rules"]:
+            if r["type"] == "pull_request":
+                r["parameters"]["required_reviewers"] = []
+                r["parameters"]["allowed_merge_methods"] = [
+                    "merge", "squash", "rebase"
+                ]
+        drift = bp._ruleset_matches(expected, actual, "main")
+        self.assertEqual(drift, [])
+
+    def test_D11_declared_parameter_mismatch_still_reported(self):
+        """The subset comparison must not mask a real parameter change."""
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        actual = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        for r in actual["rules"]:
+            if r["type"] == "pull_request":
+                r["parameters"]["required_approving_review_count"] = 0
+                r["parameters"]["allowed_merge_methods"] = ["merge"]
+        drift = bp._ruleset_matches(expected, actual, "main")
+        item = next(d for d in drift if "pull_request" in d.field)
+        self.assertEqual(item.expected, {"required_approving_review_count": 1})
+        self.assertEqual(item.actual, {"required_approving_review_count": 0})
+
+    def test_D9_live_sentinel_is_not_silently_treated_as_a_match(self):
+        """A live ruleset still carrying ~DEFAULT_BRANCH targets whatever
+        GitHub calls the default branch — not necessarily the spec's branch.
+        That must surface as drift, not be normalized away.
+        """
+        expected = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        actual = json.loads(json.dumps(COMPLIANT_RULESETS[0]))
+        actual["conditions"]["ref_name"]["include"] = ["~DEFAULT_BRANCH"]
+        drift = bp._ruleset_matches(
+            expected, actual, "PMOVES.AI-Edition-Hardened"
+        )
+        self.assertTrue(
+            any("conditions.ref_name.include" in d.field for d in drift)
+        )
 
 
 # === E. AuditTests ===
@@ -543,14 +644,9 @@ class RulesetDiffTests(unittest.TestCase):
 class AuditTests(unittest.TestCase):
     @mock.patch("pmoves.tools.branch_protection._gh_api")
     def test_E1_audit_compliant_repo(self, mock_api):
-        mock_api.side_effect = lambda m, p, b=None: {
-            ("GET", "repos/TEST/monorepo/rulesets"): COMPLIANT_RULESETS,
-            ("GET", "repos/TEST/monorepo/rulesets/"): None,
-        }.get((m, p)) or (
-            COMPLIANT_RULESETS[0] if m == "GET" and p == "repos/TEST/monorepo/rulesets/1" else None
-        )
-        # Override to re-fetch per ruleset
         def side_effect(m, p, b=None):
+            # The list endpoint returns a summary; the tool re-fetches each
+            # ruleset by id for bypass_actors + full rules.
             if m == "GET" and p == "repos/TEST/monorepo/rulesets":
                 return COMPLIANT_RULESETS
             if m == "GET" and p == "repos/TEST/monorepo/rulesets/1":
@@ -694,13 +790,40 @@ class ApplyTests(unittest.TestCase):
         with self.assertRaises(bp.BranchProtectionError):
             bp.apply("TEST/unknown", spec=MINIMAL_SPEC)
 
-    @mock.patch("pmoves.tools.branch_protection._gh_api")
-    def test_F7_build_ruleset_body_strips_default_branch_sentinel(self, mock_api):
+    def test_F7_build_ruleset_body_substitutes_resolved_branch_for_sentinel(self):
+        """~DEFAULT_BRANCH must be REPLACED by the resolved branch ref, not
+        dropped. Dropping it left include empty, so the ruleset matched no ref.
+        """
         rs = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
-        body = bp._build_ruleset_body(rs)
-        # The body conditions should not contain ~DEFAULT_BRANCH.
+        body = bp._build_ruleset_body(rs, "PMOVES.AI-Edition-Hardened")
         includes = body["conditions"]["ref_name"]["include"]
         self.assertNotIn("~DEFAULT_BRANCH", includes)
+        self.assertEqual(includes, ["refs/heads/PMOVES.AI-Edition-Hardened"])
+
+    def test_F8_build_ruleset_body_does_not_mutate_the_spec(self):
+        """The builder deep-copies; the in-memory spec keeps its sentinel."""
+        rs = MINIMAL_SPEC["profiles"]["monorepo"]["rulesets"][0]
+        bp._build_ruleset_body(rs, "main")
+        self.assertEqual(
+            rs["conditions"]["ref_name"]["include"], ["~DEFAULT_BRANCH"]
+        )
+
+    def test_F9_apply_records_ruleset_when_post_returns_empty_body(self):
+        """_gh_api returns None on an empty response body. The write already
+        happened, so apply must record it rather than raising AttributeError.
+        """
+        def fake_api(method, path, body=None):
+            if method == "GET" and path.endswith("/rulesets"):
+                return []
+            return None  # POST returns an empty body
+
+        with mock.patch(
+            "pmoves.tools.branch_protection._gh_api", side_effect=fake_api
+        ):
+            result = bp.apply(
+                "TEST/monorepo", dry_run=False, spec=MINIMAL_SPEC
+            )
+        self.assertEqual(result.applied, ["repos/TEST/monorepo/rulesets/?"])
 
 
 # === G. DriftCheckTests ===
@@ -782,7 +905,7 @@ class CLITests(unittest.TestCase):
             if p == "repos/TEST/monorepo/rulesets":
                 return []  # drift
             if p == "repos/TEST/fork/rulesets":
-                return COMPLIANT_RULESETS  # in sync
+                return COMPLIANT_RULESETS  # drifts from the fork profile's checks
             if p == "repos/TEST/fork/rulesets/1":
                 return COMPLIANT_RULESETS[0]
             return None
@@ -821,15 +944,23 @@ class GHErrorPathTests(unittest.TestCase):
             bp._gh_api("GET", "repos/foo")
         self.assertIn("gh CLI not found", str(cm.exception))
 
+    @mock.patch("pmoves.tools.branch_protection.shutil.which", return_value="/usr/bin/gh")
     @mock.patch("pmoves.tools.branch_protection.subprocess.run")
-    def test_I2_gh_timeout_raises(self, mock_run):
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["gh"], timeout=30)
+    def test_I2_gh_timeout_raises(self, mock_run, mock_which):
+        """which() is patched so the test reaches subprocess even on a
+        runner with no gh on PATH; the message asserts on GH_TIMEOUT_SECONDS.
+        """
+        mock_run.side_effect = subprocess.TimeoutExpired(
+            cmd=["gh"], timeout=bp.GH_TIMEOUT_SECONDS
+        )
         with self.assertRaises(bp.BranchProtectionError) as cm:
             bp._gh_api("GET", "repos/foo/rulesets")
-        self.assertIn("timed out after 30s", str(cm.exception))
+        self.assertIn(f"timed out after {bp.GH_TIMEOUT_SECONDS}s", str(cm.exception))
 
+    @mock.patch("pmoves.tools.branch_protection.shutil.which", return_value="/usr/bin/gh")
     @mock.patch("pmoves.tools.branch_protection.subprocess.run")
-    def test_I3_gh_nonzero_returns_raises(self, mock_run):
+    def test_I3_gh_nonzero_returns_raises(self, mock_run, mock_which):
+        """A non-zero gh exit that is not "Branch not protected" raises."""
         mock_run.return_value = _MockProc(
             returncode=1, stdout="", stderr="gh: not found"
         )
@@ -837,10 +968,10 @@ class GHErrorPathTests(unittest.TestCase):
             bp._gh_api("GET", "repos/foo/rulesets")
         self.assertIn("gh: not found", str(cm.exception))
 
+    @mock.patch("pmoves.tools.branch_protection.shutil.which", return_value="/usr/bin/gh")
     @mock.patch("pmoves.tools.branch_protection.subprocess.run")
-    def test_I4_gh_unprotected_branch_returns_none(self, mock_run):
-        # "Branch not protected" is an expected state for an unprotected
-        # repo, not an error.
+    def test_I4_gh_unprotected_branch_returns_none(self, mock_run, mock_which):
+        """"Branch not protected" is an expected state, not an error."""
         mock_run.return_value = _MockProc(
             returncode=1, stdout="", stderr="Branch not protected"
         )
