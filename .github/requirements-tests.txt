@@ -26,6 +26,7 @@ nats-py               # 4 files (imported as `nats`)
 python-jose           # 4 files (imported as `jose`)
 requests              # 3 files
 pydantic              # 2 files
+pydantic-settings     # graph-linker conftest imports it at config time
 websockets            # 2 files
 typer                 # 2 files
 prometheus-client     # 2 files

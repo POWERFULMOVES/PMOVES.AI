@@ -47,6 +47,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PMOVES = REPO_ROOT / "pmoves"
 BASELINE = PMOVES / "configs" / "pytest_ratchet" / "_known_failures.yaml"
 
+# Per-group wall clock. A gate has to be bounded: some suites reach for a live
+# service and block until their own timeout, and one of those must not be able to
+# eat the job budget. A group that exceeds this is recorded as a finding, so a
+# hang is visible and ratchetable instead of being an infrastructure mystery.
+GROUP_TIMEOUT_SECONDS = int(os.environ.get("PYTEST_RATCHET_GROUP_TIMEOUT", "120"))
+
 # Mirrors the workflow's original discovery exactly, minus the `head -20` cap.
 # Kept identical on purpose: this change removes a cap and adds a ratchet, it
 # does not silently redefine which tests are in scope.
@@ -68,7 +74,32 @@ def discover_test_files() -> List[Path]:
     return sorted(found)
 
 
-def run_pytest(files: List[Path], junit: Path) -> int:
+def group_files(files: List[Path]) -> Dict[str, List[Path]]:
+    """Group tests by their nearest ancestor `conftest.py` directory.
+
+    Runs are per-group rather than one session over all 264 files because a
+    conftest that cannot be imported aborts the entire session --
+    `--continue-on-collection-errors` does not cover conftest import failures.
+    One service with a missing dependency would otherwise hide every other
+    test in the repo, which is the exact failure mode this gate exists to end.
+    Grouping also keeps two conftests from colliding in one plugin registry.
+    """
+    groups: Dict[str, List[Path]] = {}
+    for f in files:
+        anchor = f.parent
+        probe = f.parent
+        while True:
+            if (REPO_ROOT / probe / "conftest.py").is_file():
+                anchor = probe
+                break
+            if probe == Path(".") or probe.parent == probe:
+                break
+            probe = probe.parent
+        groups.setdefault(anchor.as_posix(), []).append(f)
+    return groups
+
+
+def run_pytest(files: List[Path], junit: Path) -> tuple[int, str]:
     """Run pytest over `files`, collecting results into a JUnit XML report.
 
     `--continue-on-collection-errors` matters: without it a single unimportable
@@ -85,6 +116,11 @@ def run_pytest(files: List[Path], junit: Path) -> int:
         # gate exists to stop.
         "-o", "addopts=",              # drop inherited -v/--tb/--strict-markers
         "-o", "asyncio_mode=auto",     # pmoves tests rely on this
+        # Two different tests/conftest.py both resolved to the module name
+        # "tests.conftest" and pytest aborted the whole session with
+        # "Plugin already registered under a different name". Considering
+        # namespace packages derives the module name from the full path.
+        "-o", "consider_namespace_packages=true",
         "--import-mode=importlib",     # 264 files across the repo share basenames;
                                        # prepend-mode makes those a hard error
         "--continue-on-collection-errors",
@@ -94,20 +130,19 @@ def run_pytest(files: List[Path], junit: Path) -> int:
         *[str(f) for f in files],
     ]
     env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONDONTWRITEBYTECODE="1")
-    proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, text=True,
-                          capture_output=True)
-    # Head as well as tail: a pytest usage error or a conftest import crash
-    # prints at the top, and a tail-only view of a long run hides it.
-    out = proc.stdout
-    if len(out) > 8000:
-        out = out[:3000] + "\n" + "...[trimmed]..." + "\n" + out[-5000:]
-    sys.stdout.write(out)
-    if proc.stderr.strip():
-        err = proc.stderr
-        if len(err) >= 4000:
-            err = err[:2000] + "\n" + "...[trimmed]..." + "\n" + err[-2000:]
-        sys.stderr.write(err)
-    return proc.returncode
+    try:
+        proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, text=True,
+                              capture_output=True,
+                              timeout=GROUP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired as exc:
+        partial = (exc.stdout or "") + (exc.stderr or "")
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", "replace")
+        return -1, f"TIMEOUT after {GROUP_TIMEOUT_SECONDS}s{chr(10)}{partial}"
+    # Pytest output is returned, never written to stdout: stdout carries only
+    # this tool's report (and --json must stay parseable). Callers surface it
+    # on stderr for groups that actually failed to produce a report.
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
 def parse_junit(junit: Path) -> List[dict]:
@@ -138,11 +173,17 @@ def parse_junit(junit: Path) -> List[dict]:
         # classname first: it is a dotted module path, so it carries no OS path
         # separator and a baseline recorded on Linux CI matches a local Windows
         # run. `file` is the fallback for collection errors with no classname.
-        where = case.get("classname") or case.get("file") or "<unknown>"
+        where = case.get("classname") or case.get("file") or ""
+        name = case.get("name") or "<unknown>"
+        if not where:
+            # A collection error has no classname; pytest puts the module's
+            # dotted path in `name`. Move it to `where` so the baseline reads as
+            # "this module cannot be imported" rather than "<unknown>".
+            where, name = name, "<collection-error>"
         findings.append({
             "kind": kind,
-            "where": where.replace("\\", "/"),
-            "name": case.get("name") or "<unknown>",
+            "where": where.replace(chr(92), "/"),
+            "name": name,
             "detail": detail,
         })
     return findings
@@ -206,17 +247,41 @@ def main() -> int:
         print("ERROR: no test_*.py discovered — wrong repo root?", file=sys.stderr)
         return 2
 
+    groups = group_files(files)
+    findings: List[dict] = []
+    dead_groups = 0
     with tempfile.TemporaryDirectory() as tmp:
-        junit = Path(tmp) / "report.xml"
-        rc = run_pytest(files, junit)
-        findings = parse_junit(junit)
-        if not junit.is_file():
-            # pytest never got far enough to write a report: a usage error, an
-            # import-time crash in conftest, or a missing dependency. That is a
-            # real failure and must not be mistaken for "no findings".
-            print(f"ERROR: pytest produced no JUnit report (exit {rc}). "
-                  "This is a harness failure, not a clean run.", file=sys.stderr)
-            return 2
+        for i, (group, gfiles) in enumerate(sorted(groups.items()), 1):
+            junit = Path(tmp) / f"report-{i}.xml"
+            sys.stderr.write("[%d/%d] %s (%d files)%s" % (i, len(groups), group, len(gfiles), chr(10)))
+            rc, output = run_pytest(gfiles, junit)
+            if junit.is_file():
+                findings.extend(parse_junit(junit))
+            else:
+                # Only a dead group gets its output shown, on stderr, and only
+                # the tail -- enough to name the broken conftest without burying
+                # the report under ~100 groups of passing noise.
+                sys.stderr.write(
+                    "--- no report for %s (exit %d) ---%s%s%s" % (
+                        group, rc, chr(10), output[-1500:], chr(10)))
+                # pytest never wrote a report for this group: a conftest that
+                # cannot be imported, a usage error, or a crash. Recorded as a
+                # finding so it is visible and ratchetable, rather than being
+                # mistaken for "no failures here".
+                dead_groups += 1
+                findings.append({
+                    "kind": "ERROR",
+                    "where": group,
+                    "name": "<pytest-harness>",
+                    "detail": (f"pytest timed out after {GROUP_TIMEOUT_SECONDS}s"
+                               if rc == -1 else
+                               f"pytest produced no report for this group (exit {rc})"),
+                })
+    # stderr: stdout must stay pure so --json is parseable.
+    sys.stderr.write("Groups run: %d%s%s" % (
+        len(groups),
+        (" (%d produced no report)" % dead_groups) if dead_groups else "",
+        chr(10)))
 
     if args.write_baseline:
         write_baseline(findings)
