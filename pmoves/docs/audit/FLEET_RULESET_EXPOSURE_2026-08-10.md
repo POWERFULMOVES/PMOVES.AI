@@ -18,7 +18,57 @@ Follow-up to PR #2490, which found a live wrong-branch ruleset on `PMOVES-hermes
 
 The single most important number: **15 of 65 consumed branches have neither a ruleset nor classic protection.** Anyone with write access can force-push or delete the exact branch the monorepo pins.
 
+Read that number with the next section, though: it does **not** mean the fleet is broadly unprotected. Classic protection gates 46 of the other 50. What is broadly broken is the *ruleset* layer — 4 of 65 consumed branches covered, and none of the 4 on purpose.
+
 All 15 have one cause, and it has a date on it — see [Root cause](#root-cause-protection-is-a-snapshot-and-the-snapshot-is-from-2026-06-10). `branch-protection-sync.yml` is `workflow_dispatch`-only and last ran **2026-06-10**, successfully, with `failed=0`. Ten of the 15 were added to `.gitmodules` after that date; the other five were re-pointed to a different branch after it. The exposure is not a logic bug — it is that protection is a snapshot nothing refreshes.
+
+## Does the `PMOVES-hermes-agent` shape generalise? Partly — and the precise part matters
+
+`PMOVES-hermes-agent` is a ruleset named `[ main ]`, targeting `~DEFAULT_BRANCH`,
+on a repo whose consumed branch is `PMOVES.AI-Edition-Hardened`. Pre-fix `audit`
+called it compliant. The obvious worry is that this is the fleet's normal state.
+
+**It is not.** Stating it plainly, because the answer cuts both ways:
+
+**No — "most consumed branches are unprotected" is false.** 50 of 65 consumed
+branches are gated by something. Classic branch protection is carrying 46 of
+them. `branch-protection-sync.yml` did its job on the forks it saw, and the
+15 that are exposed are the ones it has not seen since 2026-06-10 — not ones
+it got wrong.
+
+**Yes — within the ruleset layer, the shape is the norm rather than the
+exception.** Of the 8 entries that carry any ruleset at all:
+
+| | count |
+|---|---|
+| Ruleset **covers** the consumed branch | 4 |
+| Ruleset **misses** the consumed branch | 4 |
+
+A 50% miss rate. The four misses are `PMOVES-hermes-agent`, `PMOVES-pinokio`
+(twice, via its `pbnj` alias), and `PMOVES-BotZ-gateway` — the last matching
+`~ALL` but with `enforcement: disabled`.
+
+And the four hits do not redeem it, because **not one of them is a hit by
+branch resolution**:
+
+| Entry | Why it covers the consumed branch |
+|---|---|
+| `PMOVES-transcribe-and-fetch` | `~ALL` wildcard |
+| `PMOVES-ToKenism-Multi` | `~ALL` wildcard |
+| `PMOVES-ClawZ` | `~ALL` wildcard |
+| `PMOVES-DoX` | `~DEFAULT_BRANCH`, and its repo default *is* the hardened branch |
+
+Three wildcards and one coincidence. **Zero cases where a tool resolved the
+tracked branch and wrote a ruleset to it.** That is the honest summary of the
+ruleset layer as it stands: 4 of 65 consumed branches covered, and none of the
+4 covered on purpose.
+
+So the correct reading is not "the fleet is unprotected". It is: **classic
+protection is doing all of the real work, and the ruleset layer — the thing
+PR #2490 built and the ratification made this tool's sole responsibility — has
+a 50% miss rate on the handful of repos it has touched.** The sentinel fix in
+#2490 is what makes a correct hit possible at all; before it, a hit could only
+ever have been a wildcard or a coincidence.
 
 ## What "the consumed branch" means, and why it is the only branch that matters
 
