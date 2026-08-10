@@ -21,11 +21,38 @@ value = estimated_reduction × error_weight
 is semi-measured. `estimated_reduction` starts as a declared prior at mint and is refined by
 observation later (post-v0).
 
-## Trigger (exists today)
+## Trigger (contract registered; publisher NOT yet built)
 
 A pattern only becomes a domino if it passed QA. Reuse the Archon mint gate unchanged:
 `archon.mint.agent.v1` → `archon.qa.result.v1` (blocks on fail) → **`archon.mint.confirmed.v1`**.
 v0 subscribes to `archon.mint.confirmed.v1`.
+
+**Two prerequisites, both real blockers for v0. Neither is optional.**
+
+**(a) There is no runtime publisher.** The three `archon.mint.*` subjects are registered in
+`pmoves/contracts/topics.json` and have schemas, but no service publishes them: a search across
+`*.py`/`*.ts`/`*.js`/`*.go` returns nothing, and every hit is a doc, a slash command, or a schema.
+`.claude/PATTERNS.md` places the mint flow between the slash commands and `archon-qa-agent`, and
+`model-lifecycle-pipeline-2026-07-30.md` marks the stage a stub. The Archon NATS bridge that
+actually emits `archon.mint.confirmed.v1` is therefore a **prerequisite of v0**, not something v0
+can assume. Until it exists the acceptance run can only be driven by a synthetic publish.
+
+**(b) The event cannot carry the scoring inputs.** `archon/mint.confirmed.v1.schema.json` is
+`additionalProperties: false` and carries exactly two fields:
+
+```jsonc
+{ "agent_id": "<uuid>", "confirmed_at": "<date-time>" }
+```
+
+`error_class`, `estimated_reduction`, `contributors` and `trail_ref` are **not in it**, and not in
+`mint.agent.v1` either. The scorer cannot build a Domino Record from the event it subscribes to.
+v0 must either (i) define a separate **domino-candidate contract** carrying those fields,
+correlated to the mint by `agent_id`, or (ii) name an explicit lookup source for each field.
+Widening `mint.confirmed.v1` is the wrong lever - it is a QA-gate signal, not a value record.
+
+This also exposes a scope mismatch: the "first real domino" below (#2464, a PR recovery) is **not
+an agent mint at all** and would never arrive on `archon.mint.confirmed.v1`. v0 needs a
+domino-candidate contract that both a mint and a recovery can produce.
 
 ## The four steps
 
@@ -48,12 +75,28 @@ On `archon.mint.confirmed.v1`, produce a **Domino Record**:
 `error_weight` lookup: count prior occurrences of `error_class` in `known-roads.jsonl` + the
 AGNOTE trail corpus. Missing class → weight 1 (unknown-but-nonzero).
 
+**Count incidents only - never paved dominos.** Step 2 appends a domino line carrying the same
+`error_class` to the very file Step 1 counts. Left as-is, the second domino for an error class
+reads the first one's *paved road* as another occurrence of the error, so `error_weight` - and the
+reported `value` - inflates every time a preventive pattern is scored, with no new error having
+happened. That makes the metric reward scoring itself, which is backwards for something defined as
+"reduces FUTURE error".
+
+v0 fix: count only explicitly typed **incident** records. Either keep the domino ledger in a
+separate file, or tag domino lines (`"record_type": "domino"`) and filter them out of the lookup.
+
 ### 2. Pave — Known-Road line (extend existing mechanism)
 Append one provable line to `.claude/hooks/damage-control/known-roads.jsonl` (append-only,
 `merge=union`, fail-closed) tagging it as a domino: `{domino_id, pattern_ref, error_class,
 value, trail_ref, ts}`. The road is paved the instant the domino is scored.
 
 ### 3. Attribute — `tokenism.value.recorded.v1` (new subject, existing bus)
+
+**Register it before publishing it.** `tokenism.value.recorded.v1` is absent from
+`pmoves/contracts/topics.json` and has no `*.v1.schema.json`. An unregistered subject cannot be
+validated by the canonical envelope path (`services/common/events.py`) and is invisible to subject
+auditing, so v0 would publish something the bus cannot recognise. Both are v0 deliverables: a
+versioned `tokenism/value.recorded.v1.schema.json` and a `topics.json` entry.
 Publish to the geometry/tokenism bus:
 ```jsonc
 { "domino_id": "...", "value": 9.6, "contributors": ["z890-claude","crush"], "trail_ref": "...", "ts": "..." }
@@ -68,7 +111,7 @@ value-recorded entry keyed by `domino_id`, so the victory is on the books with p
 ## Components & ownership
 | Step | Component | New/Exists | Lane |
 |------|-----------|-----------|------|
-| Trigger | Archon mint + QA gate | exists | Archon (4090) |
+| Trigger | Archon mint + QA gate | contract exists; **publisher not built** (prereq) | Archon (4090) |
 | Score | `domino-scorer` | **new (small)** | z890 infra |
 | Pave | Known-Roads guard | exists (extend) | z890 infra |
 | Attribute | ToKenism-Multi | exists (add subject consumer) | tokenism lane |
@@ -92,6 +135,12 @@ A script that: publishes a synthetic `archon.mint.confirmed.v1` for a test patte
 (1) a Domino Record with `value = estimated_reduction × error_weight`, (2) a matching
 `known-roads.jsonl` line, (3) a `tokenism.value.recorded.v1` event on the bus, (4) a Wealth
 entry — **all four sharing the same `domino_id` and `trail_ref`.** Green = one domino, end to end.
+
+Also required to pass:
+- the published `tokenism.value.recorded.v1` **validates against its registered schema** and the
+  subject resolves in `pmoves/contracts/topics.json` (see step 3);
+- scoring a **second** domino with the same `error_class` leaves the first one's `error_weight`
+  unchanged - paved dominos must not be counted as incidents (see step 1).
 
 ## Convergence — 3 lanes + MissingLinc (proposed)
 
