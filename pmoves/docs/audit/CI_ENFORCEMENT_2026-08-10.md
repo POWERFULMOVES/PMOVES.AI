@@ -12,9 +12,19 @@ files and 100 jobs, which of our checks are actually load-bearing?
 It is not "everything is broken", and it is not "two bad steps". It is narrower
 and worse than either:
 
-> **Three of the five checks required to merge into `main` are structurally
-> incapable of failing. All three are in one file, `merge-gate.yml`. The other
-> two are well built and genuinely enforce.**
+> **Three of the five checks required to merge into `main` cannot fail on the
+> thing they exist to validate. All three are in one file, `merge-gate.yml`. The
+> other two are well built and genuinely enforce.**
+
+The precise claim is worth stating carefully, because the sloppy version is
+falsifiable and this one is not. These jobs **can** report `failure` — every one
+of them runs `actions/checkout`, and `python-tests` additionally runs
+`actions/setup-python` and a `pip install` whose fallback can fail. Any of those
+can go red, and `merge-decision` would see it. What cannot happen is a **red
+caused by the validation**: give them a defective repository and they still exit
+0. So the gate is live as infrastructure and dead as a gate — which is the
+dangerous combination, because an occasional infrastructure failure makes it look
+like a check that works.
 
 The wider estate is in better shape than that suggests: of 87 jobs containing
 shell steps, **46 have no failure-masking at all**. Most workflows do enforce.
@@ -31,9 +41,20 @@ the gate.
 
 ## Proof, not inference
 
-Each verdict below was produced by constructing an input that *should* fail and
-observing the step still exit 0. A green check is not evidence, and neither is a
-suspicious-looking name.
+A green check is not evidence, and neither is a suspicious-looking name. The two
+verdicts rest on different evidence, and conflating them would be the same
+overstatement this audit is about:
+
+- **`VACUOUS`** — constructed an input that *should* fail and observed the step
+  still exit 0. That is what the three `merge-gate.yml` sections below show.
+- **`ENFORCING`** — read the failure paths and confirmed a non-zero exit exists
+  and is reachable: `verify` runs under `set -euo pipefail` with an explicit
+  `exit 1` per missing contract element, and `submodule-gitlink-gate` sets
+  `fail=1` and exits 1 on a dangling, rollback or sideways gitlink. **No failing
+  input was constructed against those two**, so the claim for them is "a real
+  failure path exists", not "observed to reject a defect". Weaker evidence,
+  stated as such — and the weaker claim is still enough to distinguish them from
+  a job with no failure path at all.
 
 ### `python-tests` — required
 
@@ -46,7 +67,7 @@ Two independent defects, either of which alone would be sufficient.
 **Truncation.** Counted with the workflow's own `find`, in a clean checkout of
 `origin/main`:
 
-```
+```console
 $ find . -name 'test_*.py' -not -path '*/venv/*' -not -path '*node_modules*' | wc -l
 264
 $ find . -name 'test_*.py' -not -path '*/venv/*' -not -path '*node_modules*' | head -20 | wc -l
@@ -56,9 +77,14 @@ $ find . -name 'test_*.py' -not -path '*/venv/*' -not -path '*node_modules*' | h
 244 of 264 test files are never executed, and *which* 20 run is filesystem
 order — not a stable, reviewable subset.
 
-**Discarded status.** A deliberately failing test, run through the exact step:
+**Discarded status.** A deliberately failing test, run through an **equivalent
+local reproduction** of the step — not the step verbatim. Two differences, both
+noted so the transcript is not read as more than it is: `python -m pytest` rather
+than the workflow's bare `pytest` (same invocation, explicit interpreter on this
+box), and the `find` predicates elided to `...` for width. Neither touches the
+`|| true` that produces the result.
 
-```
+```console
 $ python -m pytest --tb=no -q test_definitely_fails.py ; echo $?
 1
 
@@ -94,7 +120,7 @@ Case B exposes a second bug the step's author did not intend. The
 `|| echo 'No USER directives found'` fallback is **unreachable**, because the
 pipeline's exit status is `head`'s, not `grep`'s. Demonstrated side by side:
 
-```
+```console
 $ grep -r 'USER' pmoves/services/*/Dockerfile 2>/dev/null || echo 'No USER directives found'
 No USER directives found          <- fallback fires
 $ grep -r 'USER' pmoves/services/*/Dockerfile 2>/dev/null | head -10 || echo 'No USER directives found'
@@ -179,14 +205,14 @@ repairing its three inputs fixes it for free.
 `merge-gate.yml` opens by telling the operator how to configure branch
 protection:
 
-```
+```text
 # Configure branch protection in GitHub Settings > Branches > main:
 #   Required status checks: Merge Gate / merge-decision
 ```
 
 The live configuration does not do that:
 
-```
+```console
 $ gh api repos/POWERFULMOVES/PMOVES.AI/branches/main/protection \
       --jq '.required_status_checks.contexts'
 ["merge-gate","python-tests","hardening-validation","verify","submodule-gitlink-gate"]
@@ -206,9 +232,13 @@ all.
 
 ## A second hardening check, also vacuous
 
-`hardening-validation.yml` (workflow *"Docker Hardening Validation"*, job check
-name *"Docker Bench Security"*) is a separate, more serious-looking attempt at
-the same concern. All three of its shell steps are masked:
+The **`docker-bench` job** of `hardening-validation.yml` (check name *"Docker
+Bench Security"*) is a separate, more serious-looking attempt at the same
+concern. Scoped to that job deliberately — the same workflow's
+`validate-hardening` job runs `./pmoves/scripts/validate-hardening.sh` unmasked
+with `continue-on-error: false`, and `validate-compose` and `validate-dockerfiles`
+carry unmasked steps too. **The workflow as a whole is not vacuous; this one job
+is.** All three of `docker-bench`'s shell steps carry masking constructs:
 
 | Step | Masking |
 |---|---|
@@ -216,9 +246,28 @@ the same concern. All three of its shell steps are masked:
 | Validate compose hardening directives | `\|\| echo`, `2>/dev/null \|\|` |
 | Run CIS Docker Bench (Linux bare-metal only) | `\|\| true`, `2>/dev/null \|\|` |
 
+**One correction to the step-level reading, and it cuts against this audit's own
+method.** "Contains a masking construct" is not the same as "cannot fail". The
+first step above also contains an explicit failure path the scan could not see,
+because the mask and the `exit 1` live in the same shell block:
+
+```bash
+if ! docker info > /dev/null 2>&1; then
+  echo "✗ Docker daemon not reachable"
+  exit 1
+fi
+```
+
+So `docker-bench` **can** go red — on daemon unavailability, which is an
+infrastructure condition, not a hardening defect. Its hardening *assertions* are
+still all masked. That is the same shape as `merge-gate.yml`: capable of failing,
+incapable of rejecting. Read the appendix's `unmasked` column with this in mind —
+a `0` there means "no step is wholly unmasked", not "this job cannot fail".
+
 It is not a required check, so it provides no false *merge* assurance — but the
-project now has **two** container-hardening checks, and neither can fail. Anyone
-reading the check list would reasonably conclude hardening is covered.
+project now has **two** container-hardening checks and neither can reject a
+hardening defect. Anyone reading the check list would reasonably conclude
+hardening is covered.
 
 ## Honestly advisory — not a problem, named so they are not miscounted
 
@@ -325,7 +374,14 @@ such — treat it as a map of where to look, not as a set of verdicts.
 
 ## Appendix — all 100 jobs (scan-derived)
 
-`run` = shell steps. `unmasked` = shell steps with no masking construct and no `continue-on-error`. `uses*` = action steps without `continue-on-error`, which can also fail a job. A row with `unmasked=0` and `uses*=0` cannot fail on anything it does.
+`run` = shell steps. `unmasked` = shell steps with no masking construct and no `continue-on-error`. `uses*` = action steps without `continue-on-error`, which can also fail a job.
+
+**These are counts, not verdicts** — as the method section says, this appendix is a map of where to look. Two limits matter when reading it:
+
+- `unmasked=0` means *no step is wholly unmasked*. It does **not** mean the job cannot fail: masking is detected per step, and a step can hold a masking construct and an explicit `exit 1` in the same shell block. `docker-bench` is exactly that case and it is why the row-level shorthand that used to sit here — "a row with `unmasked=0` and `uses*=0` cannot fail on anything it does" — has been removed rather than qualified. It was an inference the data does not support.
+- The `verify` row for `verify-attestation.yml` previously read **required / live on PRs**. Corrected: that workflow is `workflow_dispatch`-only, so it produces no PR check and cannot be a required context. The required `verify` context comes from `chit-contract.yml`. The five-check conclusion stands; the row was the error.
+
+Deciding whether a job can fail needs the failure paths inside each shell block read individually. That is what the sections above do for the five required checks, and what this table does not do for the other 95.
 
 | File | Job | Check name | Req | Live on PRs | run | unmasked | uses\* |
 |---|---|---|---|---|---|---|---|
@@ -425,11 +481,21 @@ such — treat it as a map of where to look, not as a set of verdicts.
 | `validate-composes-ratchet.yml` | `validate-composes-ratchet` | `validate-composes-ratchet` |  |  | 2 | 2 | 2 |
 | `validate-dockerfile-paths-ratchet.yml` | `validate-dockerfile-paths-ratchet` | `validate-dockerfile-paths-ratchet` |  |  | 2 | 2 | 2 |
 | `validate-tac-ratchet.yml` | `validate-tac-ratchet` | `validate-tac-ratchet` |  |  | 2 | 2 | 2 |
-| `verify-attestation.yml` | `verify` | `verify` | **yes** | yes | 1 | 1 | 0 |
+| `verify-attestation.yml` | `verify` | `verify` |  |  | 1 | 1 | 0 |
 | `village-gate.yml` | `village-gate` | `village-gate` |  | yes | 2 | 2 | 3 |
 | `webhook-smoke.yml` | `smoke` | `smoke` |  |  | 1 | 1 | 3 |
 | `yt-dlp-bump.yml` | `bump-yt-dlp` | `bump-yt-dlp` |  |  | 2 | 1 | 4 |
 
 ---
+
+**Status: non-release evidence.** This is a read-only audit written to inform an
+operator decision — whether to give `merge-gate` a body or drop it from the
+required set, and whether to require the four checks that enforce but are not
+required. It validates nothing into production, changes no workflow, and carries
+no claim or release row. It therefore does **not** travel the Three-Body
+claim → work → sign → release trail, and the ACK below is deliberately advisory
+and unsigned-local rather than a signed release ACK. Whoever acts on these
+findings opens that trail for the change itself; citing this document is not a
+substitute for it.
 
 Collected 2026-08-10 against `origin/main` @ `beeee2147` and the live GitHub API. `agent_signature (advisory, unsigned-local): ACK::4090-CLAUDE::CI-ENFORCEMENT-AUDIT::2026-08-10`
