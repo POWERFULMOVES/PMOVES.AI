@@ -1276,6 +1276,17 @@ validate-command-anchors-json: ## Same as validate-command-anchors, but JSON out
 validate-command-anchors-baseline: ## Re-baseline the anchor gate (deliberate: say why in the PR)
 	@$(PYTHON) tools/validate_command_anchors.py --write-baseline
 
+.PHONY: python-tests-ratchet python-tests-json python-tests-baseline
+python-tests-ratchet: ## Run every test_*.py and fail only on NEW failures (the merge-gate check)
+	@echo "?? Python-tests ratchet..."
+	@$(PYTHON) tools/pytest_ratchet.py
+
+python-tests-json: ## Same as python-tests-ratchet, but JSON output
+	@$(PYTHON) tools/pytest_ratchet.py --json
+
+python-tests-baseline: ## Re-baseline the python-tests gate (deliberate: say why in the PR)
+	@$(PYTHON) tools/pytest_ratchet.py --write-baseline
+
 validate-dockerfile-paths-list-orphans: ## Diagnostic: list orphan Dockerfiles not in the baseline; never fails
 	@$(PYTHON) tools/validate_dockerfile_paths.py --list-orphans
 

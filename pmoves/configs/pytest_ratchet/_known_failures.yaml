@@ -1,0 +1,8 @@
+# Baselined Python test failures — pytest_ratchet.py
+#
+# SEEDING IN PROGRESS — populated from the first CI run of this PR, because the
+# baseline has to be recorded in the environment the gate runs in (Linux,
+# Python 3.12, .github/requirements-tests.txt). A baseline recorded on a
+# developer machine would encode that machine's missing packages as if they
+# were repo defects.
+known_failures:
