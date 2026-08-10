@@ -1,36 +1,11 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "PMOVES standard branch protection",
-  "description": "Canonical branch-protection profile schema for the PMOVES org. Consumed by `pmoves/tools/branch_protection.py` to apply + audit + drift-check across the 8+ PMOVES forks. Each profile is a per-repo declaration of: required status checks, required PR review policy, branch-protection ruleset shape, and optional bypass actors. The shape mirrors the GitHub REST API: branches/{branch}/protection + rulesets endpoints, so a profile maps 1:1 to API calls. The schema is strict on the profile keys (additionalProperties: false) so an unintended typo fails the validator before the tool hits the network.",
-  "spec": "pmoves.branch_protection/v1",
-  "encoder_version": "1.0.0",
+  "spec": "pmoves.rulesets/v2",
+  "encoder_version": "2.0.0",
+  "description": "Canonical PMOVES ruleset spec. The branch_protection tool OWNS RULESETS only; classic branch protection is the sole responsibility of .github/workflows/branch-protection-sync.yml. Most-restrictive-wins per About rulesets (https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets), so the tool's job is to additively ensure the rulesets exist with the right content. The workflow does not need to know the spec exists; the tool does not need to know the workflow exists. They layer, not replace.",
+
   "profiles": {
     "monorepo": {
-      "description": "The PMOVES.AI monorepo profile. 4 required status checks from the PMOVES GitHub App, 1 reviewer with code-owner enforcement, linear history + signed commits + conversation resolution. Admins are NOT enforced (operator preauthorized --admin override for hot lanes). The [main] ruleset layers on top of classic protection with explicit bypass actors for the PMOVES GitHub App + the Copilot integration.",
-      "branch": "main",
-      "required_status_checks": {
-        "strict": true,
-        "checks": [
-          { "context": "merge-gate" },
-          { "context": "python-tests" },
-          { "context": "hardening-validation" },
-          { "context": "verify" },
-          { "context": "submodule-gitlink-gate" }
-        ]
-      },
-      "required_pull_request_reviews": {
-        "dismiss_stale_reviews": true,
-        "require_code_owner_reviews": true,
-        "require_last_push_approval": false,
-        "required_approving_review_count": 1
-      },
-      "required_linear_history": true,
-      "required_signatures": true,
-      "required_conversation_resolution": true,
-      "enforce_admins": false,
-      "allow_force_pushes": false,
-      "allow_deletions": false,
-      "restrictions": null,
+      "description": "PMOVES.AI profile. The monorepo itself; mirrors the classic protection that branch-protection-sync.yml writes, expressed as ruleset rules so the rulesets layer additively. required_signatures + require_linear_history are expressed as ruleset rules (NOT as classic required_signatures / required_linear_history — those are a separate endpoint, not the ruleset model).",
       "rulesets": [
         {
           "name": "[ main ]",
@@ -40,8 +15,33 @@
           "rules": [
             { "type": "deletion" },
             { "type": "non_fast_forward" },
-            { "type": "pull_request", "parameters": { "require_code_owner_review": false, "require_last_push_approval": false, "dismiss_stale_reviews_on_push": true, "required_approving_review_count": 0, "required_review_thread_resolution": true } },
-            { "type": "copilot_code_review" }
+            { "type": "required_signatures" },
+            { "type": "required_linear_history" },
+            { "type": "required_conversation_resolution" },
+            { "type": "copilot_code_review" },
+            {
+              "type": "required_status_checks",
+              "parameters": {
+                "required_status_checks": [
+                  { "context": "merge-gate" },
+                  { "context": "python-tests" },
+                  { "context": "hardening-validation" },
+                  { "context": "verify" },
+                  { "context": "submodule-gitlink-gate" }
+                ],
+                "strict_required_status_checks_policy": true
+              }
+            },
+            {
+              "type": "pull_request",
+              "parameters": {
+                "require_code_owner_review": true,
+                "require_last_push_approval": false,
+                "dismiss_stale_reviews_on_push": true,
+                "required_approving_review_count": 1,
+                "required_review_thread_resolution": true
+              }
+            }
           ],
           "bypass_actors": [
             { "actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always" }
@@ -50,25 +50,7 @@
       ]
     },
     "fork": {
-      "description": "The PMOVES fork profile (used for PMOVES-hermes-agent, PMOVES-pinokio, and any future PMOVES-* fork). The per-repo required status checks are declared in the fork's own config — this profile is the SHAPE. A fork consumer passes its own required status checks + this profile as the layered structure. Linear history is required (no merge commits); signatures are NOT required (forks often receive upstream commits that aren't signed by the fork's contributors); conversation resolution is required; admins are NOT enforced (the operator preauthorized --admin for hot lanes). No bypass actors (forks have no Copilot integration, no PMOVES GitHub App).",
-      "branch": "main",
-      "required_status_checks": {
-        "strict": true,
-        "checks": []
-      },
-      "required_pull_request_reviews": {
-        "dismiss_stale_reviews": true,
-        "require_code_owner_reviews": false,
-        "require_last_push_approval": false,
-        "required_approving_review_count": 1
-      },
-      "required_linear_history": true,
-      "required_signatures": false,
-      "required_conversation_resolution": true,
-      "enforce_admins": false,
-      "allow_force_pushes": false,
-      "allow_deletions": false,
-      "restrictions": null,
+      "description": "PMOVES-* fork profile. The minimum-protection ruleset for downstream forks. Layers on top of whatever classic protection branch-protection-sync.yml writes. Does NOT include require_linear_history, require_signatures, copilot_code_review, or required_status_checks (those are workflow concerns; layering them additively over a workflow-managed fork would strand sync/* PRs per #2490 review N5). The pull_request rule's required_approving_review_count=0 matches the workflow's classic default — the operator can override per_repo_overrides[repo].ruleset_overrides to bump a specific fork to 1 (or higher) when the human-review gate is required. Inheriting the workflow default avoids the deadlock: most-restrictive-wins gives 0 either way, and the per_repo_overrides escape hatch is the only way to raise it for a specific fork.",
       "rulesets": [
         {
           "name": "[ main ]",
@@ -78,39 +60,77 @@
           "rules": [
             { "type": "deletion" },
             { "type": "non_fast_forward" },
-            { "type": "pull_request", "parameters": { "require_code_owner_review": false, "require_last_push_approval": false, "dismiss_stale_reviews_on_push": true, "required_approving_review_count": 1, "required_review_thread_resolution": true } }
+            {
+              "type": "pull_request",
+              "parameters": {
+                "require_code_owner_review": false,
+                "require_last_push_approval": false,
+                "dismiss_stale_reviews_on_push": true,
+                "required_approving_review_count": 0,
+                "required_review_thread_resolution": true
+              }
+            }
           ],
           "bypass_actors": []
         }
       ]
     }
   },
+
   "per_repo_overrides": {
+    "POWERFULMOVES/PMOVES.AI": {
+      "profile": "monorepo",
+      "branch": "main"
+    },
     "POWERFULMOVES/PMOVES-hermes-agent": {
       "profile": "fork",
-      "required_status_checks": {
-        "strict": true,
-        "checks": [
-          { "context": "check-attribution" },
-          { "context": "check-common-ancestor" },
-          { "context": "ruff + ty diff" },
-          { "context": "ruff enforcement (blocking)" },
-          { "context": "Windows footguns (blocking)" },
-          { "context": "changes" },
-          { "context": "e2e" },
-          { "context": "Check PyPI dependency upper bounds" },
-          { "context": "Scan PR for critical supply chain risks" }
-        ]
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "ruleset_overrides": {
+        "[ main ]": {
+          "rules": [
+            {
+              "type": "required_status_checks",
+              "parameters": {
+                "required_status_checks": [
+                  { "context": "check-attribution" },
+                  { "context": "check-common-ancestor" },
+                  { "context": "ruff + ty diff" },
+                  { "context": "ruff enforcement (blocking)" },
+                  { "context": "Windows footguns (blocking)" },
+                  { "context": "changes" },
+                  { "context": "e2e" },
+                  { "context": "Check PyPI dependency upper bounds" },
+                  { "context": "Scan PR for critical supply chain risks" }
+                ],
+                "strict_required_status_checks_policy": true
+              }
+            }
+          ]
+        }
       }
     },
     "POWERFULMOVES/PMOVES-pinokio": {
       "profile": "fork",
-      "required_status_checks": {
-        "strict": true,
-        "checks": [
-          { "context": "CodeRabbit" }
-        ]
+      "branch": "main",
+      "ruleset_overrides": {
+        "[ main ]": {
+          "rules": [
+            {
+              "type": "required_status_checks",
+              "parameters": {
+                "required_status_checks": [
+                  { "context": "CodeRabbit" }
+                ],
+                "strict_required_status_checks_policy": true
+              }
+            }
+          ]
+        }
       }
+    },
+    "POWERFULMOVES/PMOVES-nats-server": {
+      "profile": "fork",
+      "branch": "main"
     }
   }
 }
