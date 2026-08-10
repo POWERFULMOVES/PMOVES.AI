@@ -56,8 +56,11 @@ export async function GET(request: Request) {
   const subPath = pathname.replace(/^\/persona\/livingdoc\//, '');
   const requestedFile = path.join(personaDir, subPath);
 
-  // Prevent path traversal
-  if (!requestedFile.startsWith(personaDir)) {
+  // Prevent path traversal: resolve both sides and require containment with a
+  // separator — a bare startsWith(personaDir) lets `<personaDir>-evil` through.
+  const resolvedFile = path.resolve(requestedFile);
+  const resolvedDir = path.resolve(personaDir);
+  if (resolvedFile !== resolvedDir && !resolvedFile.startsWith(resolvedDir + path.sep)) {
     return new Response('Forbidden', { status: 403 });
   }
 

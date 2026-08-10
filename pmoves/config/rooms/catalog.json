@@ -94,7 +94,7 @@
       "stage": "rehearsal",
       "manifest": "darkxsides.room.json",
       "summary": "Private, owner-only persona room (co-creator + witness -> eventual digital twin). Uncensored/unrestricted authentic expression; houses the dedicated publish-gate surfaced in Open Notebook, with a fail-closed public-egress redaction floor.",
-      "current_stage": "archive",
+      "current_stage": "rehearsal",
       "stage_source": "inferred: private persona room, not serving external traffic (defaulted to archive; operator can flip to 'live' if active). See open-room-lane spec §6 stretch checklist.",
       "stage_verified_at": "2026-07-20T18:00:00Z"
     },
