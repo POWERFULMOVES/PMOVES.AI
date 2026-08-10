@@ -75,7 +75,14 @@ ssh pmoves@pmoves-b850-ai-top '
 ### Step 2 — format `pmoves-media` onto MinIO
 ```bash
 # MinIO is already tailnet-live on z890 (…:9000). Use the fleet MinIO creds (from vault).
+# Run this ON b850. `supabase-db` is a node-local Docker network alias, so the format
+# must execute on the node whose `pmoves_data` network carries the metadata database
+# Step 1 just destroyed. Run it anywhere else and you format an unrelated local
+# database (or fail outright) while b850 stays broken. MinIO stays z890, by hostname.
+ssh pmoves@pmoves-b850-ai-top     # then, in that session:
+
 export META_PASSWORD="<supabase_admin pw>"
+export MINIO_USER="<minio access key>" MINIO_PASSWORD="<minio secret key>"
 docker run --rm --network pmoves_data \
   -e META_PASSWORD -e MINIO_USER -e MINIO_PASSWORD \
   juicedata/mount:ce-v1.3.0 sh -c '
@@ -92,6 +99,7 @@ docker run --rm --network pmoves_data \
 
 ### Step 2a — ensure the MinIO bucket exists
 ```bash
+# Same b850 session as Step 2.
 docker run --rm --network pmoves_data \
   -e MC_HOST_z=http://$MINIO_USER:$MINIO_PASSWORD@minio:9000 \
   minio/mc mb -p z/pmoves-media || true
@@ -100,7 +108,10 @@ docker run --rm --network pmoves_data \
 ### Step 3 — re-create b850's mount with `META_PASSWORD` (no inline secret)
 Use the repo target that already implements the `META_PASSWORD` form (added in the #2337 line):
 ```bash
-ssh pmoves@pmoves-b850-ai-top 'cd /opt/pmoves && make -C pmoves juicefs-mount-pg'
+# b850 holds the metadata database locally, so juicefs-mount-local is the correct
+# target: it feeds SUPABASE_DB_PASSWORD in as META_PASSWORD and keeps it off argv.
+# (There is no juicefs-mount-pg target in this repo.)
+ssh pmoves@pmoves-b850-ai-top 'cd /opt/pmoves && make -C pmoves juicefs-mount-local'
 # verify:
 ssh pmoves@pmoves-b850-ai-top 'make -C pmoves juicefs-mount-status'
 # `juicefs status` should now report Storage: minio, Bucket: http://<z890>:9000/pmoves-media
@@ -110,14 +121,20 @@ ssh pmoves@pmoves-b850-ai-top 'make -C pmoves juicefs-storage-check'   # must NO
 ### Step 4 — mount cross-node + prove one byte crosses
 ```bash
 # On z890 (S3 gateway host — add the POSIX mount):
-make -C pmoves juicefs-mount-pg   # or juicefs-mount-local
-echo "hello-from-z890" > /mnt/pmoves-media/_crossnode_probe.txt
+# Both remote nodes join through the canonical cross-node target: it takes the b850
+# MagicDNS hostname plus DB_PASS and hands the password to JuiceFS via META_PASSWORD,
+# so it never reaches argv or `ps`.
+make -C pmoves juicefs-cross-node-setup JUICEFS_HOST=pmoves-b850-ai-top DB_PASS="<supabase_admin pw>"
+echo "hello-from-z890" > "$HOME/pmoves-fs/_crossnode_probe.txt"
 
 # On nano-1 (client already installed):
+# A bare `juicefs mount` cannot work here: this is a native client outside b850's
+# Compose network, so `supabase-db` is a Docker alias it cannot resolve, and the DSN
+# carries no password to authenticate with. Same target as z890, run on the node.
 ssh pmovesnvme@pmoves-nano-1 \
-  'sudo juicefs mount --enable-xattr \
-     "postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable" \
-     /mnt/pmoves-media -d && cat /mnt/pmoves-media/_crossnode_probe.txt'
+  'cd /opt/pmoves && make -C pmoves juicefs-cross-node-setup \
+     JUICEFS_HOST=pmoves-b850-ai-top DB_PASS="<supabase_admin pw>" \
+   && cat "$HOME/pmoves-fs/_crossnode_probe.txt"'
 # Expect: hello-from-z890  ← the byte written on z890, read on the jetson. Blocker cleared.
 ```
 

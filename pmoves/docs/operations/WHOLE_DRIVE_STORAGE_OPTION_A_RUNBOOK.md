@@ -41,7 +41,7 @@ transport; keep the share **read-only** so a remote node can't mutate the librar
    `/media`. Set it through the env pipeline (env.example/brand default → regen), **not** by hand-editing
    `env.shared`. Bind the real path directly — Docker Desktop does **not** traverse Windows junctions
    (a junction shows as one stub inside the container).
-3. `make -C pmoves up-jellyfin` (or the jellyfin service target) → complete the Startup Wizard →
+3. `make -C pmoves up-jellyfin-ai` → complete the Startup Wizard →
    add libraries pointing at `/media/MOVIES`, `/media/BEATS BACKUP`.
 4. Cross-node Jellyfin (5090) instead mounts the A1 SMB share.
 
@@ -50,7 +50,11 @@ The "agents + users see/move files" cross-node volume, on N: (1.1T free), NOT th
 
 1. **Relocate MinIO onto N:** (D: is full; this benefits everything). Set `MINIO_DATA_DIR=N:/pmoves-storage/minio`
    via the env pipeline. Stop MinIO, move `D:/pmoves-storage/minio` → `N:/pmoves-storage/minio`
-   (`robocopy /E /MOVE`), `docker compose up -d --force-recreate minio` (OPERATOR: data-move + recreate).
+   (`robocopy /E /MOVE`), `make -C pmoves up-minio` (OPERATOR: data-move + recreate).
+   `up-jellyfin` starts only `jellyfin-bridge`, so the Jellyfin server and its Startup
+   Wizard are not reachable from it; `up-jellyfin-ai` (or grouped `up-external`) brings the
+   server itself up. Raw `docker compose up` is blocked by the damage-control hooks and
+   skips env-file and restart handling - the worst moment to leave the object store down.
 2. **Format a fresh JuiceFS volume against that MinIO** (path-style bucket by Tailscale hostname,
    postgres meta, `META_PASSWORD`) — per `JUICEFS_MEDIA_MINIO_REFORMAT_RUNBOOK.md` §2, but a NEW
    volume (e.g. `pmoves-content`) rather than reusing the empty b850 `pmoves-media`. OPERATOR vault:
