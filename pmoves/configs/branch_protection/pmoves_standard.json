@@ -5,7 +5,7 @@
 
   "profiles": {
     "monorepo": {
-      "description": "PMOVES.AI profile. The monorepo itself; mirrors the classic protection that branch-protection-sync.yml writes, expressed as ruleset rules so the rulesets layer additively. required_signatures + require_linear_history are expressed as ruleset rules (NOT as classic required_signatures / required_linear_history — those are a separate endpoint, not the ruleset model).",
+      "description": "PMOVES.AI profile. The monorepo itself; mirrors the classic protection that branch-protection-sync.yml writes, expressed as ruleset rules so the rulesets layer additively. required_signatures + required_linear_history are expressed as ruleset rules (NOT as classic required_signatures / required_linear_history — those are a separate endpoint, not the ruleset model).",
       "rulesets": [
         {
           "name": "[ main ]",
@@ -50,7 +50,7 @@
       ]
     },
     "fork": {
-      "description": "PMOVES-* fork profile. The minimum-protection ruleset for downstream forks. Layers on top of whatever classic protection branch-protection-sync.yml writes. Does NOT include require_linear_history, require_signatures, copilot_code_review, or required_status_checks (those are workflow concerns; layering them additively over a workflow-managed fork would strand sync/* PRs per #2490 review N5). The pull_request rule's required_approving_review_count=0 matches the workflow's classic default — the operator can override per_repo_overrides[repo].ruleset_overrides to bump a specific fork to 1 (or higher) when the human-review gate is required. Inheriting the workflow default avoids the deadlock: most-restrictive-wins gives 0 either way, and the per_repo_overrides escape hatch is the only way to raise it for a specific fork.",
+      "description": "PMOVES-* fork profile. The minimum-protection ruleset for downstream forks. Layers on top of whatever classic protection branch-protection-sync.yml writes. Does NOT include required_linear_history, required_signatures, copilot_code_review, or required_status_checks (those are workflow concerns; layering them additively over a workflow-managed fork would strand sync/* PRs per #2490 review N5). The pull_request rule's required_approving_review_count=0 matches the workflow's classic default — the operator can override per_repo_overrides[repo].ruleset_overrides to bump a specific fork to 1 (or higher) when the human-review gate is required. Inheriting the workflow default avoids the deadlock: most-restrictive-wins gives 0 either way, and the per_repo_overrides escape hatch is the only way to raise it for a specific fork.",
       "rulesets": [
         {
           "name": "[ main ]",

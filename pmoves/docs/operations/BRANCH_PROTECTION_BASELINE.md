@@ -7,7 +7,7 @@
 The PMOVES standard for how every repo in the org's main branches are
 protected. The spec is the single source of truth — drift from the spec
 is reported on `pmoves.branch_protection.drift.v1` (NATS subject, see
-[`.claude/context/nats-subjects.md`](../nats-subjects.md)) by the Mavis
+[`.claude/context/nats-subjects.md`](../../../.claude/context/nats-subjects.md)) by the Mavis
 cron `branch_protection scan`.
 
 ## Ownership split (the post-ratification model)
@@ -58,8 +58,9 @@ The Hermes PR #4 was admin-merged only because there was no
 required gate to be met. That's a bug-as-feature, not a designed
 protection. This baseline fixes the asymmetry: every repo
 in the org now has at least the minimum ruleset (deletion + non-FF +
-pull_request with 0 reviewers — the workflow writes the human-review
-gate via classic on top).
+pull_request with 0 reviewers — a PR is required, but automation can
+still self-merge `sync/*` and dependabot PRs; the real per-fork gates
+are the required status checks in `per_repo_overrides`).
 
 ## Profiles
 
@@ -69,25 +70,38 @@ they need a more specific shape; that decision is the operator's.
 ### `monorepo` — the PMOVES.AI profile
 
 The full-power profile. Used for the monorepo only. Expressed as a
-`[ main ]` ruleset whose rules layer on top of whatever classic
-protection `branch-protection-sync.yml` writes.
+`[ main ]` ruleset. Unlike the fork profile, it does NOT layer with
+`branch-protection-sync.yml` — see the note under the table.
 
 | Ruleset rule | Parameters | Why |
 |---|---|---|
 | `deletion` | (n/a) | main is not deletable |
 | `non_fast_forward` | (n/a) | no force-pushes to main |
 | `required_signatures` | (n/a) | all commits to main must be signed (per [About rulesets — available rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)) |
-| `require_linear_history` | (n/a) | squash or rebase merge only; no merge commits |
+| `required_linear_history` | (n/a) | squash or rebase merge only; no merge commits |
 | `required_conversation_resolution` | (n/a) | all PR comment threads must resolve before merge |
 | `copilot_code_review` | (n/a) | the operator uses Copilot for the first pass |
 | `required_status_checks` | strict; 5 checks (`merge-gate`, `python-tests`, `hardening-validation`, `verify`, `submodule-gitlink-gate`) | the 5 required gates from the PMOVES GitHub App (id=15368) |
 | `pull_request` | `require_code_owner_review: true`, `dismiss_stale_reviews_on_push: true`, `required_approving_review_count: 1`, `required_review_thread_resolution: true` | CODEOWNERS must approve; reviews dismiss on push; minimum 1 human approval |
 | `bypass_actors` | `RepositoryRole id=5` (operators) | the operator's preauthorized `--admin` override |
 
-The most-restrictive-wins layering means the workflow's classic
-`required_approving_review_count=0` (so automation can self-merge hot
-lanes) is dominated by the ruleset's 1 — humans must approve. The
-operator's `--admin` override still works (it bypasses both writers).
+**The workflow does not touch PMOVES.AI.** `branch-protection-sync.yml`
+derives its fork list from `.gitmodules`, and the monorepo is not a
+submodule of itself — so on PMOVES.AI there is no classic writer to layer
+with, and `required_approving_review_count: 1` is the only review gate in
+play. That is why the N5 deadlock (below) does not apply to this profile.
+
+Two rules here are operator calls, not mechanical defaults, because
+`apply --no-dry-run` on PMOVES.AI would newly enforce them on `main`:
+
+- `required_signatures` — every commit reaching `main` must be signed.
+  Merges made through the GitHub UI/API are signed by GitHub, but a
+  locally-pushed unsigned commit would be rejected.
+- `required_linear_history` — merge commits are rejected on `main`;
+  squash or rebase only.
+
+The operator's `--admin` override still works (`bypass_actors`
+`RepositoryRole id=5`).
 
 ### `fork` — the PMOVES-* profile (forks)
 
@@ -110,10 +124,20 @@ via `per_repo_overrides[repo].ruleset_overrides`.
 
 | Repo | Profile | Ruleset state | Notes |
 |---|---|---|---|
-| `POWERFULMOVES/PMOVES.AI` | monorepo | 3 rulesets (well-configured) | classic protection is layered on top by the workflow; the tool's `apply --no-dry-run` would CREATE the monorepo's `[ main ]` ruleset as a 4th — most-restrictive-wins makes that monotonic |
-| `POWERFULMOVES/PMOVES-hermes-agent` | fork | 1 ruleset id=20589548 + 9 status checks | classic (9 required status checks) + ruleset (deletion + non-FF + pull_request) |
+| `POWERFULMOVES/PMOVES.AI` | monorepo | 3 rulesets (well-configured) | out of the workflow's scope (not a submodule of itself); the tool's `apply --no-dry-run` would CREATE the monorepo's `[ main ]` ruleset as a 4th, newly enforcing signed commits + linear history on `main` — operator call |
+| `POWERFULMOVES/PMOVES-hermes-agent` | fork | 1 ruleset id=20589548 + 9 status checks | classic (9 required status checks) + ruleset (deletion + non-FF + pull_request). **The ruleset targets the wrong branch** — see the note below |
 | `POWERFULMOVES/PMOVES-pinokio` | fork | 1 ruleset id=20589542 + CodeRabbit | classic (CodeRabbit required) + ruleset (deletion + non-FF + pull_request) |
 | `POWERFULMOVES/PMOVES-nats-server` | fork | (no ruleset yet) | spec entry added 2026-08-10; `apply --no-dry-run` will create the fork-profile ruleset. Fork lives in the PMOVES org; submodule wire-up is a separate PR (#2493) |
+
+> **Known gap (2026-08-10 audit): the Slice 2 rulesets target the default
+> branch, not the gitlink branch.** `PMOVES-hermes-agent`'s default branch is
+> `main`, but the monorepo consumes `PMOVES.AI-Edition-Hardened`. The ruleset
+> applied in Slice 2 went out with `conditions.ref_name.include:
+> ["~DEFAULT_BRANCH"]`, so it protects `main` while the branch that actually
+> ships is ungated. The pre-fix diff skipped the include comparison entirely
+> and reported this as compliant. `audit` now reports it as drift, and
+> `apply` writes `refs/heads/<resolved branch>`. Re-running `apply` against
+> the two Slice 2 forks is the remediation — it needs the release gate below.
 
 ## How to apply / audit / drift-check
 
@@ -131,6 +155,25 @@ python -m pmoves.tools.branch_protection drift-check --org POWERFULMOVES
 
 The tool writes **rulesets only** — never classic. Classic protection
 is the workflow's responsibility.
+
+### The release gate on `--no-dry-run`
+
+`--no-dry-run` is a production write against org repo settings. It is
+gated by the Three-Body claim → work → sign → release sequence; do not
+run it from a bare shell.
+
+1. **Claim** — add a claim row to
+   `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` § Active Claim Register
+   naming the repo(s) and the branch being targeted.
+2. **Work** — run `audit` and `apply` (dry-run, the default) and attach
+   the printed call sequence to the claim. Confirm the resolved
+   `branch` in the output is the gitlink branch you expect — for the 55
+   forks tracking `PMOVES.AI-Edition-Hardened` it must not read `main`.
+3. **Sign** — produce the signed ACK block for the claim.
+4. **Release** — only then run `apply --no-dry-run`, and record the
+   post-apply `audit` (or `drift-check`) output as the release row's
+   evidence. If signing is unavailable, leave the release pending
+   rather than asserting completion.
 
 ## How to add a new repo
 
@@ -185,8 +228,8 @@ The branch protection tool is part of the PMOVES harness:
 ## References
 
 - [GitHub Docs — About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets) — the modern protection model; "the most restrictive version of the rule applies", "start using rulesets without overriding any of your existing protection rules"
-- [GitHub Docs — Available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets) — the ruleset-rule catalog (deletion, non_fast_forward, required_signatures, require_linear_history, required_conversation_resolution, copilot_code_review, required_status_checks, pull_request, etc.)
+- [GitHub Docs — Available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets) — the ruleset-rule catalog (deletion, non_fast_forward, required_signatures, required_linear_history, required_conversation_resolution, copilot_code_review, required_status_checks, pull_request, etc.)
 - [GitHub Docs — About protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) — the classic model (the workflow's domain)
 - [GraphQL `MergeStateStatus` enum](https://docs.github.com/v4/enum/mergestatestatus) — `UNSTABLE` = "mergeable with non-passing commit status; merge is still allowed"
 - `pmoves/tools/LEARNINGS/mavis-harness-v0-multi-fork_LEARNINGS.md` — the pattern-update LEARNINGS from the 3-PR review pass (where the harness + protection fan-out started)
-- `pmoves/tools/LEARNINGS/branch-protection-v0_LEARNINGS.md` — this PR's LEARNINGS (5-class taxonomy + 6 pair-review lessons + ownership-split ratification)
+- `pmoves/tools/LEARNINGS/branch-protection-v0_LEARNINGS.md` — this PR's LEARNINGS (5-class taxonomy + 8 pair-review lessons + ownership-split ratification)
