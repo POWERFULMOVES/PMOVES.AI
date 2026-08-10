@@ -65,9 +65,16 @@ Captured from 4090's paste so the audit has one surface:
 | `pmoves/mk/infra.mk` `docker-prune-all` | **was leaking** — only `docker builder prune`, never got the fix → **z890 backfilled** (branch `fix/docker-prune-all-buildx-reclaim`) |
 | `.claude/skills/ci-expedition/SKILL.md` runner-hygiene block | 4th copy of the cleanup recipe |
 
+> **Status (4090, at merge) — the table above is HISTORICAL, the leak is closed.**
+> Two of the four already carried the #2473 fix when this was written
+> (`pmoves/scripts/pmoves-disk-cleanup.sh`, `deploy/provision/docker-fleet-cleanup.sh`).
+> `pmoves/mk/infra.mk` was fixed by z890 in **#2480**, and the
+> `.claude/skills/ci-expedition/SKILL.md` copy shipped with item 2. **Current leak count: 0.**
+> What remains is *de-duplication*, not remediation — do not re-audit for a live leak.
+
 **Target state:** collapse to one implementation; make targets + the skill *reference* it rather
-than re-embed it. The z890 sub-fix restored parity across the three executable copies as a stopgap;
-the unification is 4090's call (a shared script the make target and skill both invoke).
+than re-embed it. All four are now at parity, so the unification is a maintainability change with
+no outstanding leak behind it.
 
 ### 2. ci-expedition skill error (`SKILL.md:29`)
 
@@ -84,10 +91,21 @@ conflates them. The wrong row misdirects the next `startup_failure` triage.
 - `deploy/provision/claude-pmoves.sh` (6523 B)
 - `pmoves/scripts/claude-pmoves.sh` (642 B)
 
-Pick the authoritative one; make the other a thin reference or delete. **Crush setup is similarly
-split** across `deploy/provision/` and `pmoves/scripts/` — same reconcile.
+**Keep both entry points — they are not duplicates.** `deploy/provision/claude-pmoves.sh` loads
+`env.shared` and the MCP roster; `pmoves/scripts/claude-pmoves.sh` provides positional-agent
+selection. Make the smaller a thin **delegate** to the larger while preserving positional-agent
+selection and MCP credential loading. **Do not delete either** — each carries a capability the
+other lacks, so a straight pick loses function. **Crush setup is similarly split** across
+`deploy/provision/` and `pmoves/scripts/` — same reconcile, same caution.
 
-### 4. `up-*` target sprawl (89 targets)
+### 4. `up-*` target sprawl (89 definitions, 88 unique names)
+
+> **Both counts are correct and the gap is a finding.** `grep -c '^up-[a-z0-9-]*:'` over
+> `pmoves/Makefile` (82) + `mk/egress.mk` (1) + `mk/infra.mk` (3) + `mk/yt-cookies.mk` (3) = **89
+> definitions**; `sort -u` gives **88 names**. The difference is **`up-openroom`, defined twice in
+> `pmoves/Makefile` (:1279 and :1335)** — byte-identical recipes, so behaviour is unaffected, but
+> make emits an overriding-recipe warning and the second definition wins. Deleting one is the
+> single safest item on this list.
 
 > **Caveat (4090, at merge) — measure call sites before calling anything superseded.**
 > These are *inventory* candidates, **not** a retire list. The `up-core-*` family is a
@@ -110,11 +128,17 @@ Inventory candidates by family:
 
 ### 5. Sibling-submodule build gap (runtime-topology finding)
 
-7 services build from `../PMOVES-<X>` sibling paths that aren't populated inside a worktree:
-`archon` (:3132), `cipher-api` (:3265), `pmoves-yt` (:2274), `openroom` (:3371), `transcribe-*`,
-`llama-throughput-lab`, `tokenism-ui` (nested `./`) — **plus `n8n`** (in `docker-compose.n8n.yml`).
-**Exclude `jellyfin`** (local build). Same contexts are re-declared across split overlays.
-`up-cipher-nobuild` is the existing workaround.
+**7 sibling-context services / 8 total** build from `../PMOVES-<X>` paths that aren't populated
+inside a worktree — the same list verified at the top of this document, restated here so the two
+sections cannot drift apart:
+
+`archon`, `cipher-api`, `pmoves-yt`, `openroom`, `llama-throughput-lab`, `transcribe-backend`,
+`transcribe-frontend` — **plus `n8n`** (in `docker-compose.n8n.yml`), for **8 services**.
+
+`tokenism-ui` was listed here in the original enumeration and is **removed**: its context is a
+nested `./`, not a sibling submodule path, so it builds fine from a worktree. **Exclude
+`jellyfin`** (local build). The same contexts are re-declared across split overlays, which is what
+produced the original "13 of 15". `up-cipher-nobuild` is the existing workaround.
 
 **Target:** document + make CI/worktree-aware. This needs a **runbook/check**, not a code review —
 CI is blind to it because it checks out `submodules: recursive`.
