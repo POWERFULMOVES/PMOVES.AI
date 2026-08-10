@@ -102,12 +102,21 @@ class TestSynthesizedAudioPath(unittest.TestCase):
 
 
 class TestDiscardSynthesizedAudio(unittest.TestCase):
-    """Listen mode never reads the WAV, so it must delete it."""
+    """Listen mode never reads the WAV, so it must delete it -- but only ours."""
+
+    def _synthesize_to_temp(self, payload: bytes = b"RIFFfake-wav-bytes"):
+        """Produce a synthesis result the way the pipeline actually does."""
+        with patch.object(
+            beats_to_voice.urllib.request, "urlopen",
+            return_value=_FakeResponse(payload),
+        ):
+            return beats_to_voice.synthesize_prosodic(PROFILE)
 
     def test_removes_the_synthesized_file(self):
-        fd, path = tempfile.mkstemp(suffix=".wav")
-        os.close(fd)
-        results = {"stages": {"voice": {"synthesis": {"output": path}}}}
+        result = self._synthesize_to_temp()
+        path = result["output"]
+        self.assertTrue(os.path.exists(path))
+        results = {"stages": {"voice": {"synthesis": result}}}
         beats_to_voice._discard_synthesized_audio(results)
         self.assertFalse(os.path.exists(path))
 
@@ -121,11 +130,77 @@ class TestDiscardSynthesizedAudio(unittest.TestCase):
             beats_to_voice._discard_synthesized_audio(results)
 
     def test_already_removed_file_does_not_raise(self):
-        fd, path = tempfile.mkstemp(suffix=".wav")
-        os.close(fd)
-        os.unlink(path)
-        results = {"stages": {"voice": {"synthesis": {"output": path}}}}
+        result = self._synthesize_to_temp()
+        os.unlink(result["output"])
+        results = {"stages": {"voice": {"synthesis": result}}}
         beats_to_voice._discard_synthesized_audio(results)
+
+    def test_refuses_a_path_this_process_did_not_create(self):
+        """A non-audio Flute response is echoed verbatim, so `output` is untrusted.
+
+        Without an ownership check, a gateway answering
+        ``{"output": "/home/service/data.db"}`` gets that file deleted by the
+        listen loop.
+        """
+        fd, victim = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        self.addCleanup(lambda: os.path.exists(victim) and os.unlink(victim))
+
+        results = {"stages": {"voice": {"synthesis": {"output": victim}}}}
+        beats_to_voice._discard_synthesized_audio(results)
+        self.assertTrue(
+            os.path.exists(victim),
+            "cleanup deleted a path the process never created",
+        )
+
+    def test_non_dict_synthesis_is_a_no_op(self):
+        """A JSON body need not even be an object; chained .get() would raise."""
+        for synthesis in ([], "error", 7, None):
+            results = {"stages": {"voice": {"synthesis": synthesis}}}
+            beats_to_voice._discard_synthesized_audio(results)
+
+    def test_second_discard_is_a_no_op(self):
+        """Ownership is consumed, so a repeated result cannot delete a reused name."""
+        result = self._synthesize_to_temp()
+        results = {"stages": {"voice": {"synthesis": result}}}
+        beats_to_voice._discard_synthesized_audio(results)
+        Path(result["output"]).write_bytes(b"someone else's file now")
+        self.addCleanup(
+            lambda: os.path.exists(result["output"]) and os.unlink(result["output"])
+        )
+        beats_to_voice._discard_synthesized_audio(results)
+        self.assertTrue(os.path.exists(result["output"]))
+
+
+class TestWriteFailureCleansUp(unittest.TestCase):
+    """mkstemp creates the file before the write; a failed write must not orphan it."""
+
+    def test_failed_write_removes_the_tempfile(self):
+        created = []
+        real_mkstemp = tempfile.mkstemp
+
+        def _tracking_mkstemp(*args, **kwargs):
+            fd, path = real_mkstemp(*args, **kwargs)
+            created.append(path)
+            return fd, path
+
+        def _boom(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        with patch.object(
+            beats_to_voice.urllib.request, "urlopen",
+            return_value=_FakeResponse(b"RIFFfake"),
+        ), patch.object(beats_to_voice.tempfile, "mkstemp", _tracking_mkstemp), \
+                patch.object(beats_to_voice.os, "fdopen", _boom):
+            result = beats_to_voice.synthesize_prosodic(PROFILE)
+
+        self.assertIsNone(result, "a failed write must not report success")
+        self.assertEqual(len(created), 1, "expected exactly one mkstemp call")
+        self.assertFalse(
+            os.path.exists(created[0]),
+            "the partially-written tempfile was left behind",
+        )
+        self.assertNotIn(created[0], beats_to_voice._OWNED_TEMPFILES)
 
 
 if __name__ == "__main__":

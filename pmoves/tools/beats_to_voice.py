@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import os
 import sys
@@ -61,6 +62,12 @@ DEFAULT_VOICE = os.environ.get("BEATS_VOICE", "default")
 DEFAULT_AGENT_ID = os.environ.get("BEATS_AGENT_ID", "4090-claude")
 NATS_SUBJECT = "tokenism.prosodic.bpm.v1"
 NATS_URL = os.environ.get("NATS_URL", "")
+
+# Temp files this process created via mkstemp, and the only paths listen-mode
+# cleanup is allowed to unlink. The synthesis result is not always ours: a
+# non-audio Flute response is returned as decoded JSON, so `output` can be any
+# string the gateway chooses.
+_OWNED_TEMPFILES: set[str] = set()
 NATS_TRIGGER_SUBJECT = os.environ.get("BEATS_TRIGGER_SUBJECT", "voice.agent.response.v1")
 
 
@@ -135,20 +142,31 @@ async def _nats_publish_cgp(cgp_packet: dict, nats_url: str = NATS_URL) -> bool:
 
 
 def _discard_synthesized_audio(results: dict[str, Any]) -> None:
-    """Delete the WAV that run_pipeline synthesized, if there was one.
+    """Delete the WAV that run_pipeline synthesized, if this process created it.
 
     Listen mode publishes the CGP packet and never reads the audio, so without
     this every trigger leaves another file behind and a sustained event stream
     fills the disk.
+
+    Only paths in ``_OWNED_TEMPFILES`` are removed. ``synthesis`` is not always
+    a result we built: when Flute answers with a non-audio content-type,
+    ``synthesize_prosodic`` returns the decoded JSON body verbatim, so a remote
+    or misconfigured gateway controls ``output`` completely. Unlinking that
+    unconditionally would let it delete any file this process can write.
     """
-    out_path = (
-        results.get("stages", {})
-        .get("voice", {})
-        .get("synthesis", {})
-        .get("output")
-    )
-    if not out_path:
+    synthesis = results.get("stages", {}).get("voice", {}).get("synthesis")
+    if not isinstance(synthesis, dict):
         return
+    out_path = synthesis.get("output")
+    if not out_path or not isinstance(out_path, str):
+        return
+    if out_path not in _OWNED_TEMPFILES:
+        sys.stderr.write(
+            f"[beats_to_voice] Refusing to delete {out_path!r}: not a tempfile "
+            f"this process created.\n"
+        )
+        return
+    _OWNED_TEMPFILES.discard(out_path)
     try:
         os.unlink(out_path)
     except OSError as exc:
@@ -302,8 +320,26 @@ def synthesize_prosodic(
                 fd, out_path = tempfile.mkstemp(
                     prefix="beats_to_voice_", suffix=".wav"
                 )
-                with os.fdopen(fd, "wb") as f:
-                    f.write(audio_bytes)
+                _OWNED_TEMPFILES.add(out_path)
+                try:
+                    with os.fdopen(fd, "wb") as f:
+                        f.write(audio_bytes)
+                except OSError:
+                    # mkstemp already created the file. The outer handler turns
+                    # this into a `return None`, so no caller ever learns a path
+                    # to clean up and retries accumulate unique orphans -- one
+                    # per attempt, since each mkstemp name is different.
+                    #
+                    # Close first: fdopen only takes ownership of the descriptor
+                    # when it succeeds, and Windows refuses to unlink a file that
+                    # still has an open handle. EBADF here just means the `with`
+                    # already closed it, which is why this is suppressed.
+                    with contextlib.suppress(OSError):
+                        os.close(fd)
+                    _OWNED_TEMPFILES.discard(out_path)
+                    with contextlib.suppress(OSError):
+                        os.unlink(out_path)
+                    raise
                 return {
                     "status": "synthesized",
                     "output": out_path,
