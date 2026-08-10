@@ -111,7 +111,7 @@ docker exec pmoves-neo4j-1 cypher-shell -u neo4j -p "$NEO4J_PASSWORD" \
 ### Container Won't Start
 ```bash
 docker logs pmoves-neo4j-1
-docker volume rm pmoves_neo4jdata
+make -C pmoves volume-reset SERVICE=neo4j
 make -C pmoves neo4j-local-up
 ```
 

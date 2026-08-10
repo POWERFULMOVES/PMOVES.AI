@@ -23,7 +23,7 @@ Missing items are not failures — they are operational facts. Disclose them. Ne
 |------|------------|
 | Start / restart services | `make -C pmoves up-<service>` (never `docker compose up` raw) |
 | Apply secrets | `make -C pmoves secrets-funnel` (before any service start after env change) |
-| Read-only health | `make -C pmoves health-quick` / `health-check-all` |
+| Read-only health | `make -C pmoves health-summary` / `health-dormant` |
 | Fleet view | `make -C pmoves fleet-status` (never raw `tailscale status` for public IPs) |
 | CHIT-sign provenance | `make -C pmoves sign-trail SUMMARY=... AGENT=...` |
 | Refresh living docs | `make -C pmoves docs-reconcile` |

@@ -229,7 +229,7 @@ load-consciousness-neo4j: ## Load consciousness taxonomy (migration 003)
 docker stop pmoves-neo4j-1
 
 # Remove data volume (WARNING: loses all data)
-docker volume rm pmoves_neo4jdata
+make -C pmoves volume-reset SERVICE=neo4j
 
 # Update env.shared with fresh password from brand_defaults
 make -C pmoves env-setup

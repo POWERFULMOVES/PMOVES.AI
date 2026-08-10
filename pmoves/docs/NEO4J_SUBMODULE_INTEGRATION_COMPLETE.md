@@ -91,7 +91,7 @@ neo4j-seed:     → $(MAKE) -C pmoves/integrations/neo4j seed SEED=...
 docker stop pmoves-neo4j-1
 
 # Remove data volume (WARNING: loses existing data)
-docker volume rm pmoves_neo4jdata
+make -C pmoves volume-reset SERVICE=neo4j
 
 # Generate fresh credentials
 make -C pmoves env-setup
