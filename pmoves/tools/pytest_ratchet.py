@@ -77,20 +77,36 @@ def run_pytest(files: List[Path], junit: Path) -> int:
     """
     cmd = [
         sys.executable, "-m", "pytest",
+        # Every option is set explicitly rather than inherited from whichever
+        # config file pytest happens to discover. Passing files from the repo
+        # root moves rootdir off pmoves/, so pmoves/pyproject.toml's
+        # [tool.pytest.ini_options] may not apply at all -- and silently losing
+        # import-mode/asyncio-mode is the kind of environment-dependence this
+        # gate exists to stop.
+        "-o", "addopts=",              # drop inherited -v/--tb/--strict-markers
+        "-o", "asyncio_mode=auto",     # pmoves tests rely on this
+        "--import-mode=importlib",     # 264 files across the repo share basenames;
+                                       # prepend-mode makes those a hard error
         "--continue-on-collection-errors",
         "-p", "no:cacheprovider",
         f"--junit-xml={junit}",
         "--tb=no", "-q",
-        # The pmoves pyproject sets -v/--tb=short via addopts; -q here keeps the
-        # console readable, the XML carries the detail.
         *[str(f) for f in files],
     ]
     env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONDONTWRITEBYTECODE="1")
     proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, text=True,
                           capture_output=True)
-    sys.stdout.write(proc.stdout[-4000:])
+    # Head as well as tail: a pytest usage error or a conftest import crash
+    # prints at the top, and a tail-only view of a long run hides it.
+    out = proc.stdout
+    if len(out) > 8000:
+        out = out[:3000] + "\n" + "...[trimmed]..." + "\n" + out[-5000:]
+    sys.stdout.write(out)
     if proc.stderr.strip():
-        sys.stderr.write(proc.stderr[-2000:])
+        err = proc.stderr
+        if len(err) >= 4000:
+            err = err[:2000] + "\n" + "...[trimmed]..." + "\n" + err[-2000:]
+        sys.stderr.write(err)
     return proc.returncode
 
 
