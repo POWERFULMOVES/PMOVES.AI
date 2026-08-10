@@ -225,17 +225,16 @@ load-consciousness-neo4j: ## Load consciousness taxonomy (migration 003)
 
 ### Option 1: Reset Neo4j with Correct Password
 ```bash
-# Stop Neo4j
-docker stop pmoves-neo4j-1
-
-# Remove data volume (WARNING: loses all data)
-make -C pmoves volume-reset SERVICE=neo4j
-
-# Update env.shared with fresh password from brand_defaults
+# 1. Update env.shared with the fresh password from brand_defaults FIRST.
+#    volume-reset restarts the service itself (pmoves/mk/infra.mk:44), so the
+#    new volume must initialize against credentials that already exist.
 make -C pmoves env-setup
+make -C pmoves secrets-funnel
 
-# Start Neo4j (will initialize with new password)
-docker compose up -d neo4j
+# 2. Reset the volume (WARNING: loses all data). This stops, removes, drops
+#    the matching volumes, and restarts `neo4j` with the new password —
+#    no separate `up` step is needed afterwards.
+make -C pmoves volume-reset SERVICE=neo4j
 
 # Load consciousness schema
 make -C pmoves load-consciousness-neo4j
