@@ -1,0 +1,13 @@
+# Baselined COPY/ADD source gaps -- validate_dockerfile_paths.py
+#
+# Each entry is a COPY or ADD whose source does not resolve against the
+# build context its compose stanza declares. They are recorded so the
+# gate can be enforced today; they are NOT approved. Every one of them
+# is an image that dies on that instruction, or a file silently absent
+# from the image. The list may shrink. Adding to it should require
+# saying why.
+#
+# Key: KIND|<dockerfile>:<line>|<build context>|<source operand>
+known_copy_gaps:
+  - "COPY_UNRESOLVED|pmoves/services/a2ui-renderer/Dockerfile:4|pmoves|package-lock.json*"
+  - "COPY_UNRESOLVED|pmoves/services/a2ui-renderer/Dockerfile:4|pmoves|package.json"
