@@ -51,7 +51,7 @@ nats_publish(subject="mesh.report.v1", payload="{...CGP...}", sign=true)
 
 ```
 nats_subscribe(subject="tokenism.prosodic.>", timeout_seconds=10)
-→ messages[].chit_signed == "true" | "false"   # verify the two-layer gate at the consumer
+→ messages[].chit_signed is true | false        # real bool, same type publish reports
 ```
 
 ## Acceptance (spec §10)

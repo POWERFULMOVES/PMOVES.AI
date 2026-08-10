@@ -91,7 +91,15 @@ def _maybe_sign(subject: str, payload: str, sign: bool) -> tuple[bytes, dict[str
         )
 
 
-async def _publish(subject: str, payload: str, headers: dict[str, str] | None, sign: bool) -> dict[str, Any]:
+async def _publish(
+    subject: str,
+    payload: str,
+    headers: dict[str, str] | None = None,
+    sign: bool = False,
+) -> dict[str, Any]:
+    """Publish one message. `headers`/`sign` keep defaults: this helper is called
+    directly as `_publish(subject, payload)` by .claude/hooks/test/run_integration.sh,
+    which would otherwise TypeError before ever opening a connection."""
     body, sig_headers, meta = _maybe_sign(subject, payload, sign)
     merged: dict[str, str] = dict(headers or {})
     if sig_headers:
@@ -126,11 +134,19 @@ async def _subscribe(subject: str, timeout_seconds: int, max_messages: int) -> l
                 msg = await asyncio.wait_for(sub.next_msg(timeout=remaining), timeout=remaining)
             except (asyncio.TimeoutError, nats.errors.TimeoutError):
                 break
+            msg_headers = msg.headers or {}
+            # NATS headers are strings. Returning the raw header made the honest
+            # "false" verdict read as signed downstream -- bool("false") is True in
+            # Python and Boolean("false") is true in JS, so an agent auditing the bus
+            # saw every unsigned message as signed. Normalise to a real bool so the
+            # subscribe side reports the same type _publish does.
             captured.append({
                 "subject": msg.subject,
                 "data": msg.data.decode("utf-8", errors="replace"),
                 "reply": msg.reply or None,
-                "chit_signed": (msg.headers or {}).get("X-CHIT-Signed"),
+                "chit_signed": msg_headers.get("X-CHIT-Signed") == "true",
+                **({"chit_note": msg_headers["X-CHIT-Reason"]}
+                   if msg_headers.get("X-CHIT-Reason") else {}),
             })
         await sub.unsubscribe()
         return captured
