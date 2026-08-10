@@ -74,6 +74,15 @@ def discover_test_files() -> List[Path]:
     return sorted(found)
 
 
+def _as_text(value) -> str:
+    """Decode a subprocess stream that may be str, bytes, or None."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return value
+
+
 def group_files(files: List[Path]) -> Dict[str, List[Path]]:
     """Group tests by their nearest ancestor `conftest.py` directory.
 
@@ -135,9 +144,11 @@ def run_pytest(files: List[Path], junit: Path) -> tuple[int, str]:
                               capture_output=True,
                               timeout=GROUP_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired as exc:
-        partial = (exc.stdout or "") + (exc.stderr or "")
-        if isinstance(partial, bytes):
-            partial = partial.decode("utf-8", "replace")
+        # subprocess returns TimeoutExpired.stdout/.stderr as raw bytes on some
+        # platforms even with text=True, so each is decoded on its own rather
+        # than concatenated first (that raised "can't concat str to bytes" on
+        # Linux CI while being fine locally on Windows).
+        partial = _as_text(exc.stdout) + _as_text(exc.stderr)
         return -1, f"TIMEOUT after {GROUP_TIMEOUT_SECONDS}s{chr(10)}{partial}"
     # Pytest output is returned, never written to stdout: stdout carries only
     # this tool's report (and --json must stay parseable). Callers surface it
