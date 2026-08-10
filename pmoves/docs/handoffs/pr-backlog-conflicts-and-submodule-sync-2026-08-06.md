@@ -22,7 +22,13 @@ going forward — it now runs on fork-sync completion.
   so resolve carefully.
 
 Both are otherwise wanted. Whoever picks up: check out the branch, `git rebase origin/main`,
-resolve, push, let CI run, then admin-merge (or ping me).
+resolve, push, let CI run, then run the standing closeout -
+[`pmoves/docs/operations/PR_CLOSEOUT.md`](../operations/PR_CLOSEOUT.md) - and hand it to the
+operator (or ping me). **Passing CI is not sufficient and merges are not autonomous.** The
+closeout gate also requires all review threads resolved, a passing live-head audit, and - where
+the lane touches production - a Three-Body ACK in `AGNOTE4482_SIGNOFF_CHECKLIST.md`. That
+matters most for **#2440**, which is auth-related (cookie SSR): do not shortcut it to
+`gh pr merge`.
 
 ### 2. #2436 shipped a pre-existing runner-label bug (fast follow-up)
 `.github/workflows/fleet-docker-cleanup.yml` targets runner labels that don't exist. Verified
