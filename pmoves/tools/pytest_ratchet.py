@@ -53,6 +53,14 @@ BASELINE = PMOVES / "configs" / "pytest_ratchet" / "_known_failures.yaml"
 # hang is visible and ratchetable instead of being an infrastructure mystery.
 GROUP_TIMEOUT_SECONDS = int(os.environ.get("PYTEST_RATCHET_GROUP_TIMEOUT", "120"))
 
+# Groups are further chunked so that one hang hides as little as possible. The
+# pmoves/tests group alone holds 88 files; when it timed out, every result in it
+# collapsed into a single "no report" entry and real findings inside it -- such
+# as the hyphen-in-import-path syntax error in test_issue_triage.py -- were
+# invisible. Chunking does not change semantics: the same conftest still
+# applies to each file.
+CHUNK_SIZE = int(os.environ.get("PYTEST_RATCHET_CHUNK_SIZE", "20"))
+
 # Mirrors the workflow's original discovery exactly, minus the `head -20` cap.
 # Kept identical on purpose: this change removes a cap and adds a ratchet, it
 # does not silently redefine which tests are in scope.
@@ -105,7 +113,16 @@ def group_files(files: List[Path]) -> Dict[str, List[Path]]:
                 break
             probe = probe.parent
         groups.setdefault(anchor.as_posix(), []).append(f)
-    return groups
+
+    chunked: Dict[str, List[Path]] = {}
+    for name, gfiles in groups.items():
+        if len(gfiles) <= CHUNK_SIZE:
+            chunked[name] = gfiles
+            continue
+        for i in range(0, len(gfiles), CHUNK_SIZE):
+            part = i // CHUNK_SIZE + 1
+            chunked[f"{name} [{part}]"] = gfiles[i:i + CHUNK_SIZE]
+    return chunked
 
 
 def run_pytest(files: List[Path], junit: Path) -> tuple[int, str]:
