@@ -22,6 +22,31 @@ name: Branch Protection Sync
 # NOT to deadlock automation — required_approving_review_count=0 means a PR is
 # REQUIRED (no direct pushes) but the App / dependabot can still self-merge.
 
+# TRIGGERS: coverage is derived from .gitmodules, so it must follow .gitmodules.
+# Before this workflow had a push/schedule trigger it was dispatch-only and had
+# run three times ever (last: 2026-06-10). Every submodule added or re-pointed
+# since silently fell out of coverage — 15 consumed branches ended up with no
+# protection at all, none of them because the workflow got anything wrong. See
+# pmoves/docs/audit/FLEET_RULESET_EXPOSURE_2026-08-10.md.
+#
+#   push (.gitmodules)  — the primary vector. A submodule added or re-pointed
+#                         is exactly the event that drops it from coverage, so
+#                         the check runs on the commit that causes it.
+#   schedule (weekly)   — backstop for drift that does NOT touch .gitmodules:
+#                         a fork's branch renamed or deleted, protection removed
+#                         by hand, a new fork created outside a superproject
+#                         commit. Weekly, not daily, because push already covers
+#                         the frequent vector and a daily audit that nobody reads
+#                         is noise rather than signal.
+#
+# SAFETY — automated runs are AUDIT-ONLY and cannot write.
+# `inputs.*` is empty on any trigger other than workflow_dispatch, and the script
+# tests `[ "$DRY_RUN" = "true" ]`. An unguarded schedule/push trigger would
+# therefore evaluate DRY_RUN="" as "not dry run" and issue live PUTs across every
+# derived fork, with ONLY_UNPROTECTED="" also disabling the gap-only filter — a
+# fleet-wide write on the first tick. The env block below pins both to "true" for
+# non-dispatch events. Writing stays a deliberate human act: workflow_dispatch
+# with dry_run=false. See the env block for how to arm it.
 on:
   workflow_dispatch:
     inputs:
@@ -39,6 +64,13 @@ on:
         description: 'Required approving reviews (0 = require PR but allow automation self-merge).'
         required: false
         default: '0'
+  push:
+    branches: [main]
+    paths:
+      - '.gitmodules'
+  schedule:
+    # Mondays 06:00 UTC — audit-only, see SAFETY above.
+    - cron: '0 6 * * 1'
 
 permissions: {}
 
@@ -96,8 +128,20 @@ jobs:
       - name: Apply standard branch protection
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          DRY_RUN: ${{ inputs.dry_run }}
-          ONLY_UNPROTECTED: ${{ inputs.only_unprotected }}
+          # Non-dispatch events carry no inputs, and the script treats an empty
+          # DRY_RUN as "write". Pin both flags for schedule/push so an automated
+          # run can only ever audit, and can only ever look at gaps.
+          #
+          # To ARM live writes, the operator runs the workflow manually:
+          #   Actions -> Branch Protection Sync -> Run workflow
+          #     dry_run: false            (issues the PUTs)
+          #     only_unprotected: true    (add protection where there is none;
+          #                                leave already-protected branches alone)
+          # only_unprotected=false rewrites every derived branch from the policy
+          # below, which LOWERS any branch currently stricter than it — see the
+          # downgrade table in the PR that added these triggers.
+          DRY_RUN: ${{ github.event_name != 'workflow_dispatch' && 'true' || inputs.dry_run }}
+          ONLY_UNPROTECTED: ${{ github.event_name != 'workflow_dispatch' && 'true' || inputs.only_unprotected }}
           REQUIRED_REVIEWS: ${{ inputs.required_reviews || '0' }}
           OWNER: ${{ github.repository_owner }}
         run: |
