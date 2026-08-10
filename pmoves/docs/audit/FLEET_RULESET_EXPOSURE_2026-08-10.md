@@ -16,11 +16,32 @@ Follow-up to PR #2490, which found a live wrong-branch ruleset on `PMOVES-hermes
 | Consumed branch gated by classic protection only | 43 |
 | Consumed branch covered by an active ruleset | 4 |
 
-The single most important number: **15 of 65 consumed branches have neither a ruleset nor classic protection.** Anyone with write access can force-push or delete the exact branch the monorepo pins.
+The single most important number: **15 of 65 registered entries have neither a ruleset nor classic protection on their consumed branch.**
 
-Read that number with the next section, though: it does **not** mean the fleet is broadly unprotected. Classic protection gates 46 of the other 50. What is broadly broken is the *ruleset* layer — 4 of 65 consumed branches covered, and none of the 4 on purpose.
+Of those 15, **11 are live exposure** — a present gitlink pinning a branch that exists, which anyone with write access can force-push or delete. The other four are ungated but not rewritable as pinned branches, and they are counted here because they are equally invisible to the tooling, not because they are equally dangerous:
 
-All 15 have one cause, and it has a date on it — see [Root cause](#root-cause-protection-is-a-snapshot-and-the-snapshot-is-from-2026-06-10). `branch-protection-sync.yml` is `workflow_dispatch`-only and last ran **2026-06-10**, successfully, with `failed=0`. Ten of the 15 were added to `.gitmodules` after that date; the other five were re-pointed to a different branch after it. The exposure is not a logic bug — it is that protection is a snapshot nothing refreshes.
+| | count | why it is not live exposure |
+|---|---|---|
+| `pmoves-hirag-mcp`, `PMOVES-jcodemunch-mcp`, `PMOVES-Spark-VSS` | 3 | the tracked branch does not exist on the remote (see [§2](#2-three-entries-track-a-branch-that-does-not-exist-on-the-remote)) — there is nothing to force-push |
+| `PMOVES-ollama` | 1 | registered in `.gitmodules` with no gitlink in the tree (see [§4](#4-pmoves-ollama-is-registered-in-gitmodules-with-no-gitlink-in-the-tree)) — the monorepo pins nothing |
+
+**Prioritise the 11.** The other four are `.gitmodules` integrity problems and should be fixed there first; protecting them is not meaningful until they point at something real.
+
+Read the number with the next section, too: it does **not** mean the fleet is broadly unprotected. Classic protection gates 46 of the other 50. What is broadly broken is the *ruleset* layer — 4 of 65 consumed branches covered, and none of the 4 on purpose.
+
+**Eleven of the 15 have one cause, and it has a date on it** — see [Root cause](#root-cause-protection-is-a-snapshot-and-the-snapshot-is-from-2026-06-10). `branch-protection-sync.yml` is `workflow_dispatch`-only and last ran **2026-06-10**, successfully, with `failed=0`. Those were added to `.gitmodules` after that date, or re-pointed to a different branch after it. For them the exposure is not a logic bug — it is that protection is a snapshot nothing refreshes.
+
+**The remaining four are a different class, and a refresh will not close them.** `PMOVES-obico-server`, `PMOVES-moonraker-obico`, `PMOVES-OctoPrint-Obico` and `PMOVES-fluidd` have no `branch` key, so git follows remote HEAD and the *consumed* branch is `release` / `master` / `master` / `develop`. But `branch-protection-sync.yml` resolves a missing key by hard-coding `main` (`[ -z "$branch" ] && branch="main"`), and none of those four repos has a `main` — verified live:
+
+```
+PMOVES-obico-server      default=release   main=404
+PMOVES-moonraker-obico   default=master    main=404
+PMOVES-OctoPrint-Obico   default=master    main=404
+PMOVES-fluidd            default=develop   main=404
+PMOVES-OrcaSlicer        default=main      main=main    <- resolves, by luck
+```
+
+Re-running or scheduling the workflow targets a branch that does not exist, gets a per-fork 404 that the loop swallows, and leaves the real branch ungated — indefinitely. **That is a branch-resolution defect in the workflow, not a stale snapshot**, and it needs the `branch` key supplied or the fallback changed to the repo's actual default before any refresh can be said to close the exposure. See [§1](#1-five-entries-have-no-branch-key-and-four-of-those-repos-have-no-main-branch).
 
 ## Does the `PMOVES-hermes-agent` shape generalise? Partly — and the precise part matters
 
@@ -215,14 +236,29 @@ The two candidate shapes for closing it, both out of scope for this
 read-only audit:
 
 - give the workflow a `schedule:` and/or a `push:` trigger on
-  `paths: ['.gitmodules']`, so coverage follows the file that defines it
-- report coverage as drift. This is what `drift_check` in
-  `pmoves/tools/branch_protection.py` is for, and PR #2490 left the NATS
-  subject `pmoves.branch_protection.drift.v1` plus the Mavis cron as the
-  Slice 3 follow-up. Note that `drift_check` currently only audits repos
-  listed in the spec's `per_repo_overrides` — 4 repos — so it would need to
-  derive its scope from `.gitmodules` the way the workflow does before it
-  could catch this class.
+  `paths: ['.gitmodules']`, so coverage follows the file that defines it.
+
+  > **Do not add those triggers alone — that would turn an audit-by-default
+  > tool into an automatic writer.** `branch-protection-sync.yml` today is
+  > `workflow_dispatch`-only with `dry_run` defaulting to `true`, and the guard
+  > is `DRY_RUN: ${{ inputs.dry_run }}` with `if [ "$DRY_RUN" = "true" ]` around
+  > the `PUT .../branches/{branch}/protection`. A `push` or `schedule` run
+  > receives no dispatch inputs, so `DRY_RUN` is empty, the exact-string test
+  > fails, and **every matching event writes branch protection across the fleet
+  > unattended** — bypassing the claim → work → sign → release gate. Any such
+  > trigger has to be paired with routing non-dispatch events to audit-only
+  > drift reporting, or defaulting `DRY_RUN` to `true` when
+  > `github.event_name != 'workflow_dispatch'`.
+
+- report coverage as drift. `drift_check` in `pmoves/tools/branch_protection.py`
+  is meant for this — **note both are on PR #2490, which is still open, so
+  neither exists in this tree yet**; the same is true of `per_repo_overrides`
+  and the NATS subject `pmoves.branch_protection.drift.v1`, which #2490 left
+  with the Mavis cron as its Slice 3 follow-up. As written there, `drift_check`
+  only audits repos listed in the spec's `per_repo_overrides` — 4 repos — so it
+  would need to derive its scope from `.gitmodules` the way the workflow does
+  before it could catch this class. **#2490 has to land before any of this is
+  actionable.**
 
 ## Structural findings
 
@@ -237,7 +273,7 @@ branch=$(git config -f .gitmodules --get "submodule.${name}.branch")
 [ -z "$branch" ] && branch="main"
 ```
 
-`resolve_branch()` in `pmoves/tools/branch_protection.py` has the same fallback (`DEFAULT_BRANCH = "main"`). Verified against the remotes:
+`resolve_branch()` in `pmoves/tools/branch_protection.py` carries the same fallback (`DEFAULT_BRANCH = "main"`) — that file is on PR #2490 and not yet in this tree, so the defect is inherited rather than duplicated once #2490 lands. Verified against the remotes:
 
 | Entry | Repo default | Does `main` exist? | Consequence |
 |---|---|---|---|
@@ -324,7 +360,7 @@ change to `PMOVES-Archon`, not to this repo, and it is out of scope here.
 
 ## A correction to the "55 of 60" framing
 
-`branch_protection.py`'s module docstring and the PR #2490 discussion both cite "55 of 60 submodules track `PMOVES.AI-Edition-Hardened`, not `main`". The first half is right and the second half is misleading.
+The module docstring of `branch_protection.py` (on PR #2490, not yet in this tree) and the #2490 discussion both cite "55 of 60 submodules track `PMOVES.AI-Edition-Hardened`, not `main`". The first half is right and the second half is misleading.
 
 | | count |
 |---|---|
