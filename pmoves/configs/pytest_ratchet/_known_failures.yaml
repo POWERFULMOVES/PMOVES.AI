@@ -42,7 +42,7 @@ known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_n8n_workflow|test_workflow"
   - "ERROR|pmoves/services/deepresearch/tests|<pytest-harness>"
   - "ERROR|pmoves/services/graph-linker/tests|<pytest-harness>"
-  - "ERROR|pmoves/tests [1]|<pytest-harness>"
+  - "ERROR|pmoves/tests|<pytest-harness>"
   - "ERROR|pytest|internal"
   - "ERROR|services.agent-zero.python.features.a2a.test_server|<collection-error>"
   - "ERROR|services.channel-monitor.tests.test_monitor|<collection-error>"

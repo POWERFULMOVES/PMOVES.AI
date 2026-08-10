@@ -299,7 +299,10 @@ def main() -> int:
                 dead_groups += 1
                 findings.append({
                     "kind": "ERROR",
-                    "where": group,
+                    # Chunk suffix stripped: "[2]" is a positional label, so
+                    # keying on it would churn the baseline every time a test
+                    # file is added anywhere earlier in the group.
+                    "where": group.split(" [")[0],
                     "name": "<pytest-harness>",
                     "detail": (f"pytest timed out after {GROUP_TIMEOUT_SECONDS}s"
                                if rc == -1 else
