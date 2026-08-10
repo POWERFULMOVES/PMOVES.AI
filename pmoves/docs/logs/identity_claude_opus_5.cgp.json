@@ -1,0 +1,44 @@
+{
+  "version": "cgp.v2",
+  "timestamp": "2026-08-10T14:14:05.779700+00:00",
+  "payload": {
+    "content_hash": "53d34f50e6636024",
+    "content_length": 421,
+    "word_count": 50,
+    "hyperbolic_coords": {
+      "x": 0.405995,
+      "y": -0.246562,
+      "curvature": -1.0,
+      "radius": 0.475
+    },
+    "spectral_signature": [
+      14.334274,
+      21.813458,
+      25.981868,
+      33.169081,
+      33.968319,
+      38.750613
+    ],
+    "dirichlet_weights": {
+      "alphas": [
+        1.5,
+        0.1,
+        0.1,
+        0.1,
+        0.1
+      ],
+      "categories": [
+        "factual",
+        "conceptual",
+        "procedural",
+        "contextual",
+        "relational"
+      ],
+      "total_alpha": 1.9
+    },
+    "holographic_boundary": "1KQc5wGRL+PZUahpcFwYPkY4sc3tK7+5NlBeR4mtrJA=",
+    "metadata": {}
+  },
+  "checksum": "0b9da1d7bde9239cfbfa1a4ca12d53f05cd0741d4fb22bbbc6f0791ad4139efc",
+  "source": "chit_encode_hook"
+}
