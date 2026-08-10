@@ -12,7 +12,11 @@
 
 **Read this before anything else in this document.**
 
-This audit establishes **reproducibility**: that the six checks execute, that they exit 0, that they are deterministic, and that the files present hash to the values the authors published.
+This audit establishes **reproducibility of the checks**: that the six checks execute, that they exit 0, and that they are deterministic.
+
+It does **not** establish that every present file hashes to the value the authors published — and saying so plainly here matters, because that was the audit's own headline integrity finding and this paragraph is what most readers will carry away. `README.md` reproduces in **neither** of the two repository manifests — 34 of 35 and 51 of 52 entries, with that one file the single mismatch in each. Only the frozen referee package verifies clean. See [Question 1](#question-1--does-it-reproduce).
+
+So: **the checks reproduce; two of the three integrity manifests do not.**
 
 This audit says **nothing whatsoever about whether the counterexample is mathematically correct.**
 
@@ -250,7 +254,11 @@ So the package supports **two independent negative controls** — a semantic one
 Concretely:
 
 1. **`jacobian-counterexample-repro`** — clean tree, expect exit 0 and the seven artifact hashes above. Verifies the harness can execute and content-address a real workload.
-2. **`jacobian-counterexample-mutant`** — the one-coefficient perturbation, **expect exit 1** and expect the manifest to report the tampered file. This is the acceptance-(5) half; without it the pair verifies nothing.
+2. **`jacobian-counterexample-mutant`** — the one-coefficient perturbation, **expect exit 1** and expect the manifest to report the tampered file. Without it the pair verifies nothing: a fixture that can only pass cannot tell you the harness would notice a failure.
+
+   **This is acceptance (2), not acceptance (5) — the earlier draft mislabelled it, and the difference is the whole point of (5).** `SKILL_DANGER_ROOM_VERIFICATION_SPARK_2026-08-08.md` reads: (2) *"at least one fixture plants a falsifiable failure"*; (5) *"**A deliberately broken skill fails.** ... Break `ci-expedition`'s signature table on a branch, run it, and show me a red artifact."* Mutating the **workload** proves the packaged assertion detects that mutation. Breaking the **skill** proves the harness can say no. A skill that ignored this fixture entirely, or misclassified its exit code, would sail through the clean/mutant pair while failing exactly the property (5) exists to establish.
+
+   So this fixture pair does not discharge (5) and must not be recorded as having done so. (5) still needs a deliberately broken skill producing a red artifact, and per the handoff it is *"the one I would cut last."*
 3. Pin the fixture to `645eb48b` rather than tracking upstream `main`, so an upstream edit cannot silently change a fixture's verdict. Note that if the fixture ever runs those integrity targets, it must expect the **known README failure** at this SHA, or record the fix if upstream regenerates the manifests.
 4. Set `PYTHONIOENCODING=utf-8`, or run it in a Linux sandbox, so defect #1 above does not read as a fixture failure.
 5. `nodes: [any]` — this needs no GPU and would be wasted as a SPARK-only fixture. It is a good **CPU-floor** fixture precisely because it is heavy enough to be real (~10 s of Gröbner bases and resultants) and light enough to run anywhere.
