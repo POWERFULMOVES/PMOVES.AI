@@ -85,6 +85,15 @@ fi
 # Stop existing mount if any
 docker rm -f juicefs-mount 2>/dev/null || true
 
+# Per-host bounded cache flags. The default JuiceFS cache (100 GiB, /var/jfsCache,
+# 10% free-space floor) is not host-aware: on a small or near-full node it either
+# fills the disk or self-disables caching so every read streams from tailnet MinIO.
+# Measure the /data volume's host backing dir ($DATA_DIR) and emit bounded flags.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CACHE_FLAGS="$(JFS_CACHE_DIR=/data/jfsCache JFS_CACHE_MEASURE_DIR="$DATA_DIR" \
+    bash "$SCRIPT_DIR/juicefs-cache-bounds.sh")"
+echo "Cache bounds: $CACHE_FLAGS"
+
 # Start JuiceFS mount (foreground, persistent container)
 echo "Starting JuiceFS mount..."
 META_PASSWORD="$DB_PASS" docker run -d \
@@ -97,7 +106,7 @@ META_PASSWORD="$DB_PASS" docker run -d \
     -v "$DATA_DIR:/data" \
     -v "$MOUNT_POINT:$MOUNT_POINT:rshared" \
     juicedata/mount:ce-v1.3.0 \
-    -c "exec juicefs mount --enable-xattr \"$META_URL\" $MOUNT_POINT"
+    -c "exec juicefs mount --enable-xattr $CACHE_FLAGS \"$META_URL\" $MOUNT_POINT"
 
 echo ""
 echo "Waiting for mount..."
