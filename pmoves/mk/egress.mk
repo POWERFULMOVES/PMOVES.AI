@@ -357,7 +357,14 @@ juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	$(eval JFS_MOUNT_POINT := $(JFS_HOST_HOME)/pmoves-fs)
 	@mkdir -p "$(JFS_MOUNT_POINT)"
 	@test -n "$(SUPABASE_DB_PASSWORD)" || { echo "ERROR: SUPABASE_DB_PASSWORD not set — source it from the CHIT secrets pipeline"; exit 1; }
-	@META_PASSWORD='$(SUPABASE_DB_PASSWORD)' docker run -d \
+	@# Per-host bounded cache flags: measure the /data volume's host backing dir so
+	@# this node never inherits JuiceFS's 100 GiB default nor self-disables caching
+	@# on a near-full disk. Canonical logic: scripts/juicefs-cache-bounds.sh.
+	@# Fail-safe guards: make runs this via `sh -c` (no -e), so an empty-failure
+	@# would chain straight into `docker run` with zero bounds. Refuse unbounded.
+	@JFS_CACHE_FLAGS="$$(JFS_CACHE_DIR=/data/jfsCache JFS_CACHE_MEASURE_DIR='$(JFS_HOST_HOME)/.local/share/juicefs-data' bash scripts/juicefs-cache-bounds.sh)" || { echo "ERROR: cache-bounds helper failed"; exit 1; }; \
+	test -n "$$JFS_CACHE_FLAGS" || { echo "ERROR: empty cache bounds — refusing unbounded mount"; exit 1; }; \
+	META_PASSWORD='$(SUPABASE_DB_PASSWORD)' docker run -d \
 	    --name juicefs-mount \
 	    --restart unless-stopped \
 	    --privileged \
@@ -365,8 +372,9 @@ juicefs-mount-local: ## Start JuiceFS mount on this node (local Supabase DB)
 	    --entrypoint sh \
 	    -e META_PASSWORD \
 	    -e JFS_MOUNT="$(JFS_MOUNT_POINT)" \
+	    -e JFS_CACHE_FLAGS="$$JFS_CACHE_FLAGS" \
 	    -v $(JFS_HOST_HOME)/.local/share/juicefs-data:/data \
 	    -v $(JFS_MOUNT_POINT):$(JFS_MOUNT_POINT):rshared \
 	    juicedata/mount:ce-v1.3.0 \
-	    -c 'exec juicefs mount --enable-xattr "postgres://supabase_admin@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$$JFS_MOUNT"'
+	    -c 'exec juicefs mount --enable-xattr $$JFS_CACHE_FLAGS "postgres://supabase_admin@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$$JFS_MOUNT"'
 	@echo "Use 'make juicefs-mount-status' to verify"

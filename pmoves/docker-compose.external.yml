@@ -63,6 +63,12 @@ services:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
     container_name: pmoves-firefly
     restart: unless-stopped
+    # Host port for operator UI access (first-user registration + PAT minting).
+    # The committed auth bootstrap (integrations/firefly-iii/auth/bootstrap.sh)
+    # defaults FIREFLY_BASE_URL to http://localhost:8075 — this mapping is the
+    # other half of that contract.
+    ports:
+      - "${FIREFLY_HTTP_PORT:-8075}:8080"
     networks:
       pmoves_app:
         aliases:

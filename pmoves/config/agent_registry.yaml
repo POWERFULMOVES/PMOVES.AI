@@ -2556,6 +2556,36 @@ agents:
       compose_profile: agents
     description: "Fordham room host/concierge; routes resident intent to the 4 specialists. No money/vote authority. Runtime-minted by Archon."
 
+  missinglinc_validator:
+    name: "MiSSinGLinC Validator"
+    class: specialized
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: "/healthz"
+    layers: [L2, L4]
+    evolution_stage: stage_0
+    nats:
+      publishes: ["validation.verdict.ready.v1", "validation.evidence.chain.v1", "validation.counter.evidence.v1"]
+      subscribes: ["voice.agent.response.v1", "ingest.file.added.v1", "validation.run.requested.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_completion]
+    topology:
+      node_affinity: [powerfulmoves, pmoves-laptop]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "External peer-review validator (DangerRuss frame) built on PMOVES-mike; adversarial claim validation with cryptographic evidence chains. Audits only - never drafts. Wave-0 staged; runtime-minted by Archon. Spec: pmoves/docs/AGENTS/MISSINGLINC_MINT_SPEC.md"
+
   fordham_onboarding:
     name: "Fordham Onboarding"
     class: specialized

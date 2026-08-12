@@ -388,18 +388,23 @@
 [submodule "PMOVES-obico-server"]
 	path = PMOVES-obico-server
 	url = https://github.com/POWERFULMOVES/PMOVES-obico-server.git
+	branch = release
 [submodule "PMOVES-moonraker-obico"]
 	path = PMOVES-moonraker-obico
 	url = https://github.com/POWERFULMOVES/PMOVES-moonraker-obico.git
+	branch = master
 [submodule "PMOVES-OrcaSlicer"]
 	path = PMOVES-OrcaSlicer
 	url = https://github.com/POWERFULMOVES/PMOVES-OrcaSlicer.git
+	branch = main
 [submodule "PMOVES-OctoPrint-Obico"]
 	path = PMOVES-OctoPrint-Obico
 	url = https://github.com/POWERFULMOVES/PMOVES-OctoPrint-Obico.git
+	branch = master
 [submodule "PMOVES-fluidd"]
 	path = PMOVES-fluidd
 	url = https://github.com/POWERFULMOVES/PMOVES-fluidd.git
+	branch = develop
 [submodule "PMOVES-nats-server"]
 	path = PMOVES-nats-server
 	url = https://github.com/POWERFULMOVES/PMOVES-nats-server.git

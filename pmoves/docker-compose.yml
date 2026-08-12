@@ -1518,8 +1518,19 @@ services:
     - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
+    # Per-host bounded cache on the /data volume: the gateway must never inherit the
+    # JuiceFS 100 GiB default (fills a small disk) nor self-disable caching on a
+    # near-full one. Canonical logic lives in scripts/juicefs-cache-bounds.sh; it is
+    # mirrored compactly here because compose renders on the host while this cache
+    # lives inside the container, so the measurement has to run at container start.
     # Single quotes around the DSN protect the '&' from shell interpretation.
-    - "juicefs gateway --multi-buckets --keep-etag '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000"
+    - |
+      set -e
+      D=/data; [ -d "$$D" ] || D=/; D=$${D%/}
+      eval "$$(df -Pk "$$D" | awk 'NR==2{a=$$4;t=$$2;c=int(a/1024*0.5);if(c>102400)c=102400;if(c<512)c=512;r=(t>0?a/t*0.5:0.1);if(r>0.1)r=0.1;if(r<0.01)r=0.01;printf "CS=%d FSR=%.3f",c,r}')"
+      mkdir -p "$$D/jfsCache"
+      echo "[juicefs-gateway] bounded cache: --cache-dir $$D/jfsCache --cache-size $${CS}MiB --free-space-ratio $$FSR"
+      exec juicefs gateway --multi-buckets --keep-etag --cache-dir "$$D/jfsCache" --cache-size "$$CS" --free-space-ratio "$$FSR" '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000
     volumes:
     - juicefs-data:/data
     networks:
@@ -2275,6 +2286,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+  watch-folder-router:  # SEAP ingestion Bud 1: routes ingest.file.added.v1 by MIME to the right analyzer (SEAP_WATCHFOLDER_NATS_CONSTELLATION)
+    <<: *tier-media-hardened
+    build:
+      context: ..
+      dockerfile: pmoves/services/watch-folder-router/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
+    - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
+    - ROUTER_TRANSCRIBE_TIMEOUT_SEC=${ROUTER_TRANSCRIBE_TIMEOUT_SEC:-3600}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8125/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
   voice-sampler:  # media-sourced voice references (VOICE_SAMPLER_SPEC.md): diarize → audition → owner-gated publish
     <<: *tier-media-hardened
     build:
@@ -4439,7 +4475,7 @@ services:
     # Realtime duplex voice agent (/v1/voice/agent: mic→Whisper→LLM→VibeVoice).
     # Off by default — requires pipecat-ai installed + VibeVoice (7860) running.
     - PIPECAT_ENABLED=${PIPECAT_ENABLED:-false}
-    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}  # NATIVE-first: engines run in the Pinokio-native UTS on host 7860 (feedback_tts_native_not_docker); the GHCR container is a UI/MCP shell WITHOUT engine packages — override to http://ultimate-tts-studio:7860 only if the image ever bakes engines
     - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
     # Host-affinity routing (opt-in, #2305): with VOICE_HOST_AFFINITY=1 a cast
     # host-swaps the configured engine URL to the selected fleet node's Tailscale
@@ -4610,7 +4646,7 @@ services:
     environment:
     - PORT=8060
     - FLUTE_GATEWAY_URL=http://flute-gateway:8055
-    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}  # NATIVE-first: engines run in the Pinokio-native UTS on host 7860 (feedback_tts_native_not_docker); the GHCR container is a UI/MCP shell WITHOUT engine packages — override to http://ultimate-tts-studio:7860 only if the image ever bakes engines
     - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
     - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}

@@ -107,8 +107,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 2G
+          # 2G silently OOM-kills the inner A0 python while the supervisor
+          # exits 0 - same failure class fixed on the main agent-zero service
+          # (see AGENT_ZERO_MEMORY_LIMIT there); keep parity with that default.
+          cpus: ${DARKXSIDE_A0_CPU_LIMIT:-4.0}
+          memory: ${DARKXSIDE_A0_MEMORY_LIMIT:-8G}
 
 networks:
   pmoves-net:

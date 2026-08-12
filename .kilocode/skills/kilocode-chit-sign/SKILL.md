@@ -29,7 +29,7 @@ COCREATOR witness. All trail entries from the 5090 carry: `DARKXSIDE x POWERFULM
 - **Claim Register**: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
 - **KRISS KROSS Accord**: `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md`
 - **DARKXSIDE Signature**: `pmoves/docs/AGENTS/DARKXSIDE_SIGNATURE.md`
-- **Cipher MCP**: `http://localhost:8105/sse` — for memory persistence
+- **Cipher MCP**: `http://localhost:8105/mcp/sse` — for memory persistence
 
 ## Attribution Format
 
