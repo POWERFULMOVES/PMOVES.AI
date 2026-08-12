@@ -2286,6 +2286,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+  watch-folder-router:  # SEAP ingestion Bud 1: routes ingest.file.added.v1 by MIME to the right analyzer (SEAP_WATCHFOLDER_NATS_CONSTELLATION)
+    <<: *tier-media-hardened
+    build:
+      context: ..
+      dockerfile: pmoves/services/watch-folder-router/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
+    - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
+    - ROUTER_TRANSCRIBE_TIMEOUT_SEC=${ROUTER_TRANSCRIBE_TIMEOUT_SEC:-3600}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8125/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
   voice-sampler:  # media-sourced voice references (VOICE_SAMPLER_SPEC.md): diarize → audition → owner-gated publish
     <<: *tier-media-hardened
     build:
