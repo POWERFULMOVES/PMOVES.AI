@@ -1123,7 +1123,8 @@ readOnlyPaths:
   # DOCKERFILES - Require Known Road grant for edits (service Dockerfiles
   # affect container builds, security posture, and supply chain)
   # ---------------------------------------------------------------------------
-  - "**/Dockerfile"
+  - "Dockerfile"        # bare name: catches `cd dir && sed -i ... Dockerfile` in bash hook
+  - "**/Dockerfile"     # path-anchored: catches `path/to/Dockerfile` without substring over-match
   - "Dockerfile.*"
   - ".dockerignore"
 
