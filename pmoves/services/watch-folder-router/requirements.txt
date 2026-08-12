@@ -1,0 +1,6 @@
+# watch-folder-router — thin NATS router (no models, no GPU)
+fastapi==0.114.2
+uvicorn[standard]==0.30.6
+requests==2.33.0
+nats-py==2.7.2
+prometheus-client>=0.19.0
