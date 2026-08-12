@@ -77,7 +77,7 @@ if echo "$PROMPT" | grep -iqE '(cipher|memory graph|knowledge graph|search_nodes
     append "CIPHER surface:"
     append "  /cipher:search  Docker MCP: search_nodes() open_nodes() read_graph()"
     append "  Graph: 12 entities + 17 relations (seeded 2026-05-25)"
-    append "  Cipher SSE: http://localhost:8105/sse"
+    append "  Cipher SSE: http://localhost:8105/mcp/sse"
 fi
 
 # ── NATS / Events ────────────────────────────────────────────────────────────
