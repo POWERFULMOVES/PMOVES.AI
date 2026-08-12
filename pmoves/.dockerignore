@@ -2,3 +2,11 @@ jellyfin-ai/neo4j/import
 jellyfin-ai/redis
 jellyfin-ai/redis/*
 jellyfin-ai/redis/**
+
+# A host node_modules/ must never enter a root-context build. The
+# a2ui-renderer builder runs `npm ci` and THEN copies its source tree; an
+# on-disk node_modules from a developer's `npm install` would land on top
+# of the clean install and ship host-arch binaries into the image. No
+# Dockerfile in this repo copies node_modules from a context (only from a
+# builder stage via --from=), so excluding it is subtractive only.
+**/node_modules

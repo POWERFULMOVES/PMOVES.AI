@@ -9,5 +9,3 @@
 #
 # Key: KIND|<dockerfile>:<line>|<build context>|<source operand>
 known_copy_gaps:
-  - "COPY_UNRESOLVED|pmoves/services/a2ui-renderer/Dockerfile:4|pmoves|package-lock.json*"
-  - "COPY_UNRESOLVED|pmoves/services/a2ui-renderer/Dockerfile:4|pmoves|package.json"
