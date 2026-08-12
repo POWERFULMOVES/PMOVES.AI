@@ -1241,8 +1241,14 @@ validate-tac-json: ## Same as validate-tac, but JSON output (for CI annotation)
 #   validate-dockerfile-paths-json   - same, JSON output
 #   validate-dockerfile-paths-list-orphans - diagnostic: print orphan list
 #                                           without failing
+#   validate-dockerfile-paths-copy-skips  - diagnostic: print the COPY/ADD
+#                                           sources the scan deliberately
+#                                           does not check, with reasons
+#   validate-dockerfile-paths-copy-baseline - re-baseline COPY_UNRESOLVED
+#                                           (deliberate; every entry is a
+#                                            real build break)
 # ----------------------------------------------------------------------------
-.PHONY: validate-dockerfile-paths validate-dockerfile-paths-json validate-dockerfile-paths-list-orphans
+.PHONY: validate-dockerfile-paths validate-dockerfile-paths-json validate-dockerfile-paths-list-orphans validate-dockerfile-paths-copy-baseline validate-dockerfile-paths-copy-skips
 validate-dockerfile-paths: ## Assert every compose `build:` points at a real Dockerfile; orphans must be in baseline (no network, ~100ms)
 	@echo "?? Validate-dockerfile-paths ratchet..."
 	@$(PYTHON) tools/validate_dockerfile_paths.py
@@ -1272,6 +1278,12 @@ validate-command-anchors-baseline: ## Re-baseline the anchor gate (deliberate: s
 
 validate-dockerfile-paths-list-orphans: ## Diagnostic: list orphan Dockerfiles not in the baseline; never fails
 	@$(PYTHON) tools/validate_dockerfile_paths.py --list-orphans
+
+validate-dockerfile-paths-copy-skips: ## Diagnostic: list COPY/ADD sources the scan cannot check statically, with reasons; never fails
+	@$(PYTHON) tools/validate_dockerfile_paths.py --list-copy-skips
+
+validate-dockerfile-paths-copy-baseline: ## Re-baseline the COPY-source gate (deliberate: every entry is a real build break — say why in the PR)
+	@$(PYTHON) tools/validate_dockerfile_paths.py --write-copy-baseline
 
 .PHONY: up-workers up-workers-core
 
