@@ -84,7 +84,7 @@ All trail entries include source attribution: `DARKXSIDE x POWERFULMOVES on 5090
 | Archon | `http://${TS_Z890}:8091` | Agent service |
 | TensorZero | `http://${TS_Z890}:3030` | LLM gateway |
 | NATS | `nats://${TS_Z890}:4222` | Message bus |
-| Cipher Memory | `http://${TS_Z890}:8105/sse` | Agent memory (MCP SSE endpoint) |
+| Cipher Memory | `http://${TS_Z890}:8105/mcp/sse` | Agent memory (MCP SSE endpoint) |
 | Ollama (Z890) | `http://${TS_Z890}:11434` | Z890 model serving |
 
 ## AGNOTE4482 Workstreams

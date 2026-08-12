@@ -125,7 +125,7 @@ Full audit: `pmoves/docs/CLAUDE_CONTEXT_AUDIT.md`.
 **Agent Zero MCP API** at `/mcp/*` on port 8080 — external agents can call Agent Zero via MCP protocol. Used by Archon for agent coordination.
 
 **Configured local MCP servers** (`.claude/mcp.json`):
-- `pmoves-cipher` (SSE `http://localhost:8105/sse`) — persistent memory lookups + writes
+- `pmoves-cipher` (SSE `http://localhost:8105/mcp/sse`) — persistent memory lookups + writes. Path verified 2026-08-12 against the running container; `/sse` and `/api/mcp/sse` both 404.
 - `docker` (`mcp/docker`) — container inspection via local Docker socket
 - `hostinger-mcp` — Hostinger API tasks via `$HOSTINGER_API_KEY`
 - `tailscale` — tailnet inventory, stale-node cleanup, tag inspection, ACL operations
