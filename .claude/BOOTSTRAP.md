@@ -34,7 +34,7 @@ Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When the
 
 | Server | Transport | Purpose |
 |--------|-----------|---------|
-| `pmoves-cipher` | SSE `http://localhost:8105/sse` | Persistent agent memory lookups + writes |
+| `pmoves-cipher` | SSE `http://localhost:8105/mcp/sse` | Persistent agent memory lookups + writes |
 | `docker` | `mcp/docker` | Container inspection via local Docker socket |
 | `hostinger-mcp` | stdio | Hostinger VPS API via `HOSTINGER_API_KEY` |
 | `tailscale` | stdio | Tailnet inventory, stale-node cleanup, ACL operations |
