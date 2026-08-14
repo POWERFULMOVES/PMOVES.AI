@@ -10,41 +10,50 @@ services:
     # platform alone is not enough. This image compiles CUDA kernels, and the
     # x86 defaults are wrong here: CUDA_ARCHS "86;89" are Z890/4090. Neither
     # arm64 node is in that list, so the build would succeed, ship, and have no
-    # cubins for the GPU it lands on — which the libggml-cuda.so guard cannot
-    # catch, because the backend IS built.
+    # cubins for the GPU it lands on — which the libggml-cuda.so guard could not
+    # catch, because the backend IS built. That guard now asserts per-arch with
+    # cuobjdump (see the Dockerfile), so this class fails loudly at build.
     #
-    # ONE ARCH LIST CANNOT SERVE BOTH ARM64 NODES. They need different toolkits:
+    # ONE LIST SERVES BOTH ARM64 NODES, on CUDA 13:
     #
-    #   Jetson Orin   sm_87   CUDA 12.8.1   <- the default below
-    #   DGX Spark     sm_121  CUDA 13.x     <- ARM64_CUDA_VERSION=13.0.1 ARM64_CUDA_ARCHS=121
+    #   Jetson Orin    sm_87    JetPack 7.2+ ships CUDA 13
+    #   DGX Spark GB10 sm_121   driver 13.0, needs nvcc >= 12.9 to compile for
     #
-    # sm_121 needs nvcc >= 12.9, so it cannot be added to the 12.8.1 default.
-    # Defaulting to Jetson because that combination is valid as written; a Spark
-    # build must set both vars together or it will not compile.
+    # This was NOT true on CUDA 12.8 — sm_121 cannot be compiled there at all,
+    # which is why an earlier revision split them. JetPack 7.2+ is the platform
+    # target, so CUDA 13 is the correct floor and the split is unnecessary.
     #
-    # An earlier revision of this file said Spark was sm_110 and listed "87;110".
-    # That was WRONG TWICE: compute_110 does not exist in any CUDA 12.x (it is
-    # Jetson THOR, added in 13.0), so the build died at nvcc; and GB10 is sm_121.
-    # The bad value came from pmoves/config/gpu-models.yaml, corrected in #2547.
+    # Arch numbers are NOT inferred. Authoritative source is dusty-nv's
+    # jetson-containers get_cuda_arch() (jetson_containers/l4t_version.py):
+    #     Nano/TX1 53 | TX2 62 | Xavier 72 | Orin 87
+    #     Orin on JetPack 7.2+  -> [87, 110, 120, 121]
+    #     Thor                  -> [110, 120, 121]
+    # sm_110 is THOR, not GB10 — that error cost this PR a build arg that could
+    # not compile. GB10 is sm_121, read from NVML on the node (ollama logs
+    # compute=12.1 / cc=1210 for "NVIDIA GB10", driver 13.0).
     #
-    # Ground truth is NVML on the node, not the model name — Spark's ollama logs
-    # it every start:
-    #   msg="inference compute" library=CUDA compute=12.1 description="NVIDIA GB10" driver=13.0
-    # and the failure mode is already visible there:
-    #   msg="skipping CUDA device — compute capability not in compiled architectures"
-    #     device="NVIDIA GB10" cc=1210 archs="[... 900 1200]"
-    # An sm_120 build skips this GPU entirely. That is what a wrong arch costs.
+    # Listing only 87;121 rather than dusty-nv's full JP7.2+ set: 110 is Thor and
+    # 120 is consumer Blackwell, and neither is an arm64 node in this fleet. Each
+    # extra arch is another kernel compile and more image weight. Widen to
+    # "87;110;120;121" if a Thor lands, or to match jetson-containers exactly.
     #
-    # Jetson Orin's sm_87 is still UNVERIFIED against hardware — consistent with
-    # the part, but nobody has read compute_cap off those nodes. Same standing
-    # sm_110 had until it cost a build. Confirm before trusting:
-    #   nvidia-smi --query-gpu=name,compute_cap --format=csv
+    # STRATEGIC NOTE — this image is hand-rolled on nvidia/cuda base images while
+    # dusty-nv/jetson-containers already solves the L4T/JetPack/CUDA matrix, and
+    # pmoves/config/profiles/jetson-orin-nano.yaml already names
+    # nvcr.io/nvidia/l4t-jetpack:r36.4.4 as that node's base. Building the Jetson
+    # path from those images instead of re-deriving arch and toolkit pins by hand
+    # is the better long-term shape; this override is the correct short-term fix,
+    # not the destination.
+    #
+    # Nano caveat: jetson-orin-nano.yaml is still JetPack 6.2.1 / CUDA 12.6. A
+    # CUDA 13 image will not run there until it is on 7.2+. Per-node override:
+    #   ARM64_CUDA_VERSION=12.8.1 ARM64_CUDA_ARCHS=87
     build:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
       args:
-        CUDA_VERSION: ${ARM64_CUDA_VERSION:-12.8.1}
-        CUDA_ARCHS: ${ARM64_CUDA_ARCHS:-87}
+        CUDA_VERSION: ${ARM64_CUDA_VERSION:-13.0.1}
+        CUDA_ARCHS: ${ARM64_CUDA_ARCHS:-87;121}
   channel-monitor:
     platform: linux/arm64
   archon-server:
