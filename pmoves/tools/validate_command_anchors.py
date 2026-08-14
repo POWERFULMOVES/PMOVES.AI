@@ -351,38 +351,100 @@ ENDPOINT_CITE_RE = re.compile(
 # the compose port map.
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "host.docker.internal"}
 
+SERVICE_KEY_RE = re.compile(r"^([A-Za-z0-9_.-]+):\s*(?:#.*)?$")
+
 COMPOSE_VAR_RE = re.compile(r"\$\{[A-Za-z0-9_]+:-([^}]*)\}")
 
 
 def host_port_map() -> Dict[str, str]:
     """host port -> service, for ports that name exactly one service.
 
+    Deliberately stdlib-only. The first cut imported yaml behind a try/except
+    that returned {} when it was missing. In the CI step documented "stdlib
+    only, no network" that did not fail -- it silently produced ZERO loopback
+    findings, which then tripped STALE_BASELINE against a baseline recorded on a
+    machine that had yaml. A gate whose findings depend on an optional import,
+    and degrades quietly when it is absent, is the exact defect this ratchet
+    exists to catch. So the port map is parsed directly.
+
+    Only one shape matters and compose writes it consistently:
+
+        services:
+          <name>:
+            ports:
+            - ${BIND:-127.0.0.1}:${PORT:-8080}:8080
+            - "9090:9090"
+
     A port published by more than one service (11434 by two ollamas, 9096 by
     three jellyfins, 80/443 by nginx and traefik) cannot be resolved to a single
     route table, so it is dropped rather than guessed.
     """
-    try:
-        import yaml  # type: ignore
-    except ImportError:
-        return {}
     owners: Dict[str, Set[str]] = {}
     for f in sorted(PMOVES.glob("docker-compose*.yml")):
         try:
-            doc = yaml.safe_load(f.read_text(encoding="utf-8", errors="replace")) or {}
-        except Exception:
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
             continue
-        for svc, cfg in (doc.get("services") or {}).items():
-            if not isinstance(cfg, dict):
+        in_services = False
+        svc = ""
+        in_ports = False
+        for raw in lines:
+            if not raw.strip() or raw.lstrip().startswith("#"):
                 continue
-            for entry in (cfg.get("ports") or []):
-                raw = str(entry if not isinstance(entry, dict) else entry.get("published", ""))
-                raw = COMPOSE_VAR_RE.sub(lambda m: m.group(1), raw).strip().strip('"')
-                parts = raw.split("/")[0].split(":")
-                if len(parts) < 2:
+            indent = len(raw) - len(raw.lstrip())
+            stripped = raw.strip()
+
+            if indent == 0:
+                in_services = stripped.startswith("services:")
+                svc, in_ports = "", False
+                continue
+            if not in_services:
+                continue
+
+            # A 2-space key names a service and ends any previous ports block.
+            # The trailing-comment form is real and common --
+            #   voice-sampler:  # media-sourced voice references ...
+            # -- so an endswith(":") test silently keeps the PREVIOUS service
+            # name and files that service's ports under its neighbour. That is
+            # the under-collecting direction: it makes a shared port look
+            # unambiguous and defeats the ambiguity guard.
+            if indent == 2:
+                key = SERVICE_KEY_RE.match(stripped)
+                if key:
+                    svc = key.group(1)
+                    in_ports = False
                     continue
-                host = parts[-2]
-                if host.isdigit():
-                    owners.setdefault(host, set()).add(svc)
+            if not svc:
+                continue
+
+            if in_ports:
+                if stripped.startswith("- "):
+                    entry = COMPOSE_VAR_RE.sub(lambda m: m.group(1), stripped[2:])
+                    entry = entry.split("#")[0].strip().strip("\"'")
+                    parts = entry.split("/")[0].split(":")
+                    if len(parts) >= 2 and parts[-2].isdigit():
+                        owners.setdefault(parts[-2], set()).add(svc)
+                    continue
+                in_ports = False  # this line is a sibling key, fall through
+
+            if indent == 4 and stripped == "ports:":
+                in_ports = True
+                continue
+
+            # Inline flow sequence: ports: ["${BIND:-127.0.0.1}:8055:8055", ...]
+            # Used by flute-gateway, traefik and ~20 others. Missing this form
+            # made the parser UNDER-collect, which is the dangerous direction:
+            # a port published by two services looked like it belonged to one,
+            # and the ambiguity guard never fired.
+            if indent == 4 and stripped.startswith("ports:") and "[" in stripped:
+                inner = stripped[stripped.index("[") + 1:]
+                inner = inner.rsplit("]", 1)[0] if "]" in inner else inner
+                for item in inner.split(","):
+                    entry = COMPOSE_VAR_RE.sub(lambda m: m.group(1), item)
+                    entry = entry.strip().strip("\"'")
+                    parts = entry.split("/")[0].split(":")
+                    if len(parts) >= 2 and parts[-2].isdigit():
+                        owners.setdefault(parts[-2], set()).add(svc)
     return {p: next(iter(v)) for p, v in owners.items() if len(v) == 1}
 
 

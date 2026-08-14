@@ -345,8 +345,7 @@ def test_compose_var_substitution_takes_the_default():
 
 def test_host_port_map_resolves_known_services_and_drops_ambiguity():
     m = vca.host_port_map()
-    if not m:
-        pytest.skip("pyyaml unavailable")
+    assert m, "port map is empty — the parser silently collected nothing"
     # Spot-check ports whose owner is unambiguous in compose.
     assert m.get("8080") == "agent-zero"
     assert m.get("8104") == "github-runner-ctl"
@@ -359,3 +358,39 @@ def test_endpoint_regex_matches_loopback_form():
     m = vca.ENDPOINT_CITE_RE.search("curl http://localhost:8080/mcp/health")
     assert m and m.group(1) == "localhost" and m.group(2) == "8080"
     assert m.group(3) == "/mcp/health"
+
+
+def test_tool_imports_no_third_party_modules():
+    """The ratchet runs in a CI step documented "stdlib only, no network".
+
+    The first cut of the port map imported yaml behind a try/except returning {}.
+    It did not fail in CI — it silently produced zero loopback findings, which
+    tripped STALE_BASELINE against a baseline recorded where yaml existed. A
+    gate whose findings depend on an optional import is not a gate.
+    """
+    src = TOOL.read_text(encoding="utf-8")
+    for banned in ("import yaml", "import requests", "import httpx"):
+        assert banned not in src, f"{banned} — breaks the stdlib-only guarantee"
+
+
+def test_service_key_regex_tolerates_trailing_comment():
+    # Real form in docker-compose.media.yml:
+    #   voice-sampler:  # media-sourced voice references ...
+    # An endswith(":") test keeps the PREVIOUS service name and files this
+    # service's ports under its neighbour — under-collecting, which makes a
+    # shared port look unambiguous and defeats the ambiguity guard.
+    assert vca.SERVICE_KEY_RE.match("voice-sampler:  # diarize -> audition").group(1) == "voice-sampler"
+    assert vca.SERVICE_KEY_RE.match("agent-zero:").group(1) == "agent-zero"
+    # A list item or a nested key must not be mistaken for a service name.
+    assert vca.SERVICE_KEY_RE.match("- foo:") is None
+    assert vca.SERVICE_KEY_RE.match("image: nginx") is None
+
+
+def test_port_map_covers_both_block_and_inline_forms():
+    m = vca.host_port_map()
+    # block sequence form (ports: then "- ${BIND:-...}:${PORT:-8125}:8125")
+    assert m.get("8125") == "watch-folder-router"
+    # inline flow:     ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", ...]
+    assert m.get("8055") == "flute-gateway"
+    # trailing-comment service key
+    assert m.get("8124") == "voice-sampler"
