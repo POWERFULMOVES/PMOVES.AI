@@ -423,3 +423,29 @@ def test_angle_bracket_params_are_wildcards_not_skips():
 def test_shell_interpolation_is_still_skipped():
     # `$VAR` can expand to anything, so there is no claim to check.
     assert "$" in "/v1/voice/personas/$PERSONA_ID"
+
+
+def test_complete_route_services_skip_the_namespace_rule():
+    """The namespace rule protects services whose routes we cannot fully see.
+
+    Applying it to a service with a PROVABLY COMPLETE route set hides real
+    findings. botz-gateway declares only /v1/*, /healthz and /metrics and has no
+    include_router or mount anywhere -- so a doc citing botz-gateway:8054/tools
+    is plainly wrong, yet the namespace rule stayed silent because the service
+    "owns no /tools namespace". Turning strict mode on for complete services
+    surfaced 28 real ghosts, including a /health vs /healthz cluster across four
+    services (a health probe against /health 404s).
+    """
+    complete = vca.complete_route_services()
+    assert "botz-gateway" in complete, "botz-gateway has no include_router/mount"
+    # agent-zero pulls /a2a/v1/* from a router defined outside its service dir,
+    # so it must KEEP the namespace rule.
+    assert "agent-zero" not in complete
+
+
+def test_external_router_marker_detects_inclusion_and_mount():
+    for body in ("app.include_router(r)",
+                 'app.include_router(create_a2a_router())',
+                 'app.mount("/static", StaticFiles())'):
+        assert vca.ROUTE_EXTERNAL_RE.search(body), body
+    assert vca.ROUTE_EXTERNAL_RE.search('@app.get("/healthz")') is None

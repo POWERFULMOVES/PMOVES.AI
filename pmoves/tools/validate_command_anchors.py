@@ -297,6 +297,45 @@ ROUTE_RELOCATE_RE = re.compile(
 )
 
 
+# ROUTE_RELOCATE_RE catches routes MOVED to a different path. This catches routes
+# we simply cannot see: a router included from outside the service directory
+# contributes real routes with no marker in this tree. agent-zero does exactly
+# that for /a2a/v1/* via include_router(create_a2a_router()) with no prefix.
+ROUTE_EXTERNAL_RE = re.compile(r"include_router\(|\.mount\(")
+
+
+def complete_route_services() -> Set[str]:
+    """Services whose declared route set is provably COMPLETE.
+
+    No include_router, no mount -- every route is an @app decorator in this dir,
+    so anything a doc cites that does not match is a ghost, full stop. These
+    services do not need the namespace rule, and applying it to them hides real
+    findings: botz-gateway serves only /v1/*, /healthz and /metrics, so a doc
+    citing botz-gateway:8054/tools is plainly wrong -- but the namespace rule
+    stayed silent because the service "owns no /tools namespace".
+    """
+    out: Set[str] = set()
+    if not SERVICES.is_dir():
+        return out
+    for svc in sorted(SERVICES.iterdir()):
+        if not svc.is_dir():
+            continue
+        external = False
+        for py in svc.rglob("*.py"):
+            if "test" in py.name or "node_modules" in py.parts:
+                continue
+            try:
+                body = py.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if ROUTE_EXTERNAL_RE.search(body):
+                external = True
+                break
+        if not external:
+            out.add(svc.name)
+    return out
+
+
 def service_routes() -> Dict[str, Set[str]]:
     """service dir name -> declared route paths, for services we can read safely."""
     out: Dict[str, Set[str]] = {}
@@ -460,6 +499,7 @@ def host_port_map() -> Dict[str, str]:
 def scan_endpoints(routes_by_svc: Dict[str, Set[str]]) -> List[dict]:
     findings: List[dict] = []
     matchers = {s: _route_matchers(r) for s, r in routes_by_svc.items()}
+    complete = complete_route_services()
     ports = host_port_map()
     self_name = Path(__file__).name
 
@@ -503,9 +543,12 @@ def scan_endpoints(routes_by_svc: Dict[str, Set[str]]) -> List[dict]:
             # namespace it owns and a missing /mcp/tools/list is a real claim.
             # It declares no /a2a/* route, so we stay silent about /a2a/v1/*
             # rather than guess.
-            ns = "/" + path.strip("/").split("/", 1)[0]
-            if not any(r == ns or r.startswith(ns + "/") for r in routes_by_svc[svc]):
-                continue
+            # Services with a provably complete route set skip the namespace
+            # rule -- there is nothing unseen to be wrong about.
+            if svc not in complete:
+                ns = "/" + path.strip("/").split("/", 1)[0]
+                if not any(r == ns or r.startswith(ns + "/") for r in routes_by_svc[svc]):
+                    continue
             key = f"{svc}{path}"
             if key in seen:
                 continue
