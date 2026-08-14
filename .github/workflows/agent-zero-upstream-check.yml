@@ -109,6 +109,16 @@ jobs:
       - name: Check for existing PR
         id: check_pr
         if: steps.compare.outputs.UPSTREAM_CURRENT == 'false'
+        # GH_TOKEN is required for `gh pr list`. Its absence here was invisible
+        # for months because this step is gated on the pin being STALE: on every
+        # run where the pin was current the step was skipped, so the workflow
+        # went green without ever executing it. The first run after upstream
+        # v2.9 was tagged (2026-08-12 14:51) is the first time it ever ran, and
+        # it failed instantly — taking `create-pr` (which `needs` this job) with
+        # it. The bump PR this workflow exists to open has therefore never been
+        # openable. Every other `gh` step in this file already sets the token.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="chore/agent-zero-upstream-${{ steps.compare.outputs.NEW_TAG }}"
           PR_NUM=$(gh pr list --head "${BRANCH}" --json number --jq '.[0].number')
