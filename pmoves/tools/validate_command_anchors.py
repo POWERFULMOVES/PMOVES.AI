@@ -343,9 +343,53 @@ ENDPOINT_CITE_RE = re.compile(
 )
 
 
+# Docs overwhelmingly write `http://localhost:8080/...`, not `http://agent-zero:8080/...`
+# -- 1574 of the 1732 endpoint citations in the scanned tree take the loopback
+# form. Checking only the service-name form would cover 9% of the surface while
+# reading like it covered the surface, which is the exact failure this whole
+# ratchet exists to stop. So loopback host:port is resolved to a service through
+# the compose port map.
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "host.docker.internal"}
+
+COMPOSE_VAR_RE = re.compile(r"\$\{[A-Za-z0-9_]+:-([^}]*)\}")
+
+
+def host_port_map() -> Dict[str, str]:
+    """host port -> service, for ports that name exactly one service.
+
+    A port published by more than one service (11434 by two ollamas, 9096 by
+    three jellyfins, 80/443 by nginx and traefik) cannot be resolved to a single
+    route table, so it is dropped rather than guessed.
+    """
+    try:
+        import yaml  # type: ignore
+    except ImportError:
+        return {}
+    owners: Dict[str, Set[str]] = {}
+    for f in sorted(PMOVES.glob("docker-compose*.yml")):
+        try:
+            doc = yaml.safe_load(f.read_text(encoding="utf-8", errors="replace")) or {}
+        except Exception:
+            continue
+        for svc, cfg in (doc.get("services") or {}).items():
+            if not isinstance(cfg, dict):
+                continue
+            for entry in (cfg.get("ports") or []):
+                raw = str(entry if not isinstance(entry, dict) else entry.get("published", ""))
+                raw = COMPOSE_VAR_RE.sub(lambda m: m.group(1), raw).strip().strip('"')
+                parts = raw.split("/")[0].split(":")
+                if len(parts) < 2:
+                    continue
+                host = parts[-2]
+                if host.isdigit():
+                    owners.setdefault(host, set()).add(svc)
+    return {p: next(iter(v)) for p, v in owners.items() if len(v) == 1}
+
+
 def scan_endpoints(routes_by_svc: Dict[str, Set[str]]) -> List[dict]:
     findings: List[dict] = []
     matchers = {s: _route_matchers(r) for s, r in routes_by_svc.items()}
+    ports = host_port_map()
     self_name = Path(__file__).name
 
     for doc in live_docs():
@@ -355,7 +399,9 @@ def scan_endpoints(routes_by_svc: Dict[str, Set[str]]) -> List[dict]:
         text = doc.read_text(encoding="utf-8", errors="replace")
         seen: Set[str] = set()
         for m in ENDPOINT_CITE_RE.finditer(text):
-            svc, _port, path = m.group(1), m.group(2), m.group(3)
+            svc, port, path = m.group(1), m.group(2), m.group(3)
+            if svc in LOOPBACK_HOSTS:
+                svc = ports.get(port, "")
             if svc not in matchers:
                 continue
             path = path.split("?", 1)[0].split("#", 1)[0]

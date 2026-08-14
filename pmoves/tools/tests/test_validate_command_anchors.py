@@ -327,3 +327,35 @@ def test_namespace_rule_is_the_soundness_boundary():
 
     assert owns("/mcp/tools/list")   # we declare /mcp/* — we may speak
     assert not owns("/a2a/v1/message")  # we declare no /a2a/* — stay silent
+
+
+def test_loopback_hosts_are_the_dominant_citation_form():
+    # The reason the compose port map exists at all. If this set ever shrinks,
+    # coverage silently drops back to the ~9% service-name-only surface.
+    assert {"localhost", "127.0.0.1", "host.docker.internal"} <= vca.LOOPBACK_HOSTS
+
+
+def test_compose_var_substitution_takes_the_default():
+    # Ports are written ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080.
+    # Without substitution the host field is not a digit and every port is dropped.
+    out = vca.COMPOSE_VAR_RE.sub(lambda m: m.group(1), "${A_BIND:-127.0.0.1}:${A_PORT:-8080}:8080")
+    assert out == "127.0.0.1:8080:8080"
+    assert out.split(":")[-2] == "8080"
+
+
+def test_host_port_map_resolves_known_services_and_drops_ambiguity():
+    m = vca.host_port_map()
+    if not m:
+        pytest.skip("pyyaml unavailable")
+    # Spot-check ports whose owner is unambiguous in compose.
+    assert m.get("8080") == "agent-zero"
+    assert m.get("8104") == "github-runner-ctl"
+    # 11434 is published by both ollama-edge and pmoves-ollama; guessing an owner
+    # would attach one service's route table to the other's citations.
+    assert "11434" not in m
+
+
+def test_endpoint_regex_matches_loopback_form():
+    m = vca.ENDPOINT_CITE_RE.search("curl http://localhost:8080/mcp/health")
+    assert m and m.group(1) == "localhost" and m.group(2) == "8080"
+    assert m.group(3) == "/mcp/health"
