@@ -40,6 +40,61 @@ def create_mock_wav_bytes(duration_samples: int = 24000) -> bytes:
     return buf.getvalue()
 
 
+def mock_schema_params() -> list:
+    """A minimal but REALISTIC /generate_unified_tts parameter schema.
+
+    Since #2400 the provider discovers parameters from the studio's own
+    /gradio_api/info rather than assuming a positional layout, so every
+    synthesis test has to serve a schema. Shape matches what Gradio
+    publishes: parameter_name, parameter_default, python_type.type.
+
+    Deliberately NOT 121 entries and deliberately not in the studio's
+    order. Discovery resolves by NAME, so neither the count nor the
+    ordering may matter — if a change to the provider ever makes this
+    fixture's arbitrary length or order significant, these tests should
+    start failing, and that failure is the point.
+    """
+    def p(name, default=None, ptype="str"):
+        return {
+            "parameter_name": name,
+            "parameter_default": default,
+            "python_type": {"type": ptype},
+        }
+
+    return [
+        p("audio_format", "wav"),
+        p("kokoro_speed", 1.0, "float"),
+        p("text_input", ""),
+        p("kitten_voice", "expr-voice-2-f"),
+        p("tts_engine", "KittenTTS"),
+        p("kokoro_voice", "af_heart"),
+        p("indextts2_emotion_mode", "audio_prompt"),
+        p("indextts2_happy", 0.0, "float"),
+        p("indextts2_angry", 0.0, "float"),
+        p("indextts2_sad", 0.0, "float"),
+        p("indextts2_afraid", 0.0, "float"),
+        p("indextts2_disgusted", 0.0, "float"),
+        p("indextts2_melancholic", 0.0, "float"),
+        p("indextts2_surprised", 0.0, "float"),
+        p("indextts2_calm", 0.0, "float"),
+    ]
+
+
+def mock_info_response(params: list = None) -> MagicMock:
+    """Mock the GET /gradio_api/info schema-discovery response."""
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.raise_for_status = MagicMock(return_value=None)
+    resp.json.return_value = {
+        "named_endpoints": {
+            "/generate_unified_tts": {
+                "parameters": mock_schema_params() if params is None else params
+            }
+        }
+    }
+    return resp
+
+
 class _MockSSEStream:
     """Mock SSE stream for Gradio 4.x event API responses.
 
@@ -256,11 +311,22 @@ class TestUltimateTTSProviderSynthesize:
 
         mock_client.stream = MagicMock(side_effect=mock_stream)
 
-        # GET returns audio bytes (for the final audio download)
+        # GET serves two different things and MUST be routed by URL:
+        #   /gradio_api/info -> the parameter schema (discovery, since #2400)
+        #   anything else    -> the rendered audio file
+        # Returning audio for both is what made every synthesis test fail with
+        # "Core param 'text_input' missing from live schema" — the provider
+        # asked for a schema and got a MagicMock.
         mock_audio_response = MagicMock()
         mock_audio_response.status_code = 200
         mock_audio_response.content = create_mock_wav_bytes()
-        mock_client.get = AsyncMock(return_value=mock_audio_response)
+
+        async def mock_get(url, **kwargs):
+            if "/gradio_api/info" in url:
+                return mock_info_response()
+            return mock_audio_response
+
+        mock_client.get = AsyncMock(side_effect=mock_get)
 
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -281,15 +347,71 @@ class TestUltimateTTSProviderSynthesize:
     @pytest.mark.parametrize("engine", [
         "kitten_tts", "kokoro", "f5_tts", "indextts2", "indextts",
         "fish", "fish_s2", "chatterbox", "chatterbox_turbo",
-        "chatterbox_multilingual", "voxcpm", "higgs", "qwen", "vibevoice",
+        "chatterbox_multilingual", "voxcpm", "higgs", "qwen",
     ])
     async def test_synthesize_each_engine(self, provider, engine):
-        """Test synthesize works for each engine type."""
+        """Test synthesize works for each engine type.
+
+        vibevoice is deliberately absent — it is not reachable through
+        /generate_unified_tts. See test_synthesize_vibevoice_rejected.
+        """
         mock_client = self._create_mock_client()
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             result = await provider.synthesize("Test text", engine=engine)
             assert isinstance(result, bytes)
+
+    @pytest.mark.asyncio
+    async def test_synthesize_vibevoice_rejected(self, provider):
+        """vibevoice must be refused on the unified endpoint, not attempted.
+
+        It has no /generate_unified_tts path — it needs the dedicated
+        VibeVoice panel via gradio_client. This test previously asserted
+        vibevoice SUCCEEDED, which only passed while the provider silently
+        guessed at parameters. Refusing is the correct behaviour, so the
+        test now pins the refusal.
+        """
+        mock_client = self._create_mock_client()
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(UltimateTTSError, match="vibevoice is not supported"):
+                await provider.synthesize("Test text", engine="vibevoice")
+
+    @pytest.mark.asyncio
+    async def test_synthesize_unknown_engine_rejected(self, provider):
+        """An engine absent from ENGINE_NAMES must raise, not guess."""
+        mock_client = self._create_mock_client()
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(UltimateTTSError, match="Unknown engine"):
+                await provider.synthesize("Test text", engine="not_a_real_engine")
+
+    @pytest.mark.asyncio
+    async def test_synthesize_raises_when_core_param_missing(self, provider):
+        """A schema without text_input must fail loudly rather than guess.
+
+        This is the guard #2400 added: if the studio renames a core param,
+        the provider refuses instead of null-crashing at a stale position.
+        Nothing covered it, so a regression that reinstated positional
+        guessing would have gone unnoticed.
+        """
+        mock_client = self._create_mock_client()
+        stripped = [p for p in mock_schema_params()
+                    if p["parameter_name"] != "text_input"]
+
+        async def mock_get(url, **kwargs):
+            if "/gradio_api/info" in url:
+                return mock_info_response(stripped)
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.content = create_mock_wav_bytes()
+            return resp
+
+        mock_client.get = AsyncMock(side_effect=mock_get)
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(UltimateTTSError, match="missing from live schema"):
+                await provider.synthesize("Test text", engine="kitten_tts")
 
     @pytest.mark.asyncio
     async def test_synthesize_with_custom_voice(self, provider):
@@ -331,7 +453,11 @@ class TestUltimateTTSProviderSynthesize:
         mock_client.stream = MagicMock(
             side_effect=lambda method, url, **kw: _MockSSEStream(load_sse)
         )
-        mock_client.get = AsyncMock()
+        # Schema discovery runs BEFORE the synthesis POST, so this GET has to
+        # serve a real schema. A bare AsyncMock() returned a coroutine whose
+        # .json() was itself a coroutine -> "'coroutine' object has no
+        # attribute 'get'", masking the 500 this test exists to assert.
+        mock_client.get = AsyncMock(return_value=mock_info_response())
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
@@ -346,6 +472,10 @@ class TestUltimateTTSProviderSynthesize:
 
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("Timeout"))
+        # Schema discovery precedes the POST; serve it so the timeout under
+        # test is the one raised by synthesis and not an artefact of an
+        # unmocked GET.
+        mock_client.get = AsyncMock(return_value=mock_info_response())
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
@@ -411,42 +541,98 @@ class TestUltimateTTSProviderRecognize:
 
 
 class TestUltimateTTSProviderBuildParams:
-    """Test parameter building for Gradio API."""
+    """Test parameter building against a DISCOVERED schema.
+
+    This class previously asserted a fixed positional contract — 121
+    elements, text at index 0, engine at 1, kokoro voice at 28, kitten
+    voice at 83. #2400 ("schema-driven generate_unified_tts — discovery
+    over hardcoding") deleted that contract: the provider now reads the
+    studio's published schema and resolves every parameter BY NAME, and
+    its own docstring notes the layout had already drifted 121 -> "101"
+    -> 121, null-crashing synthesis each time.
+
+    Those assertions could not be repaired, only removed — under
+    discovery an index is not a property of the system. What replaces
+    them tests the guarantee that actually exists now: resolution by
+    name, independent of order and count.
+    """
 
     @pytest.fixture
     def provider(self):
         """Create provider instance."""
         return UltimateTTSProvider(base_url="http://localhost:7861")
 
-    def test_build_params_returns_121_elements(self, provider):
-        """Test _build_params returns exactly 121 parameters."""
-        params = provider._build_params("Hello", "kitten_tts")
-        assert len(params) == 121
+    def _named(self, provider, params, name):
+        """Read a built param by NAME, the way the provider writes it."""
+        schema = mock_schema_params()
+        idx = {p["parameter_name"]: i for i, p in enumerate(schema)}[name]
+        return params[idx]
 
-    def test_build_params_text_at_index_0(self, provider):
-        """Test text is at index 0."""
-        params = provider._build_params("Test text", "kitten_tts")
-        assert params[0] == "Test text"
+    def test_build_params_length_matches_schema_not_a_constant(self, provider):
+        """Output length tracks the schema it was given, whatever that is."""
+        schema = mock_schema_params()
+        params = provider._build_params(schema, "Hello", "kitten_tts")
+        assert len(params) == len(schema)
 
-    def test_build_params_engine_at_index_1(self, provider):
-        """Test engine name is at index 1."""
-        params = provider._build_params("Test", "kitten_tts")
-        assert params[1] == "KittenTTS"
+    def test_build_params_sets_core_params_by_name(self, provider):
+        """text_input / tts_engine / audio_format land by name, not position."""
+        schema = mock_schema_params()
+        params = provider._build_params(schema, "Test text", "kitten_tts")
+        assert self._named(provider, params, "text_input") == "Test text"
+        assert self._named(provider, params, "tts_engine") == "KittenTTS"
+        assert self._named(provider, params, "audio_format") == "wav"
 
-        params = provider._build_params("Test", "kokoro")
-        assert params[1] == "Kokoro TTS"
+    def test_build_params_engine_display_name_is_mapped(self, provider):
+        """Engine keys map to the studio's display names."""
+        schema = mock_schema_params()
+        params = provider._build_params(schema, "Test", "kokoro")
+        assert self._named(provider, params, "tts_engine") == "Kokoro TTS"
 
-    def test_build_params_audio_format_wav(self, provider):
-        """Test audio format is WAV at index 2."""
-        params = provider._build_params("Test", "kitten_tts")
-        assert params[2] == "wav"
+    def test_build_params_engine_overrides_applied_by_name(self, provider):
+        """Per-engine voice overrides resolve by name for each engine."""
+        schema = mock_schema_params()
 
-    def test_build_params_kitten_voice_at_index_83(self, provider):
-        """Test KittenTTS voice is at index 83."""
-        params = provider._build_params("Test", "kitten_tts", voice="expr-voice-3-f")
-        assert params[83] == "expr-voice-3-f"
+        kitten = provider._build_params(schema, "Test", "kitten_tts",
+                                        voice="expr-voice-3-f")
+        assert self._named(provider, kitten, "kitten_voice") == "expr-voice-3-f"
 
-    def test_build_params_kokoro_voice_at_index_28(self, provider):
-        """Test Kokoro voice is at index 28."""
-        params = provider._build_params("Test", "kokoro", voice="af_bella")
-        assert params[28] == "af_bella"
+        kokoro = provider._build_params(schema, "Test", "kokoro", voice="af_bella")
+        assert self._named(provider, kokoro, "kokoro_voice") == "af_bella"
+
+    def test_build_params_is_order_independent(self, provider):
+        """A reordered schema must produce the same values by name.
+
+        This is the property the deleted index assertions actively
+        prevented anyone from having.
+        """
+        schema = mock_schema_params()
+        reversed_schema = list(reversed(schema))
+
+        params = provider._build_params(reversed_schema, "Hello", "kokoro",
+                                        voice="af_bella")
+        idx = {p["parameter_name"]: i for i, p in enumerate(reversed_schema)}
+        assert params[idx["text_input"]] == "Hello"
+        assert params[idx["tts_engine"]] == "Kokoro TTS"
+        assert params[idx["kokoro_voice"]] == "af_bella"
+
+    def test_build_params_unknown_param_uses_studio_default(self, provider):
+        """Slots we do not override keep the studio's own default."""
+        schema = mock_schema_params()
+        params = provider._build_params(schema, "Test", "kokoro")
+        idx = {p["parameter_name"]: i for i, p in enumerate(schema)}
+        assert params[idx["indextts2_emotion_mode"]] == "audio_prompt"
+
+    def test_build_params_missing_core_param_raises(self, provider):
+        """A renamed core param fails loudly instead of null-crashing."""
+        schema = [p for p in mock_schema_params()
+                  if p["parameter_name"] != "text_input"]
+        with pytest.raises(UltimateTTSError, match="missing from live schema"):
+            provider._build_params(schema, "Test", "kitten_tts")
+
+    def test_build_params_indextts2_emotion_preset_by_name(self, provider):
+        """IndexTTS2 emotion presets write the 8 vector slots by name."""
+        schema = mock_schema_params()
+        params = provider._build_params(schema, "Test", "indextts2", voice="angry")
+        idx = {p["parameter_name"]: i for i, p in enumerate(schema)}
+        assert params[idx["indextts2_angry"]] == 1.0
+        assert params[idx["indextts2_emotion_mode"]] == "vector_control"
