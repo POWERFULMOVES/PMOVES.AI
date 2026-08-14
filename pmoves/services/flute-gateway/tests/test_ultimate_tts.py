@@ -562,9 +562,19 @@ class TestUltimateTTSProviderBuildParams:
         """Create provider instance."""
         return UltimateTTSProvider(base_url="http://localhost:7861")
 
-    def _named(self, provider, params, name):
-        """Read a built param by NAME, the way the provider writes it."""
-        schema = mock_schema_params()
+    def _named(self, schema, params, name):
+        """Read a built param by NAME, resolved against the schema USED.
+
+        Takes the caller's schema rather than re-deriving one. The first
+        version of this helper called mock_schema_params() itself and
+        ignored the schema the params were actually built from — which
+        works only while every caller happens to use the default. Hand a
+        test a permuted schema and it would have read the wrong slot and
+        reported a pass or a failure for the wrong reason: a helper that
+        claims to resolve by name while secretly resolving by a fixed
+        assumption. That is the same defect this whole file exists to
+        remove, so it does not get to live in the fixture either.
+        """
         idx = {p["parameter_name"]: i for i, p in enumerate(schema)}[name]
         return params[idx]
 
@@ -578,15 +588,15 @@ class TestUltimateTTSProviderBuildParams:
         """text_input / tts_engine / audio_format land by name, not position."""
         schema = mock_schema_params()
         params = provider._build_params(schema, "Test text", "kitten_tts")
-        assert self._named(provider, params, "text_input") == "Test text"
-        assert self._named(provider, params, "tts_engine") == "KittenTTS"
-        assert self._named(provider, params, "audio_format") == "wav"
+        assert self._named(schema, params, "text_input") == "Test text"
+        assert self._named(schema, params, "tts_engine") == "KittenTTS"
+        assert self._named(schema, params, "audio_format") == "wav"
 
     def test_build_params_engine_display_name_is_mapped(self, provider):
         """Engine keys map to the studio's display names."""
         schema = mock_schema_params()
         params = provider._build_params(schema, "Test", "kokoro")
-        assert self._named(provider, params, "tts_engine") == "Kokoro TTS"
+        assert self._named(schema, params, "tts_engine") == "Kokoro TTS"
 
     def test_build_params_engine_overrides_applied_by_name(self, provider):
         """Per-engine voice overrides resolve by name for each engine."""
@@ -594,10 +604,10 @@ class TestUltimateTTSProviderBuildParams:
 
         kitten = provider._build_params(schema, "Test", "kitten_tts",
                                         voice="expr-voice-3-f")
-        assert self._named(provider, kitten, "kitten_voice") == "expr-voice-3-f"
+        assert self._named(schema, kitten, "kitten_voice") == "expr-voice-3-f"
 
         kokoro = provider._build_params(schema, "Test", "kokoro", voice="af_bella")
-        assert self._named(provider, kokoro, "kokoro_voice") == "af_bella"
+        assert self._named(schema, kokoro, "kokoro_voice") == "af_bella"
 
     def test_build_params_is_order_independent(self, provider):
         """A reordered schema must produce the same values by name.
@@ -614,6 +624,27 @@ class TestUltimateTTSProviderBuildParams:
         assert params[idx["text_input"]] == "Hello"
         assert params[idx["tts_engine"]] == "Kokoro TTS"
         assert params[idx["kokoro_voice"]] == "af_bella"
+
+    def test_build_params_by_name_under_a_permuted_schema(self, provider):
+        """Overrides resolve by name even when the schema is permuted.
+
+        Distinct from test_build_params_is_order_independent: that one
+        reverses and checks core params, this one rotates and checks the
+        per-engine overrides, which take a different code path
+        (ENGINE_NAME_OVERRIDES, callables resolved against the schema).
+
+        It also exercises _named against a schema that is NOT the default
+        — the case the first version of that helper got silently wrong.
+        """
+        schema = mock_schema_params()
+        rotated = schema[7:] + schema[:7]
+
+        params = provider._build_params(rotated, "Hello", "kokoro",
+                                        voice="af_bella")
+        assert self._named(rotated, params, "text_input") == "Hello"
+        assert self._named(rotated, params, "kokoro_voice") == "af_bella"
+        assert self._named(rotated, params, "kokoro_speed") == 1.0
+        assert self._named(rotated, params, "tts_engine") == "Kokoro TTS"
 
     def test_build_params_unknown_param_uses_studio_default(self, provider):
         """Slots we do not override keep the studio's own default."""
