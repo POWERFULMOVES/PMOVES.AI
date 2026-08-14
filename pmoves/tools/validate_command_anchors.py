@@ -20,6 +20,20 @@ isn't there:
 `docs_reconcile.py` does not catch these: it checks *freshness* (commit dates,
 staleness), not whether a named thing exists.
 
+A second batch on 2026-08-14, same shape, different surface — documented HTTP
+APIs that are not served:
+
+  * `.claude/context/agent-zero-orchestration.md` documented `/mcp/health`,
+    `/mcp/agents` and `/mcp/subordinate/create`. None were ever implemented.
+    #2449 bannered that file and five others by hand; the same fictional
+    `/mcp/*` surface survived in nine more docs the manual pass never reached.
+  * `pmoves/docs/infrastructure/github-runner-agent-zero-integration.md` ships
+    `curl .../queue/POWERFULMOVES/PMOVES.AI` against `@app.get("/queue/{repository}")`.
+    FastAPI's `{param}` is one segment, so the documented call 404s.
+
+Freshness could not see either: both docs were recently edited and confidently
+wrong. That is what GHOST_ENDPOINT is for — age is not accuracy.
+
 SCOPE AND TOPOLOGY, NOT JUST DOCKER
 -----------------------------------
 Make targets reach docker, ssh, python, git, systemd, NATS and each other. An
@@ -40,6 +54,9 @@ FINDING CLASSES
   UNKNOWN_HOST    a documented `ssh <host>` names a host absent from the fleet
                   topology (this also catches raw IPs, which must never appear
                   in committed docs)
+  GHOST_ENDPOINT  a doc cites `http://<service>:<port>/<path>` against a PMOVES
+                  service whose routes we can read, and that service declares no
+                  such route -- i.e. the doc documents an API that is not there
   GHOST_ROAD      the damage-control guard offers a `make` target as the
                   "correct path" and no such target exists — a blocked agent is
                   routed into a wall at the moment it is least able to recover
@@ -262,6 +279,122 @@ PATH_CITE_RE = re.compile(r"`((?:pmoves|deploy|\.claude|\.github)/[A-Za-z0-9_./-
 SSH_CITE_RE = re.compile(r"ssh\s+(?:-\S+\s+)*(?:root@|[a-z][a-z0-9_-]*@)?([A-Za-z0-9][A-Za-z0-9._-]+)")
 
 
+SERVICES = PMOVES / "services"
+
+# FastAPI/Starlette route declarations. One uniform style covers the fleet:
+# 59 of 97 service dirs declare routes this way.
+ROUTE_DECL_RE = re.compile(
+    r"""@(?:\w+)\.(?:get|post|put|delete|patch|head|options|websocket)\(\s*["']([^"']+)["']"""
+)
+
+# A service whose real prefix we cannot compute statically would produce false
+# GHOST_ENDPOINTs for every route it has, which is worse than no check at all --
+# the noise gets baselined and the class stops meaning anything. So a service is
+# introspectable ONLY if it declares routes and does NOT relocate them at
+# include/mount time.
+ROUTE_RELOCATE_RE = re.compile(
+    r"APIRouter\([^)]*prefix\s*=|include_router\([^)]*prefix\s*=|\.mount\("
+)
+
+
+def service_routes() -> Dict[str, Set[str]]:
+    """service dir name -> declared route paths, for services we can read safely."""
+    out: Dict[str, Set[str]] = {}
+    if not SERVICES.is_dir():
+        return out
+    for svc in sorted(SERVICES.iterdir()):
+        if not svc.is_dir():
+            continue
+        routes: Set[str] = set()
+        relocates = False
+        for py in svc.rglob("*.py"):
+            if "test" in py.name or "node_modules" in py.parts:
+                continue
+            try:
+                body = py.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if ROUTE_RELOCATE_RE.search(body):
+                relocates = True
+                break
+            routes |= {m.group(1) for m in ROUTE_DECL_RE.finditer(body)}
+        if routes and not relocates:
+            out[svc.name] = routes
+    return out
+
+
+def _route_matchers(routes: Set[str]) -> List[re.Pattern]:
+    """Compile declared routes, treating {param} as one path segment."""
+    pats: List[re.Pattern] = []
+    for r in routes:
+        esc = "".join(
+            r"[^/]+" if part.startswith("{") and part.endswith("}") else re.escape(part)
+            for part in re.split(r"(\{[^}]+\})", r)
+            if part
+        )
+        pats.append(re.compile(rf"^{esc}/?$"))
+    return pats
+
+
+# Only host:port forms. A bare `/healthz` in prose names no service, and a
+# scheme-less path is as often a URL fragment as an API claim.
+ENDPOINT_CITE_RE = re.compile(
+    r"https?://([A-Za-z0-9][A-Za-z0-9_.-]*):(\d{2,5})(/[A-Za-z0-9_./{}%:-]*)"
+)
+
+
+def scan_endpoints(routes_by_svc: Dict[str, Set[str]]) -> List[dict]:
+    findings: List[dict] = []
+    matchers = {s: _route_matchers(r) for s, r in routes_by_svc.items()}
+    self_name = Path(__file__).name
+
+    for doc in live_docs():
+        rel = doc.relative_to(REPO_ROOT).as_posix()
+        if self_name in rel:
+            continue
+        text = doc.read_text(encoding="utf-8", errors="replace")
+        seen: Set[str] = set()
+        for m in ENDPOINT_CITE_RE.finditer(text):
+            svc, _port, path = m.group(1), m.group(2), m.group(3)
+            if svc not in matchers:
+                continue
+            path = path.split("?", 1)[0].split("#", 1)[0]
+            if path in ("/", ""):
+                continue
+            # A cited path carrying a placeholder is a template, not a claim
+            # about a concrete route.
+            if "<" in path or "$" in path:
+                continue
+            if any(p.match(path) for p in matchers[svc]):
+                continue
+            # SOUNDNESS GATE. A service may include a router defined outside its
+            # own directory (agent-zero does exactly this for /a2a/v1/*, via
+            # `include_router(create_a2a_router())` with the router living in
+            # python.features.a2a.server). Those routes are real and invisible
+            # here, so "not in my extracted set" does NOT mean "not served".
+            #
+            # We only speak where we have standing: flag a path ONLY if the
+            # service already declares at least one route in the same top-level
+            # namespace. If agent-zero declares /mcp/commands, then /mcp is a
+            # namespace it owns and a missing /mcp/tools/list is a real claim.
+            # It declares no /a2a/* route, so we stay silent about /a2a/v1/*
+            # rather than guess.
+            ns = "/" + path.strip("/").split("/", 1)[0]
+            if not any(r == ns or r.startswith(ns + "/") for r in routes_by_svc[svc]):
+                continue
+            key = f"{svc}{path}"
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append({
+                "kind": "GHOST_ENDPOINT",
+                "doc": rel,
+                "detail": key,
+                "scope": "http",
+            })
+    return findings
+
+
 def scan(targets: Dict[str, Path], scopes: Dict[str, str]) -> List[dict]:
     findings: List[dict] = []
     hosts = known_hosts()
@@ -434,7 +567,7 @@ def main() -> int:
 
     bodies = target_bodies()
     scopes = {t: classify_scope(bodies.get(t, [])) for t in targets}
-    findings = scan(targets, scopes) + scan_guard_roads(targets)
+    findings = scan(targets, scopes) + scan_guard_roads(targets) + scan_endpoints(service_routes())
 
     if args.write_baseline:
         write_baseline(findings)

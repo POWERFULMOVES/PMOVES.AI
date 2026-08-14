@@ -251,3 +251,79 @@ def test_fenced_form_keeps_the_same_dash_c_handling():
     """The fenced matcher shares the -C fragment; keep them in step."""
     assert vca.MAKE_FENCED_RE.findall("make -C pmoves up-core") == ["up-core"]
     assert vca.MAKE_FENCED_RE.findall("$ make -C ../pmoves validate-composes") == ["validate-composes"]
+
+
+# ── GHOST_ENDPOINT ──────────────────────────────────────────────────
+#
+# The class exists because four record defects in one session shared a shape the
+# older classes could not see: a doc naming an HTTP API that is not served.
+# These tests pin the two properties that make it worth having — it must FIRE on
+# a fictional route, and it must STAY SILENT where it has no standing.
+
+
+def _matchers(routes):
+    return vca._route_matchers(set(routes))
+
+
+def _matches(routes, path):
+    return any(p.match(path) for p in _matchers(routes))
+
+
+def test_route_matcher_accepts_exact_and_trailing_slash():
+    assert _matches(["/healthz"], "/healthz")
+    assert _matches(["/healthz"], "/healthz/")
+
+
+def test_route_matcher_treats_param_as_one_segment():
+    # FastAPI's {param} is [^/]+ — it does NOT span a slash. This is exactly the
+    # github-runner-ctl defect: /queue/{repository} documented as "owner/repo"
+    # cannot be called as /queue/OWNER/REPO; that 404s.
+    assert _matches(["/jobs/{context_id}"], "/jobs/abc123")
+    assert not _matches(["/queue/{repository}"], "/queue/OWNER/REPO")
+
+
+def test_route_matcher_rejects_unknown_sibling():
+    assert not _matches(["/mcp/commands", "/mcp/execute"], "/mcp/tools/list")
+
+
+def test_endpoint_regex_captures_service_port_and_path():
+    m = vca.ENDPOINT_CITE_RE.search("curl http://agent-zero:8080/mcp/tools/list")
+    assert m and m.group(1) == "agent-zero"
+    assert m.group(2) == "8080"
+    assert m.group(3) == "/mcp/tools/list"
+
+
+def test_endpoint_regex_ignores_bare_path():
+    # A scheme-less path names no service, so there is nothing to check it against.
+    assert vca.ENDPOINT_CITE_RE.search("see /mcp/tools/list for details") is None
+
+
+def test_route_decl_regex_reads_fastapi_decorators():
+    body = '@app.get("/healthz")\n@router.post("/tasks")\n@app.websocket("/ws")\n'
+    assert {m.group(1) for m in vca.ROUTE_DECL_RE.finditer(body)} == {
+        "/healthz", "/tasks", "/ws",
+    }
+
+
+def test_relocating_services_are_excluded_from_introspection():
+    # A prefix applied at include/mount time moves every route, so the extracted
+    # set would be wrong for all of them — worse than not checking.
+    for body in (
+        'r = APIRouter(prefix="/api")',
+        'app.include_router(r, prefix="/v1")',
+        'app.mount("/static", StaticFiles())',
+    ):
+        assert vca.ROUTE_RELOCATE_RE.search(body), body
+
+
+def test_namespace_rule_is_the_soundness_boundary():
+    # agent-zero includes a router defined OUTSIDE its service dir for /a2a/v1/*.
+    # Those routes are real and unreadable here, so absence must not imply ghost.
+    declared = {"/mcp/commands", "/mcp/execute", "/healthz"}
+
+    def owns(path):
+        ns = "/" + path.strip("/").split("/", 1)[0]
+        return any(r == ns or r.startswith(ns + "/") for r in declared)
+
+    assert owns("/mcp/tools/list")   # we declare /mcp/* — we may speak
+    assert not owns("/a2a/v1/message")  # we declare no /a2a/* — stay silent

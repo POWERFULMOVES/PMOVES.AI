@@ -4,6 +4,17 @@
 # recorded so the gate can be enforced today; they are NOT approved.
 # The list may shrink. Adding to it should require saying why.
 known_gaps:
+  - "GHOST_ENDPOINT|.claude/context/modular-architecture.md|agent-zero/mcp"
+  - "GHOST_ENDPOINT|pmoves/docs/AGENTS/BOTZ_GATEWAY_DEPLOYMENT_PLAN.md|agent-zero/mcp"
+  - "GHOST_ENDPOINT|pmoves/docs/TAC/TAC_GATEWAY_AGENT.md|agent-zero/mcp"
+  - "GHOST_ENDPOINT|pmoves/docs/architecture/evoswarm-agentgym-rl-integration.md|agent-zero/mcp/agent/register"
+  - "GHOST_ENDPOINT|pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md|agent-zero/mcp"
+  - "GHOST_ENDPOINT|pmoves/docs/infrastructure/github-runner-agent-zero-integration.md|agent-zero/mcp/command"
+  - "GHOST_ENDPOINT|pmoves/docs/infrastructure/github-runner-agent-zero-integration.md|github-runner-ctl/queue/POWERFULMOVES/PMOVES.AI"
+  - "GHOST_ENDPOINT|pmoves/docs/integrations/ARCHON_INTEGRATION.md|agent-zero/mcp/"
+  - "GHOST_ENDPOINT|pmoves/docs/integrations/E2B_INTEGRATION.md|agent-zero/mcp/tools/call"
+  - "GHOST_ENDPOINT|pmoves/docs/integrations/E2B_INTEGRATION.md|agent-zero/mcp/tools/list"
+  - "GHOST_ENDPOINT|pmoves/docs/integrations/INTEGRATIONS.md|agent-zero/mcp"
   - "GHOST_PATH|pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md|pmoves/services/flute-gateway/pipecat/pipelines/voice_agent.py"
   - "GHOST_PATH|pmoves/docs/reviews/2026-03-01/tokenism-multi-review.md|.claude/skills/pmoves-integration/tools/nats-monitor.ts"
   - "GHOST_PATH|pmoves/docs/reviews/2026-03-01/tokenism-multi-review.md|.github/workflows/ci.yml"
