@@ -132,7 +132,16 @@ jobs:
           # Collect unique package specs. Most entries strip versions to let pip resolve;
           # preserved specs keep explicit guardrails for packages with bad releases.
           packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov"]
+          # Test-only dependencies. These are NOT collected from any service
+          # requirements.txt because the services do not need them at runtime —
+          # only the tests do. `common` in particular ships no requirements.txt
+          # at all, so anything its tests import has to be declared here.
+          #
+          # ruamel.yaml: pmoves/services/common/tests/test_topology_networks_wiring.py
+          # imports it, and its own docstring pins the version it expects
+          # (`uv run --with ruamel.yaml==0.19.1`). Matching that pin here keeps
+          # the CI run and the documented standalone invocation on one version.
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "ruamel.yaml==0.19.1"]
 
           import re
           for path in requirements:
