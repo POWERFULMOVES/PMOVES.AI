@@ -14,7 +14,37 @@
 # Usage: run this instead of `claude` (alias it: alias claude=/path/to/claude-pmoves.sh).
 set -u
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
+# Resolve through symlinks before deriving ROOT. install-claude-pmoves-command.sh
+# drops a ~/.local/bin/claude-pmoves symlink on PATH as the route for shells that
+# don't source the rc function. Taking dirname of the SYMLINK made ROOT=$HOME, so
+# env.shared and .claude/mcp.json both missed and every cred-dependent MCP started
+# empty — silently, with only a WARN. Same failure class as #2484, other entrypoint.
+SELF="${BASH_SOURCE[0]:-$0}"
+while [ -L "$SELF" ]; do
+  link_dir="$(cd -P "$(dirname "$SELF")" && pwd)"
+  SELF="$(readlink "$SELF")"
+  case "$SELF" in /*) ;; *) SELF="$link_dir/$SELF" ;; esac
+done
+if [ -n "${PMOVES_REPO_ROOT:-}" ]; then
+  ROOT="$PMOVES_REPO_ROOT"
+else
+  ROOT="$(cd "$(dirname "$SELF")/../.." && pwd)"
+fi
+
+# Validate the derived ROOT the way the sibling launchers already do — crush-pmoves
+# tests `$candidate/pmoves/Makefile`, pmoves-mini tests `$candidate/pmoves/tools/
+# mini_cli.py`, and both reject a candidate that fails. This script computed ROOT and
+# trusted it, so a wrong answer degraded into two WARNs and a session with every
+# cred-dependent MCP dark. A launcher whose whole job is loading repo-relative config
+# must not proceed when it cannot find the repo.
+if [ ! -f "$ROOT/pmoves/Makefile" ]; then
+  echo "[claude-pmoves] ERROR: derived repo root has no pmoves/Makefile: $ROOT" >&2
+  echo "[claude-pmoves]        (resolved from: $SELF)" >&2
+  echo "[claude-pmoves]        Fix: re-run deploy/provision/install-claude-pmoves-command.sh," >&2
+  echo "[claude-pmoves]             or set PMOVES_REPO_ROOT=/path/to/PMOVES.AI" >&2
+  exit 1
+fi
+
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
 if [ -f "$ENVF" ]; then
