@@ -190,6 +190,18 @@ jobs:
           git checkout -b "${BRANCH}"
           git add -A
           git commit -m "chore(agent-zero): bump upstream to ${{ needs.check-upstream.outputs.new_tag }}"
+          # IDEMPOTENCY. This job only runs when check_pr found NO open PR for
+          # this branch (see the `if:` on create-pr). So if the branch exists
+          # remotely, it is debris from an earlier run that pushed it and then
+          # died before opening the PR -- which is exactly what happened here
+          # for months while create-pr could not run at all. Without this, the
+          # workflow is permanently wedged by its own leftovers: every rerun
+          # fails non-fast-forward at push.
+          #
+          # Deleted rather than force-pushed so the intent is explicit, and
+          # narrowed to a branch with no open PR so a maintainer's in-progress
+          # work on a real bump PR is never touched.
+          git push origin --delete "${BRANCH}" 2>/dev/null || true
           git push origin "${BRANCH}"
 
       - name: Create draft PR
