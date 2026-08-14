@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uvicorn fastapi pydantic pydantic-settings httpx jsonschema pyyaml python-multipart referencing nats-py
+COPY services/p7-room-orchestrator/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/p7-room-orchestrator/ ./
 
