@@ -57,7 +57,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 ## Voice & Speech
 
-**Flute-Gateway** `:8055` HTTP, `:8056` WebSocket — Multimodal voice communication with Pipecat. Prosodic TTS. API: `POST /v1/voice/synthesize/prosodic`. Health: `GET /healthz`. Detail: `.claude/context/flute-gateway.md`.
+**Flute-Gateway** `:8055` (HTTP + WebSocket) — Multimodal voice communication with Pipecat. Prosodic TTS. API: `POST /v1/voice/synthesize/prosodic` (returns `audio/wav`), `GET /v1/voice/config`, `GET /v1/voice/binding`. WS: `/v1/voice/stream/tts`, `/v1/voice/agent`. Auth: `X-API-Key` header (no Bearer/JWT). Health: `GET /healthz`. Detail: `.claude/context/flute-gateway.md`.
 
 **Ultimate-TTS-Studio** `:7860` native, `:7861` Docker — 14-engine TTS (KittenTTS, Kokoro, F5, IndexTTS/2, Fish Speech S1/S2 Pro, VoxCPM, Higgs Audio, Chatterbox variants, Qwen Voice Design, VibeVoice). Gradio UI. **GPU-accelerated, runs natively via Pinokio (NOT Docker).** Health: `GET /gradio_api/info`.
 
