@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,6 +45,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
+      # GHCR requires a lowercase repository path, and github.repository_owner
+      # is "POWERFULMOVES". Actions expressions have no toLowerCase, so the env
+      # IMAGE_PREFIX built from that expression produced an invalid tag and
+      # buildx refused it. Same `tr` idiom as test-app-token.yml. Computed
+      # rather than hardcoded so the workflow still works on a fork.
+      - name: Compute lowercase image prefix
+        id: imgpfx
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "prefix=ghcr.io/${owner}" >> "$GITHUB_OUTPUT"
+
       - name: Build pmoves-yt with bumped yt-dlp
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
@@ -53,7 +63,7 @@ jobs:
           push: false
           build-args: |
             YTDLP_VERSION=${{ steps.meta.outputs.version }}
-          tags: ${{ env.IMAGE_PREFIX }}/pmoves-yt:tmp-bump
+          tags: ${{ steps.imgpfx.outputs.prefix }}/pmoves-yt:tmp-bump
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
@@ -61,6 +71,11 @@ jobs:
       - name: Open PR with bump
         env:
           VERSION: ${{ steps.meta.outputs.version }}
+          # `gh pr create` needs this. Without it the command failed and the
+          # trailing `|| true` swallowed it, so the step went green having
+          # created nothing — a bump workflow that reported success weekly
+          # while never opening a PR.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -72,5 +87,7 @@ jobs:
           git add docs/hardening/PMOVES-hardening-tracker.md
           git commit -m "chore(pmoves-yt): bump yt-dlp to ${VERSION}"
           git push origin "$branch"
-          gh pr create --title "chore(pmoves-yt): bump yt-dlp to ${VERSION}" --body "Automated weekly bump to yt-dlp ${VERSION}." || true
+          # No `|| true`: if the PR cannot be opened, this workflow has done
+          # nothing useful and must say so. `set -e` is already on.
+          gh pr create --title "chore(pmoves-yt): bump yt-dlp to ${VERSION}"             --body "Automated weekly bump to yt-dlp ${VERSION}."
 
