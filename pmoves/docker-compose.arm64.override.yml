@@ -7,32 +7,44 @@ services:
     platform: linux/arm64
   ffmpeg-whisper:
     platform: linux/arm64
-    # platform alone is not enough for this image. It compiles CUDA kernels, and
-    # its x86 defaults are wrong here in two independent ways:
+    # platform alone is not enough. This image compiles CUDA kernels, and the
+    # x86 defaults are wrong here: CUDA_ARCHS "86;89" are Z890/4090. Neither
+    # arm64 node is in that list, so the build would succeed, ship, and have no
+    # cubins for the GPU it lands on — which the libggml-cuda.so guard cannot
+    # catch, because the backend IS built.
     #
-    #   CUDA_VERSION 12.6.2 has no arm64 wheels for the stack these nodes need.
-    #   media-audio's Dockerfile already carries the same note ("cu128 required
-    #   for ARM64 (GB10/Jetson)"), proven on SPARK via Hi-RAG GPU.
+    # ONE ARCH LIST CANNOT SERVE BOTH ARM64 NODES. They need different toolkits:
     #
-    #   CUDA_ARCHS "86;89" are the Z890/4090 architectures. Neither Jetson Orin
-    #   (sm_87) nor Spark GB10 (sm_110) is in that list, so the build would
-    #   succeed, ship, and silently fall back to CPU on both — the exact failure
-    #   the libggml-cuda.so build guard cannot catch, because the backend IS
-    #   built; it just has no cubins for the GPU it lands on.
+    #   Jetson Orin   sm_87   CUDA 12.8.1   <- the default below
+    #   DGX Spark     sm_121  CUDA 13.x     <- ARM64_CUDA_VERSION=13.0.1 ARM64_CUDA_ARCHS=121
     #
-    # 87 and 110 are both listed because this one override serves Jetson and
-    # Spark alike. For a single-node deployment, narrow it — each arch is another
-    # kernel compile and more image weight for a GPU that node will never have:
-    #   Jetson only:  ARM64_CUDA_ARCHS=87
-    #   Spark only:   ARM64_CUDA_ARCHS=110
+    # sm_121 needs nvcc >= 12.9, so it cannot be added to the 12.8.1 default.
+    # Defaulting to Jetson because that combination is valid as written; a Spark
+    # build must set both vars together or it will not compile.
     #
-    # Confirm on the node before trusting: nvidia-smi --query-gpu=compute_cap
+    # An earlier revision of this file said Spark was sm_110 and listed "87;110".
+    # That was WRONG TWICE: compute_110 does not exist in any CUDA 12.x (it is
+    # Jetson THOR, added in 13.0), so the build died at nvcc; and GB10 is sm_121.
+    # The bad value came from pmoves/config/gpu-models.yaml, corrected in #2547.
+    #
+    # Ground truth is NVML on the node, not the model name — Spark's ollama logs
+    # it every start:
+    #   msg="inference compute" library=CUDA compute=12.1 description="NVIDIA GB10" driver=13.0
+    # and the failure mode is already visible there:
+    #   msg="skipping CUDA device — compute capability not in compiled architectures"
+    #     device="NVIDIA GB10" cc=1210 archs="[... 900 1200]"
+    # An sm_120 build skips this GPU entirely. That is what a wrong arch costs.
+    #
+    # Jetson Orin's sm_87 is still UNVERIFIED against hardware — consistent with
+    # the part, but nobody has read compute_cap off those nodes. Same standing
+    # sm_110 had until it cost a build. Confirm before trusting:
+    #   nvidia-smi --query-gpu=name,compute_cap --format=csv
     build:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
       args:
         CUDA_VERSION: ${ARM64_CUDA_VERSION:-12.8.1}
-        CUDA_ARCHS: ${ARM64_CUDA_ARCHS:-87;110}
+        CUDA_ARCHS: ${ARM64_CUDA_ARCHS:-87}
   channel-monitor:
     platform: linux/arm64
   archon-server:

@@ -138,19 +138,39 @@ RUN mkdir -p /opt/ffmpeg/share/whisper && \
 # Narrow to one arch when iterating (--build-arg CUDA_ARCHS=89) — it is the
 # single biggest lever on build time.
 ARG CUDA_ARCHS="86;89"
-RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggerganov/whisper.cpp.git && \
+# ggml-org, not ggerganov: the GitHub repo was renamed. The old URL still
+# resolves, but only via GitHub's rename redirect, which survives exactly
+# until someone creates a new ggerganov/whisper.cpp. The HuggingFace model
+# URL above deliberately STAYS on ggerganov -- only the GitHub org moved;
+# huggingface.co/ggml-org/whisper.cpp returns 401.
+RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggml-org/whisper.cpp.git && \
     cmake -S whisper.cpp -B whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
         -DGGML_CUDA=1 -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" \
         -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF && \
     cmake --build whisper.cpp/build --config Release -j"$(nproc)" && \
     cmake --install whisper.cpp/build --config Release --prefix /usr/local && \
     test -f /usr/local/lib/libggml-cuda.so && \
+    # test -f proves the backend COMPILED. It does not prove it compiled for
+    # the GPU this image will land on -- a wrong CUDA_ARCHS still yields a
+    # valid libggml-cuda.so with no cubins for the target, and the image then
+    # runs on CPU without saying so. That is the exact failure this file
+    # exists to stop, so assert every requested arch is present in the binary.
+    # cuobjdump ships in the devel stage.
+    for a in $(echo "${CUDA_ARCHS}" | tr ';' ' ' | sed 's/-real//g;s/-virtual//g'); do \
+        cuobjdump --list-elf /usr/local/lib/libggml-cuda.so | grep -q "sm_${a}" || { \
+            echo "FATAL: CUDA_ARCHS asked for sm_${a}, no cubin was built for it." >&2; \
+            cuobjdump --list-elf /usr/local/lib/libggml-cuda.so | grep -oE 'sm_[0-9]+a?' | sort -u >&2; \
+            exit 1; \
+        }; \
+    done && \
     rm -rf /tmp/whisper.cpp
 
 # --- Layer 3: ffmpeg against the CUDA-enabled whisper ----------------------
 # FFmpeg PINNED for the same reason whisper.cpp is pinned above: this was
 # `git clone --depth 1` on HEAD, so the larger of the two builds tracked upstream
-# with no diff on our side to explain a breakage. n8.1.2 is current stable; the
+# with no diff on our side to explain a breakage. n8.1.2 is a MAINTAINED 8.1
+# branch release, NOT current stable -- FFmpeg 9.0 shipped 2026-08-12.
+# Pinning to 8.1.x is deliberate; calling it current stable was not. The
 # af_whisper filter this service is designed around landed in 8.0.
 ARG FFMPEG_REF=n8.1.2
 # configure runs `require_pkg_config whisper "whisper >= 1.7.5" ...`, and
