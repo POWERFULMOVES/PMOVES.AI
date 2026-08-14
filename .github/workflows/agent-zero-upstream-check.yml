@@ -332,21 +332,28 @@ jobs:
               FAILED_JOBS=$(gh run view "${RUN_ID}" --json jobs --jq '[.jobs[] | select(.conclusion == "failure") | "- `\(.name)`: \(.conclusion)"] | join("\n")')
             fi
 
-            cat > /tmp/failure_comment.md << 'COMMENT'
-            ## CI Failure Analysis
-
-            The following checks failed:
-            FAILED_JOBS_PLACEHOLDER
-
-            ### Likely Cause
-            The Dockerfile is currently pointed at the upstream tag, but the PMOVES fork hasn't been synced yet. This is expected behavior.
-
-            ### Next Steps
-            1. Complete the fork sync process (see PR description)
-            2. Update `AGENT_ZERO_REF` to point to the synced fork branch
-            3. Push the update — CI will re-run automatically
-            COMMENT
-
-            sed -i "s|FAILED_JOBS_PLACEHOLDER|${FAILED_JOBS:-"- CI did not complete or timed out"}|" /tmp/failure_comment.md
+            # Built with a brace group instead of a heredoc. The heredoc here
+            # used `<< 'COMMENT'` with an INDENTED terminator, so bash never
+            # found it and swallowed the rest of the script:
+            #     line 31: syntax error: unexpected end of file
+            # `<<` requires the delimiter at column 0; `<<-` strips only TABS,
+            # not the spaces this file is indented with. The placeholder+sed
+            # dance it needed also nested double quotes inside a double-quoted
+            # sed expression. A brace group has neither problem.
+            [ -n "${FAILED_JOBS}" ] || FAILED_JOBS="- CI did not complete or timed out"
+            {
+              echo "## CI Failure Analysis"
+              echo
+              echo "The following checks failed:"
+              echo "${FAILED_JOBS}"
+              echo
+              echo "### Likely Cause"
+              echo "The Dockerfile is currently pointed at the upstream tag, but the PMOVES fork has not been synced yet. This is expected behaviour."
+              echo
+              echo "### Next Steps"
+              echo "1. Complete the fork sync process (see PR description)"
+              echo "2. Update \`AGENT_ZERO_REF\` to point to the synced fork branch"
+              echo "3. Push the update — CI will re-run automatically"
+            } > /tmp/failure_comment.md
             gh pr comment "${PR_NUMBER}" --body-file /tmp/failure_comment.md
           fi
