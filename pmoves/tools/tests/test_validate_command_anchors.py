@@ -394,3 +394,32 @@ def test_port_map_covers_both_block_and_inline_forms():
     assert m.get("8055") == "flute-gateway"
     # trailing-comment service key
     assert m.get("8124") == "voice-sampler"
+
+
+def test_angle_bracket_params_are_wildcards_not_skips():
+    """`<param>` must behave exactly like `{param}` — matched, never skipped.
+
+    Excluding `<` from the path charclass did not skip the citation, it
+    TRUNCATED it: `/jobs/<context_id>` was captured as `/jobs/`, which then
+    failed the matcher for the real route and reported a ghost. A gate that
+    flags correct documentation is worse than one that misses, because it
+    pushes authors to "fix" docs that were right.
+
+    Skipping bracketed paths wholesale is the opposite error — it would have
+    hidden three real ghosts (`/mcp/task/<task_id>`) in the agent command docs.
+    So both directions are pinned here.
+    """
+    m = vca.ENDPOINT_CITE_RE.search("curl http://localhost:8080/jobs/<context_id>")
+    assert m and m.group(3) == "/jobs/<context_id>", "angle-bracket path was truncated"
+
+    real = _matchers(["/jobs/{context_id}", "/mcp/commands", "/mcp/execute"])
+    hit = lambda p: any(r.match(p) for r in real)
+
+    assert hit("/jobs/<context_id>")   # real route, documented with <param>
+    assert hit("/jobs/{context_id}")   # real route, documented with {param}
+    assert not hit("/mcp/task/<task_id>")  # genuine ghost, must stay visible
+
+
+def test_shell_interpolation_is_still_skipped():
+    # `$VAR` can expand to anything, so there is no claim to check.
+    assert "$" in "/v1/voice/personas/$PERSONA_ID"

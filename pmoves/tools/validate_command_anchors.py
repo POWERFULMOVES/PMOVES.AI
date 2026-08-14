@@ -338,8 +338,17 @@ def _route_matchers(routes: Set[str]) -> List[re.Pattern]:
 
 # Only host:port forms. A bare `/healthz` in prose names no service, and a
 # scheme-less path is as often a URL fragment as an API claim.
+#
+# `<` and `>` MUST stay in the path class even though a bracketed segment is
+# never a real route. `<param>` is a normal doc convention, and excluding the
+# bracket does not skip the citation -- it TRUNCATES it. `/jobs/<context_id>`
+# captured as `/jobs/`, which then failed the matcher for the real route
+# `/jobs/{context_id}` and reported a ghost. The placeholder skip below can
+# only fire on characters the capture actually kept. A gate that flags correct
+# documentation is worse than one that misses: it pushes authors to "fix" docs
+# that were right.
 ENDPOINT_CITE_RE = re.compile(
-    r"https?://([A-Za-z0-9][A-Za-z0-9_.-]*):(\d{2,5})(/[A-Za-z0-9_./{}%:-]*)"
+    r"https?://([A-Za-z0-9][A-Za-z0-9_.-]*):(\d{2,5})(/[A-Za-z0-9_./{}<>%:-]*)"
 )
 
 
@@ -469,10 +478,17 @@ def scan_endpoints(routes_by_svc: Dict[str, Set[str]]) -> List[dict]:
             path = path.split("?", 1)[0].split("#", 1)[0]
             if path in ("/", ""):
                 continue
-            # A cited path carrying a placeholder is a template, not a claim
-            # about a concrete route.
-            if "<" in path or "$" in path:
+            # `$` means shell interpolation -- the segment could expand to
+            # anything, so there is no claim to check.
+            if "$" in path:
                 continue
+            # `<param>` is NOT skipped. It is a normal doc convention for a path
+            # parameter, and it contains no slash, so it matches the `[^/]+` a
+            # declared `{param}` compiles to. That keeps both directions honest:
+            #   /jobs/<context_id>  matches real /jobs/{context_id}  -> silent
+            #   /mcp/task/<id>      matches no declared /mcp route   -> flagged
+            # Skipping bracketed paths wholesale would have hidden three real
+            # ghosts in the agent command docs.
             if any(p.match(path) for p in matchers[svc]):
                 continue
             # SOUNDNESS GATE. A service may include a router defined outside its
