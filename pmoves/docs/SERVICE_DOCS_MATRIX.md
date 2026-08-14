@@ -48,7 +48,7 @@
 
 | Service | Port | CLAUDE.md | README | API Docs | NATS Subjects | Health | Audit | Layer |
 |---------|------|-----------|--------|----------|---------------|--------|-------|-------|
-| Flute-Gateway | 8055, 8056 | -- | -- | `.claude/context/flute-gateway.md` | `voice.tts.*`, `voice.stt.*` | `/healthz` | -- | L3 |
+| Flute-Gateway | 8055 | -- | -- | `.claude/context/flute-gateway.md` | `voice.tts.*`, `voice.stt.*` | `/healthz` | -- | L3 |
 | Ultimate-TTS-Studio | 7861 | -- | `PMOVES-Ultimate-TTS-Studio/README.md` | Gradio API | -- | `/gradio_api/info` | -- | L3 |
 | Pipecat | -- | `PMOVES-Pipecat/CLAUDE.md` | `PMOVES-Pipecat/README.md` | -- | `voice.*` | -- | P2 (no allowlist) | L3 |
 

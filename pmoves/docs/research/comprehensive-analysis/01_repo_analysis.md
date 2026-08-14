@@ -385,7 +385,7 @@ Voice is a **first-class citizen** in PMOVES, with a comprehensive infrastructur
 
 | Service | Port | Purpose | Status |
 |---------|------|---------|--------|
-| **Flute Gateway** | 8055 (HTTP), 8056 (WebSocket) | Multimodal voice communication with Pipecat | Live |
+| **Flute Gateway** | 8055 (HTTP + WebSocket) | Multimodal voice communication with Pipecat | Live |
 | **VibeVoice Realtime** | (varies) | Real-time voice synthesis | Integrated |
 | **MiniMax Voice** | API endpoint | Character persona voice synthesis (FlOO$) | Integrated |
 | **Kokoro TTS** | Submodule | Local TTS (PMOVES-Open-Notebook-TTS-Studio) | Available |

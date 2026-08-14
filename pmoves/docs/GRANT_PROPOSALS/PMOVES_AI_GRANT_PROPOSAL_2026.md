@@ -102,7 +102,7 @@ The `pmoves-nats-fleet` MCP server exposes NATS publish/subscribe directly to op
 ### 2.6 Voice, multimodal, and media pipeline
 
 The platform ingests, transcribes, and analyses long-form media end-to-end. Component services:
-- **Flute-Gateway** (`:8055` HTTP / `:8056` WS) — multimodal voice via Pipecat, prosodic TTS API (`/v1/voice/synthesize/prosodic`).
+- **Flute-Gateway** (`:8055` HTTP + WS) — multimodal voice via Pipecat, prosodic TTS API (`/v1/voice/synthesize/prosodic`).
 - **Ultimate-TTS-Studio** (`:7860` native) — 14-engine GPU-accelerated TTS, runs natively via Pinokio.
 - **PMOVES.YT** (`:8077`) — YouTube ingestion with MinIO persistence.
 - **FFmpeg-Whisper** (`:8078`) — Faster-Whisper transcription with Jetson/GPU auto-detect.
