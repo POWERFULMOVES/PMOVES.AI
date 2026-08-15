@@ -1,0 +1,9 @@
+[Unit]
+Description=rocm-smi exporter HTTP socket
+
+[Socket]
+ListenStream=9835
+Accept=yes
+
+[Install]
+WantedBy=sockets.target

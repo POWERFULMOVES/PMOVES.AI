@@ -11,13 +11,22 @@ Use this command to discover available voices across TTS engines.
 curl -s http://localhost:7861/gradio_api/info | jq '.named_endpoints'
 ```
 
-2. Query flute-gateway voice capabilities:
+2. Query flute-gateway providers and feature matrix (no auth required):
 ```bash
-curl -s http://localhost:8055/v1/voice/capabilities \
-  -H "Authorization: Bearer $FLUTE_API_KEY" | jq '.'
+curl -s http://localhost:8055/v1/voice/config | jq '.'
 ```
 
-3. List engine-specific voices:
+3. List registered voice profiles:
+```bash
+curl -s http://localhost:8055/v1/voice/profiles -H "X-API-Key: $FLUTE_API_KEY" | jq '.profiles'
+```
+
+> [!NOTE]
+> flute-gateway serves no `/v1/voice/capabilities` and no `/v1/voices`.
+> Discovery is `/v1/voice/config` (providers + features) plus
+> `/v1/voice/profiles` (registered voice slugs).
+
+4. List engine-specific voices:
 
 **KittenTTS voices:**
 - `kitten-female-1` - Natural female voice

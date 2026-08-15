@@ -50,6 +50,13 @@ on:
       - "pmoves/config/operator_nodes.yaml"
       - "pmoves/configs/claws/scopes/*.json"
       - "pmoves/configs/command_anchors/_known_gaps.yaml"
+      # GHOST_ENDPOINT reads route declarations out of the service sources, so
+      # drift runs in BOTH directions: a doc can name a route that was never
+      # added, and a route can be renamed or deleted out from under a doc that
+      # still cites it. Keying only on docs would catch the first and miss the
+      # second — and the second is the more common one, because the person
+      # renaming a route is rarely the person who wrote the runbook.
+      - "pmoves/services/**/*.py"
       - "pmoves/tools/validate_command_anchors.py"
       - "pmoves/tools/tests/test_validate_command_anchors.py"
       - ".claude/hooks/pre-tool.sh"

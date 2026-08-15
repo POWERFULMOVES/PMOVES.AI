@@ -9,7 +9,20 @@ RETRO_FLAGS ?=
 RUNNER_PHASE ?= local-certification
 SUBMODULE_LAYER_MANIFEST ?= configs/submodule_layer_validation_manifest.json
 SUBMODULE_BRANCH_DEFAULT ?= PMOVES.AI-Edition-Hardened
-SUBMODULE_BRANCH_ALLOW ?= PMOVES-DoX=PMOVES.AI-Edition-Hardened-DoX,PMOVES-ClawZ=main
+# Submodules that legitimately track an upstream default branch instead of a
+# hardened branch. Every branch here is verified to exist on its remote.
+SUBMODULE_BRANCH_ALLOW ?= PMOVES-DoX=PMOVES.AI-Edition-Hardened-DoX,\
+  PMOVES-ClawZ=main,\
+  PMOVES-obico-server=release,\
+  PMOVES-moonraker-obico=master,\
+  PMOVES-OrcaSlicer=main,\
+  PMOVES-OctoPrint-Obico=master,\
+  PMOVES-fluidd=develop,\
+  skills/Pmoves-skills=main,\
+  skills/PMOVES-awesome-agent-skills=main,\
+  skills/pmoves-fork-repository-skill=main,\
+  skills/PMOVES-agent-sandbox-skill=main,\
+  skills/Pmoves-claude-d3js-skill=main
 AUDIT_RUNTIME_GPU ?= 0
 PRECHECK_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 PRECHECK_VENV_UNIX ?= .venv-pmoves/bin/python

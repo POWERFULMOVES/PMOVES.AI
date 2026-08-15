@@ -251,3 +251,201 @@ def test_fenced_form_keeps_the_same_dash_c_handling():
     """The fenced matcher shares the -C fragment; keep them in step."""
     assert vca.MAKE_FENCED_RE.findall("make -C pmoves up-core") == ["up-core"]
     assert vca.MAKE_FENCED_RE.findall("$ make -C ../pmoves validate-composes") == ["validate-composes"]
+
+
+# ── GHOST_ENDPOINT ──────────────────────────────────────────────────
+#
+# The class exists because four record defects in one session shared a shape the
+# older classes could not see: a doc naming an HTTP API that is not served.
+# These tests pin the two properties that make it worth having — it must FIRE on
+# a fictional route, and it must STAY SILENT where it has no standing.
+
+
+def _matchers(routes):
+    return vca._route_matchers(set(routes))
+
+
+def _matches(routes, path):
+    return any(p.match(path) for p in _matchers(routes))
+
+
+def test_route_matcher_accepts_exact_and_trailing_slash():
+    assert _matches(["/healthz"], "/healthz")
+    assert _matches(["/healthz"], "/healthz/")
+
+
+def test_route_matcher_treats_param_as_one_segment():
+    # FastAPI's {param} is [^/]+ — it does NOT span a slash. This is exactly the
+    # github-runner-ctl defect: /queue/{repository} documented as "owner/repo"
+    # cannot be called as /queue/OWNER/REPO; that 404s.
+    assert _matches(["/jobs/{context_id}"], "/jobs/abc123")
+    assert not _matches(["/queue/{repository}"], "/queue/OWNER/REPO")
+
+
+def test_route_matcher_rejects_unknown_sibling():
+    assert not _matches(["/mcp/commands", "/mcp/execute"], "/mcp/tools/list")
+
+
+def test_endpoint_regex_captures_service_port_and_path():
+    m = vca.ENDPOINT_CITE_RE.search("curl http://agent-zero:8080/mcp/tools/list")
+    assert m and m.group(1) == "agent-zero"
+    assert m.group(2) == "8080"
+    assert m.group(3) == "/mcp/tools/list"
+
+
+def test_endpoint_regex_ignores_bare_path():
+    # A scheme-less path names no service, so there is nothing to check it against.
+    assert vca.ENDPOINT_CITE_RE.search("see /mcp/tools/list for details") is None
+
+
+def test_route_decl_regex_reads_fastapi_decorators():
+    body = '@app.get("/healthz")\n@router.post("/tasks")\n@app.websocket("/ws")\n'
+    assert {m.group(1) for m in vca.ROUTE_DECL_RE.finditer(body)} == {
+        "/healthz", "/tasks", "/ws",
+    }
+
+
+def test_relocating_services_are_excluded_from_introspection():
+    # A prefix applied at include/mount time moves every route, so the extracted
+    # set would be wrong for all of them — worse than not checking.
+    for body in (
+        'r = APIRouter(prefix="/api")',
+        'app.include_router(r, prefix="/v1")',
+        'app.mount("/static", StaticFiles())',
+    ):
+        assert vca.ROUTE_RELOCATE_RE.search(body), body
+
+
+def test_namespace_rule_is_the_soundness_boundary():
+    # agent-zero includes a router defined OUTSIDE its service dir for /a2a/v1/*.
+    # Those routes are real and unreadable here, so absence must not imply ghost.
+    declared = {"/mcp/commands", "/mcp/execute", "/healthz"}
+
+    def owns(path):
+        ns = "/" + path.strip("/").split("/", 1)[0]
+        return any(r == ns or r.startswith(ns + "/") for r in declared)
+
+    assert owns("/mcp/tools/list")   # we declare /mcp/* — we may speak
+    assert not owns("/a2a/v1/message")  # we declare no /a2a/* — stay silent
+
+
+def test_loopback_hosts_are_the_dominant_citation_form():
+    # The reason the compose port map exists at all. If this set ever shrinks,
+    # coverage silently drops back to the ~9% service-name-only surface.
+    assert {"localhost", "127.0.0.1", "host.docker.internal"} <= vca.LOOPBACK_HOSTS
+
+
+def test_compose_var_substitution_takes_the_default():
+    # Ports are written ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080.
+    # Without substitution the host field is not a digit and every port is dropped.
+    out = vca.COMPOSE_VAR_RE.sub(lambda m: m.group(1), "${A_BIND:-127.0.0.1}:${A_PORT:-8080}:8080")
+    assert out == "127.0.0.1:8080:8080"
+    assert out.split(":")[-2] == "8080"
+
+
+def test_host_port_map_resolves_known_services_and_drops_ambiguity():
+    m = vca.host_port_map()
+    assert m, "port map is empty — the parser silently collected nothing"
+    # Spot-check ports whose owner is unambiguous in compose.
+    assert m.get("8080") == "agent-zero"
+    assert m.get("8104") == "github-runner-ctl"
+    # 11434 is published by both ollama-edge and pmoves-ollama; guessing an owner
+    # would attach one service's route table to the other's citations.
+    assert "11434" not in m
+
+
+def test_endpoint_regex_matches_loopback_form():
+    m = vca.ENDPOINT_CITE_RE.search("curl http://localhost:8080/mcp/health")
+    assert m and m.group(1) == "localhost" and m.group(2) == "8080"
+    assert m.group(3) == "/mcp/health"
+
+
+def test_tool_imports_no_third_party_modules():
+    """The ratchet runs in a CI step documented "stdlib only, no network".
+
+    The first cut of the port map imported yaml behind a try/except returning {}.
+    It did not fail in CI — it silently produced zero loopback findings, which
+    tripped STALE_BASELINE against a baseline recorded where yaml existed. A
+    gate whose findings depend on an optional import is not a gate.
+    """
+    src = TOOL.read_text(encoding="utf-8")
+    for banned in ("import yaml", "import requests", "import httpx"):
+        assert banned not in src, f"{banned} — breaks the stdlib-only guarantee"
+
+
+def test_service_key_regex_tolerates_trailing_comment():
+    # Real form in docker-compose.media.yml:
+    #   voice-sampler:  # media-sourced voice references ...
+    # An endswith(":") test keeps the PREVIOUS service name and files this
+    # service's ports under its neighbour — under-collecting, which makes a
+    # shared port look unambiguous and defeats the ambiguity guard.
+    assert vca.SERVICE_KEY_RE.match("voice-sampler:  # diarize -> audition").group(1) == "voice-sampler"
+    assert vca.SERVICE_KEY_RE.match("agent-zero:").group(1) == "agent-zero"
+    # A list item or a nested key must not be mistaken for a service name.
+    assert vca.SERVICE_KEY_RE.match("- foo:") is None
+    assert vca.SERVICE_KEY_RE.match("image: nginx") is None
+
+
+def test_port_map_covers_both_block_and_inline_forms():
+    m = vca.host_port_map()
+    # block sequence form (ports: then "- ${BIND:-...}:${PORT:-8125}:8125")
+    assert m.get("8125") == "watch-folder-router"
+    # inline flow:     ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", ...]
+    assert m.get("8055") == "flute-gateway"
+    # trailing-comment service key
+    assert m.get("8124") == "voice-sampler"
+
+
+def test_angle_bracket_params_are_wildcards_not_skips():
+    """`<param>` must behave exactly like `{param}` — matched, never skipped.
+
+    Excluding `<` from the path charclass did not skip the citation, it
+    TRUNCATED it: `/jobs/<context_id>` was captured as `/jobs/`, which then
+    failed the matcher for the real route and reported a ghost. A gate that
+    flags correct documentation is worse than one that misses, because it
+    pushes authors to "fix" docs that were right.
+
+    Skipping bracketed paths wholesale is the opposite error — it would have
+    hidden three real ghosts (`/mcp/task/<task_id>`) in the agent command docs.
+    So both directions are pinned here.
+    """
+    m = vca.ENDPOINT_CITE_RE.search("curl http://localhost:8080/jobs/<context_id>")
+    assert m and m.group(3) == "/jobs/<context_id>", "angle-bracket path was truncated"
+
+    real = _matchers(["/jobs/{context_id}", "/mcp/commands", "/mcp/execute"])
+    hit = lambda p: any(r.match(p) for r in real)
+
+    assert hit("/jobs/<context_id>")   # real route, documented with <param>
+    assert hit("/jobs/{context_id}")   # real route, documented with {param}
+    assert not hit("/mcp/task/<task_id>")  # genuine ghost, must stay visible
+
+
+def test_shell_interpolation_is_still_skipped():
+    # `$VAR` can expand to anything, so there is no claim to check.
+    assert "$" in "/v1/voice/personas/$PERSONA_ID"
+
+
+def test_complete_route_services_skip_the_namespace_rule():
+    """The namespace rule protects services whose routes we cannot fully see.
+
+    Applying it to a service with a PROVABLY COMPLETE route set hides real
+    findings. botz-gateway declares only /v1/*, /healthz and /metrics and has no
+    include_router or mount anywhere -- so a doc citing botz-gateway:8054/tools
+    is plainly wrong, yet the namespace rule stayed silent because the service
+    "owns no /tools namespace". Turning strict mode on for complete services
+    surfaced 28 real ghosts, including a /health vs /healthz cluster across four
+    services (a health probe against /health 404s).
+    """
+    complete = vca.complete_route_services()
+    assert "botz-gateway" in complete, "botz-gateway has no include_router/mount"
+    # agent-zero pulls /a2a/v1/* from a router defined outside its service dir,
+    # so it must KEEP the namespace rule.
+    assert "agent-zero" not in complete
+
+
+def test_external_router_marker_detects_inclusion_and_mount():
+    for body in ("app.include_router(r)",
+                 'app.include_router(create_a2a_router())',
+                 'app.mount("/static", StaticFiles())'):
+        assert vca.ROUTE_EXTERNAL_RE.search(body), body
+    assert vca.ROUTE_EXTERNAL_RE.search('@app.get("/healthz")') is None

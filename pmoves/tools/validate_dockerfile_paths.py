@@ -23,6 +23,20 @@ privilege, ~100ms on the full fleet. Fails (exit 1) on:
      paths) and live in the baseline. New orphans are caught
      immediately.
 
+  3. COPY_UNRESOLVED — a `COPY`/`ADD` source inside a Dockerfile does
+     not exist under the build context its compose stanza declares.
+     This is the inverse of the first two: they check paths TO
+     Dockerfiles, this checks paths INSIDE them. Found the expensive
+     way in #2468 — `mai-ui-agent` does `COPY requirements.txt .`
+     against `context: .` (= `pmoves/`), where no such file exists,
+     so the image dies on its first COPY. Baselined separately in
+     `pmoves/configs/dockerfiles/_known_copy_gaps.yaml`, with stale
+     entries failing the gate the same way new findings do.
+
+  4. DOCKERIGNORE_EXCLUDED — a `COPY` source that exists on disk but is
+     excluded by the context's `.dockerignore`, so it never reaches the
+     daemon. Same build break, harder to see.
+
 The ratchet only goes DOWN over time. The baseline file is committed
 and reviewable in PR diffs. Adding to the baseline requires a clear
 reason; removing from the baseline is a one-line win that should ship
@@ -34,6 +48,8 @@ Usage:
     python3 pmoves/tools/validate_dockerfile_paths.py --list-orphans
     python3 pmoves/tools/validate_dockerfile_paths.py \
         --compose pmoves/docker-compose.yml
+    python3 pmoves/tools/validate_dockerfile_paths.py --list-copy-skips
+    python3 pmoves/tools/validate_dockerfile_paths.py --write-copy-baseline
 """
 
 from __future__ import annotations
@@ -333,6 +349,490 @@ def _scan_one_compose(path: Path) -> list[dict]:
     return _scan_compose_for_builds(path)
 
 
+# -- COPY_UNRESOLVED --------------------------------------------------
+#
+# The name of this file reads like it validates paths INSIDE Dockerfiles.
+# Until now it did the opposite: it validated paths TO Dockerfiles
+# (BROKEN_BUILD) and Dockerfiles nobody points at (ORPHAN_DOCKERFILE).
+# The gap was found the expensive way in #2468:
+#
+#     pmoves/services/mai-ui-agent/Dockerfile:  COPY requirements.txt .
+#     compose stanza:                           context: .     # = pmoves/
+#
+# There is no `pmoves/requirements.txt`, so the image dies on its first
+# COPY. Sibling `evo-controller` gets it right from the same root context
+# -- `COPY services/evo-controller/requirements.txt .` -- which is what
+# makes this a drift class rather than a one-off typo: the correct form
+# and the broken form look equally plausible in review.
+#
+# `_resolve_build_target` already hands back the context for every
+# compose-referenced Dockerfile. This finding class is what that context
+# was always for.
+#
+# Keyed by (dockerfile:line, context, source) rather than by compose
+# file, because the defect lives in the Dockerfile/context pair. A new
+# overlay referencing an already-baselined build does not churn the
+# baseline.
+
+COPY_BASELINE = (
+    REPO_ROOT / "pmoves" / "configs" / "dockerfiles" / "_known_copy_gaps.yaml"
+)
+
+# Flags docker accepts on COPY/ADD. `--from` is the load-bearing one: it
+# resolves against a build stage or an external image, NOT the context, so
+# there is nothing on disk for a static scan to check.
+_COPY_FLAG_RE = re.compile(
+    r"^--(from|chown|chmod|link|parents|exclude|checksum|keep-git-dir)(=.*)?$"
+)
+
+# Remote sources. ADD accepts URLs and git refs; COPY does not, but we
+# skip them uniformly rather than pretending to fetch anything.
+_REMOTE_SRC_RE = re.compile(r"^(https?://|ftp://|git@|git://|github\.com/)", re.I)
+
+# Any shell-expansion shape. Docker interpolates ARG/ENV into COPY
+# operands and the value is only known at build time, so guessing a
+# default here would invent findings. These are recorded as skips with a
+# reason instead of being resolved or silently dropped.
+_INTERP_RE = re.compile(r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*")
+
+_GLOB_CHARS = set("*?[")
+
+_ESCAPE_DIRECTIVE_RE = re.compile(r"^\s*#\s*escape\s*=\s*(\S)", re.I)
+
+_COPY_INSTR_RE = re.compile(r"^(COPY|ADD)\s+(.*)$", re.I)
+
+
+def _escape_char(text: str) -> str:
+    """Honour a `# escape=` parser directive. Directives are only valid
+    before the first non-comment line; anything later is a plain comment."""
+    for raw in text.splitlines():
+        s = raw.strip()
+        if not s:
+            continue
+        if not s.startswith("#"):
+            break
+        m = _ESCAPE_DIRECTIVE_RE.match(s)
+        if m:
+            return m.group(1)
+    return "\\"
+
+
+def _logical_lines(text: str, escape_char: str = "\\") -> list:
+    """Join Dockerfile continuation lines into logical instructions.
+
+    Returns (line_number_of_first_physical_line, logical_line) pairs.
+    Comment-only lines are dropped, including ones interleaved inside a
+    continuation -- docker strips those before parsing, and a scanner that
+    does not will mis-join the next instruction onto the previous one.
+
+    `#` mid-line is NOT a comment in a Dockerfile; only a line whose first
+    non-space character is `#` is.
+    """
+    out = []
+    buf = []
+    start_no = 0
+    for i, raw in enumerate(text.splitlines(), start=1):
+        stripped = raw.strip()
+        if stripped.startswith("#"):
+            continue
+        if not buf:
+            if not stripped:
+                continue
+            start_no = i
+        if stripped.endswith(escape_char):
+            buf.append(stripped[: -len(escape_char)])
+            continue
+        buf.append(stripped)
+        out.append((start_no, " ".join(p for p in buf if p).strip()))
+        buf = []
+    if buf:
+        out.append((start_no, " ".join(p for p in buf if p).strip()))
+    return out
+
+
+def _split_operands(rest: str):
+    """Split the operand portion of a COPY/ADD into tokens.
+
+    Handles the JSON-array form (`COPY ["src", "dest"]`) and the shell
+    form with single/double quotes. Returns None when the form is not
+    parseable, so the caller can skip rather than guess.
+    """
+    rest = rest.strip()
+    if rest.startswith("["):
+        try:
+            parsed = json.loads(rest)
+        except Exception:
+            return None
+        if not isinstance(parsed, list) or not all(isinstance(x, str) for x in parsed):
+            return None
+        return parsed
+    toks = []
+    cur = []
+    quote = None
+    i = 0
+    while i < len(rest):
+        ch = rest[i]
+        if quote:
+            if ch == "\\" and i + 1 < len(rest):
+                cur.append(rest[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+            else:
+                cur.append(ch)
+        elif ch in "\"'":
+            quote = ch
+        elif ch.isspace():
+            if cur:
+                toks.append("".join(cur))
+                cur = []
+        else:
+            cur.append(ch)
+        i += 1
+    if cur:
+        toks.append("".join(cur))
+    if quote is not None:
+        return None
+    return toks
+
+
+def parse_copy_instructions(dockerfile: Path) -> list:
+    """Every COPY/ADD in a Dockerfile, parsed to the point where only the
+    build context is missing.
+
+    Each entry: {line, instruction, flags, sources, dest, skip}. `skip` is
+    set (and `sources` left empty) when the instruction cannot be checked
+    statically -- a `--from=` stage, a heredoc, or an unterminated quote.
+    """
+    try:
+        text = dockerfile.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    esc = _escape_char(text)
+    out = []
+    for line_no, logical in _logical_lines(text, esc):
+        m = _COPY_INSTR_RE.match(logical)
+        if not m:
+            continue
+        instr = m.group(1).upper()
+        rest = m.group(2)
+
+        flags = []
+        tokens = rest.split(None, 1)
+        while tokens and tokens[0].startswith("--"):
+            if not _COPY_FLAG_RE.match(tokens[0]):
+                break
+            flags.append(tokens[0])
+            rest = tokens[1] if len(tokens) > 1 else ""
+            tokens = rest.split(None, 1)
+
+        entry = {
+            "line": line_no,
+            "instruction": instr,
+            "flags": flags,
+            "sources": [],
+            "dest": None,
+            "skip": None,
+        }
+
+        if any(f.startswith("--from") for f in flags):
+            entry["skip"] = "--from= (resolves against a build stage, not the context)"
+            out.append(entry)
+            continue
+
+        if "<<" in rest:
+            entry["skip"] = "heredoc form (content is inline, not a context path)"
+            out.append(entry)
+            continue
+
+        operands = _split_operands(rest)
+        if operands is None:
+            entry["skip"] = "unparseable operands (unterminated quote or malformed JSON form)"
+            out.append(entry)
+            continue
+        if len(operands) < 2:
+            entry["skip"] = "fewer than two operands (malformed instruction)"
+            out.append(entry)
+            continue
+
+        entry["dest"] = operands[-1]
+        entry["sources"] = operands[:-1]
+        out.append(entry)
+    return out
+
+
+def _load_dockerignore(context_path: Path) -> list:
+    """Parse `<context>/.dockerignore` into (is_negation, pattern) pairs.
+
+    Only ever used to ADD a finding, never to suppress one: a source
+    excluded by dockerignore fails the build the same way a missing source
+    does, so treating dockerignore as a reason to stay quiet would hide
+    the exact defect this class exists to catch.
+    """
+    di = context_path / ".dockerignore"
+    if not di.is_file():
+        return []
+    pats = []
+    try:
+        lines = di.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    for raw in lines:
+        s = raw.strip()
+        if not s or s.startswith("#"):
+            continue
+        neg = s.startswith("!")
+        if neg:
+            s = s[1:].strip()
+        s = s.strip("/")
+        if s:
+            pats.append((neg, s))
+    return pats
+
+
+def _dockerignore_regex(pat: str):
+    """Compile one `.dockerignore` pattern to a regex.
+
+    Docker patterns are NOT gitignore patterns, and the difference matters
+    here: they are anchored at the build-context root, and `*` does not
+    cross a `/`. So `*.md` excludes `README.md` but NOT `docs/guide.md`,
+    and `__pycache__` excludes a top-level `__pycache__/` but not
+    `app/__pycache__/`. Matching those the gitignore way would invent
+    DOCKERIGNORE_EXCLUDED findings for files docker actually ships, which
+    on a hard gate means a spurious red build.
+    """
+    out = ["^"]
+    i = 0
+    n = len(pat)
+    while i < n:
+        if pat.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+            continue
+        if pat.startswith("**", i):
+            out.append(".*")
+            i += 2
+            continue
+        c = pat[i]
+        if c == "*":
+            out.append("[^/]*")
+        elif c == "?":
+            out.append("[^/]")
+        elif c == "[":
+            j = pat.find("]", i + 1)
+            if j == -1:
+                out.append(re.escape(c))
+            else:
+                out.append(pat[i:j + 1])
+                i = j + 1
+                continue
+        else:
+            out.append(re.escape(c))
+        i += 1
+    out.append("$")
+    try:
+        return re.compile("".join(out))
+    except re.error:
+        return None
+
+
+def _dockerignored(rel_source: str, patterns: list):
+    """Return the matching pattern if `rel_source` is excluded, else None.
+
+    Excluding a directory excludes everything under it, so each ancestor
+    of the source is tested too. Last matching pattern wins, which is how
+    a `!keep` line after a broad exclude un-excludes.
+    """
+    rel = rel_source.strip("/").replace("\\", "/")
+    candidates = [rel]
+    parts = rel.split("/")
+    for k in range(1, len(parts)):
+        candidates.append("/".join(parts[:k]))
+
+    hit = None
+    for neg, pat in patterns:
+        rx = _dockerignore_regex(pat.strip("/"))
+        if rx is None:
+            continue
+        if any(rx.match(c) for c in candidates):
+            hit = None if neg else pat
+    return hit
+
+
+def _copy_key(f: dict) -> str:
+    return f"{f['kind']}|{f['dockerfile']}:{f['line']}|{f['context']}|{f['source']}"
+
+
+def scan_copy_sources(compose_findings: list):
+    """Resolve every COPY/ADD source against its stanza's build context.
+
+    Returns (findings, skips). A (dockerfile, context) pair is scanned once
+    even when several overlays build it, so the baseline is keyed to the
+    defect rather than to how many compose files happen to reference it.
+    """
+    findings = []
+    skips = []
+    seen_pairs = set()
+    seen_keys = set()
+
+    for f in compose_findings:
+        if f.get("kind") == "parse-error":
+            continue
+        df_abs = f.get("dockerfile_abs")
+        if not df_abs or not Path(df_abs).is_file():
+            # BROKEN_BUILD already covers a missing Dockerfile; a second
+            # finding for the same defect would just be noise.
+            continue
+        df_abs = Path(df_abs)
+        df_rel = f.get("dockerfile_rel", "")
+        if not _is_in_scope_build_target(df_abs):
+            continue
+
+        compose_dir = (REPO_ROOT / f["compose_file"]).parent
+        context_path = (compose_dir / f["context"]).resolve()
+        ctx_rel = _try_relative(context_path)
+        pair = (df_rel, ctx_rel)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+
+        if not context_path.is_dir():
+            # A context that is not a directory is a build break too, but
+            # it belongs to the compose stanza, not to the Dockerfile.
+            continue
+
+        di_patterns = _load_dockerignore(context_path)
+
+        for entry in parse_copy_instructions(df_abs):
+            if entry["skip"]:
+                skips.append({
+                    "dockerfile": df_rel,
+                    "line": entry["line"],
+                    "context": ctx_rel,
+                    "reason": entry["skip"],
+                })
+                continue
+            for src in entry["sources"]:
+                if _REMOTE_SRC_RE.match(src):
+                    skips.append({
+                        "dockerfile": df_rel,
+                        "line": entry["line"],
+                        "context": ctx_rel,
+                        "reason": f"remote source {src!r} (fetched at build time)",
+                    })
+                    continue
+                if _INTERP_RE.search(src):
+                    skips.append({
+                        "dockerfile": df_rel,
+                        "line": entry["line"],
+                        "context": ctx_rel,
+                        "reason": (
+                            f"ARG/ENV interpolation in {src!r} "
+                            f"(value known only at build time)"
+                        ),
+                    })
+                    continue
+
+                # A leading `/` in a COPY source is relative to the context
+                # root, not to the filesystem root.
+                cleaned = src.lstrip("/")
+                if cleaned in ("", "."):
+                    continue
+
+                kind = "COPY_UNRESOLVED"
+                detail = None
+                if set(cleaned) & _GLOB_CHARS:
+                    import glob as _glob
+
+                    matches = _glob.glob(str(context_path / cleaned), recursive=True)
+                    if not matches:
+                        detail = (
+                            f"glob {src!r} matches nothing under context "
+                            f"{ctx_rel}/ -- docker fails the build with "
+                            f"'no source files were specified'"
+                        )
+                else:
+                    target = (context_path / cleaned).resolve()
+                    try:
+                        target.relative_to(context_path)
+                    except ValueError:
+                        detail = (
+                            f"{src!r} resolves outside the build context "
+                            f"{ctx_rel}/ -- docker refuses paths outside the context"
+                        )
+                    else:
+                        if not target.exists():
+                            detail = (
+                                f"{src!r} does not exist under context {ctx_rel}/ "
+                                f"(looked for {_try_relative(target)})"
+                            )
+                        else:
+                            ignored = _dockerignored(cleaned, di_patterns)
+                            if ignored:
+                                kind = "DOCKERIGNORE_EXCLUDED"
+                                detail = (
+                                    f"{src!r} exists but is excluded by "
+                                    f"{ctx_rel}/.dockerignore pattern {ignored!r}, so "
+                                    f"it is not in the context sent to the daemon"
+                                )
+
+                if detail is None:
+                    continue
+                fin = {
+                    "kind": kind,
+                    "dockerfile": df_rel,
+                    "line": entry["line"],
+                    "context": ctx_rel,
+                    "source": src,
+                    "detail": detail,
+                }
+                k = _copy_key(fin)
+                if k in seen_keys:
+                    continue
+                seen_keys.add(k)
+                findings.append(fin)
+
+    return findings, skips
+
+
+def load_copy_baseline() -> set:
+    """Same list-of-strings shape as the command-anchors baseline, so the
+    two ratchets read alike in a PR diff."""
+    if not COPY_BASELINE.is_file():
+        return set()
+    keys = set()
+    for line in COPY_BASELINE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("- "):
+            keys.add(line[2:].strip().strip('"'))
+    return keys
+
+
+def write_copy_baseline(findings: list) -> None:
+    COPY_BASELINE.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "# Baselined COPY/ADD source gaps -- validate_dockerfile_paths.py",
+        "#",
+        "# Each entry is a COPY or ADD whose source does not resolve against the",
+        "# build context its compose stanza declares. They are recorded so the",
+        "# gate can be enforced today; they are NOT approved. Every one of them",
+        "# is an image that dies on that instruction, or a file silently absent",
+        "# from the image. The list may shrink. Adding to it should require",
+        "# saying why.",
+        "#",
+        "# Key: KIND|<dockerfile>:<line>|<build context>|<source operand>",
+        "known_copy_gaps:",
+    ]
+    for k in sorted({_copy_key(f) for f in findings}):
+        lines.append(f'  - "{k}"')
+    # newline="" so the file is byte-identical whether it was regenerated
+    # on Windows or in CI. write_text() emits CRLF on Windows, and the next
+    # Linux re-baseline would then rewrite every line as a spurious diff.
+    with COPY_BASELINE.open("w", encoding="utf-8", newline="") as fh:
+        fh.write("\n".join(lines) + "\n")
+
+
 def _summary(by_kind: dict[str, int]) -> str:
     if not by_kind:
         return "no findings"
@@ -358,6 +858,24 @@ def main() -> int:
         help="scan a single compose file (test-only path; for CI use the default glob)",
     )
     parser.add_argument(
+        "--write-copy-baseline",
+        action="store_true",
+        help=(
+            "record today's COPY_UNRESOLVED / DOCKERIGNORE_EXCLUDED findings "
+            "as the accepted baseline. Only for the initial seed or a "
+            "deliberate acceptance — every entry is a real build break."
+        ),
+    )
+    parser.add_argument(
+        "--list-copy-skips",
+        action="store_true",
+        help=(
+            "diagnostic: list COPY/ADD sources the scan deliberately did not "
+            "check (--from= stages, remote URLs, ARG/ENV interpolation) with "
+            "the reason for each; always exits 0"
+        ),
+    )
+    parser.add_argument(
         "--baseline-add",
         type=str,
         default=None,
@@ -370,6 +888,13 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+
+    # Windows consoles default to cp1252 and raise on the em dashes below.
+    # Same guard validate_command_anchors.py carries.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
     # baseline-add convenience path: write a single key then exit
     if args.baseline_add:
@@ -390,6 +915,36 @@ def main() -> int:
     for f in compose_findings:
         if "dockerfile_rel" in f:
             referenced.add(f["dockerfile_rel"])
+
+    # COPY_UNRESOLVED / DOCKERIGNORE_EXCLUDED: paths INSIDE each
+    # compose-referenced Dockerfile, resolved against that stanza's
+    # declared build context.
+    copy_findings, copy_skips = scan_copy_sources(compose_findings)
+    copy_baseline = load_copy_baseline()
+    copy_live = {_copy_key(f) for f in copy_findings}
+    copy_new = [f for f in copy_findings if _copy_key(f) not in copy_baseline]
+    # A baselined key that no longer occurs was FIXED. Leaving it in the
+    # file would re-accept the same defect if it came back, which
+    # contradicts the count-only-down claim the ratchet makes.
+    copy_stale = sorted(copy_baseline - copy_live)
+
+    if args.write_copy_baseline:
+        write_copy_baseline(copy_findings)
+        print(
+            f"COPY baseline written: {len(copy_live)} entries -> "
+            f"{COPY_BASELINE.relative_to(REPO_ROOT).as_posix()}"
+        )
+        return 0
+
+    if args.list_copy_skips:
+        if args.json:
+            print(json.dumps({"copy_skips": copy_skips}, indent=2))
+        else:
+            print(f"# COPY/ADD sources not statically checkable: {len(copy_skips)}")
+            for sk in copy_skips:
+                print(f"  {sk['dockerfile']}:{sk['line']}  ({sk['context']})")
+                print(f"      {sk['reason']}")
+        return 0
 
     # BROKEN_BUILD: a compose build target that doesn't exist on disk
     # AND is in-scope for the ratchet (not a sibling submodule / vendor /
@@ -473,23 +1028,56 @@ def main() -> int:
             ),
         })
 
+    for f in copy_new:
+        problems.append({
+            "kind": f["kind"].lower().replace("_", "-"),
+            "file": f["dockerfile"],
+            "service": None,
+            "dockerfile": f"{f['dockerfile']}:{f['line']}",
+            "context": f["context"],
+            "detail": f["detail"],
+        })
+
     by_kind: dict[str, int] = {}
     for p in problems:
         by_kind[p["kind"]] = by_kind.get(p["kind"], 0) + 1
 
     if args.json:
         print(json.dumps({
-            "ok": not problems,
+            "ok": not problems and not copy_stale,
             "problems": problems,
             "summary": by_kind,
             "baseline_count": len(baseline),
             "referenced_count": len(referenced),
             "total_dockerfiles": len(dockerfiles),
+            "copy_total": len(copy_findings),
+            "copy_baselined": len(copy_findings) - len(copy_new),
+            "copy_new": copy_new,
+            "copy_stale_baseline": copy_stale,
+            "copy_skipped": len(copy_skips),
         }, indent=2))
     else:
-        if not problems:
+        print(
+            f"COPY sources: {len(copy_findings)} findings, "
+            f"{len(copy_findings) - len(copy_new)} baselined, {len(copy_new)} new "
+            f"({len(copy_skips)} not statically checkable)"
+        )
+        if copy_stale:
+            print(
+                f"\nSTALE COPY BASELINE — {len(copy_stale)} "
+                f"entr{'y' if len(copy_stale) == 1 else 'ies'} no longer occur:"
+            )
+            for k in copy_stale[:20]:
+                print(f"  {k}")
+            if len(copy_stale) > 20:
+                print(f"  ... and {len(copy_stale) - 20} more")
+            print("\nThese were fixed. Drop them so the same defect cannot return silently:")
+            print("  make -C pmoves validate-dockerfile-paths-copy-baseline")
+        if not problems and not copy_stale:
             print(f"validate-dockerfile-paths: OK ({len(dockerfiles)} dockerfiles, {len(referenced)} referenced, {len(baseline)} baseline)")
             return 0
+        if not problems:
+            return 1
         print(f"validate-dockerfile-paths: FAIL ({_summary(by_kind)})", file=sys.stderr)
         for p in problems:
             where = p.get("file", "?")
@@ -503,7 +1091,7 @@ def main() -> int:
     # suite (and CI) can assert on it. (Non-JSON mode returns
     # from inside the `else` branch above; this return is for
     # the JSON path.)
-    return 0 if not problems else 1
+    return 0 if (not problems and not copy_stale) else 1
 
 
 def _baseline_add(rel_path: str) -> int:

@@ -60,7 +60,7 @@ Detail files live in `.claude/context/`:
 - `submodules.md` — complete submodules catalog (50 submodules per `git submodule status`)
 - `nats-subjects.md` — comprehensive NATS subject catalog
 - `geometry-nats-subjects.md` — GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
-- `mcp-api.md` — Agent Zero MCP API reference
+- ~~`mcp-api.md`~~ — **SUPERSEDED, do not use as an API reference.** It documents `/mcp/command`, `/mcp/health`, `/mcp/task/{id}`, `/mcp/agents`, `/mcp/subordinate/create`, `/mcp/subordinate/create-with-persona` and an `MCP_CLIENT_SECRET` Bearer scheme that were never implemented. Canonical: `pmoves/docs/operations/AGENT_ZERO_API.md`.
 - `testing-strategy.md` — testing workflow + PR requirements
 - `security-patterns.md` — cross-cutting security patterns (auth, secrets, hardening)
 - `observability-patterns.md` — Prometheus, Grafana, Loki, TensorZero metrics
@@ -122,17 +122,19 @@ Full audit: `pmoves/docs/CLAUDE_CONTEXT_AUDIT.md`.
 
 ## MCP Integration Points
 
-**Agent Zero MCP API** at `/mcp/*` on port 8080 — external agents can call Agent Zero via MCP protocol. Used by Archon for agent coordination.
+**Agent Zero supervisor REST API** on port 8080 — `GET /healthz`, `GET /mcp/commands`, `POST /mcp/execute` (`{cmd, arguments}`), `POST /tasks`, `GET /jobs/{context_id}`, `POST /sessions`, `/memory/*`, `POST /events/publish`. **No inbound auth** on these routes. It is a REST facade, not an MCP protocol server; there is no `/mcp/*` wildcard mount.
+
+**Agent Zero MCP protocol server** — served by the A0 runtime on port 8081 at `/t-{MCP_SERVER_TOKEN}/sse`, `/t-{...}/http`, `/t-{...}/messages/`. The runtime authenticates with `X-API-KEY`. A2A routes (`/a2a/v1/*`, `/.well-known/agent-card.json`) on 8080 use a Supabase JWT `Authorization: Bearer`, gated by `A2A_DISCOVERY_PUBLIC` / `A2A_TASKS_PUBLIC`.
 
 **Configured local MCP servers** (`.claude/mcp.json`):
-- `pmoves-cipher` (SSE `http://localhost:8105/sse`) — persistent memory lookups + writes
+- `pmoves-cipher` (SSE `http://localhost:8105/mcp/sse`) — persistent memory lookups + writes. Path verified 2026-08-12 against the running container; `/sse` and `/api/mcp/sse` both 404.
 - `docker` (`mcp/docker`) — container inspection via local Docker socket
 - `hostinger-mcp` — Hostinger API tasks via `$HOSTINGER_API_KEY`
 - `tailscale` — tailnet inventory, stale-node cleanup, tag inspection, ACL operations
 
 **Enabled operator plugin pack** (`.claude/settings.json`): `huggingface-skills@claude-plugins-official` — use when Hub models, datasets, Spaces, or launch recipes are the source of truth.
 
-**Configuration:** set `AGENTZERO_JETSTREAM=true` for reliable delivery; configure `MCP_SERVICE_URL`, `MCP_CLIENT_ID`, `MCP_CLIENT_SECRET`.
+**Configuration:** set `AGENTZERO_JETSTREAM=true` for reliable delivery. For Agent Zero, set `AGENT_ZERO_MCP_TOKEN` (the A0 runtime's inbound `X-API-KEY` / MCP path token) and `AGENT_ZERO_API_KEY` (what the supervisor forwards to the runtime). `MCP_SERVICE_URL`, `MCP_CLIENT_ID` and `MCP_CLIENT_SECRET` are **not read by any PMOVES service** — they appear nowhere under `pmoves/services/`. You will still see `MCP_CLIENT_SECRET` in tier env files because `pmoves/tools/brand_defaults.py:405-410` auto-generates one; it has no consumer. Do not send it as an auth header.
 
 ## Meta-Instruction for Claude Code CLI
 
