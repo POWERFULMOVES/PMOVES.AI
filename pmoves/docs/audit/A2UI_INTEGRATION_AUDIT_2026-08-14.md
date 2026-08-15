@@ -215,6 +215,38 @@ A `nats-subject-auditor` agent and a `pmoves-nats-subject-audit` skill already e
 this honest — the registry drifted anyway, which suggests the audit is not wired into a gate
 that can fail.
 
+### The two ghost subjects have never existed in code
+
+`a2ui.event.v1` and `a2ui.command.v1` are a different class of problem from the rest of
+F5. Tracing their origin:
+
+```bash
+git log --reverse -S"a2ui.event.v1" -- .claude/context/nats-subjects.md
+# 1e0b727a3  2026-03-15  feat(infra): Tailscale brand defaults, ACL policy, and NATS subjects (#952)
+git log --reverse -S"a2ui.event.v1" -- pmoves/docs/reviews/nats-subject-catalog-gaps.md
+# 828003374  2026-03-15  fix(security): add JWT auth to 6 unauthenticated pmovesui API routes (#951)
+
+git log -S"a2ui.event.v1" -- '*.py' '*.ts' '*.tsx' '*.js' '*.yml' '*.yaml' '*.json'
+# (no output — never present in any code file, in any commit)
+```
+
+Both entered on **2026-03-15** via `pmoves/docs/reviews/nats-subject-catalog-gaps.md`, a
+handoff from a Z890 security audit whose stated premise was that *"30+ NATS subjects were
+found **undocumented**"* and whose action item was to register them. The catalog entry
+followed the same day.
+
+**For these two the premise does not hold.** They were never in code — not then, not since,
+not in any commit. The gaps review lists their subscriber as the A2UI NATS bridge, and
+`bridge.py` has never referenced them either. They were intent written up as discovery.
+
+The consequence is that `.claude/context/nats-subjects.md` — the canonical catalog agents
+are told to consult — has asserted for five months that the bridge handles UI events and
+user commands. It does not.
+
+**Recommendation:** delete both entries, or re-label them `PROPOSED — no implementation`.
+Registering schemas for them would harden a contract that nothing has ever spoken. This is
+distinct from `a2ui.render.v1`, which is real, cross-submodule, and genuinely under-registered.
+
 ---
 
 ## F6 — The renderer's README documents inputs it does not have
