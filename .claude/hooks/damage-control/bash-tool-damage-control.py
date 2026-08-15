@@ -100,39 +100,82 @@ TRUNCATE_PATTERNS = [
 # ---------------------------------------------------------------------------
 # INTERPRETER WRITE PATTERNS
 # ---------------------------------------------------------------------------
-# Every pattern above keys on a SHELL verb: >, tee, sed -i, cp, mv, truncate.
-# An interpreter uses none of them. `python - <<'PY'` followed by
-# pathlib.write_text() matched NOTHING, so readOnlyPaths were writable from
-# Bash the whole time, while the Edit/Write tools were correctly blocked.
+# Every other pattern keys on a SHELL verb (>, tee, sed -i, cp, mv, truncate).
+# An interpreter uses none of them, so `python - <<'PY'` + pathlib.write_text()
+# matched nothing and readOnlyPaths were writable from Bash while Edit/Write
+# were correctly blocked.
 #
-# The hook receives the entire command string, heredoc body included, so the
-# path IS present here -- it is simply on a later line than the interpreter.
-# Hence [\s\S]* rather than .*, since every pattern above is single-line.
+# THE PATH MUST BE QUOTED AND BOUND TO THE WRITE. An earlier revision asserted
+# 'an interpreter runs' AND 'a write verb appears' independently, then only
+# required the path to occur somewhere in the command. That was wrong three ways:
 #
-# Order-independent by construction: the write verb may precede the path
-# (open(p, 'w')) or follow it (p = Path(x); p.write_text(...)). The lookaheads
-# assert 'an interpreter runs' AND 'a write API is used' anywhere in the
-# command, then require the protected path to appear.
+#   * readOnlyPaths includes /usr/, /bin/, build/, .venv/, node_modules/, so
+#     `/usr/bin/python3 -c "...write_text('a.txt')..."` was BLOCKED on /usr/,
+#     and `source .venv/bin/activate && python -c "open('out.txt','w')"` on /bin/.
+#   * reading a protected file and writing elsewhere was blocked, contradicting
+#     the read-only contract -- the canonical regenerate-a-doc script.
+#   * unanchored [\s\S]* re-scanned from every offset, x56 paths x2 forms, in a
+#     BLOCKING PreToolUse hook: a 5 KB heredoc stalled every Bash call 22s.
 #
-# READS STAY ALLOWED, deliberately: read-only means read-only, not no-access.
-# A bare python -c "print(open(P).read())" has no write verb and does not match.
+# Requiring the path inside a quoted string fixes the first: /usr/ and .venv/
+# appear as bare command fragments, a real target is always a literal. Binding
+# it to the write operation fixes the second: `Path('P').read_text()` has a READ
+# verb after the path. Dropping the lookaheads and the leading wildcard fixes
+# the third -- re.search already scans, so these stay linear.
 #
-# RESIDUAL GAP, stated rather than papered over: this cannot resolve indirection.
-#   for f in <paths>; do perl -i -pe '...' "$f"; done
-# hides the path behind $f, and no regex over the command text can expand it.
-# Closing that needs interpretation, not pattern matching. The defence there is
-# that Edit/Write are blocked, so it only matters for a deliberate bypass --
-# a policy question, not a technical one.
-_INTERP = r"(?:python[0-9.]*|node|ruby|perl|php|deno|bun)"
-_WRITE_API = (
-    r"(?:write_text|write_bytes|writeFileSync|appendFileSync|createWriteStream|"
-    r"\.write\(|\.writelines\(|open\([^)]*['\"][wax]|"
-    r"shutil\.(?:copy|copy2|copyfile|move)|os\.(?:replace|rename|remove|unlink)|"
-    r"fs\.(?:write|append|rm|unlink|rename))"
+# RESIDUAL GAP, stated not papered over: indirection is still out of reach.
+#   p = Path(x); p.write_text(...)      variable holds the path
+#   for f in <paths>; do perl -i ... "$f"; done
+# No regex over command text can expand those. Closing them needs
+# interpretation, not pattern matching.
+
+# Methods invoked ON a path object: Path('P').write_text(...)
+_PATH_WRITE_METHODS = (
+    r"(?:write_text|write_bytes|unlink|touch|mkdir|rename|replace|truncate|"
+    r"chmod|rmdir|write|writelines|open)"
 )
+# Functions taking the path as an ARGUMENT: shutil.copy(src, 'P')
+_WRITE_FUNCS = (
+    r"(?:writeFileSync|appendFileSync|createWriteStream|"
+    r"shutil\.(?:copy|copy2|copyfile|copytree|move|rmtree)|"
+    r"os\.(?:remove|unlink|truncate|rename|replace|rmdir|removedirs|makedirs|mkdir)|"
+    r"fs\.(?:writeFile|writeFileSync|appendFile|rm|rmSync|unlink|rename|truncate|mkdir))"
+)
+# PowerShell is invocable from the Bash tool on this Windows-primary fleet and
+# uses -Path rather than call parens.
+_PS_WRITE = r"(?:Set-Content|Out-File|Add-Content|Remove-Item|New-Item|Clear-Content)"
+
+# A COMPLETE quoted string containing the protected path. Requiring the quotes
+# is what keeps /usr/, /bin/, build/ and .venv/ from matching: those appear as
+# bare command fragments, never as string literals.
+_Q_OPEN = r"['\"][^'\"]*{path}[^'\"]*['\"]"
+
 INTERPRETER_WRITE_PATTERNS = [
-    (r"(?=[\s\S]*\b" + _INTERP + r"\b)(?=[\s\S]*" + _WRITE_API + r")[\s\S]*{path}",
+    # Path('P').write_text(...)  -- quoted path, write method applied to it
+    (_Q_OPEN + r"\s*\)\s*\.\s*" + _PATH_WRITE_METHODS,
      "interpreter write"),
+    # open('P', 'w'|'a'|'x')
+    (_Q_OPEN + r"\s*,\s*['\"][wax]",
+     "interpreter write"),
+    # writeFileSync('P', ...) / shutil.copy(src, 'P') / os.remove('P')
+    (_WRITE_FUNCS + r"\s*\([^)]{0,200}" + _Q_OPEN,
+     "interpreter write"),
+    # Set-Content -Path 'P'
+    (_PS_WRITE + r"[^\n]{0,120}" + _Q_OPEN,
+     "interpreter write"),
+]
+
+# noDeletePaths need the destructive subset — the earlier revision extended only
+# READ_ONLY_BLOCKED, leaving `python -c "os.remove('CLAUDE.md')"` allowed.
+_DELETE_METHODS = r"(?:unlink|rmdir|remove)"
+_DELETE_FUNCS = (
+    r"(?:shutil\.rmtree|os\.(?:remove|unlink|rmdir|removedirs)|"
+    r"fs\.(?:rm|rmSync|unlink|rmdir))"
+)
+INTERPRETER_DELETE_PATTERNS = [
+    (_Q_OPEN + r"\s*\)\s*\.\s*" + _DELETE_METHODS, "interpreter delete"),
+    (_DELETE_FUNCS + r"\s*\([^)]{0,200}" + _Q_OPEN, "interpreter delete"),
+    (r"(?:Remove-Item|Clear-Content)[^\n]{0,120}" + _Q_OPEN, "interpreter delete"),
 ]
 
 READ_ONLY_BLOCKED = (
@@ -147,7 +190,10 @@ READ_ONLY_BLOCKED = (
 )
 
 # Patterns for no-delete paths (block ONLY delete operations)
-NO_DELETE_BLOCKED = DELETE_PATTERNS
+# Includes the interpreter delete subset: the first revision extended only
+# READ_ONLY_BLOCKED, so `python -c "os.remove('CLAUDE.md')"` stayed allowed
+# against every noDeletePath (.git/, .github/, pmoves/services/, LICENSE).
+NO_DELETE_BLOCKED = DELETE_PATTERNS + INTERPRETER_DELETE_PATTERNS
 
 # ============================================================================
 # CONFIGURATION LOADING
@@ -209,6 +255,29 @@ def load_config() -> Dict[str, Any]:
 # PATH CHECKING
 # ============================================================================
 
+def _escape_path(path: str) -> str:
+    """Escape a protected path, making a directory's trailing slash OPTIONAL.
+
+    Configured directory paths end with "/" (".claude/context/", "pmoves/tools/")
+    and re.escape() kept that slash mandatory. Omitting one character therefore
+    walked straight past the guard: a recursive delete of "pmoves/tools/" was
+    blocked, while the identical delete of "pmoves/tools" was ALLOWED. Same
+    directory, same destruction, one character apart.
+
+    This applied to EVERY pattern class -- delete, write, move, truncate, and the
+    interpreter patterns alike -- because they all interpolate {path}. Fixing it
+    here fixes all of them at once.
+
+    The trailing group is (?:/|(?![A-Za-z0-9._-])) rather than a bare optional
+    slash, which would also match "pmoves/toolsmith", and rather than \b, which
+    once the separator is optional. Requiring either a separator or a word
+    boundary keeps the match on a whole path component.
+    """
+    if path.endswith("/") and len(path) > 1:
+        return re.escape(path[:-1]) + r"(?:/|(?![A-Za-z0-9._-]))"
+    return re.escape(path)
+
+
 def check_path_patterns(command: str, path: str, patterns: List[Tuple[str, str]], path_type: str) -> Tuple[bool, str]:
     """Check command against a list of patterns for a specific path.
 
@@ -234,8 +303,8 @@ def check_path_patterns(command: str, path: str, patterns: List[Tuple[str, str]]
     else:
         # Original literal path matching (prefix-based)
         expanded = os.path.expanduser(path)
-        escaped_expanded = re.escape(expanded)
-        escaped_original = re.escape(path)
+        escaped_expanded = _escape_path(expanded)
+        escaped_original = _escape_path(path)
 
         for pattern_template, operation in patterns:
             # Check both expanded path (/Users/x/.ssh/) and original tilde form (~/.ssh/)
