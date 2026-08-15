@@ -18,14 +18,20 @@
 # Husks (emptied directories) and clean-but-stale worktrees are reported but do
 # NOT fail the gate — they are housekeeping, not uncommitted work, and a gate
 # that fires on them gets muted.
+#
+# Uses $(PYTHON), not a bare `python`: pmoves/Makefile:57-75 resolves that to
+# python3 on POSIX, python on Windows, and the .venv-pmoves interpreter when
+# one exists. A bare `python` dies with 'command not found' on any Linux node
+# without a python shim — recreating the exact GHOST_TARGET dead end this file
+# was written to remove.
 
 .PHONY: worktree-sitrep worktree-sitrep-strict worktree-sitrep-json
 
 worktree-sitrep:
-	@python $(CURDIR)/tools/worktree_sitrep.py
+	@$(PYTHON) $(CURDIR)/tools/worktree_sitrep.py
 
 worktree-sitrep-strict:
-	@python $(CURDIR)/tools/worktree_sitrep.py --strict
+	@$(PYTHON) $(CURDIR)/tools/worktree_sitrep.py --strict
 
 worktree-sitrep-json:
-	@python $(CURDIR)/tools/worktree_sitrep.py --json
+	@$(PYTHON) $(CURDIR)/tools/worktree_sitrep.py --json
