@@ -27,7 +27,7 @@ individual pieces are, on the whole, well built — the CHIT gate on the bridge 
 tested, the vendored web bundle is genuinely self-contained and reproducibly built, and the
 Remotion renderer is better instrumented than most services in the repo.
 
-The cheapest, highest-leverage work is **not** engineering. Five of the ten findings are
+The cheapest, highest-leverage work is **not** engineering. Five of the nine standing findings (F10 was retracted) are
 documentation and registry corrections that cost hours and prevent the next contributor from
 building against a seam that isn't there. The version split in **F9** — which looks like the
 most alarming finding — turns out to be two wrong strings in one file, not a migration.
@@ -412,53 +412,58 @@ does not exist yet, regardless of what PMOVES decides.
 **Explicitly not recommended:** migrating the estate to v0.9. It would buy
 nothing today, and the web renderer cannot follow.
 
-## F10 — the a2ui-renderer Docker build cannot succeed as wired
+## F10 — RETRACTED. The build is fine; I audited the wrong branch
 
-Found while scoping whether the renderer could consume the `pretext` submodule directly.
+**This finding was published, then refuted by running the build. It is kept here rather than
+deleted, because the way it went wrong is the more useful record.**
 
-`pmoves/docker-compose.yml:3766` builds the service like this:
+**What I claimed:** that `pmoves/docker-compose.yml` builds with `context: .` (`pmoves/`)
+while the Dockerfile does `COPY package.json package-lock.json* ./`, and since
+`pmoves/package.json` does not exist, the build must fail.
 
-```yaml
-  a2ui-renderer:
-    build:
-      context: .                                    # resolves to pmoves/
-      dockerfile: services/a2ui-renderer/Dockerfile
-```
-
-`pmoves/services/a2ui-renderer/Dockerfile` line 4 then does:
+**Why it was wrong:** I read the Dockerfile from the **main working tree, which is checked out
+on `feat/voice-gotime-convergence`**, while every other check in this audit was run against
+`f27d43ed6` (`main`). On `main` the Dockerfile is already context-relative and correct:
 
 ```dockerfile
-COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+COPY services/a2ui-renderer/package.json services/a2ui-renderer/package-lock.json* ./
+COPY services/a2ui-renderer/ .
 ```
 
-That `COPY` resolves against the **build context**, which is `pmoves/` — and:
+**Refuted by execution:**
 
 ```bash
-ls pmoves/package.json
-# does not exist
+docker build --target builder -f pmoves/services/a2ui-renderer/Dockerfile pmoves/
+# exit 0 — COPY resolves, npm ci runs, npm run build succeeds
 ```
 
-The Dockerfile is written for a context of `services/a2ui-renderer/`; compose gives it
-`pmoves/`. A `COPY` whose source matches nothing is a hard build failure, so
-`make up-a2ui-renderer` — which runs `up -d --build a2ui-renderer` — cannot build this image.
+There is no build defect on `main`.
 
-The service does still declare
-`image: ghcr.io/powerfulmoves/pmoves-a2ui-renderer:pmoves-latest`, so a plain `up -d` may
-pull a previously-published image and appear healthy. That would mask the broken build: the
-running container would be whatever was last published by other means, not the current source.
+**The lesson, since this audit exists to check exactly this class of error:** a stated baseline
+is not a real one unless every command is actually run against it. Ten findings were verified
+in a clean worktree at `f27d43ed6`; one was not, and that one was wrong. Reading a repository
+whose main checkout sits on a feature branch is a standing hazard here.
 
-**Not verified by execution.** This audit started no services and ran no builds. The
-mechanism above is read directly from the three files, but the failure itself is inferred,
-not observed. Running `make -C pmoves up-a2ui-renderer` would confirm or refute it in one step
-— worth doing before acting on this finding.
+### What survives — the pretext wiring constraint
 
-**Consequence for § F3 and § F4:** vendoring the `pretext` fork into this service is blocked
-twice over, independently of this bug. `Pmoves-pretext` sits at the repository root, outside
-the `pmoves/` build context, so a `file:` dependency is unreachable from the image; and
-`npm ci --ignore-scripts` would skip pretext's `prepack` (`tsc -p tsconfig.build.json`), so
-the `dist/` that its `main` field points at would never be produced. Any "consume the fork
-directly" plan has to resolve the build context first.
+Independent of the retraction, consuming `Pmoves-pretext` from this service is still blocked,
+for two reasons that hold on `main`:
+
+1. The build context is `pmoves/`. `Pmoves-pretext` sits at the **repository root**, one level
+   above it, so a `file:` dependency is unreachable from inside the image.
+2. `npm ci --ignore-scripts` skips pretext's `prepack` (`tsc -p tsconfig.build.json`), so the
+   `dist/` that its `main` field points at would never be produced.
+
+Vendoring pretext's built `dist/` — the pattern `website/stage/vendor/` already proves — avoids
+both, since it needs neither a `file:` dependency nor a build script.
+
+### Branch-drift observation (not a `main` defect)
+
+`feat/voice-gotime-convergence` carries a stale Dockerfile **and** has no `a2ui-renderer`
+compose service — `make -C pmoves up-a2ui-renderer` there fails with
+`no such service: a2ui-renderer`. On `main` the service is defined at
+`docker-compose.yml:3766` and `docker-compose.core.yml:1438`. Worth knowing before anyone
+debugs the renderer from that branch.
 
 ## What is already right
 
