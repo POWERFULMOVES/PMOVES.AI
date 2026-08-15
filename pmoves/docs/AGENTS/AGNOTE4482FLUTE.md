@@ -147,7 +147,7 @@ Pending follow-up (separate scope; not blocking this PR):
    - `health.ekg.bpm.v1` — published by EKG/HRV ingest (rPPG/Polar H10/healthkit) → consumed by matrix monitor + Flute prosodic envelope
    - `wellbeing.matrix.score.v1` — published by matrix monitor → consumed by UI / Hyperdimensions cymatic visualizer / agent personas
 2. Add to [`.claude/context/services-catalog.md`](../../../.claude/context/services-catalog.md) under a new "Proposed Services (Flute Well-Being Matrix)" section:
-   - **Well-Being Matrix Monitor** — proposed port `8057+` (after current Flute WS at `8056`), `GET /healthz`, subscribes to `tokenism.prosodic.bpm.v1` + `health.ekg.bpm.v1`, publishes `wellbeing.matrix.score.v1`
+   - **Well-Being Matrix Monitor** — proposed port `8057+` (8056 is reserved for Flute but unbound; Flute's WS is on `8055`), `GET /healthz`, subscribes to `tokenism.prosodic.bpm.v1` + `health.ekg.bpm.v1`, publishes `wellbeing.matrix.score.v1`
    - **EKG / HRV Ingest** — proposed port TBD, publishes `health.ekg.bpm.v1`, input candidates: rPPG / Polar H10 / Apple Watch healthkit
 
 Why a separate scope: `.claude/context/` is fenced by the damage-control hook (read-only by default) — touching it requires either an explicit allow-rule override or operator confirmation. Filing the catalog sync as its own PR keeps that gate visible rather than bypassing it.

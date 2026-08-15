@@ -1,6 +1,10 @@
 # Agent Zero — Live API Reference
 
-> **Live-state companion** to [`.claude/context/mcp-api.md`](../../../.claude/context/mcp-api.md). That doc is the canonical MCP API specification; **this doc records what's actually deployed** as of 2026-05-16, probed from `http://pmoves-powerfulmoves:8080/openapi.json` and `/mcp/commands`.
+> **This is the canonical Agent Zero API reference.** Route list re-verified against
+> `pmoves/services/agent-zero/main.py` on 2026-08-14; endpoint summaries were probed
+> from `http://pmoves-powerfulmoves:8080/openapi.json` and `/mcp/commands` on 2026-05-16.
+> `.claude/context/mcp-api.md` is **SUPERSEDED** — it documents six endpoints that were
+> never implemented and an `MCP_CLIENT_SECRET` Bearer scheme that authenticates nothing.
 >
 > Use this when driving Agent Zero from a CLI — e.g., from B850-CLAUDE (Knuckles) over Tailscale.
 
@@ -17,15 +21,24 @@
 | JetStream stream | `AGENTZERO` |
 | Subjects | `agentzero.task.v1`, `agentzero.memory.update` |
 
-**Auth**: Per `.claude/context/mcp-api.md`, MCP endpoints expect:
-```bash
-export MCP_CLIENT_ID="..."
-export MCP_CLIENT_SECRET="..."
-# Header: Authorization: Bearer $MCP_CLIENT_SECRET
-```
-The deployed `/healthz` is open (no auth). `/mcp/execute` may require auth in some forms — verify per environment.
+**Auth**: the 14 core routes take **no inbound auth**. `main.py` declares no auth
+dependency, no security scheme and no middleware; `MCP_CLIENT_SECRET` /
+`MCP_CLIENT_ID` appear nowhere under `pmoves/services/`. (`brand_defaults.py`
+auto-generates an `MCP_CLIENT_SECRET` into tier env files, but nothing reads it.)
+Do not send `Authorization: Bearer $MCP_CLIENT_SECRET` — it authenticates nothing.
 
-## REST endpoint inventory (14 endpoints)
+The supervisor forwards `X-API-KEY` (`AGENT_ZERO_API_KEY`, `main.py:84` and
+`main.py:265-266`) *outbound* to the A0 runtime, which validates it against
+`mcp_server_token`. Two surfaces that do authenticate inbound:
+
+| Surface | Header |
+|---|---|
+| A0 runtime on 8081 (incl. `/t-{token}/sse`) | `X-API-KEY` (or `api_key` in the JSON body) |
+| A2A routes on 8080 | `Authorization: Bearer <supabase-jwt>` — see below |
+
+A 401 on a core route means an ingress in front of 8080 added auth, not this service.
+
+## REST endpoint inventory (14 core endpoints + 8 A2A)
 
 Verified via `GET /openapi.json` on 2026-05-16. Method → path → summary:
 
@@ -34,7 +47,7 @@ Verified via `GET /openapi.json` on 2026-05-16. Method → path → summary:
 | `GET` | `/healthz` | Returns NATS connection + git info + pid + runtime version |
 | `GET` | `/config/environment` | Active environment / form configuration |
 | `GET` | `/metrics` | Prometheus-style metrics |
-| `GET` | `/mcp/commands` | List 16 MCP commands available |
+| `GET` | `/mcp/commands` | List 17 MCP commands available |
 | `POST` | `/mcp/execute` | Execute named MCP command with arguments |
 | `POST` | `/tasks` | Submit task with `TaskSubmissionRequest` body |
 | `GET` | `/jobs/{context_id}` | Job status by context id |
@@ -59,12 +72,13 @@ Verified via `GET /openapi.json` on 2026-05-16. Method → path → summary:
 }
 ```
 
-## MCP command inventory (16 commands)
+## MCP command inventory (17 commands)
 
 Verified via `GET /mcp/commands` on 2026-05-16:
 
 | Command | Description |
 |---------|-------------|
+| `a2a.strategic_handoff` | Handoff complex reasoning tasks to the Gemini Cognitive Core (context, task) |
 | `comfy.render` | Trigger a ComfyUI render via render webhook |
 | `e2b.desktop.create` | Create a new E2B desktop sandbox with GUI access (duration, memory_mb, resolution) |
 | `e2b.sandbox.create` | Create a new E2B sandbox for code execution (duration, memory_mb, cpu_limit) |
@@ -88,7 +102,7 @@ Verified via `GET /mcp/commands` on 2026-05-16:
 
 All examples use `pmoves-powerfulmoves` as the Tailscale hostname; substitute as needed.
 
-> **Auth caveat**: `/healthz` is open (no auth). All other endpoints (`/mcp/*`, `/tasks`, `/memory`, `/sessions`) **may** require `Authorization: Bearer $MCP_CLIENT_SECRET` depending on deployment config. The examples below omit this header for brevity — if you get 401/403, add `-H 'Authorization: Bearer $MCP_CLIENT_SECRET'` to the curl command.
+> **Auth caveat**: none of the core routes below take inbound auth, so the examples send no auth header — that is correct, not brevity. See the Auth section above.
 
 > **Health endpoint convention**: `/healthz` is the repo-wide standard (200+ references). Some services use `/health` or `/api/health` — see `agent_registry.yaml` or `NEXT_PUBLIC_*_HEALTH_PATH` env vars for per-service overrides. The AZ supervisor has fallback logic: `/healthz` → `/api/health` → `/`.
 
@@ -153,6 +167,30 @@ AZ subscribes (per `/healthz`):
 
 JetStream stream `AGENTZERO` retains these. Other PMOVES NATS subjects (e.g. `archon.mint.*.v1`, `chit.signed.v1`, `tokenism.*`, `geometry.*`) are publisher-side or consumed by other services — see `.claude/context/nats-subjects.md` for the catalog.
 
+## A2A protocol routes (8 paths, conditionally mounted)
+
+Not part of the 14 above and **absent from `/openapi.json` when the A2A import
+fails** — `main.py:54-57` sets `create_a2a_router = None` on ImportError, and
+`main.py:673-674` only includes the router when it loaded. Source:
+`pmoves/services/agent-zero/python/features/a2a/server.py`.
+
+| Method | Path |
+|--------|------|
+| `GET` | `/.well-known/agent-card.json` |
+| `GET` | `/.well-known/agent.json` (legacy alias, `include_in_schema=False`) |
+| `POST` | `/a2a/v1/tasks` |
+| `GET` | `/a2a/v1/tasks` |
+| `GET` | `/a2a/v1/tasks/{task_id}` |
+| `POST` | `/a2a/v1/tasks/{task_id}/cancel` |
+| `POST` | `/a2a/v1/tasks/{task_id}/artifacts` |
+| `POST` | `/a2a/v1/discover` |
+
+**Auth (differs from the core routes):** these require
+`Authorization: Bearer <supabase-jwt>`, validated against `SUPABASE_JWT_SECRET`
+via python-jose (`server.py:72-90`). Gated by `A2A_DISCOVERY_PUBLIC` and
+`A2A_TASKS_PUBLIC` — both default `false` in compose, so auth is required
+unless explicitly opened.
+
 ## Drift detection
 
 Run periodically to catch shifts between this doc and live state:
@@ -166,14 +204,14 @@ curl -s http://pmoves-powerfulmoves:8080/openapi.json \
 # MCP command count drift
 curl -s http://pmoves-powerfulmoves:8080/mcp/commands \
   | jq '.commands | length'
-# Expected: 16
+# Expected: 17
 ```
 
 If counts diverge from this doc, re-fetch `/openapi.json` + `/mcp/commands`, update tables here, file a register entry referencing the version bump.
 
 ## Cross-references
 
-- **Canonical MCP API spec**: [`.claude/context/mcp-api.md`](../../../.claude/context/mcp-api.md)
+- **Superseded, do not use**: [`.claude/context/mcp-api.md`](../../../.claude/context/mcp-api.md) — ghost endpoints, retained for historical intent only
 - **Catalog entry** (port, health, role): [`.claude/CATALOG.md`](../../../.claude/CATALOG.md) § Agent Coordination & Orchestration
 - **Slash commands wrapping these endpoints**: [`.claude/commands/agents/`](../../../.claude/commands/agents/) (status, execute, subordinate, mcp-query, task-status)
 - **Forms directory** (referenced by `form.get` / `form.switch`): `pmoves/configs/agents/forms/`

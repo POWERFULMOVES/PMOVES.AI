@@ -418,7 +418,7 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
    ```bash
    make up-voice
    ```
-   - Flute-Gateway: Multimodal voice communication (port 8055 HTTP, 8056 WebSocket)
+   - Flute-Gateway: Multimodal voice communication (port 8055 — HTTP + WebSocket)
    - Ultimate-TTS-Studio: TTS synthesis (via Pinokio, NOT Docker)
    - Test voice synthesis: `curl -X POST http://localhost:8055/v1/voice/synthesize`
 

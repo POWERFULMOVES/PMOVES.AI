@@ -119,7 +119,7 @@ def encode_prosodic_bpm(analysis: ProsodicAnalysis) -> dict:
 
 ## Flute-Gateway Integration
 
-### New Endpoint
+### New Endpoint (PROPOSED — not implemented)
 
 ```
 POST /v1/voice/analyze/prosodic
@@ -140,7 +140,7 @@ Response:
 
 ### Existing Endpoint Enhancement
 
-`POST /v1/voice/synthesize/prosodic` — currently not exposed. Wire the prosodic parser to this endpoint for synthesis with boundary-aware pauses and BPM encoding.
+`POST /v1/voice/synthesize/prosodic` — **SHIPPED** (`main.py:1193`). Returns `audio/wav` with the BPM/prosodic timeline in the `X-Prosodic-Chunks` / `X-Prosodic-BPM` / `X-Prosodic-Timeline` response headers. Requires the `ultimate_tts` provider (400 otherwise). The analysis-only endpoint below remains **PROPOSED**.
 
 ## Implementation Phases
 

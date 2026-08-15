@@ -62,7 +62,7 @@ These services are reviewed for opt-in direct mesh exposure, but the preferred p
 |---------|----------|------|
 | Kong Proxy | `KONG_PROXY_BIND` | 8000 |
 | Agent Zero | `AGENT_ZERO_BIND` | 8080/8081 |
-| Flute-Gateway | `FLUTE_BIND` | 8055/8056 |
+| Flute-Gateway | `FLUTE_BIND` | 8055/8056 (8056 published but unbound) |
 | TensorZero Gateway | `TENSORZERO_BIND` | 3030 |
 | Hi-RAG v1 / v2 | `HIRAG_V1_BIND`, `HIRAG_BIND` | 8089 / 8086/8087/8187 |
 | DeepResearch | `DEEPRESEARCH_BIND` | 8098 |

@@ -26,7 +26,7 @@
   "hardware_requirements": {
     "gpu": true,
     "min_vram_mb": 24000,
-    "gpu_arch": ["sm_120", "sm_110"],
+    "gpu_arch": ["sm_120", "sm_121"],
     "node_roles": ["primary-gpu-tts", "gpu-inference"],
     "cpu_arch": ["x86_64", "arm64"]
   },

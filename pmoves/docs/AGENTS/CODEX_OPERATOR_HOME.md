@@ -220,8 +220,8 @@ Current lanes:
 
 - Flute health:
   - `curl -fsS http://localhost:8055/healthz | jq .`
-- Flute session status:
-  - `curl -fsS http://localhost:8055/v1/sessions -H "Authorization: Bearer $FLUTE_API_KEY" | jq .`
+- Flute config + feature matrix (no session registry exists):
+  - `curl -fsS http://localhost:8055/v1/voice/config | jq .`
 - TTS backend:
   - `curl -fsS http://localhost:7861/gradio_api/info | jq .`
 

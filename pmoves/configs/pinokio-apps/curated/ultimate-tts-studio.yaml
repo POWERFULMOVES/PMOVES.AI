@@ -9,7 +9,7 @@ runtime:
   autostart: true
   gpu_required: true
   min_vram_mb: 6144
-  gpu_arch: [sm_120, sm_110]
+  gpu_arch: [sm_120, sm_121]
   gpu_reservation_mb: 6144
   gpu_reservation_mode: concurrent
   dependencies: []

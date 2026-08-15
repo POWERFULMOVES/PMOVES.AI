@@ -54,12 +54,12 @@ Execute the following steps:
 
 If `FLUTE_API_KEY` is configured, include it:
 ```bash
--H "Authorization: Bearer $FLUTE_API_KEY"
+-H "X-API-Key: $FLUTE_API_KEY"
 ```
 
 ## Notes
 
-- Flute-Gateway: port 8055 (HTTP), port 8056 (WebSocket for streaming)
+- Flute-Gateway: port 8055 (HTTP **and** WebSocket — `/v1/voice/stream/tts`, `/v1/voice/agent`)
 - Ultimate-TTS-Studio: port 7861 (Gradio UI with 7 engines)
 - Available voices depend on loaded TTS engines
 - WebSocket streaming recommended for real-time applications

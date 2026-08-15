@@ -72,8 +72,19 @@ services:
     - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
+    # Per-host bounded cache on the /data volume: the gateway must never inherit the
+    # JuiceFS 100 GiB default (fills a small disk) nor self-disable caching on a
+    # near-full one. Canonical logic lives in scripts/juicefs-cache-bounds.sh; it is
+    # mirrored compactly here because compose renders on the host while this cache
+    # lives inside the container, so the measurement has to run at container start.
     # Single quotes around the DSN protect the '&' from shell interpretation.
-    - "juicefs gateway --multi-buckets --keep-etag '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000"
+    - |
+      set -e
+      D=/data; [ -d "$$D" ] || D=/; D=$${D%/}
+      eval "$$(df -Pk "$$D" | awk 'NR==2{a=$$4;t=$$2;c=int(a/1024*0.5);if(c>102400)c=102400;if(c<512)c=512;r=(t>0?a/t*0.5:0.1);if(r>0.1)r=0.1;if(r<0.01)r=0.01;printf "CS=%d FSR=%.3f",c,r}')"
+      mkdir -p "$$D/jfsCache"
+      echo "[juicefs-gateway] bounded cache: --cache-dir $$D/jfsCache --cache-size $${CS}MiB --free-space-ratio $$FSR"
+      exec juicefs gateway --multi-buckets --keep-etag --cache-dir "$$D/jfsCache" --cache-size "$$CS" --free-space-ratio "$$FSR" '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000
     volumes:
     - juicefs-data:/data
     networks:

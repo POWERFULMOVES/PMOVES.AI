@@ -47,7 +47,7 @@ The PMOVES Cast Integration enables voice agents to output speech to Google Cast
 │ ├── MCP Bridge with Cast tools                                 │
 │ └── Response publishing to NATS                                │
 ├─────────────────────────────────────────────────────────────────┤
-│ Level 3: Flute-Gateway [Port 8055/8056]                        │
+│ Level 3: Flute-Gateway [Port 8055]                             │
 │ ├── Prosodic TTS synthesis (91% faster TTFS)                   │
 │ ├── Multi-engine routing (VibeVoice, Ultimate-TTS)             │
 │ └── WebSocket streaming for real-time audio                     │
@@ -71,7 +71,7 @@ The PMOVES Cast Integration enables voice agents to output speech to Google Cast
 | Component | Port | Purpose |
 |-----------|------|---------|
 | Agent Zero | 8080 | Voice agent orchestration, MCP API |
-| Flute-Gateway | 8055/8056 | Prosodic TTS synthesis |
+| Flute-Gateway | 8055 | Prosodic TTS synthesis |
 | Cast TTS Gateway | 8060 | Device management, audio casting |
 | Ultimate-TTS Studio | 7861 | TTS fallback (7 engines) |
 | NATS | 4222 | Event coordination bus |
