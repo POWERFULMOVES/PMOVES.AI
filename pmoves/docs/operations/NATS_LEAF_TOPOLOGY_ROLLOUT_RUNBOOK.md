@@ -24,22 +24,42 @@ explicitly **not** leaf-federated. This lane builds the *real* leaf trust model 
 
 | Slice | State | Gate |
 |-------|-------|------|
-| Land the design spec (#2492) | **done** (draft PR) | operator merge |
-| Wire fork as submodule (#2493) | **done** (draft PR) | operator merge |
-| This runbook + AGNOTE claim | **done** | operator merge |
-| Phase 1 — mint nsc operator/accounts/users | **blocked** | `nsc` not installed on z890; custody decision (#1901) |
-| Phase 2 — hub: fork config + `leafnodes{7422}` + SYS | blocked on P1 | Known-Road compose/Dockerfile (operator-auth) |
-| Phase 3 — migrate CORE services → `.creds` | blocked on P2 | Known-Road compose |
-| Phase 4 — EDGE leaf (nano-1 @ 7422) | blocked on P2 | cross-node access (jetson) |
-| Phase 5 — CLOUD leaf (KVM) | blocked on P2 | cross-node access (Hostinger) |
-| Phase 6 — `pmoves-nats-mcp` → CORE `.creds` + CHIT-signed publish | **partly actionable** | packaging now; `.creds` wiring on P1 |
+| Land the design spec (#2492) | **done** — merged 2026-08-12 | — |
+| Wire fork as submodule (#2493) | **done** — merged 2026-08-12 | — |
+| This runbook + AGNOTE claim | **done** | — |
+| Phase 1 — mint nsc operator/accounts/users | **DONE** (verified 2026-08-15) | — |
+| Phase 2 — hub: config + `leafnodes{7422}` + SYS | **config written + PROVEN**; not yet wired to prod | Known-Road compose (operator-auth) **+ requires Phase 3 in the same window** |
+| Phase 3 — migrate CORE services → `.creds` | ready to sequence | Known-Road compose |
+| Phase 4 — EDGE leaf (nano-1 @ 7422) | **leaf config written + PROVEN**; awaits P2 | jetsons ARE live (2026-08-15) |
+| Phase 5 — CLOUD leaf (KVM) | awaits P2 | cross-node access (Hostinger) |
+| Phase 6 — `pmoves-nats-mcp` → CORE `.creds` + CHIT-signed publish | **done** — merged as #2496 | `.creds` flip rides P2/P3 |
+
+### Phase 1 is no longer blocked (verified on z890, 2026-08-15)
+
+The gate below said "`nsc` not installed on z890". That is **stale** — measured now:
+
+- `nsc` is installed; the vault exists at `%APPDATA%/pmoves/nats-nsc` (config/ data/ keys/).
+- Operator `PMOVES` + all four accounts are minted: **SYS, CORE, EDGE, CLOUD** (`nsc list accounts`).
+- Four user creds exist, including **`EDGE/edge-nano-1.creds`** — the jetson leaf credential itself.
+
+So the critical-path unblocker is cleared and **Phase 2 is what everything now waits on.**
+
+### ⚠️ Sequencing warning for Phase 2 (read before authorizing)
+
+The production hub (`pmoves-nats-1`) is launched from **CLI flags** with plaintext
+`--user/--pass` (`nats:pmoves` defaults). Swapping it to the account/JWT config below is
+**not backwards compatible**: every existing client authenticating as `nats:pmoves` will fail
+with an authorization violation the moment the hub starts requiring account creds. **Phase 2 and
+Phase 3 must land in the same maintenance window**, or the hub must temporarily run both auth
+modes. Do not merge a Phase-2 compose swap expecting it to be a no-op.
 
 ---
 
 ## The gates (what the operator/tooling must clear before deeper slices)
 
-1. **`nsc` install** — Phase 1 mints Operator `PMOVES` → 4 Accounts (SYS/CORE/EDGE/CLOUD) → user
-   `.creds`. `nsc` is not on z890. Install is the critical-path unblocker for everything after slice 3.
+1. ~~**`nsc` install**~~ — **CLEARED 2026-08-15.** `nsc` is installed on z890 and Phase 1 is minted:
+   Operator `PMOVES` → 4 Accounts (SYS/CORE/EDGE/CLOUD) → 4 user `.creds` (incl. `edge-nano-1`),
+   vault at `%APPDATA%/pmoves/nats-nsc`. This is no longer the critical path — **Phase 2 is.**
 2. **Custody decision (#1901 precedent)** — spec §3/§8: v0 = **file-mounted Docker secret** for the
    nsc operator seed + `.creds` (the `_FILE` convention across `pmoves/services/**`); CHIT-vault custody
    is the documented follow-up. **Final custody choice is the operator's** per #1901 §7 — confirm before minting.
@@ -59,6 +79,44 @@ explicitly **not** leaf-federated. This lane builds the *real* leaf trust model 
   `nats-server` + baked conf + entrypoint that templates the resolver), `examples/` leaf-attach demo.
   These carry **no secrets** — the account JWTs are public and render at funnel time; the seeds/`.creds`
   stay file-mounted secrets.
+
+## Measured implementation findings (z890, 2026-08-15, nats:2.11.8-alpine)
+
+Established by building the hub + leaf in **throwaway containers** (production `pmoves-nats-1`
+never touched) and running the spec §10 tests. Configs live at `pmoves/config/nats/`.
+
+**Spec §4's "open detail" is RESOLVED.** The question was whether a leaf's account is pinned by an
+`account:` field on the remote or implied by the creds. Both sides observed:
+- **Hub side — implied by the creds.** A leaf presenting `EDGE/edge-nano-1.creds` shows up in hub
+  `/leafz` as `account=AAS574M5ZNQE…`, exactly the EDGE account pubkey. No `account:` field needed.
+- **Leaf side — separate, defaults to `$G`.** The leaf logs `Leafnode connection created for
+  account: $G`. That is correct for a leaf defining no local accounts; `account:` on the remote
+  only pins WHICH LOCAL account the link binds to.
+
+**Five config gotchas — each one silently prevents boot or attachment:**
+
+| # | Gotcha | Symptom | Correct form |
+|---|--------|---------|--------------|
+| 1 | `operator:` omitted | `error resolving system account: account validation failed` (hub won't boot) | `operator: <operator JWT>` — **required**; spec §3's snippet omits it |
+| 2 | `max_memory` in `jetstream{}` | `unknown field "max_memory"` — config never loads | `max_mem` |
+| 3 | `no_advertise` inside a `remotes[]` entry | `unknown field "no_advertise"` — config never loads | block-level, directly under `leafnodes {` |
+| 4 | `${VAR:-default}` | `variable reference ... can not be found` | no shell defaults; render it or export it |
+| 5 | `$VAR` inside a quoted string | runtime `lookup for host "$VAR": no such host` | variable must stand alone: `urls: [ $PMOVES_NATS_LEAF_URL ]` carrying the whole URL |
+
+Gotchas 2 and 3 were **already present in the committed `elder-melchor-leaf.conf`** — so that file
+could never have loaded even if its port/auth had been right. That is independent corroboration of
+the 2026-08-08 forensic finding that no coherent leaf has ever run in PMOVES production.
+
+**§10 acceptance tests — status:**
+
+| Test | Result |
+|---|---|
+| Leaf handshake at 7422 | **PASS** — `pmoves-edge-nano-1` attached, `account=<EDGE pubkey>`, rtt 244µs |
+| `4222`-target refused | **PASS** — `attempted to connect to wrong port` (the exact reason the old leaf conf never worked) |
+| EDGE↔CORE isolation | **PASS** — CORE subscriber on `test.>` received **0** from an EDGE publisher on `test.isolation`; positive control (EDGE→EDGE) received 1 |
+| Export/import round-trip | not yet — needs the §5 matrix wired (Phase 4) |
+| Two-layer trust / MCP signed publish | not yet — rides Phase 3 `.creds` migration |
+| SYS-guarded monitoring, cred rotation | not yet — Phase 2/3 |
 
 ## Acceptance tests (spec §10 — run per phase)
 
