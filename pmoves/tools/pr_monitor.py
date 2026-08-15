@@ -14,7 +14,11 @@ from typing import Any, Iterable, List
 
 SUCCESS_STATES = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 BLOCKING_REVIEW_STATES = {"CHANGES_REQUESTED"}
-BOT_REVIEW_LOGINS = {"coderabbitai[bot]", "chatgpt-codex-connector[bot]"}
+# github-actions posts CI status output (hardening/validation reports) as issue
+# comments; real failures still block via failed_checks (check conclusions), so
+# classifying these as bot keeps green status reports from masquerading as
+# human actionable feedback.
+BOT_REVIEW_LOGINS = {"coderabbitai[bot]", "chatgpt-codex-connector[bot]", "github-actions"}
 NITPICK_TOKENS = ("nitpick", "nit:", "nits", "style-only")
 ACTIONABLE_TOKENS = (
     "[p0",
