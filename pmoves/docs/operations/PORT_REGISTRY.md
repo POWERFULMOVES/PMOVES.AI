@@ -49,7 +49,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | Port | Service | Description |
 |------|---------|-------------|
 | 8055 | Flute Gateway | Voice/TTS layer |
-| 8056 | Flute Gateway WebSocket | Real-time audio |
+| 8056 | Flute Gateway (reserved) | Published by compose but **unbound** — the app serves HTTP + WebSocket on 8055 only |
 | 8077 | PMOVES.YT | YouTube ingestion |
 | 8078 | FFmpeg-Whisper | Media transcription |
 | 8079 | Media-Video Analyzer | YOLO video analysis |

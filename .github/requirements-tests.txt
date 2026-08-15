@@ -1,0 +1,42 @@
+# Dependency set for the `python-tests` merge gate.
+#
+# The workflow previously ran:
+#     pip install -r requirements.txt 2>/dev/null || pip install pytest ...
+# There is no `requirements.txt` at the repo root, so that line ALWAYS fell
+# through to the four-package fallback and swallowed the error while doing it.
+# That is why `pydantic` and `jsonschema` were missing in CI and why real test
+# modules reported as collection errors rather than as passing or failing tests.
+#
+# This file is installed with no `||` fallback and no `2>/dev/null`: if it is
+# missing or unresolvable the job now fails loudly, which is the point.
+#
+# Contents are evidence-based — derived by parsing the imports of all 264
+# `test_*.py` files in the repo, not guessed.
+
+pytest
+pytest-asyncio
+
+# Imported by the test suite (file counts from the import scan):
+httpx                 # 45 files
+fastapi               # 34 files
+pyyaml                # 20 files (imported as `yaml`)
+numpy                 # 12 files
+jsonschema            # 8 files
+nats-py               # 4 files (imported as `nats`)
+python-jose           # 4 files (imported as `jose`)
+requests              # 3 files
+pydantic              # 2 files
+pydantic-settings     # graph-linker conftest imports it at config time
+websockets            # 2 files
+typer                 # 2 files
+prometheus-client     # 2 files
+aiohttp               # hf-research-agent and other service modules
+
+# From pmoves/pyproject.toml [project.optional-dependencies] dev
+cryptography
+google-auth-oauthlib>=1.2.0
+
+# Deliberately NOT installed: torch (3 files). It is a multi-GB download for
+# three tests and would dominate gate runtime. Those modules stay recorded in
+# the ratchet baseline as collection errors rather than being hidden — see
+# pmoves/configs/pytest_ratchet/_known_failures.yaml.
