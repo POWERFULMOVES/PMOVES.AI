@@ -4826,6 +4826,7 @@ OVERLAY_MEDIA   := -f docker-compose.media.yml
 OVERLAY_UI      := -f docker-compose.ui.yml
 OVERLAY_WORKERS := -f docker-compose.workers.yml
 OVERLAY_APPS    := -f docker-compose.apps.yml
+OVERLAY_ROCM    := -f docker-compose.rocm.override.yml
 
 # Use the raw docker compose binary (NOT $(DC), which includes STACK_FILES and would
 # pull the monolithic docker-compose.yml into overlay targets, defeating isolation).
@@ -4899,6 +4900,44 @@ overlay-up-apps: ## Start application services via overlay
 overlay-down: ## Stop all overlay services
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) down
 	@echo "✅ All overlay services stopped"
+
+# --- AMD RDNA4 / ROCm node overlay -----------------------------------------
+# Node-specific: only nodes with an AMD GPU can run this. Guarded on /dev/kfd so a
+# non-AMD node gets a clear skip instead of a container that fails to start.
+# Brief: docs/handoffs/rocm-device-metrics-exporter-2026-08-15.md
+.PHONY: overlay-up-rocm overlay-down-rocm rocm-exporter-status
+
+overlay-up-rocm: ## Start AMD GPU metrics exporter (rdna4 nodes only)
+	@if [ ! -e /dev/kfd ]; then \
+	  echo "⏭  skipping: /dev/kfd absent — not an AMD GPU node"; exit 0; \
+	fi
+	@$(OVERLAY_DC) $(OVERLAY_ROCM) up -d device-metrics-exporter
+	@echo "✅ AMD device-metrics-exporter started"
+	@echo "   Prometheus scrapes it by service name on pmoves_monitoring (job: amd-gpu)."
+	@echo "   Verify: make -C pmoves rocm-exporter-status"
+
+overlay-down-rocm: ## Stop the AMD GPU metrics exporter
+	@$(OVERLAY_DC) $(OVERLAY_ROCM) down
+	@echo "✅ AMD device-metrics-exporter stopped"
+
+rocm-exporter-status: ## Verify the AMD GPU exporter serves SAMPLES and Prometheus scrapes it
+	@echo "── exporter endpoint ──"
+	@# Probed via docker exec, NOT a host curl: pmoves_monitoring is an internal
+	@# network, so there is no host port to hit. A host curl here returns 000 on a
+	@# perfectly healthy exporter — which is a misleading diagnostic, the thing this
+	@# whole change exists to stop.
+	@samples=$$(docker exec pmoves-device-metrics-exporter \
+	     wget -qO- http://localhost:5000/metrics 2>/dev/null | grep -c '^gpu_' || echo 0); \
+	 echo "   gpu_ samples: $$samples"; \
+	 if [ "$$samples" -eq 0 ]; then \
+	   echo "   ⚠ answering but empty is the exact failure this replaced — check: docker logs pmoves-device-metrics-exporter"; \
+	 fi
+	@echo "── prometheus target ──"
+	@curl -s --max-time 6 'http://localhost:9090/api/v1/targets?state=any' 2>/dev/null \
+	  | $(PYTHON) -c "import json,sys; d=json.load(sys.stdin); \
+	    ts=[t for t in d.get('data',{}).get('activeTargets',[]) if t['labels'].get('job')=='amd-gpu']; \
+	    print('   ' + (('health=' + ts[0]['health'] + (' lastError=' + ts[0]['lastError'] if ts[0].get('lastError') else '')) if ts else 'job amd-gpu NOT configured in prometheus.yml'))" \
+	  2>/dev/null || echo "   (prometheus unreachable on :9090)"
 
 .PHONY: design-tokens design-tokens-check design-test-js
 

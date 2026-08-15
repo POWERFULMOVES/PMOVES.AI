@@ -20,6 +20,22 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:8080"]
 
+  # AMD GPU metrics — AMD's official Device Metrics Exporter, run as a CONTAINER
+  # on the shared network rather than a host-native listener.
+  #
+  # WHY A CONTAINER: the previous host-native exporter (systemd socket on :9835)
+  # was unreachable from here. Docker-published ports bypass UFW on this node
+  # (DOCKER-USER is empty) but a host-native listener does not, so it fell under
+  # UFW's default deny on the bridge — measured: NATS :4222 OPEN, exporter :9835
+  # refused. Running on the network removes the host hop entirely instead of
+  # opening a firewall rule for it.
+  #
+  # Only scrapes where the exporter is deployed (rdna4 nodes); a missing target
+  # shows as down rather than breaking other jobs.
+  - job_name: amd-gpu
+    static_configs:
+      - targets: ["pmoves-device-metrics-exporter:5000"]
+
   - job_name: loki
     static_configs:
       - targets: ["loki:3100"]
