@@ -27,7 +27,7 @@ individual pieces are, on the whole, well built — the CHIT gate on the bridge 
 tested, the vendored web bundle is genuinely self-contained and reproducibly built, and the
 Remotion renderer is better instrumented than most services in the repo.
 
-The cheapest, highest-leverage work is **not** engineering. Five of the nine findings are
+The cheapest, highest-leverage work is **not** engineering. Five of the ten findings are
 documentation and registry corrections that cost hours and prevent the next contributor from
 building against a seam that isn't there. The version split in **F9** — which looks like the
 most alarming finding — turns out to be two wrong strings in one file, not a migration.
@@ -411,6 +411,54 @@ does not exist yet, regardless of what PMOVES decides.
 
 **Explicitly not recommended:** migrating the estate to v0.9. It would buy
 nothing today, and the web renderer cannot follow.
+
+## F10 — the a2ui-renderer Docker build cannot succeed as wired
+
+Found while scoping whether the renderer could consume the `pretext` submodule directly.
+
+`pmoves/docker-compose.yml:3766` builds the service like this:
+
+```yaml
+  a2ui-renderer:
+    build:
+      context: .                                    # resolves to pmoves/
+      dockerfile: services/a2ui-renderer/Dockerfile
+```
+
+`pmoves/services/a2ui-renderer/Dockerfile` line 4 then does:
+
+```dockerfile
+COPY package.json package-lock.json* ./
+RUN npm ci --ignore-scripts
+```
+
+That `COPY` resolves against the **build context**, which is `pmoves/` — and:
+
+```bash
+ls pmoves/package.json
+# does not exist
+```
+
+The Dockerfile is written for a context of `services/a2ui-renderer/`; compose gives it
+`pmoves/`. A `COPY` whose source matches nothing is a hard build failure, so
+`make up-a2ui-renderer` — which runs `up -d --build a2ui-renderer` — cannot build this image.
+
+The service does still declare
+`image: ghcr.io/powerfulmoves/pmoves-a2ui-renderer:pmoves-latest`, so a plain `up -d` may
+pull a previously-published image and appear healthy. That would mask the broken build: the
+running container would be whatever was last published by other means, not the current source.
+
+**Not verified by execution.** This audit started no services and ran no builds. The
+mechanism above is read directly from the three files, but the failure itself is inferred,
+not observed. Running `make -C pmoves up-a2ui-renderer` would confirm or refute it in one step
+— worth doing before acting on this finding.
+
+**Consequence for § F3 and § F4:** vendoring the `pretext` fork into this service is blocked
+twice over, independently of this bug. `Pmoves-pretext` sits at the repository root, outside
+the `pmoves/` build context, so a `file:` dependency is unreachable from the image; and
+`npm ci --ignore-scripts` would skip pretext's `prepack` (`tsc -p tsconfig.build.json`), so
+the `dist/` that its `main` field points at would never be produced. Any "consume the fork
+directly" plan has to resolve the build context first.
 
 ## What is already right
 
