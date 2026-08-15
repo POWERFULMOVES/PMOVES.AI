@@ -129,16 +129,6 @@ via `per_repo_overrides[repo].ruleset_overrides`.
 | `POWERFULMOVES/PMOVES-pinokio` | fork | 1 ruleset id=20589542 + CodeRabbit | classic (CodeRabbit required) + ruleset (deletion + non-FF + pull_request) |
 | `POWERFULMOVES/PMOVES-nats-server` | fork | (no ruleset yet) | spec entry added 2026-08-10; `apply --no-dry-run` will create the fork-profile ruleset. Fork lives in the PMOVES org; submodule wire-up is a separate PR (#2493) |
 
-> **Known gap (2026-08-10 audit): the Slice 2 rulesets target the default
-> branch, not the gitlink branch.** `PMOVES-hermes-agent`'s default branch is
-> `main`, but the monorepo consumes `PMOVES.AI-Edition-Hardened`. The ruleset
-> applied in Slice 2 went out with `conditions.ref_name.include:
-> ["~DEFAULT_BRANCH"]`, so it protects `main` while the branch that actually
-> ships is ungated. The pre-fix diff skipped the include comparison entirely
-> and reported this as compliant. `audit` now reports it as drift, and
-> `apply` writes `refs/heads/<resolved branch>`. Re-running `apply` against
-> the two Slice 2 forks is the remediation — it needs the release gate below.
-
 ## How to apply / audit / drift-check
 
 ```bash
@@ -220,10 +210,39 @@ The branch protection tool is part of the PMOVES harness:
 - `pmoves/tools/load_bootstrap.py` (harness v0) can declare the
   profile assignment in the bootstrap CGP
 - `pmoves/tools/branch_protection.py` audit/apply is the runtime
-- The Mavis cron `branch_protection scan` (Slice 3 follow-up) calls
-  `drift_check` daily + publishes to `pmoves.branch_protection.drift.v1`
-- The orchestrator (from the harness v0 slice) can dispatch a
-  remediation session when drift is detected
+- `pmoves/tools/branch_protection_publisher.py` is the drift publisher
+  (NATS envelope + FilePublisher / MockPublisher / NatsPublisher sinks)
+- `.github/workflows/branch-protection-drift.yml` is the daily drift cron
+  (06:00 UTC) — calls `branch_protection_publisher` for the org, writes
+  the per-repo JSONL to an artifact, and (when `pmoves-nats-mcp` is live)
+  publishes to `pmoves.branch_protection.drift.v1`
+- `.github/workflows/branch-protection-ruleset-sync.yml` is the
+  ruleset-side auto-enroller (weekly Sun 04:00 UTC safety net +
+  `workflow_dispatch`) — applies every `per_repo_overrides` entry
+  via `branch_protection apply --no-dry-run`. Org-level
+  `repository.created` is the natural auto-enroll hook for new
+  forks; lands in a follow-up slice when the org App gets
+  `repository.created` wired.
+- The orchestrator (from the harness v0 slice) can subscribe to
+  `pmoves.branch_protection.drift.v1` and dispatch a remediation
+  session when drift is detected
+
+## NATS subjects (Mavis harness v0 wire-up)
+
+5 subjects registered in `.claude/context/nats-subjects.md` for the
+harness v0 follow-up slice:
+
+| Subject | Producer | Consumer | Purpose |
+|---|---|---|---|
+| `pmoves.agent.task.v1` | `orchestrator.dispatch()` | Worker agents (Hermes, KiloClaw, Mavis-self) | A multi-agent task envelope |
+| `pmoves.agent.result.v1` | Worker agents | `orchestrator` (correlates by `task_id`) | A worker's reply to a task |
+| `pmoves.bpm.phase.v1` | `bpm_cron.advance()` | orchestrator, A2UI, observability | A BPM phase transition (`define → assign → execute → review → close`) |
+| `pmoves.bpm.pomodoro.v1` | `bpm_cron` (focus-block boundaries) | A2UI, observability, operator check-in | A pomodoro focus-block event (25-min work + 5-min check-in) |
+| `pmoves.branch_protection.drift.v1` | `branch_protection_publisher` | orchestrator (remediation), A2UI, observability | A per-repo branch-protection drift report |
+
+The publisher follows the same `Protocol` shape as
+`orchestrator.Publisher` so the test surface is uniform and the
+real `pmoves-nats-mcp` wire-up later just drops in.
 
 ## References
 
