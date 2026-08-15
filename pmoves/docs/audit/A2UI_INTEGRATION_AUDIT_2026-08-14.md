@@ -9,8 +9,10 @@ be re-run.
 
 **Baseline:** `f27d43ed6` (main, `ci(python-tests): make the merge gate capable of failing
 (#2526)`). Findings were first gathered against an older tree and **re-verified in full**
-against this commit — one finding (F3) materially changed between the two and is stated in
-its corrected form.
+against this commit. Two findings were corrected in the course of the audit and are stated
+in corrected form: **F3** (the naive grep result changed between passes) and **F4** (the fork
+turned out to carry no local commits at all). **F9** was found late, by following a reviewer
+prompt to check `PMOVES-DoX`, and is the reason the reconciliation section exists.
 
 **Auditor:** CLAUDE-OPUS-5 (4090 node). **Output:** assessment + recommended sequencing.
 No code changed.
@@ -25,9 +27,10 @@ individual pieces are, on the whole, well built — the CHIT gate on the bridge 
 tested, the vendored web bundle is genuinely self-contained and reproducibly built, and the
 Remotion renderer is better instrumented than most services in the repo.
 
-The cheapest, highest-leverage work is **not** engineering. Four of the eight findings are
+The cheapest, highest-leverage work is **not** engineering. Five of the nine findings are
 documentation and registry corrections that cost hours and prevent the next contributor from
-building against a seam that isn't there.
+building against a seam that isn't there. The version split in **F9** — which looks like the
+most alarming finding — turns out to be two wrong strings in one file, not a migration.
 
 ---
 
@@ -153,6 +156,29 @@ The submodule is **not** vestigial — `website/chit-tour/data.js:362` states th
 plainly: *"Pmoves tracks the POWERFULMOVES/Pmoves-pretext fork for ongoing alignment."* So
 this is a declared strategy that was never completed, which is worse than either finishing
 or dropping it: the repo advertises a fork-tracking posture it does not have.
+
+**Measured delta (2026-08-14).** Initializing the submodule and adding the
+upstream remote settles what the fork actually contains:
+
+```bash
+git rev-list --count upstream/main..HEAD   # 0   commits the fork adds
+git rev-list --count HEAD..upstream/main   # 32  commits the fork is behind
+git describe --tags HEAD                   # v0.0.6-7-gbb224e0
+```
+
+**The fork carries zero PMOVES commits.** It is a clean mirror of upstream,
+parked 7 commits past the `v0.0.6` tag and 32 commits behind current
+`upstream/main`; upstream has since released `v0.0.7` and `v0.0.8`.
+
+This matters for the decision: "vendor the fork" does not mean "preserve our
+customizations", because there are none. It means pinning to a stale
+mid-release upstream snapshot. Customization has not started.
+
+One real hazard does survive: fork HEAD is 7 commits past the `v0.0.6` tag while
+`package.json` still reads `0.0.6`, and the service installs `^0.0.6` from npm —
+which under npm semver resolves `>=0.0.6 <0.0.7`, i.e. the published `0.0.6`
+tarball. So the tracked fork and the installed package are **different code
+under the same version string**, and neither is current.
 
 Two secondary concerns:
 
@@ -286,6 +312,74 @@ tree. Confirm with that lane before treating it as a defect.
 
 ---
 
+## F9 — DoX advertises A2UI v0.9 and emits v0.8
+
+`PMOVES-DoX` is a fourth A2UI participant that the first pass of this audit
+missed. It matters because its declared version and its actual output disagree.
+
+**What it advertises** (`backend/app/api/routers/a2a.py:231`), in its A2A agent
+capability:
+
+```python
+uri="https://a2ui.org/a2a-extension/a2ui/v0.9",
+params={"supportedCatalogIds":
+    ["https://a2ui.dev/specification/v0_9/standard_catalog.json"]}
+```
+
+**What it emits** (`backend/app/services/a2ui_service.py`):
+
+```python
+{"surfaceUpdate": {...}}                              # v0.8 message name
+{"Text": {"text": {"literalString": ...}, "usageHint": ...}}   # v0.8 component shape
+```
+
+Nested component key, `literalString` wrapper, `usageHint`, and the
+`beginRendering` / `surfaceUpdate` pair are all **v0.8**. Under v0.9 the same
+component is flat — `"component": "Text"` with a bare `text` and `variant`.
+
+An A2A client that honoured the advertisement would fetch the v0.9 catalog,
+expect flat components, and receive nested ones. It would also expect
+`ChoicePicker` where DoX can only produce `MultipleChoice`.
+
+DoX also has a live NATS seam: `frontend/app/a2ui/page.tsx:42` subscribes to
+`a2ui.render.v1` — the same unregistered subject from § F5, which makes that
+registration gap a **cross-submodule** contract gap rather than an internal one.
+
+**This is a two-string defect, not an architecture defect.** See the
+reconciliation scope below.
+
+## Reconciliation scope — what one spec version would cost
+
+Establishing the actual spread:
+
+| Component | Emits / renders | Evidence |
+|---|---|---|
+| `a2ui-nats-bridge` | v0.8 | `A2UI_BEGIN_RENDERING`, `A2UI_SURFACE_UPDATE` |
+| `website/stage/` + `a2ui.mjs` | v0.8 | `public-rooms.json` uses `literalString` / `usageHint` |
+| A2UI editor (`tools/editor`) | v0.8 | imports `v0_8` from `@a2ui/lit` |
+| `PMOVES-DoX` generator | v0.8 | `a2ui_service.py` |
+| `PMOVES-DoX` agent card | **advertises v0.9** | `a2a.py:231` |
+
+**Everything that actually moves bytes is already v0.8.** The only v0.9 in the
+system is a pair of metadata strings in one file.
+
+There is also a hard constraint on moving the other way: `@a2ui/lit` implements
+**only** v0.8 — `renderers/lit/src/` contains a single `0.8` directory. Upgrading
+the web surface to v0.9 is therefore blocked on upstream renderer support that
+does not exist yet, regardless of what PMOVES decides.
+
+**Recommended reconciliation — correct the advertisement, do not migrate.**
+
+1. Change the two strings in `a2a.py` to the v0.8 extension URI and the v0.8
+   catalog id, so DoX advertises what it emits. Effort: minutes.
+2. Add a regression test asserting the advertised catalog version matches the
+   version `a2ui_service.py` generates, so the two cannot drift apart again.
+3. Register `a2ui.render.v1` (§ F5) — it is now known to be a cross-submodule
+   contract between the bridge and the DoX frontend.
+
+**Explicitly not recommended:** migrating the estate to v0.9. It would buy
+nothing today, and the web renderer cannot follow.
+
 ## What is already right
 
 Worth protecting during any remediation:
@@ -315,6 +409,7 @@ config only.
 | 3 | Register the four missing subjects in `topics.json`; wire the subject audit into a gate that can fail | F5 | S | The auditor exists but drift happened anyway. |
 | 4 | Resolve `Pmoves-pretext`: vendor it or drop it; pin `0.0.6` exactly | F4 | S | Removes an advertised-but-absent dependency before anyone builds on it. |
 | 5 | Reconcile the room manifest with reality (with the 5090 lane) | F8 | S | Cheap once ownership is confirmed. |
+| 5b | Correct DoX's advertised A2UI version to match what it emits, + a drift test | F9 | S | Two strings. Everything that moves bytes is already v0.8. |
 | 6 | **Extract pretext into a shared layout module used by both web and video** | F3 | M | The substantive enhancement. Interface is already correct and already browser-safe. |
 | 7 | CHIT-gate the renderer; add it to `CHIT_INTEGRATION_STATUS.md` | F7 | M | Closes unsigned input into a provenance path. |
 | 8 | Protocol → Animation adapter | F1 | L | **Do not start without answering the question below.** |
