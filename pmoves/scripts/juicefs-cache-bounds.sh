@@ -87,12 +87,27 @@ while [ ! -d "$probe" ] && [ "$probe" != "/" ] && [ -n "$probe" ]; do
 done
 
 # ── df bracket (measure, don't assume) ──────────────────────────────────────
+# CONTRACT: total_kib / avail_kib MUST end up numeric — the compute block below
+# guards on `total_kib > 0`, and POSIX awk does a STRING compare when one side is
+# a string, so a non-numeric value silently passes that guard and then coerces to
+# 0 in the division.
+#
+# Read the 1024-blocks and Available columns from the RIGHT ($(NF-4)/$(NF-2)):
+# a Filesystem name can contain spaces (Git Bash reports "/" as
+# "C:/Program Files/Git"; some Linux mounts too), which shifts positional $2/$4
+# onto the wrong fields. That fed a non-numeric total into awk -> "division by
+# zero attempted", and silently sized the cache off USED space rather than
+# available. Mounted-on (NF) is the probe path we passed, which has no spaces.
+#
 # `|| true` so a failed df (EOF on read) does not trip `set -e` before the
 # guard below can run — the guard is the safety net, it must be reachable.
-read -r total_kib avail_kib < <(df -Pk "$probe" 2>/dev/null | awk 'NR==2{print $2, $4}') || true
-if [ -z "${total_kib:-}" ] || [ -z "${avail_kib:-}" ]; then
-  warn "df failed for '$probe' — emitting conservative floor bounds."
-  total_kib=0; avail_kib=0
+read -r total_kib avail_kib < <(df -Pk "$probe" 2>/dev/null | awk 'NR==2{print $(NF-4), $(NF-2)}') || true
+# Coerce empty OR non-numeric (a pathological df layout) to 0; the awk below
+# treats total_kib=0 as "unknown" and skips the division, emitting floor bounds.
+case "${total_kib:-}" in ''|*[!0-9]*) total_kib=0 ;; esac
+case "${avail_kib:-}" in ''|*[!0-9]*) avail_kib=0 ;; esac
+if [ "$total_kib" = 0 ] || [ "$avail_kib" = 0 ]; then
+  warn "df gave no usable numbers for '$probe' — emitting conservative floor bounds."
 fi
 
 info "df target: $probe"
