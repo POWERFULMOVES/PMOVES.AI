@@ -97,7 +97,46 @@ TRUNCATE_PATTERNS = [
 ]
 
 # Combined patterns for read-only paths (block ALL modifications)
+# ---------------------------------------------------------------------------
+# INTERPRETER WRITE PATTERNS
+# ---------------------------------------------------------------------------
+# Every pattern above keys on a SHELL verb: >, tee, sed -i, cp, mv, truncate.
+# An interpreter uses none of them. `python - <<'PY'` followed by
+# pathlib.write_text() matched NOTHING, so readOnlyPaths were writable from
+# Bash the whole time, while the Edit/Write tools were correctly blocked.
+#
+# The hook receives the entire command string, heredoc body included, so the
+# path IS present here -- it is simply on a later line than the interpreter.
+# Hence [\s\S]* rather than .*, since every pattern above is single-line.
+#
+# Order-independent by construction: the write verb may precede the path
+# (open(p, 'w')) or follow it (p = Path(x); p.write_text(...)). The lookaheads
+# assert 'an interpreter runs' AND 'a write API is used' anywhere in the
+# command, then require the protected path to appear.
+#
+# READS STAY ALLOWED, deliberately: read-only means read-only, not no-access.
+# A bare python -c "print(open(P).read())" has no write verb and does not match.
+#
+# RESIDUAL GAP, stated rather than papered over: this cannot resolve indirection.
+#   for f in <paths>; do perl -i -pe '...' "$f"; done
+# hides the path behind $f, and no regex over the command text can expand it.
+# Closing that needs interpretation, not pattern matching. The defence there is
+# that Edit/Write are blocked, so it only matters for a deliberate bypass --
+# a policy question, not a technical one.
+_INTERP = r"(?:python[0-9.]*|node|ruby|perl|php|deno|bun)"
+_WRITE_API = (
+    r"(?:write_text|write_bytes|writeFileSync|appendFileSync|createWriteStream|"
+    r"\.write\(|\.writelines\(|open\([^)]*['\"][wax]|"
+    r"shutil\.(?:copy|copy2|copyfile|move)|os\.(?:replace|rename|remove|unlink)|"
+    r"fs\.(?:write|append|rm|unlink|rename))"
+)
+INTERPRETER_WRITE_PATTERNS = [
+    (r"(?=[\s\S]*\b" + _INTERP + r"\b)(?=[\s\S]*" + _WRITE_API + r")[\s\S]*{path}",
+     "interpreter write"),
+]
+
 READ_ONLY_BLOCKED = (
+    INTERPRETER_WRITE_PATTERNS +
     WRITE_PATTERNS +
     APPEND_PATTERNS +
     EDIT_PATTERNS +
