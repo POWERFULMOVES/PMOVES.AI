@@ -20,7 +20,50 @@
 #   PMOVES_ENV_SHARED   path to env.shared (default: $REPO/pmoves/env.shared)
 set -u
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
+# ---------------------------------------------------------------------------
+# REPO-ROOT RESOLUTION — keep byte-identical across the three launchers that
+# carry it (claude-pmoves.sh, this file, pmoves/scripts/claude-pmoves.sh).
+# Enforced by deploy/provision/tests/test-launcher-root-resolution.sh, which
+# fails if one is fixed and the others are not — the drift that produced this
+# bug in the first place.
+#
+# WHY THE WALK: an install script may drop a ~/.local/bin/<name> symlink on PATH
+# for shells that don't source the rc function. Taking dirname of the SYMLINK
+# makes ROOT=$HOME, so env.shared misses and every cred-dependent MCP starts
+# empty — silently, with only a WARN.
+#
+# WHY `CDPATH= cd -P --`: dirname yields a bare relative path when the script is
+# invoked relatively; `cd` consults CDPATH for such arguments, which both jumps
+# elsewhere AND echoes the destination, embedding a newline in the captured path.
+# ---------------------------------------------------------------------------
+SELF="${BASH_SOURCE[0]:-$0}"
+while [ -L "$SELF" ]; do
+  link_dir="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+  SELF="$(readlink -- "$SELF")"
+  case "$SELF" in /*) ;; *) SELF="$link_dir/$SELF" ;; esac
+done
+SELF_DIR="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+
+# PMOVES_LAUNCHER_ROOT, not PMOVES_REPO_ROOT: the latter is already consumed by
+# pmoves/services/creator-operator/config.py.
+if [ -n "${PMOVES_LAUNCHER_ROOT:-}" ]; then
+  ROOT="$PMOVES_LAUNCHER_ROOT"
+else
+  ROOT="$(CDPATH= cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
+fi
+
+if [ ! -f "${ROOT:-/nonexistent}/pmoves/Makefile" ]; then
+  if [ -n "${PMOVES_ENV_SHARED:-}" ] && [ -f "$PMOVES_ENV_SHARED" ]; then
+    echo "[crush-pmoves] WARN: repo root not found (${ROOT:-<unresolved>}); using PMOVES_ENV_SHARED." >&2
+  else
+    echo "[crush-pmoves] ERROR: no pmoves/Makefile under repo root: ${ROOT:-<unresolved>}" >&2
+    echo "[crush-pmoves]        (resolved from: $SELF)" >&2
+    echo "[crush-pmoves]        Fix: set PMOVES_LAUNCHER_ROOT=/path/to/PMOVES.AI," >&2
+    echo "[crush-pmoves]             or PMOVES_ENV_SHARED=/path/to/env.shared" >&2
+    exit 1
+  fi
+fi
+
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
 if [ -f "$ENVF" ]; then
