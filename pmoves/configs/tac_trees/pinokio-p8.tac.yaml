@@ -203,7 +203,7 @@ root:
           task: "Bridge can match creator-studio room requirements (sm_120 / 24GB) on the 5090 host"
           action:
             type: http
-            target: "http://127.0.0.1:8130/v1/gpu/match?min_vram=24000&gpu_arch=sm_120,sm_110"
+            target: "http://127.0.0.1:8130/v1/gpu/match?min_vram=24000&gpu_arch=sm_120,sm_121"
             method: "GET"
             expect: "HTTP 200 with matched: true on the 5090 (vram 32GB, sm_120); matched: false elsewhere"
           context: "P7 calls this exact query during creator-studio room-session-open per the slice 1 hardware_requirements schema"

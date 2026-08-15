@@ -118,8 +118,8 @@ Default ranges used by port allocator:
 | DeepResearch | 8098 | Research |
 | SupaSerch | 8099 | Search |
 | **Voice & Speech** |
-| Flute Gateway | 8055 | TTS HTTP |
-| Flute Gateway WS | 8056 | TTS WebSocket |
+| Flute Gateway | 8055 | TTS HTTP + WebSocket |
+| Flute Gateway WS | 8056 | Reserved — published, not bound (see PORT_REGISTRY.md) |
 | Ultimate TTS Studio | 7861 | TTS UI |
 | **Media Ingestion** |
 | PMOVES.YT | 8077 | YouTube |

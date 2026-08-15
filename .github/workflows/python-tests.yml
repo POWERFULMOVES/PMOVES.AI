@@ -57,17 +57,32 @@ jobs:
         run: |
           git submodule sync -- PMOVES.YT
           git -c protocol.version=2 submodule update --init --depth=1 PMOVES.YT
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
-        continue-on-error: true          # Self-hosted runner: bash arithmetic fails on large disks (scientific notation)
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: false
-          swap-storage: false
+      - name: Free disk space (ubuntu-latest)
+        # Inline rather than jlumbroso/free-disk-space: that action is not on
+        # this repo's Actions allowlist, which made the WHOLE workflow
+        # uncompilable — `startup_failure`, 0 jobs, on 100 of its last 100
+        # runs. A required merge check that cannot launch is worse than a slow
+        # one. Reclaiming inline needs no allowlist entry and adds no
+        # third-party supply-chain surface.
+        #
+        # Mirrors what the action removed for us (android/dotnet/haskell/
+        # large-packages, tool-cache and swap left alone). Safe here ONLY
+        # because runs-on is ubuntu-latest — an ephemeral hosted VM. Do not
+        # copy this onto a self-hosted fleet runner: `docker image prune`
+        # there would delete live fleet images.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "before: $(df -h --output=avail / | tail -1 | tr -d ' ') avail"
+          for d in /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                   /usr/local/.ghcup /usr/local/share/boost /usr/local/share/powershell; do
+            [ -e "$d" ] && sudo rm -rf -- "$d" || true
+          done
+          sudo apt-get purge -y -qq '^llvm-.*' '^mongodb-.*' '^mysql-.*' azure-cli 2>/dev/null || true
+          sudo apt-get autoremove -y -qq 2>/dev/null || true
+          sudo apt-get clean 2>/dev/null || true
+          echo "after:  $(df -h --output=avail / | tail -1 | tr -d ' ') avail"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -117,7 +132,16 @@ jobs:
           # Collect unique package specs. Most entries strip versions to let pip resolve;
           # preserved specs keep explicit guardrails for packages with bad releases.
           packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov"]
+          # Test-only dependencies. These are NOT collected from any service
+          # requirements.txt because the services do not need them at runtime —
+          # only the tests do. `common` in particular ships no requirements.txt
+          # at all, so anything its tests import has to be declared here.
+          #
+          # ruamel.yaml: pmoves/services/common/tests/test_topology_networks_wiring.py
+          # imports it, and its own docstring pins the version it expects
+          # (`uv run --with ruamel.yaml==0.19.1`). Matching that pin here keeps
+          # the CI run and the documented standalone invocation on one version.
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "ruamel.yaml==0.19.1"]
 
           import re
           for path in requirements:

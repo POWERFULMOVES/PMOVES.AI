@@ -52,6 +52,14 @@ SERVER_PORT = int(os.environ.get("HF_RESEARCH_PORT", "8202"))
 MIN_DOWNLOADS = int(os.environ.get("HF_MIN_DOWNLOADS", "100"))
 MIN_LIKES = int(os.environ.get("HF_MIN_LIKES", "10"))
 MIN_SCORE = int(os.environ.get("HF_MIN_SCORE", "50"))
+
+# Scoring scale. Criteria 1-4 award up to BASE_MAX_SCORE (40 + 25 + 20 + 15);
+# Criterion 5 adds a further COMPAT_BONUS_POINTS on top, so the attainable
+# maximum is 110, not 100. MIN_SCORE is an absolute threshold, not a
+# percentage of MAX_SCORE.
+BASE_MAX_SCORE = 100
+COMPAT_BONUS_POINTS = 10
+MAX_SCORE = BASE_MAX_SCORE + COMPAT_BONUS_POINTS
 PREFERRED_TAGS_RAW = os.environ.get("HF_PREFERRED_TAGS", "")
 PREFERRED_TAGS = {t.strip().lower() for t in PREFERRED_TAGS_RAW.split(",") if t.strip()}
 AVOID_TAGS_RAW = os.environ.get("HF_AVOID_TAGS", "")
@@ -103,7 +111,6 @@ class HFResearchAgent:
         model_id = model.get("model_id", "unknown")
 
         score = 0
-        max_score = 100
         reasons: list[str] = []
 
         # Criterion 1: Downloads (0-40 points)
@@ -151,8 +158,10 @@ class HFResearchAgent:
         model_id_lower = model_id.lower()
         matched_compat = {kw for kw in compat_keywords if kw in model_id_lower or kw in tags}
         if matched_compat:
-            score += 10
-            reasons.append(f"local-compat (+10): {sorted(matched_compat)}")
+            score += COMPAT_BONUS_POINTS
+            reasons.append(
+                f"local-compat (+{COMPAT_BONUS_POINTS}): {sorted(matched_compat)}"
+            )
 
         # Penalty: Avoid tags (-10 points each)
         matched_avoid = tags & AVOID_TAGS
@@ -165,7 +174,7 @@ class HFResearchAgent:
         return {
             "model_id": model_id,
             "score": score,
-            "max_score": max_score + 10,  # +10 from Criterion 5
+            "max_score": MAX_SCORE,
             "passed": passed,
             "reasons": reasons,
             "tags": model.get("tags", []),

@@ -194,7 +194,7 @@ The vendored yt-dlp fork supports **1000+ sites**. Key platforms for PMOVES cont
 ```
 
 ### Stream capture via Flute-Gateway + WebRTC
-- Flute-Gateway WebSocket (`:8056`) captures duplex audio
+- Flute-Gateway WebSocket (`:8055/v1/voice/agent`) captures duplex audio (requires `PIPECAT_ENABLED=true`)
 - WebRTC session recordings can be saved to `/mnt/pmoves/media/video/live-captures/`
 - Pipecat integration enables real-time voice agent session recording
 
