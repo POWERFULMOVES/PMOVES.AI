@@ -12,9 +12,14 @@ files and 100 jobs, which of our checks are actually load-bearing?
 It is not "everything is broken", and it is not "two bad steps". It is narrower
 and worse than either:
 
-> **Three of the five checks required to merge into `main` cannot fail on the
-> thing they exist to validate. All three are in one file, `merge-gate.yml`. The
-> other two are well built and genuinely enforce.**
+> **As audited on 2026-08-10, three of the five checks required to merge into
+> `main` could not fail on the thing they exist to validate. All three were in
+> one file, `merge-gate.yml`. The other two are well built and genuinely
+> enforce.**
+>
+> **Status at 2026-08-14 — two of the three remain.** `python-tests` was repaired
+> by #2526 (merged 2026-08-14) and now enforces. `merge-gate` and
+> `hardening-validation` are unchanged. **The count today is two of five.**
 
 The precise claim is worth stating carefully, because the sloppy version is
 falsifiable and this one is not. These jobs **can** report `failure` — every one
@@ -34,10 +39,15 @@ the gate.
 | Required check | Verdict | Why |
 |---|---|---|
 | `merge-gate` | **VACUOUS** | the job body is three `echo`s and an unread variable; it contains no command that can fail |
-| `python-tests` | **VACUOUS** | `head -20` of 264 test files, then `\|\| true` |
+| `python-tests` | **VACUOUS at audit → REPAIRED 2026-08-14** | was `head -20` of 264 test files, then `\|\| true`; #2526 replaced the body with `pmoves/tools/pytest_ratchet.py` and an unmasked `pip install`, so the job can now fail |
 | `hardening-validation` | **VACUOUS** | greps for the string `USER` and asserts nothing; passes whether a service runs as root explicitly or implicitly |
 | `verify` | **ENFORCING** | `set -euo pipefail`, explicit `exit 1` per missing contract element, fail-safe on diff errors |
 | `submodule-gitlink-gate` | **ENFORCING** | sets `fail=1` and `exit 1` on dangling / rollback / sideways gitlinks |
+
+*Re-verified against `main` at `f27d43ed6` on 2026-08-14, in the same turn this
+row was edited: `merge-gate` still sets `PASSED=true` and never reads it, ending
+in two `echo`s; `hardening-validation` still ends in `grep … || echo`. Only the
+`python-tests` row changed.*
 
 ## Proof, not inference
 
@@ -195,10 +205,15 @@ if [[ "${{ needs.python-tests.result }}" == "failure" ]] || ... ; then
 fi
 ```
 
-That is a real aggregator with a real `exit 1`. It is nonetheless structurally
-green, because **all three jobs it aggregates are vacuous** and can therefore
-never report `failure`. Repairing `merge-decision` would accomplish nothing;
-repairing its three inputs fixes it for free.
+That is a real aggregator with a real `exit 1`. At the time of audit it was
+nonetheless structurally green, because **all three jobs it aggregates were
+vacuous** and could therefore never report `failure`. Repairing `merge-decision`
+would have accomplished nothing; repairing its three inputs fixes it for free.
+
+**Updated 2026-08-14.** #2526 repaired `python-tests`, so this aggregator is now
+live: a `python-tests` failure will fail `merge-decision` and block the merge.
+Its other two inputs, `docker-build-validation` and `hardening-validation`,
+remain vacuous — so the aggregator enforces on one of its three legs.
 
 ## The wiring does not match the design
 
