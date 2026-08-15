@@ -116,14 +116,15 @@ curl -X POST http://localhost:3000/api/run-scenario \
 
 The route returns `{ scenario_results, comparative_analysis, recommendations }` with Scenario-B metrics `final_wealth, gini, poverty_rate, wealth_growth, inequality_change, resilience` (`route.ts:66-77`).
 
-Direct (no HTTP) alternative — call the engine in a ts-node script:
+Client alternative — call the simulator through the real typed client
+(`pmoves/ui/lib/tokenismClient.ts`), which POSTs to the tokenism simulator's
+`/api/v1/simulate` (port 8103):
 
 ```ts
-import { runSimulation } from './src/lib/simulation';
+import { getTokenismClient } from '@/lib/tokenismClient';
 import params from './fordham-mesh.json';
-runSimulation(params.params).then(r =>
-  console.log(r.history.at(-1))   // final WeeklyMetrics: Gini_A/B, PovertyRate_A/B, ...
-);
+const r = await getTokenismClient().runSimulation(params.params);
+console.log(r.history.at(-1));   // final WeeklyMetrics: Gini_A/B, PovertyRate_A/B, ...
 ```
 
 ---
