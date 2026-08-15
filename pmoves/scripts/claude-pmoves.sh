@@ -30,7 +30,37 @@
 # script directly: deploy/provision/claude-pmoves.sh
 set -u
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
+# ---------------------------------------------------------------------------
+# REPO-ROOT RESOLUTION — keep byte-identical across the three launchers that
+# carry it (deploy/provision/claude-pmoves.sh, deploy/provision/crush-pmoves.sh,
+# this file). Enforced by deploy/provision/tests/test-launcher-root-resolution.sh,
+# which fails if one is fixed and the others are not.
+#
+# WHY THE WALK: taking dirname of a PATH symlink instead of the real file makes
+# ROOT=$HOME, so the delegate cannot find the real launcher and degrades to
+# `claude --agent` with no creds — the silent-credless class this file exists to
+# close.
+#
+# WHY `CDPATH= cd -P --`: dirname yields a bare relative path when the script is
+# invoked relatively; `cd` consults CDPATH for such arguments, which both jumps
+# elsewhere AND echoes the destination, embedding a newline in the captured path.
+# ---------------------------------------------------------------------------
+SELF="${BASH_SOURCE[0]:-$0}"
+while [ -L "$SELF" ]; do
+  link_dir="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+  SELF="$(readlink -- "$SELF")"
+  case "$SELF" in /*) ;; *) SELF="$link_dir/$SELF" ;; esac
+done
+SELF_DIR="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+
+# PMOVES_LAUNCHER_ROOT, not PMOVES_REPO_ROOT: the latter is already consumed by
+# pmoves/services/creator-operator/config.py.
+if [ -n "${PMOVES_LAUNCHER_ROOT:-}" ]; then
+  ROOT="$PMOVES_LAUNCHER_ROOT"
+else
+  ROOT="$(CDPATH= cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
+fi
+
 LAUNCHER="$ROOT/deploy/provision/claude-pmoves.sh"
 
 AGENT="${1:-delivery-agent}"

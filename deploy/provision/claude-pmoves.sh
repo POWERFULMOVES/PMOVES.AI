@@ -14,7 +14,61 @@
 # Usage: run this instead of `claude` (alias it: alias claude=/path/to/claude-pmoves.sh).
 set -u
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
+# ---------------------------------------------------------------------------
+# REPO-ROOT RESOLUTION — keep byte-identical across the three launchers that
+# carry it (this file, crush-pmoves.sh, pmoves/scripts/claude-pmoves.sh).
+# Enforced by deploy/provision/tests/test-launcher-root-resolution.sh, which
+# fails if one is fixed and the others are not — the drift that produced this
+# bug in the first place.
+#
+# WHY THE WALK: install-claude-pmoves-command.sh drops a ~/.local/bin/<name>
+# symlink on PATH for shells that don't source the rc function. Taking dirname
+# of the SYMLINK made ROOT=$HOME, so env.shared and .claude/mcp.json both missed
+# and every cred-dependent MCP started empty — silently, with only a WARN.
+#
+# WHY `CDPATH= cd -P --`: dirname yields a bare relative path when the script is
+# invoked relatively; `cd` consults CDPATH for such arguments, which both jumps
+# elsewhere AND echoes the destination, embedding a newline in the captured path.
+# ---------------------------------------------------------------------------
+SELF="${BASH_SOURCE[0]:-$0}"
+while [ -L "$SELF" ]; do
+  link_dir="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+  SELF="$(readlink -- "$SELF")"
+  case "$SELF" in /*) ;; *) SELF="$link_dir/$SELF" ;; esac
+done
+SELF_DIR="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+
+# PMOVES_LAUNCHER_ROOT, not PMOVES_REPO_ROOT: the latter is already consumed by
+# pmoves/services/creator-operator/config.py, so reusing it would let a shell
+# exported for that service silently redirect this launcher.
+if [ -n "${PMOVES_LAUNCHER_ROOT:-}" ]; then
+  ROOT="$PMOVES_LAUNCHER_ROOT"
+else
+  ROOT="$(CDPATH= cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
+fi
+
+# Validate the derived ROOT the way the sibling launchers do (marker-file check)
+# rather than trusting the computation. A launcher whose whole job is loading
+# repo-relative config must not proceed silently when it cannot find the repo.
+#
+# EXCEPTION: an explicit, existing PMOVES_ENV_SHARED means the operator has
+# pinned the creds themselves — the documented "alias claude=..." path from a
+# non-repo copy. Honour it and warn about the roster instead of hard-failing,
+# which would make `claude` itself unusable on that node.
+if [ ! -f "${ROOT:-/nonexistent}/pmoves/Makefile" ]; then
+  if [ -n "${PMOVES_ENV_SHARED:-}" ] && [ -f "$PMOVES_ENV_SHARED" ]; then
+    echo "[claude-pmoves] WARN: repo root not found (${ROOT:-<unresolved>}); using PMOVES_ENV_SHARED." >&2
+    echo "[claude-pmoves]       The MCP roster is repo-relative and will be skipped." >&2
+  else
+    echo "[claude-pmoves] ERROR: no pmoves/Makefile under repo root: ${ROOT:-<unresolved>}" >&2
+    echo "[claude-pmoves]        (resolved from: $SELF)" >&2
+    echo "[claude-pmoves]        Fix: re-run deploy/provision/install-claude-pmoves-command.sh," >&2
+    echo "[claude-pmoves]             set PMOVES_LAUNCHER_ROOT=/path/to/PMOVES.AI," >&2
+    echo "[claude-pmoves]             or set PMOVES_ENV_SHARED=/path/to/env.shared" >&2
+    exit 1
+  fi
+fi
+
 ENVF="${PMOVES_ENV_SHARED:-$ROOT/pmoves/env.shared}"
 
 if [ -f "$ENVF" ]; then
