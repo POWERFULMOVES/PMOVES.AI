@@ -66,6 +66,12 @@ jobs:
       # Derive the repo set to apply to. If a single --repo is passed,
       # use that; otherwise apply to every per_repo_overrides entry in
       # the spec. The spec is the source of truth — no hardcoded list.
+      #
+      # The `repos` step output is the heredoc the App-token step reads
+      # for the `repositories` input. Per actions/create-github-app-token
+      # docs, an empty `repositories` with `owner` set scopes the token
+      # to EVERY accessible repository (privilege escalation + slow) —
+      # so the heredoc is load-bearing for the least-privilege goal.
       - name: Resolve apply target set
         id: targets
         run: |
@@ -86,6 +92,14 @@ jobs:
           with open("repos_count", "w") as f:
               f.write(str(len(repos)))
           PY
+          # Export the resolved repo set as a step output so the App-token
+          # step can scope the token. Empty output = "every repo" per the
+          # action's contract; the heredoc is the protection.
+          {
+            echo "repos<<__EOF__"
+            sort -u repos.tsv
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
 
       # Mint the GitHub App token with the Administration grant
       # (required to PUT rulesets). The token scope is the resolved
@@ -112,14 +126,28 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
+          # `set +e` here is intentional — we want to count failures
+          # across repos, not fail the step on the first one. The per-repo
+          # apply has its own try/collect.
+          #
+          # NB on the pipefail-style trap: `python | tee` returns `tee`'s
+          # exit code (always 0) by default, so a plain `if pipeline; then`
+          # would never increment FAILED. We capture the python exit via
+          # `${PIPESTATUS[0]}` so failures are actually counted.
           set +e
           APPLIED=0; SKIPPED=0; FAILED=0
           while IFS= read -r repo; do
             [ -z "$repo" ] && continue
             echo "--- $repo ---"
-            args=("$repo")
-            if [ "$DRY_RUN" = "true" ]; then args+=("--dry-run"); fi
-            if python -m pmoves.tools.branch_protection apply "${args[@]}" 2>&1 | tee -a "apply.${repo//\//_}.log"; then
+            # Tool CLI: `apply --repo REPO [--no-dry-run]`. The dry-run
+            # default is true, so we ONLY add --no-dry-run when the input
+            # says dry_run=false. Passing the nonexistent --dry-run flag
+            # would make arg-parse fail and silently no-op every repo.
+            args=("--repo" "$repo")
+            if [ "$DRY_RUN" = "false" ]; then args+=("--no-dry-run"); fi
+            python -m pmoves.tools.branch_protection apply "${args[@]}" 2>&1 | tee -a "apply.${repo//\//_}.log"
+            rc=${PIPESTATUS[0]}
+            if [ "$rc" -eq 0 ]; then
               APPLIED=$((APPLIED+1))
             else
               FAILED=$((FAILED+1))

@@ -52,16 +52,40 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Mint the GitHub App token. branch_protection.drift_check() shells
+      # out to `gh api` for every repo in per_repo_overrides, which
+      # requires auth. With `permissions: {}` and no App-token step,
+      # every call 401s and is reported as an `audit_error` (false
+      # drift). The token scope is every repo in per_repo_overrides
+      # (the drift audit needs read access to all of them).
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ github.repository_owner }}
+          permission-contents: read
+          # permission-administration: read is not required for drift
+          # audit (only writes need administration). The token is
+          # least-privilege for the drift surface.
+
       # Run the drift check + publish. The default sink is `file`
       # (JSONL to stdout + the per-run artifact). Operators flip to
       # `nats` when pmoves-nats-mcp is wired on the runner.
+      #
+      # `set -e -o pipefail` is required: the `python ... | tee ...`
+      # pipeline's exit status is `tee`'s (always 0) by default, which
+      # would mask a publisher failure (e.g. NATS sink can't import its
+      # package). pipefail propagates python's exit, so the step fails
+      # when the publisher fails — which is the documented contract.
       - name: Run drift check + publish
         id: drift
         env:
           ORG: ${{ inputs.org || 'POWERFULMOVES' }}
           SINK: ${{ inputs.sink || 'file' }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          set -e
+          set -e -o pipefail
           mkdir -p .drift
           # Default to file sink writing to the artifact path. The publisher
           # is a stdlib-only Python tool; the workflow does not need
