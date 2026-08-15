@@ -2102,3 +2102,105 @@ This is analogous to HTTP path versioning (`/api/v1/`) vs content-type versionin
 - **Direction:** Published by missinglinc-validator (adversarial depth only) -> Consumed by rooms, alerting
 - **Purpose:** Counter-evidence report: contradictions found while red-teaming a claim set
 - **Status:** REGISTERED-AHEAD — see mint spec
+
+## Mavis Harness v0 Subjects
+
+> Namespace `pmoves.agent.*` + `pmoves.bpm.*` introduced by the Mavis multi-agent
+> harness v0 (`pmoves/tools/orchestrator.py` + `pmoves/tools/bpm_cron.py`).
+> Locked in PR #2477; registered here in PR follow-up slice. The `pmoves-nats-mcp`
+> slice (z890 PR #2492 spec) is the consumer that will produce these messages
+> in production; the MockPublisher in `pmoves/tools/orchestrator.py` is the
+> test-surface that runs without a live NATS broker.
+
+**`pmoves.agent.task.v1`**
+- **Direction:** Published by `pmoves/tools/orchestrator.py::Orchestrator.dispatch` → Consumed by worker agents (Hermes, KiloClaw, Mavis-self)
+- **Purpose:** A multi-agent task envelope. The orchestrator publishes one task with a `task_id`; the worker replies on `pmoves.agent.result.v1` keyed by the same `task_id`.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task": "render cyber.png as the Pillar 4 encoding skin",
+    "agents": ["mavis", "kiloclaw"],
+    "context": { "identity": "critic", "tools_bridge": [...] }
+  }
+  ```
+- **Subscribers:** Agent Zero (for routing), worker agents, audit/observability sinks
+- **Status:** REGISTERED — orchestrator + bpm_cron use these subjects; consumer-fork wire-up (Hermes, KiloClaw) is the harness v0 consumer slice
+
+**`pmoves.agent.result.v1`**
+- **Direction:** Published by worker agents → Consumed by `pmoves/tools/orchestrator.py::Orchestrator` (correlates by `task_id`)
+- **Purpose:** The worker's reply to a task. Multiple workers may reply for the same `task_id`; the orchestrator merges per-phase.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "target": "kiloclaw",
+    "status": "success | error | pending | timeout",
+    "output": "rendered PNG at /tmp/.../cyber.png",
+    "elapsed_s": 12.4,
+    "error": ""
+  }
+  ```
+- **Subscribers:** Orchestrator, audit/observability, A2UI live trail
+- **Status:** REGISTERED — same as `pmoves.agent.task.v1`
+
+**`pmoves.bpm.phase.v1`**
+- **Direction:** Published by `pmoves/tools/bpm_cron.py::BpmCron.advance` → Consumed by the orchestrator, A2UI, observability
+- **Purpose:** A BPM phase transition event. The 5 phases are `define → assign → execute → review → close`; each transition is a published event so the orchestrator can dispatch the next phase's work and A2UI can render the live trail.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task_name": "react-to-video-123",
+    "phase": "execute",
+    "previous_phase": "assign",
+    "agent": "mavis",
+    "timestamp": "2026-08-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Orchestrator, A2UI live trail, observability
+- **Status:** REGISTERED — bpm_cron publishes per-phase
+
+**`pmoves.bpm.pomodoro.v1`**
+- **Direction:** Published by `pmoves/tools/bpm_cron.py::BpmCron` (focus-block boundaries) → Consumed by A2UI, observability, the operator's check-in dispatcher
+- **Purpose:** A pomodoro focus-block event: 25-min work + 5-min check-in (configurable via env). Each block boundary is a published event so the operator check-in surface knows when to interrupt.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task_name": "react-to-video-123",
+    "block_index": 1,
+    "event": "start | completed | skipped",
+    "work_minutes": 25,
+    "checkin_minutes": 5,
+    "timestamp": "2026-08-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** A2UI, observability, operator check-in surfaces
+- **Status:** REGISTERED — bpm_cron publishes per-block
+
+**`pmoves.branch_protection.drift.v1`**
+- **Direction:** Published by `pmoves/tools/branch_protection_publisher.py::publish_drift_report` → Consumed by the orchestrator (remediation dispatch), A2UI (live ruleset trail), observability
+- **Purpose:** A per-repo branch-protection drift report. One message per non-compliant repo (compliant repos are silent to avoid flooding the subject). The envelope wraps the `AuditResult.to_dict()` shape and adds a `source` + `published_at` for filtering.
+- **Payload:**
+  ```json
+  {
+    "envelope": "drift.v1",
+    "source": "pmoves.branch_protection",
+    "published_at": "2026-08-15T12:00:00Z",
+    "audit": {
+      "repo": "POWERFULMOVES/PMOVES.AI",
+      "profile": "monorepo",
+      "branch": "main",
+      "compliant": false,
+      "drift": [
+        { "field": "rulesets[[ main ]].rules[type=required_signatures]", "expected": "present", "actual": "missing", "severity": "block" }
+      ],
+      "checked_at": "2026-08-15T12:00:00Z",
+      "source_url": "https://github.com/POWERFULMOVES/PMOVES.AI/settings/branches"
+    }
+  }
+  ```
+- **Publisher cadence:** Daily 06:00 UTC (the `branch-protection-drift.yml` workflow schedule) + manual `workflow_dispatch`
+- **Subscribers:** Orchestrator (remediation session), A2UI live ruleset trail, observability
+- **Status:** REGISTERED — `branch_protection_publisher.py` publishes via the `FilePublisher` (JSONL stdout, the default sink) or `NatsPublisher` (when `pmoves-nats-mcp` is wired)
