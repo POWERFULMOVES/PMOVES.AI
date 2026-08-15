@@ -79,12 +79,21 @@ probe:
        loki, flute-gateway, tensorzero-gateway, deepresearch, supaserch, neo4j,
        gpu-orchestrator, otel-collector — the ROCm exporter was never wired. Fixing the
        endpoint does not put metrics in Grafana on its own."
-    - "SCRAPE CHAIN GAP 2: UFW default-deny has no rule for any Docker bridge subnet, so
-       ALL container→host traffic is dropped (~1341 blocks/6h measured). Prometheus can
-       reach the exporter neither via host.docker.internal nor via its bridge gateway.
-       A host-bound exporter is unscrapeable from the monitoring stack on this node
-       regardless of correctness; running the exporter as a container would remove the
-       hop entirely."
+    - "SCRAPE CHAIN GAP 2: a container cannot reach this HOST-NATIVE exporter, though
+       container→host is NOT blocked in general. Measured from the Prometheus container
+       via its own bridge gateway:
+         port 4222 (NATS, docker-published)  -> OPEN
+         port 9835 (exporter, host-native)   -> refused/filtered
+       Mechanism: Docker inserts its own ACCEPT rules for published ports and the
+       DOCKER-USER chain is empty, so published ports bypass UFW entirely. A host-native
+       listener (systemd socket) gets no such bypass and falls under UFW's
+       `default deny (incoming)` on the bridge interface. UFW logging is set to `low`,
+       so these particular drops are not logged — do not conclude 'not firewalled'
+       from an absent log line.
+       The socket itself is healthy: from the host, both loopback and the bridge address
+       return 200, so this is a packet-path problem, not a bind problem.
+       Fix is either a scoped UFW allow (bridge subnet -> 9835) or running the exporter
+       as a container, which removes the host hop entirely."
     - "compose_overrides names docker-compose.rocm.override.yml — NO SUCH FILE exists
        anywhere in the repo."
     - "Runbook pmoves/docs/P7_SKILL_B850.md starts llama-server on :8080 and documents
