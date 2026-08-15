@@ -179,6 +179,7 @@ help: ## Show available make targets and descriptions
 include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk
+include mk/worktree.mk
 include mk/build-gate.mk
 include mk/nvidia-5090.mk
 include mk/nvidia-dgx-spark.mk
