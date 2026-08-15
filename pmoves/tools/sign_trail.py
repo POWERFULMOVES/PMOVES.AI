@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pyyaml>=6"]
+# ///
 """Sign a Graphiti trail entry with CHIT HMAC.
+
+DEPENDENCY NOTE — why the inline block above matters for correctness, not just
+convenience: `_load_signature()` imports yaml INSIDE its try, and the surrounding
+`except Exception: pass` returns `_FALLBACK`. Under `uv run` (a bare env with no
+pyyaml) that path was taken silently, so signatures were emitted with default
+presentation — glyph ◆ / colour #7C3AED — instead of the agent's registered identity,
+while the HMAC itself was perfectly valid. A trail entry whose purpose is provenance
+was misattributing at the presentation layer with no warning. Declaring pyyaml here
+makes the registry actually load under every invocation path.
+
 
 CLI tool that creates an agent.graphiti.signed.v1 payload and HMAC-signs it
 using sign_cgp() from chit_security.py.  Never contains its own crypto —
