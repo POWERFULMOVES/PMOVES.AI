@@ -64,15 +64,27 @@ probe:
        Not yet checked (needs root or BIOS): PCIe link training errors, slot
        bifurcation setting, physical seating/power. See probe.open_questions."
     - "llama-server not running — nothing listening on :8090 (profile) or :8080 (runbook)."
-    - "rocm-smi-exporter IS running (/usr/local/bin/rocm-smi-exporter.sh, since 2026-08-13)
-       and writes valid samples to /run/rocm-smi-metrics.prom (459 B, temp + utilization
-       for card0/card1). BUT http://127.0.0.1:9835/metrics returns HTTP 200 with a
-       ZERO-BYTE body — the file→HTTP hop is broken, so Prometheus scrapes nothing and
-       the Grafana GPU panel is blank while every health check looks green."
-    - "Exporter bug 2: rocm_gpu_memory_used_bytes never emits samples. The script selects
-       .value[\"VRAM Total Used Memory (B)\"] out of `rocm-smi --showmemuse`, but that
-       flag returns 'GPU memory use (%)'; the byte counter comes from
-       `rocm-smi --showmeminfo vram`. HELP/TYPE are printed, samples never are."
+    - "rocm-smi-exporter served HTTP 200 with a ZERO-BYTE body — FIXED in this change.
+       The collector was healthy all along (valid samples in /run/rocm-smi-metrics.prom);
+       the responder unit inlined shell in ExecStart, so systemd ate %d as its
+       credentials-dir specifier and ${#body} as an env reference. Endpoint now returns
+       756+ bytes / 8 samples. NOTE the endpoint being correct is necessary but not
+       sufficient — see the two entries below; nothing scrapes it yet."
+    - "Exporter bug 2: rocm_gpu_memory_used_bytes never emitted samples — FIXED in this
+       change. The collector selected .value[\"VRAM Total Used Memory (B)\"] out of
+       `rocm-smi --showmemuse`, but that flag returns 'GPU memory use (%)'; the byte
+       counter comes from `rocm-smi --showmeminfo vram`. HELP/TYPE printed, samples
+       never did. rocm_gpu_memory_total_bytes added so used renders as a percentage."
+    - "SCRAPE CHAIN GAP 1: Prometheus has NO job for :9835. Its config covers cadvisor,
+       loki, flute-gateway, tensorzero-gateway, deepresearch, supaserch, neo4j,
+       gpu-orchestrator, otel-collector — the ROCm exporter was never wired. Fixing the
+       endpoint does not put metrics in Grafana on its own."
+    - "SCRAPE CHAIN GAP 2: UFW default-deny has no rule for any Docker bridge subnet, so
+       ALL container→host traffic is dropped (~1341 blocks/6h measured). Prometheus can
+       reach the exporter neither via host.docker.internal nor via its bridge gateway.
+       A host-bound exporter is unscrapeable from the monitoring stack on this node
+       regardless of correctness; running the exporter as a container would remove the
+       hop entirely."
     - "compose_overrides names docker-compose.rocm.override.yml — NO SUCH FILE exists
        anywhere in the repo."
     - "Runbook pmoves/docs/P7_SKILL_B850.md starts llama-server on :8080 and documents
