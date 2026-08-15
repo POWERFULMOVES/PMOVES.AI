@@ -75,9 +75,14 @@ echo "==> VERIFY"
 # fallback would concatenate and report a nonsense "000000". Default after capture.
 code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:9835/metrics 2>/dev/null)" || true
 code="${code:-000}"
-body="$(curl -s --max-time 5 http://127.0.0.1:9835/metrics 2>/dev/null || true)"
-bytes="$(printf '%s' "$body" | wc -c | tr -d ' ')"
-samples="$(printf '%s' "$body" | grep -c '^rocm_' || true)"
+# Measure bytes with curl's own counter, NOT `$(curl ...) | wc -c`: command
+# substitution strips trailing newlines, so the report was one byte short of what
+# the endpoint actually served (755 vs 756). A verify step that misreports the
+# number it is verifying is the same class of defect this script exists to fix.
+_tmp="$(mktemp)"; trap 'rm -f "$_tmp"' EXIT
+bytes="$(curl -s --max-time 5 -o "$_tmp" -w '%{size_download}' http://127.0.0.1:9835/metrics 2>/dev/null)" || true
+bytes="${bytes:-0}"
+samples="$(grep -c '^rocm_' "$_tmp" 2>/dev/null || true)"
 cards="$(rocm-smi --showid --json 2>/dev/null | grep -o '"card[0-9]*"' | sort -u | wc -l | tr -d ' ' || echo '?')"
 
 echo "    HTTP          : $code    (want 200)"
