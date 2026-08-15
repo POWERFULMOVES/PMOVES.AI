@@ -1,4 +1,4 @@
-# Branch protection v0 - LEARNINGS (5-class taxonomy + 9 pair-review lessons + ownership split)
+# Branch protection v0 - LEARNINGS (5-class taxonomy + 12 pair-review lessons + ownership split)
 
 The companion LEARNINGS file to the PMOVES standard branch protection
 fan-out (Slice 1: tool + spec, Slice 2: 2-fork apply, Slice 2b:
@@ -61,6 +61,14 @@ The operator's ratification turn (2026-08-10): "sourced from current GitHub docs
     Practical checks, in order of cost: (a) for any "the bad thing is gone" assertion, ask what the empty case does — if it passes, the test is decorative; (b) mutate the implementation to the degenerate state (return `[]`) and confirm the test goes red — a guard that survives its own sabotage was never a guard; (c) for tools that write to an external system, verify against the **live** state once before declaring the capability real. Here, one `gh api repos/POWERFULMOVES/PMOVES-hermes-agent --jq .default_branch` returned `main` against a `.gitmodules` branch of `PMOVES.AI-Edition-Hardened` and collapsed the whole question in a single call.
 
     Pairs with the disposition-verification lesson: a green test, a "FIXED" reply, and a passing CI run are all **claims about** the artifact, not the artifact. Read the tree; query the live system.
+
+12. **Workflow glue needs code review, not just unit tests.** The 17/17 publisher unit tests in the previous slice all passed; the CI was green; the PR admin-merged. And the workflows it wrote were broken in four ways, none of which a unit test could catch:
+   1. The apply loop passed the repository positionally instead of via `--repo`, AND added a nonexistent `--dry-run` flag — every invocation was a silent no-op (arg-parse error).
+   2. The drift cron had no GitHub App token mint, so `drift_check()` 401s on every repo and reports each as `audit_error` (false drift).
+   3. The drift pipeline used `set -e` without `pipefail`, so the `tee` step's 0 exit masked publisher failures (the workflow reported success on a broken publisher).
+   4. The resolve step wrote `repos.tsv` but never defined a `repos` step output, so the App-token action received an empty `repositories` input — which, with `owner` set, escalates to **every** accessible repository (privilege escalation + slow).
+
+   All four bugs were caught by the codex automated review on the merged PR, not by tests, not by CI, not by the operator. Lesson: **the glue between code and infrastructure (GitHub Actions, shell semantics, action contracts) is a review surface, not a test surface.** Unit tests cover the Python. Workflow files need a different test class — parse the YAML, assert on the patterns that bind the workflow to the tool's actual contract (CLI flags, action outputs, pipefail behavior, permission scopes). The 14 regression tests added in the post-merge fix slice (`tests/test_branch_protection_workflows.py`, groups A-D) are the structure: each test asserts on a specific failure mode (positional arg, missing token, no pipefail, no output export) that a unit test of the underlying Python could not have caught. Test files: `ApplyArgsTests`, `DriftAuthTests`, `PipefailTests`, `HeredocOutputTests`. The drift cron was actively misleading the operator (every audit reported false drift); the ruleset-sync wasn't applying anything at all. Both bugs were live in main for the duration of the merge.
 
 10. **A drift publisher should follow the same `Publisher` Protocol as the orchestrator, with a `FilePublisher` fallback that writes JSONL.** The Mavis harness v0 needs many publishers (orchestrator, bpm_cron, branch_protection_publisher, future: beats_to_voice, health_to_cgp, etc.). The right pattern is a single `Publisher` Protocol + 3 sink implementations: `MockPublisher` (in-memory, for tests), `FilePublisher` (JSONL to file or stdout, the default sink when NATS is not live), and a real `NatsPublisher` (when `pmoves-nats-mcp` is wired). The 3 sinks share a `publish(subject, payload)` signature, so swapping is a one-line change. The `FilePublisher` is the test-friendly default: it writes to disk where the operator can grep + replay, and the JSONL shape is one line per event (easy to `tail -f` + `jq`). The `envelope` shape wraps each payload in `{"envelope": "drift.v1", "source": "...", "published_at": "..."}` so subscribers can filter by source + order by time. The cleanest separation: the tool that does the work (e.g. `branch_protection.drift_check`) returns a structured result; the publisher (`branch_protection_publisher.publish_drift_report`) wraps + sends. Compliant repos are silent (publishing every audit would flood the subject); only non-compliant repos publish. Tests: `pmoves/tools/tests/test_branch_protection_publisher.py::PublishDriftReportTests::test_C1_compliant_repos_are_silent` + `test_C2_non_compliant_repos_publish` + `test_C3_publish_failure_propagates` (a NATS failure is hard, not silent — the orchestrator needs to know).
 
@@ -131,8 +139,9 @@ diff in `_ruleset_matches()`.
 | pre-existing | No drift publisher for the orchestrator to consume | fixed in follow-up slice — `pmoves/tools/branch_protection_publisher.py` with `MockPublisher` + `FilePublisher` + (future) `NatsPublisher` |
 | pre-existing | No daily drift check cron | fixed in follow-up slice — `.github/workflows/branch-protection-drift.yml` (daily 06:00 UTC, FilePublisher to artifact) |
 | pre-existing | No auto-apply workflow for `per_repo_overrides` fan-out | fixed in follow-up slice — `.github/workflows/branch-protection-ruleset-sync.yml` (weekly Sun 04:00 UTC + `workflow_dispatch`); org-level `repository.created` event is a follow-up |
+| already-fixed | The Mavis follow-up workflows had 4 silent-broken patterns in main (positional args, no App token, no pipefail, no repos output export) | fixed in post-merge slice 2026-08-15 (fix PR landed same day); 14 regression tests in `tests/test_branch_protection_workflows.py`; lesson #12 captures the structural lesson |
 
-(15 already-fixed, 6 owner, 5 out-of-scope, 9 pre-existing as of this PR.)
+(16 already-fixed, 6 owner, 5 out-of-scope, 9 pre-existing as of this PR.)
 
 ## What this slice does NOT do (intentional, follow-up)
 
