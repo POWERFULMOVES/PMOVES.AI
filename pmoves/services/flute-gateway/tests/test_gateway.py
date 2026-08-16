@@ -85,6 +85,94 @@ class TestHealthEndpoint:
 
 
 @requires_deps
+class TestHealthProbeConcurrency:
+    """The probes must run CONCURRENTLY, not in sequence.
+
+    Regression test for the B850 incident: the five provider probes and the Supabase
+    probe were awaited one after another, so every dependency that was DOWN added its
+    full timeout to the wall clock. With three providers unreachable, /healthz answered
+    HTTP 200 in 15.038s against a 15s container healthcheck timeout — marked unhealthy
+    by 38 milliseconds, 1,950 consecutive times, while serving correctly throughout.
+
+    The pre-existing health tests all passed the whole time: they asserted status codes
+    and payload keys, and never once asserted how long the answer took. A health endpoint
+    that is correct but slower than the thing measuring it is indistinguishable from a
+    dead one — so latency is part of this endpoint's contract, and is now tested.
+    """
+
+    def test_probes_run_concurrently_not_serially(self):
+        """Six 0.3s probes must finish in ~0.3s (max), not ~1.8s (sum)."""
+        import asyncio
+        import time
+
+        DELAY = 0.3
+        N_PROVIDERS = 5
+
+        def _slow_provider():
+            provider = MagicMock()
+
+            async def _slow_health_check():
+                await asyncio.sleep(DELAY)
+                return True
+
+            provider.health_check = AsyncMock(side_effect=_slow_health_check)
+            return provider
+
+        async def _slow_supabase(*_args, **_kwargs):
+            await asyncio.sleep(DELAY)
+            raise RuntimeError("supabase unreachable in test")
+
+        with patch("main.vibevoice_provider", _slow_provider()), \
+             patch("main.whisper_provider", _slow_provider()), \
+             patch("main.ultimate_tts_provider", _slow_provider()), \
+             patch("main.voicebox_provider", _slow_provider()), \
+             patch("main.omnivoice_provider", _slow_provider()), \
+             patch("main.nats_client", None), \
+             patch("httpx.AsyncClient.get", new=AsyncMock(side_effect=_slow_supabase)):
+            from fastapi.testclient import TestClient
+            from main import app
+
+            client = TestClient(app)
+            started = time.monotonic()
+            response = client.get("/healthz")
+            elapsed = time.monotonic() - started
+
+        assert response.status_code == 200
+        serial = DELAY * (N_PROVIDERS + 1)  # 5 providers + supabase == 1.8s
+        assert elapsed < serial / 2, (
+            f"/healthz took {elapsed:.2f}s; serial execution would be ~{serial:.2f}s. "
+            "The probes are running one after another again."
+        )
+
+    def test_raising_probe_does_not_break_the_endpoint(self):
+        """A provider whose health_check RAISES must not 500 the whole endpoint.
+
+        gather(return_exceptions=True) keeps one broken provider from taking down the
+        only endpoint an operator can use to find out which provider is broken.
+        """
+        exploding = MagicMock()
+        exploding.health_check = AsyncMock(side_effect=RuntimeError("provider exploded"))
+        healthy = MagicMock()
+        healthy.health_check = AsyncMock(return_value=True)
+
+        with patch("main.vibevoice_provider", exploding), \
+             patch("main.whisper_provider", healthy), \
+             patch("main.ultimate_tts_provider", None), \
+             patch("main.voicebox_provider", None), \
+             patch("main.omnivoice_provider", None), \
+             patch("main.nats_client", None):
+            from fastapi.testclient import TestClient
+            from main import app
+
+            response = TestClient(app).get("/healthz")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["providers"]["vibevoice"] is False
+        assert data["providers"]["whisper"] is True
+
+
+@requires_deps
 class TestConfigEndpoint:
     """Tests for /v1/voice/config endpoint."""
 
