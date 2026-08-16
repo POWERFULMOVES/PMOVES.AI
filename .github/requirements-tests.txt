@@ -36,6 +36,20 @@ aiohttp               # hf-research-agent and other service modules
 cryptography
 google-auth-oauthlib>=1.2.0
 
+# NOT found by the import scan, and could not have been: nothing imports
+# `multipart` by name. FastAPI requires it at ROUTE-DEFINITION time for any
+# endpoint declaring Form(...), so `import main` raises
+#   RuntimeError: Form data requires "python-multipart" to be installed.
+# before a single test runs. flute-gateway/main.py has such an endpoint, so its
+# whole test module failed at collection.
+#
+# Worth recording as a limit of this file's method: deriving the dependency set
+# by parsing test imports is sound and evidence-based, but it is structurally
+# blind to packages that are never imported by name and are instead required at
+# runtime by a framework. When a test module fails at import with a package name
+# in the message, check here before assuming the service's packaging is wrong.
+python-multipart      # fastapi Form() dependency; imported by no test directly
+
 # Deliberately NOT installed: torch (3 files). It is a multi-GB download for
 # three tests and would dominate gate runtime. Those modules stay recorded in
 # the ratchet baseline as collection errors rather than being hidden — see
