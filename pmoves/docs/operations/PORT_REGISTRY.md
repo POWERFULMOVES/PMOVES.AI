@@ -6,7 +6,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 | Range | Purpose | Examples |
 |-------|---------|----------|
-| 3000-3999 | Web UIs | Grafana 3002 |
+| 3000-3999 | Web UIs | Grafana **host** 3002 (container 3000) |
 | 4000-4999 | Debug/Admin | TensorZero UI 4000 |
 | 5000-5999 | Databases | Postgres 5432* |
 | 6000-6999 | Vector/Search | Qdrant 6333, Meilisearch 7700† |
@@ -25,7 +25,9 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 | Port | Service | Description |
 |------|---------|-------------|
-| 3000 | Grafana | Metrics visualization |
+| 3002 | Grafana | Metrics visualization — **host** 3002 → container 3000 |
+| 3000 | *(host)* Invidious | `${INVIDIOUS_PORT:-3000}:3000` — the actual default claimant of host 3000 |
+| 3010 | PostgREST | Supabase REST API — host 3010 → container 3000 |
 | 3030 | TensorZero Gateway | LLM gateway |
 | 3100 | Loki | Log aggregation |
 | 4000 | TensorZero UI | Metrics dashboard |
@@ -111,10 +113,16 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
   three sources disagreed (allocator 3010, this doc "container-internal", compose 3000)
   and nothing reconciled them. `scripts/port-consistency-check.sh` does not cover
   postgrest, which is why the drift was never caught.
-- In-network callers are unaffected either way: they reach `rest:3000` /
-  `supabase-postgrest:3000` inside the container namespace, and
-  `services/common/port_resolver.py` only consults the host port for out-of-compose
-  callers.
+- In-network callers are unaffected either way: they **hardcode** `rest:3000` /
+  `supabase-postgrest:3000`, and Kong routes `rest` → `supabase-postgrest:3000`.
+  An earlier revision of this note credited `services/common/port_resolver.py` for
+  that; it was wrong. `port_allocator.py:32` keys the entry `"postgrest"` while
+  `port_resolver.py:58` looks up the slug `"supabase-postgrest"`, so the lookup
+  returns `None`, `resolve()` yields port 0, and `resolve_all()` filters the service
+  out entirely. The resolver has no callers outside its own `main()`. **The slug
+  mismatch is a real, separate bug** — recorded here rather than silently fixed,
+  because making the resolver work would change behaviour for anything that starts
+  using it.
 - **Kong (8000):** Primary external access point for all Supabase APIs
 - **Services on pmoves_api + pmoves_data:** Need database access for queries
 

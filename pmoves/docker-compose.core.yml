@@ -647,9 +647,22 @@ services:
       supabase-db:
         condition: service_healthy
     ports:
-    # Host side defaults to 3010 (scripts/port_allocator.py "postgrest": 3010).
-    # Kept byte-identical to the same block in docker-compose.yml — see the note
-    # there for why 3000 on the host was wrong.
+    # HOST side defaults to 3010, the value scripts/port_allocator.py already
+    # allocates for "postgrest", and which ~12 consumers already assume (smoke
+    # tests, tests/utils/service_catalog.py, generate_ports.sh, BRING_UP_GUIDE).
+    # It previously defaulted to 3000 — the same number as the CONTAINER port —
+    # so the host binding collided with anything else on 3000 (Invidious defaults
+    # there too) and `up-supabase` died with "address already in use" while
+    # PostgREST itself was fine.
+    #
+    # In-network callers are unaffected because they HARDCODE `rest:3000` /
+    # `supabase-postgrest:3000` and Kong routes `rest` -> `supabase-postgrest:3000`.
+    # An earlier version of this comment credited services/common/port_resolver.py
+    # instead; that was wrong and is corrected here rather than left as folklore:
+    # port_allocator keys the entry "postgrest" while port_resolver looks up the
+    # slug "supabase-postgrest" (port_resolver.py:58), so the lookup returns None
+    # and resolve() yields port 0. The resolver has no callers outside its own
+    # main(). Right conclusion, wrong evidence.
     - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3010}:3000
     networks:
       pmoves_api:

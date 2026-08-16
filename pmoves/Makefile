@@ -638,7 +638,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler 2>/dev/null || true; \
 		echo ""; \
 		echo "Expected local endpoints:"; \
-		echo "  PostgREST: http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
+		echo "  PostgREST: http://localhost:$${SUPABASE_POSTGREST_PORT:-3010}"; \
 		echo "  Kong:      http://localhost:$${SUPABASE_KONG_PROXY_PORT:-8000}"; \
 		echo "  Auth:      http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
 		echo "  Studio:    http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
@@ -694,7 +694,7 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 			fi; \
 		fi; \
 	else \
-		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
+		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3010}"; \
 		auth_url="http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
 		studio_url="http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
 	fi; \
@@ -3359,7 +3359,12 @@ archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 
 	  if echo "$$c" | grep -Eq "^0+$$"; then url=""; fi; \
 	fi; \
 	if [ -z "$$url" ]; then \
-	  for cand in "http://127.0.0.1:65421/rest/v1" "http://localhost:65421/rest/v1" "http://localhost:8000/rest/v1" "http://localhost:3000"; do \
+	  # Last candidate is postgrest's HOST port. It was 3000; Invidious defaults to
+	  # the same host port (docker-compose.yml `${INVIDIOUS_PORT:-3000}:3000`), so with
+	  # Invidious up this probe selected Invidious, got 2xx on "/", then 404 on
+	  # "$$url/$$table" and printed "not accessible (policy/missing) — OK" with exit 0.
+	  # An RLS probe passing against a video frontend. 3010 is postgrest's actual host port.
+	  for cand in "http://127.0.0.1:65421/rest/v1" "http://localhost:65421/rest/v1" "http://localhost:8000/rest/v1" "http://localhost:3010"; do \
 	    c=$$(curl -s -o /dev/null -w "%{http_code}" "$$cand/" || true); \
 	    case "$$c" in 2*|3*|4*) url="$$cand"; break;; esac; \
 	  done; \
