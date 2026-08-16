@@ -60,7 +60,8 @@ Two shapes, and they need different remedies:
   all four without knowing anything about any of them. Three of the four share one exact
   cause: **a soft-import or broad `except` that swallows the reason and returns a
   plausible default**, so the caller receives a complete-looking result built from
-  nothing.
+  nothing. *Mechanizable is not the same as grep-able* — see the sweep below, where
+  that instinct over-reported by a factor of forty before it was narrowed.
 - **3, 4, 6 are not.** They are a wrong question, unrelated noise destroying evidence, and
   a misread. No linter catches these; only the habit of reading raw values does.
 
@@ -69,6 +70,53 @@ been **repaired** (`pytest_ratchet.py` runs all 264 test files, previously `head
 filesystem order; the dependency install lost its `|| fallback` and `2>/dev/null`; the
 gate now `exit 1`s on any failure). Verified before relying on it for the merges above.
 **The audit lane is driving fixes ahead of its own PRs merging.**
+
+## The sweep — and what it says about the sweep
+
+Finding 7's cause looked mechanizable, so it was swept for across `pmoves/tools/` and
+`pmoves/services/` by AST rather than grep (a text grep cannot tell a handler's shape).
+The funnel matters more than the endpoint:
+
+| Filter | Hits |
+|---|---|
+| `try:` containing an import, with a broad or bare `except` | **157** |
+| …of those, handlers that are **silent** (no log, no raise, no warn) | **60** |
+| …of those, handlers that are fully `pass` | 6 |
+| …of those, in a path that **reports outward** as authoritative | **4** |
+
+**The first number is the finding.** 157 would have been a fleet-wide alarm, and it would
+have been wrong: `torch`, `faiss`, `sentence_transformers`, `numpy`, `tqdm`, `rich`,
+`psutil` guards are all *correct* — the feature genuinely degrades and the caller is told.
+Had this audit stopped at the grep it would have become an eighth entry in the table
+above: a confident count that did not match reality. **The antipattern is not "a broad
+`except` on an import." It is a silent handler in a path that reports outward.**
+
+Two sites show what correct looks like, and both survived every filter honestly:
+
+- `services/hf-mcp-server/main.py:542` — live registry query falls back to the static
+  catalog and stamps `"source": "catalog"` instead of `"source": "registry"`. The
+  consumer can *see* which one it got.
+- `tools/chit_security.py:13` — crypto import failure sets `_CRYPTO_OK = False`, an
+  explicit degraded flag rather than a silent no-op.
+
+The four that lied outward, all fixed in this PR (logging only — no behaviour or
+contract change; best-effort delivery stays best-effort):
+
+| Site | Was | Now |
+|---|---|---|
+| `tools/sign_trail.py:77` | substituted the whole agent identity in silence | warns to stderr naming the reason (pyyaml missing / file unreadable / agent unregistered) |
+| `hi-rag-gateway-v2/routes/geometry.py:166` | dropped every live subscriber, returned `{"ok": true}` | `logger.exception` |
+| `hi-rag-gateway-v2/routes/geometry.py:583` | same | `logger.exception` |
+| `hf-mcp-server/main.py:853` | `hf.model.gguf.converted.v1` never published, returned `{"ok": true}` | `logger.exception` |
+
+Two of these are self-evidencing. `sign_trail.py` already warned loudly that it could not
+find a requested **alter** — twenty lines below the block that substituted the entire
+**agent** without a word; it could report a missing persona but not a missing person.
+And `geometry.py` persists with `logger.exception` + `raise HTTPException(500)`, then
+eight lines later swallows the broadcast and returns `ok: true`. **Both files already
+contained the correct discipline; it just had not been applied to the adjacent line.**
+That is the more useful lesson than any lint rule: the fix was usually already in the
+file.
 
 ## Mechanical traps (the genuinely new material)
 

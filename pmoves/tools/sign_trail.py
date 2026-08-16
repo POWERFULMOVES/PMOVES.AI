@@ -82,9 +82,25 @@ def _load_signature(agent_id: str) -> Dict[str, Any]:
         sigs = data.get("signatures", {})
         if agent_id in sigs:
             return sigs[agent_id]
-    except Exception:
-        pass
-    # Return a minimal fallback so the tool never hard-fails on missing YAML
+        reason = f"'{agent_id}' is not registered in {_SIGNATURES_PATH.name}"
+    except ImportError as exc:
+        reason = f"pyyaml unavailable ({exc})"
+    except OSError as exc:
+        reason = f"cannot read {_SIGNATURES_PATH} ({exc})"
+    except Exception as exc:  # malformed YAML, unexpected shape
+        reason = f"{type(exc).__name__}: {exc}"
+
+    # Still non-fatal by design (see module docstring) — but never SILENT.
+    # This function warned loudly about a missing ALTER twenty lines below while
+    # saying nothing when it could not resolve the AGENT at all, so a run that
+    # substituted the whole identity looked identical to a clean one. A provenance
+    # tool must be able to report not knowing who is signing.
+    print(
+        f"[warn] identity not resolved: {reason}; signing with FALLBACK "
+        f"presentation (glyph {_FALLBACK['glyph']} / {_FALLBACK['color']}) — "
+        f"this is NOT the agent's registered identity",
+        file=sys.stderr,
+    )
     return {"agent_id": agent_id, **_FALLBACK}
 
 
