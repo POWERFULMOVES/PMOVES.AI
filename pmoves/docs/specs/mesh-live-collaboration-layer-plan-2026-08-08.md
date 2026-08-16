@@ -49,6 +49,13 @@ in git**. The mesh serves them live to every node.
 > git ls-tree -r -l HEAD | awk '$4 > 1048576 {print $4, $5}' | sort -rn | head -40
 > git ls-files 'pmoves/docs/evidence/*.png' | wc -l
 > ```
+> **Re-measured 2026-08-16 against `origin/main` @ `017de5369`** with the commands above: beats
+> **98 MB**, `CATACLYSM_STUDIOS_INC/` **126 MB**, evidence PNGs **38** — the table's figures hold.
+> The table nonetheless *under*-scopes the job: the full tracked surface is **75 blobs over
+> 1 MiB totalling 259 MB**, and the single largest file (70.8 MB, under
+> `CATACLYSM_STUDIOS_INC/evidence/`) is named by no row here. Scope Stage A from the command,
+> not from the table.
+>
 > **Inclusion rule:** tracked files in this repository only. Submodule contents are out of scope
 > (they are separate repos with their own hygiene), and generated files are in scope only where
 > the generator is also tracked. Figures above were observed 2026-08-08 and are **not** re-verified
@@ -117,6 +124,11 @@ the **domino / value-engine thesis** (verified → CHIT-signed → real value).
 > readable by whoever picks this lane up. **Writing that spec is therefore Stage C's first
 > task, not a reference it can lean on** — until it exists, Stage C has no recoverable
 > requirements.
+>
+> **Update (2026-08-16).** That is now out of date in the good direction: the spec exists as
+> `spec/value-engine-domino-v0`, open as **PR #2516** and not yet merged. Stage C is
+> therefore blocked on a *merge*, not on an authorship gap. Re-read the spec as merged before
+> planning against it — an open PR can still change shape in review.
 
 **This is its own follow-up** — a data/verification lane, not part of the Stage A binary offload.
 
@@ -129,8 +141,9 @@ the **domino / value-engine thesis** (verified → CHIT-signed → real value).
   visibility; z890 could not reach `localhost:8222`). Archon observes for any real publisher or
   subscriber on `archon.crawl.request.v1` / `archon.crawl.result.v1` and retires if none, or lets a
   VL service define its own contract. Recorded in `AGNOTE4482PHI.t1.md` under
-  `Z890-CLAUDE::CONTROL-ITEMS-RESOLVED-2026-08-08`. **`.claude/context/nats-subjects.md:1776-1777`
-  still documents both subjects with no status marker — whoever executes the retirement owns that
+  `Z890-CLAUDE::CONTROL-ITEMS-RESOLVED-2026-08-08`. **`.claude/context/nats-subjects.md:1798-1799`
+  (was `:1776-1777` when this plan was written — the file has grown; re-locate by subject name,
+  not by line) still documents both subjects with no status marker — whoever executes the retirement owns that
   edit; this plan does not pre-empt it.**
 
 ---

@@ -9,6 +9,39 @@
 
 ---
 
+## STATUS — CLOSED (verified against `origin/main` @ `017de5369`, 2026-08-16)
+
+This handoff is a **historical record**, not open work. The lane was claimed 2026-08-08 and
+released 2026-08-09 (`ACK::4090-claude::WS2-TOOLING-AUDIT-RELEASE-2026-08-09`). Four of the five
+enumerated items are shipped and merged. The per-item state below was **re-measured against main
+on 2026-08-16**, not carried forward from the release text.
+
+| Item | State | Evidence in `origin/main` |
+|------|-------|---------------------------|
+| 1 — cleanup logic in 4 places | **PARTIAL** | Leak is closed everywhere (`--all-inactive` present in all three implementations); the `ci-expedition` copy now *references* the canonical script instead of re-embedding it. **Three implementations still exist** — `pmoves/scripts/pmoves-disk-cleanup.sh` (128 lines, canonical), `deploy/provision/docker-fleet-cleanup.sh` (91 lines), and `pmoves/mk/infra.mk:77` which still inlines the whole recipe. De-duplication is the open remainder. |
+| 2 — `ci-expedition SKILL.md:29` | **DONE** (#2483) | The trigger note now sits at `:36-53` and states the correct resolution: `issue_comment` → default branch always, `push` → the pushed ref, `pull_request`/`pull_request_review` → PR head / merge ref. The four `.claude/worktrees/agent-*` copies no longer exist in main. |
+| 3 — two `claude-pmoves.sh` | **DONE** (#2484) | `pmoves/scripts/claude-pmoves.sh` is an explicit `THIN DELEGATE` that `exec`s `deploy/provision/claude-pmoves.sh` while keeping positional-agent selection. Neither was deleted. Guarded by `deploy/provision/tests/test-launcher-root-resolution.sh`. |
+| 4 — `up-*` sprawl | **DONE** (#2486 inventory, #2523 dupe removal) | The `up-openroom` double definition is gone: the count is now **88 definitions / 88 unique names**, closing the 89/88 gap this document reports. `pmoves/docs/operations/UP_TARGET_INVENTORY.md` is merged. Its retirement list is **8 both-zero candidates**, not the 11 an earlier revision claimed — and it flags two of the eight as load-bearing anyway. |
+| 5 — sibling-submodule build gap | **DONE** (#2485) | `pmoves/docs/operations/SUBMODULE_BUILD_AND_MOUNT_GAP.md` is merged. The seven sibling contexts in `pmoves/docker-compose.yml` match this document's list exactly. |
+
+**What is still open, and where it went:**
+
+- **Item 1 de-duplication** — collapse the three implementations to one. No leak behind it; this is
+  maintainability. `pmoves/mk/infra.mk:77` also carries a cosmetic defect: the recipe announces
+  "Step 1/3" and then runs four steps.
+- **Item 4 retirement decision** — operator call on the 8 both-zero targets plus the four
+  `secrets-funnel*` siblings. The inventory deliberately edits no Makefile.
+- **Item 5 runtime check** — the runbook specifies it at
+  `SUBMODULE_BUILD_AND_MOUNT_GAP.md:183`: on `up`, assert every declared bind source of file kind
+  is a file on disk. Runtime, not build time, and a handful of `test -f` calls.
+
+**A note on how this was verified.** `git cherry` reported four of the five item branches as
+*unmerged*. That was wrong — they were squash-merged, which rewrites patch-ids. Reading the file
+contents in `origin/main` is what settled it. Anyone re-checking this lane should do the same
+rather than trusting a patch-id comparison.
+
+---
+
 ## Why 4090 owns this
 
 4090 already has the tooling audit in flight and has **node affinity** for it: it runs Archon
