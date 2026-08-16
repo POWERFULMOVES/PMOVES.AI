@@ -715,7 +715,15 @@ services:
       supabase-db:
         condition: service_healthy
     ports:
-    - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
+    # HOST side defaults to 3010, the value scripts/port_allocator.py already
+    # allocates for "postgrest". It previously defaulted to 3000 — the same number
+    # as the CONTAINER port — so the host binding collided with anything else on
+    # 3000 and `up-supabase` died with "address already in use" while PostgREST
+    # itself was fine. Nothing needs the host side to be 3000: in-network callers
+    # reach `rest:3000` / `supabase-postgrest:3000` through the container's own
+    # namespace (services/common/port_resolver.py resolves Docker DNS in-compose
+    # and only consults SUPABASE_POSTGREST_PORT for out-of-compose callers).
+    - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3010}:3000
     networks:
       pmoves_api:
         aliases:
