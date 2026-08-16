@@ -84,6 +84,37 @@ class TestHealthEndpoint:
         assert data["nats"] == "disconnected"
 
 
+def _load_main():
+    """Return the flute-gateway ``main`` module without ever re-executing it.
+
+    ``main`` defines its Prometheus Counters at module scope and
+    ``prometheus_client.REGISTRY`` is process-GLOBAL, so the two outlive each other
+    badly: if anything evicts ``main`` from ``sys.modules`` (other service test groups
+    in the same worker do), a plain ``import main`` re-runs those definitions against a
+    registry that still holds them and raises ``DuplicateTimeseries``. That is a harness
+    artifact, not a defect in the code under test — but it fails the test just as loudly,
+    and it only reproduces under CI's grouping, not a local file or directory run.
+
+    Reuse the cached module; if it really is gone, drop the stale flute_* collectors
+    first so the re-import can succeed.
+    """
+    import sys
+
+    if "main" in sys.modules:
+        return sys.modules["main"]
+
+    from prometheus_client import REGISTRY
+
+    for collector in list(getattr(REGISTRY, "_collector_to_names", {})):
+        names = REGISTRY._collector_to_names.get(collector, set())
+        if any(str(n).startswith("flute_") for n in names):
+            REGISTRY.unregister(collector)
+
+    import main as _main
+
+    return _main
+
+
 @requires_deps
 class TestHealthProbeConcurrency:
     """The probes must run CONCURRENTLY, not in sequence.
@@ -122,17 +153,17 @@ class TestHealthProbeConcurrency:
             await asyncio.sleep(DELAY)
             raise RuntimeError("supabase unreachable in test")
 
-        with patch("main.vibevoice_provider", _slow_provider()), \
-             patch("main.whisper_provider", _slow_provider()), \
-             patch("main.ultimate_tts_provider", _slow_provider()), \
-             patch("main.voicebox_provider", _slow_provider()), \
-             patch("main.omnivoice_provider", _slow_provider()), \
-             patch("main.nats_client", None), \
+        main_mod = _load_main()
+        with patch.object(main_mod, "vibevoice_provider", _slow_provider()), \
+             patch.object(main_mod, "whisper_provider", _slow_provider()), \
+             patch.object(main_mod, "ultimate_tts_provider", _slow_provider()), \
+             patch.object(main_mod, "voicebox_provider", _slow_provider()), \
+             patch.object(main_mod, "omnivoice_provider", _slow_provider()), \
+             patch.object(main_mod, "nats_client", None), \
              patch("httpx.AsyncClient.get", new=AsyncMock(side_effect=_slow_supabase)):
             from fastapi.testclient import TestClient
-            from main import app
 
-            client = TestClient(app)
+            client = TestClient(main_mod.app)
             started = time.monotonic()
             response = client.get("/healthz")
             elapsed = time.monotonic() - started
@@ -155,16 +186,16 @@ class TestHealthProbeConcurrency:
         healthy = MagicMock()
         healthy.health_check = AsyncMock(return_value=True)
 
-        with patch("main.vibevoice_provider", exploding), \
-             patch("main.whisper_provider", healthy), \
-             patch("main.ultimate_tts_provider", None), \
-             patch("main.voicebox_provider", None), \
-             patch("main.omnivoice_provider", None), \
-             patch("main.nats_client", None):
+        main_mod = _load_main()
+        with patch.object(main_mod, "vibevoice_provider", exploding), \
+             patch.object(main_mod, "whisper_provider", healthy), \
+             patch.object(main_mod, "ultimate_tts_provider", None), \
+             patch.object(main_mod, "voicebox_provider", None), \
+             patch.object(main_mod, "omnivoice_provider", None), \
+             patch.object(main_mod, "nats_client", None):
             from fastapi.testclient import TestClient
-            from main import app
 
-            response = TestClient(app).get("/healthz")
+            response = TestClient(main_mod.app).get("/healthz")
 
         assert response.status_code == 200
         data = response.json()
