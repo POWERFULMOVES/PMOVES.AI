@@ -695,7 +695,12 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 		fi; \
 	else \
 		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3010}"; \
-		auth_url="http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
+		: "gotrue and studio publish NO host port in the compose runtime — \
+		   `docker ps` shows bare '9999/tcp' and '3000/tcp' with no host mapping. \
+		   Probing localhost:9999 / localhost:54323 could therefore NEVER succeed, \
+		   and this target printed two permanent ❌ against a fully healthy stack. \
+		   Both are reachable through Kong, which is the supported path anyway."; \
+		auth_url="http://localhost:$${SUPABASE_KONG_PROXY_PORT:-8000}/auth/v1/health"; \
 		studio_url="http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
 	fi; \
 	rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$rest_url" || true); \
@@ -704,13 +709,24 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 	fi; \
 	auth_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$auth_url" || true); \
 	studio_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$studio_url" || true); \
-	if [ "$$rest_code" = "200" ]; then echo "  ✅ REST ($$rest_url)"; else echo "  ❌ REST ($$rest_url) -> $$rest_code"; fi; \
-	if [ "$$auth_code" = "200" ]; then echo "  ✅ Auth ($$auth_url)"; else echo "  ❌ Auth ($$auth_url) -> $$auth_code"; fi; \
-	if [ "$$studio_code" = "200" ] || [ "$$studio_code" = "301" ] || [ "$$studio_code" = "302" ] || [ "$$studio_code" = "307" ] || [ "$$studio_code" = "308" ]; then \
-		echo "  ✅ Studio ($$studio_url)"; \
-	else \
-		echo "  ❌ Studio ($$studio_url) -> $$studio_code"; \
-	fi
+	: "401 is PostgREST ANSWERING — it demands an apikey and says so. Requiring 200 \
+	   marked a live REST layer ❌. make kong-routes-check already documents the \
+	   correct rule on the very same service ('404 = route missing; 401/200 = wired'); \
+	   these two instruments disagreed about what alive means. 000 is the real \
+	   failure — nothing on the socket."; \
+	case "$$rest_code" in \
+		200|401) echo "  ✅ REST ($$rest_url) -> $$rest_code";; \
+		*) echo "  ❌ REST ($$rest_url) -> $$rest_code";; \
+	esac; \
+	case "$$auth_code" in \
+		200|401) echo "  ✅ Auth ($$auth_url) -> $$auth_code";; \
+		*) echo "  ❌ Auth ($$auth_url) -> $$auth_code";; \
+	esac; \
+	case "$$studio_code" in \
+		200|301|302|307|308) echo "  ✅ Studio ($$studio_url)";; \
+		000) echo "  ⚠️  Studio ($$studio_url) -> not published on the host (reach it via Kong)";; \
+		*) echo "  ❌ Studio ($$studio_url) -> $$studio_code";; \
+	esac
 
 supa-collation-refresh: ## Refresh collation version for all Supabase databases (RG-3)
 	@echo "Refreshing collation versions..."
