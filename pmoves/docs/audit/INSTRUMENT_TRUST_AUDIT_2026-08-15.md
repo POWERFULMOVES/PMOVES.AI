@@ -118,6 +118,26 @@ contained the correct discipline; it just had not been applied to the adjacent l
 That is the more useful lesson than any lint rule: the fix was usually already in the
 file.
 
+## Postscript — the fix for #5 had the same defect twice
+
+The first host run of the *merged* `geometry_bus_health.py` found two gaps in the
+NOT MEASURED work itself. Neither is a new instrument; both are instrument 5 again:
+
+- **The JSON branch still emitted `"health_pct": 0.0`.** The human-readable branch had
+  been taught to refuse an unmeasured percentage; `--json` had not, so anything
+  machine-consuming it kept receiving the identical false negative. *Fixed the instance,
+  not the class* — the failure mode this session hit twice already. Now `null`, beside an
+  explicit `"measured"` flag.
+- **The failure report listed guesses and no facts.** The real cause was
+  `Authorization Violation`, but nats-py routes server rejections through `error_cb` and
+  retries, so the only exception reaching the caller was `TimeoutError`. The report said
+  *"timed out"* and advised checking host and port — both of which were already correct.
+  An `error_cb` now captures what the server actually said and the report leads with it.
+
+Worth stating plainly: **the remedy for a confidently-wrong instrument was itself
+confidently wrong on first contact with the real system.** It passed review, it passed
+its own tests, and it was still guessing. The only thing that caught it was running it.
+
 ## Mechanical traps (the genuinely new material)
 
 Node-agnostic, reproduced, and in none of the existing surfaces:
