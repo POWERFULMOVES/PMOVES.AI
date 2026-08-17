@@ -92,6 +92,12 @@ This tier holds the canonical reference for the **AGENTS.md open format** (unive
 - **Tier:** **Tier-2 always-relevant** (load when format/taxonomy/persona work touches the conversation)
 - **Cross-refs:** Root `AGENTS.md` follows this format; `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` and `PMOVES_AGENT_TOPOLOGY.md` are taxonomy docs that may migrate here (gated on user confirmation)
 
+**Submodule table entry** (mirrors the `skills/*` table format below for scannability):
+
+| Submodule | Upstream | Purpose |
+|-----------|----------|---------|
+| `PMOVES-agents.md/` | [agentsmd/agents.md](https://agents.md) | AGENTS.md open format reference + agent taxonomy + persona schema (Tier-2 always-relevant) |
+
 ### skills/ — Skills Constellation
 
 POWERFULMOVES forks of upstream agent-skill repositories, mounted as nested submodules under `skills/`. Load `skills/README.md` first; load a specific skill submodule's CLAUDE.md / README only when working in that skill's domain.
