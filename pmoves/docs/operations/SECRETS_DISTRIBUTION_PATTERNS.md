@@ -54,23 +54,48 @@ gh workflow run sync-secrets-local.yml --repo POWERFULMOVES/PMOVES.AI \
 
 **Design:**
 
-1. **Producer workflow** runs on any ai-lab runner (e.g. SPARK), writes CHIT bundle, **uploads as encrypted artifact**:
+1. **Producer** is the existing `sync-secrets-local.yml` — not a separate workflow. It
+   runs on any ai-lab runner, writes the CHIT bundle, and uploads it per target
+   (`.github/workflows/sync-secrets-local.yml:402`):
    ```yaml
    - name: Upload bundle
      uses: actions/upload-artifact@v4
      with:
-       name: chit-bundle-${{ github.run_id }}
+       name: chit-bundle-${{ matrix.target }}-${{ github.run_id }}
        path: pmoves/data/chit/env.cgp.json
        retention-days: 1
    ```
+   The `matrix.target` segment matters: `secrets-pull` prefers the artifact for the
+   node it is running on and only then falls back to any other target's bundle.
 
-2. **Consumer step on target node** (cron, systemd timer, scheduled task, or operator one-shot):
+2. **Consumer step on target node** (cron, systemd timer, scheduled task, or operator
+   one-shot) — one command, no run-id and no path juggling:
+   ```bash
+   make -C pmoves secrets-funnel-from-prod
+   ```
+   That is `secrets-pull` (find the newest unexpired `chit-bundle-*` for this node,
+   validate it, install 0600 at `CHIT_EXPORT_PATH`) followed by
+   `secrets-funnel-sync-from-bundle` (materialize the tier env files from it). Split
+   them if you want to pull and materialize on different schedules.
+
+   > **Do not run `make -C pmoves secrets-funnel` on a node that just pulled a
+   > bundle.** It is the Pattern-A funnel: its `secrets-funnel-sync` step depends on
+   > `chit-export`, which re-encodes *this node's local* `env.shared` over
+   > `CHIT_EXPORT_PATH` — the exact file the pull just installed. The CI credentials
+   > are destroyed before anything reads them, and the node then materializes tier
+   > files from its own pre-existing local state while appearing to have succeeded.
+   > `secrets-funnel-sync-from-bundle` exists precisely to skip that step; its own
+   > `make help` line says so ("skips chit-export so CI credentials are not
+   > overwritten"). See `pmoves/mk/codex.mk:111` (the `chit-export` dependency) and
+   > `:121` (the bundle-safe variant).
+
+   If you must download by hand, the artifact name carries the target segment and the
+   destination is the bundle path itself, not an arbitrary directory:
    ```bash
    gh run download <run-id> --repo POWERFULMOVES/PMOVES.AI \
-     --name chit-bundle-<run-id> \
-     --dir "$XDG_CONFIG_HOME/pmoves/chit"
-
-   make -C pmoves secrets-funnel   # decode + populate tier files
+     --name chit-bundle-<target>-<run-id> \
+     --dir "$(dirname "${XDG_CONFIG_HOME:-$HOME/.config}/pmoves/chit/env.cgp.json")"
+   make -C pmoves secrets-funnel-sync-from-bundle
    ```
 
 3. **Target node only needs:** `gh` CLI + authenticated session (PAT or device-flow). No GH Actions runner.
@@ -81,8 +106,13 @@ gh workflow run sync-secrets-local.yml --repo POWERFULMOVES/PMOVES.AI \
 - Per-node pull schedule decouples freshness from workflow trigger time (each node can pull on its own cadence).
 
 **Trade-off:**
-- Adds a second workflow (producer) and a small pull script per node.
+- A scheduled pull per node. (No second workflow — the producer is the upload step
+  already in `sync-secrets-local.yml`, and the pull script ships as
+  `pmoves/scripts/pull_chit_bundle.sh` behind `make secrets-pull`.)
 - Artifact retention costs apply (1-day retention recommended; bundles are CHIT-encrypted so storage is acceptable).
+- **Two funnel targets that look interchangeable and are not** — see the warning in
+  step 2. This is the pattern's sharpest edge: the wrong one fails by silently
+  succeeding.
 
 **Authorization signal (2026-05-18, DARKXSIDE):**
 > "review B as method for new nodes when new hardware added — secrets are sent where they need to go not folder that might be blocked on system"
