@@ -115,7 +115,16 @@ secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env
 secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
 	@bash scripts/pull_chit_bundle.sh
 
-secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull newest CI bundle, then materialize tier files from it
+secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull bundle, materialize tiers, refresh local.env, force-hydrate env.shared
+	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/emit_local_env.py --cgp "$(CHIT_EXPORT_PATH)"
+	@$(MAKE) --no-print-directory secrets-local-hydrate FORCE=1
+	@echo "✔ env.shared force-refreshed from prod bundle — prod-managed keys (incl. rotations) now current"
+	@echo "  Note: local.env is the prod-secrets overlay; keep genuinely node-local overrides in env.shared, not local.env."
+
+.PHONY: docker-mcp-secrets-hydrate
+docker-mcp-secrets-hydrate: ## Re-push funnel-managed values into the Docker MCP Toolkit secret store (recovery after a Docker Desktop VMM/migration wipes the MCP resolver). DRY_RUN=1 to preview. Run AFTER Docker Desktop restart (resolver must be up).
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/docker_mcp_secrets_hydrate.py $(if $(DRY_RUN),--dry-run)
 
 .PHONY: secrets-funnel-sync-from-bundle
 secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files from a pre-installed CI CHIT bundle (skips chit-export so CI credentials are not overwritten)
