@@ -408,3 +408,7 @@
 [submodule "PMOVES-nats-server"]
 	path = PMOVES-nats-server
 	url = https://github.com/POWERFULMOVES/PMOVES-nats-server.git
+[submodule "skills/PMOVES-skills"]
+	path = skills/PMOVES-skills
+	url = https://github.com/POWERFULMOVES/PMOVES-skills.git
+	branch = main
