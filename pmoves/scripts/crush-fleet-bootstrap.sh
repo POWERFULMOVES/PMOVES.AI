@@ -117,13 +117,27 @@ esac
 
 export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
-if ! command -v python3 >/dev/null 2>&1; then
-  fail "python3 not found on PATH"
+# Resolve python the same way preflight.mk does: canonical venv first, then
+# platform launchers. Bare `python3` hard-fails on Windows nodes (Git Bash has
+# no python3; the Windows Store stub is unusable).
+PYTHON=""
+if [ -x "${PMOVES_DIR}/.venv-pmoves/Scripts/python.exe" ]; then
+  PYTHON="${PMOVES_DIR}/.venv-pmoves/Scripts/python.exe"
+elif [ -x "${PMOVES_DIR}/.venv-pmoves/bin/python" ]; then
+  PYTHON="${PMOVES_DIR}/.venv-pmoves/bin/python"
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+  PYTHON=python3
+elif command -v py >/dev/null 2>&1; then
+  PYTHON="py -3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON=python
+else
+  fail "no usable python found (tried .venv-pmoves, python3, py -3, python)"
 fi
-PYTHON=python3
+info "Using python: ${PYTHON}"
 
 if ! ${PYTHON} -c "import yaml" 2>/dev/null; then
-  warn "PyYAML not available in system python — Hermes YAML merge may fail"
+  warn "PyYAML not available — Hermes YAML merge may fail (run: make env-bootstrap-lite)"
 fi
 
 # ── 3. Crush Config Generation ───────────────────────────────────────────────

@@ -28,6 +28,15 @@ def parse_args() -> argparse.Namespace:
         help="Virtual environment path relative to pmoves/ (default: .venv-pmoves).",
     )
     parser.add_argument(
+        "--python",
+        default="3.11",
+        help=(
+            "Python version for fresh venv creation (default: 3.11 — the fleet "
+            "standard; pyproject requires-python is >=3.11). Ignored when the "
+            "venv already exists."
+        ),
+    )
+    parser.add_argument(
         "--requirements",
         action="append",
         default=["tools/requirements-lite.txt"],
@@ -63,11 +72,13 @@ def venv_python_path(venv_path: Path) -> Path:
     return venv_path / "bin" / "python"
 
 
-def ensure_venv(venv_path: Path) -> tuple[str | None, Path]:
+def ensure_venv(venv_path: Path, python_pin: str = "3.11") -> tuple[str | None, Path]:
     uv_bin = shutil.which("uv")
     if not venv_path.exists():
         if uv_bin:
-            run([uv_bin, "venv", str(venv_path)])
+            # Pin the interpreter: bare `uv venv` grabs uv's newest managed
+            # CPython (3.14.x), which produced broken venvs on fleet nodes.
+            run([uv_bin, "venv", "--python", python_pin, str(venv_path)])
         else:
             run([sys.executable, "-m", "venv", str(venv_path)])
 
@@ -161,7 +172,7 @@ def main() -> int:
     print(f"Repository root: {REPO_ROOT}")
     print(f"Venv path: {venv_path}")
 
-    uv_bin, venv_python = ensure_venv(venv_path)
+    uv_bin, venv_python = ensure_venv(venv_path, python_pin=args.python)
     print(f"Using venv python: {venv_python}")
     print(f"uv available: {'yes' if uv_bin else 'no'}")
 
