@@ -758,6 +758,14 @@
       "skills": [],
       "context_files": [],
       "agents_docs": []
+    },
+    "skills/PMOVES-skills": {
+      "context_tier": 2,
+      "domain_tags": ["agents", "mcp"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "$note": "Post-recenter home of the skills library that moved from MiniMax-AI/skills to vercel-labs/skills in August 2026. Tracked under skills/PMOVES-skills/. The pre-recenter URL (POWERFULMOVES/Pmoves-Minimax-skills) is preserved as a deprecated reference, not added as a separate submodule entry. Added 2026-08-17 by PR1 of the 6-repo fold-in slice."
     }
   }
 }
