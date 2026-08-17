@@ -766,6 +766,51 @@
       "context_files": [],
       "agents_docs": [],
       "$note": "Post-recenter home of the skills library that moved from MiniMax-AI/skills to vercel-labs/skills in August 2026. Tracked under skills/PMOVES-skills/. The pre-recenter URL (POWERFULMOVES/Pmoves-Minimax-skills) is preserved as a deprecated reference, not added as a separate submodule entry. Added 2026-08-17 by PR1 of the 6-repo fold-in slice."
+    },
+    "PMOVES-MiniMax-MCP": {
+      "context_tier": 2,
+      "domain_tags": ["mcp", "agents", "llm"],
+      "skills": [
+        "mcp/connect",
+        "mcp/list-tools",
+        "mcp/invoke"
+      ],
+      "context_files": [
+        "mcp-api.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "MINIMAX_MCP_OPERATOR_HOME.md"
+      ],
+      "$note": "MCP server bridging Claude Code / Agent Zero to the MiniMax model suite. Replaces ad-hoc CLI shelling out to the model API. The harness v0 work calls this for model access; the sidecar lane (Pinokio on operator devices) routes through Pmoves-minimax-cli to the same surface. Added 2026-08-17 by PR2 of the 6-repo fold-in slice."
+    },
+    "Pmoves-minimax-cli": {
+      "context_tier": 3,
+      "domain_tags": ["llm", "agents"],
+      "skills": [
+        "minimax-cli/run",
+        "minimax-cli/list-models"
+      ],
+      "context_files": [
+        "mcp-api.md"
+      ],
+      "agents_docs": [],
+      "$note": "CLI wrapper around PMOVES-MiniMax-MCP, used by the sidecar lane (deployed via Pinokio on operator devices). The WebUI/Agent-Zero side calls the MCP directly; the sidecar / operator-device side calls this CLI. Added 2026-08-17 by PR2 of the 6-repo fold-in slice."
+    },
+    "Pmoves-MiniMax-Provider-Verifier": {
+      "context_tier": 3,
+      "domain_tags": ["llm", "infra", "ci"],
+      "skills": [
+        "minimax-verify/provider",
+        "minimax-verify/conformance"
+      ],
+      "context_files": [
+        "mcp-api.md"
+      ],
+      "agents_docs": [
+        "MINIMAX_PROVIDER_CONFORMANCE.md"
+      ],
+      "$note": "Provider conformance gate - validates that any third-party provider claiming MiniMax compatibility actually meets the contract. This is the load-bearing test for adding new providers to the Mavis model cascade. Added 2026-08-17 by PR2 of the 6-repo fold-in slice."
     }
   }
 }
