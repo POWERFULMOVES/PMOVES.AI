@@ -61,7 +61,10 @@ def default_docker_mcp_dir() -> Path:
     return Path.home() / ".docker" / "mcp"
 
 
-_ENV_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}")
+# Bounded to 64 like emit_local_env._reportable_name: an env key is short and
+# key-shaped, whereas a value that lands in the key position (malformed bundle)
+# is long. The length bound is what separates them, not the charset alone.
+_ENV_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
 
 
 def _safe_name(name: str) -> str:

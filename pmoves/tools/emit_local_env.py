@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import os
 import stat
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -57,6 +58,20 @@ def _valid_env_key(key: str) -> bool:
     return bool(key) and key.isupper() and key.replace("_", "").isalnum()
 
 
+_REPORTABLE_NAME_RE = re.compile(r"[A-Za-z0-9_.\-]{1,64}")
+
+
+def _reportable_name(name: str) -> str:
+    """A key name safe to print, or a redaction placeholder.
+
+    `skipped` is a diagnostic list of KEY names -- never values. But a
+    malformed bundle can put a value where a key belongs, and that value would
+    then be printed in clear text. Bound what may be echoed to something
+    key-shaped and short; everything else is redacted rather than logged.
+    """
+    return name if _REPORTABLE_NAME_RE.fullmatch(name or "") else "<non-conforming-key>"
+
+
 def select_emittable(secrets: Mapping[str, str]) -> tuple[Dict[str, str], List[str]]:
     """Filter a decoded secret map to values safe for a line-based env file.
 
@@ -67,13 +82,14 @@ def select_emittable(secrets: Mapping[str, str]) -> tuple[Dict[str, str], List[s
     emit: Dict[str, str] = {}
     skipped: List[str] = []
     for key, value in secrets.items():
-        # Every name that reaches `skipped` passes through _valid_env_key first,
-        # so the reported list can only ever contain env-key-shaped names. A
-        # malformed entry -- which is exactly the case where the "key" might not
-        # be a key at all -- is counted, never echoed. Names are the useful
-        # diagnostic; the values behind them are never reportable.
+        # A rejected name is the whole point of `skipped` -- an operator needs to
+        # know WHICH entry was dropped, and a lowercase or dotted key is an
+        # ordinary mistake worth naming. What must never be echoed is the case
+        # where a decoded bundle is malformed enough that a VALUE lands in the
+        # key position; those are long and carry characters no key ever has, so
+        # _reportable_name bounds both and redacts anything outside them.
         if not _valid_env_key(key):
-            skipped.append("<non-conforming-key>")
+            skipped.append(_reportable_name(key))
             continue
         if is_placeholder(value):
             skipped.append(key)
