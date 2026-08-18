@@ -114,16 +114,29 @@ The two mechanisms are not interchangeable, and the difference is operational:
 |---|---|---:|---|---|
 | 1 | Exact-duplicate blobs (2 pairs) | **17.0 MB** | **Delete the redundant copy** | No mechanism needed. Do this **first** — it changes the byte count of rows 4a and 5 below. Requires naming which path is canonical. |
 | 2 | `CATACLYSM_STUDIOS_INC/evidence/*.wav` master | **70.8 MB** | **Remove-from-tree → mesh `/business`** | A lossless master is archival, not working material; nothing in the repo reads it. Largest single reclaim on the list. **Gate:** mesh path confirmed live and retained first. |
-| 3 | `pmoves/data/beats/**` audio (41 files) | 98 MB | **LFS, not remove** | The plan itself requires beats to keep serving `/media/beats` for the voice pipeline. Until that path is *verified live*, removing from the tree risks a working pipeline. LFS gets the bytes out of a clone while keeping the path resolvable. **I could not verify the mesh path from this node — do not treat it as confirmed.** Excluded from the net below for that reason. |
+| 3 | `pmoves/data/beats/**` audio (41 files) | 98 MB | **LFS, not remove** | The plan itself requires beats to keep serving `/media/beats` for the voice pipeline. Until that path is *verified live*, removing from the tree risks a working pipeline. LFS keeps the path resolvable while capping *future* Git-object growth — it does **not** get these 98 MB out of a clone, see the correction below. **I could not verify the mesh path from this node — do not treat it as confirmed.** Excluded from the net below for that reason. |
 | 4a | `pmoves/docs/**` PDFs, post-dedup (3 files) | **12.7 MB** | **Remove-from-tree → mesh `/docs`** | Rendered output, not source. `PMOVESCHIT/main.pdf` 9.2 MB is already accounted for in row 1. |
 | 4b | `CATACLYSM_STUDIOS_INC/**` PDFs (7 files) | **26.3 MB** | **Remove-from-tree → mesh `/business`** | Rendered decks. The plan's split principle keeps the `.csv`/`.md` source in git. |
-| 5 | `repoingest/*.txt` dumps, post-dedup (4 files) | **15.7 MB** | **Delete outright — do not move** | These are *generated ingests of other repositories* — neither source nor artifact, but a cache. Moving a cache to the mesh preserves something that should be regenerable. Confirm the generator is tracked before deleting. |
+| 5 | `repoingest/*.txt` dumps, post-dedup (4 files) | **15.7 MB** | **Delete outright — do not move** | These are *generated ingests of other repositories* — neither source nor artifact, but a cache. Moving a cache to the mesh preserves something that should be regenerable. **Two gates, not one:** confirm the generator is tracked, *and* migrate the consumers first — `docs/PMOVES.md` cites exact line ranges in `docs/repoingest/coleam00-archon.txt` on 10 separate lines (e.g. `†L523-L555`, `†L1124-L1132`, `†L53822-L53841`). Deleting the file breaks those citations, and regenerating from a newer upstream revision silently moves the line numbers, which is worse. |
 | 6 | `pmoves/docs/evidence/**` (180 files) | 16.9 MB | **Leave in git** | 94 KB average. The clone-hygiene argument is weak at this size, and evidence screenshots earn their keep by being linkable from a commit. Revisit if it grows. |
 | 7 | `.minimax/`, `research/`, `website/` | ~7 MB | **Leave in git** | Below the threshold where either mechanism pays for its own complexity. |
 
 **Net if rows 1, 2, 4a, 4b and 5 are taken — 142.5 MB out of the working tree**, of which
 **32.7 MB is deleted** (rows 1 and 5) and **109.8 MB moves to the mesh** (rows 2, 4a, 4b).
 Beats (row 3) is deliberately excluded until its mesh path is validated.
+
+> **Correction — LFS does not shrink a full clone here.** Row 3 originally read "LFS gets the
+> bytes out of a clone." That is wrong under this document's own no-history-rewrite constraint
+> (see *Explicitly not in scope*). Converting the current beats paths to LFS adds a commit in
+> which they become pointers, but every historical blob stays reachable, and on top of that the
+> LFS smudge filter downloads the current payload on checkout — so a default full clone gets
+> *slightly larger*, not 98 MB smaller. `git lfs migrate --help` is explicit that an import
+> "will rewrite your Git history, changing commits and generating new commit SHAs", which is
+> the premise this document declines to reintroduce. What LFS still buys, without a rewrite:
+> the 98 MB stops accreting into Git objects on every future beats change, and a clone can
+> opt out of the payload (`GIT_LFS_SKIP_SMUDGE=1`, `lfs.fetchexclude`) instead of being forced
+> to carry it. Treat row 3 as a growth cap and a fetch-opt-out, not a reclaim — and price the
+> LFS bandwidth accordingly, because that cost is real either way.
 
 > The per-row byte figures are **post-dedup and non-overlapping**. An earlier draft of this
 > table summed category totals instead and double-counted the duplicate pairs across rows 1, 4
