@@ -89,7 +89,7 @@ changes and should not ride together.
 ## Verification
 
 ```bash
-make -C pmoves up-firefly          # recreate so the new tmpfs options apply
+make -C pmoves up-external        # recreate so the new tmpfs options apply (firefly is in this stack)
 docker exec pmoves-firefly sh -c 'ls -ld /var/www/html/storage/framework/cache'   # expect www-data
 curl -sf -o /dev/null -w '%{http_code}\n' http://localhost:8075/                  # expect 200, not 500
 ```
