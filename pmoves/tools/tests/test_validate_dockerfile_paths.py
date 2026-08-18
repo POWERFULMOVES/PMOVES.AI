@@ -379,3 +379,274 @@ services:
         assert not broken, f"expected no broken-build for test-svc, got: {broken}"
     finally:
         _cleanup(path)
+
+
+# ---------------------------------------------------------------------------
+# 11. COPY_UNRESOLVED — the class that would have caught #2468
+# ---------------------------------------------------------------------------
+#
+# `mai-ui-agent` shipped `COPY requirements.txt .` against `context: .`
+# (= pmoves/), where no such file exists, so the image dies on its first
+# COPY. Sibling `evo-controller` does the same job correctly from the same
+# root context — `COPY services/evo-controller/requirements.txt .`. The
+# correct and the broken form are equally plausible on a review diff, which
+# is what makes it a gate's job rather than a reviewer's.
+
+import importlib.util as _ilu
+
+_spec = _ilu.spec_from_file_location("_vdp", RATCHET)
+_vdp = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_vdp)
+
+
+def _write_service(name: str, dockerfile: str, files: dict) -> Path:
+    """Create pmoves/services/<name>/ with a Dockerfile + given files."""
+    d = PMOVES_DIR / "services" / name
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "Dockerfile").write_text(dockerfile, encoding="utf-8")
+    for rel, content in files.items():
+        f = d / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(content, encoding="utf-8")
+    return d
+
+
+def _rmtree(d: Path) -> None:
+    import shutil
+    if d.exists():
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_copy_source_missing_under_declared_context():
+    """The #2468 shape: root context, service-relative COPY."""
+    svc = _write_service(
+        "zz-copytest-broken",
+        "FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\n",
+        {"requirements.txt": "flask\n"},
+    )
+    payload = """
+services:
+  test-svc:
+    build:
+      context: .
+      dockerfile: services/zz-copytest-broken/Dockerfile
+    image: test-svc:latest
+"""
+    path = _write_tmp_compose("test_vdp_copy_broken", payload)
+    try:
+        r = _run_ratchet("--compose", str(path))
+        out = json.loads(r.stdout)
+        hits = [
+            f for f in out["copy_new"]
+            if f["dockerfile"].endswith("zz-copytest-broken/Dockerfile")
+        ]
+        assert hits, f"expected COPY_UNRESOLVED for the service, got: {out['copy_new']}"
+        assert hits[0]["kind"] == "COPY_UNRESOLVED"
+        assert hits[0]["source"] == "requirements.txt"
+        assert r.returncode == 1
+    finally:
+        _cleanup(path)
+        _rmtree(svc)
+
+
+def test_copy_source_correct_for_root_context_passes():
+    """The `evo-controller` shape: service-qualified source, root context."""
+    svc = _write_service(
+        "zz-copytest-ok",
+        "FROM python:3.12-slim\nWORKDIR /app\n"
+        "COPY services/zz-copytest-ok/requirements.txt .\n",
+        {"requirements.txt": "flask\n"},
+    )
+    payload = """
+services:
+  test-svc:
+    build:
+      context: .
+      dockerfile: services/zz-copytest-ok/Dockerfile
+    image: test-svc:latest
+"""
+    path = _write_tmp_compose("test_vdp_copy_ok", payload)
+    try:
+        r = _run_ratchet("--compose", str(path))
+        out = json.loads(r.stdout)
+        hits = [
+            f for f in out["copy_new"]
+            if f["dockerfile"].endswith("zz-copytest-ok/Dockerfile")
+        ]
+        assert not hits, f"expected no COPY finding, got: {hits}"
+    finally:
+        _cleanup(path)
+        _rmtree(svc)
+
+
+def test_copy_glob_with_no_match_is_flagged():
+    """`COPY *.whl .` with no wheel present fails the real build with
+    'no source files were specified'; the gate must say so first."""
+    svc = _write_service(
+        "zz-copytest-glob",
+        "FROM python:3.12-slim\nCOPY services/zz-copytest-glob/*.whl .\n",
+        {"app.py": "x = 1\n"},
+    )
+    payload = """
+services:
+  test-svc:
+    build:
+      context: .
+      dockerfile: services/zz-copytest-glob/Dockerfile
+    image: test-svc:latest
+"""
+    path = _write_tmp_compose("test_vdp_copy_glob", payload)
+    try:
+        r = _run_ratchet("--compose", str(path))
+        out = json.loads(r.stdout)
+        hits = [
+            f for f in out["copy_new"]
+            if f["dockerfile"].endswith("zz-copytest-glob/Dockerfile")
+        ]
+        assert hits, f"expected a glob finding, got: {out['copy_new']}"
+        assert "matches nothing" in hits[0]["detail"]
+    finally:
+        _cleanup(path)
+        _rmtree(svc)
+
+
+def test_copy_from_stage_and_remote_are_skipped_not_flagged():
+    """`--from=` resolves against a build stage and ADD <url> is fetched at
+    build time. Neither has anything on disk to check, so both are recorded
+    as skips with a reason rather than flagged or silently dropped."""
+    svc = _write_service(
+        "zz-copytest-skips",
+        "FROM python:3.12-slim AS builder\n"
+        "FROM python:3.12-slim\n"
+        "COPY --from=builder /app/dist ./dist\n"
+        "ADD https://example.invalid/x.tar.gz /tmp/\n",
+        {},
+    )
+    payload = """
+services:
+  test-svc:
+    build:
+      context: .
+      dockerfile: services/zz-copytest-skips/Dockerfile
+    image: test-svc:latest
+"""
+    path = _write_tmp_compose("test_vdp_copy_skips", payload)
+    try:
+        r = _run_ratchet("--compose", str(path))
+        out = json.loads(r.stdout)
+        hits = [
+            f for f in out["copy_new"]
+            if f["dockerfile"].endswith("zz-copytest-skips/Dockerfile")
+        ]
+        assert not hits, f"expected no findings for skip-only Dockerfile, got: {hits}"
+    finally:
+        _cleanup(path)
+        _rmtree(svc)
+
+
+def test_copy_arg_interpolation_is_skipped_not_guessed():
+    """A COPY source containing ${ARG} is only known at build time.
+    Guessing a default would invent findings, so it is skipped."""
+    svc = _write_service(
+        "zz-copytest-arg",
+        "FROM python:3.12-slim\nARG SRC_DIR=services/zz-copytest-arg\n"
+        "COPY ${SRC_DIR}/app.py .\n",
+        {"app.py": "x = 1\n"},
+    )
+    payload = """
+services:
+  test-svc:
+    build:
+      context: .
+      dockerfile: services/zz-copytest-arg/Dockerfile
+    image: test-svc:latest
+"""
+    path = _write_tmp_compose("test_vdp_copy_arg", payload)
+    try:
+        r = _run_ratchet("--compose", str(path))
+        out = json.loads(r.stdout)
+        hits = [
+            f for f in out["copy_new"]
+            if f["dockerfile"].endswith("zz-copytest-arg/Dockerfile")
+        ]
+        assert not hits, f"ARG interpolation must be skipped, not flagged: {hits}"
+    finally:
+        _cleanup(path)
+        _rmtree(svc)
+
+
+# ---------------------------------------------------------------------------
+# 12. Parser units — the shapes a naive line-grep gets wrong
+# ---------------------------------------------------------------------------
+
+def test_parser_handles_multi_source_flags_and_continuations(tmp_path):
+    df = tmp_path / "Dockerfile"
+    df.write_text(
+        "FROM alpine\n"
+        "COPY app.py nats_integration.py ./\n"
+        "COPY --chown=1000:1000 --chmod=755 a.txt .\n"
+        'COPY ["with space.txt", "dest/"]\n'
+        "COPY a.py \\\n"
+        "     b.py \\\n"
+        "# a comment inside the continuation\n"
+        "     ./\n",
+        encoding="utf-8",
+    )
+    entries = _vdp.parse_copy_instructions(df)
+    assert entries[0]["sources"] == ["app.py", "nats_integration.py"]
+    assert entries[1]["flags"] == ["--chown=1000:1000", "--chmod=755"]
+    assert entries[1]["sources"] == ["a.txt"]
+    assert entries[2]["sources"] == ["with space.txt"]
+    assert entries[3]["sources"] == ["a.py", "b.py"], (
+        "a comment line inside a continuation must not break the join"
+    )
+
+
+def test_parser_honours_escape_directive(tmp_path):
+    df = tmp_path / "Dockerfile"
+    df.write_text(
+        "# escape=`\n"
+        "FROM alpine\n"
+        "COPY a.py `\n"
+        "     b.py `\n"
+        "     ./\n",
+        encoding="utf-8",
+    )
+    entries = _vdp.parse_copy_instructions(df)
+    assert entries[0]["sources"] == ["a.py", "b.py"]
+
+
+def test_dockerignore_matcher_is_anchored_at_context_root():
+    """Docker patterns are anchored at the context root and `*` does not
+    cross a `/` — unlike gitignore. Matching them the gitignore way would
+    invent DOCKERIGNORE_EXCLUDED findings for files docker actually ships,
+    which on a hard gate means a spurious red build."""
+    pats = [(False, "*.md"), (False, "**/__pycache__"), (False, "tests"), (True, "README.md")]
+    assert _vdp._dockerignored("CHANGELOG.md", pats) == "*.md"
+    assert _vdp._dockerignored("docs/guide.md", pats) is None
+    assert _vdp._dockerignored("README.md", pats) is None
+    assert _vdp._dockerignored("app/__pycache__/x.pyc", pats) == "**/__pycache__"
+    assert _vdp._dockerignored("tests/a.py", pats) == "tests"
+    assert _vdp._dockerignored("src/main.py", pats) is None
+
+
+# ---------------------------------------------------------------------------
+# 13. Ratchet contract: stale baseline entries fail too
+# ---------------------------------------------------------------------------
+
+def test_stale_copy_baseline_entry_fails(monkeypatch, tmp_path):
+    """A baselined key that no longer occurs was FIXED. Leaving it in the
+    file re-accepts the same defect if it returns, which contradicts the
+    count-only-down claim — so it fails the gate like a new finding does."""
+    baseline = tmp_path / "_known_copy_gaps.yaml"
+    baseline.write_text(
+        "known_copy_gaps:\n"
+        '  - "COPY_UNRESOLVED|pmoves/services/gone/Dockerfile:1|pmoves|vanished.txt"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(_vdp, "COPY_BASELINE", baseline)
+    assert _vdp.load_copy_baseline() == {
+        "COPY_UNRESOLVED|pmoves/services/gone/Dockerfile:1|pmoves|vanished.txt"
+    }
+    live = set()
+    assert sorted(_vdp.load_copy_baseline() - live), "stale entry must be detected"

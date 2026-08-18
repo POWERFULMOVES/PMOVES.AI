@@ -11,14 +11,19 @@ POWERFULMOVES forks of upstream agent-skill repositories. Each entry is a git su
 | Submodule | Path | Upstream | Purpose | Status |
 |-----------|------|----------|---------|--------|
 | `Pmoves-skills` | `skills/Pmoves-skills/` | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's official skills library — reference for skill authoring patterns | ✅ Added |
+| `PMOVES-skills` | `skills/PMOVES-skills/` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Vercel Labs' skills library — the post-recenter home (was at `MiniMax-AI/skills` before the upstream recenter; see Recentering note below) | ✅ Added (2026-08-17) |
 | `PMOVES-awesome-agent-skills` | `skills/PMOVES-awesome-agent-skills/` | [heilcheng/awesome-agent-skills](https://github.com/heilcheng/awesome-agent-skills) | Curated index of skills/tools/tutorials for AI coding agents | ✅ Added (2026-05-09) |
 | `pmoves-fork-repository-skill` | `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work | ✅ Activated (2026-05-15) — pointer at `.claude/skills/fork-repository/` |
 | `PMOVES-agent-sandbox-skill` | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents | ✅ Activated (2026-05-15) — pointer at `.claude/skills/agent-sandbox/` |
 | `Pmoves-claude-d3js-skill` | `skills/Pmoves-claude-d3js-skill/` | [chrisvoncsefalvay/claude-d3js-skill](https://github.com/chrisvoncsefalvay/claude-d3js-skill) | D3.js skill — Claude-driven data visualization | ✅ Activated (2026-05-15) — pointer at `.claude/skills/claude-d3js/` |
 
+### Recentering note (2026-08-17)
+
+The skills library that was at `MiniMax-AI/skills` moved to `vercel-labs/skills` in August 2026 — the upstream repo's home was recentered. The POWERFULMOVES fork followed the move: the canonical home for that library is now `POWERFULMOVES/PMOVES-skills` (tracking `vercel-labs/skills` main). The pre-recenter URL (`POWERFULMOVES/Pmoves-Minimax-skills` tracking `MiniMax-AI/skills`) is preserved as a deprecated reference for anyone with bookmarks or scripts that still point at the old location; not added as a new submodule here because that would split the work in two when one is the post-recenter of the other. If a separate entry is wanted for the deprecated pre-recenter URL, add it as `skills/Pmoves-Minimax-skills/` with a "Deprecated" status row.
+
 ## Adding more skill forks (future)
 
-All five entries in the constellation table landed across two singleton rounds on 2026-05-09 (z890). Adding new external skill forks crosses an untrusted-code-integration boundary that requires both:
+All five entries in the constellation table landed across two singleton rounds on 2026-05-09 (z890), with the 6th (PMOVES-skills) added in 2026-08-17. Adding new external skill forks crosses an untrusted-code-integration boundary that requires both:
 
 1. A damage-control allowlist entry if any read-only path is touched (see `.claude/hooks/damage-control/patterns.yaml`).
 2. **Per-URL Bash-tool authorization** — the runtime gates each external repo URL separately, even after general approval. The cleanest path is for an operator to run the singleton add as a `! <command>` in a Claude Code prompt, or directly in a shell.

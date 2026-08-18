@@ -92,6 +92,12 @@ This tier holds the canonical reference for the **AGENTS.md open format** (unive
 - **Tier:** **Tier-2 always-relevant** (load when format/taxonomy/persona work touches the conversation)
 - **Cross-refs:** Root `AGENTS.md` follows this format; `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` and `PMOVES_AGENT_TOPOLOGY.md` are taxonomy docs that may migrate here (gated on user confirmation)
 
+**Submodule table entry** (mirrors the `skills/*` table format below for scannability):
+
+| Submodule | Upstream | Purpose |
+|-----------|----------|---------|
+| `PMOVES-agents.md/` | [agentsmd/agents.md](https://agents.md) | AGENTS.md open format reference + agent taxonomy + persona schema (Tier-2 always-relevant) |
+
 ### skills/ — Skills Constellation
 
 POWERFULMOVES forks of upstream agent-skill repositories, mounted as nested submodules under `skills/`. Load `skills/README.md` first; load a specific skill submodule's CLAUDE.md / README only when working in that skill's domain.
@@ -103,6 +109,7 @@ POWERFULMOVES forks of upstream agent-skill repositories, mounted as nested subm
 | `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work |
 | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents |
 | `skills/Pmoves-claude-d3js-skill/` | [chrisvoncsefalvay/claude-d3js-skill](https://github.com/chrisvoncsefalvay/claude-d3js-skill) | D3.js skill — Claude-driven data visualization patterns |
+| `skills/PMOVES-skills/` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Vercel Labs' skills library — the post-recenter home of the library that moved from `MiniMax-AI/skills` in August 2026 (see `skills/README.md` Recentering note) |
 
 Activation paths and cross-references live in `skills/README.md`.
 
@@ -137,6 +144,19 @@ Activation paths and cross-references live in `skills/README.md`.
   - Supabase for session logging
 - **Relevant Skills:** `/botz:init`, `/botz:mcp`, `/botz:profile`, `/botz:secrets`
 - **README:** [PMOVES-BoTZ/README.md](../../../PMOVES-BoTZ/README.md)
+
+### PMOVES-MiniMax-MCP
+- **Path:** `PMOVES-MiniMax-MCP/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-MiniMax-MCP.git
+- **Branch:** `main`
+- **Purpose:** MCP server that bridges Claude Code / Agent Zero to the MiniMax model suite — replaces ad-hoc CLI shelling with a proper MCP surface so agents can consume models as tools
+- **Upstream:** [MiniMax-AI/MiniMax-MCP](https://github.com/MiniMax-AI/MiniMax-MCP)
+- **Integration Points:**
+  - Exposes model-provider tools through the MCP protocol (model/load, model/invoke, etc.)
+  - Consumed by the Mavis orchestrator + the harness v0 follow-ups publisher
+  - Routes through PMOVES-tensorzero when model routing is enabled
+- **Relevant Skills:** `/mcp:connect`, `/mcp:list-tools`, `/mcp:invoke`
+- **README:** [PMOVES-MiniMax-MCP/README.md](../../../PMOVES-MiniMax-MCP/README.md)
 
 ---
 
@@ -442,6 +462,32 @@ Activation paths and cross-references live in `skills/README.md`.
   - MCP-compatible for tool extensions
 - **Relevant Skills:** `/crush:setup`, `/crush:status`
 - **README:** [PMOVES-crush/README.md](../../../PMOVES-crush/README.md)
+
+### Pmoves-minimax-cli
+- **Path:** `Pmoves-minimax-cli/`
+- **Repository:** https://github.com/POWERFULMOVES/Pmoves-minimax-cli.git
+- **Branch:** `main`
+- **Purpose:** CLI wrapper around `PMOVES-MiniMax-MCP` — used by the sidecar lane (deployed via Pinokio on operator devices) to access the MiniMax model surface without a full MCP client
+- **Upstream:** [MiniMax-AI/cli](https://github.com/MiniMax-AI/cli)
+- **Integration Points:**
+  - Deployed via Pinokio on operator nodes (P10 XL fleet, Tab Ultra fleet)
+  - The WebUI/Agent-Zero side calls the MCP directly; the sidecar side calls this CLI
+  - Same model surface as PMOVES-MiniMax-MCP, just a different transport
+- **Relevant Skills:** `/minimax-cli:run`, `/minimax-cli:list-models`
+- **README:** [Pmoves-minimax-cli/README.md](../../../Pmoves-minimax-cli/README.md)
+
+### Pmoves-MiniMax-Provider-Verifier
+- **Path:** `Pmoves-MiniMax-Provider-Verifier/`
+- **Repository:** https://github.com/POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier.git
+- **Branch:** `main`
+- **Purpose:** Provider conformance gate — validates that any third-party provider claiming MiniMax compatibility actually meets the contract. Load-bearing for adding new providers to the Mavis model cascade.
+- **Upstream:** [MiniMax-AI/MiniMax-Provider-Verifier](https://github.com/MiniMax-AI/MiniMax-Provider-Verifier)
+- **Integration Points:**
+  - Runs as a CI gate on PRs that add new provider configurations
+  - Validates the contract: model list shape, response format, token accounting, tool-call support
+  - A provider that passes the gate is allowed into the model cascade; a failure is a hard block
+- **Relevant Skills:** `/minimax-verify:provider`, `/minimax-verify:conformance`
+- **README:** [Pmoves-MiniMax-Provider-Verifier/README.md](../../../Pmoves-MiniMax-Provider-Verifier/README.md)
 
 ---
 

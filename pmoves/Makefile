@@ -179,6 +179,7 @@ help: ## Show available make targets and descriptions
 include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk
+include mk/worktree.mk
 include mk/build-gate.mk
 include mk/nvidia-5090.mk
 include mk/nvidia-dgx-spark.mk
@@ -1241,8 +1242,14 @@ validate-tac-json: ## Same as validate-tac, but JSON output (for CI annotation)
 #   validate-dockerfile-paths-json   - same, JSON output
 #   validate-dockerfile-paths-list-orphans - diagnostic: print orphan list
 #                                           without failing
+#   validate-dockerfile-paths-copy-skips  - diagnostic: print the COPY/ADD
+#                                           sources the scan deliberately
+#                                           does not check, with reasons
+#   validate-dockerfile-paths-copy-baseline - re-baseline COPY_UNRESOLVED
+#                                           (deliberate; every entry is a
+#                                            real build break)
 # ----------------------------------------------------------------------------
-.PHONY: validate-dockerfile-paths validate-dockerfile-paths-json validate-dockerfile-paths-list-orphans
+.PHONY: validate-dockerfile-paths validate-dockerfile-paths-json validate-dockerfile-paths-list-orphans validate-dockerfile-paths-copy-baseline validate-dockerfile-paths-copy-skips
 validate-dockerfile-paths: ## Assert every compose `build:` points at a real Dockerfile; orphans must be in baseline (no network, ~100ms)
 	@echo "?? Validate-dockerfile-paths ratchet..."
 	@$(PYTHON) tools/validate_dockerfile_paths.py
@@ -1256,6 +1263,20 @@ validate-dockerfile-paths-json: ## Same as validate-dockerfile-paths, but JSON o
 #   GHOST_PATH     documented `file:NNN` where the file does not exist
 #   UNRUNNABLE_DOC documented command matching a damage-control BLOCKED_PATTERN
 #   UNKNOWN_HOST   documented ssh host absent from the fleet topology
+# ----------------------------------------------------------------------------
+# Bind-source preflight -- the runtime half of the submodule build & mount gap.
+# Docker CREATES a missing bind source as a directory instead of erroring, so an
+# unpopulated submodule turns a file mount into a directory mount and the container
+# fails on its own config. Neither compose ratchet can see it (both check out
+# without submodules). See docs/operations/SUBMODULE_BUILD_AND_MOUNT_GAP.md.
+# ----------------------------------------------------------------------------
+.PHONY: bind-sources-check bind-sources-check-json
+bind-sources-check: ## Assert every submodule-backed compose bind source exists and is the right kind
+	@$(PYTHON) tools/check_bind_sources.py
+
+bind-sources-check-json: ## Same as bind-sources-check, but JSON output
+	@$(PYTHON) tools/check_bind_sources.py --json
+
 # Scope-aware: make reaches docker/ssh/python/git/systemd/nats, not just docker.
 # Ratchet — baseline in configs/command_anchors/_known_gaps.yaml, count goes down.
 # ----------------------------------------------------------------------------
@@ -1270,19 +1291,27 @@ validate-command-anchors-json: ## Same as validate-command-anchors, but JSON out
 validate-command-anchors-baseline: ## Re-baseline the anchor gate (deliberate: say why in the PR)
 	@$(PYTHON) tools/validate_command_anchors.py --write-baseline
 
+.PHONY: python-tests-ratchet python-tests-json python-tests-baseline
+python-tests-ratchet: ## Run every test_*.py and fail only on NEW failures (the merge-gate check)
+	@echo "?? Python-tests ratchet..."
+	@$(PYTHON) tools/pytest_ratchet.py
+
+python-tests-json: ## Same as python-tests-ratchet, but JSON output
+	@$(PYTHON) tools/pytest_ratchet.py --json
+
+python-tests-baseline: ## Re-baseline the python-tests gate (deliberate: say why in the PR)
+	@$(PYTHON) tools/pytest_ratchet.py --write-baseline
+
 validate-dockerfile-paths-list-orphans: ## Diagnostic: list orphan Dockerfiles not in the baseline; never fails
 	@$(PYTHON) tools/validate_dockerfile_paths.py --list-orphans
 
-.PHONY: up-workers up-workers-core
+validate-dockerfile-paths-copy-skips: ## Diagnostic: list COPY/ADD sources the scan cannot check statically, with reasons; never fails
+	@$(PYTHON) tools/validate_dockerfile_paths.py --list-copy-skips
 
-.PHONY: up-openroom
-up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
-	@echo "🚪 Starting OpenRoom desktop..."
-	@$(DC) --profile ui up -d openroom
-	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
-	@echo "✅ OpenRoom ready"
-	@echo "   Desktop:      http://localhost:5173/webuiapps/"
-	@echo "   Try a room:   http://localhost:5173/webuiapps/?room=persona.room.livingdoc"
+validate-dockerfile-paths-copy-baseline: ## Re-baseline the COPY-source gate (deliberate: every entry is a real build break — say why in the PR)
+	@$(PYTHON) tools/validate_dockerfile_paths.py --write-copy-baseline
+
+.PHONY: up-workers up-workers-core
 
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
@@ -4812,6 +4841,7 @@ OVERLAY_MEDIA   := -f docker-compose.media.yml
 OVERLAY_UI      := -f docker-compose.ui.yml
 OVERLAY_WORKERS := -f docker-compose.workers.yml
 OVERLAY_APPS    := -f docker-compose.apps.yml
+OVERLAY_ROCM    := -f docker-compose.rocm.override.yml
 
 # Use the raw docker compose binary (NOT $(DC), which includes STACK_FILES and would
 # pull the monolithic docker-compose.yml into overlay targets, defeating isolation).
@@ -4885,6 +4915,44 @@ overlay-up-apps: ## Start application services via overlay
 overlay-down: ## Stop all overlay services
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) down
 	@echo "✅ All overlay services stopped"
+
+# --- AMD RDNA4 / ROCm node overlay -----------------------------------------
+# Node-specific: only nodes with an AMD GPU can run this. Guarded on /dev/kfd so a
+# non-AMD node gets a clear skip instead of a container that fails to start.
+# Brief: docs/handoffs/rocm-device-metrics-exporter-2026-08-15.md
+.PHONY: overlay-up-rocm overlay-down-rocm rocm-exporter-status
+
+overlay-up-rocm: ## Start AMD GPU metrics exporter (rdna4 nodes only)
+	@if [ ! -e /dev/kfd ]; then \
+	  echo "⏭  skipping: /dev/kfd absent — not an AMD GPU node"; exit 0; \
+	fi
+	@$(OVERLAY_DC) $(OVERLAY_ROCM) up -d device-metrics-exporter
+	@echo "✅ AMD device-metrics-exporter started"
+	@echo "   Prometheus scrapes it by service name on pmoves_monitoring (job: amd-gpu)."
+	@echo "   Verify: make -C pmoves rocm-exporter-status"
+
+overlay-down-rocm: ## Stop the AMD GPU metrics exporter
+	@$(OVERLAY_DC) $(OVERLAY_ROCM) down
+	@echo "✅ AMD device-metrics-exporter stopped"
+
+rocm-exporter-status: ## Verify the AMD GPU exporter serves SAMPLES and Prometheus scrapes it
+	@echo "── exporter endpoint ──"
+	@# Probed via docker exec, NOT a host curl: pmoves_monitoring is an internal
+	@# network, so there is no host port to hit. A host curl here returns 000 on a
+	@# perfectly healthy exporter — which is a misleading diagnostic, the thing this
+	@# whole change exists to stop.
+	@samples=$$(docker exec pmoves-device-metrics-exporter \
+	     wget -qO- http://localhost:5000/metrics 2>/dev/null | grep -c '^gpu_' || echo 0); \
+	 echo "   gpu_ samples: $$samples"; \
+	 if [ "$$samples" -eq 0 ]; then \
+	   echo "   ⚠ answering but empty is the exact failure this replaced — check: docker logs pmoves-device-metrics-exporter"; \
+	 fi
+	@echo "── prometheus target ──"
+	@curl -s --max-time 6 'http://localhost:9090/api/v1/targets?state=any' 2>/dev/null \
+	  | $(PYTHON) -c "import json,sys; d=json.load(sys.stdin); \
+	    ts=[t for t in d.get('data',{}).get('activeTargets',[]) if t['labels'].get('job')=='amd-gpu']; \
+	    print('   ' + (('health=' + ts[0]['health'] + (' lastError=' + ts[0]['lastError'] if ts[0].get('lastError') else '')) if ts else 'job amd-gpu NOT configured in prometheus.yml'))" \
+	  2>/dev/null || echo "   (prometheus unreachable on :9090)"
 
 .PHONY: design-tokens design-tokens-check design-test-js
 

@@ -14,9 +14,9 @@ set -u
 HOMES=""; NODE_CAP=40; SAVINGS=35; OUT="/opt/pilot-dashboard/index.html"; NOW="${NOW:-}"
 JSON=""
 while [ $# -gt 0 ]; do case "$1" in
-  --homes) HOMES="$2"; shift;; --node-cap) NODE_CAP="$2"; shift;;
-  --savings-per-home) SAVINGS="$2"; shift;; --out) OUT="$2"; shift;;
-  --json) JSON="$2"; shift;; --now) NOW="$2"; shift;;
+  --homes) HOMES="${2:-}"; shift;; --node-cap) NODE_CAP="${2:-}"; shift;;
+  --savings-per-home) SAVINGS="${2:-}"; shift;; --out) OUT="${2:-}"; shift;;
+  --json) JSON="${2:-}"; shift;; --now) NOW="${2:-}"; shift;;
   *) ;; esac; shift; done
 [ -z "$JSON" ] && JSON="$(cat)"    # read observer json from stdin if not passed
 

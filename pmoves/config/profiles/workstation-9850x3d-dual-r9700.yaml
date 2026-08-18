@@ -26,9 +26,90 @@ hardware:
       memory_gb: 32
   total_vram_gb: 64                 # 2x 32 GB
   rocm_version: "7.1"
-  ram_gb: 128
+  ram_gb: 32                        # CORRECTED 2026-08-14: was 128. Measured MemTotal
+                                    # 31939336 kB (~30 GiB usable). See `probe:` below.
   storage: "NVMe SSD"
   tags: [workstation, amd64, rdna4, gfx1201, dual-gpu]
+
+# Observed state from a live probe. The `hardware:` block above describes the TARGET
+# build (dual R9700); this records what is actually installed, so anything routing work
+# here can tell the difference. Re-probe after hardware changes.
+probe:
+  probed_at: "2026-08-14"
+  probed_on: pmoves-b850
+  method: "rocm-smi + lspci + /proc/meminfo (no sudo)"
+  ram_gb_observed: 32               # MemTotal 31939336 kB
+  gpus_observed:
+    - slot: "03:00.0"
+      pci_id: "1002:7551"
+      gfx_version: gfx1201          # matches target: RDNA4
+      sku: APM107573
+      vram_gb: 32                   # 34208743424 B
+      role: discrete
+    - slot: "13:00.0"
+      pci_id: "1002:13c0"
+      gfx_version: gfx1036          # Raphael iGPU, not an inference target
+      vram_gb: 0.5                  # 536870912 B
+      role: integrated
+  total_vram_gb_observed: 32        # ONE R9700, not two
+  divergences:
+    - "ram_gb declared 128, observed 32 — corrected above."
+    - "FAULT — second R9700 is PHYSICALLY INSTALLED but does not enumerate. Operator
+       confirms two cards; the PCIe bus shows exactly one 1002:7551. This is a
+       hardware/firmware fault, NOT a spec error: total_vram_gb 64 and dual_gpu_flags
+       (--tensor-split 0.5,0.5 --split-mode row) describe the correct target and must
+       stay. Until the card enumerates, only single-GPU workloads will run.
+       Ruled out: Above-4G Decoding / ReBAR are ON (card 1 holds a 32G BAR at
+       0xf000000000). amdgpu 6.19.4 healthy on the card that IS seen.
+       Not yet checked (needs root or BIOS): PCIe link training errors, slot
+       bifurcation setting, physical seating/power. See probe.open_questions."
+    - "llama-server not running — nothing listening on :8090 (profile) or :8080 (runbook)."
+    - "rocm-smi-exporter served HTTP 200 with a ZERO-BYTE body — FIXED in this change.
+       The collector was healthy all along (valid samples in /run/rocm-smi-metrics.prom);
+       the responder unit inlined shell in ExecStart, so systemd ate %d as its
+       credentials-dir specifier and ${#body} as an env reference. Endpoint now returns
+       756+ bytes / 8 samples. NOTE the endpoint being correct is necessary but not
+       sufficient — see the two entries below; nothing scrapes it yet."
+    - "Exporter bug 2: rocm_gpu_memory_used_bytes never emitted samples — FIXED in this
+       change. The collector selected .value[\"VRAM Total Used Memory (B)\"] out of
+       `rocm-smi --showmemuse`, but that flag returns 'GPU memory use (%)'; the byte
+       counter comes from `rocm-smi --showmeminfo vram`. HELP/TYPE printed, samples
+       never did. rocm_gpu_memory_total_bytes added so used renders as a percentage."
+    - "SCRAPE CHAIN GAP 1: Prometheus has NO job for :9835. Its config covers cadvisor,
+       loki, flute-gateway, tensorzero-gateway, deepresearch, supaserch, neo4j,
+       gpu-orchestrator, otel-collector — the ROCm exporter was never wired. Fixing the
+       endpoint does not put metrics in Grafana on its own."
+    - "SCRAPE CHAIN GAP 2: a container cannot reach this HOST-NATIVE exporter, though
+       container→host is NOT blocked in general. Measured from the Prometheus container
+       via its own bridge gateway:
+         port 4222 (NATS, docker-published)  -> OPEN
+         port 9835 (exporter, host-native)   -> refused/filtered
+       Mechanism: Docker inserts its own ACCEPT rules for published ports and the
+       DOCKER-USER chain is empty, so published ports bypass UFW entirely. A host-native
+       listener (systemd socket) gets no such bypass and falls under UFW's
+       `default deny (incoming)` on the bridge interface. UFW logging is set to `low`,
+       so these particular drops are not logged — do not conclude 'not firewalled'
+       from an absent log line.
+       The socket itself is healthy: from the host, both loopback and the bridge address
+       return 200, so this is a packet-path problem, not a bind problem.
+       Fix is either a scoped UFW allow (bridge subnet -> 9835) or running the exporter
+       as a container, which removes the host hop entirely."
+    - "compose_overrides names docker-compose.rocm.override.yml — NO SUCH FILE exists
+       anywhere in the repo."
+    - "Runbook pmoves/docs/P7_SKILL_B850.md starts llama-server on :8080 and documents
+       the API there, contradicting this profile's port 8090 and its stated reason
+       (8080 reserved for Agent Zero fleet-wide). :8080 is free on this node today
+       (no Agent Zero container here), so this is a convention violation waiting to
+       collide, not an active conflict."
+    - "AGNOTE4482_SITREP.md:243 lists this node as '64GB RAM; no discrete GPU' —
+       wrong on both counts; a gfx1201 R9700 is present."
+  open_questions:
+    - "Which physical slot holds card 2? CPU root ports are 00:01.1 (card 1, bus 01-03)
+       and 00:01.2 (Samsung NVMe, bus 04) — so card 2 must be chipset-attached."
+    - "Chipset has 5 EMPTY downstream ports (buses 09, 0a, 0b, 0c, 0d). Card 2 appears
+       on none of them, so it is not merely untrained on a populated port."
+    - "dmesg_restrict=1 and /var/log/kern.log is root-only; `lspci -vv` LnkSta needs
+       root. Re-run diagnosis with sudo to see link-training errors."
 inference_backend: "llama.cpp-hip"
 inference_server:
   name: llama-server

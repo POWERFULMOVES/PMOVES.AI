@@ -28,17 +28,23 @@ jobs:
           echo "All checks passed=true" >> $GITHUB_OUTPUT
           echo "passed=true" >> $GITHUB_OUTPUT
 
+  # Ratcheted: runs ALL test_*.py (previously capped at `head -20` of 264 by
+  # filesystem order) and can actually fail (previously ended in `|| true`).
+  # New failures and fixed-but-still-baselined entries both fail the job.
   python-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: pip install -r requirements.txt 2>/dev/null || pip install pytest pytest-asyncio httpx pyyaml
-      - name: Run Python tests
-        run: find . -name 'test_*.py' -not -path '*/venv/*' -not -path '*node_modules*' | head -20 | xargs pytest --tb=short -q || true
+        # No `|| fallback` and no `2>/dev/null`: a missing or unresolvable
+        # requirements file must fail the job, not silently install four packages.
+        run: pip install -r .github/requirements-tests.txt
+      - name: Run Python tests (ratchet)
+        run: python pmoves/tools/pytest_ratchet.py
 
   docker-build-validation:
     runs-on: ubuntu-latest
@@ -49,15 +55,27 @@ jobs:
           pip install pyyaml
           python -c "import yaml; yaml.safe_load(open('pmoves/docker-compose.yml'))" 2>/dev/null || echo 'Compose validation skipped'
 
+  # Ratcheted: judges ALL 99 tracked Dockerfiles (previously globbed
+  # pmoves/services/*/Dockerfile, which sees 76 of them and misses 10 of the 12
+  # that run as root) and can actually fail (previously ended in `|| echo`).
+  # It also now judges the *effective* user: pmoves/images/jellyfin/Dockerfile
+  # sets a non-root USER and then switches back with a later `USER root`, which
+  # a substring search for USER scored as compliant.
+  # New findings and fixed-but-still-baselined entries both fail the job.
   hardening-validation:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Check hardening standards
-        run: |
-          echo 'Checking container hardening standards...'
-          # Verify no root user in Dockerfiles
-          grep -r 'USER' pmoves/services/*/Dockerfile 2>/dev/null | head -10 || echo 'No USER directives found'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # No pip install: the ratchet is stdlib-only and discovers via `git
+      # ls-files`, so it needs the checkout and nothing else.
+      - name: Check container hardening (ratchet)
+        run: python pmoves/tools/hardening_ratchet.py
 
   merge-decision:
     needs: [python-tests, docker-build-validation, hardening-validation]

@@ -102,6 +102,7 @@ SERVICE_GROUPS = {
     ],
     "workers": [
         "extract-worker",
+        "watch-folder-router",
         "spark-shape-worker",
         "pdf-ingest",
         "langextract",

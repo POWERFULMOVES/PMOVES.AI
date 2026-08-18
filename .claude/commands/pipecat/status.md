@@ -11,25 +11,25 @@ Use this command to verify Pipecat and flute-gateway health.
 curl -sf http://localhost:8055/healthz && echo "Flute-Gateway: OK" || echo "Flute-Gateway: DOWN"
 ```
 
-2. Check WebSocket server:
+2. Check the WebSocket route (same port as HTTP — 8055):
 ```bash
-# Test WebSocket connectivity
-curl -sf http://localhost:8056 --max-time 2 && echo "WebSocket: LISTENING" || echo "WebSocket: DOWN"
+WSKEY='Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='
+curl -s -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H "$WSKEY" http://localhost:8055/v1/voice/stream/tts
+# expect 101 (switching protocols)
 ```
 
-3. Check Pipecat pipeline status:
+3. Check the pipeline feature matrix:
 ```bash
-curl -s http://localhost:8055/v1/pipeline/status \
-  -H "Authorization: Bearer $FLUTE_API_KEY" | jq '.'
+curl -s http://localhost:8055/v1/voice/config | jq '.features, .providers'
 ```
 
-4. View active sessions:
-```bash
-curl -s http://localhost:8055/v1/sessions \
-  -H "Authorization: Bearer $FLUTE_API_KEY" | jq '.sessions | length'
-```
+> [!NOTE]
+> flute-gateway serves no `/v1/pipeline/status` and no `/v1/sessions` — it keeps
+> no session registry, so there are no "active sessions" to list.
+> `/v1/voice/config` (unauthenticated) is the closest real signal; `/metrics`
+> carries per-endpoint request counters.
 
-5. Check container logs:
+4. Check container logs:
 ```bash
 docker logs --tail 50 pmoves-flute-gateway-1
 ```
@@ -39,20 +39,19 @@ docker logs --tail 50 pmoves-flute-gateway-1
 | Component | Port | Purpose |
 |-----------|------|---------|
 | HTTP API | 8055 | REST endpoints |
-| WebSocket | 8056 | Real-time audio streaming |
-| TTS Backend | 7861 | Ultimate-TTS-Studio |
+| WebSocket | 8055 | `/v1/voice/stream/tts`, `/v1/voice/agent` |
+| TTS Backend | 7861 (container) / 7860 (host-native) | Ultimate-TTS-Studio Gradio UI is published on 7861; flute-gateway's `ULTIMATE_TTS_URL` defaults to the host-native UTS on 7860 (`main.py:156`) |
 
 ## Expected Output
 
 ```
 Flute-Gateway: OK
-WebSocket: LISTENING
-Active sessions: 0
-Pipeline status: ready
+WebSocket: 101
+Providers: omnivoice, ultimate_tts, whisper
 ```
 
 ## Notes
 
 - Pipecat provides real-time voice communication
-- WebSocket port (8056) handles bidirectional audio
+- WebSocket routes share port 8055 with HTTP; 8056 is published by compose but unbound
 - See PR #332 for Pipecat integration details

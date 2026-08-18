@@ -85,7 +85,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["sm_75", "sm_80", "sm_86", "sm_87", "sm_89", "sm_90", "sm_100", "sm_110", "sm_120", "gfx900", "gfx906", "gfx908", "gfx90a", "gfx940", "gfx941", "gfx942", "gfx1010", "gfx1030", "gfx1100", "gfx1101", "gfx1200", "gfx1201"]
+            "enum": ["sm_75", "sm_80", "sm_86", "sm_87", "sm_89", "sm_90", "sm_100", "sm_110", "sm_120", "sm_121", "gfx900", "gfx906", "gfx908", "gfx90a", "gfx940", "gfx941", "gfx942", "gfx1010", "gfx1030", "gfx1100", "gfx1101", "gfx1200", "gfx1201"]
           },
           "minItems": 0,
           "description": "Allowed GPU compute capabilities (NVIDIA sm_* + AMD gfx*). Empty array means any GPU is acceptable (when gpu_required=true) or no GPU is needed (when gpu_required=false)."

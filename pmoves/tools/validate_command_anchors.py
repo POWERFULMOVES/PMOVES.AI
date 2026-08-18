@@ -20,6 +20,20 @@ isn't there:
 `docs_reconcile.py` does not catch these: it checks *freshness* (commit dates,
 staleness), not whether a named thing exists.
 
+A second batch on 2026-08-14, same shape, different surface — documented HTTP
+APIs that are not served:
+
+  * `.claude/context/agent-zero-orchestration.md` documented `/mcp/health`,
+    `/mcp/agents` and `/mcp/subordinate/create`. None were ever implemented.
+    #2449 bannered that file and five others by hand; the same fictional
+    `/mcp/*` surface survived in nine more docs the manual pass never reached.
+  * `pmoves/docs/infrastructure/github-runner-agent-zero-integration.md` ships
+    `curl .../queue/POWERFULMOVES/PMOVES.AI` against `@app.get("/queue/{repository}")`.
+    FastAPI's `{param}` is one segment, so the documented call 404s.
+
+Freshness could not see either: both docs were recently edited and confidently
+wrong. That is what GHOST_ENDPOINT is for — age is not accuracy.
+
 SCOPE AND TOPOLOGY, NOT JUST DOCKER
 -----------------------------------
 Make targets reach docker, ssh, python, git, systemd, NATS and each other. An
@@ -40,6 +54,9 @@ FINDING CLASSES
   UNKNOWN_HOST    a documented `ssh <host>` names a host absent from the fleet
                   topology (this also catches raw IPs, which must never appear
                   in committed docs)
+  GHOST_ENDPOINT  a doc cites `http://<service>:<port>/<path>` against a PMOVES
+                  service whose routes we can read, and that service declares no
+                  such route -- i.e. the doc documents an API that is not there
   GHOST_ROAD      the damage-control guard offers a `make` target as the
                   "correct path" and no such target exists — a blocked agent is
                   routed into a wall at the moment it is least able to recover
@@ -262,6 +279,289 @@ PATH_CITE_RE = re.compile(r"`((?:pmoves|deploy|\.claude|\.github)/[A-Za-z0-9_./-
 SSH_CITE_RE = re.compile(r"ssh\s+(?:-\S+\s+)*(?:root@|[a-z][a-z0-9_-]*@)?([A-Za-z0-9][A-Za-z0-9._-]+)")
 
 
+SERVICES = PMOVES / "services"
+
+# FastAPI/Starlette route declarations. One uniform style covers the fleet:
+# 59 of 97 service dirs declare routes this way.
+ROUTE_DECL_RE = re.compile(
+    r"""@(?:\w+)\.(?:get|post|put|delete|patch|head|options|websocket)\(\s*["']([^"']+)["']"""
+)
+
+# A service whose real prefix we cannot compute statically would produce false
+# GHOST_ENDPOINTs for every route it has, which is worse than no check at all --
+# the noise gets baselined and the class stops meaning anything. So a service is
+# introspectable ONLY if it declares routes and does NOT relocate them at
+# include/mount time.
+ROUTE_RELOCATE_RE = re.compile(
+    r"APIRouter\([^)]*prefix\s*=|include_router\([^)]*prefix\s*=|\.mount\("
+)
+
+
+# ROUTE_RELOCATE_RE catches routes MOVED to a different path. This catches routes
+# we simply cannot see: a router included from outside the service directory
+# contributes real routes with no marker in this tree. agent-zero does exactly
+# that for /a2a/v1/* via include_router(create_a2a_router()) with no prefix.
+ROUTE_EXTERNAL_RE = re.compile(r"include_router\(|\.mount\(")
+
+
+def complete_route_services() -> Set[str]:
+    """Services whose declared route set is provably COMPLETE.
+
+    No include_router, no mount -- every route is an @app decorator in this dir,
+    so anything a doc cites that does not match is a ghost, full stop. These
+    services do not need the namespace rule, and applying it to them hides real
+    findings: botz-gateway serves only /v1/*, /healthz and /metrics, so a doc
+    citing botz-gateway:8054/tools is plainly wrong -- but the namespace rule
+    stayed silent because the service "owns no /tools namespace".
+    """
+    out: Set[str] = set()
+    if not SERVICES.is_dir():
+        return out
+    for svc in sorted(SERVICES.iterdir()):
+        if not svc.is_dir():
+            continue
+        external = False
+        for py in svc.rglob("*.py"):
+            if "test" in py.name or "node_modules" in py.parts:
+                continue
+            try:
+                body = py.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if ROUTE_EXTERNAL_RE.search(body):
+                external = True
+                break
+        if not external:
+            out.add(svc.name)
+    return out
+
+
+def service_routes() -> Dict[str, Set[str]]:
+    """service dir name -> declared route paths, for services we can read safely."""
+    out: Dict[str, Set[str]] = {}
+    if not SERVICES.is_dir():
+        return out
+    for svc in sorted(SERVICES.iterdir()):
+        if not svc.is_dir():
+            continue
+        routes: Set[str] = set()
+        relocates = False
+        for py in svc.rglob("*.py"):
+            if "test" in py.name or "node_modules" in py.parts:
+                continue
+            try:
+                body = py.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if ROUTE_RELOCATE_RE.search(body):
+                relocates = True
+                break
+            routes |= {m.group(1) for m in ROUTE_DECL_RE.finditer(body)}
+        if routes and not relocates:
+            out[svc.name] = routes
+    return out
+
+
+def _route_matchers(routes: Set[str]) -> List[re.Pattern]:
+    """Compile declared routes, treating {param} as one path segment."""
+    pats: List[re.Pattern] = []
+    for r in routes:
+        esc = "".join(
+            r"[^/]+" if part.startswith("{") and part.endswith("}") else re.escape(part)
+            for part in re.split(r"(\{[^}]+\})", r)
+            if part
+        )
+        pats.append(re.compile(rf"^{esc}/?$"))
+    return pats
+
+
+# Only host:port forms. A bare `/healthz` in prose names no service, and a
+# scheme-less path is as often a URL fragment as an API claim.
+#
+# `<` and `>` MUST stay in the path class even though a bracketed segment is
+# never a real route. `<param>` is a normal doc convention, and excluding the
+# bracket does not skip the citation -- it TRUNCATES it. `/jobs/<context_id>`
+# captured as `/jobs/`, which then failed the matcher for the real route
+# `/jobs/{context_id}` and reported a ghost. The placeholder skip below can
+# only fire on characters the capture actually kept. A gate that flags correct
+# documentation is worse than one that misses: it pushes authors to "fix" docs
+# that were right.
+ENDPOINT_CITE_RE = re.compile(
+    r"https?://([A-Za-z0-9][A-Za-z0-9_.-]*):(\d{2,5})(/[A-Za-z0-9_./{}<>%:-]*)"
+)
+
+
+# Docs overwhelmingly write `http://localhost:8080/...`, not `http://agent-zero:8080/...`
+# -- 1574 of the 1732 endpoint citations in the scanned tree take the loopback
+# form. Checking only the service-name form would cover 9% of the surface while
+# reading like it covered the surface, which is the exact failure this whole
+# ratchet exists to stop. So loopback host:port is resolved to a service through
+# the compose port map.
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "host.docker.internal"}
+
+SERVICE_KEY_RE = re.compile(r"^([A-Za-z0-9_.-]+):\s*(?:#.*)?$")
+
+COMPOSE_VAR_RE = re.compile(r"\$\{[A-Za-z0-9_]+:-([^}]*)\}")
+
+
+def host_port_map() -> Dict[str, str]:
+    """host port -> service, for ports that name exactly one service.
+
+    Deliberately stdlib-only. The first cut imported yaml behind a try/except
+    that returned {} when it was missing. In the CI step documented "stdlib
+    only, no network" that did not fail -- it silently produced ZERO loopback
+    findings, which then tripped STALE_BASELINE against a baseline recorded on a
+    machine that had yaml. A gate whose findings depend on an optional import,
+    and degrades quietly when it is absent, is the exact defect this ratchet
+    exists to catch. So the port map is parsed directly.
+
+    Only one shape matters and compose writes it consistently:
+
+        services:
+          <name>:
+            ports:
+            - ${BIND:-127.0.0.1}:${PORT:-8080}:8080
+            - "9090:9090"
+
+    A port published by more than one service (11434 by two ollamas, 9096 by
+    three jellyfins, 80/443 by nginx and traefik) cannot be resolved to a single
+    route table, so it is dropped rather than guessed.
+    """
+    owners: Dict[str, Set[str]] = {}
+    for f in sorted(PMOVES.glob("docker-compose*.yml")):
+        try:
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        in_services = False
+        svc = ""
+        in_ports = False
+        for raw in lines:
+            if not raw.strip() or raw.lstrip().startswith("#"):
+                continue
+            indent = len(raw) - len(raw.lstrip())
+            stripped = raw.strip()
+
+            if indent == 0:
+                in_services = stripped.startswith("services:")
+                svc, in_ports = "", False
+                continue
+            if not in_services:
+                continue
+
+            # A 2-space key names a service and ends any previous ports block.
+            # The trailing-comment form is real and common --
+            #   voice-sampler:  # media-sourced voice references ...
+            # -- so an endswith(":") test silently keeps the PREVIOUS service
+            # name and files that service's ports under its neighbour. That is
+            # the under-collecting direction: it makes a shared port look
+            # unambiguous and defeats the ambiguity guard.
+            if indent == 2:
+                key = SERVICE_KEY_RE.match(stripped)
+                if key:
+                    svc = key.group(1)
+                    in_ports = False
+                    continue
+            if not svc:
+                continue
+
+            if in_ports:
+                if stripped.startswith("- "):
+                    entry = COMPOSE_VAR_RE.sub(lambda m: m.group(1), stripped[2:])
+                    entry = entry.split("#")[0].strip().strip("\"'")
+                    parts = entry.split("/")[0].split(":")
+                    if len(parts) >= 2 and parts[-2].isdigit():
+                        owners.setdefault(parts[-2], set()).add(svc)
+                    continue
+                in_ports = False  # this line is a sibling key, fall through
+
+            if indent == 4 and stripped == "ports:":
+                in_ports = True
+                continue
+
+            # Inline flow sequence: ports: ["${BIND:-127.0.0.1}:8055:8055", ...]
+            # Used by flute-gateway, traefik and ~20 others. Missing this form
+            # made the parser UNDER-collect, which is the dangerous direction:
+            # a port published by two services looked like it belonged to one,
+            # and the ambiguity guard never fired.
+            if indent == 4 and stripped.startswith("ports:") and "[" in stripped:
+                inner = stripped[stripped.index("[") + 1:]
+                inner = inner.rsplit("]", 1)[0] if "]" in inner else inner
+                for item in inner.split(","):
+                    entry = COMPOSE_VAR_RE.sub(lambda m: m.group(1), item)
+                    entry = entry.strip().strip("\"'")
+                    parts = entry.split("/")[0].split(":")
+                    if len(parts) >= 2 and parts[-2].isdigit():
+                        owners.setdefault(parts[-2], set()).add(svc)
+    return {p: next(iter(v)) for p, v in owners.items() if len(v) == 1}
+
+
+def scan_endpoints(routes_by_svc: Dict[str, Set[str]]) -> List[dict]:
+    findings: List[dict] = []
+    matchers = {s: _route_matchers(r) for s, r in routes_by_svc.items()}
+    complete = complete_route_services()
+    ports = host_port_map()
+    self_name = Path(__file__).name
+
+    for doc in live_docs():
+        rel = doc.relative_to(REPO_ROOT).as_posix()
+        if self_name in rel:
+            continue
+        text = doc.read_text(encoding="utf-8", errors="replace")
+        seen: Set[str] = set()
+        for m in ENDPOINT_CITE_RE.finditer(text):
+            svc, port, path = m.group(1), m.group(2), m.group(3)
+            if svc in LOOPBACK_HOSTS:
+                svc = ports.get(port, "")
+            if svc not in matchers:
+                continue
+            path = path.split("?", 1)[0].split("#", 1)[0]
+            if path in ("/", ""):
+                continue
+            # `$` means shell interpolation -- the segment could expand to
+            # anything, so there is no claim to check.
+            if "$" in path:
+                continue
+            # `<param>` is NOT skipped. It is a normal doc convention for a path
+            # parameter, and it contains no slash, so it matches the `[^/]+` a
+            # declared `{param}` compiles to. That keeps both directions honest:
+            #   /jobs/<context_id>  matches real /jobs/{context_id}  -> silent
+            #   /mcp/task/<id>      matches no declared /mcp route   -> flagged
+            # Skipping bracketed paths wholesale would have hidden three real
+            # ghosts in the agent command docs.
+            if any(p.match(path) for p in matchers[svc]):
+                continue
+            # SOUNDNESS GATE. A service may include a router defined outside its
+            # own directory (agent-zero does exactly this for /a2a/v1/*, via
+            # `include_router(create_a2a_router())` with the router living in
+            # python.features.a2a.server). Those routes are real and invisible
+            # here, so "not in my extracted set" does NOT mean "not served".
+            #
+            # We only speak where we have standing: flag a path ONLY if the
+            # service already declares at least one route in the same top-level
+            # namespace. If agent-zero declares /mcp/commands, then /mcp is a
+            # namespace it owns and a missing /mcp/tools/list is a real claim.
+            # It declares no /a2a/* route, so we stay silent about /a2a/v1/*
+            # rather than guess.
+            # Services with a provably complete route set skip the namespace
+            # rule -- there is nothing unseen to be wrong about.
+            if svc not in complete:
+                ns = "/" + path.strip("/").split("/", 1)[0]
+                if not any(r == ns or r.startswith(ns + "/") for r in routes_by_svc[svc]):
+                    continue
+            key = f"{svc}{path}"
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append({
+                "kind": "GHOST_ENDPOINT",
+                "doc": rel,
+                "detail": key,
+                "scope": "http",
+            })
+    return findings
+
+
 def scan(targets: Dict[str, Path], scopes: Dict[str, str]) -> List[dict]:
     findings: List[dict] = []
     hosts = known_hosts()
@@ -434,7 +734,7 @@ def main() -> int:
 
     bodies = target_bodies()
     scopes = {t: classify_scope(bodies.get(t, [])) for t in targets}
-    findings = scan(targets, scopes) + scan_guard_roads(targets)
+    findings = scan(targets, scopes) + scan_guard_roads(targets) + scan_endpoints(service_routes())
 
     if args.write_baseline:
         write_baseline(findings)

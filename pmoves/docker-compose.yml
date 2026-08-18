@@ -753,6 +753,19 @@ services:
     # makes the route table a reviewable file instead of unmanaged DB state.
     - KONG_DATABASE=off
     - KONG_DECLARATIVE_CONFIG=/usr/local/kong/kong.yml
+    # REQUIRED by the declarative config this mounts. Upstream Supabase commit
+    # 9777f051d6 (#45462, "restrict rest root anon") added a route using the
+    # EXPRESSIONS router syntax (expression: 'http.path == "/rest/v1/"').
+    # Under the default traditional router that is an unknown field and the ENTIRE
+    # kong.yml fails to parse, so Kong never starts - one route takes down all 21
+    # services (observed: 3,924 restarts). Upstream sets this same var in
+    # PMOVES-supabase/docker/docker-compose.yml:95; PMOVES defines its own
+    # supabase-kong service and had not carried it over, so the submodule's config
+    # outran this definition. Do NOT 'fix' the route to paths: instead - that is a
+    # PREFIX match where upstream means an EXACT one, which would widen the
+    # restricted-anon scope to all REST traffic.
+    # See docs/handoffs/supabase-kong-declarative-config-boot-failure-2026-08-18.md
+    - KONG_ROUTER_FLAVOR=expressions
     # Supabase's CLI issue #14: force LAST so service short-names resolve.
     - KONG_DNS_ORDER=LAST,A,CNAME
     - KONG_DNS_NOT_FOUND_TTL=1
@@ -1518,8 +1531,19 @@ services:
     - PMOVES_NETWORKS=pmoves_data
     entrypoint: ["sh", "-lc"]
     command:
+    # Per-host bounded cache on the /data volume: the gateway must never inherit the
+    # JuiceFS 100 GiB default (fills a small disk) nor self-disable caching on a
+    # near-full one. Canonical logic lives in scripts/juicefs-cache-bounds.sh; it is
+    # mirrored compactly here because compose renders on the host while this cache
+    # lives inside the container, so the measurement has to run at container start.
     # Single quotes around the DSN protect the '&' from shell interpretation.
-    - "juicefs gateway --multi-buckets --keep-etag '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000"
+    - |
+      set -e
+      D=/data; [ -d "$$D" ] || D=/; D=$${D%/}
+      eval "$$(df -Pk "$$D" | awk 'NR==2{a=$$4;t=$$2;c=int(a/1024*0.5);if(c>102400)c=102400;if(c<512)c=512;r=(t>0?a/t*0.5:0.1);if(r>0.1)r=0.1;if(r<0.01)r=0.01;printf "CS=%d FSR=%.3f",c,r}')"
+      mkdir -p "$$D/jfsCache"
+      echo "[juicefs-gateway] bounded cache: --cache-dir $$D/jfsCache --cache-size $${CS}MiB --free-space-ratio $$FSR"
+      exec juicefs gateway --multi-buckets --keep-etag --cache-dir "$$D/jfsCache" --cache-size "$$CS" --free-space-ratio "$$FSR" '${JUICEFS_META_URL:-postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable}' 0.0.0.0:9000
     volumes:
     - juicefs-data:/data
     networks:
@@ -2275,6 +2299,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+  watch-folder-router:  # SEAP ingestion Bud 1: routes ingest.file.added.v1 by MIME to the right analyzer (SEAP_WATCHFOLDER_NATS_CONSTELLATION)
+    <<: *tier-media-hardened
+    build:
+      context: ..
+      dockerfile: pmoves/services/watch-folder-router/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
+    - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
+    - ROUTER_TRANSCRIBE_TIMEOUT_SEC=${ROUTER_TRANSCRIBE_TIMEOUT_SEC:-3600}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8125/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
   voice-sampler:  # media-sourced voice references (VOICE_SAMPLER_SPEC.md): diarize → audition → owner-gated publish
     <<: *tier-media-hardened
     build:
@@ -3797,9 +3846,15 @@ services:
     hostname: p7-room-orchestrator
     restart: unless-stopped
     environment:
-    - PORT=8122
-    - PMOVES_ROOT=/app/pmoves
-    - NATS_URL=${NATS_URL}
+    # Service reads P7_* names (services/p7-room-orchestrator/config.py) and
+    # resolves relative paths against P7_PMOVES_ROOT. Root is /app (the image
+    # WORKDIR) so defaults like pmoves/config/rooms/catalog.json land on the
+    # mounted tree — /app/pmoves would double-prefix to
+    # /app/pmoves/pmoves/config/rooms and rooms_loaded stays 0.
+    - P7_HTTP_PORT=8122
+    - P7_PMOVES_ROOT=/app
+    - P7_NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - P7_ROOM_MANIFEST_SCHEMA=/app/pmoves/contracts/schemas/room/room.manifest.v1.schema.json
     - SUPABASE_URL=${P7_SUPABASE_URL:-http://supabase-kong:8000}
     - P7_SUPABASE_REST_URL=${P7_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
@@ -3807,6 +3862,13 @@ services:
     - P7_SUPABASE_SCHEMA=${P7_SUPABASE_SCHEMA:-pmoves_core}
     - P7_CONTROL_TOKEN_FILE=${P7_CONTROL_TOKEN_FILE:-}
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    volumes:
+    # Room catalog + manifests: rw so stage transitions can write back
+    # current_stage (same contract as the `p7` service stanza).
+    - ./config/rooms:/app/pmoves/config/rooms:rw
+    # Room manifest schema: CatalogLoader.get_manifest() validates against it,
+    # and it is not part of the service dir copied into the image.
+    - ./contracts/schemas:/app/pmoves/contracts/schemas:ro
     ports:
     - ${P7_ROOM_ORCHESTRATOR_BIND:-127.0.0.1}:${P7_ROOM_ORCHESTRATOR_PORT:-8122}:8122
     depends_on:

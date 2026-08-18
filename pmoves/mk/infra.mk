@@ -10,7 +10,7 @@
 # Guard: SERVICE must be set for volume-reset
 VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-db nats
 
-.PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup \
+.PHONY: volume-reset volume-list docker-prune docker-prune-all cleanup-parity-check branch-audit branch-cleanup \
        tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip \
        fleet-status fleet-rustdesk-fix fleet-enroll fleet-stale-audit \
        up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status port-audit \
@@ -79,10 +79,10 @@ docker-prune-all: ## Aggressive cleanup: also removes unused images older than 7
 	@echo "Current disk usage:"
 	@docker system df
 	@echo ""
-	@echo "Step 1/3: Removing stopped containers..."
+	@echo "Step 1/4: Removing stopped containers..."
 	@docker container prune -f
 	@echo ""
-	@echo "Step 2/3: Removing unused images older than 72h..."
+	@echo "Step 2/4: Removing unused images older than 72h..."
 	@docker image prune -a -f --filter "until=72h"
 	@echo ""
 	@echo "Step 3/4: Removing unused build cache older than 72h..."
@@ -105,6 +105,9 @@ docker-prune-all: ## Aggressive cleanup: also removes unused images older than 7
 	@echo ""
 	@echo "Volumes NOT pruned. Use 'make volume-reset SERVICE=...' for targeted resets."
 	@echo "=== Docker prune-all complete ==="
+
+cleanup-parity-check: ## Assert the 3 Docker-cleanup implementations have not drifted apart
+	@$(PYTHON) tools/check_cleanup_parity.py
 
 # ── Fleet Docker Cleanup (scheduled + on-demand) ─────────────────────
 # Installs a systemd timer on the current node for daily Docker cleanup.

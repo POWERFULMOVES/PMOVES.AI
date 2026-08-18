@@ -1464,3 +1464,66 @@ Two read-only reviewers ran in tandem; folded into PR #2025 provenance.
 - Branch: `codex/p7-room-contract-reconciliation`
 
 <!-- GRAPHITI_MARK: CODEX-GPT5::P7-ROOM-CONTRACT-RECONCILIATION::2026-07-17 -->
+
+## Instrument-Trust Audit Record (2026-08-15)
+
+### Work Performed
+- B850/Knuckles session 2026-08-13 → 08-15. Four PRs merged: #2538 (launcher root
+  resolution across all three copies + a drift-guard test), #2545 (rocm exporter and the
+  provisioner that generated its bugs), #2567 (AMD official device-metrics-exporter as a
+  container, closing the dead scrape chain), #2570 (first CGP packet on the GEOMETRY BUS).
+- Audit written to `pmoves/docs/audit/INSTRUMENT_TRUST_AUDIT_2026-08-15.md` (PR #2572),
+  joining the existing audit lane rather than opening a new one.
+
+### Key Findings
+- **Seven instruments reported confidently and were wrong.** A `200 OK` serving 0 bytes
+  for weeks; a launcher that WARNed and `exec`'d anyway leaving every cred-dependent MCP
+  empty; a submodule audit measuring branch *name* instead of membership (53 false
+  positives vs 3 real); `dmesg` evicted by a USB keyboard re-enumerating ~5,000×/day
+  while diagnosing a missing GPU; `geometry_bus_health.py` printing "Health: 0.0%" for a
+  bus it never contacted; **this agent** reading an `AttributeError` as an `ImportError`
+  and writing it into a Makefile comment as fact; and — found while registering *this
+  record* — `sign_trail.py` emitting a valid HMAC under **fallback identity** because
+  `import yaml` sat inside a `try` with `except Exception: pass` and pyyaml was
+  undeclared. Fixed in the same change; re-signed under the registered `⌬` identity.
+- Four are mechanizable (a surface returning success while the payload is absent, stale
+  or substituted — assert content, not status). Three of those four share one cause: a
+  broad `except` that swallows the reason and returns a plausible default. Three are not
+  mechanizable (a wrong question, unrelated noise destroying evidence, a misread).
+- **The discipline was already written.** `.claude/agents/verifier.md` specifies
+  "evidence before assertions … capture verbatim … state UNVERIFIED (environment) rather
+  than approximating". It was invoked **zero times** this session, in a session where it
+  would have caught the sixth finding immediately. The gap is invocation, not doctrine.
+- #2525's `merge-gate` finding has already been repaired (`pytest_ratchet.py` runs all
+  264 test files; the gate `exit 1`s). Verified before relying on it. The audit lane is
+  driving fixes ahead of its own PRs merging.
+- GEOMETRY BUS was dark for two independent reasons: no JetStream stream caught core
+  publishes, and the health checker had never contacted NATS. First signed CGP packet now
+  persisted; bus reports 1/24 subjects active (4.2%) — the first honest reading it has
+  produced.
+
+### Handoff Notes
+- **Village Rule gap, disclosed:** this session's production validation was substantially
+  single-agent. Control/review was automated CI plus one `/code-review` pass; memory/
+  security had no separate agent. Finding #6 is precisely the failure mode the Village
+  Rule exists to prevent, and it was caught by the operator, not by a second agent.
+  Pair review on #2572 would be well placed.
+- Open for the lane: #2522, #2525, #2527 remain OPEN. Recommend landing them — their
+  findings are already changing the repo.
+- #2527's package is proposed as a **calibration fixture**: #2525 had to hand-roll a
+  deliberately-failing test to prove a check *could* fail; a frozen, network-isolated,
+  hash-manifested package with six deterministic checks of known outcome is the standing
+  form of that.
+- Node-local, operator-owned, still open: BIOS x8/x8 bifurcation did not take (card 1
+  still negotiates x16, second R9700 does not enumerate); `CIPHER_BIND` unset so the
+  Cipher pore stays closed to the fleet; the NATS topology (accounts/leafnodes/websocket)
+  is specced in `PMOVES-nats-server/pmoves/pmoves-nats.conf` and unrolled, with MQTT —
+  the only protocol the esp32 tier speaks — commented out even there.
+
+### Agent ACK
+- Agent: `B850-CLAUDE`
+- Signature: `ACK::B850-CLAUDE::INSTRUMENT-TRUST-AUDIT`
+- Timestamp: `2026-08-15`
+- Branch: `docs/instrument-trust-audit`
+
+<!-- GRAPHITI_MARK: B850-CLAUDE::INSTRUMENT-TRUST-AUDIT::2026-08-15 -->

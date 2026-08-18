@@ -1,9 +1,9 @@
 FROM node:24-slim AS builder
 
 WORKDIR /app
-COPY package.json package-lock.json* ./
+COPY services/a2ui-renderer/package.json services/a2ui-renderer/package-lock.json* ./
 RUN npm ci --ignore-scripts
-COPY . .
+COPY services/a2ui-renderer/ .
 RUN npm run build
 
 FROM node:24-slim
