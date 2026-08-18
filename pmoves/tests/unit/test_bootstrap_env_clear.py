@@ -112,3 +112,112 @@ class TestCli:
         rc = main(["--clear", "A", "--rotate", "B"])
         assert rc == 2
         assert "mutually exclusive" in capsys.readouterr().err
+
+
+class TestTombstoneSurvivesTheFunnel:
+    """The P1 from #2598 review: a clear that secrets-funnel silently reverses.
+
+    `secrets-funnel` runs `secrets-local-hydrate` as its second step. hydrate()
+    overlays a local.env value whenever the env.shared value is a *placeholder*,
+    and "" is the first entry in PLACEHOLDER_VALUES — so a deliberately-cleared
+    key looked exactly like a never-set one and the stale value came straight
+    back. These tests fail if that regression returns.
+    """
+
+    def test_hydrate_would_restore_without_the_tombstone(self, tmp_path: Path):
+        """Baseline: proves the hazard is real, not theoretical."""
+        from pmoves.tools.secrets_local_hydrate import hydrate
+
+        local = tmp_path / "local.env"
+        local.write_text("SUPABASE_SECRET_KEY=stale_legacy_jwt\n", encoding="utf-8")
+        shared = tmp_path / "env.shared"
+        shared.write_text("SUPABASE_SECRET_KEY=\n", encoding="utf-8")
+        empty_tombstone = tmp_path / "none.yaml"
+
+        updates = hydrate(local, shared, cleared_keys_path=empty_tombstone)
+        assert updates.get("SUPABASE_SECRET_KEY") == "stale_legacy_jwt"
+
+    def test_tombstone_blocks_the_restore(self, tmp_path: Path):
+        from pmoves.tools.secrets_local_hydrate import hydrate
+
+        local = tmp_path / "local.env"
+        local.write_text("SUPABASE_SECRET_KEY=stale_legacy_jwt\n", encoding="utf-8")
+        shared = tmp_path / "env.shared"
+        shared.write_text("SUPABASE_SECRET_KEY=\n", encoding="utf-8")
+        tomb = tmp_path / "secrets_cleared.yaml"
+        tomb.write_text('cleared_keys:\n  - "SUPABASE_SECRET_KEY"\n', encoding="utf-8")
+
+        updates = hydrate(local, shared, cleared_keys_path=tomb)
+        assert "SUPABASE_SECRET_KEY" not in updates
+        assert shared.read_text(encoding="utf-8") == "SUPABASE_SECRET_KEY=\n"
+
+    def test_force_does_not_override_the_tombstone(self, tmp_path: Path):
+        """--force means 'push a rotated GH Secret over a stale local value'.
+
+        It does not mean 'ignore that this key is supposed to be empty'.
+        """
+        from pmoves.tools.secrets_local_hydrate import hydrate
+
+        local = tmp_path / "local.env"
+        local.write_text("SUPABASE_SECRET_KEY=stale_legacy_jwt\n", encoding="utf-8")
+        shared = tmp_path / "env.shared"
+        shared.write_text("SUPABASE_SECRET_KEY=\n", encoding="utf-8")
+        tomb = tmp_path / "secrets_cleared.yaml"
+        tomb.write_text('cleared_keys:\n  - "SUPABASE_SECRET_KEY"\n', encoding="utf-8")
+
+        updates = hydrate(local, shared, force=True, cleared_keys_path=tomb)
+        assert "SUPABASE_SECRET_KEY" not in updates
+
+    def test_other_keys_still_hydrate(self, tmp_path: Path):
+        """The tombstone must be surgical — it is not a global off switch."""
+        from pmoves.tools.secrets_local_hydrate import hydrate
+
+        local = tmp_path / "local.env"
+        local.write_text("A=cleared_one\nB=real_value\n", encoding="utf-8")
+        shared = tmp_path / "env.shared"
+        shared.write_text("A=\nB=\n", encoding="utf-8")
+        tomb = tmp_path / "secrets_cleared.yaml"
+        tomb.write_text('cleared_keys:\n  - "A"\n', encoding="utf-8")
+
+        updates = hydrate(local, shared, cleared_keys_path=tomb)
+        assert "A" not in updates
+        assert updates.get("B") == "real_value"
+
+
+class TestTombstoneBookkeeping:
+    def test_clear_records_the_key(self, tmp_path: Path):
+        from pmoves.scripts.bootstrap_env import mark_key_cleared, read_cleared_keys
+
+        tomb = tmp_path / "secrets_cleared.yaml"
+        tomb.write_text("# header\ncleared_keys: []\n", encoding="utf-8")
+        mark_key_cleared("SOME_KEY", tomb)
+        assert read_cleared_keys(tomb) == ["SOME_KEY"]
+        assert tomb.read_text(encoding="utf-8").startswith("# header")
+
+    def test_marking_is_idempotent(self, tmp_path: Path):
+        from pmoves.scripts.bootstrap_env import mark_key_cleared, read_cleared_keys
+
+        tomb = tmp_path / "secrets_cleared.yaml"
+        tomb.write_text("cleared_keys: []\n", encoding="utf-8")
+        mark_key_cleared("K", tomb)
+        mark_key_cleared("K", tomb)
+        assert read_cleared_keys(tomb) == ["K"]
+
+    def test_rotate_removes_the_tombstone(self, tmp_path: Path):
+        """A clear followed by a rotate must not leave a latent trap."""
+        from pmoves.scripts.bootstrap_env import (
+            mark_key_cleared,
+            read_cleared_keys,
+            unmark_key_cleared,
+        )
+
+        tomb = tmp_path / "secrets_cleared.yaml"
+        tomb.write_text("cleared_keys: []\n", encoding="utf-8")
+        mark_key_cleared("K", tomb)
+        unmark_key_cleared("K", tomb)
+        assert read_cleared_keys(tomb) == []
+
+    def test_missing_file_is_not_an_error(self, tmp_path: Path):
+        from pmoves.scripts.bootstrap_env import read_cleared_keys
+
+        assert read_cleared_keys(tmp_path / "nope.yaml") == []

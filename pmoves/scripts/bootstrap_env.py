@@ -25,7 +25,60 @@ from urllib.parse import urlparse
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY_PATH = REPO_ROOT / "pmoves" / "bootstrap" / "registry.json"
 ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
+CLEARED_KEYS_PATH = REPO_ROOT / "pmoves" / "configs" / "secrets_cleared.yaml"
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def read_cleared_keys(path: Optional[Path] = None) -> List[str]:
+    """Keys deliberately held empty, in declaration order.
+
+    Line-parsed rather than YAML-parsed, matching pytest_ratchet.py and
+    hardening_ratchet.py: this runs inside a *bootstrap* script, which must not
+    acquire a pyyaml dependency to do its job. The file's leading comment block
+    is load-bearing documentation and a JSON file could not carry it.
+    """
+    target = path or CLEARED_KEYS_PATH
+    if not target.is_file():
+        return []
+    keys: List[str] = []
+    for line in target.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("- "):
+            key = line[2:].strip().strip("\"'")
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
+def _write_cleared_keys(keys: List[str], path: Optional[Path] = None) -> None:
+    """Rewrite the tombstone list, preserving the explanatory header verbatim."""
+    target = path or CLEARED_KEYS_PATH
+    header: List[str] = []
+    if target.is_file():
+        for line in target.read_text(encoding="utf-8").splitlines():
+            if line.startswith("cleared_keys:"):
+                break
+            header.append(line)
+    body = ["cleared_keys: []"] if not keys else ["cleared_keys:"] + [
+        f'  - "{k}"' for k in sorted(keys)
+    ]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(header + body) + "\n", encoding="utf-8")
+
+
+def mark_key_cleared(key: str, path: Optional[Path] = None) -> None:
+    """Record *key* as deliberately empty so hydrate() cannot re-populate it."""
+    keys = read_cleared_keys(path)
+    if key not in keys:
+        keys.append(key)
+        _write_cleared_keys(keys, path)
+
+
+def unmark_key_cleared(key: str, path: Optional[Path] = None) -> None:
+    """Drop *key* from the tombstone — it now carries a real value again."""
+    keys = read_cleared_keys(path)
+    if key in keys:
+        _write_cleared_keys([k for k in keys if k != key], path)
 
 
 def _warn(msg: str) -> None:
@@ -652,8 +705,16 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         except (ValueError, FileNotFoundError) as exc:
             _error(str(exc))
             return 2
+        # Tombstone BEFORE reporting success. secrets-funnel runs
+        # secrets-local-hydrate as its second step, and hydrate() treats the
+        # empty string as a placeholder (it is the first entry in
+        # PLACEHOLDER_VALUES), so without this record the very next funnel run
+        # overlays the stale local.env value back on top and silently undoes
+        # the clear.
+        mark_key_cleared(args.clear)
         _info(
-            f"Cleared {args.clear} in env.shared (now empty). "
+            f"Cleared {args.clear} in env.shared (now empty) and recorded it in "
+            f"{CLEARED_KEYS_PATH.name} so secrets-local-hydrate cannot restore it. "
             "Next: make -C pmoves chit-export && make -C pmoves secrets-funnel, "
             "then restart the affected consumers."
         )
@@ -676,6 +737,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         except (ValueError, FileNotFoundError) as exc:
             _error(str(exc))
             return 2
+        # A key that now carries a real value is no longer deliberately empty.
+        # Leaving the tombstone would permanently block hydrate() from ever
+        # overlaying this key again — a clear followed by a rotate must not
+        # leave a latent trap behind.
+        unmark_key_cleared(args.rotate)
         source = (
             "supplied value" if (args.value or args.value_env)
             else f"generated {args.gen_type}"
