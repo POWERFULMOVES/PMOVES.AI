@@ -428,3 +428,6 @@
 	path = PMOVES-agents.md
 	url = https://github.com/POWERFULMOVES/PMOVES-agents.md.git
 	branch = main
+[submodule "pmoves-keygen"]
+	path = pmoves-keygen
+	url = https://github.com/POWERFULMOVES/pmoves-keygen.git
