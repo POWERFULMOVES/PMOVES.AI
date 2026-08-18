@@ -78,6 +78,10 @@
   },
 
   "per_repo_overrides": {
+    "POWERFULMOVES/pmoves-keygen": {
+      "profile": "fork",
+      "branch": "master"
+    },
     "POWERFULMOVES/PMOVES.AI": {
       "profile": "monorepo",
       "branch": "main"
