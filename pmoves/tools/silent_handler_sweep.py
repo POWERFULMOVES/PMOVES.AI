@@ -313,7 +313,11 @@ def sweep(paths: Iterable[str], legacy: bool = False) -> List[Site]:
             # rather than letting it vanish into a clean-looking total.
             unparsed += 1
             continue
-        rel = str(path.relative_to(_REPO_ROOT))
+        # .as_posix(), not str(): on Windows str() yields backslashes, so every
+        # emitted path — and anything derived from it, including a baseline or a
+        # cross-referenced report — differs by platform for the same file. Forward
+        # slashes are what the rest of this repo's tooling records.
+        rel = path.relative_to(_REPO_ROOT).as_posix()
         for node in ast.walk(tree):
             if not isinstance(node, ast.Try):
                 continue
