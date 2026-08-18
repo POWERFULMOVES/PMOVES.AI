@@ -155,3 +155,69 @@ I do not need to watch a run. I need to be able to answer these from artifacts a
 ## Trail
 
 Three-body: delivery=SPARK, control=DARKXSIDE, memory=this doc + the AGNOTE row + the receipts themselves once T3 lands.
+
+---
+
+## Re-scope check — 2026-08-16 (4090, before assignment)
+
+Eight days on, re-measured against `origin/main` @ `017de5369` before handing this to SPARK.
+**The scope holds.** Nothing below replaces the text above; it records what is still true, what
+is newly available, and one thing that got sharper.
+
+### Still true, verified not assumed
+
+| Claim in this handoff | Checked | State |
+|---|---|---|
+| E2B gitlink drifted, sync before building | `git submodule status PMOVES-E2B-Danger-Room` | **still drifted.** Working copy `7a38b33b`, `origin/main` records `78f7c5d8`. The pre-req is unresolved — it is the first thing to do, not a footnote. |
+| 31 skills, retrofitting all of them is out of scope | count of `.claude/skills/*/SKILL.md` | **still 31.** Unchanged. |
+| No skill declares the verification contract | grep for `danger_room` / `scope:` in skill frontmatter | **still none.** Piece 2 is untouched. |
+
+### Newly available — acceptance criterion 1 can now be a command
+
+Acceptance 1 asks that a sandbox built from the template have populated submodules. When this
+was written that was an eyeball check. Since then:
+
+- `pmoves/docs/operations/SUBMODULE_BUILD_AND_MOUNT_GAP.md` merged (#2485) — the failure is now
+  documented, including that Docker **creates** a missing bind source as a directory rather than
+  erroring, which is exactly how a sandbox produces a confident false negative.
+- `make -C pmoves bind-sources-check` (#2581) asserts every submodule-backed compose bind source
+  exists and is the right kind, and distinguishes *missing* from *directory-where-file-expected*.
+
+So acceptance 1 should be stated as two commands rather than an inspection:
+
+```bash
+git submodule status | grep '^-' && echo "UNPOPULATED" || echo "populated"
+make -C pmoves bind-sources-check
+```
+
+A sandbox that passes both cannot silently be the empty-submodule case.
+
+### Sharper — the `archon.crawl.*` cautionary tale is worse than this doc says
+
+Piece 5 cites `archon.crawl.*` as the reason to register `skill.verified.v1` **before** first
+publish: "a subject registered against an operation nobody built." That description was too kind,
+and the real version matters for the artifact contract.
+
+`archon.crawl.*` has a handler. `ArchonOrchestrator._process_crawl` takes the `metadata` dict
+**from the request message** and republishes it unchanged as `extracted_text` and `fragments`,
+stamped `"status": "completed"`. Nothing fetches the URL. Its tests assert dispatch *routing*
+and never that a crawl occurred. (Documented 2026-08-16, PR #2582.)
+
+**A subject that is never implemented times out and you notice. This one reports success.** For
+`skill.verified.v1` that is the precise failure to design against: a receipt reading PASS because
+the harness echoed back what the request handed it. Which means the artifact must carry the
+**skill content hash** — already required by piece 4 — *and* something the harness could only
+know by actually running: exit codes, wall time, emitted paths. A receipt derivable from the
+request alone is `archon.crawl.result.v1` wearing a different name.
+
+This also raises acceptance (5) from "the one I would cut last" to **the one that defines the
+lane**. A Danger Room that cannot emit RED is a publish→echo circuit.
+
+### Unchanged and still correct
+
+The boundaries hold: `e2b-mcp-server` stays out of scope (still not a compose service), and
+retrofitting all 31 skills stays out of scope. Two or three real fixtures still beat thirty
+aspirational ones.
+
+**Not claimed by 4090.** SPARK remains the named owner; this row refreshes the lane, it does not
+take it.
