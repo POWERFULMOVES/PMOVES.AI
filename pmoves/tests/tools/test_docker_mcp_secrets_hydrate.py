@@ -110,7 +110,7 @@ def test_hydrate_collects_setter_errors():
     assert errors == [("hostinger-mcp-server.api_token", "resolver timeout")]
 
 
-def test_load_secret_map_treats_blank_as_operator_only(tmp_path):
+def test_load_key_mapping_treats_blank_as_operator_only(tmp_path):
     p = tmp_path / "map.yaml"
     p.write_text(textwrap.dedent("""
         version: 1
@@ -118,6 +118,6 @@ def test_load_secret_map_treats_blank_as_operator_only(tmp_path):
           hostinger-mcp-server.api_token: HOSTINGER_API_KEY
           dockerhub.pat_token:
     """), encoding="utf-8")
-    m = mod.load_secret_map(p)
+    m = mod.load_key_mapping(p)
     assert m["hostinger-mcp-server.api_token"] == "HOSTINGER_API_KEY"
     assert m["dockerhub.pat_token"] is None

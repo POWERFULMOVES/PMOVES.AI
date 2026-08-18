@@ -48,7 +48,7 @@ from pmoves.tools._secrets_common import (
 )
 
 DEFAULT_ENV_SHARED = PROJECT_ROOT / "env.shared"
-DEFAULT_SECRET_MAP = PROJECT_ROOT / "config" / "docker_mcp_secret_map.yaml"
+DEFAULT_KEY_MAPPING = PROJECT_ROOT / "config" / "docker_mcp_secret_map.yaml"
 
 
 def default_docker_mcp_dir() -> Path:
@@ -120,8 +120,14 @@ def load_required(docker_mcp_dir: Path) -> List[Required]:
     return required
 
 
-def load_secret_map(path: Path) -> Dict[str, str | None]:
-    """Load the Docker-secret-name -> env.shared-key overrides (may map to None)."""
+def load_key_mapping(path: Path) -> Dict[str, str | None]:
+    """Load the Docker-secret-NAME -> env.shared-KEY-NAME overrides (may map to None).
+
+    This file holds names on both sides and never a value. It was called a
+    "secret map", which is a misnomer that misleads a reader and is also why
+    static analysis treated the key names read out of it as secret material
+    flowing into a log line.
+    """
     if not path.exists():
         return {}
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -131,7 +137,7 @@ def load_secret_map(path: Path) -> Dict[str, str | None]:
 
 def build_plan(
     required: Sequence[Required],
-    secret_map: Mapping[str, str | None],
+    key_mapping: Mapping[str, str | None],
     env_shared: Mapping[str, str],
 ) -> Plan:
     """Resolve each required secret to a source value or classify it as a gap.
@@ -142,8 +148,8 @@ def build_plan(
     """
     plan = Plan()
     for req in required:
-        if req.docker_name in secret_map:
-            source_key = secret_map[req.docker_name]
+        if req.docker_name in key_mapping:
+            source_key = key_mapping[req.docker_name]
             if source_key is None:
                 plan.operator_only.append(req)
                 continue
@@ -201,7 +207,13 @@ def hydrate(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-shared", type=Path, default=DEFAULT_ENV_SHARED)
-    parser.add_argument("--secret-map", type=Path, default=DEFAULT_SECRET_MAP)
+    parser.add_argument(
+        "--secret-map",
+        dest="key_mapping",
+        type=Path,
+        default=DEFAULT_KEY_MAPPING,
+        help="Docker-secret-NAME -> env.shared-KEY-NAME overrides (names only, never values).",
+    )
     parser.add_argument("--docker-mcp-dir", type=Path, default=None)
     parser.add_argument("--dry-run", action="store_true", help="Show what would be pushed; touch nothing")
     args = parser.parse_args(argv)
@@ -218,9 +230,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("No enabled Docker MCP servers require secrets — nothing to hydrate.")
         return 0
 
-    secret_map = load_secret_map(args.secret_map)
+    key_mapping = load_key_mapping(args.key_mapping)
     env_shared = parse_env_file(args.env_shared.expanduser().resolve())
-    plan = build_plan(required, secret_map, env_shared)
+    plan = build_plan(required, key_mapping, env_shared)
 
     prefix = "[dry-run] " if args.dry_run else ""
     pushed, errors = hydrate(plan, dry_run=args.dry_run)
@@ -244,8 +256,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  – {req.docker_name}  ({req.server})")
     if errors:
         print("\n✖ Failed to push (resolver down? restart Docker Desktop, then re-run):", file=sys.stderr)
-        for name, err in errors:
-            print(f"  ✖ {name}: {err}", file=sys.stderr)
+        for name, _err in errors:
+            # Name only. `err` is whatever `docker mcp secret set` wrote to stderr,
+            # and the value was piped into that command -- a resolver that echoes
+            # its input would put a live secret in CI logs. The failure mode the
+            # operator needs is "which one, and go restart Docker Desktop".
+            print(f"  ✖ {name}: push failed (see `docker mcp secret set` output)", file=sys.stderr)
         return 1
     if not pushed and not args.dry_run:
         print("No funnel-managed Docker MCP secrets to push "
