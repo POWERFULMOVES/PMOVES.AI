@@ -4846,7 +4846,11 @@ services:
     - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:8000/rest/v1}
       # Voice/TTS
     - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
-    - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
+      # 8055, not 8056 — see the same line in docker-compose.ui.yml. flute-gateway
+      # binds only 8055; 8056 is EXPOSEd and published but never listened on, so a
+      # socket aimed at it accepts TCP and hangs. This var wins over the client-side
+      # derivation fixed in #2560.
+    - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8055}
       # Agent Services (client-side needs localhost)
     - NEXT_PUBLIC_AGENT_ZERO_URL=${NEXT_PUBLIC_AGENT_ZERO_URL:-http://localhost:8080}
     - NEXT_PUBLIC_AGENT_ZERO_UI_URL=${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}
