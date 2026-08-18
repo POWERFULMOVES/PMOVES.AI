@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Install PMOVES fleet CLI wrappers, cross-platform.
+
+Unix:    copies the bash wrappers to ~/.local/bin and marks them executable.
+Windows: writes .bat shims (from pmoves/scripts/windows/) with the absolute
+         repo root baked in, so PowerShell/cmd can execute them.
+
+Wrappers: pmoves-mini, crush-pmoves, hermes-pmoves, claude-pmoves.
+
+Usage:
+    python pmoves/tools/install_tools.py [--bin DIR] [--dry-run]
+
+Run via make:
+    make -C pmoves install-tools
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import stat
+import sys
+from pathlib import Path
+
+PMOVES_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = PMOVES_ROOT.parent
+SCRIPTS_DIR = PMOVES_ROOT / "scripts"
+WINDOWS_DIR = SCRIPTS_DIR / "windows"
+
+# (bash source under pmoves/scripts/, installed command name, windows template)
+WRAPPERS = [
+    ("pmoves-mini", "pmoves-mini", "pmoves-mini.bat"),
+    ("crush-pmoves", "crush-pmoves", "crush-pmoves.bat"),
+    ("hermes-pmoves", "hermes-pmoves", "hermes-pmoves.bat"),
+    ("claude-pmoves.sh", "claude-pmoves", "claude-pmoves.bat"),
+]
+
+REPO_ROOT_PLACEHOLDER = "__PMOVES_REPO_ROOT__"
+
+
+def default_bin_dir() -> Path:
+    override = os.environ.get("PMOVES_BIN")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".local" / "bin"
+
+
+def install_unix(bin_dir: Path, dry_run: bool) -> list[Path]:
+    installed: list[Path] = []
+    for source_name, command, _ in WRAPPERS:
+        source = SCRIPTS_DIR / source_name
+        if not source.is_file():
+            print(f"WARN: bash wrapper missing, skipping: {source}")
+            continue
+        dest = bin_dir / command
+        print(f"[install] {source_name} -> {dest}")
+        if dry_run:
+            installed.append(dest)
+            continue
+        dest.write_bytes(source.read_bytes())
+        mode = dest.stat().st_mode
+        dest.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        installed.append(dest)
+    return installed
+
+
+def install_windows(bin_dir: Path, dry_run: bool) -> list[Path]:
+    installed: list[Path] = []
+    baked_root = str(REPO_ROOT)
+    for _, command, template_name in WRAPPERS:
+        template = WINDOWS_DIR / template_name
+        if not template.is_file():
+            print(f"WARN: windows shim template missing, skipping: {template}")
+            continue
+        dest = bin_dir / f"{command}.bat"
+        print(f"[install] {template_name} -> {dest} (repo root baked)")
+        if dry_run:
+            installed.append(dest)
+            continue
+        content = template.read_text(encoding="utf-8").replace(
+            REPO_ROOT_PLACEHOLDER, baked_root
+        )
+        dest.write_text(content, encoding="utf-8", newline="\r\n")
+        installed.append(dest)
+    return installed
+
+
+def warn_if_not_on_path(bin_dir: Path) -> None:
+    path_env = os.environ.get("PATH", "")
+    sep = os.pathsep
+    candidates = {str(bin_dir), str(bin_dir.resolve())}
+    parts = path_env.split(sep)
+    if os.name == "nt":
+        normalized = {part.strip('"').rstrip("\\/").lower() for part in parts if part}
+        found = any(candidate.lower().rstrip("\\/") in normalized for candidate in candidates)
+    else:
+        found = bool(candidates & set(parts))
+    if not found:
+        print(f"WARN: {bin_dir} is not on PATH - add it to your shell profile.")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--bin",
+        default=None,
+        help="Install directory (default: $PMOVES_BIN or ~/.local/bin).",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Print actions only.")
+    args = parser.parse_args(argv)
+
+    bin_dir = Path(args.bin).expanduser() if args.bin else default_bin_dir()
+    if args.dry_run:
+        print(f"[dry-run] target dir: {bin_dir}")
+    else:
+        bin_dir.mkdir(parents=True, exist_ok=True)
+
+    if os.name == "nt":
+        installed = install_windows(bin_dir, args.dry_run)
+    else:
+        installed = install_unix(bin_dir, args.dry_run)
+
+    if not installed:
+        print("ERROR: nothing installed")
+        return 1
+    warn_if_not_on_path(bin_dir)
+    print(f"Installed {len(installed)} wrapper(s) to {bin_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
