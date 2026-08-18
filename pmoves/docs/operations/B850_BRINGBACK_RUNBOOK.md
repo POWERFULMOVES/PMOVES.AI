@@ -131,6 +131,37 @@ authorized by tag in the ACL (`tag:lab` sources reach `tag:vps`/`tag:exit` as
 root; owner identities reach nodes per the owner rule). There is no per-node key
 step here.
 
+> ### ⚠️ Pass the per-node username — the ACL is probably not your problem
+>
+> From a tagged workstation, `ssh <host>` defaults to your **local** username. On
+> Windows that is something like `DARKXSIDE`, which does not exist on a Linux
+> node, and Tailscale rejects it with:
+>
+> ```
+> tailnet policy does not permit you to SSH as user "DARKXSIDE"
+> ```
+>
+> That message names the **user**, not the node — it is easy to misread as "this
+> node is ACL-blocked" and go off writing ACL rules. Measured 2026-08-15: the rule
+> `tag:pmoves → tag:pmoves (autogroup:nonroot)` already permits it, z890 carries
+> `tag:pmoves`, and **no ACL change was needed**. Supply the account that exists
+> on the target:
+>
+> ```bash
+> ssh pmoves@pmoves-b850-ai-top     # B850
+> ssh pmovesnvme@pmoves-nano-1      # jetsons
+> ```
+>
+> Related standing rule: `autogroup:nonroot` grants a *non-root* user, and **that
+> user must already exist on the node** — the ACL cannot conjure it.
+>
+> **Privileges you get there (B850):** the `pmoves` account is in the `docker`
+> group but has **no passwordless sudo**, and the JuiceFS mount's bind paths live
+> under `/home/pmoves-knuckles/` (a *different* user's home). So you can drive
+> Docker fine, but you cannot write those paths — stage helper files under
+> `/home/pmoves/` and bind-mount them. Always `docker stop -t 30` before removing a
+> FUSE-mount container so JuiceFS unmounts cleanly; a stale mount needs root.
+
 > **Tracked gap:** the per-node SSH-key story is still incomplete fleet-wide — see
 > `pmoves/docs/handoffs/doc-coordination-juicefs-ingest-2026-08-06.md` (§ around
 > lines 28–31: `claude-pmoves` SSH is authorized only on 4090 + jetsons, not the
@@ -139,69 +170,73 @@ step here.
 
 ---
 
-## 6. Security follow-ups — HIGH severity (operator)
+## 6. Credential handling for the mount — ✅ DONE 2026-08-15
 
-B850's currently-running `juicefs-mount` was started with the **Supabase admin
-password inline in the container command line**, so it is visible in `ps` and
-`docker inspect` to any local user — and has been for **days**. Ref:
-`pmoves/docs/handoffs/juicefs-cross-node-storage-blocker-2026-08-04.md` §
-"Security item" (lines ~79–95).
+The JuiceFS mount's metadata credential is supplied by a **file-mounted secret**
+read at container start — the `*_FILE` indirection the fleet standardises on
+(`#2492 § 8`, following the `#1901` precedent). This is the pattern to copy for
+any node that mounts JuiceFS.
 
-### 6a. Re-create the mount with `META_PASSWORD` (no inline secret)
+**Why the file, and not an env var:** `docker run -e VAR` (value-less, inherited
+from the shell) makes Docker persist the *expanded* value into the container's
+stored config, where `docker inspect` still shows it. Reading the value from a
+mounted file inside the command keeps it out of the container's argv **and** its
+stored config.
 
-The password must be passed via the `META_PASSWORD` env var so the DSN in the
-command line carries no credential. The canonical targets already do this:
-
-```bash
-# Local-DB mount on the data-tier host (B850), password via env, cache bounded:
-export SUPABASE_DB_PASSWORD=...          # from the CHIT secrets pipeline
-make -C pmoves juicefs-mount-local
-```
-
-`juicefs-mount-local` (see `pmoves/mk/egress.mk`) now also injects **per-host
-bounded cache flags** (`scripts/juicefs-cache-bounds.sh`) so B850 does not inherit
-the JuiceFS 100 GiB default nor self-disable caching on a full disk. Confirm the
-new container has **no password** in its command line:
+### The shape
 
 ```bash
-docker inspect juicefs-mount --format '{{json .Args}}'    # must NOT contain the password
-docker inspect juicefs-mount --format '{{json .Config.Env}}' | grep -c META_PASSWORD   # expect 1
+# Secret lives in a 0600 file owned by the invoking user; never committed.
+#   /home/<user>/.pmoves-secrets/jfs_meta_pw          (mode 600)
+# Mount it read-only and read it at exec time:
+docker run -d --name juicefs-mount --restart unless-stopped \
+  --network pmoves_data --privileged --entrypoint sh \
+  -e JFS_MOUNT="$MNT" \
+  -v <juicefs-data>:/data \
+  -v "$MNT:$MNT:rshared" \
+  -v <repo-scripts>:/scripts:ro \
+  -v "$SECRET_FILE:/run/secrets/jfs_meta_pw:ro" \
+  juicedata/mount:ce-v1.3.0 \
+  -c 'JFS_CACHE_FLAGS="$(JFS_CACHE_DIR=/data/jfsCache JFS_CACHE_MEASURE_DIR=/data \
+        bash /scripts/juicefs-cache-bounds.sh 2>/dev/null || true)"; \
+      test -n "$JFS_CACHE_FLAGS" || JFS_CACHE_FLAGS="--cache-dir /data/jfsCache --cache-size 512 --free-space-ratio 0.05"; \
+      export META_PASSWORD="$(cat /run/secrets/jfs_meta_pw)"; \
+      exec juicefs mount --enable-xattr $JFS_CACHE_FLAGS \
+        "postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable" "$JFS_MOUNT"'
 ```
 
-> **This narrows the exposure — it does not close it. Read before signing off.**
->
-> `docker run -e META_PASSWORD` (value-less, inherited from the shell) makes Docker
-> persist the **expanded** value into the container's `.Config.Env`. So this step
-> moves the credential out of `.Args` — where it was visible in **both** `ps` and
-> `docker inspect` — into `.Config.Env`, where it is still visible to
-> `docker inspect`. The second verification command above is itself the proof: it
-> greps `.Config.Env` and expects a hit.
->
-> **Who can still read it:** any local user in the `docker` group (and thus root),
-> via `docker inspect juicefs-mount`. That is a smaller set than "anyone who can run
-> `ps`", which is the point of doing this — but it is not "no cleartext in inspect".
->
-> **Real remediation:** file-mounted Docker secrets with a `*_FILE` indirection read
-> inside the entrypoint, which keeps the value out of `.Args` *and* `.Config.Env`.
-> The fleet already specifies this — see `#2492 § 8` (materialized per node as a
-> file-mounted secret, never committed, never in `ps`), following the `#1901`
-> precedent. Until that lands here, treat § 6a as *reduction*, not closure, and
-> rotate on the assumption the value is readable by the docker group.
+Note the DSN carries **no credential** — `juicefs` takes it from `META_PASSWORD`.
 
-### 6b. Rotate the exposed Supabase admin password
+### Verification (all four must be 0)
 
-Because the old password sat in process listings and container metadata for at
-least three days, **rotate it** after the mount is re-created without it. Rotate
-in Supabase, then flow the new value through the CHIT secrets pipeline
-(`make -C pmoves secrets-funnel`) — do not hand-edit `env.shared`. Any other
-consumer of `SUPABASE_DB_PASSWORD` / the JuiceFS meta DSN (the gateway, cross-node
-mounts) picks up the new value on next `up`.
+```bash
+SEC=$(cat "$SECRET_FILE")
+docker inspect juicefs-mount --format '{{json .Args}}' | grep -cE 'postgres://[^:@"]+:[^@"]+@'  # inline DSN cred
+docker inspect juicefs-mount | grep -cF "$SEC"                                                  # stored config
+pgrep -a juicefs | grep -cF "$SEC"                                                              # process argv
+docker logs juicefs-mount 2>&1 | grep -cF "$SEC"                                                # logs
+unset SEC
+```
 
-**T2 security pass criteria:** `juicefs-mount` re-created with `META_PASSWORD`
-(no cleartext in `ps`, and none in `.Args` — but **still readable in
-`.Config.Env`** via `docker inspect`, see the note in § 6a); Supabase admin
-password rotated and funneled. The file-mounted-secret work in `#2492 § 8` is
-what closes `inspect`; this pass does not.
+> Count with `grep -cF "$SEC"`, and exclude your own `grep` when scanning `ps` —
+> `ps aux | grep -F "$SEC"` matches the grep process's own argv and reports a
+> false positive. Use `pgrep -a juicefs` (greps pgrep's *output*) instead.
+
+**Verified on B850 2026-08-15:** all four counts 0; mount ACTIVE; cache bounds
+applied from the helper (`--cache-size 41880 --free-space-ratio 0.045` on a
+91%-full disk); 0 error lines.
+
+### 6b. Credential rotation — standing hygiene item (operator)
+
+Rotate the metadata credential on the normal schedule, and whenever a mount has
+been re-created. Rotate at the source, then flow the new value through the CHIT
+secrets pipeline (`make -C pmoves secrets-funnel`) — never hand-edit `env.shared`.
+Consumers of `SUPABASE_DB_PASSWORD` / the JuiceFS meta DSN pick it up on next `up`.
+
+> **Blast radius before you start:** ~27 containers on B850 carry
+> `SUPABASE_DB_PASSWORD`/`POSTGRES_PASSWORD`. Changing the database password
+> *without* funneling + restarting those consumers takes the data tier down.
+> Do both in one window, then re-create the mount's secret file.
 
 ---
 

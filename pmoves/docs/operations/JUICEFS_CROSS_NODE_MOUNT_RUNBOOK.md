@@ -17,14 +17,21 @@ There are two JuiceFS volumes and **only one is cross-node-capable**:
 
 | Volume | Storage backend | Meta | Cross-node? |
 |--------|-----------------|------|-------------|
-| **`pmoves`** | **minio** (tailnet MinIO) | Postgres (`juicefs_meta`) | ✅ **yes — mount this** |
-| `pmoves-media` | `file` (host-local disk blocks) | — | ❌ no — lists filenames, I/O-errors every read |
+| **`pmoves`** | **minio** (tailnet MinIO) | Postgres (`juicefs_meta`) | ✅ yes |
+| **`pmoves-media`** | **minio** — *reformatted; was `file`* | Postgres (`juicefs_meta`) | ✅ yes (as of 2026-08-15) |
 
-`pmoves` is minio-backed, Postgres-meta, writable (mirror-confirmed on SPARK).
-`pmoves-media` is formatted with `Storage:"file"`, so its data blocks live on the
-formatting host's local disk and are unreachable from any other node — the
-cross-node setup script **refuses** it unless you set `ALLOW_FILE_STORAGE=1`
-(don't, for the shared mount). Verify before mounting:
+> **UPDATED 2026-08-15 — the `pmoves-media` file-backend blocker is RESOLVED.**
+> B850's live mount reports its backend as `minio://…/juicefs/pmoves-media`, i.e.
+> the reformat in `JUICEFS_MEDIA_MINIO_REFORMAT_RUNBOOK.md` has been executed.
+> `pmoves-media` is no longer `Storage:"file"` and no longer single-node by
+> construction, so the setup script will not refuse it.
+
+The historical warning is kept because the failure mode it describes is exactly
+what a `file`-backed volume does (filenames list, every read I/O-errors), and
+storage is fixed **at format time** and is a **per-volume** property — so re-check
+rather than assume. The cross-node setup script **refuses** a `file`-backed volume
+unless you set `ALLOW_FILE_STORAGE=1` (don't, for a shared mount). Verify before
+mounting:
 
 ```bash
 make -C pmoves juicefs-storage-check
@@ -42,6 +49,32 @@ make -C pmoves juicefs-storage-check
 - The Supabase DB (JuiceFS meta) on B850 is reachable **by MagicDNS hostname**,
   never a literal Tailscale/LAN IP (committed docs carry no literal IPs; the
   DARKXSIDE egress floor fails closed on literal IPs).
+
+### 🚧 That last prerequisite is NOT met yet (measured 2026-08-15)
+
+B850's Postgres is **docker-internal only** — port 5432 is not reachable off-box.
+Measured from two independent nodes:
+
+```
+z890    -> pmoves-b850-ai-top:5432   NOT reachable
+nano-1  -> pmoves-b850-ai-top:5432   NOT reachable
+```
+
+So **no cross-node mount can be established yet**, whatever the volume's storage
+backend: a remote `juicefs mount` cannot reach the metadata engine, and the setup
+script fails at its preflight (correct behaviour).
+
+**What has to happen first:** expose B850's Postgres on the **tailnet interface** —
+bind it to the node's tailnet address rather than publishing to `0.0.0.0`, or front
+it with a tailnet-only listener. Treat this as a **security decision, not a
+mechanical port-publish**: the whole data tier lives behind that port, and
+`pmoves_data` is `internal:true` on purpose. Scope it to the tailnet and to the
+accounts that need it.
+
+This is the same class of gap as the NATS leafnode listener — the service is
+healthy, the port simply is not reachable off-box. Note the **NATS-streamed** edge
+paths (e.g. `voice.stt.edge.v1`) do **not** need this; they need the leafnode
+listener instead (`NATS_LEAF_TOPOLOGY_ROLLOUT_RUNBOOK.md`).
 
 ---
 
