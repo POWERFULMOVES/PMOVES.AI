@@ -1450,9 +1450,9 @@
       "aliases": [
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_SERVICE_KEY",
-        "RENDER_WEBHOOK_SUPABASE_SERVICE_ROLE_KEY",
-        "SUPABASE_SECRET_KEY"
+        "RENDER_WEBHOOK_SUPABASE_SERVICE_ROLE_KEY"
       ],
+      "_alias_removed_2026_08_18": "SUPABASE_SECRET_KEY was listed here as an alias of SERVICE_ROLE_KEY. It is NOT an alias - it is Supabase's NEW opaque API-key model (sb_secret_...), a different credential type. Treating it as an alias made the pipeline write the legacy service-role JWT into it, so Kong's declarative config declared the SAME key twice for the service_role consumer (once as $SUPABASE_SERVICE_KEY, once as $SUPABASE_SECRET_KEY). Kong requires keyauth_credentials.key to be globally unique, so it rejected the entire kong.yml with 'uniqueness violation ... already declared' and crash-looped 3924 times, taking every /rest/v1, /auth/v1 and /storage/v1 route down. Upstream ships it EMPTY (PMOVES-supabase/docker/.env.example:49) and its entrypoint strips blank key entries ('Remove empty key-auth credentials (unconfigured opaque keys)', kong-entrypoint.sh:47), so unset is the SUPPORTED state. Same reasoning applies to SUPABASE_PUBLISHABLE_KEY vs ANON_KEY - do not add it as an alias either. See docs/handoffs/supabase-kong-declarative-config-boot-failure-2026-08-18.md",
       "sunset": "2026-05-26",
       "severity": "P0",
       "reference": "CANONICAL_NAMES.md \u00a72"
