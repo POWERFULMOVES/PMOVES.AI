@@ -35,9 +35,13 @@ WRAPPERS = [
     ("crush-pmoves", "crush-pmoves", "crush-pmoves.bat"),
     ("hermes-pmoves", "hermes-pmoves", "hermes-pmoves.bat"),
     ("claude-pmoves.sh", "claude-pmoves", "claude-pmoves.bat"),
+    ("codex-pmoves.sh", "codex-pmoves", "codex-pmoves.bat"),
+    ("kilo-pmoves.sh", "kilo-pmoves", "kilo-pmoves.bat"),
+    ("kimi-pmoves.sh", "kimi-pmoves", "kimi-pmoves.bat"),
 ]
 
 REPO_ROOT_PLACEHOLDER = "__PMOVES_REPO_ROOT__"
+CLI_MANIFEST = PMOVES_ROOT / "configs" / "cli_tools.yaml"
 
 
 def default_bin_dir() -> Path:
@@ -122,6 +126,54 @@ def warn_if_not_on_path(bin_dir: Path) -> None:
         print(f"WARN: {bin_dir} is not on PATH - add it to your shell profile.")
 
 
+def check_host_clis(strict: bool) -> int:
+    """Doctor mode: validate host CLIs against configs/cli_tools.yaml."""
+    import shutil
+
+    try:
+        import yaml
+    except ImportError:
+        print("ERROR: --check needs PyYAML (run: make -C pmoves env-bootstrap-lite)")
+        return 1
+    if not CLI_MANIFEST.is_file():
+        print(f"ERROR: manifest missing: {CLI_MANIFEST}")
+        return 1
+
+    manifest = yaml.safe_load(CLI_MANIFEST.read_text(encoding="utf-8")) or {}
+    host_clis = manifest.get("host_clis", {}) or {}
+    platform_key = "windows" if os.name == "nt" else "linux"
+    missing_required: list[str] = []
+    missing_optional = 0
+
+    print("Host CLI check (configs/cli_tools.yaml):")
+    for name, spec in host_clis.items():
+        spec = spec or {}
+        binary = shutil.which(name)
+        required = bool(spec.get("required", False))
+        if binary:
+            print(f"  OK       {name}: {binary}")
+            continue
+        hint = (spec.get("install", {}) or {}).get(platform_key, "")
+        marker = "REQUIRED" if required else "optional"
+        print(f"  MISSING  {name} ({marker}) - {spec.get('purpose', '')}")
+        if hint:
+            print(f"           install: {hint}")
+        if required:
+            missing_required.append(name)
+        else:
+            missing_optional += 1
+
+    if missing_required:
+        print(f"ERROR: required host CLIs missing: {', '.join(missing_required)}")
+        return 1
+    if strict and missing_optional:
+        print(f"ERROR: strict mode - {missing_optional} optional CLI(s) missing")
+        return 1
+    if missing_optional:
+        print(f"note: {missing_optional} optional CLI(s) missing - fine unless a lane needs them")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -130,7 +182,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Install directory (default: $PMOVES_BIN or ~/.local/bin).",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print actions only.")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Doctor mode: validate host CLIs against configs/cli_tools.yaml (no install).",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="With --check: also fail on missing optional CLIs.",
+    )
     args = parser.parse_args(argv)
+
+    if args.check:
+        return check_host_clis(strict=args.strict)
 
     bin_dir = Path(args.bin).expanduser() if args.bin else default_bin_dir()
     if args.dry_run:
