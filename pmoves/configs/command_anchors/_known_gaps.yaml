@@ -470,6 +470,8 @@ known_gaps:
   - "UNKNOWN_HOST|pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md|pmoves-b850"
   - "UNKNOWN_HOST|pmoves/docs/operations/FLEET_INVENTORY_LIVE.md|pmoves-kvm4-1"
   - "UNKNOWN_HOST|pmoves/docs/operations/FLEET_INVENTORY_LIVE.md|pmoves-nano"
+  - "UNKNOWN_HOST|pmoves/docs/operations/JUICEFS_MEDIA_MINIO_REFORMAT_RUNBOOK.md|pmoves-b850-ai-top"
+  - "UNKNOWN_HOST|pmoves/docs/operations/JUICEFS_MEDIA_MINIO_REFORMAT_RUNBOOK.md|pmoves-nano-1"
   - "UNKNOWN_HOST|pmoves/docs/operations/MULLVAD_EXIT_UPSTREAM.md|pmoves-kvm4-1"
   - "UNKNOWN_HOST|pmoves/docs/operations/RUSTDESK_ENROLLMENT.md|pmoves-kvm2"
   - "UNKNOWN_HOST|pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md|pmoves-kvm2"
