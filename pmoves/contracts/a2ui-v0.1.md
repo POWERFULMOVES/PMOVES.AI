@@ -4,9 +4,25 @@
 > **Date**: 2026-07-15
 > **Locked by**: DARKXSIDE (data-binding model: C, strict subset)
 > **Implementation**: `pmoves/web-components/*` (this PR)
-> **Renderer**: vendored Lit at `website/stage/vendor/a2ui.mjs` (consumes these components)
+> **Renderer**: `website/tenant-template/tenant-renderer.js` — see the correction note below
 > **Changelog**:
 > - v0.1 (2026-07-15) — initial draft, locked data-binding model
+
+> **Which "A2UI" is this?** Three distinct schemas share the `a2ui` prefix in
+> this repo. This document defines the **PMOVES `pm-*` component contract**. It
+> is not the Google A2UI Protocol (`beginRendering` / `surfaceUpdate`,
+> `PMOVES-A2UI/specification/`) and not A2UI Animation v1
+> (`pmoves/contracts/a2ui-animation-schema.json`).
+>
+> **Correction (2026-08-14):** earlier revisions of this document named the
+> vendored Lit bundle `website/stage/vendor/a2ui.mjs` as the renderer for these
+> components. That is not accurate. `website/stage/stage.js:145` sets
+> `enableCustomElements = false`, and that flag guards the only branch in the
+> Lit renderer (`root.ts:144`) that could instantiate a `pm-*` element — so
+> `pm-*` components are unreachable through `a2ui.mjs` as currently wired.
+> The actual consumer is `website/tenant-template/tenant-renderer.js`, which
+> imports `pmoves/web-components/register.js` directly. See
+> `pmoves/docs/audit/A2UI_INTEGRATION_AUDIT_2026-08-14.md` § F2.
 
 ## 1. Purpose
 
@@ -246,7 +262,11 @@ Per-component README documents the full prop schema, the data-source contract (i
 
 ## 12. Reference implementations
 
-- **Renderer** (consumes A2UI messages): `website/stage/stage.js` + `vendor/a2ui.mjs` (Lit)
+- **Renderer** (consumes `pm-*` components): `website/tenant-template/tenant-renderer.js`
+  (imports `pmoves/web-components/register.js`)
+- **Not a renderer for these components**: `website/stage/stage.js` + `vendor/a2ui.mjs`
+  renders the Google A2UI Protocol with `enableCustomElements = false` — see the
+  correction note at the top of this document
 - **Persona runtime** (injects theming tokens): `website/persona/persona-theme.js` + `persona-boot.js`
 - **Compose tool** (produces A2UI messages): `pmoves/tools/compose/compose.py` (v0.1 ships with this lane)
 - **Conformance test**: `pmoves/contracts/a2ui-v0.1-conformance.test.html` (axe-core + DOM checks per component)
