@@ -480,6 +480,19 @@ services:
     # makes the route table a reviewable file instead of unmanaged DB state.
     - KONG_DATABASE=off
     - KONG_DECLARATIVE_CONFIG=/usr/local/kong/kong.yml
+    # REQUIRED by the declarative config this mounts. Upstream Supabase commit
+    # 9777f051d6 (#45462, "restrict rest root anon") added a route using the
+    # EXPRESSIONS router syntax (expression: 'http.path == "/rest/v1/"').
+    # Under the default traditional router that is an unknown field and the ENTIRE
+    # kong.yml fails to parse, so Kong never starts - one route takes down all 21
+    # services (observed: 3,924 restarts). Upstream sets this same var in
+    # PMOVES-supabase/docker/docker-compose.yml:95; PMOVES defines its own
+    # supabase-kong service and had not carried it over, so the submodule's config
+    # outran this definition. Do NOT 'fix' the route to paths: instead - that is a
+    # PREFIX match where upstream means an EXACT one, which would widen the
+    # restricted-anon scope to all REST traffic.
+    # See docs/handoffs/supabase-kong-declarative-config-boot-failure-2026-08-18.md
+    - KONG_ROUTER_FLAVOR=expressions
     # Supabase's CLI issue #14: force LAST so service short-names resolve.
     - KONG_DNS_ORDER=LAST,A,CNAME
     - KONG_DNS_NOT_FOUND_TTL=1

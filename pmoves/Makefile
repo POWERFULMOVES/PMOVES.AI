@@ -179,6 +179,7 @@ help: ## Show available make targets and descriptions
 include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk
+include mk/worktree.mk
 include mk/build-gate.mk
 include mk/nvidia-5090.mk
 include mk/nvidia-dgx-spark.mk
@@ -1278,6 +1279,20 @@ validate-dockerfile-paths-json: ## Same as validate-dockerfile-paths, but JSON o
 #   GHOST_PATH     documented `file:NNN` where the file does not exist
 #   UNRUNNABLE_DOC documented command matching a damage-control BLOCKED_PATTERN
 #   UNKNOWN_HOST   documented ssh host absent from the fleet topology
+# ----------------------------------------------------------------------------
+# Bind-source preflight -- the runtime half of the submodule build & mount gap.
+# Docker CREATES a missing bind source as a directory instead of erroring, so an
+# unpopulated submodule turns a file mount into a directory mount and the container
+# fails on its own config. Neither compose ratchet can see it (both check out
+# without submodules). See docs/operations/SUBMODULE_BUILD_AND_MOUNT_GAP.md.
+# ----------------------------------------------------------------------------
+.PHONY: bind-sources-check bind-sources-check-json
+bind-sources-check: ## Assert every submodule-backed compose bind source exists and is the right kind
+	@$(PYTHON) tools/check_bind_sources.py
+
+bind-sources-check-json: ## Same as bind-sources-check, but JSON output
+	@$(PYTHON) tools/check_bind_sources.py --json
+
 # Scope-aware: make reaches docker/ssh/python/git/systemd/nats, not just docker.
 # Ratchet — baseline in configs/command_anchors/_known_gaps.yaml, count goes down.
 # ----------------------------------------------------------------------------

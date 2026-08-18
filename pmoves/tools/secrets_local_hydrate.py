@@ -30,6 +30,11 @@ from pmoves.tools._secrets_common import (
     validate_secret_value,
 )
 
+# Single source of truth for the tombstone list — imported rather than
+# reimplemented, so the writer (--clear) and the reader (hydrate) can never
+# drift apart on the file's format.
+from pmoves.scripts.bootstrap_env import read_cleared_keys
+
 DEFAULT_ENV_SHARED = PROJECT_ROOT / "env.shared"
 
 
@@ -81,6 +86,7 @@ def hydrate(
     *,
     dry_run: bool = False,
     force: bool = False,
+    cleared_keys_path: Path | None = None,
 ) -> Dict[str, str]:
     """Overlay local.env values into env.shared for empty/placeholder keys.
 
@@ -88,12 +94,24 @@ def hydrate(
     from local.env, even if the current value is non-placeholder. This is
     needed when GH Secrets are rotated and the stale local value must be
     replaced.
+
+    Keys listed in pmoves/configs/secrets_cleared.yaml are NEVER overlaid, not
+    even under force. They were emptied deliberately via
+    ``bootstrap_env.py --clear``, and the empty string is the first entry in
+    PLACEHOLDER_VALUES — so without that list a deliberately-empty key is
+    indistinguishable from a never-set one, and this function would restore the
+    stale local value on the next `secrets-funnel` run, silently undoing the
+    clear. force= exists to push a rotated GH Secret over a stale local value,
+    which is a different intent from "this key is supposed to be empty".
     """
     local_values = _parse_env(local_env_path)
     shared_values = _parse_env(env_shared_path)
+    cleared = set(read_cleared_keys(cleared_keys_path))
 
     updates: Dict[str, str] = {}
     for key, local_val in sorted(local_values.items()):
+        if key in cleared:
+            continue  # Deliberately empty — see secrets_cleared.yaml
         if is_placeholder(local_val):
             continue  # Don't overlay empty local values
         current = shared_values.get(key, "")
