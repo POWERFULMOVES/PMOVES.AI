@@ -20,6 +20,14 @@ and worse than either:
 > **Status at 2026-08-14 — two of the three remain.** `python-tests` was repaired
 > by #2526 (merged 2026-08-14) and now enforces. `merge-gate` and
 > `hardening-validation` are unchanged. **The count today is two of five.**
+>
+> **Status at 2026-08-18 — one of the three remains.** `hardening-validation` was
+> repaired by #2592 (merged 2026-08-18): the `grep … | head -10 || echo` is gone,
+> replaced by `pmoves/tools/hardening_ratchet.py`, which judges all 99 tracked
+> Dockerfiles on their *effective* (last) `USER` directive and fails on new
+> findings or on stale baseline entries. Only `merge-gate` is still vacuous — and
+> it is the one of the three that branch protection does **not** actually require.
+> **The count today is one of five, and zero of the four required checks.**
 
 The precise claim is worth stating carefully, because the sloppy version is
 falsifiable and this one is not. These jobs **can** report `failure` — every one
@@ -40,7 +48,7 @@ the gate.
 |---|---|---|
 | `merge-gate` | **VACUOUS** | the job body is three `echo`s and an unread variable; it contains no command that can fail |
 | `python-tests` | **VACUOUS at audit → REPAIRED 2026-08-14** | was `head -20` of 264 test files, then `\|\| true`; #2526 replaced the body with `pmoves/tools/pytest_ratchet.py` and an unmasked `pip install`, so the job can now fail |
-| `hardening-validation` | **VACUOUS** | greps for the string `USER` and asserts nothing; passes whether a service runs as root explicitly or implicitly |
+| `hardening-validation` | **VACUOUS at audit → REPAIRED 2026-08-18** | greped for the string `USER` and asserted nothing; passed whether a service ran as root explicitly or implicitly, and its glob saw only 76 of 99 tracked Dockerfiles. #2592 replaced the body with `pmoves/tools/hardening_ratchet.py`, which judges the *effective* (last) `USER` directive across all 99 and fails on new findings or stale baseline entries |
 | `verify` | **ENFORCING** | `set -euo pipefail`, explicit `exit 1` per missing contract element, fail-safe on diff errors |
 | `submodule-gitlink-gate` | **ENFORCING** | sets `fail=1` and `exit 1` on dangling / rollback / sideways gitlinks |
 
@@ -48,6 +56,20 @@ the gate.
 row was edited: `merge-gate` still sets `PASSED=true` and never reads it, ending
 in two `echo`s; `hardening-validation` still ends in `grep … || echo`. Only the
 `python-tests` row changed.*
+
+*Re-verified again against `main` at `1f3bfb7f8` on 2026-08-18, in the same turn
+the `hardening-validation` row was edited: that job now runs
+`python pmoves/tools/hardening_ratchet.py` with no mask, and `merge-gate` still
+sets `PASSED=true`, never reads it, and ends in two `echo`s. Only the
+`hardening-validation` row changed.*
+
+*One correction to this document's own analysis, recorded rather than silently
+amended: the `hardening-validation` entry under "Proof, not inference" attributes
+the unconditional exit 0 to the `|| echo` fallback being unreachable. That is
+right, and it is the sharper finding — the reason it is unreachable is the pipe
+into `head`, since the default `run:` shell is `bash -e` **without** `pipefail`
+(only an explicit `shell: bash` adds `-eo pipefail`). #2592's description
+initially blamed the `|| echo` itself and was corrected to match this document.*
 
 ## Proof, not inference
 
