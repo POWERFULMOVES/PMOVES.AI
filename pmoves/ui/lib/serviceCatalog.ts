@@ -581,7 +581,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     color: 'forest',
     endpoints: [
       { name: 'HTTP API', port: '8055', path: '/', type: 'api' },
-      { name: 'WebSocket', port: '8056', path: '/', type: 'ws' },
+      { name: 'WebSocket (TTS stream)', port: '8055', path: '/v1/voice/stream/tts', type: 'ws' },
       { name: 'Health', port: '8055', path: '/healthz', type: 'health' },
       { name: 'Metrics', port: '8055', path: '/metrics', type: 'metrics' },
     ],
