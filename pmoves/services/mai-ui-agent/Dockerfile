@@ -14,6 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY services/common /app/services/common
 COPY services/mai-ui-agent/app.py .
 
+# Hardening ratchet: run as non-root. --create-home so the default HF cache
+# path (expanduser("~/.cache/...") resolves via the pwd entry) exists.
+RUN useradd --create-home --shell /bin/bash maiui
+USER maiui
+
 EXPOSE 8220
 
 CMD ["python", "app.py"]
