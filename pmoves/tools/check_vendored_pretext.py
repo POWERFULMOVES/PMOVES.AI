@@ -39,21 +39,31 @@ def fail(msg: str) -> None:
 
 
 def gitlink_sha() -> str:
-    """The commit the superproject records for the submodule."""
+    """The commit the superproject records for the submodule, read from the INDEX.
+
+    Deliberately the index and not HEAD. The vendor-update recipe stages the
+    gitlink bump together with the rebuilt dist/README and validates *before*
+    committing; reading HEAD would compare the new README against the OLD
+    pointer and reject a correctly aligned change until it had already been
+    committed -- exactly backwards for a pre-commit gate.
+
+    `git ls-files --stage` reports the staged entry, which equals HEAD's when
+    nothing is staged, so the committed-tree (CI) case is unchanged.
+    """
     out = subprocess.run(
-        ["git", "ls-tree", "HEAD", SUBMODULE],
+        ["git", "ls-files", "--stage", "--", SUBMODULE],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         encoding="utf-8",
     )
     if out.returncode != 0 or not out.stdout.strip():
-        fail(f"could not read the {SUBMODULE} gitlink from HEAD: {out.stderr.strip()}")
-    # "160000 commit <sha>\t<path>"
+        fail(f"could not read the {SUBMODULE} gitlink from the index: {out.stderr.strip()}")
+    # "160000 <sha> <stage>" then a tab and the path
     parts = out.stdout.split()
     if len(parts) < 3 or parts[0] != "160000":
-        fail(f"{SUBMODULE} is not a gitlink in HEAD (got: {out.stdout.strip()!r})")
-    return parts[2]
+        fail(f"{SUBMODULE} is not a gitlink in the index (got: {out.stdout.strip()!r})")
+    return parts[1]
 
 
 def recorded_sha() -> str:
@@ -136,7 +146,7 @@ def main() -> int:
         fail(
             "vendored pretext is out of step with the submodule.\n"
             f"  vendor/pretext/README.md records: {recorded}\n"
-            f"  {SUBMODULE} gitlink at HEAD:      {actual}\n"
+            f"  {SUBMODULE} gitlink in index:     {actual}\n"
             "Rebuild the vendored dist from the gitlink commit, or bump the gitlink to match.\n"
             "Recipe: pmoves/services/a2ui-renderer/vendor/pretext/README.md"
         )

@@ -2271,6 +2271,7 @@ submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 
 submodule-integrity: ## Non-recursive submodule integrity gate (all declared submodules required)
+	@$(PYTHON) tools/check_vendored_pretext.py
 	@$(PYTHON) tools/submodule_integrity.py \
 		--required-initialized PMOVES-Agent-Zero \
 		--required-initialized PMOVES-Archon \
@@ -2281,6 +2282,7 @@ submodule-integrity: ## Non-recursive submodule integrity gate (all declared sub
 		--required-initialized Pmoves-cipher
 
 submodule-integrity-strict: ## Strict submodule integrity gate (includes recursive validation)
+	@$(PYTHON) tools/check_vendored_pretext.py
 	@$(PYTHON) tools/submodule_integrity.py --check-recursive \
 		--required-initialized PMOVES-Agent-Zero \
 		--required-initialized PMOVES-Archon \
