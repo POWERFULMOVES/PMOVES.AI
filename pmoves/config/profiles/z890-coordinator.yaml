@@ -13,11 +13,11 @@ hardware:
     cores: 20
     threads: 20
   gpu:
-    type: none  # Z890 delegates GPU work to 5090/4090 via Tailscale mesh
-    models: []
-    memory_gb: 0
+    type: nvidia  # Probed 2026-08-15: RTX 3090 Ti 24GB installed (nvidia-smi 610.62)
+    models: ["RTX 3090 Ti"]
+    memory_gb: 24
   ram_gb: 32
-  tags: [coordinator, docker, infra, development]
+  tags: [coordinator, docker, infra, development, cuda]
 
 compose_overrides:
   - docker-compose.hardened.yml

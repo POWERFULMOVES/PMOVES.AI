@@ -117,32 +117,53 @@ esac
 
 export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
-if ! command -v python3 >/dev/null 2>&1; then
-  fail "python3 not found on PATH"
+# Resolve python the same way preflight.mk does: canonical venv first, then
+# platform launchers. Bare `python3` hard-fails on Windows nodes (Git Bash has
+# no python3; the Windows Store stub is unusable).
+# An ARRAY, not a scalar. Two of the branches below cannot both survive a
+# scalar: the venv branch holds a filesystem path that may contain spaces (a
+# checkout under "C:/Users/Alice Smith/..." is ordinary on Windows), while the
+# launcher branch is genuinely two words (py -3). An UNquoted ${PYTHON} is
+# required for the second and corrupts the first; a quoted one is required for
+# the first and breaks the second. "${PYTHON[@]}" is correct for both, because
+# word boundaries come from the array rather than from re-splitting a string.
+PYTHON=()
+if [ -x "${PMOVES_DIR}/.venv-pmoves/Scripts/python.exe" ]; then
+  PYTHON=("${PMOVES_DIR}/.venv-pmoves/Scripts/python.exe")
+elif [ -x "${PMOVES_DIR}/.venv-pmoves/bin/python" ]; then
+  PYTHON=("${PMOVES_DIR}/.venv-pmoves/bin/python")
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+  PYTHON=(python3)
+elif command -v py >/dev/null 2>&1; then
+  PYTHON=(py -3)
+elif command -v python >/dev/null 2>&1; then
+  PYTHON=(python)
+else
+  fail "no usable python found (tried .venv-pmoves, python3, py -3, python)"
 fi
-PYTHON=python3
+info "Using python: ${PYTHON[*]}"
 
-if ! ${PYTHON} -c "import yaml" 2>/dev/null; then
-  warn "PyYAML not available in system python — Hermes YAML merge may fail"
+if ! "${PYTHON[@]}" -c "import yaml" 2>/dev/null; then
+  warn "PyYAML not available — Hermes YAML merge may fail (run: make env-bootstrap-lite)"
 fi
 
 # ── 3. Crush Config Generation ───────────────────────────────────────────────
 
 info "Generating Crush config: ${CRUSH_CONFIG}"
-${PYTHON} -m pmoves.tools.mcp_config_generator --client crush --output "${CRUSH_CONFIG}" \
+"${PYTHON[@]}" -m pmoves.tools.mcp_config_generator --client crush --output "${CRUSH_CONFIG}" \
   || fail "Crush config generation failed"
 
 info "Running crush_configurator for provider/model setup..."
 CRUSH_CONFIG_DIR=$(dirname "${CRUSH_CONFIG}")
 mkdir -p "${CRUSH_CONFIG_DIR}"
-${PYTHON} -m pmoves.tools.mini_cli crush setup 2>/dev/null \
+"${PYTHON[@]}" -m pmoves.tools.mini_cli crush setup 2>/dev/null \
   || warn "mini_cli crush setup not available (non-fatal)"
 
 # ── 4. CHIT Signing Test ─────────────────────────────────────────────────────
 
 if [ -n "$CHIT_PASS" ]; then
   info "Testing CHIT trail signing..."
-  if CHIT_PASSPHRASE="$CHIT_PASS" ${PYTHON} "${PMOVES_DIR}/tools/sign_trail.py" \
+  if CHIT_PASSPHRASE="$CHIT_PASS" "${PYTHON[@]}" "${PMOVES_DIR}/tools/sign_trail.py" \
       --agent-id "crush-${CRUSH_NODE}" \
       --summary "Fleet bootstrap signing test" \
       --phase "fleet-bootstrap" \
@@ -163,7 +184,7 @@ echo "  Crush Fleet Bootstrap Complete — Node: ${CRUSH_NODE}"
 echo "═══════════════════════════════════════════════════════════════"
 echo "  Config:        ${CRUSH_CONFIG}"
 echo "  CHIT source:   ${CHIT_SOURCE:-none (unsigned mode)}"
-echo "  Python:        $(${PYTHON} --version)"
+echo "  Python:        $("${PYTHON[@]}" --version)"
 echo ""
 if [ -n "$CHIT_PASS" ]; then
   echo "  ✓ Trail signing enabled (make sign-trail will produce signed payloads)"
