@@ -67,8 +67,13 @@ def select_emittable(secrets: Mapping[str, str]) -> tuple[Dict[str, str], List[s
     emit: Dict[str, str] = {}
     skipped: List[str] = []
     for key, value in secrets.items():
+        # Every name that reaches `skipped` passes through _valid_env_key first,
+        # so the reported list can only ever contain env-key-shaped names. A
+        # malformed entry -- which is exactly the case where the "key" might not
+        # be a key at all -- is counted, never echoed. Names are the useful
+        # diagnostic; the values behind them are never reportable.
         if not _valid_env_key(key):
-            skipped.append(key)
+            skipped.append("<non-conforming-key>")
             continue
         if is_placeholder(value):
             skipped.append(key)
@@ -131,7 +136,9 @@ def emit(cgp_path: Path, local_env: Path, *, dry_run: bool = False) -> Dict[str,
     secrets = decode_secret_map(load_cgp(cgp_path))
     emittable, skipped = select_emittable(secrets)
     if skipped:
-        # Key names only (CodeQL-safe: no value taint).
+        # Key names only, and only names that already passed _valid_env_key --
+        # see select_emittable. A non-conforming entry is reported as a
+        # placeholder token, so nothing that failed key validation is echoed.
         print(
             f"ℹ Skipped {len(skipped)} non-emittable entry/entries "
             f"(placeholder/invalid-key/malformed): {', '.join(sorted(skipped))}",

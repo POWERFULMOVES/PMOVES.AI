@@ -27,6 +27,7 @@ run this AFTER Docker Desktop has been restarted and the resolver responds.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -60,10 +61,20 @@ def default_docker_mcp_dir() -> Path:
     return Path.home() / ".docker" / "mcp"
 
 
-def _masked(value: str) -> str:
-    if len(value) < 8:
-        return "***"
-    return f"{value[:4]}...{value[-4:]}"
+_ENV_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}")
+
+
+def _safe_name(name: str) -> str:
+    """Echo an env/secret KEY NAME only when it is provably a name, not a value.
+
+    Key names are the useful diagnostic here; values never are. Anything that
+    does not match the env-key shape came out of a decoded bundle unvalidated,
+    so it is replaced rather than echoed -- that covers both a malformed key and
+    a value that ended up where a key was expected.
+    """
+    if _ENV_KEY_RE.fullmatch(name or ""):
+        return name
+    return "<non-conforming-key>"
 
 
 @dataclass
@@ -213,13 +224,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if pushed:
         print(f"{prefix}Funnel-fed {len(pushed)} Docker MCP secret(s) from env.shared:")
-        for req, value in plan.pushable:
-            print(f"  ✔ {req.docker_name}  ({req.server}) = {_masked(value)}")
+        for req, _value in plan.pushable:
+            # Deliberately prints NO value-derived material -- not even a mask.
+            # A first-4/last-4 mask is still partial disclosure of a live secret
+            # into CI logs, and the line's job is to say WHICH secret was pushed.
+            print(f"  ✔ {req.docker_name}  ({req.server})  ← funnel")
     if plan.missing_in_funnel:
         print("\nⓘ Mapped to a funnel key but absent/placeholder in env.shared "
               "(funnel these keys, then re-run):")
         for req, source_key in plan.missing_in_funnel:
-            print(f"  – {req.docker_name}  ({req.server})  ← env.shared:{source_key}")
+            print(f"  – {req.docker_name}  ({req.server})  ← env.shared:{_safe_name(source_key)}")
     if plan.operator_only:
         print("\n⚠ Operator-provided, NOT funnel-managed — set once manually "
               "(`<value> | docker mcp secret set NAME`) or add to the funnel:")
