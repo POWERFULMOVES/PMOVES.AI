@@ -1807,9 +1807,15 @@ nats server report connections
 >
 > So a consumer receives a success result whose content is whatever the *requester*
 > supplied. That is a stronger failure than an unimplemented subject — an unimplemented
-> subject times out and you notice; this one reports completion. The existing tests assert
-> only dispatch **routing** (`test_archon_orchestrator.py:77-98`), never that a crawl
-> occurred, which is why the gap survived.
+> subject times out and you notice; this one reports completion. The existing tests are not
+> thin — `test_archon_orchestrator.py:206-264` covers the crawl state machine
+> (`queued -> processing -> completed`), result publication on `archon.crawl.result.v1`, and
+> the result payload's shape. What none of them assert is **network retrieval**: no test
+> checks that the URL was ever fetched or that the returned content came from it.
+> `test_crawl_result_payload_structure` in fact demonstrates the defect — it feeds
+> `metadata.fragments = ["a", "b"]` in the request and asserts the *result* carries the same
+> `["a", "b"]` back. That round-trip passes whether or not a crawler exists, which is why
+> the gap survived a well-covered suite.
 >
 > **Retire-vs-implement is an open operator decision**, parked and delegated to Archon in
 > `AGNOTE4482PHI.t1.md` (`ACK::Z890-CLAUDE::CONTROL-ITEMS-RESOLVED-2026-08-08`). This entry
