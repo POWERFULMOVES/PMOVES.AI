@@ -22,7 +22,10 @@ env-var name), so ``secrets_local_hydrate`` overlays them 1:1.
 from __future__ import annotations
 
 import argparse
+import os
+import stat
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence
 
@@ -30,8 +33,8 @@ _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from pmoves.chit.codec import decode_secret_map, load_cgp
-from pmoves.tools._secrets_common import (
+from pmoves.chit.codec import decode_secret_map, load_cgp  # noqa: E402
+from pmoves.tools._secrets_common import (  # noqa: E402
     is_placeholder,
     local_env_path as _default_local_env,
     validate_secret_value,
@@ -78,41 +81,53 @@ def select_emittable(secrets: Mapping[str, str]) -> tuple[Dict[str, str], List[s
     return emit, skipped
 
 
-def _write_merged(local_env: Path, emit: Mapping[str, str]) -> None:
-    """Merge ``emit`` into local.env, preserving existing keys/comments/order.
+def _write_replace(local_env: Path, emit: Mapping[str, str]) -> None:
+    """Write local.env as EXACTLY the emittable bundle keys (replacement, not merge).
 
-    Merge (not overwrite) so a key present locally but absent from *this* bundle
-    (e.g. a GH secret that was empty at bundle-build time) is not silently lost.
-    Structure-preserving in-place update mirrors ``secrets_local_hydrate._write_updates``.
+    Replacement is load-bearing for the ``secrets-funnel-from-prod`` path, which
+    force-hydrates env.shared from this file. If a secret is removed from / emptied
+    in the prod bundle, a *merge* would keep its stale local.env entry and the
+    downstream ``secrets-local-hydrate FORCE=1`` would copy that dead credential
+    back into env.shared (Codex P1, PR #2602). local.env is the prod-secrets
+    overlay — its contents mirror the bundle, nothing else; genuinely node-local
+    overrides belong in env.shared, not here. (An empty bundle yields no emittable
+    keys, so ``emit`` skips the write entirely and local.env is left untouched.)
+
+    The file holds production secrets in cleartext, so it is installed 0600 inside
+    a 0700 directory, written atomically (temp file + ``os.replace``) — matching the
+    owner-only permissions ``sync-secrets-local.yml`` uses on a runner. chmod is
+    best-effort (a no-op on filesystems without POSIX modes, e.g. Windows).
     """
-    if local_env.exists():
-        lines = local_env.read_text(encoding="utf-8", errors="ignore").splitlines()
-    else:
-        local_env.parent.mkdir(parents=True, exist_ok=True)
-        lines = ["# Auto-generated from the CHIT bundle by pmoves.tools.emit_local_env"]
+    local_env.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(local_env.parent, stat.S_IRWXU)  # 0700
+    except OSError:
+        pass
 
-    index: Dict[str, int] = {}
-    for idx, raw in enumerate(lines):
-        stripped = raw.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        index[stripped.split("=", 1)[0].strip()] = idx
+    lines = [
+        "# Auto-generated from the CHIT bundle by pmoves.tools.emit_local_env.",
+        "# Replacement overlay: contents mirror the prod bundle (no merge).",
+    ]
+    for key in sorted(emit):
+        lines.append(f"{key}={emit[key]}")
+    text = "\n".join(lines) + "\n"
 
-    for key, value in emit.items():
-        entry = f"{key}={value}"
-        if key in index:
-            lines[index[key]] = entry
-        else:
-            lines.append(entry)
-
-    text = "\n".join(lines)
-    if text and not text.endswith("\n"):
-        text += "\n"
-    local_env.write_text(text, encoding="utf-8")
+    fd, tmp = tempfile.mkstemp(dir=str(local_env.parent), prefix=".local.env.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+        os.replace(tmp, local_env)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def emit(cgp_path: Path, local_env: Path, *, dry_run: bool = False) -> Dict[str, str]:
-    """Decode ``cgp_path`` and merge its emittable secrets into ``local_env``."""
+    """Decode ``cgp_path`` and write its emittable secrets to ``local_env`` (replacement)."""
     secrets = decode_secret_map(load_cgp(cgp_path))
     emittable, skipped = select_emittable(secrets)
     if skipped:
@@ -123,7 +138,7 @@ def emit(cgp_path: Path, local_env: Path, *, dry_run: bool = False) -> Dict[str,
             file=sys.stderr,
         )
     if emittable and not dry_run:
-        _write_merged(local_env, emittable)
+        _write_replace(local_env, emittable)
     return emittable
 
 

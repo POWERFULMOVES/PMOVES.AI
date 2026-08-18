@@ -10,6 +10,12 @@ fresh values in env.shared.
 
 from __future__ import annotations
 
+import os
+import stat
+import sys
+
+import pytest
+
 from pmoves.chit.codec import encode_secret_map, save_cgp
 from pmoves.tools import emit_local_env
 from pmoves.tools._secrets_common import parse_env_file
@@ -61,17 +67,35 @@ def test_emit_skips_multiline_values(tmp_path):
     assert "HOSTINGER_SSH_PRIVATE_KEY" not in parse_env_file(local_env)
 
 
-def test_emit_merges_preserving_local_only_keys(tmp_path):
+def test_emit_replaces_dropping_stale_keys(tmp_path):
+    # Pre-existing local.env carries a key that is NO LONGER in the new bundle.
     local_env = tmp_path / "local.env"
-    local_env.write_text("# header comment\nLOCAL_ONLY=keepme\nHOSTINGER_API_KEY=oldvalue\n")
+    local_env.write_text("# old header\nSTALE_REMOVED=oldsecret\nHOSTINGER_API_KEY=oldvalue\n")
+    # New bundle dropped STALE_REMOVED entirely and rotated HOSTINGER_API_KEY.
     bundle = _make_bundle(tmp_path, {"HOSTINGER_API_KEY": "newvalue123"})
 
     emit_local_env.emit(bundle, local_env)
 
     parsed = parse_env_file(local_env)
-    assert parsed["HOSTINGER_API_KEY"] == "newvalue123"  # updated in place
-    assert parsed["LOCAL_ONLY"] == "keepme"  # preserved, not dropped
-    assert "# header comment" in local_env.read_text()  # structure preserved
+    assert parsed["HOSTINGER_API_KEY"] == "newvalue123"  # rotated value lands
+    # Replacement, not merge: a key absent from the new bundle is GONE, so a
+    # downstream `secrets-local-hydrate FORCE=1` cannot resurrect it into env.shared
+    # (Codex P1, PR #2602). This is the whole point of replacement semantics.
+    assert "STALE_REMOVED" not in parsed
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes not enforced on Windows")
+def test_emit_writes_owner_only_permissions(tmp_path):
+    bundle = _make_bundle(tmp_path, {"HOSTINGER_API_KEY": "abc123def456"})
+    local_env = tmp_path / "secrets" / "local.env"
+
+    emit_local_env.emit(bundle, local_env)
+
+    file_mode = stat.S_IMODE(os.stat(local_env).st_mode)
+    dir_mode = stat.S_IMODE(os.stat(local_env.parent).st_mode)
+    # Cleartext prod secrets must not be world/group readable (Codex P1, PR #2602).
+    assert file_mode == 0o600, f"local.env must be 0600, got {oct(file_mode)}"
+    assert dir_mode == 0o700, f"secrets dir must be 0700, got {oct(dir_mode)}"
 
 
 def test_emit_dry_run_writes_nothing(tmp_path):
