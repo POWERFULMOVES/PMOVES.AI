@@ -109,6 +109,20 @@ def _parse_target(data: Mapping) -> Target:
     return Target(file=file_name, key=key)
 
 
+def _first_usable(secrets: Mapping[str, str], entry: "Entry") -> str | None:
+    """First of label-then-aliases whose value is non-empty after stripping.
+
+    Returns None when every candidate is absent OR present-but-blank, so callers
+    can treat "delivered as empty" and "never delivered" identically — which is how
+    every consumer of a line-based env file already treats them.
+    """
+    for key in (entry.label, *entry.aliases):
+        value = secrets.get(key)
+        if value is not None and value.strip():
+            return key
+    return None
+
+
 def build_outputs(
     secrets: Mapping[str, str],
     entries: Sequence[Entry],
@@ -118,12 +132,26 @@ def build_outputs(
     outputs: Dict[str, Dict[str, str]] = defaultdict(dict)
     missing: List[str] = []
     for entry in entries:
-        source_key = entry.label
-        if source_key not in secrets:
-            # Honor legacy aliases: an operator may supply a deprecated name
-            # (e.g. MCP_SERVER_TOKEN) that maps to a canonical label. Emit the
-            # canonical target keys from whichever alias value is present.
-            source_key = next((a for a in entry.aliases if a in secrets), None)
+        # Honor legacy aliases: an operator may supply a deprecated name (e.g.
+        # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
+        # target keys from whichever alias carries a USABLE value.
+        #
+        # "Usable" excludes present-but-empty, and that distinction is the whole
+        # point. This previously tested key presence alone (`source_key not in
+        # secrets`), so a canonical label sitting in the bundle with an EMPTY value
+        # won over a populated alias: the empty was written as `KEY=` into every
+        # target file and kept out of `missing` even when required.
+        #
+        # Measured on B850, 2026-08-18: `env.shared` carries CHIT_PROD_PASSPHRASE
+        # with a zero-length value while the GH-delivered CHIT_PASSPHRASE alias
+        # carries the real one. chit-export encodes env.shared into the bundle, so
+        # the blank canonical shadowed the good alias at exactly this line.
+        #
+        # Why blank is worse than absent: compose's `${KEY:?}` rejects empty as well
+        # as unset, but `${KEY?}` accepts it, and anything that SOURCES an env file
+        # and exports it re-exports the blank — where shell environment then beats
+        # every `--env-file`. An empty secret is not a secret; treat it as absent.
+        source_key = _first_usable(secrets, entry)
         if source_key is None:
             if entry.required:
                 missing.append(entry.label)
