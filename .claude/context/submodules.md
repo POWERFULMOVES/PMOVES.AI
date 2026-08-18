@@ -63,16 +63,15 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
 - **Path:** `PMOVES-Archon/`
 - **Repository:** https://github.com/POWERFULMOVES/PMOVES-Archon.git
 - **Branch:** `PMOVES.AI-Edition-Hardened`
-- **Purpose:** Supabase-driven agent service with prompt/form management
+- **Purpose:** Workflow engine for AI coding agents — remote agentic coding platform controlling AI coding assistants via Slack/Telegram/GitHub/Web/CLI
+- **Version:** v0.8.0 (Bun / TypeScript ESM)
 - **Key Ports:**
   - `8091` - API server
-  - `3737` - Web UI
-  - `8051/8052` - Internal MCP servers
 - **Integration Points:**
-  - Connects to Agent Zero's MCP interface
-  - Uses Supabase for prompt storage and state management
-  - NATS event coordination
-- **Health Check:** `GET http://localhost:8091/healthz`
+  - tier=agent (PMOVES.AI integration overlay)
+  - Health check: `GET http://localhost:8091/healthz`
+  - NATS enabled=False, GPU enabled=False
+  - Original Python-based Archon (pre-0.6.0) is archived on `archive/v1-task-management-rag`
 - **Docker Profile:** `agents`
 - **Relevant Skills:** `/agents:status`, `/agents:mcp-query`, `/deploy:up`, `/botz:profile`
 - **README:** [PMOVES-Archon/README.md](../../../PMOVES-Archon/README.md)
