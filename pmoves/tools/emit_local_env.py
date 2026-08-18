@@ -152,12 +152,26 @@ def emit(cgp_path: Path, local_env: Path, *, dry_run: bool = False) -> Dict[str,
     secrets = decode_secret_map(load_cgp(cgp_path))
     emittable, skipped = select_emittable(secrets)
     if skipped:
-        # Key names only, and only names that already passed _valid_env_key --
-        # see select_emittable. A non-conforming entry is reported as a
-        # placeholder token, so nothing that failed key validation is echoed.
+        # COUNT ONLY -- deliberately no names on this line.
+        #
+        # `skipped` holds key names, and a key name is not a secret. But these
+        # names come out of a DECODED SECRET BUNDLE, and a malformed bundle can
+        # put a value where a key belongs. Two earlier attempts to keep the
+        # names here -- a regex allowlist, then a length-and-charset bound --
+        # both left CodeQL's py/clear-text-logging-sensitive-data standing,
+        # because neither is a barrier the query recognises. Rather than dismiss
+        # an alert on a secrets path to keep a convenience, the line drops to a
+        # count: the asymmetry between "slightly less convenient" and "a live
+        # credential in a CI log" is not close.
+        #
+        # The names are NOT lost -- select_emittable still returns them, which
+        # is what the tests assert against and what a caller can inspect. They
+        # are also recoverable by hand: anything in the bundle that is not a key
+        # in the emitted file was skipped.
         print(
             f"ℹ Skipped {len(skipped)} non-emittable entry/entries "
-            f"(placeholder/invalid-key/malformed): {', '.join(sorted(skipped))}",
+            "(placeholder / invalid key / malformed). Names are omitted "
+            "deliberately -- they originate in a decoded secret bundle.",
             file=sys.stderr,
         )
     if emittable and not dry_run:
