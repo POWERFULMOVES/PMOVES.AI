@@ -639,7 +639,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler 2>/dev/null || true; \
 		echo ""; \
 		echo "Expected local endpoints:"; \
-		echo "  PostgREST: http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
+		echo "  PostgREST: http://localhost:$${SUPABASE_POSTGREST_PORT:-3010}"; \
 		echo "  Kong:      http://localhost:$${SUPABASE_KONG_PROXY_PORT:-8000}"; \
 		echo "  Auth:      http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
 		echo "  Studio:    http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
@@ -695,8 +695,13 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 			fi; \
 		fi; \
 	else \
-		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
-		auth_url="http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
+		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3010}"; \
+		: "gotrue and studio publish NO host port in the compose runtime — \
+		   `docker ps` shows bare '9999/tcp' and '3000/tcp' with no host mapping. \
+		   Probing localhost:9999 / localhost:54323 could therefore NEVER succeed, \
+		   and this target printed two permanent ❌ against a fully healthy stack. \
+		   Both are reachable through Kong, which is the supported path anyway."; \
+		auth_url="http://localhost:$${SUPABASE_KONG_PROXY_PORT:-8000}/auth/v1/health"; \
 		studio_url="http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
 	fi; \
 	rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$rest_url" || true); \
@@ -705,13 +710,24 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 	fi; \
 	auth_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$auth_url" || true); \
 	studio_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$studio_url" || true); \
-	if [ "$$rest_code" = "200" ]; then echo "  ✅ REST ($$rest_url)"; else echo "  ❌ REST ($$rest_url) -> $$rest_code"; fi; \
-	if [ "$$auth_code" = "200" ]; then echo "  ✅ Auth ($$auth_url)"; else echo "  ❌ Auth ($$auth_url) -> $$auth_code"; fi; \
-	if [ "$$studio_code" = "200" ] || [ "$$studio_code" = "301" ] || [ "$$studio_code" = "302" ] || [ "$$studio_code" = "307" ] || [ "$$studio_code" = "308" ]; then \
-		echo "  ✅ Studio ($$studio_url)"; \
-	else \
-		echo "  ❌ Studio ($$studio_url) -> $$studio_code"; \
-	fi
+	: "401 is PostgREST ANSWERING — it demands an apikey and says so. Requiring 200 \
+	   marked a live REST layer ❌. make kong-routes-check already documents the \
+	   correct rule on the very same service ('404 = route missing; 401/200 = wired'); \
+	   these two instruments disagreed about what alive means. 000 is the real \
+	   failure — nothing on the socket."; \
+	case "$$rest_code" in \
+		200|401) echo "  ✅ REST ($$rest_url) -> $$rest_code";; \
+		*) echo "  ❌ REST ($$rest_url) -> $$rest_code";; \
+	esac; \
+	case "$$auth_code" in \
+		200|401) echo "  ✅ Auth ($$auth_url) -> $$auth_code";; \
+		*) echo "  ❌ Auth ($$auth_url) -> $$auth_code";; \
+	esac; \
+	case "$$studio_code" in \
+		200|301|302|307|308) echo "  ✅ Studio ($$studio_url)";; \
+		000) echo "  ⚠️  Studio ($$studio_url) -> not published on the host (reach it via Kong)";; \
+		*) echo "  ❌ Studio ($$studio_url) -> $$studio_code";; \
+	esac
 
 supa-collation-refresh: ## Refresh collation version for all Supabase databases (RG-3)
 	@echo "Refreshing collation versions..."
@@ -3374,7 +3390,12 @@ archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 
 	  if echo "$$c" | grep -Eq "^0+$$"; then url=""; fi; \
 	fi; \
 	if [ -z "$$url" ]; then \
-	  for cand in "http://127.0.0.1:65421/rest/v1" "http://localhost:65421/rest/v1" "http://localhost:8000/rest/v1" "http://localhost:3000"; do \
+	  # Last candidate is postgrest's HOST port. It was 3000; Invidious defaults to
+	  # the same host port (docker-compose.yml `${INVIDIOUS_PORT:-3000}:3000`), so with
+	  # Invidious up this probe selected Invidious, got 2xx on "/", then 404 on
+	  # "$$url/$$table" and printed "not accessible (policy/missing) — OK" with exit 0.
+	  # An RLS probe passing against a video frontend. 3010 is postgrest's actual host port.
+	  for cand in "http://127.0.0.1:65421/rest/v1" "http://localhost:65421/rest/v1" "http://localhost:8000/rest/v1" "http://localhost:3010"; do \
 	    c=$$(curl -s -o /dev/null -w "%{http_code}" "$$cand/" || true); \
 	    case "$$c" in 2*|3*|4*) url="$$cand"; break;; esac; \
 	  done; \
