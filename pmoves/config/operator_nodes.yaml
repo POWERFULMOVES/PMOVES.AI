@@ -19,6 +19,14 @@ nodes:
     vram_gb: 24
     caps: ["cuda", "comfyui", "browser", "voice"]
   - node_id: "knuckles"
-    reach: "knuckles"          # AMD 9850X3D + dual R9700 (ROCm). OmniVoice-on-ROCm = seam.
+    reach: "pmoves-b850-ai-top"  # AMD 9850X3D + dual R9700 (ROCm). OmniVoice-on-ROCm = seam.
     vram_gb: 32
     caps: ["rocm", "voice"]
+  # Jetson edge tier. There are three; only nano-1's reach is confirmed, and the
+  # other two are deliberately NOT guessed — an invented hostname here would be
+  # worse than an absent one, because it would silently satisfy the anchor check
+  # for docs that name a machine nobody can reach. Add each as it is confirmed.
+  - node_id: "nano-1"
+    reach: "pmoves-nano-1"
+    vram_gb: 8
+    caps: ["cuda", "edge"]
