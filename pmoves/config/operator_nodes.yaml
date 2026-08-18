@@ -30,3 +30,11 @@ nodes:
     reach: "pmoves-nano-1"
     vram_gb: 8
     caps: ["cuda", "edge"]
+    # NOT schedulable: this node is not compose-bootstrapped — no /opt/pmoves and
+    # no arm64 worker images — so nothing can consume a job assigned to it. It is
+    # listed anyway so its hostname resolves for topology and `ssh` recipes
+    # naming it stop being recorded as UNKNOWN_HOST gaps. Because select_node()
+    # picks the LOWEST-VRAM match, omitting this flag would make nano-1 win every
+    # job with needs ["cuda"] and min_vram_gb <= 8. Flip to true once the worker
+    # stack is deployed.
+    schedulable: false
