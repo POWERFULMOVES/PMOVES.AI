@@ -113,6 +113,7 @@ def rotate_secret(
     length: int = 48,
     gen_type: str = "random_urlsafe",
     env_path: Optional[Path] = None,
+    allow_empty: bool = False,
 ) -> str:
     """Surgically rotate a single secret in env.shared (the secrets-funnel source).
 
@@ -127,6 +128,17 @@ def rotate_secret(
     ``make -C pmoves chit-export`` (encode env.shared -> CGP bundle) then
     ``make -C pmoves secrets-funnel`` to propagate to the tier env files.
 
+    *allow_empty* permits writing ``KEY=`` (the empty value). It is off by
+    default and must be asked for explicitly, because an empty value is
+    indistinguishable from an unset shell variable at the call site — without
+    this gate, ``--value "$SOME_UNSET_VAR"`` would silently blank a live
+    credential. Empty is a legitimate *configured state* for some keys, not an
+    absence: Supabase ships ``SUPABASE_SECRET_KEY`` and
+    ``SUPABASE_PUBLISHABLE_KEY`` empty on purpose and its Kong entrypoint
+    strips blank key entries, so a populated one is what breaks the deployment
+    (see #2593/#2595 — a duplicate key crash-looped Kong 3,924 times). Before
+    this parameter existed the pipeline could not express that state at all.
+
     Returns the new value; callers MUST NOT log it.
     """
     target = env_path or ENV_SHARED_PATH
@@ -134,11 +146,14 @@ def rotate_secret(
         raise ValueError(
             f"invalid env key (must match [A-Za-z_][A-Za-z0-9_]*): {key!r}"
         )
-    if value is None:
+    if value is None and not allow_empty:
         value = generate_value({"type": gen_type, "length": length})
-    if not value:
+    if value is None:
+        value = ""
+    if not value and not allow_empty:
         raise ValueError(
-            f"no value to rotate {key!r}: pass --value, or use a generatable --gen-type"
+            f"no value to rotate {key!r}: pass --value, or use a generatable "
+            f"--gen-type. To deliberately blank it, use --clear {key}."
         )
     if "\n" in value or "\r" in value:
         raise ValueError(
@@ -588,6 +603,17 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "Then run: make -C pmoves chit-export && make -C pmoves secrets-funnel.",
     )
     parser.add_argument(
+        "--clear",
+        metavar="KEY",
+        help="Set a single key in env.shared to the EMPTY value (surgical in-place). "
+        "Empty is a real configured state for some keys — Supabase ships "
+        "SUPABASE_SECRET_KEY / SUPABASE_PUBLISHABLE_KEY empty and its Kong "
+        "entrypoint strips blank entries — and --rotate cannot express it. "
+        "Separate flag rather than --value '' so blanking a credential is always "
+        "deliberate, never the result of an unset shell variable. "
+        "Then run: make -C pmoves chit-export && make -C pmoves secrets-funnel.",
+    )
+    parser.add_argument(
         "--value",
         help="Explicit new value for --rotate (e.g. an externally-minted API key). "
         "If omitted, a value is generated from --gen-type/--length. "
@@ -615,6 +641,23 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
+
+    if args.clear and args.rotate:
+        _error("--clear and --rotate are mutually exclusive: pick one key operation")
+        return 2
+
+    if args.clear:
+        try:
+            rotate_secret(args.clear, value="", allow_empty=True)
+        except (ValueError, FileNotFoundError) as exc:
+            _error(str(exc))
+            return 2
+        _info(
+            f"Cleared {args.clear} in env.shared (now empty). "
+            "Next: make -C pmoves chit-export && make -C pmoves secrets-funnel, "
+            "then restart the affected consumers."
+        )
+        return 0
 
     if args.rotate:
         rotate_value = args.value
