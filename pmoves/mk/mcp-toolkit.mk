@@ -166,7 +166,10 @@ hermes-bootstrap: ## Full Hermes fleet bootstrap: profile + MCP + CHIT + Docker 
 	@echo "[HERMES] Starting fleet bootstrap..."
 	@bash scripts/hermes-fleet-bootstrap.sh
 
-install-tools: ## Install fleet CLI wrappers (pmoves-mini, crush-pmoves, hermes-pmoves, claude-pmoves) cross-platform
+install-tools: ## Install fleet CLI wrappers (7 launchers) cross-platform
 	@$(PRECHECK_PY) tools/install_tools.py $(ARGS)
 
-.PHONY: crush-bootstrap hermes-bootstrap install-tools
+cli-check: ## Doctor: validate host CLIs against configs/cli_tools.yaml
+	@$(PRECHECK_PY) tools/install_tools.py --check $(ARGS)
+
+.PHONY: crush-bootstrap hermes-bootstrap install-tools cli-check
