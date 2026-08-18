@@ -16,12 +16,28 @@ def load_nodes(path: Path) -> list:
 
 
 def select_node(node_caps: dict, nodes: list):
-    """Lowest-VRAM node that satisfies min_vram_gb and all required caps."""
+    """Lowest-VRAM node that satisfies min_vram_gb and all required caps.
+
+    Nodes marked ``schedulable: false`` are excluded. The capacity registry has
+    to name every machine on the fleet — the anchor validator derives known
+    hostnames from it, so a node absent from the registry makes correct
+    documentation look like a typo. But "this box exists" and "a worker can
+    consume a job on it" are different claims, and the registry could previously
+    only make the second one.
+
+    That gap is not cosmetic here, because this function picks the LOWEST-VRAM
+    match: an un-bootstrapped edge node is not a harmless extra row, it *wins*
+    every small job it nominally qualifies for and those jobs get dispatched to
+    a host with no worker to run them. Defaults to True, so every existing
+    registry entry keeps its current behaviour.
+    """
     need = set(node_caps.get("needs", []))
     min_vram = node_caps.get("min_vram_gb", 0)
     candidates = [
         n for n in nodes
-        if n.get("vram_gb", 0) >= min_vram and need.issubset(set(n.get("caps", [])))
+        if n.get("schedulable", True)
+        and n.get("vram_gb", 0) >= min_vram
+        and need.issubset(set(n.get("caps", [])))
     ]
     if not candidates:
         return None
