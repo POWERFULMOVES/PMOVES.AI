@@ -181,3 +181,9 @@ So Class A is a **known, accepted** blind spot, not an oversight. The ratchet is
 The gap is therefore between a correct declaration and a checkout that cannot satisfy it — and both gates deliberately decline to close it. That is a defensible split (a static ratchet genuinely cannot reason about an external repo's contents), but it means **the only thing standing between this and a silent production failure is a human knowing about it.** Hence this document.
 
 If a check is ever wanted, the useful one is **runtime, not build time**: on `up`, assert that every declared bind source of file kind is a file on disk. That catches Class B at the moment it matters, needs no submodule checkout in CI, and is a handful of `test -f` calls rather than a new workflow.
+
+> **Shipped 2026-08-16 — `make -C pmoves bind-sources-check`** (`pmoves/tools/check_bind_sources.py`). It resolves every compose bind source against `.gitmodules` rather than matching a `../` shape, so it sees the deep `../../PMOVES-n8n/workflows` in `pmoves/compose/docker-compose.core.yml` that a single-`../` scan misses, and does not false-positive on `pmoves/docker-compose/hf-mcp-server.yml`, whose `../../pmoves/services/...` resolves back inside this repository. It reports **missing** and **directory-where-file-expected** separately — the second being the signature of a previous `up` having auto-created the stub, which is the failure this document exists to name.
+>
+> Verified both ways: exit 0 against a populated checkout, exit 1 against a fresh worktree where it flags all 10 declarations (the supabase four are re-declared across `docker-compose.yml` and `docker-compose.core.yml`). The directory-where-file-expected branch was exercised by creating `vector.yml` as a directory, exactly as Docker would.
+>
+> It is **not** wired into the `up-*` targets. Doing so would change bring-up behaviour across 88 targets, which is an operator decision rather than a docs one.
