@@ -64,7 +64,24 @@ CHUNK_SIZE = int(os.environ.get("PYTEST_RATCHET_CHUNK_SIZE", "20"))
 # Mirrors the workflow's original discovery exactly, minus the `head -20` cap.
 # Kept identical on purpose: this change removes a cap and adds a ratchet, it
 # does not silently redefine which tests are in scope.
-EXCLUDE_PARTS = ("venv", "node_modules", ".git", "__pycache__", "site-packages")
+#
+# `.claude` is excluded for a reason that only bites OFF CI: git worktrees live
+# under `.claude/worktrees/`, each a full copy of the repo. In CI's fresh
+# checkout there are none, so this changes nothing there. On a developer machine
+# with worktrees checked out, discovery went from 29 groups to 427 — every test
+# file counted once per worktree. That matters because the gate's own failure
+# message instructs you to run `make -C pmoves python-tests-baseline`, and doing
+# so from a machine with worktrees would have written a baseline full of
+# duplicated, worktree-scoped keys that CI can never reproduce. The documented
+# recovery command has to be safe to actually run.
+EXCLUDE_PARTS = (
+    "venv",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    "site-packages",
+    ".claude",
+)
 
 
 def discover_test_files() -> List[Path]:
@@ -361,12 +378,18 @@ def main() -> int:
 
     if stale:
         print(f"\nSTALE BASELINE — {len(stale)} entr{'y' if len(stale) == 1 else 'ies'} no longer fail:")
-        for k in stale[:40]:
+        # Printed in FULL, deliberately unlike `new` above. The stale list is the
+        # only actionable output this branch produces: `--write-baseline` cannot be
+        # run anywhere but CI (discovery walks git worktrees under .claude/ and
+        # populated submodules, neither of which exists in CI's checkout — a
+        # developer machine reported 398 groups against CI's 29). So the operator
+        # has to prune these by hand from the CI log, and truncating at 40 removed
+        # exactly the information needed to do it. A list you are told to act on
+        # should not be abbreviated.
+        for k in stale:
             print(f"  {k}")
-        if len(stale) > 40:
-            print(f"  ... and {len(stale) - 40} more")
         print("\nThese were fixed. Drop them so the same breakage cannot return silently:")
-        print("  make -C pmoves python-tests-baseline")
+        print("  make -C pmoves python-tests-baseline   (CI only — see note above)")
 
     if not new and not stale:
         print("PASS — no failures outside the baseline, no stale entries.")

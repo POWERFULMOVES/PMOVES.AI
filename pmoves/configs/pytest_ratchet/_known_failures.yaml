@@ -14,6 +14,19 @@
 # goal; adding one should require saying why in the PR. A fixed test that is
 # still listed here fails the gate as a STALE entry, so the count only goes down.
 #
+# 2026-08-16 — 182 -> 125. Adding `python-multipart` to
+# .github/requirements-tests.txt fixed 57 entries at once. flute-gateway/main.py
+# declares a fastapi Form() endpoint, and FastAPI raises at route-definition time
+# without that package, so importing the module failed and its entire test suite
+# was recorded here as broken. 57 of the 182 entries — nearly a third of this
+# whole file — were one missing dependency, not 57 broken tests.
+#
+# Pruned by hand from the CI log rather than with `--write-baseline`, because
+# that flag cannot be used off CI: discovery walks git worktrees under `.claude/`
+# and populated submodules, and CI's checkout has neither (a developer machine
+# reported 398 groups against CI's 29). The gate's own message recommends the
+# command anyway; running it locally would corrupt this file.
+#
 # Three entries deserve a note:
 #
 #   ERROR|tests.test_issue_triage|<collection-error>
@@ -64,39 +77,7 @@ known_failures:
   - "ERROR|services.creator-operator.tests.test_router|<collection-error>"
   - "ERROR|services.creator-operator.tests.test_schemas|<collection-error>"
   - "ERROR|services.creator-operator.tests.test_voice_operator|<collection-error>"
-  - "ERROR|services.ffmpeg-whisper.tests.test_transcribe_file_filename_collision|<collection-error>"
   - "ERROR|services.flute-gateway.test_cgp_consumer|<collection-error>"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestApiKeyAuthentication|test_personas_requires_api_key"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestApiKeyAuthentication|test_recognize_requires_api_key"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestApiKeyAuthentication|test_synthesize_accepts_valid_key"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestApiKeyAuthentication|test_synthesize_rejects_invalid_key"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestApiKeyAuthentication|test_synthesize_requires_api_key"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestConfigEndpoint|test_config_contains_audio_settings"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestConfigEndpoint|test_config_contains_features"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestConfigEndpoint|test_config_contains_providers"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestConfigEndpoint|test_config_returns_200"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestHealthEndpoint|test_health_check_includes_providers"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestHealthEndpoint|test_health_check_returns_200"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestHealthEndpoint|test_health_check_shows_nats_status"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestMetricsEndpoint|test_metrics_includes_request_counter"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestMetricsEndpoint|test_metrics_returns_prometheus_format"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestRecognizeEndpoint|test_recognize_calls_provider"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestRecognizeEndpoint|test_recognize_passes_language"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestRecognizeEndpoint|test_recognize_returns_transcription"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestSynthesizeEndpoint|test_synthesize_audio_rejects_empty_audio"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestSynthesizeEndpoint|test_synthesize_audio_returns_wav_bytes"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestSynthesizeEndpoint|test_synthesize_calls_provider"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestSynthesizeEndpoint|test_synthesize_handles_empty_text"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestSynthesizeEndpoint|test_synthesize_respects_voice_parameter"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestSynthesizeEndpoint|test_synthesize_returns_audio_metadata"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestSynthesizeEndpoint|test_synthesize_unavailable_provider"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestVoiceBindingEndpoint|test_binding_floos_alter_carries_prosody"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestVoiceBindingEndpoint|test_binding_requires_api_key"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestVoiceBindingEndpoint|test_binding_returns_voicebinding_shape"
-  - "ERROR|services.flute-gateway.tests.test_gateway.TestVoiceBindingEndpoint|test_binding_unknown_agent_is_failopen"
-  - "ERROR|services.flute-gateway.tests.test_geometry_bridge|test_publish_voice_event_disabled_attribution_skips_both"
-  - "ERROR|services.flute-gateway.tests.test_geometry_bridge|test_publish_voice_event_kill_switch_skips_canonical"
-  - "ERROR|services.flute-gateway.tests.test_geometry_bridge|test_publish_voice_event_publishes_to_both_subjects"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheCount|test_count_returns_total"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheDimensionFilter|test_dimension_mismatch_filtered_by_sql"
   - "ERROR|services.semantic-cache.tests.test_cache.TestCacheIncrement|test_increment_hit"
@@ -124,31 +105,6 @@ known_failures:
   - "ERROR|tests.services.test_gateway_agent|<collection-error>"
   - "ERROR|tests.test_issue_triage|<collection-error>"
   - "ERROR|tests.test_tools|<collection-error>"
-  - "FAIL|services.flute-gateway.tests.test_gateway.TestPersonasEndpoints|test_get_persona_by_id"
-  - "FAIL|services.flute-gateway.tests.test_gateway.TestPersonasEndpoints|test_get_persona_not_found"
-  - "FAIL|services.flute-gateway.tests.test_gateway.TestPersonasEndpoints|test_list_personas_returns_list"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_auth_required_on_profiles_post"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_create_profile_invalid_capability_422"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_create_profile_invalid_engine_422"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_create_profile_invalid_grounding_422"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_create_profile_invalid_name_pattern_422"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_create_profile_publishes_invalidation"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_create_profile_success_warms_cache"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_get_profile_404"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_hook_clears_slug_when_no_provider_voice"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_hook_noop_when_registry_unhealthy"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_list_profiles_degraded_returns_empty_200"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_list_profiles_filter_engine_tag"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_resolve_voice_profile_hook_mutates_request"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_resolve_voice_profile_hook_unknown_slug_noop"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_synthesize_unknown_slug_falls_back_to_default"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_synthesize_voice_slug_routes_via_registry"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_validate_contract_get"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_validate_forbidden_consciousness_shape"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_validate_grounding_client_error_is_hard_error"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_validate_grounding_malformed_uuid_rejected_without_query"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_validate_grounding_pk_resolution"
-  - "FAIL|services.flute-gateway.tests.test_voice_profiles|test_validate_grounding_unreachable_is_warning_not_error"
   - "FAIL|services.mesh_exposure.tests.test_app|test_live_registry_loads_12_entries_from_slice4_curated"
   - "FAIL|services.nats_event_bus.tests.test_app|test_read_events_limit_is_respected"
   - "FAIL|services.nats_event_bus.tests.test_app|test_subscriber_disabled_when_nats_url_empty"

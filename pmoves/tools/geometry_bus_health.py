@@ -119,6 +119,12 @@ class BusHealth:
 
     connected: bool = False
     server_id: Optional[str] = None
+    # What actually went wrong, carried into the report. Without this the NOT MEASURED
+    # block could only offer a list of GUESSES — and on the first real host run those
+    # guesses were wrong: the failure was 'Authorization Violation' while the hints
+    # said "use localhost:4222", which is exactly what had been used. A diagnostic
+    # that speculates instead of reporting is the same defect this file documents.
+    error: Optional[str] = None
     jetstream_enabled: bool = False
     subjects: List[SubjectHealth] = field(default_factory=list)
     total_subjects: int = 0
@@ -144,6 +150,16 @@ async def check_bus_health(nats_url: str = "", verbose: bool = False) -> BusHeal
             all_subjects.append((domain, subj))
     health.total_subjects = len(all_subjects)
 
+    # nats-py surfaces server-side rejections (notably 'Authorization Violation') through
+    # error_cb and keeps retrying; the asyncio.wait_for below then fires and the only
+    # exception the caller sees is TimeoutError. Reported alone that reads as a NETWORK
+    # problem and sends the operator to check the host and port — which on the first real
+    # host run were both already correct. Capture what the server actually said.
+    server_errors: List[str] = []
+
+    async def _error_cb(exc: BaseException) -> None:
+        server_errors.append(f"{type(exc).__name__}: {exc}")
+
     try:
         import nats
         from nats.js.api import StreamInfo
@@ -155,7 +171,12 @@ async def check_bus_health(nats_url: str = "", verbose: bool = False) -> BusHeal
         # on the host) it retried for a minute before raising. A health checker that
         # hangs is worse than one that fails — measured, not assumed.
         await asyncio.wait_for(
-            nc.connect(url, connect_timeout=5, max_reconnect_attempts=0),
+            nc.connect(
+                url,
+                connect_timeout=5,
+                max_reconnect_attempts=0,
+                error_cb=_error_cb,
+            ),
             timeout=5,
         )
         health.connected = True
@@ -228,13 +249,23 @@ async def check_bus_health(nats_url: str = "", verbose: bool = False) -> BusHeal
 
         await nc.close()
 
-    except ImportError:
+    except ImportError as e:
+        health.error = f"nats-py not importable: {e}"
         print("nats-py not installed. Install with: uv pip install nats-py", file=sys.stderr)
         for domain, subject in all_subjects:
             sh = SubjectHealth(subject=subject, domain=domain, status="error")
             health.subjects.append(sh)
 
+    except asyncio.TimeoutError:
+        detail = f" — last server error: {server_errors[-1]}" if server_errors else ""
+        health.error = f"timed out after 5s connecting to {_redact_url(url)}{detail}"
+        print(f"NATS connection timed out: {_redact_url(url)}{detail}", file=sys.stderr)
+        for domain, subject in all_subjects:
+            sh = SubjectHealth(subject=subject, domain=domain, status="error")
+            health.subjects.append(sh)
+
     except Exception as e:
+        health.error = f"{type(e).__name__}: {e}"
         print(f"NATS connection failed: {e}", file=sys.stderr)
         for domain, subject in all_subjects:
             sh = SubjectHealth(subject=subject, domain=domain, status="error")
@@ -267,13 +298,20 @@ def print_health(health: BusHealth, as_json: bool = False, verbose: bool = False
         output = {
             "connected": health.connected,
             "server_id": health.server_id,
+            "error": health.error,
+            "measured": health.connected,
             "jetstream_enabled": health.jetstream_enabled,
             "summary": {
                 "total_subjects": health.total_subjects,
                 "active": health.active_subjects,
                 "idle": health.idle_subjects,
                 "missing": health.missing_subjects,
-                "health_pct": round(health.health_pct, 1),
+                # null, NOT 0.0, when the bus was never contacted. The human-readable
+                # branch already refused to print an unmeasured percentage; this one
+                # still emitted `"health_pct": 0.0`, so any dashboard or alert consuming
+                # the JSON kept receiving the exact false negative the text output had
+                # been fixed to stop telling. Same defect, machine-readable half.
+                "health_pct": round(health.health_pct, 1) if health.connected else None,
             },
             "subjects": [
                 {
@@ -309,7 +347,13 @@ def print_health(health: BusHealth, as_json: bool = False, verbose: bool = False
         print(f"  {health.total_subjects} catalogued subjects were NOT checked.")
         print("  This is not a health reading. Do not read 0% as 'the bus is dead'.")
         print()
+        # Report what happened before offering guesses about what might have.
+        print(f"  Reason: {health.error or 'unknown'}")
+        print()
         print("  Common causes:")
+        print("    - 'Authorization Violation': the server requires credentials and")
+        print("      NATS_URL has none. Supply them from the environment; this tool")
+        print("      deliberately ships no credential-bearing default.")
         print("    - NATS_URL points at a container DNS name (nats:4222) but you are")
         print("      running on the host — use the published address (localhost:4222).")
         print("    - nats-py missing: run via `uv run` so the inline deps resolve.")

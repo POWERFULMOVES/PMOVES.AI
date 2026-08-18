@@ -864,7 +864,16 @@ async def hf_model_convert_gguf(
         }).encode())
         await nc.close()
     except Exception:
-        pass  # NATS publish is best-effort
+        # Publish stays best-effort — the conversion itself succeeded and that is what
+        # the ok:true below reports. But swallowing this silently meant a subscriber
+        # waiting on hf.model.gguf.converted.v1 could wait forever while the caller was
+        # told everything worked, with nothing anywhere recording that the event never
+        # left. Best-effort is a delivery guarantee, not a licence to be unobservable.
+        logger.exception(
+            "NATS publish of hf.model.gguf.converted.v1 failed for %s "
+            "(conversion succeeded; downstream consumers will not be notified)",
+            model_id,
+        )
 
     return {
         "ok": True,
