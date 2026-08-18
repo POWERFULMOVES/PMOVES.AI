@@ -27,6 +27,10 @@ What is asserted
 ----------------
 For every Dockerfile tracked by git:
 
+  NO_FROM    the file declares no `FROM`, so it has no build stage and cannot
+             build at all. Checked first and short-circuiting: a truncated
+             fragment whose only line is `USER pmoves` otherwise scores
+             COMPLIANT under the last-USER rule below.
   NO_USER    the file declares no `USER` directive at all, so the image runs as
              root by default.
   ROOT_USER  the *last* `USER` directive is `root` or `0`. Order matters: it is
@@ -76,6 +80,7 @@ BASELINE = PMOVES / "configs" / "hardening_ratchet" / "_known_gaps.yaml"
 # `Dockerfile`, `Dockerfile.cipher`, `service.Dockerfile` all count.
 DOCKERFILE_RE = re.compile(r"(^|/)(Dockerfile(\..+)?|.+\.Dockerfile)$")
 USER_RE = re.compile(r"^\s*USER\s+(\S+)", re.IGNORECASE)
+FROM_RE = re.compile(r"^\s*FROM\s+\S+", re.IGNORECASE)
 ROOT_USERS = {"root", "0"}
 
 
@@ -114,9 +119,34 @@ def effective_user(path: str) -> str | None:
     return users[-1] if users else None
 
 
+def has_build_stage(path: str) -> bool:
+    """True when the file declares at least one FROM.
+
+    A Dockerfile with no FROM has no build stage: `docker build` fails with
+    "no build stage in current context". It also cannot be judged on its USER
+    directive, because there is no image for that USER to apply to.
+    """
+    full = REPO_ROOT / path
+    try:
+        text = io.open(full, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return False
+    return any(FROM_RE.match(line) for line in text.splitlines())
+
+
 def scan() -> List[dict]:
     findings: List[dict] = []
     for path in discover_dockerfiles():
+        # NO_FROM is checked FIRST and short-circuits, because a fragment with no
+        # build stage would otherwise be scored *compliant*: its lone `USER pmoves`
+        # is non-root, so the last-USER rule passes it. That is not hypothetical --
+        # #2285's hardening pass truncated 9 tracked Dockerfiles down to their USER
+        # tails, `main` could not build them, and this gate stayed green through it
+        # (#2604). A gate that greens a file which cannot build is asserting a
+        # property nobody asked about.
+        if not has_build_stage(path):
+            findings.append({"kind": "NO_FROM", "where": path, "detail": ""})
+            continue
         user = effective_user(path)
         if user is None:
             findings.append({"kind": "NO_USER", "where": path, "detail": ""})
@@ -221,18 +251,21 @@ def main() -> int:
         return 1 if (new or stale) else 0
 
     print(f"Scanned {len(files)} tracked Dockerfiles.")
-    print(f"Root-running: {len(found)} ({len(baseline)} baselined, {len(new)} new)")
+    # "Findings", not "Root-running": NO_FROM is not a root-privilege problem,
+    # and a summary line that mislabels what it counted is how a gate ends up
+    # trusted for a property it never checked.
+    print(f"Findings: {len(found)} ({len(baseline)} baselined, {len(new)} new)")
 
     if new:
-        print("\nNEW — these run as root and are not in the baseline:")
+        print("\nNEW - not in the baseline:")
         for k in new:
             kind, path = k.split("|", 1)
             extra = f" (last USER: {detail[k]})" if detail.get(k) else ""
             print(f"  {kind:<10} {path}{extra}")
-        print(
-            "\nAdd a non-root USER as the final USER directive, or record it "
-            "deliberately:\n  python pmoves/tools/hardening_ratchet.py --write-baseline"
-        )
+        if any(k.startswith("NO_FROM|") for k in new):
+            print("\nNO_FROM = no build stage; docker build fails outright.\n  Restore the file content. Do NOT baseline it.")
+        if any(not k.startswith("NO_FROM|") for k in new):
+            print("\nNO_USER / ROOT_USER: add a non-root USER as the final USER directive,\n  or record it deliberately:\n  python pmoves/tools/hardening_ratchet.py --write-baseline")
 
     if stale:
         print("\nSTALE — baselined but now compliant. Remove these entries:")
