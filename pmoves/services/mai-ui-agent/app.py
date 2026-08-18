@@ -22,6 +22,8 @@ import re
 import time
 from typing import Any
 
+from services.common.env import get_secret
+
 import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -79,7 +81,8 @@ BACKEND = os.environ.get("MAI_UI_BACKEND", "local").strip().lower()
 BASE_URL = os.environ.get("MAI_UI_BASE_URL", "").rstrip("/")
 REMOTE_MODEL = os.environ.get("MAI_UI_REMOTE_MODEL", "MAI-UI-2B")
 # Optional; local runtimes (Ollama, LM Studio, llama.cpp) generally need no key.
-REMOTE_API_KEY = os.environ.get("MAI_UI_API_KEY", "")
+# get_secret honors MAI_UI_API_KEY_FILE so compose-injected file secrets load too.
+REMOTE_API_KEY = get_secret("MAI_UI_API_KEY", "") or ""
 REMOTE_TIMEOUT = float(os.environ.get("MAI_UI_REMOTE_TIMEOUT", "120"))
 
 # Roles the local chat template and the remote backend both understand. Anything
