@@ -169,7 +169,11 @@ def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
             await _room_broadcast("geometry", {"type": "geometry.cgp.v1", "data": payload})
         anyio.from_thread.run(_notify)
     except Exception:
-        pass
+        # Broadcast stays best-effort (the packet is already persisted), but it is no
+        # longer silent: the persist eight lines up logs its failure while this one
+        # dropped every live subscriber without a trace, and the caller still got
+        # {"ok": True}. Two disciplines in one function.
+        logger.exception("room broadcast of geometry.cgp.v1 failed (packet persisted)")
     return {"ok": True}
 
 
@@ -587,5 +591,5 @@ def import_db(body: Dict[str, Any], _=Depends(require_admin_tailscale)):
             await _room_broadcast("geometry", {"type": "geometry.cgp.v1", "data": payload})
         anyio.from_thread.run(_notify)
     except Exception:
-        pass
+        logger.exception("room broadcast of geometry.cgp.v1 failed (packet persisted)")
     return {"ok": True}

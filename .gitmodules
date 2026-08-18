@@ -408,3 +408,23 @@
 [submodule "PMOVES-nats-server"]
 	path = PMOVES-nats-server
 	url = https://github.com/POWERFULMOVES/PMOVES-nats-server.git
+[submodule "skills/PMOVES-skills"]
+	path = skills/PMOVES-skills
+	url = https://github.com/POWERFULMOVES/PMOVES-skills.git
+	branch = main
+[submodule "PMOVES-MiniMax-MCP"]
+	path = PMOVES-MiniMax-MCP
+	url = https://github.com/POWERFULMOVES/PMOVES-MiniMax-MCP.git
+	branch = main
+[submodule "Pmoves-minimax-cli"]
+	path = Pmoves-minimax-cli
+	url = https://github.com/POWERFULMOVES/Pmoves-minimax-cli.git
+	branch = main
+[submodule "Pmoves-MiniMax-Provider-Verifier"]
+	path = Pmoves-MiniMax-Provider-Verifier
+	url = https://github.com/POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier.git
+	branch = main
+[submodule "PMOVES-agents.md"]
+	path = PMOVES-agents.md
+	url = https://github.com/POWERFULMOVES/PMOVES-agents.md.git
+	branch = main
