@@ -1,44 +1,102 @@
 {
-  "version": "cgp.v2",
-  "timestamp": "2026-08-10T14:14:05.779700+00:00",
-  "payload": {
+  "spec": "chit.cgp.v0.2",
+  "summary": "Identity declaration: claude-opus-5, an alter of the claude-opus signer.",
+  "created_at": "2026-08-10T14:14:05.779700+00:00",
+  "meta": {
+    "agent_address": "claude-opus/claude-opus-5",
+    "agent_id": "claude-opus",
+    "alter_id": "claude-opus-5",
+    "display_name": "Claude Opus 5",
+    "glyph": "◆",
+    "registry": "pmoves/config/agent_signatures.yaml#signatures.claude-opus.alters[claude-opus-5]",
+    "kind": "identity-declaration",
     "content_hash": "53d34f50e6636024",
     "content_length": 421,
     "word_count": 50,
-    "hyperbolic_coords": {
+    "holographic_boundary": "1KQc5wGRL+PZUahpcFwYPkY4sc3tK7+5NlBeR4mtrJA=",
+    "emitted_by": "chit_encode_hook",
+    "checksum": "0b9da1d7bde9239cfbfa1a4ca12d53f05cd0741d4fb22bbbc6f0791ad4139efc"
+  },
+  "hyperbolic": {
+    "space": "poincare_disk",
+    "curvature": -1.0,
+    "base_radius": 0.475,
+    "hierarchy_depth": 1
+  },
+  "attribution": {
+    "dirichlet_alpha": [
+      1.5,
+      0.1,
+      0.1,
+      0.1,
+      0.1
+    ],
+    "total_alpha": 1.9,
+    "contributors": [
+      {
+        "address": "claude-opus/claude-opus-5",
+        "weight": 1.0
+      }
+    ],
+    "timestamp": "2026-08-10T14:14:05.779700+00:00",
+    "dirichlet_categories": [
+      "factual",
+      "conceptual",
+      "procedural",
+      "contextual",
+      "relational"
+    ]
+  },
+  "super_nodes": [
+    {
+      "id": "identity-claude-opus-5",
+      "label": "Claude Opus 5",
+      "summary": "Alter of claude-opus. Same lineage, newer model; the node is a location, not an identity.",
       "x": 0.405995,
       "y": -0.246562,
-      "curvature": -1.0,
-      "radius": 0.475
-    },
-    "spectral_signature": [
-      14.334274,
-      21.813458,
-      25.981868,
-      33.169081,
-      33.968319,
-      38.750613
-    ],
-    "dirichlet_weights": {
-      "alphas": [
-        1.5,
-        0.1,
-        0.1,
-        0.1,
-        0.1
-      ],
-      "categories": [
-        "factual",
-        "conceptual",
-        "procedural",
-        "contextual",
-        "relational"
-      ],
-      "total_alpha": 1.9
-    },
-    "holographic_boundary": "1KQc5wGRL+PZUahpcFwYPkY4sc3tK7+5NlBeR4mtrJA=",
-    "metadata": {}
-  },
-  "checksum": "0b9da1d7bde9239cfbfa1a4ca12d53f05cd0741d4fb22bbbc6f0791ad4139efc",
-  "source": "chit_encode_hook"
+      "r": 0.475,
+      "meta": {
+        "agent_address": "claude-opus/claude-opus-5"
+      },
+      "constellations": [
+        {
+          "id": "constellation-identity-declaration",
+          "summary": "Registry declaration + spectral signature emitted by chit_encode_hook",
+          "anchor": [
+            0.405995,
+            -0.246562
+          ],
+          "spectrum": [
+            14.334274,
+            21.813458,
+            25.981868,
+            33.169081,
+            33.968319,
+            38.750613
+          ],
+          "points": [
+            {
+              "id": "point-registry-alter",
+              "modality": "text",
+              "address": "claude-opus/claude-opus-5",
+              "summary": "agent_signatures.yaml declares claude-opus-5 under signatures.claude-opus.alters",
+              "ref_id": "pmoves/config/agent_signatures.yaml"
+            },
+            {
+              "id": "point-signing-representation",
+              "modality": "text",
+              "address": "claude-opus/claude-opus-5",
+              "summary": "sign_trail resolves the alter id to parent claude-opus and stamps selected_alter",
+              "ref_id": "pmoves/tools/sign_trail.py"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.identity",
+            "category": "declaration"
+          }
+        }
+      ]
+    }
+  ],
+  "sig": null
 }
