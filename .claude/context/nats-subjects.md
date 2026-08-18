@@ -1795,8 +1795,32 @@ nats server report connections
 
 ## Service Coordination Subjects
 
-**`archon.crawl.request.v1`** — Web crawl request (Agent/UI → Archon)
-**`archon.crawl.result.v1`** — Crawl result (Archon → requesting agent)
+**`archon.crawl.request.v1`** — ⚠️ **STUB — does not crawl.** Web crawl request (Agent/UI → Archon)
+**`archon.crawl.result.v1`** — ⚠️ **STUB — echoes the request.** Crawl result (Archon → requesting agent)
+
+> **Read this before building against the crawl pair.** A handler does exist —
+> `ArchonOrchestrator` (`pmoves/services/archon/orchestrator.py:22`) subscribes to
+> `archon.crawl.request[.v1]` — but `_process_crawl` takes the `metadata` dict **from the
+> request message** and republishes it unchanged as `extracted_text` and `fragments`,
+> stamped `"status": "completed"`. Nothing fetches the URL: there is no HTTP client,
+> headless browser, or crawler anywhere under `pmoves/services/archon/`.
+>
+> So a consumer receives a success result whose content is whatever the *requester*
+> supplied. That is a stronger failure than an unimplemented subject — an unimplemented
+> subject times out and you notice; this one reports completion. The existing tests are not
+> thin — `test_archon_orchestrator.py:206-264` covers the crawl state machine
+> (`queued -> processing -> completed`), result publication on `archon.crawl.result.v1`, and
+> the result payload's shape. What none of them assert is **network retrieval**: no test
+> checks that the URL was ever fetched or that the returned content came from it.
+> `test_crawl_result_payload_structure` in fact demonstrates the defect — it feeds
+> `metadata.fragments = ["a", "b"]` in the request and asserts the *result* carries the same
+> `["a", "b"]` back. That round-trip passes whether or not a crawler exists, which is why
+> the gap survived a well-covered suite.
+>
+> **Retire-vs-implement is an open operator decision**, parked and delegated to Archon in
+> `AGNOTE4482PHI.t1.md` (`ACK::Z890-CLAUDE::CONTROL-ITEMS-RESOLVED-2026-08-08`). This entry
+> does not pre-empt it — it only stops the catalog from advertising a crawler that is not
+> there.
 **`persona.publish.v1`** — Persona definition publish (Archon → Agent Zero)
 **`persona.update.v1`** — Persona update (Archon → Agent Zero)
 **`mesh.node.announce.v2`** — Node announcement v2 format (Mesh Agent → Agent Zero)
@@ -1808,8 +1832,22 @@ nats server report connections
 **`hf.model.ready.v1`** — Model download complete (HF downloader → requesting agent)
 **`botz.skill.register.v1`** — Skill registration (BoTZ gateway → Agent Zero)
 **`botz.skill.health.v1`** — Skill health status (BoTZ gateway → monitoring)
-**`a2ui.event.v1`** — UI event for real-time display (any agent → A2UI NATS bridge)
-**`a2ui.command.v1`** — User command from UI (UI → A2UI NATS bridge)
+**`a2ui.event.v1`** — ⛔ **NEVER IMPLEMENTED.** UI event for real-time display (any agent → A2UI NATS bridge)
+**`a2ui.command.v1`** — ⛔ **NEVER IMPLEMENTED.** User command from UI (UI → A2UI NATS bridge)
+
+> **These two have never existed in code — not now, not in any commit.** A history-wide
+> pickaxe search (`git log -S` across `*.py *.ts *.tsx *.js *.yml *.yaml *.json`) returns
+> nothing for either name. The catalog lists the A2UI NATS bridge as their endpoint;
+> `bridge.py` has never referenced them.
+>
+> Both entered on **2026-03-15** via `pmoves/docs/reviews/nats-subject-catalog-gaps.md`, a
+> security-audit handoff whose premise was that *"30+ NATS subjects were found
+> **undocumented**"* and whose action was to register them. For these two the premise did
+> not hold — they were intent written up as discovery, then registered as fact. Full
+> trace: `pmoves/docs/audit/A2UI_INTEGRATION_AUDIT_2026-08-14.md` § F5.
+>
+> The subjects the A2UI renderer **actually** publishes are `a2ui.render.completed.v1`,
+> `ingest.file.added.v1`, and `agent.graphiti.signed.v1`.
 
 ## Archon Mint Subjects
 
