@@ -1,4 +1,49 @@
-USER pmoves
-RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+# Kokoro CPU TTS — self-contained image (Apache-2.0 Kokoro-82M baked in, CPU-only).
+# Build context = THIS directory (app.py has no services.common import).
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    KOKORO_MODEL_DIR=/models
+
+WORKDIR /app
+
+# espeak-ng: g2p/phonemization backend kokoro-onnx uses; curl for model fetch + healthcheck.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        espeak-ng \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Fetch the pinned Kokoro model (Apache-2.0) + voices so the image is
+# self-contained and offline-capable. Pinned release: model-files-v1.0.
+ARG KOKORO_MODEL_URL=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
+ARG KOKORO_VOICES_URL=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
+# Supply-chain integrity: the model assets MUST be pinned by sha256. Compute the
+# digests once (sha256sum on the downloaded files) and pass them as build args
+# (kokoro.compose.yml build.args / README). The build FAILS CLOSED on a missing
+# or mismatched digest — a swapped upstream asset can't slip into the image.
+ARG KOKORO_MODEL_SHA256
+ARG KOKORO_VOICES_SHA256
+RUN test -n "$KOKORO_MODEL_SHA256" && test -n "$KOKORO_VOICES_SHA256" || { \
+        echo "ERROR: KOKORO_MODEL_SHA256 + KOKORO_VOICES_SHA256 build args are required (pin the release digests)"; \
+        exit 1; }
+RUN mkdir -p /models \
+    && curl -fSL "$KOKORO_MODEL_URL"  -o /models/kokoro-v1.0.onnx \
+    && curl -fSL "$KOKORO_VOICES_URL" -o /models/voices-v1.0.bin \
+    && echo "${KOKORO_MODEL_SHA256}  /models/kokoro-v1.0.onnx" | sha256sum -c - \
+    && echo "${KOKORO_VOICES_SHA256}  /models/voices-v1.0.bin" | sha256sum -c -
+
+COPY app.py .
+
+EXPOSE 8004
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
+    CMD curl -fsS http://localhost:8004/healthz || exit 1
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8004"]
+
+# Non-root runtime (house pattern; restores #2285 intent without truncating)
+RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+USER pmoves
