@@ -90,28 +90,24 @@ else
   warn "To fix: run 'make secrets-funnel' or set CHIT_PASSPHRASE env var"
 fi
 
-# ── 2. Install CLI Wrappers ──────────────────────────────────────────────────
+# ── 2. Install CLI Wrappers (cross-platform) ─────────────────────────────────
+# Delegates to tools/install_tools.py so this path and `make install-tools`
+# cannot drift: Unix gets bash copies + chmod, Windows gets .bat shims.
 
-LOCAL_BIN="${HOME}/.local/bin"
-mkdir -p "$LOCAL_BIN"
-
-for wrapper in pmoves-mini crush-pmoves; do
-  src="${PMOVES_DIR}/scripts/${wrapper}"
-  dst="${LOCAL_BIN}/${wrapper}"
-  if [ -f "$src" ]; then
-    cp "$src" "$dst"
-    chmod +x "$dst"
-    info "Installed ${wrapper} → ${dst}"
+BOOTSTRAP_PY=""
+for cand in python3 python; do
+  if command -v "$cand" >/dev/null 2>&1 && "$cand" -c "import sys" >/dev/null 2>&1; then
+    BOOTSTRAP_PY="$cand"
+    break
   fi
 done
 
-case ":${PATH}:" in
-  *":${LOCAL_BIN}:"*) : ;; # already on PATH
-  *)
-    warn "${LOCAL_BIN} is not on PATH — add it to your shell rc:"
-    warn "  export PATH=\"${LOCAL_BIN}:\$PATH\""
-    ;;
-esac
+if [ -n "$BOOTSTRAP_PY" ]; then
+  "${BOOTSTRAP_PY}" "${PMOVES_DIR}/tools/install_tools.py" \
+    || warn "wrapper install failed (non-fatal — run 'make install-tools')"
+else
+  warn "no python found — skipping CLI wrapper install (run: make install-tools)"
+fi
 
 # ── 3. Python Environment ────────────────────────────────────────────────────
 
