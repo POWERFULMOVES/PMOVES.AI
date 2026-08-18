@@ -33,7 +33,7 @@ CF_UP="https://speed.cloudflare.com/__up"
 LAT_HOST="1.1.1.1"; LAT_PORT="443"
 HOME_BUDGET_MBPS=10               # FLEET_CAPACITY_ANALYSIS.md §6 conservative per-home budget
 RETAIL_PLAN_MBPS=50               # a demanding home's peak-plan basis
-JSON=0; LABEL=""; SAVE=""; HOMES=""; DOWN_OVERRIDE=""; UP_OVERRIDE=""
+JSON=0; LABEL=""; SAVE=""; HOMES=""; DOWN_OVERRIDE=""
 
 die(){ echo "ERROR: $*" >&2; exit 1; }
 need(){ command -v "$1" >/dev/null 2>&1 || die "missing dependency: $1"; }
@@ -101,22 +101,28 @@ do_measure(){
 # --- auto A/B across approved exit nodes (needs tailscale CLI) ------------------
 do_ab(){
   need curl; need awk; need tailscale
-  local orig nodes
+  local orig nodes n
   orig=$(tailscale debug prefs 2>/dev/null | awk -F'"' '/"ExitNodeID"/{print $4}')
-  restore(){ [ -n "$orig" ] && tailscale set --exit-node="$orig" --exit-node-allow-lan-access >/dev/null 2>&1 || tailscale set --exit-node= >/dev/null 2>&1 || true; }
+  restore(){
+    if [ -n "$orig" ]; then
+      tailscale set --exit-node="$orig" --exit-node-allow-lan-access >/dev/null 2>&1 && return
+      echo "WARN: could not restore original exit node ($orig); clearing exit node instead." >&2
+    fi
+    tailscale set --exit-node= >/dev/null 2>&1 || true
+  }
   trap restore EXIT
   nodes=$(tailscale exit-node list 2>/dev/null | awk 'NR>1 && $2 ~ /\./ {print $2}')
   [ "$JSON" = 1 ] && echo "["
   LABEL="direct (no exit node)"; tailscale set --exit-node= >/dev/null 2>&1 || true; sleep 3
-  [ "$JSON" = 1 ] && do_measure | sed 's/$/,/' || { echo "=== DIRECT (no exit node) ==="; do_measure; }
-  local n
+  # direct is always the first array element; subsequent nodes prefix a comma
+  if [ "$JSON" = 1 ]; then do_measure; else echo "=== DIRECT (no exit node) ==="; do_measure; fi
   for n in $nodes; do
     LABEL="via ${n%%.*}"
     tailscale set --exit-node="$n" --exit-node-allow-lan-access >/dev/null 2>&1 || continue
     sleep 3
-    if [ "$JSON" = 1 ]; then do_measure | sed 's/$/,/'; else echo ""; echo "=== VIA ${n%%.*} ==="; do_measure; fi
+    if [ "$JSON" = 1 ]; then printf ',\n'; do_measure; else echo ""; echo "=== VIA ${n%%.*} ==="; do_measure; fi
   done
-  [ "$JSON" = 1 ] && echo "{}]"
+  [ "$JSON" = 1 ] && echo "]"
   restore; trap - EXIT
   [ "$JSON" = 1 ] || { echo ""; echo "  restored exit node."; }
 }
@@ -160,13 +166,13 @@ do_compare(){
     }'
 }
 
-usage(){ sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; }
+usage(){ sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; }
 
 # --- arg parse -----------------------------------------------------------------
 MODE="${1:-}"; shift || true
 while [ $# -gt 0 ]; do case "$1" in
   --json) JSON=1;; --label) LABEL="$2"; shift;; --save) SAVE="$2"; shift;;
-  --homes) HOMES="$2"; shift;; --down) DOWN_OVERRIDE="$2"; shift;; --up) UP_OVERRIDE="$2"; shift;;
+  --homes) HOMES="$2"; shift;; --down) DOWN_OVERRIDE="$2"; shift;;
   --budget) HOME_BUDGET_MBPS="$2"; shift;; -h|--help) usage; exit 0;;
   *) COMPARE_ARGS="${COMPARE_ARGS:-} $1";; esac; shift; done
 
