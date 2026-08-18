@@ -72,7 +72,33 @@ def venv_python_path(venv_path: Path) -> Path:
     return venv_path / "bin" / "python"
 
 
-def ensure_venv(venv_path: Path, python_pin: str = "3.11") -> tuple[str | None, Path]:
+def resolve_pinned_interpreter(python_pin: str) -> str | None:
+    """Find an interpreter matching `python_pin` (e.g. "3.11") without uv.
+
+    Tries the version-suffixed name first, then the Windows launcher. Returns
+    None when nothing matching is on the host -- the caller decides what that
+    means.
+    """
+    exact = shutil.which(f"python{python_pin}")
+    if exact:
+        return exact
+    if os.name == "nt":
+        launcher = shutil.which("py")
+        if launcher:
+            probe = subprocess.run(
+                [launcher, f"-{python_pin}", "-c", "import sys; print(sys.executable)"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            if probe.returncode == 0 and probe.stdout.strip():
+                return probe.stdout.strip()
+    return None
+
+
+def ensure_venv(
+    venv_path: Path, python_pin: str = "3.11", *, strict: bool = False
+) -> tuple[str | None, Path]:
     uv_bin = shutil.which("uv")
     if not venv_path.exists():
         if uv_bin:
@@ -80,7 +106,30 @@ def ensure_venv(venv_path: Path, python_pin: str = "3.11") -> tuple[str | None, 
             # CPython (3.14.x), which produced broken venvs on fleet nodes.
             run([uv_bin, "venv", "--python", python_pin, str(venv_path)])
         else:
-            run([sys.executable, "-m", "venv", str(venv_path)])
+            # No uv is a supported state for non-strict `env-bootstrap-lite`,
+            # but --python must not be silently dropped here: the whole point of
+            # the pin is that an off-version interpreter produces exactly the
+            # broken venv this script exists to prevent. Resolve the pinned
+            # interpreter from the host; only fall back to sys.executable, and
+            # only loudly, when it cannot be found.
+            interpreter = resolve_pinned_interpreter(python_pin)
+            if interpreter is None:
+                running = f"{sys.version_info.major}.{sys.version_info.minor}"
+                if running != python_pin:
+                    msg = (
+                        f"requested Python {python_pin} but neither uv nor a "
+                        f"python{python_pin} interpreter is on PATH; the venv would be "
+                        f"built with Python {running} ({sys.executable})"
+                    )
+                    if strict:
+                        raise SystemExit(
+                            f"ERROR: {msg}.\n"
+                            f"       Install uv, or install Python {python_pin}, "
+                            f"or pass --python {running} to accept it."
+                        )
+                    print(f"WARN: {msg} — proceeding unpinned (--strict-tools would fail here)")
+                interpreter = sys.executable
+            run([interpreter, "-m", "venv", str(venv_path)])
 
     py = venv_python_path(venv_path)
     if not py.exists():
@@ -172,7 +221,9 @@ def main() -> int:
     print(f"Repository root: {REPO_ROOT}")
     print(f"Venv path: {venv_path}")
 
-    uv_bin, venv_python = ensure_venv(venv_path, python_pin=args.python)
+    uv_bin, venv_python = ensure_venv(
+        venv_path, python_pin=args.python, strict=args.strict_tools
+    )
     print(f"Using venv python: {venv_python}")
     print(f"uv available: {'yes' if uv_bin else 'no'}")
 
