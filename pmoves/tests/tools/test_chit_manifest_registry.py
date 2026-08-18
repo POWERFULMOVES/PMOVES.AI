@@ -92,3 +92,37 @@ def test_absence_is_reported_rather_than_silently_skipped():
 
     _, missing = build_outputs({}, [_entry()], strict=False)
     assert missing == [HOST_KEY]
+
+
+# ---------------------------------------------------------------------------
+# Present-but-empty is not delivered (found live on B850, 2026-08-18)
+# ---------------------------------------------------------------------------
+
+
+def test_empty_value_counts_as_missing_not_delivered():
+    """A blank value must not count as delivered.
+
+    Measured on B850 2026-08-18: env.shared holds this key with a zero-length
+    value. Compose rejects empty for `${KEY:?}` but accepts it for `${KEY?}`, and
+    anything that sources an env file and exports it re-exports the blank — where
+    shell environment beats every --env-file. Absent is safer than blank.
+    """
+    outputs, missing = build_outputs({HOST_KEY: ""}, [_entry()], strict=False)
+
+    assert missing == [HOST_KEY]
+    assert "env.tier-agent" not in outputs, "an empty value must not be emitted at all"
+
+
+def test_whitespace_only_value_counts_as_missing():
+    _, missing = build_outputs({HOST_KEY: "   \n"}, [_entry()], strict=False)
+    assert missing == [HOST_KEY]
+
+
+def test_empty_label_falls_through_to_a_populated_alias():
+    """A blank canonical must not shadow a real value under the legacy name."""
+    outputs, missing = build_outputs(
+        {HOST_KEY: "", CONTAINER_KEY: "real"}, [_entry()], strict=False
+    )
+
+    assert not missing
+    assert outputs["env.tier-agent"][HOST_KEY] == "real"
