@@ -87,7 +87,7 @@ gh workflow run sync-secrets-local.yml --repo POWERFULMOVES/PMOVES.AI \
    > `secrets-funnel-sync-from-bundle` exists precisely to skip that step; its own
    > `make help` line says so ("skips chit-export so CI credentials are not
    > overwritten"). See `pmoves/mk/codex.mk:111` (the `chit-export` dependency) and
-   > `:121` (the bundle-safe variant).
+   > `:130` (the bundle-safe variant).
 
    If you must download by hand, the artifact name carries the target segment and the
    destination is the bundle path itself, not an arbitrary directory:

@@ -96,7 +96,7 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     #
     # The alias is the load-bearing part: the GH secret is named CHIT_PASSPHRASE (no
     # CHIT_PROD_* secret exists in either scope, verified 2026-08-17), so older
-    # bundles carry only that name. secrets_sync.py:120-131 resolves label first,
+    # bundles carry only that name. secrets_sync.py:112 (_first_usable) resolves label first,
     # then aliases, and emits the CANONICAL target key either way — the same shape as
     # KIMI_CODING_API / MOONSHOT_API_KEY.
     #

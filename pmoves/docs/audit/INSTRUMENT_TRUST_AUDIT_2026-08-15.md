@@ -95,10 +95,10 @@ the way this audit is about. Corrected 2026-08-17 against
   `pytest_ratchet.py:11`'s own figure and it holds: re-deriving it on 2026-08-17 via
   `discover_test_files()` with submodule paths excluded (CI checks out with
   `submodules: false`, stated at `pytest_ratchet.py:88-91`) gives **263**.
-- Enforcement actually comes from a **third** job, `merge-decision` (`:68`), which reads
+- Enforcement actually comes from a **third** job, `merge-decision` (`:80`), which reads
   `needs.*.result` and `exit 1`s. Worth recording while looking straight at it: it fails
   only on `== "failure"`, so a **cancelled or skipped** required job passes the gate
-  (`:79-84`). Not pursued here — noted with its line so it is not rediscovered from
+  (`:91-96`). Not pursued here — noted with its line so it is not rediscovered from
   scratch.
 
 Verified before relying on it for the merges above. **The audit lane is driving fixes
@@ -110,10 +110,10 @@ Finding 7's cause looked mechanizable, so it was swept for across `pmoves/tools/
 `pmoves/services/` by AST rather than grep (a text grep cannot tell a handler's shape).
 The funnel matters more than the endpoint:
 
-| Filter | orig, 08-15 | `--legacy`, 08-17 | current, 08-17 |
+| Filter | orig, 08-15 | `--legacy`, 08-18 | current, 08-18 |
 |---|---|---|---|
-| `try:` containing an import, with a broad or bare `except` | **157** | 158 | **176** |
-| …of those, handlers that are **silent** (no log, no raise, no warn) | **60** | 63 | **69** |
+| `try:` containing an import, with a broad or bare `except` | **157** | 160 | **178** |
+| …of those, handlers that are **silent** (no log, no raise, no warn) | **60** | 65 | **71** |
 | …of those, handlers that are fully `pass` | 6 | 2 | 4 |
 | …of those, in a path that **reports outward** as authoritative | **4** | — | **0** |
 
@@ -126,8 +126,8 @@ directory, and its predicate is now preserved in-tree as
 middle column while leaving it un-runnable would repeat the same defect one level down.
 All three columns reconcile:
 
-- **157 → 158.** The historical headline reproduces to within a single site across two
-  days of commits. It was never wrong — it was merely unverifiable, which is a different
+- **157 → 160.** The historical headline reproduces to within three sites across three
+  days of commits (49 of them). It was never wrong — it was merely unverifiable, which is a different
   complaint and the one this audit should have anticipated about itself.
 - **6 → 2 is exactly the four sites fixed in this PR.** The original predicate,
   unchanged, run two days later, finds precisely the four gone and the two known-good
@@ -138,7 +138,7 @@ All three columns reconcile:
   inside `if os.name == 'nt':`, and `bootstrap.py:70` nests likewise; both were invisible
   to the original. The original also matched only `ast.Name` for broadness, missing
   tuple forms like `except (ValueError, Exception)`.
-- **Only 2 predicate disagreements remain across all 176 stage-1 sites**, and the new
+- **Only 2 predicate disagreements remain across all 178 stage-1 sites**, and the new
   tool is right in both: `tunnel_manager.py:163` calls `self._notify_error(...)` (audible;
   the original missed it), and `chit_invalidation.py:123` merely *acquires* a logger with
   `logging.getLogger(...)` (silent; the original called it audible).
@@ -163,13 +163,13 @@ fourth time:
   `catalog`, `dialog`, `logic`, `exit_code`) reads as a report. **In the sweep whose
   headline is that a text grep cannot see a handler's shape, the sweep was a text grep.**
 - **The replacement's first draft counted `Assign` and `Return` as audible** and reported
-  stage 2 as **7** instead of 69. That predicate excludes
+  stage 2 as **7** instead of 71. That predicate excludes
   `except Exception: return _FALLBACK` — *finding #7 itself*. Widening "audible" until
   the alarming number goes away is the same move as trusting a status code.
 - **Its second draft under-detected**, missing `print_error`, `error_msg`, `sys.exit`,
   and then `logger.info` / `logger.debug`, because the verb list was assembled by
   guessing instead of by diffing against the original. Each round was caught only by
-  running both predicates over the same 176 sites and reading every disagreement —
+  running both predicates over the same 178 sites and reading every disagreement —
   four, then four again, then two.
 
 `silent_handler_sweep.py:_is_silent` and `:_is_audible_call` now carry all of this, and
