@@ -36,7 +36,7 @@ Many submodules originated as upstream vendor mirrors (`pmoves/vendor/`, `resear
 
 ### Integration Overlay Standard
 
-Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source, PMOVES provisions, service dependencies, NATS subjects, Docker profiles, and cross-links. See the [template](../../pmoves/docs/SUBMODULE_FORK_ARCHITECTURE.md#template).
+Each fork should contain a `PMOVES.AI_INTEGRATION.md` documenting: upstream source, PMOVES provisions, service dependencies, NATS subjects, Docker profiles, and cross-links. See the [template](../../pmoves/docs/SUBMODULE_FORK_ARCHITECTURE.md#template).
 
 ---
 
@@ -495,7 +495,7 @@ git submodule foreach 'echo $name: $(git rev-parse HEAD)'
 | Submodule | Primary Port(s) | Purpose | Profile |
 |-----------|----------------|---------|---------|
 | PMOVES-Agent-Zero | 8080, 8081 | Agent orchestrator | agents |
-| PMOVES-Archon | 8091, 3737 | Agent service + UI | agents |
+| PMOVES-Archon | 8091 | Agent service (API server) | agents |
 | PMOVES-BoTZ | 2091, 3020, 7071, 7072, 8110 | MCP tools ecosystem + VPN | varies |
 | PMOVES-BotZ-gateway | — | BoTZ gateway service | agents |
 | PMOVES-Creator | varies | ComfyUI image generation | orchestration |
