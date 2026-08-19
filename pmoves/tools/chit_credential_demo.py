@@ -41,7 +41,10 @@ def load_env_file(path: Path, keys: set[str] | None = None) -> Dict[str, str]:
         key, value = stripped.split("=", 1)
         if keys and key not in keys:
             continue
-        secrets[key] = value
+        # Same comment-only-value guard as chit_encode_secrets.load_env_file;
+        # see the rationale there. Kept in sync deliberately -- these two copies
+        # of the loader had drifted into the identical defect.
+        secrets[key] = "" if value.strip().startswith("#") else value
     return secrets
 
 
