@@ -4936,7 +4936,10 @@ services:
     networks: [pmoves_app, pmoves_api, pmoves_external]
     profiles: ["ui"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      # Image has node but no curl/wget — node>=18 fetch keeps the check dependency-free
+      test:
+      - CMD-SHELL
+      - node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 20s
       timeout: 5s
       retries: 3

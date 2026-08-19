@@ -328,6 +328,66 @@
       "sync": false,
       "branch": "main",
       "reason": "PMOVES first-party MCP bridge; no upstream to sync"
+    },
+    "PMOVES-agents.md": {
+      "upstream": "agentsmd/agents.md",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-fluidd": {
+      "upstream": "TheSpaghettiDetective/fluidd",
+      "sync": false,
+      "branch": "develop",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "pmoves-keygen": {
+      "upstream": "charmbracelet/keygen",
+      "sync": false,
+      "branch": "master",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "Pmoves-minimax-cli": {
+      "upstream": "MiniMax-AI/cli",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "Pmoves-MiniMax-Provider-Verifier": {
+      "upstream": "MiniMax-AI/MiniMax-Provider-Verifier",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-moonraker-obico": {
+      "upstream": "TheSpaghettiDetective/moonraker-obico",
+      "sync": false,
+      "branch": "master",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-nats-server": {
+      "upstream": "nats-io/nats-server",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-obico-server": {
+      "upstream": "TheSpaghettiDetective/obico-server",
+      "sync": false,
+      "branch": "release",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-OctoPrint-Obico": {
+      "upstream": "TheSpaghettiDetective/OctoPrint-Obico",
+      "sync": false,
+      "branch": "master",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-OrcaSlicer": {
+      "upstream": "OrcaSlicer/OrcaSlicer",
+      "sync": false,
+      "branch": "main",
+      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     }
   },
   "_excluded": {

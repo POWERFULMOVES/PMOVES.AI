@@ -30,7 +30,24 @@ def load_env_file(path: Path, keys: set[str] | None = None) -> Dict[str, str]:
         key, value = raw.split("=", 1)
         if keys and key not in keys:
             continue
-        secrets[key] = value
+        # A value that is NOTHING BUT a trailing comment is not a value.
+        #
+        # env.shared.example shipped lines like
+        #     PMOVES_BRIDGE_TOKEN=   # REQUIRED - generate: openssl rand -hex 32
+        # and this loader returned the 80-character comment as the secret. It is
+        # non-empty, so secrets_sync._first_usable accepted it and build_outputs
+        # emitted a PUBLIC TEMPLATE STRING into env.tier-worker while the
+        # required-secret check reported the funnel as successful. Three REQUIRED
+        # keys were exposed this way -- PMOVES_BRIDGE_TOKEN, PMOVES_BRIDGE_API_KEY
+        # and GATE_API_KEY -- none of which brand_defaults mints, so nothing
+        # downstream ever overwrote the placeholder. (NATS_EVENT_BUS_TOKEN had the
+        # same line shape but is minted, which is why it never surfaced.)
+        #
+        # Only the unambiguous case is handled here: the value, once stripped, is
+        # entirely a comment. `KEY=real  # note` is deliberately left alone -- a
+        # secret may legitimately contain '#', and guessing would corrupt it.
+        # The template no longer emits that shape, which is where it belongs.
+        secrets[key] = "" if value.strip().startswith("#") else value
     if not secrets:
         raise RuntimeError(f"{path} did not contain any key=value pairs")
     return secrets

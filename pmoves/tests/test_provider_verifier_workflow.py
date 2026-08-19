@@ -77,26 +77,52 @@ def test_workflow_triggers_on_pull_request(workflow: dict) -> None:
     )
 
 
-def test_workflow_paths_filter_covers_submodule(workflow: dict) -> None:
-    """The paths filter must include Pmoves-MiniMax-Provider-Verifier/**.
+def test_workflow_has_no_paths_filter(workflow: dict) -> None:
+    """on.pull_request must NOT carry a paths: filter.
 
-    This is the load-bearing path filter: a PR that adds a new provider
-    to the cascade touches the submodule, and the gate must run.
+    This gate is intended to become a required status check, and GitHub is
+    explicit: "If a workflow is skipped due to path filtering ... checks
+    associated with that workflow will remain in a Pending state. A pull request
+    that requires those checks to be successful will be blocked from merging."
+    A skipped WORKFLOW never reports; a skipped JOB reports success. So the path
+    decision belongs in the job, not the trigger -- see the two tests below,
+    which assert the same coverage in its new home.
     """
     pr = _triggers(workflow)["pull_request"]
-    paths = pr.get("paths", [])
-    assert any("Pmoves-MiniMax-Provider-Verifier" in p for p in paths), (
-        f"pull_request.paths must include a Pmoves-MiniMax-Provider-Verifier "
-        f"entry; got {paths}"
+    assert "paths" not in (pr or {}), (
+        "on.pull_request must not filter by paths: a required check that never "
+        "reports blocks every PR that touches none of those paths. Move the "
+        "condition into the job (steps.changed) instead."
     )
 
 
-def test_workflow_paths_filter_covers_helper(workflow: dict) -> None:
-    """The paths filter must include pmoves/tools/provider_verifier_gate.py."""
-    pr = _triggers(workflow)["pull_request"]
-    paths = pr.get("paths", [])
-    assert any("provider_verifier_gate" in p for p in paths), (
-        f"pull_request.paths must include the helper; got {paths}"
+def test_job_condition_covers_submodule(workflow_text: str) -> None:
+    """The job-level path condition must still cover the verifier submodule.
+
+    Same guarantee the old paths: filter carried -- a PR adding a provider to the
+    cascade touches the submodule and must run the gate -- asserted where the
+    decision now lives.
+    """
+    assert "Pmoves-MiniMax-Provider-Verifier/*)" in workflow_text, (
+        "the `changed` step's case must match Pmoves-MiniMax-Provider-Verifier/*"
+    )
+
+
+def test_job_condition_covers_helper(workflow_text: str) -> None:
+    """The job-level path condition must still cover the gate helper."""
+    assert "pmoves/tools/provider_verifier_gate.py)" in workflow_text, (
+        "the `changed` step's case must match pmoves/tools/provider_verifier_gate.py"
+    )
+
+
+def test_working_steps_are_gated_on_the_condition(workflow_text: str) -> None:
+    """The work must be conditional even though the job is not.
+
+    If the steps ran unconditionally the gate would execute on every PR in the
+    repo; if the JOB were conditional it would stop reporting. Both halves matter.
+    """
+    assert "steps.changed.outputs.relevant == 'true'" in workflow_text, (
+        "the gate steps must be guarded by the computed condition"
     )
 
 
