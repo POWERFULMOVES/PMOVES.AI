@@ -50,6 +50,17 @@ google-auth-oauthlib>=1.2.0
 # in the message, check here before assuming the service's packaging is wrong.
 python-multipart      # fastapi Form() dependency; imported by no test directly
 
+# Same blind spot as python-multipart above, found the same way. `slowapi` is
+# imported by pmoves/services/content-provenance-gate/main.py and by no test, so
+# the import scan could not see it, and test_content_provenance_gate.py failed at
+# import with ModuleNotFoundError. That failure was invisible for months because
+# the file sat in the `pmoves/tests [1]` chunk, which times out and whose results
+# were discarded wholesale until the per-file fallback in this same change.
+# Installing this is necessary but not sufficient — the tests then fail on auth
+# and need real work in that service — but a missing dependency should not be
+# what is hiding that.
+slowapi               # content-provenance-gate rate limiter; imported by no test directly
+
 # Deliberately NOT installed: torch (3 files). It is a multi-GB download for
 # three tests and would dominate gate runtime. Those modules stay recorded in
 # the ratchet baseline as collection errors rather than being hidden — see
