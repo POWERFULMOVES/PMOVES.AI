@@ -80,7 +80,7 @@ The overall verdict is "PASS" if all six metrics clear the thresholds; "FAIL" if
 
 ### The static half (PR-time, no API calls)
 
-The workflow `verifier-gate` runs `py pmoves/tools/provider_verifier_gate.py --json` on every PR that touches the relevant paths. It performs 6 checks (no API calls, no secrets):
+The workflow `verifier-gate` runs `python pmoves/tools/provider_verifier_gate.py --json` on every PR that touches the relevant paths. It performs 6 checks (no API calls, no secrets):
 
 | Check | Catches |
 |-------|---------|

@@ -166,15 +166,17 @@ def test_bootstrap_and_gate_doc_agree_on_invoke() -> None:
 
     A drift here means a cold-start agent and a doc-reading operator
     invoke the gate differently. The contract: both surfaces say
-    `py pmoves/tools/provider_verifier_gate.py` for the static half.
+    `python pmoves/tools/provider_verifier_gate.py` for the static half.
+    NOT `py` -- that is the Windows launcher, absent on the ubuntu-latest
+    runner the gate actually runs on (fixed in #2623).
     """
     if not BOOTSTRAP_MD.exists() or not PROVIDER_VERIFIER_GATE_DOC.exists():
         pytest.skip("BOOTSTRAP.md or PROVIDER_VERIFIER_GATE.md missing")
     bootstrap = BOOTSTRAP_MD.read_text(encoding="utf-8")
     gate_doc = PROVIDER_VERIFIER_GATE_DOC.read_text(encoding="utf-8")
-    assert "py pmoves/tools/provider_verifier_gate.py" in bootstrap, (
+    assert "python pmoves/tools/provider_verifier_gate.py" in bootstrap, (
         "BOOTSTRAP.md must invoke the gate via the exact path the helper lives at"
     )
-    assert "py pmoves/tools/provider_verifier_gate.py" in gate_doc, (
+    assert "python pmoves/tools/provider_verifier_gate.py" in gate_doc, (
         "PROVIDER_VERIFIER_GATE.md must show the same invocation"
     )
