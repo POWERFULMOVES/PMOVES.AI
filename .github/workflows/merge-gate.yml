@@ -77,8 +77,20 @@ jobs:
       - name: Check container hardening (ratchet)
         run: python pmoves/tools/hardening_ratchet.py
 
+  # The merge-decision job evaluates the in-workflow hard gates
+  # (python-tests, docker-build-validation, hardening-validation).
+  #
+  # The verifier-gate status check is a CROSS-WORKFLOW status
+  # check (lives in .github/workflows/provider-verifier.yml) and
+  # is NOT a `needs:` reference here — `needs:` only resolves
+  # within the same workflow. Cross-workflow status checks are
+  # enforced via branch protection rules (configured in repo
+  # settings): add 'Provider Verifier Gate / verifier-gate' to
+  # the required status checks list. A FAIL on the provider-
+  # verifier workflow then blocks merge via branch protection,
+  # not via this job.
   merge-decision:
-    needs: [python-tests, docker-build-validation, hardening-validation, verifier-gate]
+    needs: [python-tests, docker-build-validation, hardening-validation]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -88,16 +100,9 @@ jobs:
           echo "  python-tests: ${{ needs.python-tests.result }}"
           echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
           echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
-          echo "  verifier-gate: ${{ needs.verifier-gate.result }}"
-          # The verifier-gate workflow has a paths: filter; when a PR
-          # doesn't touch the relevant paths, the workflow is
-          # 'skipped' and there's no status check to gate on. A
-          # 'skipped' result is therefore treated as a pass for the
-          # merge-decision (the gate simply didn't apply to this PR).
           if [[ "${{ needs.python-tests.result }}" == "failure" ]] || \
              [[ "${{ needs.docker-build-validation.result }}" == "failure" ]] || \
-             [[ "${{ needs.hardening-validation.result }}" == "failure" ]] || \
-             [[ "${{ needs.verifier-gate.result }}" == "failure" ]]; then
+             [[ "${{ needs.hardening-validation.result }}" == "failure" ]]; then
             echo "::error::Merge gate FAILED — one or more required checks failed"
             exit 1
           fi

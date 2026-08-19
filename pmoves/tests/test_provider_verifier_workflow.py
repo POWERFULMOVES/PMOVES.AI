@@ -290,45 +290,87 @@ def merge_gate_text() -> str:
     return MERGE_GATE_PATH.read_text(encoding="utf-8")
 
 
-def test_merge_gate_references_verifier_gate(merge_gate_text: str) -> None:
-    """merge-gate.yml's merge-decision step must include verifier-gate in its needs.
+def test_merge_gate_does_not_need_external_job(merge_gate_text: str) -> None:
+    """merge-gate.yml's merge-decision `needs:` must not reference an external job.
 
-    The provider-verifier workflow's job name is 'verifier-gate';
-    if merge-gate.yml doesn't reference it, a FAIL on verifier-gate
-    wouldn't block merge. The two-workflow contract.
+    `needs:` only resolves within the same workflow; referencing
+    'verifier-gate' (which is the job name in a SEPARATE
+    workflow) either fails to load the workflow or silently
+    no-ops the gate. The provider-verifier workflow's status
+    check is enforced via branch protection rules, not via
+    `needs:`.
+
+    Codex review on #2623 caught the earlier formulation
+    (`needs: [verifier-gate, ...]`) as a P1.
     """
+    # Look for any 'needs:' line that includes 'verifier-gate'.
+    for line in merge_gate_text.splitlines():
+        if "needs:" in line and "verifier-gate" in line:
+            pytest.fail(
+                f"merge-gate.yml has 'needs: [..., verifier-gate, ...]'; "
+                f"this references a job in another workflow and silently "
+                f"no-ops the gate. Remove verifier-gate from the needs "
+                f"list; the status check is enforced via branch "
+                f"protection rules, not via needs:.\n"
+                f"Offending line: {line!r}"
+            )
+
+
+def test_merge_gate_documents_branch_protection_enforcement(merge_gate_text: str) -> None:
+    """merge-gate.yml must DOCUMENT that the verifier-gate status check is a branch-protection required check.
+
+    The cross-workflow contract: 'Provider Verifier Gate /
+    verifier-gate' is a required status check configured in
+    repo branch protection settings. A FAIL on the workflow
+    blocks merge via branch protection, not via this job.
+
+    A future edit that drops the documentation comment risks
+    the next reader trying to re-add `verifier-gate` to
+    `needs:` (the natural reflex), which silently no-ops the
+    gate.
+    """
+    # The documentation comment must mention:
+    #   - the cross-workflow nature (verifier-gate is in another workflow)
+    #   - branch protection as the enforcement mechanism
     assert "verifier-gate" in merge_gate_text, (
-        "merge-gate.yml must reference 'verifier-gate' (the provider-"
-        "verifier.yml job name) so a FAIL on the gate blocks merge"
+        "merge-gate.yml must mention 'verifier-gate' in the "
+        "documentation comment that explains the cross-workflow "
+        "contract"
+    )
+    assert "branch protection" in merge_gate_text.lower(), (
+        "merge-gate.yml documentation must mention 'branch protection' "
+        "as the enforcement mechanism for the cross-workflow status check"
     )
 
 
-def test_merge_gate_handles_verifier_gate_skipped(merge_gate_text: str) -> None:
-    """merge-decision must treat verifier-gate's 'skipped' result as a pass.
+def test_merge_gate_handles_verifier_gate_skipped_NOT_APPLICABLE(merge_gate_text: str) -> None:
+    """merge-decision's `if: always()` no longer has a verifier-gate clause to skip.
 
-    The provider-verifier workflow has a paths: filter; a PR that
-    doesn't touch the relevant paths runs the workflow as 'skipped'
-    (not 'success' or 'failure'). A gate that treats 'skipped' as
-    'failure' would block every PR that doesn't touch the verifier
-    — that's a regression from the previous behavior.
+    After the fix in commit 14, the verifier-gate status check is
+    enforced via branch protection (a different mechanism) rather
+    than via this job's conditional. The merge-decision's failure
+    check is now strictly about the 3 in-workflow hard gates
+    (python-tests, docker-build-validation, hardening-validation).
+
+    The earlier test that asserted 'skipped != failure' for
+    verifier-gate is no longer load-bearing: the conditional
+    no longer references verifier-gate's result. This test
+    remains as a regression marker — if a future edit
+    re-introduces a 'verifier-gate' clause in the conditional
+    (which would be wrong, see test_merge_gate_does_not_need_external_job),
+    this test catches that the conditional is back to the
+    broken pattern.
     """
-    # The expected logic: 'failure' blocks; 'skipped' / 'success' pass.
-    # Look for the conditional that explicitly excludes 'skipped' from
-    # the failure set.
-    assert "verifier-gate.result" in merge_gate_text, (
-        "merge-decision must check verifier-gate's result"
-    )
-    # The failure clause should reference 'failure', not 'skipped'.
-    # The naive anti-pattern is: "|| [[ verifier-gate.result == 'skipped' ]]"
-    # We want: only 'failure' is in the OR.
-    # Look for the explicit line.
+    # After the fix, the conditional should NOT mention
+    # verifier-gate's result.
     failure_lines = [
         line for line in merge_gate_text.splitlines()
-        if "verifier-gate" in line and "skipped" in line and "failure" not in line
+        if "verifier-gate" in line and ("result" in line or "skipped" in line)
     ]
     assert not failure_lines, (
-        f"merge-decision must NOT treat 'skipped' as failure; "
-        f"found: {failure_lines}"
+        f"merge-decision conditional should not reference verifier-gate's "
+        f"result (cross-workflow status checks aren't accessed via "
+        f"${{ needs.<job>.result }}). Found: {failure_lines}"
     )
 
 
