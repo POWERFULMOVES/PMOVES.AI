@@ -44,40 +44,39 @@
 #     visible, ratchetable finding instead of silence.
 #
 #
-# ── What the `pmoves/tests [1]` no-report entry actually costs ───────────────
-# That chunk holds 20 test files and it exceeds the 120s timeout on every run,
-# so `parse_junit` never sees ANY result from it — passes and failures alike are
-# discarded, not just the hang. The baseline records the silence; it cannot
-# record what the silence contains.
+# ── The `pmoves/tests [1]` blind spot, and what was behind it ───────────────
+# A chunk that exceeds the group timeout is killed before pytest writes its JUnit
+# report, so EVERY result in it was lost -- passes and failures alike, not just
+# the hang. `pmoves/tests [1]` timed out on every run on record, and the baseline
+# recorded the silence without being able to record what the silence contained.
 #
-# Measured, 2026-08-19: chunk membership is a function of the whole discovered
-# file list (nearest-conftest grouping, then chunks of 20 in discovery order), so
-# adding ANY test file anywhere in pmoves/tests reshuffles the boundaries and
-# changes which failures are visible. Adding two files to this repo moved
-# pmoves/tests/services/test_content_provenance_gate.py from chunk [1] into
-# chunk [2], and three failures that had never once been reported appeared as
-# "new":
+# pytest_ratchet now re-runs a timed-out chunk one file at a time, so only the
+# file that actually hangs stays unmeasured. In CI that narrowed the unmeasured
+# set from 20 files to exactly one:
 #
-#   FAIL|tests.services.test_content_provenance_gate|test_preview_pipeline_shapes_attests_and_accepts
-#   FAIL|tests.services.test_content_provenance_gate|test_preview_pipeline_rejects_low_signal_content
-#   FAIL|tests.services.test_content_provenance_gate|test_new_content_topics_validate_against_contracts
+#   ERROR|pmoves/tests/integration/test_voice_relay_e2e.py|<pytest-harness>
 #
-# All three: ModuleNotFoundError: No module named 'slowapi'. Reproduced in a
-# clean venv built from .github/requirements-tests.txt — pre-existing, unrelated
-# to whatever PR happens to shift the boundary. `slowapi` is imported by
-# pmoves/services/content-provenance-gate/main.py and by no test, which is the
-# same blind spot that file already documents for python-multipart. Installing
-# it is necessary but not sufficient: the tests then fail 401 and need real work
-# in that service.
+# and surfaced 127 findings that had never once been reported, taking this file
+# from 124 entries to 250. The bulk of them:
 #
-# They are NOT baselined here. Baselining would convert "invisible because a
-# chunk timed out" into "known broken", which is a stronger and less true claim,
-# and would silently absorb whatever else is hiding in those 20 files. Recorded
-# here instead so the next boundary shift is recognized rather than re-diagnosed.
+#     54  tests.hardening.test_docker_hardening.TestResourceLimits
+#     10  tests.integration.test_pr483_critical_path
+#      7  tests.hardening.test_docker_hardening.TestNonRootUser
+#      7  tests.fresh_start.test_env_layout.TestTierFilesExist
+#     ~24 tests.integration.test_gateway_agent_integration.*
 #
-# The underlying fix is to stop discarding a timed-out chunk's partial results,
-# or to size chunks so none times out. Both surface an unknown number of further
-# failures at once and need an owner, so neither is done here.
+# Every one is a real failing test that was already failing. None is a new break,
+# and none is a judgement that the failure is acceptable -- baselined is not
+# approved, it means MEASURED. What changed is that these files can now only get
+# better, where until now they were unobserved.
+#
+# One entry that used to live here is gone: `ERROR|pmoves/tests|<pytest-harness>`.
+# It keyed on a positional chunk label, which named no file and shifted whenever
+# any test was added earlier in the group. Harness findings now key on the file.
+#
+# Two files hang locally but not in CI (test_a2ui_bridge_integration.py,
+# test_tokenism_simulator.py) -- they reach for services that exist on a dev node
+# and not on a runner. Only test_voice_relay_e2e.py hangs in both.
 #
 # Regenerate: make -C pmoves python-tests-baseline
 known_failures:
@@ -91,7 +90,7 @@ known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_n8n_workflow|test_workflow"
   - "ERROR|pmoves/services/deepresearch/tests|<pytest-harness>"
   - "ERROR|pmoves/services/graph-linker/tests|<pytest-harness>"
-  - "ERROR|pmoves/tests|<pytest-harness>"
+  - "ERROR|pmoves/tests/integration/test_voice_relay_e2e.py|<pytest-harness>"
   - "ERROR|pytest|internal"
   - "ERROR|services.agent-zero.python.features.a2a.test_server|<collection-error>"
   - "ERROR|services.channel-monitor.tests.test_monitor|<collection-error>"
@@ -137,6 +136,20 @@ known_failures:
   - "ERROR|services.sso-auth.tests.test_login|<collection-error>"
   - "ERROR|services.sso-auth.tests.test_oidc|<collection-error>"
   - "ERROR|services.tokenism-simulator.tests.test_approval_gate|<collection-error>"
+  - "ERROR|tests.integration.test_gateway_agent_integration.TestErrorHandling|test_concurrent_requests"
+  - "ERROR|tests.integration.test_gateway_agent_integration.TestHealthAndMetrics|test_secrets_endpoint_masks"
+  - "ERROR|tests.integration.test_gateway_agent_integration.TestHealthAndMetrics|test_secrets_endpoint_rejects_invalid_key"
+  - "ERROR|tests.integration.test_gateway_agent_integration.TestHealthAndMetrics|test_secrets_endpoint_requires_auth"
+  - "ERROR|tests.integration.test_gateway_agent_integration.TestHealthAndMetrics|test_secrets_endpoint_structure"
+  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_agent_zero"
+  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_hirag_v2"
+  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_nats"
+  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_neo4j"
+  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_supabase"
+  - "ERROR|tests.integration.test_pr483_critical_path|test_critical_path_tensorzero"
+  - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_archon_to_supabase"
+  - "ERROR|tests.integration.test_pr483_critical_path|test_end_to_end_pmoves_ui"
+  - "ERROR|tests.services.test_archon_mcp|<collection-error>"
   - "ERROR|tests.services.test_gateway_agent_api|<collection-error>"
   - "ERROR|tests.services.test_gateway_agent|<collection-error>"
   - "ERROR|tests.test_issue_triage|<collection-error>"
@@ -153,6 +166,118 @@ known_failures:
   - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store"
   - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store_failure_is_non_blocking"
   - "FAIL|services.semantic-cache.tests.test_cipher_layer.TestCipherStore|test_store_network_exception_fail_open"
+  - "FAIL|tests.a2ui.test_bridge.TestMetricsEndpoint|test_metrics_returns_prometheus_format"
+  - "FAIL|tests.fresh_start.test_chit_integration.TestCHITManifestV2|test_manifest_entries_have_tier"
+  - "FAIL|tests.fresh_start.test_env_layout.TestCHITManifestV2|test_manifest_v2_entries_have_tier"
+  - "FAIL|tests.fresh_start.test_env_layout.TestDockerComposeAnchors|test_invidious_uses_tier_media_anchor"
+  - "FAIL|tests.fresh_start.test_env_layout.TestNoLegacyEnvGenerated|test_no_services_use_legacy_env"
+  - "FAIL|tests.fresh_start.test_env_layout.TestTierFilesExist|test_all_tier_files_exist"
+  - "FAIL|tests.fresh_start.test_env_layout.TestTierFilesExist|test_tier_file_exists[agent]"
+  - "FAIL|tests.fresh_start.test_env_layout.TestTierFilesExist|test_tier_file_exists[api]"
+  - "FAIL|tests.fresh_start.test_env_layout.TestTierFilesExist|test_tier_file_exists[data]"
+  - "FAIL|tests.fresh_start.test_env_layout.TestTierFilesExist|test_tier_file_exists[llm]"
+  - "FAIL|tests.fresh_start.test_env_layout.TestTierFilesExist|test_tier_file_exists[media]"
+  - "FAIL|tests.fresh_start.test_env_layout.TestTierFilesExist|test_tier_file_exists[worker]"
+  - "FAIL|tests.fresh_start.test_fresh_deployment.TestDatabaseMigrations|test_supabase_migrations_are_valid_sql"
+  - "FAIL|tests.functional.test_a2ui_bridge_integration|test_a2ui_bridge_health"
+  - "FAIL|tests.functional.test_a2ui_bridge_integration|test_a2ui_bridge_metrics"
+  - "FAIL|tests.functional.test_a2ui_bridge_integration|test_a2ui_event_publish"
+  - "FAIL|tests.functional.test_a2ui_bridge_integration|test_a2ui_simulate_endpoint"
+  - "FAIL|tests.functional.test_a2ui_bridge_integration|test_user_action_forwarding"
+  - "FAIL|tests.hardening.test_docker_hardening.TestDockerfileSecurity|test_dockerfile_uses_specific_uid[flute-gateway-pmoves/services/flute-gateway/Dockerfile]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestDockerfileSecurity|test_dockerfile_uses_specific_uid[tokenism-simulator-pmoves/services/tokenism-simulator/Dockerfile]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestHardenedServicesExist|test_critical_hardened_services_defined"
+  - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[botz-gateway]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[flute-gateway]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[gateway-agent]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[github-runner-ctl]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[nats-init]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[tokenism-simulator]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestNonRootUser|test_service_has_user_directive[tokenism-ui]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[agent-zero]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[archon]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[channel-monitor]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[comfy-watcher]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[deepresearch]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[extract-worker]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[ffmpeg-whisper]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[grayjay-plugin-host]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-gpu]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-v2-gpu]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[hi-rag-gateway-v2]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[invidious-companion-proxy]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[jellyfin-bridge]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[langextract]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[media-audio]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[media-video]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[mesh-agent]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[nats-echo-req]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[nats-echo-res]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[notebook-sync]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[pdf-ingest]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[pmoves-yt]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[presign]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[publisher-discord]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[render-webhook]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[retrieval-eval]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_cpu_limit[supaserch]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[agent-zero]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[archon]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[channel-monitor]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[comfy-watcher]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[deepresearch]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[extract-worker]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[ffmpeg-whisper]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[grayjay-plugin-host]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-gpu]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-v2-gpu]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[hi-rag-gateway-v2]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[invidious-companion-proxy]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[jellyfin-bridge]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[langextract]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[media-audio]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[media-video]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[mesh-agent]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[nats-echo-req]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[nats-echo-res]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[notebook-sync]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[pdf-ingest]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[pmoves-yt]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[presign]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[publisher-discord]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[render-webhook]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[retrieval-eval]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestResourceLimits|test_service_has_memory_limit[supaserch]"
+  - "FAIL|tests.hardening.test_docker_hardening.TestSecretsManagement|test_github_runner_uses_secrets"
+  - "FAIL|tests.hardening.test_docker_hardening.TestValidationScriptIntegration|test_validation_script_checks_flute_gateway"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestEndToEndWorkflows|test_category_browse_workflow"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestEndToEndWorkflows|test_discovery_to_execution_workflow"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestEndToEndWorkflows|test_health_dependency_workflow"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestErrorHandling|test_invalid_json_request"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestHealthAndMetrics|test_health_check_comprehensive"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestOpenAPIDocumentation|test_openapi_paths_documented"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestOpenAPIDocumentation|test_openapi_schema"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestServiceHealth|test_agent_zero_accessible"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestServiceHealth|test_cipher_accessible"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestServiceHealth|test_gateway_agent_accessible"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestServiceHealth|test_tensorzero_accessible"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestSkillsStorage|test_search_skills"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestSkillsStorage|test_search_skills_with_category"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestSkillsStorage|test_store_skill_missing_fields"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestSkillsStorage|test_store_skill_request_format"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestToolDiscovery|test_discover_tools_from_gateway"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestToolDiscovery|test_fallback_tools_when_agent_zero_down"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestToolDiscovery|test_tool_cache_refresh"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestToolDiscovery|test_tools_category_filter"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestToolDiscovery|test_tools_have_required_fields"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestToolExecution|test_execute_nonexistent_tool"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestToolExecution|test_execute_tool_response_format"
+  - "FAIL|tests.integration.test_gateway_agent_integration.TestToolExecution|test_execute_with_timeout"
+  - "FAIL|tests.integration.test_pr483_critical_path|test_end_to_end_critical_path_summary"
+  - "FAIL|tests.integration.test_pr483_critical_path|test_pr483_changes_verified"
+  - "FAIL|tests.services.test_content_provenance_gate|test_new_content_topics_validate_against_contracts"
+  - "FAIL|tests.services.test_content_provenance_gate|test_preview_pipeline_rejects_low_signal_content"
+  - "FAIL|tests.services.test_content_provenance_gate|test_preview_pipeline_shapes_attests_and_accepts"
   - "FAIL|tests.services.test_voice_cloning.TestCloningSynthesisProvider|test_synthesis_provider_initialization"
   - "FAIL|tests.smoke.test_compose_structure|test_no_deprecated_version_key"
   - "FAIL|tests.smoke.test_critical_path|test_postgres_health"
