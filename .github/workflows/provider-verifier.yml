@@ -27,11 +27,18 @@ name: Provider Verifier Gate
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'Pmoves-MiniMax-Provider-Verifier/**'
-      - 'pmoves/tools/provider_verifier_gate.py'
-      - 'pmoves/tools/tests/test_provider_verifier_gate.py'
-      - '.github/workflows/provider-verifier.yml'
+    # NO paths: filter, deliberately -- see the `changed` step below.
+    #
+    # GitHub: "If a workflow is skipped due to path filtering, branch filtering
+    # or a commit message, then checks associated with that workflow will remain
+    # in a Pending state. A pull request that requires those checks to be
+    # successful will be blocked from merging." and "You should not use path or
+    # branch filtering to skip workflow runs if the workflow is required."
+    #
+    # A skipped WORKFLOW never reports. A skipped JOB reports success. Since this
+    # gate is meant to become a required check, the path decision has to move
+    # from the trigger into the job, or every PR that touches none of these paths
+    # would sit on "Waiting for status to be reported" forever.
   workflow_dispatch:
     inputs:
       providers_json:
@@ -68,12 +75,47 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
+      # Decide applicability HERE rather than in on.pull_request.paths. The job
+      # always runs and always reports; the work below is conditional. That is the
+      # shape GitHub prescribes for a workflow that is a required check.
+      - name: Does this PR touch the verifier surface?
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          if [ -z "$base" ] || [ -z "$head" ]; then
+            # workflow_dispatch and anything without a PR context: always run.
+            echo "relevant=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$base" >/dev/null 2>&1 || true
+          files="$(git diff --name-only "$base" "$head" 2>/dev/null || git diff --name-only HEAD~1 HEAD)"
+          relevant=false
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              Pmoves-MiniMax-Provider-Verifier/*) relevant=true ;;
+              pmoves/tools/provider_verifier_gate.py) relevant=true ;;
+              pmoves/tools/tests/test_provider_verifier_gate.py) relevant=true ;;
+              .github/workflows/provider-verifier.yml) relevant=true ;;
+            esac
+          done <<< "$files"
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+          if [ "$relevant" = "true" ]; then
+            echo "Verifier surface touched — running the static gate."
+          else
+            echo "No verifier-surface change; gate is a no-op and reports success."
+          fi
+
       - name: Set up Python
+        if: steps.changed.outputs.relevant == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
       - name: Install the verifier's runtime deps (best-effort)
+        if: steps.changed.outputs.relevant == 'true'
         # The gate's 6 static checks don't need the verifier's heavy
         # deps (numpy, openai, megfile). We install them only for the
         # full-conformance dispatch path. The 'best-effort' install
@@ -85,6 +127,7 @@ jobs:
             echo "::warning::verifier runtime deps not installed; the static gate still runs"
 
       - name: Run the static gate
+        if: steps.changed.outputs.relevant == 'true'
         id: gate
         shell: bash
         run: |
@@ -110,7 +153,7 @@ jobs:
           echo "verdict=PASS" >> "$GITHUB_OUTPUT"
 
       - name: Post PR comment on FAIL
-        if: failure()
+        if: failure() && steps.changed.outputs.relevant == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
