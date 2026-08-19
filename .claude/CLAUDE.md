@@ -57,7 +57,7 @@ Detail files live in `.claude/context/`:
 - `runner-topology.md` — condensed node/runner/team topology
 - `credentials-workflow.md` — credential bootstrap, secrets-funnel, JWT-from-Supabase
 - `services-catalog.md` — full service listing (superset of CATALOG.md)
-- `submodules.md` — complete submodules catalog (50 submodules per `git submodule status`)
+- `submodules.md` — submodules catalog (52 documented rows; `.gitmodules` tracks 72 — see the header of that file for why the three counts differ)
 - `nats-subjects.md` — comprehensive NATS subject catalog
 - `geometry-nats-subjects.md` — GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - ~~`mcp-api.md`~~ — **SUPERSEDED, do not use as an API reference.** It documents `/mcp/command`, `/mcp/health`, `/mcp/task/{id}`, `/mcp/agents`, `/mcp/subordinate/create`, `/mcp/subordinate/create-with-persona` and an `MCP_CLIENT_SECRET` Bearer scheme that were never implemented. Canonical: `pmoves/docs/operations/AGENT_ZERO_API.md`.
