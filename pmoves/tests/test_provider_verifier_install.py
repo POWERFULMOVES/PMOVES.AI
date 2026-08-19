@@ -26,6 +26,7 @@ it before the operator hits a "command not found" at 2am.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -59,7 +60,9 @@ def test_verifier_help_lists_required_flags() -> None:
     """
     import subprocess
     result = subprocess.run(
-        ["py", str(VERIFIER_DIR / "verify.py"), "--help"],
+        # sys.executable, not "py": the launcher is Windows-only and this
+        # suite runs on ubuntu-latest in CI, where it exits 127.
+        [sys.executable, str(VERIFIER_DIR / "verify.py"), "--help"],
         capture_output=True,
         text=True,
         timeout=30,

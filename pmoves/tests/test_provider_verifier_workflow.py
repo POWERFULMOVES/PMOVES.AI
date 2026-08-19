@@ -290,67 +290,60 @@ def merge_gate_text() -> str:
     return MERGE_GATE_PATH.read_text(encoding="utf-8")
 
 
-def test_merge_gate_references_verifier_gate(merge_gate_text: str) -> None:
-    """merge-gate.yml's merge-decision step must include verifier-gate in its needs.
+def test_merge_gate_does_not_reference_verifier_gate(merge_gate_text: str) -> None:
+    """merge-decision must NOT list verifier-gate in `needs`.
 
-    The provider-verifier workflow's job name is 'verifier-gate';
-    if merge-gate.yml doesn't reference it, a FAIL on verifier-gate
-    wouldn't block merge. The two-workflow contract.
+    `needs` resolves only job IDs declared in the SAME workflow. `verifier-gate`
+    is the display name of the `static-gate` job in provider-verifier.yml, so
+    naming it here makes merge-gate.yml invalid — and merge-decision is a
+    REQUIRED check on main, so it would never report and every PR in the repo
+    would block on a check that cannot run.
+
+    This test previously asserted the opposite. It was written to match the
+    implementation rather than the requirement, so it passed while locking the
+    defect in place. Gating on the verifier is done by adding its check to
+    branch protection's required list, which is an operator action and cannot
+    be expressed through `needs`.
     """
-    assert "verifier-gate" in merge_gate_text, (
-        "merge-gate.yml must reference 'verifier-gate' (the provider-"
-        "verifier.yml job name) so a FAIL on the gate blocks merge"
+    assert "verifier-gate" not in merge_gate_text, (
+        "merge-gate.yml must not reference 'verifier-gate' — it is a job in a "
+        "different workflow, and an unresolvable `needs` invalidates the whole "
+        "workflow, taking the required merge-decision check down with it"
     )
 
 
-def test_merge_gate_handles_verifier_gate_skipped(merge_gate_text: str) -> None:
-    """merge-decision must treat verifier-gate's 'skipped' result as a pass.
+def test_merge_decision_requires_success_not_merely_not_failure(merge_gate_text: str) -> None:
+    """Every merge-decision dependency must be required to equal 'success'.
 
-    The provider-verifier workflow has a paths: filter; a PR that
-    doesn't touch the relevant paths runs the workflow as 'skipped'
-    (not 'success' or 'failure'). A gate that treats 'skipped' as
-    'failure' would block every PR that doesn't touch the verifier
-    — that's a regression from the previous behavior.
+    needs.<job>.result is one of success | failure | cancelled | skipped.
+    Testing only for == 'failure' lets cancelled and skipped through, so a run
+    that never evaluated a gate reports PASSED (see #2622).
     """
-    # The expected logic: 'failure' blocks; 'skipped' / 'success' pass.
-    # Look for the conditional that explicitly excludes 'skipped' from
-    # the failure set.
-    assert "verifier-gate.result" in merge_gate_text, (
-        "merge-decision must check verifier-gate's result"
-    )
-    # The failure clause should reference 'failure', not 'skipped'.
-    # The naive anti-pattern is: "|| [[ verifier-gate.result == 'skipped' ]]"
-    # We want: only 'failure' is in the OR.
-    # Look for the explicit line.
-    failure_lines = [
-        line for line in merge_gate_text.splitlines()
-        if "verifier-gate" in line and "skipped" in line and "failure" not in line
-    ]
-    assert not failure_lines, (
-        f"merge-decision must NOT treat 'skipped' as failure; "
-        f"found: {failure_lines}"
+    assert '!= "success"' in merge_gate_text, (
+        "merge-decision must require each dependency to equal 'success', not "
+        "merely reject 'failure'"
     )
 
 
-def test_workflow_uses_py_alias_for_python(workflow_text: str) -> None:
-    """The workflow uses `py` (the GitHub-Actions-bundled alias).
+def test_workflow_invokes_python_not_the_windows_launcher(workflow_text: str) -> None:
+    """The gate step must invoke `python`, not `py`.
 
-    `python` may not be on PATH in every runner; `py` is the
-    GitHub-bundled alias that points at the setup-python-managed
-    interpreter. The other workflows in this repo use `py`.
+    The job is runs-on: ubuntu-latest and actions/setup-python exposes the
+    selected interpreter as `python`. `py` is the Windows launcher and is not
+    present on the Ubuntu runner: the step would exit 127, set verdict=FAIL,
+    and block every PR matching the path filter without running a check.
+
+    This test previously asserted `py`, justified as "the GitHub-bundled alias"
+    that "the other workflows in this repo use". Both halves are false --
+    measured across .github/workflows/: ZERO workflows invoke bare `py`, and 27
+    use `python`/`python3`.
     """
-    # Look for 'py ' invocation (not 'python ' or 'python3 ').
-    # The workflow should NOT use bare 'python' or 'python3'.
-    assert re.search(r"\bpy\s+pmoves/tools/provider_verifier_gate", workflow_text), (
-        "run step must invoke the helper via 'py' (the GitHub-bundled "
-        "alias), not 'python' or 'python3'"
+    assert "python " + "pmoves/tools/provider_verifier_gate" in workflow_text, (
+        "the gate step must invoke the helper via 'python'"
     )
-
-
-# ============================================================================
-# Tool-contract: the workflow invokes the helper the way the helper expects
-# ============================================================================
-
+    assert "$(py " + "pmoves/tools/provider_verifier_gate" not in workflow_text, (
+        "'py' is the Windows launcher and does not exist on ubuntu-latest"
+    )
 
 def test_helper_supports_json_flag() -> None:
     """The helper must support --json (workflow depends on it).
