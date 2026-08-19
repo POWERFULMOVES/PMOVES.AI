@@ -119,14 +119,33 @@ def test_workflow_supports_workflow_dispatch(workflow: dict) -> None:
 
 
 def test_workflow_has_minimal_permissions(workflow: dict) -> None:
-    """permissions must be {} (no scopes the job doesn't need).
+    """permissions must be {} at the workflow level (no scopes the workflow as a whole needs).
 
     A workflow that inherits the default GITHUB_TOKEN can do too
     much. The static gate doesn't need any token scope (it just
-    reads files); workflow_dispatch can add scopes inline if needed.
+    reads files); the job-level override adds `issues: write` for
+    the PR-comment step.
     """
     assert workflow.get("permissions") == {}, (
-        f"permissions should be {{}} for minimal scope; got {workflow.get('permissions')}"
+        f"workflow-level permissions should be {{}} for minimal scope; "
+        f"got {workflow.get('permissions')}"
+    )
+
+
+def test_workflow_job_has_issues_write_for_comment_step(workflow: dict) -> None:
+    """The static-gate job must declare issues: write (for the PR comment step).
+
+    actions/github-script uses the default GITHUB_TOKEN scope. With
+    workflow-level `permissions: {}` the token has no scopes, so
+    the PR-comment step would fail with a permissions error. The
+    job-level override is the minimum scope that lets the comment
+    step post.
+    """
+    job = workflow["jobs"]["static-gate"]
+    perms = job.get("permissions", {})
+    assert perms.get("issues") == "write", (
+        f"job-level permissions.issues must be 'write' for the PR-comment step; "
+        f"got {perms}"
     )
 
 
