@@ -218,7 +218,7 @@
     "PMOVES-jcodemunch-mcp": {
       "upstream": "jgravelle/jcodemunch-mcp",
       "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
+      "branch": "main",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "PMOVES-Jellyfin": {
@@ -320,13 +320,13 @@
     "PMOVES-Spark-VSS": {
       "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
       "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
-      "reason": "submodule tracks PMOVES.AI-Edition-Hardened; sync=false (Spark-specific integration, manual updates)"
+      "branch": "main",
+      "reason": "submodule tracks main (the fork has no other branch); sync=false (Spark-specific integration, manual updates)"
     },
     "pmoves-hirag-mcp": {
       "upstream": "_first_party",
       "sync": false,
-      "branch": "PMOVES.AI-Edition-Hardened",
+      "branch": "main",
       "reason": "PMOVES first-party MCP bridge; no upstream to sync"
     }
   },
