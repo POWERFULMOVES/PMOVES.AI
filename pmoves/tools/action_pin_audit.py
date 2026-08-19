@@ -79,6 +79,10 @@ USES_RE = re.compile(
 )
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 VERSION_RE = re.compile(r"\bv\d+(?:\.\d+){0,2}\b")
+# A COMPLETE vX.Y.Z, as opposed to a moving major like `v2`. Only these are
+# compared against the tag's commit -- a bare `# v2` is a deliberate reference
+# to the moving tag, so its SHA is expected to drift.
+_FULL_VERSION_RE = re.compile(r"v\d+\.\d+\.\d+")
 
 
 class Unreachable(RuntimeError):
@@ -222,9 +226,50 @@ def audit(pins: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[s
             errors.append({**pin, "reason": f"no such commit in {slug}"})
             continue  # a bad SHA makes the version comment moot
         version = pin["version"]
-        if version and _get(f"/repos/{slug}/git/ref/tags/{version}", cache) is None:
+        if not version:
+            continue
+        ref = _get(f"/repos/{slug}/git/ref/tags/{version}", cache)
+        if ref is None:
             warnings.append({**pin, "reason": f"comment names {version}, which is not a tag in {slug}"})
+            continue
+
+        # The tag EXISTS. That was the whole check, and it is not enough: a pin can
+        # name a real version while pointing somewhere else entirely. Measured on
+        # 2026-08-19, step-security/harden-runner@05e31511 was commented `# v2.13.1`
+        # while 05e31511 is the MOVING `v2` tag; v2.13.1 is f4a75cfd. The pin
+        # resolved, the tag existed, the audit passed, and the comment named the
+        # wrong release -- in a file whose stated purpose is that the comment is
+        # "what a human reads when deciding whether a pin is current".
+        #
+        # Only full vX.Y.Z comments are compared. A bare `# v2`/`# v3` is a
+        # deliberate reference to the moving major, so its SHA is expected to drift
+        # and comparing it would flag correct pins.
+        if not _FULL_VERSION_RE.fullmatch(version):
+            continue
+        target = _tag_commit(slug, ref, cache)
+        if target is not None and target != pin["sha"]:
+            warnings.append({**pin, "reason": (
+                f"comment names {version}, but that tag is {target[:12]} "
+                f"and this pin is {pin['sha'][:12]}"
+            )})
     return errors, warnings
+
+
+def _tag_commit(slug: str, ref: Any, cache: Dict[str, Any]) -> Optional[str]:
+    """Commit a tag ref points at, dereferencing annotated tags.
+
+    A lightweight tag's ref object IS the commit. An ANNOTATED tag's ref object is
+    a tag object that has to be followed to reach the commit -- comparing the ref
+    sha directly reports a mismatch on every annotated tag, which is most releases.
+    """
+    obj = (ref or {}).get("object") or {}
+    sha, kind = obj.get("sha"), obj.get("type")
+    if not sha:
+        return None
+    if kind != "tag":
+        return sha
+    tag = _get(f"/repos/{slug}/git/tags/{sha}", cache)
+    return ((tag or {}).get("object") or {}).get("sha")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
