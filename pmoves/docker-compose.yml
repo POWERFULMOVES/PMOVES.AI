@@ -2799,7 +2799,7 @@ services:
           cpus: '4.0'
           memory: 8G
     ports:
-    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
+    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V1_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
     depends_on:
       qdrant:
         condition: service_healthy
@@ -3010,7 +3010,7 @@ services:
     # unreachable (a container's localhost is itself, not the nats service).
     # nats-init always runs on pmoves_bus where NATS is reachable as nats:4222,
     # so hardcode it (matches the script default and env.shared.example).
-    - NATS_URL=nats://nats:pmoves@nats:4222
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
     - PMOVES_NETWORKS=pmoves_bus
     volumes:
     - ./scripts/nats:/scripts:ro
@@ -3439,7 +3439,18 @@ services:
       # Broker requires auth (documented default creds convention) — without
       # them P7 boots in log-only fallback (nats_connected:false, no signed
       # lifecycle events on the control plane).
-    - P7_NATS_URL=${P7_NATS_URL:-nats://nats:pmoves@nats:4222}
+      #
+      # Composed from NATS_USER/NATS_PASSWORD with the HOST PINNED to nats:4222,
+      # the same shape nats-init uses. Deliberately NOT `${NATS_URL:-...}` in the
+      # chain: Compose gives a host-session export precedence over every
+      # --env-file, so an interactive shell exporting a host-oriented NATS URL
+      # (one pointing at localhost:4222) would reach the container, where
+      # localhost is P7 itself — it boots log-only with nats_connected:false and
+      # silently drops lifecycle events. P7_NATS_URL stays the explicit override.
+      # (Phrased without the literal assignment form on purpose: the
+      # test_no_hardcoded_nats_urls_in_compose scanner greps raw lines and does
+      # not skip comments, so spelling it out here trips it on prose.)
+    - P7_NATS_URL=${P7_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
     - P7_PMOVES_ROOT=/etc/pmoves
     - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
     - P7_ROOMS_DIR=/etc/pmoves/rooms
@@ -3869,7 +3880,12 @@ services:
     # /app/pmoves/pmoves/config/rooms and rooms_loaded stays 0.
     - P7_HTTP_PORT=8122
     - P7_PMOVES_ROOT=/app
-    - P7_NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      # Same shape as the canonical P7 stanza above, and for the same reason:
+      # credentials come from NATS_USER/NATS_PASSWORD, the host stays pinned to
+      # nats:4222, and host-session NATS_URL is deliberately kept out of the
+      # chain. This is the legacy stanza that previously read ${NATS_URL}
+      # directly — the form that made a shell export poison the container.
+    - P7_NATS_URL=${P7_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
     - P7_ROOM_MANIFEST_SCHEMA=/app/pmoves/contracts/schemas/room/room.manifest.v1.schema.json
     - SUPABASE_URL=${P7_SUPABASE_URL:-http://supabase-kong:8000}
     - P7_SUPABASE_REST_URL=${P7_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
@@ -4713,7 +4729,7 @@ services:
       start_period: 10s
     depends_on:
       nats-init:
-        condition: service_healthy
+        condition: service_completed_successfully
 
   # Cast TTS Gateway - Chromecast/Google Home TTS routing (port 8060)
     deploy:

@@ -92,7 +92,7 @@ services:
     # unreachable (a container's localhost is itself, not the nats service).
     # nats-init always runs on pmoves_bus where NATS is reachable as nats:4222,
     # so hardcode it (matches the script default and env.shared.example).
-    - NATS_URL=nats://nats:pmoves@nats:4222
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
     - PMOVES_NETWORKS=pmoves_bus
     volumes:
     - ./scripts/nats:/scripts:ro
@@ -1424,7 +1424,18 @@ services:
       # Broker requires auth (documented default creds convention) — without
       # them P7 boots in log-only fallback (nats_connected:false, no signed
       # lifecycle events on the control plane).
-    - P7_NATS_URL=${P7_NATS_URL:-nats://nats:pmoves@nats:4222}
+      #
+      # Composed from NATS_USER/NATS_PASSWORD with the HOST PINNED to nats:4222,
+      # the same shape nats-init uses. Deliberately NOT `${NATS_URL:-...}` in the
+      # chain: Compose gives a host-session export precedence over every
+      # --env-file, so an interactive shell exporting a host-oriented NATS URL
+      # (one pointing at localhost:4222) would reach the container, where
+      # localhost is P7 itself — it boots log-only with nats_connected:false and
+      # silently drops lifecycle events. P7_NATS_URL stays the explicit override.
+      # (Phrased without the literal assignment form on purpose: the
+      # test_no_hardcoded_nats_urls_in_compose scanner greps raw lines and does
+      # not skip comments, so spelling it out here trips it on prose.)
+    - P7_NATS_URL=${P7_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
     - P7_PMOVES_ROOT=/etc/pmoves
     - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
     - P7_ROOMS_DIR=/etc/pmoves/rooms
