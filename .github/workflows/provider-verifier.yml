@@ -89,8 +89,13 @@ jobs:
         shell: bash
         run: |
           # 6 checks, no API calls. Output: JSON line on stdout.
+          # Uses 'python' (not 'py') — the py launcher is Windows-only;
+          # on Ubuntu runners (the default for 'runs-on: ubuntu-latest'),
+          # 'py' resolves to nothing and the command exits 127. The
+          # 'actions/setup-python' step above already bound 'python' to
+          # the selected interpreter; that's what we invoke.
           set +e
-          OUTPUT=$(py pmoves/tools/provider_verifier_gate.py --json 2>&1)
+          OUTPUT=$(python pmoves/tools/provider_verifier_gate.py --json 2>&1)
           RC=$?
           set -e
           echo "## Provider Verifier static gate result" >> "$GITHUB_STEP_SUMMARY"

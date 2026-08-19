@@ -332,18 +332,28 @@ def test_merge_gate_handles_verifier_gate_skipped(merge_gate_text: str) -> None:
     )
 
 
-def test_workflow_uses_py_alias_for_python(workflow_text: str) -> None:
-    """The workflow uses `py` (the GitHub-Actions-bundled alias).
+def test_workflow_uses_python_executable(workflow_text: str) -> None:
+    """The workflow invokes the helper via 'python', not 'py'.
 
-    `python` may not be on PATH in every runner; `py` is the
-    GitHub-bundled alias that points at the setup-python-managed
-    interpreter. The other workflows in this repo use `py`.
+    `py` is the Windows Python Launcher and does not exist on
+    Ubuntu runners (the default for 'runs-on: ubuntu-latest');
+    invoking `py` exits 127 and the gate silently no-ops as
+    FAIL. The codex review on #2623 caught this as a P1.
+
+    The other workflows in this repo (fork-registry-ratchet,
+    integration-contract, integration-gate, merge-gate,
+    validate-agents-config, etc.) all use 'python'. This test
+    pins the same convention for the provider-verifier workflow.
     """
-    # Look for 'py ' invocation (not 'python ' or 'python3 ').
-    # The workflow should NOT use bare 'python' or 'python3'.
-    assert re.search(r"\bpy\s+pmoves/tools/provider_verifier_gate", workflow_text), (
-        "run step must invoke the helper via 'py' (the GitHub-bundled "
-        "alias), not 'python' or 'python3'"
+    assert re.search(r"\bpython\s+pmoves/tools/provider_verifier_gate", workflow_text), (
+        "run step must invoke the helper via 'python', not 'py' "
+        "(the py launcher is Windows-only; on Ubuntu runners the "
+        "command exits 127)"
+    )
+    # Anti-pattern: 'py ' invocation. The presence of 'py' followed
+    # by a space and the helper path is the load-bearing failure mode.
+    assert not re.search(r"^[^#]*\bpy\s+pmoves/tools/provider_verifier_gate", workflow_text, re.MULTILINE), (
+        "run step must NOT use 'py' (Windows launcher) — use 'python' instead"
     )
 
 
