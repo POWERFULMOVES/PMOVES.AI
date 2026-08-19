@@ -35,12 +35,25 @@ network-exposed auth surface. Two individually-manageable facts compound.
 
 ### Order (a deliberate refinement of rotate -> role -> expose)
 
-1. **Scoped role first.** Once JuiceFS authenticates as a single-schema role, the
-   pending admin rotation **no longer touches the JuiceFS mount at all** — it shrinks
-   the rotation's blast radius rather than widening it, and it is cheap and reversible
-   where the rotation is expensive (~27 consumers, one maintenance window).
-2. **Rotate `supabase_admin`** — operator action.
-3. **Expose**, bound to the tailnet interface only.
+1. **Create the scoped role.** Cheap, reversible, and a precondition for everything
+   below. Created `NOLOGIN`, so at this point **nothing uses it yet**.
+2. **Cut the mount over — this is the step that shrinks blast radius, not step 1.**
+   Grant `LOGIN` with a pipeline-delivered password, repoint
+   `pmoves/scripts/juicefs-cross-node-setup.sh:58` (which today builds
+   `postgres://supabase_admin@...` unconditionally, with no branch) and the in-stack
+   defaults, then **verify a real read through the new credential**.
+3. **Rotate `supabase_admin`** — operator action.
+4. **Expose**, bound to the tailnet interface only.
+
+> **Why the extra step, and why it is not pedantry.** An earlier version of this list
+> went role → rotate → expose, which reads as though creating the role reduces the
+> rotation's blast radius. It does not. The role is `NOLOGIN` and no consumer points at
+> it, so until step 2 the JuiceFS mount still authenticates as `supabase_admin` and the
+> rotation touches it exactly as before. Following the old order would have rotated and
+> exposed a credential that was still the only one in use, while the document read as
+> though the exposure had already been reduced — retiring the operator's attention on a
+> problem that was still live. Rotation is the step *after* the cutover is verified,
+> never the step before.
 
 ---
 
@@ -110,16 +123,37 @@ Supavisor remains a legitimate future improvement — tracked separately.
 
 ## Step 1 — the scoped role (ready to apply; needs the migrations Known Road)
 
-Target file: `pmoves/supabase/migrations/20260818000000_juicefs_meta_scoped_role.sql`
+Target file: `pmoves/supabase/initdb/00_3_juicefs_meta_role.sql`
 
-Blocked on an operator-set `KNOWN_ROAD=migrations:handoff:<this file>` — protected-path
-writes are operator-authorized by design and an agent must not self-grant them.
+**A seed, not a migration, and the placement is load-bearing.** `supabase-bootstrap`
+applies `supabase/migrations` *before* `supabase/initdb`, and the `juicefs_meta` schema
+is created by a seed (`00_2_juicefs_meta_schema.sql`). As a migration this DDL therefore
+ran before its own schema existed on a fresh database, guarded, returned cleanly — and a
+clean return is `psql` exit 0, which `apply_dir` records as *applied*. The filename then
+sat in `public.pmoves_bootstrap_history` forever and the role was never created. It
+worked only where the schema already existed from an earlier bootstrap, i.e. on the
+machine it was developed on and not after a rebuild. Reproduced and fixed in #2614; the
+ledger semantics are written up in
+`pmoves/docs/services/supabase/MIGRATION_WORKFLOW.md`.
+
+Apply with **`make -C pmoves supabase-bootstrap`**, not `make -C pmoves supa-migrate`.
+`supa-migrate` connects as `-U postgres`, which is **not** superuser in the hardened
+Supabase image (verified: `postgres rolsuper=false`, `supabase_admin rolsuper=true`), so
+it cannot grant on `supabase_admin`-owned objects. It also applies no seeds and keeps no
+ledger. `supabase-bootstrap` connects as `supabase_admin` over TCP and is the only
+canonical path that applies this file.
+
+Still blocked on an operator-set `KNOWN_ROAD=migrations:handoff:<this file>` — the
+`migrations` domain covers `supabase/initdb` as well as `supabase/migrations`, and
+protected-path writes are operator-authorized by design.
 
 Grants **DML on one schema only**; withholds `CREATE`, `BYPASSRLS`, `SUPERUSER`,
 `CREATEROLE`, `CREATEDB`, `REPLICATION`, and every other schema. Created `NOLOGIN`
 until the password is delivered via the CHIT pipeline (a login-capable role with no
-password is a worse default). Idempotent. Applied with `make -C pmoves supa-migrate`
-— no raw psql. Does **not** repoint the live mount; that is a separate reviewable step.
+password is a worse default). Idempotent. Applied with
+`make -C pmoves supabase-bootstrap` — no raw psql, and not `supa-migrate` (see
+above). Does **not** repoint the live mount; that is step 2, and until it happens
+the mount still authenticates as `supabase_admin`.
 
 ```sql
 DO $$
@@ -157,8 +191,19 @@ operation and revoke it afterwards — do not leave it standing.
 
 ```bash
 # Step 1
-make -C pmoves supa-migrate
-# on B850: role exists, NOT superuser, and holds NO privileges outside juicefs_meta
+make -C pmoves supabase-bootstrap
+# NOT supa-migrate: it runs as -U postgres (non-superuser here), applies no seeds,
+# and keeps no ledger. Expect `seed: applied=...` to include 00_3_juicefs_meta_role.sql.
+
+# Confirm what was actually created — presence of the role is not the assertion:
+#   rolcanlogin=false rolsuper=false bypassrls=false createdb=false createrole=false
+#   has_schema_privilege('juicefs_meta','juicefs_meta','USAGE')  = true
+#   has_schema_privilege('juicefs_meta','juicefs_meta','CREATE') = false
+#
+# NOTE has_schema_privilege('juicefs_meta','public','USAGE') is ALSO true — inherited
+# from PUBLIC, not granted by the seed. Every role inherits PUBLIC, and this database
+# has SECURITY DEFINER functions in public with no REVOKE ... FROM PUBLIC. Inert while
+# the role is NOLOGIN; revoke that set BEFORE step 2 grants LOGIN.
 
 # Step 3 (after 1 and 2), from a remote node:
 nc -z pmoves-b850-ai-top 5432
