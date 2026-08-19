@@ -71,15 +71,6 @@ jobs:
       # the `changed` step lists PR files via the API
       pull-requests: read
     steps:
-      - name: Checkout repo (with submodules)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: recursive
-          fetch-depth: 1
-
-      # Decide applicability HERE rather than in on.pull_request.paths. The job
-      # always runs and always reports; the work below is conditional. That is the
-      # shape GitHub prescribes for a workflow that is a required check.
       # Decide applicability HERE rather than in on.pull_request.paths. The job
       # always runs and always reports; the work below is conditional. That is the
       # shape GitHub prescribes for a workflow that is a required check.
@@ -120,11 +111,30 @@ jobs:
             esac
           done <<< "$files"
           echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
           if [ "$relevant" = "true" ]; then
             echo "Verifier surface touched — running the static gate."
           else
             echo "No verifier-surface change; gate is a no-op and reports success."
           fi
+
+      # Checkout is deliberately AFTER the detection step and gated on it.
+      #
+      # `submodules: recursive` over a monorepo with 72 submodules measured
+      # 9m15s on run 32294521610 -- after which the detection step took 2s to
+      # decide the PR was irrelevant and every working step skipped. As a
+      # required check that cost would be paid by EVERY pull request in the
+      # repo, almost none of which touch the verifier surface.
+      #
+      # The detection step needs no repo content -- it asks the PR files API,
+      # naming the repo explicitly via github.repository -- so it can run
+      # first on a bare runner. Nothing above this line reads the working tree.
+      - name: Checkout repo (with submodules)
+        if: steps.changed.outputs.relevant == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 1
 
       - name: Set up Python
         if: steps.changed.outputs.relevant == 'true'
