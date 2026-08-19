@@ -3111,7 +3111,7 @@ mcp_servers:
       MINIMAX_API_RESOURCE_MODE: "${MINIMAX_API_RESOURCE_MODE:-url}"
     action_namespace: "mcp.v1.minimax"
     capabilities: ["text", "image", "video", "tts", "voice-clone", "video-gen"]
-    rooms: ["minimax-mcp.room.model", "hermes-agent.room.control"]
+    rooms: ["z890-infra.room.fabric", "hermes-agent.room.control", "darkxsides.room"]
     # grounding_source: a discovering agent fetches startup grounding here
     # (MiniMax model surface: text/image/video/TTS/voice-clone via the
     # PMOVES-MiniMax-MCP server). See §4a of
