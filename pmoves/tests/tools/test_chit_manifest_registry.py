@@ -126,3 +126,38 @@ def test_empty_label_falls_through_to_a_populated_alias():
 
     assert not missing
     assert outputs["env.tier-agent"][HOST_KEY] == "real"
+
+
+# ---------------------------------------------------------------------------
+# Alias divergence — reported by SPARK on PR #2605
+# ---------------------------------------------------------------------------
+
+
+def _diverges(values: dict, names: list) -> bool:
+    """Mirror of the audit's 8c predicate: >1 distinct non-blank value."""
+    present = {n: values[n] for n in names if values.get(n, "").strip()}
+    return len(set(present.values())) > 1
+
+
+def test_alias_divergence_detected():
+    """SPARK carries both CHIT names with different key material.
+
+    Compose reads env.shared directly, so containers get one value while the
+    host signing chain resolves the other — signatures cannot cross-verify, and
+    every per-key check passes because both keys are populated.
+    """
+    assert _diverges({"A": "x" * 43, "B": "y" * 64}, ["A", "B"])
+
+
+def test_identical_alias_values_are_not_divergence():
+    assert not _diverges({"A": "same", "B": "same"}, ["A", "B"])
+
+
+def test_blank_alias_is_not_divergence():
+    """A blank is the blank-beats-alias case, already covered — not divergence.
+
+    This is why the check stayed quiet about the CHIT pair on B850 (one side is
+    zero-length there) while correctly firing on a genuinely divergent pair.
+    """
+    assert not _diverges({"A": "", "B": "y" * 64}, ["A", "B"])
+    assert not _diverges({"A": "   ", "B": "y" * 64}, ["A", "B"])
