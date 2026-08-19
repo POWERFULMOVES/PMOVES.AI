@@ -45,11 +45,14 @@
       }
     },
     "hostinger-mcp": {
+      "_note": "POWERFULMOVES fork (hostinger-api-mcp v1.35.7, 320 tools, per-service binaries) pinned to commit 094e38c — interim local wiring until the PMOVES MCP-gateway hub hosts it as an adapter. The fork reads HOSTINGER_API_TOKEN (or API_TOKEN); both are fed from the established env.shared var HOSTINGER_API_KEY so the launcher's existing sourcing resolves them. Source GH secret is HOSTINGER_API_KEY (Prod env); HOSTINGER_API_TOKEN is the consumer var only.",
       "command": "npx",
       "args": [
-        "hostinger-api-mcp@0.2.1"
+        "-y",
+        "github:POWERFULMOVES/pmoves-hostinger-api-mcp-server#094e38c"
       ],
       "env": {
+        "HOSTINGER_API_TOKEN": "${HOSTINGER_API_KEY}",
         "API_TOKEN": "${HOSTINGER_API_KEY}"
       }
     },
@@ -88,6 +91,11 @@
         "CLOUDFLARE_API_TOKEN": "${CLOUDFLARE_API_TOKEN}",
         "CLOUDFLARE_ACCOUNT_ID": "${CLOUDFLARE_ACCOUNT_ID}"
       }
+    },
+    "cloudflare-api": {
+      "_purpose": "Cloudflare's official REMOTE API MCP (https://mcp.cloudflare.com/mcp) — the ENTIRE Cloudflare API (2,500+ endpoints incl. all of DNS) exposed via two Code-Mode tools search()/execute(), ~1k tokens instead of ~1M for native schemas. OAuth on first connect uses the operator's admin-scoped Cloudflare account. Use this (not the stdio 'cloudflare' entry, which needs a CLOUDFLARE_API_TOKEN that is currently empty in env.shared) to list/manage pmoves.ai DNS records and to mint/verify a Zone:DNS:Edit token for Traefik ACME (CLOUDFLARE_DNS_API_TOKEN). Ref: Cloudflare docs /agents/model-context-protocol/cloudflare/servers-for-cloudflare/ (verified 2026-08-18).",
+      "type": "http",
+      "url": "https://mcp.cloudflare.com/mcp"
     },
     "pmoves-4090-web": {
       "_note": "D-Proxy SSE gateway for pmoves_4090_web profile. Requires `make mcp-4090-gateway-start` first. Claude Code skips gracefully if gateway is not running.",

@@ -24,6 +24,14 @@ services:
       - --certificatesresolvers.cf.acme.email=${ACME_EMAIL:-ops@pmoves.ai}
       - --certificatesresolvers.cf.acme.storage=/letsencrypt/acme.json
     environment:
+      # lego (Traefik's ACME library) reads CLOUDFLARE_DNS_API_TOKEN; the legacy
+      # CF_* alias is no longer recognized in current lego. Observed 2026-08-18:
+      # every edge cert (wealth/health/auth) failed ACME with
+      # "credentials information are missing: CLOUDFLARE_DNS_API_TOKEN" while only
+      # CF_DNS_API_TOKEN was set. Set BOTH so the token is found regardless of
+      # lego version — the value is identical (the operator-supplied DNS:Edit token).
+      # See docs/handoffs/traefik-cloudflare-dns-token-varname-2026-08-18.md
+      CLOUDFLARE_DNS_API_TOKEN: ${CLOUDFLARE_DNS_API_TOKEN}
       CF_DNS_API_TOKEN: ${CLOUDFLARE_DNS_API_TOKEN}
     ports: ["443:443", "80:80"]
     volumes:
