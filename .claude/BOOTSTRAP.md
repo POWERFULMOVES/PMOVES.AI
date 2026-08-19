@@ -27,6 +27,8 @@ Missing items are not failures — they are operational facts. Disclose them. Ne
 | Fleet view | `make -C pmoves fleet-status` (never raw `tailscale status` for public IPs) |
 | CHIT-sign provenance | `make -C pmoves sign-trail SUMMARY=... AGENT=...` |
 | Refresh living docs | `make -C pmoves docs-reconcile` |
+| Run the provider-verifier static gate | `py pmoves/tools/provider_verifier_gate.py` (no API calls; 6 checks; FAIL blocks merge via merge-gate) |
+| Run the provider-verifier full conformance | `cd Pmoves-MiniMax-Provider-Verifier && python verify.py --providers <file> --output-dir /tmp/run` (operator-only, requires real API keys from `env.shared`) |
 
 Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When the damage-control hook converts a raw `docker` / `netsh` / `gh workflow run` command to an `ask` prompt, that means a Make target already exists — use it.
 
