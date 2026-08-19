@@ -752,7 +752,12 @@ services:
   #  strips comments trailing the `environment:` sequence on its round-trip.)
   supabase-kong:
     <<: *tier-supabase-hardened
-    image: kong/kong:3.9.1
+    # Matches upstream PMOVES-supabase/docker/docker-compose.yml. Kong is the REST
+    # gateway; keeping it aligned with the submodule matters because its declarative
+    # config (kong.yml) is LIVE-MOUNTED from that submodule, so upstream config
+    # changes reach this container the moment the gitlink bumps - which is exactly
+    # how the expressions-router outage (#2593) arrived. Patch-level bump.
+    image: kong/kong:3.9.3
     profiles:
     - supabase-local
     volumes:
@@ -982,7 +987,9 @@ services:
   supabase-studio:
     <<: *tier-supabase-hardened
     # Pinned 2025-02-04: Latest stable from Supabase
-    image: supabase/studio:2026.06.03-sha-0bca601
+    # Matches upstream. Dashboard UI only - no data path and nothing depends on it,
+    # so this is the lowest-risk half of the L2 currency slice.
+    image: supabase/studio:2026.08.03-sha-022b374
     restart: unless-stopped
     profiles:
     - supabase-local
