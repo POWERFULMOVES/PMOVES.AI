@@ -55,6 +55,12 @@ jobs:
   static-gate:
     name: verifier-gate
     runs-on: ubuntu-latest
+    # Override the workflow-level {} permissions: the PR-comment step
+    # uses actions/github-script, which needs issues: write. The static
+    # gate itself needs no scopes; this is the minimum that lets the
+    # comment step post on FAIL.
+    permissions:
+      issues: write
     steps:
       - name: Checkout repo (with submodules)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
