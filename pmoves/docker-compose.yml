@@ -3264,7 +3264,11 @@ services:
     # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
     - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
     - BETTER_AUTH_SECRET=${ARCHON_BETTER_AUTH_SECRET:-${BETTER_AUTH_SECRET:-}}
-    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://nats:pmoves@nats:4222}
+      # Credentials from NATS_USER/NATS_PASSWORD, host pinned to nats:4222 —
+      # the shape nats-init and both P7 stanzas use since #2610. The hardcoded
+      # `nats:pmoves` default this replaces fails auth on any node with a rotated
+      # NATS_PASSWORD. ARCHON_BUS_NATS_URL remains the explicit per-node override.
+    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
@@ -3992,7 +3996,12 @@ services:
     restart: unless-stopped
     environment:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      # Composed from NATS_USER/NATS_PASSWORD with the host PINNED, per #2610.
+      # The previous `${NATS_URL:-...}` form was doubly wrong: the default failed
+      # auth on a rotated password, AND Compose gives a host-session export
+      # precedence over every --env-file, so a shell exporting a localhost-oriented
+      # NATS URL reached the container, where localhost is the container itself.
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
@@ -4080,8 +4089,14 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
+      # Composed from NATS_USER/NATS_PASSWORD with the host PINNED, per #2610.
+      # The previous `${NATS_URL:-...}` form was doubly wrong: the default failed
+      # auth on a rotated password, AND Compose gives a host-session export
+      # precedence over every --env-file, so a shell exporting a localhost-oriented
+      # NATS URL reached the container, where localhost is the container itself.
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
+    # Credentials come from NATS_USER/NATS_PASSWORD, which the funnel writes into
+    # env.shared / env.tier-agent.
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
