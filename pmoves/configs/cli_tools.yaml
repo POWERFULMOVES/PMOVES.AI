@@ -110,6 +110,13 @@ host_clis:
       windows: "pip install glances[web]"
       linux: "pip install glances[web]  # or brew install glances"
     check: "glances --version"
+  skills:
+    purpose: "Open skills ecosystem package manager (vercel-labs/skills CLI, via npx) — backs the find-skills meta-skill"
+    required: false
+    install:
+      windows: "npm install -g skills"
+      linux: "npm install -g skills"
+    check: "npx skills --version"
 
 service_clis:
   # CLIs that live inside PMOVES services/submodules

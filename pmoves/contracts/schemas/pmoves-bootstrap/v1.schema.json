@@ -149,6 +149,17 @@
             "account": {"type": "string"},
             "zones": {"type": "array", "items": {"type": "string"}}
           }
+        },
+        "minimax": {
+          "type": "object",
+          "description": "MiniMax model cascade - the 3 NEW submodules from PR #2589 of the 6-repo fold-in. mcp is the MCP server (consumed by WebUI/Agent Zero); cli is the sidecar CLI (consumed by Pinokio on operator devices); verifier is the conformance gate (run on candidate providers before adding them); pinokio is the sidecar lane binding. All are advisory - missing submodules are skipped, not failed. Same skip-on-missing pattern as tailscale/rustdesk/hostinger/cloudflare.",
+          "additionalProperties": true,
+          "properties": {
+            "mcp": {"type": "string", "description": "Submodule path for the MCP server (PMOVES-MiniMax-MCP)."},
+            "cli": {"type": "string", "description": "Submodule path for the sidecar CLI (Pmoves-minimax-cli)."},
+            "verifier": {"type": "string", "description": "Submodule path for the conformance gate (Pmoves-MiniMax-Provider-Verifier)."},
+            "pinokio": {"type": "string", "description": "Submodule path for the sidecar lane (Pmoves-pinokio)."}
+          }
         }
       }
     },
