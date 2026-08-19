@@ -23,7 +23,7 @@
               "type": "required_status_checks",
               "parameters": {
                 "required_status_checks": [
-                  { "context": "merge-gate" },
+                  { "context": "merge-decision" },
                   { "context": "python-tests" },
                   { "context": "hardening-validation" },
                   { "context": "verify" },
