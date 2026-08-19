@@ -221,7 +221,11 @@ services:
     # Postgres backend (pg_notify realtime). Archon auto-inits its schema on boot.
     - DATABASE_URL=${ARCHON_DATABASE_URL:-postgresql://${ARCHON_DB_USER:-archon}:${ARCHON_DB_PASSWORD:-archon}@archon-postgres:5432/${ARCHON_DB_NAME:-remote_coding_agent}}
     - BETTER_AUTH_SECRET=${ARCHON_BETTER_AUTH_SECRET:-${BETTER_AUTH_SECRET:-}}
-    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://nats:pmoves@nats:4222}
+      # Credentials from NATS_USER/NATS_PASSWORD, host pinned to nats:4222 —
+      # the shape nats-init and both P7 stanzas use since #2610. The hardcoded
+      # `nats:pmoves` default this replaces fails auth on any node with a rotated
+      # NATS_PASSWORD. ARCHON_BUS_NATS_URL remains the explicit per-node override.
+    - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
