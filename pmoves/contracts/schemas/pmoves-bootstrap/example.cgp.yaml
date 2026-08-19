@@ -58,6 +58,7 @@ mcps:
   - obsidian-brain        # Cross-session knowledge lookups
   - pmoves-neo4j-mcp      # Graph queries (Pillar 4, CHIT tour data)
   - pmoves-cipher-mcp     # Memory layer (Cipher agent)
+  - pmoves-minimax-mcp    # MiniMax model surface (text/image/video/TTS/voice-clone); submodule PMOVES-MiniMax-MCP, stdio via `uvx minimax-mcp`
 
 # === Services (tagged infrastructure) ===
 # All advisory - missing services are skipped, not failed.
@@ -78,6 +79,17 @@ services:
   cloudflare:
     account: powerfullmoves
     zones: []  # populated when the operator wires CF zones
+  # MiniMax model cascade - the 3 NEW submodules landed by PR #2589 of the
+  # 6-repo fold-in. Mavis / WebUI / Agent Zero call pmoves-minimax-mcp
+  # directly; the sidecar lane (Pinokio on operator devices) calls the same
+  # surface through Pmoves-minimax-cli. MiniMax-Provider-Verifier is the
+  # conformance gate: any new provider claiming MiniMax compatibility
+  # must pass `verify.py` before being added to this block.
+  minimax:
+    mcp: PMOVES-MiniMax-MCP        # submodule path; entry `uvx minimax-mcp`
+    cli: Pmoves-minimax-cli        # `mmx <subcommand>` is the operator-device surface
+    verifier: Pmoves-MiniMax-Provider-Verifier  # `verify.py <provider.json>` gates new providers
+    pinokio: Pmoves-pinokio        # sidecar lane (operator devices)
 
 # === Routing (peer agents in the fleet) ===
 # Mavis publishes to pmoves.agent.task.v1 with target=<agent>; the
