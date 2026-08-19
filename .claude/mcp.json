@@ -1,5 +1,5 @@
 {
-  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=POWERFULMOVES fork @094e38c (v1.35.7; replaced the npm 0.2.1 pin), tailscale-mcp=2026.4.10-1, @supabase/mcp-server-postgrest=0.1.1, postgres-mcp=0.3.0",
+  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=POWERFULMOVES fork @094e38c (v1.35.7; replaced the npm 0.2.1 pin), tailscale-mcp=2026.4.10-1, @supabase/mcp-server-postgrest=0.1.1, postgres-mcp=0.3.0, minimax-mcp=0.0.18 (matches the audited PMOVES-MiniMax-MCP gitlink f4d6a61b, whose pyproject.toml declares version 0.0.18)",
   "mcpServers": {
     "pmoves-cipher": {
       "_note": "Cipher SSE requires bearer auth when the API token is set (hardened container, post-#2005 recreate). The claude-pmoves launcher injects the token env var; without it the header expands empty and cipher returns 401 (same as before this header existed - no regression). PATH VERIFIED 2026-08-12 against a freshly built pmoves-cipher-api-1 (node dist/pmoves/rest-server.js --port 8105, published 127.0.0.1:8105->8105): /mcp/sse answers 200; /api/mcp/sse and /sse both 404. Same result as an independent 2026-08-04 probe of a different build, so the path is a property of the server, not of one container.",
@@ -152,7 +152,7 @@
       "_purpose": "PMOVES-MiniMax-MCP — MiniMax model surface (text/image/video/TTS/voice-clone) over MCP stdio. Submodule POWERFULMOVES/PMOVES-MiniMax-MCP (f4d6a61b) at PMOVES-MiniMax-MCP/; entry point `uvx minimax-mcp` per the submodule's pyproject.toml. Mavis harness v0 follow-ups (PR #2568) consume this for model access; the sidecar lane (Pinokio on operator devices) calls the same surface via Pmoves-minimax-cli. Requires MINIMAX_API_KEY.",
       "command": "uvx",
       "args": [
-        "minimax-mcp"
+        "minimax-mcp==0.0.18"
       ],
       "env": {
         "MINIMAX_API_KEY": "${MINIMAX_API_KEY}",
