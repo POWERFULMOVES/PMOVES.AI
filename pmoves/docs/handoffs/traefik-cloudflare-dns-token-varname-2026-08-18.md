@@ -39,12 +39,22 @@ genuinely empty. The 2026-08-14 "creds not in Traefik" read was correct; the int
 
 ## Fix
 
-**Operator-gated (the real fix):** supply a Cloudflare API token with **Zone:DNS:Edit on the
-`pmoves.ai` zone** into `env.shared` as `CLOUDFLARE_DNS_API_TOKEN`, via the secrets pipeline
+**Operator-gated (the real fix):** supply a Cloudflare API token with **BOTH `Zone:DNS:Edit`
+AND `Zone:Zone:Read` on the `pmoves.ai` zone** into `env.shared` as `CLOUDFLARE_DNS_API_TOKEN`,
+via the secrets pipeline
 (`make secrets-rotate KEY=CLOUDFLARE_DNS_API_TOKEN` with `PMOVES_ROTATE_VALUE`), then
 `make -C pmoves up-edge` to recreate Traefik. Option: if the existing `CLOUDFLARE_API_TOKEN`
 (used by the cloudflare MCP) already carries DNS:Edit on pmoves.ai, its value can be reused —
 operator decision.
+
+> **Why `Zone:Zone:Read` and not just `Zone:DNS:Edit`.** lego does not know the zone ID for
+> `pmoves.ai`; it looks the zone up through the Cloudflare API before it can write the
+> `_acme-challenge` TXT record. That lookup is a `Zone:Read` operation. lego supports splitting
+> the two — a separate `CLOUDFLARE_ZONE_API_TOKEN` for discovery and `CLOUDFLARE_DNS_API_TOKEN`
+> for the record write — but `docker-compose.traefik.yml` supplies only the DNS token, so that
+> single token serves both calls and needs both scopes. A `DNS:Edit`-only token is rejected
+> during zone discovery and every edge certificate stays unissued, with a failure that looks
+> like a credentials problem rather than a scope problem.
 
 **Precautionary hardening (this change, already applied):** also set the token under the
 canonical name lego reads, keeping the legacy name too, so once a real value is present lego
