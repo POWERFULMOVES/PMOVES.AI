@@ -78,6 +78,90 @@
   },
 
   "per_repo_overrides": {
+    "POWERFULMOVES/pmoves-keygen": {
+      "profile": "fork",
+      "branch": "master"
+    },
+    "POWERFULMOVES/PMOVES-E2B-Danger-Room": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/PMOVES-Danger-infra": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/pmoves-pipecat": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/PMOVES-MAI-UI": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/PMOVES-headscale": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/PMOVES-jcodemunch-mcp": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/pmoves-hirag-mcp": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/PM-Spark-video-search-and-summarization": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/PMOVES-ollama": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/Pmoves-skills": {
+      "profile": "fork",
+      "branch": "main"
+    },
+    "POWERFULMOVES/PMOVES-skills": {
+      "profile": "fork",
+      "branch": "main"
+    },
+    "POWERFULMOVES/PMOVES-agents.md": {
+      "profile": "fork",
+      "branch": "main"
+    },
+    "POWERFULMOVES/PMOVES-MiniMax-MCP": {
+      "profile": "fork",
+      "branch": "main"
+    },
+    "POWERFULMOVES/Pmoves-minimax-cli": {
+      "profile": "fork",
+      "branch": "main"
+    },
+    "POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier": {
+      "profile": "fork",
+      "branch": "main"
+    },
+    "POWERFULMOVES/PMOVES-OrcaSlicer": {
+      "profile": "fork",
+      "branch": "main"
+    },
+    "POWERFULMOVES/PMOVES-obico-server": {
+      "profile": "fork",
+      "branch": "release"
+    },
+    "POWERFULMOVES/PMOVES-moonraker-obico": {
+      "profile": "fork",
+      "branch": "master"
+    },
+    "POWERFULMOVES/PMOVES-OctoPrint-Obico": {
+      "profile": "fork",
+      "branch": "master"
+    },
+    "POWERFULMOVES/PMOVES-fluidd": {
+      "profile": "fork",
+      "branch": "develop"
+    },
     "POWERFULMOVES/PMOVES.AI": {
       "profile": "monorepo",
       "branch": "main"
@@ -86,7 +170,7 @@
       "profile": "fork",
       "branch": "PMOVES.AI-Edition-Hardened",
       "ruleset_overrides": {
-        "[ main ]": {
+        "[ PMOVES.AI-Edition-Hardened ]": {
           "rules": [
             {
               "type": "required_status_checks",
@@ -111,7 +195,8 @@
     },
     "POWERFULMOVES/PMOVES-pinokio": {
       "profile": "fork",
-      "branch": "main",
+      "_note": "branch tracks .gitmodules, NOT the GitHub default. The parent pins PMOVES.AI-Edition-Hardened; protecting `main` here left the tracked branch open, which is the exact gap this file exists to close.",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "ruleset_overrides": {
         "[ main ]": {
           "rules": [
