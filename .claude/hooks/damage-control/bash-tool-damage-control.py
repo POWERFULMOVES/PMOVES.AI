@@ -292,10 +292,23 @@ def check_path_patterns(command: str, path: str, patterns: List[Tuple[str, str]]
             # For glob patterns, we check if the operation + glob appears in command
             # e.g., "rm *.lock" should match DELETE_PATTERNS with *.lock
             try:
-                # Build a regex that matches: operation ... glob_pattern
-                # Extract the command prefix from pattern_template (e.g., '\brm\s+.*' from '\brm\s+.*{path}')
-                cmd_prefix = pattern_template.replace("{path}", "")
-                if cmd_prefix and re.search(cmd_prefix + glob_regex, command, re.IGNORECASE):
+                # SUBSTITUTE into {path}; do not strip it and append.
+                #
+                # Stripping worked only because every SHELL template ends in {path},
+                # so prefix+glob happened to reconstruct them. The INTERPRETER templates
+                # carry {path} in the MIDDLE, and stripping collapsed the quote-binding
+                # to a bare quoted-string match with the glob tacked on the end -- which
+                # no longer ties the path to the write. Every readOnlyPath expressed as a
+                # glob (12 of 57) was therefore unprotected against interpreter writes,
+                # while literal paths were protected. Measured: an interpreter write to a
+                # glob-matched read-only path was ALLOWED; the same form against a literal
+                # read-only path was BLOCKED.
+                #
+                # Substitution reconstructs the shell templates identically (placeholder is
+                # last, so you get prefix+glob) and fixes the interpreter ones.
+                # glob_to_regex emits no anchors, so it is safe to embed mid-pattern.
+                filled = pattern_template.replace('{path}', glob_regex)
+                if filled and re.search(filled, command, re.IGNORECASE):
                     return True, f"Blocked: {operation} operation on {path_type} {path}"
             except re.error as e:
                 print(f"WARNING: Invalid regex for glob path pattern ({operation}, {path}): {e}", file=sys.stderr)

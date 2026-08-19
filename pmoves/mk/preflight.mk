@@ -49,14 +49,14 @@ else
 endif
 
 flight-check: ## Fast readiness scan (quick mode, no boot animation)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
 	PYTHONUTF8=1 PYTHONIOENCODING=utf-8 $$runner tools/flightcheck/retro_flightcheck.py --quick --theme "$(RETRO_THEME_QUICK)"
 
 flight-check-retro: ## Full retro diagnostics with optional CRT boot animation
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
@@ -237,14 +237,14 @@ auth-alignment-strict: ## Strict auth alignment (warnings also fail)
 	@$(PRECHECK_PY) tools/auth_alignment_check.py --strict
 
 topology-chit-gate: ## Validate Archon topology and CHIT sync/propagation (warning mode)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
 	$$runner tools/topology_chit_gate.py $(ARGS)
 
 topology-chit-gate-strict: ## Strict topology+CHIT gate (warnings fail)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \

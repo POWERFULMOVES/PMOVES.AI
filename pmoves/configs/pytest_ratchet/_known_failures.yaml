@@ -43,6 +43,42 @@
 #     (pmoves/tests [1]). Recorded so a hang or an unimportable conftest is a
 #     visible, ratchetable finding instead of silence.
 #
+#
+# ── What the `pmoves/tests [1]` no-report entry actually costs ───────────────
+# That chunk holds 20 test files and it exceeds the 120s timeout on every run,
+# so `parse_junit` never sees ANY result from it — passes and failures alike are
+# discarded, not just the hang. The baseline records the silence; it cannot
+# record what the silence contains.
+#
+# Measured, 2026-08-19: chunk membership is a function of the whole discovered
+# file list (nearest-conftest grouping, then chunks of 20 in discovery order), so
+# adding ANY test file anywhere in pmoves/tests reshuffles the boundaries and
+# changes which failures are visible. Adding two files to this repo moved
+# pmoves/tests/services/test_content_provenance_gate.py from chunk [1] into
+# chunk [2], and three failures that had never once been reported appeared as
+# "new":
+#
+#   FAIL|tests.services.test_content_provenance_gate|test_preview_pipeline_shapes_attests_and_accepts
+#   FAIL|tests.services.test_content_provenance_gate|test_preview_pipeline_rejects_low_signal_content
+#   FAIL|tests.services.test_content_provenance_gate|test_new_content_topics_validate_against_contracts
+#
+# All three: ModuleNotFoundError: No module named 'slowapi'. Reproduced in a
+# clean venv built from .github/requirements-tests.txt — pre-existing, unrelated
+# to whatever PR happens to shift the boundary. `slowapi` is imported by
+# pmoves/services/content-provenance-gate/main.py and by no test, which is the
+# same blind spot that file already documents for python-multipart. Installing
+# it is necessary but not sufficient: the tests then fail 401 and need real work
+# in that service.
+#
+# They are NOT baselined here. Baselining would convert "invisible because a
+# chunk timed out" into "known broken", which is a stronger and less true claim,
+# and would silently absorb whatever else is hiding in those 20 files. Recorded
+# here instead so the next boundary shift is recognized rather than re-diagnosed.
+#
+# The underlying fix is to stop discarding a timed-out chunk's partial results,
+# or to size chunks so none times out. Both surface an unknown number of further
+# failures at once and need an owner, so neither is done here.
+#
 # Regenerate: make -C pmoves python-tests-baseline
 known_failures:
   - "ERROR|docs.PMOVES.AI PLANS.PMOVES.yt.test_integration|test_full_ingest"
@@ -133,7 +169,6 @@ known_failures:
   - "FAIL|tests.smoke.test_nats_configuration|test_nats_on_correct_networks"
   - "FAIL|tests.smoke.test_nats_configuration|test_nats_url_defined_in_tier_files"
   - "FAIL|tests.smoke.test_nats_configuration|test_nats_url_has_credentials"
-  - "FAIL|tests.smoke.test_nats_configuration|test_no_hardcoded_nats_urls_in_compose"
   - "FAIL|tests.smoke.test_neo4j_dual_ports|test_hirag_v2_uses_neo4j_bolt_port"
   - "FAIL|tests.smoke.test_neo4j_dual_ports|test_neo4j_bolt_port_exposed"
   - "FAIL|tests.smoke.test_neo4j_dual_ports|test_neo4j_http_port_exposed"

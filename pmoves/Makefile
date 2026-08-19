@@ -4575,6 +4575,14 @@ geometry-bus-status: ## Check GEOMETRY BUS NATS subject health
 geometry-bus-status-json: ## Check GEOMETRY BUS health (JSON output)
 	@$(PYTHON) tools/geometry_bus_health.py --json
 
+.PHONY: silent-handler-sweep
+silent-handler-sweep: ## Sweep for silent except-around-import handlers (instrument-trust audit)
+	@$(PYTHON) tools/silent_handler_sweep.py
+
+.PHONY: silent-handler-sweep-json
+silent-handler-sweep-json: ## Silent-handler sweep (JSON output)
+	@$(PYTHON) tools/silent_handler_sweep.py --json
+
 .PHONY: chit-encode
 chit-encode: ## CHIT-encode content from stdin
 	@$(PYTHON) tools/chit_encode_hook.py --pretty

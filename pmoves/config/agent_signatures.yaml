@@ -32,6 +32,17 @@ signatures:
       - cross-repo-orchestration
       - hardening
     description: "Primary architect and security auditor — deep analysis, structured output"
+    alters:
+      - name: "claude-opus-5"
+        id: "claude-opus-5"
+        display_name: "Claude Opus 5"
+        glyph: "◆"          # ◆ Diamond (same lineage)
+        color: "#7C3AED"         # Deep Violet (same)
+        accent: "#C4B5FD"
+        voice: analytical
+        co_author: "Claude Opus 5 <noreply@anthropic.com>"
+        model: "claude-opus-5"
+        description: "Claude Opus 5 — same lineage, newer model. Runs wherever it is launched; the node is a location, not an identity."
 
   kilocode:
     agent_id: "kilocode"

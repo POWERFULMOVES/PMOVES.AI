@@ -119,14 +119,47 @@ def load_config() -> Dict[str, Any]:
 TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".defaults")
 
 
+def _dir_prefix_match(normalized_fwd: str, pattern: str) -> bool:
+    """True when `pattern` names a DIRECTORY prefix of the path.
+
+    chitSafePaths carries directory entries written with a trailing separator.
+    match_path handles file and glob patterns; this covers the directory form,
+    anchored to a path boundary so "a/b/" cannot match "xa/b-c/".
+    """
+    pat = pattern.replace("\\", "/")
+    if not pat.endswith("/"):
+        return False
+    return normalized_fwd.startswith(pat) or ("/" + pat) in ("/" + normalized_fwd)
+
+
 def check_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, str, bool]:
-    """Check if file_path is blocked. Returns (blocked, reason, is_template)."""
-    # CHIT safe paths — CGP archives and CHIT data directories bypass zero-access
-    chit_safe = config.get("chitSafePaths", [])
+    """Check if file_path is blocked. Returns (blocked, reason, is_template).
+
+    ORDER MATTERS AND IS DELIBERATE: zero-access is decided FIRST.
+
+    chitSafePaths used to run ahead of everything, so a safe-list entry could
+    open a path the config declares zero-access. That was not theoretical: a
+    chitSafePaths directory entry is a prefix of a zeroAccessPaths glob under
+    the same tree, and every file the glob protects was editable through it.
+    A safe-list may relax read-only; it must never reach a file the config says
+    has no access at all.
+    """
     normalized_fwd = os.path.normpath(file_path).replace("\\", "/")
-    for safe_pat in chit_safe:
-        safe_normalized = safe_pat.replace("\\", "/")
-        if safe_normalized in normalized_fwd:
+
+    # 1. Zero-access wins over every bypass, including chitSafePaths.
+    for zero_path in config.get("zeroAccessPaths", []):
+        if match_path(file_path, zero_path):
+            basename = os.path.basename(file_path).lower()
+            if any(basename.endswith(suffix) for suffix in TEMPLATE_SUFFIXES):
+                return True, f"zero-access path {zero_path}", True
+            return True, f"zero-access path {zero_path} (no operations allowed)", False
+
+    # 2. CHIT safe paths — CGP archives and CHIT data dirs bypass read-only.
+    #    match_path, not a bare `in`: substring matching made every entry an
+    #    unanchored wildcard, so a bare filename entry also matched that name
+    #    with any suffix appended, and any path merely containing those bytes.
+    for safe_pat in config.get("chitSafePaths", []):
+        if match_path(file_path, safe_pat) or _dir_prefix_match(normalized_fwd, safe_pat):
             return False, "", False
 
     # Known Road — contextualized, provable bypass (see known_roads.py / PATTERNS.md).
@@ -136,14 +169,6 @@ def check_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, str, bool]
     if kr_detail:
         # File is in a Known Road domain but the road is invalid — block with detail.
         return True, kr_detail, False
-
-    # Check zero-access paths first (no access at all)
-    for zero_path in config.get("zeroAccessPaths", []):
-        if match_path(file_path, zero_path):
-            basename = os.path.basename(file_path).lower()
-            if any(basename.endswith(suffix) for suffix in TEMPLATE_SUFFIXES):
-                return True, f"zero-access path {zero_path}", True
-            return True, f"zero-access path {zero_path} (no operations allowed)", False
 
     # Check read-only paths (writes not allowed)
     for readonly in config.get("readOnlyPaths", []):

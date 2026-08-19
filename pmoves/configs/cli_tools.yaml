@@ -1,0 +1,151 @@
+# PMOVES CLI Tools Registry — canonical inventory
+# Single source of truth for every CLI the fleet uses:
+#   pmoves_wrappers: launcher scripts shipped in pmoves/scripts/ (install-tools)
+#   host_clis:       external binaries nodes need (doctor validates presence)
+#   service_clis:    CLI entrypoints of PMOVES services/submodules
+#
+# Consumers:
+#   - pmoves/tools/install_tools.py   (install wrappers, --check validates host_clis)
+#   - pmoves/configs/skill-pairings.yaml skill_sources (BoTZ tool references)
+#   - make -C pmoves cli-check        (host CLI doctor)
+#
+# When adding a CLI here, also add its skill_sources entry if BoTZ agents
+# should be able to invoke it.
+
+schema_version: "1.0.0"
+
+pmoves_wrappers:
+  # name -> what it launches
+  pmoves-mini:
+    script: pmoves/scripts/pmoves-mini
+    windows_shim: pmoves/scripts/windows/pmoves-mini.bat
+    drives: python (pmoves/tools/mini_cli.py, typer)
+    purpose: "PMOVES mini CLI — profiles, models, automations, crush setup"
+  claude-pmoves:
+    script: pmoves/scripts/claude-pmoves.sh
+    windows_shim: pmoves/scripts/windows/claude-pmoves.bat
+    drives: claude (Claude Code)
+    purpose: "Claude Code with PMOVES three-body agent frontmatter (delivery/control/memory)"
+  codex-pmoves:
+    script: pmoves/scripts/codex-pmoves.sh
+    windows_shim: pmoves/scripts/windows/codex-pmoves.bat
+    drives: codex (OpenAI Codex CLI)
+    purpose: "Codex CLI rooted in the PMOVES repo"
+  kilo-pmoves:
+    script: pmoves/scripts/kilo-pmoves.sh
+    windows_shim: pmoves/scripts/windows/kilo-pmoves.bat
+    drives: opencode (KiloCode/OpenCode)
+    purpose: "KiloCode/OpenCode with per-node configs (pmoves/configs/claws/opencode-<node>.json)"
+  kimi-pmoves:
+    script: pmoves/scripts/kimi-pmoves.sh
+    windows_shim: pmoves/scripts/windows/kimi-pmoves.bat
+    drives: kimi (Kimi Code CLI)
+    purpose: "Kimi Code with PMOVES context files + Cipher/Agent Zero MCP"
+  crush-pmoves:
+    script: pmoves/scripts/crush-pmoves
+    windows_shim: pmoves/scripts/windows/crush-pmoves.bat
+    drives: crush (Charm Crush)
+    purpose: "One-shot Crush bootstrap+launch (config + CHIT + MCP)"
+  hermes-pmoves:
+    script: pmoves/scripts/hermes-pmoves
+    windows_shim: pmoves/scripts/windows/hermes-pmoves.bat
+    drives: hermes (Hermes Agent)
+    purpose: "One-shot Hermes bootstrap+launch (profile + MCP + CHIT)"
+
+host_clis:
+  # name -> { purpose, required, install hints, check command }
+  nats:
+    purpose: "NATS CLI — CHIT bundle ops, JetStream/subject checks (chit.signed.v1)"
+    required: false
+    install:
+      windows: "winget install Nexodus.NATS-CLI  # or: scoop install nats-cli"
+      linux: "brew install nats-io/nats-tools/nats-cli  # or download from github.com/nats-io/natscli releases"
+    check: "nats --version"
+  supabase:
+    purpose: "Supabase CLI — local stack bring-up, migrations, types"
+    required: false
+    install:
+      windows: "winget install Supabase.CLI"
+      linux: "brew install supabase/tap/supabase"
+    check: "supabase --version"
+  ollama:
+    purpose: "Ollama — local model runtime (model-readiness, edge inference)"
+    required: false
+    install:
+      windows: "winget install Ollama.Ollama"
+      linux: "curl -fsSL https://ollama.com/install.sh | sh"
+    check: "ollama --version"
+  gh:
+    purpose: "GitHub CLI — CHIT bundle pull (secrets-pull), PR ops, workflow dispatch"
+    required: true
+    install:
+      windows: "winget install GitHub.cli"
+      linux: "brew install gh"
+    check: "gh --version"
+  docker:
+    purpose: "Docker — compose runtime for every tier"
+    required: true
+    install:
+      windows: "winget install Docker.DockerDesktop"
+      linux: "curl -fsSL https://get.docker.com | sh"
+    check: "docker --version"
+  make:
+    purpose: "GNU Make — every PMOVES can-opener is a make target"
+    required: true
+    install:
+      windows: "winget install GnuWin32.Make  # fleet nodes typically use Git Bash make"
+      linux: "apt install make # or brew install make"
+    check: "make --version"
+  uv:
+    purpose: "uv — fast Python env management (env-bootstrap-lite)"
+    required: false
+    install:
+      windows: "winget install astral-sh.uv"
+      linux: "curl -LsSf https://astral.sh/uv/install.sh | sh"
+    check: "uv --version"
+  glances:
+    purpose: "Glances — hardware probe backend (node profiles, ghost detector)"
+    required: false
+    install:
+      windows: "pip install glances[web]"
+      linux: "pip install glances[web]  # or brew install glances"
+    check: "glances --version"
+  skills:
+    purpose: "Open skills ecosystem package manager (vercel-labs/skills CLI, via npx) — backs the find-skills meta-skill"
+    required: false
+    install:
+      windows: "npm install -g skills"
+      linux: "npm install -g skills"
+    check: "npx skills --version"
+
+service_clis:
+  # CLIs that live inside PMOVES services/submodules
+  mini_cli:
+    path: pmoves/tools/mini_cli.py
+    framework: typer
+    wrapper: pmoves-mini
+    purpose: "PMOVES mini CLI (profiles, models, automations, crush, hermes)"
+  agent-zero-runtime:
+    path: PMOVES-Agent-Zero/run.py
+    wrapper: null
+    purpose: "Agent Zero runtime CLI (host-native runs)"
+  minimax-cli:
+    path: Pmoves-minimax-cli
+    wrapper: null
+    purpose: "MiniMax MCP CLI bridge (sidecar lane; folded in 2026-08-17)"
+  kilocode-project:
+    path: kilo.json
+    wrapper: kilo-pmoves
+    purpose: "KiloCode project config (default_agent kilocode-glm, zai/glm-5.2)"
+  hostinger-mcp:
+    path: mcp_hostinger-api (session MCP)
+    wrapper: null
+    purpose: "Hostinger API MCP — VPS/DNS/billing tools (many CLIs surface)"
+
+botz:
+  # How BoTZ agents discover these tools
+  registry: pmoves/configs/skill-pairings.yaml#skill_sources
+  note: >
+    Every pmoves_wrapper and host_cli referenced in skill_sources can be
+    composed into BoTZ pipelines via FlOO$ depends/hooks. Host CLIs used
+    by pipelines should carry a health check in their skill entry.

@@ -108,6 +108,30 @@ DIRECTORY_BYPASS_CASES = [
 ]
 
 
+
+# EVERY case above is checked against CTX, a LITERAL readOnlyPath. That is exactly
+# why this suite stayed green while the 12 GLOB readOnlyPaths had no interpreter
+# protection at all: check_path_patterns takes a different branch for globs, and
+# no case here ever exercised it. These carry their own protected path, like
+# DIRECTORY_BYPASS_CASES, so both branches are covered.
+GLOB_PATH_CASES = [
+    (True, "interpreter write to a glob read-only path", 'pmoves/docker-compose*.yml',
+     "python -c \"import io; io.open('pmoves/docker-compose.ui.yml','w').write(1)\""),
+    (True, "Path(glob path).write_text", 'pmoves/docker-compose*.yml',
+     "python -c \"from pathlib import Path; Path('pmoves/docker-compose.ui.yml').write_text('x')\""),
+    (True, "interpreter write to a *-suffix glob path", '*.lock',
+     "python -c \"import io; io.open('poetry.lock','w').write(1)\""),
+    # the shell branch must not regress -- it worked before and must keep working
+    (True, "shell edit on a glob path", 'pmoves/docker-compose*.yml',
+     "sed -i 's/a/b/' pmoves/docker-compose.ui.yml"),
+    # and reads stay allowed: read-only means read-only, not no-access
+    (False, "read a glob read-only path", 'pmoves/docker-compose*.yml',
+     "python -c \"import io; print(io.open('pmoves/docker-compose.ui.yml').read())\""),
+    (False, "write to a path the glob does not cover", 'pmoves/docker-compose*.yml',
+     "python -c \"import io; io.open('pmoves/docs/out.md','w').write(1)\""),
+]
+
+
 def main() -> int:
     failures = 0
 
@@ -139,6 +163,12 @@ def main() -> int:
 
     for should_block, label, protected, command in DIRECTORY_BYPASS_CASES:
         blocked, _ = dc.check_path_patterns(command, protected, dc.NO_DELETE_BLOCKED, "no-delete path")
+        ok = blocked == should_block
+        failures += 0 if ok else 1
+        print(f"  [{'PASS' if ok else 'FAIL'}] {'block' if should_block else 'allow':<5} {label}")
+
+    for should_block, label, protected, command in GLOB_PATH_CASES:
+        blocked, _ = dc.check_path_patterns(command, protected, dc.READ_ONLY_BLOCKED, "read-only path")
         ok = blocked == should_block
         failures += 0 if ok else 1
         print(f"  [{'PASS' if ok else 'FAIL'}] {'block' if should_block else 'allow':<5} {label}")

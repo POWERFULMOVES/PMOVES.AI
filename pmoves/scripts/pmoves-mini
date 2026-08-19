@@ -19,6 +19,15 @@ if [ -z "$REPO_ROOT" ]; then
   exit 1
 fi
 
+VENV_PY="${PMOVES_PYTHON:-}"
+if [ -z "$VENV_PY" ]; then
+  if [ -x "${REPO_ROOT}/pmoves/.venv-pmoves/Scripts/python.exe" ]; then
+    VENV_PY="${REPO_ROOT}/pmoves/.venv-pmoves/Scripts/python.exe"
+  else
+    VENV_PY="${REPO_ROOT}/pmoves/.venv-pmoves/bin/python"
+  fi
+fi
+
 exec env PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
-  "${PMOVES_PYTHON:-${REPO_ROOT}/pmoves/.venv-pmoves/bin/python}" \
+  "$VENV_PY" \
   "$REPO_ROOT/pmoves/tools/mini_cli.py" "$@"

@@ -16,6 +16,22 @@ from typing import Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+
+def force_utf8_stdio() -> None:
+    """Make stdout/stderr UTF-8 so status glyphs don't crash a cp1252 Windows console.
+
+    Windows Python defaults stdout to the locale encoding (cp1252), which raises
+    ``UnicodeEncodeError`` on ``✔``/``ℹ``/``→`` etc. The funnel sets no
+    ``PYTHONUTF8``/``PYTHONIOENCODING``, so tools that print glyphs must self-defend.
+    A no-op when the stream can't be reconfigured (e.g. under pytest capture).
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
+
+
 # ---------------------------------------------------------------------------
 # Placeholder Detection
 # ---------------------------------------------------------------------------
