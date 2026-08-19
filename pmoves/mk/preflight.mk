@@ -25,7 +25,12 @@ SUBMODULE_BRANCH_ALLOW ?= PMOVES-DoX=PMOVES.AI-Edition-Hardened-DoX,\
   skills/Pmoves-claude-d3js-skill=main,\
   PMOVES-jcodemunch-mcp=main,\
   pmoves-hirag-mcp=main,\
-  PMOVES-Spark-VSS=main
+  PMOVES-Spark-VSS=main,\
+  PMOVES-nats-server=main,\
+  PMOVES-MiniMax-MCP=main,\
+  Pmoves-minimax-cli=main,\
+  Pmoves-MiniMax-Provider-Verifier=main,\
+  PMOVES-agents.md=main
 AUDIT_RUNTIME_GPU ?= 0
 PRECHECK_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 PRECHECK_VENV_UNIX ?= .venv-pmoves/bin/python
