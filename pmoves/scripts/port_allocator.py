@@ -55,6 +55,7 @@ DEFAULT_PORTS = {
     # Retrieval & Knowledge
     "hi-rag-gateway-v2": 8086,
     "hi-rag-gateway-v2-gpu": 8087,
+    "hi-rag-gateway-v1-gpu": 8187,  # container 8086; 8090 reserved for retrieval-eval
     "deepresearch": 8098,
     "supaserch": 8099,
 

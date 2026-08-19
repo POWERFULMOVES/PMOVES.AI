@@ -133,7 +133,6 @@ known_failures:
   - "FAIL|tests.smoke.test_nats_configuration|test_nats_on_correct_networks"
   - "FAIL|tests.smoke.test_nats_configuration|test_nats_url_defined_in_tier_files"
   - "FAIL|tests.smoke.test_nats_configuration|test_nats_url_has_credentials"
-  - "FAIL|tests.smoke.test_nats_configuration|test_no_hardcoded_nats_urls_in_compose"
   - "FAIL|tests.smoke.test_neo4j_dual_ports|test_hirag_v2_uses_neo4j_bolt_port"
   - "FAIL|tests.smoke.test_neo4j_dual_ports|test_neo4j_bolt_port_exposed"
   - "FAIL|tests.smoke.test_neo4j_dual_ports|test_neo4j_http_port_exposed"
