@@ -112,11 +112,29 @@ jobs:
           echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
           echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
           echo "  action-pin-validation: ${{ needs.action-pin-validation.result }}"
-          if [[ "${{ needs.python-tests.result }}" == "failure" ]] || \
-             [[ "${{ needs.docker-build-validation.result }}" == "failure" ]] || \
-             [[ "${{ needs.hardening-validation.result }}" == "failure" ]] || \
-             [[ "${{ needs.action-pin-validation.result }}" == "failure" ]]; then
-            echo "::error::Merge gate FAILED — one or more required checks failed"
+          # REQUIRE success — do not merely reject "failure".
+          #
+          # A needs.<job>.result is one of success | failure | cancelled | skipped.
+          # Testing only for "failure" let cancelled and skipped through, so a run
+          # that never evaluated a gate reported PASSED. That is the same fail-open
+          # shape this PR exists to remove, reproduced in the gate meant to close it:
+          # an instrument that reports fine without having measured anything.
+          #
+          # None of the four jobs carries an `if:` or a path filter, so they always
+          # run — a skip is not a legitimate state here, and if one ever appears it
+          # is itself worth failing on rather than passing silently.
+          failed=0
+          for r in "python-tests:${{ needs.python-tests.result }}" \
+                   "docker-build-validation:${{ needs.docker-build-validation.result }}" \
+                   "hardening-validation:${{ needs.hardening-validation.result }}" \
+                   "action-pin-validation:${{ needs.action-pin-validation.result }}"; do
+            job="${r%%:*}"; res="${r#*:}"
+            if [[ "$res" != "success" ]]; then
+              echo "::error::Merge gate FAILED — $job did not succeed (result: ${res:-<empty>})"
+              failed=1
+            fi
+          done
+          if [[ "$failed" -ne 0 ]]; then
             exit 1
           fi
-          echo "Merge gate PASSED"
+          echo "Merge gate PASSED — all four gates reported success"
