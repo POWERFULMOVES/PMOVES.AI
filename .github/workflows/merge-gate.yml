@@ -77,8 +77,31 @@ jobs:
       - name: Check container hardening (ratchet)
         run: python pmoves/tools/hardening_ratchet.py
 
+  # A SHA-pinned action that does not exist fails the workflow during SETUP —
+  # before runs-on resolves, before any step logs, before any annotation. The
+  # run shows `startup_failure`, which reads exactly like a runner hiccup. Two
+  # such pins were live and unnoticed: branch-protection-drift/ruleset-sync
+  # (0 successful runs, ever) and build-nats-workers (5/5 startup_failure since
+  # 2026-07-26). This gate makes the next one a PR failure instead.
+  action-pin-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Stdlib-only; resolves pins through the `gh` CLI preinstalled on the
+      # runner, authenticated with the workflow token.
+      - name: Validate SHA-pinned actions resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python pmoves/tools/action_pin_audit.py
+
   merge-decision:
-    needs: [python-tests, docker-build-validation, hardening-validation]
+    needs: [python-tests, docker-build-validation, hardening-validation, action-pin-validation]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -88,9 +111,11 @@ jobs:
           echo "  python-tests: ${{ needs.python-tests.result }}"
           echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
           echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
+          echo "  action-pin-validation: ${{ needs.action-pin-validation.result }}"
           if [[ "${{ needs.python-tests.result }}" == "failure" ]] || \
              [[ "${{ needs.docker-build-validation.result }}" == "failure" ]] || \
-             [[ "${{ needs.hardening-validation.result }}" == "failure" ]]; then
+             [[ "${{ needs.hardening-validation.result }}" == "failure" ]] || \
+             [[ "${{ needs.action-pin-validation.result }}" == "failure" ]]; then
             echo "::error::Merge gate FAILED — one or more required checks failed"
             exit 1
           fi
