@@ -68,6 +68,8 @@ jobs:
     # comment step post on FAIL.
     permissions:
       issues: write
+      # the `changed` step lists PR files via the API
+      pull-requests: read
     steps:
       - name: Checkout repo (with submodules)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,19 +80,35 @@ jobs:
       # Decide applicability HERE rather than in on.pull_request.paths. The job
       # always runs and always reports; the work below is conditional. That is the
       # shape GitHub prescribes for a workflow that is a required check.
+      # Decide applicability HERE rather than in on.pull_request.paths. The job
+      # always runs and always reports; the work below is conditional. That is the
+      # shape GitHub prescribes for a workflow that is a required check.
+      #
+      # Uses the PR files API, not a local diff: checkout is fetch-depth 1, so
+      # neither `git diff base..head` nor `HEAD~1` resolves -- the first attempt
+      # here died with "ambiguous argument 'HEAD~1'". Deepening the clone would
+      # mean a full history fetch of a monorepo with 72 submodules to answer a
+      # question the API answers in one call.
+      #
+      # FAILS OPEN TOWARD RUNNING: if the API call fails we set relevant=true, so
+      # an unanswerable question runs the gate rather than silently skipping it.
       - name: Does this PR touch the verifier surface?
         id: changed
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          if [ -z "$base" ] || [ -z "$head" ]; then
-            # workflow_dispatch and anything without a PR context: always run.
+          set -uo pipefail
+          num="${{ github.event.pull_request.number }}"
+          if [ -z "$num" ]; then
+            echo "no PR context (workflow_dispatch) — running the gate."
             echo "relevant=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          git fetch --no-tags --depth=1 origin "$base" >/dev/null 2>&1 || true
-          files="$(git diff --name-only "$base" "$head" 2>/dev/null || git diff --name-only HEAD~1 HEAD)"
+          files="$(gh api --paginate "repos/${{ github.repository }}/pulls/$num/files"                      --jq '.[].filename' 2>/dev/null)"
+          if [ -z "$files" ]; then
+            echo "::warning::could not list PR files — running the gate rather than skipping it"
+            echo "relevant=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
           relevant=false
           while IFS= read -r f; do
             [ -n "$f" ] || continue
