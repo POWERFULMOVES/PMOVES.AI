@@ -24,6 +24,7 @@ ENV HF_HOME=/home/nonroot/.cache/huggingface
 EXPOSE 8114
 CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8114"]
 
-# Non-root runtime (house pattern; restores #2285 intent without truncating)
-RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
-USER pmoves
+# Non-root runtime: the final stage is distroless (no shell, no useradd, no RUN).
+# It ships a built-in `nonroot` user (uid 65532) — and the HF_HOME above already
+# points at /home/nonroot, so this is the user the image was designed around.
+USER nonroot
