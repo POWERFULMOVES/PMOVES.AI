@@ -69,6 +69,9 @@ codex-health-quick: ## Fast Codex-oriented health check for core agent services
 secrets-audit: ## Run secrets hardening audit (CHIT paths, sync workflow, export hygiene)
 	@$(CODEX_PY) tools/secrets_hardening_audit.py
 
+action-pin-audit: ## Verify every SHA-pinned GitHub Action resolves (exit 3 = API unreachable, NOT a pass)
+	@$(CODEX_PY) tools/action_pin_audit.py
+
 tooling-audit: ## Audit PMOVES tools/scripts overlap vs submodule tooling (auth/user/login focused)
 	@$(CODEX_PY) tools/tooling_script_audit.py
 	@echo Wrote pmoves/docs/AGENTS/TOOLING_SCRIPT_AUDIT.md
@@ -81,21 +84,21 @@ chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bund
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_register.py $(ARGS)
 
 chit-manifest-sync: ## Sync v1 CHIT manifest from v2 (file/key targets + alias hints)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
 chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
