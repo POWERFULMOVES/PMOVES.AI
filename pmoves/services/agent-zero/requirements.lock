@@ -3485,9 +3485,9 @@ primp==0.15.0 \
     --hash=sha256:c18b45c23f94016215f62d2334552224236217aaeb716871ce0e4dcfa08eb161 \
     --hash=sha256:e985a9cba2e3f96a323722e5440aa9eccaac3178e74b884778e926b5249df080
     # via duckduckgo-search
-prometheus-client==0.25.0 \
-    --hash=sha256:5e373b75c31afb3c86f1a52fa1ad470c9aace18082d39ec0d2f918d11cc9ba28 \
-    --hash=sha256:d5aec89e349a6ec230805d0df882f3807f74fd6c1a2fa86864e3c2279059fed1
+prometheus-client==0.26.0 \
+    --hash=sha256:fa93d06737aa02bacd05794768508bb97d2fbee28cb3bca04eaae92f0ca953d6 \
+    --hash=sha256:04a91bcf94e2cf74a44a1a874d651a2e853ed354b6e822f3b7487751465d5c2b
     # via
     #   opentelemetry-exporter-prometheus
     #   pydocket

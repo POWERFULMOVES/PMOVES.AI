@@ -8,7 +8,7 @@ jsonschema
 PyYAML
 
 # Metrics
-prometheus-client==0.25.0
+prometheus-client==0.26.0
 
 # Testing
 pytest
