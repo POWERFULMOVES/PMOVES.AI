@@ -69,7 +69,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Python
-        uses: actions/setup-python@65d7f1bbcb944a234e64f7c5668c77cf2d914bb6 # v6.0.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
@@ -111,7 +111,7 @@ jobs:
 
       - name: Post PR comment on FAIL
         if: failure()
-        uses: actions/github-script@ed9884d31165e1ddc43522b9b95e7ecb58b50296 # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
