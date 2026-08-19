@@ -90,7 +90,12 @@ jobs:
         run: |
           # 6 checks, no API calls. Output: JSON line on stdout.
           set +e
-          OUTPUT=$(py pmoves/tools/provider_verifier_gate.py --json 2>&1)
+          # `python`, not `py`. This job is runs-on: ubuntu-latest and
+          # actions/setup-python exposes the selected interpreter as `python`;
+          # `py` is the Windows launcher and is absent here. It would exit 127,
+          # set verdict=FAIL, and block every PR matching the path filter without
+          # ever running a check. The install step two above already uses `python`.
+          OUTPUT=$(python pmoves/tools/provider_verifier_gate.py --json 2>&1)
           RC=$?
           set -e
           echo "## Provider Verifier static gate result" >> "$GITHUB_STEP_SUMMARY"

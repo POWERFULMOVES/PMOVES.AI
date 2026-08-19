@@ -235,11 +235,22 @@ def check_example_keys_are_placeholders(verifier_submodule: Path) -> CheckResult
     leaked: List[str] = []
     for i, entry in enumerate(entries):
         key = entry.get("api_key", "")
-        if key and key != PLACEHOLDER_API_KEY:
-            leaked.append(
-                f"entry[{i}] ({entry.get('name', '?')}): api_key looks real "
-                f"(length {len(key)}, prefix {key[:4]!r}...)"
-            )
+        # Compare against the placeholder directly. `if key and ...` skipped the
+        # check for a falsy value, so api_key "" (and null) passed while the
+        # required-fields check also passed on mere key presence -- the aggregate
+        # gate could report PASS on an example that violates the stated invariant
+        # that every example value equals the placeholder.
+        if key != PLACEHOLDER_API_KEY:
+            if not key:
+                leaked.append(
+                    f"entry[{i}] ({entry.get('name', '?')}): api_key is empty; "
+                    f"expected the literal placeholder {PLACEHOLDER_API_KEY!r}"
+                )
+            else:
+                leaked.append(
+                    f"entry[{i}] ({entry.get('name', '?')}): api_key looks real "
+                    f"(length {len(key)}, prefix {key[:4]!r}...)"
+                )
     if leaked:
         return CheckResult(
             name="example_keys_are_placeholders",
