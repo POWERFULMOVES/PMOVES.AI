@@ -3090,6 +3090,36 @@ mcp_servers:
       by: name
     status: "planned"
 
+  # PMOVES-MiniMax-MCP — text/image/video/TTS/voice-clone over MCP. Submodule
+  # (POWERFULMOVES/PMOVES-MiniMax-MCP, f4d6a61b on main) folds the upstream
+  # MiniMax model surface into one stdio server; `uvx minimax-mcp` is the
+  # entry point declared in the submodule's pyproject.toml. stdio (not SSE)
+  # matches the upstream server's design. The harness v0 follow-ups
+  # (pmoves/configs/submodule_skill_registry.json:770) register the skill
+  # surface [mcp/connect, mcp/list-tools, mcp/invoke]; this entry is the
+  # discovery-plane twin that lets rooms and rooms-tools find it by name.
+  pmoves_minimax_mcp:
+    name: "PMOVES-MiniMax-MCP"
+    submodule: "PMOVES-MiniMax-MCP"
+    class: utility
+    transport: "stdio"
+    command: "uvx"
+    args: ["minimax-mcp"]
+    env:
+      MINIMAX_API_KEY: "${MINIMAX_API_KEY}"
+      MINIMAX_API_HOST: "${MINIMAX_API_HOST:-https://api.minimax.chat}"
+      MINIMAX_API_RESOURCE_MODE: "${MINIMAX_API_RESOURCE_MODE:-url}"
+    action_namespace: "mcp.v1.minimax"
+    capabilities: ["text", "image", "video", "tts", "voice-clone", "video-gen"]
+    rooms: ["minimax-mcp.room.model", "hermes-agent.room.control"]
+    # grounding_source: a discovering agent fetches startup grounding here
+    # (MiniMax model surface: text/image/video/TTS/voice-clone via the
+    # PMOVES-MiniMax-MCP server). See §4a of
+    # docs/superpowers/specs/2026-06-26-voice-agents-design.md and
+    # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
+    grounding_source: true
+    status: "active"
+
 # ── A2A Server Registry ─────────────────────────────────────────────────────
 a2a_servers:
   agent_zero_a2a:

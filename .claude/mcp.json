@@ -139,6 +139,18 @@
       "env": {
         "DATABASE_URI": "${SUPABASE_DB_URI}"
       }
+    },
+    "pmoves-minimax-mcp": {
+      "_purpose": "PMOVES-MiniMax-MCP — MiniMax model surface (text/image/video/TTS/voice-clone) over MCP stdio. Submodule POWERFULMOVES/PMOVES-MiniMax-MCP (f4d6a61b) at PMOVES-MiniMax-MCP/; entry point `uvx minimax-mcp` per the submodule's pyproject.toml. Mavis harness v0 follow-ups (PR #2568) consume this for model access; the sidecar lane (Pinokio on operator devices) calls the same surface via Pmoves-minimax-cli. Requires MINIMAX_API_KEY.",
+      "command": "uvx",
+      "args": [
+        "minimax-mcp"
+      ],
+      "env": {
+        "MINIMAX_API_KEY": "${MINIMAX_API_KEY}",
+        "MINIMAX_API_HOST": "${MINIMAX_API_HOST:-https://api.minimax.chat}",
+        "MINIMAX_API_RESOURCE_MODE": "${MINIMAX_API_RESOURCE_MODE:-url}"
+      }
     }
   }
 }
