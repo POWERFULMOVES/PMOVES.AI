@@ -149,8 +149,14 @@ def test_mcp_json_minimax_command(mcp_json: dict) -> None:
         f"pmoves-minimax-mcp.command is {server.get('command')!r}, expected 'uvx'"
     )
     args = server.get("args", [])
-    assert "minimax-mcp" in args, (
-        f"pmoves-minimax-mcp.args is {args!r}, expected to contain 'minimax-mcp'"
+    # PINNED, not bare. .claude/mcp.json line 2 declares an exact-version policy
+    # (F-07 supply chain); a bare "minimax-mcp" resolves whatever PyPI serves at
+    # cold start. Assert the pin so the policy cannot regress silently -- the
+    # version must match the audited PMOVES-MiniMax-MCP gitlink's pyproject.
+    pinned = [a for a in args if a.startswith("minimax-mcp==")]
+    assert pinned, (
+        f"pmoves-minimax-mcp.args is {args!r}, expected a pinned 'minimax-mcp==<version>' "
+        f"entry (see the exact-version policy on line 2 of .claude/mcp.json)"
     )
 
 
