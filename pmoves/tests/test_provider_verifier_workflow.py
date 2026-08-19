@@ -255,6 +255,64 @@ def test_workflow_helper_exit_code_round_trips(workflow_text: str) -> None:
     )
 
 
+# ============================================================================
+# Cross-workflow contract: merge-gate consumes the verifier-gate status
+# ============================================================================
+
+
+MERGE_GATE_PATH = REPO_ROOT / ".github" / "workflows" / "merge-gate.yml"
+
+
+@pytest.fixture(scope="module")
+def merge_gate_text() -> str:
+    """The merge-gate workflow as a string."""
+    if not MERGE_GATE_PATH.exists():
+        pytest.skip(f"merge-gate.yml not present at {MERGE_GATE_PATH}")
+    return MERGE_GATE_PATH.read_text(encoding="utf-8")
+
+
+def test_merge_gate_references_verifier_gate(merge_gate_text: str) -> None:
+    """merge-gate.yml's merge-decision step must include verifier-gate in its needs.
+
+    The provider-verifier workflow's job name is 'verifier-gate';
+    if merge-gate.yml doesn't reference it, a FAIL on verifier-gate
+    wouldn't block merge. The two-workflow contract.
+    """
+    assert "verifier-gate" in merge_gate_text, (
+        "merge-gate.yml must reference 'verifier-gate' (the provider-"
+        "verifier.yml job name) so a FAIL on the gate blocks merge"
+    )
+
+
+def test_merge_gate_handles_verifier_gate_skipped(merge_gate_text: str) -> None:
+    """merge-decision must treat verifier-gate's 'skipped' result as a pass.
+
+    The provider-verifier workflow has a paths: filter; a PR that
+    doesn't touch the relevant paths runs the workflow as 'skipped'
+    (not 'success' or 'failure'). A gate that treats 'skipped' as
+    'failure' would block every PR that doesn't touch the verifier
+    — that's a regression from the previous behavior.
+    """
+    # The expected logic: 'failure' blocks; 'skipped' / 'success' pass.
+    # Look for the conditional that explicitly excludes 'skipped' from
+    # the failure set.
+    assert "verifier-gate.result" in merge_gate_text, (
+        "merge-decision must check verifier-gate's result"
+    )
+    # The failure clause should reference 'failure', not 'skipped'.
+    # The naive anti-pattern is: "|| [[ verifier-gate.result == 'skipped' ]]"
+    # We want: only 'failure' is in the OR.
+    # Look for the explicit line.
+    failure_lines = [
+        line for line in merge_gate_text.splitlines()
+        if "verifier-gate" in line and "skipped" in line and "failure" not in line
+    ]
+    assert not failure_lines, (
+        f"merge-decision must NOT treat 'skipped' as failure; "
+        f"found: {failure_lines}"
+    )
+
+
 def test_workflow_uses_py_alias_for_python(workflow_text: str) -> None:
     """The workflow uses `py` (the GitHub-Actions-bundled alias).
 

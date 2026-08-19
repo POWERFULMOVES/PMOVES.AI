@@ -78,7 +78,7 @@ jobs:
         run: python pmoves/tools/hardening_ratchet.py
 
   merge-decision:
-    needs: [python-tests, docker-build-validation, hardening-validation]
+    needs: [python-tests, docker-build-validation, hardening-validation, verifier-gate]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -88,9 +88,16 @@ jobs:
           echo "  python-tests: ${{ needs.python-tests.result }}"
           echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
           echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
+          echo "  verifier-gate: ${{ needs.verifier-gate.result }}"
+          # The verifier-gate workflow has a paths: filter; when a PR
+          # doesn't touch the relevant paths, the workflow is
+          # 'skipped' and there's no status check to gate on. A
+          # 'skipped' result is therefore treated as a pass for the
+          # merge-decision (the gate simply didn't apply to this PR).
           if [[ "${{ needs.python-tests.result }}" == "failure" ]] || \
              [[ "${{ needs.docker-build-validation.result }}" == "failure" ]] || \
-             [[ "${{ needs.hardening-validation.result }}" == "failure" ]]; then
+             [[ "${{ needs.hardening-validation.result }}" == "failure" ]] || \
+             [[ "${{ needs.verifier-gate.result }}" == "failure" ]]; then
             echo "::error::Merge gate FAILED — one or more required checks failed"
             exit 1
           fi
