@@ -49,3 +49,4 @@
 {"agent": "unknown", "domain": "compose", "file": "C:/Users/russe/OneDrive/Documents/GitHub/pmoves-natsauth/pmoves/docker-compose.yml", "reason": "pr:2610", "session": "unknown", "tool": "Edit", "ts": "2026-08-19T10:42:37Z"}
 {"agent": "unknown", "domain": "compose", "file": "C:/Users/russe/OneDrive/Documents/GitHub/pmoves-natsauth/pmoves/docker-compose.yml", "reason": "pr:2610", "session": "unknown", "tool": "Edit", "ts": "2026-08-19T10:43:59Z"}
 {"agent": "unknown", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.traefik.yml", "reason": "handoff:traefik-cloudflare-dns-token-varname-2026-08-18.md", "session": "unknown", "tool": "Edit", "ts": "2026-08-18T19:38:37Z"}
+{"agent": "unknown", "domain": "compose", "file": "C:/Users/russe/OneDrive/Documents/GitHub/pmoves-cfedge/pmoves/docker-compose.traefik.yml", "reason": "pr:2615", "session": "unknown", "tool": "Edit", "ts": "2026-08-19T11:37:17Z"}
