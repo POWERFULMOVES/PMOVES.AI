@@ -66,13 +66,27 @@ while IFS= read -r name; do
   fi
 
   ok=1
+  # 0. Does the declared branch even EXIST on the fork? The compare below 404s
+  #    for a missing branch AND for an unreachable sha, and the catch-all used to
+  #    report both as "bad branch pin or unreachable sha?" — one message covering
+  #    two conditions with opposite fixes. Three submodules declared
+  #    PMOVES.AI-Edition-Hardened on forks that only had `main`; their gitlinks
+  #    were IDENTICAL to that fork's main, i.e. perfectly healthy, and they read
+  #    as broken pointers for as long as the gate had been running. Probing the
+  #    ref first separates "create the branch / fix the declaration" from
+  #    "the pinned commit is gone".
+  if ! gh api "repos/$slug/git/ref/heads/$branch" --jq '.object.sha' >/dev/null 2>&1; then
+    echo "FAIL  $name: declared branch '$branch' does not exist on $slug — create it, or correct the .gitmodules declaration (the gitlink itself may be fine)"
+    fail=1; continue
+  fi
+
   # 1. DANGLING — compare tracked-branch...head; on-branch iff head is behind/== branch.
   st=$(gh api "repos/$slug/compare/$branch...$head_link" --jq '.status' 2>/dev/null || echo "error")
   case "$st" in
     behind|identical) : ;;                                          # head is on the branch
     ahead)    echo "FAIL  $name: gitlink ${head_link:0:9} is AHEAD of '$branch' — commits not merged to the tracked branch (off-strategy)"; fail=1; ok=0 ;;
     diverged) echo "FAIL  $name: gitlink ${head_link:0:9} has DIVERGED from '$branch' (dangling — not on the tracked branch)"; fail=1; ok=0 ;;
-    *)        echo "FAIL  $name: cannot compare ${head_link:0:9} against '$branch' on $slug (status='$st' — bad branch pin or unreachable sha?)"; fail=1; ok=0 ;;
+    *)        echo "FAIL  $name: cannot compare ${head_link:0:9} against '$branch' on $slug (status='$st'). The branch exists, so the pinned commit is unreachable — force-pushed away, or never pushed to this fork."; fail=1; ok=0 ;;
   esac
 
   # 2. LEFT / ROLLBACK — compare base...head; forward iff head is ahead/== base.
