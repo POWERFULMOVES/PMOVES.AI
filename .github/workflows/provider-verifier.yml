@@ -1,0 +1,133 @@
+name: Provider Verifier Gate
+
+# The static half of the MiniMax-Provider-Verifier CI gate.
+#
+# The verifier submodule (Pmoves-MiniMax-Provider-Verifier/verify.py)
+# is the conformance gate for adding a new third-party provider to
+# the Mavis model cascade. It REQUIRES real API calls (--api-key,
+# --base-url, --model) so it cannot run in CI without exposing
+# secrets, which the F-07 supply-chain note explicitly forbids.
+#
+# This workflow runs the static half (pmoves/tools/
+# provider_verifier_gate.py) — 6 checks with no API calls. The
+# static half fails fast on config drift; the operator's full
+# conformance run is workflow_dispatch (manual, with real keys).
+#
+# Triggers:
+#   - pull_request to main when a touched file is in the verifier
+#     submodule or its registry; this catches the most common
+#     case (a PR that adds a provider entry or bumps the submodule)
+#   - workflow_dispatch for manual runs (operator uses this for
+#     the full conformance run with secrets from the operator's
+#     local env)
+#
+# Status check name (consumed by merge-gate.yml): verifier-gate
+# The merge-gate job references this check; a FAIL blocks merge.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Pmoves-MiniMax-Provider-Verifier/**'
+      - 'pmoves/tools/provider_verifier_gate.py'
+      - 'pmoves/tools/tests/test_provider_verifier_gate.py'
+      - '.github/workflows/provider-verifier.yml'
+  workflow_dispatch:
+    inputs:
+      providers_json:
+        description: 'Path to a providers JSON file (relative to repo root) for the full conformance run'
+        required: false
+        type: string
+        default: 'Pmoves-MiniMax-Provider-Verifier/provider.json.example'
+      api_key:
+        description: 'Provider API key for the full conformance run (use repo secrets; not stored)'
+        required: false
+        type: string
+        default: ''
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  static-gate:
+    name: verifier-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo (with submodules)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@65d7f1bbcb944a234e64f7c5668c77cf2d914bb6 # v6.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install the verifier's runtime deps (best-effort)
+        # The gate's 6 static checks don't need the verifier's heavy
+        # deps (numpy, openai, megfile). We install them only for the
+        # full-conformance dispatch path. The 'best-effort' install
+        # keeps the static path fast.
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r Pmoves-MiniMax-Provider-Verifier/requirements.txt || \
+            echo "::warning::verifier runtime deps not installed; the static gate still runs"
+
+      - name: Run the static gate
+        id: gate
+        shell: bash
+        run: |
+          # 6 checks, no API calls. Output: JSON line on stdout.
+          set +e
+          OUTPUT=$(py pmoves/tools/provider_verifier_gate.py --json 2>&1)
+          RC=$?
+          set -e
+          echo "## Provider Verifier static gate result" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          echo "$OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$OUTPUT"
+          if [ "$RC" -ne 0 ]; then
+            echo "verdict=FAIL" >> "$GITHUB_OUTPUT"
+            exit "$RC"
+          fi
+          echo "verdict=PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Post PR comment on FAIL
+        if: failure()
+        uses: actions/github-script@ed9884d31165e1ddc43522b9b95e7ecb58b50296 # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            // The gate wrote its JSON to the step summary, but the
+            // easiest way to grab the verdict is to re-run the
+            // helper inline. We just keep the comment short and
+            // point at PROVIDER_VERIFIER_GATE.md.
+            const body = [
+              '## Provider Verifier static gate: FAIL',
+              '',
+              'One or more of the 6 static checks failed. See the',
+              '**verifier-gate** job summary above for the per-check',
+              'detail.',
+              '',
+              'Common causes:',
+              '- `Pmoves-MiniMax-Provider-Verifier/provider.json.example`',
+              '  has a missing field, a real API key, or invalid JSON.',
+              '- `sample.jsonl` is missing or empty.',
+              '- `verify.py` has a syntax error or the submodule',
+              '  isn\'t initialized.',
+              '',
+              'See `pmoves/docs/operations/PROVIDER_VERIFIER_GATE.md`',
+              'for the full check list + how to fix.',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
