@@ -347,8 +347,15 @@ def main() -> int:
                         f"entry '{entry.get('id')}' but hold DIFFERENT values. Compose reads "
                         f"env.shared directly, so containers and host tooling can end up on "
                         f"different key material and signatures will not cross-verify. "
-                        f"Fix: decide which value your existing receipts were signed with, "
-                        f"delete the other from env.shared, then run 'make secrets-funnel'.",
+                        f"Fix: decide which value your existing receipts were signed "
+                        f"with, then clear the other with "
+                        f"'python pmoves/scripts/bootstrap_env.py --clear <KEY>' and run "
+                        f"'make -C pmoves secrets-funnel'. Deleting the line by hand is "
+                        f"NOT enough: secrets-local-hydrate treats an absent or empty "
+                        f"value as a placeholder and writes the stale local.env value "
+                        f"straight back on the next funnel run. --clear also records the "
+                        f"key in pmoves/configs/secrets_cleared.yaml, which is what stops "
+                        f"that re-population.",
                         "pmoves/env.shared",
                     )
                 )
