@@ -610,55 +610,76 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# MCP bridge (mcp_bridge.py) — the curated 6-tool surface over all 14 engines
+# (tts_list_engines/intents/synthesize/engine_status/load/unload). Written for
+# the vei.contract.mcp-bridge TAC contract (:8055/sse) but never mounted until
+# now. Callables defer to the module globals set during lifespan startup.
+from mcp_bridge import create_mcp_router  # noqa: E402
+
+app.include_router(
+    create_mcp_router(
+        get_provider=lambda: ultimate_tts_provider,
+        get_nats_client=lambda: nats_client,
+    ),
+    dependencies=[Depends(verify_api_key)],
+)
+
 
 # Health check endpoint
 @app.get("/healthz", response_model=HealthResponse)
 async def health_check():
     """Check service health and provider availability."""
-    providers = {}
+    # The five provider probes and the Supabase probe are INDEPENDENT, but were awaited
+    # strictly in sequence, so every unreachable dependency added its own full timeout to
+    # the wall clock. With whisper (DNS resolution failure), voicebox and omnivoice all
+    # down on B850 this endpoint took 15.038s against a 15s container healthcheck timeout
+    # — it answered HTTP 200 and was marked unhealthy by 38 milliseconds, 1,950 times in
+    # a row, for a service that was serving correctly the whole time.
+    #
+    # Concurrency makes the wall clock the SLOWEST probe rather than their sum, so the
+    # endpoint no longer degrades linearly with the number of dependencies that are down —
+    # which is exactly when a health endpoint is most needed and least affordable to hang.
+    _probes = {
+        "vibevoice": vibevoice_provider,
+        "whisper": whisper_provider,
+        "ultimate_tts": ultimate_tts_provider,
+        "voicebox": voicebox_provider,
+        "omnivoice": omnivoice_provider,
+    }
 
-    # Check VibeVoice
-    if vibevoice_provider:
-        providers["vibevoice"] = await vibevoice_provider.health_check()
-    else:
-        providers["vibevoice"] = False
+    async def _supabase_probe() -> str:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{SUPABASE_URL}/rest/v1/")
+                return "connected" if resp.status_code in [200, 401] else "error"
+        except Exception as exc:
+            logger.warning("Supabase health check failed: %s", exc)
+            return "disconnected"
 
-    # Check Whisper
-    if whisper_provider:
-        providers["whisper"] = await whisper_provider.health_check()
-    else:
-        providers["whisper"] = False
+    _names = [n for n, p in _probes.items() if p]
+    _results = await asyncio.gather(
+        *(_probes[n].health_check() for n in _names),
+        _supabase_probe(),
+        return_exceptions=True,
+    )
 
-    # Check Ultimate-TTS
-    if ultimate_tts_provider:
-        providers["ultimate_tts"] = await ultimate_tts_provider.health_check()
-    else:
-        providers["ultimate_tts"] = False
+    providers = {name: False for name in _probes}
+    for name, result in zip(_names, _results):
+        if isinstance(result, BaseException):
+            # Never silently downgrade to False: a probe that RAISED and a provider that
+            # answered "not ready" are different facts, and only one of them is a bug.
+            logger.warning("provider %s health check raised: %r", name, result)
+            providers[name] = False
+        else:
+            providers[name] = bool(result)
 
-    # Check Voicebox
-    if voicebox_provider:
-        providers["voicebox"] = await voicebox_provider.health_check()
-    else:
-        providers["voicebox"] = False
-
-    # Check OmniVoice
-    if omnivoice_provider:
-        providers["omnivoice"] = await omnivoice_provider.health_check()
-    else:
-        providers["omnivoice"] = False
+    _supabase_result = _results[-1]
+    supabase_status = (
+        "disconnected" if isinstance(_supabase_result, BaseException) else _supabase_result
+    )
 
     # Check NATS
     nats_status = "connected" if nats_client and nats_client.is_connected else "disconnected"
-
-    # Check Supabase
-    supabase_status = "unknown"
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{SUPABASE_URL}/rest/v1/")
-            supabase_status = "connected" if resp.status_code in [200, 401] else "error"
-    except Exception as exc:
-        logger.warning("Supabase health check failed: %s", exc)
-        supabase_status = "disconnected"
 
     REQUESTS_TOTAL.labels(endpoint="/healthz", status="200").inc()
 

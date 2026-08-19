@@ -267,7 +267,7 @@ dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
 ---
 
 ### 13. Flute Gateway
-**Port:** 8055 (HTTP), 8056 (WebSocket)
+**Port:** 8055 (HTTP + WebSocket — a single uvicorn bind; 8056 is published by compose but nothing listens on it)
 **Role:** Voice prosodic synthesis
 **Key Files:** `pmoves/services/flute-gateway/main.py`
 

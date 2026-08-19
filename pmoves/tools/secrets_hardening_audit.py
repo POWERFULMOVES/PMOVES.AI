@@ -290,6 +290,76 @@ def main() -> int:
                     )
                 )
 
+    # 8c) An alias and its canonical label both set in the shared env, with
+    #     DIFFERENT values. Reported by SPARK on PR #2605: that node carries both
+    #     CHIT names with different key material, so compose interpolation (which
+    #     reads the shared env directly) hands containers one value while the
+    #     host signing chain resolves the other — and signatures produced on the
+    #     two sides cannot cross-verify. Nothing detected it, because every
+    #     individual check sees a populated key and passes.
+    #
+    #     The manifest alias mechanism only governs GENERATED outputs. A
+    #     hand-set divergent value in the shared env wins for every compose
+    #     interpolation regardless, so this is not something the funnel can fix
+    #     on its own — it needs a human to decide which value is authoritative.
+    #
+    #     WARN rather than ERROR: erroring would exit non-zero at funnel step 6
+    #     and strand the very nodes that have the problem. Lengths are reported
+    #     because they are enough to tell the two apart (SPARK saw 43 vs 64)
+    #     without disclosing key material.
+    shared_env = REPO_ROOT / "pmoves" / "env.shared"
+    manifest_v2 = REPO_ROOT / "pmoves" / "chit" / "secrets_manifest_v2.yaml"
+    if shared_env.exists() and manifest_v2.exists():
+        shared_values = parse_env_file(shared_env)
+        try:
+            import yaml  # type: ignore[import-untyped]
+
+            entries = (yaml.safe_load(manifest_v2.read_text(encoding="utf-8")) or {}).get(
+                "entries", []
+            )
+        except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+            entries = []
+            findings.append(
+                Finding(
+                    "WARN",
+                    f"alias-divergence check skipped: cannot read the v2 manifest ({type(exc).__name__}: {exc})",
+                    "pmoves/chit/secrets_manifest_v2.yaml",
+                )
+            )
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            source = entry.get("source") or {}
+            names = [source.get("label")] + list(source.get("aliases") or [])
+            present = {
+                n: shared_values[n]
+                for n in names
+                if n and shared_values.get(n, "").strip()
+            }
+            if len(set(present.values())) > 1:
+                shape = ", ".join(
+                    f"{n} (len {len(v)})" for n, v in sorted(present.items())
+                )
+                findings.append(
+                    Finding(
+                        "WARN",
+                        f"alias divergence in env.shared: {shape} are the same manifest "
+                        f"entry '{entry.get('id')}' but hold DIFFERENT values. Compose reads "
+                        f"env.shared directly, so containers and host tooling can end up on "
+                        f"different key material and signatures will not cross-verify. "
+                        f"Fix: decide which value your existing receipts were signed "
+                        f"with, then clear the other with "
+                        f"'python pmoves/scripts/bootstrap_env.py --clear <KEY>' and run "
+                        f"'make -C pmoves secrets-funnel'. Deleting the line by hand is "
+                        f"NOT enough: secrets-local-hydrate treats an absent or empty "
+                        f"value as a placeholder and writes the stale local.env value "
+                        f"straight back on the next funnel run. --clear also records the "
+                        f"key in pmoves/configs/secrets_cleared.yaml, which is what stops "
+                        f"that re-population.",
+                        "pmoves/env.shared",
+                    )
+                )
+
     # 9) Secret env files must NEVER be git-tracked. They are generated locally by
     #    secrets_sync and are gitignored — but git keeps tracking files added before
     #    an ignore rule was introduced, which is exactly how pmoves/env.tier-media

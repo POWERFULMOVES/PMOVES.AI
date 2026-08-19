@@ -125,7 +125,7 @@
        Media Tier Services:
        - PMOVES.YT (8077 YouTube ingestion)
        - Jellyfin (8096 media server)
-       - Flute-Gateway (8055 HTTP, 8056 WebSocket for TTS)
+       - Flute-Gateway (8055 — HTTP + WebSocket; TTS stream at `/v1/voice/stream/tts`)
        - Ultimate-TTS-Studio (7861 Gradio)
 
        Agent Tier Services:
@@ -838,7 +838,7 @@
        - SupaSerch (8099) → NATS: supaserch.* + Supabase + Agent Zero MCP
 
        Voice & Speech:
-       - Flute-Gateway (8055/8056) → WebSocket streaming, Prosodic TTS
+       - Flute-Gateway (8055) → WebSocket streaming, Prosodic TTS
        - Ultimate-TTS-Studio (7861) → Gradio + 7 engines (Kokoro, F5-TTS, etc.)
 
        Media Ingestion:

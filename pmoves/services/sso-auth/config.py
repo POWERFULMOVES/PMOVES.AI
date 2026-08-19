@@ -6,6 +6,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
     supabase_jwt_secret: str          # env: SUPABASE_JWT_SECRET
     gotrue_url: str                   # env: GOTRUE_URL (internal http://supabase-gotrue:9999)
+    # Browser-facing GoTrue origin. SEPARATE from gotrue_url on purpose: gotrue_url
+    # is used for server-to-server POSTs from inside the Docker network, so it is a
+    # compose service name that no browser can resolve. provider_authorize_url()
+    # hands its result to the USER'S BROWSER as a redirect — using gotrue_url there
+    # renders a dead "Sign in with GitHub" link pointing at
+    # http://supabase-gotrue:9999/authorize, which is what shipped until 2026-08-06.
+    # Defaults to gotrue_url so single-host / dev deployments (where GoTrue is
+    # already on a reachable address) keep working unchanged.
+    gotrue_public_url: str = ""       # env: GOTRUE_PUBLIC_URL (https://auth.pmoves.ai/gotrue)
     public_base_url: str              # env: PUBLIC_BASE_URL (https://auth.pmoves.ai)
     cookie_domain: str = ".pmoves.ai" # env: SSO_COOKIE_DOMAIN
     cookie_name: str = "pmoves_session"
@@ -51,6 +60,8 @@ class Settings(BaseSettings):
         return cls(
             supabase_jwt_secret=os.environ["SUPABASE_JWT_SECRET"],
             gotrue_url=g("GOTRUE_URL", ""),
+            # Fall back to the internal URL so nothing that works today breaks.
+            gotrue_public_url=g("GOTRUE_PUBLIC_URL", "") or g("GOTRUE_URL", ""),
             public_base_url=g("PUBLIC_BASE_URL", ""),
             cookie_domain=g("SSO_COOKIE_DOMAIN", ".pmoves.ai"),
             jellyfin_oidc_client_id=g("JELLYFIN_OIDC_CLIENT_ID", ""),

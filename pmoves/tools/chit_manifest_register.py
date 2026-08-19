@@ -87,6 +87,32 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # the field laptop. Randomly minted into env.shared; registering here
     # materializes them into the tier env files the funnel emits, so no service is
     # gated from a field node.
+    # The CHIT passphrase, under the name the RUNTIME reads. Every compose file
+    # writes `CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?...}` — the container-side name
+    # is CHIT_PASSPHRASE, the host-side name is CHIT_PROD_PASSPHRASE, and only the
+    # former was ever registered. 26 refs across 5 compose files / 12 services, and
+    # since compose interpolates the whole file before running anything, the absence
+    # gated every `up-*` target on the node rather than only those services.
+    #
+    # The alias is the load-bearing part: the GH secret is named CHIT_PASSPHRASE (no
+    # CHIT_PROD_* secret exists in either scope, verified 2026-08-17), so older
+    # bundles carry only that name. secrets_sync.py:112 (_first_usable) resolves label first,
+    # then aliases, and emits the CANONICAL target key either way — the same shape as
+    # KIMI_CODING_API / MOONSHOT_API_KEY.
+    #
+    # required=True follows the neighbours below rather than the DASHBOARD_* pattern,
+    # and the choice is not free: SECRETS_SYNC_FLAGS defaults to `--merge` (strict),
+    # so on a node that genuinely lacks the secret the funnel now fails instead of
+    # emitting tier files. That is the intended trade — required=False is not
+    # "safer", it is silent: build_outputs() only records a missing key in `missing`
+    # when required is set, so the funnel would keep reporting 0 errors for a node
+    # whose every container is ungated, which is the exact defect being closed.
+    # Escape hatch for a node that really should not have it: SECRETS_ALLOW_MISSING=1.
+    "CHIT_PROD_PASSPHRASE": {
+        "tier": "agent",
+        "required": True,
+        "aliases": ["CHIT_PASSPHRASE"],
+    },
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
     "SECRET_KEY_BASE": {"tier": "supabase", "required": True},

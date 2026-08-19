@@ -215,13 +215,16 @@ class NATSPublisher:
         })
 
     async def publish_room_session(self, room_id: str, session_id: str,
-                                  action: str, agent_id: str) -> bool:
+                                  action: str, agent_id: str,
+                                  alter: str = "", room_stage: str = "rehearsal") -> bool:
         return await self.publish(SUBJECT_SESSION, {
             "v": "1.0.0",
             "room_id": room_id,
             "session_id": session_id,
             "action": action,  # "open" | "close" | "heartbeat"
             "agent_id": agent_id,
+            "alter": alter,  # empty string when no alter
+            "room_stage": room_stage,
             "timestamp": _utcnow_iso(),
         })
 

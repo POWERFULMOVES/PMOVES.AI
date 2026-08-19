@@ -28,7 +28,7 @@ jobs:
       contents: read
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -91,6 +91,24 @@ jobs:
             "pmoves/supabase/migrations/20250109000000_living_pages.sql"
             "pmoves/supabase/migrations/20250110000000_voice_messages.sql"
             "pmoves/supabase/migrations/20260626000000_wealth_cgp_exports.sql"
+            # --- reviewed 2026-08-19 (4090) -------------------------------------
+            # All three match only the standard trusted-backend patterns. What was
+            # checked in each, rather than pattern-matched:
+            #
+            # voice_cloning_provenance: the single USING(true) is FOR ALL TO
+            #   service_role. The "to anon" hit is a COMMENT stating anon is NOT
+            #   granted -- now also handled by the comment-stripping above.
+            # ingested_videos: USING(true) is FOR ALL TO service_role. It does
+            #   GRANT SELECT TO anon, but RLS is ENABLED and no policy admits anon,
+            #   so the privilege yields zero rows -- closed, not public.
+            # review_comments: USING(true) appears on two service_role policies and
+            #   on rc_read (FOR SELECT TO authenticated). anon gets schema USAGE only;
+            #   table SELECT goes to authenticated + service_role, never anon.
+            #   Note for the owners, not a blocker: rc_read lets ANY authenticated
+            #   user read EVERY review comment. Deliberate or not, worth stating.
+            "pmoves/supabase/migrations/20260802000000_voice_cloning_provenance.sql"
+            "pmoves/supabase/migrations/20260804000000_ingested_videos.sql"
+            "pmoves/supabase/migrations/20260805000000_review_comments.sql"
           )
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
           # Fail on blanket USING true or explicit anon grants outside dev
@@ -107,10 +125,17 @@ jobs:
               echo "Skipping allowlisted policy file: $f"
               continue
             fi
-            if grep -Eqi '\bUSING\s*\(?\s*true\s*\)?' "$f"; then
+            # Strip `--` line comments before matching. The scanner reads raw lines,
+            # so it flagged PROSE: 20260802000000_voice_cloning_provenance.sql carries
+            # the comment "-- to anon or other users. This prevents leaking signed
+            # consent documents." -- a line explaining anon is NOT granted -- and it
+            # was reported as "Policy grants to anon found in". A gate that fires on a
+            # comment saying the opposite of its own finding teaches people to skim it.
+            stripped="$(sed 's/--.*$//' "$f")"
+            if printf '%s' "$stripped" | grep -Eqi '\bUSING\s*\(?\s*true\s*\)?'; then
               echo "Unsafe blanket policy in: $f"; bad=1
             fi
-            if grep -Eqi 'to\s+anon\b' "$f"; then
+            if printf '%s' "$stripped" | grep -Eqi 'to\s+anon\b'; then
               echo "Policy grants to anon found in: $f"; bad=1
             fi
           done

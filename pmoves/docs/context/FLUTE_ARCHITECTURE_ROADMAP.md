@@ -273,6 +273,26 @@ CREATE TABLE public.voice_session (
 
 ## 5. API Specification
 
+> [!IMPORTANT]
+> **Design spec, not current state.** Sections 5.1/5.2 describe the intended
+> surface; several routes below have never been built. For what the service
+> actually serves today, `.claude/context/flute-gateway.md` is the operational
+> reference. Status markers below: **SHIPPED** = verified in
+> `pmoves/services/flute-gateway/main.py`; **PROPOSED** = not implemented.
+>
+> | Spec'd here | Status |
+> |---|---|
+> | `GET /healthz`, `GET /v1/voice/config` | SHIPPED |
+> | `POST /v1/voice/synthesize`, `/synthesize/audio`, `/synthesize/prosodic` | SHIPPED |
+> | `POST /v1/voice/recognize` | SHIPPED |
+> | `GET /v1/voice/personas`, `GET /v1/voice/personas/{id}` | SHIPPED (read-only) |
+> | `POST`/`PATCH`/`DELETE /v1/voice/personas*`, `/{id}/preview` | **PROPOSED** |
+> | `POST /v1/voice/clone` | **PROPOSED** (`providers/cloning.py` exists but is never mounted) |
+> | `WS /v1/voice/stream/tts` | SHIPPED — **on port 8055, not 8056** |
+> | `WS /v1/voice/agent` (duplex) | SHIPPED — port 8055, gated `PIPECAT_ENABLED=true` |
+> | `WS /v1/voice/stream/stt`, `WS /v1/voice/stream/duplex` | **PROPOSED** |
+> | `POST /v1/sessions/*` (§3.3, Agent Zero :8080) | **PROPOSED** |
+
 ### 5.1 REST Endpoints (Port 8055)
 
 #### Health Check
@@ -319,7 +339,7 @@ Response: {
 }
 ```
 
-#### Manage Personas
+#### Manage Personas (GET routes SHIPPED; writes + preview PROPOSED)
 ```
 GET    /v1/voice/personas           - List all personas
 POST   /v1/voice/personas           - Create persona
@@ -329,7 +349,7 @@ DELETE /v1/voice/personas/{id}      - Delete persona
 POST   /v1/voice/personas/{id}/preview - Preview voice sample
 ```
 
-#### Clone Voice
+#### Clone Voice (PROPOSED — never implemented)
 ```
 POST /v1/voice/clone
 Request: multipart/form-data with voice sample + metadata
@@ -340,7 +360,11 @@ Response: {
 }
 ```
 
-### 5.2 WebSocket Endpoints (Port 8056)
+### 5.2 WebSocket Endpoints (Port 8055)
+
+> The two sockets that shipped (`/v1/voice/stream/tts`, `/v1/voice/agent`) are
+> served on **8055** alongside HTTP — a single uvicorn bind. 8056 is published by
+> compose but nothing listens on it.
 
 #### Real-time TTS Streaming
 ```
@@ -595,7 +619,7 @@ ELEVENLABS_API_KEY=...  # Optional
 
 # Flute Gateway
 FLUTE_HTTP_PORT=8055
-FLUTE_WS_PORT=8056
+FLUTE_WS_PORT=8056   # set in the Dockerfile but read by no code — WS is on 8055
 ```
 
 ---

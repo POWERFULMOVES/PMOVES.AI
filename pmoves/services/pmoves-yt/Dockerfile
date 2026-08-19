@@ -33,7 +33,15 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 # deno is yt-dlp's default-enabled runtime. Pin via DENO_VERSION (e.g. "v2.6.4")
 # for reproducible builds; "latest" tracks upstream.
 ARG DENO_VERSION=latest
-RUN set -eux;     if [ "$DENO_VERSION" = "latest" ]; then       url="https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip";     else       url="https://github.com/denoland/deno/releases/download/${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip";     fi;     curl -fsSL "$url" -o /tmp/deno.zip;     python -c "import zipfile,os; zipfile.ZipFile('/tmp/deno.zip').extractall('/usr/local/bin'); os.chmod('/usr/local/bin/deno',0o755)";     rm /tmp/deno.zip;     deno --version
+# TARGETARCH is supplied by BuildKit on every build. The asset name was
+# hardcoded to x86_64, so the linux/arm64 leg of a multi-arch build downloaded
+# an amd64 binary and died on `deno --version` with exit 127. That blocked the
+# weekly yt-dlp bump build outright, and it blocks pmoves-yt on every arm64
+# node -- docker-compose.arm64.override.yml pins this service to linux/arm64
+# for Jetson and Spark. Unsupported arches fail loudly here rather than
+# shipping an image whose JS runtime is missing.
+ARG TARGETARCH
+RUN set -eux;     case "${TARGETARCH}" in       amd64) deno_arch="x86_64-unknown-linux-gnu" ;;       arm64) deno_arch="aarch64-unknown-linux-gnu" ;;       *) echo "unsupported TARGETARCH='${TARGETARCH}' for deno" >&2; exit 1 ;;     esac;     if [ "$DENO_VERSION" = "latest" ]; then       url="https://github.com/denoland/deno/releases/latest/download/deno-${deno_arch}.zip";     else       url="https://github.com/denoland/deno/releases/download/${DENO_VERSION}/deno-${deno_arch}.zip";     fi;     curl -fsSL "$url" -o /tmp/deno.zip;     python -c "import zipfile,os; zipfile.ZipFile('/tmp/deno.zip').extractall('/usr/local/bin'); os.chmod('/usr/local/bin/deno',0o755)";     rm /tmp/deno.zip;     deno --version
 USER pmoves:pmoves
 
 EXPOSE 8077

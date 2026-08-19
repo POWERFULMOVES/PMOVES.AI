@@ -381,3 +381,55 @@
 	path = PMOVES-hermes-agent
 	url = https://github.com/POWERFULMOVES/PMOVES-hermes-agent.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-pinokio"]
+	path = PMOVES-pinokio
+	url = https://github.com/POWERFULMOVES/PMOVES-pinokio.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-obico-server"]
+	path = PMOVES-obico-server
+	url = https://github.com/POWERFULMOVES/PMOVES-obico-server.git
+	branch = release
+[submodule "PMOVES-moonraker-obico"]
+	path = PMOVES-moonraker-obico
+	url = https://github.com/POWERFULMOVES/PMOVES-moonraker-obico.git
+	branch = master
+[submodule "PMOVES-OrcaSlicer"]
+	path = PMOVES-OrcaSlicer
+	url = https://github.com/POWERFULMOVES/PMOVES-OrcaSlicer.git
+	branch = main
+[submodule "PMOVES-OctoPrint-Obico"]
+	path = PMOVES-OctoPrint-Obico
+	url = https://github.com/POWERFULMOVES/PMOVES-OctoPrint-Obico.git
+	branch = master
+[submodule "PMOVES-fluidd"]
+	path = PMOVES-fluidd
+	url = https://github.com/POWERFULMOVES/PMOVES-fluidd.git
+	branch = develop
+[submodule "PMOVES-nats-server"]
+	path = PMOVES-nats-server
+	url = https://github.com/POWERFULMOVES/PMOVES-nats-server.git
+	branch = main
+[submodule "skills/PMOVES-skills"]
+	path = skills/PMOVES-skills
+	url = https://github.com/POWERFULMOVES/PMOVES-skills.git
+	branch = main
+[submodule "PMOVES-MiniMax-MCP"]
+	path = PMOVES-MiniMax-MCP
+	url = https://github.com/POWERFULMOVES/PMOVES-MiniMax-MCP.git
+	branch = main
+[submodule "Pmoves-minimax-cli"]
+	path = Pmoves-minimax-cli
+	url = https://github.com/POWERFULMOVES/Pmoves-minimax-cli.git
+	branch = main
+[submodule "Pmoves-MiniMax-Provider-Verifier"]
+	path = Pmoves-MiniMax-Provider-Verifier
+	url = https://github.com/POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier.git
+	branch = main
+[submodule "PMOVES-agents.md"]
+	path = PMOVES-agents.md
+	url = https://github.com/POWERFULMOVES/PMOVES-agents.md.git
+	branch = main
+[submodule "pmoves-keygen"]
+	path = pmoves-keygen
+	url = https://github.com/POWERFULMOVES/pmoves-keygen.git
+	branch = master

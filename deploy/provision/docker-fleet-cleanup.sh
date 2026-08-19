@@ -31,6 +31,19 @@ docker container prune -f 2>/dev/null || true
 log "Pruning build cache..."
 docker builder prune -af 2>/dev/null || true
 
+# Phase 2b: Reclaim inactive buildx builders + orphaned state volumes.
+# `docker builder prune` clears cache INSIDE builders but leaves the builders —
+# and their buildx_buildkit_*_state volumes — standing, which is where the
+# leaked GBs actually live (invisible to `docker system df`). `--all-inactive`
+# is Docker's built-in, name-agnostic mechanism; an in-flight build keeps its
+# builder ACTIVE, so this can't kill it. The trailing volume sweep catches
+# *_state volumes whose builder is already gone (name-filtered to
+# buildx_buildkit_, so it can never touch a pmoves_* data volume).
+log "Reclaiming inactive buildx builders + orphaned state volumes..."
+docker buildx rm --all-inactive --force 2>/dev/null || true
+docker volume ls -q --filter dangling=true --filter name=buildx_buildkit_ 2>/dev/null \
+  | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
+
 # Phase 3: Unused images older than 72h
 log "Pruning unused images (>72h)..."
 docker image prune -a -f --filter "until=72h" 2>/dev/null || true

@@ -98,7 +98,7 @@ export default async function RoomsPage() {
                 <div className="flex flex-wrap gap-2">
                   <span className="tag tag-forest">{formatToken(room.manifest.room_type)}</span>
                   <span className="tag tag-violet">{formatToken(room.manifest.owner_mode)}</span>
-                  <span className="tag tag-gold">{formatToken(room.manifest.policies.model_routing)}</span>
+                  <span className="tag tag-gold">{formatToken(room.manifest.policies?.model_routing ?? 'default')}</span>
                 </div>
 
                 <dl className="grid grid-cols-2 gap-4 text-sm">

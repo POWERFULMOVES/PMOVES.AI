@@ -22,6 +22,16 @@ name: Validate Dockerfile Paths Ratchet
 #      references AND isn't in the operator-acknowledged baseline.
 #      The initial baseline has 26 entries (variant Dockerfiles,
 #      base images, services run as side-channel processes, etc.).
+#   3. COPY_UNRESOLVED: a COPY/ADD source inside a Dockerfile that does
+#      not exist under the build context its compose stanza declares.
+#      The inverse of 1 and 2 — those check paths TO Dockerfiles, this
+#      checks paths INSIDE them. Found the expensive way in #2468:
+#      mai-ui-agent does `COPY requirements.txt .` against `context: .`
+#      (= pmoves/), so the image dies on its first COPY. Baselined in
+#      _known_copy_gaps.yaml; stale baseline entries fail the gate too,
+#      because a fixed defect left in the file can return silently.
+#   4. DOCKERIGNORE_EXCLUDED: a COPY source that exists but is excluded
+#      by the context's .dockerignore, so it never reaches the daemon.
 
 on:
   pull_request:
@@ -35,6 +45,7 @@ on:
       - "pmoves/tools/validate_dockerfile_paths.py"
       - "pmoves/tools/tests/test_validate_dockerfile_paths.py"
       - "pmoves/configs/dockerfiles/_known_orphans.yaml"
+      - "pmoves/configs/dockerfiles/_known_copy_gaps.yaml"
       - ".github/workflows/validate-dockerfile-paths-ratchet.yml"
   workflow_dispatch:
 

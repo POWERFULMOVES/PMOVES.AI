@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pyyaml>=6"]
+# ///
 """Sign a Graphiti trail entry with CHIT HMAC.
+
+DEPENDENCY NOTE — why the inline block above matters for correctness, not just
+convenience: `_load_signature()` imports yaml INSIDE its try, and the surrounding
+`except Exception: pass` returns `_FALLBACK`. Under `uv run` (a bare env with no
+pyyaml) that path was taken silently, so signatures were emitted with default
+presentation — glyph ◆ / colour #7C3AED — instead of the agent's registered identity,
+while the HMAC itself was perfectly valid. A trail entry whose purpose is provenance
+was misattributing at the presentation layer with no warning. Declaring pyyaml here
+makes the registry actually load under every invocation path.
+
 
 CLI tool that creates an agent.graphiti.signed.v1 payload and HMAC-signs it
 using sign_cgp() from chit_security.py.  Never contains its own crypto —
@@ -68,9 +82,25 @@ def _load_signature(agent_id: str) -> Dict[str, Any]:
         sigs = data.get("signatures", {})
         if agent_id in sigs:
             return sigs[agent_id]
-    except Exception:
-        pass
-    # Return a minimal fallback so the tool never hard-fails on missing YAML
+        reason = f"'{agent_id}' is not registered in {_SIGNATURES_PATH.name}"
+    except ImportError as exc:
+        reason = f"pyyaml unavailable ({exc})"
+    except OSError as exc:
+        reason = f"cannot read {_SIGNATURES_PATH} ({exc})"
+    except Exception as exc:  # malformed YAML, unexpected shape
+        reason = f"{type(exc).__name__}: {exc}"
+
+    # Still non-fatal by design (see module docstring) — but never SILENT.
+    # This function warned loudly about a missing ALTER twenty lines below while
+    # saying nothing when it could not resolve the AGENT at all, so a run that
+    # substituted the whole identity looked identical to a clean one. A provenance
+    # tool must be able to report not knowing who is signing.
+    print(
+        f"[warn] identity not resolved: {reason}; signing with FALLBACK "
+        f"presentation (glyph {_FALLBACK['glyph']} / {_FALLBACK['color']}) — "
+        f"this is NOT the agent's registered identity",
+        file=sys.stderr,
+    )
     return {"agent_id": agent_id, **_FALLBACK}
 
 
@@ -132,6 +162,47 @@ def _resolve_signing_card_id(agent_id: str) -> Optional[str]:
     return matches[0].get("card_id")
 
 
+def _top_level_signature_ids() -> set:
+    """Ids that `_load_signature` can find directly (no alter resolution needed)."""
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        with open(_SIGNATURES_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+        return set((data.get("signatures") or {}).keys())
+    except Exception:
+        return set()
+
+
+def _resolve_alter_parent(agent_id: str) -> Optional[tuple]:
+    """Map an ALTER id back to its parent signer.
+
+    ``_load_signature`` only searches top-level ``signatures`` keys, so an id
+    that exists solely as an entry in some agent's ``alters`` array (e.g.
+    ``claude-opus-5`` under ``claude-opus``) previously fell through to the
+    synthetic ``_FALLBACK`` identity and found no signing card -- a machine
+    trail signed under that id could not be matched to the declared identity.
+
+    Returns ``(parent_id, alter_dict)`` for the first match, or None. The caller
+    is expected to sign AS the parent and stamp ``selected_alter``, which is the
+    representation the rest of this module already uses.
+    """
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        with open(_SIGNATURES_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except Exception:
+        return None
+    for parent_id, sig in (data.get("signatures") or {}).items():
+        if not isinstance(sig, dict):
+            continue
+        alter = _resolve_alter(sig, agent_id)
+        if alter is not None:
+            return parent_id, alter
+    return None
+
+
 def _resolve_alter(sig: Dict[str, Any], alter_name: str) -> Optional[Dict[str, Any]]:
     """Find an alter by name within an agent's signature entry.
 
@@ -177,6 +248,19 @@ def build_payload(
     array.  The ``agent_id`` stays the same — ``selected_alter`` records which
     persona was active.
     """
+    # An agent_id that exists only as an ALTER resolves to its parent signer, and
+    # is treated exactly as `--agent-id <parent> --alter <this>`. Without this an
+    # alter id silently degrades to the synthetic fallback identity with no
+    # signing card, so the signed trail cannot be matched to the declared
+    # identity in agent_signatures.yaml.
+    if agent_id not in _top_level_signature_ids():
+        parent = _resolve_alter_parent(agent_id)
+        if parent is not None:
+            parent_id, _ = parent
+            if alter is None:
+                alter = agent_id
+            agent_id = parent_id
+
     sig = _load_signature(agent_id)
 
     # Resolve alter overlay if requested

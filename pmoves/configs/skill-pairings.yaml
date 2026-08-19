@@ -452,6 +452,21 @@ skill_sources:
   health-weekly-cgp: "pmoves/integrations/health-wger/n8n/flows/health_weekly_to_cgp.json"
   finance-monthly-cgp: "pmoves/integrations/firefly-iii/n8n/flows/finance_monthly_to_cgp.json"
 
+  # Fleet CLI wrappers + host CLIs (canonical inventory: pmoves/configs/cli_tools.yaml)
+  cli-tools-manifest: "pmoves/configs/cli_tools.yaml"
+  cli-wrapper-pmoves-mini: "pmoves/scripts/pmoves-mini"
+  cli-wrapper-claude-pmoves: "pmoves/scripts/claude-pmoves.sh"
+  cli-wrapper-codex-pmoves: "pmoves/scripts/codex-pmoves.sh"
+  cli-wrapper-kilo-pmoves: "pmoves/scripts/kilo-pmoves.sh"
+  cli-wrapper-kimi-pmoves: "pmoves/scripts/kimi-pmoves.sh"
+  cli-wrapper-crush-pmoves: "pmoves/scripts/crush-pmoves"
+  cli-wrapper-hermes-pmoves: "pmoves/scripts/hermes-pmoves"
+  cli-host-nats: "nats (host binary - CHIT bundle ops, subject checks)"
+  cli-host-supabase: "supabase (host binary - stack bring-up, migrations)"
+  cli-host-ollama: "ollama (host binary - local model runtime)"
+  cli-host-skills: "skills (host binary - open skills ecosystem CLI, backs find-skills)"
+  find-skills: "skills/PMOVES-skills/skills/find-skills/SKILL.md"
+
   # Fleet Secrets Sync → Bootstrap → Deploy
   fleet-secrets-bootstrap:
     name: "Fleet Secrets Bootstrap"

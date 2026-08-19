@@ -9,7 +9,7 @@ runtime:
   autostart: false
   gpu_required: true
   min_vram_mb: 24000
-  gpu_arch: [sm_120, sm_110, sm_90]
+  gpu_arch: [sm_120, sm_121, sm_90]
   gpu_reservation_mb: 24000
   gpu_reservation_mode: exclusive
   dependencies: []

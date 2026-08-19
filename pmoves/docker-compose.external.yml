@@ -63,6 +63,12 @@ services:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
     container_name: pmoves-firefly
     restart: unless-stopped
+    # Host port for operator UI access (first-user registration + PAT minting).
+    # The committed auth bootstrap (integrations/firefly-iii/auth/bootstrap.sh)
+    # defaults FIREFLY_BASE_URL to http://localhost:8075 — this mapping is the
+    # other half of that contract.
+    ports:
+      - "${FIREFLY_HTTP_PORT:-8075}:8080"
     networks:
       pmoves_app:
         aliases:
@@ -107,10 +113,21 @@ services:
       - SETGID
       - SETUID
     tmpfs:
+      # A tmpfs mount starts EMPTY and ROOT-OWNED on every container start. Firefly's
+      # php-fpm workers run as www-data (uid=33, gid=33), so without uid/gid they cannot
+      # create the subdirectories Laravel needs — notably storage/framework/cache/data —
+      # and EVERY request 500s with `file_put_contents(...): No such file or directory`.
+      # That is what filled a 10.7 GB container log while Blackbox Exporter polled it.
+      # Docker's tmpfs reference lists uid/gid/mode as supported options and recommends
+      # uid/gid precisely because tmpfs permissions reset across restarts.
+      # noexec,nosuid are RETAINED — the hardening intent is preserved, not traded away.
+      # See docs/handoffs/firefly-tmpfs-ownership-500-log-flood-2026-08-16.md
+      # (size= limits deliberately NOT set here: an unmeasured bound would risk a new
+      #  outage of the same shape. Tracked as a follow-up in that handoff.)
       - /tmp:noexec,nosuid
-      - /var/www/html/storage/framework/sessions:noexec,nosuid
-      - /var/www/html/storage/framework/views:noexec,nosuid
-      - /var/www/html/storage/framework/cache:noexec,nosuid
+      - /var/www/html/storage/framework/sessions:noexec,nosuid,uid=33,gid=33,mode=0770
+      - /var/www/html/storage/framework/views:noexec,nosuid,uid=33,gid=33,mode=0770
+      - /var/www/html/storage/framework/cache:noexec,nosuid,uid=33,gid=33,mode=0770
     # Health check — Firefly III is upstream Laravel with no /healthz endpoint.
     # Probe the /api/v1/about route (Firefly-specific health indicator).
     # Matches the Archon/agent-zero blackbox pattern for upstream services.

@@ -816,6 +816,28 @@ Example: `ingest.transcript.ready.v1`
 - **Filter:** Only tasks with `meta.voice_mode: true` in the input payload are relayed
 - **Profiles:** `cast`, `media`
 
+## Voice Sampler Subjects
+
+Media-sourced voice references (VOICE_SAMPLER_SPEC.md; voice-sampler service, port 8124).
+Voice references are personal data: payloads carry JuiceFS keys only, never audio.
+
+**`voice.sample.candidates.v1`**
+- **Publisher:** voice-sampler (after diarize + segment cut + JuiceFS stage)
+- **Subscribers:** Voice Vault room app (audition lanes)
+- **Payload:** `{batch_id, bucket, prefix, speakers: [{speaker, clips: [{key, start, end, duration}]}], room, persona_id, source: {bucket, key}, diarization_model, timestamp}`
+
+**`voice.reference.approved.v1`**
+- **Publisher:** Voice Vault room app (owner-only pub-gate decision)
+- **Subscribers:** voice-sampler (executes PUBLISH: JuiceFS refs path + OmniVoice catalog + optional flute clone register)
+- **Payload:** `{batch_id, room, persona_id, owner_id, catalog_id?, clips: [candidate keys], chit_sig}`
+- **Gate:** sampler refuses unless `owner_id` matches `VOICE_SAMPLER_OWNER_ID` and `chit_sig` present (fail closed; full CHIT verification is the follow-up)
+
+**`voice.reference.published.v1`**
+- **Publisher:** voice-sampler (ANNOUNCE after successful publish)
+- **Subscribers:** room surfaces, H3/Maestro reference pickers
+- **Payload:** `{persona_id, catalog_id, room, refs: [keys], source_batch, chit_sig, timestamp}`
+- **Profiles:** `workers`, `voice`
+
 ## Cast TTS Subjects
 
 **`voice.cast.completed.v1`**
@@ -1773,8 +1795,32 @@ nats server report connections
 
 ## Service Coordination Subjects
 
-**`archon.crawl.request.v1`** — Web crawl request (Agent/UI → Archon)
-**`archon.crawl.result.v1`** — Crawl result (Archon → requesting agent)
+**`archon.crawl.request.v1`** — ⚠️ **STUB — does not crawl.** Web crawl request (Agent/UI → Archon)
+**`archon.crawl.result.v1`** — ⚠️ **STUB — echoes the request.** Crawl result (Archon → requesting agent)
+
+> **Read this before building against the crawl pair.** A handler does exist —
+> `ArchonOrchestrator` (`pmoves/services/archon/orchestrator.py:22`) subscribes to
+> `archon.crawl.request[.v1]` — but `_process_crawl` takes the `metadata` dict **from the
+> request message** and republishes it unchanged as `extracted_text` and `fragments`,
+> stamped `"status": "completed"`. Nothing fetches the URL: there is no HTTP client,
+> headless browser, or crawler anywhere under `pmoves/services/archon/`.
+>
+> So a consumer receives a success result whose content is whatever the *requester*
+> supplied. That is a stronger failure than an unimplemented subject — an unimplemented
+> subject times out and you notice; this one reports completion. The existing tests are not
+> thin — `test_archon_orchestrator.py:206-264` covers the crawl state machine
+> (`queued -> processing -> completed`), result publication on `archon.crawl.result.v1`, and
+> the result payload's shape. What none of them assert is **network retrieval**: no test
+> checks that the URL was ever fetched or that the returned content came from it.
+> `test_crawl_result_payload_structure` in fact demonstrates the defect — it feeds
+> `metadata.fragments = ["a", "b"]` in the request and asserts the *result* carries the same
+> `["a", "b"]` back. That round-trip passes whether or not a crawler exists, which is why
+> the gap survived a well-covered suite.
+>
+> **Retire-vs-implement is an open operator decision**, parked and delegated to Archon in
+> `AGNOTE4482PHI.t1.md` (`ACK::Z890-CLAUDE::CONTROL-ITEMS-RESOLVED-2026-08-08`). This entry
+> does not pre-empt it — it only stops the catalog from advertising a crawler that is not
+> there.
 **`persona.publish.v1`** — Persona definition publish (Archon → Agent Zero)
 **`persona.update.v1`** — Persona update (Archon → Agent Zero)
 **`mesh.node.announce.v2`** — Node announcement v2 format (Mesh Agent → Agent Zero)
@@ -1786,8 +1832,22 @@ nats server report connections
 **`hf.model.ready.v1`** — Model download complete (HF downloader → requesting agent)
 **`botz.skill.register.v1`** — Skill registration (BoTZ gateway → Agent Zero)
 **`botz.skill.health.v1`** — Skill health status (BoTZ gateway → monitoring)
-**`a2ui.event.v1`** — UI event for real-time display (any agent → A2UI NATS bridge)
-**`a2ui.command.v1`** — User command from UI (UI → A2UI NATS bridge)
+**`a2ui.event.v1`** — ⛔ **NEVER IMPLEMENTED.** UI event for real-time display (any agent → A2UI NATS bridge)
+**`a2ui.command.v1`** — ⛔ **NEVER IMPLEMENTED.** User command from UI (UI → A2UI NATS bridge)
+
+> **These two have never existed in code — not now, not in any commit.** A history-wide
+> pickaxe search (`git log -S` across `*.py *.ts *.tsx *.js *.yml *.yaml *.json`) returns
+> nothing for either name. The catalog lists the A2UI NATS bridge as their endpoint;
+> `bridge.py` has never referenced them.
+>
+> Both entered on **2026-03-15** via `pmoves/docs/reviews/nats-subject-catalog-gaps.md`, a
+> security-audit handoff whose premise was that *"30+ NATS subjects were found
+> **undocumented**"* and whose action was to register them. For these two the premise did
+> not hold — they were intent written up as discovery, then registered as fact. Full
+> trace: `pmoves/docs/audit/A2UI_INTEGRATION_AUDIT_2026-08-14.md` § F5.
+>
+> The subjects the A2UI renderer **actually** publishes are `a2ui.render.completed.v1`,
+> `ingest.file.added.v1`, and `agent.graphiti.signed.v1`.
 
 ## Archon Mint Subjects
 
@@ -2051,3 +2111,134 @@ This is analogous to HTTP path versioning (`/api/v1/`) vs content-type versionin
 - Runtime dependencies: `nats` CLI, `hbbs` / `hbbr` systemd journals, `/var/log/pmoves`, and a NATS broker reachable from KVM2
 - Auth split: `TAILSCALE_AUTHKEY` joins nodes; `TAILSCALE_API_KEY` is for admin API operations and is not used to publish watcher events
 - Reachability caveat: the repo-default NATS broker is localhost-only on port `4222`, so remote watcher publishes stay blocked until one broker is exposed on a Tailscale-reachable interface
+
+
+## Validation Subjects (MiSSinGLinC external peer review)
+
+> Namespace `validation.*` introduced by the MiSSinGLinC mint
+> (`pmoves/docs/AGENTS/MISSINGLINC_MINT_SPEC.md`, 2026-08-09). The branded
+> namespace table addition in `.claude/context/self-hosted-defaults.md` is
+> staged in the mint PR body — that file is damage-control protected, so the
+> table row lands via operator apply.
+
+**`validation.run.requested.v1`**
+- **Direction:** Published by rooms/agents requesting validation -> Consumed by missinglinc-validator
+- **Purpose:** Request an external peer-review validation run: `{claim_set, evidence_corpus_refs, validation_depth}`
+- **Status:** REGISTERED-AHEAD — publisher lands with the MiSSinGLinC service (mint spec Wave-0; no consumer live yet)
+
+**`validation.verdict.ready.v1`**
+- **Direction:** Published by missinglinc-validator -> Consumed by rooms, Makeda voice readout (persona.makeda.missinglinc), Hi-RAG ingest
+- **Purpose:** Structured validation verdict with per-claim evidence chains and CHIT CGP proof packet
+- **Status:** REGISTERED-AHEAD — see mint spec
+
+**`validation.evidence.chain.v1`**
+- **Direction:** Published by missinglinc-validator -> Consumed by graph persistence (Neo4j lane), audit surfaces
+- **Purpose:** Claim -> evidence -> source graph (JSON-LD) for a completed validation run
+- **Status:** REGISTERED-AHEAD — see mint spec
+
+**`validation.counter.evidence.v1`**
+- **Direction:** Published by missinglinc-validator (adversarial depth only) -> Consumed by rooms, alerting
+- **Purpose:** Counter-evidence report: contradictions found while red-teaming a claim set
+- **Status:** REGISTERED-AHEAD — see mint spec
+
+## Mavis Harness v0 Subjects
+
+> Namespace `pmoves.agent.*` + `pmoves.bpm.*` introduced by the Mavis multi-agent
+> harness v0 (`pmoves/tools/orchestrator.py` + `pmoves/tools/bpm_cron.py`).
+> Locked in PR #2477; registered here in PR follow-up slice. The `pmoves-nats-mcp`
+> slice (z890 PR #2492 spec) is the consumer that will produce these messages
+> in production; the MockPublisher in `pmoves/tools/orchestrator.py` is the
+> test-surface that runs without a live NATS broker.
+
+**`pmoves.agent.task.v1`**
+- **Direction:** Published by `pmoves/tools/orchestrator.py::Orchestrator.dispatch` → Consumed by worker agents (Hermes, KiloClaw, Mavis-self)
+- **Purpose:** A multi-agent task envelope. The orchestrator publishes one task with a `task_id`; the worker replies on `pmoves.agent.result.v1` keyed by the same `task_id`.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task": "render cyber.png as the Pillar 4 encoding skin",
+    "agents": ["mavis", "kiloclaw"],
+    "context": { "identity": "critic", "tools_bridge": [...] }
+  }
+  ```
+- **Subscribers:** Agent Zero (for routing), worker agents, audit/observability sinks
+- **Status:** REGISTERED — orchestrator + bpm_cron use these subjects; consumer-fork wire-up (Hermes, KiloClaw) is the harness v0 consumer slice
+
+**`pmoves.agent.result.v1`**
+- **Direction:** Published by worker agents → Consumed by `pmoves/tools/orchestrator.py::Orchestrator` (correlates by `task_id`)
+- **Purpose:** The worker's reply to a task. Multiple workers may reply for the same `task_id`; the orchestrator merges per-phase.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "target": "kiloclaw",
+    "status": "success | error | pending | timeout",
+    "output": "rendered PNG at /tmp/.../cyber.png",
+    "elapsed_s": 12.4,
+    "error": ""
+  }
+  ```
+- **Subscribers:** Orchestrator, audit/observability, A2UI live trail
+- **Status:** REGISTERED — same as `pmoves.agent.task.v1`
+
+**`pmoves.bpm.phase.v1`**
+- **Direction:** Published by `pmoves/tools/bpm_cron.py::BpmCron.advance` → Consumed by the orchestrator, A2UI, observability
+- **Purpose:** A BPM phase transition event. The 5 phases are `define → assign → execute → review → close`; each transition is a published event so the orchestrator can dispatch the next phase's work and A2UI can render the live trail.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task_name": "react-to-video-123",
+    "phase": "execute",
+    "previous_phase": "assign",
+    "agent": "mavis",
+    "timestamp": "2026-08-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Orchestrator, A2UI live trail, observability
+- **Status:** REGISTERED — bpm_cron publishes per-phase
+
+**`pmoves.bpm.pomodoro.v1`**
+- **Direction:** Published by `pmoves/tools/bpm_cron.py::BpmCron` (focus-block boundaries) → Consumed by A2UI, observability, the operator's check-in dispatcher
+- **Purpose:** A pomodoro focus-block event: 25-min work + 5-min check-in (configurable via env). Each block boundary is a published event so the operator check-in surface knows when to interrupt.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "task_name": "react-to-video-123",
+    "block_index": 1,
+    "event": "start | completed | skipped",
+    "work_minutes": 25,
+    "checkin_minutes": 5,
+    "timestamp": "2026-08-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** A2UI, observability, operator check-in surfaces
+- **Status:** REGISTERED — bpm_cron publishes per-block
+
+**`pmoves.branch_protection.drift.v1`**
+- **Direction:** Published by `pmoves/tools/branch_protection_publisher.py::publish_drift_report` → Consumed by the orchestrator (remediation dispatch), A2UI (live ruleset trail), observability
+- **Purpose:** A per-repo branch-protection drift report. One message per non-compliant repo (compliant repos are silent to avoid flooding the subject). The envelope wraps the `AuditResult.to_dict()` shape and adds a `source` + `published_at` for filtering.
+- **Payload:**
+  ```json
+  {
+    "envelope": "drift.v1",
+    "source": "pmoves.branch_protection",
+    "published_at": "2026-08-15T12:00:00Z",
+    "audit": {
+      "repo": "POWERFULMOVES/PMOVES.AI",
+      "profile": "monorepo",
+      "branch": "main",
+      "compliant": false,
+      "drift": [
+        { "field": "rulesets[[ main ]].rules[type=required_signatures]", "expected": "present", "actual": "missing", "severity": "block" }
+      ],
+      "checked_at": "2026-08-15T12:00:00Z",
+      "source_url": "https://github.com/POWERFULMOVES/PMOVES.AI/settings/branches"
+    }
+  }
+  ```
+- **Publisher cadence:** Daily 06:00 UTC (the `branch-protection-drift.yml` workflow schedule) + manual `workflow_dispatch`
+- **Subscribers:** Orchestrator (remediation session), A2UI live ruleset trail, observability
+- **Status:** REGISTERED — `branch_protection_publisher.py` publishes via the `FilePublisher` (JSONL stdout, the default sink) or `NatsPublisher` (when `pmoves-nats-mcp` is wired)

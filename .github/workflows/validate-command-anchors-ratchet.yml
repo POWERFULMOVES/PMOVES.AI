@@ -1,0 +1,97 @@
+name: Validate Command Anchors Ratchet
+
+# Anchors documented commands to the things they name.
+#
+# A doc that says `make foo` is a promise. This checks the promise resolves —
+# that the target exists, that a cited `path:NNN` file exists, that a documented
+# ssh host is in the fleet topology, and that a documented command is not one the
+# damage-control hook blocks (a doc that produces a refusal instead of an action).
+#
+# Written after three same-shaped failures on 2026-08-08: a skill documenting a
+# command the pre-tool hook rejects, that same skill carrying a superseded docker
+# incantation #2473 had already fixed elsewhere, and an inventory doc whose own
+# reproduction command counted itself.
+#
+# Scope-aware by design: make targets reach docker, ssh, python, git, systemd and
+# NATS, not just docker, so targets are classified by scope and remote-scope
+# hosts are checked against pmoves/config/fleet-map.yaml +
+# pmoves/configs/claws/scopes/ rather than a hardcoded list.
+#
+# Ratchet, not a wall: findings present at baseline live in
+# pmoves/configs/command_anchors/_known_gaps.yaml and do not fail. Anything new
+# does. Count goes down only. Same shape as validate-composes and
+# validate-dockerfile-paths.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/docs/**/*.md"
+      - ".claude/skills/**/*.md"
+      # The always-loaded orientation layer — first contact for any agent
+      # entering this repo, and therefore the highest-cost place for a dead
+      # reference. .claude/CLAUDE.md currently names a target that does not exist.
+      - ".claude/*.md"
+      - "CLAUDE.md"
+      - "AGENTS.md"
+      - ".claude/context/**/*.md"
+      - ".claude/commands/**/*.md"
+      - ".claude/agents/**/*.md"
+      # The damage-control routing table: every "correct path" it offers is a
+      # promise made to an agent at its least recoverable moment.
+      - ".claude/hooks/damage-control/patterns.yaml"
+      - "deploy/runbooks/**/*.md"
+      - "pmoves/Makefile"
+      - "pmoves/mk/*.mk"
+      - "pmoves/config/fleet-map.yaml"
+      - "pmoves/config/operator_nodes.yaml"
+      - "pmoves/configs/claws/scopes/*.json"
+      - "pmoves/configs/command_anchors/_known_gaps.yaml"
+      # GHOST_ENDPOINT reads route declarations out of the service sources, so
+      # drift runs in BOTH directions: a doc can name a route that was never
+      # added, and a route can be renamed or deleted out from under a doc that
+      # still cites it. Keying only on docs would catch the first and miss the
+      # second — and the second is the more common one, because the person
+      # renaming a route is rarely the person who wrote the runbook.
+      - "pmoves/services/**/*.py"
+      - "pmoves/tools/validate_command_anchors.py"
+      - "pmoves/tools/tests/test_validate_command_anchors.py"
+      - ".claude/hooks/pre-tool.sh"
+      - ".github/workflows/validate-command-anchors-ratchet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  validate-command-anchors-ratchet:
+    name: validate-command-anchors-ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Run ratchet (stdlib only, no network)
+        run: python pmoves/tools/validate_command_anchors.py
+
+      - name: Pytest the ratchet (regression net for the ratchet itself)
+        run: |
+          # pmoves/conftest.py is shared across the tools/tests suite and imports
+          # pytest_asyncio + pyyaml. These ratchet tests are sync and stdlib-only,
+          # but the conftest import chain still has to resolve or collection dies
+          # before a single test runs. Same note as
+          # validate-dockerfile-paths-ratchet.yml, learned the same way.
+          python -m pip install --quiet pytest pytest-asyncio pyyaml
+          python -m pytest pmoves/tools/tests/test_validate_command_anchors.py -v

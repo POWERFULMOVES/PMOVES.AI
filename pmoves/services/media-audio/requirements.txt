@@ -12,7 +12,10 @@ librosa>=0.10.0
 soundfile>=0.12.0
 pydub>=0.25.1
 # Speaker diarization — loaded only when HF_TOKEN is set (pyannote 3.1 is gated).
-pyannote.audio>=3.3.0
+# <4 is load-bearing: pyannote 4.x hard-requires torchcodec>=0.7, which aborts
+# on import (std::length_error) in this image — reproduced as a 202-restart
+# crash loop. The 3.4 stack is the documented, working path.
+pyannote.audio>=3.3.0,<4
 
 # API framework
 fastapi==0.114.2
@@ -25,8 +28,12 @@ boto3==1.34.162
 requests==2.33.0
 
 # ML utilities
-transformers>=5.0.0rc3
-accelerate==0.32.1
+# <5 is load-bearing: transformers 5 forces huggingface-hub>=1.0, which breaks
+# pyannote 3.x (use_auth_token removed); pyannote 4.x in turn hard-requires
+# torchcodec>=0.7, which aborts on import (std::length_error) in this image.
+# whisper-large-v3-turbo + hubert emotion are 4.x-era architectures.
+transformers>=4.53,<5
+accelerate>=1.0  # pyannote.audio 4.x + transformers 5.x need modern accelerate (was ==0.32.1)
 
 # Data validation
 pydantic>=2.0.0

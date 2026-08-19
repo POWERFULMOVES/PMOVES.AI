@@ -23,10 +23,12 @@ Missing items are not failures — they are operational facts. Disclose them. Ne
 |------|------------|
 | Start / restart services | `make -C pmoves up-<service>` (never `docker compose up` raw) |
 | Apply secrets | `make -C pmoves secrets-funnel` (before any service start after env change) |
-| Read-only health | `make -C pmoves health-quick` / `health-check-all` |
+| Read-only health | `make -C pmoves health-summary` / `health-dormant` |
 | Fleet view | `make -C pmoves fleet-status` (never raw `tailscale status` for public IPs) |
 | CHIT-sign provenance | `make -C pmoves sign-trail SUMMARY=... AGENT=...` |
 | Refresh living docs | `make -C pmoves docs-reconcile` |
+| Run the provider-verifier static gate | `python pmoves/tools/provider_verifier_gate.py` (no API calls; 6 checks; FAIL blocks merge via merge-gate) |
+| Run the provider-verifier full conformance | `cd Pmoves-MiniMax-Provider-Verifier && python verify.py --providers <file> --output-dir /tmp/run` (operator-only, requires real API keys from `env.shared`) |
 
 Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When the damage-control hook converts a raw `docker` / `netsh` / `gh workflow run` command to an `ask` prompt, that means a Make target already exists — use it.
 
@@ -34,7 +36,8 @@ Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When the
 
 | Server | Transport | Purpose |
 |--------|-----------|---------|
-| `pmoves-cipher` | SSE `http://localhost:8105/sse` | Persistent agent memory lookups + writes |
+| `pmoves-cipher` | SSE `http://localhost:8105/mcp/sse` | Persistent agent memory lookups + writes |
+| `pmoves-minimax-mcp` | stdio `uvx minimax-mcp` | MiniMax model surface (text/image/video/TTS/voice-clone); submodule PMOVES-MiniMax-MCP |
 | `docker` | `mcp/docker` | Container inspection via local Docker socket |
 | `hostinger-mcp` | stdio | Hostinger VPS API via `HOSTINGER_API_KEY` |
 | `tailscale` | stdio | Tailnet inventory, stale-node cleanup, ACL operations |

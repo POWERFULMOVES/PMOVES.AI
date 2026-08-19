@@ -8,6 +8,7 @@ Public HTTP API for room lifecycle management. Endpoints follow the spec at
   GET  /healthz                                       service + catalog health
   GET  /api/p7/rooms                                  list rooms (catalog rows)
   GET  /api/p7/rooms/{room_id}                        room detail (manifest + stage)
+  POST /api/p7/rooms/{room_id}/session                open/close room session (OpenRoom adapter)
   POST /api/p7/rooms/{room_id}/transition             state-machine transition
   POST /api/p7/reload                                 force re-read of catalog from disk
 
@@ -26,7 +27,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -263,6 +266,19 @@ class TransitionRequest(BaseModel):
     requester: str = Field(..., min_length=1, description="Agent or operator id requesting the transition")
 
 
+class SessionRequest(BaseModel):
+    """Open/close a room session — called by the OpenRoom desktop adapter
+    (pmovesRoomAdapter.ts) on room enter (action=open) and room leave
+    (action=close). Best-effort: any failure logs but doesn't block the
+    desktop. Returns a session_id the client can correlate in logs.
+    """
+    action: str = Field(..., description="One of: open, close")
+    agent_id: str = Field(default="anonymous", description="Agent id (window.PMOVES_AGENT_ID)")
+    alter: str = Field(default="", description="Agent alter (window.PMOVES_ALTER)")
+    room_stage: str = Field(default="rehearsal", description="Room stage at session time (rehearsal/live/review/archive)")
+    timestamp: str = Field(default="", description="Client-supplied ISO-8601 timestamp (advisory only)")
+
+
 # --------------------------------------------------------------------------- #
 # Endpoints
 # --------------------------------------------------------------------------- #
@@ -335,6 +351,60 @@ async def transition_room(room_id: str, req: TransitionRequest) -> Dict[str, Any
         requester=req.requester,
     )
     return result
+
+
+@app.post("/api/p7/rooms/{room_id}/session")
+async def room_session(room_id: str, req: SessionRequest) -> Dict[str, Any]:
+    """Open or close a room session.
+
+    The OpenRoom desktop adapter (pmovesRoomAdapter.ts) calls this on
+    room enter (action=open) and room leave (action=close). The endpoint
+    is intentionally **unauthenticated** because the adapter is a
+    public-facing browser-side module — auth would block the openroom
+    reverse proxy from forwarding the call. The session is recorded
+    with the agent_id + alter that the client supplies, so audit
+    forensics still work (the alter is a soft signal, not an identity
+    proof). For real auth, deploy a forward-auth gateway in front of
+    /api/p7/.
+
+    Best-effort NATS publish: if the broker is down, the session is
+    still recorded in the local log and a session_id is returned so
+    the desktop doesn't block. Catalog row lookup is in-memory; if
+    the room isn't in the catalog we still record the session (it
+    might be a private/owner-only room that doesn't appear in the
+    public catalog).
+    """
+    if req.action not in ("open", "close"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"action must be 'open' or 'close', got {req.action!r}",
+        )
+    session_id = str(uuid.uuid4())
+    LOG.info(
+        "session %s: room=%s agent=%s alter=%s stage=%s session_id=%s",
+        req.action, room_id, req.agent_id, req.alter, req.room_stage, session_id,
+    )
+    if PUBLISHER is not None:
+        try:
+            await PUBLISHER.publish_room_session(
+                room_id=room_id,
+                session_id=session_id,
+                action=req.action,
+                agent_id=req.agent_id,
+                alter=req.alter,
+                room_stage=req.room_stage,
+            )
+        except Exception:  # pragma: no cover - best-effort
+            LOG.exception("session %s publish failed (continuing)", req.action)
+    return {
+        "status": {"open": "opened", "close": "closed"}[req.action],
+        "session_id": session_id,
+        "room_id": room_id,
+        "agent_id": req.agent_id,
+        "alter": req.alter,
+        "room_stage": req.room_stage,
+        "timestamp": req.timestamp or datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @app.post("/api/p7/reload")

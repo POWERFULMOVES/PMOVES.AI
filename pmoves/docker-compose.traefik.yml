@@ -1,6 +1,15 @@
 services:
   traefik:
-    image: ${TRAEFIK_IMAGE:-traefik:v3.3}
+    # v3.6 is a FLOOR, not a preference. Traefik's Docker provider pins Docker API
+    # v1.24 until v3.6; Docker Engine 29 sets MinAPIVersion 1.40 and answers v1.24
+    # with a 400 whose body is empty — which surfaces as the unhelpful
+    # `Error response from daemon: ` with nothing after the colon, once a minute,
+    # while EVERY route 404s because no container label is ever read.
+    # Measured on Engine 29.6.2: v3.4 → 7 provider errors/10s, v3.5 → 6, v3.6 → 0.
+    # DOCKER_API_VERSION=1.44 does NOT help; Traefik ignores it.
+    # Do not downgrade below v3.6. See
+    # docs/handoffs/traefik-docker-provider-api-version-2026-08-06.md
+    image: ${TRAEFIK_IMAGE:-traefik:v3.6@sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d}
     container_name: pmoves-traefik
     restart: unless-stopped
     command:
@@ -15,6 +24,30 @@ services:
       - --certificatesresolvers.cf.acme.email=${ACME_EMAIL:-ops@pmoves.ai}
       - --certificatesresolvers.cf.acme.storage=/letsencrypt/acme.json
     environment:
+      # COMPATIBILITY HARDENING — NOT the fix. Certificates keep failing until a
+      # real token value is funneled into env.shared.
+      #
+      # Root cause, corrected 2026-08-18 after a recreate proved it: the token is
+      # EMPTY, not misnamed. Measured inside the running container,
+      # `printf %s "$CLOUDFLARE_DNS_API_TOKEN" | wc -c` = 0 — and CF_DNS_API_TOKEN
+      # = 0 as well. An earlier masked-presence grep reported "SET" by matching the
+      # JSON closing quote after `=` rather than a value, which is what produced
+      # the original "CF_* vs CLOUDFLARE_* name mismatch" theory. That theory was
+      # wrong. Compose substitution and `up-edge`'s --env-file are both working;
+      # they resolve to empty because no Cloudflare DNS token was ever supplied.
+      #
+      # Setting both names is still worth keeping: lego reads
+      # CLOUDFLARE_DNS_API_TOKEN, the CF_* form is the legacy alias, and carrying
+      # both means a real value is found regardless of lego version. It changes
+      # nothing while the value is empty.
+      #
+      # The operator-side fix: mint a Cloudflare token with BOTH Zone:DNS:Edit AND
+      # Zone:Zone:Read on pmoves.ai (lego resolves the zone ID before writing the
+      # _acme-challenge record, and no separate CLOUDFLARE_ZONE_API_TOKEN is
+      # supplied here, so one token serves both calls), then funnel it via
+      # `make secrets-rotate KEY=CLOUDFLARE_DNS_API_TOKEN` and `make -C pmoves up-edge`.
+      # See docs/handoffs/traefik-cloudflare-dns-token-varname-2026-08-18.md
+      CLOUDFLARE_DNS_API_TOKEN: ${CLOUDFLARE_DNS_API_TOKEN}
       CF_DNS_API_TOKEN: ${CLOUDFLARE_DNS_API_TOKEN}
     ports: ["443:443", "80:80"]
     volumes:

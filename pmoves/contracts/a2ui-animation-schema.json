@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pmoves.ai/schemas/a2ui-animation-v1.json",
   "title": "A2UI Animation Schema",
-  "description": "Animation extension for A2UI declarative UI specs. Defines how A2UI components animate via Remotion, Three.js, or CSS.",
+  "description": "A2UI Animation v1 — a scene/element timeline consumed by the a2ui-renderer service (port 8107) and rendered via Remotion. This is one of three distinct schemas sharing the a2ui prefix; it is NOT the A2UI Protocol (beginRendering/surfaceUpdate) and NOT the pm-* component contract in a2ui-v0.1.md. See pmoves/docs/audit/A2UI_INTEGRATION_AUDIT_2026-08-14.md section F1.",
   "version": "1.0.0",
   "type": "object",
   "properties": {

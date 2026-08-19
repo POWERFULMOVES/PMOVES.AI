@@ -150,3 +150,45 @@ def test_clean_image_anime_route_on_cuda_comfyui_node(workflow_id):
 @pytest.mark.parametrize("workflow_id", ["image.flux-schnell", "anime.animagine-xl"])
 def test_clean_image_anime_use_comfyui_operator(workflow_id):
     assert operator_kind(workflow_id) == "comfyui"  # only voice.* is special
+
+
+# ── schedulable flag ────────────────────────────────────────────────
+# The capacity registry must name every machine on the fleet (the anchor
+# validator derives known hostnames from it), but naming a box is not the same
+# claim as "a worker can consume a job there". Because select_node() picks the
+# LOWEST-VRAM match, an un-bootstrapped edge node would otherwise WIN every
+# small job it nominally qualifies for.
+
+_UNBOOTSTRAPPED = [
+    {"node_id": "nano-1", "vram_gb": 8, "caps": ["cuda", "edge"],
+     "reach": "pmoves-nano-1", "schedulable": False},
+    {"node_id": "4090", "vram_gb": 24, "caps": ["cuda", "edge"],
+     "reach": "pmoves-laptop"},
+]
+
+
+def test_unschedulable_node_is_never_selected():
+    pick = select_node({"needs": ["cuda"], "min_vram_gb": 4}, _UNBOOTSTRAPPED)
+    assert pick is not None
+    assert pick["node_id"] == "4090"
+
+
+def test_schedulable_flag_is_load_bearing():
+    """Flipping the flag must change the outcome, or the test proves nothing."""
+    nodes = copy.deepcopy(_UNBOOTSTRAPPED)
+    for n in nodes:
+        if n["node_id"] == "nano-1":
+            n["schedulable"] = True
+    pick = select_node({"needs": ["cuda"], "min_vram_gb": 4}, nodes)
+    assert pick["node_id"] == "nano-1"
+
+
+def test_schedulable_defaults_to_true():
+    """Existing registry entries carry no flag and must keep their behaviour."""
+    nodes = [{"node_id": "edge", "vram_gb": 8, "caps": ["cuda"], "reach": "pmoves-edge"}]
+    assert select_node({"needs": ["cuda"]}, nodes)["node_id"] == "edge"
+
+
+def test_all_unschedulable_parks_rather_than_misroutes():
+    nodes = [dict(_UNBOOTSTRAPPED[0])]
+    assert select_node({"needs": ["cuda"], "min_vram_gb": 4}, nodes) is None

@@ -285,6 +285,7 @@ make -C pmoves kokoro-build kokoro-up kokoro-smoke
 
 ```bash
 curl http://localhost:8055/healthz
-curl http://localhost:8055/v1/voices          # List available voices
-curl http://localhost:8055/v1/voice/health    # Provider health
+curl -s http://localhost:8055/v1/voice/config | jq .providers                                    # available providers
+curl -s http://localhost:8055/v1/voice/profiles -H "X-API-Key: $FLUTE_API_KEY" | jq .profiles     # registered voices
+curl -s http://localhost:8055/healthz | jq .providers                                             # per-provider health
 ```

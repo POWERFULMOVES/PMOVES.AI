@@ -164,6 +164,17 @@ class AudioProcessor:
             try:
                 from pyannote.audio import Pipeline as PyannotePipeline
 
+                # torch>=2.6 weights-only unpickling rejects the non-tensor
+                # globals pyannote 3.x checkpoints embed. Allowlist exactly
+                # those instead of falling back to weights_only=False, so
+                # TORCH_FORCE_WEIGHTS_ONLY_LOAD=1 keeps protecting every
+                # other model load.
+                from pyannote.audio.core.task import Problem, Resolution, Specifications
+                from torch.torch_version import TorchVersion
+
+                torch.serialization.add_safe_globals(
+                    [TorchVersion, Specifications, Problem, Resolution]
+                )
                 try:
                     pipe = PyannotePipeline.from_pretrained(DIARIZATION_MODEL, token=HF_TOKEN)
                 except TypeError:
@@ -290,22 +301,85 @@ def _startup() -> None:
 async def _maybe_publish(result: Dict[str, Any]) -> None:
     if not NATS_URL:
         return
-    # Conform to the registered analysis.audio.v1 contract before emitting: its schema
-    # (contracts/schemas/analysis/audio.v1.schema.json) requires an `emotions` array.
-    # The build context is ./services/media-audio so the schema file is not in the image;
-    # enforce its one hard invariant inline rather than poison consumers with a bad payload.
-    if not isinstance(result, dict) or not isinstance(result.get("emotions"), list):
+    import json
+
+    # Emit the shared envelope, not a bare payload. events.envelope() validates the
+    # payload against this topic's registered schema (contracts/topics.json ->
+    # schemas/analysis/audio.v1.schema.json) and wraps it in the common envelope
+    # (id/topic/ts/version/source) that every other producer on the bus emits.
+    #
+    # This supersedes an inline `emotions`-array check that existed only because the
+    # old service-directory build context could not reach pmoves/contracts. The image
+    # is now built from the repo root, so the real contract is available.
+    #
+    # Follows the #1814 discipline: an invalid packet is logged and dropped rather than
+    # published, and an unavailable validator is a *visible* warning — never a silent
+    # downgrade to unvalidated publishing.
+    #
+    # envelope() is used instead of events.publish() deliberately: events resolves its
+    # own module-level NATS_URL with an empty-string default, which would connect to
+    # nowhere whenever NATS_URL is unset, whereas this service carries a real default.
+    try:
+        from services.common.events import envelope
+    except Exception:
         logger.warning(
-            "skipping %s publish: payload missing required 'emotions' array", MEDIA_AUDIO_SUBJECT
+            "not publishing to %s: services.common.events is unavailable — this image "
+            "must be built from the repo root so pmoves/services/common is present",
+            MEDIA_AUDIO_SUBJECT,
+            exc_info=True,
         )
         return
-    try:
-        import json
 
+    # Adapt the native result to the event contract before validating. These are
+    # deliberately different documents (issue #2186): the contract wants a top-level
+    # `emotions` array, but full() nests it under `emotion`, so publishing the native
+    # result unmapped could never satisfy the schema — every publish was dropped.
+    try:
+        from analysis_event import build_analysis_event
+    except Exception:
+        logger.warning(
+            "not publishing to %s: analysis_event adapter is unavailable",
+            MEDIA_AUDIO_SUBJECT,
+            exc_info=True,
+        )
+        return
+
+    # Validate exactly what goes on the wire. Coercing first matters: `default=str`
+    # turns datetimes into strings at serialization time, so validating the raw dict
+    # would be validating a different document than the one published.
+    try:
+        payload = json.loads(json.dumps(build_analysis_event(result), default=str))
+    except (TypeError, ValueError):
+        logger.warning(
+            "skipping %s publish: payload is not JSON-serializable",
+            MEDIA_AUDIO_SUBJECT,
+            exc_info=True,
+        )
+        return
+
+    try:
+        env = envelope(MEDIA_AUDIO_SUBJECT, payload, source="media-audio")
+    except KeyError:
+        # MEDIA_AUDIO_SUBJECT is env-overridable, so an operator can point this at a
+        # subject that was never registered. That is a config fault, not a bad payload.
+        logger.warning(
+            "not publishing: %s is not registered in contracts/topics.json",
+            MEDIA_AUDIO_SUBJECT,
+        )
+        return
+    except Exception:
+        logger.warning(
+            "skipping %s publish: payload failed its registered contract",
+            MEDIA_AUDIO_SUBJECT,
+            exc_info=True,
+        )
+        return
+
+    try:
         import nats
 
         nc = await nats.connect(NATS_URL)
-        await nc.publish(MEDIA_AUDIO_SUBJECT, json.dumps(result, default=str).encode("utf-8"))
+        await nc.publish(MEDIA_AUDIO_SUBJECT, json.dumps(env).encode("utf-8"))
         await nc.drain()
     except Exception:
         logger.warning("NATS publish skipped/failed", exc_info=True)

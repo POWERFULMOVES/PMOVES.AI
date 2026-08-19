@@ -111,8 +111,9 @@ docker exec pmoves-neo4j-1 cypher-shell -u neo4j -p "$NEO4J_PASSWORD" \
 ### Container Won't Start
 ```bash
 docker logs pmoves-neo4j-1
-docker volume rm pmoves_neo4jdata
-make -C pmoves neo4j-local-up
+# volume-reset stops, removes, drops the volumes, and restarts the service
+# (pmoves/mk/infra.mk:44) — it is the whole recovery, not just the wipe.
+make -C pmoves volume-reset SERVICE=neo4j
 ```
 
 ### Authentication Failed

@@ -45,6 +45,30 @@ jobs:
     runs-on: [self-hosted, Linux]
     timeout-minutes: 5
     steps:
+      # These runners keep a PERSISTENT workspace. `submodules: false` means
+      # checkout never updates the submodules, so whatever they were left at
+      # survives forever -- and actions/checkout still runs
+      # `git submodule foreach --recursive` for its sshCommand cleanup,
+      # regardless of that setting. Some runners are parked on an archon commit
+      # (1e02907a) that carries external/* gitlinks with no .gitmodules, so the
+      # foreach aborts:
+      #
+      #   fatal: No url found for submodule path
+      #     'pmoves/integrations/archon/external/PMOVES-Agent-Zero' in .gitmodules
+      #
+      # The REPO is clean -- main pins archon at 944d31da, which has zero
+      # gitlinks. #2519 fixed the repo; nothing reset the runners. Because
+      # `runs-on: [self-hosted, Linux]` matches five runners and only some are
+      # dirty, this failed 4 of the last 8 runs, alternating, which reads as
+      # flaky CI rather than one stale directory.
+      #
+      # Deinit before checkout so the state cannot persist. This job needs no
+      # submodules at all, so dropping them is free. Best-effort by design: on a
+      # clean or first-run workspace there is nothing to deinit.
+      - name: Clear stale submodule state (persistent self-hosted workspace)
+        continue-on-error: true
+        run: git submodule deinit -f --all >/dev/null 2>&1 || true
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

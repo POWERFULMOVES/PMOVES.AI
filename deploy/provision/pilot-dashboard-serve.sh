@@ -65,8 +65,10 @@ CRON="* * * * * bash $DIR/refresh.sh >/dev/null 2>&1"
   && echo "cron: refresh every minute" || echo "warn: cron not set (add manually: $CRON)"
 
 # 5) publish over Tailscale (tailnet HTTPS, private — not Funnel)
-if tailscale serve --bg "$PORT" 2>&1 | tail -1; then :; else
-  tailscale serve --bg --https=443 "http://127.0.0.1:$PORT" 2>&1 | tail -1 || true
+# Check tailscale's own exit status directly — piping to `tail` would mask a
+# serve failure behind tail's success and the fallback would never fire.
+if ! tailscale serve --bg "$PORT" 2>&1; then
+  tailscale serve --bg --https=443 "http://127.0.0.1:$PORT" 2>&1 || true
 fi
 URL="https://$(tailscale status --json 2>/dev/null | grep -oE '"DNSName":"[^"]*' | head -1 | sed 's/.*:"//; s/\.$//')"
 echo "──────────────────────────────────────────────"

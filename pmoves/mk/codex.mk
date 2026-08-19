@@ -69,6 +69,9 @@ codex-health-quick: ## Fast Codex-oriented health check for core agent services
 secrets-audit: ## Run secrets hardening audit (CHIT paths, sync workflow, export hygiene)
 	@$(CODEX_PY) tools/secrets_hardening_audit.py
 
+action-pin-audit: ## Verify every SHA-pinned GitHub Action resolves (exit 3 = API unreachable, NOT a pass)
+	@$(CODEX_PY) tools/action_pin_audit.py
+
 tooling-audit: ## Audit PMOVES tools/scripts overlap vs submodule tooling (auth/user/login focused)
 	@$(CODEX_PY) tools/tooling_script_audit.py
 	@echo Wrote pmoves/docs/AGENTS/TOOLING_SCRIPT_AUDIT.md
@@ -81,21 +84,21 @@ chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bund
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-register: ## Idempotently add missing registry entries to the v2 CHIT manifest (ARGS='--check' to gate)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_register.py $(ARGS)
 
 chit-manifest-sync: ## Sync v1 CHIT manifest from v2 (file/key targets + alias hints)
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
 chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
-	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@$(MAKE) --no-print-directory env-bootstrap-lite ARGS= >/dev/null
 	@runner="$(CODEX_PY)"; \
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
@@ -115,7 +118,16 @@ secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env
 secrets-pull: ## Pattern B consumer: install the newest CI CHIT bundle at the canonical user-scoped path (runnerless nodes; no path juggling)
 	@bash scripts/pull_chit_bundle.sh
 
-secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull newest CI bundle, then materialize tier files from it
+secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-shot prod funnel for runnerless nodes: pull bundle, materialize tiers, refresh local.env, force-hydrate env.shared
+	@echo "→ Refreshing local.env from CHIT bundle (runnerless parity with sync-secrets-local.yml)"
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/emit_local_env.py --cgp "$(CHIT_EXPORT_PATH)"
+	@$(MAKE) --no-print-directory secrets-local-hydrate FORCE=1
+	@echo "✔ env.shared force-refreshed from prod bundle — prod-managed keys (incl. rotations) now current"
+	@echo "  Note: local.env is the prod-secrets overlay; keep genuinely node-local overrides in env.shared, not local.env."
+
+.PHONY: docker-mcp-secrets-hydrate
+docker-mcp-secrets-hydrate: ## Re-push funnel-managed values into the Docker MCP Toolkit secret store (recovery after a Docker Desktop VMM/migration wipes the MCP resolver). DRY_RUN=1 to preview. Run AFTER Docker Desktop restart (resolver must be up).
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/docker_mcp_secrets_hydrate.py $(if $(DRY_RUN),--dry-run)
 
 .PHONY: secrets-funnel-sync-from-bundle
 secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files from a pre-installed CI CHIT bundle (skips chit-export so CI credentials are not overwritten)

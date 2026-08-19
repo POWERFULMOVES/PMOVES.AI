@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient, type Session } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 import { logError } from './errorUtils';
 import { ErrorIds } from './constants/errorIds';
@@ -55,6 +55,25 @@ let cachedRestUrl: string | null = null;
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
 
+export function syncSessionToCookie(session: Session | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const cookieName = `sb-${new URL(ensureUrl()).hostname}-auth-token`;
+    if (session) {
+      const val = JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        token_type: session.token_type,
+        user: session.user,
+      });
+      document.cookie = `${cookieName}=${encodeURIComponent(val)}; path=/; max-age=${session.expires_in ?? 3600}; SameSite=Lax`;
+    } else {
+      document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    }
+  } catch { /* SSR guard */ }
+}
+
 export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
   const bootJwt = resolveBootJwt();
   const validBoot = bootJwt && !isBootJwtExpired(5);
@@ -62,6 +81,7 @@ export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
     auth: {
       autoRefreshToken: !validBoot,
       persistSession: !validBoot,
+      detectSessionInUrl: !validBoot,
     },
     global: validBoot
       ? {
@@ -71,11 +91,10 @@ export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
         }
       : undefined,
   });
-  if (typeof window !== 'undefined') {
-    (window as any).__PMOVES_SUPABASE_BOOT = {
-      hasBootJwt: Boolean(bootJwt),
-      // Security: never expose the JWT token on the window object
-    };
+  if (typeof window !== 'undefined' && !validBoot) {
+    client.auth.onAuthStateChange((_event, session) => {
+      syncSessionToCookie(session);
+    });
   }
   return client;
 };

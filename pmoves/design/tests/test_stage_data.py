@@ -82,3 +82,47 @@ def test_output_is_deterministic():
     first = json.dumps(build_surface_messages(rooms), indent=2)
     second = json.dumps(build_surface_messages(load_public_rooms()), indent=2)
     assert first == second
+
+
+def test_each_public_room_has_enter_button_with_room_id():
+    """P3 (openroom-realization slice 2): every public room card carries an
+    Enter button that dispatches a2ui.action with name=openroom.enter and
+    context.room_id matching the manifest. stage.js listens for the event
+    and navigates to ${OPENROOM_BASE_URL}/?room=<room_id>.
+    """
+    rooms = load_public_rooms()
+    assert rooms, "no public rooms found — the catalog filter may have drifted"
+    messages = build_surface_messages(rooms)
+    components = messages[1]["surfaceUpdate"]["components"]
+    by_id = {c["id"]: c["component"] for c in components}
+
+    # Collect every Button's action + child label, indexed by id
+    buttons: dict[str, dict] = {}
+    for component_id, spec in by_id.items():
+        if "Button" in spec:
+            buttons[component_id] = spec["Button"]
+
+    # Every public room manifest must produce exactly one Enter button
+    # whose action name is openroom.enter and whose context carries the
+    # canonical room_id.
+    for room in rooms:
+        room_id = room["manifest"]["room_id"]
+        enter_buttons = [
+            (bid, b) for bid, b in buttons.items()
+            if b.get("action", {}).get("name") == "openroom.enter"
+            and any(
+                c.get("key") == "room_id"
+                and c.get("value", {}).get("literalString") == room_id
+                for c in b.get("action", {}).get("context", [])
+            )
+        ]
+        assert len(enter_buttons) == 1, (
+            f"room {room_id} expected exactly one openroom.enter button, "
+            f"got {len(enter_buttons)}"
+        )
+        # The button's child label must exist and be a Text component
+        button_id, button = enter_buttons[0]
+        assert button["child"] in by_id
+        assert "Text" in by_id[button["child"]]
+        # The Enter button must be primary (visual emphasis)
+        assert button.get("primary") is True

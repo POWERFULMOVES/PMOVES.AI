@@ -57,7 +57,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 ## Voice & Speech
 
-**Flute-Gateway** `:8055` HTTP, `:8056` WebSocket — Multimodal voice communication with Pipecat. Prosodic TTS. API: `POST /v1/voice/synthesize/prosodic`. Health: `GET /healthz`. Detail: `.claude/context/flute-gateway.md`.
+**Flute-Gateway** `:8055` (HTTP + WebSocket) — Multimodal voice communication with Pipecat. Prosodic TTS. API: `POST /v1/voice/synthesize/prosodic` (returns `audio/wav`), `GET /v1/voice/config`, `GET /v1/voice/binding`. WS: `/v1/voice/stream/tts`, `/v1/voice/agent`. Auth: `X-API-Key` header (no Bearer/JWT). Health: `GET /healthz`. Detail: `.claude/context/flute-gateway.md`.
 
 **Ultimate-TTS-Studio** `:7860` native, `:7861` Docker — 14-engine TTS (KittenTTS, Kokoro, F5, IndexTTS/2, Fish Speech S1/S2 Pro, VoxCPM, Higgs Audio, Chatterbox variants, Qwen Voice Design, VibeVoice). Gradio UI. **GPU-accelerated, runs natively via Pinokio (NOT Docker).** Health: `GET /gradio_api/info`.
 
@@ -131,7 +131,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 | `pmoves-cipher` | SSE `localhost:8105/mcp/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
 | `pmoves-nats-fleet` | stdio | `NATS_URL` (declared inline) | `pmoves-nats-mcp/nats_mcp/server.py` | Publishes/subscribes to the fleet hub at KVM4-2. No env.shared dependency. |
 | `docker` | stdio (image `mcp/docker`) | none | Docker socket | Container inspect/exec on the local Docker daemon |
-| `hostinger-mcp` | stdio (npm pkg `hostinger-api-mcp@0.2.1`) | `HOSTINGER_API_KEY` | npm package | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |
+| `hostinger-mcp` | stdio (GitHub fork `POWERFULMOVES/pmoves-hostinger-api-mcp-server#094e38c`, v1.35.7, 320 tools) | `HOSTINGER_API_KEY` | git fork, commit-pinned | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |
 | `tailscale` | stdio (npm pkg `tailscale-mcp@2026.4.10-1`) | `TAILSCALE_API_KEY`, `TAILSCALE_TAILNET` | npm package | No-op until env populated. Tailnet inventory, ACL audit, stale-node sweep |
 
 **Secrets pipeline (canonical)** — never paste API keys in chat. Set in `pmoves/env.tier-api` (or per-tier file), run `make -C pmoves secrets-funnel`, restart the consuming container or Claude Code session. The env.shared multi-line value rule applies: keep secrets single-line escaped or behind `_PATH` references; multi-line bodies break dotenv parsing.

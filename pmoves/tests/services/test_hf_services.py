@@ -184,8 +184,37 @@ class TestHFResearchAgent:
         result = hf_research_mod.HFResearchAgent._evaluate_model(model)
         assert result["passed"] is True
         assert result["score"] >= 50
-        assert result["max_score"] == 100
+        assert result["max_score"] == hf_research_mod.MAX_SCORE == 110
         assert "high downloads" in " ".join(result["reasons"])
+
+    def test_compat_bonus_adds_ten_points(self) -> None:
+        """Criterion 5 awards +10 when the model id advertises a local-run variant.
+
+        Compared against an otherwise identical model so the assertion holds
+        regardless of the env-derived PREFERRED_TAGS/AVOID_TAGS sets.
+        """
+        base = {
+            "model_id": "Qwen/Qwen3.5-9B",
+            "tags": ["text-generation"],
+            "downloads": 50000,
+            "likes": 200,
+            "pipeline_tag": "text-generation",
+        }
+        compat = dict(base, model_id="Qwen/Qwen3.5-9B-GGUF")
+
+        plain = hf_research_mod.HFResearchAgent._evaluate_model(base)
+        bonused = hf_research_mod.HFResearchAgent._evaluate_model(compat)
+
+        assert bonused["score"] - plain["score"] == hf_research_mod.COMPAT_BONUS_POINTS
+        assert any("local-compat" in r for r in bonused["reasons"])
+        assert not any("local-compat" in r for r in plain["reasons"])
+
+    def test_max_score_matches_the_documented_rubric(self) -> None:
+        """max_score is the attainable maximum: 40+25+20+15 base, +10 bonus."""
+        assert hf_research_mod.BASE_MAX_SCORE == 40 + 25 + 20 + 15
+        assert hf_research_mod.MAX_SCORE == (
+            hf_research_mod.BASE_MAX_SCORE + hf_research_mod.COMPAT_BONUS_POINTS
+        )
 
     def test_low_quality_model_fails(self) -> None:
         """Zero-download, zero-like, no-tag model must fail."""

@@ -14,6 +14,10 @@
 
 tracked:
   # ── Root keystones (CLAUDE.md fleet) ───────────────────────────────────
+  - path: pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md
+    freshness_days: 365
+    severity: INFO
+    description: "Foundational doctrine — Human/AI/System three-body problem stabilized by CHIT; root of the Village Rule and register Three-Body Pattern (rewired to discovery surfaces 2026-08-09 after going unfindable)"
   - path: CLAUDE.md
     freshness_days: 60
     severity: P2
@@ -104,6 +108,45 @@ tracked:
     freshness_days: 30
     severity: P2
     description: "A2UI Renderer (port 8107) — Remotion animation engine for creator pipeline"
+
+  # ── Agent Zero integration ─────────────────────────────────────────────
+  # Enrolled 2026-08-06. Previously untracked — which is why this integration's
+  # docs drifted from its code unnoticed. Two other docs
+  # (.claude/context/agent-zero-orchestration.md, pmoves/docs/TAC/TAC_AGENT_ZERO.md)
+  # documented an /mcp/* API and an agent.zero.* / agent.task.* NATS family that
+  # were never implemented, including copy-pasteable curl and `nats sub` commands
+  # that cannot work. Those are retired in the companion commit.
+  #
+  # Severity P2 (warn, do not gate) is deliberate: freshness is measured from
+  # last-commit date, and AGENT_ZERO_API.md is already outside budget. Enrolling
+  # at P1 would fail CI the moment this merges. Promote to P1 after a refresh
+  # pass brings them inside budget.
+  - path: pmoves/docs/operations/AGENT_ZERO_API.md
+    freshness_days: 30
+    severity: P2
+    description: "Agent Zero live-state API — probed from /openapi.json; canonical endpoint reference for the outer supervisor (:8080)"
+  - path: pmoves/services/agent-zero/README.md
+    freshness_days: 60
+    severity: P2
+    description: "Agent Zero service README — env vars, build (upstream agent0ai base + PMOVES overlay), make targets"
+
+  # ── Archon integration ─────────────────────────────────────────────────
+  # Enrolled 2026-08-06, same root cause. Archon 0.6.0 (#2217) replaced the
+  # Python service with a TypeScript/Bun app on a single port (3090, /api/health),
+  # but four untracked docs still described the pre-0.6.0 Python/Supabase
+  # split-port architecture and nothing reconciled them against the code.
+  - path: pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md
+    freshness_days: 60
+    severity: P2
+    description: "Archon mint-contract current state — archon.mint.* implementation + registration gaps; authoritative over the mint-agent command doc"
+
+  # ── Cross-service health-endpoint truth ────────────────────────────────
+  # The doc that would have caught the Archon blackbox probe pointing at a dead
+  # port and path (#2448). Untracked until now.
+  - path: pmoves/docs/operations/SERVICE_HEALTH_ENDPOINTS.md
+    freshness_days: 90
+    severity: P2
+    description: "Per-service health endpoint truth — reference for compose healthchecks and Prometheus blackbox probes"
 
 
 # ============================================================================

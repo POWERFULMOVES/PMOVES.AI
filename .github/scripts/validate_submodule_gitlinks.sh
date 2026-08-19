@@ -40,9 +40,15 @@ while IFS= read -r name; do
   branch=$(git config -f .gitmodules --get "submodule.$name.branch" 2>/dev/null || true)
   url=$(git config -f .gitmodules --get "submodule.$name.url" 2>/dev/null || true)
 
+  # Fail-closed. This used to warn-and-skip, which made the gate silently blind
+  # to exactly the submodules most likely to drift: pmoves-keygen carried no
+  # branch pin, so its gitlink sat AHEAD of master (pinned to the head of an open
+  # PR) across every PR this gate ran on, and every run reported ok. A submodule
+  # with no declared strategy is an unchecked submodule, which is the condition
+  # this gate exists to prevent — not an exemption from it.
   if [ -z "${branch:-}" ]; then
-    echo "warn  $name: no .gitmodules branch pin — branch strategy undefined, skipped"
-    continue
+    echo "FAIL  $name: no .gitmodules branch pin — declare 'branch = <tracked>' in .gitmodules"
+    fail=1; continue
   fi
   # Derive OWNER/REPO from the submodule URL (https or ssh form).
   slug=$(printf '%s' "$url" | sed -E 's#(git@github\.com:|https?://github\.com/)##; s#\.git$##')

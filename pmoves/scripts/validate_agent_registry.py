@@ -166,6 +166,54 @@ def main(argv: list[str]) -> int:
             f"room {manifest.name}: owner agent_id {owner!r} resolves to neither "
             f"a registry agent ({kebab_to_snake(owner)!r}) nor an external contributor")
 
+    # --- Registry rooms: -> catalog (advisory) ------------------------------
+    # The mirror of the check above. That one asks "does this room's owner exist";
+    # this asks "do the rooms an agent claims exist". Nothing enforced it, and a
+    # fabricated name shipped: PR #2612 bound pmoves_minimax_mcp to
+    # "minimax-mcp.room.model", which is in no catalog and no manifest. The
+    # binding resolved to nothing and the agent could not be discovered through
+    # the room plane at all.
+    #
+    # Advisory, like the owner check. `rooms:` has no schema and its semantics are
+    # not settled -- see the note in ROOM_MANIFEST_CONTRACT.md -- so this asserts
+    # only the part that is unambiguous: a named room must exist.
+    catalog_path = ROOMS_DIR / "catalog.json"
+    known_rooms: set = set()
+    if catalog_path.is_file():
+        try:
+            cat = json.loads(catalog_path.read_text(encoding="utf-8"))
+            entries = cat.get("rooms", cat) if isinstance(cat, dict) else cat
+            if isinstance(entries, list):
+                for r in entries:
+                    if isinstance(r, dict):
+                        rid = r.get("room_id") or r.get("id") or r.get("name")
+                        if rid:
+                            known_rooms.add(rid)
+            elif isinstance(entries, dict):
+                known_rooms.update(entries.keys())
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"rooms catalog unreadable ({exc})")
+    # A manifest on disk counts too: catalog and manifests can lag each other.
+    for manifest in ROOMS_DIR.glob("*.json"):
+        if manifest.name != "catalog.json":
+            known_rooms.add(manifest.name[: -len(".json")])
+
+    if known_rooms:
+        # `rooms:` lives under BOTH agents: and mcp_servers: -- today every
+        # occurrence is under mcp_servers:, which is why an earlier draft of this
+        # check scanned agents: only and caught nothing when the fabricated name
+        # was reinjected. Scan both so the check cannot go quiet if the field
+        # moves or spreads.
+        for section in ("agents", "mcp_servers"):
+            for entry_key, spec in sorted((reg_raw.get(section) or {}).items()):
+                if not isinstance(spec, dict):
+                    continue
+                for room in spec.get("rooms") or []:
+                    if room not in known_rooms:
+                        warnings.append(
+                            f"{section}[{entry_key}]: rooms entry {room!r} is in neither "
+                            f"pmoves/config/rooms/catalog.json nor a room manifest")
+
     # --- Report ------------------------------------------------------------
     print(f"registry agents: {len(registry_keys)} | team agents: {len(teamed)} "
           f"| external contributors: {len(external)}")

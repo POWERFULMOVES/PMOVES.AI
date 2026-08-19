@@ -48,7 +48,13 @@ services:
     - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:8000/rest/v1}
       # Voice/TTS
     - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
-    - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
+      # 8055, not 8056. flute-gateway runs ONE uvicorn process on 8055 and both
+      # WebSocket routes are @app.websocket handlers on that same app. 8056 is
+      # EXPOSEd and published but nothing has ever bound it, so a socket aimed
+      # there accepts TCP and then hangs — worse to debug than a closed port.
+      # This var takes priority over the client-side derivation fixed in #2560,
+      # so leaving it at 8056 re-broke the voice path on every Compose launch.
+    - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8055}
       # Agent Services (client-side needs localhost)
     - NEXT_PUBLIC_AGENT_ZERO_URL=${NEXT_PUBLIC_AGENT_ZERO_URL:-http://localhost:8080}
     - NEXT_PUBLIC_AGENT_ZERO_UI_URL=${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}
@@ -84,13 +90,20 @@ services:
     # so the rooms API (/api/rooms) and the home-page Rooms tab work.
     volumes:
     - ./config/rooms:/app/rooms:ro
+      # P1 fix: persona living-doc route serves from rooms/persona/dist (rendered
+      # walkthrough.mp4 + pretext/index.html). Without this mount, every request
+      # to /persona/livingdoc hits the line 38 404 in production.
+    - ./rooms/persona:/app/data/rooms/persona:ro
     ports:
     - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
     networks: [pmoves_app, pmoves_api, pmoves_external]
     profiles: ["ui"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      # Image has node but no curl/wget — node>=18 fetch keeps the check dependency-free
+      test:
+      - CMD-SHELL
+      - node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 20s
       timeout: 5s
       retries: 3
@@ -394,3 +407,21 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  openroom:
+    build:
+      context: ../PMOVES-OpenRoom
+      dockerfile: apps/webuiapps/Dockerfile
+      args:
+        ENV: production
+        APP_PATH: /app/apps/webuiapps
+    image: pmoves-openroom:latest
+    container_name: pmoves-openroom
+    restart: unless-stopped
+    volumes:
+    - ./config/rooms:/etc/pmoves/rooms:ro
+    ports:
+    - "${OPENROOM_BIND:-0.0.0.0}:${OPENROOM_PORT:-5173}:3000"
+    networks: [pmoves_app, pmoves_external]
+    profiles: ["ui", "p7"]
+    environment:
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external

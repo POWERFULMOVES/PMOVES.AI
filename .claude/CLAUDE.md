@@ -38,7 +38,7 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 - `PMOVES-agents.md/` — AGENTS.md format reference + agent taxonomy/persona docs (Tier-2 *always-relevant*: load when discussing agent class, taxonomy, or AGENTS.md format)
 - `PMOVES-Archon/.claude/CLAUDE.md` — agent service architecture
 - `PMOVES-BoTZ/.claude/CLAUDE.md` — skills marketplace framework (legacy/archived per 2026-04-19)
-- `PMOVES-Agent-Zero/.claude/CLAUDE.md` — orchestration patterns
+- Agent Zero — the submodule has **no** `.claude/CLAUDE.md` (verified 2026-08-06). Use `pmoves/services/agent-zero/README.md` for the service, and `pmoves/docs/operations/AGENT_ZERO_API.md` for the live API surface.
 - `skills/` — skills constellation (5 forks registered in `.gitmodules`: Pmoves-skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js — run `git submodule update --init skills/` to populate); load `skills/README.md` first
 - Load only when working directly on that subsystem.
 
@@ -57,14 +57,14 @@ Detail files live in `.claude/context/`:
 - `runner-topology.md` — condensed node/runner/team topology
 - `credentials-workflow.md` — credential bootstrap, secrets-funnel, JWT-from-Supabase
 - `services-catalog.md` — full service listing (superset of CATALOG.md)
-- `submodules.md` — complete submodules catalog (50 submodules per `git submodule status`)
+- `submodules.md` — submodules catalog (52 documented rows; `.gitmodules` tracks 72 — see the header of that file for why the three counts differ)
 - `nats-subjects.md` — comprehensive NATS subject catalog
 - `geometry-nats-subjects.md` — GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
-- `mcp-api.md` — Agent Zero MCP API reference
+- ~~`mcp-api.md`~~ — **SUPERSEDED, do not use as an API reference.** It documents `/mcp/command`, `/mcp/health`, `/mcp/task/{id}`, `/mcp/agents`, `/mcp/subordinate/create`, `/mcp/subordinate/create-with-persona` and an `MCP_CLIENT_SECRET` Bearer scheme that were never implemented. Canonical: `pmoves/docs/operations/AGENT_ZERO_API.md`.
 - `testing-strategy.md` — testing workflow + PR requirements
 - `security-patterns.md` — cross-cutting security patterns (auth, secrets, hardening)
 - `observability-patterns.md` — Prometheus, Grafana, Loki, TensorZero metrics
-- `agent-zero-orchestration.md` — MCP API reference, task flow, subordinate model
+- ~~`agent-zero-orchestration.md`~~ — **SUPERSEDED, do not use as an API reference.** It documents `/mcp/health`, `/mcp/agents`, `/mcp/subordinate/create` and an `agent.zero.*` NATS family that were never implemented. Canonical: `pmoves/docs/operations/AGENT_ZERO_API.md` (probed from `/openapi.json`).
 - `tier-architecture.md` — 7-tier env security model, network segmentation
 - `chrome-extension.md` — Chrome Extension integration (8 services, message protocol, auth)
 - `tensorzero.md` — TensorZero detailed documentation
@@ -116,23 +116,25 @@ When conflicts occur: main PMOVES.AI patterns take precedence; document exceptio
 **Solution:**
 - Each agent loads only its direct tier
 - Use MCP APIs for cross-agent communication, not shared context
-- Reference integration docs (e.g., `pmoves/docs/ARCHON_INTEGRATION.md`) instead of duplicating
+- Reference integration docs instead of duplicating (note: `pmoves/docs/integrations/ARCHON_INTEGRATION.md` is **superseded** — it describes the pre-0.6.0 Python/Supabase Archon; current state is `.claude/CATALOG.md` + `pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md`)
 
 Full audit: `pmoves/docs/CLAUDE_CONTEXT_AUDIT.md`.
 
 ## MCP Integration Points
 
-**Agent Zero MCP API** at `/mcp/*` on port 8080 — external agents can call Agent Zero via MCP protocol. Used by Archon for agent coordination.
+**Agent Zero supervisor REST API** on port 8080 — `GET /healthz`, `GET /mcp/commands`, `POST /mcp/execute` (`{cmd, arguments}`), `POST /tasks`, `GET /jobs/{context_id}`, `POST /sessions`, `/memory/*`, `POST /events/publish`. **No inbound auth** on these routes. It is a REST facade, not an MCP protocol server; there is no `/mcp/*` wildcard mount.
+
+**Agent Zero MCP protocol server** — served by the A0 runtime on port 8081 at `/t-{MCP_SERVER_TOKEN}/sse`, `/t-{...}/http`, `/t-{...}/messages/`. The runtime authenticates with `X-API-KEY`. A2A routes (`/a2a/v1/*`, `/.well-known/agent-card.json`) on 8080 use a Supabase JWT `Authorization: Bearer`, gated by `A2A_DISCOVERY_PUBLIC` / `A2A_TASKS_PUBLIC`.
 
 **Configured local MCP servers** (`.claude/mcp.json`):
-- `pmoves-cipher` (SSE `http://localhost:8105/sse`) — persistent memory lookups + writes
+- `pmoves-cipher` (SSE `http://localhost:8105/mcp/sse`) — persistent memory lookups + writes. Path verified 2026-08-12 against the running container; `/sse` and `/api/mcp/sse` both 404.
 - `docker` (`mcp/docker`) — container inspection via local Docker socket
 - `hostinger-mcp` — Hostinger API tasks via `$HOSTINGER_API_KEY`
 - `tailscale` — tailnet inventory, stale-node cleanup, tag inspection, ACL operations
 
 **Enabled operator plugin pack** (`.claude/settings.json`): `huggingface-skills@claude-plugins-official` — use when Hub models, datasets, Spaces, or launch recipes are the source of truth.
 
-**Configuration:** set `AGENTZERO_JETSTREAM=true` for reliable delivery; configure `MCP_SERVICE_URL`, `MCP_CLIENT_ID`, `MCP_CLIENT_SECRET`.
+**Configuration:** set `AGENTZERO_JETSTREAM=true` for reliable delivery. For Agent Zero, set `AGENT_ZERO_MCP_TOKEN` (the A0 runtime's inbound `X-API-KEY` / MCP path token) and `AGENT_ZERO_API_KEY` (what the supervisor forwards to the runtime). `MCP_SERVICE_URL`, `MCP_CLIENT_ID` and `MCP_CLIENT_SECRET` are **not read by any PMOVES service** — they appear nowhere under `pmoves/services/`. You will still see `MCP_CLIENT_SECRET` in tier env files because `pmoves/tools/brand_defaults.py:405-410` auto-generates one; it has no consumer. Do not send it as an auth header.
 
 ## Meta-Instruction for Claude Code CLI
 

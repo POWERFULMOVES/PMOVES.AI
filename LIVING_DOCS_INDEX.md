@@ -53,6 +53,7 @@ These are the rendering targets. Doc updates should propagate visually through t
 | **Creator pipeline — motion/Remotion runtime** (A2UI Renderer, port 8107: `A2UIComposition`, `ProvenanceLivingDoc`) | [`pmoves/services/a2ui-renderer/`](./pmoves/services/a2ui-renderer/) | [`pmoves/docs/CREATOR_PIPELINE.md`](./pmoves/docs/CREATOR_PIPELINE.md) |
 | **Pretext text layout** (deterministic wrap/caption/living-doc overlays in the Remotion runtime) | npm `@chenglou/pretext@0.0.6` via `pmoves/services/a2ui-renderer/src/remotion/pretextLayout.ts`; [`Pmoves-pretext` fork](https://github.com/POWERFULMOVES/Pmoves-pretext) wired as submodule `Pmoves-pretext/` (#2227) | [`pmoves/docs/CREATOR_PIPELINE.md`](./pmoves/docs/CREATOR_PIPELINE.md) §text_layout |
 | **PreTeXt math authoring — a DIFFERENT "pretext"** (pretextbook.org structured-document language; not the layout engine above) | [`pmoves/rooms/persona/pretext/`](./pmoves/rooms/persona/pretext/) — buildable project (`pretext build web`, pretext-cli 2.45.0): *CHIT & the MOF: A Structural Isomorphism* | persona living-doc room lane (#2236–#2247); room manifest [`persona.room.livingdoc.json`](./pmoves/config/rooms/persona.room.livingdoc.json) |
+| **Three-Body Doctrine** (foundational: Human/AI/System as a three-body problem stabilized by CHIT geometry — root of the Village Rule + register Three-Body Pattern) | [`pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md`](./pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md) | referenced by AGNOTE4482 Canonical Pointers; was orphaned from discovery surfaces until 2026-08-09 |
 | **CHIT Visual Tour — web dashboard** (public explainer, armor tokens; evidence policy: verified actuals only, projections labeled) | [`website/chit-tour/`](./website/chit-tour/) | content source-of-truth = `data.js` SOURCES map; sibling code-first walkthrough: [`pmoves/docs/PMOVESCHIT/VISUAL_TOUR.md`](./pmoves/docs/PMOVESCHIT/VISUAL_TOUR.md) — keep the two cross-linked, they drift independently |
 | **Skills — two distinct registries** | (1) submodule↔skills↔context map: [`pmoves/configs/submodule_skill_registry.json`](./pmoves/configs/submodule_skill_registry.json) (machine-emitted; commands in [`.claude/commands/`](./.claude/commands/)); (2) operator-workflow skills (bringup-audit, secrets-chit-funnel, submodule-parity, persona-grounding, multimodal-verifier) | [`pmoves/docs/AGENTS/PmovesSKillZ.md`](./pmoves/docs/AGENTS/PmovesSKillZ.md) — not the same thing as the `skills/` 5-fork constellation below |
 | **A2UI NATS bridge** (port 9224) | service-side | `.claude/CATALOG.md` |
@@ -81,7 +82,7 @@ The doc fleet should be reachable from the CLI without operators having to know 
 | Tier-2 on-demand | [`PMOVES-Agent-Zero/`](./PMOVES-Agent-Zero/) | Orchestration / MCP API |
 | Tier-2 on-demand | [`PMOVES-Archon/`](./PMOVES-Archon/) | Agent service architecture |
 | Tier-2 on-demand | [`PMOVES-HiRAG/`](./PMOVES-HiRAG/) | Hi-RAG v2 retrieval gateway |
-| Full registry | [`.claude/context/submodules.md`](./.claude/context/submodules.md) | All 54 submodules cataloged |
+| Full registry | [`.claude/context/submodules.md`](./.claude/context/submodules.md) | All 52 documented submodules cataloged |
 
 ---
 

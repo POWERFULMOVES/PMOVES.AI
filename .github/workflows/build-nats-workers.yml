@@ -32,7 +32,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           allowed-endpoints:
@@ -94,7 +94,7 @@ jobs:
 
       - name: Harden Runner
         if: matrix.service != '__none_'
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           allowed-endpoints:
@@ -109,7 +109,7 @@ jobs:
 
       - name: Set up QEMU (multi-arch)
         if: matrix.service != '__none_'
-        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba59b3f373 # v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
 
       - name: Set up Docker Buildx
         if: matrix.service != '__none_'

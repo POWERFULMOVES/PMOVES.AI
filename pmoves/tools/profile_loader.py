@@ -34,7 +34,7 @@ def load_profiles(directory: Path | None = None) -> Dict[str, Profile]:
     directory = directory or PROFILE_DIR
     profiles: Dict[str, Profile] = {}
     for path in sorted(directory.glob("*.yaml")):
-        data = yaml.safe_load(path.read_text())
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or "id" not in data:
             continue
         profile = Profile(

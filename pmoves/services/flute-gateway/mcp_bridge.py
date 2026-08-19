@@ -274,7 +274,7 @@ async def _tool_synthesize(
             "modifier": modifier,
             "text_length": len(text),
             "audio_bytes": len(audio_bytes),
-            "audio_base64": audio_b64[:100] + "..." if len(audio_b64) > 100 else audio_b64,
+            "audio_base64": audio_b64,
             "format": "wav",
             "status": "ok",
         }
@@ -314,14 +314,12 @@ async def _tool_load_engine(
     load_ep, _ = ENGINE_ENDPOINTS[engine]
     try:
         import httpx
+        # The old synchronous /api/ predict endpoint is a 404 on current
+        # Ultimate-TTS builds — go through the provider's event-based
+        # /gradio_api/call flow instead.
         async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(
-                f"{provider.base_url}/api{load_ep}",
-                json={"data": []},
-            )
-            resp.raise_for_status()
-            result = resp.json()
-            return {"engine": engine, "endpoint": load_ep, "result": result, "status": "loaded"}
+            result = await provider._call_gradio(client, load_ep, [], timeout=120.0)
+        return {"engine": engine, "endpoint": load_ep, "result": result, "status": "loaded"}
     except Exception as e:
         logger.exception("tts_load_engine failed for engine=%s", engine)
         return {"error": str(e), "engine": engine}
@@ -343,13 +341,8 @@ async def _tool_unload_engine(
     try:
         import httpx
         async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{provider.base_url}/api{unload_ep}",
-                json={"data": []},
-            )
-            resp.raise_for_status()
-            result = resp.json()
-            return {"engine": engine, "endpoint": unload_ep, "result": result, "status": "unloaded"}
+            result = await provider._call_gradio(client, unload_ep, [], timeout=60.0)
+        return {"engine": engine, "endpoint": unload_ep, "result": result, "status": "unloaded"}
     except Exception as e:
         logger.exception("tts_unload_engine failed for engine=%s", engine)
         return {"error": str(e), "engine": engine}

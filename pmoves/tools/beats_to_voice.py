@@ -19,9 +19,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import os
 import sys
+import tempfile
 import time
 import urllib.request
 import urllib.error
@@ -60,6 +62,12 @@ DEFAULT_VOICE = os.environ.get("BEATS_VOICE", "default")
 DEFAULT_AGENT_ID = os.environ.get("BEATS_AGENT_ID", "4090-claude")
 NATS_SUBJECT = "tokenism.prosodic.bpm.v1"
 NATS_URL = os.environ.get("NATS_URL", "")
+
+# Temp files this process created via mkstemp, and the only paths listen-mode
+# cleanup is allowed to unlink. The synthesis result is not always ours: a
+# non-audio Flute response is returned as decoded JSON, so `output` can be any
+# string the gateway chooses.
+_OWNED_TEMPFILES: set[str] = set()
 NATS_TRIGGER_SUBJECT = os.environ.get("BEATS_TRIGGER_SUBJECT", "voice.agent.response.v1")
 
 
@@ -133,6 +141,40 @@ async def _nats_publish_cgp(cgp_packet: dict, nats_url: str = NATS_URL) -> bool:
         return False
 
 
+def _discard_synthesized_audio(results: dict[str, Any]) -> None:
+    """Delete the WAV that run_pipeline synthesized, if this process created it.
+
+    Listen mode publishes the CGP packet and never reads the audio, so without
+    this every trigger leaves another file behind and a sustained event stream
+    fills the disk.
+
+    Only paths in ``_OWNED_TEMPFILES`` are removed. ``synthesis`` is not always
+    a result we built: when Flute answers with a non-audio content-type,
+    ``synthesize_prosodic`` returns the decoded JSON body verbatim, so a remote
+    or misconfigured gateway controls ``output`` completely. Unlinking that
+    unconditionally would let it delete any file this process can write.
+    """
+    synthesis = results.get("stages", {}).get("voice", {}).get("synthesis")
+    if not isinstance(synthesis, dict):
+        return
+    out_path = synthesis.get("output")
+    if not out_path or not isinstance(out_path, str):
+        return
+    if out_path not in _OWNED_TEMPFILES:
+        sys.stderr.write(
+            f"[beats_to_voice] Refusing to delete {out_path!r}: not a tempfile "
+            f"this process created.\n"
+        )
+        return
+    _OWNED_TEMPFILES.discard(out_path)
+    try:
+        os.unlink(out_path)
+    except OSError as exc:
+        sys.stderr.write(
+            f"[beats_to_voice] Could not remove {out_path}: {exc}\n"
+        )
+
+
 async def _listen_loop(
     nats_url: str,
     trigger_subject: str,
@@ -162,10 +204,13 @@ async def _listen_loop(
                     f"[beats_to_voice] Trigger received agent={aid} len={len(text)}\n"
                 )
                 results = run_pipeline(text=text, voice=voice, agent_id=aid, flute_url=flute_url)
-                cgp = results.get("cgp_packet", {})
-                if cgp:
-                    await nc.publish(NATS_SUBJECT, json.dumps(cgp).encode("utf-8"))
-                    sys.stderr.write(f"[beats_to_voice] CGP published to {NATS_SUBJECT}\n")
+                try:
+                    cgp = results.get("cgp_packet", {})
+                    if cgp:
+                        await nc.publish(NATS_SUBJECT, json.dumps(cgp).encode("utf-8"))
+                        sys.stderr.write(f"[beats_to_voice] CGP published to {NATS_SUBJECT}\n")
+                finally:
+                    _discard_synthesized_audio(results)
             except Exception as e:
                 sys.stderr.write(f"[beats_to_voice] Handler error: {e}\n")
 
@@ -244,15 +289,79 @@ def synthesize_prosodic(
             "position_ratio": chunk.get("position_ratio", 0.0),
         })
 
-    # Flute-Gateway /v1/voice/synthesize/prosodic accepts: text, voice, format
+    # Flute-Gateway /v1/voice/synthesize/prosodic accepts: text, voice, format, provider, engine
+    # Kokoro handles short chunks reliably; KittenTTS crashes on short fragments.
     payload = {
-        "text":    profile.get("text", ""),
-        "voice":   voice,
-        "format":  "wav",
+        "text":     profile.get("text", ""),
+        "voice":    voice or "af_heart",
+        "format":   "wav",
+        "provider": "ultimate_tts",
+        "engine":   "kokoro",
     }
 
     url = f"{flute_url}/v1/voice/synthesize/prosodic"
-    return _post_json(url, payload, timeout=60)
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            content_type = resp.headers.get("content-type", "")
+            if "audio" in content_type:
+                # Raw WAV response — save to file
+                audio_bytes = resp.read()
+                # tempfile, not a hard-coded POSIX path: honours TMPDIR/TEMP so
+                # this works on native Windows, and creates the file 0600 under
+                # an unpredictable name so concurrent calls cannot overwrite
+                # each other and a local actor cannot pre-create a symlink.
+                fd, out_path = tempfile.mkstemp(
+                    prefix="beats_to_voice_", suffix=".wav"
+                )
+                _OWNED_TEMPFILES.add(out_path)
+                try:
+                    with os.fdopen(fd, "wb") as f:
+                        f.write(audio_bytes)
+                except OSError:
+                    # mkstemp already created the file. The outer handler turns
+                    # this into a `return None`, so no caller ever learns a path
+                    # to clean up and retries accumulate unique orphans -- one
+                    # per attempt, since each mkstemp name is different.
+                    #
+                    # Close first: fdopen only takes ownership of the descriptor
+                    # when it succeeds, and Windows refuses to unlink a file that
+                    # still has an open handle. EBADF here just means the `with`
+                    # already closed it, which is why this is suppressed.
+                    with contextlib.suppress(OSError):
+                        os.close(fd)
+                    _OWNED_TEMPFILES.discard(out_path)
+                    with contextlib.suppress(OSError):
+                        os.unlink(out_path)
+                    raise
+                return {
+                    "status": "synthesized",
+                    "output": out_path,
+                    "size_bytes": len(audio_bytes),
+                    "bpm_header": resp.headers.get("X-Prosodic-BPM", "?"),
+                    "chunks_header": resp.headers.get("X-Prosodic-Chunks", "?"),
+                }
+            else:
+                return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err_body = ""
+        try:
+            err_body = e.read().decode("utf-8")[:200]
+        except Exception:
+            pass
+        sys.stderr.write(
+            f"[beats_to_voice] HTTP {e.code} from {url}: {err_body}\n"
+        )
+        return None
+    except (urllib.error.URLError, OSError) as e:
+        sys.stderr.write(f"[beats_to_voice] Connection failed to {url}: {e}\n")
+        return None
 
 
 # ---------------------------------------------------------------------------

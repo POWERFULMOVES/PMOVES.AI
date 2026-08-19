@@ -76,22 +76,17 @@ Meta URL form (postgres):
 postgres://supabase_admin@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable
 ```
 
-## Security item — carried over from 08-01 and still live
+## Credential handling for the mount — ✅ RESOLVED 2026-08-15
 
-b850 passes the Supabase admin password as a **cleartext CLI argument**, so it is
-visible in `ps` to any local user, and it shows up in `docker inspect` output:
+A JuiceFS meta DSN must never carry the credential inline. JuiceFS reads
+`META_PASSWORD`, so the URL omits it entirely; the value itself is supplied by a
+**file-mounted secret** read at container start, which keeps it out of the
+container's argv *and* its stored config.
 
-```
-CMD=[-c exec juicefs mount --enable-xattr "postgres://supabase_admin:<PASSWORD>@..." /mnt/media]
-```
-
-JuiceFS supports `META_PASSWORD`, so the URL can omit the credential entirely. The
-`juicefs-mount-pg` target added in this PR uses that form. Two follow-ups remain and
-are **operator actions**:
-
-1. Re-create b850's `juicefs-mount` with `META_PASSWORD` instead of the inline URL.
-2. **Rotate the Supabase admin password** — it has been exposed in process listings
-   and container metadata for at least three days.
+b850's mount was re-created in that form on 2026-08-15 and verified clean. The
+canonical shape, the verification commands, and the rotation guidance now live in
+**`pmoves/docs/operations/B850_BRINGBACK_RUNBOOK.md` § 6** — use that as the
+reference for any node that mounts JuiceFS.
 
 ## Why the DARKXSIDE inbox is empty
 

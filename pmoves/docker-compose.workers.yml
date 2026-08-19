@@ -77,6 +77,42 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  watch-folder-router:  # SEAP ingestion Bud 1: routes ingest.file.added.v1 by MIME to the right analyzer (SEAP_WATCHFOLDER_NATS_CONSTELLATION)
+    <<:
+      env_file:
+      - env.shared
+      - env.tier-media
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build:
+      context: ..
+      dockerfile: pmoves/services/watch-folder-router/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
+    - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
+    - ROUTER_TRANSCRIBE_TIMEOUT_SEC=${ROUTER_TRANSCRIBE_TIMEOUT_SEC:-3600}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8125/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
   spark-shape-worker:
     <<: *tier-worker-hardened
     build: ./services/spark-shape-worker
@@ -339,7 +375,12 @@ services:
     restart: unless-stopped
     environment:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      # Composed from NATS_USER/NATS_PASSWORD with the host PINNED, per #2610.
+      # The previous `${NATS_URL:-...}` form was doubly wrong: the default failed
+      # auth on a rotated password, AND Compose gives a host-session export
+      # precedence over every --env-file, so a shell exporting a localhost-oriented
+      # NATS URL reached the container, where localhost is the container itself.
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
@@ -458,8 +499,14 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:***@nats:4222
+      # Composed from NATS_USER/NATS_PASSWORD with the host PINNED, per #2610.
+      # The previous `${NATS_URL:-...}` form was doubly wrong: the default failed
+      # auth on a rotated password, AND Compose gives a host-session export
+      # precedence over every --env-file, so a shell exporting a localhost-oriented
+      # NATS URL reached the container, where localhost is the container itself.
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
+    # Credentials come from NATS_USER/NATS_PASSWORD, which the funnel writes into
+    # env.shared / env.tier-agent.
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
