@@ -76,15 +76,36 @@ The overall verdict is "PASS" if all six metrics clear the thresholds; "FAIL" if
 
 ## Gate in CI
 
-The Mavis model-cascade CI (not yet wired — see "Follow-up" below) will run the verifier on every PR that touches `pmoves/contracts/providers/` or that adds a new entry to the `pmoves_minimax_mcp` provider block. A FAIL verdict blocks merge; a REVIEW verdict requires operator sign-off.
+**Status: wired (since PR #2612 / this slice).** The static half runs on every PR via `.github/workflows/provider-verifier.yml`; the full conformance run is the operator's manual step (see below).
 
-For now, gate manually:
+### The static half (PR-time, no API calls)
+
+The workflow `verifier-gate` runs `py pmoves/tools/provider_verifier_gate.py --json` on every PR that touches the relevant paths. It performs 6 checks (no API calls, no secrets):
+
+| Check | Catches |
+|-------|---------|
+| `verifier_submodule_present` | The submodule is initialized (catches a fresh clone with `--recurse-submodules=false`) |
+| `provider_config_well_formed` | `provider.json.example` parses as a JSON array |
+| `provider_entries_have_required_fields` | Every entry has `name`, `model`, `base_url`, `api_key` (catches a typo that breaks verify.py's CLI) |
+| `example_keys_are_placeholders` | No real API key accidentally committed to the example file (catches a secret leak at PR time, not audit time) |
+| `sample_jsonl_present` | `sample.jsonl` is non-empty (required positional arg for verify.py) |
+| `verifier_entry_point_importable` | `verify.py` parses cleanly (catches missing deps + syntax errors in the submodule) |
+
+The verdict is posted to the step summary + as a PR comment on FAIL. A FAIL blocks merge (the status check name `verifier-gate` is the load-bearing reference; add it to the required checks list in branch protection if not already there).
+
+The static half is **not** the full conformance check — it can't tell you whether a provider actually behaves like MiniMax. It catches the most common drift: a config error that would break the operator's manual run before the run even starts.
+
+### The full conformance run (operator's manual step)
+
+`verify.py` REQUIRES real API calls (--api-key, --base-url, --model), so it cannot run in CI without exposing secrets, which the F-07 supply-chain note explicitly forbids. The operator runs the full conformance check on the operator's local node, where the API keys live in `pmoves/env.shared` (synced via the secrets-funnel pipeline, never in a workflow file).
 
 ```bash
 cd Pmoves-MiniMax-Provider-Verifier
 python verify.py --providers <your-provider.json> --output-dir /tmp/verifier-run
 # Read /tmp/verifier-run/<provider>/summary.json — look at `verdict`
 ```
+
+The workflow's `workflow_dispatch` trigger is wired for the future: when the operator wants a CI-issued conformance report (not a local one), the dispatch path is ready — just supply the API key as a workflow input and the gate runs the static checks + a real call. Until then, the operator's local run is the canonical path.
 
 ## What you CAN'T skip
 
