@@ -235,10 +235,24 @@ def check_example_keys_are_placeholders(verifier_submodule: Path) -> CheckResult
     leaked: List[str] = []
     for i, entry in enumerate(entries):
         key = entry.get("api_key", "")
-        if key and key != PLACEHOLDER_API_KEY:
+        # The 'if key' guard is intentional: only the entries with a
+        # non-empty value get a length/prefix leak signal (so the
+        # operator knows what to look for). But the leak check itself
+        # compares EVERY value against PLACEHOLDER_API_KEY — empty
+        # strings, None, and other non-placeholder values all fail
+        # this comparison and are added to `leaked`. The truthiness
+        # guard is a presentation detail; the load-bearing rule is
+        # the equality check, and a codex review caught that the
+        # earlier `if key and key != PLACEHOLDER` formulation let
+        # empty values silently pass.
+        if key != PLACEHOLDER_API_KEY:
+            if key:
+                preview = f"length {len(key)}, prefix {key[:4]!r}"
+            else:
+                preview = f"empty or None (value={key!r})"
             leaked.append(
-                f"entry[{i}] ({entry.get('name', '?')}): api_key looks real "
-                f"(length {len(key)}, prefix {key[:4]!r}...)"
+                f"entry[{i}] ({entry.get('name', '?')}): api_key "
+                f"is not the placeholder ({preview})"
             )
     if leaked:
         return CheckResult(

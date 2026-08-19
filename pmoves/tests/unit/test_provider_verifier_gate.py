@@ -227,6 +227,55 @@ def test_check_example_keys_real_key_detected(fixture_verifier_dir: Path) -> Non
     assert "leaky" in result.detail
 
 
+def test_check_example_keys_empty_key_detected(fixture_verifier_dir: Path) -> None:
+    """An entry with an empty api_key: check fails (codex review catch).
+
+    Earlier formulation `if key and key != PLACEHOLDER` was
+    truthiness-guarded, which let `""` silently pass: `if ""` is
+    False, so the check never compared the value. The fix is to
+    always compare against PLACEHOLDER_API_KEY regardless of
+    truthiness. Empty, None, and any other non-placeholder value
+    all fail this comparison.
+    """
+    write_provider_config(
+        fixture_verifier_dir,
+        [
+            {
+                "name": "emptykey",
+                "model": "m",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "",
+            }
+        ],
+    )
+    result = gate.check_example_keys_are_placeholders(fixture_verifier_dir)
+    assert not result.passed, (
+        "empty api_key must be flagged as non-placeholder; the "
+        "example file is a template and empty is a sentinel for "
+        "'the operator forgot to fill in the placeholder'"
+    )
+    assert "emptykey" in result.detail
+    assert "not the placeholder" in result.detail
+
+
+def test_check_example_keys_none_key_detected(fixture_verifier_dir: Path) -> None:
+    """An entry with api_key: null: check fails (None != placeholder)."""
+    write_provider_config(
+        fixture_verifier_dir,
+        [
+            {
+                "name": "nullkey",
+                "model": "m",
+                "base_url": "https://api.example.com/v1",
+                "api_key": None,
+            }
+        ],
+    )
+    result = gate.check_example_keys_are_placeholders(fixture_verifier_dir)
+    assert not result.passed
+    assert "nullkey" in result.detail
+
+
 # ============================================================================
 # check_sample_jsonl_present
 # ============================================================================
