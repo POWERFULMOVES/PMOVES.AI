@@ -170,7 +170,7 @@
       "profile": "fork",
       "branch": "PMOVES.AI-Edition-Hardened",
       "ruleset_overrides": {
-        "[ main ]": {
+        "[ PMOVES.AI-Edition-Hardened ]": {
           "rules": [
             {
               "type": "required_status_checks",
@@ -195,7 +195,8 @@
     },
     "POWERFULMOVES/PMOVES-pinokio": {
       "profile": "fork",
-      "branch": "main",
+      "_note": "branch tracks .gitmodules, NOT the GitHub default. The parent pins PMOVES.AI-Edition-Hardened; protecting `main` here left the tracked branch open, which is the exact gap this file exists to close.",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "ruleset_overrides": {
         "[ main ]": {
           "rules": [
