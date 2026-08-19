@@ -100,40 +100,58 @@ class GateResult:
 # ============================================================================
 
 
-def check_verifier_submodule_present() -> CheckResult:
+def _paths(verifier_submodule: Path) -> Dict[str, Path]:
+    """Resolve the 3 paths the gate inspects under the given submodule dir."""
+    return {
+        "config": verifier_submodule / "provider.json.example",
+        "sample": verifier_submodule / "sample.jsonl",
+        "entry": verifier_submodule / "verify.py",
+    }
+
+
+def _try_relative(path: Path) -> str:
+    """Best-effort: show the path relative to REPO_ROOT if it lives there."""
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def check_verifier_submodule_present(verifier_submodule: Path) -> CheckResult:
     """The Pmoves-MiniMax-Provider-Verifier submodule must be initialized."""
-    if not VERIFIER_SUBMODULE.exists():
+    if not verifier_submodule.exists():
         return CheckResult(
             name="verifier_submodule_present",
             passed=False,
             detail=(
-                f"Pmoves-MiniMax-Provider-Verifier/ not found at {VERIFIER_SUBMODULE}. "
+                f"Pmoves-MiniMax-Provider-Verifier/ not found at {verifier_submodule}. "
                 "Run `git submodule update --init Pmoves-MiniMax-Provider-Verifier`."
             ),
         )
-    if not VERIFIER_SUBMODULE.is_dir():
+    if not verifier_submodule.is_dir():
         return CheckResult(
             name="verifier_submodule_present",
             passed=False,
-            detail=f"{VERIFIER_SUBMODULE} is not a directory.",
+            detail=f"{verifier_submodule} is not a directory.",
         )
     return CheckResult(
         name="verifier_submodule_present",
         passed=True,
-        detail=f"submodule present at {VERIFIER_SUBMODULE.relative_to(REPO_ROOT)}",
+        detail=f"submodule present at {_try_relative(verifier_submodule)}",
     )
 
 
-def check_provider_config_well_formed() -> CheckResult:
+def check_provider_config_well_formed(verifier_submodule: Path) -> CheckResult:
     """provider.json.example must be valid JSON with a top-level list."""
-    if not PROVIDER_CONFIG.exists():
+    config = _paths(verifier_submodule)["config"]
+    if not config.exists():
         return CheckResult(
             name="provider_config_well_formed",
             passed=False,
-            detail=f"{PROVIDER_CONFIG.relative_to(REPO_ROOT)} not found.",
+            detail=f"{_try_relative(config)} not found.",
         )
     try:
-        with PROVIDER_CONFIG.open(encoding="utf-8") as f:
+        with config.open(encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as exc:
         return CheckResult(
@@ -154,15 +172,16 @@ def check_provider_config_well_formed() -> CheckResult:
     )
 
 
-def check_provider_entries_have_required_fields() -> CheckResult:
+def check_provider_entries_have_required_fields(verifier_submodule: Path) -> CheckResult:
     """Every entry must have name, model, base_url, api_key."""
-    if not PROVIDER_CONFIG.exists():
+    config = _paths(verifier_submodule)["config"]
+    if not config.exists():
         return CheckResult(
             name="provider_entries_have_required_fields",
             passed=False,
             detail="provider.json.example not found; cannot check entries",
         )
-    with PROVIDER_CONFIG.open(encoding="utf-8") as f:
+    with config.open(encoding="utf-8") as f:
         entries = json.load(f)
     if not isinstance(entries, list):
         return CheckResult(
@@ -191,20 +210,21 @@ def check_provider_entries_have_required_fields() -> CheckResult:
     )
 
 
-def check_example_keys_are_placeholders() -> CheckResult:
+def check_example_keys_are_placeholders(verifier_submodule: Path) -> CheckResult:
     """No real API key in the example file.
 
     The example is committed to the repo and serves as a template. If a
     real key ever lands here, it MUST be caught at PR time, not at
     audit time.
     """
-    if not PROVIDER_CONFIG.exists():
+    config = _paths(verifier_submodule)["config"]
+    if not config.exists():
         return CheckResult(
             name="example_keys_are_placeholders",
             passed=False,
             detail="provider.json.example not found",
         )
-    with PROVIDER_CONFIG.open(encoding="utf-8") as f:
+    with config.open(encoding="utf-8") as f:
         entries = json.load(f)
     if not isinstance(entries, list):
         return CheckResult(
@@ -237,52 +257,54 @@ def check_example_keys_are_placeholders() -> CheckResult:
     )
 
 
-def check_sample_jsonl_present() -> CheckResult:
+def check_sample_jsonl_present(verifier_submodule: Path) -> CheckResult:
     """sample.jsonl is required for verify.py to run (positional file_path)."""
-    if not SAMPLE_JSONL.exists():
+    sample = _paths(verifier_submodule)["sample"]
+    if not sample.exists():
         return CheckResult(
             name="sample_jsonl_present",
             passed=False,
-            detail=f"{SAMPLE_JSONL.relative_to(REPO_ROOT)} not found.",
+            detail=f"{_try_relative(sample)} not found.",
         )
-    size = SAMPLE_JSONL.stat().st_size
+    size = sample.stat().st_size
     if size == 0:
         return CheckResult(
             name="sample_jsonl_present",
             passed=False,
-            detail=f"{SAMPLE_JSONL.relative_to(REPO_ROOT)} is empty.",
+            detail=f"{_try_relative(sample)} is empty.",
         )
     # Count non-empty lines as a quick smoke check.
-    with SAMPLE_JSONL.open(encoding="utf-8") as f:
+    with sample.open(encoding="utf-8") as f:
         line_count = sum(1 for line in f if line.strip())
     return CheckResult(
         name="sample_jsonl_present",
         passed=True,
-        detail=f"{SAMPLE_JSONL.relative_to(REPO_ROOT)} present, {line_count} non-empty lines, {size} bytes",
+        detail=f"{_try_relative(sample)} present, {line_count} non-empty lines, {size} bytes",
     )
 
 
-def check_verifier_entry_point_importable() -> CheckResult:
+def check_verifier_entry_point_importable(verifier_submodule: Path) -> CheckResult:
     """verify.py must be importable (catches missing deps + syntax errors)."""
-    if not VERIFIER_ENTRY.exists():
+    entry = _paths(verifier_submodule)["entry"]
+    if not entry.exists():
         return CheckResult(
             name="verifier_entry_point_importable",
             passed=False,
-            detail=f"{VERIFIER_ENTRY.relative_to(REPO_ROOT)} not found",
+            detail=f"{_try_relative(entry)} not found",
         )
-    spec = importlib.util.spec_from_file_location("_pmoves_provider_verifier", VERIFIER_ENTRY)
+    spec = importlib.util.spec_from_file_location("_pmoves_provider_verifier", entry)
     if spec is None or spec.loader is None:
         return CheckResult(
             name="verifier_entry_point_importable",
             passed=False,
-            detail=f"could not load spec for {VERIFIER_ENTRY.relative_to(REPO_ROOT)}",
+            detail=f"could not load spec for {_try_relative(entry)}",
         )
     try:
         # We don't execute the module's top-level code (which may import
         # validator/ package and its deps) — we just confirm the source
         # is parseable. The full import is a heavier check that lives
         # in the operator's manual run.
-        compile(VERIFIER_ENTRY.read_text(encoding="utf-8"), str(VERIFIER_ENTRY), "exec")
+        compile(entry.read_text(encoding="utf-8"), str(entry), "exec")
     except SyntaxError as exc:
         return CheckResult(
             name="verifier_entry_point_importable",
@@ -298,7 +320,7 @@ def check_verifier_entry_point_importable() -> CheckResult:
     return CheckResult(
         name="verifier_entry_point_importable",
         passed=True,
-        detail=f"verify.py parses cleanly ({VERIFIER_ENTRY.stat().st_size} bytes)",
+        detail=f"verify.py parses cleanly ({entry.stat().st_size} bytes)",
     )
 
 
@@ -309,21 +331,15 @@ def check_verifier_entry_point_importable() -> CheckResult:
 
 def run_gate(verifier_submodule: Optional[Path] = None) -> GateResult:
     """Run all 5 static checks. The verifier_submodule override is for tests."""
-    if verifier_submodule is not None:
-        # Allow tests to point at a fixture directory.
-        global VERIFIER_SUBMODULE, PROVIDER_CONFIG, SAMPLE_JSONL, VERIFIER_ENTRY
-        VERIFIER_SUBMODULE = verifier_submodule
-        PROVIDER_CONFIG = verifier_submodule / "provider.json.example"
-        SAMPLE_JSONL = verifier_submodule / "sample.jsonl"
-        VERIFIER_ENTRY = verifier_submodule / "verify.py"
+    target = verifier_submodule if verifier_submodule is not None else VERIFIER_SUBMODULE
 
     checks = [
-        check_verifier_submodule_present(),
-        check_provider_config_well_formed(),
-        check_provider_entries_have_required_fields(),
-        check_example_keys_are_placeholders(),
-        check_sample_jsonl_present(),
-        check_verifier_entry_point_importable(),
+        check_verifier_submodule_present(target),
+        check_provider_config_well_formed(target),
+        check_provider_entries_have_required_fields(target),
+        check_example_keys_are_placeholders(target),
+        check_sample_jsonl_present(target),
+        check_verifier_entry_point_importable(target),
     ]
     failed = [c for c in checks if not c.passed]
     if failed:
