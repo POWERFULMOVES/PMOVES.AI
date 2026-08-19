@@ -464,6 +464,8 @@ skill_sources:
   cli-host-nats: "nats (host binary - CHIT bundle ops, subject checks)"
   cli-host-supabase: "supabase (host binary - stack bring-up, migrations)"
   cli-host-ollama: "ollama (host binary - local model runtime)"
+  cli-host-skills: "skills (host binary - open skills ecosystem CLI, backs find-skills)"
+  find-skills: "skills/PMOVES-skills/skills/find-skills/SKILL.md"
 
   # Fleet Secrets Sync → Bootstrap → Deploy
   fleet-secrets-bootstrap:
