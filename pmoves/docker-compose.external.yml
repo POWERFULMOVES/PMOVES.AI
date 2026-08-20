@@ -43,7 +43,7 @@ services:
       - traefik.http.routers.health.rule=Host(`health.pmoves.ai`)
       - traefik.http.routers.health.entrypoints=websecure
       - traefik.http.routers.health.tls.certresolver=cf
-      - traefik.http.routers.health.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.routers.health.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
       - traefik.http.services.health.loadbalancer.server.port=80
       # API router — higher priority, token auth only (no SSO redirect).
       # wger phone app uses Authorization: Token <key>, can't follow browser redirects.
@@ -98,7 +98,7 @@ services:
       - traefik.http.routers.wealth.rule=Host(`wealth.pmoves.ai`)
       - traefik.http.routers.wealth.entrypoints=websecure
       - traefik.http.routers.wealth.tls.certresolver=cf
-      - traefik.http.routers.wealth.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.routers.wealth.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
       - traefik.http.services.wealth.loadbalancer.server.port=8080
     volumes:
       - firefly-storage:/var/www/html/storage
@@ -216,7 +216,7 @@ services:
       - traefik.http.routers.notebook.rule=Host(`notebook.pmoves.ai`)
       - traefik.http.routers.notebook.entrypoints=websecure
       - traefik.http.routers.notebook.tls.certresolver=cf
-      - traefik.http.routers.notebook.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.routers.notebook.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
       - traefik.http.services.notebook.loadbalancer.server.port=8502
 
   jellyfin-ext:
