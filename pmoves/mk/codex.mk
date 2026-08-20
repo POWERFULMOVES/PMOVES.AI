@@ -105,7 +105,7 @@ chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
 	$$runner tools/chit_manifest_sync.py --check --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
 secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared (FORCE=1 to overwrite stale)
-	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(FORCE),--force)
+	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(filter 1,$(FORCE)),--force)
 
 secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supabase/container) into env.shared
 	-@$(MAKE) --no-print-directory supa-status
@@ -165,7 +165,7 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
 
 cf-dns-token-provision: ## Mint a pmoves.ai-scoped Cloudflare DNS-Edit token for Traefik ACME + funnel it as CLOUDFLARE_DNS_API_TOKEN. Needs CF_ADMIN_API_TOKEN in the env (API Tokens Write + Zone Read; never argv). Dry-run unless APPLY=1. Usage: export CF_ADMIN_API_TOKEN=...; make cf-dns-token-provision [APPLY=1] [ZONE=pmoves.ai]
-	@$(CODEX_PY) tools/cf_dns_token_provision.py $(if $(ZONE),--zone "$(ZONE)",) $(if $(APPLY),--apply,)
+	@$(CODEX_PY) tools/cf_dns_token_provision.py $(if $(ZONE),--zone "$(ZONE)",) $(if $(filter 1,$(APPLY)),--apply,)
 
 secrets-untrack: ## Untrack a leaked generated secret env file (git rm --cached; then commit + rotate). Usage: make secrets-untrack FILE=pmoves/env.shared.pre-funnel [DRY_RUN=1]
 	$(if $(strip $(FILE)),,$(error Usage: make -C pmoves secrets-untrack FILE=<repo-relative generated env path> [DRY_RUN=1]. Only untracks a gitignored generated-secret file (env.shared*/env.tier-*); the audit gate (secrets_hardening_audit.py #9) lists them.))
