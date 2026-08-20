@@ -74,31 +74,51 @@ jobs:
 
       - name: Surface freshness summary
         if: always()
+        # The whole summary is rendered by ONE python invocation. A previous
+        # version closed the `python -c` block and then continued with Python
+        # (`ahead = [...]`, `if ahead:`, `for s in ahead:`) in the SHELL, which
+        # `bash -n` rejects with "syntax error near unexpected token '('" -- so
+        # the step failed whenever the report existed, i.e. on every real run.
         run: |
-          if [ -f .freshness/report.json ]; then
-            echo "## Submodule freshness summary" >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            # Pretty-print just the summary block (first 12 lines or so).
-            python -c "
-          import json
-          data = json.load(open('.freshness/report.json'))
-          print(json.dumps(data['summary'], indent=2, sort_keys=True))
-          " >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            # Then list the remote_ahead ones in plain text.
-            ahead = [s for s in data.get('submodules', []) if s.get('status') == 'remote_ahead']
-            if ahead:
-              echo "## Submodules with remote ahead" >> "$GITHUB_STEP_SUMMARY"
-              for s in ahead:
-                echo "- \`${s['path']}\` (${s['branch']}) — ${s['detail']}" >> "$GITHUB_STEP_SUMMARY"
-            else:
-              echo "_No submodules with remote ahead._" >> "$GITHUB_STEP_SUMMARY"
+          set -uo pipefail
+          if [ ! -f .freshness/report.json ]; then
+            echo "_No freshness report produced._" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          with open(".freshness/report.json", encoding="utf-8") as fh:
+              data = json.load(fh)
+
+          print("## Submodule freshness summary")
+          print("```json")
+          print(json.dumps(data.get("summary", {}), indent=2, sort_keys=True))
+          print("```")
+          print()
+
+          ahead = [s for s in data.get("submodules", [])
+                   if s.get("status") == "remote_ahead"]
+          if ahead:
+              print("## Submodules with remote ahead")
+              for s in ahead:
+                  print(f"- `{s.get('path')}` ({s.get('branch')}) — {s.get('detail')}")
+          else:
+              print("_No submodules with remote ahead._")
+
+          unknown = [s for s in data.get("submodules", [])
+                     if s.get("status") == "unknown"]
+          if unknown:
+              # Not the same as "nothing to report" — these were not measured.
+              print()
+              print("## Could not be measured")
+              for s in unknown:
+                  print(f"- `{s.get('path')}` — {s.get('detail')}")
+          PY
 
       - name: Upload freshness artifact
         if: always()
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee13c689e4253b0aa2 # v8.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: submodule-freshness-${{ github.run_id }}
           path: .freshness/

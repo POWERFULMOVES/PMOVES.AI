@@ -272,12 +272,13 @@ def test_cli_strict_passes_when_all_in_sync(sample_records: list[dict[str, str]]
 
 
 def test_check_one_diverged_branches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Two SHAs that are not ancestors of each other → status: error."""
+    """Two SHAs that are not ancestors of each other -> status: error."""
     record = {"name": "x", "path": "x", "url": "u", "branch": "b"}
     monkeypatch.setattr(sfc, "parent_gitlink", lambda _p: "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111")
     monkeypatch.setattr(sfc, "remote_head", lambda _u, _b: "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222")
+    monkeypatch.setattr(sfc, "_has_object", lambda _s, _c: True)
     # merge-base --is-ancestor returns 1 for "not an ancestor" in both directions.
-    monkeypatch.setattr(sfc, "_is_ancestor", lambda _a, _b: False)
+    monkeypatch.setattr(sfc, "_is_ancestor", lambda _a, _b, _cwd: False)
     result = sfc.check_one(record)
     assert result.status == "error", f"diverged branches should be 'error', got {result.status}"
     assert "diverged" in result.detail, f"detail should mention divergence: {result.detail!r}"
@@ -290,15 +291,71 @@ def test_check_one_remote_ahead(monkeypatch: pytest.MonkeyPatch) -> None:
     remote = "cccc3333cccc3333cccc3333cccc3333cccc3333"
     monkeypatch.setattr(sfc, "parent_gitlink", lambda _p: parent)
     monkeypatch.setattr(sfc, "remote_head", lambda _u, _b: remote)
-    # parent is ancestor of remote (remote ahead) — _is_ancestor(parent, remote)=True
-    # remote is NOT ancestor of parent — _is_ancestor(remote, parent)=False
-    def fake_is_ancestor(maybe_anc, desc):
+    monkeypatch.setattr(sfc, "_has_object", lambda _s, _c: True)
+    # parent is ancestor of remote (remote ahead); remote is NOT ancestor of parent.
+    def fake_is_ancestor(maybe_anc, desc, _cwd):
         return maybe_anc == parent and desc == remote
     monkeypatch.setattr(sfc, "_is_ancestor", fake_is_ancestor)
-    monkeypatch.setattr(sfc, "_count_commits_between", lambda _a, _b: 3)
+    monkeypatch.setattr(sfc, "_count_commits_between", lambda _a, _b, _cwd: 3)
     result = sfc.check_one(record)
     assert result.status == "remote_ahead", f"expected remote_ahead, got {result.status}: {result.detail}"
     assert "3 commit" in result.detail
+
+
+def test_ancestry_runs_inside_the_submodule_not_the_parent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The cwd is the whole defect, so assert it rather than the outcome.
+
+    A submodule's commits live in its own object store. Running merge-base in
+    the parent resolves neither SHA, both ancestry checks return non-zero, and
+    every genuine update is classified as divergence -- the tool reports
+    "reconcile manually" for everything and never once says remote_ahead, which
+    is the state --strict exists to gate on.
+    """
+    record = {"name": "x", "path": "sub/x", "url": "u", "branch": "b"}
+    parent = "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"
+    remote = "cccc3333cccc3333cccc3333cccc3333cccc3333"
+    monkeypatch.setattr(sfc, "parent_gitlink", lambda _p: parent)
+    monkeypatch.setattr(sfc, "remote_head", lambda _u, _b: remote)
+    monkeypatch.setattr(sfc, "_has_object", lambda _s, _c: True)
+
+    seen: list = []
+    def spy(maybe_anc, desc, cwd):
+        seen.append(cwd)
+        return maybe_anc == parent and desc == remote
+    monkeypatch.setattr(sfc, "_is_ancestor", spy)
+    monkeypatch.setattr(sfc, "_count_commits_between", lambda _a, _b, _cwd: 1)
+
+    sfc.check_one(record)
+
+    assert seen, "_is_ancestor was never called"
+    for cwd in seen:
+        assert Path(cwd) == sfc.REPO_ROOT / "sub/x", (
+            f"ancestry ran in {cwd}, must run in the submodule "
+            f"{sfc.REPO_ROOT / 'sub/x'}"
+        )
+
+
+def test_unmeasurable_is_not_reported_as_divergence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`ls-remote` returns a SHA without fetching the object it names.
+
+    Ancestry against an object that is not present fails exactly like genuine
+    divergence. Those are different findings -- one is "they diverged", the
+    other is "I could not look" -- and collapsing them is how a tool reports a
+    conclusion it never measured.
+    """
+    record = {"name": "x", "path": "x", "url": "u", "branch": "b"}
+    monkeypatch.setattr(sfc, "parent_gitlink", lambda _p: "a" * 40)
+    monkeypatch.setattr(sfc, "remote_head", lambda _u, _b: "c" * 40)
+    monkeypatch.setattr(sfc, "_has_object", lambda _s, _c: False)   # never resolvable
+    monkeypatch.setattr(sfc, "_try_fetch", lambda _u, _b, _c: None)  # fetch cannot help
+    called = []
+    monkeypatch.setattr(sfc, "_is_ancestor", lambda *a: called.append(a) or False)
+
+    result = sfc.check_one(record)
+
+    assert result.status == "unknown", f"expected 'unknown', got {result.status}"
+    assert "could not compare" in result.detail
+    assert not called, "must not guess a relationship it cannot compute"
 
 
 def test_check_one_in_sync(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -201,23 +201,41 @@ def check_one(record: dict[str, str]) -> SubmoduleFreshness:
     if remote == parent:
         status = "in_sync"
         detail = "parent gitlink matches remote HEAD"
-    elif _is_ancestor(remote, parent):
-        status = "remote_behind"
-        detail = "parent gitlink is ahead of remote HEAD (local-only commit on tracked branch)"
-    elif _is_ancestor(parent, remote):
-        status = "remote_ahead"
-        detail = (
-            f"remote HEAD is ahead of parent gitlink by "
-            f"{_count_commits_between(parent, remote)} commit(s); "
-            f"consider `git submodule update --remote {path}`"
-        )
     else:
-        # Neither is an ancestor of the other — divergent branches.
-        status = "error"
-        detail = (
-            f"parent gitlink ({parent[:9]}) and remote HEAD ({remote[:9]}) "
-            f"have diverged; manual reconciliation required"
-        )
+        # Ancestry must be computed INSIDE the submodule -- its commits live in
+        # its own object store, not the parent's -- and the remote head has to be
+        # present locally first, because `ls-remote` returns a SHA without
+        # fetching the object it names.
+        sub = REPO_ROOT / path
+        if not _has_object(remote, sub):
+            _try_fetch(url, branch, sub)
+
+        if not (_has_object(remote, sub) and _has_object(parent, sub)):
+            # Say so, rather than letting an unresolvable object masquerade as
+            # divergence. "Could not measure" and "measured, and they diverged"
+            # are different findings and must not share a status.
+            status = "unknown"
+            detail = (
+                f"could not compare {parent[:9]} against {remote[:9]} in {path}: "
+                f"objects unavailable locally (submodule uninitialized, or fetch "
+                f"of {branch} failed)"
+            )
+        elif _is_ancestor(remote, parent, sub):
+            status = "remote_behind"
+            detail = "parent gitlink is ahead of remote HEAD (local-only commit on tracked branch)"
+        elif _is_ancestor(parent, remote, sub):
+            status = "remote_ahead"
+            detail = (
+                f"remote HEAD is ahead of parent gitlink by "
+                f"{_count_commits_between(parent, remote, sub)} commit(s); "
+                f"consider `git submodule update --remote {path}`"
+            )
+        else:
+            status = "error"
+            detail = (
+                f"parent gitlink ({parent[:9]}) and remote HEAD ({remote[:9]}) "
+                f"have diverged; manual reconciliation required"
+            )
 
     return SubmoduleFreshness(
         path=path,
@@ -230,15 +248,42 @@ def check_one(record: dict[str, str]) -> SubmoduleFreshness:
     )
 
 
-def _is_ancestor(maybe_ancestor: str, descendant: str) -> bool:
-    """True if `maybe_ancestor` is reachable from `descendant`."""
-    proc = run_git("merge-base", "--is-ancestor", maybe_ancestor, descendant)
+def _is_ancestor(maybe_ancestor: str, descendant: str, cwd: Path) -> bool:
+    """True if `maybe_ancestor` is reachable from `descendant`, inside `cwd`.
+
+    `cwd` is REQUIRED and is the submodule, never the parent. A submodule's
+    commits live in its own object store; running this in the parent resolves
+    neither SHA, both checks return non-zero, and every genuine update is then
+    misreported as divergence -- silently turning the tool into one that only
+    ever says "reconcile manually".
+    """
+    proc = run_git("merge-base", "--is-ancestor", maybe_ancestor, descendant, cwd=cwd)
     return proc.returncode == 0
 
 
-def _count_commits_between(a: str, b: str) -> int:
+def _has_object(sha: str, cwd: Path) -> bool:
+    """Is `sha` present in `cwd`'s object store?
+
+    `git ls-remote` returns a SHA WITHOUT fetching the object it names, so the
+    remote head is normally absent locally. Ancestry against an absent object
+    fails identically to genuine divergence -- so it must be checked, not assumed.
+    """
+    proc = run_git("cat-file", "-e", f"{sha}^{{commit}}", cwd=cwd)
+    return proc.returncode == 0
+
+
+def _try_fetch(url: str, branch: str, cwd: Path) -> None:
+    """Best-effort: bring the remote branch's objects into `cwd`.
+
+    Failure is not fatal -- the caller checks _has_object afterwards and reports
+    an explicit "cannot determine" rather than guessing a relationship.
+    """
+    run_git("fetch", "--quiet", "--no-tags", url, branch, cwd=cwd)
+
+
+def _count_commits_between(a: str, b: str, cwd: Path) -> int:
     """Roughly: how many commits in `b` not in `a`? Used for the ahead-count hint."""
-    proc = run_git("rev-list", "--count", f"{a}..{b}")
+    proc = run_git("rev-list", "--count", f"{a}..{b}", cwd=cwd)
     if proc.returncode != 0 or not proc.stdout.strip():
         return 0
     try:

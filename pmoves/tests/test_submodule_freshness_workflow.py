@@ -115,3 +115,43 @@ def test_workflow_uploads_artifact(workflow_text: str) -> None:
     assert ".freshness/" in workflow_text or "freshness" in workflow_text.lower(), (
         "workflow doesn't reference the .freshness/ artifact path"
     )
+
+def test_every_run_block_is_valid_shell():
+    """The step that shipped was Python pasted into a bash `run:` block.
+
+    After the `python -c` invocation closed, the script continued with
+    `ahead = [...]`, `if ahead:` and `for s in ahead:` -- Python, in the shell.
+    `bash -n` rejects it with "syntax error near unexpected token '('", and the
+    step is `if: always()`, so every scheduled run would have failed.
+
+    Nothing in this repo syntax-checks workflow shell, which is why it shipped:
+    the YAML parses fine, and the string inside `run:` is opaque to it.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    yaml = pytest.importorskip("yaml")
+    bash = shutil.which("bash")
+    if not bash:
+        pytest.skip("bash not available on this runner")
+
+    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = [s for job in doc["jobs"].values()
+             for s in job["steps"] if "run" in s]
+    assert steps, "no run: blocks found -- this test would pass vacuously"
+
+    offenders = []
+    with tempfile.TemporaryDirectory() as d:
+        script = Path(d) / "step.sh"
+        for step in steps:
+            script.write_text(step["run"], encoding="utf-8", newline="\n")
+            proc = subprocess.run(
+                [bash, "-n", str(script)], capture_output=True, text=True
+            )
+            if proc.returncode != 0:
+                offenders.append(f"{step.get('name')!r}: {proc.stderr.strip()}")
+
+    assert not offenders, (
+        "run: blocks that are not valid shell:\n" + "\n".join(offenders)
+    )
