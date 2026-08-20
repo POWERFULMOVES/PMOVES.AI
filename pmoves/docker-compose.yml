@@ -3850,7 +3850,8 @@ services:
     - pmoves_bus
     - pmoves_data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8107/healthz >/dev/null 2>&1 || exit 1"]
+      # Image ships curl but NOT wget — same class as the pmoves-ui curl fix
+      test: ["CMD-SHELL", "curl -sf http://localhost:8107/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
