@@ -40,7 +40,7 @@ Open PBnJ in Pinokio → **Launch Demo Room** button.
 
 Equivalent shell:
 ```bash
-pterm start pbnj/pinokio/api/pmoves-pbnj/demo.js
+pterm start PMOVES-pinokio/api/pmoves-pbnj/demo.js
 ```
 
 ## Manual launch
@@ -69,4 +69,4 @@ Subject: `p7.nats.launch`
 ## Stop
 
 In Pinokio UI: click the stop button on the demo.js terminal.
-Or: `pterm stop pbnj/pinokio/api/pmoves-pbnj/demo.js`
+Or: `pterm stop PMOVES-pinokio/api/pmoves-pbnj/demo.js`
