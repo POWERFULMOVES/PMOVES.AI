@@ -21,9 +21,20 @@ http:
         # cannot smuggle it through Traefik, and apps can trust it as proof the
         # request transited the proxy (defence-in-depth vs Remote-User spoofing).
         authResponseHeaders: ["Remote-User", "X-Auth-Email", "X-Auth-Subject", "X-Forward-Auth-Secret"]
+        # REQUIRED for the browser redirect below to reach the user.
+        #
+        # Traefik: "Defines whether to forward the Location header to the client
+        # as is or prefix it with the domain name of the authentication server."
+        # Default is FALSE. So without this, the 302 that /auth/verify returns
+        # (Location: https://auth.pmoves.ai/login?rd=...) is rewritten to the
+        # forwardAuth `address` host above -- http://pmoves-sso-auth:8080/login -
+        # an internal container name the browser cannot resolve. That is the same
+        # dead end this change exists to remove, one layer further out.
+        preserveLocationHeader: true
         # Browser login-redirect is handled INSIDE /auth/verify (it returns a 302
         # to /login?rd=<original> for text/html requests, a bare 401 for API
-        # clients), which Traefik passes through unchanged. The former
+        # clients), and which Traefik forwards verbatim ONLY because
+        # preserveLocationHeader is set above. The former
         # `pmoves-auth-redirect` *errors* middleware was removed: an errors
         # middleware keeps the 401 status (body-swap, not a redirect) and its
         # `query` substitutes only {status} — the {host}/{uri} it used are not

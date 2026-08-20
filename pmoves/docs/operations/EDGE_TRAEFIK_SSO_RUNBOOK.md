@@ -66,9 +66,33 @@ its own listener.
 
 ### Config
 
-`config/traefik/dynamic.yml` must exist. It defines `pmoves-forward-auth` (the
-ForwardAuth middleware) and `pmoves-auth-redirect` (401 → login). Preflight fails
-without it, because Traefik would start and silently protect nothing.
+`config/traefik/dynamic.yml` must exist. It defines `pmoves-forward-auth`, the
+ForwardAuth middleware. Preflight fails without it, because Traefik would start
+and silently protect nothing.
+
+**The 401 → login transition is no longer a middleware.** `pmoves-auth-redirect`
+(an `errors` middleware) was removed: an `errors` middleware swaps the response
+*body* while keeping the 401 status, so it never actually redirected, and its
+`query` template substitutes only `{status}` — the `{host}`/`{uri}` it used are
+not valid placeholders, so the post-login `rd` was a literal broken string.
+
+The redirect now happens inside the auth service. `/auth/verify` returns:
+
+| request | response |
+|---|---|
+| `Accept:` includes `text/html` (a browser) | `302` to `<public_base_url>/login?rd=<original URL>` |
+| anything else (XHR/fetch/API) | bare `401` |
+
+Two settings make that reach the user, and it fails silently without either:
+
+- **`preserveLocationHeader: true`** on `pmoves-forward-auth`. Traefik's default
+  is `false`, which *"prefix[es] it with the domain name of the authentication
+  server"* — rewriting the `Location` to `http://pmoves-sso-auth:8080/login`, an
+  internal container name the browser cannot resolve. Symptom: login appears to
+  do nothing, or the browser reports an unresolvable host.
+- **`PUBLIC_BASE_URL`** on the auth service. Without it `/auth/verify` cannot
+  build a login URL and falls back to a bare 401 for browsers too — i.e. exactly
+  the dead end this replaced. Symptom: a 401 page with no redirect.
 
 ## Run
 
