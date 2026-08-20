@@ -3043,7 +3043,13 @@ mcp_servers:
     # docs/superpowers/specs/2026-06-26-voice-agents-design.md and
     # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
     grounding_source: true
-    status: "planned"
+    # Active: pmoves-hirag-mcp is wired into .claude/mcp.json (SSE, followups-v1
+    # commit 6). The container is built by the PMOVES-HiRAG + pmoves-hirag-mcp
+    # submodules and published on PMOVES.AI-Edition-Hardened; see the
+    # `services.pmoves_hirag_mcp` field in pmoves/contracts/schemas/pmoves-bootstrap/
+    # v1.schema.json for the typed service block that the bootstrap CGP profile
+    # uses to reference it.
+    status: "active"
 
   pmoves_nats_mcp:
     name: "pmoves-nats-mcp"
