@@ -209,6 +209,16 @@
             "nats_subject": {"type": "string", "const": "pmoves.agent.task.v1"},
             "target": {"type": "string", "examples": ["hermes-3"]}
           }
+        },
+        "pinokio": {
+          "type": "object",
+          "description": "The Pinokio app-launcher. Lives on operator devices (Pixel 10 XL fleet) per memory; PMOVES-pinokio fork consumes the bootstrap at launch time and registers the CGP's tools + MCPs as the app's surface. Node is the operator device tailnet IP (or 'host' for the operator's local machine); target is the Pinokio app id being launched.",
+          "additionalProperties": true,
+          "properties": {
+            "node": {"type": "string", "examples": ["host", "100.x.y.z"]},
+            "nats_subject": {"type": "string", "const": "pmoves.agent.task.v1"},
+            "target": {"type": "string", "examples": ["pmoves-mini", "pmoves-launcher"]}
+          }
         }
       }
     },
