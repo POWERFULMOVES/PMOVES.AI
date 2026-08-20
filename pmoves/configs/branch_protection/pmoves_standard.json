@@ -104,15 +104,15 @@
     },
     "POWERFULMOVES/PMOVES-jcodemunch-mcp": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/pmoves-hirag-mcp": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PM-Spark-video-search-and-summarization": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-ollama": {
       "profile": "fork",
