@@ -17,6 +17,21 @@ Test groups:
        to `$GITHUB_OUTPUT` (so the App-token step gets the resolved
        repo set, not an empty default that escalates to every
        accessible repo)
+    E. RulesetOverrideTests - a per-repo `ruleset_overrides` key that
+       matches no ruleset in the profile is rejected at spec load,
+       and the shipped spec's own override actually merges
+    F. FailurePropagationTests - the apply step exits non-zero when
+       any repo failed, instead of counting failures and ignoring
+       the count
+
+Groups E and F come from the FIRST successful run of
+branch-protection-ruleset-sync (2026-08-20, once #2622 fixed the
+fabricated action pin that had kept it from starting at all). That
+run reported success while carrying an unhandled
+`KeyError: 'name'` on PMOVES-hermes-agent -- the only repo in the
+fleet with `ruleset_overrides`, whose 9 required status checks had
+therefore never once been applied. Same lesson as #14: the glue
+was untested. `ruleset_overrides` had no test at all.
 """
 from __future__ import annotations
 
@@ -190,6 +205,104 @@ class HeredocOutputTests(unittest.TestCase):
         # The App-token step must reference the resolved repos
         # output, not leave `repositories:` blank.
         self.assertIn('repositories: ${{ steps.targets.outputs.repos }}', self.text)
+
+
+class RulesetOverrideTests(unittest.TestCase):
+    """E. per-repo ruleset_overrides must resolve, not crash."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, str(ROOT))
+        from pmoves.tools import branch_protection as bp  # noqa: E402
+        cls.bp = bp
+
+    def _spec(self, overrides):
+        return {
+            "spec": "pmoves-branch-protection/v1",
+            "profiles": {
+                "fork": {
+                    "rulesets": [{
+                        "name": "[ main ]",
+                        "target": "branch",
+                        "enforcement": "active",
+                        "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+                        "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+                    }]
+                }
+            },
+            "per_repo_overrides": {
+                "O/R": {"profile": "fork", "branch": "main", "ruleset_overrides": overrides}
+            },
+        }
+
+    def test_E1_unmatched_key_without_name_is_rejected_at_load(self):
+        """The exact shape that crashed: a rules-only override under a key that
+        names no ruleset in the profile. Previously appended verbatim, then died
+        on `rs["name"]` mid-apply, on one repo out of twenty-five."""
+        spec = self._spec({"[ NOT-A-RULESET ]": {"rules": [{"type": "deletion"}]}})
+        with self.assertRaises(self.bp.BranchProtectionError) as ctx:
+            self.bp.SpecValidator(spec).validate()
+        self.assertIn("matches no ruleset", str(ctx.exception))
+        self.assertIn("[ main ]", str(ctx.exception))  # names the valid key
+
+    def test_E2_unmatched_key_WITH_a_name_is_allowed(self):
+        """Adding a genuinely new ruleset stays legal."""
+        spec = self._spec({"[ extra ]": {
+            "name": "[ extra ]", "target": "branch", "enforcement": "active",
+            "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+            "rules": [{"type": "deletion"}]}})
+        self.bp.SpecValidator(spec).validate()   # must not raise
+
+    def test_E3_matched_key_merges_rules_by_type(self):
+        spec = self._spec({"[ main ]": {"rules": [{"type": "required_status_checks",
+                                                   "parameters": {"required_status_checks": []}}]}})
+        _, profile = self.bp.resolve_repo_profile(spec, "O/R")
+        self.assertEqual(len(profile["rulesets"]), 1, "override must merge, not append")
+        types = {r["type"] for r in profile["rulesets"][0]["rules"]}
+        self.assertIn("deletion", types)          # base rule preserved
+        self.assertIn("required_status_checks", types)   # override added
+
+    def test_E4_resolve_raises_legibly_instead_of_KeyError(self):
+        """Even bypassing the validator, the resolver must not emit a bare
+        KeyError from deep inside _build_ruleset_body."""
+        spec = self._spec({"[ NOT-A-RULESET ]": {"rules": [{"type": "deletion"}]}})
+        with self.assertRaises(self.bp.BranchProtectionError):
+            self.bp.resolve_repo_profile(spec, "O/R")
+
+    def test_E5_the_shipped_spec_validates(self):
+        spec = self.bp.load_spec()      # raises if invalid
+        self.assertIn("per_repo_overrides", spec)
+
+    def test_E6_hermes_required_checks_actually_merge(self):
+        """The regression that mattered: hermes-agent's 9 required status checks
+        must end up in ONE ruleset alongside the profile's base rules."""
+        spec = self.bp.load_spec()
+        repo = "POWERFULMOVES/PMOVES-hermes-agent"
+        if repo not in spec.get("per_repo_overrides", {}):
+            self.skipTest(f"{repo} not enrolled")
+        _, profile = self.bp.resolve_repo_profile(spec, repo)
+        self.assertEqual(len(profile["rulesets"]), 1)
+        rules = profile["rulesets"][0]["rules"]
+        by_type = {r["type"]: r for r in rules}
+        self.assertIn("non_fast_forward", by_type)   # base rule survived the merge
+        self.assertIn("required_status_checks", by_type)
+        contexts = by_type["required_status_checks"]["parameters"]["required_status_checks"]
+        self.assertGreaterEqual(len(contexts), 9)
+
+
+class FailurePropagationTests(unittest.TestCase):
+    """F. counting failures and then ignoring the count is not error handling."""
+
+    def setUp(self):
+        self.text = _read(RULESET_SYNC)
+
+    def test_F1_apply_step_exits_nonzero_when_a_repo_failed(self):
+        run = _extract_run_block(self.text, "Apply rulesets") or self.text
+        self.assertRegex(run, r'if \[ "\$FAILED" -gt 0 \]', "no failure gate in the apply step")
+        self.assertIn("exit 1", run)
+
+    def test_F2_failure_is_annotated_not_just_printed(self):
+        self.assertIn("::error::", self.text)
 
 
 if __name__ == "__main__":
