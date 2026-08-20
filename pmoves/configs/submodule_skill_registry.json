@@ -309,6 +309,49 @@
         "HARDWARE_TTS_REQUIREMENTS.md"
       ]
     },
+    "PMOVES-pterm": {
+      "context_tier": 3,
+      "domain_tags": ["infra", "agents"],
+      "skills": [
+        "pinokio/app-list",
+        "pinokio/app-start",
+        "pinokio/app-stop"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "Pinokio-SKILL.md"
+      ],
+      "$note": "Fork of pinokiocomputer/pterm - the Pinokio terminal CLI. Backs the `pterm` skill (clipboard, desktop notifications, native file picker, script testing) and the pinokio/app-* commands, which shell out to pterm. Registered 2026-08-20 alongside gepeto and pinokiod."
+    },
+    "PMOVES-gepeto": {
+      "context_tier": 3,
+      "domain_tags": ["infra", "agents"],
+      "skills": [],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "Pinokio-SKILL.md"
+      ],
+      "$note": "Fork of pinokiocomputer/gepeto - the Pinokio launcher-script generator, behind the `gepeto` skill (building 1-click launchers). skills[] is deliberately empty: gepeto is a plugin skill rather than a .claude/commands/ entry, and declaring a command file that does not exist is exactly what left 7 dangling skill references from #2589."
+    },
+    "PMOVES-pinokiod": {
+      "context_tier": 3,
+      "domain_tags": ["infra"],
+      "skills": [
+        "pinokio/app-list",
+        "pinokio/app-search"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "Pinokio-SKILL.md"
+      ],
+      "$note": "Fork of pinokiocomputer/pinokiod - the Pinokio daemon/backend the desktop app drives. Relevant when a launcher misbehaves at the daemon level rather than inside a start.js. Registered 2026-08-20."
+    },
     "PMOVES-Ultimate-TTS-Studio": {
       "context_tier": 3,
       "domain_tags": ["voice", "media"],
