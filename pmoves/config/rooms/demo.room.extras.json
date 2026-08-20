@@ -5,7 +5,7 @@
     "agent-zero-webui": {
       "port": 8080,
       "model": "hermes-v4-8b",
-      "start_script": "pbnj/pinokio/api/pmoves-pbnj/demo.js"
+      "start_script": "PMOVES-pinokio/api/pmoves-pbnj/demo.js"
     },
     "claude-code-session": {
       "node": "4090-claude",

@@ -1051,7 +1051,7 @@ module.exports = {
 For PMOVES team members, packages are available at:
 
 ```
-pbnj/pinokio/api/
+PMOVES-pinokio/api/
 ├── pmoves-agent-zero/     # Agent Zero launcher
 ├── pmoves-archon/         # Archon launcher
 ├── pmoves-services/       # Multi-service launcher
@@ -1063,7 +1063,7 @@ pbnj/pinokio/api/
 
 ```bash
 # macOS/Linux
-ln -s /path/to/PMOVES.AI/pbnj/pinokio/api/pmoves-agent-zero \
+ln -s /path/to/PMOVES.AI/PMOVES-pinokio/api/pmoves-agent-zero \
   ~/pinokio/api/pmoves-agent-zero
 
 # Windows (PowerShell)
@@ -1281,6 +1281,6 @@ pterm --version
 **Document maintained by:** PMOVES Documentation Team  
 **Related Documentation:**
 - [PMOVES Agent Registry](../../config/agent_registry.yaml)
-- [PBnJ README](../../../pbnj/README.md)
+- [PBnJ README](../../../PMOVES-pinokio/README.md)
 - [Pinokio Documentation](https://pinokio.co/docs)
 - [CLAUDE.md (Pinokio Rules)](../../../CLAUDE.md)
