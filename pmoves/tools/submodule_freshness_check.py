@@ -1,0 +1,356 @@
+#!/usr/bin/env python3
+"""Submodule freshness check: detect submodules whose tracked branch is
+ahead of the parent gitlink.
+
+The `pmoves/tools/submodule_integrity.py` check catches the LOCAL case
+— a checked-out submodule that's drifted from its parent gitlink.
+This tool catches the REMOTE case — a submodule's tracked branch on
+the remote (e.g. `PMOVES.AI-Edition-Hardened`) that has commits the
+parent repo hasn't picked up. When the remote is ahead, the operator
+can run `git submodule update --remote` to consume the new commits
+or open a PR to bump the gitlink.
+
+Output: a JSON report on stdout (or a human-readable summary with
+--no-json). The JSON shape is:
+
+    {
+      "checked_at": "<ISO-8601 UTC>",
+      "summary": {
+        "total": <int>,
+        "in_sync": <int>,
+        "remote_ahead": <int>,
+        "remote_behind": <int>,
+        "remote_missing": <int>,
+        "errors": <int>
+      },
+      "submodules": [
+        {
+          "path": "<submodule path>",
+          "url": "<submodule url>",
+          "branch": "<tracked branch>",
+          "parent_gitlink": "<sha or null>",
+          "remote_head": "<sha or null>",
+          "status": "in_sync" | "remote_ahead" | "remote_behind" |
+                    "remote_missing" | "local_uninitialized" | "error",
+          "detail": "<human-readable note>"
+        },
+        ...
+      ]
+    }
+
+This tool makes ONE `git ls-remote` call per submodule, in parallel by
+default (configurable). It's safe to run in CI on a cron — no API
+calls beyond what the local git daemon does, no auth tokens.
+
+Refs: followups-v1 slice commit 8
+"""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import json
+import re
+import subprocess
+import sys
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+GITMODULES = REPO_ROOT / ".gitmodules"
+
+
+# ============================================================================
+# Data shapes
+# ============================================================================
+
+
+@dataclass
+class SubmoduleFreshness:
+    path: str
+    url: str
+    branch: str
+    parent_gitlink: Optional[str] = None
+    remote_head: Optional[str] = None
+    status: str = "pending"  # in_sync / remote_ahead / remote_behind / remote_missing / local_uninitialized / error
+    detail: str = ""
+
+
+@dataclass
+class FreshnessReport:
+    checked_at: str
+    summary: dict = field(default_factory=dict)
+    submodules: list = field(default_factory=list)
+
+
+# ============================================================================
+# .gitmodules parsing
+# ============================================================================
+
+
+def parse_gitmodules() -> list[dict[str, str]]:
+    """Return one record per submodule: {path, url, branch}.
+
+    Branch is the .gitmodules `branch =` field; defaults to "main"
+    when the field is absent (which is a common case for submodules
+    that don't pin a branch).
+    """
+    if not GITMODULES.exists():
+        return []
+    records: list[dict[str, str]] = []
+    current: dict[str, str] = {}
+    section_re = re.compile(r"^\[submodule \"(.+)\"\]\s*$")
+    kv_re = re.compile(r"^\s*(\w+)\s*=\s*(.+?)\s*$")
+    for raw in GITMODULES.read_text(encoding="utf-8").splitlines():
+        section = section_re.match(raw)
+        if section:
+            if current.get("path"):
+                records.append(current)
+            current = {"name": section.group(1), "branch": "main"}
+            continue
+        kv = kv_re.match(raw)
+        if not kv or not current:
+            continue
+        key, value = kv.group(1), kv.group(2)
+        if key in ("path", "url", "branch"):
+            current[key] = value
+    if current.get("path"):
+        records.append(current)
+    return records
+
+
+# ============================================================================
+# git helpers
+# ============================================================================
+
+
+def run_git(*args: str, cwd: Optional[Path] = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd or REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+
+
+def parent_gitlink(submodule_path: str) -> Optional[str]:
+    """Return the SHA the parent repo pins for this submodule, or None."""
+    proc = run_git("ls-files", "--stage", submodule_path)
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return None
+    # Format: `<mode> <sha> <stage>\t<path>`
+    line = proc.stdout.splitlines()[0]
+    parts = line.split()
+    if len(parts) < 3 or not parts[0].startswith("160000"):
+        return None
+    return parts[1]
+
+
+def remote_head(url: str, branch: str) -> Optional[str]:
+    """Return the SHA at `<url> refs/heads/<branch>` or None if missing."""
+    proc = run_git("ls-remote", "--heads", url, f"refs/heads/{branch}")
+    if proc.returncode != 0:
+        return None
+    for line in proc.stdout.splitlines():
+        # Format: `<sha>\t<ref>`
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        if parts[1] == f"refs/heads/{branch}":
+            return parts[0]
+    return None
+
+
+# ============================================================================
+# Per-submodule check
+# ============================================================================
+
+
+def check_one(record: dict[str, str]) -> SubmoduleFreshness:
+    """Run the freshness check for a single submodule."""
+    path = record["path"]
+    url = record["url"]
+    branch = record["branch"]
+
+    parent = parent_gitlink(path)
+    if not parent:
+        return SubmoduleFreshness(
+            path=path,
+            url=url,
+            branch=branch,
+            status="local_uninitialized",
+            detail="parent gitlink is missing or path is uninitialized",
+        )
+
+    remote = remote_head(url, branch)
+    if not remote:
+        return SubmoduleFreshness(
+            path=path,
+            url=url,
+            branch=branch,
+            parent_gitlink=parent,
+            status="remote_missing",
+            detail=f"could not resolve {url} refs/heads/{branch} (branch deleted? private repo? offline?)",
+        )
+
+    if remote == parent:
+        status = "in_sync"
+        detail = "parent gitlink matches remote HEAD"
+    elif _is_ancestor(remote, parent):
+        status = "remote_behind"
+        detail = "parent gitlink is ahead of remote HEAD (local-only commit on tracked branch)"
+    elif _is_ancestor(parent, remote):
+        status = "remote_ahead"
+        detail = (
+            f"remote HEAD is ahead of parent gitlink by "
+            f"{_count_commits_between(parent, remote)} commit(s); "
+            f"consider `git submodule update --remote {path}`"
+        )
+    else:
+        # Neither is an ancestor of the other — divergent branches.
+        status = "error"
+        detail = (
+            f"parent gitlink ({parent[:9]}) and remote HEAD ({remote[:9]}) "
+            f"have diverged; manual reconciliation required"
+        )
+
+    return SubmoduleFreshness(
+        path=path,
+        url=url,
+        branch=branch,
+        parent_gitlink=parent,
+        remote_head=remote,
+        status=status,
+        detail=detail,
+    )
+
+
+def _is_ancestor(maybe_ancestor: str, descendant: str) -> bool:
+    """True if `maybe_ancestor` is reachable from `descendant`."""
+    proc = run_git("merge-base", "--is-ancestor", maybe_ancestor, descendant)
+    return proc.returncode == 0
+
+
+def _count_commits_between(a: str, b: str) -> int:
+    """Roughly: how many commits in `b` not in `a`? Used for the ahead-count hint."""
+    proc = run_git("rev-list", "--count", f"{a}..{b}")
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return 0
+    try:
+        return int(proc.stdout.strip())
+    except ValueError:
+        return 0
+
+
+# ============================================================================
+# Orchestration
+# ============================================================================
+
+
+def run_check(records: list[dict[str, str]], parallel: bool = True) -> FreshnessReport:
+    """Run the freshness check for every submodule in `records`."""
+    if parallel:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(check_one, records))
+    else:
+        results = [check_one(r) for r in records]
+
+    summary = {
+        "total": len(results),
+        "in_sync": sum(1 for r in results if r.status == "in_sync"),
+        "remote_ahead": sum(1 for r in results if r.status == "remote_ahead"),
+        "remote_behind": sum(1 for r in results if r.status == "remote_behind"),
+        "remote_missing": sum(1 for r in results if r.status == "remote_missing"),
+        "errors": sum(1 for r in results if r.status in ("error",)),
+    }
+
+    return FreshnessReport(
+        checked_at=datetime.now(timezone.utc).isoformat(),
+        summary=summary,
+        submodules=[asdict(r) for r in results],
+    )
+
+
+# ============================================================================
+# Output
+# ============================================================================
+
+
+def render_human(report: FreshnessReport) -> str:
+    """A human-friendly summary; the JSON is the canonical form."""
+    lines: list[str] = []
+    s = report.summary
+    lines.append(f"Submodule freshness check at {report.checked_at}")
+    lines.append(
+        f"  total={s['total']}  in_sync={s['in_sync']}  "
+        f"remote_ahead={s['remote_ahead']}  remote_behind={s['remote_behind']}  "
+        f"remote_missing={s['remote_missing']}  errors={s['errors']}"
+    )
+    # Highlight the ones that need action.
+    for sub in report.submodules:
+        if sub["status"] in ("in_sync", "remote_behind"):
+            continue
+        lines.append(f"  [{sub['status']:>20}] {sub['path']:50} {sub['detail']}")
+    return "\n".join(lines)
+
+
+# ============================================================================
+# CLI
+# ============================================================================
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--no-json",
+        action="store_true",
+        help="Print a human summary instead of the canonical JSON report.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero if any submodule is remote_ahead (consume before next release).",
+    )
+    parser.add_argument(
+        "--path",
+        action="append",
+        default=[],
+        help="Restrict the check to this submodule path (can be repeated).",
+    )
+    parser.add_argument(
+        "--no-parallel",
+        action="store_true",
+        help="Run submodule checks serially (default: 8 workers).",
+    )
+    args = parser.parse_args(argv)
+
+    records = parse_gitmodules()
+    if not records:
+        print("ERROR: no submodules found in .gitmodules", file=sys.stderr)
+        return 2
+    if args.path:
+        wanted = set(args.path)
+        records = [r for r in records if r["path"] in wanted]
+        if not records:
+            print(f"ERROR: no submodules match --path {sorted(wanted)}", file=sys.stderr)
+            return 2
+
+    report = run_check(records, parallel=not args.no_parallel)
+
+    if args.no_json:
+        print(render_human(report))
+    else:
+        print(json.dumps(asdict(report), indent=2, sort_keys=True))
+
+    if args.strict and report.summary["remote_ahead"] > 0:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
