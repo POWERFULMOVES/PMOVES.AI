@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+> **Format note.** This file follows the [agents.md open format](https://agents.md) — a universal contract for guiding coding agents. The PMOVES fork of the format spec lives at [`PMOVES-agents.md/`](PMOVES-agents.md/) (submodule, fork of [agentsmd/agents.md](https://github.com/agentsmd/agents.md)). The three canonical section names — `## Dev environment tips`, `## Testing instructions`, `## PR instructions` — are present below; PMOVES-specific extensions are documented inline as `<!-- PMOVES-EXT: <name> -->` comments so cold-start agents can find the extension boundaries.
+
 ## Project Structure
 
 PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**, built on a rooms-on-a-stage topology. P7 (Pinokio 7) is the room-aware stage manager that selects rooms and manages stage transitions.
