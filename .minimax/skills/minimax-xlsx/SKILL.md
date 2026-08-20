@@ -35,10 +35,19 @@ Create, edit and repair XLSX workbooks.
 | something is broken | `docs/pitfalls-index.md` |
 | deeper mechanics | `docs/advanced-reference.md` |
 
-`docs/create-edit-guide.md` is the openpyxl + xlsxwriter cookbook — the minimal
-one-liners live in §3 below; go there when a one-liner is not enough (full
-styling, charts, conditional formatting, in-place edits, merged cells, shared
-strings).
+`docs/create-edit-guide.md` is the openpyxl + xlsxwriter cookbook — the write-side
+recipes, from minimal one-liners through full styling, charts, conditional
+formatting, in-place edits, merged cells and shared strings.
+
+### A note on `SKILL.md §N` references
+
+Several `docs/*` files cite numbered sections of this file (`§3`, `§3.3`, `§4`,
+`§4.1`, `§5`). Those sections belonged to the original `SKILL.md`, which was never
+committed — the skill landed in #1484 as scaffolding with every file except its
+entry point. The content itself was not lost; it lives in the guides. Those
+citations have been repointed to the guide that actually holds each topic rather
+than recreated here, because inventing recipes to match a citation would put
+guessed instructions in front of an agent.
 
 ## Worked case
 

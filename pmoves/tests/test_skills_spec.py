@@ -113,9 +113,17 @@ def test_skill_meets_spec(skill_dir: Path):
     metadata = data.get("metadata")
     if metadata is not None:
         assert isinstance(metadata, dict), f"{rel}: `metadata` must be a mapping"
-        non_string = sorted(k for k, v in metadata.items() if not isinstance(v, str))
-        assert not non_string, (
-            f"{rel}: `metadata` must map string keys to string VALUES; these are "
-            f"not strings: {non_string}. A list or number here is accepted by "
-            f"yaml.safe_load but violates the spec."
+        # BOTH sides. The spec says "a map from string keys to string values",
+        # and YAML happily produces non-string keys: `metadata: {1: ok}` yields an
+        # int key, and `metadata: {yes: ok}` yields a bool one. Checking only the
+        # values would pass both.
+        bad_keys = sorted(repr(k) for k in metadata if not isinstance(k, str))
+        assert not bad_keys, (
+            f"{rel}: `metadata` keys must be strings; these are not: {bad_keys}. "
+            f"YAML turns bare 1 into an int and bare yes/no into a bool."
+        )
+        bad_values = sorted(k for k, v in metadata.items() if not isinstance(v, str))
+        assert not bad_values, (
+            f"{rel}: `metadata` values must be strings; these are not: {bad_values}. "
+            f"A list or number here is accepted by yaml.safe_load but violates the spec."
         )
