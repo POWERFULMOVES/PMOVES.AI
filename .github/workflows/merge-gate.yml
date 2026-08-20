@@ -1,6 +1,14 @@
 # Merge Gate — Required status checks for all PRs targeting main
 # Configure branch protection in GitHub Settings > Branches > main:
-#   Required status checks: Merge Gate / merge-decision
+#   Required status checks: merge-decision
+#
+# There used to be a job here literally named `merge-gate` whose entire body
+# was `echo "passed=true"`. It took no input, evaluated nothing, and could not
+# report anything but success — while carrying the name that reads, in the
+# checks list and in the branch-protection config, as THE gate. It was never in
+# merge-decision's `needs`, so nothing depended on it; it only ever supplied a
+# green tick next to an authoritative-sounding name. Removed, and the required
+# context moved to `merge-decision`, which actually evaluates the other jobs.
 #
 # Note: CodeQL scanning is handled by codeql.yml (CodeQL Advanced) separately.
 # This avoids duplicate scans and transient init failures.
@@ -13,21 +21,6 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  merge-gate:
-    runs-on: ubuntu-latest
-    outputs:
-      passed: ${{ steps.gate.outputs.passed }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Check required validations
-        id: gate
-        run: |
-          PASSED=true
-          # List all required check names
-          echo "Checking required validations..."
-          echo "All checks passed=true" >> $GITHUB_OUTPUT
-          echo "passed=true" >> $GITHUB_OUTPUT
-
   # Ratcheted: runs ALL test_*.py (previously capped at `head -20` of 264 by
   # filesystem order) and can actually fail (previously ended in `|| true`).
   # New failures and fixed-but-still-baselined entries both fail the job.

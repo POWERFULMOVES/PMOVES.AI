@@ -82,7 +82,7 @@ The doc fleet should be reachable from the CLI without operators having to know 
 | Tier-2 on-demand | [`PMOVES-Agent-Zero/`](./PMOVES-Agent-Zero/) | Orchestration / MCP API |
 | Tier-2 on-demand | [`PMOVES-Archon/`](./PMOVES-Archon/) | Agent service architecture |
 | Tier-2 on-demand | [`PMOVES-HiRAG/`](./PMOVES-HiRAG/) | Hi-RAG v2 retrieval gateway |
-| Full registry | [`.claude/context/submodules.md`](./.claude/context/submodules.md) | All 54 submodules cataloged |
+| Full registry | [`.claude/context/submodules.md`](./.claude/context/submodules.md) | All 52 documented submodules cataloged |
 
 ---
 

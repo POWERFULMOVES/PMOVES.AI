@@ -347,11 +347,11 @@
 [submodule "PMOVES-jcodemunch-mcp"]
 	path = PMOVES-jcodemunch-mcp
 	url = https://github.com/POWERFULMOVES/PMOVES-jcodemunch-mcp.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 [submodule "pmoves-hirag-mcp"]
 	path = pmoves-hirag-mcp
 	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 [submodule "PMOVES-OpenRoom"]
 	path = PMOVES-OpenRoom
 	url = https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
@@ -365,12 +365,7 @@
 [submodule "PMOVES-Spark-VSS"]
 	path = PMOVES-Spark-VSS
 	url = https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git
-	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "pbnj"]
-	path = pbnj
-	url = https://github.com/POWERFULMOVES/PMOVES-pinokio.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-ollama"]
 	path = PMOVES-ollama

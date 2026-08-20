@@ -8,7 +8,24 @@ PMOVES.AI uses git submodules to integrate external projects and specialized ser
 
 **Repository:** `https://github.com/POWERFULMOVES/PMOVES.AI`
 **Branch tracking:** All submodules track `PMOVES.AI-Edition-Hardened`
-**Total submodules:** 54 (including vendor/legacy dual-mounts; +5 in `skills/` after Phase 2)
+**Submodule counts (2026-08-19) — three surfaces, three numbers, and that is the finding:**
+
+| measure | count | what it is |
+|---|---:|---|
+| `.gitmodules` entries | 72 | what git actually tracks — the authoritative number |
+| `pmoves/configs/submodule_skill_registry.json` | 61 | what carries `context_tier` / `domain_tags` |
+| rows in this file | 52 | what is documented below |
+
+They are not three views of one set. **20 tracked submodules have no registry entry**
+(`PMOVES-hermes-agent`, `PMOVES-nats-server`, `pmoves-keygen`, `PMOVES-ollama`,
+`pmoves-cipher-mcp`, `pmoves-hirag-mcp` among them), so they carry no context tier and
+an agent loading context by tier cannot see them. **9 registry entries name paths that
+are no longer tracked** — 7 are `pmoves/vendor/*` leftovers from the vendor-to-fork
+migration, plus `research/A2UI` and `pmoves-surf`.
+
+Reconciling those 29 is an ownership decision (do vendor paths still belong? should all
+20 be registered, and at which tier?), not a mechanical edit — see issue #2573 finding 4.
+Previously this line read "Total submodules: 54", a number that matched none of the three.
 
 ## Fork Architecture (Vendor-to-Fork Migration)
 

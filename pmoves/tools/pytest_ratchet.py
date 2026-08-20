@@ -39,9 +39,10 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PMOVES = REPO_ROOT / "pmoves"
@@ -60,6 +61,20 @@ GROUP_TIMEOUT_SECONDS = int(os.environ.get("PYTEST_RATCHET_GROUP_TIMEOUT", "120"
 # invisible. Chunking does not change semantics: the same conftest still
 # applies to each file.
 CHUNK_SIZE = int(os.environ.get("PYTEST_RATCHET_CHUNK_SIZE", "20"))
+
+# When a chunk times out, pytest is killed before it writes its JUnit report, so
+# EVERY result in that chunk is lost -- passes and failures alike, not just the
+# hang. Measured 2026-08-19: `pmoves/tests [1]` timed out on every run on record,
+# and the 20 files inside it included 66 failures in test_docker_hardening.py and
+# 25 in test_gateway_agent_integration.py that had never once been reported. The
+# baseline recorded the silence; it could not record what the silence contained.
+#
+# So a timed-out chunk is now re-run one file at a time. Only the file that
+# actually hangs stays unmeasured; the other 19 report normally. The cost is paid
+# only when a chunk times out, and is bounded by FALLBACK_BUDGET_SECONDS so a
+# chunk full of hangs cannot eat the job.
+FALLBACK_FILE_TIMEOUT = int(os.environ.get("PYTEST_RATCHET_FILE_TIMEOUT", "60"))
+FALLBACK_BUDGET_SECONDS = int(os.environ.get("PYTEST_RATCHET_FALLBACK_BUDGET", "600"))
 
 # Mirrors the workflow's original discovery exactly, minus the `head -20` cap.
 # Kept identical on purpose: this change removes a cap and adds a ratchet, it
@@ -142,7 +157,8 @@ def group_files(files: List[Path]) -> Dict[str, List[Path]]:
     return chunked
 
 
-def run_pytest(files: List[Path], junit: Path) -> tuple[int, str]:
+def run_pytest(files: List[Path], junit: Path,
+                timeout: Optional[int] = None) -> tuple[int, str]:
     """Run pytest over `files`, collecting results into a JUnit XML report.
 
     `--continue-on-collection-errors` matters: without it a single unimportable
@@ -176,14 +192,14 @@ def run_pytest(files: List[Path], junit: Path) -> tuple[int, str]:
     try:
         proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, text=True,
                               capture_output=True,
-                              timeout=GROUP_TIMEOUT_SECONDS)
+                              timeout=timeout or GROUP_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired as exc:
         # subprocess returns TimeoutExpired.stdout/.stderr as raw bytes on some
         # platforms even with text=True, so each is decoded on its own rather
         # than concatenated first (that raised "can't concat str to bytes" on
         # Linux CI while being fine locally on Windows).
         partial = _as_text(exc.stdout) + _as_text(exc.stderr)
-        return -1, f"TIMEOUT after {GROUP_TIMEOUT_SECONDS}s{chr(10)}{partial}"
+        return -1, f"TIMEOUT after {timeout or GROUP_TIMEOUT_SECONDS}s{chr(10)}{partial}"
     # Pytest output is returned, never written to stdout: stdout carries only
     # this tool's report (and --json must stay parseable). Callers surface it
     # on stderr for groups that actually failed to produce a report.
@@ -276,6 +292,61 @@ def write_baseline(findings: List[dict]) -> None:
     BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def run_chunk_with_fallback(group: str, gfiles: List[Path], tmp: Path,
+                            index: int) -> tuple[List[dict], List[str]]:
+    """Run a group; if it times out, re-run it one file at a time.
+
+    Returns (findings, dead_labels). `dead_labels` names whatever stayed
+    unmeasured -- the whole group if the fallback could not run, or the specific
+    files that hang.
+
+    A timed-out chunk is killed before pytest writes its JUnit report, so
+    treating the timeout as one opaque "no report" discards every result in the
+    chunk. Isolating per file narrows the loss to the file that actually hangs.
+    """
+    junit = tmp / f"report-{index}.xml"
+    rc, output = run_pytest(gfiles, junit)
+    if junit.is_file():
+        return parse_junit(junit), []
+
+    if rc != -1 or len(gfiles) <= 1:
+        # Not a timeout (unimportable conftest, usage error, crash), or nothing
+        # left to split. Per-file isolation cannot help either case.
+        sys.stderr.write("--- no report for %s (exit %d) ---%s%s%s" % (
+            group, rc, chr(10), output[-1500:], chr(10)))
+        return [], [group]
+
+    sys.stderr.write(
+        "--- %s timed out; isolating %d files (budget %ds) ---%s" % (
+            group, len(gfiles), FALLBACK_BUDGET_SECONDS, chr(10)))
+
+    findings: List[dict] = []
+    dead: List[str] = []
+    spent = 0.0
+    for j, f in enumerate(gfiles):
+        if spent >= FALLBACK_BUDGET_SECONDS:
+            # Honest about what was NOT measured. Silently stopping here would
+            # reintroduce the defect this function exists to fix.
+            remaining = [str(x).replace(chr(92), "/") for x in gfiles[j:]]
+            sys.stderr.write(
+                "--- fallback budget exhausted; %d files unmeasured ---%s" % (
+                    len(remaining), chr(10)))
+            dead.extend(remaining)
+            break
+        sub = tmp / f"report-{index}-{j}.xml"
+        start = time.monotonic()
+        frc, foutput = run_pytest([f], sub, timeout=FALLBACK_FILE_TIMEOUT)
+        spent += time.monotonic() - start
+        if sub.is_file():
+            findings.extend(parse_junit(sub))
+            continue
+        label = str(f).replace(chr(92), "/")
+        sys.stderr.write("---   no report for %s (exit %d) ---%s%s%s" % (
+            label, frc, chr(10), foutput[-600:], chr(10)))
+        dead.append(label)
+    return findings, dead
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true")
@@ -297,33 +368,26 @@ def main() -> int:
     dead_groups = 0
     with tempfile.TemporaryDirectory() as tmp:
         for i, (group, gfiles) in enumerate(sorted(groups.items()), 1):
-            junit = Path(tmp) / f"report-{i}.xml"
             sys.stderr.write("[%d/%d] %s (%d files)%s" % (i, len(groups), group, len(gfiles), chr(10)))
-            rc, output = run_pytest(gfiles, junit)
-            if junit.is_file():
-                findings.extend(parse_junit(junit))
-            else:
-                # Only a dead group gets its output shown, on stderr, and only
-                # the tail -- enough to name the broken conftest without burying
-                # the report under ~100 groups of passing noise.
-                sys.stderr.write(
-                    "--- no report for %s (exit %d) ---%s%s%s" % (
-                        group, rc, chr(10), output[-1500:], chr(10)))
-                # pytest never wrote a report for this group: a conftest that
-                # cannot be imported, a usage error, or a crash. Recorded as a
-                # finding so it is visible and ratchetable, rather than being
-                # mistaken for "no failures here".
+            gfindings, dead = run_chunk_with_fallback(group, gfiles, Path(tmp), i)
+            findings.extend(gfindings)
+            for label in dead:
+                # pytest never wrote a report for this unit: a conftest that
+                # cannot be imported, a usage error, a crash, or a hang that
+                # survived per-file isolation. Recorded as a finding so it is
+                # visible and ratchetable, rather than being mistaken for
+                # "no failures here".
                 dead_groups += 1
                 findings.append({
                     "kind": "ERROR",
                     # Chunk suffix stripped: "[2]" is a positional label, so
                     # keying on it would churn the baseline every time a test
-                    # file is added anywhere earlier in the group.
-                    "where": group.split(" [")[0],
+                    # file is added anywhere earlier in the group. A per-file
+                    # label carries no such suffix and needs no stripping --
+                    # and, unlike the chunk label, it names the actual hang.
+                    "where": label.split(" [")[0],
                     "name": "<pytest-harness>",
-                    "detail": (f"pytest timed out after {GROUP_TIMEOUT_SECONDS}s"
-                               if rc == -1 else
-                               f"pytest produced no report for this group (exit {rc})"),
+                    "detail": "pytest produced no report for this unit",
                 })
     # stderr: stdout must stay pure so --json is parseable.
     sys.stderr.write("Groups run: %d%s%s" % (
