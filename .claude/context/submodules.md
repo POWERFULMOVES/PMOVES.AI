@@ -126,7 +126,6 @@ POWERFULMOVES forks of upstream agent-skill repositories, mounted as nested subm
 | `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work |
 | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents |
 | `skills/Pmoves-claude-d3js-skill/` | [chrisvoncsefalvay/claude-d3js-skill](https://github.com/chrisvoncsefalvay/claude-d3js-skill) | D3.js skill — Claude-driven data visualization patterns |
-| `skills/PMOVES-skills/` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Vercel Labs' skills library — the post-recenter home of the library that moved from `MiniMax-AI/skills` in August 2026 (see `skills/README.md` Recentering note) |
 
 Activation paths and cross-references live in `skills/README.md`.
 
