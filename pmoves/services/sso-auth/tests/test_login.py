@@ -97,10 +97,55 @@ def test_verify_emits_forward_auth_secret_on_200(monkeypatch):
     assert v.headers.get("X-Forward-Auth-Secret") == "proxy-shared-secret-xyz"
 
 def test_verify_401_omits_forward_auth_secret():
-    # No session -> 401 and no secret leaked.
+    # No session -> 401 and no secret leaked. (Default Accept is */*, i.e. NOT a
+    # browser navigation, so this stays a bare 401 — see the redirect tests below.)
     client.cookies.clear()
     v = client.get("/auth/verify")
     assert v.status_code == 401 and "x-forward-auth-secret" not in {k.lower() for k in v.headers}
+
+def test_verify_redirects_browser_to_login_with_rd():
+    # A browser (Accept: text/html) with no session must get a 302 to the login
+    # page carrying the ORIGINAL url (rebuilt from the X-Forwarded-* headers Traefik
+    # injects) as rd — not a dead 401. Traefik passes this non-2xx verify response
+    # to the browser unchanged, so the 302 becomes a real redirect it can follow.
+    client.cookies.clear()
+    r = client.get("/auth/verify", headers={
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "notebook.pmoves.ai",
+        "x-forwarded-uri": "/dash?x=1",
+    }, follow_redirects=False)
+    assert r.status_code == 302
+    loc = r.headers["location"]
+    # Location host is always our own auth origin (trusted), never the forwarded host.
+    assert loc.startswith("https://auth.pmoves.ai/login?")
+    # rd is the original notebook URL, url-encoded, so post-login returns the user there.
+    assert "rd=https%3A%2F%2Fnotebook.pmoves.ai%2Fdash%3Fx%3D1" in loc
+
+def test_verify_api_client_gets_bare_401_not_redirect():
+    # An XHR/fetch/API caller (no text/html in Accept) must get a clean 401, never a
+    # 302 to an HTML login page — that would corrupt an API response and mask the
+    # real auth failure.
+    client.cookies.clear()
+    r = client.get("/auth/verify", headers={"accept": "application/json"}, follow_redirects=False)
+    assert r.status_code == 401
+    assert "location" not in {k.lower() for k in r.headers}
+
+def test_verify_redirect_rejects_spoofed_forwarded_host():
+    # SECURITY: a spoofed X-Forwarded-Host outside *.pmoves.ai must NOT become the
+    # post-login rd — _safe_rd collapses it to '/', and the Location host stays our
+    # own public_base_url regardless.
+    client.cookies.clear()
+    r = client.get("/auth/verify", headers={
+        "accept": "text/html",
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "evil.com",
+        "x-forwarded-uri": "/steal",
+    }, follow_redirects=False)
+    assert r.status_code == 302
+    loc = r.headers["location"]
+    assert loc.startswith("https://auth.pmoves.ai/login?")
+    assert "rd=%2F" in loc and "evil.com" not in loc
 
 def test_logout_clears_cookie():
     # Isolate from the shared module-level `client`'s cookie jar: a prior test

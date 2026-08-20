@@ -11,12 +11,22 @@ def healthz():
 
 @app.get("/auth/verify")
 def auth_verify(request: Request):
-    """Traefik ForwardAuth target. 200 + identity headers, or 401."""
+    """Traefik ForwardAuth target. On a valid session: 200 + identity headers.
+    On no/invalid session: a 302 to /login for BROWSER navigations (so the user
+    lands on the login page, not a dead 401), else a bare 401 for API clients.
+
+    Why redirect from HERE rather than a Traefik `errors` middleware: an `errors`
+    middleware body-swaps while KEEPING the original 401 status (it is not a
+    redirect), and its `query` substitutes only `{status}` — it cannot carry the
+    original URL, so the user can't be returned to where they were headed. Traefik
+    passes a forwardAuth server's non-2xx response to the client unchanged, so a
+    302 emitted here becomes a real browser redirect that CAN carry `rd`.
+    See _unauthenticated_response for the browser-vs-API split."""
     token = request.cookies.get(settings.cookie_name, "")
     try:
         claims = verify_session(token)
     except SessionInvalid:
-        return Response(status_code=401)
+        return _unauthenticated_response(request)
     ident = claims.get("email") or claims.get("sub") or ""
     headers = {
         "Remote-User": ident,
@@ -63,6 +73,33 @@ def _safe_rd(rd: str) -> str:
     if p.scheme in ("http", "https") and host and (host == dom or host.endswith("." + dom)):
         return rd
     return "/"
+
+def _unauthenticated_response(request: Request) -> Response:
+    """No valid session on /auth/verify: redirect a browser to /login (keeping
+    where it was headed), else a bare 401 for API/programmatic callers.
+
+    Browser split: ONLY a request that Accepts text/html gets the 302 — an
+    XHR/fetch/API caller Accepts application/json or */* and must receive a clean
+    401 (a 302 to an HTML login page would corrupt an API response and mask the
+    real auth failure). This is why the old `errors`-middleware approach was
+    wrong for BOTH audiences: it returned login HTML with a 401 to everyone.
+
+    Return destination: rebuilt from the X-Forwarded-* headers Traefik injects
+    onto the forward-auth sub-request (the ORIGINAL app URL the user asked for,
+    e.g. https://notebook.pmoves.ai/foo), then passed through _safe_rd so a
+    spoofed X-Forwarded-Host can't turn login into an open redirect (it collapses
+    anything outside *.pmoves.ai to '/'). The Location host is always our own
+    public_base_url (trusted config), never the forwarded host. Falls back to a
+    bare 401 if we can't form a valid login URL (no public_base_url configured)."""
+    accept = request.headers.get("accept", "").lower()
+    base = settings.public_base_url
+    if "text/html" not in accept or not base:
+        return Response(status_code=401)
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host", "")
+    uri = request.headers.get("x-forwarded-uri", "/")
+    rd = _safe_rd(f"{proto}://{host}{uri}") if host else "/"
+    return RedirectResponse(f"{base}/login?" + urlencode({"rd": rd}), status_code=302)
 
 def _set_session(resp, access_token: str):
     resp.set_cookie(settings.cookie_name, access_token, domain=settings.cookie_domain,

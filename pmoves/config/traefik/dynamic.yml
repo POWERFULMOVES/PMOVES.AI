@@ -21,10 +21,11 @@ http:
         # cannot smuggle it through Traefik, and apps can trust it as proof the
         # request transited the proxy (defence-in-depth vs Remote-User spoofing).
         authResponseHeaders: ["Remote-User", "X-Auth-Email", "X-Auth-Subject", "X-Forward-Auth-Secret"]
-        # On 401 Traefik returns the auth service's response; a 401 body/redirect
-        # sends the browser to auth.pmoves.ai/login (see errors middleware below).
-    pmoves-auth-redirect:
-      errors:
-        status: ["401"]
-        service: sso-auth@docker
-        query: "/login?rd=https://{host}{uri}"
+        # Browser login-redirect is handled INSIDE /auth/verify (it returns a 302
+        # to /login?rd=<original> for text/html requests, a bare 401 for API
+        # clients), which Traefik passes through unchanged. The former
+        # `pmoves-auth-redirect` *errors* middleware was removed: an errors
+        # middleware keeps the 401 status (body-swap, not a redirect) and its
+        # `query` substitutes only {status} — the {host}/{uri} it used are not
+        # valid placeholders, so the post-login `rd` was a literal broken string.
+        # See pmoves/services/sso-auth/app.py:_unauthenticated_response.
