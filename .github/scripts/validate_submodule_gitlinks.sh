@@ -31,6 +31,26 @@ BASE_REF="${1:?usage: validate_submodule_gitlinks.sh <base-ref> [--all]}"
 MODE="${2:-changed}"
 fail=0
 
+# The BASE .gitmodules, held in memory so a change to a submodule's declared
+# BRANCH is detectable even when its gitlink is untouched. Without this the
+# unchanged-gitlink skip below fires first and a branch-only edit is never
+# validated -- which is exactly how three submodules came to declare a branch
+# that did not exist on their fork, and how the PR that corrected them passed
+# this gate without making a single API call.
+BASE_GITMODULES="$(git show "$BASE_REF:.gitmodules" 2>/dev/null || true)"
+
+# Read `branch` out of the base .gitmodules for one submodule. Section-aware:
+# stops at the next [submodule ...] header so it cannot read a neighbour's value.
+base_branch_of() {
+  printf '%s\n' "$BASE_GITMODULES" | awk -v want="$1" '
+    /^[[:space:]]*\[submodule "/ {
+      insec = (index($0, "\"" want "\"]") > 0); next
+    }
+    insec && /^[[:space:]]*branch[[:space:]]*=/ {
+      sub(/^[^=]*=[[:space:]]*/, ""); gsub(/[[:space:]]+$/, ""); print; exit
+    }'
+}
+
 names=$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
           | sed -E 's/^submodule\.(.*)\.path .*/\1/')
 
@@ -56,8 +76,15 @@ while IFS= read -r name; do
   head_link=$(git ls-tree HEAD -- "$path" 2>/dev/null | awk '$2=="commit"{print $3}')
   base_link=$(git ls-tree "$BASE_REF" -- "$path" 2>/dev/null | awk '$2=="commit"{print $3}')
 
+  base_branch="$(base_branch_of "$name")"
+
   [ -z "$head_link" ] && continue                                  # not a gitlink / removed
-  if [ "$MODE" != "--all" ] && [ "$head_link" = "$base_link" ]; then
+  # Skip only when NEITHER the gitlink NOR the declared branch moved. A
+  # branch-only edit changes what this gate compares against, so it has to be
+  # revalidated even though the pointer is untouched.
+  if [ "$MODE" != "--all" ] \
+     && [ "$head_link" = "$base_link" ] \
+     && [ "$branch" = "$base_branch" ]; then
     continue                                                       # unchanged in this PR
   fi
   if [ -z "$slug" ]; then
@@ -66,13 +93,27 @@ while IFS= read -r name; do
   fi
 
   ok=1
+  # 0. Does the declared branch even EXIST on the fork? The compare below 404s
+  #    for a missing branch AND for an unreachable sha, and the catch-all used to
+  #    report both as "bad branch pin or unreachable sha?" — one message covering
+  #    two conditions with opposite fixes. Three submodules declared
+  #    PMOVES.AI-Edition-Hardened on forks that only had `main`; their gitlinks
+  #    were IDENTICAL to that fork's main, i.e. perfectly healthy, and they read
+  #    as broken pointers for as long as the gate had been running. Probing the
+  #    ref first separates "create the branch / fix the declaration" from
+  #    "the pinned commit is gone".
+  if ! gh api "repos/$slug/git/ref/heads/$branch" --jq '.object.sha' >/dev/null 2>&1; then
+    echo "FAIL  $name: declared branch '$branch' does not exist on $slug — create it, or correct the .gitmodules declaration (the gitlink itself may be fine)"
+    fail=1; continue
+  fi
+
   # 1. DANGLING — compare tracked-branch...head; on-branch iff head is behind/== branch.
   st=$(gh api "repos/$slug/compare/$branch...$head_link" --jq '.status' 2>/dev/null || echo "error")
   case "$st" in
     behind|identical) : ;;                                          # head is on the branch
     ahead)    echo "FAIL  $name: gitlink ${head_link:0:9} is AHEAD of '$branch' — commits not merged to the tracked branch (off-strategy)"; fail=1; ok=0 ;;
     diverged) echo "FAIL  $name: gitlink ${head_link:0:9} has DIVERGED from '$branch' (dangling — not on the tracked branch)"; fail=1; ok=0 ;;
-    *)        echo "FAIL  $name: cannot compare ${head_link:0:9} against '$branch' on $slug (status='$st' — bad branch pin or unreachable sha?)"; fail=1; ok=0 ;;
+    *)        echo "FAIL  $name: cannot compare ${head_link:0:9} against '$branch' on $slug (status='$st'). The branch exists, so the pinned commit is unreachable — force-pushed away, or never pushed to this fork."; fail=1; ok=0 ;;
   esac
 
   # 2. LEFT / ROLLBACK — compare base...head; forward iff head is ahead/== base.

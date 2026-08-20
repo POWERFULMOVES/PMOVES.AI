@@ -1237,5 +1237,5 @@ module.exports = {
 
 **Next Steps:**
 - See [PINOKIO_PACKAGING_GUIDE.md](./PINOKIO_PACKAGING_GUIDE.md) for detailed API reference
-- See [pbnj/pinokio/api/](../../../pbnj/pinokio/api/) for existing implementations
+- See [PMOVES-pinokio/api/](../../../PMOVES-pinokio/api/) for existing implementations
 - See [CLAUDE.md](../../../CLAUDE.md) for Pinokio scripting rules

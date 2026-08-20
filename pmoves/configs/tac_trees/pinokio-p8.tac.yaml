@@ -213,7 +213,7 @@ root:
           task: "PMOVES-Pinokio launchers reference the {{vram}} / {{gpu_*}} template vars"
           action:
             type: grep
-            target: "pbnj/pinokio/api/pmoves-creator-comfyui/install.js"
+            target: "PMOVES-pinokio/api/pmoves-creator-comfyui/install.js"
             pattern: "\\{\\{vram\\}\\}|\\{\\{gpu_model\\}\\}|\\{\\{gpu_target\\}\\}"
             expect: "At least one Pinokio launcher in the PMOVES-Pinokio fork references the P8 template vars; if zero, the launchers are still on the v1 model and the bridge's GPU surface is unused"
           context: "PMOVES-Pinokio fork sync to P8 (separate fleet-fork-sync lane) brings the P8 template support; this check catches the drift"

@@ -2410,7 +2410,7 @@ agents:
       compose_profile: null
     tool_path: "pmoves/tools/analyze_beats.py"
     runtime: "uv run"
-    pinokio_skill: "pbnj/pinokio/api/pmoves-cipher-beats/SKILL.md"
+    pinokio_skill: "PMOVES-pinokio/api/pmoves-cipher-beats/SKILL.md"
     description: |
       Level 11 Cipher Gateway Specialist. Extracts sonic fingerprints via ffprobe/ffmpeg
       lavfi (ebur128 R128 loudness, aspectralstats spectral analysis). Clusters DARKXSIDE

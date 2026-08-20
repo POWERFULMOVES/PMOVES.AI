@@ -1,8 +1,45 @@
 # pmoves/tools/tests/test_beats_features.py
-import numpy as np
-from pmoves.tools.analyze_beats import librosa_features_from_array
+"""Feature-extraction tests for the librosa-backed beats analyser.
+
+These SKIP rather than fail when librosa is absent, matching the contract the
+source already sets: `analyze_beats.librosa_features_from_array` imports librosa
+lazily *inside the function* (analyze_beats.py:128) precisely so the module is
+usable without it. A test that hard-fails on a dependency the production code
+treats as optional is asserting a stricter contract than the code has.
+
+librosa is deliberately not in .github/requirements-tests.txt. It pulls numba,
+scipy, soundfile and audioread -- a large install on every run of a 279-file
+suite, to exercise three tests. If the audio lane later needs CI coverage, add
+it there and this importorskip becomes a no-op; nothing else has to change.
+
+Why this surfaced when it did: before #2630, `pmoves/tests [1]` timed out and
+its whole chunk was discarded unmeasured. With per-file isolation these results
+became visible for the first time -- they are not new breakage, they are newly
+observed, which is exactly what that change was for.
+"""
+import importlib.util
+
+import pytest
+
+# Scoped to the three librosa-dependent tests ONLY.
+#
+# A module-level importorskip would also disable
+# test_cluster_on_embeddings_partial_embeddings_no_nan_crash and
+# test_cluster_on_embeddings_separates_two_blobs, which exercise
+# `cluster_on_embeddings` and touch no audio code at all. Skipping those would
+# mean a regression in its NaN handling or clustering behaviour passes CI
+# unnoticed -- trading a false failure for a silent gap in coverage, which is
+# the worse of the two.
+needs_librosa = pytest.mark.skipif(
+    importlib.util.find_spec("librosa") is None,
+    reason="librosa is an optional heavy dependency; analyze_beats imports it lazily",
+)
+
+import numpy as np  # noqa: E402
+from pmoves.tools.analyze_beats import librosa_features_from_array  # noqa: E402
 
 
+@needs_librosa
 def test_librosa_features_shapes_and_keys():
     sr = 22050
     t = np.linspace(0, 5, sr * 5, endpoint=False)
@@ -28,6 +65,7 @@ def _all_finite(d):
     return True
 
 
+@needs_librosa
 def test_librosa_features_silence_and_short_finite():
     sr = 22050
     # pure silence: beat_track may raise or yield NaN tempo
@@ -47,6 +85,7 @@ def test_librosa_features_silence_and_short_finite():
     assert f_nan["tempo_bpm"] == 0.0
 
 
+@needs_librosa
 def test_librosa_features_deterministic():
     sr = 22050
     y = np.sin(np.linspace(0, 50, sr * 4)).astype("float32")
