@@ -83,6 +83,20 @@ def sample_records() -> list[dict[str, str]]:
 # ============================================================================
 
 
+
+# The pure-logic tests below build synthetic records for paths that do not exist
+# on disk. `check_one` now also verifies the working tree is checked out, which
+# would short-circuit every one of them. That precondition is not what they are
+# testing, so it is satisfied by default here; the tests that DO exercise it
+# restore the real implementation explicitly.
+_REAL_WORKTREE_POPULATED = sfc.worktree_populated
+
+
+@pytest.fixture(autouse=True)
+def _assume_worktree_checked_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sfc, "worktree_populated", lambda path: True)
+
+
 def test_parse_gitmodules_returns_records(monkeypatch: pytest.MonkeyPatch, sample_gitmodules: Path) -> None:
     """The parser produces one record per `[submodule ...]` block."""
     monkeypatch.setattr(sfc, "GITMODULES", sample_gitmodules)
@@ -384,3 +398,86 @@ def test_check_one_remote_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     result = sfc.check_one(record)
     assert result.status == "remote_missing", f"expected remote_missing, got {result.status}: {result.detail}"
     assert "could not resolve" in result.detail
+
+
+# ── uninitialized worktrees (2026-08-20) ────────────────────────────────────
+#
+# 13 of 71 submodules were uninitialized on B850 and this tool exited 0. Two
+# independent reasons:
+#
+#   1. `local_uninitialized` was never counted in the summary, so the buckets
+#      silently summed to 58 against total=71.
+#   2. The status only fired when the parent GITLINK was missing from the index.
+#      All 13 had a perfectly good gitlink and an EMPTY directory, which the
+#      tool classified as healthy.
+#
+# PMOVES-MiniMax-MCP was one of them, which is why .claude/mcp.json registers
+# MiniMax from PyPI rather than the submodule.
+
+SOURCE = (sfc.REPO_ROOT / "pmoves" / "tools" / "submodule_freshness_check.py").read_text(
+    encoding="utf-8"
+)
+
+
+def test_worktree_populated_requires_a_dotgit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`git` marks a submodule initialized by placing a .git file/dir inside it —
+    the same signal `git submodule status` uses for its '-' marker."""
+    monkeypatch.setattr(sfc, "worktree_populated", _REAL_WORKTREE_POPULATED)
+    monkeypatch.setattr(sfc, "REPO_ROOT", tmp_path)
+    (tmp_path / "empty-sub").mkdir()
+    assert sfc.worktree_populated("empty-sub") is False
+    assert sfc.worktree_populated("never-created") is False
+
+
+def test_worktree_populated_true_when_checked_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guards the positive case: if this returned False for a real checkout the
+    gate would fail every run and get reverted."""
+    monkeypatch.setattr(sfc, "worktree_populated", _REAL_WORKTREE_POPULATED)
+    monkeypatch.setattr(sfc, "REPO_ROOT", tmp_path)
+    sub = tmp_path / "real-sub"
+    sub.mkdir()
+    (sub / ".git").write_text("gitdir: ../.git/modules/real-sub\n", encoding="utf-8")
+    assert sfc.worktree_populated("real-sub") is True
+
+
+def test_populated_gitlink_with_empty_tree_is_uninitialized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exact shape of all 13: a valid gitlink over an empty directory."""
+    monkeypatch.setattr(sfc, "worktree_populated", _REAL_WORKTREE_POPULATED)
+    monkeypatch.setattr(sfc, "REPO_ROOT", tmp_path)
+    (tmp_path / "sub").mkdir()
+    monkeypatch.setattr(sfc, "parent_gitlink", lambda path: "d1ac7f063d20e70015ed6732664049ae4ba9d74e")
+    result = sfc.check_one({"path": "sub", "url": "https://example/sub.git", "branch": "main"})
+    assert result.status == "local_uninitialized"
+    assert "not checked out" in result.detail
+    assert "git submodule update --init" in result.detail
+
+
+def test_summary_counts_local_uninitialized() -> None:
+    """The counter whose absence hid all 13."""
+    assert 'r.status == "local_uninitialized"' in SOURCE
+    assert '"local_uninitialized": sum(' in SOURCE
+
+
+def test_summary_has_a_bucket_for_every_status() -> None:
+    """The instrument checks itself. Adding a status without a counter shrinks
+    the buckets against `total` — exactly how this went unnoticed."""
+    for status in ("in_sync", "remote_ahead", "remote_behind",
+                   "remote_missing", "local_uninitialized"):
+        assert f'r.status == "{status}"' in SOURCE, f"{status} has no counter"
+    assert 'r.status in ("error",)' in SOURCE
+    assert "does not account for every submodule" in SOURCE, "no bucket-sum invariant"
+
+
+def test_uninitialized_fails_without_needing_strict() -> None:
+    """An uninitialized tree is not a freshness signal like remote_ahead — it
+    means the code the gitlink points at is absent. It must fail on its own."""
+    gate = SOURCE[SOURCE.index('if report.summary["local_uninitialized"]'):]
+    before_return = gate.split("return 1")[0]
+    assert "args.strict" not in before_return
+
+
+def test_override_is_explicit_and_documented() -> None:
+    assert "--allow-uninitialized" in SOURCE
+    assert "deliberate partial checkout" in SOURCE
