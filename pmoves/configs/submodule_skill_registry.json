@@ -724,13 +724,6 @@
       "agents_docs": [],
       "canonical": "PMOVES-surf"
     },
-    "skills/Pmoves-skills": {
-      "context_tier": 2,
-      "domain_tags": ["agents", "mcp"],
-      "skills": [],
-      "context_files": [],
-      "agents_docs": []
-    },
     "skills/PMOVES-awesome-agent-skills": {
       "context_tier": 2,
       "domain_tags": ["agents", "mcp"],
@@ -765,7 +758,7 @@
       "skills": [],
       "context_files": [],
       "agents_docs": [],
-      "$note": "Post-recenter home of the skills library that moved from MiniMax-AI/skills to vercel-labs/skills in August 2026. Tracked under skills/PMOVES-skills/. The pre-recenter URL (POWERFULMOVES/Pmoves-Minimax-skills) is preserved as a deprecated reference, not added as a separate submodule entry. Added 2026-08-17 by PR1 of the 6-repo fold-in slice."
+      "$note": "The skills PACKAGE (vercel-labs/skills -- npx skills add). Tracks PMOVES.AI-Edition-Hardened, whose sources/ overlay holds the skill-source forks. CORRECTION 2026-08-20: this note previously said the library moved from MiniMax-AI/skills to vercel-labs/skills and that Pmoves-Minimax-skills was a deprecated pre-recenter URL. No move happened -- both repos are alive, share no history, and are different things (a skills collection vs a CLI tool). Acting on that error left a live MIT library of 17 skills forked and referenced by nothing; it is now tracked at PMOVES-skills/sources/Pmoves-Minimax-skills."
     },
     "PMOVES-MiniMax-MCP": {
       "context_tier": 2,

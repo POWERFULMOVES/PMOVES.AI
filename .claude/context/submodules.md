@@ -121,7 +121,7 @@ POWERFULMOVES forks of upstream agent-skill repositories, mounted as nested subm
 
 | Submodule | Upstream | Purpose |
 |-----------|----------|---------|
-| `skills/Pmoves-skills/` | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's official skills library — reference for skill authoring patterns |
+| `skills/PMOVES-skills/` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | The skills **package** (`npx skills add`). Tracks `PMOVES.AI-Edition-Hardened`, whose `sources/` overlay holds the skill-source forks — including `Pmoves-Claude-skills` ([anthropics/skills](https://github.com/anthropics/skills)) and `Pmoves-Minimax-skills` ([MiniMax-AI/skills](https://github.com/MiniMax-AI/skills)) |
 | `skills/PMOVES-awesome-agent-skills/` | [heilcheng/awesome-agent-skills](https://github.com/heilcheng/awesome-agent-skills) | Curated index of skills/tools/tutorials for AI coding agents |
 | `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work |
 | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents |
