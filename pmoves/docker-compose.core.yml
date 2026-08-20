@@ -1470,7 +1470,10 @@ services:
       nats:
         condition: service_healthy
     networks: [pmoves_app, pmoves_bus, pmoves_external]
-    profiles: ["agents", "p7"]
+    # "ui" so `make up-openroom` (profile ui) also brings up the /api/p7
+    # upstream the OpenRoom nginx proxy targets (p7:8120) — without it the
+    # proxy 502s on every session call.
+    profiles: ["agents", "p7", "ui"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)"]
       interval: 30s
