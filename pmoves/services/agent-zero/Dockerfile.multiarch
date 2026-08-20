@@ -13,8 +13,8 @@ FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS upstream
 ARG AGENT_ZERO_REPO=https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
 # The hardened fork is now based on upstream v2.8. Keep this committed marker in
 # sync when the rolling hardened branch advances to a new upstream release.
-ARG AGENT_ZERO_UPSTREAM_VERSION=v2.8
-ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
+ARG AGENT_ZERO_UPSTREAM_VERSION=v2.10
+ARG AGENT_ZERO_REF=v2.10
 
 # Clone PMOVES fork of Agent Zero (matches submodule branch).
 # The ARG value busts the Docker layer cache when the pointer advances,
