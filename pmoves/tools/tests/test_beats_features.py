@@ -1,6 +1,31 @@
 # pmoves/tools/tests/test_beats_features.py
-import numpy as np
-from pmoves.tools.analyze_beats import librosa_features_from_array
+"""Feature-extraction tests for the librosa-backed beats analyser.
+
+These SKIP rather than fail when librosa is absent, matching the contract the
+source already sets: `analyze_beats.librosa_features_from_array` imports librosa
+lazily *inside the function* (analyze_beats.py:128) precisely so the module is
+usable without it. A test that hard-fails on a dependency the production code
+treats as optional is asserting a stricter contract than the code has.
+
+librosa is deliberately not in .github/requirements-tests.txt. It pulls numba,
+scipy, soundfile and audioread -- a large install on every run of a 279-file
+suite, to exercise three tests. If the audio lane later needs CI coverage, add
+it there and this importorskip becomes a no-op; nothing else has to change.
+
+Why this surfaced when it did: before #2630, `pmoves/tests [1]` timed out and
+its whole chunk was discarded unmeasured. With per-file isolation these results
+became visible for the first time -- they are not new breakage, they are newly
+observed, which is exactly what that change was for.
+"""
+import pytest
+
+pytest.importorskip(
+    "librosa",
+    reason="librosa is an optional heavy dependency; analyze_beats imports it lazily",
+)
+
+import numpy as np  # noqa: E402
+from pmoves.tools.analyze_beats import librosa_features_from_array  # noqa: E402
 
 
 def test_librosa_features_shapes_and_keys():
