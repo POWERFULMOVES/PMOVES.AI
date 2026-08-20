@@ -110,7 +110,7 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 - `pmoves/config/agent_signatures.yaml`
 - `pmoves/services/botz-gateway/`
 - `PMOVES-crush/`
-- `pbnj/pinokio/api/pmoves-services/SKILL.md`
+- `PMOVES-pinokio/api/pmoves-services/SKILL.md`
 
 ---
 
@@ -125,7 +125,7 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 | Asset | Location | Status |
 |-------|----------|--------|
 | P7 TAC tree | `pmoves/configs/tac_trees/pinokio-p7.tac.yaml` | Active — 7 phases |
-| P7 SKILL.md files | `pbnj/pinokio/api/*/SKILL.md` | 4 services |
+| P7 SKILL.md files | `PMOVES-pinokio/api/*/SKILL.md` | 4 services |
 | Devcontainer baseline | `.devcontainer/devcontainer.json` | SHIPPED via `#1041`; needs refresh against current room/stage posture |
 | Room catalog + runtime taxonomy | `pmoves/ui` + room manifest contracts | Active — merged Mar 27-28, 2026 |
 
@@ -149,7 +149,7 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 ### Key Files
 - `pmoves/configs/tac_trees/pinokio-p7.tac.yaml`
 - `.devcontainer/devcontainer.json` — NEW
-- `pbnj/pinokio/api/*/SKILL.md`
+- `PMOVES-pinokio/api/*/SKILL.md`
 
 ---
 

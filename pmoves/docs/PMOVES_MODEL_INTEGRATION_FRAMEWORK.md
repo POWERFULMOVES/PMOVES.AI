@@ -219,7 +219,7 @@ Reference: [AGNOTE_P7_PLAYGROUND.md](pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md)
 
 The `pinokio_p7.pbnj_launch` field indicates whether the PBNJ Pinokio app manages the model's lifecycle. Currently all models are `false` — PBNJ manages service stacks (Agent Zero, NATS, Supabase) but not individual model pull/load cycles. This may change as PBNJ evolves to include GPU mesh management.
 
-Reference: `pbnj/pinokio/api/pmoves-services/pinokio.json`
+Reference: `PMOVES-pinokio/api/pmoves-services/pinokio.json`
 
 ### 4.3 TAC Node Tracking
 

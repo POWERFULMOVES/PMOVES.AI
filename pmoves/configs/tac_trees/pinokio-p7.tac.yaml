@@ -5,7 +5,7 @@
 # Key files:
 #   D:\pinokio\                                       (Pinokio install root)
 #   D:\pinokio\api\Ultimate-TTS-Studio.git\           (TTS app — P7 discovery target)
-#   pbnj/pinokio/api/pmoves-services/                 (Docker Compose launcher)
+#   PMOVES-pinokio/api/pmoves-services/                 (Docker Compose launcher)
 #   PMOVES-Pinokio-Ultimate-TTS-Studio/               (TTS launcher submodule)
 #   pmoves/configs/tac_trees/voice-agents.tac.yaml    (voice pipeline TAC)
 #   pmoves/config/agent_registry.yaml                 (agent identities)
@@ -17,7 +17,7 @@ description: "Track Pinokio 7 upgrade, Agent Interpreter readiness, SKILL.md exp
 root:
   id: pinokio-p7
   task: "Pinokio 7 integration review"
-  context: "D:\\pinokio\\ + pbnj/pinokio/ + PMOVES-Pinokio-Ultimate-TTS-Studio/"
+  context: "D:\\pinokio\\ + PMOVES-pinokio/ + PMOVES-Pinokio-Ultimate-TTS-Studio/"
   agent_hint: 5090-claude
   children:
 
@@ -78,10 +78,10 @@ root:
           task: "PMOVES Services launcher discoverable"
           action:
             type: grep
-            target: "pbnj/pinokio/api/pmoves-services/pinokio.js"
+            target: "PMOVES-pinokio/api/pmoves-services/pinokio.js"
             pattern: "PMOVES Services"
             expect: "pmoves-services app visible in Pinokio with start/stop controls"
-          context: "pbnj/pinokio/api/pmoves-services/ — Docker Compose profile launcher"
+          context: "PMOVES-pinokio/api/pmoves-services/ — Docker Compose profile launcher"
           agent_hint: 5090-claude
           status: pending
 
@@ -190,7 +190,7 @@ root:
             expect: "P7 SKILL.md format documented (after upgrade, check P7 source)"
           agent_hint: 5090-claude
           status: done
-          notes: "Format self-evident from 5 shipped SKILL.md files: cipher-beats, holographic-blocks, pmoves-services, pmoves-remote, model-registry (all in pbnj/pinokio/api/*/SKILL.md)"
+          notes: "Format self-evident from 5 shipped SKILL.md files: cipher-beats, holographic-blocks, pmoves-services, pmoves-remote, model-registry (all in PMOVES-pinokio/api/*/SKILL.md)"
 
         - id: p7.skillmd.tts
           task: "Ultimate-TTS-Studio optional SKILL.md hint created"
@@ -208,11 +208,11 @@ root:
           action:
             type: manual
             expect: "SKILL.md in pmoves-services describes Docker profile start/stop"
-          context: "pbnj/pinokio/api/pmoves-services/"
+          context: "PMOVES-pinokio/api/pmoves-services/"
           agent_hint: z890-claude
           status: done
           depends_on: [p7.skillmd.format]
-          notes: "Shipped at pbnj/pinokio/api/pmoves-services/SKILL.md (PR #1085)"
+          notes: "Shipped at PMOVES-pinokio/api/pmoves-services/SKILL.md (PR #1085)"
 
     # =========================================================================
     # Phase 7: NATS Integration
@@ -247,7 +247,7 @@ root:
           notes: |
             Claimed 2026-05-18 by z890-claude (DARKXSIDE authorized).
             Implementation surface: pinokio.js `on` event handlers in PMOVES launchers
-            under pbnj/pinokio/api/ + D:\pinokio\api\, publishing to NATS subject
+            under PMOVES-pinokio/api/ + D:\pinokio\api\, publishing to NATS subject
             `pinokio.app.launched.v1` via the existing fleet NATS bus.
             Unblocks p7.nats.cgp-correlation (already done) downstream consumers and
             p7.nats.embedding-quality which depend_on this node.
@@ -272,7 +272,7 @@ root:
           context: "Model Registry HF enrichment endpoints live (PR #1082). P7 agents can discover model capabilities before dispatching inference."
           agent_hint: 4090-claude
           status: done
-          notes: "SKILL.md created at pbnj/pinokio/api/pmoves-model-registry/SKILL.md. P7 Agent Interpreter can now discover Model Registry (port 8110) for model catalog queries, HF enrichment, TensorZero config export, and GPU deployment tracking."
+          notes: "SKILL.md created at PMOVES-pinokio/api/pmoves-model-registry/SKILL.md. P7 Agent Interpreter can now discover Model Registry (port 8110) for model catalog queries, HF enrichment, TensorZero config export, and GPU deployment tracking."
 
         - id: p7.nats.embedding-quality
           task: "P7-triggered ingestion uses 2560d Qwen3 embeddings"

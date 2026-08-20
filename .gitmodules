@@ -367,11 +367,6 @@
 	url = https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git
 	branch = main
 
-[submodule "pbnj"]
-	path = pbnj
-	url = https://github.com/POWERFULMOVES/PMOVES-pinokio.git
-	branch = PMOVES.AI-Edition-Hardened
-
 [submodule "PMOVES-ollama"]
 	path = PMOVES-ollama
 	url = https://github.com/POWERFULMOVES/PMOVES-ollama.git
