@@ -115,7 +115,7 @@ Don't dump everything into AGENTS.md. The tiered context map:
 | **P7 Stage Manager** | `pmoves/docs/AGENTS/AGNOTE4482.md` — P7 room-aware stage manager definition |
 | **Room/Stage Prospectus** | `pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md` — prospectus frame, foyer/war-room/voice-room model |
 
-## Build & Development Commands
+## Dev environment tips
 
 All make targets live in `pmoves/Makefile`. Run with `make -C pmoves <target>`.
 
