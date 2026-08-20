@@ -9,6 +9,11 @@
         "Authorization": "Bearer ${CIPHER_API_TOKEN}"
       }
     },
+    "pmoves-hirag-mcp": {
+      "_purpose": "Hi-RAG v2 MCP — hybrid vector (Qdrant) + graph (Neo4j) + full-text (Meilisearch) retrieval with cross-encoder reranking. Endpoint is the docker-compose service name on the PMOVES network; override with PMOVES_HIRAG_MCP_ENDPOINT for non-compose deploys. No auth — the SSE endpoint is bound to the PMOVES tailnet (Tailscale) and not exposed to the public internet. Source of truth for the active flag: pmoves/config/agent_registry.yaml `pmoves_hirag_mcp.status` (flipped planned→active in followups-v1 commit 5).",
+      "type": "sse",
+      "url": "${PMOVES_HIRAG_MCP_ENDPOINT:-http://pmoves-hirag-mcp:8080/sse}"
+    },
     "agent-zero": {
       "_purpose": "Agent Zero orchestrator for cross-agent task dispatch and memory operations.",
       "type": "http",
