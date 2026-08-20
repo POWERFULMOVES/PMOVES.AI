@@ -389,3 +389,31 @@ def test_helper_supports_json_flag() -> None:
     assert "--json" in result.stdout, (
         f"helper --help must mention --json; got: {result.stdout!r}"
     )
+
+
+def test_detection_runs_before_checkout(workflow: dict) -> None:
+    """The applicability check must not sit behind a 9-minute checkout.
+
+    `submodules: recursive` over this monorepo's 72 submodules measured 9m15s
+    on run 32294521610, after which the detection step took 2s to conclude the
+    PR was irrelevant and every working step skipped. As a REQUIRED check that
+    cost is paid by every pull request in the repo, almost none of which touch
+    the verifier surface.
+
+    The detection step reads no working-tree state -- it asks the PR files API
+    and names the repo via github.repository -- so it can and must run first.
+    """
+    steps = workflow["jobs"]["static-gate"]["steps"]
+    names = [s.get("name", "") for s in steps]
+
+    detect = next(i for i, n in enumerate(names) if "verifier surface" in n)
+    checkout = next(i for i, n in enumerate(names) if "Checkout" in n)
+
+    assert detect < checkout, (
+        "the detection step must precede checkout; found detect at "
+        f"{detect} and checkout at {checkout}"
+    )
+    # ...and the checkout itself must be conditional, or the cost is unchanged.
+    assert steps[checkout].get("if") == "steps.changed.outputs.relevant == 'true'"
+    # The detection step must NOT be conditional -- it is what decides.
+    assert "if" not in steps[detect]

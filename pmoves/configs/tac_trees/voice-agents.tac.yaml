@@ -677,14 +677,14 @@ root:
     # =========================================================================
     - id: va.pinokio
       task: "Pinokio one-click voice stack launcher"
-      context: "pbnj/pinokio/api/pmoves-services/start-voice.js"
+      context: "PMOVES-pinokio/api/pmoves-services/start-voice.js"
       agent_hint: codex
       children:
         - id: va.pinokio.start-voice
           task: "start-voice.js launches orchestration+media+gpu profiles"
           action:
             type: file_exists
-            target: "pbnj/pinokio/api/pmoves-services/start-voice.js"
+            target: "PMOVES-pinokio/api/pmoves-services/start-voice.js"
             expect: "docker compose --profile orchestration --profile media --profile gpu up -d"
           context: "One-click voice stack via Pinokio Services launcher (PR #997)"
           agent_hint: codex
@@ -693,7 +693,7 @@ root:
           task: "Voice menu item appears when running"
           action:
             type: grep
-            target: "pbnj/pinokio/api/pmoves-services/pinokio.js"
+            target: "PMOVES-pinokio/api/pmoves-services/pinokio.js"
             pattern: "start-voice"
             expect: "Dynamic menu shows Flute Gateway URL when voice stack running"
           context: "info.running('start-voice.js') + info.local() for URL"
