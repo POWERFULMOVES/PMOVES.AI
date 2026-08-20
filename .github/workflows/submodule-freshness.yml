@@ -1,0 +1,105 @@
+name: Submodule Freshness
+
+# Weekly check for submodules whose tracked branch on the remote
+# has commits the parent repo's gitlink hasn't picked up.
+#
+# This is the REMOTE-side complement to pmoves/tools/submodule_integrity.py,
+# which only checks the LOCAL checkout. When the remote is ahead, the
+# operator can run `git submodule update --remote <path>` to consume
+# the new commits, or open a PR to bump the gitlink deliberately.
+#
+# Schedule: weekly Sun 08:00 UTC (off-peak; 6 hours after the
+# ruleset-sync safety net at 04:00 UTC). workflow_dispatch for
+# manual runs.
+#
+# Exit codes:
+#   0 = freshness check ran (in_sync or remote_ahead — both are OK)
+#   1 = any submodule is remote_ahead (operator should review)
+#   2 = tool error (parse failure, git invocation failure)
+
+on:
+  schedule:
+    - cron: '0 8 * * 0'  # Weekly Sun 08:00 UTC
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: 'Exit non-zero if any submodule is remote_ahead'
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  freshness:
+    name: submodule-freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Recursive so submodule worktrees are available; the tool
+          # does its own git ls-remote for the remote SHA but needs
+          # the parent gitlink from the index, which is always
+          # present on a checkout.
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Run the freshness check. `set -e -o pipefail` is required
+      # so the `python | tee` pipeline surfaces the tool's exit
+      # code (Lesson 12: tee always returns 0, so without pipefail
+      # the workflow reports success on a broken publisher).
+      #
+      # The workflow default does NOT set --strict; we want the
+      # report either way (an at-a-glance "is anything drifting?"
+      # check). workflow_dispatch lets an operator force --strict
+      # to gate a release on a clean submodule slate.
+      - name: Run freshness check
+        id: freshness
+        env:
+          STRICT: ${{ inputs.strict && 'true' || 'false' }}
+        run: |
+          set -e -o pipefail
+          mkdir -p .freshness
+          STRICT_FLAG=""
+          if [ "$STRICT" = "true" ]; then
+            STRICT_FLAG="--strict"
+          fi
+          python -m pmoves.tools.submodule_freshness_check \
+            $STRICT_FLAG \
+            | tee .freshness/report.json
+
+      - name: Surface freshness summary
+        if: always()
+        run: |
+          if [ -f .freshness/report.json ]; then
+            echo "## Submodule freshness summary" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            # Pretty-print just the summary block (first 12 lines or so).
+            python -c "
+          import json
+          data = json.load(open('.freshness/report.json'))
+          print(json.dumps(data['summary'], indent=2, sort_keys=True))
+          " >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            # Then list the remote_ahead ones in plain text.
+            ahead = [s for s in data.get('submodules', []) if s.get('status') == 'remote_ahead']
+            if ahead:
+              echo "## Submodules with remote ahead" >> "$GITHUB_STEP_SUMMARY"
+              for s in ahead:
+                echo "- \`${s['path']}\` (${s['branch']}) — ${s['detail']}" >> "$GITHUB_STEP_SUMMARY"
+            else:
+              echo "_No submodules with remote ahead._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload freshness artifact
+        if: always()
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee13c689e4253b0aa2 # v8.0.0
+        with:
+          name: submodule-freshness-${{ github.run_id }}
+          path: .freshness/
+          if-no-files-found: ignore
