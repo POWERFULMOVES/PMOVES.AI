@@ -21,6 +21,13 @@ httpx                 # 45 files
 fastapi               # 34 files
 pyyaml                # 20 files (imported as `yaml`)
 numpy                 # 12 files
+scikit-learn          # analyze_beats.cluster_on_embeddings (KMeans + silhouette).
+                      # Imported lazily inside the function, like librosa -- but
+                      # unlike librosa it is installed here rather than skipped,
+                      # because the two tests that need it are the ONLY coverage
+                      # for the NaN-crash guard and the cluster-separation
+                      # behaviour. Skipping them would leave that unguarded; see
+                      # pmoves/tools/tests/test_beats_features.py.
 jsonschema            # 8 files
 nats-py               # 4 files (imported as `nats`)
 python-jose           # 4 files (imported as `jose`)
