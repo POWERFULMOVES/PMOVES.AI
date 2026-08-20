@@ -164,6 +164,9 @@ secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make s
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
 	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
 
+cf-dns-token-provision: ## Mint a pmoves.ai-scoped Cloudflare DNS-Edit token for Traefik ACME + funnel it as CLOUDFLARE_DNS_API_TOKEN. Needs CF_ADMIN_API_TOKEN in the env (API Tokens Write + Zone Read; never argv). Dry-run unless APPLY=1. Usage: export CF_ADMIN_API_TOKEN=...; make cf-dns-token-provision [APPLY=1] [ZONE=pmoves.ai]
+	@$(CODEX_PY) tools/cf_dns_token_provision.py $(if $(ZONE),--zone "$(ZONE)",) $(if $(APPLY),--apply,)
+
 secrets-untrack: ## Untrack a leaked generated secret env file (git rm --cached; then commit + rotate). Usage: make secrets-untrack FILE=pmoves/env.shared.pre-funnel [DRY_RUN=1]
 	$(if $(strip $(FILE)),,$(error Usage: make -C pmoves secrets-untrack FILE=<repo-relative generated env path> [DRY_RUN=1]. Only untracks a gitignored generated-secret file (env.shared*/env.tier-*); the audit gate (secrets_hardening_audit.py #9) lists them.))
 	@$(CODEX_PY) tools/secrets_untrack.py --file "$(FILE)" $(if $(DRY_RUN),--dry-run)
