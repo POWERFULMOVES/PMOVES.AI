@@ -60,8 +60,12 @@ SUBJECT_BPM_POMODORO = "pmoves.bpm.pomodoro.v1"
 
 # Per the bootstrap CGP: mavis can be a target (the agent points at
 # itself for tasks that should stay in-session); kiloclaw = GLM-5.1 on
-# 5090; hermes = NousResearch (location TBD).
-KNOWN_TARGETS = {"mavis", "kiloclaw", "hermes"}
+# 5090; hermes = NousResearch (location TBD); pinokio = app-launcher
+# on operator devices. KNOWN_TARGETS is now derived from the bootstrap
+# routing block (see _known_targets() below) plus the implicit "mavis"
+# self-target; the constant here is the floor for tests that don't
+# want to construct a full bootstrap.
+_BUILTIN_TARGETS = frozenset({"mavis", "kiloclaw", "hermes", "pinokio"})
 
 
 # ---- Transport ---------------------------------------------------------------
@@ -146,6 +150,35 @@ class Orchestrator:
         self.timeout_s = timeout_s
         self.poll_s = poll_s
 
+    @property
+    def known_targets(self) -> set[str]:
+        """The set of agent names the orchestrator will accept on dispatch().
+
+        Derived from the bootstrap's routing block (kiloclaw / hermes /
+        pinokio) plus the implicit 'mavis' self-target. A future PR
+        that adds a routing entry to the bootstrap automatically widens
+        the dispatch surface here - no orchestrator code change needed.
+        """
+        targets = set(_BUILTIN_TARGETS)
+        routing = self.bootstrap.routing
+        for peer in ("kiloclaw", "hermes", "pinokio"):
+            if getattr(routing, peer, None):
+                targets.add(peer)
+        return targets
+
+    def routing_for(self, target: str) -> dict[str, Any]:
+        """Return the CGP routing entry for a target, or {} if unknown.
+
+        Used by the KVM control surface (see publish_kvm_focus) and by
+        external consumers that need the node/target metadata for a
+        given dispatch.
+        """
+        if target == "mavis":
+            return {"node": "self", "nats_subject": SUBJECT_TASK, "target": "mavis"}
+        routing = self.bootstrap.routing
+        entry = getattr(routing, target, None) or {}
+        return dict(entry)
+
     def dispatch(
         self,
         task: str,
@@ -173,12 +206,13 @@ class Orchestrator:
 
         result = DispatchResult(task_id=task_id, task=task)
         deadline = time.monotonic() + self.timeout_s
+        known = self.known_targets
         for agent in agents:
-            if agent not in KNOWN_TARGETS:
+            if agent not in known:
                 result.results[agent] = AgentResult(
                     target=agent,
                     status="error",
-                    error=f"unknown agent target {agent!r}; known: {sorted(KNOWN_TARGETS)}",
+                    error=f"unknown agent target {agent!r}; known: {sorted(known)}",
                 )
                 result.failed.append(agent)
                 continue
@@ -192,6 +226,17 @@ class Orchestrator:
                 "bootstrap_id": self.bootstrap.meta.get("bootstrap_id"),
                 "issued_at": time.time(),
             })
+            # KVM control surface: when the dispatch lands on a target
+            # whose routing entry names a different node, publish a
+            # phase event with target_node so an external KVM controller
+            # (RustDesk + Tailscale, per the operator's fleet config)
+            # can switch the operator's focus to the right machine.
+            # Local self-dispatches (mavis, or any peer whose node is
+            # 'self'/'host') are no-ops on the KVM channel.
+            routing = self.routing_for(agent)
+            target_node = routing.get("node") or ""
+            if target_node and target_node not in ("self", "host", ""):
+                self.publish_kvm_focus(task_id=task_id, target=agent, node=target_node)
 
         # Wait for results. The orchestrator polls the publisher's
         # published list for matching result entries (the test mock
@@ -272,6 +317,32 @@ class Orchestrator:
             "task_id": task_id,
             "block_index": block_index,
             "status": status,  # started | completed | skipped
+            "issued_at": time.time(),
+        })
+
+    def publish_kvm_focus(self, task_id: str, target: str, node: str) -> None:
+        """Publish a KVM focus-switch event.
+
+        Called by dispatch() when a task lands on a target whose
+        routing entry names a different node. The external KVM
+        controller (a separate service that subscribes to
+        pmoves.bpm.phase.v1 and watches for `phase: kvm-focus`
+        events) uses this to switch the operator's focus via
+        RustDesk + Tailscale to the named node.
+
+        The event shape is intentionally a phase event (not a new
+        subject) so the KVM controller can reuse the existing
+        phase-event subscriber; the `phase: kvm-focus` discriminator
+        is the contract.
+        """
+        if not node or node in ("self", "host"):
+            # Local target - KVM doesn't need to switch; no-op.
+            return
+        self.publisher.publish(SUBJECT_BPM_PHASE, {
+            "task_id": task_id,
+            "phase": "kvm-focus",  # discriminator; see publish_phase for the standard phases
+            "target": target,
+            "target_node": node,
             "issued_at": time.time(),
         })
 
