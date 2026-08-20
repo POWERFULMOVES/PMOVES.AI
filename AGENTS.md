@@ -2,6 +2,7 @@
 
 > **Format note.** This file follows the [agents.md open format](https://agents.md) — a universal contract for guiding coding agents. The PMOVES fork of the format spec lives at [`PMOVES-agents.md/`](PMOVES-agents.md/) (submodule, fork of [agentsmd/agents.md](https://github.com/agentsmd/agents.md)). The three canonical section names — `## Dev environment tips`, `## Testing instructions`, `## PR instructions` — are present below; PMOVES-specific extensions are documented inline as `<!-- PMOVES-EXT: <name> -->` comments so cold-start agents can find the extension boundaries.
 
+<!-- PMOVES-EXT: project_structure -->
 ## Project Structure
 
 PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**, built on a rooms-on-a-stage topology. P7 (Pinokio 7) is the room-aware stage manager that selects rooms and manages stage transitions.
@@ -17,6 +18,7 @@ PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**, 
 - **`.claude/`** — Claude Code context, commands, hooks, MCP config
 - **Root** — `Makefile` (delegates to pmoves), `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`
 
+<!-- PMOVES-EXT: non_obvious_rules -->
 ## Operating in This Repo (Non-Obvious Rules)
 
 These are the load-bearing conventions that are **not** obvious from reading a single file. Violating them has cost the fleet many hours. Full detail in [`.claude/PATTERNS.md`](.claude/PATTERNS.md) and [`.claude/BOOTSTRAP.md`](.claude/BOOTSTRAP.md).
@@ -180,11 +182,13 @@ All make targets live in `pmoves/Makefile`. Run with `make -C pmoves <target>`.
 
 **The canonical secrets pipeline is `make -C pmoves secrets-funnel`.** It is defined in `pmoves/mk/codex.mk` — **not** in `pmoves/Makefile`. A grep of the root Makefile alone will not find it. Before adding any secrets tooling, run `grep -rn 'secrets-funnel' pmoves/Makefile pmoves/mk/` and `make -C pmoves help`. A duplicate funnel has been written twice by agents who checked only the root Makefile and concluded the target did not exist.
 
+<!-- PMOVES-EXT: submodule_workflow -->
 ## Submodule Workflow
 - Consult `.claude/context/submodules.md` and `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/README.md` before submodule changes
 - Work in the submodule directory, land the commit there, then update the PMOVES.AI gitlink
 - Run `make -C pmoves submodule-integrity` after pointer changes
 
+<!-- PMOVES-EXT: deployment -->
 ## Deployment
 
 ### Sidecar (standalone)
@@ -198,6 +202,7 @@ Full stack with NATS, TensorZero, Supabase, monitoring. See `pmoves/docker-compo
 - Images pinned in `pmoves/env.shared` (`AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, etc.)
 - GHCR workflow builds multi-arch images: `.github/workflows/self-hosted-builds-hardened.yml`
 
+<!-- PMOVES-EXT: security -->
 ## Security
 - CHIT (Cryptographic Handshake for Identity & Trust): `pmoves/docs/security/`
 - Hardening tracker: `docs/hardening/PMOVES-hardening-tracker.md`
