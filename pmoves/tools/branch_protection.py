@@ -287,6 +287,29 @@ class SpecValidator:
             self.errors.append(
                 f"per_repo_overrides[{repo!r}].ruleset_overrides: not a dict"
             )
+        elif "ruleset_overrides" in override:
+            # An override key that names no ruleset in the repo's profile is
+            # inert at best and a crash at worst: a partial override (rules
+            # only) with an unmatched key used to be appended as a whole new
+            # ruleset with no "name", which died later on `rs["name"]`. Caught
+            # here so a typo'd key fails at spec load, before any network call,
+            # instead of mid-apply on one repo of twenty-five.
+            profile = self.spec.get("profiles", {}).get(override.get("profile"), {})
+            known = {
+                rs.get("name")
+                for rs in profile.get("rulesets", [])
+                if isinstance(rs, dict)
+            }
+            for rs_name, rs_override in override["ruleset_overrides"].items():
+                if rs_name in known:
+                    continue
+                if isinstance(rs_override, dict) and "name" in rs_override:
+                    continue  # adding a NEW ruleset, which is allowed
+                self.errors.append(
+                    f"per_repo_overrides[{repo!r}].ruleset_overrides[{rs_name!r}]: "
+                    f"matches no ruleset in profile {override.get('profile')!r} "
+                    f"(has: {sorted(n for n in known if n)}) and supplies no 'name'"
+                )
 
 
 def load_spec(path: Optional[Path] = None, validate: bool = True) -> dict:
@@ -328,6 +351,24 @@ def resolve_repo_profile(spec: dict, repo: str) -> tuple[str, dict]:
     for rs_name, rs_override in override.get("ruleset_overrides", {}).items():
         target = next((r for r in profile["rulesets"] if r.get("name") == rs_name), None)
         if target is None:
+            # An override key that matches no ruleset in the profile used to be
+            # appended verbatim. When the override is a partial (rules only) the
+            # appended dict has no "name", and _build_ruleset_body then died on
+            # `rs["name"]` with a bare KeyError — mid-loop, per-repo, in a step
+            # that does not fail the job. PMOVES-hermes-agent is the only entry
+            # in the fleet with ruleset_overrides, its key is
+            # "[ PMOVES.AI-Edition-Hardened ]" while both profiles name their
+            # ruleset "[ main ]", and so its 9 required status checks had never
+            # once been applied.
+            if "name" not in rs_override:
+                known = [r.get("name") for r in profile["rulesets"]]
+                raise BranchProtectionError(
+                    f"per_repo_overrides[{repo!r}].ruleset_overrides[{rs_name!r}] "
+                    f"matches no ruleset in profile {profile_name!r} and supplies no "
+                    f"'name' of its own, so it cannot be added as a new ruleset. "
+                    f"Rulesets in that profile: {known}. Either use one of those "
+                    f"keys to override it, or give the override a 'name'."
+                )
             profile["rulesets"].append(copy.deepcopy(rs_override))
             continue
         for key, value in rs_override.items():
