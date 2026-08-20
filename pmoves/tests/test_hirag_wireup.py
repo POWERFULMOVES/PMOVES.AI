@@ -108,10 +108,17 @@ def test_hirag_registry_status_is_active(registry_text: str) -> None:
     )
 
 
-def test_hirag_registry_transport_is_sse(registry_text: str) -> None:
-    """`transport: sse` — not stdio, not http, not anything else."""
+def test_hirag_registry_transport_is_stdio(registry_text: str) -> None:
+    """`transport: stdio` — matching what the submodule actually ships.
+
+    Registered as `sse` at first, pointed at http://pmoves-hirag-mcp:8080/sse.
+    No compose service by that name exists, and the submodule ships no
+    Dockerfile and no SSE server — its README says "Thin stdio MCP bridge" and
+    documents the uv invocation. An unreachable endpoint is worse than an
+    unregistered one: it reads as wired.
+    """
     block = _hirag_registry_block(registry_text)
-    assert block.get("transport") == "sse", (
+    assert block.get("transport") == "stdio", (
         f"pmoves_hirag_mcp.transport is {block.get('transport')!r}; "
         f"the HiRAG MCP server is SSE-only and the registry must agree"
     )
@@ -142,23 +149,50 @@ def test_hirag_mcp_json_entry_exists(mcp_json: dict) -> None:
     )
 
 
-def test_hirag_mcp_json_is_sse_transport(mcp_json: dict) -> None:
-    """The entry has `type: sse` (matches registry transport)."""
+def test_hirag_mcp_json_launches_the_stdio_bridge(mcp_json: dict) -> None:
+    """A stdio server is launched by command, not dialled by URL.
+
+    Asserting the command rather than just the absence of `type: sse`, so the
+    entry cannot regress into a different unreachable shape.
+    """
     servers = mcp_json.get("mcpServers", {})
     entry = servers.get("pmoves-hirag-mcp", {})
-    assert entry.get("type") == "sse", (
-        f"pmoves-hirag-mcp type is {entry.get('type')!r}; expected 'sse' "
-        f"to match pmoves_hirag_mcp.transport in the registry"
+    assert "url" not in entry and entry.get("type") != "sse", (
+        f"pmoves-hirag-mcp still declares a dialled endpoint "
+        f"(type={entry.get('type')!r}, url={entry.get('url')!r}); the bridge is "
+        f"stdio and no SSE service exists to dial"
+    )
+
+    assert entry.get("command") == "uv", (
+        f"expected the uv launcher from the submodule README, got {entry.get('command')!r}"
+    )
+    args = entry.get("args") or []
+    assert "hirag_mcp.server" in args, (
+        f"args must launch the documented module; got {args!r}"
+    )
+    assert "./pmoves-hirag-mcp" in args, (
+        f"args must point at the submodule directory; got {args!r}"
     )
 
 
-def test_hirag_mcp_json_url_present(mcp_json: dict) -> None:
-    """The entry has a URL (not a stdio command/args block)."""
+def test_hirag_mcp_json_declares_no_unreachable_url(mcp_json: dict) -> None:
+    """The inverse of what this test originally asserted, deliberately.
+
+    It required a `url`, because the entry was registered as SSE against
+    http://pmoves-hirag-mcp:8080/sse. No compose service by that name exists,
+    the submodule ships no Dockerfile and no SSE server, and its README calls
+    it a "Thin stdio MCP bridge". So the test was pinning an endpoint that
+    could never answer -- it encoded the implementation, not the requirement.
+
+    A stdio bridge is launched, not dialled. If an SSE container is built
+    later, this test and the entry change together, in the same commit as the
+    compose service.
+    """
     servers = mcp_json.get("mcpServers", {})
     entry = servers.get("pmoves-hirag-mcp", {})
-    assert entry.get("url"), (
-        "pmoves-hirag-mcp is missing its `url` field; SSE transport "
-        "requires a URL pointing at the SSE endpoint"
+    assert not entry.get("url"), (
+        f"pmoves-hirag-mcp declares url={entry.get('url')!r}, but no SSE "
+        f"service exists to serve it; the bridge is stdio"
     )
 
 
@@ -178,15 +212,28 @@ def test_hirag_bootstrap_table_row(bootstrap_text: str) -> None:
     )
 
 
-def test_hirag_bootstrap_table_has_sse(bootstrap_text: str) -> None:
-    """The HiRAG row mentions SSE so the cold-start agent knows the transport."""
-    # The table row format is:
-    # | `pmoves-hirag-mcp` | SSE `${...}` | <purpose> |
-    # We assert the SSE marker is on the same line as the entry name.
+def test_hirag_bootstrap_table_states_the_stdio_transport(bootstrap_text: str) -> None:
+    """The cold-start row must name the transport that exists.
+
+    It previously required the marker "SSE", matching an entry that pointed at
+    http://pmoves-hirag-mcp:8080/sse -- a host with no compose service behind
+    it. BOOTSTRAP.md is the cold-start surface: a fresh agent reads this row to
+    learn how to reach a server, so advertising a transport that cannot connect
+    is worse here than anywhere else.
+    """
     lines = bootstrap_text.splitlines()
     hirag_lines = [line for line in lines if "pmoves-hirag-mcp" in line]
-    assert hirag_lines, (
-        "pmoves-hirag-mcp does not appear in any BOOTSTRAP.md line"
+    assert hirag_lines, "pmoves-hirag-mcp does not appear in any BOOTSTRAP.md line"
+
+    for line in hirag_lines:
+        if line.strip().startswith("|") and "stdio" in line:
+            assert "SSE" not in line and "8080/sse" not in line, (
+                f"row still advertises the unreachable SSE endpoint: {line}"
+            )
+            return
+    raise AssertionError(
+        f"pmoves-hirag-mcp appears in BOOTSTRAP.md but not in a table row "
+        f"marked with stdio; lines: {hirag_lines}"
     )
     # The first non-table line (often the heading) shouldn't be the only
     # match; we want a table row.

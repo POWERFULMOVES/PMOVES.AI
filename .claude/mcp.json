@@ -10,9 +10,16 @@
       }
     },
     "pmoves-hirag-mcp": {
-      "_purpose": "Hi-RAG v2 MCP — hybrid vector (Qdrant) + graph (Neo4j) + full-text (Meilisearch) retrieval with cross-encoder reranking. Endpoint is the docker-compose service name on the PMOVES network; override with PMOVES_HIRAG_MCP_ENDPOINT for non-compose deploys. No auth — the SSE endpoint is bound to the PMOVES tailnet (Tailscale) and not exposed to the public internet. Source of truth for the active flag: pmoves/config/agent_registry.yaml `pmoves_hirag_mcp.status` (flipped planned→active in followups-v1 commit 5).",
-      "type": "sse",
-      "url": "${PMOVES_HIRAG_MCP_ENDPOINT:-http://pmoves-hirag-mcp:8080/sse}"
+      "_purpose": "Hi-RAG v2 MCP bridge — hybrid vector (Qdrant) + graph (Neo4j) + full-text (Meilisearch) retrieval with cross-encoder reranking, over the existing PMOVES retrieval APIs. STDIO, per the submodule's own README (\"Thin stdio MCP bridge\") and the invocation it documents. It was first registered here as SSE against http://pmoves-hirag-mcp:8080/sse — no compose service by that name exists, the submodule ships no Dockerfile and no SSE server, so the endpoint was unreachable. If an SSE container is built later, switch this back and add the compose service in the same change. Source of truth for the active flag: pmoves/config/agent_registry.yaml `pmoves_hirag_mcp.status`.",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./pmoves-hirag-mcp",
+        "run",
+        "python",
+        "-m",
+        "hirag_mcp.server"
+      ]
     },
     "agent-zero": {
       "_purpose": "Agent Zero orchestrator for cross-agent task dispatch and memory operations.",

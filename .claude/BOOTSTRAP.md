@@ -38,7 +38,7 @@ Full Known Roads catalog lives in `.claude/PATTERNS.md § Known Roads`. When the
 |--------|-----------|---------|
 | `pmoves-cipher` | SSE `http://localhost:8105/mcp/sse` | Persistent agent memory lookups + writes |
 | `pmoves-minimax-mcp` | stdio `uvx minimax-mcp` | MiniMax model surface (text/image/video/TTS/voice-clone); submodule PMOVES-MiniMax-MCP |
-| `pmoves-hirag-mcp` | SSE `${PMOVES_HIRAG_MCP_ENDPOINT:-http://pmoves-hirag-mcp:8080/sse}` | Hi-RAG v2 hybrid vector+graph+full-text retrieval with cross-encoder reranking (tailnet-only, no auth) |
+| `pmoves-hirag-mcp` | stdio `uv --directory ./pmoves-hirag-mcp run python -m hirag_mcp.server` | Hi-RAG v2 hybrid vector+graph+full-text retrieval with cross-encoder reranking (launched by the client; no service to reach) |
 | `docker` | `mcp/docker` | Container inspection via local Docker socket |
 | `hostinger-mcp` | stdio | Hostinger VPS API via `HOSTINGER_API_KEY` |
 | `tailscale` | stdio | Tailnet inventory, stale-node cleanup, ACL operations |
