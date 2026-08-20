@@ -90,6 +90,28 @@ def _registry_branches() -> dict[str, str]:
     return walk(json.loads(REGISTRY.read_text(encoding="utf-8")), {})
 
 
+def _registry_branch(registry: dict[str, str], url: str) -> str | None:
+    """Look the registry up by URL BASENAME, never by submodule section name.
+
+    fork_registry_ratchet._submodule_repos keys on the URL for exactly this
+    reason, and says so in its docstring: several submodules are registered
+    under a section name that differs from the repository. PMOVES-Spark-VSS
+    points at PM-Spark-video-search-and-summarization, and fork_registry.json
+    carries entries under BOTH names. A section-name lookup therefore reads the
+    alias while the ratchet -- and every other consumer -- reads the canonical
+    URL-basename entry, so the two can disagree indefinitely and this gate would
+    report parity the whole time. That is the precise failure this file exists
+    to prevent, reproduced inside it.
+
+    Casefolded because three submodules differ from their repo only in case.
+    """
+    basename = _slug(url).rpartition("/")[2]
+    if not basename:
+        return None
+    folded = {k.casefold(): v for k, v in registry.items()}
+    return folded.get(basename.casefold())
+
+
 def _preflight_allow() -> dict[str, str]:
     text = PREFLIGHT.read_text(encoding="utf-8")
     match = re.search(r"SUBMODULE_BRANCH_ALLOW \?=(.*?)\n[A-Z_]+ \?=", text, re.S)
@@ -113,7 +135,7 @@ def _declarations() -> dict[str, dict[str, str]]:
         found = {
             "gitmodules": fields.get("branch"),
             "spec": spec.get(_slug(fields.get("url", ""))),
-            "registry": registry.get(name),
+            "registry": _registry_branch(registry, fields.get("url", "")),
             "preflight": allow.get(name),
         }
         out[name] = {k: v for k, v in found.items() if v}
@@ -171,3 +193,68 @@ def test_preflight_allowlist_holds_only_real_exceptions():
         if declared and declared != branch:
             offenders.append(f"{name}: preflight={branch} but .gitmodules={declared}")
     assert not offenders, "preflight allowlist contradicts .gitmodules:\n  " + "\n  ".join(offenders)
+
+
+def test_registry_lookup_prefers_the_repo_entry_over_a_same_named_alias():
+    """A section name is a LABEL; the URL is the repository's IDENTITY.
+
+    fork_registry.json is consumed by key, and fork_registry_ratchet keys on the
+    URL basename -- its docstring spells out why: several submodules sit under a
+    section name that differs from the repo, so keying on the name "false-fires
+    on all of them".
+
+    PMOVES-Spark-VSS was the live case. It points at
+    PM-Spark-video-search-and-summarization, and the registry carries entries
+    under BOTH names. Keying this gate by section name read the alias while every
+    other consumer read the canonical entry, so the two disagreed
+    (gitmodules=PMOVES.AI-Edition-Hardened, canonical registry=main) and this
+    file reported parity throughout.
+
+    Synthetic registry rather than live data: once the two entries agree there is
+    no case left in the repo that can tell a correct lookup from a wrong one, and
+    a test that cannot distinguish them is not guarding anything.
+    """
+    registry = {
+        "PM-Spark-video-search-and-summarization": "PMOVES.AI-Edition-Hardened",
+        "PMOVES-Spark-VSS": "main",          # the alias, deliberately disagreeing
+    }
+    url = "https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git"
+    assert _registry_branch(registry, url) == "PMOVES.AI-Edition-Hardened"
+
+
+def test_registry_lookup_is_case_insensitive():
+    """Three submodules differ from their repository only in case."""
+    registry = {"Pmoves-skills": "main"}
+    assert _registry_branch(registry, "https://github.com/POWERFULMOVES/PMOVES-skills.git") == "main"
+
+
+def test_declarations_resolves_the_registry_by_url(monkeypatch):
+    """Guards the CALL SITE, not just the helper.
+
+    Falsification exposed why this is separate: with the live data agreeing,
+    reverting _declarations() to `registry.get(name)` still passed every other
+    test in this file. The helper was correct and simply was not being used --
+    which is exactly the shape of the original bug.
+
+    So: feed _declarations() a registry where the alias and the canonical entry
+    disagree, and require it to report the canonical one.
+    """
+    modules = _gitmodules()
+    spark = next(
+        (n for n, f in modules.items()
+         if _slug(f.get("url", "")).rpartition("/")[2] == "PM-Spark-video-search-and-summarization"),
+        None,
+    )
+    if spark is None:
+        import pytest
+        pytest.skip("PMOVES-Spark-VSS is no longer registered under a divergent name")
+
+    import sys
+    monkeypatch.setattr(
+        sys.modules[__name__], "_registry_branches",
+        lambda: {
+            "PM-Spark-video-search-and-summarization": "canonical-wins",
+            spark: "alias-should-lose",
+        },
+    )
+    assert _declarations()[spark]["registry"] == "canonical-wins"

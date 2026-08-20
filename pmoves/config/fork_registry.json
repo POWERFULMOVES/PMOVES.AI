@@ -158,7 +158,7 @@
     "PM-Spark-video-search-and-summarization": {
       "upstream": "NVIDIA-AI-Blueprints/video-search-and-summarization",
       "sync": false,
-      "branch": "main",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "PMOVES-agent-sandbox-skill": {
