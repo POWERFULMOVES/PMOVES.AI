@@ -96,6 +96,7 @@ Don't dump everything into AGENTS.md. The tiered context map:
 | Architecture thesis | [`pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md`](pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md) |
 
 
+<!-- PMOVES-EXT: canonical_documentation -->
 ## Canonical Documentation
 
 | Topic | Location |
@@ -146,13 +147,14 @@ All make targets live in `pmoves/Makefile`. Run with `make -C pmoves <target>`.
 6. `make -C pmoves bootstrap-data`
 7. `make -C pmoves smoke`
 
+<!-- PMOVES-EXT: coding_style -->
 ## Coding Style
 - Python 3.11+, 4-space indentation, type hints preferred
 - FastAPI routes: snake_case functions; kebab-case in URL paths only
 - Event contracts: `v{n}` suffix in filenames (e.g., `*.v1.schema.json`)
 - Keep modules small and single-purpose
 
-## Testing
+## Testing instructions
 - Framework: `pytest` — tests per service in `pmoves/tests/` (unit, smoke, integration, hardening) and inline `pmoves/services/<svc>/tests/`
 - Mock external systems (NATS, Supabase, Neo4j); validate with sample payloads
 - Run a single service suite: `pytest -q pmoves/services/<svc>/tests/` — run under env: `bash pmoves/scripts/with-env.sh pytest pmoves/tests/unit/`
@@ -163,7 +165,17 @@ All make targets live in `pmoves/Makefile`. Run with `make -C pmoves <target>`.
 - Before pushing: run `/test:pr` (or the smoke targets above) and paste a **Testing** section into the PR description
 - Submodule-pointer changes: always run `make -C pmoves submodule-integrity` before/after
 
-## Commit & PR Guidelines
+<!-- PMOVES-EXT: pr_instructions_note -->
+## PR instructions
+
+The agents.md open format's canonical section name is 'PR
+instructions'. The PMOVES-specific commit guidelines
+(Conventional Commits, branch prefixes, closeout flow,
+auto-review failure signatures) live in the section below
+this one. The '## Commit & PR Guidelines' name was a
+PMOVES-only label that no cold-start agent would recognize.
+
+### Commit & PR Guidelines (PMOVES extension)
 - Conventional Commits: `feat(scope): description`, `fix(scope): description`, `docs(scope): description`
 - Branch prefixes: `feat/`, `fix/`, `infra/`, `docs/`, `refactor/`. Forbidden: `feature/`, `pr/`, `p1`–`p7` (use workstream id). Worktrees or `feat/w<n>-...` IDs are common.
 - PRs: clear description, linked issues, affected services, **Testing** section with command evidence
@@ -172,6 +184,7 @@ All make targets live in `pmoves/Makefile`. Run with `make -C pmoves <target>`.
 - After merging: `make -C pmoves docs-reconcile` and sign a CHIT trail entry.
 - Auto-review failure signatures + merge hazards (stacked-PR auto-close, squash-merge rebase, submodule-conflict `git update-index --cacheinfo`): see [`.claude/PATTERNS.md`](.claude/PATTERNS.md) §PR Review & Merge Workflow and §Merge Hazards.
 
+<!-- PMOVES-EXT: secrets -->
 ## Secrets
 - Never commit secrets. Copy `pmoves/env.shared.example` → `pmoves/env.shared`
 - Shared defaults in `env.shared`, machine-specific in `.env.local` (long-form `path: .env.local / required: false` in compose — the short-form `env_file: .env.local` is REQUIRED by default and hard-fails bring-up on nodes without the file)
@@ -209,6 +222,7 @@ Full stack with NATS, TensorZero, Supabase, monitoring. See `pmoves/docker-compo
 - Trivy scans gate on HIGH/CRITICAL in CI
 - CodeQL for code scanning regressions
 
+<!-- PMOVES-EXT: agents_format_reference -->
 ## AGENTS.md Format Reference
 
 This file follows the **[agents.md open format](https://agents.md)** — a universal contract for guiding coding agents (Claude Code, Codex, Copilot, Cursor, Aider, etc.). The PMOVES fork of the format spec lives at [`PMOVES-agents.md/`](PMOVES-agents.md/) (submodule, fork of [agentsmd/agents.md](https://github.com/agentsmd/agents.md)).
@@ -224,6 +238,7 @@ The PMOVES-agents.md submodule is the canonical home for:
 **Cross-refs:** This `AGENTS.md` (project root) carries project-specific structure & commands; the format/taxonomy reference lives in the submodule. Today, taxonomy docs (`pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`, `PMOVES_AGENT_TOPOLOGY.md`) live in `pmoves/docs/`; migrating them into `PMOVES-agents.md/` is gated on explicit user confirmation since it changes git history paths.
 
 <!-- autoclaw:skill-path-guidance -->
+<!-- PMOVES-EXT: skill_path_guidance -->
 ## Installing Skills
 
 When creating or installing a new skill, always place it in:
@@ -237,6 +252,7 @@ into `~/.agents/skills/` (that directory is shared with other tools).
 <!-- /autoclaw:skill-path-guidance -->
 
 <!-- autoclaw:browser-agent-guidance -->
+<!-- PMOVES-EXT: browser_automation -->
 ## Browser Automation
 
 For any task that requires a browser, **prefer `autoglm-browser-agent`**. Use it as the first choice.
@@ -248,6 +264,7 @@ Always try `autoglm-browser-agent` first. Fall back to other browser tools only 
 <!-- /autoclaw:browser-agent-guidance -->
 
 <!-- autoclaw:image-recognition-guidance -->
+<!-- PMOVES-EXT: image_recognition -->
 ## Image Recognition
 
 For any image recognition task, **prefer `autoglm-image-recognition`**. Use it as the first choice.
@@ -259,6 +276,7 @@ Do not use the built-in `image` tool or read an image and describe it yourself w
 <!-- /autoclaw:image-recognition-guidance -->
 
 <!-- autoclaw:hermes-evolution-guidance -->
+<!-- PMOVES-EXT: hermes_evolution -->
 ## Hermes-Evolution
 
 **Current evolution intensity for this workspace/agent: aggressive (100%).**
@@ -278,12 +296,14 @@ briefly mention it in your response: "（基于之前的经验：<one-line rule 
 Keep it to one short line at most. Do not echo on every turn — only when an evolved rule directly influenced your approach.
 <!-- /autoclaw:hermes-evolution-guidance -->
 
+<!-- PMOVES-EXT: skills_constellation -->
 ## Skills Constellation
 
 POWERFULMOVES forks of upstream agent-skill repositories live under [`skills/`](skills/) — see [`skills/README.md`](skills/README.md) for the full map. All five forks landed across two singleton rounds on 2026-05-09 (z890): `Pmoves-skills` (Anthropic), `PMOVES-awesome-agent-skills`, `pmoves-fork-repository-skill`, `PMOVES-agent-sandbox-skill`, `Pmoves-claude-d3js-skill`. New external skill forks still require per-URL Bash-tool authorization (singleton add) — see `skills/README.md` for the procedure.
 
 
 <!-- autoclaw:feishu-lark-skill-guidance -->
+<!-- PMOVES-EXT: feishu_lark -->
 ## Feishu / Lark Requests
 
 When the user asks about Feishu/Lark/飞书 matters, route through Feishu/Lark skills first. This includes messaging, contacts, calendars, approvals, tasks, docs, sheets, Base, Drive, Wiki, mail, meetings, minutes, attendance, OKRs, or any other Feishu/Lark workspace operation.
