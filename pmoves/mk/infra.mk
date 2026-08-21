@@ -570,3 +570,22 @@ tensorzero-render: ## Render tensorzero.toml Ollama EMBEDDING api_base from OLLA
 			echo "⚠ $(TZ_CONFIG) not found — skipping render"; \
 		fi
 	'
+
+# -- Service dependency matrix ------------------------------------------------
+# Layered bring-up and graceful shutdown both need a TRUTHFUL dependency order.
+# With ~52 compose files and ~170 depends_on edges a hand-written order drifts the
+# moment a service is added -- and a drifted runbook is worse than none, because it
+# reads as authoritative. So the order is DERIVED from the graph, never authored.
+# Paths are relative to pmoves/ (make's CURDIR here). Kept on one line on purpose:
+# backslash continuations inside a make variable did not survive expansion into
+# the recipe shell, producing a literal backslash-n in the command.
+DEP_MATRIX_DOC ?= docs/SERVICE_DEPENDENCY_MATRIX.md
+COMPOSE_MATRIX_FILES ?= docker-compose.yml docker-compose.core.yml docker-compose.agents.yml docker-compose.workers.yml docker-compose.media.yml docker-compose.ui.yml docker-compose.external.yml docker-compose.juicefs.yml
+DEP_MATRIX_RUN = uv run --quiet --with pyyaml python tools/service_dependency_matrix.py
+
+dep-matrix: ## Regenerate docs/SERVICE_DEPENDENCY_MATRIX.md from the compose graph
+	@$(DEP_MATRIX_RUN) --format markdown $(COMPOSE_MATRIX_FILES) > $(DEP_MATRIX_DOC); rc=$$?; if [ $$rc -eq 1 ]; then echo "BLOCKING findings - matrix NOT trustworthy, see dep-matrix-check"; exit 1; fi; exit 0
+	@echo "regenerated pmoves/$(DEP_MATRIX_DOC)"
+
+dep-matrix-check: ## Validate dependency graph (blocking fails; advisory warns. STRICT=1 fails on advisory)
+	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; if [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; elif [ $$rc -eq 2 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; fi; exit 0
