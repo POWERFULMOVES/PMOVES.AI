@@ -1,6 +1,6 @@
 # MCP Gateway wiring for PMOVES.AI — research findings
 
-**Status:** research complete, implementation blocked on one decision (§5).
+**Status:** research complete; substrate chosen (§5). Superseded recommendation kept visible, not deleted.
 **Date:** 2026-08-20 · **Node:** B850 · **Scope:** how every PMOVES service that speaks MCP gets registered in one gateway reachable by all agents.
 
 ---
@@ -31,7 +31,7 @@ The bridge's 23 tools: `hirag_query`, `hirag_similarity`, `hirag_graph`, `hirag_
 
 ---
 
-## 2. The blocker: the gateway deploys, it does not federate
+## 2. Why Microsoft's gateway cannot federate: it deploys, on Kubernetes
 
 The gateway has no way to register an MCP server that already exists. Everything it manages, it **launches from a container image**.
 
@@ -94,32 +94,59 @@ Any wiring effort that starts before submodule init is fixed will produce more o
 
 ---
 
-## 5. The decision
+## 5. The substrate: Docker's own gateway, not a fork of Microsoft's
 
-| | approach | cost | keeps "no Kubernetes"? |
-|---|---|---|---|
-| **A** | Implement `DockerAdapterDeploymentManager` in the fork | 5 interface methods + a Docker `IServiceNodeInfoProvider` + a DI switch | **yes** |
-| **B** | Run k3s/kind just for the gateway | zero code | no — this is the fan-out that was ruled out |
-| **C** | Write a PMOVES router that mimics `/adapters/{name}/mcp` over running containers | smaller than A | yes, but it is another shim |
+The first version of this document recommended implementing
+`DockerAdapterDeploymentManager` against `IAdapterDeploymentManager` in the
+Microsoft fork. **That is cancelled.** It was the right answer to the wrong
+question — it assumed the Microsoft gateway was the only gateway available.
 
-**Recommendation: A.**
+`POWERFULMOVES/PMOVES-mcp-gateway` is a fork of **`docker/mcp-gateway`**: the
+`docker-mcp` CLI plugin and Docker MCP Gateway. Its README states it "can work in
+Docker Desktop or independently". Its server-entry spec
+(`docs/server-entry-spec.md`) defines three types — `server`, `remote`, `poci` —
+and `remote` is exactly the capability §2 found missing:
 
-`IAdapterDeploymentManager` is a five-method interface — `CreateDeploymentAsync`, `DeleteDeploymentAsync`, `GetDeploymentStatusAsync`, `GetDeploymentLogsAsync`, `UpdateDeploymentAsync`. All five map cleanly onto the Docker Engine API, and `AdapterData` already carries everything a Docker run needs (image, tag, env, replica count). We keep the real product — its portal, its Entra role model, its session-affinity routing, its `/adapters/{name}/mcp` contract — and swap only the substrate.
+| field | required | meaning |
+|---|---|---|
+| `remote.url` | yes | URL endpoint of an MCP server that already runs |
+| `remote.transport_type` | no | e.g. `sse` |
+| `remote.headers` | no | custom HTTP headers (auth) |
 
-C is rejected on the grounds that produced this document: a shim that imitates a gateway is how `botz-gateway` came to be depended on by a service it cannot serve.
+So `hi-rag-gateway-v2:8086`, `botz-mcp-bridge:8100` and `cipher:8105/mcp/sse` can
+be federated as-is. No image, no pod, no Kubernetes, no C#.
+
+**Both gateways are kept.** Microsoft's (`PMOVES-BotZ-gateway`) remains the
+Kubernetes substrate; Docker's (`PMOVES-mcp-gateway`) is the compose-fleet
+substrate. They are not competing — they target different runtimes, and §2 is the
+evidence for why the split exists rather than a preference.
+
+### Mapping the inventory onto server entries
+
+| surface | entry type | why |
+|---|---|---|
+| `botz-mcp-bridge` :8100 (23 tools) | `remote` | already running, JSON-RPC on `POST /mcp` |
+| `pmoves-cipher` :8105 SSE | `remote` | `transport_type: sse` + `headers` for the bearer token |
+| `agent-zero` :8080/mcp | `remote` | already running |
+| `cloudflare-api`, `comfy` (hosted) | `remote` | third-party HTTPS endpoints |
+| `pmoves-e2b-mcp-server`, `PMOVES-jcodemunch-mcp` | `server` | ship Dockerfiles |
+| `pmoves-cipher-mcp`, `pmoves-hirag-mcp`, `PMOVES-MiniMax-MCP` | `server` | need a Dockerfile first |
 
 ### Sequence
 
-1. **Fix submodule init** (13 uninitialized) — otherwise every later step routes around a missing tree.
-2. **A**: `DockerAdapterDeploymentManager` + Docker node-info provider + DI switch, in the fork.
-3. **Add Dockerfiles** for `pmoves-cipher-mcp` and `pmoves-hirag-mcp` so they can be adapters.
-4. **Register** each MCP surface from the §4 inventory.
-5. **Repoint `.claude/mcp.json`** at `POST /adapters/{name}/mcp` — one reachable endpoint for all agents, which is the actual goal.
-6. **Fix `github-issue-triage`**: either a `github_*` tool family on the bridge, or a GitHub MCP adapter. Then delete `BOTZ_MCP_URL`'s 8102 default and cover it with a test.
+1. ~~Fix submodule init~~ — **done**. All 13 initialized; the gate that missed
+   them is fixed in #2659.
+2. Add `PMOVES-mcp-gateway` as a submodule — **done in this change**, tracking
+   `PMOVES.AI-Edition-Hardened` (created at `main` HEAD, zero divergence),
+   registered in `fork_registry.json`.
+3. Author the PMOVES catalog: one server entry per surface in the table above.
+4. Stand the gateway up on compose and point `.claude/mcp.json` at it — one
+   endpoint for all agents, which is the actual goal.
+5. Fix `github-issue-triage` (§3): a `github_*` server entry, then delete
+   `BOTZ_MCP_URL`'s `:8102` default and cover it with a test.
 
-Step 5 is the payoff. Steps 1–2 are what make it possible.
-
----
+Steps 3–5 are the remaining work. Nothing in them requires Kubernetes or a new
+deployment manager.
 
 ## 6. Related finding
 
