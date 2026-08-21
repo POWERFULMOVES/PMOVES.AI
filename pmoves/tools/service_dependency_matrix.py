@@ -36,10 +36,14 @@ WHAT IT CHECKS (the failures that hide behind a green bring-up)
 
 EXIT CODES
   0  clean
-  1  blocking (cycle, undefined dependency, unreadable file)
-  2  advisory only (healthcheck gaps, weak waits)
-Blocking and advisory are separated so CI can gate on real breakage without
-drowning in advice.
+  1  blocking (cycle, undefined dependency, unreadable/missing input)
+  3  advisory only (healthcheck gaps, weak waits, unsafe shutdown)
+
+Advisory is 3, NOT 2, on purpose. Exit 2 is what a FAILED RUNNER returns —
+argparse errors use it, and `uv` returns it when it cannot start the script (for
+example when PyYAML cannot be fetched offline). If advisory were 2, a caller
+could not tell "the graph has advice" from "the tool never ran", and would
+happily accept an empty result as success.
 """
 from __future__ import annotations
 
@@ -186,12 +190,18 @@ def main():
     a = ap.parse_args()
 
     paths = [Path(f) for f in a.files] or [Path("pmoves/docker-compose.yml")]
+    # A missing input must be REPORTED, not filtered away. Dropping it silently
+    # meant a misspelled or deleted overlay produced a smaller-but-successful
+    # matrix: the `if not paths` guard never fires while any other input exists,
+    # so an incomplete graph publishes as if it were complete.
+    missing = [str(p) for p in paths if not p.exists()]
     paths = [p for p in paths if p.exists()]
     if not paths:
         sys.stderr.write("no compose files found\n")
         return 1
 
     services, read_problems = load_compose(paths)
+    read_problems = ["{}: input not found".format(m) for m in missing] + read_problems
     r = analyze(services)
 
     if a.format == "shutdown":
@@ -255,7 +265,7 @@ def main():
                     print("  ... and {} more".format(len(items) - 20))
     if blocking:
         return 1
-    return 2 if advisory else 0
+    return 3 if advisory else 0
 
 
 if __name__ == "__main__":

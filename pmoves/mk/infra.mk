@@ -584,10 +584,22 @@ COMPOSE_MATRIX_FILES ?= docker-compose.yml docker-compose.core.yml docker-compos
 DEP_MATRIX_RUN = uv run --quiet --with pyyaml python tools/service_dependency_matrix.py
 
 dep-matrix: ## Regenerate docs/SERVICE_DEPENDENCY_MATRIX.md from the compose graph
-	@$(DEP_MATRIX_RUN) --format markdown $(COMPOSE_MATRIX_FILES) > $(DEP_MATRIX_DOC); rc=$$?; if [ $$rc -eq 1 ]; then echo "BLOCKING findings - matrix NOT trustworthy, see dep-matrix-check"; exit 1; fi; exit 0
+	@# Write to a TEMP file first. A shell redirect truncates the destination
+	@# BEFORE the command runs, so a runner failure (uv unable to fetch PyYAML,
+	@# argparse error) would otherwise replace the canonical matrix with an EMPTY
+	@# file and still report success. Only exit 0 (clean) or 3 (advisory) may
+	@# publish; anything else is a failed run and must not touch the doc.
+	@tmp=$$(mktemp); $(DEP_MATRIX_RUN) --format markdown $(COMPOSE_MATRIX_FILES) > $$tmp; rc=$$?; \
+	 if [ $$rc -ne 0 ] && [ $$rc -ne 3 ]; then rm $$tmp; echo "dep-matrix: run FAILED (exit $$rc) - matrix left unchanged"; exit 1; fi; \
+	 if [ ! -s $$tmp ]; then rm $$tmp; echo "dep-matrix: produced EMPTY output - matrix left unchanged"; exit 1; fi; \
+	 mv $$tmp $(DEP_MATRIX_DOC)
 	@echo "regenerated pmoves/$(DEP_MATRIX_DOC)"
-
-dep-matrix-check: ## Validate dependency graph (blocking fails; advisory warns. STRICT=1 fails on advisory)
+dep-matrix-check: ## Validate graph (1=blocking fails, 3=advisory warns, other=runner failure). STRICT=1 fails on advisory
+	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; \
+	 if [ $$rc -eq 0 ]; then exit 0; \
+	 elif [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; \
+	 elif [ $$rc -eq 3 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; exit 0; \
+	 else echo "dep-matrix-check: RUNNER FAILURE (exit $$rc) - the tool did not run; this is NOT a pass"; exit 1; fi
 	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; if [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; elif [ $$rc -eq 2 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; fi; exit 0
 
 dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up layers)
