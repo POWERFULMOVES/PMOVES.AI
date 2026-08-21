@@ -122,6 +122,22 @@ CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host (exit 3 = unmeasurable, not a pass)
 	@$(PRECHECK_PY) tools/docker_host_policy_check.py $(ARGS)
 
+# Uses $(MCP_GATEWAY_DC), defined beside the other per-stack macros in the
+# Makefile, so it carries -p $(PROJECT) and $(COMPOSE_ENV_FILES). A raw
+# `docker compose up -d` here would skip COMPOSE_ENV_FILES injection and the
+# gateway's ${MCP_GATEWAY_AUTH_TOKEN:?} would fail to resolve — the pipeline
+# bypass the deploy guard exists to catch. Run `make -C pmoves secrets-funnel`
+# first on a fresh node so the tier env files carry the token.
+up-mcp-gateway: ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
+	@$(MCP_GATEWAY_DC) --profile mcp up -d $(ARGS)
+	@echo "MCP Gateway on http://localhost:$${MCP_GATEWAY_PORT:-8091}/mcp"
+
+down-mcp-gateway: ## Stop the PMOVES MCP Gateway
+	@$(MCP_GATEWAY_DC) --profile mcp down $(ARGS)
+
+mcp-gateway-verify: ## Prove the gateway federates: list tools through it, per server
+	@$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
+
 docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
 	@echo "=== Installing Docker Fleet Cleanup Timer ==="
 	@if [ "$$(id -u)" -ne 0 ]; then \

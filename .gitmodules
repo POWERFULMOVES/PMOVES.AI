@@ -436,3 +436,7 @@
 	path = PMOVES-pinokiod
 	url = https://github.com/POWERFULMOVES/PMOVES-pinokiod.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-mcp-gateway"]
+	path = PMOVES-mcp-gateway
+	url = https://github.com/POWERFULMOVES/PMOVES-mcp-gateway.git
+	branch = PMOVES.AI-Edition-Hardened

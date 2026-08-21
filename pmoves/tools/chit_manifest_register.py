@@ -113,6 +113,13 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "required": True,
         "aliases": ["CHIT_PASSPHRASE"],
     },
+    # PMOVES MCP Gateway inbound auth. The gateway binds 0.0.0.0 across four
+    # fleet networks so every agent can reach it; without this token and without
+    # --allow-unauthenticated it refuses remote callers, which is the correct
+    # default. required=True because docker-compose.mcp-gateway.yml declares it
+    # ${MCP_GATEWAY_AUTH_TOKEN:?} — an unset value fails the whole `up`, and
+    # file-wide interpolation means it would gate every service in that file.
+    "MCP_GATEWAY_AUTH_TOKEN": {"tier": "agent", "required": True},
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
     "SECRET_KEY_BASE": {"tier": "supabase", "required": True},
