@@ -2199,6 +2199,20 @@ This is analogous to HTTP path versioning (`/api/v1/`) vs content-type versionin
 - **Subscribers:** Orchestrator, A2UI live trail, observability
 - **Status:** REGISTERED — bpm_cron publishes per-phase
 
+**`pmoves.kvm.focus.v1`**
+- **Direction:** Published by `pmoves/tools/orchestrator.py::Orchestrator.publish_kvm_focus` → Consumed by the external KVM controller (RustDesk + Tailscale)
+- **Purpose:** Ask the operator's KVM to switch focus to the node a dispatch just landed on. Emitted only when the target's routing `node` is a real remote machine — local targets (`self`, `host`) and placeholders (`TBD`, `none`, `n/a`, `-`, empty) are no-ops.
+- **Payload:**
+  ```json
+  {
+    "task_id": "uuid",
+    "target": "glm-5.1",
+    "target_node": "5090",
+    "issued_at": 1755700000.0
+  }
+  ```
+- **Note:** This began life as a `phase: kvm-focus` event on `pmoves.bpm.phase.v1`, reusing that subscriber. It was split out because that subject is contracted as the five lifecycle phases carrying `task_name`/`previous_phase`, so a focus request read as an invalid lifecycle transition to any A2UI or observability consumer. A discriminator field does not make an incompatible payload compatible.
+
 **`pmoves.bpm.pomodoro.v1`**
 - **Direction:** Published by `pmoves/tools/bpm_cron.py::BpmCron` (focus-block boundaries) → Consumed by A2UI, observability, the operator's check-in dispatcher
 - **Purpose:** A pomodoro focus-block event: 25-min work + 5-min check-in (configurable via env). Each block boundary is a published event so the operator check-in surface knows when to interrupt.

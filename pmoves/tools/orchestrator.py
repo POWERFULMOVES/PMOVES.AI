@@ -16,6 +16,7 @@ in the next session; the values here are the planned v0 contract):
 - pmoves.agent.task.v1     - Mavis publishes the task here
 - pmoves.agent.result.v1   - Worker publishes the result back here
 - pmoves.bpm.phase.v1      - BPM cron publishes phase transitions
+- pmoves.kvm.focus.v1      - KVM focus-switch requests (this module)
 - pmoves.bpm.pomodoro.v1   - Focus-block boundaries
 
 The transport is abstracted behind a Publisher interface so the
@@ -41,6 +42,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import sys
@@ -56,12 +58,29 @@ from pmoves.tools.load_bootstrap import Bootstrap, load_bootstrap
 SUBJECT_TASK = "pmoves.agent.task.v1"
 SUBJECT_RESULT = "pmoves.agent.result.v1"
 SUBJECT_BPM_PHASE = "pmoves.bpm.phase.v1"
+# KVM focus gets its OWN subject rather than riding the BPM phase stream.
+# pmoves.bpm.phase.v1 is contracted (see .claude/context/nats-subjects.md) as the
+# five lifecycle phases define -> assign -> execute -> review -> close, carrying
+# task_name/previous_phase. A "kvm-focus" phase with a target_node is neither, so
+# an A2UI or observability subscriber reading that stream would see an invalid
+# lifecycle transition. A discriminator field does not make an incompatible payload
+# compatible; it just moves the breakage into the consumer.
+SUBJECT_KVM_FOCUS = "pmoves.kvm.focus.v1"
+
+# Routing entries whose `node` is not a switchable remote machine. "self"/"host"
+# are the local device; the rest are placeholders a config carries while the wire
+# is ready but the peer is not (example.cgp.yaml ships hermes.node: TBD).
+_NON_ACTIONABLE_NODES = frozenset({"self", "host", "tbd", "todo", "none", "n/a", "-"})
 SUBJECT_BPM_POMODORO = "pmoves.bpm.pomodoro.v1"
 
 # Per the bootstrap CGP: mavis can be a target (the agent points at
 # itself for tasks that should stay in-session); kiloclaw = GLM-5.1 on
-# 5090; hermes = NousResearch (location TBD).
-KNOWN_TARGETS = {"mavis", "kiloclaw", "hermes"}
+# 5090; hermes = NousResearch (location TBD); pinokio = app-launcher
+# on operator devices. KNOWN_TARGETS is now derived from the bootstrap
+# routing block (see _known_targets() below) plus the implicit "mavis"
+# self-target; the constant here is the floor for tests that don't
+# want to construct a full bootstrap.
+_BUILTIN_TARGETS = frozenset({"mavis", "kiloclaw", "hermes", "pinokio"})
 
 
 # ---- Transport ---------------------------------------------------------------
@@ -146,6 +165,40 @@ class Orchestrator:
         self.timeout_s = timeout_s
         self.poll_s = poll_s
 
+    @property
+    def known_targets(self) -> set[str]:
+        """The set of agent names the orchestrator will accept on dispatch().
+
+        Derived from the bootstrap's routing block (kiloclaw / hermes /
+        pinokio) plus the implicit 'mavis' self-target. A future PR
+        that adds a routing entry to the bootstrap automatically widens
+        the dispatch surface here - no orchestrator code change needed.
+        """
+        targets = set(_BUILTIN_TARGETS)
+        routing = self.bootstrap.routing
+        # Enumerate the Routing dataclass's FIELDS rather than a literal tuple.
+        # The docstring promises that adding a routing entry widens the dispatch
+        # surface with no orchestrator change; a hard-coded peer list silently
+        # breaks that promise, because a new field would be rejected here while
+        # appearing to be configured.
+        for f in dataclasses.fields(routing):
+            if getattr(routing, f.name, None):
+                targets.add(f.name)
+        return targets
+
+    def routing_for(self, target: str) -> dict[str, Any]:
+        """Return the CGP routing entry for a target, or {} if unknown.
+
+        Used by the KVM control surface (see publish_kvm_focus) and by
+        external consumers that need the node/target metadata for a
+        given dispatch.
+        """
+        if target == "mavis":
+            return {"node": "self", "nats_subject": SUBJECT_TASK, "target": "mavis"}
+        routing = self.bootstrap.routing
+        entry = getattr(routing, target, None) or {}
+        return dict(entry)
+
     def dispatch(
         self,
         task: str,
@@ -173,25 +226,44 @@ class Orchestrator:
 
         result = DispatchResult(task_id=task_id, task=task)
         deadline = time.monotonic() + self.timeout_s
+        known = self.known_targets
         for agent in agents:
-            if agent not in KNOWN_TARGETS:
+            if agent not in known:
                 result.results[agent] = AgentResult(
                     target=agent,
                     status="error",
-                    error=f"unknown agent target {agent!r}; known: {sorted(KNOWN_TARGETS)}",
+                    error=f"unknown agent target {agent!r}; known: {sorted(known)}",
                 )
                 result.failed.append(agent)
                 continue
             result.results[agent] = AgentResult(target=agent, status="pending")
 
+            # Publish the CONFIGURED target, not the alias. routing.hermes.target
+            # is "hermes-3" and the Hermes handoff in AGNOTE4482PHI.t1.md
+            # subscribes on exactly that; an envelope carrying the alias "hermes"
+            # never matches, so the handoff sits pending forever. The alias is
+            # kept alongside it so producer-side correlation still works.
+            routing = self.routing_for(agent)
+            wire_target = routing.get("target") or agent
             self.publisher.publish(SUBJECT_TASK, {
                 "task_id": task_id,
-                "target": agent,
+                "target": wire_target,
+                "target_alias": agent,
                 "task": task,
                 "context": context,
                 "bootstrap_id": self.bootstrap.meta.get("bootstrap_id"),
                 "issued_at": time.time(),
             })
+            # KVM control surface: when the dispatch lands on a target
+            # whose routing entry names a different node, publish a
+            # phase event with target_node so an external KVM controller
+            # (RustDesk + Tailscale, per the operator's fleet config)
+            # can switch the operator's focus to the right machine.
+            # Local self-dispatches (mavis, or any peer whose node is
+            # 'self'/'host') are no-ops on the KVM channel.
+            self.publish_kvm_focus(
+                task_id=task_id, target=wire_target, node=routing.get("node") or ""
+            )
 
         # Wait for results. The orchestrator polls the publisher's
         # published list for matching result entries (the test mock
@@ -274,6 +346,44 @@ class Orchestrator:
             "status": status,  # started | completed | skipped
             "issued_at": time.time(),
         })
+
+    def publish_kvm_focus(self, task_id: str, target: str, node: str) -> None:
+        """Publish a KVM focus-switch request on SUBJECT_KVM_FOCUS.
+
+        Called by dispatch() when a task lands on a target whose routing
+        entry names a real, remote node. An external KVM controller
+        (RustDesk + Tailscale, per the operator's fleet config) subscribes
+        to pmoves.kvm.focus.v1 and switches the operator's focus.
+
+        No-op for anything that is not an actionable remote node: a local
+        target, or a placeholder left in the routing table for a peer that
+        has not been stood up yet.
+        """
+        if not self._is_actionable_node(node):
+            return
+        self.publisher.publish(SUBJECT_KVM_FOCUS, {
+            "task_id": task_id,
+            "target": target,
+            "target_node": node,
+            "issued_at": time.time(),
+        })
+
+    @staticmethod
+    def _is_actionable_node(node: str) -> bool:
+        """Is `node` a real remote machine the KVM controller can switch to?
+
+        False for the local device, and false for placeholders. The shipped
+        example.cgp.yaml carries `hermes.node: TBD` -- "the operator hasn't
+        stood Hermes up yet; wire is ready" -- and a literal TBD passed the
+        old `node not in ("self", "host", "")` guard, so a default-config
+        dispatch asked the KVM controller to switch to a machine named TBD.
+
+        Placeholders are matched case-insensitively because a config is
+        hand-written: TBD, tbd and Tbd are the same intent.
+        """
+        if not node:
+            return False
+        return node.strip().casefold() not in _NON_ACTIONABLE_NODES
 
 
 # ---- CLI ---------------------------------------------------------------------

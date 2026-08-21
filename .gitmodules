@@ -320,10 +320,6 @@
 	path = PMOVES-space-agent
 	url = https://github.com/POWERFULMOVES/PMOVES-space-agent.git
 	branch = PMOVES.AI-Edition-Hardened
-[submodule "skills/Pmoves-skills"]
-	path = skills/Pmoves-skills
-	url = https://github.com/POWERFULMOVES/Pmoves-skills.git
-	branch = main
 [submodule "skills/PMOVES-awesome-agent-skills"]
 	path = skills/PMOVES-awesome-agent-skills
 	url = https://github.com/POWERFULMOVES/PMOVES-awesome-agent-skills.git
@@ -407,7 +403,7 @@
 [submodule "skills/PMOVES-skills"]
 	path = skills/PMOVES-skills
 	url = https://github.com/POWERFULMOVES/PMOVES-skills.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-MiniMax-MCP"]
 	path = PMOVES-MiniMax-MCP
 	url = https://github.com/POWERFULMOVES/PMOVES-MiniMax-MCP.git
@@ -428,3 +424,15 @@
 	path = pmoves-keygen
 	url = https://github.com/POWERFULMOVES/pmoves-keygen.git
 	branch = master
+[submodule "PMOVES-pterm"]
+	path = PMOVES-pterm
+	url = https://github.com/POWERFULMOVES/PMOVES-pterm.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-gepeto"]
+	path = PMOVES-gepeto
+	url = https://github.com/POWERFULMOVES/PMOVES-gepeto.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-pinokiod"]
+	path = PMOVES-pinokiod
+	url = https://github.com/POWERFULMOVES/PMOVES-pinokiod.git
+	branch = PMOVES.AI-Edition-Hardened

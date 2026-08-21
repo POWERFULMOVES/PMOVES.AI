@@ -16,7 +16,6 @@ SUBMODULE_BRANCH_ALLOW ?= PMOVES-obico-server=release,\
   PMOVES-OrcaSlicer=main,\
   PMOVES-OctoPrint-Obico=master,\
   PMOVES-fluidd=develop,\
-  skills/Pmoves-skills=main,\
   skills/PMOVES-awesome-agent-skills=main,\
   skills/pmoves-fork-repository-skill=main,\
   skills/PMOVES-agent-sandbox-skill=main,\
