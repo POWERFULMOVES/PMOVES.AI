@@ -55,9 +55,44 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
-# Matches deploy/provision/daemon.json. A node may cap tighter, never looser.
-MAX_SIZE_CEILING_MB = 50
+# Default matches deploy/provision/daemon.json, which is the BASELINE, not a
+# universal maximum. DOCKER_DAEMON_HARDENING.md sizes per node class, and two
+# classes legitimately sit above the baseline:
+#
+#   ai-lab / Z890      50m   (doc table; note nixos-post.nix provisions 100m)
+#   SPARK              50m
+#   KVM4 data tier    100m   deeper retention for prod debugging
+#   dev / 4090         20m
+#
+# Treating 50 as a hard ceiling failed a correctly-provisioned KVM4 data-tier
+# node for honouring its own documented policy. Override per node class with
+# --max-size-ceiling-mb or PMOVES_LOG_MAX_SIZE_CEILING_MB.
+DEFAULT_MAX_SIZE_CEILING_MB = 50
 REQUIRED_MAX_FILE = 1  # at least one rotation file
+
+
+def _env_ceiling() -> int:
+    """Read the ceiling from the environment, falling back to the baseline.
+
+    A malformed value is ignored rather than fatal: this probe runs inside
+    audit passes, and an unparseable env var must not be the thing that decides
+    whether a host certifies.
+    """
+    import os
+
+    raw = os.environ.get("PMOVES_LOG_MAX_SIZE_CEILING_MB", "").strip()
+    if not raw:
+        return DEFAULT_MAX_SIZE_CEILING_MB
+    try:
+        value = int(raw)
+    except ValueError:
+        print(
+            f"[warn] PMOVES_LOG_MAX_SIZE_CEILING_MB={raw!r} is not an integer; "
+            f"using {DEFAULT_MAX_SIZE_CEILING_MB}",
+            file=sys.stderr,
+        )
+        return DEFAULT_MAX_SIZE_CEILING_MB
+    return value if value >= 1 else DEFAULT_MAX_SIZE_CEILING_MB
 
 
 class Unmeasured(RuntimeError):
@@ -113,7 +148,9 @@ def log_config(name: str) -> Dict[str, Any]:
         raise Unmeasured(f"{name}: unparseable LogConfig: {exc}") from exc
 
 
-def audit_logging(names: List[str]) -> Tuple[List[dict], List[dict]]:
+def audit_logging(
+    names: List[str], ceiling_mb: int = DEFAULT_MAX_SIZE_CEILING_MB
+) -> Tuple[List[dict], List[dict]]:
     offenders: List[dict] = []
     compliant: List[dict] = []
     for name in names:
@@ -133,10 +170,10 @@ def audit_logging(names: List[str]) -> Tuple[List[dict], List[dict]]:
                 "reason": "no max-size — this container's log grows without bound",
             })
             continue
-        if size_mb > MAX_SIZE_CEILING_MB:
+        if size_mb > ceiling_mb:
             offenders.append({
                 "container": name, "driver": driver, "max_size": max_size,
-                "reason": f"max-size {max_size} exceeds the {MAX_SIZE_CEILING_MB}m policy ceiling",
+                "reason": f"max-size {max_size} exceeds the {ceiling_mb}m policy ceiling",
             })
             continue
         try:
@@ -176,11 +213,25 @@ def orphaned_build_cache() -> List[dict]:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--json", action="store_true", help="machine-readable output")
+    parser.add_argument(
+        "--max-size-ceiling-mb",
+        type=int,
+        default=_env_ceiling(),
+        help=(
+            "Largest permitted max-size, in MB (default: "
+            f"{DEFAULT_MAX_SIZE_CEILING_MB}, or PMOVES_LOG_MAX_SIZE_CEILING_MB). "
+            "Raise it on node classes DOCKER_DAEMON_HARDENING.md sizes above the "
+            "baseline -- the KVM4 data tier is documented at 100m."
+        ),
+    )
     args = parser.parse_args(argv)
+    if args.max_size_ceiling_mb < 1:
+        print("ERROR: --max-size-ceiling-mb must be >= 1", file=sys.stderr)
+        return 4
 
     try:
         names = running_containers()
-        offenders, compliant = audit_logging(names)
+        offenders, compliant = audit_logging(names, ceiling_mb=args.max_size_ceiling_mb)
         orphans = orphaned_build_cache()
     except Unmeasured as exc:
         print(f"[unmeasured] {exc}", file=sys.stderr)
@@ -195,6 +246,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "sampled": len(names),
             "offenders": offenders,
             "compliant": len(compliant),
+            "max_size_ceiling_mb": args.max_size_ceiling_mb,
             "orphaned_build_cache": orphans,
         }, indent=2))
         return 1 if offenders else 0

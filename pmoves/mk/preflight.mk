@@ -137,10 +137,21 @@ audit-layers-static: ## Submodule-first static certification pass before runtime
 	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
 	@$(MAKE) --no-print-directory skill-registry-validate
 	@# Z890 reported logs eating disk; B850 measured 59 of 62 containers
-	@# logging without any max-size. `|| true` because a node with no
-	@# Docker socket exits 3 (unmeasurable) and must not fail a static
-	@# certification pass -- the probe still prints what it found.
-	@$(MAKE) --no-print-directory docker-host-policy-check || true
+	@# logging without any max-size.
+	@#
+	@# Exit 3 means UNMEASURABLE (no Docker socket) and must not fail a static
+	@# certification pass. Exit 1 means OFFENDERS FOUND and must. A bare
+	@# `|| true` cannot tell those apart -- it suppressed both, so a live host
+	@# with 59 unbounded-log containers passed the complete runtime
+	@# certification, which reaches this check only through this line.
+	@$(MAKE) --no-print-directory docker-host-policy-check; \
+	  rc=$$?; \
+	  if [ $$rc -eq 3 ]; then \
+	    echo "[audit] docker-host-policy-check: unmeasurable here (no Docker socket) -- not failing the static pass"; \
+	  elif [ $$rc -ne 0 ]; then \
+	    echo "[audit] docker-host-policy-check FAILED (exit $$rc): container log policy violations above."; \
+	    exit $$rc; \
+	  fi
 	@$(MAKE) --no-print-directory docs-reconcile-check || true
 
 audit-layers-runtime: ## Runtime certification pass once services are online
