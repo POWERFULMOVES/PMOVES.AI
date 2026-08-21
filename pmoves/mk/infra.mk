@@ -592,3 +592,6 @@ dep-matrix-check: ## Validate dependency graph (blocking fails; advisory warns. 
 
 dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up layers)
 	@$(DEP_MATRIX_RUN) --format shutdown $(COMPOSE_MATRIX_FILES)
+
+agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
+	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
