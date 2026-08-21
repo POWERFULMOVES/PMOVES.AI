@@ -736,7 +736,9 @@ services:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
-    depends_on: [nats]
+    depends_on:
+      nats:
+        condition: service_healthy
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
     healthcheck:
@@ -781,7 +783,7 @@ services:
       nats:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     profiles: ["agents", "cipher"]
     extra_hosts:
     - "host.docker.internal:host-gateway"
@@ -880,7 +882,8 @@ services:
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
     - PMOVES_NETWORKS=pmoves_bus
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     profiles:
     - agents
     - diag
@@ -908,7 +911,8 @@ services:
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
     - PMOVES_NETWORKS=pmoves_bus
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     profiles:
     - agents
     - diag
