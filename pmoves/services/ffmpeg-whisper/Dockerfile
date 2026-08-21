@@ -183,9 +183,32 @@ ARG FFMPEG_REF=n8.1.2
 # LINK — the generated whisper.pc does not carry the CUDA dependencies that
 # libwhisper.so now has. Hence the search paths below.
 #
-# Deliberately NOT forcing --extra-libs="-lggml-cuda -lcudart -lcublas": with
-# BUILD_SHARED_LIBS=ON the linker follows DT_NEEDED, and hardcoded library names
-# are brittle (one wrong name kills configure). Add them only if the link fails.
+# --extra-libs="-lcuda" is REQUIRED, and the reason is only visible in
+# ffbuild/config.log -- which is exactly what FFmpeg's error tells you to read:
+#
+#   /usr/bin/ld: /usr/local/lib/libggml-cuda.so: undefined reference to `cuMemSetAccess'
+#                                                undefined reference to `cuDeviceGet'
+#                                                undefined reference to `cuMemAddressFree'
+#
+# Those are cu* symbols, not cuda* -- the CUDA DRIVER API, which lives in
+# libcuda.so. libggml-cuda.so calls the driver VMM functions but nothing asked
+# the linker for the library. The stubs directory was already on -L; the library
+# itself was never requested.
+#
+# configure reports this as `ERROR: whisper >= 1.7.5 not found using pkg-config`,
+# which is misleading: test_pkg_config does BOTH an existence check and a
+# compile-and-link test, and both print that same text. The package was always
+# found. An earlier attempt read it as a pkg-config path problem, and a later one
+# as a missing RUNTIME lib (-lcudart -lcublas -lcublasLt) -- both were tried on a
+# 4090 and both still failed. -lcuda alone is sufficient and is the minimal fix.
+#
+# CONSEQUENCE, deliberate: the binary now hard-links libcuda.so.1, so it cannot
+# start without an NVIDIA driver --
+#   error while loading shared libraries: libcuda.so.1: cannot open shared object file
+# The stub satisfies the LINK at build time; the real driver must be present at
+# RUN time via the NVIDIA Container Toolkit (--gpus all / compose device
+# reservation). Any healthcheck or smoke test that runs this image without GPU
+# access now fails at exec rather than at transcode.
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \
     LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 RUN git clone --depth 1 --branch "${FFMPEG_REF}" https://github.com/FFmpeg/FFmpeg.git ffmpeg && \
@@ -197,7 +220,8 @@ RUN git clone --depth 1 --branch "${FFMPEG_REF}" https://github.com/FFmpeg/FFmpe
         --enable-shared \
         --enable-whisper \
         --extra-cflags="-I/usr/local/include" \
-        --extra-ldflags="-L/usr/local/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs" && \
+        --extra-ldflags="-L/usr/local/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs" \
+        --extra-libs="-lcuda" && \
     make -j"$(nproc)" && \
     make install && \
     strip /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe && \
