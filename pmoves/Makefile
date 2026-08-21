@@ -1379,7 +1379,7 @@ up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
 .PHONY: up-openroom
 up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
 	@echo "🚪 Starting OpenRoom desktop..."
-	@$(DC) --profile ui up -d openroom
+	@$(DC) --profile ui up -d openroom p7
 	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
 	@echo "✅ OpenRoom ready"
 	@echo "   Desktop:      http://localhost:5173/webuiapps/"
