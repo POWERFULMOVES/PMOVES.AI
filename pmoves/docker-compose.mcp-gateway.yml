@@ -1,0 +1,115 @@
+# PMOVES MCP Gateway — one MCP endpoint reachable by every agent.
+#
+# Overlay, not an edit to the 5k-line base compose, so it can be brought up and
+# torn down independently while the catalog is still being filled in.
+#
+#   make -C pmoves up-mcp-gateway
+#   make -C pmoves mcp-gateway-verify
+#
+# Why this gateway: docker/mcp-gateway server entries support `type: remote`
+# (url / transport_type / headers), so MCP servers that ALREADY RUN are
+# federated as-is. The Microsoft McpGateway fork requires ImageName+ImageVersion
+# on every adapter and deploys them through a Kubernetes-only deployment
+# manager, so it cannot point at an existing endpoint at all. Microsoft's stays
+# for Kubernetes. See pmoves/docs/architecture/MCP_GATEWAY_WIRING_RESEARCH.md.
+
+services:
+  mcp-gateway:
+    image: ${MCP_GATEWAY_IMAGE:-docker/mcp-gateway:latest}
+    container_name: pmoves-mcp-gateway
+    hostname: mcp-gateway
+    restart: unless-stopped
+    command:
+      # RELATIVE on purpose. pkg/catalog/catalog.go:133 resolves the catalogs
+      # root as $HOME/.docker/mcp/catalogs and rejects anything outside it with
+      # "local file path must resolve within Docker MCP catalogs directory". A
+      # relative path is joined onto that root; an absolute one is checked
+      # against it and fails. The gateway's OWN example
+      # (examples/remote_mcp/compose.yaml) mounts at /mcp/catalog.yaml and does
+      # NOT work against this build — verified by starting it: the container
+      # crash-looped on that exact error.
+      - --catalog=pmoves.yaml
+      - --servers=botz-mcp-bridge,cipher
+      - --transport=streaming
+      - --port=8091
+      - --host=0.0.0.0
+      # Long-lived so federated remotes keep their session rather than being
+      # torn down between calls.
+      - --long-lived
+      - --log-calls
+    environment:
+      # The gateway authenticates HTTP/SSE callers with this token. It is NOT
+      # optional-by-omission: leaving it unset without --allow-unauthenticated
+      # makes the gateway refuse remote callers, which is the correct default
+      # for something bound on 0.0.0.0 across four fleet networks.
+      MCP_GATEWAY_AUTH_TOKEN: ${MCP_GATEWAY_AUTH_TOKEN:?set MCP_GATEWAY_AUTH_TOKEN - the gateway is reachable fleet-wide and must not be open}
+      # Required for `type: remote` entries on plain http. The gateway's default
+      # policy is "public HTTPS destinations only" (pkg/remoteurl/remoteurl.go:15
+      # — "Production defaults allow only public HTTPS destinations"), and
+      # without this it refuses every PMOVES endpoint:
+      #
+      #   > Can't start cipher: unsafe remote MCP URL: remote URL must use https
+      #   > Can't start botz-mcp-bridge: unsafe remote MCP URL: ...
+      #   > 0 tools listed
+      #
+      # …while still starting, binding 8091 and reporting itself up. Federating
+      # nothing is the exact failure `make mcp-gateway-verify` exists to catch.
+      #
+      # SCOPE OF THIS RELAXATION: every URL in catalog.yaml resolves to a
+      # container on an internal Docker bridge network (pmoves_app /
+      # pmoves_pmoves_app). No catalogued endpoint is public, and the gateway's
+      # OWN listener is still authenticated by MCP_GATEWAY_AUTH_TOKEN above.
+      # A public `remote` entry must use https and needs no exemption — do not
+      # add one here to work around a certificate problem.
+      DOCKER_MCP_ALLOW_INSECURE_REMOTE_URLS: "1"
+    volumes:
+      # Mounted INSIDE the catalogs root the gateway will accept. HOME is /root
+      # in docker/mcp-gateway:latest (verified), so this is the path that
+      # --catalog=pmoves.yaml resolves to.
+      - ./config/mcp-gateway/catalog.yaml:/root/.docker/mcp/catalogs/pmoves.yaml:ro
+      # `type: server` entries make the gateway START containers, so it needs
+      # the daemon. `type: remote` entries do not — but the catalog is expected
+      # to grow server entries (jcodemunch, e2b), so the socket is mounted now
+      # rather than in a later change that would look unrelated.
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "${MCP_GATEWAY_BIND:-0.0.0.0}:${MCP_GATEWAY_PORT:-8091}:8091"
+    networks:
+      # BOTH app networks on purpose. pmoves-botz-mcp-bridge lives on
+      # pmoves_pmoves_app (the BoTZ project's own network, 2 containers) while
+      # the fleet is on the external pmoves_app. Attaching to both is what
+      # federates the partition — verified from a container joined to both:
+      # http://pmoves-botz-mcp-bridge:8100/mcp -> 200.
+      - pmoves_app
+      - pmoves_pmoves_app
+      - pmoves_api
+      - pmoves_bus
+    healthcheck:
+      # Reads the response body, not just the status line — a 200 that is not
+      # valid MCP is not health. See PMOVES-BoTZ#190 for the pattern this avoids.
+      test:
+        - CMD-SHELL
+        - >-
+          wget -q -O- --header='Content-Type: application/json'
+          --post-data='{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+          http://127.0.0.1:8091/mcp | grep -q '"tools"' || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    profiles: ["mcp", "agents"]
+
+networks:
+  pmoves_app:
+    external: true
+  pmoves_pmoves_app:
+    external: true
+  pmoves_api:
+    external: true
+  pmoves_bus:
+    external: true

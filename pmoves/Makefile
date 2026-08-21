@@ -2170,6 +2170,7 @@ STACK_FILES ?= \
 DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
+MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
 JELLYFIN_AI_DC := docker compose -p $(PROJECT)-jellyfin-ai --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) --env-file env.jellyfin-ai -f docker-compose.jellyfin-ai.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
