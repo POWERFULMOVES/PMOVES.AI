@@ -25,6 +25,7 @@ manually + in CI.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -81,6 +82,20 @@ def sample_records() -> list[dict[str, str]]:
 # ============================================================================
 # 1. .gitmodules parsing
 # ============================================================================
+
+
+
+# The pure-logic tests below build synthetic records for paths that do not exist
+# on disk. `check_one` now also verifies the working tree is checked out, which
+# would short-circuit every one of them. That precondition is not what they are
+# testing, so it is satisfied by default here; the tests that DO exercise it
+# restore the real implementation explicitly.
+_REAL_WORKTREE_POPULATED = sfc.worktree_populated
+
+
+@pytest.fixture(autouse=True)
+def _assume_worktree_checked_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sfc, "worktree_populated", lambda path: True)
 
 
 def test_parse_gitmodules_returns_records(monkeypatch: pytest.MonkeyPatch, sample_gitmodules: Path) -> None:
@@ -384,3 +399,161 @@ def test_check_one_remote_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     result = sfc.check_one(record)
     assert result.status == "remote_missing", f"expected remote_missing, got {result.status}: {result.detail}"
     assert "could not resolve" in result.detail
+
+
+# ── uninitialized worktrees (2026-08-20) ────────────────────────────────────
+#
+# 13 of 71 submodules were uninitialized on B850 and this tool exited 0. Two
+# independent reasons:
+#
+#   1. `local_uninitialized` was never counted in the summary, so the buckets
+#      silently summed to 58 against total=71.
+#   2. The status only fired when the parent GITLINK was missing from the index.
+#      All 13 had a perfectly good gitlink and an EMPTY directory, which the
+#      tool classified as healthy.
+#
+# PMOVES-MiniMax-MCP was one of them, which is why .claude/mcp.json registers
+# MiniMax from PyPI rather than the submodule.
+
+SOURCE = (sfc.REPO_ROOT / "pmoves" / "tools" / "submodule_freshness_check.py").read_text(
+    encoding="utf-8"
+)
+
+
+def test_worktree_populated_requires_a_dotgit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`git` marks a submodule initialized by placing a .git file/dir inside it —
+    the same signal `git submodule status` uses for its '-' marker."""
+    monkeypatch.setattr(sfc, "worktree_populated", _REAL_WORKTREE_POPULATED)
+    monkeypatch.setattr(sfc, "REPO_ROOT", tmp_path)
+    (tmp_path / "empty-sub").mkdir()
+    assert sfc.worktree_populated("empty-sub") is False
+    assert sfc.worktree_populated("never-created") is False
+
+
+def test_worktree_populated_true_when_checked_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guards the positive case: if this returned False for a real checkout the
+    gate would fail every run and get reverted."""
+    monkeypatch.setattr(sfc, "worktree_populated", _REAL_WORKTREE_POPULATED)
+    monkeypatch.setattr(sfc, "REPO_ROOT", tmp_path)
+    sub = tmp_path / "real-sub"
+    sub.mkdir()
+    (sub / ".git").write_text("gitdir: ../.git/modules/real-sub\n", encoding="utf-8")
+    assert sfc.worktree_populated("real-sub") is True
+
+
+def test_populated_gitlink_with_empty_tree_is_uninitialized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exact shape of all 13: a valid gitlink over an empty directory."""
+    monkeypatch.setattr(sfc, "worktree_populated", _REAL_WORKTREE_POPULATED)
+    monkeypatch.setattr(sfc, "REPO_ROOT", tmp_path)
+    (tmp_path / "sub").mkdir()
+    monkeypatch.setattr(sfc, "parent_gitlink", lambda path: "d1ac7f063d20e70015ed6732664049ae4ba9d74e")
+    result = sfc.check_one({"path": "sub", "url": "https://example/sub.git", "branch": "main"})
+    assert result.status == "local_uninitialized"
+    assert "not checked out" in result.detail
+    assert "git submodule update --init" in result.detail
+
+
+def _report_for(statuses: list[str]) -> sfc.FreshnessReport:
+    """Drive run_check with canned results so the summary code RUNS.
+
+    The tests these replaced asserted against the source text, which is how a
+    missing bucket survived a test named "has a bucket for every status".
+    """
+    records = [{"path": f"p{i}", "url": "u", "branch": "main"}
+               for i in range(len(statuses))]
+    canned = iter([
+        sfc.SubmoduleFreshness(path=f"p{i}", url="u", branch="main", status=st)
+        for i, st in enumerate(statuses)
+    ])
+    with mock.patch.object(sfc, "check_one", lambda record: next(canned)):
+        return sfc.run_check(records, parallel=False)
+
+
+def test_every_declared_status_gets_its_own_bucket() -> None:
+    """One result per status; each must land in exactly one bucket."""
+    report = _report_for(list(sfc.STATUSES))
+    assert report.summary["total"] == len(sfc.STATUSES)
+    for status in sfc.STATUSES:
+        key = sfc._SUMMARY_KEY.get(status, status)
+        assert report.summary[key] == 1, f"{status} did not land in {key}"
+
+
+def test_local_uninitialized_is_counted() -> None:
+    """The counter whose absence hid all 13 on B850."""
+    assert _report_for(["local_uninitialized", "in_sync"])        .summary["local_uninitialized"] == 1
+
+
+def test_unknown_does_not_take_out_the_report() -> None:
+    """`unknown` is reachable whenever ls-remote succeeds but neither commit
+    object can be fetched, and submodule-freshness.yml renders those under
+    "Could not be measured". With no bucket, the invariant raised
+    AssertionError and destroyed the report the workflow exists to publish —
+    a transient fetch failure became a lost diagnostic."""
+    report = _report_for(["unknown", "in_sync"])
+    assert report.summary["unknown"] == 1
+    assert report.summary["total"] == 2
+
+
+def test_an_unaccounted_status_is_named_in_the_error() -> None:
+    with pytest.raises(AssertionError) as excinfo:
+        _report_for(["in_sync", "teleported"])
+    assert "teleported" in str(excinfo.value)
+
+
+def test_statuses_is_derived_not_remembered() -> None:
+    """Every status literal the tool assigns must be declared in STATUSES.
+
+    Derived from the source rather than hand-listed. The previous version of
+    this test hard-coded the five statuses it checked, so it could only ever
+    confirm what the author had already remembered — and it did not remember
+    "unknown".
+    """
+    assigned = set(re.findall(r'status\s*=\s*"([a-z_]+)"', SOURCE))
+    assert assigned, "regex found no status assignments — the test is vacuous"
+    missing = sorted(assigned - set(sfc.STATUSES))
+    assert not missing, f"assigned by the tool but absent from STATUSES: {missing}"
+
+
+def test_uninitialized_failure_branch_can_actually_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """report.submodules holds asdict() output, not dataclasses.
+
+    Attribute access in this branch raised AttributeError and took out the one
+    piece of code whose entire job is to print the fix — a failure path that
+    itself failed, and only on the path it was added for.
+    """
+    report = _report_for(["local_uninitialized", "in_sync"])
+    monkeypatch.setattr(sfc, "parse_gitmodules",
+                        lambda: [{"path": "p0", "url": "u", "branch": "main"}])
+    monkeypatch.setattr(sfc, "run_check", lambda *a, **k: report)
+    rc = sfc.main(["--no-json"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "uninitialized" in err
+    assert "git submodule update --init" in err
+
+
+def test_override_suppresses_the_uninitialized_failure(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report = _report_for(["local_uninitialized", "in_sync"])
+    monkeypatch.setattr(sfc, "parse_gitmodules",
+                        lambda: [{"path": "p0", "url": "u", "branch": "main"}])
+    monkeypatch.setattr(sfc, "run_check", lambda *a, **k: report)
+    assert sfc.main(["--no-json", "--allow-uninitialized"]) == 0
+
+
+def test_uninitialized_fails_without_needing_strict() -> None:
+    """An uninitialized tree is not a freshness signal like remote_ahead — it
+    means the code the gitlink points at is absent. It must fail on its own."""
+    gate = SOURCE[SOURCE.index('if report.summary["local_uninitialized"]'):]
+    before_return = gate.split("return 1")[0]
+    assert "args.strict" not in before_return
+
+
+def test_override_is_explicit_and_documented() -> None:
+    assert "--allow-uninitialized" in SOURCE
+    assert "deliberate partial checkout" in SOURCE
