@@ -1,6 +1,6 @@
 # conventions-guide — financial-model conventions for Excel outputs
 
-> The full rationale behind the tables in [`SKILL.md`](../SKILL.md) §5 —
+> The full rationale behind the convention tables —
 > color coding, number formatting, hardcode source documentation, formula
 > construction discipline, and template-preservation rules. Anything that
 > reviewers would otherwise ask "why this and not that" goes here so the
