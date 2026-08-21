@@ -76,8 +76,29 @@ class SubmoduleFreshness:
     branch: str
     parent_gitlink: Optional[str] = None
     remote_head: Optional[str] = None
-    status: str = "pending"  # in_sync / remote_ahead / remote_behind / remote_missing / local_uninitialized / error
+    status: str = "pending"  # one of STATUSES
     detail: str = ""
+
+
+# The authoritative status set. The summary buckets and the test that guards
+# them BOTH derive from this tuple, so a new status cannot be added without a
+# bucket. The previous arrangement -- a hand-written list in the summary and a
+# hand-written list in the test -- could only ever confirm what the author
+# already remembered, and it did not remember "unknown".
+STATUSES: tuple[str, ...] = (
+    "pending",
+    "in_sync",
+    "remote_ahead",
+    "remote_behind",
+    "remote_missing",
+    "local_uninitialized",
+    "unknown",
+    "error",
+)
+
+# status -> summary key. Only `error` differs: consumers already read
+# summary["errors"], so the key stays plural.
+_SUMMARY_KEY = {"error": "errors"}
 
 
 @dataclass
@@ -341,21 +362,23 @@ def run_check(records: list[dict[str, str]], parallel: bool = True) -> Freshness
     else:
         results = [check_one(r) for r in records]
 
-    summary = {
-        "total": len(results),
-        "in_sync": sum(1 for r in results if r.status == "in_sync"),
-        "remote_ahead": sum(1 for r in results if r.status == "remote_ahead"),
-        "remote_behind": sum(1 for r in results if r.status == "remote_behind"),
-        "remote_missing": sum(1 for r in results if r.status == "remote_missing"),
-        # Counted since 2026-08-20. The status existed and nothing consumed it:
-        # 13 of 71 submodules were uninitialized on B850 and appeared in NO
-        # summary bucket, so the counters silently summed to 58 against
-        # total=71 and the run exited 0. PMOVES-MiniMax-MCP was one of them,
-        # which is why .claude/mcp.json registers MiniMax from PyPI instead of
-        # the submodule.
-        "local_uninitialized": sum(1 for r in results if r.status == "local_uninitialized"),
-        "errors": sum(1 for r in results if r.status in ("error",)),
-    }
+    # Every status in STATUSES gets a bucket, by construction rather than by
+    # remembering. Two were missing when these were hand-listed:
+    #   local_uninitialized -- 13 of 71 submodules were uninitialized on B850
+    #     and appeared in NO bucket, so the counters silently summed to 58
+    #     against total=71 and the run exited 0. PMOVES-MiniMax-MCP was one of
+    #     them, which is why .claude/mcp.json registers MiniMax from PyPI
+    #     instead of the submodule.
+    #   unknown -- reachable whenever ls-remote succeeds but neither commit
+    #     object can be fetched. .github/workflows/submodule-freshness.yml
+    #     renders these under "Could not be measured", so dropping the bucket
+    #     turned a transient fetch failure into an AssertionError that killed
+    #     the report the workflow exists to publish.
+    summary = {"total": len(results)}
+    for _status in STATUSES:
+        summary[_SUMMARY_KEY.get(_status, _status)] = sum(
+            1 for r in results if r.status == _status
+        )
     # The instrument checks itself: every result must land in exactly one
     # bucket. Without this, adding a new status silently shrinks the counters
     # against `total` -- which is precisely how local_uninitialized went
@@ -364,10 +387,15 @@ def run_check(records: list[dict[str, str]], parallel: bool = True) -> Freshness
         v for k, v in summary.items() if k != "total"
     )
     if _bucketed != summary["total"]:
+        unaccounted = sorted({r.status for r in results} - set(STATUSES))
+        cause = (
+            f"status(es) missing from STATUSES: {unaccounted}"
+            if unaccounted
+            else "every status is in STATUSES, so a result is double-counted"
+        )
         raise AssertionError(
             f"freshness summary does not account for every submodule: "
-            f"buckets={_bucketed} total={summary['total']}. A status was added "
-            f"without a counter."
+            f"buckets={_bucketed} total={summary['total']}. {cause}."
         )
 
     return FreshnessReport(
@@ -462,7 +490,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     # missing tree -- which is how the botz-gateway shim and the PyPI MiniMax
     # registration came to exist.
     if report.summary["local_uninitialized"] > 0 and not args.allow_uninitialized:
-        paths = [r.path for r in report.submodules if r.status == "local_uninitialized"]
+        # report.submodules holds asdict() output, not SubmoduleFreshness
+        # objects -- attribute access here raises AttributeError and takes out
+        # the branch whose whole job is to print the fix.
+        paths = [
+            r["path"] for r in report.submodules
+            if r["status"] == "local_uninitialized"
+        ]
         print(
             f"FAIL: {len(paths)} submodule(s) are uninitialized: "
             + ", ".join(sorted(paths)[:10])

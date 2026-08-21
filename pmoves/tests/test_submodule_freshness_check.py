@@ -25,6 +25,7 @@ manually + in CI.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -454,20 +455,95 @@ def test_populated_gitlink_with_empty_tree_is_uninitialized(
     assert "git submodule update --init" in result.detail
 
 
-def test_summary_counts_local_uninitialized() -> None:
-    """The counter whose absence hid all 13."""
-    assert 'r.status == "local_uninitialized"' in SOURCE
-    assert '"local_uninitialized": sum(' in SOURCE
+def _report_for(statuses: list[str]) -> sfc.FreshnessReport:
+    """Drive run_check with canned results so the summary code RUNS.
+
+    The tests these replaced asserted against the source text, which is how a
+    missing bucket survived a test named "has a bucket for every status".
+    """
+    records = [{"path": f"p{i}", "url": "u", "branch": "main"}
+               for i in range(len(statuses))]
+    canned = iter([
+        sfc.SubmoduleFreshness(path=f"p{i}", url="u", branch="main", status=st)
+        for i, st in enumerate(statuses)
+    ])
+    with mock.patch.object(sfc, "check_one", lambda record: next(canned)):
+        return sfc.run_check(records, parallel=False)
 
 
-def test_summary_has_a_bucket_for_every_status() -> None:
-    """The instrument checks itself. Adding a status without a counter shrinks
-    the buckets against `total` — exactly how this went unnoticed."""
-    for status in ("in_sync", "remote_ahead", "remote_behind",
-                   "remote_missing", "local_uninitialized"):
-        assert f'r.status == "{status}"' in SOURCE, f"{status} has no counter"
-    assert 'r.status in ("error",)' in SOURCE
-    assert "does not account for every submodule" in SOURCE, "no bucket-sum invariant"
+def test_every_declared_status_gets_its_own_bucket() -> None:
+    """One result per status; each must land in exactly one bucket."""
+    report = _report_for(list(sfc.STATUSES))
+    assert report.summary["total"] == len(sfc.STATUSES)
+    for status in sfc.STATUSES:
+        key = sfc._SUMMARY_KEY.get(status, status)
+        assert report.summary[key] == 1, f"{status} did not land in {key}"
+
+
+def test_local_uninitialized_is_counted() -> None:
+    """The counter whose absence hid all 13 on B850."""
+    assert _report_for(["local_uninitialized", "in_sync"])        .summary["local_uninitialized"] == 1
+
+
+def test_unknown_does_not_take_out_the_report() -> None:
+    """`unknown` is reachable whenever ls-remote succeeds but neither commit
+    object can be fetched, and submodule-freshness.yml renders those under
+    "Could not be measured". With no bucket, the invariant raised
+    AssertionError and destroyed the report the workflow exists to publish —
+    a transient fetch failure became a lost diagnostic."""
+    report = _report_for(["unknown", "in_sync"])
+    assert report.summary["unknown"] == 1
+    assert report.summary["total"] == 2
+
+
+def test_an_unaccounted_status_is_named_in_the_error() -> None:
+    with pytest.raises(AssertionError) as excinfo:
+        _report_for(["in_sync", "teleported"])
+    assert "teleported" in str(excinfo.value)
+
+
+def test_statuses_is_derived_not_remembered() -> None:
+    """Every status literal the tool assigns must be declared in STATUSES.
+
+    Derived from the source rather than hand-listed. The previous version of
+    this test hard-coded the five statuses it checked, so it could only ever
+    confirm what the author had already remembered — and it did not remember
+    "unknown".
+    """
+    assigned = set(re.findall(r'status\s*=\s*"([a-z_]+)"', SOURCE))
+    assert assigned, "regex found no status assignments — the test is vacuous"
+    missing = sorted(assigned - set(sfc.STATUSES))
+    assert not missing, f"assigned by the tool but absent from STATUSES: {missing}"
+
+
+def test_uninitialized_failure_branch_can_actually_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """report.submodules holds asdict() output, not dataclasses.
+
+    Attribute access in this branch raised AttributeError and took out the one
+    piece of code whose entire job is to print the fix — a failure path that
+    itself failed, and only on the path it was added for.
+    """
+    report = _report_for(["local_uninitialized", "in_sync"])
+    monkeypatch.setattr(sfc, "parse_gitmodules",
+                        lambda: [{"path": "p0", "url": "u", "branch": "main"}])
+    monkeypatch.setattr(sfc, "run_check", lambda *a, **k: report)
+    rc = sfc.main(["--no-json"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "uninitialized" in err
+    assert "git submodule update --init" in err
+
+
+def test_override_suppresses_the_uninitialized_failure(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report = _report_for(["local_uninitialized", "in_sync"])
+    monkeypatch.setattr(sfc, "parse_gitmodules",
+                        lambda: [{"path": "p0", "url": "u", "branch": "main"}])
+    monkeypatch.setattr(sfc, "run_check", lambda *a, **k: report)
+    assert sfc.main(["--no-json", "--allow-uninitialized"]) == 0
 
 
 def test_uninitialized_fails_without_needing_strict() -> None:
