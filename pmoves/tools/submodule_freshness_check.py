@@ -21,6 +21,7 @@ Output: a JSON report on stdout (or a human-readable summary with
         "remote_ahead": <int>,
         "remote_behind": <int>,
         "remote_missing": <int>,
+        "local_uninitialized": <int>,
         "errors": <int>
       },
       "submodules": [
@@ -75,8 +76,29 @@ class SubmoduleFreshness:
     branch: str
     parent_gitlink: Optional[str] = None
     remote_head: Optional[str] = None
-    status: str = "pending"  # in_sync / remote_ahead / remote_behind / remote_missing / local_uninitialized / error
+    status: str = "pending"  # one of STATUSES
     detail: str = ""
+
+
+# The authoritative status set. The summary buckets and the test that guards
+# them BOTH derive from this tuple, so a new status cannot be added without a
+# bucket. The previous arrangement -- a hand-written list in the summary and a
+# hand-written list in the test -- could only ever confirm what the author
+# already remembered, and it did not remember "unknown".
+STATUSES: tuple[str, ...] = (
+    "pending",
+    "in_sync",
+    "remote_ahead",
+    "remote_behind",
+    "remote_missing",
+    "local_uninitialized",
+    "unknown",
+    "error",
+)
+
+# status -> summary key. Only `error` differs: consumers already read
+# summary["errors"], so the key stays plural.
+_SUMMARY_KEY = {"error": "errors"}
 
 
 @dataclass
@@ -171,6 +193,22 @@ def remote_head(url: str, branch: str) -> Optional[str]:
 # ============================================================================
 
 
+def worktree_populated(path: str) -> bool:
+    """True when the submodule's working tree is actually checked out.
+
+    `git` marks a submodule initialized by placing a `.git` file (a gitdir
+    pointer) or directory inside it. Testing that is exactly what `git
+    submodule status` uses for its leading '-' marker.
+
+    This is NOT the same question as "is the gitlink present". The gitlink lives
+    in the parent's index and is there whether or not anyone ran `git submodule
+    update --init`. 13 of 71 submodules on B850 had a perfectly good gitlink and
+    an EMPTY directory, so the parent-gitlink test below classified them as
+    healthy and the run exited 0.
+    """
+    return (REPO_ROOT / path / ".git").exists()
+
+
 def check_one(record: dict[str, str]) -> SubmoduleFreshness:
     """Run the freshness check for a single submodule."""
     path = record["path"]
@@ -184,7 +222,26 @@ def check_one(record: dict[str, str]) -> SubmoduleFreshness:
             url=url,
             branch=branch,
             status="local_uninitialized",
-            detail="parent gitlink is missing or path is uninitialized",
+            detail="parent gitlink is missing from the index",
+        )
+
+    # A present gitlink says nothing about whether the tree was ever checked
+    # out. Both conditions are reported as local_uninitialized -- the status
+    # name is about the LOCAL tree -- but with distinct details, because the
+    # fixes differ: a missing gitlink needs a commit, an empty tree needs
+    # `git submodule update --init`.
+    if not worktree_populated(path):
+        return SubmoduleFreshness(
+            path=path,
+            url=url,
+            branch=branch,
+            parent_gitlink=parent,
+            status="local_uninitialized",
+            detail=(
+                f"gitlink {parent[:9]} is recorded but the working tree at "
+                f"{path} is not checked out; run "
+                f"`git submodule update --init --depth 1 {path}`"
+            ),
         )
 
     remote = remote_head(url, branch)
@@ -305,14 +362,41 @@ def run_check(records: list[dict[str, str]], parallel: bool = True) -> Freshness
     else:
         results = [check_one(r) for r in records]
 
-    summary = {
-        "total": len(results),
-        "in_sync": sum(1 for r in results if r.status == "in_sync"),
-        "remote_ahead": sum(1 for r in results if r.status == "remote_ahead"),
-        "remote_behind": sum(1 for r in results if r.status == "remote_behind"),
-        "remote_missing": sum(1 for r in results if r.status == "remote_missing"),
-        "errors": sum(1 for r in results if r.status in ("error",)),
-    }
+    # Every status in STATUSES gets a bucket, by construction rather than by
+    # remembering. Two were missing when these were hand-listed:
+    #   local_uninitialized -- 13 of 71 submodules were uninitialized on B850
+    #     and appeared in NO bucket, so the counters silently summed to 58
+    #     against total=71 and the run exited 0. PMOVES-MiniMax-MCP was one of
+    #     them, which is why .claude/mcp.json registers MiniMax from PyPI
+    #     instead of the submodule.
+    #   unknown -- reachable whenever ls-remote succeeds but neither commit
+    #     object can be fetched. .github/workflows/submodule-freshness.yml
+    #     renders these under "Could not be measured", so dropping the bucket
+    #     turned a transient fetch failure into an AssertionError that killed
+    #     the report the workflow exists to publish.
+    summary = {"total": len(results)}
+    for _status in STATUSES:
+        summary[_SUMMARY_KEY.get(_status, _status)] = sum(
+            1 for r in results if r.status == _status
+        )
+    # The instrument checks itself: every result must land in exactly one
+    # bucket. Without this, adding a new status silently shrinks the counters
+    # against `total` -- which is precisely how local_uninitialized went
+    # unnoticed. A mismatch is a defect in this tool, not in the repo.
+    _bucketed = sum(
+        v for k, v in summary.items() if k != "total"
+    )
+    if _bucketed != summary["total"]:
+        unaccounted = sorted({r.status for r in results} - set(STATUSES))
+        cause = (
+            f"status(es) missing from STATUSES: {unaccounted}"
+            if unaccounted
+            else "every status is in STATUSES, so a result is double-counted"
+        )
+        raise AssertionError(
+            f"freshness summary does not account for every submodule: "
+            f"buckets={_bucketed} total={summary['total']}. {cause}."
+        )
 
     return FreshnessReport(
         checked_at=datetime.now(timezone.utc).isoformat(),
@@ -334,7 +418,8 @@ def render_human(report: FreshnessReport) -> str:
     lines.append(
         f"  total={s['total']}  in_sync={s['in_sync']}  "
         f"remote_ahead={s['remote_ahead']}  remote_behind={s['remote_behind']}  "
-        f"remote_missing={s['remote_missing']}  errors={s['errors']}"
+        f"remote_missing={s['remote_missing']}  "
+        f"uninitialized={s['local_uninitialized']}  errors={s['errors']}"
     )
     # Highlight the ones that need action.
     for sub in report.submodules:
@@ -355,6 +440,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--no-json",
         action="store_true",
         help="Print a human summary instead of the canonical JSON report.",
+    )
+    parser.add_argument(
+        "--allow-uninitialized",
+        action="store_true",
+        help="Do not fail on uninitialized submodules (deliberate partial checkout).",
     )
     parser.add_argument(
         "--strict",
@@ -392,6 +482,31 @@ def main(argv: Optional[list[str]] = None) -> int:
     else:
         print(json.dumps(asdict(report), indent=2, sort_keys=True))
 
+    # An uninitialized submodule fails REGARDLESS of --strict. It is not a
+    # freshness signal like remote_ahead (informational: the remote moved); it
+    # means the working tree does not contain the code the gitlink points at.
+    # CI checks out with `submodules: recursive`, so seeing it there means the
+    # checkout genuinely failed. Locally it means work will route around a
+    # missing tree -- which is how the botz-gateway shim and the PyPI MiniMax
+    # registration came to exist.
+    if report.summary["local_uninitialized"] > 0 and not args.allow_uninitialized:
+        # report.submodules holds asdict() output, not SubmoduleFreshness
+        # objects -- attribute access here raises AttributeError and takes out
+        # the branch whose whole job is to print the fix.
+        paths = [
+            r["path"] for r in report.submodules
+            if r["status"] == "local_uninitialized"
+        ]
+        print(
+            f"FAIL: {len(paths)} submodule(s) are uninitialized: "
+            + ", ".join(sorted(paths)[:10])
+            + ("" if len(paths) <= 10 else f" (+{len(paths) - 10} more)")
+            + "\n      Fix: git submodule update --init --depth 1 <path>"
+            + "\n      Override with --allow-uninitialized only when a partial "
+              "checkout is deliberate.",
+            file=sys.stderr,
+        )
+        return 1
     if args.strict and report.summary["remote_ahead"] > 0:
         return 1
     return 0
