@@ -589,3 +589,6 @@ dep-matrix: ## Regenerate docs/SERVICE_DEPENDENCY_MATRIX.md from the compose gra
 
 dep-matrix-check: ## Validate dependency graph (blocking fails; advisory warns. STRICT=1 fails on advisory)
 	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; if [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; elif [ $$rc -eq 2 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; fi; exit 0
+
+dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up layers)
+	@$(DEP_MATRIX_RUN) --format shutdown $(COMPOSE_MATRIX_FILES)

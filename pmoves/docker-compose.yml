@@ -551,6 +551,9 @@ services:
   # =============================================================================
 
   supabase-db:
+    # Graceful stop: PostgreSQL: SIGTERM is SMART shutdown (waits for ALL sessions); SIGINT is FAST (aborts txns, clean exit). ~39 consumers hold pooled sessions, so SIGTERM never completes inside the 10s default and Docker escalates to SIGKILL -> WAL recovery. This is the 2026-08-19 6-minute fsync.
+    stop_grace_period: 90s
+    stop_signal: SIGINT
     <<: *tier-supabase-hardened
     image: supabase/postgres:17.6.1.108
     restart: unless-stopped
@@ -1346,6 +1349,8 @@ services:
           cpus: '0.5'
           memory: 256M
   qdrant:
+    # Graceful stop: Segment flush.
+    stop_grace_period: 30s
     image: qdrant/qdrant:v1.16.0
     restart: unless-stopped
     cap_drop:
@@ -1383,6 +1388,8 @@ services:
           cpus: '2.0'
           memory: 4G
   meilisearch:
+    # Graceful stop: Index write.
+    stop_grace_period: 30s
     <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.34.1
     restart: unless-stopped
@@ -1414,6 +1421,8 @@ services:
           cpus: '2.0'
           memory: 4G
   neo4j:
+    # Graceful stop: Page-cache flush and checkpoint on shutdown.
+    stop_grace_period: 60s
     image: neo4j:5.26.22
     env_file:
     - env.tier-data
@@ -1466,6 +1475,8 @@ services:
           cpus: '2.0'
           memory: 4G
   minio:
+    # Graceful stop: Completes in-flight PUTs before exit.
+    stop_grace_period: 30s
     <<: *tier-data-hardened
     # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
     # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
@@ -2969,6 +2980,8 @@ services:
   # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
   nats:
+    # Graceful stop: JetStream state flush.
+    stop_grace_period: 30s
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
     image: nats:2.11.8-alpine
@@ -3237,6 +3250,9 @@ services:
   # a single port (3090, /api/health). Backed by a dedicated Postgres (pg_notify
   # realtime); Archon auto-inits its schema on first boot.
   archon-postgres:
+    # Graceful stop: PostgreSQL: same reason as supabase-db, fewer sessions.
+    stop_grace_period: 60s
+    stop_signal: SIGINT
     image: ${ARCHON_POSTGRES_IMAGE:-postgres:17-alpine}
     container_name: pmoves-archon-postgres
     hostname: archon-postgres
@@ -4231,6 +4247,8 @@ services:
       retries: 5
       start_period: 30s
   tensorzero-clickhouse:
+    # Graceful stop: Flushes parts to disk; a kill mid-merge leaves temp parts behind.
+    stop_grace_period: 60s
     <<: *tier-llm-hardened
     image: clickhouse/clickhouse-server:24.12-alpine
     restart: unless-stopped

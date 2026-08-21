@@ -147,6 +147,8 @@ services:
           memory: 256M
 
   open-notebook-surrealdb-ext:
+    # Graceful stop: RocksDB flush before Docker escalates to SIGKILL.
+    stop_grace_period: 30s
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: pmoves-open-notebook-surrealdb
     restart: unless-stopped

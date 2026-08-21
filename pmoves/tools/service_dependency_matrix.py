@@ -61,6 +61,17 @@ STATEFUL_HINTS = (
     "qdrant", "clickhouse", "minio", "meilisearch", "surrealdb", "nats", "mongo",
 )
 
+# Services that actually PERSIST state and therefore need a clean stop. Kept as an
+# explicit set rather than a substring match: the first version flagged
+# nats-echo-req, a2ui-nats-bridge and nats-init purely because "nats" appears in
+# their names. An over-reporting check trains people to ignore it, which is how a
+# real finding gets missed.
+STATEFUL_SERVICES = {
+    "supabase-db", "archon-postgres", "neo4j", "qdrant", "minio", "meilisearch",
+    "tensorzero-clickhouse", "nats", "open-notebook-surrealdb-ext",
+    "open-notebook-surrealdb", "juicefs-redis",
+}
+
 
 def load_compose(paths):
     """Merge `services` across files. Later files win, mirroring compose overlay order."""
@@ -139,7 +150,23 @@ def analyze(services):
                 weak_waits.append(
                     "{} waits on {} with condition=service_started (data store - 'started' is not 'ready')".format(name, dep)
                 )
+    shutdown_risks = []
+    for name, spec in sorted(services.items()):
+        if name not in STATEFUL_SERVICES:
+            continue
+        grace = spec.get("stop_grace_period")
+        sig = spec.get("stop_signal")
+        if grace is None:
+            shutdown_risks.append(
+                "{} has no stop_grace_period - Docker SIGKILLs it 10s after SIGTERM".format(name)
+            )
+        if any(pg in name for pg in ("postgres", "supabase-db")) and sig != "SIGINT":
+            shutdown_risks.append(
+                "{} uses {} - PostgreSQL treats SIGTERM as SMART shutdown (waits for ALL sessions to end); "
+                "SIGINT is FAST shutdown (aborts transactions, exits cleanly)".format(name, sig or "the SIGTERM default")
+            )
     return {
+        "shutdown_risks": shutdown_risks,
         "layers": layers,
         "cyclic": cyclic,
         "undefined": undefined,
@@ -155,7 +182,7 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("files", nargs="*", help="compose files (default: pmoves/docker-compose.yml)")
-    ap.add_argument("--format", choices=["text", "markdown", "json"], default="text")
+    ap.add_argument("--format", choices=["text", "markdown", "json", "shutdown"], default="text")
     a = ap.parse_args()
 
     paths = [Path(f) for f in a.files] or [Path("pmoves/docker-compose.yml")]
@@ -167,6 +194,18 @@ def main():
     services, read_problems = load_compose(paths)
     r = analyze(services)
 
+    if a.format == "shutdown":
+        # Reverse layer order. Dependants stop BEFORE the things they depend on,
+        # so a data store is never killed while a client still holds a session.
+        print("# Graceful shutdown order (reverse of bring-up)")
+        print("")
+        for i, lyr in enumerate(reversed(r["layers"])):
+            print("## Stop group {} (was layer {})".format(i, len(r["layers"]) - 1 - i))
+            print("")
+            for sname in lyr:
+                print("- `{}`".format(sname))
+            print("")
+        return 0
     if a.format == "json":
         print(json.dumps(r, indent=2))
     elif a.format == "markdown":
@@ -196,7 +235,7 @@ def main():
         print("provenance: {} built-from-source, {} pulled-image, {} UNDEFINED".format(built, pulled, undef))
 
     blocking = bool(r["cyclic"] or r["undefined"] or read_problems)
-    advisory = bool(r["health_gaps"] or r["weak_waits"])
+    advisory = bool(r["health_gaps"] or r["weak_waits"] or r["shutdown_risks"])
     if a.format != "json":
         groups = (
             ("UNREADABLE", read_problems),
@@ -204,6 +243,7 @@ def main():
             ("UNDEFINED DEPENDENCY", r["undefined"]),
             ("HEALTHCHECK GAP", r["health_gaps"]),
             ("WEAK WAIT", r["weak_waits"]),
+            ("UNSAFE SHUTDOWN", r["shutdown_risks"]),
         )
         for label, items in groups:
             if items:
