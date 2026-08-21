@@ -79,16 +79,31 @@ Any wiring effort that starts before submodule init is fixed will produce more o
 
 ### Registration inventory
 
-| MCP surface | ships a Dockerfile? | adapter-ready |
-|---|---|---|
-| `pmoves-e2b-mcp-server` | **yes** | yes |
-| `PMOVES-jcodemunch-mcp` | **yes** | yes |
-| `pmoves-cipher-mcp` | no | needs one |
-| `pmoves-hirag-mcp` | no | needs one (mcp.json already notes this) |
-| `PMOVES-MiniMax-MCP` | **uninitialized** | blocked on init |
-| `botz-mcp-bridge` (23 tools) | in `PMOVES-BoTZ` compose | yes |
-| `docling-mcp`, `vpn-mcp` | in `PMOVES-BoTZ` compose | yes |
-| `hf-mcp-server` | in `pmoves` compose | yes |
+> **Vocabulary note.** An earlier revision of this table used "adapter-ready",
+> which belongs to the Microsoft adapter model **cancelled in §5**. Under that
+> model the gateway is an HTTP reverse proxy to `/adapters/{name}/mcp`, so
+> "adapter-ready" for a stdio server would have been simply wrong. Under
+> Docker's gateway a `type: server` entry means *the gateway runs the container
+> and speaks stdio to it* — stdio is the normal case, not a blocker. The column
+> below is the entry type from `docs/server-entry-spec.md`, not an adapter
+> claim.
+
+| MCP surface | transport | container status | entry type | still needed |
+|---|---|---|---|---|
+| `pmoves-e2b-mcp-server` | stdio | Dockerfile, **no published image** | `server` | build + push an image |
+| `PMOVES-jcodemunch-mcp` | stdio (`uvx`) | Dockerfile, **no published image** | `server` | build + push an image |
+| `pmoves-cipher-mcp` | stdio (legacy) | none | — | **retired on purpose** — do not wire |
+| `pmoves-hirag-mcp` | stdio | none | `server` | Dockerfile first (mcp.json notes this) |
+| `PMOVES-MiniMax-MCP` | stdio | submodule init fixed (#2659) | `server` | Dockerfile |
+| `botz-mcp-bridge` (23 tools) | HTTP `POST /mcp` | runs in `PMOVES-BoTZ` compose | `remote` | nothing — federate as-is |
+| `docling-mcp`, `vpn-mcp` | in `PMOVES-BoTZ` compose | running | `remote` | confirm URLs |
+| `hf-mcp-server` | in `pmoves` compose | running | `remote` | confirm URL |
+
+**A Dockerfile is not an image.** `server-entry-spec.md` makes `image` a required
+field for `type: server`, and notes the image must live somewhere reachable by
+whoever reads the entry. The first two rows above ship Dockerfiles and nothing
+else, so they are two steps from usable, not one — that gap was invisible while
+the column said only "yes".
 
 `.claude/mcp.json` currently registers **15** servers. Every one is a direct client→server connection (stdio / SSE / HTTP). **None** routes through any gateway. The file says so itself: *"interim local wiring until the PMOVES MCP-gateway hub hosts it as an adapter."*
 
@@ -129,8 +144,20 @@ evidence for why the split exists rather than a preference.
 | `pmoves-cipher` :8105 SSE | `remote` | `transport_type: sse` + `headers` for the bearer token |
 | `agent-zero` :8080/mcp | `remote` | already running |
 | `cloudflare-api`, `comfy` (hosted) | `remote` | third-party HTTPS endpoints |
-| `pmoves-e2b-mcp-server`, `PMOVES-jcodemunch-mcp` | `server` | ship Dockerfiles |
-| `pmoves-cipher-mcp`, `pmoves-hirag-mcp`, `PMOVES-MiniMax-MCP` | `server` | need a Dockerfile first |
+| `pmoves-e2b-mcp-server`, `PMOVES-jcodemunch-mcp` | `server` | stdio in a container the gateway runs; Dockerfiles exist, images do not |
+| `pmoves-hirag-mcp`, `PMOVES-MiniMax-MCP` | `server` | need a Dockerfile first |
+| `hi-rag-gateway-v2` :8086 | `remote` | already running |
+| Ultimate-TTS Gradio MCP | `remote` | `transport_type: sse` — Gradio's built-in, **already live** (`GRADIO_MCP_SERVER` defaults `"true"`) |
+| `flute-gateway/mcp_bridge.py` | `remote` | hand-rolled SSE, `verify_api_key` — **already live**, so `headers` carries the key |
+
+The last two are the ones easiest to miss: `MCP_WIRING_INVENTORY_2026-08-09.md`
+lists them as **live but unregistered**. A rollout that federates only the
+surfaces already in `mcp_inventory.json` leaves two running MCP endpoints
+outside the gateway — reachable, unaudited, and not in the one place that is
+supposed to enumerate them.
+
+`pmoves-cipher-mcp` is deliberately absent: the inventory marks it
+**intentionally retired**, and wiring it back would undo that decision.
 
 ### Sequence
 
@@ -140,8 +167,17 @@ evidence for why the split exists rather than a preference.
    `PMOVES.AI-Edition-Hardened` (created at `main` HEAD, zero divergence),
    registered in `fork_registry.json`.
 3. Author the PMOVES catalog: one server entry per surface in the table above.
-4. Stand the gateway up on compose and point `.claude/mcp.json` at it — one
-   endpoint for all agents, which is the actual goal.
+4. Stand the gateway up on compose, then repoint the fleet **at the canonical
+   inventory** — `pmoves/config/mcp_inventory.json` — and regenerate every
+   client config with `pmoves/tools/mcp_config_generator.py`.
+
+   Not `.claude/mcp.json`. That file is a **generated artifact**, one of five
+   the generator writes (`.claude/mcp.json`, `.kimi/mcp.json`, `kilo.json`,
+   the Hermes profile, and `crush.json`). Editing it directly reaches exactly
+   one client, leaves Kimi / KiloCode / Hermes / Crush on their existing direct
+   connections, and is overwritten by the next generator run. "One endpoint for
+   all agents" is only true if the rollout happens where all agents are
+   generated from.
 5. Fix `github-issue-triage` (§3): a `github_*` server entry, then delete
    `BOTZ_MCP_URL`'s `:8102` default and cover it with a test.
 
