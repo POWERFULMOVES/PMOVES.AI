@@ -424,3 +424,15 @@
 	path = pmoves-keygen
 	url = https://github.com/POWERFULMOVES/pmoves-keygen.git
 	branch = master
+[submodule "PMOVES-pterm"]
+	path = PMOVES-pterm
+	url = https://github.com/POWERFULMOVES/PMOVES-pterm.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-gepeto"]
+	path = PMOVES-gepeto
+	url = https://github.com/POWERFULMOVES/PMOVES-gepeto.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-pinokiod"]
+	path = PMOVES-pinokiod
+	url = https://github.com/POWERFULMOVES/PMOVES-pinokiod.git
+	branch = PMOVES.AI-Edition-Hardened

@@ -388,6 +388,24 @@
       "sync": false,
       "branch": "main",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+    },
+    "PMOVES-pterm": {
+      "upstream": "pinokiocomputer/pterm",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "new fork 2026-08-20 for the Pinokio pterm CLI, to be wired as a Pinokio api/ app with SKILL.md. sync:false until first use is proven; promoting also widens App-token scope on the fork, so it stays a deliberate act"
+    },
+    "PMOVES-gepeto": {
+      "upstream": "pinokiocomputer/gepeto",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "new fork 2026-08-20 for the Pinokio gepeto script generator, to be wired as a Pinokio api/ app with SKILL.md. sync:false until first use is proven; promoting also widens App-token scope on the fork"
+    },
+    "PMOVES-pinokiod": {
+      "upstream": "pinokiocomputer/pinokiod",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "new fork 2026-08-20. The hardened branch carries our bound-isHttp patch (upstream PR pinokiocomputer/pinokiod#11, unmerged) that stops an unbounded accumulator from filling the disk. Auto-sync MUST stay false while that delta is un-upstreamed, or a sync could silently revert the fix"
     }
   },
   "_excluded": {

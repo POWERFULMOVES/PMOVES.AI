@@ -103,6 +103,10 @@ routing:
     node: TBD  # operator hasn't stood Hermes up yet; wire is ready
     nats_subject: pmoves.agent.task.v1
     target: hermes-3  # NousResearch Hermes 3
+  pinokio:
+    node: host  # operator device; the Pinokio app-launcher fork
+    nats_subject: pmoves.agent.task.v1
+    target: pmoves-launcher  # which Pinokio app this target resolves to
 
 # === Constraints (non-breaking guarantees) ===
 # Consumers that violate a constraint are broken, not the producer.
