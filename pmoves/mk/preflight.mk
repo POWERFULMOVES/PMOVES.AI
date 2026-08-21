@@ -136,6 +136,11 @@ audit-layers-static: ## Submodule-first static certification pass before runtime
 	@$(MAKE) --no-print-directory ci-runners-lockdown-strict
 	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
 	@$(MAKE) --no-print-directory skill-registry-validate
+	@# Z890 reported logs eating disk; B850 measured 59 of 62 containers
+	@# logging without any max-size. `|| true` because a node with no
+	@# Docker socket exits 3 (unmeasurable) and must not fail a static
+	@# certification pass -- the probe still prints what it found.
+	@$(MAKE) --no-print-directory docker-host-policy-check || true
 	@$(MAKE) --no-print-directory docs-reconcile-check || true
 
 audit-layers-runtime: ## Runtime certification pass once services are online
