@@ -1,5 +1,8 @@
 # LEARNINGS — 6-repo fold-in PR1 (skills fold-in: PMOVES-skills)
 
+
+> **CORRECTION (2026-08-20).** The "recentering" premise below is wrong. `MiniMax-AI/skills` never moved to `vercel-labs/skills` — both are alive, share no history, and are different kinds of thing (a 17-skill MIT *collection* vs the "npx skills" *tool*). `Pmoves-Minimax-skills` is therefore NOT deprecated; it is a live source, now tracked at `PMOVES-skills/sources/`. Kept as written otherwise, since this records what was believed at the time. See `skills/README.md` § Correction.
+
 > Per the 4-bucket taxonomy (missed-signal / fix-pattern / wrong-suggestion / already-addressed).
 > Captured during implementation, before any review. Add more buckets as review threads land.
 
