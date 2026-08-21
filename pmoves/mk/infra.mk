@@ -135,8 +135,33 @@ up-mcp-gateway: ## Start the PMOVES MCP Gateway (one MCP endpoint for every agen
 down-mcp-gateway: ## Stop the PMOVES MCP Gateway
 	@$(MCP_GATEWAY_DC) --profile mcp down $(ARGS)
 
+# Path is needed on its own (not just inside $(MCP_GATEWAY_DC)) so the
+# config-check can read the service's command list back out of it.
+MCP_GATEWAY_COMPOSE_FILE := docker-compose.mcp-gateway.yml
+
+mcp-gateway-config-check: ## Validate the gateway catalog WITHOUT listening (docker's documented --dry-run)
+	@# Docker documents --dry-run as "Start the gateway but do not listen for
+	@# connections (useful for testing the configuration)". This is the cheap,
+	@# no-network gate: it parses the catalog, resolves every entry and exits.
+	@# It does NOT prove federation — a config can be valid and still connect to
+	@# nothing — which is why mcp-gateway-verify exists as well.
+	@# `compose run` REPLACES the service command, so the flags have to be
+	@# supplied again. They are READ OUT OF THE COMPOSE FILE rather than restated
+	@# here: duplicating them in the Makefile is precisely the drift that made
+	@# pmoves-daemon-log-rotation.sh disagree with deploy/provision/daemon.json.
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	args=$$($(PRECHECK_PY) -c "import yaml,shlex,sys; \
+c=yaml.safe_load(open('$(MCP_GATEWAY_COMPOSE_FILE)'))['services']['mcp-gateway']['command']; \
+print(' '.join(shlex.quote(a) for a in c))"); \
+	$(MCP_GATEWAY_DC) run --rm --no-deps mcp-gateway $$args --dry-run $(ARGS)
+
 mcp-gateway-verify: ## Prove the gateway federates: list tools through it, per server
-	@$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
+	@# Sources the same env the gateway itself runs with, so the Bearer token
+	@# comes from the tier files rather than the caller's shell. Without this the
+	@# verifier gets 401 and exits 3 (unmeasured) — correct behaviour, useless
+	@# result.
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
 
 docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
 	@echo "=== Installing Docker Fleet Cleanup Timer ==="
