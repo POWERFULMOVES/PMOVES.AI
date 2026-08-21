@@ -4422,6 +4422,32 @@ up-edge: ensure-env-shared edge-preflight ## Start the Traefik edge + sso-auth (
 	@$(EDGE_DC) up -d
 	@echo "✔ Edge up — verify with 'make edge-health'"
 
+.PHONY: rebuild-edge-svc
+rebuild-edge-svc: ensure-env-shared ## Funnel secrets, then rebuild+recreate ONE edge-overlay service from current source (the edge stale-container killer): make rebuild-edge-svc SVC=sso-auth
+	@# up-edge does `up -d` (no build) and rebuild-svc uses the DEFAULT $(DC), which
+	@# does not know sso-auth (it lives in docker-compose.sso.yml). So a merged sso-auth
+	@# code change (e.g. a forward-auth behavior fix) is NOT picked up by up-edge — the
+	@# container keeps running the stale image. This rebuilds just SVC from the edge
+	@# overlay and recreates it with --no-deps, leaving Traefik (and its live ACME
+	@# state) untouched.
+	@test -n "$(SVC)" || { echo "Usage: make rebuild-edge-svc SVC=sso-auth"; exit 1; }
+	@# AGENTS.md's Known Road for recreating a single service is
+	@# `secrets-funnel && up-<svc>`, and this is a recreate. Compose interpolates
+	@# SUPABASE_JWT_SECRET / JELLYFIN_OIDC_CLIENT_SECRET / SSO_FORWARD_AUTH_SECRET
+	@# from the env files at recreate time, so --force-recreate bakes in whatever is
+	@# on disk. Two of the three have silent defaults in docker-compose.sso.yml
+	@# (`:-$${JWT_SECRET}` and a bare `:-`), so a stale or unhydrated value does not
+	@# fail the recreate -- it yields a RUNNING container with broken auth, which is
+	@# the worst shape of failure to debug from the edge.
+	@# `secrets-rotate` already funnels on its own, so the window is narrow: a bare
+	@# `secrets-local-hydrate` or a CHIT bundle import leaves the env files stale.
+	@# Deliberately run AFTER the SVC guard rather than as a prerequisite, so a
+	@# mistyped invocation fails in a second instead of after the whole funnel.
+	@$(MAKE) --no-print-directory secrets-funnel
+	@echo "→ Rebuilding + recreating edge service $(SVC) from current source (no deps; Traefik untouched)..."
+	@$(EDGE_DC) up -d --build --no-deps --force-recreate $(SVC)
+	@echo "✔ $(SVC) rebuilt + recreated. Verify: make edge-health"
+
 .PHONY: down-edge
 down-edge: ## Stop the Traefik edge + sso-auth
 	@$(EDGE_DC) down
