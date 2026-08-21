@@ -148,6 +148,39 @@ evidence for why the split exists rather than a preference.
 Steps 3–5 are the remaining work. Nothing in them requires Kubernetes or a new
 deployment manager.
 
+## 5a. Best-practice review against the gateway's own docs
+
+The first working configuration was reviewed against `docs/security.md`,
+`docs/mcp-gateway.md`, `docs/profiles.md` and the shipped examples. Five
+deviations were found and corrected; they are recorded because four of them
+would have looked fine indefinitely.
+
+| deviation | why it was wrong | corrected to |
+|---|---|---|
+| Healthcheck POSTed `tools/list` to `/mcp` with no `Authorization` | that endpoint requires a Bearer token, so the probe would have 401'd on every interval and the container would never have gone healthy | `GET /health` — 200/503, and exempted from auth by design (`auth.go:56`) |
+| `/var/run/docker.sock` mounted "for future `type: server` entries" | granted the daemon socket for a capability nothing in the catalog uses. Every entry is `remote`, which starts no containers; the gateway's own remote-only example mounts the catalog and nothing else | socket removed, to be added in the same change as the first `server` entry |
+| `image: docker/mcp-gateway:latest` | a floating tag on the component that authenticates every agent's MCP traffic. The repo already pins images by digest (`minio/mc@sha256:…`) | pinned by digest, resolution verified upstream |
+| `DOCKER_MCP_ALLOW_INSECURE_REMOTE_URLS` under-documented | `docs/security.md` calls it "a development and test opt-out" and puts reports depending on it **out of scope** — the remote-URL boundary is off, and we own that surface | scope, what still holds, and the TLS exit written into the file |
+| Secrets-engine warning unexplained | the gateway defaults to Docker Desktop's secrets API; on Docker CE that socket never exists, so the log line is permanent noise that invites a wild-goose chase | documented as expected, with the correct fix for when a server first declares `secrets:` |
+
+Two further constraints are now recorded rather than discovered later:
+
+* **Origin header.** Requests carrying `Origin` are accepted only from
+  `localhost`/`127.0.0.1`/`::1`. Requests without one are allowed, which is how
+  non-browser clients connect — so CLI and SDK agents reach the gateway across
+  the fleet, while a browser-based agent on another node is rejected by that
+  check, not by the token.
+* **Image verification.** Signature verification is on by default for the Docker
+  Hub `mcp/` namespace and verified images must be referenced **by digest**.
+  That governs the future `type: server` entries, not today's `remote` ones.
+
+On catalogs vs profiles: `docs/catalog.md` marks catalog *management* deprecated
+in favour of Profiles, but Profiles must be turned on explicitly
+(`docker mcp feature enable profiles`) and their MCP Registry references are
+documented as "not fully implemented and not expected to work yet". With the
+flag off — our case — `--catalog` is the supported path and is exactly what the
+shipped `examples/remote_mcp` uses. Revisit when Profiles stabilise.
+
 ## 6. Related finding
 
 `pmoves-botz-mcp-bridge` reported `healthy` to Docker for 5 days while answering `/healthz` with `{"status": "degraded", …, "error": "Integration health check failed: attempted relative import with no known parent package"}`. The check was a bare `urlopen()`, which only raises on transport/HTTP errors — it could not observe the field it existed to observe. Fixed in POWERFULMOVES/PMOVES-BoTZ#190.

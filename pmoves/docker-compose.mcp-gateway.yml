@@ -15,7 +15,12 @@
 
 services:
   mcp-gateway:
-    image: ${MCP_GATEWAY_IMAGE:-docker/mcp-gateway:latest}
+    # Pinned by digest, matching the convention already used in this repo
+    # (e.g. minio/mc@sha256:...). `:latest` on a security boundary means the
+    # thing that authenticates every agent's MCP traffic can change under you
+    # on any `up`. Digest resolved from the image actually pulled and verified
+    # on B850 (built 2026-07-23). Re-pin deliberately after reviewing upstream.
+    image: ${MCP_GATEWAY_IMAGE:-docker/mcp-gateway@sha256:f5a679a05fc39022a046167bef92aeeb01bcd59485ad27843ae5227db7950688}
     container_name: pmoves-mcp-gateway
     hostname: mcp-gateway
     restart: unless-stopped
@@ -37,6 +42,15 @@ services:
       # torn down between calls.
       - --long-lived
       - --log-calls
+      # EXPECTED WARNING, do not chase it: without --secrets the gateway tries
+      # Docker Desktop's secrets API and logs
+      #   Failed to fetch secrets from secrets engine: ... dial unix
+      #   /root/.cache/docker-secrets-engine/engine.sock: no such file
+      # This is Docker CE, not Desktop, so that socket never exists. It is
+      # harmless while no catalogued server declares `secrets:` — none does
+      # today. When one does (cipher's bearer token is the likely first), point
+      # --secrets at an env file materialized by the PMOVES secrets pipeline
+      # rather than baking values into this file.
     environment:
       # The gateway authenticates HTTP/SSE callers with this token. It is NOT
       # optional-by-omission: leaving it unset without --allow-unauthenticated
@@ -55,24 +69,47 @@ services:
       # …while still starting, binding 8091 and reporting itself up. Federating
       # nothing is the exact failure `make mcp-gateway-verify` exists to catch.
       #
-      # SCOPE OF THIS RELAXATION: every URL in catalog.yaml resolves to a
-      # container on an internal Docker bridge network (pmoves_app /
-      # pmoves_pmoves_app). No catalogued endpoint is public, and the gateway's
-      # OWN listener is still authenticated by MCP_GATEWAY_AUTH_TOKEN above.
-      # A public `remote` entry must use https and needs no exemption — do not
-      # add one here to work around a certificate problem.
+      # SCOPE OF THIS RELAXATION, stated plainly because docs/security.md calls
+      # it "a development and test opt-out": with it set, the gateway's
+      # remote-URL boundary is OFF. By default that boundary rejects userinfo,
+      # unsafe hostnames, loopback, private, link-local and metadata-service
+      # ranges and validates redirect destinations — and PMOVES service IPs are
+      # private, so nothing here would pass. docs/security.md also notes that
+      # vulnerability reports depending on this opt-out are out of scope, i.e.
+      # we are outside the upstream security model for this surface and own it
+      # ourselves.
+      #
+      # What still holds: every URL in catalog.yaml resolves to a container on
+      # an internal Docker bridge network (pmoves_app / pmoves_pmoves_app), none
+      # is public, and the gateway's OWN listener remains Bearer-authenticated
+      # via MCP_GATEWAY_AUTH_TOKEN above.
+      #
+      # The real fix is TLS on the internal MCP endpoints, after which this line
+      # is deleted. A public `remote` entry must use https and needs no
+      # exemption — never add one here to paper over a certificate problem.
       DOCKER_MCP_ALLOW_INSECURE_REMOTE_URLS: "1"
     volumes:
       # Mounted INSIDE the catalogs root the gateway will accept. HOME is /root
       # in docker/mcp-gateway:latest (verified), so this is the path that
       # --catalog=pmoves.yaml resolves to.
       - ./config/mcp-gateway/catalog.yaml:/root/.docker/mcp/catalogs/pmoves.yaml:ro
-      # `type: server` entries make the gateway START containers, so it needs
-      # the daemon. `type: remote` entries do not — but the catalog is expected
-      # to grow server entries (jcodemunch, e2b), so the socket is mounted now
-      # rather than in a later change that would look unrelated.
-      - /var/run/docker.sock:/var/run/docker.sock
+      # NO DOCKER SOCKET, deliberately. An earlier revision of this file mounted
+      # /var/run/docker.sock "for future type: server entries" — granting the
+      # daemon socket for a capability nothing in this catalog uses. Every entry
+      # here is type: remote, which starts no containers. The gateway's own
+      # remote-only example (examples/remote_mcp/compose.yaml) mounts the
+      # catalog and nothing else. Add the socket in the SAME change that adds
+      # the first type: server entry, not in advance of it.
     ports:
+      # REACHABILITY CAVEAT, from docs/security.md — worth knowing before anyone
+      # points a browser-based agent at this from another host: requests
+      # carrying an `Origin` header are accepted ONLY from localhost origins
+      # (localhost, 127.0.0.1, ::1). Requests WITHOUT an Origin header are
+      # allowed, which is how non-browser MCP clients connect — so CLI agents,
+      # SDK clients and other services reach this fine across the fleet, while a
+      # browser extension on another node would be rejected by that check rather
+      # than by the Bearer token. Verified in pkg/gateway/transport.go:99
+      # (isAllowedOrigin).
       - "${MCP_GATEWAY_BIND:-0.0.0.0}:${MCP_GATEWAY_PORT:-8091}:8091"
     networks:
       # BOTH app networks on purpose. pmoves-botz-mcp-bridge lives on
@@ -85,14 +122,23 @@ services:
       - pmoves_api
       - pmoves_bus
     healthcheck:
-      # Reads the response body, not just the status line — a 200 that is not
-      # valid MCP is not health. See PMOVES-BoTZ#190 for the pattern this avoids.
-      test:
-        - CMD-SHELL
-        - >-
-          wget -q -O- --header='Content-Type: application/json'
-          --post-data='{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-          http://127.0.0.1:8091/mcp | grep -q '"tools"' || exit 1
+      # /health, not /mcp. An earlier revision POSTed tools/list to /mcp with no
+      # Authorization header — that endpoint requires a Bearer token, so the
+      # check would have 401'd on every interval and the container would never
+      # have gone healthy.
+      #
+      # /health is the right target and is a real status signal: pkg/gateway/
+      # transport.go:87 answers 200 when healthy and 503 when not, and
+      # pkg/gateway/auth.go:56 exempts it from auth by design ("The /health
+      # endpoint is not an MCP protocol endpoint and is intentionally
+      # unauthenticated" — docs/security.md). A status-code check is correct
+      # here; the body-reading pattern from PMOVES-BoTZ#190 is for services that
+      # encode degradation in a 200 body, which this one does not.
+      #
+      # It reports on the GATEWAY PROCESS, not on federation — the gateway
+      # happily serves an empty tool list. `make mcp-gateway-verify` is what
+      # proves each catalogued server actually contributes tools.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8091/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -53,4 +53,13 @@ registry:
 #                     `type: server` candidates (jcodemunch and e2b ship
 #                     Dockerfiles). They need catalog entries with an image
 #                     reference, which is a separate change from standing the
-#                     gateway up.
+#                     gateway up. TWO THINGS TO GET RIGHT THEN:
+#                       * Signature verification is ON by default for images in
+#                         the Docker Hub `mcp/` namespace, and verified images
+#                         must be referenced BY DIGEST (docs/security.md,
+#                         "Image verification"). `--verify-signatures=false` is
+#                         an explicit opt-out and should not be the reflex.
+#                       * The gateway needs /var/run/docker.sock to START
+#                         containers. It is deliberately NOT mounted today
+#                         because every entry here is `remote`. Mount it in the
+#                         same change that adds the first `server` entry.
