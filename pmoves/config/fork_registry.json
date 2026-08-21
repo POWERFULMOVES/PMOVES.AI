@@ -275,11 +275,11 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
-    "Pmoves-skills": {
-      "upstream": "anthropics/skills",
+    "PMOVES-skills": {
+      "upstream": "vercel-labs/skills",
       "sync": false,
-      "branch": "main",
-      "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "the skills package/CLI. Tracks PMOVES.AI-Edition-Hardened, which carries the sources/ overlay; main stays byte-identical to upstream so fork-sync is always a fast-forward. Entry previously read upstream anthropics/skills under the name Pmoves-skills -- that was the Anthropic fork, since renamed to Pmoves-Claude-skills, and GitHub name case-insensitivity handed the vacated name to this repo"
     },
     "PMOVES-surf": {
       "upstream": "e2b-dev/surf",
