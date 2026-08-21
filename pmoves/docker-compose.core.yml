@@ -1470,9 +1470,14 @@ services:
       nats:
         condition: service_healthy
     networks: [pmoves_app, pmoves_bus, pmoves_external]
-    # "ui" so `make up-openroom` (profile ui) also brings up the /api/p7
-    # upstream the OpenRoom nginx proxy targets (p7:8120) — without it the
-    # proxy 502s on every session call.
+    # "ui" so the OpenRoom lane brings up the /api/p7 upstream its nginx proxy
+    # targets (p7:8120) — without it the proxy 502s on every session call.
+    # This carries the OVERLAY path specifically: `up-ui-new` runs
+    # `--profile ui up -d` with NO service named, so profile membership is the
+    # only thing that starts p7 there. The named-service path needs the other
+    # half — naming a service limits `up` to it and its declared dependencies,
+    # and openroom has no `depends_on: p7`, so `up-openroom` names p7 outright.
+    # `up-ui` is unaffected either way: it names pmoves-ui.
     profiles: ["agents", "p7", "ui"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)"]
