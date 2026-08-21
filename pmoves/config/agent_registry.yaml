@@ -3054,25 +3054,43 @@ mcp_servers:
 
   pmoves_nats_mcp:
     name: "pmoves-nats-mcp"
-    submodule: "pmoves-nats-mcp"
+    # FIRST-PARTY, in-repo — not a submodule. Verified: regular blobs in the
+    # index (100644), no entry in .gitmodules. It was declared as `submodule:`
+    # which made `git submodule update --init` look like a prerequisite when
+    # there is nothing to init.
+    path: "pmoves-nats-mcp"
     class: utility
-    transport: "sse"
-    endpoint: "${PMOVES_NATS_MCP_ENDPOINT:-http://pmoves-nats-mcp:8080/sse}"
+    # stdio, NOT sse. server.py uses mcp.server.stdio.stdio_server() and the
+    # Dockerfile says so outright: "The MCP is stdio (client-spawned); this image
+    # is for CI / reproducible runs and a future HTTP/SSE transport."
+    # The previous `transport: sse` + `endpoint: http://pmoves-nats-mcp:8080/sse`
+    # described a server that does not exist: nothing listens on 8080, and no
+    # compose file defines that host. Removed rather than left pointing at air.
+    transport: "stdio"
+    # No endpoint: a stdio bridge is launched by the client, not dialled.
+    # See .claude/mcp.json for the command.
     action_namespace: "mcp.v1.nats"
     capabilities: ["publish", "subscribe", "jetstream", "health"]
     rooms: ["z890-infra.room.fabric", "hermes-agent.room.control"]
-    status: "planned"
+    # Code exists and is wired into .claude/mcp.json for direct client use.
+    # Not deployed as a service, and cannot be until an HTTP/SSE transport is
+    # added — the Dockerfile calls that "future".
+    status: "active-stdio-only"
 
   pmoves_tailscale_mcp:
     name: "pmoves-tailscale-mcp"
-    submodule: "pmoves-tailscale-mcp"
+    # FIRST-PARTY, in-repo — not a submodule (same defect as pmoves_nats_mcp).
+    path: "pmoves-tailscale-mcp"
     class: utility
-    transport: "sse"
-    endpoint: "${PMOVES_TAILSCALE_MCP_ENDPOINT:-http://pmoves-tailscale-mcp:8080/sse}"
+    # stdio, NOT sse — tailscale_mcp/server.py uses stdio_server(). The old
+    # endpoint pointed at a host no compose file defines.
+    # NOTE: .claude/mcp.json currently wires the npm package `tailscale-mcp`,
+    # not this first-party module, so the two are not yet the same thing.
+    transport: "stdio"
     action_namespace: "mcp.v1.tailscale"
     capabilities: ["network", "devices", "authkeys", "tailnet"]
     rooms: ["z890-infra.room.fabric"]
-    status: "planned"
+    status: "active-stdio-only"
 
   # Voice discovery shim (S1c, §4a "two planes, one join key"). Makes the voice
   # capability reachable through the same agent_registry → room plane as every
