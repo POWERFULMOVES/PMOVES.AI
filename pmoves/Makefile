@@ -4422,6 +4422,19 @@ up-edge: ensure-env-shared edge-preflight ## Start the Traefik edge + sso-auth (
 	@$(EDGE_DC) up -d
 	@echo "✔ Edge up — verify with 'make edge-health'"
 
+.PHONY: rebuild-edge-svc
+rebuild-edge-svc: ensure-env-shared ## Rebuild+recreate ONE edge-overlay service from current source (the edge stale-container killer): make rebuild-edge-svc SVC=sso-auth
+	@# up-edge does `up -d` (no build) and rebuild-svc uses the DEFAULT $(DC), which
+	@# does not know sso-auth (it lives in docker-compose.sso.yml). So a merged sso-auth
+	@# code change (e.g. a forward-auth behavior fix) is NOT picked up by up-edge — the
+	@# container keeps running the stale image. This rebuilds just SVC from the edge
+	@# overlay and recreates it with --no-deps, leaving Traefik (and its live ACME
+	@# state) untouched.
+	@test -n "$(SVC)" || { echo "Usage: make rebuild-edge-svc SVC=sso-auth"; exit 1; }
+	@echo "→ Rebuilding + recreating edge service $(SVC) from current source (no deps; Traefik untouched)..."
+	@$(EDGE_DC) up -d --build --no-deps --force-recreate $(SVC)
+	@echo "✔ $(SVC) rebuilt + recreated. Verify: make edge-health"
+
 .PHONY: down-edge
 down-edge: ## Stop the Traefik edge + sso-auth
 	@$(EDGE_DC) down
