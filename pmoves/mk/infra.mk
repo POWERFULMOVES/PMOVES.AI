@@ -119,6 +119,9 @@ CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 
 .PHONY: docker-fleet-cleanup-install docker-fleet-cleanup-status docker-fleet-cleanup-run
 
+docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host (exit 3 = unmeasurable, not a pass)
+	@$(PRECHECK_PY) tools/docker_host_policy_check.py $(ARGS)
+
 docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
 	@echo "=== Installing Docker Fleet Cleanup Timer ==="
 	@if [ "$$(id -u)" -ne 0 ]; then \
