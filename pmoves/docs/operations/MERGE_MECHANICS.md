@@ -18,11 +18,26 @@ waiting on an approval that can never arrive.
 | `required_status_checks.strict` | `true` |
 | `required_status_checks.contexts` | `python-tests`, `hardening-validation`, `verify`, `submodule-gitlink-gate` |
 
-## 1. Merging uses `--admin`
+## 1. Merging goes through `pr-closeout-merge`
 
 ```bash
-gh pr merge <N> --admin --squash
+make -C pmoves pr-closeout-merge   PR=<N> EXPECTED_HEAD=<full-sha> CONFIRM='MERGE #<N> @ <full-sha>'
 ```
+
+**Not `gh pr merge --admin`.** An earlier revision of this document recommended
+exactly that, which was wrong: raw `gh` is a Known Roads bypass under the same
+rule that covers raw `docker` and `ssh`, and `pr-closeout-merge` already exists
+(`mk/preflight.mk:290`, wrapping `tools/pr_closeout.py`).
+
+What the bare command gives up, all at once: head pinning via `EXPECTED_HEAD`
+(so you cannot merge a commit you did not review), rejection of drafts / wrong
+base / `CHANGES_REQUESTED`, an audit of **every** Actions check rather than only
+the six required contexts, restriction of the admin bypass to the expected
+author, and a `CONFIRM` string naming the PR and sha so a mistyped number cannot
+merge the wrong PR.
+
+`pr-closeout-audit` is the same audit without the merge, and is safe to run any
+time.
 
 Every PR authored by `POWERFULMOVES` reports `reviewDecision: REVIEW_REQUIRED`, and
 no approval arrives, so `gh pr merge --auto` waits forever. The last ~15 merges on
@@ -42,16 +57,23 @@ GitHub documents that when the bypass restriction is disabled, admin permissions
 bypass **both** required status checks and required pull request reviews
 ([about-protected-branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)).
 
-There is no flag that skips only the review requirement. So the discipline is
-**sequencing**, not flag choice:
+There is no flag that skips only the review requirement — which is precisely why
+the bypass must be **audited rather than hand-sequenced**. Using `--admin` to get
+past a red check is indistinguishable in the audit log from using it to get past a
+missing approval, and a human following a checklist is the wrong thing to rely on
+for keeping those apart.
 
-1. Poll until all six contexts report `status == "COMPLETED"`
-2. Verify every `conclusion` is `SUCCESS`
-3. *Then* `--admin`
+`pr_closeout.py` is fail-closed and makes the distinction structurally: it inspects
+every check, pins the head, and refuses rather than proceeding when it cannot
+establish readiness.
 
-Using `--admin` to get past a red check is indistinguishable in the audit log from
-using it to get past a missing approval. The sequence is the only thing that keeps
-those two apart.
+A hand-rolled wait loop cannot. The version this document originally carried polled
+for six named contexts and then fell through on timeout without checking whether it
+had ever succeeded. A context that is never created (its workflow fails to
+dispatch) leaves the predicate false for every iteration, and the follow-up query
+for checks that are not SUCCESS only inspects contexts that *exist* — so it returns
+empty. Five green checks plus one missing one then read as all-clear, and the
+checklist proceeds to merge.
 
 ```bash
 # verify, then merge — never merge and then look

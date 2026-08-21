@@ -68,7 +68,9 @@ Store knowledge for future reference:
 ```
 Use pmoves_cipher_store to remember:
 - content: The knowledge to store
-- category: code_pattern, decision, context, submodule, architecture, or reasoning
+- agentId: REQUIRED — your signing-card agent_id (claude-opus, crush, 4090-claude)
+- category: code_pattern, decision, context, submodule, architecture, reasoning,
+            agent_plan, agent_checkpoint, or agent_completion
 - tags: Optional list of tags for retrieval
 ```
 
@@ -96,6 +98,7 @@ stored wording.
 Store this pattern: "PMOVES submodules should include pmoves_announcer,
 pmoves_health, pmoves_registry, pmoves_common in their root directory."
 
+agentId: claude-opus
 Category: code_pattern
 Tags: submodule, pmoves_framework, integration
 ```
@@ -106,7 +109,9 @@ Search stored memories:
 
 ```
 Use pmoves_cipher_search to find:
-- query: Search query (semantic search)
+- query: Search query
+- agentId: REQUIRED — scopes the search. Use "*" for cross-agent (advisory only);
+           a cold-start read that omits the wildcard misses other agents' records
 - category: Optional filter by category
 - tags: Optional filter by tags
 - limit: Maximum results (default: 10)
@@ -115,6 +120,7 @@ Use pmoves_cipher_search to find:
 **Example:**
 ```
 Search for: "submodule integration patterns"
+agentId: claude-opus      (or "*" to search across agents)
 Category: code_pattern
 ```
 
