@@ -141,7 +141,19 @@ jobs:
           # imports it, and its own docstring pins the version it expects
           # (`uv run --with ruamel.yaml==0.19.1`). Matching that pin here keeps
           # the CI run and the documented standalone invocation on one version.
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "ruamel.yaml==0.19.1"]
+          #
+          # pydantic-settings: pmoves/services/common/config.py and four other
+          # services import it. SIX service requirements.txt files declare it -
+          # github-runner-ctl, gpu-orchestrator, graph-linker, model-registry,
+          # p7-room-orchestrator, semantic-cache - but NONE of those six are in
+          # services_with_tests, so CI never installed it from a declaration. It
+          # arrived transitively from agent-zero's requirements.txt, which listed
+          # 56 packages, 42 of them copies of the fork's own list. #2672 cut that
+          # file to the 8 packages PMOVES actually adds, and the accidental
+          # transitive went with it. Declaring it here makes the dependency real
+          # instead of a side effect of a file being too big.
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "ruamel.yaml==0.19.1",
+                           "pydantic-settings"]
 
           import re
           for path in requirements:
