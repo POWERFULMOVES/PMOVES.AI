@@ -31,6 +31,17 @@ class Entry:
     required: bool
     targets: Sequence[Target]
     aliases: Sequence[str] = ()
+    # Minimum usable length, in characters. 0 means "unconstrained".
+    #
+    # Some consumers reject a secret that is present, non-empty, and simply too
+    # short -- and they reject it at RUNTIME, long after the funnel reported
+    # success. Phoenix's cookie store is the worked example: it raises
+    # "cookie store expects conn.secret_key_base to be at least 64 bytes" on
+    # every request, so supabase-realtime answers 500 while its container stays
+    # "running". Measured on 4090 2026-08-22: SECRET_KEY_BASE was 48 chars and
+    # the health check had failed 6118 consecutive times, which reads as a flaky
+    # service rather than a mis-sized secret.
+    min_length: int = 0
 
 
 def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
@@ -88,8 +99,18 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
             raise ValueError(f"Entry {entry_id} has no targets")
 
         required = bool(item.get("required", True))
+        min_length = item.get("min_length", 0)
+        if not isinstance(min_length, int) or isinstance(min_length, bool) or min_length < 0:
+            raise ValueError(f"Entry {entry_id} has non-integer min_length")
         entries.append(
-            Entry(id=entry_id, label=label, required=required, targets=targets, aliases=aliases)
+            Entry(
+                id=entry_id,
+                label=label,
+                required=required,
+                targets=targets,
+                aliases=aliases,
+                min_length=min_length,
+            )
         )
 
     return cgp_path, entries
@@ -131,6 +152,7 @@ def build_outputs(
 ) -> tuple[Dict[str, Dict[str, str]], List[str]]:
     outputs: Dict[str, Dict[str, str]] = defaultdict(dict)
     missing: List[str] = []
+    too_short: List[str] = []
     for entry in entries:
         # Honor legacy aliases: an operator may supply a deprecated name (e.g.
         # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
@@ -157,8 +179,40 @@ def build_outputs(
                 missing.append(entry.label)
             continue
         value = secrets[source_key]
+        # A secret can be present, non-empty, and still unusable because it is too
+        # SHORT. That is the same failure family as blank-is-not-absent above, one
+        # rung further along: `_first_usable` already refuses "" because an empty
+        # secret is not a secret, and a 48-character value where the consumer
+        # demands 64 is not a secret either -- it is a value that parses, passes
+        # every gate, materializes into every tier file, and then fails at runtime.
+        #
+        # Withhold rather than emit. Emitting a known-bad value buys a container
+        # that boots and then answers 500 forever; withholding it makes compose's
+        # `${VAR:?}` refuse at `up` time with the variable named. Loud beats late.
+        if entry.min_length and len(value) < entry.min_length:
+            too_short.append(
+                f"{entry.label} (have {len(value)} chars, need >= {entry.min_length})"
+            )
+            if entry.required:
+                missing.append(entry.label)
+            continue
         for target in entry.targets:
             outputs[target.file][target.key] = value
+    if too_short:
+        print(
+            "WARNING: withheld "
+            + str(len(too_short))
+            + " under-length secret(s): "
+            + ", ".join(sorted(too_short))
+            + " -- rotate with `make -C pmoves secrets-rotate KEY=<NAME> LEN=<n>`. "
+            "LEN is CHARACTERS, not bytes (bootstrap_env.py truncates: "
+            "`secrets.token_urlsafe(length)[:length]`), and it DEFAULTS TO 48 -- "
+            "which is how an under-length value gets minted without anyone choosing "
+            "one. The value is present but shorter than its consumer accepts, so "
+            "emitting it would produce a service that starts and then fails every "
+            "request.",
+            file=sys.stderr,
+        )
     if missing and strict:
         joined = ", ".join(sorted(missing))
         raise KeyError(f"Missing required secrets: {joined}")
