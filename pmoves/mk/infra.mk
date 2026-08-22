@@ -689,3 +689,6 @@ agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY s
 	 mv $$tmp $(A0_REQ_DIR)/requirements.lock; \
 	 echo "agent-zero-lock: regenerated ($$(grep -cE '^[a-zA-Z0-9._-]+==' $(A0_REQ_DIR)/requirements.lock) packages)"; \
 	 $(MAKE) --no-print-directory agent-zero-pin-check
+
+compose-yaml-check: ## Assert every tracked compose file parses (incl. Compose's !reset/!override tags)
+	@uv run --quiet --with pyyaml python tools/compose_yaml_validate.py
