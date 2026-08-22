@@ -309,6 +309,16 @@
         "HARDWARE_TTS_REQUIREMENTS.md"
       ]
     },
+    "PMOVES-mcp-gateway": {
+      "context_tier": 3,
+      "domain_tags": ["infra", "mcp", "agents"],
+      "skills": [],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [],
+      "$note": "Fork of docker/mcp-gateway - the docker-mcp CLI plugin and Docker MCP Gateway, adopted in #2656 as the COMPOSE-fleet MCP substrate (Microsoft's PMOVES-BotZ-gateway stays the Kubernetes one; they target different runtimes). Server entries are server | remote | poci per docs/server-entry-spec.md. skills[] and agents_docs[] are deliberately EMPTY: no .claude/commands/mcp-gateway/* or AGENTS doc exists yet, and naming one that does not exist is what produces the forward-declaration failures this gate already reports. Registered 2026-08-21 to close the coverage gap #2656 opened."
+    },
     "PMOVES-pterm": {
       "context_tier": 3,
       "domain_tags": ["infra", "agents"],
