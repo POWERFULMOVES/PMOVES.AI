@@ -35,6 +35,11 @@ jobs:
   python-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The repository default for GITHUB_TOKEN is `write`, so a job that omits
+    # this block runs the whole test suite with a token that can push to the
+    # repo. These jobs only need to read the checkout.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -47,14 +52,33 @@ jobs:
       - name: Run Python tests (ratchet)
         run: python pmoves/tools/pytest_ratchet.py
 
+  # This job could not fail. Its body parsed ONE of 55 tracked compose files,
+  # sent the error to /dev/null, and ended in `|| echo 'Compose validation
+  # skipped'` - so it exited 0 whatever happened, while sitting in
+  # merge-decision's `needs` supplying a guaranteed green vote under a name that
+  # reads as though Docker builds were being validated. Same shape as the
+  # `merge-gate` job removed from this file for the same reason.
+  #
+  # It now parses all 55 and fails on any that do not. Note the obvious version
+  # of that fix is wrong: two overlays use Compose's own `!reset` / `!override`
+  # merge tags, which plain safe_load rejects. The tool registers them.
   docker-build-validation:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Validate Docker Compose
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install uv
         run: |
-          pip install pyyaml
-          python -c "import yaml; yaml.safe_load(open('pmoves/docker-compose.yml'))" 2>/dev/null || echo 'Compose validation skipped'
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Validate every tracked compose file parses
+        run: make -C pmoves compose-yaml-check
 
   # Ratcheted: judges ALL 99 tracked Dockerfiles (previously globbed
   # pmoves/services/*/Dockerfile, which sees 76 of them and misses 10 of the 12
@@ -195,6 +219,8 @@ jobs:
         run: make -C pmoves agent-zero-pin-check
 
   merge-decision:
+    # Reads nothing and writes nothing - it only inspects `needs` results.
+    permissions: {}
     needs: [python-tests, docker-build-validation, hardening-validation, action-pin-validation,
             agent-registry-check, dep-matrix-check, agent-zero-pin-check]
     runs-on: ubuntu-latest
