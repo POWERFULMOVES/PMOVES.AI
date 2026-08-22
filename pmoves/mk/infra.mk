@@ -128,15 +128,68 @@ docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host 
 # gateway's ${MCP_GATEWAY_AUTH_TOKEN:?} would fail to resolve — the pipeline
 # bypass the deploy guard exists to catch. Run `make -C pmoves secrets-funnel`
 # first on a fresh node so the tier env files carry the token.
-up-mcp-gateway: ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
+up-botz-mcp-bridge: ## Start the BoTZ MCP bridge (23 tools) — the gateway federates it
+	@# Nothing canonical started this before. `up-bots` starts botz-gateway, the
+	@# local work-item SHIM on 8054, which is a different service entirely. The
+	@# bridge lives in the PMOVES-BoTZ compose project and creates the
+	@# pmoves_pmoves_app network the gateway attaches to.
+	@$(BOTZ_STACK_DC) up -d mcp-bridge $(ARGS)
+
+mcp-gateway-preflight: ## Check the gateway's external deps exist before starting it
+	@# The gateway federates servers it does not own. pmoves_pmoves_app is created
+	@# by the PMOVES-BoTZ project, not by this repo, so on a clean node `up`
+	@# aborts with a bare "network not found" — and pre-creating the network by
+	@# hand still yields an EMPTY federation because the bridge is not running.
+	@# Codex P1 on #2665: verification passed on B850 only because that stack
+	@# happened to be up.
+	@missing=0; \
+	for n in pmoves_app pmoves_pmoves_app pmoves_api pmoves_bus; do \
+	  docker network inspect "$$n" >/dev/null 2>&1 || { echo "MISSING network: $$n"; missing=1; }; \
+	done; \
+	docker ps --filter name=pmoves-botz-mcp-bridge --filter status=running -q | grep -q . \
+	  || { echo "NOT RUNNING: pmoves-botz-mcp-bridge (the only catalogued server)"; missing=1; }; \
+	if [ "$$missing" -ne 0 ]; then \
+	  echo ""; \
+	  echo "Fix: make -C pmoves up-botz-mcp-bridge"; \
+	  echo "then: make -C pmoves up-mcp-gateway"; \
+	  exit 1; \
+	fi; \
+	echo "preflight ok: networks present, mcp-bridge running"
+
+up-mcp-gateway: mcp-gateway-preflight ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
 	@$(MCP_GATEWAY_DC) --profile mcp up -d $(ARGS)
 	@echo "MCP Gateway on http://localhost:$${MCP_GATEWAY_PORT:-8091}/mcp"
 
 down-mcp-gateway: ## Stop the PMOVES MCP Gateway
 	@$(MCP_GATEWAY_DC) --profile mcp down $(ARGS)
 
+# Path is needed on its own (not just inside $(MCP_GATEWAY_DC)) so the
+# config-check can read the service's command list back out of it.
+MCP_GATEWAY_COMPOSE_FILE := docker-compose.mcp-gateway.yml
+
+mcp-gateway-config-check: ## Validate the gateway catalog WITHOUT listening (docker's documented --dry-run)
+	@# Docker documents --dry-run as "Start the gateway but do not listen for
+	@# connections (useful for testing the configuration)". This is the cheap,
+	@# no-network gate: it parses the catalog, resolves every entry and exits.
+	@# It does NOT prove federation — a config can be valid and still connect to
+	@# nothing — which is why mcp-gateway-verify exists as well.
+	@# `compose run` REPLACES the service command, so the flags have to be
+	@# supplied again. They are READ OUT OF THE COMPOSE FILE rather than restated
+	@# here: duplicating them in the Makefile is precisely the drift that made
+	@# pmoves-daemon-log-rotation.sh disagree with deploy/provision/daemon.json.
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	args=$$($(PRECHECK_PY) -c "import yaml,shlex,sys; \
+c=yaml.safe_load(open('$(MCP_GATEWAY_COMPOSE_FILE)'))['services']['mcp-gateway']['command']; \
+print(' '.join(shlex.quote(a) for a in c))"); \
+	$(MCP_GATEWAY_DC) run --rm --no-deps mcp-gateway $$args --dry-run $(ARGS)
+
 mcp-gateway-verify: ## Prove the gateway federates: list tools through it, per server
-	@$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
+	@# Sources the same env the gateway itself runs with, so the Bearer token
+	@# comes from the tier files rather than the caller's shell. Without this the
+	@# verifier gets 401 and exits 3 (unmeasured) — correct behaviour, useless
+	@# result.
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
 
 docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
 	@echo "=== Installing Docker Fleet Cleanup Timer ==="
@@ -607,3 +660,32 @@ dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up l
 
 agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
 	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
+
+# ── Agent Zero dependency overlay ──────────────────────────────
+# The image installs deps twice into one venv: the fork's requirements first,
+# ours second as a --constraint. Ours therefore wins. These two targets keep
+# that from silently overriding the fork's declared pins.
+
+A0_REQ_DIR = services/agent-zero
+
+agent-zero-pin-check: ## Assert our lock never violates a pin the Agent Zero fork declares
+	@uv run --quiet --with packaging python tools/agent_zero_pin_check.py
+
+agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY sanctioned way)
+	@# --upgrade is load-bearing: without it uv treats the existing lock as
+	@# PREFERENCES and carries a stale resolution forward while showing no diff.
+	@# --python-platform linux because the image is Linux and this repo is worked
+	@# on from Windows.
+	@# UV_CUSTOM_COMPILE_COMMAND makes the lock header record THIS target, which
+	@# is what agent-zero-pin-check verifies - a hand-run of `uv pip compile`
+	@# writes its own command line there and fails the check.
+	@tmp=$$(mktemp); \
+	 UV_CUSTOM_COMPILE_COMMAND="make -C pmoves agent-zero-lock" \
+	 uv pip compile $(A0_REQ_DIR)/requirements.txt \
+	   --python-version 3.11 --python-platform linux --generate-hashes \
+	   --upgrade -o $$tmp; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then rm $$tmp; echo "agent-zero-lock: compile FAILED (exit $$rc) - lock left unchanged"; exit 1; fi; \
+	 if [ ! -s $$tmp ]; then rm $$tmp; echo "agent-zero-lock: produced EMPTY output - lock left unchanged"; exit 1; fi; \
+	 mv $$tmp $(A0_REQ_DIR)/requirements.lock; \
+	 echo "agent-zero-lock: regenerated ($$(grep -cE '^[a-zA-Z0-9._-]+==' $(A0_REQ_DIR)/requirements.lock) packages)"; \
+	 $(MAKE) --no-print-directory agent-zero-pin-check

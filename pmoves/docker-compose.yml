@@ -1257,6 +1257,16 @@ services:
   supabase-vector:
     <<: *tier-supabase-hardened
     image: timberio/vector:0.28.1-alpine
+    # vector 0.28.1 builds a proxy connector from HTTP_PROXY/HTTPS_PROXY and fails
+    # on an EMPTY one -- "Failed to build Proxy connector: empty string" -- then
+    # crash-loops. An ABSENT var is fine; an empty one is fatal. Compose has no
+    # syntax to UNSET a variable, so unset here and exec the image's entrypoint.
+    #
+    # The pass-through form below was added to fix this and cannot: compose
+    # resolves bare `- HTTP_PROXY` from --env-file too, so it inherits the very
+    # empty string it was meant to escape. Measured:
+    #   compose: environment: [- FOO]  +  vars.cfg: FOO=  ->  FOO is SET-EMPTY
+    entrypoint: ["/bin/sh", "-c", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; exec /usr/local/bin/vector \"$$@\"", "--"]
     command: ["--config", "/etc/vector/vector.yml"]
     restart: unless-stopped
     profiles:
@@ -1279,7 +1289,11 @@ services:
     # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
     - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD-SHELL", "vector validate /etc/vector/vector.yml || exit 1"]
+      # Docker execs the healthcheck SEPARATELY, with the container's configured
+      # environment -- so it still sees the empty proxy vars the entrypoint unsets
+      # for the main process. Without this the container RUNS FINE and is marked
+      # unhealthy forever (observed on the node: FailingStreak 472, status=running).
+      test: ["CMD-SHELL", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; vector validate /etc/vector/vector.yml || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -3898,7 +3912,7 @@ services:
     - pmoves_bus
     - pmoves_data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8107/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8107/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -4760,7 +4774,7 @@ services:
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8504/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8504/ >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

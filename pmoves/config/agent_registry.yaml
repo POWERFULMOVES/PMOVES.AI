@@ -3023,7 +3023,13 @@ mcp_servers:
     submodule: "pmoves-e2b-mcp-server"
     class: utility
     transport: "sse"
-    endpoint: "${PMOVES_E2B_MCP_ENDPOINT:-http://pmoves-e2b-mcp:8080/sse}"
+    # endpoint intentionally absent: status is `planned`, and no compose service
+    # serves this. The shipped server (see pmoves_e2b_mcp_server) is stdio-only -
+    # its Dockerfile has no EXPOSE and its entrypoint speaks stdio. Publishing
+    # http://pmoves-e2b-mcp:8080/sse here made the registry assert an address
+    # nothing answers on, while the sibling entry said `port: null`. Restore an
+    # endpoint here only when something actually listens.
+    endpoint: null
     action_namespace: "mcp.v1.e2b"
     capabilities: ["sandbox", "execution", "artifacts"]
     rooms: ["4090-field.room.control", "hermes-agent.room.control"]
