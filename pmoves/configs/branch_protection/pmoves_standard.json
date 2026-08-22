@@ -80,7 +80,7 @@
   "per_repo_overrides": {
     "POWERFULMOVES/pmoves-keygen": {
       "profile": "fork",
-      "branch": "master"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-E2B-Danger-Room": {
       "profile": "fork",
@@ -132,19 +132,19 @@
     },
     "POWERFULMOVES/PMOVES-agents.md": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-MiniMax-MCP": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/Pmoves-minimax-cli": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-OrcaSlicer": {
       "profile": "fork",
@@ -219,7 +219,7 @@
     },
     "POWERFULMOVES/PMOVES-nats-server": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     }
   }
 }

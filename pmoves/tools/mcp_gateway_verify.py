@@ -76,24 +76,32 @@ def load_catalog_servers() -> List[str]:
     return sorted((data.get("registry") or {}).keys())
 
 
-def list_tools(url: str, token: Optional[str]) -> List[dict]:
-    payload = json.dumps(
-        {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
-    ).encode("utf-8")
-    request = urllib.request.Request(url, data=payload, method="POST")
+def _post(url: str, token: Optional[str], payload: dict,
+          session: Optional[str] = None) -> tuple[Optional[dict], Optional[str]]:
+    """One JSON-RPC POST. Returns (parsed body or None, Mcp-Session-Id or None)."""
+    request = urllib.request.Request(
+        url, data=json.dumps(payload).encode("utf-8"), method="POST"
+    )
     request.add_header("Content-Type", "application/json")
+    # Streamable HTTP may answer either content type; asking for both keeps the
+    # server from 406-ing the handshake.
     request.add_header("Accept", "application/json, text/event-stream")
     if token:
         request.add_header("Authorization", f"Bearer {token}")
+    if session:
+        request.add_header("Mcp-Session-Id", session)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             body = response.read().decode("utf-8")
+            sid = response.headers.get("Mcp-Session-Id")
     except urllib.error.HTTPError as exc:
         raise Unreachable(f"{url}: HTTP {exc.code} {exc.reason}") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise Unreachable(f"{url}: {exc}") from exc
 
-    # streaming transport may answer as SSE; take the last data: line.
+    if not body.strip():
+        return None, sid
+    # SSE framing: take the last `data:` line.
     if body.lstrip().startswith("event:") or "\ndata:" in body:
         chunks = [l[5:].strip() for l in body.splitlines() if l.startswith("data:")]
         body = chunks[-1] if chunks else body
@@ -101,8 +109,32 @@ def list_tools(url: str, token: Optional[str]) -> List[dict]:
         parsed = json.loads(body)
     except json.JSONDecodeError as exc:
         raise Unreachable(f"{url}: response is not JSON: {body[:160]!r}") from exc
-    if "error" in parsed:
+    if isinstance(parsed, dict) and "error" in parsed:
         raise Unreachable(f"{url}: gateway returned error: {parsed['error']}")
+    return parsed, sid
+
+
+def list_tools(url: str, token: Optional[str]) -> List[dict]:
+    """Full MCP handshake, then tools/list.
+
+    `tools/list` on its own is rejected — "method \"tools/list\" is invalid
+    during session initialization". The streamable HTTP transport requires
+    initialize -> notifications/initialized first, and the server hands back an
+    Mcp-Session-Id that every subsequent request must carry.
+    """
+    _, session = _post(url, token, {
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "pmoves-mcp-gateway-verify", "version": "1.0.0"},
+        },
+    })
+    # Notification: no id, no response expected.
+    _post(url, token, {"jsonrpc": "2.0", "method": "notifications/initialized"}, session)
+    parsed, _ = _post(url, token, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, session)
+    if not parsed:
+        raise Unreachable(f"{url}: empty response to tools/list")
     return (parsed.get("result") or {}).get("tools") or []
 
 

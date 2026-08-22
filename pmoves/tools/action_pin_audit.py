@@ -159,10 +159,19 @@ def _get(path: str, cache: Dict[str, Any]) -> Optional[Any]:
 
 
 def workflow_files() -> List[Path]:
-    """Tracked workflow files, so an untracked scratch copy is never audited."""
+    """Tracked workflow AND composite-action files.
+
+    `.github/actions/**/action.yml` was missed until 2026-08-21. A composite
+    action pins third-party actions exactly like a workflow does, and an
+    unresolvable pin there fails the calling workflow at SETUP — the same
+    invisible `startup_failure` this tool exists to prevent, one level down and
+    outside the directory it was scanning. Nothing in .github/actions/ happened
+    to be broken when this was found, which is precisely the wrong reason to
+    leave a gate blind to it.
+    """
     try:
         out = subprocess.run(
-            ["git", "ls-files", ".github/workflows"],
+            ["git", "ls-files", ".github/workflows", ".github/actions"],
             cwd=REPO_ROOT, capture_output=True, text=True, check=True,
         ).stdout
         paths = [REPO_ROOT / line for line in out.splitlines() if line.strip()]
@@ -170,11 +179,14 @@ def workflow_files() -> List[Path]:
             return [p for p in paths if p.suffix in (".yml", ".yaml") and p.is_file()]
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
-    if not WORKFLOW_DIR.is_dir():
-        return []
-    return sorted(
-        p for p in WORKFLOW_DIR.iterdir() if p.suffix in (".yml", ".yaml") and p.is_file()
-    )
+    found: List[Path] = []
+    if WORKFLOW_DIR.is_dir():
+        found += [p for p in WORKFLOW_DIR.iterdir()
+                  if p.suffix in (".yml", ".yaml") and p.is_file()]
+    actions_dir = REPO_ROOT / ".github" / "actions"
+    if actions_dir.is_dir():
+        found += [p for p in actions_dir.rglob("action.y*ml") if p.is_file()]
+    return sorted(found)
 
 
 def _display_path(path: Path) -> str:
