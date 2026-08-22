@@ -13,8 +13,14 @@ architecture ([[vision_tailnet_mesh_pinokio_customdomains]]).
   names → the serving node's tailnet IP; it forwards everything else (apex/www/mail) upstream
   so the public site + email are unaffected. Currently mapped → 5090:
   `notebook` · `health` · `wealth` · `auth` · `media` · `jellyfin`.pmoves.ai.
-- **Tailscale split-DNS** routes `pmoves.ai` queries from every tailnet device to that KVM2
+- **Tailscale split-DNS** routes `pmoves.ai` queries from tailnet devices to that KVM2
   resolver. **This is the one switch that turns the whole thing on.**
+
+> **Access is identity-scoped, not tailnet-wide.** Reaching the KVM2 resolver *and* the
+> 5090's HTTPS port requires the device be an **owner/admin identity or a `tag:pmoves`
+> device** — per `pmoves/configs/tailscale-acl-policy.json`, ordinary members and the
+> partner/guest roles have no route to either, so split-DNS alone won't grant them access.
+> Enroll your phone under your owner login (or tag it `tag:pmoves`).
 
 ## STEP 1 — Turn on split-DNS (Tailscale admin console — 30 seconds, YOUR hands)
 
@@ -36,8 +42,8 @@ If it still returns your local router or NXDOMAIN, the toggle didn't save.
 ## STEP 2 — Jellyfin on mobile / Android (the media client)
 
 Jellyfin is served at **`https://media.pmoves.ai`** (Traefik, real LE cert, Jellyfin's own
-login — no SSO gate in front). Media files live on **JuiceFS** storage behind it (see below);
-you point the *app* at Jellyfin, not at JuiceFS.
+login — no SSO gate in front). You point the *app* at Jellyfin, not at the storage behind it;
+where that storage lives today vs. where it's headed is in **JuiceFS** below.
 
 **Prerequisite:** the phone must be **on the tailnet** — install the **Tailscale** app, sign
 in to the same tailnet, keep it connected. Then split-DNS (Step 1) makes `media.pmoves.ai`
@@ -64,13 +70,26 @@ Same pattern, in a browser on a tailnet device (SSO login once):
 
 ## JuiceFS — where the media lives (storage, not a client)
 
-JuiceFS is the distributed object store (S3 gateway, replacing MinIO) that backs media +
-artifacts across nodes. The `pmoves-juicefs-gateway` is healthy on the 5090. You don't point a
-phone at JuiceFS — Jellyfin reads media from the JuiceFS-mounted library and serves it. Cross-
-node mount runbook: `docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md`.
+**Target:** JuiceFS is the distributed FS (S3 gateway, replacing MinIO) that will back media +
+artifacts across nodes; you never point a phone at it — Jellyfin reads its library from the
+mount and serves it.
+
+**Current state (be accurate):** `docker-compose.external.yml` binds Jellyfin's `/media` to
+`${JELLYFIN_MEDIA_DIR:-./data/jellyfin/media}` — a **5090-local directory**, NOT the shared
+JuiceFS mount yet. So a freshly-set-up library shows local/empty content, not shared media.
+The `pmoves-juicefs-gateway` is healthy on the 5090, but the cross-node `pmoves-media` FS is
+not mounted here: remote nodes can't reach the B850 metadata engine (`supabase-db` sits on
+`internal: true` networks). Backing Jellyfin with the shared FS means, in order:
+1. land the metadata-reachability lane — scoped `juicefs_meta` role → mount cutover → rotate
+   `supabase_admin` → tailnet-expose `supabase-db`
+   (`docs/handoffs/juicefs-meta-scoped-role-and-tailnet-exposure-2026-08-18.md`);
+2. mount `pmoves-media` on the 5090 (`docs/operations/JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md`);
+3. repoint `JELLYFIN_MEDIA_DIR` at that mount, then
+   `make -C pmoves rebuild-external-svc SVC=jellyfin-ext`.
+
 (Open item: `pmoves-jellyfin-ai` is pinned to a Knuckles JuiceFS path with shared-mount
-propagation not present on the 5090 — a separate node-mount decision, tracked; the main
-`pmoves-jellyfin` server is now healthy and independent of it.)
+propagation absent on the 5090 — a separate node-mount decision, tracked; the main
+`pmoves-jellyfin` server is healthy and independent of it.)
 
 ## Pinokio custom domains (after Step 1)
 
