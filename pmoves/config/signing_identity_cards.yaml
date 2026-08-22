@@ -35,7 +35,7 @@ cards:
   ml:
     primary_method: ssh
     ssh_fingerprint: "SHA256:ml72HJ6Ogy1+ItxLrmw2MUSppoF6R4o+Wu4JBjZ6fjc"
-    ssh_allowed_signers_line: "darkxside ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKlUa2a2mSQU4XjjMowHr/0M8XtUG+mmxLcf7NIWOkGD pmoves@pmoves.ai"
+    ssh_allowed_signers_line: "powerfulmoves@pmoves.ai,pmoves@pmoves.ai,cataclysmstudios@gmail.com,142271328+POWERFULMOVES@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKlUa2a2mSQU4XjjMowHr/0M8XtUG+mmxLcf7NIWOkGD pmoves@pmoves.ai"
   h:
     agent_id: "darkxside"
     display_name: "DARKXSIDE"

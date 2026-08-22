@@ -13,5 +13,5 @@
 # it simply has no SSH key to trust.
 
 crush ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJXIevP0hVO7ibhW/NVUGeC/RGHkAoe/WUyKpveO2Bk7 pmoves@pmoves.ai
-darkxside ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKlUa2a2mSQU4XjjMowHr/0M8XtUG+mmxLcf7NIWOkGD pmoves@pmoves.ai
+powerfulmoves@pmoves.ai,pmoves@pmoves.ai,cataclysmstudios@gmail.com,142271328+POWERFULMOVES@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKlUa2a2mSQU4XjjMowHr/0M8XtUG+mmxLcf7NIWOkGD pmoves@pmoves.ai
 spark-runner ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxBf0NrpzHGHeZNHL4gEDKMqgu3jbPgQhYKzaMvxq5t pmoves@pmoves.ai
