@@ -147,7 +147,17 @@ jobs:
           for path in requirements:
               with path.open() as handle:
                   for raw in handle:
-                      line = raw.strip()
+                      # Strip inline comments BEFORE anything else. pip treats
+                      # " #" as a comment separator, and a requirements.txt is
+                      # entitled to use it. This loop used to strip it only on
+                      # the preserve_specs path; every other package relied on
+                      # re.split() on a version operator to shed the comment as
+                      # a side effect. A bare name with an inline comment --
+                      # "nats-py  # NATS bus integration" -- has no operator to
+                      # split on, so the whole line, comment and all, was handed
+                      # to `pip install` as one requirement. That took every
+                      # branch's python-tests down until it was noticed.
+                      line = raw.split(" #", 1)[0].strip()
                       if not line or line.startswith("#") or line.startswith("-"):
                           continue  # Skip comments, empty lines, and pip options
                       # Extract just the package name
@@ -156,7 +166,7 @@ jobs:
                       if normalized in skip_normalized:
                           continue
                       if normalized in preserve_normalized:
-                          packages.add(line.split(" #", 1)[0].strip())
+                          packages.add(line)  # already comment-stripped above
                       else:
                           packages.add(name)
 
