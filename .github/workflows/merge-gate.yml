@@ -93,8 +93,102 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python pmoves/tools/action_pin_audit.py
 
+  # pmoves/config/agent_registry.yaml is what a human or a tool reads to answer
+  # "what is this component and how do I reach it". Two entries claimed a
+  # submodule that is not in .gitmodules and an SSE endpoint nothing listens on,
+  # while the code was first-party and stdio-only. A drifted registry does not
+  # fail loudly; it quietly sends people somewhere that does not exist.
+  agent-registry-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Installed via the official script rather than a marketplace action: no
+      # other workflow here uses setup-uv, so adding it would mean a new entry in
+      # the Actions allowlist and another SHA to keep pinned, for one binary.
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The same make target a human runs. A CI-only invocation drifts from the
+      # local one, and then only one of them is ever right.
+      - name: Check the agent registry describes reality
+        run: make -C pmoves agent-registry-check
+
+  # Bring-up order is DERIVED from the compose graph rather than authored, so it
+  # cannot drift silently as services are added. Blocking findings are a
+  # dependency cycle, a dependency nothing defines, and an unreadable or missing
+  # compose input. Healthcheck gaps and weak waits are advisory (exit 3) and only
+  # warn.
+  #
+  # Advisory is exit 3 and deliberately not 2, because 2 is what a FAILED RUNNER
+  # returns - argparse uses it, and uv returns it when the script cannot start.
+  # A caller that treated 2 as advisory could not tell "the graph has advice"
+  # from "the tool never ran", and would accept an empty result as success.
+  dep-matrix-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Installed via the official script rather than a marketplace action: no
+      # other workflow here uses setup-uv, so adding it would mean a new entry in
+      # the Actions allowlist and another SHA to keep pinned, for one binary.
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Validate the compose dependency graph
+        run: make -C pmoves dep-matrix-check
+
+  # The agent-zero image installs dependencies TWICE into one venv - the fork's
+  # requirements first, ours second as a --constraint - so ours wins. Our lock
+  # had resolved a package BELOW the version the fork pins for a published
+  # advisory, because we declared a package that caps it. The fork's pin was
+  # intact in the fork's file the whole time; the image ran something else.
+  #
+  # This lived in its own path-filtered workflow first. Per GitHub's own
+  # guidance, a path-filtered workflow can never safely be a required check: a
+  # skipped workflow leaves its checks Pending and blocks the merge, so the
+  # advice is to avoid requiring workflows that can be skipped. A check that can
+  # never gate anything is the same orphan this commit exists to remove, so it
+  # lives here instead - unfiltered, aggregated, and requirable.
+  #
+  # No submodule checkout needed: the tool falls back to fetching the fork's
+  # requirements.txt at the GITLINK sha over https, which keeps the comparison
+  # deterministic. Gitlink-vs-branch drift is submodule-freshness.yml's job.
+  agent-zero-pin-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check our lock against the fork's declared pins
+        run: make -C pmoves agent-zero-pin-check
+
   merge-decision:
-    needs: [python-tests, docker-build-validation, hardening-validation, action-pin-validation]
+    needs: [python-tests, docker-build-validation, hardening-validation, action-pin-validation,
+            agent-registry-check, dep-matrix-check, agent-zero-pin-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -105,6 +199,9 @@ jobs:
           echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
           echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
           echo "  action-pin-validation: ${{ needs.action-pin-validation.result }}"
+          echo "  agent-registry-check: ${{ needs.agent-registry-check.result }}"
+          echo "  dep-matrix-check: ${{ needs.dep-matrix-check.result }}"
+          echo "  agent-zero-pin-check: ${{ needs.agent-zero-pin-check.result }}"
           # REQUIRE success — do not merely reject "failure".
           #
           # A needs.<job>.result is one of success | failure | cancelled | skipped.
@@ -113,14 +210,17 @@ jobs:
           # shape this PR exists to remove, reproduced in the gate meant to close it:
           # an instrument that reports fine without having measured anything.
           #
-          # None of the four jobs carries an `if:` or a path filter, so they always
+          # None of the seven jobs carries an `if:` or a path filter, so they always
           # run — a skip is not a legitimate state here, and if one ever appears it
           # is itself worth failing on rather than passing silently.
           failed=0
           for r in "python-tests:${{ needs.python-tests.result }}" \
                    "docker-build-validation:${{ needs.docker-build-validation.result }}" \
                    "hardening-validation:${{ needs.hardening-validation.result }}" \
-                   "action-pin-validation:${{ needs.action-pin-validation.result }}"; do
+                   "action-pin-validation:${{ needs.action-pin-validation.result }}" \
+                   "agent-registry-check:${{ needs.agent-registry-check.result }}" \
+                   "dep-matrix-check:${{ needs.dep-matrix-check.result }}" \
+                   "agent-zero-pin-check:${{ needs.agent-zero-pin-check.result }}"; do
             job="${r%%:*}"; res="${r#*:}"
             if [[ "$res" != "success" ]]; then
               echo "::error::Merge gate FAILED — $job did not succeed (result: ${res:-<empty>})"
@@ -130,4 +230,4 @@ jobs:
           if [[ "$failed" -ne 0 ]]; then
             exit 1
           fi
-          echo "Merge gate PASSED — all four gates reported success"
+          echo "Merge gate PASSED — all seven gates reported success"
