@@ -399,7 +399,7 @@
 [submodule "PMOVES-nats-server"]
 	path = PMOVES-nats-server
 	url = https://github.com/POWERFULMOVES/PMOVES-nats-server.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "skills/PMOVES-skills"]
 	path = skills/PMOVES-skills
 	url = https://github.com/POWERFULMOVES/PMOVES-skills.git
@@ -407,23 +407,23 @@
 [submodule "PMOVES-MiniMax-MCP"]
 	path = PMOVES-MiniMax-MCP
 	url = https://github.com/POWERFULMOVES/PMOVES-MiniMax-MCP.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "Pmoves-minimax-cli"]
 	path = Pmoves-minimax-cli
 	url = https://github.com/POWERFULMOVES/Pmoves-minimax-cli.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "Pmoves-MiniMax-Provider-Verifier"]
 	path = Pmoves-MiniMax-Provider-Verifier
 	url = https://github.com/POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-agents.md"]
 	path = PMOVES-agents.md
 	url = https://github.com/POWERFULMOVES/PMOVES-agents.md.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "pmoves-keygen"]
 	path = pmoves-keygen
 	url = https://github.com/POWERFULMOVES/pmoves-keygen.git
-	branch = master
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-pterm"]
 	path = PMOVES-pterm
 	url = https://github.com/POWERFULMOVES/PMOVES-pterm.git

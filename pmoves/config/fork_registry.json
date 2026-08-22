@@ -332,7 +332,7 @@
     "PMOVES-agents.md": {
       "upstream": "agentsmd/agents.md",
       "sync": false,
-      "branch": "main",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "PMOVES-fluidd": {
@@ -344,19 +344,19 @@
     "pmoves-keygen": {
       "upstream": "charmbracelet/keygen",
       "sync": false,
-      "branch": "master",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "Pmoves-minimax-cli": {
       "upstream": "MiniMax-AI/cli",
       "sync": false,
-      "branch": "main",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "Pmoves-MiniMax-Provider-Verifier": {
       "upstream": "MiniMax-AI/MiniMax-Provider-Verifier",
       "sync": false,
-      "branch": "main",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "PMOVES-moonraker-obico": {
@@ -374,7 +374,7 @@
     "PMOVES-nats-server": {
       "upstream": "nats-io/nats-server",
       "sync": false,
-      "branch": "main",
+      "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "untriaged - backfilled by the .gitmodules coverage cross-check. Promoting to sync: true also widens the App-token scope (Workflows:write on the fork), so it is a deliberate, reviewable act rather than a default"
     },
     "PMOVES-obico-server": {
