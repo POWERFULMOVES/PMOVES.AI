@@ -126,7 +126,11 @@ services:
       # browser extension on another node would be rejected by that check rather
       # than by the Bearer token. Verified in pkg/gateway/transport.go:99
       # (isAllowedOrigin).
-      - "${MCP_GATEWAY_BIND:-0.0.0.0}:${MCP_GATEWAY_PORT:-8091}:8091"
+      # Host default 8189, not 8091: 8091 is archon's ARCHON_API_PORT default
+      # (docker-compose.yml ${ARCHON_API_PORT:-8091}:3090) — any node running both
+      # cannot bind the gateway at all (observed on SPARK 2026-08-22: archon up
+      # healthy, gateway "port is already allocated"). Container-internal stays 8091.
+      - "${MCP_GATEWAY_BIND:-0.0.0.0}:${MCP_GATEWAY_PORT:-8189}:8091"
     networks:
       # BOTH app networks on purpose. pmoves-botz-mcp-bridge lives on
       # pmoves_pmoves_app (the BoTZ project's own network, 2 containers) while
