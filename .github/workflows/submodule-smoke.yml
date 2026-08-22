@@ -39,7 +39,8 @@ jobs:
     name: Submodule Smoke Test
     needs: gate-check
     if: needs.gate-check.outputs.should_run == 'true'
-    runs-on: [self-hosted, ai-lab]
+    # ai-lab spans b850 (X64) and spark (ARM64) — pin the arch.
+    runs-on: [self-hosted, Linux, X64, ai-lab]
     timeout-minutes: 45
 
     steps:
