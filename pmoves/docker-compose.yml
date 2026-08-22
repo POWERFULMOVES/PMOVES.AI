@@ -1289,7 +1289,11 @@ services:
     # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
     - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD-SHELL", "vector validate /etc/vector/vector.yml || exit 1"]
+      # Docker execs the healthcheck SEPARATELY, with the container's configured
+      # environment -- so it still sees the empty proxy vars the entrypoint unsets
+      # for the main process. Without this the container RUNS FINE and is marked
+      # unhealthy forever (observed on the node: FailingStreak 472, status=running).
+      test: ["CMD-SHELL", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; vector validate /etc/vector/vector.yml || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
