@@ -11,15 +11,33 @@ ARG A0_BASE_TAG=latest
 FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS upstream
 
 ARG AGENT_ZERO_REPO=https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
-# The hardened fork is now based on upstream v2.8. Keep this committed marker in
-# sync when the rolling hardened branch advances to a new upstream release.
+# The hardened fork is now based on upstream v2.10. Keep this committed marker
+# in sync when the rolling hardened branch advances to a new upstream release.
+#
+# AGENT_ZERO_UPSTREAM_VERSION is a MARKER ONLY - it records which upstream
+# release the hardened branch currently sits on, and busts the layer cache when
+# that advances. It is NOT what gets cloned.
+#
+# AGENT_ZERO_REF is what gets cloned, and it must stay the hardened BRANCH.
+# Pointing it at an upstream tag clones upstream directly and drops every PMOVES
+# overlay - path containment, the dockerized root-password skip, the removal of
+# root supervisord programs. The fork also carries no tags at all, so a tag here
+# fails the clone outright rather than silently shipping an unhardened image.
 ARG AGENT_ZERO_UPSTREAM_VERSION=v2.10
-ARG AGENT_ZERO_REF=v2.10
+ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
 
 # Clone PMOVES fork of Agent Zero (matches submodule branch).
-# The ARG value busts the Docker layer cache when the pointer advances,
-# because the clone RUN references AGENT_ZERO_UPSTREAM_VERSION via the
-# preceding comment marker (BuildKit includes ARG changes in cache keys).
+#
+# Bumping AGENT_ZERO_UPSTREAM_VERSION busts this layer's cache, which is what
+# makes a version bump actually re-clone a moving branch instead of reusing a
+# stale one. Tested rather than assumed: with the cache warm, changing only
+# that ARG re-ran the RUN, and re-building with identical args hit CACHED.
+#
+# The mechanism is NOT the comment marker below (an earlier note here claimed
+# it was). BuildKit folds the values of declared build args into the cache key
+# of subsequent instructions whether or not any comment mentions them - removing
+# the marker comment changes nothing. Do not rely on comment text for cache
+# behaviour in either direction.
 RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
       ${AGENT_ZERO_REPO} /git/agent-zero
 
