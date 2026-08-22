@@ -41,16 +41,23 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The matrix step runs `git diff HEAD~1 HEAD`. checkout defaults to
-          # fetch-depth 1, so HEAD~1 does not exist, the diff fails, and its
-          # return code is never checked — `changed` comes back empty and NO
-          # service is ever detected as changed. Every push therefore produced
-          # the `__none__` placeholder, which combined with the guard typo below
-          # meant the build steps ran against pmoves/services/__none__.
-          fetch-depth: 2
+          # Full history: the matrix step diffs the ENTIRE pushed range
+          # (github.event.before..github.sha), not just the tip. checkout
+          # defaults to fetch-depth 1, so HEAD~1 did not even exist, the diff
+          # failed, its return code was never checked, and `changed` came back
+          # empty — NO service was ever detected as changed. fetch-depth: 2
+          # would fix that single-commit case but still miss every service
+          # touched by an earlier commit of a multi-commit push (Codex P1 on
+          # #2670: a rebase-merged PR is exactly that shape).
+          fetch-depth: 0
 
       - name: Build service matrix
         id: set-matrix
+        env:
+          # `github.event.before` is the tip BEFORE this push — the start of the
+          # pushed range. Passed as env rather than interpolated into the heredoc
+          # so a crafted ref cannot be injected into the script body.
+          EVENT_BEFORE: ${{ github.event.before }}
         run: |
           python3 - <<'EOF'
           import json, os
@@ -66,18 +73,53 @@ jobs:
                   if dockerfile.exists():
                       include.append({"service": svc})
           else:
-              # On push, detect which services changed
+              # On push, detect which services changed across the WHOLE pushed
+              # range. `git diff HEAD~1 HEAD` only ever describes the tip
+              # commit, so a service touched by an earlier commit in the same
+              # push kept a stale image.
               import subprocess
-              result = subprocess.run(
-                  ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
-                  capture_output=True, text=True
-              )
-              changed = set(result.stdout.strip().split("\n"))
+              before = os.environ.get("EVENT_BEFORE", "")
+              head = os.environ.get("GITHUB_SHA", "HEAD")
+
+              def _resolvable(ref):
+                  if not ref or set(ref) <= {"0"}:
+                      return False  # all-zero: branch creation / initial push
+                  return subprocess.run(
+                      ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
+                      capture_output=True,
+                  ).returncode == 0
+
+              if _resolvable(before):
+                  rng = [f"{before}..{head}"]
+              else:
+                  # Unknown range (initial push, or `before` gone after a
+                  # force-push). Building nothing would silently ship stale
+                  # images, so fall back to the workflow_dispatch behaviour and
+                  # consider every service. Stated in the log, not implied.
+                  print("No resolvable push range; considering all services")
+                  rng = None
+
+              if rng is None:
+                  changed = None
+              else:
+                  result = subprocess.run(
+                      ["git", "diff", "--name-only", *rng],
+                      capture_output=True, text=True,
+                  )
+                  if result.returncode != 0:
+                      # A swallowed failure here is what produced the permanent
+                      # __none__ placeholder. Fail loudly instead.
+                      raise SystemExit(
+                          f"git diff {rng[0]} failed: {result.stderr.strip()}"
+                      )
+                  changed = set(result.stdout.strip().split("\n"))
               for svc in services:
                   import pathlib
                   dockerfile = pathlib.Path(f"pmoves/services/{svc}/Dockerfile")
                   svc_prefix = f"pmoves/services/{svc}/"
-                  if dockerfile.exists() and any(f.startswith(svc_prefix) for f in changed):
+                  if dockerfile.exists() and (
+                      changed is None or any(f.startswith(svc_prefix) for f in changed)
+                  ):
                       include.append({"service": svc})
 
           matrix = {"include": include} if include else {"include": [{"service": "__none__"}]}
