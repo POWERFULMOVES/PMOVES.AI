@@ -31,14 +31,30 @@ registry:
       url: "http://pmoves-botz-mcp-bridge:8100/mcp"
       transport_type: http
 
-  # Persistent memory. Verified 2026-08-21: GET /mcp/sse -> 200.
-  # The path is a property of the server, not of one container — confirmed by
-  # two independent probes of different builds (see .claude/mcp.json).
-  # /api/mcp/sse and /sse both 404.
-  cipher:
-    remote:
-      url: "http://cipher-api:8105/mcp/sse"
-      transport_type: sse
+# DISABLED, not deleted — cipher (persistent memory) is a real MCP server and a
+# wanted entry, but the gateway cannot currently complete its handshake.
+#
+#   > Can't start cipher: failed to connect: calling "initialize":
+#     failed to write: 400 Bad Request
+#
+# Measured on B850, 2026-08-21 — cipher is behaving CORRECTLY:
+#   GET  /mcp/sse   -> 200, "event: endpoint",
+#                      "data: /mcp/messages?sessionId=<uuid>"   (classic MCP SSE)
+#   POST /mcp/sse   -> "Cannot POST /mcp/sse"  (the stream endpoint is GET-only)
+#   POST /mcp/messages?sessionId=<uuid> after the stream is CLOSED
+#                   -> {"error":"Unknown session"} 400
+#
+# The session is bound to a held-open SSE stream. The gateway uses the official
+# Go SDK's mcp.SSEClientTransport (pkg/mcp/remote.go:140), which should follow
+# the endpoint event, so this needs debugging at the transport level rather than
+# a catalog change. Re-enable by restoring the entry below AND adding `cipher`
+# back to --servers in docker-compose.mcp-gateway.yml — both, or the catalog and
+# the running set drift apart.
+#
+#  cipher:
+#    remote:
+#      url: "http://cipher-api:8105/mcp/sse"
+#      transport_type: sse
 
 # NOT REGISTERED, and why — kept here so the gaps are visible rather than
 # quietly absent:
