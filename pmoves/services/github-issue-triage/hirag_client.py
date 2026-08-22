@@ -80,14 +80,7 @@ class HiRAGClient:
 
                 data = response.json()
 
-                # Extract results
-                if "results" in data:
-                    return data["results"]
-                elif isinstance(data, list):
-                    return data
-                else:
-                    logger.warning(f"Unexpected Hi-RAG response format: {data.keys()}")
-                    return None
+                return self._extract_hits(data)
 
         except httpx.TimeoutException:
             logger.error(f"Hi-RAG query timeout after {self.timeout}s")
@@ -98,6 +91,54 @@ class HiRAGClient:
         except Exception as e:
             logger.error(f"Hi-RAG query error: {e}")
             return None
+
+    @staticmethod
+    def _extract_hits(data: Any) -> Optional[List[Dict[str, Any]]]:
+        """Normalise a Hi-RAG query response into a list of issue-shaped dicts.
+
+        Two shape mismatches lived here, and fixing only the first would have
+        looked like a fix while changing nothing.
+
+        1. v2's `QueryResp` puts its result list under `hits` (models.py:36).
+           This client accepted `results` or a bare list, so every successful
+           query fell through to "unexpected format" and returned None -- triage
+           silently used pattern matching even when the gateway answered fine.
+
+        2. A `QueryHit` keeps the indexed document under `payload` and carries
+           only scoring at the top level. app.py reads `issue.get("labels")`, so
+           even once `hits` parsed, every hit would contribute zero labels and
+           triage would STILL fall back. The payload is merged up so consumers
+           can read document fields without knowing the transport shape.
+
+        Scoring keys win over payload keys on collision: a payload that happens
+        to carry `score` is document data, not the retrieval score, and the
+        caller ranking by score must see the retrieval one.
+        """
+        if isinstance(data, list):
+            return [HiRAGClient._flatten_hit(h) for h in data]
+        if isinstance(data, dict):
+            for key in ("hits", "results"):
+                if isinstance(data.get(key), list):
+                    return [HiRAGClient._flatten_hit(h) for h in data[key]]
+            logger.warning(
+                f"Unexpected Hi-RAG response format: {sorted(data.keys())} "
+                f"(expected 'hits' from v2 QueryResp, or legacy 'results')"
+            )
+            return None
+        logger.warning(f"Unexpected Hi-RAG response type: {type(data).__name__}")
+        return None
+
+    @staticmethod
+    def _flatten_hit(hit: Any) -> Dict[str, Any]:
+        """Merge a QueryHit's `payload` up to the top level."""
+        if not isinstance(hit, dict):
+            return hit
+        payload = hit.get("payload")
+        if not isinstance(payload, dict):
+            return hit
+        merged = dict(payload)
+        merged.update({k: v for k, v in hit.items() if k != "payload"})
+        return merged
 
     async def index_issue(
         self,
