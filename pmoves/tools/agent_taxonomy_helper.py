@@ -178,8 +178,13 @@ def cmd_show(registry, args):
     print(f"║  Health:    {str(agent.get('health') or '—'):<28} ║")
     print(f"║  Stage:     {agent.get('evolution_stage', 'base'):<28} ║")
     print(f"║  Layers:    {', '.join(layers):<28} ║")
+    # `submodule` is for real gitlinks; `path` is for first-party in-repo code.
+    # Both are shown, labelled honestly, so a reader is never told to
+    # `git submodule update --init` something that is not a submodule.
     if agent.get("submodule"):
         print(f"║  Submodule: {agent['submodule']:<28} ║")
+    elif agent.get("path"):
+        print(f"║  Path:      {agent['path']:<28} ║")
     print("╠══════════════════════════════════════════╣")
     print("║  CHIT Toggles:                           ║")
     for k, v in toggles.items():

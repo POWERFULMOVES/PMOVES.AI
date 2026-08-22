@@ -557,7 +557,8 @@ services:
     - PORT=${BGUTIL_PORT:-4417}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
-    - minio
+      minio:
+        condition: service_healthy
     profiles:
     - orchestration
     - yt
