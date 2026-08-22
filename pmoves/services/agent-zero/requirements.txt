@@ -21,25 +21,45 @@
 
 # --- Additions: imported by PMOVES code, absent from upstream ---
 anthropic            # mcp_server.py
-fastapi              # main.py, mcp_server.py
+# pydantic is NOT ours - anthropic drags it in, and because our lock is a
+# --constraint, whatever it resolves to is what the image gets. Left free it
+# picked 2.13.4 and would have upgraded upstream's exact `pydantic==2.11.7`
+# out from under them. Pinned to MATCH the fork so our constraint is a no-op.
+# If an upstream sync moves that pin, move this with it - `make -C pmoves
+# agent-zero-pin-check` (follow-up) should enforce it. The durable fix is to
+# declare `anthropic` in the FORK's requirements.txt instead, so pydantic is
+# resolved once, together with everything else that depends on it.
+pydantic==2.11.7     # MUST match PMOVES-Agent-Zero requirements.txt
 httpx
 jsonschema
 nats-py              # NATS bus integration
-prometheus-client==0.26.0
 python-jose[cryptography]==3.5.0
 PyYAML
 requests             # security/hooks/probabilistic.py
 
-# --- Also provided by upstream, but imported directly by PMOVES code ---
-# Declared because we import them. Note these are NOT left to upstream: leaving
-# a line unpinned here does not defer to upstream, because requirements.lock is
-# passed as `--constraint` and pins the resolved version anyway. Our layer is
-# therefore the final authority on every package in the lock. That set just went
-# from 345 packages to 48 -- an 86% cut in how much of upstream's tree we can
-# silently move. Adding a line here re-expands it.
-flaredantic          # overrides/tunnel_manager.py (replaces upstream's helper)
-pydantic
-uvicorn
+# --- NOT declared here on purpose ---
+# fastapi, prometheus-client, uvicorn, flaredantic
+# PMOVES code imports all four, and it is tempting to list them. Do not.
+# (pydantic is the exception and IS declared above - see the note there.)
+#
+# Stage 2 installs into the SAME venv it copied from stage 1 (/opt/venv-a0), so
+# upstream's copies are already importable. Listing them here does not add them
+# - it makes our lock the authority on the shared web stack, and our lock then
+# installs *second*.
+#
+# That is not theoretical. fastapi caps starlette (fastapi<=0.124 requires
+# starlette<0.51), so declaring fastapi here dragged starlette DOWN below the
+# exact version upstream pins for a published advisory. The image ended up
+# running a starlette the fork had deliberately moved off.
+#
+# fastapi and prometheus-client are already declared where they belong: in the
+# FORK's requirements.txt, as `fastapi>=0.115.0` and
+# `prometheus-client>=0.20.0`. There they participate in upstream's single
+# coherent resolution - which picks fastapi 0.141.1 alongside upstream's
+# pinned starlette - instead of fighting it afterwards.
+#
+# Rule: if upstream and PMOVES both need a package, declare it in the FORK's
+# requirements.txt, never here. This file is for things only PMOVES needs.
 
 # --- Test-only ---
 # `COPY services /app/services` puts services/agent-zero/tests into the image,
