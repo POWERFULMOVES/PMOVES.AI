@@ -1591,7 +1591,7 @@ services:
     - pmoves_bus
     - pmoves_data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8107/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8107/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
