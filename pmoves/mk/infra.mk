@@ -660,3 +660,32 @@ dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up l
 
 agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
 	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
+
+# ── Agent Zero dependency overlay ──────────────────────────────
+# The image installs deps twice into one venv: the fork's requirements first,
+# ours second as a --constraint. Ours therefore wins. These two targets keep
+# that from silently overriding the fork's declared pins.
+
+A0_REQ_DIR = services/agent-zero
+
+agent-zero-pin-check: ## Assert our lock never violates a pin the Agent Zero fork declares
+	@uv run --quiet --with packaging python tools/agent_zero_pin_check.py
+
+agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY sanctioned way)
+	@# --upgrade is load-bearing: without it uv treats the existing lock as
+	@# PREFERENCES and carries a stale resolution forward while showing no diff.
+	@# --python-platform linux because the image is Linux and this repo is worked
+	@# on from Windows.
+	@# UV_CUSTOM_COMPILE_COMMAND makes the lock header record THIS target, which
+	@# is what agent-zero-pin-check verifies - a hand-run of `uv pip compile`
+	@# writes its own command line there and fails the check.
+	@tmp=$$(mktemp); \
+	 UV_CUSTOM_COMPILE_COMMAND="make -C pmoves agent-zero-lock" \
+	 uv pip compile $(A0_REQ_DIR)/requirements.txt \
+	   --python-version 3.11 --python-platform linux --generate-hashes \
+	   --upgrade -o $$tmp; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then rm $$tmp; echo "agent-zero-lock: compile FAILED (exit $$rc) - lock left unchanged"; exit 1; fi; \
+	 if [ ! -s $$tmp ]; then rm $$tmp; echo "agent-zero-lock: produced EMPTY output - lock left unchanged"; exit 1; fi; \
+	 mv $$tmp $(A0_REQ_DIR)/requirements.lock; \
+	 echo "agent-zero-lock: regenerated ($$(grep -cE '^[a-zA-Z0-9._-]+==' $(A0_REQ_DIR)/requirements.lock) packages)"; \
+	 $(MAKE) --no-print-directory agent-zero-pin-check
