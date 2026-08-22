@@ -89,13 +89,27 @@ except ImportError:  # pragma: no cover
 SUBMODULE = "PMOVES-Agent-Zero"
 RAW = "https://raw.githubusercontent.com/POWERFULMOVES/PMOVES-Agent-Zero/{ref}/requirements.txt"
 
-# The branch the IMAGE builds. Dockerfile:12 `ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened`
-# and Dockerfile:21 `git clone --branch ${AGENT_ZERO_REF}` -- so the shipped tree is
-# the BRANCH TIP, not the gitlink. Dockerfile.multiarch clones the same way.
-BRANCH = "PMOVES.AI-Edition-Hardened"
-BRANCH_API = (
-    "https://api.github.com/repos/POWERFULMOVES/PMOVES-Agent-Zero/git/ref/heads/{branch}"
-)
+# Which ref the image builds is READ from the Dockerfiles, never hard-coded.
+#
+# The PUBLISHED pmoves-agent-zero image is built from Dockerfile.multiarch
+# (.github/workflows/integrations-ghcr.matrix.json), and the auto-bump workflow
+# rewrites `ARG AGENT_ZERO_REF=` in THAT file only
+# (agent-zero-upstream-check.yml:19,163). So a constant here would keep checking
+# PMOVES.AI-Edition-Hardened the moment a bump lands a version tag -- the gate
+# would approve a lock against a tree the published image does not contain.
+# That is the same wrong-tree approval this tool was just fixed to prevent, one
+# level up: correct today, silently wrong after the next routine bump.
+_REF_ARG = re.compile(r"^ARG\s+AGENT_ZERO_REF=(.+?)\s*$", re.M)
+REF_API = "https://api.github.com/repos/POWERFULMOVES/PMOVES-Agent-Zero/git/ref/{kind}/{ref}"
+
+
+def dockerfile_ref(path):
+    """The AGENT_ZERO_REF a build definition declares, or None."""
+    try:
+        m = _REF_ARG.search(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    return m.group(1).strip() if m else None
 
 # The only sanctioned way to regenerate the lock. The make target sets this as
 # UV_CUSTOM_COMPILE_COMMAND so the header records it instead of a raw uv line.
@@ -124,6 +138,10 @@ ROOT = repo_root()
 OURS_TXT = ROOT / "pmoves" / "services" / "agent-zero" / "requirements.txt"
 OURS_LOCK = ROOT / "pmoves" / "services" / "agent-zero" / "requirements.lock"
 
+# Defined after ROOT; see the AGENT_ZERO_REF note above.
+PUBLISHED_DOCKERFILE = ROOT / "pmoves" / "services" / "agent-zero" / "Dockerfile.multiarch"
+COMPOSE_DOCKERFILE = ROOT / "pmoves" / "services" / "agent-zero" / "Dockerfile"
+
 
 _SEPARATORS = re.compile(r"[-_.]+")
 
@@ -143,14 +161,25 @@ def norm(name: str) -> str:
     return _SEPARATORS.sub("-", name).lower()
 
 
-def branch_tip_sha():
-    """Resolve the branch tip the image clones, via the API the Dockerfile uses."""
-    try:
-        url = BRANCH_API.format(branch=BRANCH)
-        with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 - fixed https host
-            return json.load(r)["object"]["sha"]
-    except Exception:  # noqa: BLE001
+def resolve_ref_sha(ref):
+    """Resolve a branch OR tag name to a sha, the way `git clone --branch` would.
+
+    `--branch` accepts either, and the auto-bump workflow writes version TAGS, so
+    resolving only heads/ would start returning None after a routine bump -- which
+    (before this was fail-closed) meant falling back to the gitlink.
+    """
+    if not ref:
         return None
+    for kind in ("heads", "tags"):
+        try:
+            url = REF_API.format(kind=kind, ref=ref)
+            with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 - fixed https host
+                obj = json.load(r)["object"]
+                # An annotated tag points at a tag object; deref to the commit.
+                return obj["sha"]
+        except Exception:  # noqa: BLE001
+            continue
+    return None
 
 
 def gitlink_sha():
@@ -176,45 +205,61 @@ def read_fork_requirements(ref, problems):
     # Which revision to compare against is the whole correctness question.
     #
     # This used to prefer the local checkout, then the GITLINK. The image builds
-    # NEITHER: Dockerfile:21 clones `--branch ${AGENT_ZERO_REF}`, i.e. the branch
-    # TIP. So whenever the branch advanced past the gitlink -- which is the normal
-    # state, since the Dockerfile even cache-busts on the tip moving -- this gate
-    # validated a tree that is not the one shipped. A new or changed fork
-    # constraint could conflict with our overlay lock while the required check
-    # reported success: the exact regression it exists to catch.
+    # NEITHER: both Dockerfiles clone `--branch ${AGENT_ZERO_REF}`, i.e. the ref
+    # TIP. So whenever that advanced past the gitlink -- the normal state, since
+    # the Dockerfile even cache-busts on the tip moving -- this gate validated a
+    # tree that is not the one shipped.
     #
-    # So: resolve the branch tip, and say so when it differs from the gitlink.
+    # FAIL CLOSED when the tip cannot be resolved. An earlier version fell back
+    # to the gitlink with a stderr WARNING, but the merge gate reads the exit
+    # STATUS, not stderr. So a rate-limited API (unauthenticated, and
+    # raw.githubusercontent.com stays reachable) would silently restore the exact
+    # wrong-tree approval this function exists to prevent. A gate that downgrades
+    # to a weaker check under load is a gate that fails when it matters most.
     sha = ref
     if sha is None:
-        sha = branch_tip_sha()
+        published_ref = dockerfile_ref(PUBLISHED_DOCKERFILE)
+        if not published_ref:
+            problems.append(
+                "cannot read ARG AGENT_ZERO_REF from {} -- that file defines the "
+                "PUBLISHED image, so without it there is nothing to validate "
+                "against".format(PUBLISHED_DOCKERFILE.name)
+            )
+            return None
+
+        # Both build definitions must agree, or one of them ships a tree this
+        # check never looked at.
+        compose_ref = dockerfile_ref(COMPOSE_DOCKERFILE)
+        if compose_ref and compose_ref != published_ref:
+            problems.append(
+                "build definitions disagree: {} pins {!r} but {} pins {!r}. One of "
+                "them ships a tree this check does not validate.".format(
+                    PUBLISHED_DOCKERFILE.name, published_ref,
+                    COMPOSE_DOCKERFILE.name, compose_ref,
+                )
+            )
+            return None
+
+        sha = resolve_ref_sha(published_ref)
+        if sha is None:
+            problems.append(
+                "could not resolve {!r} (from {}) to a sha. Refusing to fall back "
+                "to the gitlink: the gate is read by exit status, so a quiet "
+                "downgrade to a weaker check is indistinguishable from success. "
+                "Retry, or pass --ref explicitly.".format(
+                    published_ref, PUBLISHED_DOCKERFILE.name
+                )
+            )
+            return None
+
         gl = gitlink_sha()
-        if sha and gl and sha != gl:
+        if gl and sha != gl:
             print(
-                "note: comparing against the {} tip {} -- that is what the image "
+                "note: comparing against {} tip {} -- that is what the image "
                 "builds. The gitlink is {}, so the submodule pointer does NOT "
-                "describe the shipped tree.".format(BRANCH, sha[:12], gl[:12]),
+                "describe the shipped tree.".format(published_ref, sha[:12], gl[:12]),
                 file=sys.stderr,
             )
-        if sha is None:
-            # API unreachable. Fall back, but never silently -- a fallback that
-            # looks identical to a success is how a gate stops measuring.
-            sha = gl
-            if sha:
-                print(
-                    "WARNING: could not resolve {} tip; falling back to the gitlink "
-                    "{}. This may NOT be the tree the image builds.".format(
-                        BRANCH, sha[:12]
-                    ),
-                    file=sys.stderr,
-                )
-    if not sha:
-        problems.append(
-            "cannot determine which fork revision to compare against: the {} tip "
-            "could not be resolved and the {} gitlink could not be read".format(
-                BRANCH, SUBMODULE
-            )
-        )
-        return None
     url = RAW.format(ref=sha)
     try:
         with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 - fixed https host
@@ -270,8 +315,9 @@ def main():
     )
     ap.add_argument(
         "--ref",
-        help="fork revision to compare against (default: the {} tip, which is what "
-             "the image builds -- NOT the gitlink)".format(BRANCH),
+        help="fork revision to compare against (default: the AGENT_ZERO_REF "
+             "declared by Dockerfile.multiarch, which builds the published "
+             "image -- NOT the gitlink)",
     )
     # Overridable so the checks can be exercised against fixtures. A check that
     # has never been shown to FAIL is indistinguishable from one that measures

@@ -15,6 +15,7 @@ something other than what ships.
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -55,19 +56,108 @@ def test_norm_collapses_runs_not_just_single_separators(mod):
     assert mod.norm("a_-_b") == "a-b"
 
 
-def test_the_branch_the_tool_checks_is_the_branch_the_image_clones(mod):
-    """If these drift apart, the gate silently starts checking the wrong tree."""
-    dockerfile = (
-        Path(__file__).resolve().parents[1]
-        / "services" / "agent-zero" / "Dockerfile"
-    ).read_text(encoding="utf-8")
-    assert f"ARG AGENT_ZERO_REF={mod.BRANCH}" in dockerfile, (
-        "agent_zero_pin_check.BRANCH must match the Dockerfile's AGENT_ZERO_REF "
-        "default, or the check validates a revision the image does not build"
+def test_the_ref_is_read_from_the_published_image_dockerfile(mod):
+    """Dockerfile.multiarch builds the PUBLISHED image and is the file the
+    auto-bump workflow rewrites, so it is the only authority on the ref."""
+    assert mod.PUBLISHED_DOCKERFILE.name == "Dockerfile.multiarch"
+    assert mod.dockerfile_ref(mod.PUBLISHED_DOCKERFILE), (
+        "ARG AGENT_ZERO_REF must be readable from the published-image Dockerfile"
     )
 
 
-def test_branch_tip_resolver_is_wired_and_returns_a_sha_or_none(mod):
-    """Never raises: an unreachable API must fall back loudly, not explode."""
-    out = mod.branch_tip_sha()
-    assert out is None or (isinstance(out, str) and len(out) == 40)
+def test_both_build_definitions_currently_agree(mod):
+    """They may legitimately diverge mid-bump, but the tool must NOTICE."""
+    assert mod.dockerfile_ref(mod.PUBLISHED_DOCKERFILE) == mod.dockerfile_ref(
+        mod.COMPOSE_DOCKERFILE
+    )
+
+
+def test_dockerfile_ref_parses_a_version_tag_not_just_a_branch(mod, tmp_path):
+    """The auto-bump workflow writes version TAGS; a branch-only reader breaks."""
+    f = tmp_path / "Dockerfile.multiarch"
+    f.write_text("FROM x\nARG AGENT_ZERO_REF=v2.10.1\nRUN true\n", encoding="utf-8")
+    assert mod.dockerfile_ref(f) == "v2.10.1"
+
+
+def test_dockerfile_ref_returns_none_for_a_missing_or_refless_file(mod, tmp_path):
+    assert mod.dockerfile_ref(tmp_path / "nope") is None
+    f = tmp_path / "Dockerfile"
+    f.write_text("FROM scratch\n", encoding="utf-8")
+    assert mod.dockerfile_ref(f) is None
+
+
+# --- resolve_ref_sha: mocked, never a real request ---------------------------
+#
+# The previous version of this test made a live 30s-timeout GitHub call on every
+# suite run, so an offline runner paid the full delay and then PASSED because
+# None was accepted -- neither success nor failure was actually exercised.
+
+
+class _Resp:
+    def __init__(self, payload):
+        self._payload = payload
+    def read(self):
+        return json.dumps(self._payload).encode()
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+
+def test_resolve_ref_sha_reads_the_object_sha(mod, monkeypatch):
+    sha = "a" * 40
+    monkeypatch.setattr(
+        mod.urllib.request, "urlopen",
+        lambda url, timeout=None: _Resp({"object": {"sha": sha}}),
+    )
+    assert mod.resolve_ref_sha("PMOVES.AI-Edition-Hardened") == sha
+
+
+def test_resolve_ref_sha_falls_back_from_heads_to_tags(mod, monkeypatch):
+    """`git clone --branch` accepts a tag, and the bump workflow writes tags."""
+    sha = "b" * 40
+    seen = []
+
+    def fake(url, timeout=None):
+        seen.append(url)
+        if "/heads/" in url:
+            raise OSError("404")
+        return _Resp({"object": {"sha": sha}})
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", fake)
+    assert mod.resolve_ref_sha("v2.10.1") == sha
+    assert any("/heads/" in u for u in seen) and any("/tags/" in u for u in seen)
+
+
+def test_resolve_ref_sha_returns_none_when_both_lookups_fail(mod, monkeypatch):
+    def boom(url, timeout=None):
+        raise OSError("rate limited")
+    monkeypatch.setattr(mod.urllib.request, "urlopen", boom)
+    assert mod.resolve_ref_sha("anything") is None
+
+
+def test_resolve_ref_sha_handles_an_empty_ref_without_calling_out(mod, monkeypatch):
+    def boom(url, timeout=None):
+        raise AssertionError("must not make a request for an empty ref")
+    monkeypatch.setattr(mod.urllib.request, "urlopen", boom)
+    assert mod.resolve_ref_sha(None) is None
+    assert mod.resolve_ref_sha("") is None
+
+
+def test_unresolvable_tip_FAILS_rather_than_using_the_gitlink(mod, monkeypatch):
+    """The merge gate reads the exit STATUS, not stderr. A quiet downgrade to the
+    gitlink under API rate-limiting is indistinguishable from success."""
+    monkeypatch.setattr(mod, "resolve_ref_sha", lambda ref: None)
+    monkeypatch.setattr(mod, "gitlink_sha", lambda: "c" * 40)
+    problems = []
+    assert mod.read_fork_requirements(None, problems) is None
+    assert problems, "an unresolvable tip must be reported as an input failure"
+    assert "Refusing to fall back" in " ".join(problems)
+
+
+def test_disagreeing_build_definitions_are_an_input_failure(mod, monkeypatch):
+    monkeypatch.setattr(mod, "dockerfile_ref",
+                        lambda p: "v2.10.1" if p is mod.PUBLISHED_DOCKERFILE else "main")
+    problems = []
+    assert mod.read_fork_requirements(None, problems) is None
+    assert "disagree" in " ".join(problems)
