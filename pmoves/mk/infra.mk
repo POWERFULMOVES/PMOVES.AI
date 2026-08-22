@@ -128,7 +128,35 @@ docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host 
 # gateway's ${MCP_GATEWAY_AUTH_TOKEN:?} would fail to resolve — the pipeline
 # bypass the deploy guard exists to catch. Run `make -C pmoves secrets-funnel`
 # first on a fresh node so the tier env files carry the token.
-up-mcp-gateway: ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
+up-botz-mcp-bridge: ## Start the BoTZ MCP bridge (23 tools) — the gateway federates it
+	@# Nothing canonical started this before. `up-bots` starts botz-gateway, the
+	@# local work-item SHIM on 8054, which is a different service entirely. The
+	@# bridge lives in the PMOVES-BoTZ compose project and creates the
+	@# pmoves_pmoves_app network the gateway attaches to.
+	@$(BOTZ_STACK_DC) up -d mcp-bridge $(ARGS)
+
+mcp-gateway-preflight: ## Check the gateway's external deps exist before starting it
+	@# The gateway federates servers it does not own. pmoves_pmoves_app is created
+	@# by the PMOVES-BoTZ project, not by this repo, so on a clean node `up`
+	@# aborts with a bare "network not found" — and pre-creating the network by
+	@# hand still yields an EMPTY federation because the bridge is not running.
+	@# Codex P1 on #2665: verification passed on B850 only because that stack
+	@# happened to be up.
+	@missing=0; \
+	for n in pmoves_app pmoves_pmoves_app pmoves_api pmoves_bus; do \
+	  docker network inspect "$$n" >/dev/null 2>&1 || { echo "MISSING network: $$n"; missing=1; }; \
+	done; \
+	docker ps --filter name=pmoves-botz-mcp-bridge --filter status=running -q | grep -q . \
+	  || { echo "NOT RUNNING: pmoves-botz-mcp-bridge (the only catalogued server)"; missing=1; }; \
+	if [ "$$missing" -ne 0 ]; then \
+	  echo ""; \
+	  echo "Fix: make -C pmoves up-botz-mcp-bridge"; \
+	  echo "then: make -C pmoves up-mcp-gateway"; \
+	  exit 1; \
+	fi; \
+	echo "preflight ok: networks present, mcp-bridge running"
+
+up-mcp-gateway: mcp-gateway-preflight ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
 	@$(MCP_GATEWAY_DC) --profile mcp up -d $(ARGS)
 	@echo "MCP Gateway on http://localhost:$${MCP_GATEWAY_PORT:-8091}/mcp"
 

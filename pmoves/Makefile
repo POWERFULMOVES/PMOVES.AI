@@ -2171,6 +2171,15 @@ DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_F
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
 MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
+# The BoTZ stack is a separate compose PROJECT (its own network,
+# pmoves_pmoves_app). Given its own -p so it keeps that identity, but routed
+# through COMPOSE_ENV_FILES like every other stack rather than raw compose.
+# Project name and working dir MUST match what created the containers, or
+# compose treats them as foreign and `up` dies on a name conflict. Read off
+# the running container's labels: com.docker.compose.project=pmoves-botz,
+# working_dir=<repo>/PMOVES-BoTZ. Guessing `-p pmoves` produced exactly that
+# conflict during verification.
+BOTZ_STACK_DC := docker compose -p pmoves-botz --project-directory $(CURDIR)/../PMOVES-BoTZ $(COMPOSE_ENV_FILES) -f ../PMOVES-BoTZ/docker-compose.yml
 JELLYFIN_AI_DC := docker compose -p $(PROJECT)-jellyfin-ai --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) --env-file env.jellyfin-ai -f docker-compose.jellyfin-ai.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
