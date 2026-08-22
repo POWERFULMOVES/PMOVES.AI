@@ -896,17 +896,30 @@ services:
   supabase-vector:
     <<: *tier-supabase-hardened
     image: timberio/vector:0.28.1-alpine
+    # vector 0.28.1 builds a proxy connector from HTTP_PROXY/HTTPS_PROXY and fails
+    # on an EMPTY one -- "Failed to build Proxy connector: empty string" -- then
+    # crash-loops. An ABSENT var is fine; an empty one is fatal. Compose cannot
+    # express "unset", so unset them here and exec the image's own entrypoint.
+    entrypoint: ["/bin/sh", "-c", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; exec /usr/local/bin/vector \"$$@\"", "--"]
     command: ["--config", "/etc/vector/vector.yml"]
     restart: unless-stopped
     profiles:
     - supabase-local
     environment:
     - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
-    # Pass-through (no `=`) so these resolve to ABSENT from the host, overriding
-    # the empty-string values the supabase env files set. vector 0.28.1 fails to
-    # build its logflare proxy connector from an empty-string HTTP_PROXY ("Failed
-    # to build Proxy connector: empty string") and crash-loops; an ABSENT var is
-    # fine. (An `=` here would re-set the empty string and reintroduce the crash.)
+    # NOTE: the pass-through form (`- HTTP_PROXY`, no `=`) was tried here and does
+    # NOT work. Its premise was that a bare entry resolves from the HOST and would
+    # therefore be ABSENT, overriding the empty-string values the env files set.
+    # Compose resolves bare entries from --env-file too, so it inherits exactly the
+    # empty string it was meant to escape. Measured:
+    #
+    #   compose.yml: environment: [- FOO]      vars.cfg: FOO=
+    #   -> container reports FOO SET-EMPTY (not ABSENT)
+    #
+    # There is no compose syntax that UNSETS a variable, so the unset happens in
+    # the entrypoint below. The empty values are deliberate -- sanitize_env_shared
+    # keeps them as "empty = nullify host leaks" -- so they are stripped for this
+    # one service rather than removed from env.shared.
     - HTTP_PROXY
     - HTTPS_PROXY
     - NO_PROXY

@@ -949,3 +949,46 @@ set. Check whether the variable is empty before checking whether it is wrong.
 
 Related: [`MERGE_MECHANICS.md`](../pmoves/docs/operations/MERGE_MECHANICS.md) for the
 sibling pattern in gates (a check that cannot say no).
+## Check which compose file is LIVE before editing a stanza (2026-08-21)
+
+Several services are defined **twice** — once in `docker-compose.yml` and once in
+`docker-compose.core.yml` — and the two copies drift. Editing the wrong one
+produces a change that looks correct, reviews clean, and does nothing.
+
+**This has now bitten three times:** the P7 stanza pair (5090, 2026-08-21 —
+"canonical weak-default auth-violation; legacy inherited host-session NATS_URL
+localhost leak"), an earlier attempt to fix `supabase-vector`'s empty-proxy
+crash-loop, and my own first attempt at the same fix. In every case the edit went
+into a file the running stack does not read.
+
+**The tell, in one command:**
+
+```bash
+docker inspect <container> \
+  --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'
+```
+
+That label lists the exact files compose used, in order. Run it *before* editing,
+not after wondering why nothing changed. The confirming check afterwards is that
+the recreated container actually carries your change:
+
+```bash
+docker inspect <container> --format '{{json .Config.Entrypoint}}'
+```
+
+A fresh `.Created` timestamp is **not** evidence the edit applied — the container
+can be brand new and still built from the other file.
+
+### Related trap: compose cannot express "unset"
+
+`- VAR=` sets empty. `- VAR` (bare) does **not** mean absent — compose resolves it
+from `--env-file` as well as the shell, so it inherits whatever the env files hold,
+including an empty string. Measured:
+
+```
+compose.yml: environment: [- FOO]   vars.cfg: FOO=
+-> container reports FOO SET-EMPTY, not ABSENT
+```
+
+When a program distinguishes absent from empty (see § Blank Is Not Absent), neither
+form will do, and the unset has to happen in an entrypoint wrapper.
