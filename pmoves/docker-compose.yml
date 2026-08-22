@@ -2139,9 +2139,20 @@ services:
     # an image layer is the wrong shape anyway -- it is invisible to `docker logs`,
     # unbounded by the daemon's log-rotation policy (#2660), and lost on recreate.
     # tmpfs makes the path writable, keeps it off the disk, and discards it with
-    # the container. Real logs go to stdout where the rotation policy governs them.
+    # the container.
+    #
+    # `size=` is load-bearing, not tidiness. The app still opens its own
+    # sse_monitor_*.log here -- this mount does NOT put that output under Docker's
+    # stdout rotation, and an earlier version of this comment wrongly implied it
+    # did. An unbounded tmpfs defaults to 50% of HOST RAM, while tmpfs pages are
+    # charged to the container's memory cgroup, which is capped at 512M below. So
+    # a busy or long-running worker would grow the log until the cgroup OOM-killed
+    # it -- trading a startup crash-loop for a slower, harder-to-read one.
+    # 32M bounds it well under the limit and is ample for diagnostic logging; the
+    # mount fills and writes fail loudly rather than taking the process with them.
+    # Ref: https://docs.docker.com/engine/storage/tmpfs/
     tmpfs:
-    - /app/app/monitoring/logs:uid=65532,gid=65532,mode=0700
+    - /app/app/monitoring/logs:uid=65532,gid=65532,mode=0700,size=32m
     environment:
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
