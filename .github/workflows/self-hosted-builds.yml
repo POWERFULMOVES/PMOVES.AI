@@ -69,7 +69,11 @@ jobs:
   # ============================================================================
   build-gpu:
     name: GPU Services
-    runs-on: [self-hosted, Linux, X64, ai-lab, gpu]
+    # `gpu` is not a registered label and never has been — this job has been
+    # unschedulable since 2025-12-13, queuing until GitHub cancelled it. b850 is
+    # the ai-lab GPU host; target it by a label that exists. If a second GPU host
+    # is ever added, add a real `gpu` label to both runners and revert to it.
+    runs-on: [self-hosted, Linux, X64, ai-lab, b850]
     timeout-minutes: 90
     permissions:
       contents: read
@@ -263,14 +267,23 @@ jobs:
   # ============================================================================
   deploy-staging:
     name: Deploy Staging
+    # NEITHER `cloudstartup` NOR `staging` is a registered label. There is a
+    # cloudstartup-runner signing card but no runner registered against it, so
+    # this job cannot schedule. Disabled explicitly rather than left to queue and
+    # be cancelled, which reads as 'someone stopped it' instead of 'impossible'.
     runs-on: [self-hosted, cloudstartup, staging]
     timeout-minutes: 30
     permissions:
       contents: read
     needs: [build-cpu, validate-contracts]
+    # Leading `false &&` is the disable; the original predicate is kept verbatim
+    # so re-enabling is a two-token delete once a cloudstartup runner exists.
+    # It must live in THIS key, not a second `if:` above — a duplicate mapping key
+    # does not error, the later one silently wins, and the disable evaporates.
     if: |
+      false && (
       github.ref == 'refs/heads/develop' ||
-      github.event.inputs.deploy_target == 'staging'
+      github.event.inputs.deploy_target == 'staging' )
     environment: staging
 
     steps:

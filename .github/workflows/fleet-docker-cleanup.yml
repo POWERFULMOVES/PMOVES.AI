@@ -31,27 +31,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `runner_label` must be a LABEL. Every value here used to be a runner
+        # NAME (and two were not even correct names), and `runs-on` matches
+        # labels only -- so all four lanes queued until GitHub cancelled them and
+        # this daily cleanup never ran once on any node. The disk-full events it
+        # exists to prevent happened anyway. Registered labels are enumerated in
+        # pmoves/config/runner_labels.json; validate_runner_labels.py now expands
+        # this matrix and checks each lane.
         include:
-          # B850 Knuckles — AMD ROCm, 64GB RAM
+          # B850 Knuckles — AMD ROCm, 64GB RAM.  (was: pmoves-b850-runner-1)
           - host: b850
-            runner_label: pmoves-b850-runner-1
+            runner_label: b850
             disk_warn_pct: 80
             disk_critical_pct: 90
-          # KVM4-1 — VPS, primary CI runner
+          # KVM4-1 — VPS, primary CI runner.     (was: pmoves-kvm4-1)
           - host: kvm4-1
-            runner_label: pmoves-kvm4-1
+            runner_label: kvm4-1
             disk_warn_pct: 75
             disk_critical_pct: 85
-          # KVM4-2 — VPS, data storage + CI runner
+          # KVM4-2 — VPS, data storage + CI.     (was: pmoves-kvm4-2)
           - host: kvm4-2
-            runner_label: pmoves-kvm4-2
+            runner_label: kvm4-2
             disk_warn_pct: 75
             disk_critical_pct: 85
-          # KVM2 — VPS, exit node + watcher
-          - host: kvm2
-            runner_label: pmoves-kvm2-runner-1
-            disk_warn_pct: 75
-            disk_critical_pct: 85
+          # KVM2 is NOT listed: no runner is registered for it. A lane for a host
+          # with no runner is the `cleanup-kvm2` failure that runner-maintenance.yml
+          # already documents -- it queues for the full scheduling window, gets
+          # cancelled, and marks the whole run cancelled. Add the lane back when a
+          # kvm2 runner exists and carries a label.
 
     steps:
       - name: Pre-cleanup disk status
