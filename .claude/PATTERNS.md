@@ -889,3 +889,63 @@ automatic cross-container sharing.
 **Doc-path exhaustiveness:** A path change (e.g. `/sse` → `/mcp/sse`) must be
 grepped across `README.md`, service `CLAUDE.md`, `.claude/CATALOG.md`, handoff
 notes, and `agent_registry.yaml` endpoint fields in the same commit set.
+
+## Blank Is Not Absent — the recurring hazard class (2026-08-21)
+
+**Five independent instances surfaced in a single session.** Not five coincidences —
+one failure mode that this stack reproduces at every layer, because almost every
+"is it configured?" check tests *presence* rather than *usability*.
+
+| # | Where | Empty value | How it presented |
+|---|---|---|---|
+| 1 | `docker-compose.sso.yml` | `SUPABASE_JWT_SECRET:-${JWT_SECRET}`, `SSO_FORWARD_AUTH_SECRET:-` | a **running** sso-auth container with broken auth; edge 401s |
+| 2 | `keygen-cli` | `KEYGEN_PASSPHRASE=""` | an **unencrypted private key** written silently, output said nothing |
+| 3 | `kong.yml` | `DASHBOARD_PASSWORD` | `password: length must be at least 1`, kong crash-loop, 33 restarts |
+| 4 | Docker Desktop | `HTTP_PROXY=` injected into **every** container | `supabase-vector`: "Failed to build Proxy connector: empty string" |
+| 5 | `secrets_sync.py` (#2661 lane) | canonical key present-but-empty | beat a **populated** alias, written as `KEY=` into every target |
+
+### Why it keeps winning
+
+- **`-n` / `if [ -n "$x" ]` / `os.Getenv(k) != ""` all collapse absent and empty into
+  one branch.** The distinction that matters is *three*-valued: absent, empty, set.
+  `os.LookupEnv` / `${VAR?}` / an explicit `is None` check preserve it; the common
+  idioms do not.
+- **Empty passes upstream validation.** Compose `${KEY:?}` rejects empty but
+  `${KEY?}` accepts it. A secrets funnel that has not run exports the name with no
+  value — so the variable *exists*, and every presence check says yes.
+- **The symptom lands far from the cause.** Instance 4 is the clearest: a Windows
+  proxy setting nobody configured broke a log shipper inside a Linux container, via
+  a daemon-level env injection that appears in no compose file and no env file.
+- **The good outcomes are worse than the bad ones.** #1 and #2 did not fail — they
+  *succeeded* into an insecure state. A crash (#3) is a gift by comparison.
+
+### What to do
+
+**When reading a value that must be usable, distinguish all three states.**
+
+```python
+# Wrong: absent and empty are the same branch
+if os.getenv("KEYGEN_PASSPHRASE"):
+    ...
+
+# Right: the middle state is the one that bites
+value, present = os.environ.get("K"), "K" in os.environ
+if value:            # usable
+elif present:        # SET BUT EMPTY -- warn loudly, name the likely cause
+else:                # absent -- nobody asked
+```
+
+**Emit the resolved state, don't just consume it.** `keygen-cli` now prints
+`encrypted=true|false` so the consumer can *assert* rather than assume. A pipeline
+that reports what it actually resolved converts a silent failure into a checkable
+one.
+
+**Prefer `${VAR:?}` over `${VAR?}`** in compose for anything that must be non-empty.
+The one-character difference is the whole bug.
+
+**Suspect this first** when a service is *running* but behaving as if unconfigured,
+or when a config parser complains about a length/format on a field you believe is
+set. Check whether the variable is empty before checking whether it is wrong.
+
+Related: [`MERGE_MECHANICS.md`](../pmoves/docs/operations/MERGE_MECHANICS.md) for the
+sibling pattern in gates (a check that cannot say no).
