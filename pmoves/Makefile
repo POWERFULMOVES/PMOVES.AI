@@ -4347,6 +4347,18 @@ up-external: ensure-env-shared ## Start external integration services (Wger, Fir
 	@$(EXTERNAL_DC) up -d
 	@echo "✔ External stacks up"
 
+.PHONY: rebuild-external-svc
+rebuild-external-svc: ensure-env-shared ## Recreate ONE external-overlay service from current compose/image WITHOUT touching the others — critically avoids up-external's dual-writer open-notebook/surreal hazard (both -ext surreal shares surreal_data with the running standalone). Usage: make rebuild-external-svc SVC=jellyfin-ext
+	@# up-external does `up -d` on EVERY external service, which starts
+	@# open-notebook-surrealdb-ext (same container_name + surreal_data volume as the
+	@# running standalone) = dual-writer corruption. This recreates just SVC with
+	@# --no-deps so a config change (e.g. a jellyfin --webdir fix) deploys without
+	@# collateral. Goes through the pipeline's EXTERNAL_DC (COMPOSE_ENV_FILES honored).
+	@test -n "$(SVC)" || { echo "Usage: make rebuild-external-svc SVC=<external service, e.g. jellyfin-ext>"; exit 1; }
+	@echo "→ Recreating external service $(SVC) (no deps; other external services untouched)..."
+	@$(EXTERNAL_DC) up -d --no-deps --force-recreate $(SVC)
+	@echo "✔ $(SVC) recreated. Verify: docker logs pmoves-$(SVC) --since 30s"
+
 .PHONY: down-external
 down-external: ## Stop external integration services
 	@$(EXTERNAL_DC) down

@@ -223,6 +223,11 @@ services:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
     container_name: pmoves-jellyfin
     restart: unless-stopped
+    # The fork image's default CMD is `--webdir /jellyfin/web`, which is EMPTY in the
+    # image; the web client is at /jellyfin/jellyfin-web (2262 files). Without this
+    # override Jellyfin crash-loops: "content directory is either invalid or empty:
+    # /jellyfin/web". See docs/handoffs/jellyfin-webdir-crashloop-2026-08-22.md
+    command: ["--webdir", "/jellyfin/jellyfin-web"]
     # Use numeric UID/GID so runtime stays valid even when image passwd lacks a named
     # `jellyfin` user entry (observed on some GHCR variants).
     user: "${JELLYFIN_CONTAINER_USER:-0:0}"
