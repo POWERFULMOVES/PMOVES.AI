@@ -172,3 +172,27 @@ def test_repo_workflows_are_discoverable():
     paths = apa.workflow_files()
     assert len(paths) > 10
     assert len(apa.collect_pins(paths)) > 50
+
+
+def test_composite_actions_are_scanned():
+    """`.github/actions/**/action.yml` was outside this tool's scan until
+    2026-08-21. A composite action pins third-party actions exactly like a
+    workflow does, and an unresolvable pin there fails the CALLING workflow at
+    setup — the same invisible startup_failure, one level down. Found while
+    chasing build-nats-workers, which kept failing at setup after every pin in
+    .github/workflows/ already resolved."""
+    paths = [str(p) for p in apa.workflow_files()]
+    assert any("/.github/actions/" in p or p.startswith(".github/actions/")
+               for p in paths), "composite actions are not being scanned"
+
+
+def test_composite_action_pins_are_collected(tmp_path, monkeypatch):
+    action = tmp_path / "action.yml"
+    action.write_text(
+        "runs:\n  using: composite\n  steps:\n"
+        f"    - uses: docker/setup-buildx-action@{REAL_SHA} # v4\n",
+        encoding="utf-8",
+    )
+    pins = apa.collect_pins([action])
+    assert len(pins) == 1
+    assert (pins[0]["owner"], pins[0]["repo"]) == ("docker", "setup-buildx-action")
