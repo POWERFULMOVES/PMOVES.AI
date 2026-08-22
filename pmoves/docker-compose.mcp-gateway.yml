@@ -34,7 +34,10 @@ services:
       # NOT work against this build — verified by starting it: the container
       # crash-looped on that exact error.
       - --catalog=pmoves.yaml
-      - --servers=botz-mcp-bridge,cipher
+      # Must match the ENABLED entries in catalog.yaml. cipher is catalogued but
+      # commented out there (its SSE handshake 400s — full diagnosis in the
+      # catalog), so it is not listed here either. Change both together.
+      - --servers=botz-mcp-bridge
       - --transport=streaming
       - --port=8091
       - --host=0.0.0.0
@@ -42,6 +45,19 @@ services:
       # torn down between calls.
       - --long-lived
       - --log-calls
+      # REQUIRED to run without the Docker socket. pkg/gateway/run.go:326 guards
+      # pullAndVerify() and guessNetworks() behind `if !g.Static`, and
+      # guessNetworks runs whenever DOCKER_MCP_IN_CONTAINER=1 — so a non-static
+      # gateway in a container dials /var/run/docker.sock at startup and dies
+      # with "guessing network: Cannot connect to the Docker daemon" even when
+      # every catalogue entry is `remote` and nothing needs pulling.
+      #
+      # Measured, not assumed: removing the socket without this flag crash-looped
+      # on exactly that error. Static mode is correct here because remote entries
+      # are pre-started by definition — there is nothing for the gateway to pull,
+      # verify or attach to a network. Adding the first `type: server` entry means
+      # dropping --static AND mounting the socket, together.
+      - --static
       # EXPECTED WARNING, do not chase it: without --secrets the gateway tries
       # Docker Desktop's secrets API and logs
       #   Failed to fetch secrets from secrets engine: ... dial unix
