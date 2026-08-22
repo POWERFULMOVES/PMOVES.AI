@@ -124,12 +124,14 @@ class Routing:
 
     kiloclaw: dict[str, Any] = field(default_factory=dict)
     hermes: dict[str, Any] = field(default_factory=dict)
+    pinokio: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Routing":
         return cls(
             kiloclaw=data.get("kiloclaw", {}) or {},
             hermes=data.get("hermes", {}) or {},
+            pinokio=data.get("pinokio", {}) or {},
         )
 
 
@@ -189,6 +191,8 @@ class Bootstrap:
             env[f"{prefix}TARGET_KILOCLAW"] = str(self.routing.kiloclaw["target"])
         if self.routing.hermes.get("target"):
             env[f"{prefix}TARGET_HERMES"] = str(self.routing.hermes["target"])
+        if self.routing.pinokio.get("target"):
+            env[f"{prefix}TARGET_PINOKIO"] = str(self.routing.pinokio["target"])
         for k, v in env.items():
             os.environ[k] = v
         return env

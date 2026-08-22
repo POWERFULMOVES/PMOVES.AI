@@ -11,21 +11,15 @@ SUBMODULE_LAYER_MANIFEST ?= configs/submodule_layer_validation_manifest.json
 SUBMODULE_BRANCH_DEFAULT ?= PMOVES.AI-Edition-Hardened
 # Submodules that legitimately track an upstream default branch instead of a
 # hardened branch. Every branch here is verified to exist on its remote.
-SUBMODULE_BRANCH_ALLOW ?= PMOVES-DoX=PMOVES.AI-Edition-Hardened-DoX,\
-  PMOVES-ClawZ=main,\
-  PMOVES-obico-server=release,\
+SUBMODULE_BRANCH_ALLOW ?= PMOVES-obico-server=release,\
   PMOVES-moonraker-obico=master,\
   PMOVES-OrcaSlicer=main,\
   PMOVES-OctoPrint-Obico=master,\
   PMOVES-fluidd=develop,\
-  skills/Pmoves-skills=main,\
   skills/PMOVES-awesome-agent-skills=main,\
   skills/pmoves-fork-repository-skill=main,\
   skills/PMOVES-agent-sandbox-skill=main,\
-  skills/Pmoves-claude-d3js-skill=main,\
-  PMOVES-jcodemunch-mcp=main,\
-  pmoves-hirag-mcp=main,\
-  PMOVES-Spark-VSS=main
+  skills/Pmoves-claude-d3js-skill=main
 AUDIT_RUNTIME_GPU ?= 0
 PRECHECK_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 PRECHECK_VENV_UNIX ?= .venv-pmoves/bin/python
@@ -141,6 +135,22 @@ audit-layers-static: ## Submodule-first static certification pass before runtime
 	@$(MAKE) --no-print-directory ci-runners-lockdown-strict
 	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
 	@$(MAKE) --no-print-directory skill-registry-validate
+	@# Z890 reported logs eating disk; B850 measured 59 of 62 containers
+	@# logging without any max-size.
+	@#
+	@# Exit 3 means UNMEASURABLE (no Docker socket) and must not fail a static
+	@# certification pass. Exit 1 means OFFENDERS FOUND and must. A bare
+	@# `|| true` cannot tell those apart -- it suppressed both, so a live host
+	@# with 59 unbounded-log containers passed the complete runtime
+	@# certification, which reaches this check only through this line.
+	@$(MAKE) --no-print-directory docker-host-policy-check; \
+	  rc=$$?; \
+	  if [ $$rc -eq 3 ]; then \
+	    echo "[audit] docker-host-policy-check: unmeasurable here (no Docker socket) -- not failing the static pass"; \
+	  elif [ $$rc -ne 0 ]; then \
+	    echo "[audit] docker-host-policy-check FAILED (exit $$rc): container log policy violations above."; \
+	    exit $$rc; \
+	  fi
 	@$(MAKE) --no-print-directory docs-reconcile-check || true
 
 audit-layers-runtime: ## Runtime certification pass once services are online

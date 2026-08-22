@@ -108,6 +108,27 @@ ad-hoc) without per-service edits:
 | KVM4 data tier (VPS) | `100m` | `5` | deeper retention for prod debugging |
 | Dev / 4090 (Docker Desktop) | `20m` | `2` | local only |
 
+### Checking a node against its own class
+
+`make -C pmoves docker-host-policy-check` defaults to the `50m` baseline. On a
+class documented above it, pass the class ceiling — otherwise the gate rejects
+a correctly-provisioned node for honouring the table above:
+
+```bash
+# KVM4 data tier
+PMOVES_LOG_MAX_SIZE_CEILING_MB=100 make -C pmoves docker-host-policy-check
+python pmoves/tools/docker_host_policy_check.py --max-size-ceiling-mb 100
+```
+
+Raising the ceiling does not disable the check: a container with no `max-size`
+at all is an offender at any ceiling, and anything above the ceiling still
+fails.
+
+> **Drift, unresolved (2026-08-21):** the table above sizes ai-lab / Z890 at
+> `50m`/`2`, but `deploy/provision/z890/nixos-post.nix` provisions `100m`/`3`.
+> One of the two is wrong; which one is a node-owner call, so it is recorded
+> here rather than silently reconciled.
+
 > Daemon-level `log-opts` apply only to containers **created after** the change.
 > Recreate (`docker compose up -d --force-recreate`) or let natural restarts
 > roll existing containers onto the new limits. A per-service compose

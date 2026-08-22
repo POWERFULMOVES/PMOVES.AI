@@ -1,0 +1,125 @@
+name: Submodule Freshness
+
+# Weekly check for submodules whose tracked branch on the remote
+# has commits the parent repo's gitlink hasn't picked up.
+#
+# This is the REMOTE-side complement to pmoves/tools/submodule_integrity.py,
+# which only checks the LOCAL checkout. When the remote is ahead, the
+# operator can run `git submodule update --remote <path>` to consume
+# the new commits, or open a PR to bump the gitlink deliberately.
+#
+# Schedule: weekly Sun 08:00 UTC (off-peak; 6 hours after the
+# ruleset-sync safety net at 04:00 UTC). workflow_dispatch for
+# manual runs.
+#
+# Exit codes:
+#   0 = freshness check ran (in_sync or remote_ahead — both are OK)
+#   1 = any submodule is remote_ahead (operator should review)
+#   2 = tool error (parse failure, git invocation failure)
+
+on:
+  schedule:
+    - cron: '0 8 * * 0'  # Weekly Sun 08:00 UTC
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: 'Exit non-zero if any submodule is remote_ahead'
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  freshness:
+    name: submodule-freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Recursive so submodule worktrees are available; the tool
+          # does its own git ls-remote for the remote SHA but needs
+          # the parent gitlink from the index, which is always
+          # present on a checkout.
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Run the freshness check. `set -e -o pipefail` is required
+      # so the `python | tee` pipeline surfaces the tool's exit
+      # code (Lesson 12: tee always returns 0, so without pipefail
+      # the workflow reports success on a broken publisher).
+      #
+      # The workflow default does NOT set --strict; we want the
+      # report either way (an at-a-glance "is anything drifting?"
+      # check). workflow_dispatch lets an operator force --strict
+      # to gate a release on a clean submodule slate.
+      - name: Run freshness check
+        id: freshness
+        env:
+          STRICT: ${{ inputs.strict && 'true' || 'false' }}
+        run: |
+          set -e -o pipefail
+          mkdir -p .freshness
+          STRICT_FLAG=""
+          if [ "$STRICT" = "true" ]; then
+            STRICT_FLAG="--strict"
+          fi
+          python -m pmoves.tools.submodule_freshness_check \
+            $STRICT_FLAG \
+            | tee .freshness/report.json
+
+      - name: Surface freshness summary
+        if: always()
+        # The whole summary is rendered by ONE python invocation. A previous
+        # version closed the `python -c` block and then continued with Python
+        # (`ahead = [...]`, `if ahead:`, `for s in ahead:`) in the SHELL, which
+        # `bash -n` rejects with "syntax error near unexpected token '('" -- so
+        # the step failed whenever the report existed, i.e. on every real run.
+        run: |
+          set -uo pipefail
+          if [ ! -f .freshness/report.json ]; then
+            echo "_No freshness report produced._" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          with open(".freshness/report.json", encoding="utf-8") as fh:
+              data = json.load(fh)
+
+          print("## Submodule freshness summary")
+          print("```json")
+          print(json.dumps(data.get("summary", {}), indent=2, sort_keys=True))
+          print("```")
+          print()
+
+          ahead = [s for s in data.get("submodules", [])
+                   if s.get("status") == "remote_ahead"]
+          if ahead:
+              print("## Submodules with remote ahead")
+              for s in ahead:
+                  print(f"- `{s.get('path')}` ({s.get('branch')}) — {s.get('detail')}")
+          else:
+              print("_No submodules with remote ahead._")
+
+          unknown = [s for s in data.get("submodules", [])
+                     if s.get("status") == "unknown"]
+          if unknown:
+              # Not the same as "nothing to report" — these were not measured.
+              print()
+              print("## Could not be measured")
+              for s in unknown:
+                  print(f"- `{s.get('path')}` — {s.get('detail')}")
+          PY
+
+      - name: Upload freshness artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: submodule-freshness-${{ github.run_id }}
+          path: .freshness/
+          if-no-files-found: ignore

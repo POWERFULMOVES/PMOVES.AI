@@ -1379,7 +1379,7 @@ up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
 .PHONY: up-openroom
 up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
 	@echo "🚪 Starting OpenRoom desktop..."
-	@$(DC) --profile ui up -d openroom
+	@$(DC) --profile ui up -d openroom p7
 	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
 	@echo "✅ OpenRoom ready"
 	@echo "   Desktop:      http://localhost:5173/webuiapps/"
@@ -2170,6 +2170,7 @@ STACK_FILES ?= \
 DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
+MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
 JELLYFIN_AI_DC := docker compose -p $(PROJECT)-jellyfin-ai --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) --env-file env.jellyfin-ai -f docker-compose.jellyfin-ai.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
@@ -4421,6 +4422,32 @@ up-edge: ensure-env-shared edge-preflight ## Start the Traefik edge + sso-auth (
 	@echo "→ Starting edge (Traefik + sso-auth)..."
 	@$(EDGE_DC) up -d
 	@echo "✔ Edge up — verify with 'make edge-health'"
+
+.PHONY: rebuild-edge-svc
+rebuild-edge-svc: ensure-env-shared ## Funnel secrets, then rebuild+recreate ONE edge-overlay service from current source (the edge stale-container killer): make rebuild-edge-svc SVC=sso-auth
+	@# up-edge does `up -d` (no build) and rebuild-svc uses the DEFAULT $(DC), which
+	@# does not know sso-auth (it lives in docker-compose.sso.yml). So a merged sso-auth
+	@# code change (e.g. a forward-auth behavior fix) is NOT picked up by up-edge — the
+	@# container keeps running the stale image. This rebuilds just SVC from the edge
+	@# overlay and recreates it with --no-deps, leaving Traefik (and its live ACME
+	@# state) untouched.
+	@test -n "$(SVC)" || { echo "Usage: make rebuild-edge-svc SVC=sso-auth"; exit 1; }
+	@# AGENTS.md's Known Road for recreating a single service is
+	@# `secrets-funnel && up-<svc>`, and this is a recreate. Compose interpolates
+	@# SUPABASE_JWT_SECRET / JELLYFIN_OIDC_CLIENT_SECRET / SSO_FORWARD_AUTH_SECRET
+	@# from the env files at recreate time, so --force-recreate bakes in whatever is
+	@# on disk. Two of the three have silent defaults in docker-compose.sso.yml
+	@# (`:-$${JWT_SECRET}` and a bare `:-`), so a stale or unhydrated value does not
+	@# fail the recreate -- it yields a RUNNING container with broken auth, which is
+	@# the worst shape of failure to debug from the edge.
+	@# `secrets-rotate` already funnels on its own, so the window is narrow: a bare
+	@# `secrets-local-hydrate` or a CHIT bundle import leaves the env files stale.
+	@# Deliberately run AFTER the SVC guard rather than as a prerequisite, so a
+	@# mistyped invocation fails in a second instead of after the whole funnel.
+	@$(MAKE) --no-print-directory secrets-funnel
+	@echo "→ Rebuilding + recreating edge service $(SVC) from current source (no deps; Traefik untouched)..."
+	@$(EDGE_DC) up -d --build --no-deps --force-recreate $(SVC)
+	@echo "✔ $(SVC) rebuilt + recreated. Verify: make edge-health"
 
 .PHONY: down-edge
 down-edge: ## Stop the Traefik edge + sso-auth

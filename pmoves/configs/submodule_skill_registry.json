@@ -309,6 +309,49 @@
         "HARDWARE_TTS_REQUIREMENTS.md"
       ]
     },
+    "PMOVES-pterm": {
+      "context_tier": 3,
+      "domain_tags": ["infra", "agents"],
+      "skills": [
+        "pinokio/app-list",
+        "pinokio/app-start",
+        "pinokio/app-stop"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "Pinokio-SKILL.md"
+      ],
+      "$note": "Fork of pinokiocomputer/pterm - the Pinokio terminal CLI. Backs the `pterm` skill (clipboard, desktop notifications, native file picker, script testing) and the pinokio/app-* commands, which shell out to pterm. Registered 2026-08-20 alongside gepeto and pinokiod."
+    },
+    "PMOVES-gepeto": {
+      "context_tier": 3,
+      "domain_tags": ["infra", "agents"],
+      "skills": [],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "Pinokio-SKILL.md"
+      ],
+      "$note": "Fork of pinokiocomputer/gepeto - the Pinokio launcher-script generator, behind the `gepeto` skill (building 1-click launchers). skills[] is deliberately empty: gepeto is a plugin skill rather than a .claude/commands/ entry, and declaring a command file that does not exist is exactly what left 7 dangling skill references from #2589."
+    },
+    "PMOVES-pinokiod": {
+      "context_tier": 3,
+      "domain_tags": ["infra"],
+      "skills": [
+        "pinokio/app-list",
+        "pinokio/app-search"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "Pinokio-SKILL.md"
+      ],
+      "$note": "Fork of pinokiocomputer/pinokiod - the Pinokio daemon/backend the desktop app drives. Relevant when a launcher misbehaves at the daemon level rather than inside a start.js. Registered 2026-08-20."
+    },
     "PMOVES-Ultimate-TTS-Studio": {
       "context_tier": 3,
       "domain_tags": ["voice", "media"],
@@ -724,13 +767,6 @@
       "agents_docs": [],
       "canonical": "PMOVES-surf"
     },
-    "skills/Pmoves-skills": {
-      "context_tier": 2,
-      "domain_tags": ["agents", "mcp"],
-      "skills": [],
-      "context_files": [],
-      "agents_docs": []
-    },
     "skills/PMOVES-awesome-agent-skills": {
       "context_tier": 2,
       "domain_tags": ["agents", "mcp"],
@@ -765,7 +801,7 @@
       "skills": [],
       "context_files": [],
       "agents_docs": [],
-      "$note": "Post-recenter home of the skills library that moved from MiniMax-AI/skills to vercel-labs/skills in August 2026. Tracked under skills/PMOVES-skills/. The pre-recenter URL (POWERFULMOVES/Pmoves-Minimax-skills) is preserved as a deprecated reference, not added as a separate submodule entry. Added 2026-08-17 by PR1 of the 6-repo fold-in slice."
+      "$note": "The skills PACKAGE (vercel-labs/skills -- npx skills add). Tracks PMOVES.AI-Edition-Hardened, whose sources/ overlay holds the skill-source forks. CORRECTION 2026-08-20: this note previously said the library moved from MiniMax-AI/skills to vercel-labs/skills and that Pmoves-Minimax-skills was a deprecated pre-recenter URL. No move happened -- both repos are alive, share no history, and are different things (a skills collection vs a CLI tool). Acting on that error left a live MIT library of 17 skills forked and referenced by nothing; it is now tracked at PMOVES-skills/sources/Pmoves-Minimax-skills."
     },
     "PMOVES-MiniMax-MCP": {
       "context_tier": 2,

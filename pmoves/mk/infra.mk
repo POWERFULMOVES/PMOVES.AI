@@ -119,6 +119,25 @@ CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 
 .PHONY: docker-fleet-cleanup-install docker-fleet-cleanup-status docker-fleet-cleanup-run
 
+docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host (exit 3 = unmeasurable, not a pass)
+	@$(PRECHECK_PY) tools/docker_host_policy_check.py $(ARGS)
+
+# Uses $(MCP_GATEWAY_DC), defined beside the other per-stack macros in the
+# Makefile, so it carries -p $(PROJECT) and $(COMPOSE_ENV_FILES). A raw
+# `docker compose up -d` here would skip COMPOSE_ENV_FILES injection and the
+# gateway's ${MCP_GATEWAY_AUTH_TOKEN:?} would fail to resolve — the pipeline
+# bypass the deploy guard exists to catch. Run `make -C pmoves secrets-funnel`
+# first on a fresh node so the tier env files carry the token.
+up-mcp-gateway: ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
+	@$(MCP_GATEWAY_DC) --profile mcp up -d $(ARGS)
+	@echo "MCP Gateway on http://localhost:$${MCP_GATEWAY_PORT:-8091}/mcp"
+
+down-mcp-gateway: ## Stop the PMOVES MCP Gateway
+	@$(MCP_GATEWAY_DC) --profile mcp down $(ARGS)
+
+mcp-gateway-verify: ## Prove the gateway federates: list tools through it, per server
+	@$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
+
 docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
 	@echo "=== Installing Docker Fleet Cleanup Timer ==="
 	@if [ "$$(id -u)" -ne 0 ]; then \
@@ -551,3 +570,40 @@ tensorzero-render: ## Render tensorzero.toml Ollama EMBEDDING api_base from OLLA
 			echo "⚠ $(TZ_CONFIG) not found — skipping render"; \
 		fi
 	'
+
+# -- Service dependency matrix ------------------------------------------------
+# Layered bring-up and graceful shutdown both need a TRUTHFUL dependency order.
+# With ~52 compose files and ~170 depends_on edges a hand-written order drifts the
+# moment a service is added -- and a drifted runbook is worse than none, because it
+# reads as authoritative. So the order is DERIVED from the graph, never authored.
+# Paths are relative to pmoves/ (make's CURDIR here). Kept on one line on purpose:
+# backslash continuations inside a make variable did not survive expansion into
+# the recipe shell, producing a literal backslash-n in the command.
+DEP_MATRIX_DOC ?= docs/SERVICE_DEPENDENCY_MATRIX.md
+COMPOSE_MATRIX_FILES ?= docker-compose.yml docker-compose.core.yml docker-compose.agents.yml docker-compose.workers.yml docker-compose.media.yml docker-compose.ui.yml docker-compose.external.yml docker-compose.juicefs.yml
+DEP_MATRIX_RUN = uv run --quiet --with pyyaml python tools/service_dependency_matrix.py
+
+dep-matrix: ## Regenerate docs/SERVICE_DEPENDENCY_MATRIX.md from the compose graph
+	@# Write to a TEMP file first. A shell redirect truncates the destination
+	@# BEFORE the command runs, so a runner failure (uv unable to fetch PyYAML,
+	@# argparse error) would otherwise replace the canonical matrix with an EMPTY
+	@# file and still report success. Only exit 0 (clean) or 3 (advisory) may
+	@# publish; anything else is a failed run and must not touch the doc.
+	@tmp=$$(mktemp); $(DEP_MATRIX_RUN) --format markdown $(COMPOSE_MATRIX_FILES) > $$tmp; rc=$$?; \
+	 if [ $$rc -ne 0 ] && [ $$rc -ne 3 ]; then rm $$tmp; echo "dep-matrix: run FAILED (exit $$rc) - matrix left unchanged"; exit 1; fi; \
+	 if [ ! -s $$tmp ]; then rm $$tmp; echo "dep-matrix: produced EMPTY output - matrix left unchanged"; exit 1; fi; \
+	 mv $$tmp $(DEP_MATRIX_DOC)
+	@echo "regenerated pmoves/$(DEP_MATRIX_DOC)"
+dep-matrix-check: ## Validate graph (1=blocking fails, 3=advisory warns, other=runner failure). STRICT=1 fails on advisory
+	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; \
+	 if [ $$rc -eq 0 ]; then exit 0; \
+	 elif [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; \
+	 elif [ $$rc -eq 3 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; exit 0; \
+	 else echo "dep-matrix-check: RUNNER FAILURE (exit $$rc) - the tool did not run; this is NOT a pass"; exit 1; fi
+	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; if [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; elif [ $$rc -eq 2 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; fi; exit 0
+
+dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up layers)
+	@$(DEP_MATRIX_RUN) --format shutdown $(COMPOSE_MATRIX_FILES)
+
+agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
+	@uv run --quiet --with pyyaml python tools/agent_registry_check.py

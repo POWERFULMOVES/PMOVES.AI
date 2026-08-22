@@ -104,27 +104,31 @@
     },
     "POWERFULMOVES/PMOVES-jcodemunch-mcp": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/pmoves-hirag-mcp": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PM-Spark-video-search-and-summarization": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-ollama": {
       "profile": "fork",
       "branch": "PMOVES.AI-Edition-Hardened"
     },
-    "POWERFULMOVES/Pmoves-skills": {
-      "profile": "fork",
-      "branch": "main"
-    },
     "POWERFULMOVES/PMOVES-skills": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/Pmoves-Claude-skills": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/Pmoves-Minimax-skills": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-agents.md": {
       "profile": "fork",
@@ -170,7 +174,7 @@
       "profile": "fork",
       "branch": "PMOVES.AI-Edition-Hardened",
       "ruleset_overrides": {
-        "[ PMOVES.AI-Edition-Hardened ]": {
+        "[ main ]": {
           "rules": [
             {
               "type": "required_status_checks",
