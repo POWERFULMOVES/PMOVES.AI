@@ -20,6 +20,14 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened]
 
+# All eight jobs are read-only: checkout, install, run a make target or a python
+# script, and report. Verified before setting this -- no `gh pr`/`gh api`, no
+# github-script, no comment or label writes, and the ghcr/"packages" hits in this
+# file are all prose in comments, not registry pulls. So contents:read is the
+# whole requirement, matching the sibling workflows.
+permissions:
+  contents: read
+
 jobs:
   # Ratcheted: runs ALL test_*.py (previously capped at `head -20` of 264 by
   # filesystem order) and can actually fail (previously ended in `|| true`).
