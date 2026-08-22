@@ -1262,9 +1262,9 @@ services:
     # crash-loops. An ABSENT var is fine; an empty one is fatal. Compose has no
     # syntax to UNSET a variable, so unset here and exec the image's entrypoint.
     #
-    # THIS is the live stanza. The pass-through form below was added to fix this
-    # and cannot: compose resolves bare `- HTTP_PROXY` from --env-file too, so it
-    # inherits the very empty string it was meant to escape. Measured:
+    # The pass-through form below was added to fix this and cannot: compose
+    # resolves bare `- HTTP_PROXY` from --env-file too, so it inherits the very
+    # empty string it was meant to escape. Measured:
     #   compose: environment: [- FOO]  +  vars.cfg: FOO=  ->  FOO is SET-EMPTY
     entrypoint: ["/bin/sh", "-c", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; exec /usr/local/bin/vector \"$$@\"", "--"]
     command: ["--config", "/etc/vector/vector.yml"]
