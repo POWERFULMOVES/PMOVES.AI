@@ -2130,6 +2130,18 @@ services:
       dockerfile: backend/Dockerfile
     image: ${TRANSCRIBE_BACKEND_IMAGE:-ghcr.io/powerfulmoves/pmoves-transcribe-backend:latest}
     restart: unless-stopped
+    # The image ships /app/app/monitoring/logs as dr-xr-xr-x -- owned by nonroot
+    # (the Dockerfile's `chown -R` worked) but writable by NOBODY, because chown
+    # sets ownership and not mode. The app opens a log file there on startup, so
+    # it crash-looped on PermissionError as uid 65532 before serving anything.
+    #
+    # Fixed here rather than in the image: a container writing its own logs into
+    # an image layer is the wrong shape anyway -- it is invisible to `docker logs`,
+    # unbounded by the daemon's log-rotation policy (#2660), and lost on recreate.
+    # tmpfs makes the path writable, keeps it off the disk, and discards it with
+    # the container. Real logs go to stdout where the rotation policy governs them.
+    tmpfs:
+    - /app/app/monitoring/logs:uid=65532,gid=65532,mode=0700
     environment:
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
