@@ -44,3 +44,17 @@ pmoves/docker-compose.ui.yml linguist-generated
 pmoves/docker-compose.workers.yml linguist-generated
 pmoves/docker-compose.apps.yml linguist-generated
 pmoves/docker-compose.juicefs.yml linguist-generated
+
+# Same rule, other generators. Each of these has a drift gate that fails when the
+# committed output differs from a fresh run, which is what makes them emitted
+# rather than merely derived — a hand-edit is reverted by the next generator run
+# and reported as drift in between.
+#
+#   pmoves/design/build      <- make design-tokens      (design-tokens-check)
+#   pmoves/ui/lib/persona    <- make design-vendor      (design-vendor-check)
+#   website/persona          <- make design-vendor      (design-vendor-check)
+#   website/stage/data       <- make stage-data         (stage-data-check)
+pmoves/design/build/** linguist-generated
+pmoves/ui/lib/persona/** linguist-generated
+website/persona/** linguist-generated
+website/stage/data/** linguist-generated
