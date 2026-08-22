@@ -6,6 +6,26 @@
 **Bearer auth:** `Authorization: Bearer ${CIPHER_API_TOKEN}` (header expands empty without the env var → 401, expected)
 **Discovery entry:** `pmoves/config/agent_registry.yaml` → `mcp_servers.pmoves_cipher_mcp`
 
+> **Live state, verified 2026-08-21 on 4090.** `/health` returns
+> `{"service":"cipher-pmoves-shim","version":"0.1.0"}` — the deployed API is the
+> **PMOVES shim**, entry point `dist/pmoves/rest-server.js` from the `Pmoves-cipher`
+> submodule (populated, on `PMOVES.AI-Edition-Hardened`). The `pmoves-cipher-mcp`
+> submodule referenced under Reference is **UNINITIALIZED** locally, which is
+> consistent with the shim standing in for it.
+>
+> Reachability: `pmoves-cipher-api-1` sits on `pmoves_api`/`app`/`bus`/`data` (all
+> `internal: true`) **plus `pmoves_external` (`internal: false`)**, and publishes
+> `127.0.0.1:8105->8105/tcp`. The non-internal network is what makes host publishing
+> possible; the loopback bind keeps the LAN and mesh out. Older guidance that
+> `localhost:8105` is unreachable by design and must be proxied through the
+> BoTZ-gateway is **superseded**.
+>
+> Endpoint map: `/health` 200, `/mcp/sse` 200 (GET only). `/healthz`, `/mcp` and
+> `/api/health` all 404. **`POST /mcp/sse` is not routed** — the SSE stream emits
+> `event: endpoint` naming `/mcp/messages?sessionId=...`, and JSON-RPC is POSTed
+> there while the stream is held open. Responses arrive on the stream, not as the
+> POST body (the POST returns the bare string `Accepted`).
+
 Cipher is the PMOVES memory layer. Every cross-session knowledge lookup, every durable plan/checkpoint/completion, every state-changing action's signed audit trail flows through it. This context captures what's encrypted, where the keys live, the NATS custody chain, and how a Mavis-class agent should use it.
 
 ## What cipher is for
@@ -60,11 +80,61 @@ The HMAC signature is the custody mechanism. A signed trail can be verified offl
 
 Three patterns, in priority order:
 
-1. **Read on cold start.** Before doing work, search cipher for prior plans, recent completions, and AGNOTE entries tagged with your role. The `.claude/mcp.json` `pmoves-cipher` server exposes `cipher_search(query, category, limit)` and `cipher_read(record_id)` for this. Use the `category` filter to narrow (e.g. `category=agent_checkpoint` for the prior plan; `category=agent_completion` for what was tried).
+1. **Read on cold start.** Before doing work, search cipher for prior plans, recent completions, and AGNOTE entries tagged with your role. **This is a requirement, not a health check** — cipher should be running whenever Claude or any registered agent starts. `pmoves_cipher_session_recall` is the purpose-built primitive; `pmoves_cipher_search` with a `category` filter narrows further (`agent_checkpoint` for the prior plan, `agent_completion` for what was tried).
 
-2. **Write on phase boundaries.** Every BPM phase transition (define → assign → execute → review → close, per the harness v0 NATS subjects) should write a cipher record. The `cipher_store(record_type, payload, chit_signature?)` MCP method is the entry point. The record_type enum is `agent_plan | agent_checkpoint | agent_completion | reasoning_trace | chit_signed_event`.
+2. **Write on phase boundaries.** Every BPM phase transition (define → assign → execute → review → close, per the harness v0 NATS subjects) should write a cipher record via `pmoves_cipher_store`. Use `pmoves_cipher_session_save` for session state you intend to resume from.
 
 3. **Sign before any state-changing action.** `make -C pmoves sign-trail` is the canonical entry point; raw HMAC calls bypass the audit chain. The damage-control hook redirects raw `hmac` / `openssl dgst -hmac` calls to an `ask` prompt, same as it does for raw `docker`. Don't bypass.
+
+### Tool surface (corrected 2026-08-21)
+
+Read from `Pmoves-cipher/src/pmoves/mcp-sse.ts` and confirmed against a live
+`tools/list` over the SSE transport.
+
+An earlier revision of this file named `cipher_store`, `cipher_search` and
+`cipher_read`. **None of those exist.** `cipher_read` has no counterpart at all, and
+every real name carries the `pmoves_cipher_` prefix. An agent following the old text
+would have failed every call it made.
+
+| tool | purpose |
+|---|---|
+| `pmoves_cipher_store` | store knowledge with category + tags |
+| `pmoves_cipher_search` | search over stored memories |
+| `pmoves_cipher_store_reasoning` | store a chain-of-thought trace |
+| `pmoves_cipher_reasoning_patterns` | retrieve recurring reasoning patterns |
+| `pmoves_cipher_session_save` | persist session state |
+| `pmoves_cipher_session_recall` | **the cold-start primitive** |
+| `pmoves_cipher_hybrid_search` | combined vector + text search |
+| `pmoves_cipher_graph_expand` | expand a memory's graph neighbourhood |
+| `pmoves_cipher_mcp_list` | list registered MCP surfaces |
+| `pmoves_cipher_mcp_get` | fetch one MCP surface record |
+
+**`agentId` is REQUIRED** on `pmoves_cipher_store` and `pmoves_cipher_search`.
+Neither the old text here nor the skill mentioned it, so every documented call was
+missing a required field. Use your signing-card `agent_id` from
+`pmoves/config/signing_identity_cards.yaml` — e.g. `claude-opus`, `crush`,
+`4090-claude`. Note the tool's own description offers `claude-4090` as an example,
+which matches **no card**; the card is `4090-claude`.
+
+Search is **per-agent scoped** — it returns only memories stored under the same
+`agentId`. Pass `agentId: "*"` for cross-agent search (advisory mode only). A
+cold-start read that omits the wildcard silently misses what other agents on the node
+recorded, which is the opposite of what a cold start is for.
+
+`category` is one enum shared by store and search, with nine values: `code_pattern`,
+`decision`, `context`, `submodule`, `architecture`, `reasoning`, `agent_plan`,
+`agent_checkpoint`, `agent_completion`. The old `record_type` framing invented
+`reasoning_trace` and `chit_signed_event`, which are not categories.
+
+Two operational facts measured 2026-08-21:
+
+- `pmoves_cipher_store` returns `embedded: false`, so retrieval falls back to text
+  match rather than vector similarity. Round-trip store → search → retrieve was
+  verified working, but keep queries close to the stored wording.
+- The store was **empty**: a scoped search and a wildcard search both returned
+  `{"results":[]}`. The village rule is in place; the corpus is not yet. Having
+  nothing to inherit makes writing matter more, not less.
+
 
 ## What cipher is NOT
 

@@ -2171,6 +2171,15 @@ DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_F
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
 MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
+# The BoTZ stack is a separate compose PROJECT (its own network,
+# pmoves_pmoves_app). Given its own -p so it keeps that identity, but routed
+# through COMPOSE_ENV_FILES like every other stack rather than raw compose.
+# Project name and working dir MUST match what created the containers, or
+# compose treats them as foreign and `up` dies on a name conflict. Read off
+# the running container's labels: com.docker.compose.project=pmoves-botz,
+# working_dir=<repo>/PMOVES-BoTZ. Guessing `-p pmoves` produced exactly that
+# conflict during verification.
+BOTZ_STACK_DC := docker compose -p pmoves-botz --project-directory $(CURDIR)/../PMOVES-BoTZ $(COMPOSE_ENV_FILES) -f ../PMOVES-BoTZ/docker-compose.yml
 JELLYFIN_AI_DC := docker compose -p $(PROJECT)-jellyfin-ai --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) --env-file env.jellyfin-ai -f docker-compose.jellyfin-ai.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
@@ -2680,12 +2689,18 @@ down-tensorzero-full:
 # -------- Monitoring stack (Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor) --------
 .PHONY: up-monitoring down-monitoring monitoring-open monitoring-status monitoring-smoke monitoring-smoke-prod observability-audit
 
+# --project-directory is REQUIRED on every invocation of the monitoring compose.
+# Relative bind paths inside it resolve against the PROJECT DIRECTORY, and Docker
+# defaults that to the first compose file's own directory -- so omitting it here
+# while up-obs (line ~363) passes it meant the same file resolved its binds two
+# different ways. One of the two was always broken; which one depended only on
+# which target the operator happened to run.
 MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 
 up-monitoring: ## Start monitoring stack (all services: Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor)
 	@echo "⛳ Starting monitoring stack..."
 	@bash -lc '. ./scripts/with-env.sh; \
-		docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml up -d; \
+		docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml --project-directory "$(CURDIR)" up -d; \
 		echo "✔ Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"; \
 		echo "✔ Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"; \
 		echo "✔ Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"; \
@@ -2693,7 +2708,7 @@ up-monitoring: ## Start monitoring stack (all services: Prometheus, Grafana, Lok
 		echo "✔ cAdvisor:     http://localhost:$${CADVISOR_HOST_PORT:-9180}"'
 
 down-monitoring: ## Stop monitoring stack and remove volumes
-	@bash -lc 'docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml down -v'
+	@bash -lc 'docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml --project-directory "$(CURDIR)" down -v'
 
 GRAFANA_HOST_PORT ?= 3002
 PROMETHEUS_HOST_PORT ?= 9090
