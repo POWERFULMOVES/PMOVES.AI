@@ -45,13 +45,21 @@ if (Test-Path $envf) {
     }
     # Pass 2: expand ${VAR} and ${VAR:-default} against the map (mirrors the shell
     # `source` in crush-pmoves.sh). Bounded iteration resolves chained aliases;
-    # stops early once a pass makes no substitution. A self-reference
-    # (KEY=${KEY:-default}) skips the var branch and falls to the default.
+    # stops early once a pass makes no substitution.
+    #
+    # The default group allows ONE level of nested ${...} -- `[^}]*` stopped at the
+    # inner brace and corrupted values like
+    #   ${BOTZ_GATEWAY_URL:-http://${BOTZ_HOST}:2091}
+    # into `http://${BOTZ_HOST:2091}`. The nested ${BOTZ_HOST} is then resolved by
+    # a later pass of this same loop.
+    #
+    # A self-reference (KEY=${KEY:-default}) skips the MAP but still consults the
+    # process environment -- see the else branch below.
     for ($pass = 0; $pass -lt 5; $pass++) {
         $changed = $false
         foreach ($k in @($vars.Keys)) {
             $curKey = $k
-            $resolved = [regex]::Replace($vars[$k], '\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}', {
+            $resolved = [regex]::Replace($vars[$k], '\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-((?:[^{}]|\$\{[^{}]*\})*))?\}', {
                 param($m)
                 $name = $m.Groups[1].Value
                 $repl = $null
@@ -62,6 +70,15 @@ if (Test-Path $envf) {
                         $envv = [Environment]::GetEnvironmentVariable($name)  # real process env (parity with shell source)
                         if ($envv) { $repl = $envv }
                     }
+                } else {
+                    # SELF-REFERENCE (KEY=${KEY:-default}). Skipping the map is
+                    # right -- consulting $vars[$k] here would just re-expand
+                    # itself. But the PROCESS env must still win, because that is
+                    # what `source`ing this file in a shell does: an operator who
+                    # exported NATS_TLS_ENABLED=true keeps true, rather than being
+                    # reset to the file's default of false.
+                    $envv = [Environment]::GetEnvironmentVariable($name)
+                    if ($envv) { $repl = $envv }
                 }
                 if ($null -ne $repl) { $repl }
                 elseif ($m.Groups[2].Success) { $m.Groups[2].Value }         # ${VAR:-default}
