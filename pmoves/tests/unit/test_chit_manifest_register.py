@@ -183,3 +183,39 @@ def test_build_entry_omits_min_length_when_unconstrained():
     """Every other registered secret must emit exactly as before."""
     assert "min_length" not in reg.build_entry("FOO", {"tier": "llm"})
     assert reg.build_entry("BAR", {"tier": "llm", "min_length": 64})["min_length"] == 64
+
+
+# --- constraints must survive the v1 derivation (review on #2688) ------------
+#
+# `secrets-funnel-sync` derives the v1 manifest from v2 and hands the DERIVED
+# file to secrets_sync.py (codex.mk:114-115). _build_v1_entry copied only
+# id/source/targets/required, so a constraint declared in v2 was invisible to
+# load_manifest() on the canonical path -- enforced by nothing, while both files
+# looked correct.
+
+from pmoves.tools import chit_manifest_sync as sync  # noqa: E402
+
+
+def _v2(**extra):
+    base = {
+        "id": "secret_key_base",
+        "source": {"type": "cgp", "label": "SECRET_KEY_BASE"},
+        "targets": [{"file": "env.tier-supabase", "key": "SECRET_KEY_BASE"}],
+        "required": True,
+    }
+    base.update(extra)
+    return base
+
+
+def test_v1_derivation_carries_min_length():
+    assert sync._build_v1_entry(_v2(min_length=64))["min_length"] == 64
+
+
+def test_v1_derivation_omits_it_when_unconstrained():
+    assert "min_length" not in sync._build_v1_entry(_v2())
+
+
+@pytest.mark.parametrize("bad", [0, -1, True, "64", None, 1.5])
+def test_v1_derivation_ignores_non_positive_or_non_int_values(bad):
+    """True is an int in Python; a bool constraint is a mistake, not a length."""
+    assert "min_length" not in sync._build_v1_entry(_v2(min_length=bad))
