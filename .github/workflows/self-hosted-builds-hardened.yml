@@ -354,13 +354,17 @@ jobs:
     # cloudstartup-runner signing card but no runner registered against it, so
     # this job cannot schedule. Disabled explicitly rather than left to queue and
     # be cancelled, which reads as 'someone stopped it' instead of 'impossible'.
-    if: false  # BLOCKED: no cloudstartup runner registered
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cloudstartup, staging]
     timeout-minutes: 30
     needs: [build-cpu, validate-contracts]
+    # Leading `false &&` is the disable; the original predicate is kept verbatim
+    # so re-enabling is a two-token delete once a cloudstartup runner exists.
+    # It must live in THIS key, not a second `if:` above — a duplicate mapping key
+    # does not error, the later one silently wins, and the disable evaporates.
     if: |
+      false && (
       github.ref == 'refs/heads/develop' ||
-      github.event.inputs.deploy_target == 'staging'
+      github.event.inputs.deploy_target == 'staging' )
     environment: staging
 
     steps:
