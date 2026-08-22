@@ -11,13 +11,15 @@
 #   DB_PASS=... bash juicefs-cross-node-setup.sh
 #   JUICEFS_HOST=pmoves-b850-ai-top DB_PASS=... bash juicefs-cross-node-setup.sh
 #
-# !! READ FIRST: this cannot currently give you a working cross-node mount. The
-# !! pmoves-media volume is formatted with Storage:"file", so its data blocks sit on
-# !! the host node's local disk. A remote mount enumerates filenames and then fails
-# !! every read with an I/O error. See
-# !! pmoves/docs/handoffs/juicefs-cross-node-storage-blocker-2026-08-04.md — the
-# !! volume has to be reformatted onto tailnet MinIO first. The preflight below
-# !! refuses to proceed on a file-backed volume unless you override it.
+# !! READ FIRST: the storage blocker is resolved — pmoves-media is now MinIO-backed
+# !! (z890), so remote reads work once you can reach the metadata engine. The remaining
+# !! blocker is METADATA REACHABILITY: the JuiceFS host's supabase-db sits on internal:true
+# !! Docker networks, so its published :5432 is recorded but not plumbed and remote nodes
+# !! cannot connect. The unblock (scoped juicefs_meta role -> mount cutover -> rotate
+# !! supabase_admin -> tailnet-expose supabase-db) and its operator gates are in
+# !! pmoves/docs/handoffs/juicefs-meta-scoped-role-and-tailnet-exposure-2026-08-18.md and
+# !! docs/operations/JUICEFS_CROSSNODE_CUTOVER_CHECKLIST.md. The preflight below still
+# !! refuses a file-backed volume (defense in depth) unless you override it.
 
 set -euo pipefail
 
@@ -25,6 +27,13 @@ set -euo pipefail
 JUICEFS_HOST="${JUICEFS_HOST:-pmoves-b850-ai-top}"
 DB_PORT="${DB_PORT:-5432}"
 DB_PASS="${DB_PASS:-}"
+# Metadata DSN role. Default supabase_admin for back-compat. Switch to juicefs_meta once
+# the scoped role is applied (make -C pmoves supabase-bootstrap) and granted LOGIN with a
+# pipeline-delivered password — this is the step-2 cutover in
+# docs/handoffs/juicefs-meta-scoped-role-and-tailnet-exposure-2026-08-18.md, and it is what
+# shrinks the cross-node auth surface from a full superuser to DML on one schema (the point
+# of the whole lane). DB_PASS must be that role's password when META_ROLE=juicefs_meta.
+META_ROLE="${META_ROLE:-supabase_admin}"
 MOUNT_POINT="${MOUNT_POINT:-$HOME/pmoves-fs}"
 DATA_DIR="${DATA_DIR:-$HOME/.local/share/juicefs-data}"
 # Escape hatch for the storage preflight, e.g. when deliberately standing up a
@@ -55,7 +64,7 @@ docker pull juicedata/mount:ce-v1.3.0
 # is safe to appear in `ps` / `docker inspect`. This is the fix for the exposure
 # recorded in the 2026-08-01 metadata note (b850's mount still has the password
 # inline in its command line).
-META_URL="postgres://supabase_admin@${JUICEFS_HOST}:${DB_PORT}/postgres?search_path=juicefs_meta&sslmode=disable"
+META_URL="postgres://${META_ROLE}@${JUICEFS_HOST}:${DB_PORT}/postgres?search_path=juicefs_meta&sslmode=disable"
 
 # Preflight: refuse to join a file-backed volume from a remote node. Storage is baked
 # in at format time, so `file` means the blocks are local to the formatting host and
