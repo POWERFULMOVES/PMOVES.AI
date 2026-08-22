@@ -15,7 +15,51 @@ This skill integrates Claude Code with Cipher Memory, providing:
 - Reasoning trace storage for complex problem-solving
 - Submodule knowledge management
 
+## Required on every call: `agentId`
+
+`pmoves_cipher_store` and `pmoves_cipher_search` both **require** `agentId`. This
+skill omitted it until 2026-08-21, so every example here was missing a required
+field and would have failed.
+
+Use your signing-card `agent_id` from `pmoves/config/signing_identity_cards.yaml`
+(`claude-opus`, `crush`, `4090-claude`, ...). The tool's own description suggests
+`claude-4090`, which matches **no card** — the card is `4090-claude`.
+
+Search is **per-agent scoped**: it returns only what the same `agentId` stored. Pass
+`agentId: "*"` for cross-agent search (advisory mode only). On a cold start, search
+the wildcard too or you will miss what other agents on this node recorded.
+
+## Cold start is a requirement, not a health check
+
+Cipher should be running whenever Claude or any registered agent starts. Before
+doing work, recall prior state:
+
+```
+pmoves_cipher_session_recall  — the purpose-built primitive
+pmoves_cipher_search          — with category=agent_checkpoint (prior plan)
+                                or category=agent_completion  (what was tried)
+```
+
+Verified 2026-08-21: the store was **empty** (scoped and wildcard both returned
+`{"results":[]}`). Nothing to inherit yet — which makes writing matter more.
+
 ## MCP Tools
+
+Ten tools exist. This skill documented three until 2026-08-21; the other seven —
+including both session primitives the cold-start rule depends on — were missing.
+
+| tool | purpose |
+|---|---|
+| `pmoves_cipher_store` | store knowledge with category + tags |
+| `pmoves_cipher_search` | search stored memories |
+| `pmoves_cipher_store_reasoning` | store a chain-of-thought trace |
+| `pmoves_cipher_reasoning_patterns` | retrieve recurring reasoning patterns |
+| `pmoves_cipher_session_save` | persist session state |
+| `pmoves_cipher_session_recall` | restore prior session state (cold start) |
+| `pmoves_cipher_hybrid_search` | combined vector + text search |
+| `pmoves_cipher_graph_expand` | expand a memory's graph neighbourhood |
+| `pmoves_cipher_mcp_list` | list registered MCP surfaces |
+| `pmoves_cipher_mcp_get` | fetch one MCP surface record |
 
 ### Store Memory
 
@@ -24,23 +68,37 @@ Store knowledge for future reference:
 ```
 Use pmoves_cipher_store to remember:
 - content: The knowledge to store
-- category: code_pattern, decision, context, submodule, architecture, or reasoning
+- agentId: REQUIRED — your signing-card agent_id (claude-opus, crush, 4090-claude)
+- category: code_pattern, decision, context, submodule, architecture, reasoning,
+            agent_plan, agent_checkpoint, or agent_completion
 - tags: Optional list of tags for retrieval
 ```
 
-**Categories:**
+**Categories (nine — the enum is shared by store and search):**
 - `code_pattern`: Reusable code patterns and conventions
 - `decision`: Architectural decisions and rationale
 - `context`: Project-specific context
 - `submodule`: PMOVES submodule knowledge
 - `architecture`: System patterns and design
 - `reasoning`: Chain-of-thought reasoning traces
+- `agent_plan`: A durable plan an agent can resume from
+- `agent_checkpoint`: Mid-work state at a phase boundary
+- `agent_completion`: What was actually finished, and what was tried
+
+The last three were missing from this skill. They are the ones the cold-start
+pattern in `.claude/context/cipher.md` tells agents to filter on, so their absence
+here made that guidance unusable.
+
+**Note:** `pmoves_cipher_store` currently returns `embedded: false`, so retrieval
+falls back to text match rather than vector similarity. Keep queries close to the
+stored wording.
 
 **Example:**
 ```
 Store this pattern: "PMOVES submodules should include pmoves_announcer,
 pmoves_health, pmoves_registry, pmoves_common in their root directory."
 
+agentId: claude-opus
 Category: code_pattern
 Tags: submodule, pmoves_framework, integration
 ```
@@ -51,7 +109,9 @@ Search stored memories:
 
 ```
 Use pmoves_cipher_search to find:
-- query: Search query (semantic search)
+- query: Search query
+- agentId: REQUIRED — scopes the search. Use "*" for cross-agent (advisory only);
+           a cold-start read that omits the wildcard misses other agents' records
 - category: Optional filter by category
 - tags: Optional filter by tags
 - limit: Maximum results (default: 10)
@@ -60,6 +120,7 @@ Use pmoves_cipher_search to find:
 **Example:**
 ```
 Search for: "submodule integration patterns"
+agentId: claude-opus      (or "*" to search across agents)
 Category: code_pattern
 ```
 
