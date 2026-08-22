@@ -25,9 +25,30 @@ None of that was caught by anything, because nothing checked. This does.
 CHECKS
   1. every `submodule:` claim appears as a real path in .gitmodules
   2. every `path:` exists on disk and is NOT declared as a submodule
-  3. `transport: sse|http` REQUIRES an endpoint (otherwise it cannot be dialled)
+  3. `transport: sse|http` REQUIRES an endpoint (otherwise it cannot be dialled),
+     UNLESS the entry is marked status: planned/proposed/deprecated - recording
+     an intended transport is fine; publishing an address nothing answers is not
   4. `transport: stdio` must NOT carry an endpoint (a stdio bridge is spawned by
      the client, never dialled - an endpoint here is fiction)
+
+  5. two entries describing the SAME component must not make contradictory
+     reachability claims. Found 2026-08-22, after this tool had reported the
+     file "clean": `pmoves-e2b-mcp-server` has two entries -
+
+         pmoves_e2b_mcp_server:  port: null   # stdio transport, no HTTP port
+         pmoves_e2b_mcp:         transport: sse
+                                 endpoint: http://pmoves-e2b-mcp:8080/sse
+
+     Both pass checks 1-4 in isolation. Nothing compared them, so the file says
+     both "there is no port" and "dial it here" about one component, and a
+     reader has no way to know which is true. This is the same shape as the
+     dependency audit that prompted it: two declarations of one thing, and no
+     check that they agree.
+
+     Deliberately NOT flagged: two entries for one submodule that simply do not
+     conflict. A repo can legitimately host several services. Flagging mere
+     duplication would be the over-reporting that trains people to ignore a
+     check.
 
 Exit 0 clean, 1 on any finding. This is a truth check, not a style check, so
 every finding is blocking.
@@ -85,11 +106,16 @@ def main() -> int:
 
     problems = []
     seen = set()
+    targets = {}   # submodule/path -> [(entry key, endpoint or None)]
     for name, entry in walk_entries(reg):
         ident = str(name)
         if ident in seen:
             continue
         seen.add(ident)
+
+        target = entry.get("submodule") or entry.get("path")
+        if isinstance(target, str):
+            targets.setdefault(target, []).append((ident, entry.get("endpoint")))
 
         sm = entry.get("submodule")
         if isinstance(sm, str) and ("path = " + sm) not in gm:
@@ -110,7 +136,10 @@ def main() -> int:
 
         transport = entry.get("transport")
         endpoint = entry.get("endpoint")
-        if transport in ("sse", "http", "https") and not endpoint:
+        # An entry recording INTENT may name a transport it does not yet serve.
+        # What it must not do is publish an address nothing answers on.
+        planned = str(entry.get("status", "")).lower() in ("planned", "proposed", "deprecated")
+        if transport in ("sse", "http", "https") and not endpoint and not planned:
             problems.append(
                 "{}: transport '{}' requires an endpoint — it cannot be dialled without one".format(ident, transport)
             )
@@ -118,6 +147,19 @@ def main() -> int:
             problems.append(
                 "{}: transport 'stdio' must not carry an endpoint ('{}') — a stdio bridge is "
                 "spawned by the client, never dialled".format(ident, endpoint)
+            )
+
+    # 5. contradictory reachability claims about the same component
+    for target, claims in sorted(targets.items()):
+        reachable = [(k, e) for k, e in claims if e]
+        portless = [(k, e) for k, e in claims if not e]
+        if reachable and portless:
+            r = ", ".join("{} -> {}".format(k, e) for k, e in reachable)
+            n = ", ".join(k for k, _ in portless)
+            problems.append(
+                "{}: contradictory reachability. {} declares no port/endpoint while {} "
+                "says it is dialable. One component cannot be both; a reader has no way "
+                "to tell which is true.".format(target, n, r)
             )
 
     if problems:
