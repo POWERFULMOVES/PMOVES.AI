@@ -72,13 +72,32 @@ def _inject_into_env(env, value: str):
         env[_ENV_KEY] = value
         return env
     if isinstance(env, list):
-        # Drop any existing PMOVES_NETWORKS= (idempotent), keep everything else
-        # in place, then append the canonical entry at the end.
-        for i in range(len(env) - 1, -1, -1):
-            item = env[i]
-            if isinstance(item, str) and item.split("=", 1)[0] == _ENV_KEY:
+        # Replace an existing entry IN PLACE; only append when there is none.
+        #
+        # The previous version deleted every match and re-appended at the end.
+        # In ruamel a comment is attached to the index of the item it FOLLOWS,
+        # so `del env[i]` destroys the comment on the next line -- which
+        # documents a DIFFERENT key. Observed in docker-compose.yml:
+        #
+        #   - PMOVES_NETWORKS=pmoves_api,pmoves_public
+        #   # Admin server backs `postgrest --ready` (healthcheck below). ...
+        #   - PGRST_ADMIN_SERVER_PORT=...
+        #
+        # Re-running the injector silently ate line 2, which belongs to
+        # PGRST_ADMIN_SERVER_PORT. Because the drift gate requires the
+        # injector's output to match what is committed, that loss was not
+        # optional: main was permanently one run away from dirty, and the only
+        # way to green the gate was to commit the deletion.
+        found = [
+            i for i, item in enumerate(env)
+            if isinstance(item, str) and item.split("=", 1)[0] == _ENV_KEY
+        ]
+        if found:
+            env[found[0]] = entry          # keeps position AND ca.items[i]
+            for i in reversed(found[1:]):  # drop accidental duplicates
                 del env[i]
-        env.append(entry)
+        else:
+            env.append(entry)
         return env
     raise TypeError(f"unexpected environment shape: {type(env)!r}")
 
