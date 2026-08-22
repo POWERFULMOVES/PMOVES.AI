@@ -102,6 +102,10 @@ tracked:
     freshness_days: 90
     severity: INFO
     description: "Grand Convergence five-layer thesis — slow-changing"
+  - path: pmoves/docs/architecture/AGENT_AUTHORIZATION_MODEL.md
+    freshness_days: 90
+    severity: INFO
+    description: "Agent authorization model — principals, evaluation contract, enforcement gaps"
 
   # ── Service docs (a2ui-renderer) ──────────────────────────────────────
   - path: pmoves/services/a2ui-renderer/README.md
