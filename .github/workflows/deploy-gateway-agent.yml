@@ -71,7 +71,9 @@ jobs:
 
   build-ai-lab:
     name: Build Gateway Agent (AI-Lab)
-    runs-on: [self-hosted, ai-lab]
+    # ai-lab is carried by BOTH b850 (X64) and spark (ARM64); without an arch pin
+    # this lands on whichever is free and fails intermittently on the wrong one.
+    runs-on: [self-hosted, Linux, X64, ai-lab]
     timeout-minutes: 30
     permissions:
       contents: read
@@ -145,7 +147,9 @@ jobs:
 
   deploy-ai-lab:
     name: Deploy to AI-Lab
-    runs-on: [self-hosted, ai-lab]
+    # ai-lab is carried by BOTH b850 (X64) and spark (ARM64); without an arch pin
+    # this lands on whichever is free and fails intermittently on the wrong one.
+    runs-on: [self-hosted, Linux, X64, ai-lab]
     timeout-minutes: 15
     permissions:
       contents: read
@@ -415,7 +419,9 @@ jobs:
 
   rollback-ai-lab:
     name: Rollback AI-Lab
-    runs-on: [self-hosted, ai-lab]
+    # ai-lab is carried by BOTH b850 (X64) and spark (ARM64); without an arch pin
+    # this lands on whichever is free and fails intermittently on the wrong one.
+    runs-on: [self-hosted, Linux, X64, ai-lab]
     timeout-minutes: 10
     permissions:
       contents: read
