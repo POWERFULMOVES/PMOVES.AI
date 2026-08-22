@@ -72,6 +72,7 @@ the image installs something other than what a file says it does.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -87,6 +88,14 @@ except ImportError:  # pragma: no cover
 
 SUBMODULE = "PMOVES-Agent-Zero"
 RAW = "https://raw.githubusercontent.com/POWERFULMOVES/PMOVES-Agent-Zero/{ref}/requirements.txt"
+
+# The branch the IMAGE builds. Dockerfile:12 `ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened`
+# and Dockerfile:21 `git clone --branch ${AGENT_ZERO_REF}` -- so the shipped tree is
+# the BRANCH TIP, not the gitlink. Dockerfile.multiarch clones the same way.
+BRANCH = "PMOVES.AI-Edition-Hardened"
+BRANCH_API = (
+    "https://api.github.com/repos/POWERFULMOVES/PMOVES-Agent-Zero/git/ref/heads/{branch}"
+)
 
 # The only sanctioned way to regenerate the lock. The make target sets this as
 # UV_CUSTOM_COMPILE_COMMAND so the header records it instead of a raw uv line.
@@ -116,8 +125,32 @@ OURS_TXT = ROOT / "pmoves" / "services" / "agent-zero" / "requirements.txt"
 OURS_LOCK = ROOT / "pmoves" / "services" / "agent-zero" / "requirements.lock"
 
 
+_SEPARATORS = re.compile(r"[-_.]+")
+
+
 def norm(name: str) -> str:
-    return name.lower().replace("_", "-")
+    """PEP 503 canonical form: runs of `-`, `_` and `.` are ALL equivalent.
+
+    This used to replace `_` only, so `zope.interface` and `zope-interface`
+    produced different keys. Python packaging treats them as the same
+    distribution, so the fork could constrain one spelling, our overlay could
+    override the other, and both the constraint lookup and the
+    duplicate-declaration intersection would miss it -- the check passing on a
+    real override is exactly the outcome it exists to prevent.
+
+    Ref: https://peps.python.org/pep-0503/#normalized-names
+    """
+    return _SEPARATORS.sub("-", name).lower()
+
+
+def branch_tip_sha():
+    """Resolve the branch tip the image clones, via the API the Dockerfile uses."""
+    try:
+        url = BRANCH_API.format(branch=BRANCH)
+        with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 - fixed https host
+            return json.load(r)["object"]["sha"]
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def gitlink_sha():
@@ -140,15 +173,46 @@ def read_fork_requirements(ref, problems):
     None and the run FAILS. A check that silently compares against nothing is
     worse than no check, because it reports green.
     """
-    local = ROOT / SUBMODULE / "requirements.txt"
-    if ref is None and local.is_file():
-        return local.read_text(encoding="utf-8")
-
-    sha = ref or gitlink_sha()
+    # Which revision to compare against is the whole correctness question.
+    #
+    # This used to prefer the local checkout, then the GITLINK. The image builds
+    # NEITHER: Dockerfile:21 clones `--branch ${AGENT_ZERO_REF}`, i.e. the branch
+    # TIP. So whenever the branch advanced past the gitlink -- which is the normal
+    # state, since the Dockerfile even cache-busts on the tip moving -- this gate
+    # validated a tree that is not the one shipped. A new or changed fork
+    # constraint could conflict with our overlay lock while the required check
+    # reported success: the exact regression it exists to catch.
+    #
+    # So: resolve the branch tip, and say so when it differs from the gitlink.
+    sha = ref
+    if sha is None:
+        sha = branch_tip_sha()
+        gl = gitlink_sha()
+        if sha and gl and sha != gl:
+            print(
+                "note: comparing against the {} tip {} -- that is what the image "
+                "builds. The gitlink is {}, so the submodule pointer does NOT "
+                "describe the shipped tree.".format(BRANCH, sha[:12], gl[:12]),
+                file=sys.stderr,
+            )
+        if sha is None:
+            # API unreachable. Fall back, but never silently -- a fallback that
+            # looks identical to a success is how a gate stops measuring.
+            sha = gl
+            if sha:
+                print(
+                    "WARNING: could not resolve {} tip; falling back to the gitlink "
+                    "{}. This may NOT be the tree the image builds.".format(
+                        BRANCH, sha[:12]
+                    ),
+                    file=sys.stderr,
+                )
     if not sha:
         problems.append(
-            "cannot determine which fork revision to compare against: "
-            "{} is not checked out and its gitlink could not be read".format(SUBMODULE)
+            "cannot determine which fork revision to compare against: the {} tip "
+            "could not be resolved and the {} gitlink could not be read".format(
+                BRANCH, SUBMODULE
+            )
         )
         return None
     url = RAW.format(ref=sha)
@@ -204,7 +268,11 @@ def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--ref", help="fork revision to compare against (default: the gitlink)")
+    ap.add_argument(
+        "--ref",
+        help="fork revision to compare against (default: the {} tip, which is what "
+             "the image builds -- NOT the gitlink)".format(BRANCH),
+    )
     # Overridable so the checks can be exercised against fixtures. A check that
     # has never been shown to FAIL is indistinguishable from one that measures
     # nothing, and the real lock cannot be mutated to prove it.
