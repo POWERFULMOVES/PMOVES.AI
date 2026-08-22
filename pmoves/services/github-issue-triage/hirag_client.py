@@ -48,18 +48,23 @@ class HiRAGClient:
 
         Args:
             query_text: Issue text to search for
-            top_k: Number of results to return
-            rerank: Whether to use cross-encoder reranking
+            top_k: Number of results to return (maps to v2's ``k``)
+            rerank: Whether to use cross-encoder reranking (maps to v2's ``use_rerank``)
             filters: Optional metadata filters
 
         Returns:
             List of similar issues with metadata, or None if query fails
         """
         try:
+            # Hi-RAG v2 QueryReq (verified against the live gateway's openapi.json)
+            # accepts: query, namespace, k, alpha, use_rerank, rerank_topn,
+            # rerank_k, entity_types. The old top_k/rerank names were silently
+            # dropped, so every query ran with service defaults instead of the
+            # caller's intent.
             payload = {
                 "query": query_text,
-                "top_k": top_k,
-                "rerank": rerank
+                "k": top_k,
+                "use_rerank": rerank
             }
 
             if filters:
