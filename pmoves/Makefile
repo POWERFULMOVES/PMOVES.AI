@@ -4479,6 +4479,16 @@ rebuild-edge-svc: ensure-env-shared ## Funnel secrets, then rebuild+recreate ONE
 	@$(EDGE_DC) up -d --build --no-deps --force-recreate $(SVC)
 	@echo "✔ $(SVC) rebuilt + recreated. Verify: make edge-health"
 
+.PHONY: sso-create-user
+sso-create-user: ## Create a CONFIRMED email/password SSO user via the GoTrue admin API (interactive; no SMTP needed). Sign in after at auth.pmoves.ai/login. GitHub OAuth is intentionally not wired (see project_sso_auth_architecture_decision).
+	@# Runs through with-env.sh so SUPABASE_SERVICE_ROLE_KEY loads from the env tier
+	@# (source-only). The password is read interactively and never touches argv / ps /
+	@# env files / chat. email_confirm:true creates an already-confirmed user without
+	@# sending mail (GoTrue here has no SMTP + MAILER_AUTOCONFIRM=false, so a self-serve
+	@# signup would strand the user unconfirmed). Validated against Supabase docs:
+	@# supabase.auth.admin.createUser({email,password,email_confirm:true}) == this REST call.
+	@bash scripts/with-env.sh bash scripts/sso-create-user.sh
+
 .PHONY: down-edge
 down-edge: ## Stop the Traefik edge + sso-auth
 	@$(EDGE_DC) down
