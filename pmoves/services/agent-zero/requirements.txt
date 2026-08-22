@@ -1,65 +1,48 @@
-# Core
-fastapi
-uvicorn
-pydantic
+# PMOVES additions to upstream Agent Zero — OVERLAY ONLY.
+#
+# READ THIS BEFORE ADDING A LINE
+# ------------------------------
+# The Dockerfile installs upstream's requirements.txt FIRST (Stage 1), then this
+# file SECOND, constrained by requirements.lock. Anything listed here is
+# therefore installed *over* whatever upstream already resolved.
+#
+# So this file must contain ONLY what PMOVES code imports and upstream does not
+# provide. Re-listing an upstream dependency here does not "make sure we get it"
+# — it makes us the authority on its version, silently, forever.
+#
+# That is not hypothetical. This file previously carried 56 packages, of which
+# 42 were verbatim copies of upstream's list that no PMOVES code imports, plus
+# `playwright` and `browser-use`. Upstream v2.10 replaced playwright with
+# patchright; our stale copy would have kept installing playwright==1.57.0 on
+# top of it — a second browser stack, pinned by us, wanted by nobody.
+#
+# Rule: if `grep -r "import <pkg>"` finds nothing under this directory, it does
+# not belong here. Version-pin only to fix a specific defect, and say which.
+
+# --- Additions: imported by PMOVES code, absent from upstream ---
+anthropic            # mcp_server.py
+fastapi              # main.py, mcp_server.py
 httpx
-nats-py
 jsonschema
-PyYAML
-
-# Metrics
+nats-py              # NATS bus integration
 prometheus-client==0.26.0
+python-jose[cryptography]==3.5.0
+PyYAML
+requests             # security/hooks/probabilistic.py
 
-# Testing
+# --- Also provided by upstream, but imported directly by PMOVES code ---
+# Declared because we import them. Note these are NOT left to upstream: leaving
+# a line unpinned here does not defer to upstream, because requirements.lock is
+# passed as `--constraint` and pins the resolved version anyway. Our layer is
+# therefore the final authority on every package in the lock. That set just went
+# from 345 packages to 48 -- an 86% cut in how much of upstream's tree we can
+# silently move. Adding a line here re-expands it.
+flaredantic          # overrides/tunnel_manager.py (replaces upstream's helper)
+pydantic
+uvicorn
+
+# --- Test-only ---
+# `COPY services /app/services` puts services/agent-zero/tests into the image,
+# so these are importable at runtime. Kept for in-container test runs.
 pytest
 pytest-asyncio
-
-# Optional (dev/debug)
-a2wsgi
-ansio
-browser-use
-crontab
-docker
-duckduckgo-search
-# pyreqwest-impersonate is a transitive dep of duckduckgo-search. 0.5.5 ships
-# sdist-only; source build needs cmake/perl absent from the agent-zero base image.
-# Use != to skip only the broken release — allows 0.5.6+ once upstream restores wheels.
-pyreqwest-impersonate!=0.5.5
-faiss-cpu
-fastmcp
-fasta2a
-flaredantic
-flask[async]
-flask-basicauth
-GitPython
-inputimeout
-kokoro
-langchain-community
-langchain-core
-langchain-unstructured[all-docs]
-litellm
-lxml_html_clean
-markdown
-markdownify
-mcp
-nest-asyncio
-newspaper3k
-openai-whisper
-paramiko
-pathspec
-pdf2image
-playwright
-psutil
-pymupdf
-pypdf
-python-dotenv
-python-jose[cryptography]==3.5.0
-pytesseract
-pytz
-sentence-transformers
-simpleeval
-soundfile
-tiktoken
-unstructured-client
-unstructured[all-docs]
-webcolors
