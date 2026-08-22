@@ -4357,7 +4357,10 @@ rebuild-external-svc: ensure-env-shared ## Recreate ONE external-overlay service
 	@test -n "$(SVC)" || { echo "Usage: make rebuild-external-svc SVC=<external service, e.g. jellyfin-ext>"; exit 1; }
 	@echo "→ Recreating external service $(SVC) (no deps; other external services untouched)..."
 	@$(EXTERNAL_DC) up -d --no-deps --force-recreate $(SVC)
-	@echo "✔ $(SVC) recreated. Verify: docker logs pmoves-$(SVC) --since 30s"
+	@# Service-aware verify: compose maps SVC to its real container regardless of
+	@# container_name (jellyfin-ext's is pmoves-jellyfin, not pmoves-jellyfin-ext), and
+	@# stays on the pipeline's DC instead of emitting a raw `docker logs` the guard blocks.
+	@echo "✔ $(SVC) recreated. Verify: $(EXTERNAL_DC) logs --since 30s $(SVC)"
 
 .PHONY: down-external
 down-external: ## Stop external integration services

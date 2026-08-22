@@ -36,12 +36,16 @@ The service's entrypoint (`/usr/local/bin/pmoves-entrypoint.sh`) forwards CMD ar
 Jellyfin, so this replaces the broken default. No image rebuild needed.
 
 ## Deploy / verify
-Recreate just this service (Traefik untouched):
-`make -C pmoves rebuild-edge-svc` won't reach it (that's the traefik/sso overlay); use the
-external overlay: recreate `jellyfin-ext` via the external compose (`up -d --no-deps
---force-recreate jellyfin-ext`). Then `docker logs pmoves-jellyfin` should show the HTTP
-listener start instead of the web-client error, and `media.pmoves.ai` (Traefik router,
-`certresolver=cf`, port 8096, no forward-auth — Jellyfin's own auth) serves the UI.
+Recreate just this service (other external services + Traefik untouched):
+```
+make -C pmoves rebuild-external-svc SVC=jellyfin-ext
+```
+Use this target, not raw `docker compose up` (the damage-control guard blocks raw compose),
+and not `rebuild-edge-svc` (that's the traefik/sso overlay and won't reach it). The target
+prints a service-aware verify hint; the `jellyfin-ext` service maps to container
+`pmoves-jellyfin` (its `container_name`), whose logs should show the HTTP listener start
+instead of the web-client error. Then `media.pmoves.ai` (Traefik router, `certresolver=cf`,
+port 8096, no forward-auth — Jellyfin's own auth) serves the UI.
 
 ## Mobile/Android reachability (the point)
 `jellyfin-ext` has **no host ports** — it's reachable only via Traefik at `media.pmoves.ai`.
