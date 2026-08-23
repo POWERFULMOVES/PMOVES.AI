@@ -128,7 +128,12 @@ COPY --chown=65532:65532 tools/chit_security.py /app/pmoves/tools/chit_security.
 
 # Compatibility overlay: recent flaredantic builds may omit Microsoft/notifier symbols.
 # Keep Agent Zero startup resilient by overlaying a tunnel manager that degrades gracefully.
-COPY --chown=65532:65532 services/agent-zero/overrides/tunnel_manager.py /git/agent-zero/python/helpers/tunnel_manager.py
+# Destination is helpers/, NOT python/helpers/. Upstream moved these modules up a level, so
+# `helpers.tunnel_manager` resolves to /a0/helpers/tunnel_manager.py. COPY into a
+# non-existent path always succeeds (Docker creates it), so the old destination left a
+# correct overlay on a path nothing imports while the unguarded upstream file kept loading
+# and /api/tunnel_proxy raised ImportError on flaredantic's missing NotifyData.
+COPY --chown=65532:65532 services/agent-zero/overrides/tunnel_manager.py /git/agent-zero/helpers/tunnel_manager.py
 
 
 # Install curl for healthcheck
