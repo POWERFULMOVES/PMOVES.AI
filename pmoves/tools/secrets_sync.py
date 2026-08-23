@@ -31,6 +31,17 @@ class Entry:
     required: bool
     targets: Sequence[Target]
     aliases: Sequence[str] = ()
+    # Minimum usable length, in characters. 0 means "unconstrained".
+    #
+    # Some consumers reject a secret that is present, non-empty, and simply too
+    # short -- and they reject it at RUNTIME, long after the funnel reported
+    # success. Phoenix's cookie store is the worked example: it raises
+    # "cookie store expects conn.secret_key_base to be at least 64 bytes" on
+    # every request, so supabase-realtime answers 500 while its container stays
+    # "running". Measured on 4090 2026-08-22: SECRET_KEY_BASE was 48 chars and
+    # the health check had failed 6118 consecutive times, which reads as a flaky
+    # service rather than a mis-sized secret.
+    min_length: int = 0
 
 
 def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
@@ -88,8 +99,18 @@ def load_manifest(path: Path) -> tuple[Path, Sequence[Entry]]:
             raise ValueError(f"Entry {entry_id} has no targets")
 
         required = bool(item.get("required", True))
+        min_length = item.get("min_length", 0)
+        if not isinstance(min_length, int) or isinstance(min_length, bool) or min_length < 0:
+            raise ValueError(f"Entry {entry_id} has non-integer min_length")
         entries.append(
-            Entry(id=entry_id, label=label, required=required, targets=targets, aliases=aliases)
+            Entry(
+                id=entry_id,
+                label=label,
+                required=required,
+                targets=targets,
+                aliases=aliases,
+                min_length=min_length,
+            )
         )
 
     return cgp_path, entries
@@ -128,9 +149,19 @@ def build_outputs(
     entries: Sequence[Entry],
     *,
     strict: bool = True,
+    rejected_out: Dict[str, set] | None = None,
 ) -> tuple[Dict[str, Dict[str, str]], List[str]]:
+    """Materialise per-file outputs.
+
+    ``rejected_out``, when supplied, is filled with ``{file: {key, ...}}`` for
+    values that were WITHHELD. Callers writing in merge mode must delete those
+    keys explicitly: merge reads the existing file and updates it, so simply
+    omitting a key leaves the previous -- rejected -- value in place. Optional
+    rather than a third return value so existing callers keep working.
+    """
     outputs: Dict[str, Dict[str, str]] = defaultdict(dict)
     missing: List[str] = []
+    too_short: List[str] = []
     for entry in entries:
         # Honor legacy aliases: an operator may supply a deprecated name (e.g.
         # MCP_SERVER_TOKEN) that maps to a canonical label. Emit the canonical
@@ -157,8 +188,43 @@ def build_outputs(
                 missing.append(entry.label)
             continue
         value = secrets[source_key]
+        # A secret can be present, non-empty, and still unusable because it is too
+        # SHORT. That is the same failure family as blank-is-not-absent above, one
+        # rung further along: `_first_usable` already refuses "" because an empty
+        # secret is not a secret, and a 48-character value where the consumer
+        # demands 64 is not a secret either -- it is a value that parses, passes
+        # every gate, materializes into every tier file, and then fails at runtime.
+        #
+        # Withhold rather than emit. Emitting a known-bad value buys a container
+        # that boots and then answers 500 forever; withholding it makes compose's
+        # `${VAR:?}` refuse at `up` time with the variable named. Loud beats late.
+        if entry.min_length and len(value) < entry.min_length:
+            too_short.append(
+                f"{entry.label} (have {len(value)} chars, need >= {entry.min_length})"
+            )
+            if rejected_out is not None:
+                for target in entry.targets:
+                    rejected_out.setdefault(target.file, set()).add(target.key)
+            if entry.required:
+                missing.append(entry.label)
+            continue
         for target in entry.targets:
             outputs[target.file][target.key] = value
+    if too_short:
+        print(
+            "WARNING: withheld "
+            + str(len(too_short))
+            + " under-length secret(s): "
+            + ", ".join(sorted(too_short))
+            + " -- rotate with `make -C pmoves secrets-rotate KEY=<NAME> LEN=<n>`. "
+            "LEN is CHARACTERS, not bytes (bootstrap_env.py truncates: "
+            "`secrets.token_urlsafe(length)[:length]`), and it DEFAULTS TO 48 -- "
+            "which is how an under-length value gets minted without anyone choosing "
+            "one. The value is present but shorter than its consumer accepts, so "
+            "emitting it would produce a service that starts and then fails every "
+            "request.",
+            file=sys.stderr,
+        )
     if missing and strict:
         joined = ", ".join(sorted(missing))
         raise KeyError(f"Missing required secrets: {joined}")
@@ -200,9 +266,20 @@ def write_env_files(
     outputs: Mapping[str, Mapping[str, str]],
     *,
     merge: bool = False,
+    remove: Mapping[str, set] | None = None,
 ) -> None:
+    """Write env files. ``remove`` names keys to DELETE in merge mode.
+
+    Omission is not removal. Merge reads the existing file and updates it with
+    the new outputs, so a key left out of ``outputs`` keeps whatever the file
+    already held -- which for a withheld secret means the rejected value stays
+    live for Compose. `--merge` is the funnel default (SECRETS_SYNC_FLAGS), so
+    without this the withholding above would have changed nothing on any node
+    that had already been funnelled once.
+    """
     header = "# Auto-generated by pmoves.tools.secrets_sync. Do not edit.\n"
-    for relative, values in outputs.items():
+    for relative in sorted(set(outputs) | set(remove or {})):
+        values = dict(outputs.get(relative, {}))
         env_path = PROJECT_ROOT / relative
         env_path.parent.mkdir(parents=True, exist_ok=True)
         values = _drop_multiline(relative, values)
@@ -226,6 +303,8 @@ def write_env_files(
                     existing[k] = v
             # Merge: new values override existing for specified keys
             existing.update(values)
+            for key in (remove or {}).get(relative, ()):  # rejected -> absent
+                existing.pop(key, None)
             lines = comments + [""]
             for key in sorted(existing):
                 lines.append(f"{key}={existing[key]}")
@@ -304,7 +383,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             key_set |= set(_SUPABASE_JWT_KEYS)
         entries = [e for e in entries if e.label in key_set]
 
-    outputs, missing = build_outputs(secrets, entries, strict=False)
+    rejected: Dict[str, set] = {}
+    outputs, missing = build_outputs(
+        secrets, entries, strict=False, rejected_out=rejected
+    )
     # Filter out self-generated secrets from the missing report — they are
     # either derivable (handled by fill_self_generated) or generated elsewhere
     # (e.g. POSTGRES_PASSWORD at db-init), so they are never operator gaps.
@@ -321,7 +403,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(report(outputs))
         return 0
 
-    write_env_files(outputs, merge=args.merge or bool(args.keys))
+    write_env_files(
+        outputs, merge=args.merge or bool(args.keys), remove=rejected
+    )
     print(report(outputs))
     return 0
 
