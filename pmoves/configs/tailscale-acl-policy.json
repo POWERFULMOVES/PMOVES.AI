@@ -167,13 +167,15 @@
     }
   ],
 
-  "nodeAttrs": [
-    // Exit nodes can use Tailscale Funnel for public ingress.
-    {
-      "target": ["tag:exit"],
-      "attr": ["funnel"]
-    }
-  ],
+  // nodeAttrs intentionally empty. The only entry was a Funnel grant on tag:exit,
+  // removed 2026-08-23: nothing in this repo serves anything over Funnel. Public
+  // ingress is Traefik + Cloudflare DNS-01 (`certresolver=cf`, `websecure`) for
+  // auth/chit/health/media/notebook/persona/wealth.pmoves.ai. Every "funnel" match
+  // in the tree is `secrets-funnel`, the credential pipeline -- an unrelated name.
+  // A granted-but-unused capability is still attack surface: Funnel publishes to the
+  // public internet, and tag:exit is the one tag that already forwards all traffic.
+  // Re-add it here if a service is ever deliberately Funnel-served.
+  "nodeAttrs": [],
 
   "autoApprovers": {
     "exitNode": ["tag:exit"],
