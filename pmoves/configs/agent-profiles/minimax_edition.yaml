@@ -1,9 +1,12 @@
 # MiniMax Edition Agent Profile
 # PMOVES.AI KiloCode MiniMax Edition
 #
-# Runs on 5090 (primary) or 4090 laptop (portable) nodes
-# for MiniMax M2.7/M2.1 inference via Token Plan.
+# Runs on 5090 (primary), SPARK (GB10 unified-memory), or 4090 laptop
+# (portable) nodes for MiniMax M2.7/M2.1 inference via Token Plan.
 # Complements GLM coding plan with long-context capabilities.
+# On SPARK, Mavis shares the node with SPARK-KIMI (Crush/GLM) — the
+# harness wire (pmoves.agent.task.v1 subscriber) is what actually makes
+# SPARK a dispatch target; affinity alone is a scheduling hint.
 
 name: minimax_edition
 role: minimax-kilocode-claw
@@ -11,6 +14,7 @@ description: "MiniMax Edition KiloCode claw for M2.7/M2.1 inference with 1M/100K
 
 node_affinity:
   - 5090  # Primary - GPU node for character persona generation
+  - spark  # GB10 Grace-Blackwell 128GB unified - long-context overflow + edge dispatch
   - laptop-4090  # Portable - for mobile/field work
   - z890  # Fallback - when 5090 unavailable
 
