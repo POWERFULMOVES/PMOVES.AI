@@ -131,6 +131,7 @@ jobs:
 
           # Collect unique package specs. Most entries strip versions to let pip resolve;
           # preserved specs keep explicit guardrails for packages with bad releases.
+          import re
           packages = set()
           # Test-only dependencies. These are NOT collected from any service
           # requirements.txt because the services do not need them at runtime —
@@ -155,7 +156,6 @@ jobs:
           base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "ruamel.yaml==0.19.1",
                            "pydantic-settings"]
 
-          import re
           for path in requirements:
               with path.open() as handle:
                   for raw in handle:
