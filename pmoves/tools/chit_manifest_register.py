@@ -122,7 +122,20 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     "MCP_GATEWAY_AUTH_TOKEN": {"tier": "agent", "required": True},
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
-    "SECRET_KEY_BASE": {"tier": "supabase", "required": True},
+    # min_length=64 is not a style preference -- supabase-realtime is Phoenix, and
+    # Plug's cookie store raises at REQUEST time, not boot:
+    #   (ArgumentError) cookie store expects conn.secret_key_base to be at least
+    #   64 bytes  (plug/lib/plug/session/cookie.ex:184)
+    # So the container reports "running", answers 500 to everything, and its health
+    # check just accumulates failures. Measured on 4090 2026-08-22: the value was
+    # exactly 48 characters and the failing streak stood at 6118.
+    #
+    # 48 is not arbitrary either -- `secrets-rotate` defaults to LEN=48, so the
+    # default mint is 16 characters short of what this specific consumer accepts.
+    # Nothing in the pipeline compared the two numbers: `required: True` checks
+    # presence and secrets_hardening_audit.py checks that env.supabase holds only
+    # placeholders. Neither is a length check. Rotate with LEN=64 or more.
+    "SECRET_KEY_BASE": {"tier": "supabase", "required": True, "min_length": 64},
     "VAULT_ENC_KEY": {"tier": "supabase", "required": True},
     "LOGFLARE_PRIVATE_ACCESS_TOKEN": {"tier": "supabase", "required": True},
     "LOGFLARE_PUBLIC_ACCESS_TOKEN": {"tier": "supabase", "required": True},
@@ -145,7 +158,7 @@ def build_entry(label: str, spec: Dict[str, Any]) -> Dict[str, Any]:
     aliases = spec.get("aliases")
     if aliases:
         source["aliases"] = list(aliases)
-    return {
+    entry: Dict[str, Any] = {
         "id": snake(label),
         "source": source,
         "targets": [
@@ -157,6 +170,10 @@ def build_entry(label: str, spec: Dict[str, Any]) -> Dict[str, Any]:
         "required": bool(spec.get("required", False)),
         "tier": tier,
     }
+    min_length = spec.get("min_length")
+    if min_length:
+        entry["min_length"] = int(min_length)
+    return entry
 
 
 def existing_labels(entries: Sequence[Any]) -> set[str]:
@@ -171,6 +188,47 @@ def existing_labels(entries: Sequence[Any]) -> set[str]:
         for alias in source.get("aliases") or []:
             labels.add(str(alias))
     return labels
+
+
+# Fields this tool will reconcile on an entry that ALREADY exists.
+#
+# The add-only pass below is correct for its job and wrong as the whole job: it
+# keys on `label not in known`, so a registry entry that gains a NEW CONSTRAINT
+# is invisible to it -- the label is already present, nothing is "pending", and
+# the tool prints "manifest complete" while the constraint never reaches the
+# emitted YAML. A gate that cannot reach the file it gates is not a gate.
+#
+# Deliberately narrow. `required` and `targets` are NOT reconciled: an operator
+# may have tuned those per-node, and silently reverting them to the registry's
+# view would be a different bug wearing this one's clothes. Only constraints the
+# registry is the sole author of belong here.
+RECONCILED_FIELDS = ("min_length",)
+
+
+def reconcile_entry(existing: Dict[str, Any], spec: Dict[str, Any]) -> List[str]:
+    """Bring one existing manifest entry in line with the registry. Returns changes."""
+    changes: List[str] = []
+    for field in RECONCILED_FIELDS:
+        want = spec.get(field)
+        have = existing.get(field)
+        if want is None and have is None:
+            continue
+        if want is None:
+            del existing[field]
+            changes.append(f"{field}: {have} -> (removed)")
+        elif have != want:
+            existing[field] = want
+            changes.append(f"{field}: {have if have is not None else '(unset)'} -> {want}")
+    return changes
+
+
+def entry_label(entry: Any) -> str:
+    if not isinstance(entry, dict):
+        return ""
+    source = entry.get("source")
+    if not isinstance(source, dict):
+        return ""
+    return str(source.get("label") or "")
 
 
 def insert_alphabetical(entries: List[Any], entry: Dict[str, Any]) -> None:
@@ -213,12 +271,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         label: spec for label, spec in REGISTRY.items() if label not in known
     }
 
-    if not pending:
-        print("manifest complete: all registry labels present")
+    # Reconcile constraint drift on entries that already exist. Without this the
+    # tool is add-only and a registry constraint added to an EXISTING label never
+    # lands in the manifest -- see RECONCILED_FIELDS.
+    drift: List[str] = []
+    for entry in entries:
+        label = entry_label(entry)
+        spec = REGISTRY.get(label)
+        if not spec:
+            continue
+        probe = dict(entry) if args.check else entry
+        for change in reconcile_entry(probe, spec):
+            drift.append(f"{label}: {change}")
+
+    if not pending and not drift:
+        print("manifest complete: all registry labels present, no constraint drift")
         return 0
 
     for label, spec in sorted(pending.items()):
         print(f"{'would add' if args.check else 'adding'}: {label} -> tier {spec['tier']}")
+    for line in sorted(drift):
+        print(f"{'would update' if args.check else 'updating'}: {line}")
 
     if args.check:
         return 1
@@ -230,7 +303,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         yaml.dump(manifest, default_flow_style=False, sort_keys=False),
         encoding="utf-8",
     )
-    print(f"wrote {args.manifest} (+{len(pending)} entries)")
+    print(
+        f"wrote {args.manifest} (+{len(pending)} entries, "
+        f"{len(drift)} constraint update(s))"
+    )
     return 0
 
 

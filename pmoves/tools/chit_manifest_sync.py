@@ -134,12 +134,24 @@ def _build_v1_entry(
     if aliases:
         source_out["aliases"] = aliases
 
-    return {
+    v1: Dict[str, Any] = {
         "id": entry_id,
         "source": source_out,
         "targets": targets,
         "required": REQUIRED_OVERRIDES.get(label, bool(source_entry.get("required", True))),
     }
+    # Constraints must survive the derivation, not just the v2 file.
+    #
+    # `secrets-funnel-sync` derives the v1 manifest from v2 and then hands the
+    # DERIVED file to secrets_sync.py (codex.mk:114-115). So anything this
+    # function does not copy is invisible to load_manifest() on the canonical
+    # path -- a constraint declared in v2 would be enforced by nothing, while
+    # both files looked correct. min_length was added to v2 for SECRET_KEY_BASE
+    # and would have been dropped exactly here.
+    min_length = source_entry.get("min_length")
+    if isinstance(min_length, int) and not isinstance(min_length, bool) and min_length > 0:
+        v1["min_length"] = min_length
+    return v1
 
 
 def build_v1_manifest(
