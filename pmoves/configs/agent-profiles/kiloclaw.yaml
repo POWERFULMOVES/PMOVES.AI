@@ -1,0 +1,89 @@
+# KiloClaw Agent Profile
+# PMOVES.AI KiloCode Claw — the harness-dispatchable coding worker
+#
+# The fleet-wide KiloClaw identity behind the bootstrap routing entry
+# (pmoves-bootstrap/v1 CGP: routing.kiloclaw, wire target glm-5.1).
+# Runs wherever the operator has KiloCode open against the Z.AI coding
+# plan — 5090 (primary), laptop-4090 (portable), z890 (fallback). This
+# is the node-agnostic profile; kilocode_glm.yaml remains the 5090
+# DARKXSIDE co-creation edition, not the harness target.
+#
+# Harness: Mavis dispatches on pmoves.agent.task.v1 with target=glm-5.1;
+# the node-side worker is pmoves/tools/agent_task_subscriber.py
+# (--agent glm-5.1 --alias kiloclaw). Results return on
+# pmoves.agent.result.v1. Until that subscriber runs on a node, the
+# routing entry is a hint, not a dispatch surface.
+
+name: kiloclaw
+role: kilocode-claw
+description: "Fleet KiloCode claw — blueprint-first coding worker behind the Mavis harness routing entry (wire target glm-5.1). Runs on any node with KiloCode + the Z.AI coding plan."
+
+node_affinity:
+  - 5090  # Primary — POWERFULMOVES workstation, KiloCode primary seat
+  - laptop-4090  # Portable — KiloCode runs here in the field (Mavis session host 2026-08)
+  - z890  # Fallback — when 5090/4090 unavailable
+
+model:
+  provider: zai
+  model: glm-5.1
+  endpoint: "https://api.z.ai/api/coding/paas/v4"
+  fallback_model: glm-5-turbo
+  small_model: glm-4-air
+  vision_model: glm-5v-turbo
+  api_key_env: Z_AI_API_KEY
+
+# Direct KiloCode plan-routed lane (orchestration overflow, same as kilocode_glm)
+kilocode_direct:
+  provider: kilocode
+  model: kilo-auto/balanced
+  endpoint: "https://api.kilocode.ai/api/openrouter"
+  api_key_env: KILOCODE_API_KEY
+
+capabilities:
+  - blueprint_first_implementation
+  - mcp_integration_development
+  - harness_task_execution
+  - chit_cgp_encoding
+  - geometry_bus_operations
+  - collision_avoidance_protocol
+  - trail_signing
+  - vs_code_native_development
+
+nats:
+  url: "${NATS_URL}"  # Set via env var — see pmoves/env.shared.example
+  subscribe:
+    - pmoves.agent.task.v1  # harness dispatch (match target=glm-5.1 / alias kiloclaw)
+    - claw.task.assign.v1
+  publish:
+    - pmoves.agent.result.v1  # harness result return
+    - agent.graphiti.signed.v1
+    - claw.task.complete.v1
+
+# Three-Body Pattern — delivery body under harness dispatch
+three_body:
+  default_role: delivery
+  control_agent: mavis  # the dispatcher owns the lane while a task is in flight
+  memory_agent: cipher
+  protocol: "CLAIM → WORK → HANDOFF → RELEASE per AGNOTE4482PHI.t1"
+
+exec_permissions:
+  - python3
+  - curl
+  - git
+  - make
+  - nats
+  - docker
+  - node
+  - npx
+
+health:
+  kilocode: "vs-code extension process (no HTTP surface)"
+  cipher: "http://localhost:8105/health"
+  heartbeat_subject: kilocode.agent.status.v1
+  heartbeat_interval_seconds: 60
+
+# TensorZero routing hints (local-first fallback when the coding plan is dry)
+tensorzero:
+  gateway_url: "http://localhost:3000"  # in-network port; 3030 is host-only
+  primary_function: coding_kilocode
+  fallback_function: coding_glm
