@@ -13,9 +13,6 @@
 # Regenerate: python pmoves/tools/hardening_ratchet.py --write-baseline
 known_gaps:
   - "NO_USER|.github/runners/Dockerfile"
-  - "NO_USER|CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/docker-stacks/jellyfin-ai/api-gateway/Dockerfile"
-  - "NO_USER|CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/docker-stacks/jellyfin-ai/audio-processor/Dockerfile"
-  - "NO_USER|CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/docker-stacks/jellyfin-ai/dashboard/Dockerfile"
   - "NO_USER|pmoves-nats-mcp/Dockerfile"
   - "NO_USER|pmoves/compose/n8n/Dockerfile"
   - "NO_USER|pmoves/docker/pmoves-4090-web/Dockerfile"
