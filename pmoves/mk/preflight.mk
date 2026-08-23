@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry floos-pr-monitor-run chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate runner-labels-check runner-labels-refresh auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
 
 # Force UTF-8 output on Windows (cp1252 chokes on Unicode/emoji in pr-trim et al.)
 export PYTHONIOENCODING ?= utf-8
@@ -334,13 +334,14 @@ floos-pr-monitor-resolve: ## Resolve FlOO$ DAG for PR monitor pairing
 floos-pr-monitor-run-dry: ## Dry-run FlOO$ execution plan for PR monitor pairing
 	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --dry-run --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
 
-# Wet counterpart. Until this existed, `-dry` was the ONLY runner in the file and
-# both chit-flow-pr-monitor wrappers called it, so the FlOO$ pipeline could never
-# execute -- it printed a 4-step plan and made no MCP calls, by construction rather
-# than by configuration. Deliberately NOT wired into either wrapper: this dispatches
-# real work to agents over MCP, so it stays opt-in and explicit.
-floos-pr-monitor-run: ## Execute the FlOO$ pipeline for real (MCP calls; opt-in)
-	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
+# NO wet runner target here, deliberately. `-dry` is still the only runner, and
+# both chit-flow-pr-monitor wrappers call it, so the FlOO$ pipeline cannot execute.
+# That is a real gap -- but exposing a wet target now would only move the failure,
+# not fix it: /mcp/execute 404s any cmd absent from COMMAND_REGISTRY
+# (services/agent-zero/main.py:852-858), and none of the pairing skills
+# (pr-monitor, pr-hedge-trim, pr-learnings-encode, graphiti-trail-sync) are
+# registered there. Register those four commands first; the wet target is a
+# one-liner once they resolve.
 
 chit-flow-pr-monitor: ## CHIT flow wrapper: PR monitor + FlOO$ validation/resolve + CHIT packet
 	@$(MAKE) --no-print-directory pr-monitor
