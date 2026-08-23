@@ -1,0 +1,227 @@
+# TAC Tree: DeepSeek Harness (dsh) - harness-composition reference
+# Measures dsh registration, its composition model, and the seams that let it
+# host OTHER harnesses. dsh is the reference the PMOVES harness schema is built
+# from, so this tree doubles as the acceptance criteria for that schema.
+
+name: "DeepSeek Harness Integration"
+version: "0.1.0"
+description: "DeepSeek Harness (dsh) registration and composition-model review across 5 phases. dsh is a Cordis-based harness where everything is a plugin; the profile/bundle/patch model and the hook-dialect bridges are the reference for the PMOVES harness registry."
+
+root:
+  id: deepseek-harness
+  task: "DeepSeek Harness integration and harness-composition reference"
+  context: "PMOVES-deepseek-harness/ submodule (fork of deepseek-ai/deepseek-harness, MIT) plus the PMOVES harness registry it is the measure for"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Fleet registration
+    # =========================================================================
+    - id: deepseek-harness.registration
+      task: "Fleet registration"
+      context: "Submodule, fork-registry and hardened-branch policy. Gated by fork-registry-ratchet and submodule-branch-policy-check."
+      agent_hint: codex
+      children:
+        - id: deepseek-harness.registration.gitmodules
+          task: "Verify submodule declared in .gitmodules"
+          action:
+            type: grep
+            target: ".gitmodules"
+            pattern: "PMOVES-deepseek-harness"
+            expect: "Submodule path and url declared"
+          context: "Required by submodule-integrity"
+          agent_hint: codex
+
+        - id: deepseek-harness.registration.hardened-branch
+          task: "Verify pin to the fleet hardened branch"
+          action:
+            type: grep
+            target: ".gitmodules"
+            pattern: "PMOVES.AI-Edition-Hardened"
+            expect: "Branch pin present; dsh inherits the fleet default so it needs no branch-policy override"
+          context: "submodule-branch-policy-check PASS, 75 checked. Hardened branch cut from master at b150a551b8d4."
+          agent_hint: codex
+
+        - id: deepseek-harness.registration.fork-registry
+          task: "Verify fork-registry entry with an explicit sync decision"
+          action:
+            type: grep
+            target: "pmoves/config/fork_registry.json"
+            pattern: "PMOVES-deepseek-harness"
+            expect: "Entry carrying upstream, sync and reason"
+          context: "fork-registry-ratchet fails closed without it. sync is false because upstream is a developer preview promising breaking changes, and PMOVES customization (CHIT plus plugins) lands on the hardened branch and is expected to flow upstream."
+          agent_hint: codex
+
+        - id: deepseek-harness.registration.license
+          task: "Verify upstream license is ship-compatible"
+          action:
+            type: grep
+            target: "PMOVES-deepseek-harness/LICENSE"
+            pattern: "MIT License"
+            expect: "MIT, satisfying the Apache/MIT/BSD-only ship rule"
+          context: "Third-party dependencies disclosed in THIRD_PARTY_NOTICES.md"
+          agent_hint: codex
+
+        - id: deepseek-harness.registration.integration-doc
+          task: "Verify PMOVES.AI_INTEGRATION.md present on the hardened branch"
+          action:
+            type: file_exists
+            target: "PMOVES-deepseek-harness/PMOVES.AI_INTEGRATION.md"
+            expect: "Integration dossier. All 40 documented submodules carry one; dsh is the only exception."
+          context: "KNOWN GAP, blocked on the harness-registry schema. The existing 40 docs describe services and libraries, while dsh is a harness, which PMOVES has no schema for yet."
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Composition model (profile / bundle / patch)
+    # =========================================================================
+    - id: deepseek-harness.composition
+      task: "Composition model"
+      context: "A running dsh is a plugin tree composed at boot from ordered layers. This is the reference for how PMOVES should express harness composition."
+      agent_hint: codex
+      children:
+        - id: deepseek-harness.composition.bundle-base
+          task: "Verify the base bundle declares itself via the package.json dsh field"
+          action:
+            type: grep
+            target: "PMOVES-deepseek-harness/packages/bundle/base/package.json"
+            pattern: "cordis.patch.yml"
+            expect: "The dsh.bundle.patch field points at the bundle patch file"
+          context: "Registration is a package.json field rather than a central registry, which is the property the PMOVES harness schema should copy"
+          agent_hint: codex
+
+        - id: deepseek-harness.composition.bundle-templates
+          task: "Verify headless ships as a profile template"
+          action:
+            type: file_exists
+            target: "PMOVES-deepseek-harness/packages/bundle/headless"
+            expect: "headless bundle, a one-shot runner with no server"
+          context: "web and headless are the two shipped profile templates; a PMOVES profile would stack on dsh-base the same way"
+          agent_hint: codex
+
+        - id: deepseek-harness.composition.no-privileged-core
+          task: "Verify the no-privileged-core property is documented"
+          action:
+            type: grep
+            target: "PMOVES-deepseek-harness/docs/architecture.md"
+            pattern: "no privileged core"
+            expect: "Every part is a plugin, including the model adapter, tool registry, session log and agent loop"
+          context: "This is why dsh can host other harnesses rather than compete with them"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Harness combining - the measure
+    # =========================================================================
+    - id: deepseek-harness.combining
+      task: "Harness combining via hook dialects"
+      context: "The reason dsh is the measure. A neutral hook protocol plus per-harness dialect bridges means another harness config runs unmodified."
+      agent_hint: codex
+      children:
+        - id: deepseek-harness.combining.protocol
+          task: "Verify the dialect-agnostic hook protocol package exists"
+          action:
+            type: file_exists
+            target: "PMOVES-deepseek-harness/packages/hooks/hook-protocol"
+            expect: "Matcher, exit-code and stdout codec, ctx.shell execution, most-restrictive merge, hook events"
+          context: "The neutral layer. The PMOVES harness schema needs exactly this shape: one protocol, N dialects."
+          agent_hint: codex
+
+        - id: deepseek-harness.combining.claude-code-dialect
+          task: "Verify the Claude Code hook dialect bridge exists"
+          action:
+            type: grep
+            target: "PMOVES-deepseek-harness/packages/hooks/hooks-claude-code/README.md"
+            pattern: "CLAUDE_PROJECT_DIR"
+            expect: "Runs an existing Claude Code hooks.json on dsh interception points, with CC env and variable substitution"
+          context: "PMOVES runs Claude Code as a primary harness, so this bridge makes existing CC hook config portable into dsh unmodified"
+          agent_hint: codex
+
+        - id: deepseek-harness.combining.codex-dialect
+          task: "Verify the Codex hook dialect bridge exists"
+          action:
+            type: file_exists
+            target: "PMOVES-deepseek-harness/packages/hooks/hooks-codex"
+            expect: "Codex dialect half of the hooks subsystem"
+          context: "A second dialect proves the pattern generalises; a PMOVES dialect is the natural third"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Capability seams
+    # =========================================================================
+    - id: deepseek-harness.seams
+      task: "Capability seams"
+      context: "Swappable service seams keyed on ctx values. The LLM adapter being a seam is what lets a PMOVES or TensorZero adapter mount as a plugin."
+      agent_hint: codex
+      children:
+        - id: deepseek-harness.seams.llm-registry
+          task: "Verify the LLM adapter registry is a declared seam"
+          action:
+            type: grep
+            target: "PMOVES-deepseek-harness/docs/capability-seams.md"
+            pattern: "ctx.llm"
+            expect: "LLM adapter registry seam with multiple implementations"
+          context: "capability-seams.md is machine-generated by scripts/gen-doc-graphs.ts, so the capability graph is emitted rather than hand-maintained"
+          agent_hint: codex
+
+        - id: deepseek-harness.seams.llm-impls
+          task: "Verify multiple LLM adapter implementations exist"
+          action:
+            type: file_exists
+            target: "PMOVES-deepseek-harness/packages/llm/llm-deepseek"
+            expect: "llm-deepseek alongside llm-pi-ai and llm-retry, so the seam has real alternatives rather than one blessed implementation"
+          context: "A TensorZero or PMOVES adapter would mount here as a sibling"
+          agent_hint: codex
+
+        - id: deepseek-harness.seams.mcp
+          task: "Verify MCP is a first-class package"
+          action:
+            type: file_exists
+            target: "PMOVES-deepseek-harness/packages/mcp"
+            expect: "MCP subsystem present, so dsh can consume PMOVES MCP servers directly"
+          context: "Overlaps the PMOVES MCP topology"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: PMOVES integration (open)
+    # =========================================================================
+    - id: deepseek-harness.pmoves
+      task: "PMOVES integration"
+      context: "What PMOVES still owes dsh. These assertions are expected to fail until the harness registry lands; that failure is the measurement, not a defect in the tree."
+      agent_hint: codex
+      children:
+        - id: deepseek-harness.pmoves.harness-registry
+          task: "Verify a harness registry exists that dsh can register in"
+          action:
+            type: manual
+            description: "Confirm PMOVES has a harness registration schema (neutral capability description plus per-harness dialect) distinct from the provider cascade schema"
+            expect: "A harness registry covering dsh, Claude Code, Archon and Agent Zero"
+          note: |
+            KNOWN GAP. The CLAW_TAXONOMY.md provider-by-harness matrix has 3 of
+            20 cells populated, all in the Z.AI row; Archon and Agent Zero appear
+            nowhere. The provider cascades under tools/models/ are provider-shaped
+            (coding_plan, tensorzero, model_suits) and do not describe harnesses.
+            The dsh profile/bundle/patch model plus its hook dialects is the
+            reference to build this from.
+          agent_hint: codex
+
+        - id: deepseek-harness.pmoves.catalog-port
+          task: "Verify the dsh web port is registered in the service catalog"
+          action:
+            type: grep
+            target: ".claude/CATALOG.md"
+            pattern: "3080"
+            expect: "dsh web UI on 3080 catalogued. Port verified free; archon holds 3090, 3737 and 8091."
+          context: "KNOWN GAP, not yet catalogued"
+          agent_hint: codex
+
+        - id: deepseek-harness.pmoves.chit
+          task: "Verify a CHIT integration plugin exists for dsh"
+          action:
+            type: manual
+            description: "Confirm a Cordis plugin mounts CHIT signing and trail onto dsh interception points"
+            expect: "CHIT plugin present on the hardened branch, and a candidate for upstream contribution"
+          note: |
+            KNOWN GAP, and the stated purpose of the hardened branch. Because dsh
+            has no privileged core, CHIT mounts as a plugin beside the others
+            rather than as a patch to core, which is also what makes it a
+            plausible upstream contribution rather than a fork-only divergence.
+          agent_hint: codex
