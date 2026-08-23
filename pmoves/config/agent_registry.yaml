@@ -3184,7 +3184,7 @@ mcp_servers:
     args: ["minimax-mcp"]
     env:
       MINIMAX_API_KEY: "${MINIMAX_API_KEY}"
-      MINIMAX_API_HOST: "${MINIMAX_API_HOST:-https://api.minimax.chat}"
+      MINIMAX_API_HOST: "${MINIMAX_API_HOST:-https://api.minimax.io}"
       MINIMAX_API_RESOURCE_MODE: "${MINIMAX_API_RESOURCE_MODE:-url}"
     action_namespace: "mcp.v1.minimax"
     capabilities: ["text", "image", "video", "tts", "voice-clone", "video-gen"]

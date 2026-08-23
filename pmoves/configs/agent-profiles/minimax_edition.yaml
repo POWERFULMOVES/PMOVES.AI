@@ -21,7 +21,7 @@ node_affinity:
 model:
   provider: minimax
   model: MiniMax-M3  # verifier default ID (Pmoves-MiniMax-Provider-Verifier m3_format_check); M3 since June 2026
-  endpoint: https://api.minimax.chat/v1
+  endpoint: https://api.minimax.io/v1  # Token-Plan surface (OpenAI-compatible /v1/chat/completions; chatcompletion_v2 is deprecated)
   fallback_model: minimax-m2.7  # previous primary — 1M-token long-context fallback
   token_plan_api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
 
