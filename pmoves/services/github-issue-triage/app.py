@@ -211,12 +211,22 @@ async def triage_issue(
         # Use semantic result
         pass
     else:
-        # Use pattern-based result
-        if pattern_result['label']:
-            labels = [pattern_result['label']]
-            confidence = pattern_result['confidence']
+        # Use pattern-based result.
+        #
+        # Attribute access, not subscript: classify_issue returns a
+        # ClassificationResult DATACLASS (labeling_rules.py:22), which has no
+        # __getitem__. `pattern_result['label']` raised
+        #   TypeError: 'ClassificationResult' object is not subscriptable
+        # and it raised OUTSIDE the try/except above, so it was not caught and
+        # became a 500. Every request reached this line, because the semantic
+        # branch above can only be taken when Hi-RAG returns hits and both
+        # indexers in hirag_client.py are still TODO stubs -- so the namespace
+        # being queried is empty and `method` is never "semantic".
+        if pattern_result.label:
+            labels = [pattern_result.label]
+            confidence = pattern_result.confidence
             method = "pattern"
-            reasoning = pattern_result['reasoning']
+            reasoning = pattern_result.reasoning
 
     result = IssueTriageResult(
         repo=repo,

@@ -75,3 +75,130 @@ def test_merge_ignores_corrupt_existing_lines(tmp_path, monkeypatch):
     assert parsed["GOOD"] == "keep"
     assert parsed["NEW"] == "x"
     assert "t2" not in parsed  # bogus continuation key must not survive
+
+
+# --- min_length: a secret can be present, non-empty, and still unusable -------
+#
+# supabase-realtime is Phoenix; Plug's cookie store raises "expects
+# conn.secret_key_base to be at least 64 bytes" per REQUEST, not at boot. So a
+# 48-character SECRET_KEY_BASE produces a container that reports "running" and
+# answers 500 to everything. Measured on 4090 2026-08-22 at a 6118 failing
+# streak. `required: True` could not catch it -- the value was present.
+
+
+def _entry(min_length: int = 0, required: bool = True) -> secrets_sync.Entry:
+    return secrets_sync.Entry(
+        id="skb",
+        label="SECRET_KEY_BASE",
+        required=required,
+        targets=[secrets_sync.Target(file="env.tier-supabase", key="SECRET_KEY_BASE")],
+        min_length=min_length,
+    )
+
+
+def test_under_length_required_secret_is_withheld_not_emitted():
+    """Withhold, do not emit. Compose's ${VAR:?} then fails at `up` with the name."""
+    import pytest
+
+    with pytest.raises(KeyError, match="SECRET_KEY_BASE"):
+        secrets_sync.build_outputs({"SECRET_KEY_BASE": "x" * 48}, [_entry(64)], strict=True)
+
+
+def test_under_length_boundary_is_exclusive():
+    """63 fails, 64 passes -- the bound is >=, so off-by-one lands on the safe side."""
+    outputs, missing = secrets_sync.build_outputs(
+        {"SECRET_KEY_BASE": "x" * 63}, [_entry(64)], strict=False
+    )
+    assert missing == ["SECRET_KEY_BASE"]
+    assert "SECRET_KEY_BASE" not in outputs.get("env.tier-supabase", {})
+
+    outputs, missing = secrets_sync.build_outputs(
+        {"SECRET_KEY_BASE": "y" * 64}, [_entry(64)], strict=False
+    )
+    assert missing == []
+    assert outputs["env.tier-supabase"]["SECRET_KEY_BASE"] == "y" * 64
+
+
+def test_min_length_zero_leaves_existing_behaviour_untouched():
+    """Every other registered secret is unconstrained; none may start being dropped."""
+    outputs, missing = secrets_sync.build_outputs(
+        {"SECRET_KEY_BASE": "tiny"}, [_entry(0)], strict=True
+    )
+    assert missing == []
+    assert outputs["env.tier-supabase"]["SECRET_KEY_BASE"] == "tiny"
+
+
+def test_under_length_optional_secret_is_withheld_but_does_not_raise():
+    """Optional means the funnel keeps going -- but a bad value still must not ship."""
+    outputs, missing = secrets_sync.build_outputs(
+        {"SECRET_KEY_BASE": "x" * 10}, [_entry(64, required=False)], strict=True
+    )
+    assert missing == []
+    assert "SECRET_KEY_BASE" not in outputs.get("env.tier-supabase", {})
+
+
+# --- omission is not removal (review on #2688) -------------------------------
+#
+# write_env_files(merge=True) READS the existing file and updates it, so leaving
+# a key out of `outputs` keeps whatever the file already held. For a withheld
+# secret that means the rejected value stays live for Compose. `--merge` is the
+# funnel default, so without an explicit delete the withholding changed nothing
+# on any node that had already been funnelled once.
+
+
+def _skb_entry(min_length=64, required=False):
+    return secrets_sync.Entry(
+        id="skb", label="SECRET_KEY_BASE", required=required,
+        targets=[secrets_sync.Target(file="env.tier-supabase", key="SECRET_KEY_BASE")],
+        min_length=min_length,
+    )
+
+
+def test_rejected_keys_are_reported_per_target_file():
+    rejected = {}
+    secrets_sync.build_outputs(
+        {"SECRET_KEY_BASE": "x" * 48}, [_skb_entry()], strict=False,
+        rejected_out=rejected,
+    )
+    assert rejected == {"env.tier-supabase": {"SECRET_KEY_BASE"}}
+
+
+def test_merge_without_remove_leaves_the_rejected_value_live(tmp_path, monkeypatch):
+    """Characterises the bug: this is what happened before `remove` existed."""
+    monkeypatch.setattr(secrets_sync, "PROJECT_ROOT", tmp_path)
+    target = tmp_path / "env.tier-supabase"
+    target.write_text("SECRET_KEY_BASE=" + "x" * 48 + "\n", encoding="utf-8")
+    outputs, _ = secrets_sync.build_outputs(
+        {"SECRET_KEY_BASE": "x" * 48}, [_skb_entry()], strict=False
+    )
+    secrets_sync.write_env_files(outputs, merge=True)
+    assert "SECRET_KEY_BASE=" + "x" * 48 in target.read_text()
+
+
+def test_merge_with_remove_deletes_it_and_keeps_everything_else(tmp_path, monkeypatch):
+    monkeypatch.setattr(secrets_sync, "PROJECT_ROOT", tmp_path)
+    target = tmp_path / "env.tier-supabase"
+    target.write_text(
+        "SECRET_KEY_BASE=" + "x" * 48 + "\nUNRELATED=keepme\n", encoding="utf-8"
+    )
+    rejected = {}
+    outputs, _ = secrets_sync.build_outputs(
+        {"SECRET_KEY_BASE": "x" * 48}, [_skb_entry()], strict=False,
+        rejected_out=rejected,
+    )
+    secrets_sync.write_env_files(outputs, merge=True, remove=rejected)
+    body = target.read_text()
+    assert "SECRET_KEY_BASE" not in body, "rejected key must become ABSENT, not stale"
+    assert "UNRELATED=keepme" in body, "removal must not touch unrelated keys"
+
+
+def test_removal_reaches_a_file_that_has_no_other_outputs(tmp_path, monkeypatch):
+    """The only change to a file may BE the deletion; it must still be written."""
+    monkeypatch.setattr(secrets_sync, "PROJECT_ROOT", tmp_path)
+    target = tmp_path / "env.tier-supabase"
+    target.write_text("SECRET_KEY_BASE=short\nKEEP=1\n", encoding="utf-8")
+    secrets_sync.write_env_files(
+        {}, merge=True, remove={"env.tier-supabase": {"SECRET_KEY_BASE"}}
+    )
+    body = target.read_text()
+    assert "SECRET_KEY_BASE" not in body and "KEEP=1" in body
