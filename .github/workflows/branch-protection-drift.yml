@@ -107,10 +107,26 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # `.drift/` is a DOT directory and upload-artifact excludes hidden files by
+      # default, so every run uploaded nothing while the publisher was writing
+      # drift.jsonl and summary.json normally. `if-no-files-found: ignore` then
+      # turned the empty upload into a bare log line rather than a warning, so the
+      # job went green with no artifact at all. The first run that ever completed
+      # (2026-08-20, after the fabricated action pin was fixed in #2622) reported
+      # `"published": 23` and produced:
+      #
+      #     No files were found with the provided path: .drift/.
+      #     No artifacts will be uploaded.
+      #
+      # Two silences stacked: hidden-by-default, then ignore-if-empty.
       - name: Upload drift artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: branch-protection-drift-${{ github.run_id }}
           path: .drift/
-          if-no-files-found: ignore
+          include-hidden-files: true
+          # warn, not ignore: the publisher always tees summary.json, so an empty
+          # .drift/ means the publish step did not do its job and that should be
+          # visible in the log rather than swallowed.
+          if-no-files-found: warn

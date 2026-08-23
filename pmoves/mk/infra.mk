@@ -119,6 +119,78 @@ CLEANUP_TIMER := ../deploy/provision/docker-fleet-cleanup.timer
 
 .PHONY: docker-fleet-cleanup-install docker-fleet-cleanup-status docker-fleet-cleanup-run
 
+docker-host-policy-check: ## Assert Docker log rotation is APPLIED on this host (exit 3 = unmeasurable, not a pass)
+	@$(PRECHECK_PY) tools/docker_host_policy_check.py $(ARGS)
+
+# Uses $(MCP_GATEWAY_DC), defined beside the other per-stack macros in the
+# Makefile, so it carries -p $(PROJECT) and $(COMPOSE_ENV_FILES). A raw
+# `docker compose up -d` here would skip COMPOSE_ENV_FILES injection and the
+# gateway's ${MCP_GATEWAY_AUTH_TOKEN:?} would fail to resolve — the pipeline
+# bypass the deploy guard exists to catch. Run `make -C pmoves secrets-funnel`
+# first on a fresh node so the tier env files carry the token.
+up-botz-mcp-bridge: ## Start the BoTZ MCP bridge (23 tools) — the gateway federates it
+	@# Nothing canonical started this before. `up-bots` starts botz-gateway, the
+	@# local work-item SHIM on 8054, which is a different service entirely. The
+	@# bridge lives in the PMOVES-BoTZ compose project and creates the
+	@# pmoves_pmoves_app network the gateway attaches to.
+	@$(BOTZ_STACK_DC) up -d mcp-bridge $(ARGS)
+
+mcp-gateway-preflight: ## Check the gateway's external deps exist before starting it
+	@# The gateway federates servers it does not own. pmoves_pmoves_app is created
+	@# by the PMOVES-BoTZ project, not by this repo, so on a clean node `up`
+	@# aborts with a bare "network not found" — and pre-creating the network by
+	@# hand still yields an EMPTY federation because the bridge is not running.
+	@# Codex P1 on #2665: verification passed on B850 only because that stack
+	@# happened to be up.
+	@missing=0; \
+	for n in pmoves_app pmoves_pmoves_app pmoves_api pmoves_bus; do \
+	  docker network inspect "$$n" >/dev/null 2>&1 || { echo "MISSING network: $$n"; missing=1; }; \
+	done; \
+	docker ps --filter name=pmoves-botz-mcp-bridge --filter status=running -q | grep -q . \
+	  || { echo "NOT RUNNING: pmoves-botz-mcp-bridge (the only catalogued server)"; missing=1; }; \
+	if [ "$$missing" -ne 0 ]; then \
+	  echo ""; \
+	  echo "Fix: make -C pmoves up-botz-mcp-bridge"; \
+	  echo "then: make -C pmoves up-mcp-gateway"; \
+	  exit 1; \
+	fi; \
+	echo "preflight ok: networks present, mcp-bridge running"
+
+up-mcp-gateway: mcp-gateway-preflight ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
+	@$(MCP_GATEWAY_DC) --profile mcp up -d $(ARGS)
+	@echo "MCP Gateway on http://localhost:$${MCP_GATEWAY_PORT:-8091}/mcp"
+
+down-mcp-gateway: ## Stop the PMOVES MCP Gateway
+	@$(MCP_GATEWAY_DC) --profile mcp down $(ARGS)
+
+# Path is needed on its own (not just inside $(MCP_GATEWAY_DC)) so the
+# config-check can read the service's command list back out of it.
+MCP_GATEWAY_COMPOSE_FILE := docker-compose.mcp-gateway.yml
+
+mcp-gateway-config-check: ## Validate the gateway catalog WITHOUT listening (docker's documented --dry-run)
+	@# Docker documents --dry-run as "Start the gateway but do not listen for
+	@# connections (useful for testing the configuration)". This is the cheap,
+	@# no-network gate: it parses the catalog, resolves every entry and exits.
+	@# It does NOT prove federation — a config can be valid and still connect to
+	@# nothing — which is why mcp-gateway-verify exists as well.
+	@# `compose run` REPLACES the service command, so the flags have to be
+	@# supplied again. They are READ OUT OF THE COMPOSE FILE rather than restated
+	@# here: duplicating them in the Makefile is precisely the drift that made
+	@# pmoves-daemon-log-rotation.sh disagree with deploy/provision/daemon.json.
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	args=$$($(PRECHECK_PY) -c "import yaml,shlex,sys; \
+c=yaml.safe_load(open('$(MCP_GATEWAY_COMPOSE_FILE)'))['services']['mcp-gateway']['command']; \
+print(' '.join(shlex.quote(a) for a in c))"); \
+	$(MCP_GATEWAY_DC) run --rm --no-deps mcp-gateway $$args --dry-run $(ARGS)
+
+mcp-gateway-verify: ## Prove the gateway federates: list tools through it, per server
+	@# Sources the same env the gateway itself runs with, so the Bearer token
+	@# comes from the tier files rather than the caller's shell. Without this the
+	@# verifier gets 401 and exits 3 (unmeasured) — correct behaviour, useless
+	@# result.
+	@set -a; $(LOAD_ENV_SHARED) 2>/dev/null || true; set +a; \
+	$(PRECHECK_PY) tools/mcp_gateway_verify.py $(ARGS)
+
 docker-fleet-cleanup-install: ## Install daily Docker cleanup systemd timer (run on each node)
 	@echo "=== Installing Docker Fleet Cleanup Timer ==="
 	@if [ "$$(id -u)" -ne 0 ]; then \
@@ -551,3 +623,72 @@ tensorzero-render: ## Render tensorzero.toml Ollama EMBEDDING api_base from OLLA
 			echo "⚠ $(TZ_CONFIG) not found — skipping render"; \
 		fi
 	'
+
+# -- Service dependency matrix ------------------------------------------------
+# Layered bring-up and graceful shutdown both need a TRUTHFUL dependency order.
+# With ~52 compose files and ~170 depends_on edges a hand-written order drifts the
+# moment a service is added -- and a drifted runbook is worse than none, because it
+# reads as authoritative. So the order is DERIVED from the graph, never authored.
+# Paths are relative to pmoves/ (make's CURDIR here). Kept on one line on purpose:
+# backslash continuations inside a make variable did not survive expansion into
+# the recipe shell, producing a literal backslash-n in the command.
+DEP_MATRIX_DOC ?= docs/SERVICE_DEPENDENCY_MATRIX.md
+COMPOSE_MATRIX_FILES ?= docker-compose.yml docker-compose.core.yml docker-compose.agents.yml docker-compose.workers.yml docker-compose.media.yml docker-compose.ui.yml docker-compose.external.yml docker-compose.juicefs.yml
+DEP_MATRIX_RUN = uv run --quiet --with pyyaml python tools/service_dependency_matrix.py
+
+dep-matrix: ## Regenerate docs/SERVICE_DEPENDENCY_MATRIX.md from the compose graph
+	@# Write to a TEMP file first. A shell redirect truncates the destination
+	@# BEFORE the command runs, so a runner failure (uv unable to fetch PyYAML,
+	@# argparse error) would otherwise replace the canonical matrix with an EMPTY
+	@# file and still report success. Only exit 0 (clean) or 3 (advisory) may
+	@# publish; anything else is a failed run and must not touch the doc.
+	@tmp=$$(mktemp); $(DEP_MATRIX_RUN) --format markdown $(COMPOSE_MATRIX_FILES) > $$tmp; rc=$$?; \
+	 if [ $$rc -ne 0 ] && [ $$rc -ne 3 ]; then rm $$tmp; echo "dep-matrix: run FAILED (exit $$rc) - matrix left unchanged"; exit 1; fi; \
+	 if [ ! -s $$tmp ]; then rm $$tmp; echo "dep-matrix: produced EMPTY output - matrix left unchanged"; exit 1; fi; \
+	 mv $$tmp $(DEP_MATRIX_DOC)
+	@echo "regenerated pmoves/$(DEP_MATRIX_DOC)"
+dep-matrix-check: ## Validate graph (1=blocking fails, 3=advisory warns, other=runner failure). STRICT=1 fails on advisory
+	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; \
+	 if [ $$rc -eq 0 ]; then exit 0; \
+	 elif [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; \
+	 elif [ $$rc -eq 3 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; exit 0; \
+	 else echo "dep-matrix-check: RUNNER FAILURE (exit $$rc) - the tool did not run; this is NOT a pass"; exit 1; fi
+	@$(DEP_MATRIX_RUN) $(COMPOSE_MATRIX_FILES); rc=$$?; if [ $$rc -eq 1 ]; then echo "BLOCKING dependency findings"; exit 1; elif [ $$rc -eq 2 ]; then echo "advisory findings only (not gating; STRICT=1 to fail)"; if [ "$(STRICT)" = "1" ]; then exit 1; fi; fi; exit 0
+
+dep-matrix-shutdown: ## Print the graceful shutdown order (reverse of bring-up layers)
+	@$(DEP_MATRIX_RUN) --format shutdown $(COMPOSE_MATRIX_FILES)
+
+agent-registry-check: ## Assert agent_registry.yaml describes reality (submodule vs path, transport vs endpoint)
+	@uv run --quiet --with pyyaml python tools/agent_registry_check.py
+
+# ── Agent Zero dependency overlay ──────────────────────────────
+# The image installs deps twice into one venv: the fork's requirements first,
+# ours second as a --constraint. Ours therefore wins. These two targets keep
+# that from silently overriding the fork's declared pins.
+
+A0_REQ_DIR = services/agent-zero
+
+agent-zero-pin-check: ## Assert our lock never violates a pin the Agent Zero fork declares
+	@uv run --quiet --with packaging python tools/agent_zero_pin_check.py
+
+agent-zero-lock: ## Regenerate services/agent-zero/requirements.lock (the ONLY sanctioned way)
+	@# --upgrade is load-bearing: without it uv treats the existing lock as
+	@# PREFERENCES and carries a stale resolution forward while showing no diff.
+	@# --python-platform linux because the image is Linux and this repo is worked
+	@# on from Windows.
+	@# UV_CUSTOM_COMPILE_COMMAND makes the lock header record THIS target, which
+	@# is what agent-zero-pin-check verifies - a hand-run of `uv pip compile`
+	@# writes its own command line there and fails the check.
+	@tmp=$$(mktemp); \
+	 UV_CUSTOM_COMPILE_COMMAND="make -C pmoves agent-zero-lock" \
+	 uv pip compile $(A0_REQ_DIR)/requirements.txt \
+	   --python-version 3.11 --python-platform linux --generate-hashes \
+	   --upgrade -o $$tmp; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then rm $$tmp; echo "agent-zero-lock: compile FAILED (exit $$rc) - lock left unchanged"; exit 1; fi; \
+	 if [ ! -s $$tmp ]; then rm $$tmp; echo "agent-zero-lock: produced EMPTY output - lock left unchanged"; exit 1; fi; \
+	 mv $$tmp $(A0_REQ_DIR)/requirements.lock; \
+	 echo "agent-zero-lock: regenerated ($$(grep -cE '^[a-zA-Z0-9._-]+==' $(A0_REQ_DIR)/requirements.lock) packages)"; \
+	 $(MAKE) --no-print-directory agent-zero-pin-check
+
+compose-yaml-check: ## Assert every tracked compose file parses (incl. Compose's !reset/!override tags)
+	@uv run --quiet --with pyyaml python tools/compose_yaml_validate.py

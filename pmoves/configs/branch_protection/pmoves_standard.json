@@ -23,7 +23,7 @@
               "type": "required_status_checks",
               "parameters": {
                 "required_status_checks": [
-                  { "context": "merge-gate" },
+                  { "context": "merge-decision" },
                   { "context": "python-tests" },
                   { "context": "hardening-validation" },
                   { "context": "verify" },
@@ -80,7 +80,7 @@
   "per_repo_overrides": {
     "POWERFULMOVES/pmoves-keygen": {
       "profile": "fork",
-      "branch": "master"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-E2B-Danger-Room": {
       "profile": "fork",
@@ -118,29 +118,33 @@
       "profile": "fork",
       "branch": "PMOVES.AI-Edition-Hardened"
     },
-    "POWERFULMOVES/Pmoves-skills": {
-      "profile": "fork",
-      "branch": "main"
-    },
     "POWERFULMOVES/PMOVES-skills": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/Pmoves-Claude-skills": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "POWERFULMOVES/Pmoves-Minimax-skills": {
+      "profile": "fork",
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-agents.md": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-MiniMax-MCP": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/Pmoves-minimax-cli": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     },
     "POWERFULMOVES/PMOVES-OrcaSlicer": {
       "profile": "fork",
@@ -170,7 +174,7 @@
       "profile": "fork",
       "branch": "PMOVES.AI-Edition-Hardened",
       "ruleset_overrides": {
-        "[ PMOVES.AI-Edition-Hardened ]": {
+        "[ main ]": {
           "rules": [
             {
               "type": "required_status_checks",
@@ -215,7 +219,7 @@
     },
     "POWERFULMOVES/PMOVES-nats-server": {
       "profile": "fork",
-      "branch": "main"
+      "branch": "PMOVES.AI-Edition-Hardened"
     }
   }
 }

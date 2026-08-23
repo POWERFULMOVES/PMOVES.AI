@@ -1379,7 +1379,7 @@ up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
 .PHONY: up-openroom
 up-openroom: ## Start PMOVES OpenRoom (room-experience desktop at port 5173)
 	@echo "🚪 Starting OpenRoom desktop..."
-	@$(DC) --profile ui up -d openroom
+	@$(DC) --profile ui up -d openroom p7
 	@timeout 30 bash -c 'until curl -sf http://localhost:5173/webuiapps/; do sleep 2; done' || echo "⚠️ OpenRoom may still be starting"
 	@echo "✅ OpenRoom ready"
 	@echo "   Desktop:      http://localhost:5173/webuiapps/"
@@ -2170,6 +2170,16 @@ STACK_FILES ?= \
 DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
+MCP_GATEWAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.mcp-gateway.yml
+# The BoTZ stack is a separate compose PROJECT (its own network,
+# pmoves_pmoves_app). Given its own -p so it keeps that identity, but routed
+# through COMPOSE_ENV_FILES like every other stack rather than raw compose.
+# Project name and working dir MUST match what created the containers, or
+# compose treats them as foreign and `up` dies on a name conflict. Read off
+# the running container's labels: com.docker.compose.project=pmoves-botz,
+# working_dir=<repo>/PMOVES-BoTZ. Guessing `-p pmoves` produced exactly that
+# conflict during verification.
+BOTZ_STACK_DC := docker compose -p pmoves-botz --project-directory $(CURDIR)/../PMOVES-BoTZ $(COMPOSE_ENV_FILES) -f ../PMOVES-BoTZ/docker-compose.yml
 JELLYFIN_AI_DC := docker compose -p $(PROJECT)-jellyfin-ai --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) --env-file env.jellyfin-ai -f docker-compose.jellyfin-ai.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
@@ -2679,12 +2689,18 @@ down-tensorzero-full:
 # -------- Monitoring stack (Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor) --------
 .PHONY: up-monitoring down-monitoring monitoring-open monitoring-status monitoring-smoke monitoring-smoke-prod observability-audit
 
+# --project-directory is REQUIRED on every invocation of the monitoring compose.
+# Relative bind paths inside it resolve against the PROJECT DIRECTORY, and Docker
+# defaults that to the first compose file's own directory -- so omitting it here
+# while up-obs (line ~363) passes it meant the same file resolved its binds two
+# different ways. One of the two was always broken; which one depended only on
+# which target the operator happened to run.
 MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 
 up-monitoring: ## Start monitoring stack (all services: Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor)
 	@echo "⛳ Starting monitoring stack..."
 	@bash -lc '. ./scripts/with-env.sh; \
-		docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml up -d; \
+		docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml --project-directory "$(CURDIR)" up -d; \
 		echo "✔ Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"; \
 		echo "✔ Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"; \
 		echo "✔ Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"; \
@@ -2692,7 +2708,7 @@ up-monitoring: ## Start monitoring stack (all services: Prometheus, Grafana, Lok
 		echo "✔ cAdvisor:     http://localhost:$${CADVISOR_HOST_PORT:-9180}"'
 
 down-monitoring: ## Stop monitoring stack and remove volumes
-	@bash -lc 'docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml down -v'
+	@bash -lc 'docker compose -p monitoring -f monitoring/docker-compose.monitoring.yml --project-directory "$(CURDIR)" down -v'
 
 GRAFANA_HOST_PORT ?= 3002
 PROMETHEUS_HOST_PORT ?= 9090
@@ -4346,6 +4362,21 @@ up-external: ensure-env-shared ## Start external integration services (Wger, Fir
 	@$(EXTERNAL_DC) up -d
 	@echo "✔ External stacks up"
 
+.PHONY: rebuild-external-svc
+rebuild-external-svc: ensure-env-shared ## Recreate ONE external-overlay service from current compose/image WITHOUT touching the others — critically avoids up-external's dual-writer open-notebook/surreal hazard (both -ext surreal shares surreal_data with the running standalone). Usage: make rebuild-external-svc SVC=jellyfin-ext
+	@# up-external does `up -d` on EVERY external service, which starts
+	@# open-notebook-surrealdb-ext (same container_name + surreal_data volume as the
+	@# running standalone) = dual-writer corruption. This recreates just SVC with
+	@# --no-deps so a config change (e.g. a jellyfin --webdir fix) deploys without
+	@# collateral. Goes through the pipeline's EXTERNAL_DC (COMPOSE_ENV_FILES honored).
+	@test -n "$(SVC)" || { echo "Usage: make rebuild-external-svc SVC=<external service, e.g. jellyfin-ext>"; exit 1; }
+	@echo "→ Recreating external service $(SVC) (no deps; other external services untouched)..."
+	@$(EXTERNAL_DC) up -d --no-deps --force-recreate $(SVC)
+	@# Service-aware verify: compose maps SVC to its real container regardless of
+	@# container_name (jellyfin-ext's is pmoves-jellyfin, not pmoves-jellyfin-ext), and
+	@# stays on the pipeline's DC instead of emitting a raw `docker logs` the guard blocks.
+	@echo "✔ $(SVC) recreated. Verify: $(EXTERNAL_DC) logs --since 30s $(SVC)"
+
 .PHONY: down-external
 down-external: ## Stop external integration services
 	@$(EXTERNAL_DC) down
@@ -4421,6 +4452,42 @@ up-edge: ensure-env-shared edge-preflight ## Start the Traefik edge + sso-auth (
 	@echo "→ Starting edge (Traefik + sso-auth)..."
 	@$(EDGE_DC) up -d
 	@echo "✔ Edge up — verify with 'make edge-health'"
+
+.PHONY: rebuild-edge-svc
+rebuild-edge-svc: ensure-env-shared ## Funnel secrets, then rebuild+recreate ONE edge-overlay service from current source (the edge stale-container killer): make rebuild-edge-svc SVC=sso-auth
+	@# up-edge does `up -d` (no build) and rebuild-svc uses the DEFAULT $(DC), which
+	@# does not know sso-auth (it lives in docker-compose.sso.yml). So a merged sso-auth
+	@# code change (e.g. a forward-auth behavior fix) is NOT picked up by up-edge — the
+	@# container keeps running the stale image. This rebuilds just SVC from the edge
+	@# overlay and recreates it with --no-deps, leaving Traefik (and its live ACME
+	@# state) untouched.
+	@test -n "$(SVC)" || { echo "Usage: make rebuild-edge-svc SVC=sso-auth"; exit 1; }
+	@# AGENTS.md's Known Road for recreating a single service is
+	@# `secrets-funnel && up-<svc>`, and this is a recreate. Compose interpolates
+	@# SUPABASE_JWT_SECRET / JELLYFIN_OIDC_CLIENT_SECRET / SSO_FORWARD_AUTH_SECRET
+	@# from the env files at recreate time, so --force-recreate bakes in whatever is
+	@# on disk. Two of the three have silent defaults in docker-compose.sso.yml
+	@# (`:-$${JWT_SECRET}` and a bare `:-`), so a stale or unhydrated value does not
+	@# fail the recreate -- it yields a RUNNING container with broken auth, which is
+	@# the worst shape of failure to debug from the edge.
+	@# `secrets-rotate` already funnels on its own, so the window is narrow: a bare
+	@# `secrets-local-hydrate` or a CHIT bundle import leaves the env files stale.
+	@# Deliberately run AFTER the SVC guard rather than as a prerequisite, so a
+	@# mistyped invocation fails in a second instead of after the whole funnel.
+	@$(MAKE) --no-print-directory secrets-funnel
+	@echo "→ Rebuilding + recreating edge service $(SVC) from current source (no deps; Traefik untouched)..."
+	@$(EDGE_DC) up -d --build --no-deps --force-recreate $(SVC)
+	@echo "✔ $(SVC) rebuilt + recreated. Verify: make edge-health"
+
+.PHONY: sso-create-user
+sso-create-user: ## Create a CONFIRMED email/password SSO user via the GoTrue admin API (interactive; no SMTP needed). Sign in after at auth.pmoves.ai/login. GitHub OAuth is intentionally not wired (see project_sso_auth_architecture_decision).
+	@# Runs through with-env.sh so SUPABASE_SERVICE_ROLE_KEY loads from the env tier
+	@# (source-only). The password is read interactively and never touches argv / ps /
+	@# env files / chat. email_confirm:true creates an already-confirmed user without
+	@# sending mail (GoTrue here has no SMTP + MAILER_AUTOCONFIRM=false, so a self-serve
+	@# signup would strand the user unconfirmed). Validated against Supabase docs:
+	@# supabase.auth.admin.createUser({email,password,email_confirm:true}) == this REST call.
+	@bash scripts/with-env.sh bash scripts/sso-create-user.sh
 
 .PHONY: down-edge
 down-edge: ## Stop the Traefik edge + sso-auth

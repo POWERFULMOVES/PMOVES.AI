@@ -43,7 +43,7 @@ services:
       - traefik.http.routers.health.rule=Host(`health.pmoves.ai`)
       - traefik.http.routers.health.entrypoints=websecure
       - traefik.http.routers.health.tls.certresolver=cf
-      - traefik.http.routers.health.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.routers.health.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
       - traefik.http.services.health.loadbalancer.server.port=80
       # API router — higher priority, token auth only (no SSO redirect).
       # wger phone app uses Authorization: Token <key>, can't follow browser redirects.
@@ -98,7 +98,7 @@ services:
       - traefik.http.routers.wealth.rule=Host(`wealth.pmoves.ai`)
       - traefik.http.routers.wealth.entrypoints=websecure
       - traefik.http.routers.wealth.tls.certresolver=cf
-      - traefik.http.routers.wealth.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.routers.wealth.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
       - traefik.http.services.wealth.loadbalancer.server.port=8080
     volumes:
       - firefly-storage:/var/www/html/storage
@@ -147,6 +147,8 @@ services:
           memory: 256M
 
   open-notebook-surrealdb-ext:
+    # Graceful stop: RocksDB flush before Docker escalates to SIGKILL.
+    stop_grace_period: 30s
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: pmoves-open-notebook-surrealdb
     restart: unless-stopped
@@ -164,6 +166,16 @@ services:
       - --pass
       - ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
       - rocksdb:/mydata/surreal.db
+    # Distroless image: no shell, so CMD (not CMD-SHELL) and an absolute binary path.
+    # `surreal isready` is SurrealDB's own probe — verified against the live
+    # container: exits 0 printing OK. Without this, any dependant using
+    # condition: service_healthy would wait forever.
+    healthcheck:
+      test: ["CMD", "/surreal", "isready", "--conn", "http://localhost:8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       pmoves_app:
         aliases:
@@ -178,7 +190,8 @@ services:
     # docker-compose.open-notebook.yml). The `*-ext` suffix here indicates the
     # sidecar SurrealDB topology; still the same hardened fork image underneath.
     depends_on:
-      - open-notebook-surrealdb-ext
+      open-notebook-surrealdb-ext:
+        condition: service_healthy
     networks:
       pmoves_app:
         aliases:
@@ -216,13 +229,18 @@ services:
       - traefik.http.routers.notebook.rule=Host(`notebook.pmoves.ai`)
       - traefik.http.routers.notebook.entrypoints=websecure
       - traefik.http.routers.notebook.tls.certresolver=cf
-      - traefik.http.routers.notebook.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file,pmoves-auth-redirect@file
+      - traefik.http.routers.notebook.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
       - traefik.http.services.notebook.loadbalancer.server.port=8502
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
     container_name: pmoves-jellyfin
     restart: unless-stopped
+    # The fork image's default CMD is `--webdir /jellyfin/web`, which is EMPTY in the
+    # image; the web client is at /jellyfin/jellyfin-web (2262 files). Without this
+    # override Jellyfin crash-loops: "content directory is either invalid or empty:
+    # /jellyfin/web". See docs/handoffs/jellyfin-webdir-crashloop-2026-08-22.md
+    command: ["--webdir", "/jellyfin/jellyfin-web"]
     # Use numeric UID/GID so runtime stays valid even when image passwd lacks a named
     # `jellyfin` user entry (observed on some GHCR variants).
     user: "${JELLYFIN_CONTAINER_USER:-0:0}"

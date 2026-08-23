@@ -4,7 +4,7 @@
 > `scripts/recalc.py`, which drives LibreOffice headless to recompute every
 > formula in a workbook and then walks the result with openpyxl looking for
 > the seven Excel error markers. The minimal "what to type" lives in
-> [`SKILL.md`](../SKILL.md) §4.1; this file is the place for the macro path,
+> the recalc one-liner in [`../SKILL.md`](../SKILL.md); this file is the place for the macro path,
 > JSON schema, AF_UNIX shim, cross-platform timeout, and the offline
 > alternatives.
 

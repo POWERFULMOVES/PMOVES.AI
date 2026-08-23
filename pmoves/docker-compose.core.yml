@@ -8,6 +8,8 @@
 ##############################################################################
 services:
   nats:
+    # Graceful stop: JetStream state flush.
+    stop_grace_period: 30s
     <<: &tier-data-hardened
       env_file:
       - env.shared
@@ -112,6 +114,9 @@ services:
           cpus: '0.5'
           memory: 256M
   supabase-db:
+    # Graceful stop: PostgreSQL: SIGTERM is SMART shutdown (waits for ALL sessions); SIGINT is FAST (aborts txns, clean exit). ~39 consumers hold pooled sessions, so SIGTERM never completes inside the 10s default and Docker escalates to SIGKILL -> WAL recovery. This is the 2026-08-19 6-minute fsync.
+    stop_grace_period: 90s
+    stop_signal: SIGINT
     <<: &tier-supabase-hardened
       env_file:
       - env.shared
@@ -357,7 +362,7 @@ services:
       supabase-db:
         condition: service_healthy
       supabase-postgrest:
-        condition: service_started  # distroless image — no shell for healthcheck
+        condition: service_healthy  # postgrest --ready probe (admin server); distroless, so CMD not CMD-SHELL
       supabase-imgproxy:
         condition: service_healthy
     volumes:
@@ -659,8 +664,25 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
     - PMOVES_NETWORKS=pmoves_api,pmoves_public
+    # Admin server backs `postgrest --ready` (healthcheck below). Container-internal only, never published.
+    - PGRST_ADMIN_SERVER_PORT=${SUPABASE_POSTGREST_ADMIN_PORT:-3001}
+    # REQUIRED for `--ready`, not cosmetic. PostgREST's default server-host is `!4`,
+    # and the probe refuses to run against it: "The `--ready` flag cannot be used when
+    # server-host is configured as !4". Verified that 0.0.0.0 both satisfies the probe
+    # AND keeps the API reachable from other containers (published-port test returned
+    # HTTP 503 from outside the container — socket bound, just no DB in that test).
+    - PGRST_SERVER_HOST=${SUPABASE_POSTGREST_HOST:-0.0.0.0}
+    # The image IS distroless (no shell), so this is a CMD probe, not CMD-SHELL:
+    # postgrest ships its own `--ready` which queries the admin server /ready endpoint.
+    # Verified against the live container: without the admin port it exits 1 with
+    # "Admin server is not running" — so the env var above is REQUIRED, not optional.
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -874,6 +896,16 @@ services:
   supabase-vector:
     <<: *tier-supabase-hardened
     image: timberio/vector:0.28.1-alpine
+    # vector 0.28.1 builds a proxy connector from HTTP_PROXY/HTTPS_PROXY and fails
+    # on an EMPTY one -- "Failed to build Proxy connector: empty string" -- then
+    # crash-loops. An ABSENT var is fine; an empty one is fatal. Compose has no
+    # syntax to UNSET a variable, so unset here and exec the image's entrypoint.
+    #
+    # The pass-through form below was added to fix this and cannot: compose
+    # resolves bare `- HTTP_PROXY` from --env-file too, so it inherits the very
+    # empty string it was meant to escape. Measured:
+    #   compose: environment: [- FOO]  +  vars.cfg: FOO=  ->  FOO is SET-EMPTY
+    entrypoint: ["/bin/sh", "-c", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; exec /usr/local/bin/vector \"$$@\"", "--"]
     command: ["--config", "/etc/vector/vector.yml"]
     restart: unless-stopped
     profiles:
@@ -896,7 +928,11 @@ services:
     # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
     - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD-SHELL", "vector validate /etc/vector/vector.yml || exit 1"]
+      # Docker execs the healthcheck SEPARATELY, with the container's configured
+      # environment -- so it still sees the empty proxy vars the entrypoint unsets
+      # for the main process. Without this the container RUNS FINE and is marked
+      # unhealthy forever (observed on the node: FailingStreak 472, status=running).
+      test: ["CMD-SHELL", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; vector validate /etc/vector/vector.yml || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -916,6 +952,8 @@ services:
           cpus: '1.0'
           memory: 512M
   qdrant:
+    # Graceful stop: Segment flush.
+    stop_grace_period: 30s
     image: qdrant/qdrant:v1.16.0
     restart: unless-stopped
     cap_drop:
@@ -951,6 +989,8 @@ services:
           cpus: '2.0'
           memory: 4G
   meilisearch:
+    # Graceful stop: Index write.
+    stop_grace_period: 30s
     <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.34.1
     restart: unless-stopped
@@ -982,6 +1022,8 @@ services:
           cpus: '2.0'
           memory: 4G
   neo4j:
+    # Graceful stop: Page-cache flush and checkpoint on shutdown.
+    stop_grace_period: 60s
     image: neo4j:5.26.22
     env_file:
     - env.tier-data
@@ -1032,6 +1074,8 @@ services:
           cpus: '2.0'
           memory: 4G
   minio:
+    # Graceful stop: Completes in-flight PUTs before exit.
+    stop_grace_period: 30s
     <<: *tier-data-hardened
     # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
     # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
@@ -1091,6 +1135,8 @@ services:
   # The juicefs_meta schema ships in supabase/initdb/00_2_juicefs_meta_schema.sql.
   # Requires supabase-db to be running (make up-supabase before make up-juicefs).
   tensorzero-clickhouse:
+    # Graceful stop: Flushes parts to disk; a kill mid-merge leaves temp parts behind.
+    stop_grace_period: 60s
     <<: &tier-llm-hardened
       env_file:
       - env.shared
@@ -1385,6 +1431,9 @@ services:
           cpus: '2.0'
           memory: 2G
   archon-postgres:
+    # Graceful stop: PostgreSQL: same reason as supabase-db, fewer sessions.
+    stop_grace_period: 60s
+    stop_signal: SIGINT
     image: ${ARCHON_POSTGRES_IMAGE:-postgres:17-alpine}
     container_name: pmoves-archon-postgres
     hostname: archon-postgres
@@ -1470,7 +1519,15 @@ services:
       nats:
         condition: service_healthy
     networks: [pmoves_app, pmoves_bus, pmoves_external]
-    profiles: ["agents", "p7"]
+    # "ui" so the OpenRoom lane brings up the /api/p7 upstream its nginx proxy
+    # targets (p7:8120) — without it the proxy 502s on every session call.
+    # This carries the OVERLAY path specifically: `up-ui-new` runs
+    # `--profile ui up -d` with NO service named, so profile membership is the
+    # only thing that starts p7 there. The named-service path needs the other
+    # half — naming a service limits `up` to it and its declared dependencies,
+    # and openroom has no `depends_on: p7`, so `up-openroom` names p7 outright.
+    # `up-ui` is unaffected either way: it names pmoves-ui.
+    profiles: ["agents", "p7", "ui"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)"]
       interval: 30s
@@ -1534,7 +1591,7 @@ services:
     - pmoves_bus
     - pmoves_data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8107/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8107/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

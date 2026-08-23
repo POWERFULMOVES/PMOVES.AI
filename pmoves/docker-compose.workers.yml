@@ -271,7 +271,6 @@ services:
     environment:
     - PORT=8100
     - NATS_URL=${NATS_URL}
-    - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
@@ -882,7 +881,9 @@ services:
     - SSL_CERT_DIR=
     - REQUESTS_CA_BUNDLE=
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
-    depends_on: [nats]
+    depends_on:
+      nats:
+        condition: service_healthy
     ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
     volumes:
     - ./services/github-runner-ctl/config:/app/config:ro

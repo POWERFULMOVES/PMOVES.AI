@@ -22,6 +22,7 @@ if str(_REPO) not in sys.path:
 
 from pmoves.tools.orchestrator import (  # noqa: E402
     SUBJECT_BPM_PHASE,
+    SUBJECT_KVM_FOCUS,
     SUBJECT_BPM_POMODORO,
     SUBJECT_RESULT,
     SUBJECT_TASK,
@@ -43,31 +44,94 @@ class DispatchTests(unittest.TestCase):
         orch, pub = _make_orch()
         result = orch.dispatch("render cyber.png", agents=["kiloclaw"])
         subjects = [s for s, _ in pub.published]
-        self.assertEqual(len(subjects), 1)
-        self.assertEqual(subjects[0], SUBJECT_TASK)
-        # The payload should reference kiloclaw + the task
-        subject, payload = pub.published[0]
-        self.assertEqual(payload["target"], "kiloclaw")
+        # kiloclaw's routing node is "5090" -- a real remote machine -- so a KVM
+        # focus request is correct alongside the task.
+        self.assertEqual(subjects, [SUBJECT_TASK, SUBJECT_KVM_FOCUS])
+        _, payload = pub.published[0]
+        # The CONFIGURED target goes on the wire; the alias rides alongside.
+        self.assertEqual(payload["target"], "glm-5.1")
+        self.assertEqual(payload["target_alias"], "kiloclaw")
         self.assertEqual(payload["task"], "render cyber.png")
         self.assertEqual(payload["task_id"], result.task_id)
 
     def test_dispatch_multi_agent(self) -> None:
         orch, pub = _make_orch()
-        result = orch.dispatch("review PR", agents=["kiloclaw", "hermes"])
+        orch.dispatch("review PR", agents=["kiloclaw", "hermes"])
         subjects = [s for s, _ in pub.published]
-        self.assertEqual(subjects, [SUBJECT_TASK, SUBJECT_TASK])
-        targets = [p["target"] for _, p in pub.published]
-        self.assertEqual(targets, ["kiloclaw", "hermes"])
+        # kiloclaw -> task + KVM focus (node 5090). hermes -> task only, because
+        # its shipped node is the placeholder TBD.
+        self.assertEqual(subjects, [SUBJECT_TASK, SUBJECT_KVM_FOCUS, SUBJECT_TASK])
+        tasks = [p for s, p in pub.published if s == SUBJECT_TASK]
+        self.assertEqual([p["target"] for p in tasks], ["glm-5.1", "hermes-3"])
+        self.assertEqual([p["target_alias"] for p in tasks], ["kiloclaw", "hermes"])
 
     def test_dispatch_unknown_target_marked_error(self) -> None:
         orch, pub = _make_orch()
         result = orch.dispatch("task", agents=["kiloclaw", "made-up-agent"])
-        # Only kiloclaw was published; made-up-agent is marked error
         subjects = [s for s, _ in pub.published]
-        self.assertEqual(subjects, [SUBJECT_TASK])
+        self.assertEqual(subjects, [SUBJECT_TASK, SUBJECT_KVM_FOCUS])
         self.assertEqual(result.results["kiloclaw"].status, "pending")
         self.assertEqual(result.results["made-up-agent"].status, "error")
         self.assertIn("made-up-agent", result.failed)
+
+    def test_wire_target_matches_what_the_consumer_subscribes_to(self) -> None:
+        """The Hermes handoff subscribes on target=hermes-3, not the alias.
+
+        Publishing the alias produced envelopes no consumer matched, so the
+        handoff stayed pending indefinitely -- a failure with no error.
+        """
+        orch, pub = _make_orch()
+        orch.dispatch("draft", agents=["hermes"])
+        task = next(p for s, p in pub.published if s == SUBJECT_TASK)
+        self.assertEqual(task["target"], "hermes-3")
+        self.assertEqual(task["target_alias"], "hermes")
+
+    def test_placeholder_node_does_not_request_kvm_focus(self) -> None:
+        """example.cgp.yaml ships hermes.node: TBD -- not a machine.
+
+        Asserted against the DEFAULT config rather than a substituted node,
+        because the placeholder path is the one the shipped config takes.
+        """
+        orch, pub = _make_orch()
+        orch.dispatch("draft", agents=["hermes"])
+        self.assertEqual([s for s, _ in pub.published], [SUBJECT_TASK])
+
+    def test_placeholder_matching_is_case_insensitive(self) -> None:
+        for value in ("TBD", "tbd", " Tbd ", "none", "N/A", "-", "self", "host", ""):
+            with self.subTest(node=value):
+                self.assertFalse(Orchestrator._is_actionable_node(value))
+        for value in ("5090", "spark", "z890"):
+            with self.subTest(node=value):
+                self.assertTrue(Orchestrator._is_actionable_node(value))
+
+    def test_kvm_focus_is_not_on_the_bpm_phase_stream(self) -> None:
+        """pmoves.bpm.phase.v1 is contracted as the 5 lifecycle phases.
+
+        A "kvm-focus" phase carrying target_node is neither of its documented
+        shapes, so a subscriber on that stream would read an invalid lifecycle
+        transition.
+        """
+        orch, pub = _make_orch()
+        orch.dispatch("render", agents=["kiloclaw"])
+        self.assertNotIn(SUBJECT_BPM_PHASE, [s for s, _ in pub.published])
+        focus = next(p for s, p in pub.published if s == SUBJECT_KVM_FOCUS)
+        self.assertNotIn("phase", focus)
+        self.assertEqual(focus["target_node"], "5090")
+
+    def test_known_targets_follow_the_routing_dataclass(self) -> None:
+        """Adding a routing field must widen the dispatch surface on its own.
+
+        The docstring promises no orchestrator change is needed; a hard-coded
+        peer tuple silently broke that.
+        """
+        import dataclasses
+
+        orch, _ = _make_orch()
+        fields = {f.name for f in dataclasses.fields(orch.bootstrap.routing)}
+        populated = {n for n in fields if getattr(orch.bootstrap.routing, n, None)}
+        self.assertTrue(populated, "no routing peers configured -- test is vacuous")
+        self.assertTrue(populated <= orch.known_targets)
+        self.assertIn("mavis", orch.known_targets)
 
     def test_dispatch_assigns_unique_task_id(self) -> None:
         orch, _ = _make_orch()

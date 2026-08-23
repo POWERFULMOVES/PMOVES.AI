@@ -1,10 +1,13 @@
 # PMOVES-skills review
 
 **Submodule:** [skills/PMOVES-skills/](https://github.com/POWERFULMOVES/PMOVES-skills) (PMOVES fork of [vercel-labs/skills](https://github.com/vercel-labs/skills))
-**Pin:** c6f69c631292444cc541ac6d91e2226b0ff247da
-**Recentering note:** was `MiniMax-AI/skills`, moved to `vercel-labs/skills` in August 2026. The pre-recenter URL (`POWERFULMOVES/Pmoves-Minimax-skills`) is preserved as a deprecated reference, not a separate submodule entry. See `skills/README.md` for the recentering note.
+**Pin:** tracks `PMOVES.AI-Edition-Hardened` (the `sources/` overlay); `main` stays byte-identical to upstream.
 
-The fold-in PR1 (PR #2586, 2026-08-17) added this submodule to the PMOVES.AI skills constellation as the post-recenter home of the open-skills-ecosystem library. This review audits what it brings, what's worth pulling into our catalog, and what's worth leaving alone.
+> **CORRECTION (2026-08-20).** This document was written on the premise that `MiniMax-AI/skills` *moved* to `vercel-labs/skills` and that `POWERFULMOVES/Pmoves-Minimax-skills` was therefore a deprecated pre-recenter URL.
+> **No move happened.** Both repositories are alive, share no history, and are different kinds of thing — `MiniMax-AI/skills` is a *collection* of 17 MIT skills (13,403 stars, last push 2026-04-18); `vercel-labs/skills` is a *tool*, "npx skills" (29,327 stars, last push 2026-08-18). `MiniMax-AI/skills`' HEAD does not exist anywhere in `vercel-labs/skills`, which a genuine repository move would have preserved.
+> Acting on that premise left a live MIT library forked and referenced by nothing. It is now tracked at `PMOVES-skills/sources/Pmoves-Minimax-skills`. Everything below about the *package* remains accurate; only the recentering framing was wrong.
+
+The fold-in PR1 (PR #2586, 2026-08-17) added this submodule to the PMOVES.AI skills constellation as the package for the open agent skills ecosystem. This review audits what it brings, what's worth pulling into our catalog, and what's worth leaving alone.
 
 ## What's in the submodule
 
@@ -77,7 +80,7 @@ The find-skills skill, when used by a PMOVES agent, should default to `--owner P
 
 - **The `skills/find-skills/SKILL.md` content** — it's upstream, it works, and editing it would create a fork drift. We document our override defaults here instead.
 - **The `skills` CLI source** — no PMOVES-side patches. If we ever need a fork-specific behavior, add it as a wrapper in `pmoves/tools/`, not as a submodule edit.
-- **The pre-recenter URL** (`POWERFULMOVES/Pmoves-Minimax-skills`) — preserved as a deprecated reference per the `skills/README.md` Recentering note. Do not add a separate submodule entry for it; the fold-in PR1 deliberately chose one submodule over two to avoid splitting the recenter story.
+- **`POWERFULMOVES/Pmoves-Minimax-skills`** — NOT deprecated (see the correction above). It is the fork of `MiniMax-AI/skills`, a live MIT library of 17 skills plus a pptx-plugin, and it is a *source* the package installs from. Tracked as a submodule under `PMOVES-skills/sources/`.
 
 ## Skill-pairing manifest delta (proposed, not applied)
 
@@ -114,7 +117,7 @@ These are both additive and don't conflict with anything in the current manifest
 - Submodule pin: `c6f69c631292444cc541ac6d91e2226b0ff247da`
 - Recentering context: `skills/README.md` (Recentering note, 2026-08-17)
 - Submodules doc: `.claude/context/submodules.md` line 112
-- Pre-recenter URL (deprecated): `POWERFULMOVES/Pmoves-Minimax-skills`
+- Skill source: `POWERFULMOVES/Pmoves-Minimax-skills` (fork of `MiniMax-AI/skills`, MIT)
 - Fold-in PR: PR #2586 (Mavis, 2026-08-17)
 - Upstream repo: https://github.com/vercel-labs/skills
 - Skills leaderboard: https://skills.sh/

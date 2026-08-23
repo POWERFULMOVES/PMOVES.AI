@@ -1,6 +1,7 @@
 # Edge runbook — Traefik + sso-auth
 
-Operator reference for `up-edge` / `down-edge` / `edge-health` / `edge-preflight`.
+Operator reference for `up-edge` / `down-edge` / `edge-health` / `edge-preflight` /
+`rebuild-edge-svc`.
 
 The edge is what makes every app **one app**: Traefik terminates TLS, calls `sso-auth`
 to verify the session, and injects `Remote-User` into the upstream request so the app
@@ -19,6 +20,7 @@ does not ask for a second login.
 | `make -C pmoves up-edge` | Runs preflight, then starts Traefik + sso-auth. |
 | `make -C pmoves down-edge` | Stops both. |
 | `make -C pmoves edge-health` | Reports containers, published ports, and which routers actually carry forward-auth. |
+| `make -C pmoves rebuild-edge-svc SVC=sso-auth` | Funnels secrets, then rebuilds **one** overlay service from current source and recreates it `--no-deps`. Traefik and its live ACME state are untouched. |
 
 Both overlays start **together** deliberately: the `auth.pmoves.ai` router is declared
 on the Traefik container but points at `sso-auth@docker`, so Traefik alone is an edge
@@ -66,9 +68,33 @@ its own listener.
 
 ### Config
 
-`config/traefik/dynamic.yml` must exist. It defines `pmoves-forward-auth` (the
-ForwardAuth middleware) and `pmoves-auth-redirect` (401 → login). Preflight fails
-without it, because Traefik would start and silently protect nothing.
+`config/traefik/dynamic.yml` must exist. It defines `pmoves-forward-auth`, the
+ForwardAuth middleware. Preflight fails without it, because Traefik would start
+and silently protect nothing.
+
+**The 401 → login transition is no longer a middleware.** `pmoves-auth-redirect`
+(an `errors` middleware) was removed: an `errors` middleware swaps the response
+*body* while keeping the 401 status, so it never actually redirected, and its
+`query` template substitutes only `{status}` — the `{host}`/`{uri}` it used are
+not valid placeholders, so the post-login `rd` was a literal broken string.
+
+The redirect now happens inside the auth service. `/auth/verify` returns:
+
+| request | response |
+|---|---|
+| `Accept:` includes `text/html` (a browser) | `302` to `<public_base_url>/login?rd=<original URL>` |
+| anything else (XHR/fetch/API) | bare `401` |
+
+Two settings make that reach the user, and it fails silently without either:
+
+- **`preserveLocationHeader: true`** on `pmoves-forward-auth`. Traefik's default
+  is `false`, which *"prefix[es] it with the domain name of the authentication
+  server"* — rewriting the `Location` to `http://pmoves-sso-auth:8080/login`, an
+  internal container name the browser cannot resolve. Symptom: login appears to
+  do nothing, or the browser reports an unresolvable host.
+- **`PUBLIC_BASE_URL`** on the auth service. Without it `/auth/verify` cannot
+  build a login URL and falls back to a bare 401 for browsers too — i.e. exactly
+  the dead end this replaced. Symptom: a 401 page with no redirect.
 
 ## Run
 
@@ -77,6 +103,26 @@ make -C pmoves edge-preflight     # optional; up-edge runs it anyway
 make -C pmoves up-edge
 make -C pmoves edge-health
 ```
+
+### Deploying a merged code change
+
+`up-edge` does `up -d` with **no build**, so it will not pick up a merged change to
+`sso-auth` — the container keeps running its old image. This is not hypothetical:
+#2644's browser-redirect fix merged on 2026-08-20 and `sso-auth` kept returning a bare
+401 to browsers because its image had been built on 08-18.
+
+```bash
+make -C pmoves rebuild-edge-svc SVC=sso-auth
+make -C pmoves edge-health
+```
+
+The target funnels secrets first. Compose interpolates `SUPABASE_JWT_SECRET`,
+`JELLYFIN_OIDC_CLIENT_SECRET` and `SSO_FORWARD_AUTH_SECRET` at recreate time, and two of
+the three have silent defaults in `docker-compose.sso.yml` — so recreating against stale
+env files produces a *running* container with broken auth rather than an error.
+
+Verify by content type, not just status: `text/html` should get a **302 to login**,
+while an API client should still get a bare **401**.
 
 Healthy `edge-health` shows both containers up, Traefik holding 80/443 with a non-empty
 binding list, and at least one router under "Routers attached to pmoves-forward-auth".
@@ -133,3 +179,4 @@ Bringing the edge up is necessary but **not sufficient** for single sign-on.
 | App still shows its own login | Its router has no `pmoves-forward-auth` middleware, or the container predates the label. Check `edge-health`, then recreate it. |
 | `edge-health` shows ports `[]` | Publish silently no-oped — ghost adapter on Windows. |
 | Logged in but app says anonymous | `SSO_FORWARD_AUTH_SECRET` unset, so the app rejects the injected header. |
+| A merged `sso-auth` fix has no effect | The container predates the merge. `up-edge` never rebuilds — run `make -C pmoves rebuild-edge-svc SVC=sso-auth`. |

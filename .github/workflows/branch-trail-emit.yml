@@ -42,6 +42,10 @@ jobs:
     # fleet shares; the arch-agnostic "Ensure uv" step below makes any of them
     # (ARM64 or X64) viable, and kvm4-2 is itself the tailnet NATS broker.
     # The fork-PR guard above keeps untrusted code off these trusted runners.
+    # runner-labels: arch-agnostic -- this job is pure git/shell, needs no
+    # submodules (it deinits them below) and no compiled artifacts, so it is
+    # correct on either X64 or ARM64. Declared so the runner-label gate treats
+    # it as a decision rather than flagging it forever.
     runs-on: [self-hosted, Linux]
     timeout-minutes: 5
     steps:

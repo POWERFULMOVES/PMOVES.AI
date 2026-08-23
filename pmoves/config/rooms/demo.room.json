@@ -214,7 +214,7 @@
     "updated_at": "2026-05-18T00:00:00Z",
     "related_docs": [
       "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
-      "pbnj/pinokio/api/pmoves-pbnj/demo.js",
+      "PMOVES-pinokio/api/pmoves-pbnj/demo.js",
       ".claude/skills/demo-room/SKILL.md",
       "pmoves/config/rooms/demo.room.extras.json"
     ]

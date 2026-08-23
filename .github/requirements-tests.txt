@@ -21,6 +21,13 @@ httpx                 # 45 files
 fastapi               # 34 files
 pyyaml                # 20 files (imported as `yaml`)
 numpy                 # 12 files
+scikit-learn          # analyze_beats.cluster_on_embeddings (KMeans + silhouette).
+                      # Imported lazily inside the function, like librosa -- but
+                      # unlike librosa it is installed here rather than skipped,
+                      # because the two tests that need it are the ONLY coverage
+                      # for the NaN-crash guard and the cluster-separation
+                      # behaviour. Skipping them would leave that unguarded; see
+                      # pmoves/tools/tests/test_beats_features.py.
 jsonschema            # 8 files
 nats-py               # 4 files (imported as `nats`)
 python-jose           # 4 files (imported as `jose`)
@@ -49,6 +56,17 @@ google-auth-oauthlib>=1.2.0
 # runtime by a framework. When a test module fails at import with a package name
 # in the message, check here before assuming the service's packaging is wrong.
 python-multipart      # fastapi Form() dependency; imported by no test directly
+
+# Same blind spot as python-multipart above, found the same way. `slowapi` is
+# imported by pmoves/services/content-provenance-gate/main.py and by no test, so
+# the import scan could not see it, and test_content_provenance_gate.py failed at
+# import with ModuleNotFoundError. That failure was invisible for months because
+# the file sat in the `pmoves/tests [1]` chunk, which times out and whose results
+# were discarded wholesale until the per-file fallback in this same change.
+# Installing this is necessary but not sufficient — the tests then fail on auth
+# and need real work in that service — but a missing dependency should not be
+# what is hiding that.
+slowapi               # content-provenance-gate rate limiter; imported by no test directly
 
 # Deliberately NOT installed: torch (3 files). It is a multi-GB download for
 # three tests and would dominate gate runtime. Those modules stay recorded in

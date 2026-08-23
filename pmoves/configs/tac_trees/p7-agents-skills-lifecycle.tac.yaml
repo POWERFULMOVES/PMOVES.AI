@@ -344,7 +344,7 @@ root:
             - Suit 1: agent-zero-local (port dynamic, model: hermes3:8b)
             - Suit 2: 4090-claws (Claude Code skills auto-loaded)
             - Suit 3: hermes-v4 (HERMES V4 reasoning assist)
-            Launcher: pbnj/pinokio/api/pmoves-pbnj/demo.js
+            Launcher: PMOVES-pinokio/api/pmoves-pbnj/demo.js
             Skill: .claude/skills/demo-room/SKILL.md (/demo-room)
             NATS trigger: p7.nats.launch {"room":"demo.room.rehearsal"}
           status: in_progress
