@@ -440,3 +440,7 @@
 	path = PMOVES-mcp-gateway
 	url = https://github.com/POWERFULMOVES/PMOVES-mcp-gateway.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-deepseek-harness"]
+	path = PMOVES-deepseek-harness
+	url = https://github.com/POWERFULMOVES/PMOVES-deepseek-harness.git
+	branch = PMOVES.AI-Edition-Hardened
