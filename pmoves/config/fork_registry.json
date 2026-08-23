@@ -203,6 +203,12 @@
       "branch": "PMOVES.AI-Edition-Hardened",
       "reason": "no common ancestor with upstream (compare returns HTTP 404) - hardened branch built from orphan/squashed history; needs a re-fork, not a retry"
     },
+    "PMOVES-deepseek-harness": {
+      "upstream": "deepseek-ai/deepseek-harness",
+      "sync": false,
+      "branch": "PMOVES.AI-Edition-Hardened",
+      "reason": "upstream is a developer preview that promises compatibility-breaking changes; the hardened branch carries PMOVES customization (CHIT integration and other PMOVES plugins) that auto-sync would fight. Contribution is expected to flow upstream rather than down. Revisit sync:true once upstream stabilises."
+    },
     "pmoves-fork-repository-skill": {
       "upstream": "disler/fork-repository-skill",
       "sync": false,
