@@ -40,7 +40,7 @@ def _collect(text: str) -> list[str]:
     """Return the argv entries python-tests.yml would hand to `pip install`."""
     out = []
     for raw in text.splitlines():
-        line = re.split(r"\s+#", raw.strip(), maxsplit=1)[0].strip()
+        line = raw.split(" #", 1)[0].strip()
         if not line or line.startswith("#") or line.startswith("-"):
             continue
         name = re.split(r"[>=<\[!~]", line)[0].strip()
@@ -102,7 +102,28 @@ def test_a_url_fragment_is_not_mistaken_for_a_comment():
     """pip needs whitespace before `#`, so an `egg=` fragment must survive the
     comment strip -- it is only the NAME split that trims it afterwards."""
     line = "pkg @ https://example.invalid/a.tar.gz#egg=pkg"
-    assert re.split(r"\s+#", line, maxsplit=1)[0] == line
+    assert line.split(" #", 1)[0] == line
+
+
+def test_a_TAB_before_the_comment_is_not_stripped_by_the_current_collector():
+    """Pins a known narrowness rather than pretending it is not there.
+
+    The landed collector splits on the literal `" #"`, so it only sees a comment
+    introduced by a SPACE. pip's rule is whitespace generally, so
+
+        nats-py	# NATS bus integration
+
+    would sail through the strip and reach pip as one malformed requirement --
+    the same outage, one whitespace character away. This is not currently a
+    defect in any file (asserted by the per-file test above, which mirrors the
+    collector exactly and would fail on such a line BEFORE CI does). Recorded so
+    the limitation is visible if it ever matters.
+    """
+    tabbed = "nats-py	# NATS bus integration"
+    assert _collect(tabbed) == ["nats-py	# NATS bus integration"], (
+        "if this now returns ['nats-py'], the collector was widened to all "
+        "whitespace -- delete this test and this comment"
+    )
 
 
 def test_full_line_comments_and_pip_options_are_skipped():
@@ -121,7 +142,7 @@ def test_the_workflow_itself_still_strips_inline_comments():
         Path(__file__).resolve().parents[2]
         / ".github" / "workflows" / "python-tests.yml"
     ).read_text(encoding="utf-8")
-    assert r"re.split(r'\s+#', raw.strip(), maxsplit=1)" in wf, (
+    assert 'line = raw.split(" #", 1)[0].strip()' in wf, (
         "python-tests.yml must strip the inline comment BEFORE extracting the "
         "package name, or an unversioned dependency carrying a comment takes the "
         "required gate down for every open PR"
