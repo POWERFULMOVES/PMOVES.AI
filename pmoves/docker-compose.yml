@@ -545,6 +545,25 @@ services:
   #   adopting Supabase's updated self-hosted compose defaults OR enabling custom
   #   OAuth/SAML, move the WHOLE set together (API_EXTERNAL_URL + Kong routes +
   #   issuer) and re-test auth — applying any one piece alone breaks auth.
+  # - THE VALUE, as distinct from the scheme (checked 2026-08-23). The note above
+  #   settles WHICH scheme we use. It does not address why the value is
+  #   `http://localhost:8000`, which looks wrong next to seven public
+  #   *.pmoves.ai names. It is correct, for three independent reasons:
+  #     1. Kong publishes on 127.0.0.1:8000 and 127.0.0.1:8001 ONLY -- loopback,
+  #        not 0.0.0.0. The Supabase API is not reachable off-host.
+  #     2. No Traefik router targets Kong. `auth.pmoves.ai` resolves to
+  #        `service=sso-auth@docker` (docker-compose.traefik.yml:71) -- the
+  #        forward-auth service, NOT GoTrue.
+  #     3. So there is no public Supabase endpoint for the value to name.
+  #        Per Supabase's reverse-proxy guide, API_EXTERNAL_URL/SUPABASE_PUBLIC_URL
+  #        must name the URL END USERS reach the API at. Today that is loopback.
+  #   Corroborating: auth.users is EMPTY (0 rows) and GOTRUE_SMTP_HOST is unset,
+  #   so the confirmation-email path this value feeds has never been exercised.
+  #   TRIGGER: the day a Traefik router points at Kong, this becomes wrong. Move
+  #   the whole set together then -- SUPABASE_PUBLIC_URL + SUPABASE_SITE_URL
+  #   (currently http://localhost:3000) + GOTRUE_URI_ALLOW_LIST (currently EMPTY,
+  #   so only SITE_URL is an allowed redirect) + Kong routes + issuer -- per the
+  #   SET rule above. Raised and closed twice now; recorded so it is not a third.
   # - OPTIONAL hardening: asymmetric JWT signing keys (ES256/RS256) over the
   #   current HS256 symmetric secret — larger migration (touches every
   #   JWT-validating service); tracked separately.
