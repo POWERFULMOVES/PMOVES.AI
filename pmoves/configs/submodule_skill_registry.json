@@ -236,6 +236,13 @@
       "agents_docs": [],
       "dual_mount": "research/A2UI"
     },
+    "PMOVES-deepseek-harness": {
+      "context_tier": 3,
+      "domain_tags": ["agents", "llm", "mcp"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": []
+    },
     "PMOVES-Deep-Serch": {
       "context_tier": 2,
       "domain_tags": [
