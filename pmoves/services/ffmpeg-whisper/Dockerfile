@@ -146,10 +146,15 @@ ARG CUDA_ARCHS="86;89"
 RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggml-org/whisper.cpp.git && \
     cmake -S whisper.cpp -B whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
         -DGGML_CUDA=1 -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" \
+        -DGGML_BACKEND_DL=ON -DGGML_NATIVE=OFF -DGGML_CPU_ALL_VARIANTS=ON \
         -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF && \
     cmake --build whisper.cpp/build --config Release -j"$(nproc)" && \
     cmake --install whisper.cpp/build --config Release --prefix /usr/local && \
-    test -f /usr/local/lib/libggml-cuda.so && \
+    # /usr/local/BIN, not lib: GGML_BACKEND_DL builds each backend as a CMake
+    # MODULE library ("Linking CUDA shared module"), and CMake installs MODULEs
+    # to the RUNTIME destination. Measured 2026-08-22 -- this assertion failed
+    # against lib/ while the file sat in bin/.
+    test -f /usr/local/bin/libggml-cuda.so && \
     # test -f proves the backend COMPILED. It does not prove it compiled for
     # the GPU this image will land on -- a wrong CUDA_ARCHS still yields a
     # valid libggml-cuda.so with no cubins for the target, and the image then
@@ -157,9 +162,9 @@ RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggml-or
     # exists to stop, so assert every requested arch is present in the binary.
     # cuobjdump ships in the devel stage.
     for a in $(echo "${CUDA_ARCHS}" | tr ';' ' ' | sed 's/-real//g;s/-virtual//g'); do \
-        cuobjdump --list-elf /usr/local/lib/libggml-cuda.so | grep -q "sm_${a}" || { \
+        cuobjdump --list-elf /usr/local/bin/libggml-cuda.so | grep -q "sm_${a}" || { \
             echo "FATAL: CUDA_ARCHS asked for sm_${a}, no cubin was built for it." >&2; \
-            cuobjdump --list-elf /usr/local/lib/libggml-cuda.so | grep -oE 'sm_[0-9]+a?' | sort -u >&2; \
+            cuobjdump --list-elf /usr/local/bin/libggml-cuda.so | grep -oE 'sm_[0-9]+a?' | sort -u >&2; \
             exit 1; \
         }; \
     done && \
@@ -183,10 +188,12 @@ ARG FFMPEG_REF=n8.1.2
 # LINK — the generated whisper.pc does not carry the CUDA dependencies that
 # libwhisper.so now has. Hence the search paths below.
 #
-# --extra-libs="-lcuda" is REQUIRED, and the reason is only visible in
+# GGML_BACKEND_DL=ON is what lets this link without a hard driver dependency.
+#
+# The underlying link error is real, and only visible in
 # ffbuild/config.log -- which is exactly what FFmpeg's error tells you to read:
 #
-#   /usr/bin/ld: /usr/local/lib/libggml-cuda.so: undefined reference to `cuMemSetAccess'
+#   /usr/bin/ld: /usr/local/bin/libggml-cuda.so: undefined reference to `cuMemSetAccess'
 #                                                undefined reference to `cuDeviceGet'
 #                                                undefined reference to `cuMemAddressFree'
 #
@@ -200,15 +207,31 @@ ARG FFMPEG_REF=n8.1.2
 # compile-and-link test, and both print that same text. The package was always
 # found. An earlier attempt read it as a pkg-config path problem, and a later one
 # as a missing RUNTIME lib (-lcudart -lcublas -lcublasLt) -- both were tried on a
-# 4090 and both still failed. -lcuda alone is sufficient and is the minimal fix.
+# 4090 and both still failed.
 #
-# CONSEQUENCE, deliberate: the binary now hard-links libcuda.so.1, so it cannot
-# start without an NVIDIA driver --
+# `--extra-libs="-lcuda"` DID fix the link, and was still wrong. It hard-linked
+# libcuda.so.1 into ffmpeg, so the binary could not exec without an NVIDIA driver:
 #   error while loading shared libraries: libcuda.so.1: cannot open shared object file
-# The stub satisfies the LINK at build time; the real driver must be present at
-# RUN time via the NVIDIA Container Toolkit (--gpus all / compose device
-# reservation). Any healthcheck or smoke test that runs this image without GPU
-# access now fails at exec rather than at transcode.
+# That breaks a SUPPORTED deployment. This service documents a CPU mode --
+# USE_CUDA read at main.py:347, WHISPER_DEVICE at :363, with real CPU paths
+# (int8 at :370, float32 at :529) -- and ffmpeg_extract_audio() runs at main.py:667
+# and :815, BEFORE either endpoint reaches faster-whisper. So a CPU host would 500
+# at exec before any CPU inference began. Caught in review on #2446.
+#
+# GGML_BACKEND_DL=ON serves both modes from one image. The CUDA backend builds as
+# a LOADABLE plugin (libggml-cuda.so) rather than being linked into
+# libggml/libwhisper, so nothing in ffmpeg's link graph references the cu* driver
+# symbols and -lcuda is not needed. At RUN time ggml discovers the plugin beside
+# libggml-base.so and loads it only when the driver is present; without one it
+# falls back to CPU instead of failing to start.
+#
+# Chosen over shipping two images because nothing in this repo selects between
+# image variants per node -- that mechanism would have to be built first.
+#
+# The libggml-cuda.so arch assertion above still applies and matters MORE now: a
+# wrong CUDA_ARCHS previously produced a GPU image that ran CPU-only, and with a
+# dlopen-ed backend the same mistake degrades just as silently. That assertion is
+# the only thing standing between this and the headline defect returning.
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \
     LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 RUN git clone --depth 1 --branch "${FFMPEG_REF}" https://github.com/FFmpeg/FFmpeg.git ffmpeg && \
@@ -220,8 +243,7 @@ RUN git clone --depth 1 --branch "${FFMPEG_REF}" https://github.com/FFmpeg/FFmpe
         --enable-shared \
         --enable-whisper \
         --extra-cflags="-I/usr/local/include" \
-        --extra-ldflags="-L/usr/local/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs" \
-        --extra-libs="-lcuda" && \
+        --extra-ldflags="-L/usr/local/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs" && \
     make -j"$(nproc)" && \
     make install && \
     strip /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe && \
@@ -264,10 +286,19 @@ ARG WHISPER_VAD_MODEL=silero-v5.1.2
 # Windows/WSL nodes: CUDA then reports "no CUDA-capable device is detected",
 # falls back to CPU, and still exits 0. Verified on the 4090 against the upstream
 # whisper.cpp CUDA image, which does prepend it.
+# GGML_BACKEND_PATH is REQUIRED, and the reason is a path mismatch easy to miss.
+# GGML_BACKEND_DL builds each backend as a CMake MODULE, which installs to the
+# RUNTIME destination -- /usr/local/BIN, next to 14 libggml-cpu-<microarch>.so
+# variants. ggml looks for plugins beside libggml-base.so (/usr/local/LIB) or
+# beside the running executable (ffmpeg is /opt/ffmpeg/bin). Neither is
+# /usr/local/bin, so without this the CUDA backend is built, shipped, and never
+# loaded -- the image runs CPU-only while every build-time assertion passes.
+# That is exactly the headline defect this file exists to prevent.
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/ffmpeg/bin:${PATH} \
+    GGML_BACKEND_PATH=/usr/local/bin \
     LD_LIBRARY_PATH=/usr/local/lib:/opt/ffmpeg/lib:${LD_LIBRARY_PATH} \
     WHISPER_MODEL_DIR=/opt/ffmpeg/share/whisper \
     WHISPER_MODEL_PATH=/opt/ffmpeg/share/whisper/ggml-${WHISPER_GGML_MODEL}.bin \

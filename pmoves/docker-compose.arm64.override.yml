@@ -45,15 +45,37 @@ services:
     # is the better long-term shape; this override is the correct short-term fix,
     # not the destination.
     #
-    # Nano caveat: jetson-orin-nano.yaml is still JetPack 6.2.1 / CUDA 12.6. A
-    # CUDA 13 image will not run there until it is on 7.2+. Per-node override:
-    #   ARM64_CUDA_VERSION=12.8.1 ARM64_CUDA_ARCHS=87
+    # REQUIRED, not defaulted -- and that is the point.
+    #
+    # These used to default to CUDA 13.0.1 / "87;121". ARM64 is not one platform
+    # here: SPARK GB10 is Grace-Blackwell sm_121 and NEEDS CUDA 13
+    # (dgx-spark-grace-blackwell.yaml declares cuda_version 13.0.2), while the
+    # Jetsons are sm_87 on JetPack 6.2 / L4T 36.4 (jetson-jons-*.yaml declares
+    # jetpack.target "6.2"). A CUDA 13 image cannot run on JetPack 6.2.
+    #
+    # So the default was wrong for every Jetson, and silently: nothing populates
+    # ARM64_CUDA_VERSION. It has exactly ONE consumer -- these two lines -- and no
+    # profile loader, bootstrap script, or make target sets it. The documented
+    # per-node override only helped an operator who already knew to apply it, and
+    # a node that did not got an image that cannot start. Raised in review on
+    # #2446.
+    #
+    # The profiles carry the right values; the wiring to read them does not exist
+    # yet. Until it does, refuse rather than guess -- an unset variable now fails
+    # at `docker compose` interpolation with this text, instead of producing an
+    # unrunnable image several minutes into a build.
+    #
+    #   SPARK GB10   : ARM64_CUDA_VERSION=13.0.1  ARM64_CUDA_ARCHS=121
+    #   Jetson (6.2) : ARM64_CUDA_VERSION=12.8.1  ARM64_CUDA_ARCHS=87
+    #
+    # `:?` and not `:-`: blank is not absent, and an empty value here would
+    # interpolate into a nonexistent image tag.
     build:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
       args:
-        CUDA_VERSION: ${ARM64_CUDA_VERSION:-13.0.1}
-        CUDA_ARCHS: ${ARM64_CUDA_ARCHS:-87;121}
+        CUDA_VERSION: "${ARM64_CUDA_VERSION:?Set per node. SPARK GB10 (sm_121) needs 13.0.1; Jetson on JetPack 6.2 (sm_87) needs 12.8.1. No safe default exists -- CUDA 13 will not run on JetPack 6.2, and 12.8 has no sm_121.}"
+        CUDA_ARCHS: "${ARM64_CUDA_ARCHS:?Set per node. 121 for SPARK GB10, 87 for Jetson Orin. Must match ARM64_CUDA_VERSION above.}"
   channel-monitor:
     platform: linux/arm64
   archon-server:
