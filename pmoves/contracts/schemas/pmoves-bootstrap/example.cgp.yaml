@@ -96,7 +96,13 @@ services:
 # matching agent subscribes and returns on pmoves.agent.result.v1.
 routing:
   kiloclaw:
-    node: "5090"  # POWERFULMOVES node, RTX 5090 32GB
+    # KiloCode runs wherever the operator has it open: 5090 (primary) or
+    # laptop-4090 (portable — Mavis session host 2026-08). `node` names the
+    # primary KVM focus target; profile
+    # pmoves/configs/agent-profiles/kiloclaw.yaml carries the full affinity.
+    # A node becomes dispatchable when
+    # pmoves/tools/agent_task_subscriber.py --agent glm-5.1 runs there.
+    node: "5090"  # POWERFULMOVES node, RTX 5090 32GB (laptop-4090 portable twin)
     nats_subject: pmoves.agent.task.v1
     target: glm-5.1  # GLM-5.1 model behind the KiloCode coding plan
   hermes:
