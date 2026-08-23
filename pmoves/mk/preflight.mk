@@ -126,6 +126,12 @@ runner-labels-check: ## Assert every self-hosted runs-on resolves to a registere
 runner-labels-refresh: ## Re-read the runner inventory from the GitHub API
 	@$(PRECHECK_PY) tools/validate_runner_labels.py --refresh $(ARGS)
 
+allowed-signers: ## Regenerate pmoves/config/allowed_signers from the signing identity cards
+	@$(PRECHECK_PY) tools/build_allowed_signers.py $(ARGS)
+
+allowed-signers-check: ## Drift gate: fail if allowed_signers disagrees with the cards
+	@$(PRECHECK_PY) tools/build_allowed_signers.py --check $(ARGS)
+
 skill-registry-validate: ## Validate submodule-skill registry completeness
 	@$(PRECHECK_PY) tools/skill_registry_validate.py
 
