@@ -58,3 +58,8 @@ pmoves/design/build/** linguist-generated
 pmoves/ui/lib/persona/** linguist-generated
 website/persona/** linguist-generated
 website/stage/data/** linguist-generated
+
+# Machine-emitted from the GitHub Actions runners API by
+# `make -C pmoves runner-labels-refresh`. Hand-editing it would let a workflow
+# claim a label no runner has -- the exact bug runner-labels-check exists to catch.
+pmoves/config/runner_labels.json linguist-generated
