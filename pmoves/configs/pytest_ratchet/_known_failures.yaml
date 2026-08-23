@@ -27,15 +27,14 @@
 # reported 398 groups against CI's 29). The gate's own message recommends the
 # command anyway; running it locally would corrupt this file.
 #
-# Three entries deserve a note:
+# One entry deserves a note:
 #
-#   ERROR|tests.test_issue_triage|<collection-error>
-#     pmoves/tests/test_issue_triage.py:6 reads
-#       from pmoves.services.github-issue-triage.labeling_rules import ...
-#     A hyphen cannot appear in a Python import path, so this module can never
-#     import. Baselined deliberately rather than fixed: repairing it is triage
-#     work with its own decisions (rename the directory, or load via importlib),
-#     and it does not belong in the PR that makes the gate capable of failing.
+#   (tests.test_issue_triage's <collection-error> was here. It was repaired by
+#    loading labeling_rules/hirag_client via importlib -- one of the two options
+#    this note anticipated -- so the entry is gone. A repaired-but-listed failure
+#    is itself a ratchet error, which is the right design: it forces the baseline
+#    to shrink when someone does the work instead of quietly keeping credit for a
+#    failure that no longer happens.)
 #
 #   ERROR|... |<pytest-harness>  (3 entries)
 #     A chunk that produced no JUnit report: a conftest that cannot be imported
@@ -152,7 +151,6 @@ known_failures:
   - "ERROR|tests.services.test_archon_mcp|<collection-error>"
   - "ERROR|tests.services.test_gateway_agent_api|<collection-error>"
   - "ERROR|tests.services.test_gateway_agent|<collection-error>"
-  - "ERROR|tests.test_issue_triage|<collection-error>"
   - "ERROR|tests.test_tools|<collection-error>"
   - "FAIL|services.mesh_exposure.tests.test_app|test_live_registry_loads_12_entries_from_slice4_curated"
   - "FAIL|services.nats_event_bus.tests.test_app|test_read_events_limit_is_respected"

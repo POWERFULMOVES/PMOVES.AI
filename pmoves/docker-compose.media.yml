@@ -177,6 +177,29 @@ services:
       dockerfile: backend/Dockerfile
     image: ${TRANSCRIBE_BACKEND_IMAGE:-ghcr.io/powerfulmoves/pmoves-transcribe-backend:latest}
     restart: unless-stopped
+    # The image ships /app/app/monitoring/logs as dr-xr-xr-x -- owned by nonroot
+    # (the Dockerfile's `chown -R` worked) but writable by NOBODY, because chown
+    # sets ownership and not mode. The app opens a log file there on startup, so
+    # it crash-looped on PermissionError as uid 65532 before serving anything.
+    #
+    # Fixed here rather than in the image: a container writing its own logs into
+    # an image layer is the wrong shape anyway -- it is invisible to `docker logs`,
+    # unbounded by the daemon's log-rotation policy (#2660), and lost on recreate.
+    # tmpfs makes the path writable, keeps it off the disk, and discards it with
+    # the container.
+    #
+    # `size=` is load-bearing, not tidiness. The app still opens its own
+    # sse_monitor_*.log here -- this mount does NOT put that output under Docker's
+    # stdout rotation, and an earlier version of this comment wrongly implied it
+    # did. An unbounded tmpfs defaults to 50% of HOST RAM, while tmpfs pages are
+    # charged to the container's memory cgroup, which is capped at 512M below. So
+    # a busy or long-running worker would grow the log until the cgroup OOM-killed
+    # it -- trading a startup crash-loop for a slower, harder-to-read one.
+    # 32M bounds it well under the limit and is ample for diagnostic logging; the
+    # mount fills and writes fail loudly rather than taking the process with them.
+    # Ref: https://docs.docker.com/engine/storage/tmpfs/
+    tmpfs:
+    - /app/app/monitoring/logs:uid=65532,gid=65532,mode=0700,size=32m
     environment:
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
