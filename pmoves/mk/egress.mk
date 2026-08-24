@@ -315,8 +315,14 @@ yt-wealth-videos: ## Show wealth-tagged videos (investing, entrepreneurship, bud
 # invocations keep working; prefer JUICEFS_HOST.
 JUICEFS_HOST ?= $(or $(JUICEFS_HOST_IP),pmoves-b850-ai-top)
 
-juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST=<hostname> DB_PASS=<supabase-db-pass>
-	@JUICEFS_HOST=$(JUICEFS_HOST) DB_PASS=$(or $(DB_PASS),$(error DB_PASS required)) bash scripts/juicefs-cross-node-setup.sh
+juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST=<hostname> [META_ROLE=juicefs_meta] [DB_PASS=<pw>]. DB_PASS falls back to the funnel-delivered JUICEFS_META_PASSWORD.
+	@# META_ROLE MUST be forwarded or the scoped-role cutover is unreachable through the
+	@# canonical make path — the script would silently default to supabase_admin (#2683
+	@# added META_ROLE to the script but the target never passed it). Password precedence:
+	@# explicit DB_PASS, else the funnel-delivered JUICEFS_META_PASSWORD (registered in
+	@# chit_manifest_register.py). Both pass as the sub-process ENVIRONMENT (not argv) and
+	@# are handed to JuiceFS via META_PASSWORD, so they never appear in `ps`.
+	@JUICEFS_HOST=$(JUICEFS_HOST) META_ROLE=$(or $(META_ROLE),supabase_admin) DB_PASS=$(or $(DB_PASS),$(JUICEFS_META_PASSWORD),$(error DB_PASS or JUICEFS_META_PASSWORD required)) bash scripts/juicefs-cross-node-setup.sh
 
 # The check that would have caught the cross-node blocker months earlier. Storage is
 # baked into a volume at format time: "file" means the data blocks live on the
