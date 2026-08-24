@@ -26,7 +26,17 @@
       "NEVER bypass CI gates (constraint: no-ci-bypass; admin merge override is OK for already-green PRs)"
     ]
   },
-  "required": ["spec", "meta", "identity", "tools", "mcps", "services", "routing", "constraints", "super_nodes"],
+  "required": [
+    "spec",
+    "meta",
+    "identity",
+    "tools",
+    "mcps",
+    "services",
+    "routing",
+    "constraints",
+    "super_nodes"
+  ],
   "additionalProperties": true,
   "properties": {
     "spec": {
@@ -37,7 +47,11 @@
     "meta": {
       "type": "object",
       "description": "Bootstrap metadata. Mirrors the CGP v1.0 meta block (source/units_mode/K/bins/backend analog for bootstrap context: bootstrap_id/operator/source/created_at/encoder_version).",
-      "required": ["created_at", "operator", "source"],
+      "required": [
+        "created_at",
+        "operator",
+        "source"
+      ],
       "additionalProperties": true,
       "properties": {
         "created_at": {
@@ -52,7 +66,13 @@
         "source": {
           "type": "string",
           "description": "Which producer emitted this CGP - typically mavis (the Mavis harness loader) but also hermes/pinokio if a consumer re-emits with its identity block updated.",
-          "enum": ["mavis", "hermes", "pinokio", "operator", "test"]
+          "enum": [
+            "mavis",
+            "hermes",
+            "pinokio",
+            "operator",
+            "test"
+          ]
         },
         "encoder_version": {
           "type": "string",
@@ -69,32 +89,63 @@
       "description": "Optional HMAC signature (same shape as CGP v1.0 sig). If CHIT_REQUIRE_SIGNATURE is set on the consumer, the sig MUST be valid or the consumer refuses the CGP. For now, signing is advisory - the bootstrap CGP is not a security boundary, just a manifest.",
       "additionalProperties": true,
       "properties": {
-        "alg": {"type": "string", "enum": ["HMAC-SHA256", "HMAC-SHA512"]},
-        "kid": {"type": "string", "description": "Key identifier (16-char tag from the producer's CHIT manifest)."},
-        "ts": {"type": "integer", "description": "Unix timestamp at signing."},
-        "hmac": {"type": "string", "description": "Base64-encoded HMAC digest."}
+        "alg": {
+          "type": "string",
+          "enum": [
+            "HMAC-SHA256",
+            "HMAC-SHA512"
+          ]
+        },
+        "kid": {
+          "type": "string",
+          "description": "Key identifier (16-char tag from the producer's CHIT manifest)."
+        },
+        "ts": {
+          "type": "integer",
+          "description": "Unix timestamp at signing."
+        },
+        "hmac": {
+          "type": "string",
+          "description": "Base64-encoded HMAC digest."
+        }
       }
     },
     "identity": {
       "type": "object",
       "description": "The identity of the agent session loading this CGP. Drives which Mavis voice/skin/role is active; tells the consumer fork who it's acting as in the multi-agent fleet.",
-      "required": ["agent", "role"],
+      "required": [
+        "agent",
+        "role"
+      ],
       "additionalProperties": true,
       "properties": {
         "agent": {
           "type": "string",
           "description": "Agent handle from pmoves/config/agent_signatures.yaml.",
-          "examples": ["minimax"]
+          "examples": [
+            "minimax"
+          ]
         },
         "role": {
           "type": "string",
-          "enum": ["implementer", "critic", "renderer", "curator", "operator", "dispatcher"],
+          "enum": [
+            "implementer",
+            "critic",
+            "renderer",
+            "curator",
+            "operator",
+            "dispatcher"
+          ],
           "description": "Functional role for this session. The harness picks the role; the consumer fork may further narrow it (e.g. Hermes-as-critic)."
         },
         "skin": {
           "type": "string",
           "description": "Voice/skin/identity surface from the persona system (per pmoves/configs/agent-profiles/). Optional - consumers can fall back to the agent's default.",
-          "examples": ["dimensional", "companion", "analyst"]
+          "examples": [
+            "dimensional",
+            "companion",
+            "analyst"
+          ]
         }
       }
     },
@@ -136,8 +187,13 @@
           "description": "Tailscale tailnet identity. host is the tailnet name; ip is the device's tailnet IP (100.x.y.z).",
           "additionalProperties": true,
           "properties": {
-            "host": {"type": "string"},
-            "ip": {"type": "string", "pattern": "^100\\."}
+            "host": {
+              "type": "string"
+            },
+            "ip": {
+              "type": "string",
+              "pattern": "^100\\."
+            }
           }
         },
         "rustdesk": {
@@ -147,9 +203,17 @@
           "properties": {
             "devices": {
               "type": "array",
-              "items": {"type": "string"},
+              "items": {
+                "type": "string"
+              },
               "examples": [
-                ["pixel-10-xl-1", "pixel-10-xl-2", "pixel-10", "tab-ultra-s8", "tab-ultra-11"]
+                [
+                  "pixel-10-xl-1",
+                  "pixel-10-xl-2",
+                  "pixel-10",
+                  "tab-ultra-s8",
+                  "tab-ultra-11"
+                ]
               ]
             }
           }
@@ -159,8 +223,17 @@
           "description": "Hostinger website. status is advisory - 'pending-mgmt' means the operator hasn't managed it yet; 'managed' means the website is live and the consumer can publish to it.",
           "additionalProperties": true,
           "properties": {
-            "site": {"type": "string"},
-            "status": {"type": "string", "enum": ["managed", "pending-mgmt", "offline"]}
+            "site": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "managed",
+                "pending-mgmt",
+                "offline"
+              ]
+            }
           }
         },
         "cloudflare": {
@@ -168,8 +241,15 @@
           "description": "Cloudflare account handle. account is the CF account ID; zones is optional (list of zone IDs the consumer can deploy to).",
           "additionalProperties": true,
           "properties": {
-            "account": {"type": "string"},
-            "zones": {"type": "array", "items": {"type": "string"}}
+            "account": {
+              "type": "string"
+            },
+            "zones": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         },
         "minimax": {
@@ -177,10 +257,22 @@
           "description": "MiniMax model cascade - the 3 NEW submodules from PR #2589 of the 6-repo fold-in. mcp is the MCP server (consumed by WebUI/Agent Zero); cli is the sidecar CLI (consumed by Pinokio on operator devices); verifier is the conformance gate (run on candidate providers before adding them); pinokio is the sidecar lane binding. All are advisory - missing submodules are skipped, not failed. Same skip-on-missing pattern as tailscale/rustdesk/hostinger/cloudflare.",
           "additionalProperties": true,
           "properties": {
-            "mcp": {"type": "string", "description": "Submodule path for the MCP server (PMOVES-MiniMax-MCP)."},
-            "cli": {"type": "string", "description": "Submodule path for the sidecar CLI (Pmoves-minimax-cli)."},
-            "verifier": {"type": "string", "description": "Submodule path for the conformance gate (Pmoves-MiniMax-Provider-Verifier)."},
-            "pinokio": {"type": "string", "description": "Submodule path for the sidecar lane (Pmoves-pinokio)."}
+            "mcp": {
+              "type": "string",
+              "description": "Submodule path for the MCP server (PMOVES-MiniMax-MCP)."
+            },
+            "cli": {
+              "type": "string",
+              "description": "Submodule path for the sidecar CLI (Pmoves-minimax-cli)."
+            },
+            "verifier": {
+              "type": "string",
+              "description": "Submodule path for the conformance gate (Pmoves-MiniMax-Provider-Verifier)."
+            },
+            "pinokio": {
+              "type": "string",
+              "description": "Submodule path for the sidecar lane (Pmoves-pinokio)."
+            }
           }
         }
       }
@@ -192,12 +284,26 @@
       "properties": {
         "kiloclaw": {
           "type": "object",
-          "description": "The KiloCode / GLM-5.1 coding agent. Lives on the 5090 node per memory; subscriber is the KiloCode process the operator already has running.",
+          "description": "The KiloCode / GLM-5.1 coding claw. Runs on 5090 (primary) or laptop-4090 (portable); profile agent-profiles/kiloclaw.yaml carries the affinity. Dispatchable only where pmoves/tools/agent_task_subscriber.py --agent glm-5.1 runs.",
           "additionalProperties": true,
           "properties": {
-            "node": {"type": "string", "examples": ["5090"]},
-            "nats_subject": {"type": "string", "const": "pmoves.agent.task.v1"},
-            "target": {"type": "string", "examples": ["glm-5.1"]}
+            "node": {
+              "type": "string",
+              "examples": [
+                "5090",
+                "laptop-4090"
+              ]
+            },
+            "nats_subject": {
+              "type": "string",
+              "const": "pmoves.agent.task.v1"
+            },
+            "target": {
+              "type": "string",
+              "examples": [
+                "glm-5.1"
+              ]
+            }
           }
         },
         "hermes": {
@@ -205,9 +311,24 @@
           "description": "The NousResearch Hermes agent. Node is TBD until the operator stands Hermes up. The harness sets up the wire anyway so when Hermes subscribes, the routing is ready.",
           "additionalProperties": true,
           "properties": {
-            "node": {"type": "string", "examples": ["TBD", "spark", "5090"]},
-            "nats_subject": {"type": "string", "const": "pmoves.agent.task.v1"},
-            "target": {"type": "string", "examples": ["hermes-3"]}
+            "node": {
+              "type": "string",
+              "examples": [
+                "TBD",
+                "spark",
+                "5090"
+              ]
+            },
+            "nats_subject": {
+              "type": "string",
+              "const": "pmoves.agent.task.v1"
+            },
+            "target": {
+              "type": "string",
+              "examples": [
+                "hermes-3"
+              ]
+            }
           }
         },
         "pinokio": {
@@ -215,9 +336,24 @@
           "description": "The Pinokio app-launcher. Lives on operator devices (Pixel 10 XL fleet) per memory; PMOVES-pinokio fork consumes the bootstrap at launch time and registers the CGP's tools + MCPs as the app's surface. Node is the operator device tailnet IP (or 'host' for the operator's local machine); target is the Pinokio app id being launched.",
           "additionalProperties": true,
           "properties": {
-            "node": {"type": "string", "examples": ["host", "100.x.y.z"]},
-            "nats_subject": {"type": "string", "const": "pmoves.agent.task.v1"},
-            "target": {"type": "string", "examples": ["pmoves-mini", "pmoves-launcher"]}
+            "node": {
+              "type": "string",
+              "examples": [
+                "host",
+                "100.x.y.z"
+              ]
+            },
+            "nats_subject": {
+              "type": "string",
+              "const": "pmoves.agent.task.v1"
+            },
+            "target": {
+              "type": "string",
+              "examples": [
+                "pmoves-mini",
+                "pmoves-launcher"
+              ]
+            }
           }
         }
       }
@@ -241,7 +377,9 @@
     "super_nodes": {
       "type": "array",
       "description": "CGP-valid geometry payload. The bootstrap CGP has no geometry (the bootstrap is metadata, not a data packet), so this MUST be the empty array. Producers that want to include geometry should emit a CGP v1.0 packet instead.",
-      "items": {"type": "object"},
+      "items": {
+        "type": "object"
+      },
       "maxItems": 0,
       "default": []
     }

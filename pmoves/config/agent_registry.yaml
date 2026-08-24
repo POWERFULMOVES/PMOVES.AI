@@ -2996,6 +2996,52 @@ agents:
       compose_profile: agents
     description: "Model Context Protocol server for HuggingFace Hub — model discovery, download, metadata, GGUF conversion; exposes SSE MCP and REST API"
 
+  mavis:
+    name: "Mavis"
+    class: standard
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    # Orchestrator identity of the MiniMax Edition KiloCode claw
+    # (agent-profiles/minimax_edition.yaml, signature `minimax` / glyph ⬡).
+    # Sessions to date ran on 4090; SPARK affinity added 2026-08-22 so the
+    # GB10 node can serve as a dispatch target once a pmoves.agent.task.v1
+    # subscriber is stood up there (the wire is the gate, not this entry).
+    evolution_stage: stage_1
+    signature: "minimax"
+    profile: "minimax_edition"
+    nats:
+      publishes:
+        - "pmoves.agent.task.v1"
+        - "pmoves.bpm.phase.v1"
+        - "pmoves.agent.result.v1"
+      subscribes:
+        - "pmoves.agent.result.v1"
+        - "pmoves.bpm.pomodoro.v1"
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: false
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    topology:
+      node_affinity: [5090, spark, laptop-4090, z890]
+      team: orchestration
+      ci_runner: ubuntu-latest
+      compose_profile: agents
+    description: |
+      MiniMax Edition orchestrator (Mavis). Dispatches inter-agent tasks on
+      pmoves.agent.task.v1 (kiloclaw / hermes / pinokio targets per the
+      pmoves-bootstrap/v1 CGP routing block) and runs the BPM phase cron.
+      Long-context and creative-pipeline lanes; Token Plan backed.
+
 
 # ── MCP Server Registry ─────────────────────────────────────────────────────
 # Root-level MCP servers that can be bound into room manifests as skills.
@@ -3138,7 +3184,7 @@ mcp_servers:
     args: ["minimax-mcp"]
     env:
       MINIMAX_API_KEY: "${MINIMAX_API_KEY}"
-      MINIMAX_API_HOST: "${MINIMAX_API_HOST:-https://api.minimax.chat}"
+      MINIMAX_API_HOST: "${MINIMAX_API_HOST:-https://api.minimax.io}"
       MINIMAX_API_RESOURCE_MODE: "${MINIMAX_API_RESOURCE_MODE:-url}"
     action_namespace: "mcp.v1.minimax"
     capabilities: ["text", "image", "video", "tts", "voice-clone", "video-gen"]

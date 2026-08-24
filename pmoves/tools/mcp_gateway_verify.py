@@ -16,7 +16,7 @@ answers `tools/list` perfectly happily with an empty list.
 Usage:
   python pmoves/tools/mcp_gateway_verify.py
   python pmoves/tools/mcp_gateway_verify.py --json
-  python pmoves/tools/mcp_gateway_verify.py --url http://host:8091/mcp
+  python pmoves/tools/mcp_gateway_verify.py --url http://host:8189/mcp
 
 Exit codes:
   0  every catalogued server contributed at least one tool
@@ -38,7 +38,7 @@ from typing import Dict, List, Optional
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG = REPO_ROOT / "pmoves" / "config" / "mcp-gateway" / "catalog.yaml"
 DEFAULT_URL = os.environ.get(
-    "MCP_GATEWAY_URL", f"http://localhost:{os.environ.get('MCP_GATEWAY_PORT', '8091')}/mcp"
+    "MCP_GATEWAY_URL", f"http://localhost:{os.environ.get('MCP_GATEWAY_PORT', '8189')}/mcp"
 )
 
 # Tool-name prefixes each catalogued server is expected to contribute. Derived

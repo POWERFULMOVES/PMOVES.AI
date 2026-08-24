@@ -158,7 +158,7 @@ mcp-gateway-preflight: ## Check the gateway's external deps exist before startin
 
 up-mcp-gateway: mcp-gateway-preflight ## Start the PMOVES MCP Gateway (one MCP endpoint for every agent)
 	@$(MCP_GATEWAY_DC) --profile mcp up -d $(ARGS)
-	@echo "MCP Gateway on http://localhost:$${MCP_GATEWAY_PORT:-8091}/mcp"
+	@echo "MCP Gateway on http://localhost:$${MCP_GATEWAY_PORT:-8189}/mcp"
 
 down-mcp-gateway: ## Stop the PMOVES MCP Gateway
 	@$(MCP_GATEWAY_DC) --profile mcp down $(ARGS)

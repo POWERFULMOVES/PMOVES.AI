@@ -86,6 +86,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 8103 | Tokenism UI API | Tokenism simulator API |
 | 8104 | GitHub Runner Controller | CI/CD runner orchestration |
 | 8181 | Archon | Alternative Archon port |
+| 8189 | PMOVES MCP Gateway | Host port. Container-internal is 8091; the host side moved off 8091 because that is archon's `ARCHON_API_PORT` default and the two collide on any node running both. |
 
 ### Supabase Stack (Self-Hosted)
 
