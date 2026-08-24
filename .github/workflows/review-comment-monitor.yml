@@ -18,20 +18,21 @@ concurrency:
 
 jobs:
   triage:
-    # Disabled: the fleet review model moved off the Anthropic API key path
-    # (same as claude-code-review.yml). The ANTHROPIC_API_KEY secret is empty
-    # and won't be maintained — reviews happen via CodeRabbit + Codex bot +
-    # coding plans and local models. Every bot review was producing a failing
-    # `triage` check that is NOT a required status gate, just noise on the PR
-    # checks list. Re-enable by setting a valid ANTHROPIC_API_KEY secret and
-    # changing `if: false` back to the bot-filter guard below.
-    if: false
-    # Original trigger guard (restore when re-enabling):
-    # if: |
-    #   github.event.review.user.login == 'coderabbitai' ||
-    #   github.event.review.user.login == 'coderabbitai[bot]' ||
-    #   github.event.review.user.login == 'chatgpt-codex-connector' ||
-    #   github.event.review.user.login == 'chatgpt-codex-connector[bot]'
+    # Re-enabled 2026-08-24, restoring the original bot-filter guard.
+    #
+    # It was disabled because ANTHROPIC_API_KEY was empty AND the OAuth token
+    # had expired, so every bot review produced a failing `triage` check — noise
+    # on a non-required gate. Both premises have changed: CLAUDE_CODE_OAUTH_TOKEN
+    # was rotated, and this job now authenticates with the coding plan instead of
+    # a metered API key, so running it costs plan quota rather than per-token spend.
+    #
+    # This does not replace CodeRabbit or the Codex bot. It triages what they
+    # produce, which is the step that went missing while this was off.
+    if: |
+      github.event.review.user.login == 'coderabbitai' ||
+      github.event.review.user.login == 'coderabbitai[bot]' ||
+      github.event.review.user.login == 'chatgpt-codex-connector' ||
+      github.event.review.user.login == 'chatgpt-codex-connector[bot]'
     runs-on: ubuntu-latest
     # Least-privilege: reads the diff, posts ONE summary comment. No contents:write
     # (it must not be able to push), no thread-resolution scope.
@@ -49,11 +50,12 @@ jobs:
       - name: Triage automated review
         uses: anthropics/claude-code-action@9d7150bc8a3dae8149739a88019d192b579ad90c # v1.0.193
         with:
-          # Use the direct Anthropic API key, not CLAUDE_CODE_OAUTH_TOKEN. The
-          # OAuth token is the Pro/Max subscription credential and expires; the
-          # repo's ANTHROPIC_API_KEY (rotated 2026-02-27) is the persistent path.
-          # Same fix applied to claude-code-review.yml and review-autofix.yml.
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Coding plan, not the metered API key. The subscription credential does
+          # expire and needs re-minting with `claude setup-token` — but ANTHROPIC_API_KEY
+          # was empty, so "persistent" meant persistently unauthenticated. An expiring
+          # credential that works beats a permanent one that is not set.
+          # Same across claude.yml, claude-code-review.yml and review-autofix.yml.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # claude-code-action rejects bot-triggered runs by default; this job is
           # *intentionally* triggered by bot reviews, so allow exactly those bots.
           allowed_bots: 'coderabbitai[bot],chatgpt-codex-connector[bot]'
