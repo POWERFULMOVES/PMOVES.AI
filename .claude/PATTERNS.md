@@ -992,3 +992,85 @@ compose.yml: environment: [- FOO]   vars.cfg: FOO=
 
 When a program distinguishes absent from empty (see § Blank Is Not Absent), neither
 form will do, and the unset has to happen in an entrypoint wrapper.
+
+## A submodule branch's danger lives in the parent's gitlink, not in its own PR (2026-08-24)
+
+Two different objects, routinely conflated, and the confusion runs in the
+*reassuring* direction — you check the PR, it looks additive, and the damage is
+somewhere you didn't look.
+
+- **A PR's diff is relative to its merge-base.** It shows what *merging* would
+  apply.
+- **A gitlink is an absolute commit.** It records *which commit the parent
+  points at* — no base, no diff, no merge.
+
+So a branch can be **purely additive upstream and destructive downstream at the
+same time**, purely by being what happens to be checked out when someone runs
+`git add <submodule>`.
+
+### The case that produced this note
+
+`skills/PMOVES-skills` was checked out on `feat/fork-comfy-skills`, a branch cut
+from raw upstream `main` rather than from the hardened branch. Measured both
+ways:
+
+```
+# What the PR would apply (merge-base..head) — what everyone looks at
+14 files changed, 866 insertions(+)
+files under sources/ : 0          # additive. Nothing lost.
+
+# What committing the gitlink would record (pin..checkout) — what nobody looks at
+sources/PMOVES-agent-sandbox-skill    | 1 -
+sources/Pmoves-Claude-skills          | 1 -
+sources/README.md                     | 62 -----
+...all six source submodules, gone
+```
+
+Same branch. Same two commits. Opposite conclusions, because the two commands
+answer different questions.
+
+### The tell is deceptively boring
+
+```
+modified:   skills/PMOVES-skills (new commits)
+```
+
+That line is identical whether the submodule moved forward one commit on its
+tracked branch or sideways onto an orphan branch that deleted half its tree.
+
+### Diagnostic
+
+To see what a gitlink move would actually do, diff the **pin against the
+checkout** — never the PR:
+
+```bash
+PIN=$(git ls-files -s -- <path> | awk '{print $2}')
+git -C <path> diff --stat "$PIN"..HEAD        # this is the real blast radius
+git -C <path> rev-parse --abbrev-ref HEAD     # and which branch you are on
+```
+
+### What already catches it
+
+`submodule-gitlink-gate` — a **required** check — and it was written with this
+exact failure in mind; its header calls it "the class of drift a stale local
+submodule checkout silently introduces." It resolves ancestry through the GitHub
+compare API and treats a gitlink as on-branch only when the status is `behind`
+or `identical`:
+
+```
+PMOVES.AI-Edition-Hardened ... 65dfabae0  ->  diverged    -> DANGLING, blocked
+PMOVES.AI-Edition-Hardened ... c4cb8a3bf  ->  identical   -> passes
+```
+
+So this is recoverable **by design**, not by luck — but only at PR time. Locally
+the only protection is looking, which is what the diagnostic above is for.
+
+### Recovery
+
+`git submodule update --init -- <path>` restores the checkout to the pin. It is
+non-destructive as long as the branch you are leaving is pushed — verify that
+first (`git -C <path> ls-remote origin refs/heads/<branch>` matching local HEAD),
+because the whole point is that you are abandoning a checkout, not a commit.
+
+Related: [[Blank Is Not Absent]] — same family, in that the dangerous state and
+the benign state are visually identical at the place you habitually look.
