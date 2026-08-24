@@ -256,8 +256,20 @@ services:
     #    the pre- and post-rotation keys -- both "Credit balance is too low".
     #
     # Scoped to archon: other services keep what the shared env provides.
+    #
+    # The nested default is load-bearing. env.shared.example:90 documents
+    # ANTHROPIC_AUTH_TOKEN as a variable an operator may set directly, and a
+    # service-level `environment:` entry OVERRIDES what env_file supplies -- so a
+    # bare ${CLAUDE_CODE_OAUTH_TOKEN:-} would expand to empty and wipe out a
+    # perfectly good token that was configured the documented way. Falling back to
+    # the inherited value keeps both setups working. Verified with
+    # `docker compose config`:
+    #   only CLAUDE_CODE_OAUTH_TOKEN -> that value
+    #   only ANTHROPIC_AUTH_TOKEN    -> preserved (was silently emptied before)
+    #   both                         -> CLAUDE_CODE_OAUTH_TOKEN wins
+    #   neither                      -> ""
     - ANTHROPIC_API_KEY=
-    - ANTHROPIC_AUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    - ANTHROPIC_AUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-${ANTHROPIC_AUTH_TOKEN:-}}
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
     # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
     # Default empty (uses $PATH). The upstream Archon Dockerfile installs
