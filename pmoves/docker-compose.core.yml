@@ -157,6 +157,11 @@ services:
     volumes:
     - supabase-db-data:/var/lib/postgresql/data
     - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
+    # Repo-managed pg_hba. The image ships this at /etc/postgresql/pg_hba.conf --
+    # the container's WRITABLE LAYER, not the data volume -- so an in-container
+    # edit is discarded by the next recreate. Mounting it makes the tailnet
+    # role-scoping durable. See the file's own header for why the rules exist.
+    - ./supabase/config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     networks:
     - pmoves_data
     - pmoves_api  # Services on pmoves_api need DB access

@@ -420,8 +420,13 @@ pairings:
 handoff:
   # How agents pass work between each other
   protocol: "mcp"
-  # Agent Zero MCP endpoint for orchestration
-  mcp_endpoint: "http://localhost:8080/mcp/command"
+  # Agent Zero MCP endpoint for orchestration.
+  # /mcp/execute, not /mcp/command: the supervisor on 8080 serves POST /mcp/execute
+  # and GET /mcp/commands. /mcp/command (singular) was never implemented -- it is
+  # documented only in .claude/context/mcp-api.md, which is marked SUPERSEDED for
+  # exactly that reason. floos_resolver already POSTs {cmd, arguments}, which is
+  # /mcp/execute's contract, so only the path was wrong.
+  mcp_endpoint: "http://localhost:8080/mcp/execute"
   # NATS for async handoffs
   nats_url: "nats://nats:pmoves@nats:4222"
   # Timeout for each skill step (seconds)
