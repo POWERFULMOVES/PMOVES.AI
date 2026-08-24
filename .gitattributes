@@ -22,7 +22,6 @@ Dockerfile text eol=lf
 # Append-only audit trails — union-merge so concurrent branch appends never conflict
 .claude/hooks/damage-control/known-roads.jsonl merge=union eol=lf
 
-
 # Machine-emitted, never hand-edited. `compose-split` regenerates all eight from
 # docker-compose.yml (Makefile: COMPOSE_SPLIT_FILES), and compose-split-check
 # fails if a committed overlay differs from the regenerated output.
@@ -63,3 +62,9 @@ website/stage/data/** linguist-generated
 # `make -C pmoves runner-labels-refresh`. Hand-editing it would let a workflow
 # claim a label no runner has -- the exact bug runner-labels-check exists to catch.
 pmoves/config/runner_labels.json linguist-generated
+
+# Derived from pmoves/config/signing_identity_cards.yaml by
+# pmoves/tools/build_allowed_signers.py; allowed-signers-check gates the drift.
+# Hand-editing it would add a trusted key that no card backs -- which is exactly
+# the substitution the keyring exists to prevent.
+pmoves/config/allowed_signers linguist-generated

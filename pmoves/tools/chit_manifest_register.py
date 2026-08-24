@@ -70,6 +70,19 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "required": False,
         "aliases": ["MCP_SERVER_TOKEN"],
     },
+    # Tier 5: Agent — the Claude Code coding-plan credential.
+    # env.tier-agent.example has declared this since PR #2359, and both compose
+    # files wire `${CLAUDE_CODE_OAUTH_TOKEN:-}` into the archon service, but it
+    # was never registered HERE — so the funnel never emitted it and the var
+    # arrives empty on every node. Meanwhile ANTHROPIC_API_KEY (metered, and a
+    # registered slot) is set fleet-wide from env.shared, and the Claude CLI
+    # PREFERS it over the OAuth token. Net effect: archon boots healthy, passes
+    # its health check, and every workflow dies on
+    # `billing_error: Credit balance is too low`.
+    # MODEL_FABRIC_CONTRACT.md:44 already lists `Claude Code Max` in the
+    # approved coding-plan inventory, so this is a missing slot rather than a
+    # new policy decision.
+    "CLAUDE_CODE_OAUTH_TOKEN": {"tier": "agent", "required": False},
     # Tier: supabase — Studio basic-auth through the Kong gateway. These became
     # HARD-REQUIRED when supabase-kong moved to DB-less declarative mode: the
     # vendored kong.yml declares a `basicauth_credentials` entry, and Kong
