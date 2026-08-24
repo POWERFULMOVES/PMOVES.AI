@@ -5119,7 +5119,7 @@ kimi: ## Launch Kimi Code CLI with PMOVES project config and MCP set
 
 .PHONY: claude-pmoves kimi-pmoves kilo-pmoves codex-pmoves cipher-mint-token
 claude-pmoves: ## Launch Claude Code with PMOVES delivery-agent context
-	@bash $(CURDIR)/scripts/claude-pmoves.sh delivery-agent
+	@bash $(CURDIR)/scripts/claude-pmoves.sh
 
 kimi-pmoves: ## Launch Kimi Code CLI with PMOVES project config and MCP
 	@bash $(CURDIR)/scripts/kimi-pmoves.sh

@@ -17,11 +17,12 @@
 # and it now inherits env.shared + the roster.
 #
 # Usage: claude-pmoves [agent-name] [claude-args...]
-# Default agent: delivery-agent
+# Default agent: node-steward (claims work, then spawns delivery agents)
 # Other agents: control-agent, memory-agent, researcher, test-runner, pr-trimmer, verifier, code-review
 #
 # Examples:
-#   claude-pmoves                          # delivery-agent (default)
+#   claude-pmoves                          # node-steward (default)
+#   claude-pmoves delivery-agent           # straight to execution
 #   claude-pmoves control-agent            # review/gate agent
 #   claude-pmoves memory-agent             # cipher memory agent
 #   claude-pmoves test-runner --worktree   # test runner in worktree
@@ -63,8 +64,35 @@ fi
 
 LAUNCHER="$ROOT/deploy/provision/claude-pmoves.sh"
 
-AGENT="${1:-delivery-agent}"
-shift 2>/dev/null || true
+# DEFAULT AGENT: node-steward, not delivery-agent.
+#
+# The old default made every node session an execution body with no node context
+# and no claim discipline. A B850 session on 2026-08-23 ran that way to
+# completion -- eight PRs and three live DB mutations on the data-tier host, all
+# unclaimed -- and the register recorded nobody as having been there. An agent
+# that starts holding Edit will edit; the steward is denied Write/Edit and spawns
+# delivery agents instead. See .claude/agents/node-steward.md.
+#
+# Overridable: `claude-pmoves delivery-agent` still gets the old behaviour, and
+# PMOVES_DEFAULT_AGENT sets it per node without editing this file.
+#
+# Falls back to delivery-agent if the steward definition is absent, so a node on
+# an older checkout keeps working rather than launching with --agent pointed at
+# nothing.
+DEFAULT_AGENT="${PMOVES_DEFAULT_AGENT:-node-steward}"
+if [ ! -f "$ROOT/.claude/agents/$DEFAULT_AGENT.md" ]; then
+  DEFAULT_AGENT="delivery-agent"
+fi
+# Only treat $1 as an agent NAME if it is not a flag. The previous form,
+# AGENT="${1:-delivery-agent}", consumed anything: `claude-pmoves --print ping`
+# silently launched with `--agent --print`, which claude rejects or misreads.
+# A leading `-` now means "no agent named, these are claude's args".
+if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
+  AGENT="$1"
+  shift
+else
+  AGENT="$DEFAULT_AGENT"
+fi
 
 if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still
