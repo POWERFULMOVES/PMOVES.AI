@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:10 UTC",
+  "generated_at": "2026-08-22 21:17 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -11,7 +11,7 @@
       "name": "PMOVES-Jellyfin",
       "path": "PMOVES-Jellyfin",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Jellyfin.git",
-      "status_prefix": " ",
+      "status_prefix": "+",
       "commit": "ecdfad9e36d6a7c9552200574c4c6cb6aad685ea",
       "initialized": true,
       "remote_commit_reachable": "local",

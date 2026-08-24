@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-08-22 21:30 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 2,
+    "errors": 2,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "skills/Pmoves-skills",
+      "path": "skills/Pmoves-skills",
+      "url": "https://github.com/POWERFULMOVES/Pmoves-skills.git",
+      "status_prefix": "-",
+      "commit": "c6f69c631292444cc541ac6d91e2226b0ff247da",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    },
+    {
+      "name": "skills/PMOVES-skills",
+      "path": "skills/PMOVES-skills",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-skills.git",
+      "status_prefix": "-",
+      "commit": "c6f69c631292444cc541ac6d91e2226b0ff247da",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}

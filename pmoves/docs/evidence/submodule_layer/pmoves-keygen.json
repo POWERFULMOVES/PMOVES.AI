@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:18 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "pmoves-keygen",
+      "path": "pmoves-keygen",
+      "url": "https://github.com/POWERFULMOVES/pmoves-keygen.git",
+      "status_prefix": "-",
+      "commit": "36ef04163a000da2f993899c1357063d193d7a4c",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}

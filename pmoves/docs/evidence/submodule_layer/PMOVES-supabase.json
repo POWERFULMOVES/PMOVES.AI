@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-05 15:12 UTC",
+  "generated_at": "2026-08-22 21:25 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
-    "errors": 0,
+    "errors": 1,
     "warnings": 0
   },
   "results": [
@@ -11,15 +11,21 @@
       "name": "PMOVES-supabase",
       "path": "PMOVES-supabase",
       "url": "https://github.com/POWERFULMOVES/PMOVES-supabase.git",
-      "status_prefix": " ",
-      "commit": "57c416061a2574cb505e765b3a634a4eec2b00b9",
+      "status_prefix": "+",
+      "commit": "28443251ffcec2f4346013a3a2fa339ab631e09b",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
-      "top_level_files_ok": true,
+      "top_level_files_ok": false,
       "nested_gitmodules_ok": true,
       "python_compile_ok": "skip",
-      "findings": []
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
     }
   ]
 }

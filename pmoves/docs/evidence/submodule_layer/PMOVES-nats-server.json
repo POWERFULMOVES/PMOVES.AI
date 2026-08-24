@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:20 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-nats-server",
+      "path": "PMOVES-nats-server",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-nats-server.git",
+      "status_prefix": "-",
+      "commit": "e76b0ff8d36ea51ca05f2f04a2bf209664705de6",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}

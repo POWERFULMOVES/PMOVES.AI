@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:19 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "Pmoves-minimax-cli",
+      "path": "Pmoves-minimax-cli",
+      "url": "https://github.com/POWERFULMOVES/Pmoves-minimax-cli.git",
+      "status_prefix": "-",
+      "commit": "24875e0f04220480a7b146fc8db11ca7b0b278aa",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}

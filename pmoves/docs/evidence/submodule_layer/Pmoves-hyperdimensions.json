@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:10 UTC",
+  "generated_at": "2026-08-22 21:17 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -11,8 +11,8 @@
       "name": "Pmoves-hyperdimensions",
       "path": "Pmoves-hyperdimensions",
       "url": "https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git",
-      "status_prefix": " ",
-      "commit": "5ec35cb9b5ddccaf8c8cd2d958d2e814d5497039",
+      "status_prefix": "+",
+      "commit": "c09255691c69b9a70f5398c2811f326b75b14c0b",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-05 15:08 UTC",
+  "generated_at": "2026-08-22 21:13 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
-    "errors": 0,
+    "errors": 1,
     "warnings": 0
   },
   "results": [
@@ -12,14 +12,20 @@
       "path": "PMOVES-Danger-infra",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git",
       "status_prefix": " ",
-      "commit": "62f4c272086ed98a8dea65506876d90af2152462",
+      "commit": "44d80c70b001165c470a14be743be41bab55effb",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
-      "top_level_files_ok": true,
+      "top_level_files_ok": false,
       "nested_gitmodules_ok": true,
       "python_compile_ok": "skip",
-      "findings": []
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
     }
   ]
 }

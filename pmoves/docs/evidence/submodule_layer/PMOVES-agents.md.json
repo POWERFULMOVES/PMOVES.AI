@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:09 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-agents.md",
+      "path": "PMOVES-agents.md",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-agents.md.git",
+      "status_prefix": "-",
+      "commit": "d1ac7f063d20e70015ed6732664049ae4ba9d74e",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}

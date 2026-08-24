@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:12 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-ClawZ",
+      "path": "PMOVES-ClawZ",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-ClawZ.git",
+      "status_prefix": "+",
+      "commit": "4c6a7f84a4c940c414eb7bbf1df6d8cad3ac45dd",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
+    }
+  ]
+}

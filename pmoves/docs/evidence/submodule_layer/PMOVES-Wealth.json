@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:13 UTC",
+  "generated_at": "2026-08-22 21:28 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -11,7 +11,7 @@
       "name": "PMOVES-Wealth",
       "path": "PMOVES-Wealth",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Wealth.git",
-      "status_prefix": " ",
+      "status_prefix": "+",
       "commit": "faf402fa5a12494ce8cef89d39d3ab1de8ea0323",
       "initialized": true,
       "remote_commit_reachable": "local",

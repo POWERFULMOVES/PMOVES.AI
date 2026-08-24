@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-05 15:09 UTC",
+  "generated_at": "2026-08-22 21:14 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
-    "errors": 0,
+    "errors": 1,
     "warnings": 0
   },
   "results": [
@@ -11,15 +11,21 @@
       "name": "PMOVES-E2b-Spells",
       "path": "PMOVES-E2b-Spells",
       "url": "https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git",
-      "status_prefix": " ",
-      "commit": "049731c122a051c9993e02934cc06b0e896d53dd",
+      "status_prefix": "+",
+      "commit": "75a3ec6324959ad1d30afb47e224848b666b8e14",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
-      "top_level_files_ok": true,
+      "top_level_files_ok": false,
       "nested_gitmodules_ok": true,
       "python_compile_ok": "skip",
-      "findings": []
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
     }
   ]
 }

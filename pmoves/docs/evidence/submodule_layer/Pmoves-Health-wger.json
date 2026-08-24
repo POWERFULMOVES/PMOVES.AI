@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:10 UTC",
+  "generated_at": "2026-08-22 21:15 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -11,7 +11,7 @@
       "name": "Pmoves-Health-wger",
       "path": "Pmoves-Health-wger",
       "url": "https://github.com/POWERFULMOVES/Pmoves-Health-wger.git",
-      "status_prefix": " ",
+      "status_prefix": "+",
       "commit": "341c7e065d7de801ea42ffeb8d0421f310cef0a9",
       "initialized": true,
       "remote_commit_reachable": "local",

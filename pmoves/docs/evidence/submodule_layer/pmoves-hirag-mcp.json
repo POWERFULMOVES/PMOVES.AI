@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:16 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "pmoves-hirag-mcp",
+      "path": "pmoves-hirag-mcp",
+      "url": "https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git",
+      "status_prefix": " ",
+      "commit": "0ec18d886643bf16a9b415873b4898409421c024",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
+    }
+  ]
+}

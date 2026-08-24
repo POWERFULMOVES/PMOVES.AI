@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-05 15:12 UTC",
+  "generated_at": "2026-08-22 21:26 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
-    "errors": 0,
+    "errors": 1,
     "warnings": 0
   },
   "results": [
@@ -11,15 +11,21 @@
       "name": "PMOVES-tensorzero",
       "path": "PMOVES-tensorzero",
       "url": "https://github.com/POWERFULMOVES/PMOVES-tensorzero.git",
-      "status_prefix": " ",
-      "commit": "3f941d337b26da8c70f4aa48306817f7794fbfbd",
+      "status_prefix": "+",
+      "commit": "6b1bc23f540899764a9fcbc32ad85b4e24dbae47",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
-      "top_level_files_ok": true,
+      "top_level_files_ok": false,
       "nested_gitmodules_ok": true,
       "python_compile_ok": "skip",
-      "findings": []
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
     }
   ]
 }

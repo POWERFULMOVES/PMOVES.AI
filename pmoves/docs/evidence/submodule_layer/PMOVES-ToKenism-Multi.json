@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:13 UTC",
+  "generated_at": "2026-08-22 21:27 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -11,7 +11,7 @@
       "name": "PMOVES-ToKenism-Multi",
       "path": "PMOVES-ToKenism-Multi",
       "url": "https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git",
-      "status_prefix": " ",
+      "status_prefix": "+",
       "commit": "be887747f829fe1779d806501f99e00583a0085d",
       "initialized": true,
       "remote_commit_reachable": "local",

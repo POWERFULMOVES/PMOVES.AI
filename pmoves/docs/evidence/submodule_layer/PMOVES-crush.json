@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:08 UTC",
+  "generated_at": "2026-08-22 21:12 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -11,7 +11,7 @@
       "name": "PMOVES-crush",
       "path": "PMOVES-crush",
       "url": "https://github.com/POWERFULMOVES/PMOVES-crush.git",
-      "status_prefix": " ",
+      "status_prefix": "+",
       "commit": "087dfe7effd3d91c720b0af37fc57baf035d8154",
       "initialized": true,
       "remote_commit_reachable": "local",

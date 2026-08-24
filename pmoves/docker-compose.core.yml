@@ -874,6 +874,7 @@ services:
   supabase-vector:
     <<: *tier-supabase-hardened
     image: timberio/vector:0.28.1-alpine
+    entrypoint: ["/bin/sh", "-c", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; exec /usr/local/bin/vector \"$$@\"", "--"]
     command: ["--config", "/etc/vector/vector.yml"]
     restart: unless-stopped
     profiles:
@@ -896,7 +897,11 @@ services:
     # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
     - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD-SHELL", "vector validate /etc/vector/vector.yml || exit 1"]
+      # Docker execs the healthcheck SEPARATELY, with the container's configured
+      # environment -- so it still sees the empty proxy vars the entrypoint unsets
+      # for the main process. Without this the container runs fine and is marked
+      # unhealthy forever (observed: FailingStreak 472).
+      test: ["CMD-SHELL", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; vector validate /etc/vector/vector.yml || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

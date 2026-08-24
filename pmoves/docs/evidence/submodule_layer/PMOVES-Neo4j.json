@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-08-22 21:21 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 2,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-Neo4j",
+      "path": "PMOVES-Neo4j",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-neo4j.git",
+      "status_prefix": "+",
+      "commit": "c68156edf24164435ab1ac257ec633134c2887f7",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": false,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "REQUIRED_FILES_ANY_MISSING",
+          "message": "None of required files found: ['README.md', 'PMOVES.AI_INTEGRATION.md']"
+        },
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
+    }
+  ]
+}

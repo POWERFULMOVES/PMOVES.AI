@@ -1,5 +1,5 @@
 # Submodule Layer Validation
-_Generated: 2026-04-05 15:11 UTC_
+_Generated: 2026-08-22 21:20 UTC_
 
 ## Summary
 - Manifest: `pmoves/configs/submodule_layer_validation_manifest.json`
@@ -11,7 +11,7 @@ _Generated: 2026-04-05 15:11 UTC_
 ## Matrix
 | Submodule | Initialized | Status | Remote Commit | Docs(any) | Top-level Dossier | Nested .gitmodules | Python Compile |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `PMOVES-n8n` | yes | ` ` | `local` | yes | yes | ok | `skip` |
+| `PMOVES-n8n` | yes | `+` | `local` | yes | yes | ok | `skip` |
 
 ## Findings
 - No findings.

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:07 UTC",
+  "generated_at": "2026-08-22 21:11 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -11,7 +11,7 @@
       "name": "PMOVES-BotZ-gateway",
       "path": "PMOVES-BotZ-gateway",
       "url": "https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git",
-      "status_prefix": " ",
+      "status_prefix": "+",
       "commit": "8336b2fb5468b390df2a6a16186b8a7af17839c5",
       "initialized": true,
       "remote_commit_reachable": "local",

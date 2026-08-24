@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-05 15:05 UTC",
+  "generated_at": "2026-08-22 21:07 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
-    "errors": 0,
+    "errors": 1,
     "warnings": 0
   },
   "results": [
@@ -11,15 +11,21 @@
       "name": "PMOVES-A2UI",
       "path": "PMOVES-A2UI",
       "url": "https://github.com/POWERFULMOVES/PMOVES-A2UI.git",
-      "status_prefix": " ",
-      "commit": "2bac549045e08fb87fd7b891366f48a492863374",
+      "status_prefix": "+",
+      "commit": "2d961ba2dbb05e03099883d249d6df55600d67ee",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
-      "top_level_files_ok": true,
+      "top_level_files_ok": false,
       "nested_gitmodules_ok": true,
       "python_compile_ok": "skip",
-      "findings": []
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
     }
   ]
 }

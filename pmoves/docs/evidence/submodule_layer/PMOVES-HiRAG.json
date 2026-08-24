@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:10 UTC",
+  "generated_at": "2026-08-22 21:16 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -18,7 +18,7 @@
       "required_files_any_ok": true,
       "top_level_files_ok": true,
       "nested_gitmodules_ok": true,
-      "python_compile_ok": "skip",
+      "python_compile_ok": "pass",
       "findings": []
     }
   ]

@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-08-22 21:25 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 0,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-space-agent",
+      "path": "PMOVES-space-agent",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-space-agent.git",
+      "status_prefix": " ",
+      "commit": "6e734fbf30a5d9512bf3af7228e6df57f18f9e1c",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": []
+    }
+  ]
+}

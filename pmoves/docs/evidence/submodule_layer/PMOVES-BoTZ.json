@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-05 15:07 UTC",
+  "generated_at": "2026-08-22 21:10 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
-    "errors": 0,
+    "errors": 1,
     "warnings": 0
   },
   "results": [
@@ -11,15 +11,21 @@
       "name": "PMOVES-BoTZ",
       "path": "PMOVES-BoTZ",
       "url": "https://github.com/POWERFULMOVES/PMOVES-BoTZ.git",
-      "status_prefix": " ",
-      "commit": "9970ab75a5edb5c50b2cd5e9d6805a652d1b3d5d",
+      "status_prefix": "+",
+      "commit": "d125e8a1497eeef010a2025a4faceeb96116a2bf",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
       "top_level_files_ok": true,
       "nested_gitmodules_ok": true,
-      "python_compile_ok": "pass",
-      "findings": []
+      "python_compile_ok": "fail",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "PYTHON_COMPILE_FAIL",
+          "message": "'(' was never closed (train_sft_example.py, line 58)"
+        }
+      ]
     }
   ]
 }

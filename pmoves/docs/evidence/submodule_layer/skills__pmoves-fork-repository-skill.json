@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:30 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "skills/pmoves-fork-repository-skill",
+      "path": "skills/pmoves-fork-repository-skill",
+      "url": "https://github.com/POWERFULMOVES/pmoves-fork-repository-skill.git",
+      "status_prefix": "-",
+      "commit": "ba196f646bc99416fa3669de5255487c3e22e089",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}

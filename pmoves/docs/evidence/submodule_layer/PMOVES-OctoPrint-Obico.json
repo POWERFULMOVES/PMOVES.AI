@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:21 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-OctoPrint-Obico",
+      "path": "PMOVES-OctoPrint-Obico",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-OctoPrint-Obico.git",
+      "status_prefix": "-",
+      "commit": "2ad3666fcd81cef5903d3d32ac286ff228b2a6b5",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}

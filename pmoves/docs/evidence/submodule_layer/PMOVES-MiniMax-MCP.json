@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-22 21:19 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-MiniMax-MCP",
+      "path": "PMOVES-MiniMax-MCP",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-MiniMax-MCP.git",
+      "status_prefix": "-",
+      "commit": "f4d6a61ba176d714637c0c1bf7231c6ece019cf9",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}

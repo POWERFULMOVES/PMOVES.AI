@@ -1,14 +1,23 @@
 {
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
-  "modules_checked": 44,
-  "total_errors": 1,
+  "modules_checked": 72,
+  "total_errors": 49,
   "total_warnings": 0,
   "runs": [
     {
+      "name": "pbnj",
+      "path": "pbnj",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/pbnj.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/pbnj.md"
+    },
+    {
       "name": "PMOVES-a0-plugins",
       "path": "PMOVES-a0-plugins",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-a0-plugins.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-a0-plugins.md"
@@ -16,8 +25,8 @@
     {
       "name": "PMOVES-A2UI",
       "path": "PMOVES-A2UI",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-A2UI.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-A2UI.md"
@@ -43,11 +52,20 @@
     {
       "name": "Pmoves-AgentGym-RL",
       "path": "Pmoves-AgentGym-RL",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-AgentGym-RL.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-AgentGym-RL.md"
+    },
+    {
+      "name": "PMOVES-agents.md",
+      "path": "PMOVES-agents.md",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-agents.md.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-agents.md.md"
     },
     {
       "name": "PMOVES-Archon",
@@ -61,8 +79,8 @@
     {
       "name": "PMOVES-autoresearch",
       "path": "PMOVES-autoresearch",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-autoresearch.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-autoresearch.md"
@@ -70,8 +88,8 @@
     {
       "name": "PMOVES-BoTZ",
       "path": "PMOVES-BoTZ",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-BoTZ.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-BoTZ.md"
@@ -95,10 +113,19 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-cipher.md"
     },
     {
+      "name": "pmoves-cipher-mcp",
+      "path": "pmoves-cipher-mcp",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/pmoves-cipher-mcp.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/pmoves-cipher-mcp.md"
+    },
+    {
       "name": "PMOVES-ClawZ",
       "path": "PMOVES-ClawZ",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-ClawZ.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-ClawZ.md"
@@ -124,8 +151,8 @@
     {
       "name": "PMOVES-Danger-infra",
       "path": "PMOVES-Danger-infra",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Danger-infra.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Danger-infra.md"
@@ -151,8 +178,8 @@
     {
       "name": "PMOVES-E2B-Danger-Room",
       "path": "PMOVES-E2B-Danger-Room",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2B-Danger-Room.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2B-Danger-Room.md"
@@ -160,8 +187,8 @@
     {
       "name": "PMOVES-E2B-Danger-Room-Desktop",
       "path": "PMOVES-E2B-Danger-Room-Desktop",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2B-Danger-Room-Desktop.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2B-Danger-Room-Desktop.md"
@@ -169,8 +196,8 @@
     {
       "name": "pmoves-e2b-mcp-server",
       "path": "pmoves-e2b-mcp-server",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/pmoves-e2b-mcp-server.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/pmoves-e2b-mcp-server.md"
@@ -178,11 +205,20 @@
     {
       "name": "PMOVES-E2b-Spells",
       "path": "PMOVES-E2b-Spells",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2b-Spells.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2b-Spells.md"
+    },
+    {
+      "name": "PMOVES-fluidd",
+      "path": "PMOVES-fluidd",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-fluidd.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-fluidd.md"
     },
     {
       "name": "PMOVES-Headscale",
@@ -203,6 +239,15 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-Health-wger.md"
     },
     {
+      "name": "PMOVES-hermes-agent",
+      "path": "PMOVES-hermes-agent",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-hermes-agent.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-hermes-agent.md"
+    },
+    {
       "name": "PMOVES-HiRAG",
       "path": "PMOVES-HiRAG",
       "returncode": 0,
@@ -212,6 +257,15 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-HiRAG.md"
     },
     {
+      "name": "pmoves-hirag-mcp",
+      "path": "pmoves-hirag-mcp",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/pmoves-hirag-mcp.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/pmoves-hirag-mcp.md"
+    },
+    {
       "name": "Pmoves-hyperdimensions",
       "path": "Pmoves-hyperdimensions",
       "returncode": 0,
@@ -219,6 +273,15 @@
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-hyperdimensions.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-hyperdimensions.md"
+    },
+    {
+      "name": "PMOVES-jcodemunch-mcp",
+      "path": "PMOVES-jcodemunch-mcp",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-jcodemunch-mcp.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-jcodemunch-mcp.md"
     },
     {
       "name": "PMOVES-Jellyfin",
@@ -239,10 +302,19 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-Jellyfin-AI-Media-Stack.md"
     },
     {
+      "name": "pmoves-keygen",
+      "path": "pmoves-keygen",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/pmoves-keygen.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/pmoves-keygen.md"
+    },
+    {
       "name": "PMOVES-llama-throughput-lab",
       "path": "PMOVES-llama-throughput-lab",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.md"
@@ -257,6 +329,42 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-MAI-UI.md"
     },
     {
+      "name": "Pmoves-minimax-cli",
+      "path": "Pmoves-minimax-cli",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-minimax-cli.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-minimax-cli.md"
+    },
+    {
+      "name": "PMOVES-MiniMax-MCP",
+      "path": "PMOVES-MiniMax-MCP",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-MiniMax-MCP.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-MiniMax-MCP.md"
+    },
+    {
+      "name": "Pmoves-MiniMax-Provider-Verifier",
+      "path": "Pmoves-MiniMax-Provider-Verifier",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-MiniMax-Provider-Verifier.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-MiniMax-Provider-Verifier.md"
+    },
+    {
+      "name": "PMOVES-moonraker-obico",
+      "path": "PMOVES-moonraker-obico",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-moonraker-obico.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-moonraker-obico.md"
+    },
+    {
       "name": "PMOVES-n8n",
       "path": "PMOVES-n8n",
       "returncode": 0,
@@ -266,13 +374,49 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-n8n.md"
     },
     {
+      "name": "PMOVES-nats-server",
+      "path": "PMOVES-nats-server",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-nats-server.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-nats-server.md"
+    },
+    {
       "name": "PMOVES-Neo4j",
       "path": "PMOVES-Neo4j",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 2,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Neo4j.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Neo4j.md"
+    },
+    {
+      "name": "PMOVES-obico-server",
+      "path": "PMOVES-obico-server",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-obico-server.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-obico-server.md"
+    },
+    {
+      "name": "PMOVES-OctoPrint-Obico",
+      "path": "PMOVES-OctoPrint-Obico",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-OctoPrint-Obico.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-OctoPrint-Obico.md"
+    },
+    {
+      "name": "PMOVES-ollama",
+      "path": "PMOVES-ollama",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-ollama.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-ollama.md"
     },
     {
       "name": "PMOVES-Open-Notebook",
@@ -284,10 +428,37 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Open-Notebook.md"
     },
     {
+      "name": "PMOVES-OpenRoom",
+      "path": "PMOVES-OpenRoom",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-OpenRoom.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-OpenRoom.md"
+    },
+    {
+      "name": "PMOVES-OrcaSlicer",
+      "path": "PMOVES-OrcaSlicer",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-OrcaSlicer.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-OrcaSlicer.md"
+    },
+    {
+      "name": "PMOVES-pinokio",
+      "path": "PMOVES-pinokio",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-pinokio.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-pinokio.md"
+    },
+    {
       "name": "PMOVES-Pinokio-Ultimate-TTS-Studio",
       "path": "PMOVES-Pinokio-Ultimate-TTS-Studio",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Pinokio-Ultimate-TTS-Studio.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Pinokio-Ultimate-TTS-Studio.md"
@@ -302,6 +473,15 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Pipecat.md"
     },
     {
+      "name": "Pmoves-pretext",
+      "path": "Pmoves-pretext",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-pretext.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-pretext.md"
+    },
+    {
       "name": "PMOVES-Remote-View",
       "path": "PMOVES-Remote-View",
       "returncode": 0,
@@ -311,10 +491,28 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Remote-View.md"
     },
     {
-      "name": "PMOVES-supabase",
-      "path": "PMOVES-supabase",
+      "name": "PMOVES-space-agent",
+      "path": "PMOVES-space-agent",
       "returncode": 0,
       "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-space-agent.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-space-agent.md"
+    },
+    {
+      "name": "PMOVES-Spark-VSS",
+      "path": "PMOVES-Spark-VSS",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Spark-VSS.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Spark-VSS.md"
+    },
+    {
+      "name": "PMOVES-supabase",
+      "path": "PMOVES-supabase",
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-supabase.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-supabase.md"
@@ -322,8 +520,8 @@
     {
       "name": "PMOVES-surf",
       "path": "PMOVES-surf",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-surf.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-surf.md"
@@ -331,8 +529,8 @@
     {
       "name": "PMOVES-Tailscale",
       "path": "PMOVES-Tailscale",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Tailscale.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Tailscale.md"
@@ -340,8 +538,8 @@
     {
       "name": "PMOVES-tensorzero",
       "path": "PMOVES-tensorzero",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-tensorzero.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-tensorzero.md"
@@ -399,6 +597,60 @@
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/pmoves__integrations__archon.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/pmoves__integrations__archon.md"
+    },
+    {
+      "name": "skills/PMOVES-agent-sandbox-skill",
+      "path": "skills/PMOVES-agent-sandbox-skill",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/skills__PMOVES-agent-sandbox-skill.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/skills__PMOVES-agent-sandbox-skill.md"
+    },
+    {
+      "name": "skills/PMOVES-awesome-agent-skills",
+      "path": "skills/PMOVES-awesome-agent-skills",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/skills__PMOVES-awesome-agent-skills.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/skills__PMOVES-awesome-agent-skills.md"
+    },
+    {
+      "name": "skills/Pmoves-claude-d3js-skill",
+      "path": "skills/Pmoves-claude-d3js-skill",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/skills__Pmoves-claude-d3js-skill.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/skills__Pmoves-claude-d3js-skill.md"
+    },
+    {
+      "name": "skills/pmoves-fork-repository-skill",
+      "path": "skills/pmoves-fork-repository-skill",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/skills__pmoves-fork-repository-skill.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/skills__pmoves-fork-repository-skill.md"
+    },
+    {
+      "name": "skills/Pmoves-skills",
+      "path": "skills/Pmoves-skills",
+      "returncode": 1,
+      "errors": 2,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/skills__Pmoves-skills.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/skills__Pmoves-skills.md"
+    },
+    {
+      "name": "skills/PMOVES-skills",
+      "path": "skills/PMOVES-skills",
+      "returncode": 1,
+      "errors": 2,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/skills__PMOVES-skills.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/skills__PMOVES-skills.md"
     }
   ]
 }

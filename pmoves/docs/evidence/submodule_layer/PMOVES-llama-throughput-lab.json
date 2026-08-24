@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-05 15:10 UTC",
+  "generated_at": "2026-08-22 21:18 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
-    "errors": 0,
+    "errors": 1,
     "warnings": 0
   },
   "results": [
@@ -11,15 +11,21 @@
       "name": "PMOVES-llama-throughput-lab",
       "path": "PMOVES-llama-throughput-lab",
       "url": "https://github.com/POWERFULMOVES/PMOVES-llama-throughput-lab.git",
-      "status_prefix": " ",
-      "commit": "30279632ac94a2ff2c189a699e1ee9e5b7f697ff",
+      "status_prefix": "+",
+      "commit": "823922faf0c938c484398ca6c52942c18d1e1082",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
-      "top_level_files_ok": true,
+      "top_level_files_ok": false,
       "nested_gitmodules_ok": true,
       "python_compile_ok": "skip",
-      "findings": []
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
     }
   ]
 }

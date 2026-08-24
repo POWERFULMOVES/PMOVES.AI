@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05 15:06 UTC",
+  "generated_at": "2026-08-22 21:08 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -11,19 +11,19 @@
       "name": "PMOVES-Agent-Zero",
       "path": "PMOVES-Agent-Zero",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git",
-      "status_prefix": " ",
-      "commit": "2e000aa304e52ed47ca4d5eb4a9ce64a35c916a2",
+      "status_prefix": "+",
+      "commit": "7e2d06d3faa8cabd48b8573ee63b927ce1b01eee",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
-      "top_level_files_ok": true,
+      "top_level_files_ok": false,
       "nested_gitmodules_ok": true,
-      "python_compile_ok": "fail",
+      "python_compile_ok": "pass",
       "findings": [
         {
           "level": "ERROR",
-          "code": "PYTHON_COMPILE_FAIL",
-          "message": "invalid syntax (subagents.py, line 13)"
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
         }
       ]
     }
