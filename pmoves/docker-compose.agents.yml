@@ -229,6 +229,18 @@ services:
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    # Neutralise the inherited ANTHROPIC_API_KEY for archon ONLY.
+    #
+    # archon pulls env.shared via the tier-agent-hardened anchor, and env.shared
+    # carries a metered ANTHROPIC_API_KEY. Claude Code prefers that key over
+    # CLAUDE_CODE_OAUTH_TOKEN, so with both present the coding plan is never used.
+    # Verified in-container against Claude Code 2.1.209:
+    #   key + token  -> "Credit balance is too low"     (key wins)
+    #   token only   -> "401 Invalid bearer token"      (token used)
+    #   key="" + tok -> "401 Invalid bearer token"      (empty == absent)
+    # An empty assignment is therefore sufficient; no entrypoint unset needed.
+    # Scoped to archon: other services keep whatever env.shared provides.
+    - ANTHROPIC_API_KEY=
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
     # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
     # Default empty (uses $PATH). The upstream Archon Dockerfile installs
