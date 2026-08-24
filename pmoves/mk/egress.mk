@@ -315,8 +315,30 @@ yt-wealth-videos: ## Show wealth-tagged videos (investing, entrepreneurship, bud
 # invocations keep working; prefer JUICEFS_HOST.
 JUICEFS_HOST ?= $(or $(JUICEFS_HOST_IP),pmoves-b850-ai-top)
 
-juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST=<hostname> DB_PASS=<supabase-db-pass>
-	@JUICEFS_HOST=$(JUICEFS_HOST) DB_PASS=$(or $(DB_PASS),$(error DB_PASS required)) bash scripts/juicefs-cross-node-setup.sh
+juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make juicefs-cross-node-setup JUICEFS_HOST=<hostname> [META_ROLE=juicefs_meta] [DB_PASS=<pw>]. DB_PASS falls back to the funnel-delivered JUICEFS_META_PASSWORD.
+	@# META_ROLE MUST be forwarded or the scoped-role cutover is unreachable through the
+	@# canonical make path — the script would silently default to supabase_admin (#2683
+	@# added META_ROLE to the script but the target never passed it), and pg_hba now
+	@# REJECTS supabase_admin from the tailnet (#2702), so that default fails.
+	@#
+	@# Password precedence: explicit DB_PASS, else the funnel-delivered
+	@# JUICEFS_META_PASSWORD, resolved AT RECIPE TIME through scripts/with-env.sh —
+	@# the canonical loader (env.shared* -> tier files -> .env* overlays, mirroring
+	@# compose layering). It cannot be $$(JUICEFS_META_PASSWORD): make populates its
+	@# variables only from the environment and Makefiles, and nothing includes the
+	@# generated tier files, so a make-variable reference is empty on exactly the
+	@# nodes the funnel just delivered to. Same idiom as mk/yt-cookies.mk:18, and
+	@# the lesson infra.mk:603 already records as a prior Codex P1.
+	@#
+	@# DB_PASS passes as the sub-process ENVIRONMENT, not argv, and is handed to
+	@# JuiceFS via META_PASSWORD, so it never appears in `ps`. Passing it as
+	@# `make ... DB_PASS=...` does put it in make's own argv — prefer the funnel.
+	@#
+	@# No $(error) here: the script already fails with a better message that names
+	@# both DB_PASS and the funnel path.
+	@JUICEFS_HOST=$(JUICEFS_HOST) META_ROLE=$(or $(META_ROLE),supabase_admin) \
+	  DB_PASS="$(or $(DB_PASS),$$(bash scripts/with-env.sh printenv JUICEFS_META_PASSWORD 2>/dev/null || true))" \
+	  bash scripts/juicefs-cross-node-setup.sh
 
 # The check that would have caught the cross-node blocker months earlier. Storage is
 # baked into a volume at format time: "file" means the data blocks live on the
