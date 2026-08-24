@@ -64,7 +64,15 @@ UNIX_DELEGATE = """#!/usr/bin/env bash
 #     ~/.local/bin/claude-pmoves as `ln -sf` to the TRACKED launcher. A plain
 #     write follows that symlink and overwrites the repo file with this
 #     wrapper, which then execs itself. The installer unlinks first.
-exec "{target}" "$@"
+#
+# `exec bash`, not `exec` on the target: the target is a TRACKED repo file, and
+# its exec bit is a property of the git index, not of this installer. Every
+# *-pmoves source except pmoves-mini and crush-pmoves shipped 100644, so a bare
+# exec died with "Permission denied" on every fresh clone. `make -C pmoves
+# claude-pmoves` already invokes them as `bash <script>`, which is why the Make
+# path worked while the PATH command did not -- and why the breakage stayed
+# invisible. All seven sources are #!/usr/bin/env bash, so this is exact.
+exec bash "{target}" "$@"
 """
 
 

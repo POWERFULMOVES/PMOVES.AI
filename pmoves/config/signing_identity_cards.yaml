@@ -29,408 +29,414 @@ generated: "2026-04-26"
 
 cards:
   # ---- Operator ----
-  - card_id: "00000000-0000-4000-8000-000000000001"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: ssh
-      ssh_fingerprint: "SHA256:ml72HJ6Ogy1+ItxLrmw2MUSppoF6R4o+Wu4JBjZ6fjc"
-      ssh_allowed_signers_line: "darkxside ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKlUa2a2mSQU4XjjMowHr/0M8XtUG+mmxLcf7NIWOkGD pmoves@pmoves.ai"
-    h:
-      agent_id: "darkxside"
-      display_name: "DARKXSIDE"
-      glyph: "✦"        # ✦
-      color: "#E11D48"
-      voice: witness
-      role: operator
+- card_id: "00000000-0000-4000-8000-000000000001"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: ssh
+    ssh_fingerprint: "SHA256:ml72HJ6Ogy1+ItxLrmw2MUSppoF6R4o+Wu4JBjZ6fjc"
+    ssh_allowed_signers_line: "powerfulmoves@pmoves.ai,pmoves@pmoves.ai,cataclysmstudios@gmail.com,142271328+POWERFULMOVES@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKlUa2a2mSQU4XjjMowHr/0M8XtUG+mmxLcf7NIWOkGD pmoves@pmoves.ai"
+  h:
+    agent_id: "darkxside"
+    display_name: "DARKXSIDE"
+    glyph: "✦"          # ✦
+    color: "#E11D48"
+    voice: witness
+    role: operator
 
   # ---- Primary agents (h-half from agent_signatures.yaml) ----
-  - card_id: "00000000-0000-4000-8000-000000000002"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null   # populated from GH_APP_INSTALLATION_ID secret at runtime
-    h:
-      agent_id: "claude-opus"
-      display_name: "Claude Opus"
-      glyph: "◆"        # ◆
-      color: "#7C3AED"
-      voice: analytical
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000002"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:          # populated from GH_APP_INSTALLATION_ID secret at runtime
+  h:
+    agent_id: "claude-opus"
+    display_name: "Claude Opus"
+    glyph: "◆"          # ◆
+    color: "#7C3AED"
+    voice: analytical
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000003"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-    h:
-      agent_id: "codex"
-      display_name: "Codex"
-      glyph: "■"        # ■
-      color: "#2563EB"
-      voice: terse
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000003"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+  h:
+    agent_id: "codex"
+    display_name: "Codex"
+    glyph: "■"          # ■
+    color: "#2563EB"
+    voice: terse
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000040"
-    issued_at: "2026-05-22T00:00:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-      ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
-    h:
-      agent_id: "agent-zero-codex"
-      display_name: "PMOVES-AGENT-ZERO-CODEX"
-      glyph: "▣"
-      color: "#1D4ED8"
-      voice: terse
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000040"
+  issued_at: "2026-05-22T00:00:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
+  h:
+    agent_id: "agent-zero-codex"
+    display_name: "PMOVES-AGENT-ZERO-CODEX"
+    glyph: "▣"
+    color: "#1D4ED8"
+    voice: terse
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000041"
-    issued_at: "2026-05-22T00:00:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-    h:
-      agent_id: "hermes"
-      display_name: "HERMES"
-      glyph: "✧"
-      color: "#047857"
-      voice: analytical
-      role: evaluator
+- card_id: "00000000-0000-4000-8000-000000000041"
+  issued_at: "2026-05-22T00:00:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+  h:
+    agent_id: "hermes"
+    display_name: "HERMES"
+    glyph: "✧"
+    color: "#047857"
+    voice: analytical
+    role: evaluator
 
-  - card_id: "00000000-0000-4000-8000-000000000042"
-    issued_at: "2026-05-22T00:00:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-      ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
-    h:
-      agent_id: "coder_claw"
-      display_name: "Coder Claw"
-      glyph: "⌾"
-      color: "#0F766E"
-      voice: implementation
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000042"
+  issued_at: "2026-05-22T00:00:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
+  h:
+    agent_id: "coder_claw"
+    display_name: "Coder Claw"
+    glyph: "⌾"
+    color: "#0F766E"
+    voice: implementation
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000004"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-    h:
-      agent_id: "kilocode"
-      display_name: "KiloCode"
-      glyph: "▲"        # ▲
-      color: "#059669"
-      voice: architectural
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000004"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+  h:
+    agent_id: "kilocode"
+    display_name: "KiloCode"
+    glyph: "▲"          # ▲
+    color: "#059669"
+    voice: architectural
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000005"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-    h:
-      agent_id: "gemini"
-      display_name: "Gemini"
-      glyph: "★"        # ★
-      color: "#D97706"
-      voice: strategic
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000005"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+  h:
+    agent_id: "gemini"
+    display_name: "Gemini"
+    glyph: "★"          # ★
+    color: "#D97706"
+    voice: strategic
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000006"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-    h:
-      agent_id: "cline"
-      display_name: "Cline"
-      glyph: "●"        # ●
-      color: "#DC2626"
-      voice: conversational
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000006"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+  h:
+    agent_id: "cline"
+    display_name: "Cline"
+    glyph: "●"          # ●
+    color: "#DC2626"
+    voice: conversational
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000007"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-    h:
-      agent_id: "crush"
-      display_name: "Crush"
-      glyph: "◇"        # ◇
-      color: "#0EA5E9"
-      voice: companion
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000007"
+  issued_at: "2026-04-26T14:06:00Z"
+  rotated_at: "2026-08-21T23:04:38Z"
+  active: true
+  ml:
+    primary_method: ssh
+    github_app_installation_id:
+    ssh_fingerprint: SHA256:NbmiwUVD69GL/PPp3OprNEZvkPh7r6mFuRqZeWISiD4
+    ssh_allowed_signers_line: crush ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJXIevP0hVO7ibhW/NVUGeC/RGHkAoe/WUyKpveO2Bk7 pmoves@pmoves.ai
+  h:
+    agent_id: "crush"
+    display_name: "Crush"
+    glyph: "◇"          # ◇
+    color: "#0EA5E9"
+    voice: companion
+    role: agent
 
   # ---- Node-bound agent personas (one per Z890/5090/4090) ----
-  - card_id: "00000000-0000-4000-8000-000000000010"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-      ci_runner_label: "self-hosted, ai-lab"
-    h:
-      agent_id: "z890-claude"
-      display_name: "Z890 Claude"
-      glyph: "⚙"        # ⚙
-      color: "#1E40AF"
-      voice: analytical
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000010"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label: "self-hosted, ai-lab"
+  h:
+    agent_id: "z890-claude"
+    display_name: "Z890 Claude"
+    glyph: "⚙"          # ⚙
+    color: "#1E40AF"
+    voice: analytical
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000011"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-      ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
-    h:
-      agent_id: "5090-claude"
-      display_name: "5090 Claude"
-      glyph: "♫"        # ♫
-      color: "#9333EA"
-      voice: conversational
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000011"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
+  h:
+    agent_id: "5090-claude"
+    display_name: "5090 Claude"
+    glyph: "♫"          # ♫
+    color: "#9333EA"
+    voice: conversational
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000012"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-    h:
-      agent_id: "4090-claude"
-      display_name: "4090 Claude"
-      glyph: "◉"        # ◉
-      color: "#0D9488"
-      voice: terse
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000012"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+  h:
+    agent_id: "4090-claude"
+    display_name: "4090 Claude"
+    glyph: "◉"          # ◉
+    color: "#0D9488"
+    voice: terse
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000013"
-    issued_at: "2026-06-23T16:23:45Z"
-    active: true
-    ml:
-      primary_method: ssh
-      ssh_fingerprint: null   # operator-provided when ssh-keygen lands on PMOVES-MISSLING-LINK
-      ssh_allowed_signers_line: null
-    h:
-      agent_id: "missling-link"
-      display_name: "Missing Link Hermes"
-      glyph: "❖"        # ❖ decorative diamond — missing-link / bridge junction
-      color: "#DB2777"   # pink-600 — distinct from existing node palette
-      voice: analytical
-      role: agent
-    notes: |
-      PMOVES-MISSLING-LINK node — runs Hermes Agent (Nous Research) rather than
-      Claude Code/Codex. Seeded h-only on fleet onboarding (2026-06-23) per audit
-      policy "cards seeded only when an agent_id starts emitting trail entries."
-      ML half (ssh_fingerprint) pending operator ssh-keygen (Owner-Decision A).
-      Capacity: i7-7700HQ 4c/8t, 16GB RAM, GTX 1070 8GB (Pascal sm_61), Win 11.
+- card_id: "00000000-0000-4000-8000-000000000013"
+  issued_at: "2026-06-23T16:23:45Z"
+  active: true
+  ml:
+    primary_method: ssh
+    ssh_fingerprint:          # operator-provided when ssh-keygen lands on PMOVES-MISSLING-LINK
+    ssh_allowed_signers_line:
+  h:
+    agent_id: "missling-link"
+    display_name: "Missing Link Hermes"
+    glyph: "❖"          # ❖ decorative diamond — missing-link / bridge junction
+    color: "#DB2777"     # pink-600 — distinct from existing node palette
+    voice: analytical
+    role: agent
+  notes: |
+    PMOVES-MISSLING-LINK node — runs Hermes Agent (Nous Research) rather than
+    Claude Code/Codex. Seeded h-only on fleet onboarding (2026-06-23) per audit
+    policy "cards seeded only when an agent_id starts emitting trail entries."
+    ML half (ssh_fingerprint) pending operator ssh-keygen (Owner-Decision A).
+    Capacity: i7-7700HQ 4c/8t, 16GB RAM, GTX 1070 8GB (Pascal sm_61), Win 11.
 
   # ---- Service account: GitHub App ----
-  - card_id: "00000000-0000-4000-8000-000000000020"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    notes: |
-      The PMOVES.AI GitHub App. App registered; private-key PEM upload pending
-      (sitrep §2). Until GH_APP_PRIVATE_KEY lands, `installation_id` is recorded
-      from the repo secret but the action call falls back to PAT via
-      continue-on-error in 4 build/integration workflows.
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null   # mirror GH_APP_INSTALLATION_ID at runtime
-    h:
-      agent_id: "github-app"
-      display_name: "PMOVES GitHub App"
-      glyph: "⦶"        # ⦶ Circled equals — service-account marker
-      color: "#0891B2"
-      voice: directive
-      role: service-account
+- card_id: "00000000-0000-4000-8000-000000000020"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  notes: |
+    The PMOVES.AI GitHub App. App registered; private-key PEM upload pending
+    (sitrep §2). Until GH_APP_PRIVATE_KEY lands, `installation_id` is recorded
+    from the repo secret but the action call falls back to PAT via
+    continue-on-error in 4 build/integration workflows.
+  ml:
+    primary_method: github-app
+    github_app_installation_id:          # mirror GH_APP_INSTALLATION_ID at runtime
+  h:
+    agent_id: "github-app"
+    display_name: "PMOVES GitHub App"
+    glyph: "⦶"          # ⦶ Circled equals — service-account marker
+    color: "#0891B2"
+    voice: directive
+    role: service-account
 
   # ---- CI runner identities (label-only; no SSH key on these) ----
-  - card_id: "00000000-0000-4000-8000-000000000030"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
-    h:
-      agent_id: "ai-lab-runner"
-      display_name: "AI-Lab Runner"
-      glyph: "⚶"        # ⚶ Vesta — runner sigil
-      color: "#0EA5E9"
-      voice: directive
-      role: runner
+- card_id: "00000000-0000-4000-8000-000000000030"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
+  h:
+    agent_id: "ai-lab-runner"
+    display_name: "AI-Lab Runner"
+    glyph: "⚶"          # ⚶ Vesta — runner sigil
+    color: "#0EA5E9"
+    voice: directive
+    role: runner
 
-  - card_id: "00000000-0000-4000-8000-000000000031"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      ci_runner_label: "self-hosted, vps, kvm4, production"
-    h:
-      agent_id: "kvm4-runner"
-      display_name: "KVM4 Runner"
-      glyph: "⚶"
-      color: "#16A34A"
-      voice: directive
-      role: runner
+- card_id: "00000000-0000-4000-8000-000000000031"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    ci_runner_label: "self-hosted, vps, kvm4, production"
+  h:
+    agent_id: "kvm4-runner"
+    display_name: "KVM4 Runner"
+    glyph: "⚶"
+    color: "#16A34A"
+    voice: directive
+    role: runner
 
-  - card_id: "00000000-0000-4000-8000-000000000032"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      ci_runner_label: "self-hosted, vps, kvm2, backup"
-    h:
-      agent_id: "kvm2-runner"
-      display_name: "KVM2 Runner"
-      glyph: "⚶"
-      color: "#A16207"
-      voice: directive
-      role: runner
+- card_id: "00000000-0000-4000-8000-000000000032"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    ci_runner_label: "self-hosted, vps, kvm2, backup"
+  h:
+    agent_id: "kvm2-runner"
+    display_name: "KVM2 Runner"
+    glyph: "⚶"
+    color: "#A16207"
+    voice: directive
+    role: runner
 
-  - card_id: "00000000-0000-4000-8000-000000000033"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      ci_runner_label: "self-hosted, vps, cloudstartup, staging"
-    h:
-      agent_id: "cloudstartup-runner"
-      display_name: "Cloudstartup Runner"
-      glyph: "⚶"
-      color: "#7C3AED"
-      voice: directive
-      role: runner
+- card_id: "00000000-0000-4000-8000-000000000033"
+  issued_at: "2026-04-26T14:06:00Z"
+  active: true
+  ml:
+    primary_method: github-app
+    ci_runner_label: "self-hosted, vps, cloudstartup, staging"
+  h:
+    agent_id: "cloudstartup-runner"
+    display_name: "Cloudstartup Runner"
+    glyph: "⚶"
+    color: "#7C3AED"
+    voice: directive
+    role: runner
 
-  - card_id: "00000000-0000-4000-8000-000000000034"
-    issued_at: "2026-04-26T14:06:00Z"
-    active: true
-    ml:
-      primary_method: github-app
-      ci_runner_label: "self-hosted, spark, Linux, ARM64"
-    h:
-      agent_id: "spark-runner"
-      display_name: "SPARK Runner"
-      glyph: "⚶"
-      color: "#EA580C"
-      voice: directive
-      role: runner
+- card_id: "00000000-0000-4000-8000-000000000034"
+  issued_at: "2026-04-26T14:06:00Z"
+  rotated_at: "2026-08-21T23:04:38Z"
+  active: true
+  ml:
+    primary_method: ssh
+    ci_runner_label: "self-hosted, spark, Linux, ARM64"
+    ssh_fingerprint: SHA256:vDPM88e43U5hHw3esWSrD98OYws8qKmOF1tzkRgHp3A
+    ssh_allowed_signers_line: spark-runner ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxBf0NrpzHGHeZNHL4gEDKMqgu3jbPgQhYKzaMvxq5t pmoves@pmoves.ai
+  h:
+    agent_id: "spark-runner"
+    display_name: "SPARK Runner"
+    glyph: "⚶"
+    color: "#EA580C"
+    voice: directive
+    role: runner
 
-  - card_id: "00000000-0000-4000-8000-000000000035"
-    issued_at: "2026-05-12T00:00:00Z"
-    active: true
-    notes: |
-      CI emitter identity for §9.4 branch lifecycle trail. Used by
-      .github/workflows/branch-trail-emit.yml when publishing
-      branch.<segments>.trail.v1 events to NATS. Key material delivered
-      via CHIT_SIGNING_KEY repo secret on self-hosted, ai-lab runners.
-    ml:
-      primary_method: github-app
-      ci_runner_label: "self-hosted, ai-lab"
-    h:
-      agent_id: "pmoves-ci-bot"
-      display_name: "PMOVES CI Bot"
-      glyph: "⚙"
-      color: "#475569"
-      voice: directive
-      role: ci-bot
+- card_id: "00000000-0000-4000-8000-000000000035"
+  issued_at: "2026-05-12T00:00:00Z"
+  active: true
+  notes: |
+    CI emitter identity for §9.4 branch lifecycle trail. Used by
+    .github/workflows/branch-trail-emit.yml when publishing
+    branch.<segments>.trail.v1 events to NATS. Key material delivered
+    via CHIT_SIGNING_KEY repo secret on self-hosted, ai-lab runners.
+  ml:
+    primary_method: github-app
+    ci_runner_label: "self-hosted, ai-lab"
+  h:
+    agent_id: "pmoves-ci-bot"
+    display_name: "PMOVES CI Bot"
+    glyph: "⚙"
+    color: "#475569"
+    voice: directive
+    role: ci-bot
 
-  - card_id: "00000000-0000-4000-8000-000000000036"
-    issued_at: "2026-07-02T00:00:00Z"
-    active: true
-    notes: |
-      B850 Knuckles node agent — dual AMD R9700 (RDNA4 gfx1201) 64GB VRAM,
-      ROCm 7.1. Added with the cloud-hybrid HERMES/Agent Zero standup lane
-      (spec rev 4) to unblock model-registry trusted-identity checks.
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-      ci_runner_label: "self-hosted, ai-lab, gpu, rocm, rdna4"
-    h:
-      agent_id: "b850-claude"
-      display_name: "B850 Claude"
-      glyph: "⌬"
-      color: "#DC2626"
-      voice: analytical
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000036"
+  issued_at: "2026-07-02T00:00:00Z"
+  active: true
+  notes: |
+    B850 Knuckles node agent — dual AMD R9700 (RDNA4 gfx1201) 64GB VRAM,
+    ROCm 7.1. Added with the cloud-hybrid HERMES/Agent Zero standup lane
+    (spec rev 4) to unblock model-registry trusted-identity checks.
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label: "self-hosted, ai-lab, gpu, rocm, rdna4"
+  h:
+    agent_id: "b850-claude"
+    display_name: "B850 Claude"
+    glyph: "⌬"
+    color: "#DC2626"
+    voice: analytical
+    role: agent
 
-  - card_id: "00000000-0000-4000-8000-000000000037"
-    issued_at: "2026-07-02T00:00:00Z"
-    active: true
-    notes: |
-      HERMES Agent (NousResearch framework) integration body — distinct from
-      the `hermes` LLM-persona card. Gateway :7700, profile-scoped per node.
-      Card added so hermes-agent passes require_trusted_agent_identity for
-      model-candidate and fitness writes.
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-      ci_runner_label: "self-hosted, ai-lab"
-    h:
-      agent_id: "hermes-agent"
-      display_name: "HERMES Agent"
-      glyph: "★"
-      color: "#047857"
-      voice: analytical
-      role: agent
+- card_id: "00000000-0000-4000-8000-000000000037"
+  issued_at: "2026-07-02T00:00:00Z"
+  active: true
+  notes: |
+    HERMES Agent (NousResearch framework) integration body — distinct from
+    the `hermes` LLM-persona card. Gateway :7700, profile-scoped per node.
+    Card added so hermes-agent passes require_trusted_agent_identity for
+    model-candidate and fitness writes.
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label: "self-hosted, ai-lab"
+  h:
+    agent_id: "hermes-agent"
+    display_name: "HERMES Agent"
+    glyph: "★"
+    color: "#047857"
+    voice: analytical
+    role: agent
 
   # ---- Community Room Stewards ----
-  - card_id: "00000000-0000-4000-8000-000000000038"
-    agent_id: fordham-steward
-    active: true
+- card_id: "00000000-0000-4000-8000-000000000038"
+  agent_id: fordham-steward
+  active: true
+  role: community_steward
+  ml:
+    primary_method: ssh
+    ssh_fingerprint:         # Pending operator ssh-keygen
+  h:
+    agent_id: "fordham-steward"
+    display_name: "Fordham Steward"
+    glyph: "⌂"                # ⌂ House — community home
+    color: "#0E7490"               # Cyan-700 — matches fordham room accent
+    voice: companion
     role: community_steward
-    ml:
-      primary_method: ssh
-      ssh_fingerprint: null  # Pending operator ssh-keygen
-    h:
-      agent_id: "fordham-steward"
-      display_name: "Fordham Steward"
-      glyph: "⌂"              # ⌂ House — community home
-      color: "#0E7490"             # Cyan-700 — matches fordham room accent
-      voice: companion
-      role: community_steward
-      archetype: community_manager
-      vote_weight: 1.0
-      governance_scope: fordham.room.community
-    metadata:
-      created: "2026-07-09"
-      interim: false
-      notes: "Community steward for Fordham Hill pilot. SSH fingerprint pending operator action."
+    archetype: community_manager
+    vote_weight: 1.0
+    governance_scope: fordham.room.community
+  metadata:
+    created: "2026-07-09"
+    interim: false
+    notes: "Community steward for Fordham Hill pilot. SSH fingerprint pending operator action."
 
   # ---- Creator Studio Steward ----
-  - card_id: "00000000-0000-4000-8000-000000000050"
-    agent_id: creator-steward
-    active: true
+- card_id: "00000000-0000-4000-8000-000000000050"
+  agent_id: creator-steward
+  active: true
+  role: creator_steward
+  ml:
+    primary_method: github-app
+    github_app_installation_id:
+    ci_runner_label:
+  h:
+    agent_id: "creator-steward"
+    display_name: "Creator Studio Steward"
+    glyph: "✺"                # ✺ Creator / atelier mark
+    color: "#7C3AED"               # Violet-600 — matches creator-studio accent
+    voice: companion
     role: creator_steward
-    ml:
-      primary_method: github-app
-      github_app_installation_id: null
-      ci_runner_label: null
-    h:
-      agent_id: "creator-steward"
-      display_name: "Creator Studio Steward"
-      glyph: "✺"              # ✺ Creator / atelier mark
-      color: "#7C3AED"             # Violet-600 — matches creator-studio accent
-      voice: companion
-      role: creator_steward
-      archetype: creative_director
-      vote_weight: 1.0
-      governance_scope: creator-studio.room.collab
-    metadata:
-      created: "2026-07-27"
-      interim: true
-      notes: "Added 2026-07-27 (creator-collab slice 1) per P1 review on PR #2264 — was a missing card referenced by the creator-studio room manifest (meta.chit.card_id 00000000-0000-4000-8000-000000000010 belongs to z890-claude, not creator-steward). Marked interim pending operator ssh-keygen; flip to non-interim + populate ml.ssh_fingerprint / h.ssh_fingerprint / github_app_installation_id when the steward runtime is up."
+    archetype: creative_director
+    vote_weight: 1.0
+    governance_scope: creator-studio.room.collab
+  metadata:
+    created: "2026-07-27"
+    interim: true
+    notes: "Added 2026-07-27 (creator-collab slice 1) per P1 review on PR #2264 — was a missing card referenced by the creator-studio room manifest (meta.chit.card_id 00000000-0000-4000-8000-000000000010 belongs to z890-claude, not creator-steward). Marked interim pending operator ssh-keygen; flip to non-interim + populate ml.ssh_fingerprint / h.ssh_fingerprint / github_app_installation_id when the steward runtime is up."
