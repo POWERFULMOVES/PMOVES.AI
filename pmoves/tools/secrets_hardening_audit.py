@@ -50,14 +50,16 @@ def candidate_files() -> Iterable[Path]:
     allowed = {".md", ".py", ".sh", ".yaml", ".yml", ".json", ".txt"}
     # os.walk with in-place `dirnames` pruning, not rglob("*") + filter. rglob
     # TRAVERSES every excluded subtree and only then discards the results, so
-    # filtering afterwards would remove the false findings but not their cost --
-    # the walk still descended into all 190 worktree copies. Pruning stops the
-    # descent instead: the walk is now ~13s.
+    # filtering afterwards removes the false findings but not their cost. Both were
+    # measured against the real repo, same 75329 files in scope and identical
+    # findings either way:
     #
-    # That is not the whole runtime. Measured against the real repo the full audit
-    # still takes ~6 minutes, dominated by reading the ~75k files that remain in
-    # scope, not by the walk. Worth attacking separately -- pruning fixes the
-    # wrong-results problem, not the slow-audit problem.
+    #   rglob + filter   walk 265.2s   total 904.4s
+    #   os.walk + prune  walk  12.9s   total 359.2s
+    #
+    # That is ~20x off the walk, but the audit is still NOT fast: ~6 minutes,
+    # dominated by reading the files that remain in scope rather than by the walk.
+    # Pruning fixes the wrong-results problem, not the slow-audit problem.
     for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
         here = Path(dirpath)
         dirnames[:] = [d for d in dirnames if not _is_pruned_dir(here, d)]
