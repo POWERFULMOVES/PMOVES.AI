@@ -133,6 +133,28 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     # ${MCP_GATEWAY_AUTH_TOKEN:?} — an unset value fails the whole `up`, and
     # file-wide interpolation means it would gate every service in that file.
     "MCP_GATEWAY_AUTH_TOKEN": {"tier": "agent", "required": True},
+    # Tier: data -- the scoped JuiceFS metadata role's password.
+    #
+    # The cross-node lane (handoffs/juicefs-meta-scoped-role-and-tailnet-exposure)
+    # created a non-superuser `juicefs_meta` Postgres role and cut B850's mount
+    # over to it. But the credential never entered the pipeline: it lives at
+    # /home/pmoves/.pmoves-secrets/juicefs_meta_pw -- a hand-placed file, under a
+    # different user's home, bind-mounted to /run/secrets/jfs_meta_pw, and
+    # referenced NOWHERE in this repo. So B850 works and no second node can be
+    # brought up without hand-copying a secret, which is the thing the funnel
+    # exists to prevent.
+    #
+    # This is now load-bearing rather than tidy: pg_hba (PR #2702) admits ONLY
+    # juicefs_meta from the tailnet and rejects every other role there, so a
+    # remote mount has no fallback credential -- it authenticates as this role
+    # or not at all.
+    #
+    # required=False, unlike its neighbours: only the nodes that actually mount
+    # pmoves-media need it. Under `--merge` (strict) a required slot fails the
+    # whole funnel on every node that legitimately lacks it. The silence that
+    # required=False buys elsewhere does not apply here -- an absent value fails
+    # loudly at mount time with an auth error, not quietly at runtime.
+    "JUICEFS_META_PASSWORD": {"tier": "data", "required": False},
     "NATS_EVENT_BUS_TOKEN": {"tier": "data", "required": True},
     "PMOVES_BRIDGE_TOKEN": {"tier": "worker", "required": True},
     # min_length=64 is not a style preference -- supabase-realtime is Phoenix, and
