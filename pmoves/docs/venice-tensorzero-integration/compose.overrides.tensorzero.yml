@@ -18,6 +18,14 @@ services:
     # `tensorzero/tensorzero:latest`, which is both the wrong repository and
     # unpinned -- a rebuild would silently move versions.
     image: tensorzero/gateway:2026.1.8
+    # The gateway image does NOT pick up the mounted config on its own -- it must
+    # be told. The live service passes the same flag (pmoves/docker-compose.yml,
+    # service tensorzero-gateway). Without it the container either exits looking
+    # for a default config or starts with none of the Venice routes below, which
+    # is the worse outcome: it comes up healthy and simply cannot route.
+    command:
+      - --config-file
+      - /app/config/tensorzero.toml
     restart: unless-stopped
     env_file: [.env, .env.tensorzero]
     volumes:
