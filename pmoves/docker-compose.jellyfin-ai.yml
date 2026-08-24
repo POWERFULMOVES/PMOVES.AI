@@ -1,3 +1,31 @@
+# ── Hardening envelopes ────────────────────────────────────────────────
+# Applied per PMOVES container-hardening standard (docs/security/SECURITY_RUNBOOK.md
+# §3, and the shape used by docker-compose.hardened.yml). Two variants because the
+# image families genuinely differ:
+#
+#   *-vendor   images whose entrypoint starts as root and drops privileges itself
+#              (linuxserver s6, neo4j, redis, ollama). They need the capabilities
+#              that permission-fixing and setuid/setgid dropping actually use.
+#              `no-new-privileges` is still safe here: it blocks execve GAINING
+#              privileges via a setuid binary; DROPPING privileges is unaffected.
+#
+#   *-built    the three images this repo builds. Since #2695 they ship a non-root
+#              USER of their own (65532/65532/101), so no capabilities are needed
+#              and `user:` can be pinned without guessing.
+#
+# read_only is deliberately NOT set on either. It requires enumerating every path
+# each service writes and providing a tmpfs or volume for each; guessing produces a
+# container that starts and then fails on first write, which is worse than an
+# unhardened one that works. That is its own change, per service.
+x-jf-hardened-vendor: &jf-hardened-vendor
+  cap_drop: ["ALL"]
+  cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"]
+  security_opt: ["no-new-privileges:true"]
+
+x-jf-hardened-built: &jf-hardened-built
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+
 x-jellyfin-env: &jellyfin-env
   PUID: ${JELLYFIN_PUID:-1000}
   PGID: ${JELLYFIN_PGID:-1000}
@@ -33,6 +61,7 @@ x-jellyfin-base: &jellyfin-base
 
 services:
   jellyfin:
+    <<: *jf-hardened-vendor
     <<: *jellyfin-base
     container_name: ${JELLYFIN_CONTAINER_NAME:-pmoves-jellyfin-ai}
     profiles: ["default", "jellyfin-ai"]
@@ -65,6 +94,7 @@ services:
     restart: unless-stopped
 
   jellyfin-vaapi:
+    <<: *jf-hardened-vendor
     <<: *jellyfin-base
     container_name: ${JELLYFIN_CONTAINER_NAME:-pmoves-jellyfin-ai}
     profiles: ["jellyfin-ai-vaapi"]
@@ -80,6 +110,7 @@ services:
       JELLYFIN_HWACCEL: vaapi
 
   jellyfin-nvenc:
+    <<: *jf-hardened-vendor
     <<: *jellyfin-base
     container_name: ${JELLYFIN_CONTAINER_NAME:-pmoves-jellyfin-ai}
     profiles: ["jellyfin-ai-nvenc"]
@@ -98,6 +129,7 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: ${JELLYFIN_NVIDIA_DRIVER_CAPABILITIES:-compute,video,utility}
 
   jellyfin-neo4j:
+    <<: *jf-hardened-vendor
     image: neo4j:5.26.22
     container_name: pmoves-jellyfin-neo4j
     profiles: ["default", "jellyfin-ai"]
@@ -120,6 +152,7 @@ services:
     restart: unless-stopped
 
   jellyfin-qwen-audio:
+    <<: *jf-hardened-vendor
     # OPT-IN fallback for nodes WITHOUT a native Ollama. The default path is
     # the MODEL SEAT on jellyfin-audio-processor (AUDIO_MODEL_URL/_ID below):
     # media-analysis models are a swappable seat served by native Ollama or
@@ -153,6 +186,8 @@ services:
               capabilities: [gpu]
 
   jellyfin-audio-processor:
+    <<: *jf-hardened-built
+    user: "65532:65532"
     build:
       context: ${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}/audio-processor
       dockerfile: Dockerfile
@@ -200,6 +235,7 @@ services:
       - jellyfin-neo4j
 
   jellyfin-redis:
+    <<: *jf-hardened-vendor
     image: redis:7-alpine
     container_name: ${JELLYFIN_REDIS_CONTAINER_NAME:-pmoves-jellyfin-redis}
     profiles: ["default", "jellyfin-ai"]
@@ -213,6 +249,8 @@ services:
     restart: unless-stopped
 
   jellyfin-api-gateway:
+    <<: *jf-hardened-built
+    user: "65532:65532"
     build:
       context: ${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}/api-gateway
       dockerfile: Dockerfile
@@ -254,6 +292,8 @@ services:
       - jellyfin-redis
 
   jellyfin-dashboard:
+    <<: *jf-hardened-built
+    user: "101:101"
     build:
       context: ${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}/dashboard
       dockerfile: Dockerfile
