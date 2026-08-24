@@ -189,15 +189,18 @@ services:
     # Database connection
     - GOTRUE_DB_DRIVER=postgres
     # PRECEDENCE TRAP (bit us 2026-08-23, during a real rotation).
-    # POSTGRES_PASSWORD_URLENCODED WINS over POSTGRES_PASSWORD here, and it is
-    # NOT a managed secret -- zero references in the CHIT manifest. So the funnel
-    # rotates POSTGRES_PASSWORD, reports success, and every DSN built from this
-    # chain keeps the OLD password. Three services (postgrest, gotrue, storage)
-    # came back 28P01 while holding a correct POSTGRES_PASSWORD in their env.
-    # It is cleared in secrets_cleared.yaml so hydration cannot restore it; the
-    # `:-` operator then falls through correctly on the empty value.
-    # Only set it again for an operator-supplied password containing characters
-    # that need URL-encoding -- and if you do, re-set it on EVERY rotation.
+    # POSTGRES_PASSWORD_URLENCODED wins over POSTGRES_PASSWORD here, and it is
+    # NOT sourced from the CHIT manifest -- it is emitted by
+    # tools/credential_urlencoder.py into env.tier-supabase.urlencoded, which
+    # compose loads LAST of all env files. So this chain resolves to whatever
+    # that encoder last wrote, overriding every other source.
+    #
+    # The encoder merges env.shared then env.tier-supabase (later wins), so it
+    # MUST run after secrets-funnel-sync. It used to run before, which meant a
+    # rotation re-published the PREVIOUS password as the winning value: the
+    # funnel reported success and postgrest, gotrue and storage came back 28P01
+    # holding a correct POSTGRES_PASSWORD in their own env. Order fixed in
+    # mk/codex.mk; see the note above the secrets-funnel target.
     - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
     # JWT configuration — standard names with legacy fallbacks
     - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
