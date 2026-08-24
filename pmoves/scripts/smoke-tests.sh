@@ -121,15 +121,19 @@ test_http_endpoint() {
     print_info "Testing: $url"
 
     if [ "$VERBOSE" = true ]; then
-        response=$(curl -sf --max-time "$TIMEOUT" -w "\n%{http_code}" "$url" 2>&1)
+        response=$(curl -s --max-time "$TIMEOUT" -w "\n%{http_code}" "$url" 2>&1)
         status=$?
         http_code=$(echo "$response" | tail -n1)
         body=$(echo "$response" | head -n-1)
     else
-        http_code=$(curl -sf --max-time "$TIMEOUT" -w "%{http_code}" -o /dev/null "$url" 2>/dev/null)
+        http_code=$(curl -s --max-time "$TIMEOUT" -w "%{http_code}" -o /dev/null "$url" 2>/dev/null)
         status=$?
     fi
 
+    # No -f on the two calls above: -f turns any 4xx into exit 22, so this helper
+    # could only ever assert a 2xx status -- $status -eq 0 rejected a 401 before
+    # http_code was ever compared. The http_code comparison is the real assertion;
+    # transport failures still surface as exit 7 (refused) and 28 (timeout).
     if [ $status -eq 0 ] && [ "$http_code" = "$expected_status" ]; then
         print_pass "$name"
         [ "$VERBOSE" = true ] && echo "       Response: $body"
@@ -309,7 +313,12 @@ main() {
     # Data Tier Services
     print_section "Data Tier Services"
     test_tcp_connectivity "Supabase Postgres" "localhost" "5432" "default"
-    test_http_endpoint "Supabase PostgREST" "http://localhost:3010/" "200" "default"
+    # 401, not 200. PostgREST runs with PGRST_JWT_SECRET and no anon role, so an
+    # unauthenticated GET is SUPPOSED to be refused. Asserting 200 meant the suite
+    # only went green while PostgREST was open to anonymous reads -- rewarding the
+    # insecure state -- and it began "failing" on B850 the moment that node revoked
+    # PUBLIC/anon grants. A 200 here now would be the finding.
+    test_http_endpoint "Supabase PostgREST (refuses anon)" "http://localhost:3010/" "401" "default"
     test_tcp_connectivity "Qdrant" "localhost" "6333" "default"
     test_http_endpoint "Qdrant health" "http://localhost:6333/healthz" "200" "default"
     test_tcp_connectivity "Neo4j HTTP" "localhost" "7474" "default"
