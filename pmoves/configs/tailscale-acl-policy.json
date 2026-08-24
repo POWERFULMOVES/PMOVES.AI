@@ -167,15 +167,29 @@
     }
   ],
 
-  // nodeAttrs intentionally empty. The only entry was a Funnel grant on tag:exit,
-  // removed 2026-08-23: nothing in this repo serves anything over Funnel. Public
-  // ingress is Traefik + Cloudflare DNS-01 (`certresolver=cf`, `websecure`) for
-  // auth/chit/health/media/notebook/persona/wealth.pmoves.ai. Every "funnel" match
-  // in the tree is `secrets-funnel`, the credential pipeline -- an unrelated name.
-  // A granted-but-unused capability is still attack surface: Funnel publishes to the
-  // public internet, and tag:exit is the one tag that already forwards all traffic.
-  // Re-add it here if a service is ever deliberately Funnel-served.
-  "nodeAttrs": [],
+  "nodeAttrs": [
+    // Funnel on tag:exit is LIVE, not vestigial. Recorded here because a grep for
+    // "funnel" is dominated by `secrets-funnel` -- the credential pipeline, an
+    // unrelated name -- which makes this grant look dead. It is not:
+    //
+    //   configs/pinokio-network-inventory.yaml:268-272
+    //     kvm2 (tailscale_tag: tag:exit) lists service "Tailscale-Funnel",
+    //     class: intentional -- "Tailscale Funnel for public ingress".
+    //   configs/tac_trees/public-tunnel.tac.yaml:51-57
+    //     TAC check l4.kvm2_up.tailscale_funnel runs `tailscale funnel status`
+    //     and expects active listeners. Cloudflare-Tunnel is the PRIMARY public
+    //     ingress; Funnel is the ALTERNATE, used when the operator wants the
+    //     tailnet-managed cert chain.
+    //
+    // Traefik + Cloudflare DNS-01 serves the seven *.pmoves.ai routers, so Funnel
+    // is not what fronts those. That is what makes this easy to misread as unused.
+    // Removing this grant breaks kvm2's documented Cloudflare-failover ingress.
+    // Retire it only together with those two operational contracts.
+    {
+      "target": ["tag:exit"],
+      "attr": ["funnel"]
+    }
+  ],
 
   "autoApprovers": {
     "exitNode": ["tag:exit"],
