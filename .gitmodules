@@ -211,6 +211,11 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
 	branch = PMOVES.AI-Edition-Hardened
 
+[submodule "PMOVES-agents.md"]
+	path = PMOVES-agents.md
+	url = https://github.com/POWERFULMOVES/PMOVES-agents.md.git
+	branch = main
+
 # =============================================================================
 # LLM Gateway & Model Services
 # =============================================================================
