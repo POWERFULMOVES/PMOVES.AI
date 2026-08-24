@@ -1,12 +1,29 @@
-version: "3.9"
+# Example overlay. Kept in step with the live definition in
+# pmoves/docker-compose.yml (service `tensorzero-gateway`) so copying from this
+# doc cannot teach a posture the fleet does not use.
+#
+# Port publishing follows the fleet idiom: <bind>:<host>:<container>, where BOTH
+# the bind address and the host port are variables.
+#   - bind defaults to 127.0.0.1, so a service is loopback-only until an operator
+#     opts into mesh exposure via env.mesh-bind.local. tools/port_audit.py flags
+#     any 0.0.0.0 binding not on that allowlist.
+#   - the host port defaults to something OTHER than the container port. The
+#     gateway listens on 3000 internally and publishes on 3030. Publishing
+#     3000:3000, as this file used to, puts a container port straight onto the
+#     host where it collides with anything else expecting 3000 -- and the
+#     README two files over already documents 3030 as the host port.
 services:
-  tensorzero:
-    image: tensorzero/tensorzero:latest
+  tensorzero-gateway:
+    # Pinned, and matching the live image name. This file previously said
+    # `tensorzero/tensorzero:latest`, which is both the wrong repository and
+    # unpinned -- a rebuild would silently move versions.
+    image: tensorzero/gateway:2026.1.8
     restart: unless-stopped
     env_file: [.env, .env.tensorzero]
     volumes:
       - ./tensorzero.toml:/app/config/tensorzero.toml:ro
-    ports: ["3000:3000"]
+    ports:
+      - ${TENSORZERO_BIND:-127.0.0.1}:${TENSORZERO_PORT:-3030}:3000
     depends_on: [clickhouse]
 
   clickhouse:
@@ -18,7 +35,8 @@ services:
       - CLICKHOUSE_PASSWORD=${TENSORZERO_CLICKHOUSE_PASSWORD:-changeme}
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-    ports: ["8123:8123"]
+    ports:
+      - ${CLICKHOUSE_BIND:-127.0.0.1}:${CLICKHOUSE_PORT:-8123}:8123
 
 volumes:
   clickhouse-data:

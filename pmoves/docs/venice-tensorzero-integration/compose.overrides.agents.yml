@@ -1,4 +1,11 @@
-version: "3.9"
+# Example overlay. Service name and URL match the live definition in
+# pmoves/docker-compose.yml.
+#
+# The gateway service is `tensorzero-gateway`, not `tensorzero`. This file
+# previously used the shorter name in both the URL and depends_on, so copying
+# it produced a container that resolved nothing and an unsatisfiable dependency.
+# Container-to-container traffic uses the CONTAINER port 3000; only the host
+# publish uses 3030 (see compose.overrides.tensorzero.yml).
 services:
   agent-zero:
     # image: <your existing agent-zero image>
@@ -6,12 +13,11 @@ services:
       - .env
       - .env.agent-zero.override
     environment:
-      - OPENAI_COMPAT_BASE_URL=${OPENAI_COMPAT_BASE_URL:-http://tensorzero:3000}
-    depends_on: [tensorzero]
+      - OPENAI_COMPAT_BASE_URL=${OPENAI_COMPAT_BASE_URL:-http://tensorzero-gateway:3000}
+    depends_on: [tensorzero-gateway]
 
   hi-rag-gateway-v2:
     # image: <your existing hi-rag gateway image>
     env_file:
       - .env
       - .env.hirag.override
-
