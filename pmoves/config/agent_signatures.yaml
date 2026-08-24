@@ -264,7 +264,7 @@ signatures:
       - agent-trails
       - character-persona-synthesis
       - prosodic-flow
-    description: "MiniMax M2.7 — native model backend for PMOVES.KiloCode operations. Theme: Transformers meets Bumblebee movie style evolution from 8-bit CLI origins through 16-bit PS2 era to holographic dimensions."
+    description: "MiniMax M3 — native model backend for PMOVES.KiloCode operations (m2.7/m2.1 fallback suits). Theme: Transformers meets Bumblebee movie style evolution from 8-bit CLI origins through 16-bit PS2 era to holographic dimensions."
     model_backend: true
     token_plan:
       api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
@@ -276,7 +276,8 @@ signatures:
         - ultra_highspeed: 30000
       quota_reset: rolling_5h
     model_suits:
-      - minimax-m2.7  # 1M token, primary
+      - MiniMax-M3  # verifier default ID (m3_format_check); current primary since June 2026
+      - minimax-m2.7  # 1M token, long-context fallback
       - minimax-m2.1  # 100K token, efficient
     agent_profile: minimax_edition
     alters:
