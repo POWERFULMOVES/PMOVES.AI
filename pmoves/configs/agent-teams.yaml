@@ -27,6 +27,7 @@ teams:
       - space_agent       # Port 3010 — spatial/canvas agent
       - a0_plugins        # Agent Zero community plugin index + validation CI
       - hermes_agent      # HERMES gateway/reasoning agent (hermes-agent.room.control)
+      - mavis             # MiniMax Edition orchestrator (pmoves.agent.task.v1 dispatcher; 5090/spark affinity)
       - missinglinc_validator  # External peer-review validator (DangerRuss frame; 4090-field.room.control; mint spec MISSINGLINC_MINT_SPEC.md)
 
   implementation:
