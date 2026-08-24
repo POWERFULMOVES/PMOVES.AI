@@ -83,14 +83,22 @@ listener instead (`NATS_LEAF_TOPOLOGY_ROLLOUT_RUNBOOK.md`).
 ```bash
 # On the target node (4090 / 5090). JUICEFS_HOST is the MagicDNS hostname of the
 # JuiceFS meta host (B850) — use the name confirmed in B850_BRINGBACK_RUNBOOK.md.
-# DB_PASS is the Supabase DB password, sourced from the CHIT secrets pipeline
-# (exported as an env var so it reaches JuiceFS via META_PASSWORD and never
-# appears in `ps` / `docker inspect`).
-export DB_PASS=...          # from the CHIT secrets pipeline — do not paste on a shared CLI
+# The credential is the SCOPED role's password, not the Supabase DB password.
+# That changed with the juicefs_meta cutover, and it is now enforced rather than
+# preferred: pg_hba admits ONLY juicefs_meta from the tailnet and REJECTS every
+# other role there (PR #2702). Reaching for the Supabase password here fails with
+# an auth error that looks like a bad secret rather than a rejected role.
+#
+# META_ROLE must be passed explicitly — the script defaults to supabase_admin for
+# back-compat, which is the rejected case above.
+#
+# Provisioning the credential is a Z890 (Infrastructure Coordinator) task; see
+# JUICEFS_META_CREDENTIAL_RUNBOOK.md. Once the funnel has delivered it, this node
+# has JUICEFS_META_PASSWORD in env.tier-data and needs no explicit DB_PASS.
 
 make -C pmoves juicefs-cross-node-setup \
   JUICEFS_HOST=pmoves-b850-ai-top \
-  DB_PASS="$DB_PASS"
+  META_ROLE=juicefs_meta
 ```
 
 This target (`pmoves/mk/egress.mk` → `pmoves/scripts/juicefs-cross-node-setup.sh`):
@@ -151,3 +159,5 @@ how the 5090 runs ComfyUI (WSL2 vs native).
 - Storage-backend gotcha (`file` vs `minio`) →
   `pmoves/docs/handoffs/juicefs-cross-node-storage-blocker-2026-08-04.md`.
 - Cache-bounds helper → `pmoves/scripts/juicefs-cache-bounds.sh`.
+- Metadata credential provisioning / rotation (Z890-owned, vendor-sourced) →
+  `JUICEFS_META_CREDENTIAL_RUNBOOK.md`.
