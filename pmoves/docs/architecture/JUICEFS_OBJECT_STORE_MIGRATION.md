@@ -76,8 +76,8 @@ browser. The interim last-real-tag pin (#1862) is now a permanently frozen base.
 | | |
 |---|---|
 | §4.1 said | **Postgres** on `supabase-db`, rationale included "supports the multi-node vision" |
-| Why it no longer holds | It does not. JuiceFS's [metadata engine docs](https://juicefs.com/docs/community/databases_for_metadata/) discuss **no** replication, failover or HA for PostgreSQL/MySQL, and [PostgreSQL best practices](https://juicefs.com/docs/community/postgresql_best_practices/) states: *"PostgreSQL does not yet support Multi-Shard (Distributed) transactions, do not use a multi-server distributed architecture for the JuiceFS metadata."* Postgres is a correct **single-server** choice and an incorrect HA one. |
-| Candidates | **TiKV** — *"It is recommended to use dedicated TiKV 5.0+ cluster as the metadata engine for JuiceFS"*, the only engine the docs push toward a dedicated cluster. **Redis Sentinel/Cluster** — explicitly supported, with the caveat that Cluster pins one filesystem's metadata to a single instance. **etcd** — documented as HA. |
+| Why it is reopened | Not because Postgres is disqualified — an earlier draft of this section said so and was **wrong**. JuiceFS's [metadata docs](https://juicefs.com/docs/community/databases_for_metadata/) discuss no replication/failover for PostgreSQL, and [best practices](https://juicefs.com/docs/community/postgresql_best_practices/) warns: *"PostgreSQL does not yet support Multi-Shard (Distributed) transactions, do not use a multi-server distributed architecture for the JuiceFS metadata."* **That warning is about multi-writer / sharded layouts, not about replication.** A replicated primary with standby failover behind ONE endpoint still presents JuiceFS a single writable Postgres — the warning does not apply. What is true is narrower: the *current* single `supabase-db` instance is not HA. That is a deployment gap, not an engine verdict. |
+| Candidates | **Replicated Postgres** (primary + standby behind one endpoint, e.g. Patroni/repmgr) — stays a live candidate, and is the *cheapest* option because it needs no metadata migration and no new engine in the stack. **TiKV** — *"It is recommended to use dedicated TiKV 5.0+ cluster as the metadata engine for JuiceFS"*, the only engine the docs push toward a dedicated cluster. **Redis Sentinel/Cluster** — explicitly supported; Cluster pins one filesystem's metadata to a single instance. **etcd** — documented as HA. Evaluate replicated-PG *first*: if it satisfies the requirement, the whole engine migration is avoidable. |
 | Migration cost | Bounded, and this is the load-bearing fact: `juicefs dump <old> \| juicefs load <new>`, and **object data is untouched** — no re-upload of the pool. `dump` has no snapshot consistency, so writes must be suspended for the cutover. |
 
 ### 0.6 The constraint that cannot be engineered away
@@ -87,23 +87,38 @@ operators keep viewing*. **One strongly-consistent metadata store cannot be
 writable on both sides of a partition.** Quorum lives on one side: 2 KVM + 1 local
 means losing the KVMs leaves 1/3 and local mounts fail regardless of engine.
 
-What the docs *do* offer is partial, and it is worth being precise rather than
-promising symmetry:
+**CORRECTION (this section previously claimed otherwise).** An earlier draft said
+lab nodes would "degrade to cached reads + buffered writes" during a VPS outage.
+That is **wrong**, and the repo already said so:
 
-- **Reads** — JuiceFS [client cache](https://juicefs.com/docs/community/guide/cache/):
-  cached blocks stay readable when the object store is unreachable; uncached
-  reads need connectivity. A large `--cache-dir`/`--cache-size` on lab nodes
-  turns "VPS down" into "cold data unavailable" rather than "filesystem down".
-- **Writes** — `--writeback` persists writes to local cache and uploads
-  asynchronously, so writes survive a VPS outage. Documented cost: data loss if
-  the cache filesystem fails before upload.
+> "The JuiceFS metadata + storage home is **B850** … the mounts below **fail** if
+> B850 is not up and reachable over the tailnet."
+> — `JUICEFS_CROSS_NODE_MOUNT_RUNBOOK.md`
 
-So the honest shape is **asymmetric**: quorum and object storage on the VPS side
-(uptime + egress, which is where they are wanted anyway); lab nodes as caching
-clients that degrade to cached-reads + buffered-writes during an outage. If true
-both-directions availability is required, that needs **two filesystems** with
-object-level replication, not one shared metadata store — a materially larger
-design, and it should be chosen deliberately rather than discovered.
+`--writeback` defers **object-block uploads**. It does not queue **metadata
+transactions**, and the block cache is not a metadata service. Opening, creating,
+renaming or stat-ing a file are all metadata operations, so when the metadata
+engine is unreachable the mount does not degrade — **it fails**. The cache
+changes how much object-store bandwidth you need, not whether the filesystem
+works.
+
+So the honest statement of asymmetric availability is blunter than the earlier
+draft:
+
+| | VPS (metadata + object store) up | VPS down |
+|---|---|---|
+| Operators / Jellyfin | works | works (co-located with the data) |
+| Lab nodes — `pmoves-media` | works | **unavailable**, not degraded |
+| Lab nodes — local work | works | works (local disks, unaffected) |
+
+That is a real cost and it should be chosen with eyes open, not discovered during
+an outage. The caching options remain worth setting for **bandwidth** reasons
+over a slow uplink — they are simply not an availability mechanism.
+
+If shared media must survive a VPS outage, the options are (a) reachable local
+metadata quorum — which contradicts putting quorum on the VPS side, or (b) a
+second filesystem with object-level replication and a reconciliation design.
+Both are materially larger than this spec.
 
 ### 0.7 Consequences for work in flight
 
@@ -116,9 +131,28 @@ design, and it should be chosen deliberately rather than discovered.
 - The cross-node preflight should gain a **bucket-URL reachability check** to
   close the gap in §0.2.
 
-### 0.8 What this revision does NOT decide
+### 0.8 Operator decisions (2026-08-24)
 
-Engine and backend are left open on purpose. This section replaces "confirmed"
+Two of the questions this section opened are now **closed by the operator**:
+
+- **Asymmetric availability is ACCEPTED.** With §0.6's correction in view: during
+  a VPS outage, lab nodes lose `pmoves-media` entirely — not a degraded mode.
+  Local work is unaffected. Operators keep viewing because Jellyfin and the data
+  are co-located on the VPS side, which is the direction that was wanted anyway.
+- **Object substrate: Garage, self-hosted on the KVMs.** Chosen over managed R2.
+  Its stated design target — multi-site over ordinary Internet links, for
+  "datacenters, offices, households" — is this fleet, and self-hosting keeps the
+  egress economics the KVMs exist to provide.
+
+Still open, and now the *first* question rather than a foregone one:
+
+- **Metadata engine.** §0.5's correction means replicated Postgres is a live
+  candidate, not a disqualified one — and it is the only candidate requiring no
+  engine migration. Evaluate it before TiKV.
+
+### 0.9 What this revision still does NOT decide
+
+The metadata engine is left open on purpose. This section replaces "confirmed"
 with the evidence needed to choose, and names the requirement each choice must
 now satisfy. §4.1 stays below, unedited, as the record of what was decided in
 June and why — the reasoning was sound for a single-node stack and should not be
