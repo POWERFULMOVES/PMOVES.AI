@@ -4535,8 +4535,25 @@ edge-health: ## Show edge status: containers, published ports, and which routers
 	    echo "  If those are running, they predate the labels and need recreating."; \
 	  fi
 
+.PHONY: jellyfin-ai-submodule-check
+jellyfin-ai-submodule-check: ## Fail early if the jellyfin-ai build contexts are not populated
+	@ctx="$${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}"; \
+	if [ ! -d "$$ctx/audio-processor" ]; then \
+	  echo "ERROR: jellyfin-ai build contexts not found under $$ctx" >&2; \
+	  echo "" >&2; \
+	  echo "The three images build FROM the submodule, so it must be populated." >&2; \
+	  echo "A fresh clone or a git worktree does not get it, and Compose reports" >&2; \
+	  echo "this as 'context not found' rather than 'submodule missing' -- which" >&2; \
+	  echo "is why this check exists instead of letting the build fail obscurely." >&2; \
+	  echo "" >&2; \
+	  echo "  git submodule update --init Pmoves-Jellyfin-AI-Media-Stack" >&2; \
+	  echo "" >&2; \
+	  echo "(or set PMOVES_JELLYFIN_AI_ROOT to an existing checkout)" >&2; \
+	  exit 1; \
+	fi
+
 .PHONY: up-jellyfin-ai
-up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
+up-jellyfin-ai: ensure-env-shared jellyfin-ai-submodule-check ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
 	@echo "→ Starting Jellyfin AI overlay..."
 	@docker network create pmoves-net >/dev/null 2>&1 || true
 	@docker network create pmoves_api >/dev/null 2>&1 || true
@@ -4555,12 +4572,12 @@ down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@echo "✔ Jellyfin AI overlay down"
 
 .PHONY: jellyfin-ai-compose
-jellyfin-ai-compose: ensure-env-shared ## Run docker compose against the Jellyfin AI overlay. Usage: make jellyfin-ai-compose ARGS="up -d --build jellyfin-audio-processor"
+jellyfin-ai-compose: ensure-env-shared jellyfin-ai-submodule-check ## Run docker compose against the Jellyfin AI overlay. Usage: make jellyfin-ai-compose ARGS="up -d --build jellyfin-audio-processor"
 	@if [ -z "$(strip $(ARGS))" ]; then 		echo "Usage: make jellyfin-ai-compose ARGS=\"<docker compose args>\""; 		exit 1; 	fi
 	@$(JELLYFIN_AI_DC) --profile jellyfin-ai $(ARGS)
 
 .PHONY: up-jellyfin-ai-nvenc
-up-jellyfin-ai-nvenc: ensure-env-shared ## Start Jellyfin AI with NVENC hardware transcoding (RTX 4090)
+up-jellyfin-ai-nvenc: ensure-env-shared jellyfin-ai-submodule-check ## Start Jellyfin AI with NVENC hardware transcoding (RTX 4090)
 	@echo "→ Starting Jellyfin AI overlay with NVENC..."
 	@docker network create pmoves-net >/dev/null 2>&1 || true
 	@docker network create pmoves_api >/dev/null 2>&1 || true
