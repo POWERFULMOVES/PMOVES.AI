@@ -229,18 +229,35 @@ services:
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
-    # Neutralise the inherited ANTHROPIC_API_KEY for archon ONLY.
+    # -- Coding-plan auth for the bundled Claude Code CLI --
     #
-    # archon pulls env.shared via the tier-agent-hardened anchor, and env.shared
-    # carries a metered ANTHROPIC_API_KEY. Claude Code prefers that key over
-    # CLAUDE_CODE_OAUTH_TOKEN, so with both present the coding plan is never used.
-    # Verified in-container against Claude Code 2.1.209:
-    #   key + token  -> "Credit balance is too low"     (key wins)
-    #   token only   -> "401 Invalid bearer token"      (token used)
-    #   key="" + tok -> "401 Invalid bearer token"      (empty == absent)
-    # An empty assignment is therefore sufficient; no entrypoint unset needed.
-    # Scoped to archon: other services keep whatever env.shared provides.
+    # Two separate facts, both measured in-container against Claude Code 2.1.209
+    # (the binary the Agent SDK ships at
+    #  /app/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude):
+    #
+    # 1. That CLI does NOT read CLAUDE_CODE_OAUTH_TOKEN. It reads
+    #    ANTHROPIC_AUTH_TOKEN, which it sends as `Authorization: Bearer`.
+    #      ANTHROPIC_AUTH_TOKEN=<plan token>     -> OK
+    #      CLAUDE_CODE_OAUTH_TOKEN=<same token>  -> 401 Invalid bearer token
+    #    The same token authenticates fine against the API with a Bearer header,
+    #    so this is about which variable the CLI reads, not the credential.
+    #    CLAUDE_CODE_OAUTH_TOKEN is still set above because the Archon TS server
+    #    exits(1) at boot if none of its expected auth vars is present -- it gates
+    #    startup, it does not authenticate the CLI.
+    #
+    # 2. ANTHROPIC_API_KEY OUTRANKS the bearer token, so it must be emptied or the
+    #    plan is never reached:
+    #      api key + AUTH_TOKEN    -> "Credit balance is too low"  (key wins)
+    #      AUTH_TOKEN alone        -> OK
+    #      api key="" + AUTH_TOKEN -> OK                           (empty == absent)
+    #    Emptying is sufficient; no vector-style entrypoint `unset` wrapper needed.
+    #    This is NOT about one stale key: the account bills through a coding plan,
+    #    so any ANTHROPIC_API_KEY it carries is creditless. Verified against both
+    #    the pre- and post-rotation keys -- both "Credit balance is too low".
+    #
+    # Scoped to archon: other services keep what the shared env provides.
     - ANTHROPIC_API_KEY=
+    - ANTHROPIC_AUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
     # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
     # Default empty (uses $PATH). The upstream Archon Dockerfile installs
