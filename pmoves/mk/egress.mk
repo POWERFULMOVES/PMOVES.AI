@@ -322,12 +322,13 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 	@# REJECTS supabase_admin from the tailnet (#2702), so that default fails.
 	@#
 	@# Password precedence: explicit DB_PASS, else the funnel-delivered
-	@# JUICEFS_META_PASSWORD read from env.tier-data AT RECIPE TIME. It has to be the
-	@# shell form $$(grep ...) and NOT $$(JUICEFS_META_PASSWORD): make populates its
+	@# JUICEFS_META_PASSWORD, resolved AT RECIPE TIME through scripts/with-env.sh —
+	@# the canonical loader (env.shared* -> tier files -> .env* overlays, mirroring
+	@# compose layering). It cannot be $$(JUICEFS_META_PASSWORD): make populates its
 	@# variables only from the environment and Makefiles, and nothing includes the
-	@# generated tier files — so a make-variable reference is empty exactly on the
-	@# nodes the funnel just delivered to. Same shell-read pattern as line ~229 in
-	@# this file. `cut -d= -f2-` (not -f2) so a value containing '=' is not truncated.
+	@# generated tier files, so a make-variable reference is empty on exactly the
+	@# nodes the funnel just delivered to. Same idiom as mk/yt-cookies.mk:18, and
+	@# the lesson infra.mk:603 already records as a prior Codex P1.
 	@#
 	@# DB_PASS passes as the sub-process ENVIRONMENT, not argv, and is handed to
 	@# JuiceFS via META_PASSWORD, so it never appears in `ps`. Passing it as
@@ -336,7 +337,7 @@ juicefs-cross-node-setup: ## Mount JuiceFS on this node (run on remote): make ju
 	@# No $(error) here: the script already fails with a better message that names
 	@# both DB_PASS and the funnel path.
 	@JUICEFS_HOST=$(JUICEFS_HOST) META_ROLE=$(or $(META_ROLE),supabase_admin) \
-	  DB_PASS="$(or $(DB_PASS),$$(grep -m1 '^JUICEFS_META_PASSWORD=' env.tier-data 2>/dev/null | cut -d= -f2-))" \
+	  DB_PASS="$(or $(DB_PASS),$$(bash scripts/with-env.sh printenv JUICEFS_META_PASSWORD 2>/dev/null || true))" \
 	  bash scripts/juicefs-cross-node-setup.sh
 
 # The check that would have caught the cross-node blocker months earlier. Storage is
