@@ -1,7 +1,10 @@
 
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-yt-dlp==2026.7.4
+yt-dlp  # deliberately UNPINNED. yt-dlp ships ~nightly because extraction breaks
+        # when sites change, so a hard pin guarantees a broken extractor. The live
+        # service does the same: services/pmoves-yt/Dockerfile installs
+        # yt-dlp[default] unpinned unless YTDLP_VERSION is set for a fork or a bump.
 pydantic>=2.0.0
 aiofiles==23.2.1
 python-multipart>=0.0.32
