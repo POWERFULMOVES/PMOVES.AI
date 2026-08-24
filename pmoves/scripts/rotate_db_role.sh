@@ -79,8 +79,19 @@ unset PMOVES_ROTATE_VALUE
 cat <<EOF
 ✔ $ROLE rotated in Postgres AND $KEY funnelled. STILL TO DO:
   (1) recreate the consumers holding the old value (e.g. juicefs-mount)
-  (2) seed/rotate the off-box copy — the GitHub Prod secret.
-      Nothing in this repo writes to GitHub secrets, deliberately: that
-      direction is the trust boundary, and runnerless nodes hydrate FROM it
-      via secrets-funnel-from-prod.
+  (2) seed/rotate the off-box copy — the GitHub Prod environment secret:
+
+        ./pmoves/tools/push-gh-secrets.sh --env Prod --only \$KEY --dry-run
+        ./pmoves/tools/push-gh-secrets.sh --env Prod --only \$KEY
+
+      That script reads env.shared and whitelists against the CHIT secrets
+      manifest, so a key must be a registered CHIT slot before it can be
+      pushed — the gate, not an obstacle.
+
+      Use that script, not credential_setup.py: the latter writes
+      /repos/OWNER/REPO/actions/secrets, which is REPO-level with no
+      environment support, so it cannot target Prod at all.
+
+      Runnerless nodes (5090) then hydrate FROM Prod via
+      secrets-funnel-from-prod.
 EOF
