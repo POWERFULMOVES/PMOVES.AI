@@ -28,6 +28,14 @@ jobs:
     #
     # This does not replace CodeRabbit or the Codex bot. It triages what they
     # produce, which is the step that went missing while this was off.
+    # Deliberately NOT same-repo-gated, unlike claude-code-review.yml and
+    # review-autofix.yml. The fork-secret restriction applies to `pull_request`
+    # events; this fires on `pull_request_review`, which runs in the BASE repo
+    # context and does receive secrets. review-autofix.yml shares this trigger
+    # and gates on same-repo for a different reason it states itself: it holds
+    # contents:write and pushes to the PR head, so it needs head==base. This job
+    # only posts a comment, so triage works on fork PRs and gating it would
+    # remove that.
     if: |
       github.event.review.user.login == 'coderabbitai' ||
       github.event.review.user.login == 'coderabbitai[bot]' ||

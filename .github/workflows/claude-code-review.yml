@@ -39,6 +39,13 @@ jobs:
     # agents on self-hosted runners). It adds the pre-push lane those cannot
     # cover: a diff-scoped review that runs on PR open/update rather than after
     # a human or bot notices something.
+    #
+    # Same-repo only. GitHub withholds Actions secrets from fork-originated
+    # `pull_request` runs, so on a fork PR CLAUDE_CODE_OAUTH_TOKEN is empty and
+    # this action fails instead of reviewing -- recreating the failing-check
+    # noise `if: false` was added to stop. Skipping is correct there: there is
+    # no credential to review with. Mirrors review-autofix.yml.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # Least-privilege for a comment-only reviewer: it reads the diff and posts
     # PR review comments — it does not push commits or write attestations.
