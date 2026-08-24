@@ -165,6 +165,28 @@ services:
     networks:
     - pmoves_data
     - pmoves_api  # Services on pmoves_api need DB access
+    # Step 4 of the juicefs cross-node lane. pmoves_data and pmoves_api are both
+    # `internal: true`, and a published port on a container attached only to
+    # internal networks is not reachable -- the port maps, nothing can dial it.
+    # Multi-homing onto pmoves_external (internal: false) is what actually plumbs
+    # it. Same pattern the NATS bus already uses.
+    #
+    # This does NOT put the database on the open internet. Reachability is
+    # governed by two things:
+    #   1. SUPABASE_DB_BIND -- set to the node's TAILNET address, not 0.0.0.0, so
+    #      the listener exists only on the tailnet interface. Default stays
+    #      127.0.0.1, so a node that does not set it publishes nothing new.
+    #   2. pg_hba (supabase/config/pg_hba.conf) -- admits ONLY juicefs_meta from
+    #      100.64.0.0/10 and REJECTS every other role there. That is the control
+    #      that keeps this from being a superuser surface; the scoped role alone
+    #      never was.
+    #
+    # sslmode: the cross-node DSN carries sslmode=disable. JuiceFS's PostgreSQL
+    # best-practices doc advises against it. Recorded decision rather than an
+    # inherited default: WireGuard encrypts the tailnet transport, so the session
+    # is not on the wire in plaintext, and the metadata role is non-superuser and
+    # pg_hba-scoped. Revisit if the DB is ever reachable off-tailnet.
+    - pmoves_external
 
     deploy:
       resources:
