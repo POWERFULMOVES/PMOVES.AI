@@ -134,7 +134,30 @@ def warn_if_not_on_path(bin_dir: Path) -> None:
         print(f"WARN: {bin_dir} is not on PATH - add it to your shell profile.")
 
 
-def check_host_clis(strict: bool) -> int:
+def _cli_version(check_cmd: str) -> str:
+    """Best-effort version capture: run the manifest's check command, keep line 1."""
+    import shlex
+    import subprocess
+
+    try:
+        completed = subprocess.run(
+            shlex.split(check_cmd),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return ""
+    stream = completed.stdout or completed.stderr
+    for line in stream.splitlines():
+        line = line.strip()
+        if line:
+            return line[:120]
+    return ""
+
+
+def check_host_clis(strict: bool, report_versions: bool = False) -> int:
     """Doctor mode: validate host CLIs against configs/cli_tools.yaml."""
     import shutil
 
@@ -159,7 +182,8 @@ def check_host_clis(strict: bool) -> int:
         binary = shutil.which(name)
         required = bool(spec.get("required", False))
         if binary:
-            print(f"  OK       {name}: {binary}")
+            version = f"  {_cli_version(spec.get('check', ''))}" if report_versions and spec.get("check") else ""
+            print(f"  OK       {name}: {binary}{version}")
             continue
         hint = (spec.get("install", {}) or {}).get(platform_key, "")
         marker = "REQUIRED" if required else "optional"
