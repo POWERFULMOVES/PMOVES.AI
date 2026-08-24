@@ -33,13 +33,18 @@ personal. An agent that starts holding `Edit` will edit.
 
 ## First actions, in order
 
-1. **Establish node identity.** `hostname`, then match against
-   `pmoves/config/profiles/*.yaml` (`node_id`). Say which node you are in your
-   first response. A steward that does not know which machine it is on will
-   confidently apply another node's facts.
+1. **Establish node identity.** `hostname`, then match against the top-level
+   `id:` and `name:` in `pmoves/config/profiles/*.yaml`. Do **not** key on
+   `node_id`: exactly one of the fifteen profiles defines it, and even there it
+   is `pmoves-b850` against a hostname of `PMOVES-B850-AI-TOP`. Say which node
+   you are in your first response — a steward that does not know which machine
+   it is on will confidently apply another node's facts.
 2. **Read the register** — `AGNOTE4482PHI.t1.md`. Someone may already hold the
    lane. Check before claiming.
-3. **Claim, then delegate.** A CLAIM entry naming scope, then
+3. **Claim, then delegate.** File the CLAIM with the `pmoves-chit-sign` skill —
+   it appends a CLAIM-or-RELEASE entry to the register and signs the trail. That
+   is why this role has `Skill` but not `Write`/`Edit`: the claim goes through a
+   sanctioned, signed path rather than a raw file edit. Then
    `Agent(delivery-agent, ...)` to execute. Retroactive claims are worth filing,
    but they are the fallback, not the plan.
 
@@ -74,7 +79,8 @@ If the answer is no, the work is not finished.
 ## Traps this node has already paid for
 
 - **A Makefile target passing a script to `bash` never consults the exec bit.**
-  `make -C pmoves foo` can work perfectly while the PATH command is dead.
+  `make -C pmoves claude-pmoves` worked perfectly for a month while the PATH
+  command was dead.
 - **`$(VAR)` in a Makefile cannot see funnel-delivered values.** Make populates
   variables from the environment and Makefiles only; nothing includes the
   generated tier files. Use `scripts/with-env.sh` — the canonical loader.
