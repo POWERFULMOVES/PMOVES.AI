@@ -151,24 +151,61 @@ funnel silently skips the entry.
 `juicefs_meta` is NOT a superuser, and `bootstrap_db.sh` does not manage it, so
 this affects only the mounts — not the Supabase stack.
 
+The password must not reach argv or shell history. The obvious
+`psql -c "ALTER ROLE … PASSWORD '<new>'"` form violates both, and so does
+`psql -v` — the value lands in the container's argv either way.
+
+Pipe the statement on **stdin**:
+
 ```sh
-# On B850:
-docker exec -i pmoves-supabase-db-1 \
-  psql -h 127.0.0.1 -U supabase_admin -d postgres \
-  -c "ALTER ROLE juicefs_meta PASSWORD '<new>';"
+# On B850. `read -rs` does not echo and does not enter history; printf is a
+# shell builtin, so the value never becomes a separate process's argv.
+read -rs NEWPW
+printf "ALTER ROLE juicefs_meta PASSWORD '%s';\n" "$NEWPW" \
+  | docker exec -i pmoves-supabase-db-1 \
+      psql -h 127.0.0.1 -U supabase_admin -d postgres -v ON_ERROR_STOP=1
+unset NEWPW
 ```
+
+Mint the value with the pipeline's own generator (URL-safe, no quote escaping to
+get wrong) rather than choosing one by hand.
+
+**This belongs behind a Make target** that reads from stdin, alongside
+`secrets-rotate`. Until that exists, use the form above — and afterwards confirm
+no `ALTER ROLE` line reached your history file.
 
 Then update the secret file B850's mount reads, recreate `juicefs-mount`, and set
 the Prod secret to the same value.
 
 ### 2.3 Deliver to the consuming node
 
+**Order matters for runnerless nodes, and getting it wrong is silent.**
+`secrets-funnel-from-prod` calls `scripts/pull_chit_bundle.sh`, which selects the
+newest **already-successful** run:
+
 ```sh
-# Runnerless nodes (5090 has no Actions runner):
-make -C pmoves secrets-funnel-from-prod
-# Nodes with a registered runner:
-make -C pmoves secrets-sync-trigger TARGETS=<node>
+gh run list --workflow "$WORKFLOW" --status success --limit 1 ...
 ```
+
+That run can predate the secret you just created. The pull succeeds, the funnel
+reports success, and `JUICEFS_META_PASSWORD` is absent or stale. So a fresh
+producer run has to exist *before* the pull:
+
+```sh
+# 1. On a runner-backed node — produce a bundle that CONTAINS the new secret:
+make -C pmoves secrets-sync-trigger TARGETS=<runner-backed-node>
+
+# 2. Wait for that run to finish successfully. Do not skip this.
+gh run list --repo POWERFULMOVES/PMOVES.AI \
+  --workflow sync-secrets-local.yml --limit 1 \
+  --json databaseId,status,conclusion,createdAt
+
+# 3. Only then, on the runnerless node (5090):
+make -C pmoves secrets-funnel-from-prod
+```
+
+Confirm in step 2 that `createdAt` is **after** you set the Prod secret. That
+timestamp comparison is the whole check.
 
 ### 2.4 Verify delivery WITHOUT printing the secret
 
