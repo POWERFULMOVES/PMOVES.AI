@@ -4,13 +4,14 @@
     "pmoves-cipher": {
       "_note": "Cipher SSE requires bearer auth when the API token is set (hardened container, post-#2005 recreate). MEASURED 2026-08-24, correcting this note's own earlier claim: the launcher does NOT set CIPHER_API_TOKEN, and an unset var does not expand to empty. Per Claude Code's MCP docs -- 'If a referenced environment variable isn't set and has no default value ... Claude Code reports a missing-variable warning for that server and uses the unexpanded ${VAR} text as-is' -- the literal string is sent as the bearer. Probed against the running shim: no header 200, 'Bearer ' (empty) 200, 'Bearer ${CIPHER_API_TOKEN}' 401, 'Bearer zzz' 401. The shim has NO token configured, so it accepts unauthenticated and rejects every value. The header as written was therefore a guaranteed 401 -- cipher never connected. The ':-' fallback is the remedy the docs name; it sends an empty bearer here (200) and a real one on any node that does set the token. PATH VERIFIED 2026-08-12 against a freshly built pmoves-cipher-api-1 (node dist/pmoves/rest-server.js --port 8105, published 127.0.0.1:8105->8105): /mcp/sse answers 200; /api/mcp/sse and /sse both 404. Same result as an independent 2026-08-04 probe of a different build, so the path is a property of the server, not of one container.",
       "type": "sse",
-      "url": "http://localhost:8105/mcp/sse",
+      "url": "http://${TS_Z890}:8105/mcp/sse",
       "headers": {
         "Authorization": "Bearer ${CIPHER_API_TOKEN:-}"
-      }
+      },
+      "description": "Agent memory (Neo4j knowledge graph)"
     },
     "pmoves-hirag-mcp": {
-      "_purpose": "Hi-RAG v2 MCP bridge — hybrid vector (Qdrant) + graph (Neo4j) + full-text (Meilisearch) retrieval with cross-encoder reranking, over the existing PMOVES retrieval APIs. STDIO, per the submodule's own README (\"Thin stdio MCP bridge\") and the invocation it documents. It was first registered here as SSE against http://pmoves-hirag-mcp:8080/sse — no compose service by that name exists, the submodule ships no Dockerfile and no SSE server, so the endpoint was unreachable. If an SSE container is built later, switch this back and add the compose service in the same change. Source of truth for the active flag: pmoves/config/agent_registry.yaml `pmoves_hirag_mcp.status`.",
+      "_purpose": "Hi-RAG v2 MCP bridge \u2014 hybrid vector (Qdrant) + graph (Neo4j) + full-text (Meilisearch) retrieval with cross-encoder reranking, over the existing PMOVES retrieval APIs. STDIO, per the submodule's own README (\"Thin stdio MCP bridge\") and the invocation it documents. It was first registered here as SSE against http://pmoves-hirag-mcp:8080/sse \u2014 no compose service by that name exists, the submodule ships no Dockerfile and no SSE server, so the endpoint was unreachable. If an SSE container is built later, switch this back and add the compose service in the same change. Source of truth for the active flag: pmoves/config/agent_registry.yaml `pmoves_hirag_mcp.status`.",
       "command": "uv",
       "args": [
         "--directory",
@@ -23,8 +24,9 @@
     },
     "agent-zero": {
       "_purpose": "Agent Zero orchestrator for cross-agent task dispatch and memory operations.",
-      "type": "http",
-      "url": "http://localhost:8080/mcp"
+      "type": "sse",
+      "url": "http://${TS_Z890}:8081/mcp/t-${AGENT_ZERO_MCP_TOKEN}/sse",
+      "description": "Agent Zero orchestrator (SSE with MCP token auth)"
     },
     "_pmoves-cipher-legacy-python-wrapper": {
       "_disabled": "Replaced 2026-05-15 with direct SSE to Cipher's native MCP endpoint. The Python wrapper called non-existent /api/memory routes. Kept here commented for rollback; remove in follow-up after SSE validated for 2 weeks.",
@@ -57,7 +59,7 @@
       }
     },
     "hostinger-mcp": {
-      "_note": "POWERFULMOVES fork (hostinger-api-mcp v1.35.7, 320 tools, per-service binaries) pinned to commit 094e38c — interim local wiring until the PMOVES MCP-gateway hub hosts it as an adapter. The fork reads HOSTINGER_API_TOKEN (or API_TOKEN); both are fed from the established env.shared var HOSTINGER_API_KEY so the launcher's existing sourcing resolves them. Source GH secret is HOSTINGER_API_KEY (Prod env); HOSTINGER_API_TOKEN is the consumer var only.",
+      "_note": "POWERFULMOVES fork (hostinger-api-mcp v1.35.7, 320 tools, per-service binaries) pinned to commit 094e38c \u2014 interim local wiring until the PMOVES MCP-gateway hub hosts it as an adapter. The fork reads HOSTINGER_API_TOKEN (or API_TOKEN); both are fed from the established env.shared var HOSTINGER_API_KEY so the launcher's existing sourcing resolves them. Source GH secret is HOSTINGER_API_KEY (Prod env); HOSTINGER_API_TOKEN is the consumer var only.",
       "command": "npx",
       "args": [
         "-y",
@@ -71,12 +73,14 @@
     "tailscale": {
       "command": "npx",
       "args": [
+        "-y",
         "tailscale-mcp@2026.4.10-1"
       ],
       "env": {
         "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",
         "TAILSCALE_TAILNET": "${TAILSCALE_TAILNET}"
-      }
+      },
+      "description": "Tailscale network administration"
     },
     "pmoves-nats-fleet": {
       "_purpose": "Cross-node NATS publish/subscribe to the fleet hub on KVM4-2. Replaces SSH-from-CLI dance for signal dispatch (e.g., claw.task.assign.v1 SPARK cascades). Server code shipped in PR #1490; this is the .claude/mcp.json registration enabling the tools at runtime.",
@@ -91,7 +95,8 @@
       ],
       "env": {
         "NATS_URL": "${NATS_URL}"
-      }
+      },
+      "description": "NATS fleet messaging bridge"
     },
     "cloudflare": {
       "_purpose": "Cloudflare MCP for Pages deploy + DNS zone management (cataclysmstudios.com). Requires CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in env. Added Layer 2.1 of COMBINER pipeline (2026-05-26).",
@@ -105,7 +110,7 @@
       }
     },
     "cloudflare-api": {
-      "_purpose": "Cloudflare's official REMOTE API MCP (https://mcp.cloudflare.com/mcp) — the ENTIRE Cloudflare API (2,500+ endpoints incl. all of DNS) exposed via two Code-Mode tools search()/execute(), ~1k tokens instead of ~1M for native schemas. OAuth on first connect uses the operator's admin-scoped Cloudflare account. Use this (not the stdio 'cloudflare' entry, which needs a CLOUDFLARE_API_TOKEN that is currently empty in env.shared) to list/manage pmoves.ai DNS records and to mint/verify a Zone:DNS:Edit token for Traefik ACME (CLOUDFLARE_DNS_API_TOKEN). Ref: Cloudflare docs /agents/model-context-protocol/cloudflare/servers-for-cloudflare/ (verified 2026-08-18).",
+      "_purpose": "Cloudflare's official REMOTE API MCP (https://mcp.cloudflare.com/mcp) \u2014 the ENTIRE Cloudflare API (2,500+ endpoints incl. all of DNS) exposed via two Code-Mode tools search()/execute(), ~1k tokens instead of ~1M for native schemas. OAuth on first connect uses the operator's admin-scoped Cloudflare account. Use this (not the stdio 'cloudflare' entry, which needs a CLOUDFLARE_API_TOKEN that is currently empty in env.shared) to list/manage pmoves.ai DNS records and to mint/verify a Zone:DNS:Edit token for Traefik ACME (CLOUDFLARE_DNS_API_TOKEN). Ref: Cloudflare docs /agents/model-context-protocol/cloudflare/servers-for-cloudflare/ (verified 2026-08-18).",
       "type": "http",
       "url": "https://mcp.cloudflare.com/mcp"
     },
@@ -122,11 +127,12 @@
       "command": "npx",
       "args": [
         "-y",
-        "@llmindset/hf-mcp-server"
+        "@llmindset/hf-mcp-server@0.3.30"
       ],
       "env": {
         "HF_TOKEN": "${HF_TOKEN}"
-      }
+      },
+      "description": "HuggingFace model/paper/space search"
     },
     "pmoves-supabase": {
       "_purpose": "Self-hosted PMOVES Supabase via PostgREST (NOT cloud mcp.supabase.com). Replaces the cloud 'supabase' plugin MCP for data-plane access. apiUrl points at the self-hosted Kong/PostgREST REST endpoint; falls back to local supabase-local Kong :8000 if SUPABASE_REST_URL is unset. PostgREST-based per the 'never raw psql' rule (CATALOG.md canonical http://supabase-kong:8000/rest/v1). Pinned per F-07 supply-chain note above.",
@@ -137,20 +143,21 @@
         "--apiUrl",
         "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
         "--apiKey",
-        "${SUPABASE_SERVICE_ROLE_KEY}",
+        "${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_KEY}}",
         "--schema",
-        "public,pmoves_core,pmoves_kb"
-      ]
+        "public"
+      ],
+      "description": "Supabase PostgREST API"
     },
     "comfy": {
-      "_purpose": "Official ComfyUI MCP (comfy.org) — exposes the ComfyUI engine over MCP: build/edit/run + save/re-run workflows, search models/nodes/templates, generate image/video/audio/3D. Lets the creator-operator computer-use agent drive workflows via MCP instead of clicking the UI.",
+      "_purpose": "Official ComfyUI MCP (comfy.org) \u2014 exposes the ComfyUI engine over MCP: build/edit/run + save/re-run workflows, search models/nodes/templates, generate image/video/audio/3D. Lets the creator-operator computer-use agent drive workflows via MCP instead of clicking the UI.",
       "_note": "This is the HOSTED CLOUD endpoint (drives Comfy's cloud). OAuth sign-in on first use in Claude Code (no key needed). For the SELF-HOSTED fleet ComfyUI (project_creator_comfyui_selfhost), a local ComfyUI-API MCP (community, via ComfyUI /prompt) is a separate follow-up to drive the operator's own instance. Claude Code skips gracefully if not signed in.",
       "type": "http",
       "url": "https://cloud.comfy.org/mcp"
     },
     "supabase-db": {
-      "_purpose": "Postgres MCP (crystaldba/postgres-mcp 'Postgres MCP Pro') for the SELF-HOSTED Supabase Postgres — the DDL/RLS/migration sibling of pmoves-supabase. Does what PostgREST CANNOT: run SQL, inspect schema + RLS policies, apply migrations, EXPLAIN/health/index analysis. DELIBERATE, SCOPED EXCEPTION to the 'never raw psql' rule (CATALOG.md): data-plane CRUD still goes through pmoves-supabase (PostgREST); this is for schema/migration/RLS work only (the same class as bootstrap's docker-exec psql).",
-      "_setup": "Set SUPABASE_DB_URI to a HOST-reachable connection string: postgresql://pmoves:<SUPABASE_DB_PASSWORD>@<host>:<port>/pmoves (the Supabase CLI stack publishes Postgres on a host port — use localhost/host.docker.internal + that port, NOT the internal 'supabase-db' service name). access-mode=unrestricted enables DDL/DML for migrations/RLS; use --access-mode=restricted for read-only audits.",
+      "_purpose": "Postgres MCP (crystaldba/postgres-mcp 'Postgres MCP Pro') for the SELF-HOSTED Supabase Postgres \u2014 the DDL/RLS/migration sibling of pmoves-supabase. Does what PostgREST CANNOT: run SQL, inspect schema + RLS policies, apply migrations, EXPLAIN/health/index analysis. DELIBERATE, SCOPED EXCEPTION to the 'never raw psql' rule (CATALOG.md): data-plane CRUD still goes through pmoves-supabase (PostgREST); this is for schema/migration/RLS work only (the same class as bootstrap's docker-exec psql).",
+      "_setup": "Set SUPABASE_DB_URI to a HOST-reachable connection string: postgresql://pmoves:<SUPABASE_DB_PASSWORD>@<host>:<port>/pmoves (the Supabase CLI stack publishes Postgres on a host port \u2014 use localhost/host.docker.internal + that port, NOT the internal 'supabase-db' service name). access-mode=unrestricted enables DDL/DML for migrations/RLS; use --access-mode=restricted for read-only audits.",
       "command": "uvx",
       "args": [
         "postgres-mcp@0.3.0",
@@ -158,10 +165,11 @@
       ],
       "env": {
         "DATABASE_URI": "${SUPABASE_DB_URI}"
-      }
+      },
+      "description": "Supabase Postgres database"
     },
     "pmoves-minimax-mcp": {
-      "_purpose": "PMOVES-MiniMax-MCP — MiniMax model surface (text/image/video/TTS/voice-clone) over MCP stdio. Submodule POWERFULMOVES/PMOVES-MiniMax-MCP (f4d6a61b) at PMOVES-MiniMax-MCP/; entry point `uvx minimax-mcp` per the submodule's pyproject.toml. Mavis harness v0 follow-ups (PR #2568) consume this for model access; the sidecar lane (Pinokio on operator devices) calls the same surface via Pmoves-minimax-cli. Requires MINIMAX_API_KEY.",
+      "_purpose": "PMOVES-MiniMax-MCP \u2014 MiniMax model surface (text/image/video/TTS/voice-clone) over MCP stdio. Submodule POWERFULMOVES/PMOVES-MiniMax-MCP (f4d6a61b) at PMOVES-MiniMax-MCP/; entry point `uvx minimax-mcp` per the submodule's pyproject.toml. Mavis harness v0 follow-ups (PR #2568) consume this for model access; the sidecar lane (Pinokio on operator devices) calls the same surface via Pmoves-minimax-cli. Requires MINIMAX_API_KEY.",
       "command": "uvx",
       "args": [
         "minimax-mcp==0.0.18"
@@ -171,6 +179,36 @@
         "MINIMAX_API_HOST": "${MINIMAX_API_HOST:-https://api.minimax.chat}",
         "MINIMAX_API_RESOURCE_MODE": "${MINIMAX_API_RESOURCE_MODE:-url}"
       }
+    },
+    "archon": {
+      "description": "Archon knowledge / task orchestrator (REST-only MCP, no standard transport \u2014 disabled by default)",
+      "type": "http",
+      "url": "http://${TS_Z890}:8051",
+      "disabled": true
+    },
+    "hostinger": {
+      "description": "Hostinger VPS API (requires pmz-hostinger container)",
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "pmz-hostinger",
+        "hostinger-api-mcp"
+      ],
+      "env": {
+        "HOSTINGER_API_TOKEN": "${HOSTINGER_API_TOKEN}"
+      }
+    },
+    "pmoves-docker-gateway": {
+      "description": "Docker MCP Toolkit gateway (stdio) for Claude/Kimi/OpenCode/Crush",
+      "command": "docker",
+      "args": [
+        "mcp",
+        "gateway",
+        "run",
+        "--profile",
+        "pmoves_5090_web"
+      ]
     }
   }
 }
