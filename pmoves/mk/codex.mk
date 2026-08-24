@@ -143,12 +143,26 @@ secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files fro
 env-shared-repair: ## Self-heal env.shared: collapse raw multi-line PEM/SSH values that break Docker Compose env-file parsing (idempotent, writes .bak on change)
 	@$(CODEX_PY) tools/fix_env_shared_multiline.py
 
-secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> audit gates (FORCE=1 to overwrite stale)
+# ORDER IS LOAD-BEARING: credential_urlencoder.py must run AFTER
+# secrets-funnel-sync, not before it.
+#
+# The encoder merges env.shared THEN env.tier-supabase, later file winning, and
+# compose loads its output (env.tier-supabase.urlencoded) LAST of all env files
+# -- so whatever it emits overrides every other source. It also emits the
+# _URLENCODED key unconditionally, even when the value needs no encoding.
+#
+# Run before the sync and it reads the PREVIOUS rotation's tier value and
+# re-publishes it as the winning one. The funnel then reports success while
+# every DSN built from the _URLENCODED fallback chain keeps the OLD password.
+# Measured on B850 2026-08-23: postgrest, gotrue and storage came back 28P01
+# while holding a correct POSTGRES_PASSWORD in their own environment. Running
+# the funnel a SECOND time healed it, which is the signature of this ordering.
+secrets-funnel: ## Portable secrets flow: env repair -> local hydrate -> CHIT export -> manifest sync -> urlencode -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory env-shared-repair
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
-	@$(CODEX_PY) tools/credential_urlencoder.py
 	@$(MAKE) --no-print-directory secrets-funnel-sync
+	@$(CODEX_PY) tools/credential_urlencoder.py
 	@$(MAKE) --no-print-directory secrets-audit
 	@$(MAKE) --no-print-directory tooling-audit
 ifneq ($(SECRETS_FUNNEL_BOOT_USER_TARGET),)

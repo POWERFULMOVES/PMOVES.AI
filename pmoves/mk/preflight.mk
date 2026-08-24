@@ -126,6 +126,12 @@ runner-labels-check: ## Assert every self-hosted runs-on resolves to a registere
 runner-labels-refresh: ## Re-read the runner inventory from the GitHub API
 	@$(PRECHECK_PY) tools/validate_runner_labels.py --refresh $(ARGS)
 
+allowed-signers: ## Regenerate pmoves/config/allowed_signers from the signing identity cards
+	@$(PRECHECK_PY) tools/build_allowed_signers.py $(ARGS)
+
+allowed-signers-check: ## Drift gate: fail if allowed_signers disagrees with the cards
+	@$(PRECHECK_PY) tools/build_allowed_signers.py --check $(ARGS)
+
 skill-registry-validate: ## Validate submodule-skill registry completeness
 	@$(PRECHECK_PY) tools/skill_registry_validate.py
 
@@ -333,6 +339,15 @@ floos-pr-monitor-resolve: ## Resolve FlOO$ DAG for PR monitor pairing
 
 floos-pr-monitor-run-dry: ## Dry-run FlOO$ execution plan for PR monitor pairing
 	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --dry-run --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
+
+# NO wet runner target here, deliberately. `-dry` is still the only runner, and
+# both chit-flow-pr-monitor wrappers call it, so the FlOO$ pipeline cannot execute.
+# That is a real gap -- but exposing a wet target now would only move the failure,
+# not fix it: /mcp/execute 404s any cmd absent from COMMAND_REGISTRY
+# (services/agent-zero/main.py:852-858), and none of the pairing skills
+# (pr-monitor, pr-hedge-trim, pr-learnings-encode, graphiti-trail-sync) are
+# registered there. Register those four commands first; the wet target is a
+# one-liner once they resolve.
 
 chit-flow-pr-monitor: ## CHIT flow wrapper: PR monitor + FlOO$ validation/resolve + CHIT packet
 	@$(MAKE) --no-print-directory pr-monitor

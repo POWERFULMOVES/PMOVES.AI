@@ -468,7 +468,13 @@ async def execute_step(
     start = time.monotonic()
 
     arguments = _resolve_step_input(step, context)
-    endpoint = handoff.get("mcp_endpoint", "http://localhost:8080/mcp/command")
+    # /mcp/execute, not /mcp/command. The Agent Zero supervisor on 8080 serves
+    # `POST /mcp/execute` and `GET /mcp/commands`; `/mcp/command` (singular) was
+    # never implemented -- it is documented only in .claude/context/mcp-api.md,
+    # which is marked SUPERSEDED for exactly that reason. The request body below
+    # already matches /mcp/execute's {cmd, arguments} contract, so only the path
+    # was stale: wet mode would have 404'd on every step.
+    endpoint = handoff.get("mcp_endpoint", "http://localhost:8080/mcp/execute")
     timeout = handoff.get("step_timeout", 300)
 
     retry_cfg = handoff.get("retry", {})
@@ -969,7 +975,7 @@ def cli_run(args: argparse.Namespace) -> int:
         print(f"FlOO$ Dry Run: {args.pairing}")
         print("=" * 50)
         print(f"Pipeline: {pairing.get('name', args.pairing)}")
-        print(f"MCP endpoint: {handoff.get('mcp_endpoint', 'http://localhost:8080/mcp/command')}")
+        print(f"MCP endpoint: {handoff.get('mcp_endpoint', 'http://localhost:8080/mcp/execute')}")
         print(f"Step timeout: {handoff.get('step_timeout', 300)}s")
         retry = handoff.get("retry", {})
         print(f"Retry: {retry.get('max_attempts', 3)} attempts, {retry.get('backoff_ms', 1000)}ms backoff")

@@ -31,12 +31,21 @@ concurrency:
 
 jobs:
   claude-review:
-    # Disabled: fleet review model uses Codex bot + CodeRabbit + CLI agents
-    # (Crush/Kimi/Claude on self-hosted runners orchestrated by Agent Zero/Archon),
-    # not the Anthropic API key OAuth path. The CLAUDE_CODE_OAUTH_TOKEN expired
-    # and won't be rotated — reviews happen via coding plans and local models.
-    # Kept as workflow_dispatch for manual runs if an operator re-enables OAuth.
-    if: false
+    # Re-enabled 2026-08-24. The previous note said the OAuth token "expired and
+    # won't be rotated"; it has been rotated, and this job now runs on the coding
+    # plan rather than a metered API key — which is what the note wanted.
+    #
+    # It does not displace the fleet review model (Codex bot + CodeRabbit + CLI
+    # agents on self-hosted runners). It adds the pre-push lane those cannot
+    # cover: a diff-scoped review that runs on PR open/update rather than after
+    # a human or bot notices something.
+    #
+    # Same-repo only. GitHub withholds Actions secrets from fork-originated
+    # `pull_request` runs, so on a fork PR CLAUDE_CODE_OAUTH_TOKEN is empty and
+    # this action fails instead of reviewing -- recreating the failing-check
+    # noise `if: false` was added to stop. Skipping is correct there: there is
+    # no credential to review with. Mirrors review-autofix.yml.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # Least-privilege for a comment-only reviewer: it reads the diff and posts
     # PR review comments — it does not push commits or write attestations.
@@ -58,9 +67,8 @@ jobs:
         id: claude-review
         uses: anthropics/claude-code-action@9d7150bc8a3dae8149739a88019d192b579ad90c # v1.0.193
         with:
-          # Use the direct Anthropic API key, not CLAUDE_CODE_OAUTH_TOKEN (expired).
-          # See review-comment-monitor.yml for the full rationale.
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Coding plan, not the metered API key. See review-comment-monitor.yml.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
