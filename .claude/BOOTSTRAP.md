@@ -21,6 +21,7 @@ Missing items are not failures — they are operational facts. Disclose them. Ne
 
 | Need | Known Road |
 |------|------------|
+| Verify the CLI contract before anything | `make -C pmoves check-prereqs-all` (also flags a stale session PATH — the usual cause of a tool that is installed but reads as missing) |
 | Start / restart services | `make -C pmoves up-<service>` (never `docker compose up` raw) |
 | Apply secrets | `make -C pmoves secrets-funnel` (before any service start after env change) |
 | Read-only health | `make -C pmoves health-summary` / `health-dormant` |

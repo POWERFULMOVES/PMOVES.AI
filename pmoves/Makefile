@@ -216,6 +216,18 @@ include mk/review.mk
 check-prereqs: ## Verify system binaries required for bringup (jq, make, curl, git, python3)
 	@bash scripts/check_prereqs.sh
 
+.PHONY: check-prereqs-agent
+check-prereqs-agent: ## Verify the agent CLI contract (Known Road tools + agent binaries); advisory
+	@bash scripts/check_prereqs.sh --agent
+
+.PHONY: check-prereqs-agent-strict
+check-prereqs-agent-strict: ## Same as check-prereqs-agent but non-zero exit on any gap
+	@bash scripts/check_prereqs.sh --agent --strict
+
+.PHONY: check-prereqs-all
+check-prereqs-all: ## Both tiers: bringup prereqs (fatal) + agent CLI contract (advisory)
+	@bash scripts/check_prereqs.sh --all
+
 .PHONY: venv
 venv: ## Create pmoves/.venv-pmoves and install service + tool requirements
 	@bash scripts/create_venv.sh
