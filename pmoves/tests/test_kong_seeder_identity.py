@@ -8,6 +8,7 @@ This pins the shape so that failure is caught here rather than in production.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -34,8 +35,32 @@ def test_every_suit_file_yields_a_routable_entry():
         "A dropped entry means that model is absent from Kong."
     )
 
-    missing_id = [e for e in parsed if not e.get("model_id")]
-    assert not missing_id, (
-        f"{len(missing_id)} entries have no model_id and would be skipped: "
-        f"{[e.get('file') for e in missing_id]}"
+
+def test_routing_fields_match_the_committed_snapshot():
+    """Presence and count are not enough. A change that re-parents only
+    base_url/api_key_env leaves name/provider resolvable through the parser's
+    fallback chain, so the entry still appends and the count still reads 18 —
+    while Kong silently falls back to _infer_api_base()/_infer_key_env()
+    instead of the file's real values. Pin all four fields by value.
+    """
+    seeder = _seeder()
+    snapshot_path = Path(__file__).parent / "data" / "kong_route_identity.json"
+    with open(snapshot_path, encoding="utf-8") as handle:
+        expected = json.load(handle)
+
+    actual = {
+        Path(entry["file"]).stem: {
+            "model_id": entry.get("model_id"),
+            "provider": entry.get("provider"),
+            "api_base": entry.get("api_base"),
+            "api_key_env": entry.get("api_key_env"),
+        }
+        for entry in seeder._parse_model_suits(SUITS_DIR)
+    }
+
+    assert actual == expected, (
+        "Kong routing identity drifted from the committed snapshot. If a suit "
+        "legitimately changed one of these four fields, regenerate "
+        "pmoves/tests/data/kong_route_identity.json deliberately — do not "
+        "loosen this assertion."
     )

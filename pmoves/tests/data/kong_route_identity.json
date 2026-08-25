@@ -1,0 +1,110 @@
+{
+  "claude-haiku-4": {
+    "model_id": "claude-haiku-4",
+    "provider": "anthropic",
+    "api_base": "https://api.openai.com/v1",
+    "api_key_env": "ANTHROPIC_API_KEY"
+  },
+  "claude-opus-4": {
+    "model_id": "claude-opus-4",
+    "provider": "anthropic",
+    "api_base": "https://api.openai.com/v1",
+    "api_key_env": "ANTHROPIC_API_KEY"
+  },
+  "claude-sonnet": {
+    "model_id": "claude-sonnet",
+    "provider": "openrouter",
+    "api_base": "https://openrouter.ai/api/v1",
+    "api_key_env": "OPENROUTER_API_KEY"
+  },
+  "claude-sonnet-4": {
+    "model_id": "claude-sonnet-4",
+    "provider": "anthropic",
+    "api_base": "https://api.openai.com/v1",
+    "api_key_env": "ANTHROPIC_API_KEY"
+  },
+  "gemma4-dense": {
+    "model_id": "gemma4-dense",
+    "provider": "ollama_spark",
+    "api_base": "http://pmoves-dgx-spark:11434/v1",
+    "api_key_env": "OLLAMA_API_KEY"
+  },
+  "glm-4-air": {
+    "model_id": "glm-4-air",
+    "provider": "zai",
+    "api_base": "https://api.z.ai/v1",
+    "api_key_env": "Z_AI_API_KEY"
+  },
+  "glm-4-flash": {
+    "model_id": "glm-4-flash",
+    "provider": "zai",
+    "api_base": "https://api.z.ai/v1",
+    "api_key_env": "Z_AI_API_KEY"
+  },
+  "glm-4-plus": {
+    "model_id": "glm-4-plus",
+    "provider": "zai",
+    "api_base": "https://api.z.ai/v1",
+    "api_key_env": "Z_AI_API_KEY"
+  },
+  "glm-4.7": {
+    "model_id": "glm-4.7",
+    "provider": "zai",
+    "api_base": "https://api.z.ai/v1",
+    "api_key_env": "Z_AI_API_KEY"
+  },
+  "glm-5-turbo": {
+    "model_id": "glm-5-turbo",
+    "provider": "zai",
+    "api_base": "https://api.z.ai/v1",
+    "api_key_env": "Z_AI_API_KEY"
+  },
+  "glm-5.1": {
+    "model_id": "glm-5.1",
+    "provider": "zai",
+    "api_base": "https://api.z.ai/v1",
+    "api_key_env": "Z_AI_API_KEY"
+  },
+  "glm-5.2": {
+    "model_id": "glm-5.2",
+    "provider": "zai",
+    "api_base": "https://api.z.ai/api/coding/paas/v4",
+    "api_key_env": "Z_AI_API_KEY"
+  },
+  "kilo-auto-balanced": {
+    "model_id": "kilo-auto/balanced",
+    "provider": "kilocode",
+    "api_base": "https://api.kilocode.ai/api/openrouter",
+    "api_key_env": "KILOCODE_API_KEY"
+  },
+  "kimi-k2": {
+    "model_id": "kimi-k2",
+    "provider": "moonshot_ai",
+    "api_base": "https://api.moonshot.cn/v1",
+    "api_key_env": "MOONSHOT_API_KEY"
+  },
+  "minimax-m2.1": {
+    "model_id": "minimax-m2.1",
+    "provider": "minimax",
+    "api_base": "https://api.minimax.chat/v1",
+    "api_key_env": "MINIMAX_API_KEY"
+  },
+  "minimax-m2.7": {
+    "model_id": "minimax-m2.7",
+    "provider": "minimax",
+    "api_base": "https://api.minimax.chat/v1",
+    "api_key_env": "MINIMAX_API_KEY"
+  },
+  "nemotron-3-super": {
+    "model_id": "nemotron-3-super",
+    "provider": "ollama_spark",
+    "api_base": "http://pmoves-dgx-spark:11434/v1",
+    "api_key_env": "OLLAMA_API_KEY"
+  },
+  "qwen3.6": {
+    "model_id": "qwen3.6",
+    "provider": "ollama_local",
+    "api_base": "http://localhost:11434/v1",
+    "api_key_env": "OLLAMA_API_KEY"
+  }
+}
