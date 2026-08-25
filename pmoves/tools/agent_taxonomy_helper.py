@@ -146,6 +146,43 @@ def cmd_show(registry, args):
 
     agent_id = args.name.lower().replace("-", "_").replace(" ", "_")
     agent = agents.get(agent_id)
+
+    if not agent:
+        # Runtime id -> registry key is NOT always reversible, so the hyphen/underscore
+        # swap above is not sufficient on its own.
+        #
+        # Registry keys must match validate_agent_registry.SNAKE (^[a-z][a-z0-9_]*$) —
+        # they must begin with a LETTER. Runtime ids match KEBAB
+        # (^[a-z0-9][a-z0-9.-]*$) and may begin with a DIGIT. For an id like
+        # `4090-claude` the only underscore form is `4090_claude`, which is an
+        # ILLEGAL key, so no registry key can ever derive from it. Those entries
+        # carry the runtime id in `signature` instead (the same field agent_zero
+        # uses to point at `claude-opus`).
+        #
+        # Without this branch such an agent is registered but unreachable under the
+        # id the rest of the repo actually uses — present in the file, invisible to
+        # the lookup.
+        # Resolve ONLY on a unique hit. `signature` is not a unique key —
+        # `claude-opus` is carried by six agents (agent_zero plus the four
+        # observability specialists and llm_observability). Taking the first match
+        # would answer an ambiguous question with a confident wrong card, which is
+        # worse than not resolving at all.
+        wanted = {args.name.lower(), agent_id}
+        by_signature = [
+            key for key, entry in agents.items()
+            if str((entry or {}).get("signature", "")).lower() in wanted
+        ]
+        if len(by_signature) == 1:
+            agent_id = by_signature[0]
+            agent = agents[agent_id]
+        elif len(by_signature) > 1:
+            print(
+                f"'{args.name}' is a signature shared by {len(by_signature)} agents: "
+                f"{', '.join(sorted(by_signature))}. Ask for one by its registry key.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     if not agent:
         # Fuzzy match
         matches = [k for k in agents if agent_id in k or agent_id in agents[k].get("name", "").lower()]
