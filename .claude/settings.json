@@ -104,6 +104,11 @@
             "type": "command",
             "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/bash-tool-damage-control.py\"",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/claim-collision-pre.py\"",
+            "timeout": 15
           }
         ]
       },

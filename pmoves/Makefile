@@ -1694,10 +1694,22 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check + node-vocabulary default_identity wiring
 	@echo "🔍 Validating agent registry ↔ teams coupling (pydantic gate)..."
 	@# Workflow-only deps — the script imports pyyaml + pydantic, which aren't in the
-	@# base env. Mirror the CI gate (validate-agents-config.yml) so a fresh local
-	@# checkout can run this target without a ModuleNotFoundError (Codex #1993 P2).
-	@python -m pip install --quiet "pydantic>=2" pyyaml
-	@python $(CURDIR)/scripts/validate_agent_registry.py
+	@# base env. The point (Codex #1993 P2) is that a fresh local checkout can run
+	@# this without a ModuleNotFoundError.
+	@#
+	@# `uv run --with`, NOT `python -m pip install`. The pip form mirrored CI's
+	@# MECHANISM rather than its RESULT, and the mechanism does not transfer: a CI
+	@# runner has pip, a project .venv often does not. On B850 this target failed
+	@# with `No module named pip` while the validator itself was fine -- the gate
+	@# was unrunnable locally for the exact "fresh checkout" case it was added to
+	@# serve. CI keeps pip because a disposable runner is the one place mutating
+	@# the interpreter is free.
+	@#
+	@# It also stops installing into the developer's environment as a side effect
+	@# of running a read-only check. --no-project for the same reason as
+	@# COMPOSE_SPLIT_RUN: project discovery syncs the whole workspace first.
+	@uv run --quiet --no-project --with "pydantic>=2" --with pyyaml \
+		python $(CURDIR)/scripts/validate_agent_registry.py
 
 # -------- PMOVES.YT docs helpers ----------
 .PHONY: yt-docs-sync yt-docs-catalog-smoke

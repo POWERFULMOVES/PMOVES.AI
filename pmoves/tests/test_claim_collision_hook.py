@@ -366,3 +366,140 @@ def test_the_collision_hook_specifically_declares_pyyaml():
         "ImportError and the hook reverts to exact-string owner comparison, "
         "which is the defect it was changed to remove."
     )
+# --- the shell-shaped hole -------------------------------------------------
+# A heredoc/tee/sed write never reaches the Write|Edit matcher. This agent filed
+# its own CLAIM that way and the gate never fired. The Bash path cannot do the
+# same check -- a shell command carries no proposed text -- so it asks instead.
+
+def _run_bash(tmp_path: Path, command: str, existing: str = EXISTING):
+    register = tmp_path / REGISTER_NAME
+    register.write_text(existing, encoding="utf-8")
+    payload = {
+        "tool_name": "Bash",
+        "cwd": str(tmp_path),
+        "tool_input": {"command": command},
+    }
+    return subprocess.run(
+        [sys.executable, str(HOOK)], input=json.dumps(payload),
+        capture_output=True, text=True,
+    )
+
+
+def _decision(result):
+    if not result.stdout.strip():
+        return None
+    return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"]
+
+
+@pytest.mark.parametrize("command", [
+    f"python3 - <<'PY'\nopen('{REGISTER_NAME}','a').write(x)\nPY",
+    f"cat >> {REGISTER_NAME} <<'EOF'\n- entry\nEOF",
+    f"echo '- entry' >> {REGISTER_NAME}",
+    f"sed -i 's/a/b/' {REGISTER_NAME}",
+    f"printf '%s' x | tee -a {REGISTER_NAME}",
+])
+def test_shell_writes_to_the_register_ask(tmp_path, command):
+    """Every shape that bypassed the Write/Edit matcher must now surface."""
+    r = _run_bash(tmp_path, command)
+    assert r.returncode == ALLOW, "advisory must never block"
+    assert _decision(r) == "ask", f"no prompt for: {command!r}"
+    assert "has NOT checked this one" in r.stdout
+
+
+@pytest.mark.parametrize("command", [
+    f"grep -n CLAIM {REGISTER_NAME}",
+    f"sed -n '1,5p' {REGISTER_NAME}",
+    f"wc -l {REGISTER_NAME}",
+    "echo hello >> /tmp/unrelated.txt",
+])
+def test_reads_and_unrelated_writes_stay_silent(tmp_path, command):
+    """A prompt on every `grep` would train the reader to click through."""
+    r = _run_bash(tmp_path, command)
+    assert r.returncode == ALLOW
+    assert _decision(r) is None, f"spurious prompt for: {command!r}"
+
+
+def test_the_prompt_names_the_open_lanes(tmp_path):
+    """Surfacing state is the whole point -- an opaque prompt is just friction."""
+    r = _run_bash(tmp_path, f"echo x >> {REGISTER_NAME}")
+    assert "AGENT-A" in r.stdout and "feat/widget" in r.stdout
+
+
+def test_a_file_path_is_not_a_lane(tmp_path):
+    """`docs/x.md` in a scope is a citation, not a claimed branch.
+
+    Unfiltered, two agents citing the same spec file would collide on it, and
+    the register showed lanes nobody was working.
+    """
+    existing = (
+        "- `t` CLAIM `AGENT-A` scope: **wrote it up.** "
+        "See `docs/superpowers/specs/thing-design.md`\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t` CLAIM `AGENT-B` scope: **read it.** See `docs/superpowers/specs/thing-design.md`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, "a shared file citation must not read as a collision"
+
+
+def test_a_real_docs_branch_is_still_a_lane(tmp_path):
+    """The filter keys on the file extension, so extensionless docs/ branches survive."""
+    existing = "- `t` CLAIM `AGENT-A` scope: **x.** Branch `docs/opus5-identity-and-lane-claim`\n"
+    r = run_hook(
+        tmp_path,
+        "- `t` CLAIM `AGENT-B` scope: **x.** Branch `docs/opus5-identity-and-lane-claim`",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK, "a genuine docs/ branch must still be a lane"
+
+
+def test_the_prompt_lists_every_lane_an_owner_holds(tmp_path):
+    """The advisory must survive open_claims_in's LIST-per-owner shape.
+
+    This branch was written against the older shape, where open_claims_in
+    returned one tuple per owner. #2760 changed it to a LIST -- precisely
+    because keying one claim per owner silently forgot every lane but the
+    newest. Rebasing onto that left the advisory unpacking a list of claims
+    as if it were `(lineno, lanes)`, which raises for one or three open
+    claims and, for exactly two, "succeeds" by binding two whole claims to
+    `lineno` and `lanes`.
+
+    Every pre-existing advisory test gives each owner a single open claim, so
+    all of them pass against the broken code. Two claims for one owner is the
+    discriminator, and both lanes must appear.
+    """
+    existing = (
+        "- `2026-01-01T00:00:00Z` CLAIM `AGENT-A` scope: **one.** Branch `feat/widget`\n"
+        "- `2026-01-02T00:00:00Z` CLAIM `AGENT-A` scope: **two.** Branch `fix/sprocket`\n"
+    )
+    result = _run_bash(tmp_path, f"echo '- entry' >> {REGISTER_NAME}", existing=existing)
+    assert result.returncode == ALLOW, result.stderr
+    reason = json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "feat/widget" in reason, reason
+    assert "fix/sprocket" in reason, reason
+    assert "2 total, 2 naming a branch" in reason, reason
+
+
+def test_a_release_citing_a_file_still_closes_the_whole_claim(tmp_path):
+    """A RELEASE that cites a file path is a BARE release, not a scoped one.
+
+    `lanes_in` filters file paths out of CLAIM lines; the RELEASE line has to
+    use the same filter. Left on the raw regex, a release whose scope mentions
+    `docs/something.md` produces a non-empty `released` set, so it takes the
+    "closes only the named lanes" branch and closes nothing -- while the
+    register's own convention (99 of its 120 RELEASE lines name no branch) is
+    that a bare release is a full handoff. The lane would stay open and the
+    author would have no way to tell.
+    """
+    existing = (
+        "- `2026-01-01T00:00:00Z` CLAIM `AGENT-A` scope: **widget.** Branch `feat/widget`\n"
+        "- `2026-01-02T00:00:00Z` RELEASE `AGENT-A` scope: **done, see `docs/notes.md`.**\n"
+    )
+    proposed = existing + (
+        "- `2026-01-03T00:00:00Z` CLAIM `AGENT-B` scope: **mine now.** Branch `feat/widget`\n"
+    )
+    result = run_hook(tmp_path, proposed, existing=existing)
+    assert result.returncode == ALLOW, (
+        "the release closed the lane, so AGENT-B may take it:\n" + result.stderr
+    )
