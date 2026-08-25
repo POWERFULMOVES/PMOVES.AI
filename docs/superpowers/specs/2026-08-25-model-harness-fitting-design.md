@@ -110,6 +110,45 @@ the nesting permits variation, it does not require it.
 suit was written for. Neither half is discarded, and a fitting that gains only one
 half is still valid — it is simply incomplete, and reports as such.
 
+### 1b. A role binds seams, not just sampling parameters
+
+This is the part `temperature` and `top_p` cannot express, and it is where most of
+the value is.
+
+dsh is the reference. Its `docs/capability-seams.md` names ~28 swappable seams —
+`ctx.llm`, `ctx.tools`, `ctx.storage`, `ctx.credentials`, `ctx.systemPrompt`,
+`ctx.agentPresets`, `ctx.tokenMeter`, `ctx.toolResultPruner` — each declared by one
+package and filled by any of several implementations. `ctx.sessionPersistence`
+states the principle plainly: *"Backends persist the same SessionEvent vocabulary;
+apps choose a backend at composition time."*
+
+A role is that choice. The same question — *"who should actually do this work?"* —
+is a seam binding:
+
+| question | seam | binding |
+|---|---|---|
+| drive a GUI: chrome plugin and many tool calls, or an authenticated browser? | `ctx.tools` | `pmoves-surf` + `mai_ui` rather than in-harness browser tools |
+| comb a large corpus without spending the caller's window | `ctx.llm` | a SPARK-local endpoint with cheap tool calls |
+| this needs an agent that does not exist yet | `ctx.agentPresets` | mint via `archon` |
+| OCR a fine-tuned medical set | `ctx.llm` | `hf_agent` / unsloth impl |
+| search a YouTube library, drive, mail | `ctx.storage`, `ctx.fileReferences` | the corpus-owning service |
+
+So `fit` acquires a fourth answer beyond `full` / `limited` / `none`: **`delegate`** —
+this pairing is capable, but the work belongs elsewhere, and here is where. That
+turns *"does 4090-CLAUDE do this, or does PMOVES?"* from a per-session judgement
+call into a recorded, reviewable binding.
+
+The economics are the point. A caller's context window is a hard, non-renewable
+per-session constraint; a local model's tool calls are close to free. A fitting that
+routes bulk tool-work to the caller is not merely suboptimal — it converts an
+abundant resource into a scarce one. `ctx.tokenMeter` ("replay token measurement")
+and `ctx.toolResultPruner` ("model-free tool-result pruning") exist because dsh
+treats that as a first-class concern; a fitting should be able to bind them.
+
+Seam names are dsh's vocabulary. PMOVES harnesses that expose no seams simply
+declare none, and their roles carry sampling parameters only — the schema does not
+require a harness to be seam-aware to be fitted.
+
 ### 2. Harness references must resolve
 
 Harness keys are validated against the agent registry. This is now possible because
@@ -175,7 +214,11 @@ settings?* It reads fittings, applies the role vocabulary, and honours `fit`:
   logged, not silent
 - `fit: none` — never routed
 - `fit: untested` — never routed by default; a deliberate flag opts in, which is how
-  `untested` becomes `full` or `limited` instead of staying `untested` forever
+  `untested` becomes a verdict instead of staying `untested` forever
+- `fit: delegate` — capable, but the work belongs elsewhere. The binding names the
+  destination (§1b), and the router dispatches there rather than executing locally.
+  This is the one value that routes to a DIFFERENT substrate rather than choosing a
+  model, so it is the only value that must name a target.
 
 Transport is NATS, matching the existing dispatch path (`pmoves.agent.task.v1` /
 `pmoves.agent.result.v1`, published by `mavis`). The router is a subscriber, not a
@@ -234,9 +277,13 @@ nobody re-checks. Two extractions agreeing is the check.
 
 ## Open questions
 
-1. **Should `fit` be per-harness or per (harness, role)?** A model may be `full` for
-   `code_review` in a harness and `limited` for `agentic_coding` in the same one.
-   Per-harness is proposed for simplicity; per-pair is more faithful.
+1. ~~Should `fit` be per-harness or per (harness, role)?~~ **Resolved 2026-08-25:
+   both.** `fit` is declared per harness AND may be narrowed per role, because the
+   seam bindings in §1b differ by role — a model can be `full` for `code_review` in
+   a harness and `delegate` for `bulk_ocr` in that same harness. A role-level `fit`
+   overrides the harness-level one; a harness-level `fit` with no role override
+   applies to every role. This makes migration of the 35 existing `cross_agent`
+   entries mechanical (they become harness-level) while leaving room to narrow.
 2. **Who writes `fit`?** Hand-recorded today. A measured verdict — from the provider
    verifier, or a harness smoke run — would keep it honest as models change.
 3. **Does `dsh` change this?** It hosts other harnesses via hook dialects, so a
