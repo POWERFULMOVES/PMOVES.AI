@@ -33,10 +33,28 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, field_validator
 
+# Report lines use an em dash. On Windows the default console/pipe encoding is
+# cp1252, not UTF-8 -- a caller capturing this process's output with
+# `encoding="utf-8"` (as the test suite does) then gets a UnicodeDecodeError
+# on that single byte. Force UTF-8 so stdout/stderr are decodable regardless
+# of platform locale.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8")
+
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = ROOT / "pmoves" / "config" / "agent_registry.yaml"
 TEAMS = ROOT / "pmoves" / "configs" / "agent-teams.yaml"
 ROOMS_DIR = ROOT / "pmoves" / "config" / "rooms"
+
+sys.path.insert(0, str(ROOT / "pmoves" / "tools"))
+from fittings import (  # noqa: E402
+    SUITS_DIR,
+    effective_fit,
+    load_harnesses,
+    load_roles,
+    resolve_role,
+)
 
 SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 KEBAB = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
@@ -213,6 +231,33 @@ def main(argv: list[str]) -> int:
                         warnings.append(
                             f"{section}[{entry_key}]: rooms entry {room!r} is in neither "
                             f"pmoves/config/rooms/catalog.json nor a room manifest")
+
+    # 4. Fitting cross-check -------------------------------------------------
+    # A fitting naming a harness that does not exist is a typo that silently
+    # disables routing for that pair. Same shape as the room-owner cross-check
+    # above, but an ERROR rather than a warning: a room with a bad owner is still
+    # discoverable, whereas an unroutable pairing is invisible at read time.
+    harnesses = load_harnesses()
+    roles = load_roles()
+    for suit_path in sorted(SUITS_DIR.glob("*.yaml")):
+        doc = _load_yaml(suit_path) or {}
+        fit_block = doc.get("fit") or {}
+        for harness_key, role_map in fit_block.items():
+            if harness_key not in harnesses:
+                errors.append(
+                    f"{suit_path.name}: fit names {harness_key!r}, which is not a "
+                    "registry agent with `kind: harness`"
+                )
+            for role_key, observations in (role_map or {}).items():
+                canonical, note = resolve_role(role_key, roles)
+                if canonical is None:
+                    errors.append(f"{suit_path.name}: {note}")
+                elif note:
+                    warnings.append(f"{suit_path.name}: {note}")
+                try:
+                    effective_fit(observations or [])
+                except ValueError as exc:
+                    errors.append(f"{suit_path.name} [{harness_key}/{role_key}]: {exc}")
 
     # --- Report ------------------------------------------------------------
     print(f"registry agents: {len(registry_keys)} | team agents: {len(teamed)} "
