@@ -76,9 +76,18 @@ services:
       args:
         CUDA_VERSION: "${ARM64_CUDA_VERSION:?Set per node. SPARK GB10 (sm_121) needs 13.0.1; Jetson on JetPack 6.2 (sm_87) needs 12.8.1. No safe default exists -- CUDA 13 will not run on JetPack 6.2, and 12.8 has no sm_121.}"
         CUDA_ARCHS: "${ARM64_CUDA_ARCHS:?Set per node. 121 for SPARK GB10, 87 for Jetson Orin. Must match ARM64_CUDA_VERSION above.}"
+        # Ubuntu 24.04's GCC 13 rejects the armv9.2-a+sme CPU variant that
+        # GGML_CPU_ALL_VARIANTS=ON compiles (+sme is GCC 14+). On these nodes
+        # the CUDA backend is the point; the single generic CPU backend is
+        # enough. Keep ON where the compiler supports it.
+        GGML_CPU_VARIANTS: "${ARM64_GGML_CPU_VARIANTS:-OFF}"
   channel-monitor:
     platform: linux/arm64
-  archon-server:
+  # The service is `archon` in every defining overlay; `archon-server` is a
+  # network alias, never a service name. Patching the alias name made compose
+  # fail the whole project with "neither an image nor a build context" as soon
+  # as any full-file-set build included this override.
+  archon:
     platform: linux/arm64
   mai-ui-agent:
     platform: linux/arm64
