@@ -135,6 +135,61 @@ agents:
       compose_profile: agents
     description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
 
+  claude_4090:
+    name: "4090 Claude"
+    class: standard
+    # ui/agent mirrors `crush` -- the other terminal coding harness. The surface a
+    # human drives is a UI; what it drives is an agent.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. This is a CLI session, not a service -- same as crush.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # Points at the existing external_contributors entry, exactly as agent_zero
+    # carries `signature: claude-opus`. The contributor list is the SIGNING roster
+    # and is referenced by CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/roster/users.yaml,
+    # so the name stays there; this adds the operational half that was missing.
+    signature: 4090-claude
+    # Deliberately empty. 41 of 99 registry agents publish nothing -- including
+    # archon -- and declaring subjects this session does not actually publish would
+    # be the same defect #2734 fixed: a definition describing an architecture that
+    # does not exist. Populate when the bus wiring is real.
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories:
+        - agent_plan
+        - agent_checkpoint
+        - agent_completion
+    topology:
+      # The node this identity IS. `kilocode_glm` sets the precedent for an agent
+      # claiming laptop-4090 while its team's own node_affinity does not list it.
+      node_affinity:
+        - laptop-4090
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: null
+    description: >-
+      Claude Code CLI identity on the laptop-4090 node. Operates the PMOVES stack
+      from the terminal -- review, merge, secrets funnel, service bring-up -- and
+      drives Agent Zero and Archon rather than being driven by them. Launched via
+      `claude-pmoves`, which supplies the MCP roster (incl. Cipher) and a role
+      agent; this entry supplies the node identity that pairing was missing.
   kilocode_glm:
     name: "KiloCode GLM"
     class: standard
