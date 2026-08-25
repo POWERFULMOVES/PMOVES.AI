@@ -237,25 +237,119 @@ def main(argv: list[str]) -> int:
     # disables routing for that pair. Same shape as the room-owner cross-check
     # above, but an ERROR rather than a warning: a room with a bad owner is still
     # discoverable, whereas an unroutable pairing is invisible at read time.
+    #
+    # A malformed suit file (e.g. the legacy scalar shape `fit: {harness: full}`
+    # a migrator would naturally write) must become a gate error naming the file,
+    # never an uncaught exception -- a traceback here would abort the whole run
+    # and suppress the registry/teams report for every other file.
     harnesses = load_harnesses()
     roles = load_roles()
     for suit_path in sorted(SUITS_DIR.glob("*.yaml")):
         doc = _load_yaml(suit_path) or {}
-        fit_block = doc.get("fit") or {}
+        if "fit" not in doc:
+            continue
+        fit_block = doc.get("fit")
+        if not isinstance(fit_block, dict):
+            errors.append(
+                f"{suit_path.name}: fit: must be a mapping of harness -> role -> "
+                f"[observation, ...], got {type(fit_block).__name__} ({fit_block!r})"
+            )
+            continue
+        if not fit_block:
+            # An empty map is the same artifact as an empty observation list
+            # below, one level up: a completed-looking record with no data in
+            # it. An unmeasured harness has no `fit` entry at all.
+            errors.append(
+                f"{suit_path.name}: fit: is present but empty; omit the key "
+                "entirely for an unmeasured harness rather than recording an "
+                "empty map"
+            )
+            continue
         for harness_key, role_map in fit_block.items():
             if harness_key not in harnesses:
                 errors.append(
                     f"{suit_path.name}: fit names {harness_key!r}, which is not a "
                     "registry agent with `kind: harness`"
                 )
-            for role_key, observations in (role_map or {}).items():
+            if not isinstance(role_map, dict):
+                errors.append(
+                    f"{suit_path.name} [{harness_key}]: expected a mapping of "
+                    f"role -> [observation, ...], got {type(role_map).__name__} "
+                    f"({role_map!r}) -- the legacy scalar shape "
+                    "`fit: {harness: full}` is not supported"
+                )
+                continue
+            if not role_map:
+                errors.append(
+                    f"{suit_path.name} [{harness_key}]: role map is empty; omit "
+                    "the harness entry entirely for an unmeasured pairing rather "
+                    "than recording an empty map"
+                )
+                continue
+            for role_key, observations in role_map.items():
                 canonical, note = resolve_role(role_key, roles)
                 if canonical is None:
                     errors.append(f"{suit_path.name}: {note}")
                 elif note:
                     warnings.append(f"{suit_path.name}: {note}")
+
+                if not isinstance(observations, list):
+                    errors.append(
+                        f"{suit_path.name} [{harness_key}/{role_key}]: expected a "
+                        f"list of observations, got {type(observations).__name__} "
+                        f"({observations!r})"
+                    )
+                    continue
+                if not observations:
+                    # The plan's constraint (spec §4/§6): an unmeasured pairing
+                    # has NO entry at all. A present-but-empty list is the same
+                    # "untested" artifact under a different spelling.
+                    errors.append(
+                        f"{suit_path.name} [{harness_key}/{role_key}]: "
+                        "observation list is empty; omit the role entry entirely "
+                        "for an unmeasured pairing rather than recording a null "
+                        "result"
+                    )
+                    continue
+                malformed = [o for o in observations if not isinstance(o, dict)]
+                if malformed:
+                    errors.append(
+                        f"{suit_path.name} [{harness_key}/{role_key}]: each "
+                        f"observation must be a mapping, got {malformed!r}"
+                    )
+                    continue
+
+                for obs in observations:
+                    # Evidence, not a permission bit (spec §6): every observation
+                    # must carry who measured it, how, and when.
+                    if True in obs and "on" not in obs:
+                        # Unquoted `on: 2026-08-25` parses under YAML 1.1 as the
+                        # boolean key True, not the string "on" -- the date is
+                        # then silently absent rather than merely missing.
+                        errors.append(
+                            f"{suit_path.name} [{harness_key}/{role_key}]: "
+                            "observation key `on` was parsed as the boolean "
+                            'True -- quote it as `"on":` in the YAML (unquoted '
+                            "`on:` is a YAML 1.1 boolean key)"
+                        )
+                    else:
+                        missing = [f for f in ("by", "method", "on") if not obs.get(f)]
+                        if missing:
+                            errors.append(
+                                f"{suit_path.name} [{harness_key}/{role_key}]: "
+                                f"observation missing required provenance "
+                                f"field(s): {missing} (need by, method, on)"
+                            )
+                    method = obs.get("method")
+                    if method is not None and method not in ("hand", "measured"):
+                        errors.append(
+                            f"{suit_path.name} [{harness_key}/{role_key}]: "
+                            f"observation method must be 'hand' or 'measured', "
+                            f"got {method!r}"
+                        )
+
                 try:
-                    effective_fit(observations or [])
+                    effective_fit(observations)
                 except ValueError as exc:
                     errors.append(f"{suit_path.name} [{harness_key}/{role_key}]: {exc}")
 
