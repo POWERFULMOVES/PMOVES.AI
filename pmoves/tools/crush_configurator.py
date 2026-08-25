@@ -691,6 +691,11 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         Path("pmoves/docs/SMOKETESTS.md"),
         Path("pmoves/chit/secrets_manifest.yaml"),
         Path("docs/PMOVES_MINI_CLI_SPEC.md"),
+        # Written at launch by crush-pmoves (node_identity.py resolver). Crush
+        # has no --append-system-prompt, so this generated context file is how
+        # the session's node identity reaches the model. exists() keeps nodes
+        # that never ran the launcher clean. Gitignored runtime state.
+        Path("pmoves/data/identity/node-identity.md"),
     ]
 
     context_paths = [
