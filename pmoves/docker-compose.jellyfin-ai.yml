@@ -41,7 +41,7 @@ x-jellyfin-env: &jellyfin-env
   NVIDIA_DRIVER_CAPABILITIES: ${JELLYFIN_NVIDIA_DRIVER_CAPABILITIES:-}
 
 x-jellyfin-base: &jellyfin-base
-  image: lscr.io/linuxserver/jellyfin:10.11.0
+  image: lscr.io/linuxserver/jellyfin:10.11.11
   environment:
     <<: *jellyfin-env
   volumes:
@@ -61,11 +61,16 @@ x-jellyfin-base: &jellyfin-base
 
 services:
   jellyfin:
-    <<: *jf-hardened-vendor
-    <<: *jellyfin-base
+    # Single merge SEQUENCE, not two `<<` keys. Two of them is a duplicate
+    # mapping key, which YAML rejects outright -- docker compose refused to parse
+    # this whole file ("mapping key \"<<\" already defined"). The anchors share no
+    # keys (hardening supplies cap_drop/cap_add/security_opt, base supplies
+    # image/environment/volumes/ports/networks/restart), so the order carries no
+    # precedence meaning; it reads hardening-first to match the envelope's intent.
+    <<: [*jf-hardened-vendor, *jellyfin-base]
     container_name: ${JELLYFIN_CONTAINER_NAME:-pmoves-jellyfin-ai}
     profiles: ["default", "jellyfin-ai"]
-    image: lscr.io/linuxserver/jellyfin:10.11.0
+    image: lscr.io/linuxserver/jellyfin:10.11.11
     environment:
       - PUID=${JELLYFIN_PUID:-1000}
       - PGID=${JELLYFIN_PGID:-1000}
@@ -94,24 +99,40 @@ services:
     restart: unless-stopped
 
   jellyfin-vaapi:
-    <<: *jf-hardened-vendor
-    <<: *jellyfin-base
+    # Merge SEQUENCE, not two `<<` keys -- see the note on the `jellyfin` service.
+    <<: [*jf-hardened-vendor, *jellyfin-base]
     container_name: ${JELLYFIN_CONTAINER_NAME:-pmoves-jellyfin-ai}
     profiles: ["jellyfin-ai-vaapi"]
     devices:
-      - ${JELLYFIN_VAAPI_DEVICE:-/dev/dri/renderD128}:${JELLYFIN_VAAPI_DEVICE:-/dev/dri/renderD128}
-      - /dev/dri/card0:/dev/dri/card0
+      # Whole /dev/dri by default, which is what Jellyfin's own hwaccel docs
+      # recommend. The previous pair passed renderD128 plus a HARDCODED card0 --
+      # wrong on any host whose DRM node is not card0 (SPARK has card1 as well),
+      # where the container then sees a render node with no matching card and
+      # falls back to software transcoding silently.
+      #
+      # JELLYFIN_VAAPI_DEVICE is unchanged as a knob -- it is documented in
+      # env.jellyfin-ai.example and EXTERNAL_INTEGRATIONS_BRINGUP.md -- only its
+      # DEFAULT moved from the single render node to the whole tree. An operator
+      # who set it explicitly keeps exactly the narrowing they chose.
+      - ${JELLYFIN_VAAPI_DEVICE:-/dev/dri}:${JELLYFIN_VAAPI_DEVICE:-/dev/dri}
     group_add:
+      # 44 = video. The render group GID is DISTRO-dependent and must match the
+      # host's owner of the render node, because device nodes pass through with
+      # host ownership: Debian uses 109, Ubuntu 110. Only 109 was listed, so on an
+      # Ubuntu host the container had no access to the render node it was handed.
+      # Both are listed because the fleet is mixed; a numeric GID matching no host
+      # group is inert, so carrying the spare costs nothing.
       - "44"
       - "109"
+      - "110"
     environment:
       <<: *jellyfin-env
       JELLYFIN_HWACCEL_MODE: vaapi
       JELLYFIN_HWACCEL: vaapi
 
   jellyfin-nvenc:
-    <<: *jf-hardened-vendor
-    <<: *jellyfin-base
+    # Merge SEQUENCE, not two `<<` keys -- see the note on the `jellyfin` service.
+    <<: [*jf-hardened-vendor, *jellyfin-base]
     container_name: ${JELLYFIN_CONTAINER_NAME:-pmoves-jellyfin-ai}
     profiles: ["jellyfin-ai-nvenc"]
     deploy:
