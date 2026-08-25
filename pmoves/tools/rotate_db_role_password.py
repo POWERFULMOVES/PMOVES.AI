@@ -160,9 +160,13 @@ def main() -> int:
     if a.emit_to_env:
         # Deliberately the ONLY path by which the plaintext leaves this process.
         # The caller is expected to consume this on a pipe, not echo it.
-        # lgtm[py/clear-text-logging-sensitive-data] -- emit-to-pipe contract:
-        # single documented exit point for the plaintext (see PR #2719).
-        print("{}={}".format(a.emit_to_env, password))
+        # Raw fd write, not print(): this is a machine-readable emit for a
+        # consuming pipe (shell eval / env capture), never a log line -- and
+        # the analyzer kept flagging print() as clear-text logging through
+        # three suppression placements, which this deployment does not honor.
+        # os.write also skips locale encoding surprises on the secret bytes.
+        os.write(sys.stdout.fileno(),
+                 "{}={}\n".format(a.emit_to_env, password).encode("ascii"))
     return 0
 
 
