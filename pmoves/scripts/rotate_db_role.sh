@@ -56,6 +56,26 @@ if [ -n "$DRY" ]; then
   exec $PY "$TOOL" "${args[@]}" --dry-run
 fi
 
+# Pre-flight everything that can fail WITHOUT touching the database, so the
+# ALTER is never the step that discovers a broken local prerequisite: after it,
+# the server holds a credential no consumer has, and a failed funnel means a
+# privileged recovery rotation.
+# (a) env.shared must exist — secrets-rotate surgically edits it.
+# (b) KEY must already be a line in it — a typo would otherwise surface as a
+#     funnel failure one step past the point of no return.
+# (c) the tool's own --dry-run validates role name, container reachability,
+#     and argument shape against the real docker exec path.
+if [ ! -f "$HERE/env.shared" ]; then
+  echo "pre-flight: $HERE/env.shared missing — secrets-rotate would fail after the ALTER" >&2
+  exit 1
+fi
+if ! grep -qE "^${KEY}=" "$HERE/env.shared"; then
+  # Not fatal: the funnel may legitimately introduce a brand-new key. But say
+  # so loudly BEFORE the database moves, where it is still cheap to abort.
+  echo "pre-flight WARNING: '$KEY' is not yet a key in env.shared — secrets-rotate will CREATE it" >&2
+fi
+$PY "$TOOL" "${args[@]}" --dry-run >/dev/null
+
 # One capture. Report every line EXCEPT the value-bearing one.
 out="$($PY "$TOOL" "${args[@]}" --emit-to-env PMOVES_ROTATE_VALUE)"
 printf '%s\n' "$out" | grep -v '^PMOVES_ROTATE_VALUE=' || true
@@ -73,7 +93,29 @@ fi
 # shell-active characters never transit argv. Reuse it rather than restate it.
 export PMOVES_ROTATE_VALUE="$value"
 unset value
-make -C "$HERE" --no-print-directory secrets-rotate KEY="$KEY"
+# The funnel is the one step that can fail AFTER the database already holds the
+# new verifier (CHIT audit, manifest gate, funnel-side env surgery). set -e
+# would exit here and discard the only copy of the minted plaintext, forcing a
+# second privileged rotation. Catch it instead and hand the value back with
+# retry instructions — the terminal is already a secret-bearing context, and
+# the alternative is losing the credential entirely.
+if ! make -C "$HERE" --no-print-directory secrets-rotate KEY="$KEY"; then
+  cat >&2 <<EOF
+
+✘ $ROLE IS ROTATED in Postgres, but the funnel FAILED.
+  The database now holds a credential no consumer has. The minted value is
+  below (the only surviving copy) — retry the funnel directly:
+
+    PMOVES_ROTATE_VALUE='<below>' make -C pmoves secrets-rotate KEY=$KEY
+
+  Do NOT re-run this script for the retry: it would mint a DIFFERENT
+  password and move the goalposts again.
+
+PMOVES_ROTATE_VALUE=$PMOVES_ROTATE_VALUE
+EOF
+  unset PMOVES_ROTATE_VALUE
+  exit 1
+fi
 unset PMOVES_ROTATE_VALUE
 
 cat <<EOF

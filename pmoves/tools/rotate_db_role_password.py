@@ -133,7 +133,13 @@ def main() -> int:
 
     password = mint(a.length)
     verifier = scram_sha256_verifier(password, secrets.token_bytes(SALT_BYTES))
-    stmt = "ALTER ROLE {} PASSWORD {};".format(a.role, quote_literal(verifier))
+    # LOGIN is part of the statement, not a follow-up: initdb provisions
+    # juicefs_meta with NOLOGIN (supabase/initdb/00_3_juicefs_meta_role.sql),
+    # so a password-only ALTER reports success while every authentication
+    # attempt stays rejected. WITH LOGIN closes that gap idempotently --
+    # it is a no-op for a role that can already log in.
+    stmt = "ALTER ROLE {} WITH LOGIN PASSWORD {};".format(
+        a.role, quote_literal(verifier))
 
     if a.dry_run:
         # Never print the password or the verifier. Shape only.
