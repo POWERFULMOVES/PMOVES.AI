@@ -2390,6 +2390,16 @@ services:
     - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
     - YOLO_CONFIDENCE=${YOLO_CONFIDENCE:-0.25}
     - FRAME_SAMPLE_RATE=${FRAME_SAMPLE_RATE:-5}
+    # env.shared blanks SSL_CERT_FILE/SSL_CERT_DIR/*_CA_BUNDLE to stop Windows
+    # host cert paths leaking in — but an EMPTY value breaks TLS clients that
+    # treat it as a real path: hf-xet's Rust stack (HF model downloads) loads ""
+    # and dies with "No CA certificates were loaded from the system". Re-point
+    # at the container's own CA store (same anti-leak intent, working trust
+    # chain) — mirrors the media-audio block below.
+    - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    - SSL_CERT_DIR=/etc/ssl/certs
+    - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    - CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     deploy:
       resources:
