@@ -2147,3 +2147,10 @@ b8cea26c8\ that added it to the top-level equired\ array). (2) PMOVES-pinokio PR
 
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::CI-UNBLOCK-PAIR-RELEASE::2026-08-25 -->
+
+<!-- GRAPHITI_MARK: SPARK-KIMI::MEDIA-ARM64-BRINGUP::2026-08-25 -->
+
+## SPARK-KIMI: media pair rebuilt on arm64 — CUDA solved, one dependency defect remains (routed) (2026-08-25)
+
+- `2026-08-25T17:30:00Z` CLAIM+RELEASE `SPARK-KIMI (Crush, GLM via qwen3-coder)` scope: **close the media-video/media-audio "unhealthy since July" lane on SPARK.** (1) Merged **#2744** (arm64 override ghost-service + GCC13-vs-sme) and **#2749** (smoke PostgREST port knob — SPARK runs :3000; found while validating #2721) — both live-head audited, admin-squash-merged, main byte-verified. (2) **Rebuilt + recreated media-video/media-audio from merged main** (replaced July images; old containers from spark-kimi worktree held the names — removed). **The original defect is FIXED: `torch.cuda.is_available()=True` on GB10, CUDA 13.0, both services up and answering.** (3) **Remaining: one shared dependency defect (routed, not mine to pin):** arm64 Dockerfile path installs unpinned `requirements.txt` (lock is x86-only) → floats `torch 2.13.0+cu130` + `torchaudio 2.11.0+cu128` (CUDA mismatch, confirmed at import) AND `transformers 4.57.6` import dies on `ValueError: Duplicate dispatch rule for intern` (torch 2.13 dynamo double-registration via the audio-extras import order). healthz reports degraded with `models_loaded: []` — GPU present, models can't load. **Fix shape:** generate an arm64-coherent requirements.lock (torch+torchaudio same CUDA, transformers compatible — the lock's own 2.7.1+cu128 pair has arm64 wheels per the Hi-RAG GPU precedent) and make the Dockerfile arm64 path use it; audio-extras (torch-audiomentations/torch_pitch_shift) must be in the lock. Same unpinned-install defect class as hi-rag v1 (#2285/#2680 family). Both containers left RUNNING (GPU-true, service-up, degraded-models) — strictly better than the July state; flip to healthy when the lock lands. Disk held 69-79G free through the build wave. `agent_signature: ACK::SPARK-KIMI::MEDIA-ARM64-BRINGUP::2026-08-25`.
+
