@@ -160,7 +160,10 @@ def main() -> int:
     if a.emit_to_env:
         # Deliberately the ONLY path by which the plaintext leaves this process.
         # The caller is expected to consume this on a pipe, not echo it.
-        print("{}={}".format(a.emit_to_env, password))
+        # Suppressed below on purpose: this emit-to-pipe contract is the single,
+        # documented exit point for the plaintext — keeping it here keeps the
+        # value auditable instead of scattering it through less-visible sinks.
+        print("{}={}".format(a.emit_to_env, password))  # codeql[py/clear-text-logging-sensitive-data]
     return 0
 
 
