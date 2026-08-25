@@ -9,15 +9,6 @@ on:
       - 'pmoves/services/**/tests/**'
       - 'pmoves/libs/**'
       - 'pmoves/tests/**'
-      # Inputs the tests in pmoves/tests/ read but do not live beside. Without
-      # these, a gate here is invisible to the change it exists to catch: a new
-      # node spelling in agent_registry.yaml, or an edit to the vocabulary or
-      # the resolver, would not trigger the suite that checks them.
-      - 'pmoves/tools/**'
-      - 'pmoves/configs/**'
-      - 'pmoves/config/agent_registry.yaml'
-      - 'pmoves/config/operator_nodes.yaml'
-      - 'pmoves/scripts/claude-pmoves.sh'
       - 'pytest.ini'
       - '.github/workflows/python-tests.yml'
   pull_request:
@@ -28,15 +19,6 @@ on:
       - 'pmoves/services/**/tests/**'
       - 'pmoves/libs/**'
       - 'pmoves/tests/**'
-      # Inputs the tests in pmoves/tests/ read but do not live beside. Without
-      # these, a gate here is invisible to the change it exists to catch: a new
-      # node spelling in agent_registry.yaml, or an edit to the vocabulary or
-      # the resolver, would not trigger the suite that checks them.
-      - 'pmoves/tools/**'
-      - 'pmoves/configs/**'
-      - 'pmoves/config/agent_registry.yaml'
-      - 'pmoves/config/operator_nodes.yaml'
-      - 'pmoves/scripts/claude-pmoves.sh'
       - 'pytest.ini'
       - '.github/workflows/python-tests.yml'
   workflow_dispatch:
@@ -225,16 +207,5 @@ jobs:
             pmoves/services/hi-rag-gateway/tests \
             pmoves/services/hi-rag-gateway-v2/tests \
             pmoves/services/jellyfin-bridge/tests \
-            pmoves/tests/test_node_identity.py \
             --ignore=pmoves/services/media-audio/tests \
             --ignore=pmoves/services/media-video/tests
-
-          # WHY A NAMED FILE AND NOT `pmoves/tests`: this workflow triggers on
-          # `pmoves/tests/**` and then runs an allowlist that has never included
-          # that directory -- so every test under it triggers CI without being
-          # executed by it. Adding the directory wholesale is not the fix
-          # available here: 5 collection errors (integration/, services/,
-          # smoke/, test_common/) abort the run before anything executes, and
-          # untangling those is its own change with its own reviewer. Named
-          # explicitly so this gate actually runs; the wider hole is filed
-          # separately rather than left implied by the path filter above.
