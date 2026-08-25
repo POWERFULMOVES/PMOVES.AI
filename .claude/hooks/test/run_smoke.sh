@@ -225,13 +225,27 @@ else
   bad "preflight.sh crashed (rc=$rc)"
 fi
 
-# pmoves-nats-subject-audit: gated on NATS :8222 — try and skip if unavailable
-if nc -z -w 1 127.0.0.1 8222 2>/dev/null; then
+# pmoves-nats-subject-audit: gated on the NATS monitoring port.
+#
+# This gate probed 8222 — the port INSIDE the container. Compose publishes it as
+# `${NATS_MONITORING_PORT:-9223}:8222`, so on the host 8222 is closed and the
+# gate skipped on every run, on every node, forever. A permanently-skipped case
+# reports the same "⏸" whether NATS is down or the probe is simply pointed at
+# the wrong port, so nothing ever surfaced it.
+#
+# Probe the same ports audit.py will try, in the same order, so the gate and the
+# tool cannot disagree about whether NATS is reachable. 8222 stays in the list
+# because docker-compose.z890.yml publishes `8222:8222`.
+NATS_MON_PORT=""
+for _p in "${NATS_MONITORING_PORT:-9223}" 8222; do
+  if nc -z -w 1 127.0.0.1 "$_p" 2>/dev/null; then NATS_MON_PORT="$_p"; break; fi
+done
+if [[ -n "$NATS_MON_PORT" ]]; then
   python3 .claude/skills/pmoves-nats-subject-audit/scripts/audit.py >/dev/null 2>&1
   rc=$?
   if [[ "$rc" -le 1 ]]; then ok "audit.py ran (rc=$rc)"; else bad "audit.py crashed (rc=$rc)"; fi
 else
-  echo "  ⏸  audit.py SKIPPED (NATS :8222 down)"
+  echo "  ⏸  audit.py SKIPPED (no NATS monitor on ${NATS_MONITORING_PORT:-9223} or 8222)"
 fi
 
 # pmoves-living-docs-refresh: wraps make target; just confirm it doesn't crash
