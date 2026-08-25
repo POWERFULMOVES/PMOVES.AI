@@ -146,3 +146,88 @@ def test_line_numbers_resolve_the_way_an_editor_counts(tmp_path):
     reported = int(r.stderr.split("line ")[1].split(")")[0].strip())
     actual = existing.split("\n").index(EXISTING.rstrip("\n")) + 1
     assert reported == actual, f"hook said line {reported}, editors say {actual}"
+
+
+# ---------------------------------------------------------------------------
+# Spelling drift. The register carries 49 author strings for ~13 identities;
+# B850 alone writes four. String equality made a release under one spelling
+# fail to close a claim opened under another, and left a lane open for a week
+# (2026-08-25). Both directions of that are pinned here.
+# ---------------------------------------------------------------------------
+
+B850_A = "B850-CLAUDE (Knuckles)"
+B850_B = "B850-CLAUDE (Claude Opus 5)"
+
+
+def test_a_release_closes_a_claim_written_under_another_spelling(tmp_path):
+    """The lane-stays-open bug. `(Knuckles)` claims, `(Claude Opus 5)` releases."""
+    existing = (
+        f"- `2026-01-01T00:00:00Z` CLAIM `{B850_A}` scope: **x.** Branch `feat/widget`\n"
+        f"- `2026-01-02T00:00:00Z` RELEASE `{B850_B}` scope: done.\n"
+    )
+    proposed = (
+        "- `2026-01-03T00:00:00Z` CLAIM `AGENT-C` scope: **x.** Branch `feat/widget`\n"
+    )
+    result = run_hook(tmp_path, proposed, existing)
+    assert result.returncode == ALLOW, (
+        "the lane was released, under a different spelling of the same "
+        f"identity; blocking it keeps the lane open forever.\n{result.stderr}"
+    )
+
+
+def test_an_identity_does_not_collide_with_itself_across_spellings(tmp_path):
+    """The mirror-image false positive: re-claiming your own lane after your
+    parenthetical changes (a new model, a new alter) is not a collision."""
+    existing = (
+        f"- `2026-01-01T00:00:00Z` CLAIM `{B850_A}` scope: **x.** Branch `feat/widget`\n"
+    )
+    proposed = (
+        f"- `2026-01-03T00:00:00Z` CLAIM `{B850_B}` scope: **x.** Branch `feat/widget`\n"
+    )
+    result = run_hook(tmp_path, proposed, existing)
+    assert result.returncode == ALLOW, (
+        f"an identity blocked itself across two of its own spellings\n{result.stderr}"
+    )
+
+
+def test_a_genuine_collision_still_blocks_across_spellings(tmp_path):
+    """Folding must not become a way to take someone else's lane.
+
+    The whole risk of canonicalising is over-folding, so this pins the
+    negative: two DIFFERENT identities on one lane still blocks.
+    """
+    existing = (
+        f"- `2026-01-01T00:00:00Z` CLAIM `{B850_A}` scope: **x.** Branch `feat/widget`\n"
+    )
+    proposed = (
+        "- `2026-01-03T00:00:00Z` CLAIM `4090-CLAUDE (field)` scope: **x.** "
+        "Branch `feat/widget`\n"
+    )
+    result = run_hook(tmp_path, proposed, existing)
+    assert result.returncode == BLOCK, (
+        f"a real cross-identity collision stopped blocking\n{result.stdout}"
+    )
+    assert B850_A in result.stderr, (
+        "the message must name the AS-WRITTEN owner so the reader can find the "
+        f"entry; got: {result.stderr}"
+    )
+
+
+def test_the_hook_still_guards_when_the_vocabulary_is_missing(tmp_path, monkeypatch):
+    """Fail-safe, not fail-open.
+
+    With no vocabulary the hook must fall back to exact comparison -- its
+    previous behaviour -- and still block a genuine collision. A guard that
+    silently stops guarding when a config goes missing is the failure mode
+    this whole change exists to remove.
+    """
+    proposed = (
+        "- `2026-01-03T00:00:00Z` CLAIM `AGENT-B` scope: **x.** Branch `feat/widget`\n"
+    )
+    monkeypatch.setenv("PMOVES_IDENTITY_VOCABULARY", str(tmp_path / "nope.yaml"))
+    result = run_hook(tmp_path, proposed)
+    assert result.returncode == BLOCK, result.stdout
+    assert "vocabulary unavailable" in result.stderr, (
+        "the fallback must be audible -- a guard that quietly degrades is "
+        f"indistinguishable from one that works. stderr was: {result.stderr}"
+    )

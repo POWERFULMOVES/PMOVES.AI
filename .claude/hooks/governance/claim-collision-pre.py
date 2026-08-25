@@ -57,12 +57,72 @@ LANE_RE = re.compile(
 )
 
 
-def open_claims_in(text: str) -> dict[str, tuple[int, set[str]]]:
-    """Map owner -> (line number of their open CLAIM, lanes that CLAIM names).
+_UNSET = object()
+_FOLDER = _UNSET
 
-    A CLAIM is "open" if no later RELEASE for the same owner-ID follows it.
-    RELEASE still pairs by owner, because that is how the register closes a
-    lane: a release must carry the exact string its claim was opened with.
+
+def _load_folder():
+    """Return a name-folding callable, or None if it is unavailable."""
+    global _FOLDER
+    if _FOLDER is not _UNSET:
+        return _FOLDER
+    _FOLDER = None
+    try:
+        import importlib.util
+        root = Path(__file__).resolve().parents[3]
+        spec = importlib.util.spec_from_file_location(
+            "identity_lineage",
+            root / "pmoves" / "tools" / "identity_lineage.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        # MUST be registered before exec_module: identity_lineage defines
+        # @dataclass, and dataclasses._is_type resolves the owning module
+        # via sys.modules[cls.__module__]. Unregistered, that is None and
+        # the import dies with a bare AttributeError about __dict__.
+        sys.modules["identity_lineage"] = module
+        spec.loader.exec_module(module)
+        vocab = module.load_vocabulary()
+
+        def _fold(owner: str) -> str:
+            return module.canonical_identity(owner, vocab) or owner
+
+        _FOLDER = _fold
+    except Exception as exc:  # noqa: BLE001 -- a guard must not die here
+        sys.stderr.write(
+            f"claim-collision-pre: identity vocabulary unavailable ({exc}); "
+            "comparing owner strings exactly, as before. Spelling drift "
+            "will not be folded.\n"
+        )
+    return _FOLDER
+
+
+def canonical_owner(owner: str) -> str:
+    """Fold an owner string to its canonical identity.
+
+    WHY: this hook compared owner strings with `==`, and one identity writes
+    several. B850 alone appears as `(Knuckles)` x16, `(Knuckles, opus 4.7
+    1M)` x7, `(Opus 5)` x2, `(Claude Opus 5)` x1 -- so a RELEASE under one
+    spelling did not close a CLAIM opened under another, and a lane stayed
+    open for a week (2026-08-25). The same equality also makes an identity
+    collide with ITSELF as soon as its parenthetical changes.
+
+    FAIL-SAFE: with no vocabulary this returns the string unchanged, which
+    is exactly the previous behaviour. A guard that cannot fold keys is no
+    worse than it was; a guard that raises stops guarding.
+    """
+    fold = _load_folder()
+    return fold(owner) if fold else owner
+
+
+def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
+    """Map canonical owner -> (line of their open CLAIM, lanes, as-written).
+
+    A CLAIM is "open" if no later RELEASE for the same owner follows it.
+    Pairing is on the CANONICAL identity, not the literal string: a release
+    no longer has to carry the exact spelling its claim was opened with,
+    which is the defect that left a lane open for a week. The as-written
+    string is kept for the message -- `B850-CLAUDE (Knuckles)` locates the
+    entry and `b850-claude` does not.
 
     Line numbers are 1-based to match editor conventions.
 
@@ -75,12 +135,14 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str]]]:
     A line number that does not resolve sends the reader hunting, and this hook
     only speaks when it is blocking someone.
     """
-    open_claims: dict[str, tuple[int, set[str]]] = {}
+    open_claims: dict[str, tuple[int, set[str], str]] = {}
     for lineno, line in enumerate(text.split("\n"), start=1):
         if m := CLAIM_RE.search(line):
-            open_claims[m.group(1)] = (lineno, set(LANE_RE.findall(line)))
+            open_claims[canonical_owner(m.group(1))] = (
+                lineno, set(LANE_RE.findall(line)), m.group(1)
+            )
         elif m := RELEASE_RE.search(line):
-            open_claims.pop(m.group(1), None)
+            open_claims.pop(canonical_owner(m.group(1)), None)
     return open_claims
 
 
@@ -127,11 +189,14 @@ def main() -> None:
         if not lanes:
             unkeyed.append(owner)
             continue
-        for other, (lineno, held) in existing_open.items():
-            if other == owner:
+        owner_key = canonical_owner(owner)
+        for other_key, (lineno, held, other_as_written) in existing_open.items():
+            # Canonical: re-claiming your own lane under a different
+            # spelling of your own name is not a collision.
+            if other_key == owner_key:
                 continue
             for lane in sorted(lanes & held):
-                collisions.append((lane, other, lineno))
+                collisions.append((lane, other_as_written, lineno))
 
     if collisions:
         sys.stderr.write(

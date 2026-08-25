@@ -1,0 +1,215 @@
+# Controlled vocabulary and lineage for AGENT IDENTITIES in the claim register.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# `AGNOTE4482PHI.t1.md` carries 331 CLAIM/RELEASE entries written by roughly a
+# dozen identities under **49 distinct author strings** (measured 2026-08-25).
+# The register has no vocabulary, so one identity accumulates spellings, and
+# three separate things the ledger cannot express have each been worked around
+# by editing history in place:
+#
+#   1. ATTRIBUTION CORRECTION -- "this entry's recorded author was wrong".
+#      Worked around by rewriting the author in the line and appending a prose
+#      `[CORRECTION ...]` note. The original author string is destroyed; only
+#      `git show d85b46961^` recovers it. 6 entries, 2026-05-16, #1504.
+#
+#   2. KEY DRIFT -- one identity, many spellings. B850 alone appears as
+#      `(Knuckles)` x16, `(Knuckles, opus 4.7 1M)` x7, `(Opus 5)` x2,
+#      `(Claude Opus 5)` x1. Cosmetic until `claim-collision-pre.py` was wired
+#      (#2734), at which point two spellings of one identity stopped colliding
+#      with each other. 1 annotated entry, 2026-08-25.
+#
+#   3. SUCCESSION -- "identity A became identity B". There is no edge for this
+#      at all, so it was encoded as an ARROW INSIDE THE AUTHOR FIELD:
+#      `Z890->5090-CLAUDE (opus 4.7 1M)`, 8 entries. That string is the single
+#      best evidence that the missing edge is real: someone needed it badly
+#      enough to invent syntax for it in a free-text field.
+#
+# All three are recorded here as DATA, append-only, with the original preserved.
+# Nothing in this file rewrites the register.
+#
+# THE PARENTHETICAL IS THREE FIELDS IN A TRENCH COAT. 26 distinct parentheticals
+# carry a model (`opus 4.7 1M`, `Fable 5`, `Sonnet 4.6`, `glm-5.2`), a lane or
+# alter (`field`, `pr-trim`, `voice-binding lane`), or a node (`Z890`, `SPARK`,
+# `Knuckles`). That is the (identity, harness, model, role) join the preflight
+# reports as missing -- it has existed for months as unparsed free text.
+#
+# ADDING AN IDENTITY: add a `canonical` entry with every spelling in use as an
+# alias. The gate (`pmoves/tests/test_identity_lineage.py`) fails on any author
+# string in the register that does not resolve, so a 50th spelling cannot enter
+# silently.
+
+version: 1
+
+identities:
+  - canonical: 5090-claude
+    aliases: ["5090-CLAUDE"]
+    node: "5090"
+    note: Primary workhorse lane. 51 entries across 8 spellings.
+
+  - canonical: z890-claude
+    aliases: ["Z890-CLAUDE"]
+    node: z890
+    note: >-
+      44 entries. Six of them were later reattributed to b850-claude as
+      MIS-SIGNED, not as succession -- see `corrections` below. The distinction
+      matters: those entries were never z890's work.
+
+  - canonical: b850-claude
+    aliases: ["B850-CLAUDE"]
+    node: knuckles
+    note: >-
+      34 entries. `NODE_PROFILES/B850-CLAUDE.md:10` declares the canonical
+      register form `B850-CLAUDE (Knuckles)`; four spellings are in use.
+
+  - canonical: 4090-claude
+    aliases: ["4090-CLAUDE", "4090-claude"]
+    node: "4090"
+    note: >-
+      32 entries across NINE spellings, the widest drift of any identity --
+      including `4090-CLAUDE (field)`, `4090-claude (field, voice-binding
+      lane)` and `4090-CLAUDE (pr-trim, opus-5)`. `agent_signatures.yaml:216`
+      declares `4090-field` as a formal ALTER, so some of that drift is a real
+      distinction the register had no field for.
+
+  - canonical: mavis
+    aliases: ["Mavis", "Mavis-verifier"]
+    node: "5090"
+    note: >-
+      43 entries. The parenthetical carries an orchestrator UUID
+      (`mvs_09c9b116...`, `mvs_5d5493b1...`) -- a session id, not an identity.
+      `Mavis-verifier` is listed as an alias rather than a separate identity
+      because it appears once and names a role; promote it if that changes.
+
+  - canonical: codex-gpt5
+    aliases: ["CODEX-GPT5"]
+    note: 30 entries, no drift. The cleanest lane in the register.
+
+  - canonical: claude-opus
+    aliases: ["CLAUDE-OPUS"]
+    note: >-
+      32 entries. This is the MODEL-LINEAGE signature
+      (`agent_signatures.yaml:45`: "Runs wherever it is launched; the node is a
+      location, not an identity"), which is why `CLAUDE-OPUS (Z890)` and
+      `CLAUDE-OPUS (Z890-mirror-on-5090)` name a node in the parenthetical
+      instead of in the identity.
+
+  - canonical: spark-kimi
+    aliases: ["SPARK-KIMI", "KIMI-SPARK"]
+    node: spark
+    note: 32 entries under two orderings of the same two words.
+
+  - canonical: crush
+    aliases: ["CRUSH", "CRUSH-GLM52"]
+    note: >-
+      13 entries. The `-GLM52` suffix is a MODEL, not a different identity --
+      the same lane appears as `CRUSH (z890, glm-5.2)` and `CRUSH-GLM52
+      (Z890)`. Merged here; split them if crush-on-GLM is ever meant to be a
+      distinct signer.
+
+  - canonical: kilocode-glm
+    aliases: ["KILOCODE-GLM"]
+
+  - canonical: pmoves-minimax
+    aliases: ["PMOVES-MINIMAX"]
+
+  - canonical: missing-link-hermes
+    aliases: ["MISSING-LINK-HERMES"]
+
+  - canonical: cowork-claude
+    aliases: ["COWORK-CLAUDE"]
+    note: One entry. Kept rather than folded -- a single-use name may be a typo
+      or a real one-off lane, and guessing which would be inventing history.
+
+  # --- declared, but NOT resolvable to one identity -------------------------
+  # Recorded so the gate can tell "unknown spelling" from "known to be
+  # ambiguous". These need an operator decision, not a resolver.
+  - canonical: claude-opus-5-ambiguous
+    kind: unresolved
+    aliases: ["CLAUDE-OPUS-5", "4090-CLAUDE-OPUS-5"]
+    note: >-
+      Four entries where the MODEL name is used as the IDENTITY, two of them
+      also naming the 4090. This is preflight §6 Q1 appearing in the ledger:
+      `claude-opus` is declared portable ("the node is a location, not an
+      identity") while `4090-claude` is node-named, and these strings sit
+      between the two conventions. Do not fold either way until Q1 is decided
+      -- folding into `claude-opus` erases which machine did the work, folding
+      into `4090-claude` silently ratifies node-bound identity.
+
+  - canonical: z890-to-5090-succession
+    kind: unresolved
+    aliases: ["Z890→5090-CLAUDE", "Z890->5090-CLAUDE"]
+    note: >-
+      8 entries. An ARROW inside the author field, because the register has no
+      succession edge. Left unresolved on purpose: it is the evidence, and
+      collapsing it to either endpoint destroys the only record that a handover
+      happened. See `successions` below for the structured form.
+
+# Entry-level attribution repairs. APPEND-ONLY. `recorded_as` preserves what
+# the register originally said, which the in-place rewrite destroyed.
+corrections:
+  - entry: {timestamp: "2026-03-19T22:00:00Z", kind: CLAIM}
+    recorded_as: "Z890-CLAUDE"
+    actual: b850-claude
+    reason: node operated as pmoves-b850-ai-top but mis-signed as Z890-CLAUDE
+    asserted_on: "2026-05-16"
+    evidence: "d85b46961 (#1504)"
+  - entry: {timestamp: "2026-03-19T22:00:00Z", kind: RELEASE}
+    recorded_as: "Z890-CLAUDE"
+    actual: b850-claude
+    reason: node operated as pmoves-b850-ai-top but mis-signed as Z890-CLAUDE
+    asserted_on: "2026-05-16"
+    evidence: "d85b46961 (#1504)"
+  - entry: {timestamp: "2026-03-21T14:00:00Z", kind: CLAIM}
+    recorded_as: "Z890-CLAUDE"
+    actual: b850-claude
+    reason: node operated as pmoves-b850-ai-top but mis-signed as Z890-CLAUDE
+    asserted_on: "2026-05-16"
+    evidence: "d85b46961 (#1504)"
+  - entry: {timestamp: "2026-03-21T17:33:45Z", kind: RELEASE}
+    recorded_as: "Z890-CLAUDE"
+    actual: b850-claude
+    reason: node operated as pmoves-b850-ai-top but mis-signed as Z890-CLAUDE
+    asserted_on: "2026-05-16"
+    evidence: "d85b46961 (#1504)"
+  - entry: {timestamp: "2026-03-27T04:00:00Z", kind: CLAIM}
+    recorded_as: "Z890-CLAUDE"
+    actual: b850-claude
+    reason: node operated as pmoves-b850-ai-top but mis-signed as Z890-CLAUDE
+    asserted_on: "2026-05-16"
+    evidence: "d85b46961 (#1504)"
+  - entry: {timestamp: "2026-03-27T05:00:00Z", kind: RELEASE}
+    recorded_as: "Z890-CLAUDE"
+    actual: b850-claude
+    reason: node operated as pmoves-b850-ai-top but mis-signed as Z890-CLAUDE
+    asserted_on: "2026-05-16"
+    evidence: "d85b46961 (#1504)"
+  - entry: {timestamp: "2026-08-25T01:20:00Z", kind: RELEASE}
+    recorded_as: "B850-CLAUDE (Claude Opus 5)"
+    actual: b850-claude
+    kind_of_correction: key_drift
+    reason: >-
+      Not a misattribution -- the right identity under a fourth spelling. The
+      lane stayed open for a week because claim-collision-pre.py (#2734)
+      compares author strings, and two spellings of one identity do not
+      collide.
+    asserted_on: "2026-08-25"
+    evidence: "AGNOTE4482PHI.t1.md, B850-CLAUDE preflight"
+
+# The forward edge. "Identity A became identity B" -- what the register has
+# never been able to say, and the reason correction #1-6 were implemented as a
+# rewrite instead of an edge.
+successions:
+  - from: z890-claude
+    to: 5090-claude
+    asserted_on: "2026-07-20"
+    evidence: >-
+      8 register entries authored as `Z890→5090-CLAUDE (opus 4.7 1M)`. The
+      arrow is in the ledger's own data; this record only gives it a field to
+      live in.
+    confidence: attested-by-usage
+    note: >-
+      `confidence` is NOT decoration. This edge is inferred from a naming
+      convention someone invented under pressure, not from a signed handover
+      event. It is strong evidence and it is still not proof, and a lineage
+      system that cannot say which of those it has is the thing being fixed.
