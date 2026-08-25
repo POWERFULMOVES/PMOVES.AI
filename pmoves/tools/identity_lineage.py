@@ -80,6 +80,10 @@ def split_author(author: str) -> tuple[str, str]:
     return author.strip(), ""
 
 
+def _vocabulary_path() -> Path:
+    return Path(os.environ.get("PMOVES_IDENTITY_VOCABULARY") or VOCABULARY_PATH)
+
+
 def load_vocabulary(path: Path | None = None) -> Vocabulary:
     # PMOVES_IDENTITY_VOCABULARY lets a caller point at a different file --
     # used by the claim-collision hook's fail-safe test to simulate the
@@ -246,6 +250,21 @@ def verify(vocab: Vocabulary | None = None) -> list[str]:
                 f"original author is recoverable from git alone"
             )
 
+    # Every parenthetical token must classify. 331 entries parse with zero
+    # unclassified today; an unrecognised token means a new KIND of fact is
+    # being smuggled into the free-text slot, which is how it became
+    # unparseable the first time.
+    stray: dict[str, int] = {}
+    for _, _, author in entries:
+        for token in wearing(author, vocab).unclassified:
+            stray[token] = stray.get(token, 0) + 1
+    for token, count in sorted(stray.items(), key=lambda kv: -kv[1]):
+        findings.append(
+            f"unclassified token {token!r} in {count} author string(s) -- "
+            f"declare it as a model, lane, harness, node relation or "
+            f"provisioning token in {VOCABULARY_PATH.name}"
+        )
+
     known = {i.canonical for i in vocab.index.values()}
     for record in vocab.corrections:
         if record.get("actual") not in known:
@@ -262,6 +281,197 @@ def verify(vocab: Vocabulary | None = None) -> list[str]:
                 f"evidence; an unevidenced lineage edge is a guess with a schema"
             )
     return findings
+
+
+# ---------------------------------------------------------------------------
+# WEARING -- the (identity, model, lane, node) join, parsed out of the ledger.
+#
+# Operator doctrine, 2026-08-25: an identity is WORN, not owned. "The signature
+# is not the model, as models hold many; the identity a model puts on will
+# align with the model and be tuned with the harness."
+#
+# That resolves what looked like an unanswerable question. `CLAUDE-OPUS-5` and
+# `4090-CLAUDE-OPUS-5` were marked ambiguous because folding into `claude-opus`
+# erases which machine did the work and folding into `4090-claude` ratifies
+# node-bound identity. Under the doctrine neither fold is right: the string
+# carries an identity AND a model, and the answer is to PARSE it.
+# ---------------------------------------------------------------------------
+
+SESSION_ID = re.compile(r"^mvs_[0-9a-f]{32}$")
+
+
+@dataclass(frozen=True)
+class Wearing:
+    """One wearing event, recovered from a register author string."""
+    as_written: str
+    identity: str | None
+    model: str | None = None
+    lane: str | None = None
+    node: str | None = None
+    harness: str | None = None
+    mirrored_from: str | None = None
+    provisioning: tuple[str, ...] = ()
+    session: str | None = None
+    unclassified: tuple[str, ...] = ()
+
+    @property
+    def is_complete(self) -> bool:
+        """No token went unrecognised. NOT the same as 'fully specified' --
+        most entries name no model at all, and that is a real absence rather
+        than a parse failure."""
+        return not self.unclassified
+
+
+def _fold_table(doc_key: str, vocab_doc: dict) -> dict[str, str]:
+    table: dict[str, str] = {}
+    for entry in vocab_doc.get(doc_key) or []:
+        canonical = str(entry["canonical"])
+        for alias in (*(entry.get("aliases") or []), canonical):
+            table[_norm(alias)] = canonical
+    return table
+
+
+_TABLES: dict[str, dict[str, str]] | None = None
+
+
+def _tables(path: Path | None = None) -> dict[str, dict[str, str]]:
+    global _TABLES
+    if _TABLES is None:
+        with open(path or _vocabulary_path(), encoding="utf-8") as handle:
+            doc = yaml.safe_load(handle) or {}
+        _TABLES = {
+            key: _fold_table(key, doc)
+            for key in ("models", "lanes", "provisioning", "harnesses")
+        }
+        # Node names come from the node vocabulary, which already exists and is
+        # already gated -- duplicating them here would be a second source of
+        # truth for the same fact.
+        _TABLES["relations"] = {
+            _norm(r["token"]): (r.get("node"), r.get("mirrored_from"))
+            for r in (doc.get("node_relations") or [])
+        }
+        _TABLES["nodes"] = {}
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "node_identity", REPO_ROOT / "pmoves" / "tools" / "node_identity.py"
+            )
+            module = importlib.util.module_from_spec(spec)
+            sys.modules["node_identity"] = module
+            spec.loader.exec_module(module)
+            for alias, node in module.load_vocabulary().items():
+                _TABLES["nodes"][alias] = node.canonical
+        except Exception:  # noqa: BLE001 -- node vocab is optional here
+            pass
+    return _TABLES
+
+
+def wearing(author: str, vocab: Vocabulary | None = None) -> Wearing:
+    """Parse a register author string into the wearing event it records.
+
+    Unrecognised tokens land in `unclassified` and are REPORTED. Guessing what
+    an unknown token means is how the parenthetical became unparseable in the
+    first place.
+    """
+    vocab = vocab if vocab is not None else load_vocabulary()
+    base, paren = split_author(author)
+    tables = _tables()
+
+    identity = canonical_identity(author, vocab)
+    model = lane = node = session = harness = mirrored_from = None
+    provisioning: list[str] = []
+    unclassified: list[str] = []
+
+    for token in (t.strip() for t in paren.split(",")):
+        if not token:
+            continue
+        key = _norm(token)
+        if SESSION_ID.match(token):
+            session = token
+        elif key in tables["models"]:
+            model = tables["models"][key]
+        elif key in tables["lanes"]:
+            lane = tables["lanes"][key]
+        elif key in tables["harnesses"]:
+            harness = tables["harnesses"][key]
+        elif key in tables["relations"]:
+            node, mirrored_from = tables["relations"][key]
+        elif key in tables["provisioning"]:
+            provisioning.append(tables["provisioning"][key])
+        elif key in tables["nodes"]:
+            node = tables["nodes"][key]
+        else:
+            unclassified.append(token)
+
+    # `4090-CLAUDE-OPUS-5` carries the model in the BASE, not the parenthetical.
+    if model is None:
+        for candidate, canonical in tables["models"].items():
+            if candidate and candidate in _norm(base):
+                model = canonical
+                break
+
+    return Wearing(
+        as_written=author, identity=identity, model=model, lane=lane, node=node,
+        harness=harness, mirrored_from=mirrored_from,
+        provisioning=tuple(provisioning), session=session,
+        unclassified=tuple(unclassified),
+    )
+
+
+def describe_self(identity: str, vocab: Vocabulary | None = None) -> dict:
+    """What a wearer can observe about the identity it is wearing.
+
+    The doctrine's active half: "the model will be able to observe the shape of
+    what it wears and choose, adjust accordingly." This is the read side of
+    that -- the mechanism Archon needs at mint time, and the reason an identity
+    has to be data rather than prose in a signature file.
+
+    Reports what is KNOWN and what is ABSENT, because an identity with no
+    grounding is the normal case today and must not read as a complete one.
+    """
+    vocab = vocab if vocab is not None else load_vocabulary()
+    entry = vocab.index.get(_norm(identity))
+    if entry is None:
+        return {"identity": identity, "known": False,
+                "why": "not a declared identity"}
+
+    spellings = sorted(
+        {a for _, _, a in register_entries()
+         if canonical_identity(a, vocab) == entry.canonical}
+    )
+    worn = [wearing(s, vocab) for s in spellings]
+    return {
+        "identity": entry.canonical,
+        "known": True,
+        "node": entry.node,
+        "spellings": spellings,
+        "models_worn": sorted({w.model for w in worn if w.model}),
+        "harnesses_worn": sorted({w.harness for w in worn if w.harness}),
+        "lanes_worn": sorted({w.lane for w in worn if w.lane}),
+        "entries": sum(1 for _, _, a in register_entries()
+                       if canonical_identity(a, vocab) == entry.canonical),
+        "succeeds": [s["from"] for s in predecessors(entry.canonical, vocab)],
+        "succeeded_by": [s["to"] for s in successors(entry.canonical, vocab)],
+        "alters": _alters_of(entry.canonical),
+        # Absences, stated. An identity co-created with the founder and one
+        # derived from a grounded persona are different things, and nothing in
+        # the repo currently distinguishes them -- see CATALOG_325.
+        "grounded": False,
+        "grounding_note": (
+            "No identity in this repo is prose-grounded. The lensing engine "
+            "(pmoves/tools/catalog_lensing_engine.py, 2070 lines) has produced "
+            "exactly one artifact -- 8 test items, not the 325 -- so there is "
+            "no grounded persona to compare a co-created identity against."
+        ),
+    }
+
+
+def _alters_of(identity: str) -> list[dict]:
+    """Alter lineage: how an alter came to be, not just that it exists."""
+    with open(_vocabulary_path(), encoding="utf-8") as handle:
+        doc = yaml.safe_load(handle) or {}
+    return [a for a in (doc.get("alter_lineage") or [])
+            if a.get("identity") == identity]
 
 
 def main(argv: list[str] | None = None) -> int:
