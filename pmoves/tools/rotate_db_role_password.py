@@ -160,7 +160,9 @@ def main() -> int:
     if a.emit_to_env:
         # Deliberately the ONLY path by which the plaintext leaves this process.
         # The caller is expected to consume this on a pipe, not echo it.
-        print("{}={}".format(a.emit_to_env, password))  # lgtm[py/clear-text-logging-sensitive-data] -- emit-to-pipe contract: single documented exit point for the plaintext (see PR #2719), same suppression form as launcher_profile_select.py:216
+        # lgtm[py/clear-text-logging-sensitive-data] -- emit-to-pipe contract:
+        # single documented exit point for the plaintext (see PR #2719).
+        print("{}={}".format(a.emit_to_env, password))
     return 0
 
 
