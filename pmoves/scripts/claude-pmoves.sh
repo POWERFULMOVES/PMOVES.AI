@@ -117,7 +117,11 @@ IDENT_TOOL="$ROOT/pmoves/tools/node_identity.py"
 IDENT_PY="${PMOVES_PYTHON:-python}"
 if [ -f "$IDENT_TOOL" ] && command -v "$IDENT_PY" >/dev/null 2>&1; then
   if IDENT_OUT="$("$IDENT_PY" "$IDENT_TOOL" --harness claude-code --shell 2>/dev/null)"; then
+    # The tool emits PMOVES_RESOLVED_IDENTITY, not PMOVES_NODE_IDENTITY: the
+    # latter is the operator's INPUT override, and a resolver that answers under
+    # the same name it reads cannot be called twice safely.
     eval "$IDENT_OUT"
+    PMOVES_NODE_IDENTITY="${PMOVES_RESOLVED_IDENTITY:-}"
     export PMOVES_NODE PMOVES_NODE_IDENTITY
     if [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
       echo "[claude-pmoves] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY} agent=${AGENT}" >&2
@@ -126,7 +130,7 @@ if [ -f "$IDENT_TOOL" ] && command -v "$IDENT_PY" >/dev/null 2>&1; then
       # the difference between the identity existing and the identity working.
       IDENTITY_ARGS=(--append-system-prompt "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent.")
     else
-      echo "[claude-pmoves] node=${PMOVES_NODE:-unknown} identity=unresolved: ${PMOVES_NODE_IDENTITY_WHY:-no reason given}" >&2
+      echo "[claude-pmoves] node=${PMOVES_NODE:-unknown} identity=unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}" >&2
     fi
   else
     echo "[claude-pmoves] node identity: $IDENT_TOOL failed; launching without it." >&2

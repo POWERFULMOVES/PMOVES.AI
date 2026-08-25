@@ -28,15 +28,64 @@ if not exist "%LAUNCHER%" (
   echo [claude-pmoves] env.shared and no MCP roster, which is worse than not starting. 1>&2
   exit /b 1
 )
+rem NODE IDENTITY -- the same binding pmoves\scripts\claude-pmoves.sh does, and
+rem it has to be here too for the same reason DEFAULT_AGENT is duplicated above:
+rem Windows never executes that script. The 4090 -- the node the identity work
+rem was built FOR -- launches through this file, so an identity wired only into
+rem the .sh would have been correct, tested, and unreachable on the one machine
+rem that needed it.
+rem
+rem --format cmd, not --shell: cmd.exe has no `eval` and would take the POSIX
+rem single quotes literally, setting PMOVES_NODE to the five characters '4090'.
+rem
+rem FAIL-OPEN, LOUDLY, exactly as the .sh does. `2^>nul` hides the tool's own
+rem stderr, never the reason -- that arrives as PMOVES_IDENTITY_WHY and is
+rem echoed below. Keep in step with claude-pmoves.sh; the parity test in
+rem pmoves\tests\test_node_identity.py fails if one grows the call and the other
+rem does not.
+rem NO PARENTHESISED if/else BLOCKS BELOW, deliberately. The tool's reason
+rem strings contain literal `(` and `)` -- e.g. "declared (node-vocabulary.yaml:
+rem 4090.default_identity.claude-code) but is not in agent_registry.yaml" -- and
+rem cmd.exe expands %VAR% while PARSING a block, so the first `)` in the value
+rem closes the block early. Measured: the first draft of this file died with
+rem "but was unexpected at this time." before reaching the launcher. goto-based
+rem flow has no block to close.
+rem PMOVES_NODE_IDENTITY is NOT cleared here: it is the operator's input
+rem override, and the resolver reads it from the environment. Clearing it first
+rem destroyed the override before the tool could honour it -- caught by running
+rem this file, not by reading it. The tool answers under PMOVES_RESOLVED_IDENTITY.
+set "PMOVES_NODE="
+set "PMOVES_RESOLVED_IDENTITY="
+set "PMOVES_IDENTITY_WHY="
+set "IDENT_ARGS="
+set "IDENT_TOOL=%REPO_ROOT%\pmoves\tools\node_identity.py"
+if not exist "%IDENT_TOOL%" goto ident_absent
+for /f "usebackq tokens=1,* delims==" %%A in (
+  `python "%IDENT_TOOL%" --harness claude-code --format cmd 2^>nul`
+) do set "%%A=%%B"
+if defined PMOVES_RESOLVED_IDENTITY goto ident_bound
+if defined PMOVES_IDENTITY_WHY goto ident_why
+:ident_absent
+echo [claude-pmoves] node identity: resolver did not run; launching without it. 1>&2
+goto ident_done
+:ident_why
+rem Quoted: the reason contains parentheses that would otherwise be parsed.
+echo "[claude-pmoves] identity unresolved: %PMOVES_IDENTITY_WHY%" 1>&2
+goto ident_done
+:ident_bound
+echo [claude-pmoves] node=%PMOVES_NODE% identity=%PMOVES_RESOLVED_IDENTITY% agent=%DEFAULT_AGENT% 1>&2
+set "IDENT_ARGS=--append-system-prompt "You are running on PMOVES node '%PMOVES_NODE%'. Your registered identity in pmoves/config/agent_registry.yaml is '%PMOVES_RESOLVED_IDENTITY%'. Disclose it at session start rather than rediscovering it.""
+:ident_done
+
 set "first=%~1"
 set "prefix=%first:~0,1%"
 if "%prefix%"=="-" goto flag
 if "%first%"=="" goto default
-call "%LAUNCHER%" --agent %*
+call "%LAUNCHER%" --agent %* %IDENT_ARGS%
 exit /b %ERRORLEVEL%
 :flag
-call "%LAUNCHER%" --agent %DEFAULT_AGENT% %*
+call "%LAUNCHER%" --agent %DEFAULT_AGENT% %* %IDENT_ARGS%
 exit /b %ERRORLEVEL%
 :default
-call "%LAUNCHER%" --agent %DEFAULT_AGENT%
+call "%LAUNCHER%" --agent %DEFAULT_AGENT% %IDENT_ARGS%
 exit /b %ERRORLEVEL%

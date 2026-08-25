@@ -21,7 +21,9 @@ Two rules, both deliberate:
 
 CLI:
     python pmoves/tools/node_identity.py --harness claude-code
-    python pmoves/tools/node_identity.py --shell      # eval-able exports
+    python pmoves/tools/node_identity.py --format shell   # eval-able exports
+    python pmoves/tools/node_identity.py --format cmd     # bare KEY=VALUE for
+                                                          # Windows `for /f`
 """
 from __future__ import annotations
 
@@ -248,19 +250,35 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--shell", action="store_true",
-        help="emit eval-able exports instead of a human line",
+        help="emit eval-able POSIX exports instead of a human line",
+    )
+    parser.add_argument(
+        "--format", choices=("human", "shell", "cmd"), default=None,
+        help=(
+            "output form. `cmd` emits UNQUOTED KEY=VALUE for Windows `for /f` "
+            "-- cmd.exe has no eval and would take POSIX quotes literally, so "
+            "the .bat launcher cannot consume --shell"
+        ),
     )
     args = parser.parse_args(argv)
 
+    fmt = args.format or ("shell" if args.shell else "human")
     node, identity, why = resolve_identity(args.harness)
 
-    if args.shell:
+    if fmt in ("shell", "cmd"):
         # Always emit both, empty when unresolved: a consumer that tests for
         # emptiness behaves correctly, and one that forgets to test gets an
         # empty string rather than a stale value from the parent environment.
-        print(f"PMOVES_NODE={_shell_quote(node or '')}")
-        print(f"PMOVES_NODE_IDENTITY={_shell_quote(identity or '')}")
-        print(f"PMOVES_NODE_IDENTITY_WHY={_shell_quote(why)}")
+        # OUTPUT NAMES ARE DISTINCT FROM THE INPUT OVERRIDE, deliberately.
+        # PMOVES_NODE_IDENTITY is what an operator SETS to force an identity.
+        # Emitting the result under that same name means a caller that clears
+        # its variables before invoking this tool destroys the override it was
+        # about to honour -- which is exactly what the Windows launcher did
+        # until running it caught the override being silently ignored.
+        quote = _shell_quote if fmt == "shell" else (lambda v: v)
+        print(f"PMOVES_NODE={quote(node or '')}")
+        print(f"PMOVES_RESOLVED_IDENTITY={quote(identity or '')}")
+        print(f"PMOVES_IDENTITY_WHY={quote(why)}")
         return 0
 
     print(why)

@@ -10,6 +10,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = REPO_ROOT / "pmoves" / "scripts" / "claude-pmoves.sh"
+WIN_LAUNCHER = REPO_ROOT / "pmoves" / "scripts" / "windows" / "claude-pmoves.bat"
 
 
 def _module():
@@ -241,17 +242,73 @@ def test_agents_claiming_folds_every_spelling():
 # came to have an unread node_affinity field in the first place.
 # --------------------------------------------------------------------------
 
-def test_the_launcher_invokes_the_resolver():
-    text = LAUNCHER.read_text(encoding="utf-8")
-    assert "node_identity.py" in text, "launcher no longer calls the resolver"
+@pytest.mark.parametrize("launcher", [LAUNCHER, WIN_LAUNCHER],
+                         ids=["posix", "windows"])
+def test_both_launchers_invoke_the_resolver(launcher):
+    """BOTH, not either.
+
+    The .bat carries its own copy of DEFAULT_AGENT precisely because "Windows
+    never executes" the .sh -- and the 4090, the node this work exists for, is
+    Windows. An identity wired only into the .sh would have been correct,
+    tested, and unreachable on the one machine that needed it. This test is
+    parameterised so adding the call to one launcher cannot satisfy it.
+    """
+    text = launcher.read_text(encoding="utf-8")
+    assert "node_identity.py" in text, f"{launcher.name} does not call the resolver"
     assert "--append-system-prompt" in text, (
-        "the identity must reach the session's context; an exported variable "
-        "does not"
+        f"{launcher.name}: the identity must reach the session's context; an "
+        "exported variable does not"
     )
 
 
-def test_the_launcher_fails_open():
-    """Losing the identity must never cost the launch."""
-    text = LAUNCHER.read_text(encoding="utf-8")
-    assert 'if [ -f "$IDENT_TOOL" ]' in text, "resolver call is not guarded"
-    assert "launching without it" in text, "no audible fallback message"
+@pytest.mark.parametrize("launcher", [LAUNCHER, WIN_LAUNCHER],
+                         ids=["posix", "windows"])
+def test_both_launchers_fail_open_audibly(launcher):
+    """Losing the identity must never cost the launch, or be silent."""
+    text = launcher.read_text(encoding="utf-8")
+    assert "launching without it" in text, f"{launcher.name}: no audible fallback"
+
+
+def test_no_launcher_clears_the_operator_override_before_resolving():
+    """PMOVES_NODE_IDENTITY is an INPUT the resolver reads from the environment.
+
+    The Windows launcher cleared it alongside its output variables, destroying
+    the override before the tool could honour it -- the documented escape hatch
+    silently did nothing. Running the launcher caught it; reading it had not.
+    The resolver now answers under PMOVES_RESOLVED_IDENTITY so the two cannot
+    collide again.
+    """
+    for launcher in (LAUNCHER, WIN_LAUNCHER):
+        text = launcher.read_text(encoding="utf-8")
+        assert 'PMOVES_NODE_IDENTITY=""' not in text, launcher.name
+        assert 'set "PMOVES_NODE_IDENTITY="' not in text, launcher.name
+        assert "PMOVES_RESOLVED_IDENTITY" in text, (
+            f"{launcher.name} does not read the resolver's output variable"
+        )
+
+
+def test_the_windows_launcher_uses_a_cmd_safe_format():
+    """cmd.exe has no `eval`: --shell's POSIX quotes would be taken literally,
+    setting PMOVES_NODE to the five characters '4090'."""
+    # Match the CALL, not the IDENT_TOOL assignment and not the comments:
+    # `--harness` appears only on the line that actually runs the tool.
+    invocation = [line for line in WIN_LAUNCHER.read_text(encoding="utf-8").splitlines()
+                  if "--harness" in line and not line.strip().startswith("rem")]
+    assert invocation, "no non-comment line invokes the resolver"
+    assert all("--format cmd" in line for line in invocation), invocation
+    assert not any("--shell" in line for line in invocation), invocation
+
+
+def test_the_windows_launcher_has_no_parenthesised_block_around_the_reason():
+    """The reason strings contain literal parentheses, and cmd.exe expands
+    %VAR% while PARSING a block -- the first `)` closes the block early. The
+    first draft died with "but was unexpected at this time." Guarding on the
+    goto label rather than the absence of `(`, which appears in comments."""
+    text = WIN_LAUNCHER.read_text(encoding="utf-8")
+    assert ":ident_why" in text and "goto ident_why" in text, (
+        "the reason path must be reached by goto, not an if/else block"
+    )
+    assert 'echo "[claude-pmoves] identity unresolved: %PMOVES_IDENTITY_WHY%"' in text, (
+        "the reason must be echoed quoted -- its parentheses are load-bearing "
+        "text, not syntax"
+    )
