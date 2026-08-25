@@ -80,6 +80,18 @@ cross_agent:
   typer: untested
   pinokio: full
 
+# Harness fit. Seeded fresh, harness-only — NOT migrated from cross_agent, which
+# answers a different question (which components can address this model) and whose
+# key space includes agents, a UI and a launcher.
+fit:
+  clawz:
+    "*":
+      - verdict: limited
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+        note: "requires adapter layer; tool-call parsing assumes an Anthropic-shaped response"
+
 huggingface:
   model_id: google/gemma-4-31B-it
   gguf_repo: unsloth/gemma-4-31B-it-GGUF
