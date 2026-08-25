@@ -10,7 +10,6 @@
 
 ---
 
-<<<<<<< HEAD
 <!-- graphiti:mavis phase:creative-pipeline-v0 ts:2026-08-06T18:30:00Z -->
 
 ## ⬡ Mavis — Creative Pipeline v0: Sketch Archive + 82 Beats Find Their Substrate
@@ -49,7 +48,10 @@ The substrate. DARKXSIDE's 2023-11-03 6-eye third-eye horned-helmet character, t
 - **CHIT trail unsigned-local** (no `CHIT_PASSPHRASE` loaded in Mavis session) per session convention.
 
 - ⬡
-=======
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:mavis phase:openroom-realization-slice-2 ts:2026-08-06T11:50:00Z -->
 
 ## ⬡ Mavis — OpenRoom Realization: First Wave-Function Collapse, 13 Rooms Awake, All StubApp
@@ -85,7 +87,6 @@ First collapse. The wave function was a superposition of 13 room manifests, all 
 - CHIT_PASSPHRASE was not loaded in this session - all trail entries are unsigned-local per Mavis session convention.
 
 — ⬡
->>>>>>> ade63dffe9 (feat(openroom): realization scaffold - openroom service, persona route, UI auth, AGNOTE claim, 5090 sitrep skill)
 
 </td></tr></table>
 
@@ -226,6 +227,8 @@ First collapse. The wave function was a superposition of 13 room manifests, all 
 - Graphiti trail HMAC signature pending on 5090 remote (CHIT_PASSPHRASE not set locally)
 
 </td></tr></table>
+
+<!-- /graphiti -->
 
 ---
 
