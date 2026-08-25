@@ -46,3 +46,23 @@ def resolve_role(
                 f"role {name!r} is superseded by {canonical!r}; update the fitting"
             )
     return None, f"role {name!r} is not in the vocabulary (pmoves/configs/model-roles.yaml)"
+
+
+REGISTRY_PATH = REPO_ROOT / "pmoves" / "config" / "agent_registry.yaml"
+
+
+def load_harnesses(registry_path: Path | None = None) -> set[str]:
+    """Registry keys whose entry declares ``kind: harness``.
+
+    A fitting may only name one of these. `cross_agent` deliberately names a wider
+    set (agents, a UI, a launcher) because it answers a different question —
+    component compatibility, not what a harness costs a model.
+    """
+    target = registry_path or REGISTRY_PATH
+    with open(target, encoding="utf-8") as handle:
+        doc = yaml.safe_load(handle) or {}
+    return {
+        key
+        for key, entry in (doc.get("agents") or {}).items()
+        if (entry or {}).get("kind") == "harness"
+    }

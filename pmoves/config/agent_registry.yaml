@@ -138,6 +138,10 @@ agents:
   kilocode_glm:
     name: "KiloCode GLM"
     class: standard
+    # A harness hosts models; a fitting may name it. Distinguished from agent
+    # services (agent_zero, archon), a UI (a2ui) and a launcher (pinokio), which
+    # appear in cross_agent for component compatibility but host nothing.
+    kind: harness
     primary_type: agent
     secondary_type: llm
     port: null
@@ -2054,6 +2058,10 @@ agents:
   clawz:
     name: "ClawZ (OpenClaw)"
     class: standard
+    # A harness hosts models; a fitting may name it. Distinguished from agent
+    # services (agent_zero, archon), a UI (a2ui) and a launcher (pinokio), which
+    # appear in cross_agent for component compatibility but host nothing.
+    kind: harness
     primary_type: ui
     secondary_type: agent
     port: 18789
