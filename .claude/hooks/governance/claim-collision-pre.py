@@ -1,11 +1,30 @@
 #!/usr/bin/env python3
 """claim-collision-pre.py — PreToolUse (Write/Edit matcher) governance hook.
 
-Enforces the Village Rule: "one owner per branch at a time." When Write/Edit
-targets AGNOTE4482PHI.t1.md, scan the proposed content for a new CLAIM whose
-owner-ID is still open (no matching RELEASE later in the existing file). If
-found, block with the line number of the prior CLAIM so the agent can either
-hand off or wait.
+Enforces the Village Rule: "one owner per branch at a time."
+
+KEYED ON THE LANE, NOT THE CLAIMANT. The first cut keyed on the backticked
+owner-ID, which inverted the rule it was written to enforce -- reproduced both
+ways on 2026-08-25:
+
+  * different owner, SAME branch -> 0 collisions. Two agents could claim one
+    branch and the gate stayed silent. That is the exact event the register
+    exists to prevent.
+  * same owner, DIFFERENT branch -> 1 collision. A node running several lanes
+    at once (the normal case here; this node had five PRs open while writing
+    this) was blocked from claiming unrelated work.
+
+So it missed the hazard and blocked the routine case. Now a collision means
+another owner already holds an open claim naming the same branch.
+
+COVERAGE IS PARTIAL, AND DELIBERATELY VISIBLE. The lane is extracted from
+freeform scope prose, so it only works when the claim names its branch: 53 of
+131 historical claims do (55-70% of recent ones, where `Branch `x`` is becoming
+convention). A claim that names no branch CANNOT be checked -- the hook says so
+on stderr rather than exiting 0 as though it had verified something. Treat the
+unkeyed path as unguarded, not as passing. The durable fix is an explicit
+`lane:` field in the register format; until then this is a partial gate that
+admits it.
 
 OPT-IN: not wired by default. Operator activates via PreToolUse Write/Edit
 matcher in .claude/settings.json.
@@ -32,12 +51,19 @@ from pathlib import Path
 REGISTER_NAME = "AGNOTE4482PHI.t1.md"
 CLAIM_RE = re.compile(r'CLAIM\s+`([^`]+)`')
 RELEASE_RE = re.compile(r'RELEASE\s+`([^`]+)`')
+# A branch as the register writes it: conventional-commit prefix, backticked.
+LANE_RE = re.compile(
+    r'`((?:feat|fix|docs|chore|refactor|test|ci|perf|build)/[A-Za-z0-9._/-]+)`'
+)
 
 
-def open_claims_in(text: str) -> dict[str, int]:
-    """Return {owner_id: line_no_of_latest_unmatched_claim}.
+def open_claims_in(text: str) -> dict[str, tuple[int, set[str]]]:
+    """Map owner -> (line number of their open CLAIM, lanes that CLAIM names).
 
     A CLAIM is "open" if no later RELEASE for the same owner-ID follows it.
+    RELEASE still pairs by owner, because that is how the register closes a
+    lane: a release must carry the exact string its claim was opened with.
+
     Line numbers are 1-based to match editor conventions.
 
     `split("\n")`, NOT `splitlines()`: the latter also breaks on vertical tab
@@ -49,10 +75,10 @@ def open_claims_in(text: str) -> dict[str, int]:
     A line number that does not resolve sends the reader hunting, and this hook
     only speaks when it is blocking someone.
     """
-    open_claims: dict[str, int] = {}
+    open_claims: dict[str, tuple[int, set[str]]] = {}
     for lineno, line in enumerate(text.split("\n"), start=1):
         if m := CLAIM_RE.search(line):
-            open_claims[m.group(1)] = lineno
+            open_claims[m.group(1)] = (lineno, set(LANE_RE.findall(line)))
         elif m := RELEASE_RE.search(line):
             open_claims.pop(m.group(1), None)
     return open_claims
@@ -75,8 +101,11 @@ def main() -> None:
     # Proposed-text source differs across tools.
     proposed = ti.get("new_string") if tool == "Edit" else ti.get("content")
     proposed = proposed or ""
-    new_owners = {m.group(1) for m in CLAIM_RE.finditer(proposed)}
-    if not new_owners:
+    new_claims = [
+        (m.group(1), set(LANE_RE.findall(proposed)))
+        for m in CLAIM_RE.finditer(proposed)
+    ]
+    if not new_claims:
         sys.exit(0)
 
     register = Path(file_path)
@@ -88,18 +117,46 @@ def main() -> None:
         sys.exit(0)
     existing_open = open_claims_in(existing)
 
-    collisions = [(o, existing_open[o]) for o in new_owners if o in existing_open]
+    # Collision == ANOTHER owner already holds an open claim naming this lane.
+    # Same owner re-naming their own lane is not a collision: it is the node
+    # that already holds it, and blocking that was the false positive this
+    # hook shipped with.
+    collisions = []
+    unkeyed = []
+    for owner, lanes in new_claims:
+        if not lanes:
+            unkeyed.append(owner)
+            continue
+        for other, (lineno, held) in existing_open.items():
+            if other == owner:
+                continue
+            for lane in sorted(lanes & held):
+                collisions.append((lane, other, lineno))
+
     if collisions:
         sys.stderr.write(
-            "claim-collision-pre: refusing to add CLAIM that collides with an open lane.\n"
+            "claim-collision-pre: refusing to add a CLAIM for a lane another owner holds.\n"
         )
-        for owner, lineno in collisions:
-            sys.stderr.write(f"  - owner `{owner}` already has an open CLAIM at line {lineno}\n")
+        for lane, other, lineno in collisions:
+            sys.stderr.write(
+                f"  - lane `{lane}` is already claimed by `{other}` "
+                f"(open CLAIM at line {lineno})\n"
+            )
         sys.stderr.write(
-            "Either issue a RELEASE for the prior CLAIM first, or coordinate a handoff "
-            "(see Village Rule in AGNOTE4482PHI.t1.md).\n"
+            "Either coordinate a handoff, wait for their RELEASE, or pick a different "
+            "branch (see Village Rule in AGNOTE4482PHI.t1.md).\n"
         )
         sys.exit(2)
+
+    # Say plainly when the gate could not check, instead of exiting 0 as though
+    # it had. An unkeyed claim is unguarded, not cleared.
+    if unkeyed:
+        for owner in unkeyed:
+            sys.stderr.write(
+                f"claim-collision-pre: NOT CHECKED - CLAIM by `{owner}` names no branch, "
+                "so no lane could be compared. Add ``Branch `<name>``` to the scope to "
+                "make this claim enforceable.\n"
+            )
     sys.exit(0)
 
 
