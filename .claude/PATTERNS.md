@@ -1044,10 +1044,21 @@ To see what a gitlink move would actually do, diff the **pin against the
 checkout** — never the PR:
 
 ```bash
-PIN=$(git ls-files -s -- <path> | awk '{print $2}')
+PIN=$(git ls-tree HEAD -- <path> | awk '{print $3}')   # committed pin, NOT the index
 git -C <path> diff --stat "$PIN"..HEAD        # this is the real blast radius
 git -C <path> rev-parse --abbrev-ref HEAD     # and which branch you are on
 ```
+
+**`git ls-tree HEAD`, not `git ls-files -s`.** `ls-files` reads the *index*, so
+once you have run `git add <path>` — which you will have, since staging the bump
+is what makes you want to check it — the "pin" it returns is the new one you just
+staged. `"$PIN"..HEAD` then compares the checkout to itself and prints nothing,
+reporting an empty blast radius in exactly the state this diagnostic exists to
+catch. Reproduced 2026-08-25 on a two-commit throwaway submodule: staged, the
+`ls-files` form printed nothing while the `ls-tree HEAD` form printed the real
+one-file change. Silence from a diagnostic reads as "clean", which is the same
+trap as the `modified: (new commits)` line above — the dangerous state and the
+benign one look identical at the place you habitually look.
 
 ### What already catches it
 
@@ -1067,8 +1078,19 @@ the only protection is looking, which is what the diagnostic above is for.
 
 ### Recovery
 
-`git submodule update --init -- <path>` restores the checkout to the pin. It is
-non-destructive as long as the branch you are leaving is pushed — verify that
+`git submodule update --init -- <path>` restores the checkout to the pin — but
+it takes that pin from the **index**, so if you have already staged the bump it
+restores the checkout to the commit you were trying to abandon and reports
+success. Unstage first:
+
+```bash
+git restore --staged -- <path>        # or: git reset -- <path>
+git submodule update --init -- <path>
+```
+
+Verified the same way: with the bump staged, `submodule update` left the
+checkout exactly where it was; after unstaging, it moved back to the committed
+pin. It is non-destructive as long as the branch you are leaving is pushed — verify that
 first (`git -C <path> ls-remote origin refs/heads/<branch>` matching local HEAD),
 because the whole point is that you are abandoning a checkout, not a commit.
 
