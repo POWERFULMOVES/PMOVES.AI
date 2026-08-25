@@ -90,15 +90,25 @@ def test_cross_agent_is_byte_identical_to_origin_main():
 
     If `origin/main` is unreachable (e.g. a shallow `actions/checkout` on a
     pull_request event does not create refs/remotes/origin/main), this must
-    not report green having asserted nothing -- it skips loudly instead."""
+    not report green having asserted nothing -- it skips loudly instead.
+
+    Partial reachability is the harder case and is asserted, not skipped: if
+    origin/main resolves for some files and not others (a partial fetch, a
+    file added on this branch, a rename that landed on main mid-run), the
+    subset that WAS compared would otherwise read exactly like a full pass.
+    The count is checked against the expected list and the unreached files
+    are named."""
+    expected = CLAWZ_FULL + CLAWZ_LIMITED
     compared = 0
-    for stem in CLAWZ_FULL + CLAWZ_LIMITED:
+    unreachable: list[str] = []
+    for stem in expected:
         rel = f"pmoves/configs/model-suits/{stem}.yaml"
         before = subprocess.run(
             ["git", "show", f"origin/main:{rel}"],
             cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8",
         )
         if before.returncode != 0:
+            unreachable.append(stem)
             continue
         old_block = _cross_agent_block(before.stdout)
         with open(REPO_ROOT / rel, encoding="utf-8") as handle:
@@ -115,3 +125,9 @@ def test_cross_agent_is_byte_identical_to_origin_main():
             "(e.g. actions/checkout with the default fetch-depth: 1 on a "
             "pull_request event does not create it). No comparison was made."
         )
+    assert compared == len(expected), (
+        f"only {compared}/{len(expected)} suit files were compared against "
+        f"origin/main; unreachable: {sorted(unreachable)}. A partial "
+        "comparison must not report green -- it is indistinguishable from a "
+        "full pass, which is the defect this branch exists to remove."
+    )
