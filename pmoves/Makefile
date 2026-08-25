@@ -1911,7 +1911,11 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 
 .PHONY: check-tier-envs
 check-tier-envs: ## Validate all tier environment files exist
-	@$(PYTHON) tools/check_tier_envs.py
+	@# --drift is now the default, but pass it explicitly: this target existed for
+	@# a year invoking the checker with no flags, which silently disabled the half
+	@# that catches a key declared in .example and absent from the runtime tier.
+	@# Add --strict here once the current backlog is cleared, to ratchet it shut.
+	@$(PYTHON) tools/check_tier_envs.py --drift
 
 .PHONY: bootstrap-tier-envs
 bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
