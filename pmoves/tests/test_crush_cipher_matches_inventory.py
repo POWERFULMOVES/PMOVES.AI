@@ -88,8 +88,26 @@ def test_generated_config_carries_the_live_path(key):
     spec.loader.exec_module(module)
 
     specs = [s for s in getattr(module, "MCP_SPECS", []) if getattr(s, "key", None) == key]
-    if not specs:
-        pytest.skip(f"{key} not present in MCP_SPECS (renamed or removed)")
+    # Exactly one spec per canonical inventory key -- not "skip if missing".
+    # A rename/removal that left the inventory entry orphaned would otherwise
+    # pass green here while silently dropping cipher from every generated
+    # Crush config: the exact drift this suite exists to catch.
+    assert len(specs) == 1, (
+        f"expected exactly one MCP_SPECS entry for {key!r} (the canonical "
+        f"inventory key), found {len(specs)}. If the key was renamed, update "
+        "CIPHER_KEYS and the inventory together -- do not orphan it."
+    )
     url = (specs[0].config or {}).get("url", "")
     assert "/api/mcp/sse" not in url, f"{key} still points at the 404 path: {url}"
     assert url.endswith("/mcp/sse"), f"{key} unexpected cipher URL: {url}"
+    # The empty-bearer fallback only works if the token is NOT required:
+    # missing_envs() would add disabled=true on tokenless nodes and the
+    # corrected URL/ header would still ship a dark entry.
+    assert not getattr(specs[0], "required_env", None), (
+        f"{key} sets required_env -- the shim accepts an empty bearer, so the "
+        "entry must stay enabled on tokenless nodes (disabled=true is the "
+        "silence this suite exists to end)."
+    )
+    assert not getattr(specs[0], "required_envs", None), (
+        f"{key} sets required_envs -- same defect as required_env."
+    )

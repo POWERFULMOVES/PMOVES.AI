@@ -300,7 +300,12 @@ MCP_SPECS: List[MCPSpec] = [
             "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
             "timeout": 30,
         },
-        required_env="CIPHER_API_TOKEN",
+        # Deliberately NO required_env: the shim accepts an EMPTY bearer
+        # (dev-skip when CIPHER_API_TOKEN is unset), which is exactly what the
+        # `:-` default in the header above exists to send. Keeping the token
+        # required would re-disable the spec on tokenless nodes through
+        # missing_envs() -- URL and header fixed, entry still dark, the same
+        # silence this PR exists to end.
     ),
     MCPSpec(
         key="pmoves-cipher-local",
@@ -310,7 +315,8 @@ MCP_SPECS: List[MCPSpec] = [
             "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
             "timeout": 30,
         },
-        required_env="CIPHER_API_TOKEN",
+        # See pmoves-cipher above: no required_env, the empty bearer is
+        # supported by the server.
     ),
     MCPSpec(
         key="agent-zero",
