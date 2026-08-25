@@ -131,6 +131,18 @@ def main() -> int:
         sys.stderr.write("refusing: role name must be alphanumeric/underscore\n")
         return 1
 
+    # Length floor BEFORE anything is minted or applied: mint(0) happily
+    # returns "" and the ALTER would then install a verifier for an EMPTY
+    # password -- the shell wrapper catches the blank emit, but only after
+    # the database has already moved, leaving it on an empty credential
+    # while every consumer still holds the old one.
+    if a.length < 16:
+        sys.stderr.write(
+            "refusing: length {} is below the 16-character minimum "
+            "(SCRAM verifiers for short secrets are trivially brute-forced)\n".format(
+                a.length))
+        return 1
+
     password = mint(a.length)
     verifier = scram_sha256_verifier(password, secrets.token_bytes(SALT_BYTES))
     # LOGIN is part of the statement, not a follow-up: initdb provisions
@@ -138,8 +150,14 @@ def main() -> int:
     # so a password-only ALTER reports success while every authentication
     # attempt stays rejected. WITH LOGIN closes that gap idempotently --
     # it is a no-op for a role that can already log in.
-    stmt = "ALTER ROLE {} WITH LOGIN PASSWORD {};".format(
-        a.role, quote_literal(verifier))
+    #
+    # The role is a QUOTED identifier: unquoted, names like current_user or
+    # session_user are special role specifications, and `ALTER ROLE
+    # current_user` would rotate the ADMINISTRATOR's password, not a role
+    # literally bearing that name. Double-quoting makes it always a literal
+    # identifier (and is a no-op for ordinary alphanumeric names).
+    stmt = 'ALTER ROLE "{}" WITH LOGIN PASSWORD {};'.format(
+        a.role.replace('"', '""'), quote_literal(verifier))
 
     if a.dry_run:
         # Never print the password or the verifier. Shape only.
