@@ -134,7 +134,11 @@ test_http_endpoint() {
     # could only ever assert a 2xx status -- $status -eq 0 rejected a 401 before
     # http_code was ever compared. The http_code comparison is the real assertion;
     # transport failures still surface as exit 7 (refused) and 28 (timeout).
-    if [ $status -eq 0 ] && [ "$http_code" = "$expected_status" ]; then
+    # expected_status may be an alternation ("200|401") for checks whose correct
+    # answer is deployment-dependent. NOTE: =~ with the pattern from a variable,
+    # not case: bash parses case-alternation before expansion, so a "|" arriving
+    # via $expected_status would be a literal pipe, never an alternation.
+    if [ $status -eq 0 ] && [[ "$http_code" =~ ^(${expected_status})$ ]]; then
         print_pass "$name"
         [ "$VERBOSE" = true ] && echo "       Response: $body"
         return 0
@@ -313,12 +317,17 @@ main() {
     # Data Tier Services
     print_section "Data Tier Services"
     test_tcp_connectivity "Supabase Postgres" "localhost" "5432" "default"
-    # 401, not 200. PostgREST runs with PGRST_JWT_SECRET and no anon role, so an
-    # unauthenticated GET is SUPPOSED to be refused. Asserting 200 meant the suite
-    # only went green while PostgREST was open to anonymous reads -- rewarding the
-    # insecure state -- and it began "failing" on B850 the moment that node revoked
-    # PUBLIC/anon grants. A 200 here now would be the finding.
-    test_http_endpoint "Supabase PostgREST (refuses anon)" "http://localhost:3010/" "401" "default"
+    # 200 or 401, not one hardcoded: the root's unauthenticated status is
+    # deployment-dependent and BOTH are healthy. Fresh bootstrap sets
+    # PGRST_ANON_ROLE=anon (docker-compose.core.yml) with the role granted in
+    # supabase/initdb/01_public_init.sql, so root is served as anon and answers
+    # 200 with the OpenAPI document; PGRST_JWT_SECRET only validates supplied
+    # tokens, it does not require them. A node that revokes the anon role
+    # (B850's hardening) gets 401 instead. Either proves PostgREST is up and
+    # answering; the smoke asserts liveness, the security posture is audited by
+    # auth-alignment/secrets-audit. This also keeps the shell harness consistent
+    # with tests/smoke/test_critical_path.py, which asserts 200.
+    test_http_endpoint "Supabase PostgREST" "http://localhost:3010/" "200|401" "default"
     test_tcp_connectivity "Qdrant" "localhost" "6333" "default"
     test_http_endpoint "Qdrant health" "http://localhost:6333/healthz" "200" "default"
     test_tcp_connectivity "Neo4j HTTP" "localhost" "7474" "default"
