@@ -39,9 +39,18 @@ def open_claims_in(text: str) -> dict[str, int]:
 
     A CLAIM is "open" if no later RELEASE for the same owner-ID follows it.
     Line numbers are 1-based to match editor conventions.
+
+    `split("\n")`, NOT `splitlines()`: the latter also breaks on vertical tab
+    (U+000B), form feed (U+000C), NEL, and U+2028/9, none of which grep, sed, or
+    an editor counts as a line. The register carries 7 such characters today (2
+    VT, 5 FF), so `splitlines()` reported a claim on line 2005 that every other
+    tool puts on 1998. The drift is cumulative, so it grows down the file and
+    hits exactly the newest entries -- the ones a collision message points at.
+    A line number that does not resolve sends the reader hunting, and this hook
+    only speaks when it is blocking someone.
     """
     open_claims: dict[str, int] = {}
-    for lineno, line in enumerate(text.splitlines(), start=1):
+    for lineno, line in enumerate(text.split("\n"), start=1):
         if m := CLAIM_RE.search(line):
             open_claims[m.group(1)] = lineno
         elif m := RELEASE_RE.search(line):
