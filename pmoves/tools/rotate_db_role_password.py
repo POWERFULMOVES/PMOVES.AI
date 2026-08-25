@@ -160,10 +160,7 @@ def main() -> int:
     if a.emit_to_env:
         # Deliberately the ONLY path by which the plaintext leaves this process.
         # The caller is expected to consume this on a pipe, not echo it.
-        # Suppressed below on purpose: this emit-to-pipe contract is the single,
-        # documented exit point for the plaintext — keeping it here keeps the
-        # value auditable instead of scattering it through less-visible sinks.
-        print("{}={}".format(a.emit_to_env, password))  # codeql[py/clear-text-logging-sensitive-data]
+        print("{}={}".format(a.emit_to_env, password))  # lgtm[py/clear-text-logging-sensitive-data] -- emit-to-pipe contract: single documented exit point for the plaintext (see PR #2719), same suppression form as launcher_profile_select.py:216
     return 0
 
 
