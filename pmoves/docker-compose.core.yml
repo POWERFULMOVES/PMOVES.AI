@@ -145,7 +145,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_external
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_db_egress
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 20s
@@ -168,25 +168,33 @@ services:
     # Step 4 of the juicefs cross-node lane. pmoves_data and pmoves_api are both
     # `internal: true`, and a published port on a container attached only to
     # internal networks is not reachable -- the port maps, nothing can dial it.
-    # Multi-homing onto pmoves_external (internal: false) is what actually plumbs
-    # it. Same pattern the NATS bus already uses.
+    # A non-internal bridge is what actually plumbs it.
+    #
+    # DEDICATED bridge, NOT the shared egress network (review P1): joining
+    # pmoves_external would hand every internet-facing container on that bridge
+    # a direct route to supabase-db:5432, and the pg_hba catch-all accepts every
+    # role from 172.16.0.0/12 (docker bridges included) -- the tailnet scoping
+    # never sees those sources. pmoves_db_egress (172.30.8.0/24, internal:
+    # false) carries ONLY this database, and its pg_hba ruleset admits nothing
+    # from that subnet except juicefs_meta.
     #
     # This does NOT put the database on the open internet. Reachability is
-    # governed by two things:
+    # governed by:
     #   1. SUPABASE_DB_BIND -- set to the node's TAILNET address, not 0.0.0.0, so
     #      the listener exists only on the tailnet interface. Default stays
     #      127.0.0.1, so a node that does not set it publishes nothing new.
-    #   2. pg_hba (supabase/config/pg_hba.conf) -- admits ONLY juicefs_meta from
-    #      100.64.0.0/10 and REJECTS every other role there. That is the control
-    #      that keeps this from being a superuser surface; the scoped role alone
-    #      never was.
+    #   2. pg_hba (supabase/config/pg_hba.conf) -- tailnet sources
+    #      (100.64.0.0/10, which DNAT preserves end-to-end) admit ONLY
+    #      juicefs_meta and reject every other role; the dedicated bridge subnet
+    #      carries the same juicefs_meta-only rule so a container that somehow
+    #      joined it gains nothing either.
     #
     # sslmode: the cross-node DSN carries sslmode=disable. JuiceFS's PostgreSQL
     # best-practices doc advises against it. Recorded decision rather than an
     # inherited default: WireGuard encrypts the tailnet transport, so the session
     # is not on the wire in plaintext, and the metadata role is non-superuser and
     # pg_hba-scoped. Revisit if the DB is ever reachable off-tailnet.
-    - pmoves_external
+    - pmoves_db_egress
 
     deploy:
       resources:

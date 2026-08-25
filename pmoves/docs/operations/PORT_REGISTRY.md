@@ -92,7 +92,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 | Port | Service | Description | Network |
 |------|---------|-------------|---------|
-| 5432 | Supabase DB | PostgreSQL 17 (tailnet-bound on the juicefs meta host; internal elsewhere) | pmoves_data, pmoves_api, pmoves_external |
+| 5432 | Supabase DB | PostgreSQL 17 (tailnet-bound on the juicefs meta host; internal elsewhere) | pmoves_data, pmoves_api, pmoves_db_egress (dedicated, pg_hba-scoped) |
 | 3010 | PostgREST | Supabase REST API — **host** port (container port stays 3000) | pmoves_api, pmoves_data |
 | 9999 | GoTrue | JWT authentication service | pmoves_api, pmoves_data |
 | 4010 | Realtime | WebSocket for real-time subscriptions (remapped from 4000) | pmoves_api, pmoves_data |
