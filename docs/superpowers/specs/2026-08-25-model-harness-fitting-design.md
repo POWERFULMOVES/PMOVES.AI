@@ -118,7 +118,7 @@ model_suit:
   harnesses:
     claude_pmoves:
       fit:
-        "*":   {verdict: full, by: darkxside, method: hand, on: 2026-08-25}
+        "*":   {verdict: full, by: darkxside, method: hand, "on": 2026-08-25}
       roles:                 # relocated from harness_mappings
         deep_debugging:   {temperature: 0.3, top_p: 0.90, system_prompt: directive_debugger}
         code_review:      {temperature: 0.4, top_p: 0.95}
@@ -126,10 +126,18 @@ model_suit:
         prompt_ceiling: 40000    # see §5
     clawz:
       fit:
-        "*": {verdict: limited, by: darkxside, method: hand, on: 2026-06-11,
+        "*": {verdict: limited, by: darkxside, method: hand, "on": 2026-06-11,
               note: "requires adapter layer; tool-call parsing assumes an Anthropic-shaped response"}
-        code_review: {verdict: full, by: provider_verifier, method: measured, on: 2026-08-19}
+        code_review: {verdict: full, by: provider_verifier, method: measured, "on": 2026-08-19}
 ```
+
+**`"on"` is quoted deliberately — do not tidy it.** YAML 1.1 (what PyYAML's
+`safe_load` implements) reads a bare `on` as the boolean `True`, so `on: 2026-08-25`
+parses to the key `True` and `obs.get("on")` returns `None`. The provenance vanishes
+silently: no error, no missing-key warning, just a record that looks complete and
+carries no date. An earlier draft of this spec wrote it unquoted, an implementer hit
+it while seeding, and the gate now rejects both the bare-`on` case and a `True` key
+with a message naming the quoting. The same trap catches `y`, `yes`, `no` and `off`.
 
 `cross_agent` is left exactly as it is, answering the question it was built for. No
 value is reinterpreted, so nothing can silently change meaning.
@@ -367,9 +375,9 @@ nobody re-checks. Two extractions agreeing is the check.
    clawz:
      fit: limited                       # effective value the router uses
      observations:
-       - {verdict: limited, by: darkxside,        method: hand,    on: 2026-06-11,
+       - {verdict: limited, by: darkxside,        method: hand,    "on": 2026-06-11,
           note: "tool-call parsing assumes an Anthropic-shaped response"}
-       - {verdict: limited, by: provider_verifier, method: measured, on: 2026-08-19}
+       - {verdict: limited, by: provider_verifier, method: measured, "on": 2026-08-19}
    ```
 
    The effective `fit` is the most conservative verdict among observations, so a
