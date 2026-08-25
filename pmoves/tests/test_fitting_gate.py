@@ -1,7 +1,6 @@
 """The gate rejects a fitting that names an unregistered harness or unknown role."""
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,9 +23,9 @@ def _run() -> subprocess.CompletedProcess:
 
 @pytest.fixture
 def restore_victim():
-    backup = VICTIM.read_text(encoding="utf-8")
+    backup = VICTIM.read_bytes()
     yield
-    VICTIM.write_text(backup, encoding="utf-8")
+    VICTIM.write_bytes(backup)
 
 
 def test_gate_passes_on_the_seeded_data():
