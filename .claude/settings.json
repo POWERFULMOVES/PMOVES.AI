@@ -114,6 +114,11 @@
             "type": "command",
             "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/edit-tool-damage-control.py\"",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/claim-collision-pre.py\"",
+            "timeout": 15
           }
         ]
       },
@@ -123,6 +128,11 @@
           {
             "type": "command",
             "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/write-tool-damage-control.py\"",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/claim-collision-pre.py\"",
             "timeout": 15
           }
         ]

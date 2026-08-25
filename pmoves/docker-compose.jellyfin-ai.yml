@@ -22,7 +22,7 @@ x-jellyfin-base: &jellyfin-base
     - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/media:/media
     - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/output:/output
     - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/config/www:/config/www:ro
-    - ${PMOVES_PROVISIONS_ROOT:-../CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions}/docker-stacks/jellyfin-ai/install_plugins.sh:/tmp/install_plugins.sh:ro
+    - ${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}/install_plugins.sh:/tmp/install_plugins.sh:ro
   ports:
     - "${JELLYFIN_HTTP_PORT:-9096}:8096"
   networks:
@@ -49,7 +49,7 @@ services:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/output:/output
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/config/www:/config/www:ro
       - ${JUICEFS_HOST_MOUNT:-/home/pmoves-knuckles/pmoves-fs}:/media/pmoves:rshared
-      - ${PMOVES_PROVISIONS_ROOT:-../CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions}/docker-stacks/jellyfin-ai/install_plugins.sh:/tmp/install_plugins.sh:ro
+      - ${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}/install_plugins.sh:/tmp/install_plugins.sh:ro
     # Uncomment to auto-install plugins on startup (may slow first boot):
     # entrypoint: >
     #   bash -c "apt-get update && apt-get install -y wget unzip && cp /tmp/install_plugins.sh /usr/local/bin/install_plugins.sh && chmod +x /usr/local/bin/install_plugins.sh && /usr/local/bin/install_plugins.sh && /init"
@@ -125,7 +125,7 @@ services:
     # media-analysis models are a swappable seat served by native Ollama or
     # HF-pulled GGUFs (ollama pull hf.co/...), curated by the HF agent — not
     # a dedicated per-model container. Enable with profile jellyfin-audio-local.
-    image: ollama/ollama:latest
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.31.2@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a}
     container_name: ${JELLYFIN_QWEN_CONTAINER_NAME:-pmoves-jellyfin-qwen}
     profiles: ["jellyfin-audio-local"]
     environment:
@@ -154,7 +154,7 @@ services:
 
   jellyfin-audio-processor:
     build:
-      context: ${PMOVES_PROVISIONS_ROOT:-../CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions}/docker-stacks/jellyfin-ai/audio-processor
+      context: ${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}/audio-processor
       dockerfile: Dockerfile
     container_name: ${JELLYFIN_AUDIO_PROCESSOR_CONTAINER_NAME:-pmoves-jellyfin-audio-processor}
     profiles: ["default", "jellyfin-ai"]
@@ -214,7 +214,7 @@ services:
 
   jellyfin-api-gateway:
     build:
-      context: ${PMOVES_PROVISIONS_ROOT:-../CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions}/docker-stacks/jellyfin-ai/api-gateway
+      context: ${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}/api-gateway
       dockerfile: Dockerfile
     container_name: ${JELLYFIN_API_CONTAINER_NAME:-pmoves-jellyfin-api}
     profiles: ["default", "jellyfin-ai"]
@@ -255,7 +255,7 @@ services:
 
   jellyfin-dashboard:
     build:
-      context: ${PMOVES_PROVISIONS_ROOT:-../CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions}/docker-stacks/jellyfin-ai/dashboard
+      context: ${PMOVES_JELLYFIN_AI_ROOT:-../Pmoves-Jellyfin-AI-Media-Stack/Cataclysm_Provisioning_Bundle/provisioning_bundle/docker-stacks/jellyfin-ai}/dashboard
       dockerfile: Dockerfile
     container_name: ${JELLYFIN_DASHBOARD_CONTAINER_NAME:-pmoves-jellyfin-dashboard}
     profiles: ["default", "jellyfin-ai"]
@@ -265,7 +265,7 @@ services:
       - REACT_APP_ENABLE_HDR=${JELLYFIN_ENABLE_HDR:-1}
       - REACT_APP_PREFER_AV1=${JELLYFIN_PREFER_AV1:-1}
     ports:
-      - "${JELLYFIN_DASHBOARD_PORT:-8400}:80"
+      - "${JELLYFIN_DASHBOARD_PORT:-8400}:8080"   # nginx-unprivileged listens on 8080, not 80
     networks:
       pmoves:
         aliases:

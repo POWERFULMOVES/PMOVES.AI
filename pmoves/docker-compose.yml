@@ -545,6 +545,34 @@ services:
   #   adopting Supabase's updated self-hosted compose defaults OR enabling custom
   #   OAuth/SAML, move the WHOLE set together (API_EXTERNAL_URL + Kong routes +
   #   issuer) and re-test auth — applying any one piece alone breaks auth.
+  # - THE VALUE, as distinct from the scheme (checked 2026-08-23). The note above
+  #   settles WHICH scheme we use. It does not address why the value is
+  #   `http://localhost:8000`, which looks wrong next to seven public
+  #   *.pmoves.ai names. It is correct, for three independent reasons:
+  #     1. Kong publishes on 127.0.0.1:8000 and 127.0.0.1:8001 -- loopback, by
+  #        DEFAULT. This is a default, not an invariant: the bind is
+  #        `${KONG_PROXY_BIND:-127.0.0.1}` (see the kong stanza), so setting
+  #        KONG_PROXY_BIND=0.0.0.0 in env.shared -- the documented Docker Desktop
+  #        workaround, and the way LAN access gets enabled -- makes the API
+  #        reachable off-host with NO Traefik router involved. Check the live
+  #        bind, do not assume this line.
+  #     2. No Traefik router targets Kong. `auth.pmoves.ai` resolves to
+  #        `service=sso-auth@docker` (docker-compose.traefik.yml:71) -- the
+  #        forward-auth service, NOT GoTrue.
+  #     3. So there is no public Supabase endpoint for the value to name.
+  #        Per Supabase's reverse-proxy guide, API_EXTERNAL_URL/SUPABASE_PUBLIC_URL
+  #        must name the URL END USERS reach the API at. Today that is loopback.
+  #   Corroborating: auth.users is EMPTY (0 rows) and GOTRUE_SMTP_HOST is unset,
+  #   so the confirmation-email path this value feeds has never been exercised.
+  #   TRIGGER (either of these, not just the first): a Traefik router starts
+  #   pointing at Kong, OR Kong gains any non-loopback bind via KONG_PROXY_BIND.
+  #   Both make the API reachable by clients that are not this host, and both
+  #   make `localhost:8000` wrong for them -- a LAN client handed a
+  #   GoTrue-generated localhost URL resolves it against ITSELF and fails. Move
+  #   the whole set together then -- SUPABASE_PUBLIC_URL + SUPABASE_SITE_URL
+  #   (currently http://localhost:3000) + GOTRUE_URI_ALLOW_LIST (currently EMPTY,
+  #   so only SITE_URL is an allowed redirect) + Kong routes + issuer -- per the
+  #   SET rule above. Raised and closed twice now; recorded so it is not a third.
   # - OPTIONAL hardening: asymmetric JWT signing keys (ES256/RS256) over the
   #   current HS256 symmetric secret — larger migration (touches every
   #   JWT-validating service); tracked separately.
@@ -581,6 +609,11 @@ services:
     volumes:
     - supabase-db-data:/var/lib/postgresql/data
     - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
+    # Repo-managed pg_hba. The image ships this at /etc/postgresql/pg_hba.conf --
+    # the container's WRITABLE LAYER, not the data volume -- so an in-container
+    # edit is discarded by the next recreate. Mounting it makes the tailnet
+    # role-scoping durable. See the file's own header for why the rules exist.
+    - ./supabase/config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     networks:
     - pmoves_data
     - pmoves_api  # Services on pmoves_api need DB access
@@ -607,6 +640,19 @@ services:
     - GOTRUE_API_PORT=9999
     # Database connection
     - GOTRUE_DB_DRIVER=postgres
+    # PRECEDENCE TRAP (bit us 2026-08-23, during a real rotation).
+    # POSTGRES_PASSWORD_URLENCODED wins over POSTGRES_PASSWORD here, and it is
+    # NOT sourced from the CHIT manifest -- it is emitted by
+    # tools/credential_urlencoder.py into env.tier-supabase.urlencoded, which
+    # compose loads LAST of all env files. So this chain resolves to whatever
+    # that encoder last wrote, overriding every other source.
+    #
+    # The encoder merges env.shared then env.tier-supabase (later wins), so it
+    # MUST run after secrets-funnel-sync. It used to run before, which meant a
+    # rotation re-published the PREVIOUS password as the winning value: the
+    # funnel reported success and postgrest, gotrue and storage came back 28P01
+    # holding a correct POSTGRES_PASSWORD in their own env. Order fixed in
+    # mk/codex.mk; see the note above the secrets-funnel target.
     - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
     # JWT configuration — standard names with legacy fallbacks
     - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
@@ -3343,6 +3389,47 @@ services:
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    # -- Coding-plan auth for the bundled Claude Code CLI --
+    #
+    # Two separate facts, both measured in-container against Claude Code 2.1.209
+    # (the binary the Agent SDK ships at
+    #  /app/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude):
+    #
+    # 1. That CLI does NOT read CLAUDE_CODE_OAUTH_TOKEN. It reads
+    #    ANTHROPIC_AUTH_TOKEN, which it sends as `Authorization: Bearer`.
+    #      ANTHROPIC_AUTH_TOKEN=<plan token>     -> OK
+    #      CLAUDE_CODE_OAUTH_TOKEN=<same token>  -> 401 Invalid bearer token
+    #    The same token authenticates fine against the API with a Bearer header,
+    #    so this is about which variable the CLI reads, not the credential.
+    #    CLAUDE_CODE_OAUTH_TOKEN is still set above because the Archon TS server
+    #    exits(1) at boot if none of its expected auth vars is present -- it gates
+    #    startup, it does not authenticate the CLI.
+    #
+    # 2. ANTHROPIC_API_KEY OUTRANKS the bearer token, so it must be emptied or the
+    #    plan is never reached:
+    #      api key + AUTH_TOKEN    -> "Credit balance is too low"  (key wins)
+    #      AUTH_TOKEN alone        -> OK
+    #      api key="" + AUTH_TOKEN -> OK                           (empty == absent)
+    #    Emptying is sufficient; no vector-style entrypoint `unset` wrapper needed.
+    #    This is NOT about one stale key: the account bills through a coding plan,
+    #    so any ANTHROPIC_API_KEY it carries is creditless. Verified against both
+    #    the pre- and post-rotation keys -- both "Credit balance is too low".
+    #
+    # Scoped to archon: other services keep what the shared env provides.
+    #
+    # The nested default is load-bearing. env.shared.example:90 documents
+    # ANTHROPIC_AUTH_TOKEN as a variable an operator may set directly, and a
+    # service-level `environment:` entry OVERRIDES what env_file supplies -- so a
+    # bare ${CLAUDE_CODE_OAUTH_TOKEN:-} would expand to empty and wipe out a
+    # perfectly good token that was configured the documented way. Falling back to
+    # the inherited value keeps both setups working. Verified with
+    # `docker compose config`:
+    #   only CLAUDE_CODE_OAUTH_TOKEN -> that value
+    #   only ANTHROPIC_AUTH_TOKEN    -> preserved (was silently emptied before)
+    #   both                         -> CLAUDE_CODE_OAUTH_TOKEN wins
+    #   neither                      -> ""
+    - ANTHROPIC_API_KEY=
+    - ANTHROPIC_AUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-${ANTHROPIC_AUTH_TOKEN:-}}
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
     # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
     # Default empty (uses $PATH). The upstream Archon Dockerfile installs

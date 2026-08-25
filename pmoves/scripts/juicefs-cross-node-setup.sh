@@ -26,7 +26,12 @@ set -euo pipefail
 # MagicDNS hostname, never a literal Tailscale IP (committed files carry no IPs).
 JUICEFS_HOST="${JUICEFS_HOST:-pmoves-b850-ai-top}"
 DB_PORT="${DB_PORT:-5432}"
-DB_PASS="${DB_PASS:-}"
+# DB_PASS is the META_ROLE's password. Falls back to JUICEFS_META_PASSWORD — the funnel-
+# delivered secret (registered in chit_manifest_register.py, tier data) — so a node that
+# received it via the secrets pipeline can just run with META_ROLE=juicefs_meta and no
+# explicit DB_PASS. Neither is ever inlined on a command line: both arrive via the
+# environment and are handed to JuiceFS as META_PASSWORD, so they never appear in `ps`.
+DB_PASS="${DB_PASS:-${JUICEFS_META_PASSWORD:-}}"
 # Metadata DSN role. Default supabase_admin for back-compat. Switch to juicefs_meta once
 # the scoped role is applied (make -C pmoves supabase-bootstrap) and granted LOGIN with a
 # pipeline-delivered password — this is the step-2 cutover in
@@ -41,11 +46,10 @@ DATA_DIR="${DATA_DIR:-$HOME/.local/share/juicefs-data}"
 ALLOW_FILE_STORAGE="${ALLOW_FILE_STORAGE:-0}"
 
 if [ -z "$DB_PASS" ]; then
-    echo "ERROR: DB_PASS required (the Supabase DB password)"
-    echo "  Source it from the CHIT secrets pipeline — do not paste it on the CLI,"
-    echo "  and do not read env.shared directly. It is exported to this script as an"
-    echo "  environment variable and handed to JuiceFS via META_PASSWORD, so it never"
-    echo "  appears in the container command line or in 'ps'."
+    echo "ERROR: no metadata password. Set DB_PASS, or (for META_ROLE=juicefs_meta) have"
+    echo "  JUICEFS_META_PASSWORD delivered via the CHIT secrets pipeline (funnel). Do not"
+    echo "  paste it on the CLI and do not read env.shared directly. It is read from the"
+    echo "  environment and handed to JuiceFS via META_PASSWORD, so it never appears in 'ps'."
     exit 1
 fi
 

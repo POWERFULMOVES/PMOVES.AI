@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -25,23 +26,57 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def _is_pruned_dir(root: Path, name: str) -> bool:
+    """True for directories whose entire subtree must not be audited.
+
+    Linked worktrees are full repo copies; auditing them double-counts every finding
+    against files this checkout owns. The top-level `.worktrees` layout is the one
+    actually in use and was previously not excluded at all: with 190 repo copies
+    under it, the audit reported 147 errors of which 147 came from `.worktrees` and
+    ZERO from files this checkout owns. A gate that is permanently red reports
+    nothing -- the 12 real warnings were buried under duplicate noise.
+
+    `.worktrees` is matched as a plain directory name; the dotted form is
+    distinctive enough that an accidental skip is implausible. `.claude/worktrees`
+    is matched only as that exact adjacent pair, so an unrelated directory merely
+    named `worktrees` is still audited (no blind spot).
+    """
+    if name in {".git", ".worktrees"}:
+        return True
+    return name == "worktrees" and root.name == ".claude"
+
+
 def candidate_files() -> Iterable[Path]:
     allowed = {".md", ".py", ".sh", ".yaml", ".yml", ".json", ".txt"}
-    for path in REPO_ROOT.rglob("*"):
-        if not path.is_file():
-            continue
-        if ".git" in path.parts:
-            continue
-        # Linked worktrees under .claude/worktrees are full repo copies; auditing
-        # them double-counts every finding against files this checkout owns.
-        # Match the ordered adjacent subtree so unrelated paths that merely
-        # contain both components elsewhere are still audited (no blind spot).
-        parts = path.parts
-        if any(parts[i : i + 2] == (".claude", "worktrees") for i in range(len(parts) - 1)):
-            continue
-        if path.suffix.lower() not in allowed:
-            continue
-        yield path
+    # os.walk with in-place `dirnames` pruning, not rglob("*") + filter. rglob
+    # TRAVERSES every excluded subtree and only then discards the results, so
+    # filtering afterwards removes the false findings but not their cost. Both were
+    # measured against the real repo, same 75329 files in scope and identical
+    # findings either way:
+    #
+    #   rglob + filter   walk 265.2s   total 904.4s
+    #   os.walk + prune  walk  12.9s   total 359.2s
+    #
+    # That is ~20x off the walk, but the audit is still NOT fast: ~6 minutes,
+    # dominated by reading the files that remain in scope rather than by the walk.
+    # Pruning fixes the wrong-results problem, not the slow-audit problem.
+    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
+        here = Path(dirpath)
+        dirnames[:] = [d for d in dirnames if not _is_pruned_dir(here, d)]
+        for filename in filenames:
+            path = here / filename
+            if path.suffix.lower() not in allowed:
+                continue
+            # os.walk lists broken symlinks and other non-regular entries among
+            # `filenames`; read_text() would then raise FileNotFoundError and abort
+            # the whole audit over one dangling link left by local tooling. The
+            # rglob version got this from its `path.is_file()` guard, which the
+            # rewrite dropped. Ordered AFTER the suffix test on purpose: is_file()
+            # is a stat syscall, and this way it only runs for the files that are
+            # actually in scope rather than for all 75329 walked.
+            if not path.is_file():
+                continue
+            yield path
 
 
 def parse_env_file(path: Path) -> dict[str, str]:

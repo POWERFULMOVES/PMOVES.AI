@@ -49,9 +49,8 @@ jobs:
       - name: Auto-fix from bot review
         uses: anthropics/claude-code-action@9d7150bc8a3dae8149739a88019d192b579ad90c # v1.0.193
         with:
-          # Use the direct Anthropic API key, not CLAUDE_CODE_OAUTH_TOKEN (expired).
-          # See review-comment-monitor.yml for the full rationale.
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Coding plan, not the metered API key. See review-comment-monitor.yml.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # claude-code-action default-denies bot triggers; this job is intentionally
           # triggered by bot reviews on opted-in PRs.
           allowed_bots: 'coderabbitai[bot],chatgpt-codex-connector[bot]'
