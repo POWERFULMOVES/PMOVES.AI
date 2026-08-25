@@ -160,13 +160,26 @@ def undeclared_authors(
 
 
 def correction_for(
-    timestamp: str, kind: str, vocab: Vocabulary | None = None
+    timestamp: str, kind: str, author: str | None = None,
+    vocab: Vocabulary | None = None,
 ) -> dict | None:
+    """The correction for one entry, or None.
+
+    (timestamp, kind) is NOT unique in the register -- two different authors
+    share `2026-03-04T20:50:26-05:00 CLAIM`. Without `author` this returned
+    one entry's correction for the other's row. When `author` is given it
+    must canonicalise to the correction's `actual`, since the register line
+    already carries the corrected name.
+    """
     vocab = vocab if vocab is not None else load_vocabulary()
     for record in vocab.corrections:
         entry = record.get("entry") or {}
-        if entry.get("timestamp") == timestamp and entry.get("kind") == kind:
-            return record
+        if entry.get("timestamp") != timestamp or entry.get("kind") != kind:
+            continue
+        if author is not None:
+            if canonical_identity(author, vocab) != record.get("actual"):
+                continue
+        return record
     return None
 
 
@@ -180,7 +193,7 @@ def resolve_author(
     visible rather than laundered into the line.
     """
     vocab = vocab if vocab is not None else load_vocabulary()
-    record = correction_for(timestamp, kind, vocab)
+    record = correction_for(timestamp, kind, author, vocab)
     if record is not None:
         return record["actual"], (
             f"corrected {record.get('asserted_on', '?')}: register recorded "
@@ -242,8 +255,8 @@ def verify(vocab: Vocabulary | None = None) -> list[str]:
 
     # Every prose correction must be backed by a structured record, or the
     # workaround silently spreads again.
-    for timestamp, kind, _ in annotated_corrections(text):
-        if correction_for(timestamp, kind, vocab) is None:
+    for timestamp, kind, author in annotated_corrections(text):
+        if correction_for(timestamp, kind, author, vocab) is None:
             findings.append(
                 f"[CORRECTION] annotation on {timestamp} {kind} has no record "
                 f"in {VOCABULARY_PATH.name}: the repair is prose only, so the "

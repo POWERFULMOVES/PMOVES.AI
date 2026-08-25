@@ -115,7 +115,14 @@ def canonical_owner(owner: str) -> str:
 
 
 def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
-    """Map canonical owner -> (line of their open CLAIM, lanes, as-written).
+    """Map canonical owner -> LIST of (line, lanes, as-written) still open.
+
+    A LIST, not a single tuple. Keying one claim per owner silently forgot
+    every lane but the newest: two open claims by one identity collapsed to
+    one, and a later release dropped the survivor too -- so a lane another
+    node genuinely held stopped colliding. That was true before
+    canonicalisation for two claims under the SAME spelling, and folding
+    spellings widened it to the whole identity.
 
     A CLAIM is "open" if no later RELEASE for the same owner follows it.
     Pairing is on the CANONICAL identity, not the literal string: a release
@@ -135,14 +142,33 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
     A line number that does not resolve sends the reader hunting, and this hook
     only speaks when it is blocking someone.
     """
-    open_claims: dict[str, tuple[int, set[str], str]] = {}
+    open_claims: dict[str, list[tuple[int, set[str], str]]] = {}
     for lineno, line in enumerate(text.split("\n"), start=1):
         if m := CLAIM_RE.search(line):
-            open_claims[canonical_owner(m.group(1))] = (
-                lineno, set(LANE_RE.findall(line)), m.group(1)
+            open_claims.setdefault(canonical_owner(m.group(1)), []).append(
+                (lineno, set(LANE_RE.findall(line)), m.group(1))
             )
         elif m := RELEASE_RE.search(line):
-            open_claims.pop(canonical_owner(m.group(1)), None)
+            owner = canonical_owner(m.group(1))
+            released = set(LANE_RE.findall(line))
+            if not released:
+                # A BARE release closes everything that owner holds. 99 of
+                # the register's 120 RELEASE lines name no branch, so this
+                # is the convention, not a guess -- a bare release is a
+                # full handoff.
+                open_claims.pop(owner, None)
+            else:
+                # A release that NAMES lanes closes only those. Anything
+                # else the owner still holds stays held.
+                kept = [
+                    (ln, lanes - released, raw)
+                    for ln, lanes, raw in open_claims.get(owner, [])
+                    if lanes - released
+                ]
+                if kept:
+                    open_claims[owner] = kept
+                else:
+                    open_claims.pop(owner, None)
     return open_claims
 
 
@@ -190,13 +216,14 @@ def main() -> None:
             unkeyed.append(owner)
             continue
         owner_key = canonical_owner(owner)
-        for other_key, (lineno, held, other_as_written) in existing_open.items():
+        for other_key, open_list in existing_open.items():
             # Canonical: re-claiming your own lane under a different
             # spelling of your own name is not a collision.
             if other_key == owner_key:
                 continue
-            for lane in sorted(lanes & held):
-                collisions.append((lane, other_as_written, lineno))
+            for lineno, held, other_as_written in open_list:
+                for lane in sorted(lanes & held):
+                    collisions.append((lane, other_as_written, lineno))
 
     if collisions:
         sys.stderr.write(
