@@ -284,8 +284,26 @@ nobody re-checks. Two extractions agreeing is the check.
    overrides the harness-level one; a harness-level `fit` with no role override
    applies to every role. This makes migration of the 35 existing `cross_agent`
    entries mechanical (they become harness-level) while leaving room to narrow.
-2. **Who writes `fit`?** Hand-recorded today. A measured verdict — from the provider
-   verifier, or a harness smoke run — would keep it honest as models change.
+2. ~~Who writes `fit`?~~ **Resolved 2026-08-25: both, and the record keeps more than
+   one.** A hand-recorded verdict carries judgement a benchmark cannot ("tool-call
+   parsing assumes an Anthropic-shaped response"); a measured one stays honest as
+   models change. Neither supersedes the other, so `fit` is not a bare scalar — each
+   observation carries its source, and a pairing may hold several:
+
+   ```yaml
+   clawz:
+     fit: limited                       # effective value the router uses
+     observations:
+       - {verdict: limited, by: darkxside,        method: hand,    on: 2026-06-11,
+          note: "tool-call parsing assumes an Anthropic-shaped response"}
+       - {verdict: limited, by: provider_verifier, method: measured, on: 2026-08-19}
+   ```
+
+   The effective `fit` is the most conservative verdict among observations, so a
+   single credible "this is worse than it looks" is never averaged away. Divergence
+   between a hand verdict and a measured one is a signal worth surfacing, not a
+   conflict to resolve silently — and the open lane matters: a third perspective (a
+   paired node's review, another agent's run) appends rather than overwrites.
 3. **Does `dsh` change this?** It hosts other harnesses via hook dialects, so a
    fitting for a model *inside dsh running the claude-code dialect* may need to
    compose two harness entries rather than name one.
