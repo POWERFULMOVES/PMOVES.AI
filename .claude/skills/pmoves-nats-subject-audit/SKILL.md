@@ -28,7 +28,11 @@ python3 .claude/skills/pmoves-nats-subject-audit/scripts/audit.py
 The script:
 
 1. Parses backtick-quoted dotted identifiers from `.claude/context/nats-subjects.md` and `geometry-nats-subjects.md`.
-2. Calls `http://127.0.0.1:8222/jsz?streams=true&consumers=true` (NATS monitoring port; matches CATALOG.md when broker is run with `-m 8222`).
+2. Calls `http://127.0.0.1:${NATS_MONITORING_PORT:-9223}/jsz?streams=true&consumers=true&config=true`,
+   falling back to `:8222`. **8222 is the port inside the container** — compose publishes it as
+   `${NATS_MONITORING_PORT:-9223}:8222`, so a host-side probe of 8222 is refused and the caller
+   records a skip. `config=true` is required: without it `/jsz` omits `config.subjects`, so every
+   declared subject reports as an orphan and real drift is invisible. `NATS_MONITOR_URL` overrides.
 3. Builds the live set from stream subjects and consumer filter subjects.
 4. Prints three sections; exits 0 always (informational; CI may wrap with `--strict` later).
 
