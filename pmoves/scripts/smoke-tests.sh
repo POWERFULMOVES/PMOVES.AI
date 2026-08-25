@@ -327,7 +327,11 @@ main() {
     # answering; the smoke asserts liveness, the security posture is audited by
     # auth-alignment/secrets-audit. This also keeps the shell harness consistent
     # with tests/smoke/test_critical_path.py, which asserts 200.
-    test_http_endpoint "Supabase PostgREST" "http://localhost:3010/" "200|401" "default"
+    # Port: read the same knob compose does (${SUPABASE_POSTGREST_PORT:-3010});
+    # hardcoding 3010 fails on nodes whose env overrides it (observed on SPARK,
+    # where the CLI-stack postgrest binds 127.0.0.1:3000).
+    SUPABASE_POSTGREST_PORT="${SUPABASE_POSTGREST_PORT:-3010}"
+    test_http_endpoint "Supabase PostgREST" "http://localhost:${SUPABASE_POSTGREST_PORT}/" "200|401" "default"
     test_tcp_connectivity "Qdrant" "localhost" "6333" "default"
     test_http_endpoint "Qdrant health" "http://localhost:6333/healthz" "200" "default"
     test_tcp_connectivity "Neo4j HTTP" "localhost" "7474" "default"
