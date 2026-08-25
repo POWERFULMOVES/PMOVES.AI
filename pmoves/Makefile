@@ -354,6 +354,7 @@ ensure-networks: ## Materialize the shared compose-owned networks (idempotent) s
 	@docker network inspect pmoves_bus >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.3.0/24 --gateway 172.30.3.1 --label com.docker.compose.network=pmoves_bus --label com.docker.compose.project=$(PROJECT) pmoves_bus >/dev/null 2>&1 || true
 	@docker network inspect pmoves_data >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.4.0/24 --gateway 172.30.4.1 --label com.docker.compose.network=pmoves_data --label com.docker.compose.project=$(PROJECT) pmoves_data >/dev/null 2>&1 || true
 	@docker network inspect pmoves_monitoring >/dev/null 2>&1 || docker network create --driver bridge --internal --subnet 172.30.5.0/24 --gateway 172.30.5.1 --label com.docker.compose.network=pmoves_monitoring --label com.docker.compose.project=$(PROJECT) pmoves_monitoring >/dev/null 2>&1 || true
+	@docker network inspect pmoves_db_egress >/dev/null 2>&1 || docker network create --driver bridge --subnet 172.30.8.0/24 --gateway 172.30.8.1 pmoves_db_egress >/dev/null 2>&1 || true
 	@docker network inspect pmoves-net >/dev/null 2>&1 || docker network create --driver bridge --label com.docker.compose.network=pmoves --label com.docker.compose.project=$(PROJECT) pmoves-net >/dev/null 2>&1 || true
 	@echo "✔ shared networks ensured"
 
@@ -4983,12 +4984,14 @@ overlay-up-full: ## Start ALL services via overlay files (base + all tiers)
 # files declare networks `external: true` (so each overlay parses standalone), so they
 # must EXIST at runtime; docker-compose.base.yml owns them but only materializes them
 # in a full `up`. Subnets here MUST match docker-compose.base.yml.
-ensure-overlay-networks: ## Create the bus overlay networks (pmoves_bus, pmoves_external) if missing
+ensure-overlay-networks: ## Create the bus overlay networks (pmoves_bus, pmoves_external, pmoves_db_egress) if missing
 	@docker network inspect pmoves_bus >/dev/null 2>&1 || \
 		docker network create --internal --driver bridge --subnet 172.30.3.0/24 --gateway 172.30.3.1 pmoves_bus >/dev/null
 	@docker network inspect pmoves_external >/dev/null 2>&1 || \
 		docker network create --driver bridge --subnet 172.30.6.0/24 --gateway 172.30.6.1 pmoves_external >/dev/null
-	@echo "✅ overlay bus networks present (pmoves_bus, pmoves_external)"
+	@docker network inspect pmoves_db_egress >/dev/null 2>&1 || \
+		docker network create --driver bridge --subnet 172.30.8.0/24 --gateway 172.30.8.1 pmoves_db_egress >/dev/null
+	@echo "✅ overlay bus networks present (pmoves_bus, pmoves_external, pmoves_db_egress)"
 
 # overlay-up-bus brings up ONLY the NATS event bus via the split overlays
 # (OVERLAY_DC = base+core), NOT the monolith via DC/STACK_FILES. The monolith's

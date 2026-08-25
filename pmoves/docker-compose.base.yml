@@ -581,3 +581,13 @@ networks:
   pmoves_external:
     external: true
     name: pmoves_external
+  # DEDICATED non-internal bridge for the supabase-db tailnet port publish
+  # (juicefs cross-node lane, PR #2728). Deliberately NOT pmoves_external:
+  # that bridge is shared with internet-facing containers, and pg_hba's
+  # 172.16.0.0/12 catch-all would accept every role from any of them. This
+  # network carries ONLY the database; pg_hba scopes its subnet
+  # (172.30.8.0/24) to juicefs_meta alone. External for the same
+  # cross-stack-adoption reason as pmoves_external.
+  pmoves_db_egress:
+    external: true
+    name: pmoves_db_egress

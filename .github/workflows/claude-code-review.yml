@@ -65,7 +65,15 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@9d7150bc8a3dae8149739a88019d192b579ad90c # v1.0.193
+        # v1.0.205 (Claude Code 2.1.245) — v1.0.193–v1.0.201 died at SDK init
+        # (is_error:true, num_turns:1, cost:0) on every PR since ~2026-08-23:
+        # anthropics/claude-code-action#1720. The "directory mismatch for
+        # tsconfig.json" line in the logs is Bun oven-sh/bun#25730 via #1568,
+        # noise from the same crash. If this recurs, the reported workaround is
+        # show_full_output: true (#1568, 5/5 correlated) — but action.yml warns
+        # it echoes tool results into PUBLIC logs, so it is a debug escape
+        # hatch, never a permanent setting.
+        uses: anthropics/claude-code-action@16b3b310c3d7b5279df73130324d5205aeea8eac # v1.0.205
         with:
           # Coding plan, not the metered API key. See review-comment-monitor.yml.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
