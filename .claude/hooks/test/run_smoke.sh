@@ -81,36 +81,61 @@ REGISTER="$TMP2/AGNOTE4482PHI.t1.md"
 cat >"$REGISTER" <<'EOF'
 # Active Claim Register
 
-- `2026-05-01T10:00:00Z` CLAIM `EXISTING-OWNER-A` scope: testing.
-- `2026-05-02T11:00:00Z` CLAIM `BOTH-OPEN-OWNER` scope: more testing.
+- `2026-05-01T10:00:00Z` CLAIM `EXISTING-OWNER-A` scope: testing. Branch `feat/held-lane`
+- `2026-05-02T11:00:00Z` CLAIM `BOTH-OPEN-OWNER` scope: more testing. Branch `feat/released-lane`
 - `2026-05-03T12:00:00Z` RELEASE `BOTH-OPEN-OWNER` scope: done.
 EOF
-# So: EXISTING-OWNER-A is OPEN; BOTH-OPEN-OWNER is CLOSED.
+# So: feat/held-lane is HELD by EXISTING-OWNER-A; feat/released-lane is FREE.
+#
+# These cases were rewritten 2026-08-25. They previously asserted the INVERTED
+# rule -- "same owner re-claiming -> BLOCK" -- which is why the defect survived
+# a green smoke suite: the test agreed with the bug. The gate is keyed on the
+# LANE now, so a collision means ANOTHER owner already holds that branch.
 
-# Collision: new CLAIM by EXISTING-OWNER-A → BLOCK
-PAYLOAD2A=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`EXISTING-OWNER-A\` scope: collision test" \
+# Collision: a DIFFERENT owner wants a lane that is held → BLOCK.
+# This is the event the register exists to prevent; under the owner-keyed
+# implementation it returned 0.
+PAYLOAD2A=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`OTHER-OWNER-B\` scope: same lane. Branch \`feat/held-lane\`" \
   '{tool_name:"Edit",tool_input:{file_path:$fp,new_string:$ns}}')
-run_case "collision against open lane → BLOCK" 2 "python3 $HOOK2" "$PAYLOAD2A"
+run_case "different owner takes a held lane → BLOCK" 2 "python3 $HOOK2" "$PAYLOAD2A"
 
-# Unique owner → ALLOW
-PAYLOAD2B=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`FRESH-OWNER\` scope: unique lane" \
+# Same owner, DIFFERENT lane → ALLOW. A node running several lanes at once is
+# the normal case here; blocking it was the false positive that made agents
+# route around the gate.
+PAYLOAD2B=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`EXISTING-OWNER-A\` scope: unrelated. Branch \`docs/other-lane\`" \
   '{tool_name:"Edit",tool_input:{file_path:$fp,new_string:$ns}}')
-run_case "unique owner → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2B"
+run_case "same owner, different lane → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2B"
 
-# Re-claim previously-released owner → ALLOW
-PAYLOAD2C=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`BOTH-OPEN-OWNER\` scope: re-claim after release" \
+# Same owner re-naming its OWN held lane → ALLOW (not a collision with itself).
+PAYLOAD2C=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`EXISTING-OWNER-A\` scope: more of the same. Branch \`feat/held-lane\`" \
   '{tool_name:"Edit",tool_input:{file_path:$fp,new_string:$ns}}')
-run_case "re-claim after release → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2C"
+run_case "same owner re-names its own lane → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2C"
+
+# A released lane is free for anyone → ALLOW.
+PAYLOAD2D=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`FRESH-OWNER\` scope: taking it over. Branch \`feat/released-lane\`" \
+  '{tool_name:"Edit",tool_input:{file_path:$fp,new_string:$ns}}')
+run_case "released lane is free → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2D"
+
+# A claim naming no branch cannot be compared. It must ALLOW, but say so rather
+# than exiting 0 as though it had verified something.
+PAYLOAD2E=$(jq -nc --arg fp "$REGISTER" --arg ns "- new CLAIM \`FRESH-OWNER\` scope: freeform prose, no branch named" \
+  '{tool_name:"Edit",tool_input:{file_path:$fp,new_string:$ns}}')
+run_case "unkeyed claim → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2E"
+if python3 "$HOOK2" <<<"$PAYLOAD2E" 2>&1 >/dev/null | grep -q "NOT CHECKED"; then
+  ok "unkeyed claim announces NOT CHECKED"
+else
+  bad "unkeyed claim announces NOT CHECKED"
+fi
 
 # Non-register file → ALLOW
-PAYLOAD2D=$(jq -nc --arg ns "- CLAIM \`whatever\`" \
+PAYLOAD2F=$(jq -nc --arg ns "- CLAIM \`whatever\` Branch \`feat/held-lane\`" \
   '{tool_name:"Edit",tool_input:{file_path:"/tmp/some-other.md",new_string:$ns}}')
-run_case "non-register file → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2D"
+run_case "non-register file → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2F"
 
-# Write tool on register (no collision) → ALLOW
-PAYLOAD2E=$(jq -nc --arg fp "$REGISTER" --arg c "fresh content with no CLAIM" \
+# Write tool on register (no CLAIM) → ALLOW
+PAYLOAD2G=$(jq -nc --arg fp "$REGISTER" --arg c "fresh content with no CLAIM" \
   '{tool_name:"Write",tool_input:{file_path:$fp,content:$c}}')
-run_case "Write with no CLAIM → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2E"
+run_case "Write with no CLAIM → ALLOW" 0 "python3 $HOOK2" "$PAYLOAD2G"
 
 # ═══════════════════════════════════════════════════════════════════════
 # Hook 3: signoff-gate.sh — hermetic tmp checklist via CLAUDE_PROJECT_DIR
