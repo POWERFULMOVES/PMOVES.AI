@@ -147,16 +147,18 @@ host_clis:
     check: "npm --version"
 
 project_devtools:
-  # Tools pinned by package.json (NOT host CLIs — always run via npm scripts or npx
-  # so every node gets the same version from the lockfile; never install globally)
+  # Tools pinned by package.json (NOT host CLIs — always run via the owning
+  # workspace's npm scripts so every node gets the version from ITS lockfile;
+  # never install globally, never bare `npx` from the repo root: there is no
+  # root package.json, and bare npx would fetch unrelated versions)
   jest:
-    entry: "jest.config.js (repo root)"
-    run_via: "npx jest / npm test"
-    purpose: "JS test runner"
+    entry: "jest.config.js (pmoves/ui)"
+    run_via: "npm --prefix pmoves/ui test   # or: cd pmoves/ui && npm test"
+    purpose: "JS test runner (pmoves/ui workspace)"
   eslint:
-    entry: "package.json devDependencies"
-    run_via: "npx eslint"
-    purpose: "JS/TS lint"
+    entry: "pmoves/ui package.json devDependencies"
+    run_via: "npm --prefix pmoves/ui run lint"
+    purpose: "JS/TS lint (pmoves/ui workspace)"
 
 pinokio_ecosystem:
   # Fleet Pinokio plane — launchers self-install deps into per-app venvs
