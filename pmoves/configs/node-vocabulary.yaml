@@ -77,6 +77,8 @@ nodes:
     note: >-
       AMD 9850X3D + dual R9700. operator_nodes.yaml calls it `knuckles`; the
       registry and the automode doc call it `pmoves-b850`.
+    default_identity:
+      claude-code: claude_b850
 
   - canonical: nano-1
     kind: node
