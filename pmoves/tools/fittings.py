@@ -66,3 +66,30 @@ def load_harnesses(registry_path: Path | None = None) -> set[str]:
         for key, entry in (doc.get("agents") or {}).items()
         if (entry or {}).get("kind") == "harness"
     }
+
+
+#: Fit verdicts, least to most permissive. Order IS the conservatism ranking.
+#: There is deliberately no "untested": an unmeasured pairing has no observation.
+FIT_ORDER: tuple[str, ...] = ("none", "delegate", "limited", "full")
+
+
+def effective_fit(observations: list[dict[str, Any]]) -> str | None:
+    """The verdict a router should act on.
+
+    Returns the MOST CONSERVATIVE verdict among observations, so a single credible
+    "this is worse than it looks" is never averaged away by a benchmark that did not
+    exercise the failing path. Returns ``None`` when nothing has been observed —
+    absence is honestly unknown, and is not the same as a recorded null result.
+    """
+    if not observations:
+        return None
+    ranks = []
+    for obs in observations:
+        verdict = (obs or {}).get("verdict")
+        if verdict not in FIT_ORDER:
+            raise ValueError(
+                f"unknown fit verdict {verdict!r}; permitted: {', '.join(FIT_ORDER)}. "
+                "An unmeasured pairing must have NO observation rather than a null one."
+            )
+        ranks.append(FIT_ORDER.index(verdict))
+    return FIT_ORDER[min(ranks)]
