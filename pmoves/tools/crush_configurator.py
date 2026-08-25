@@ -284,12 +284,20 @@ MCP_SPECS: List[MCPSpec] = [
         },
         required_commands=["pmoves-mini"],
     ),
+    # Cipher URL + bearer are MIRRORED from pmoves/config/mcp_inventory.json,
+    # which is canonical and was already correct. This generator does not read it,
+    # which is exactly how it kept two defects the inventory had fixed: the path
+    # (/api/mcp/sse answers 404; /mcp/sse answers 200 -- a property of the server,
+    # not of one container) and the bearer (an unset ${VAR} is sent LITERALLY, and
+    # the shim 401s any non-empty token, so cipher never connected). #2729 fixed
+    # both for claude/kilo through the inventory; crush was missed because nothing
+    # linked it. test_crush_cipher_matches_inventory.py now fails if they diverge.
     MCPSpec(
         key="pmoves-cipher",
         config={
             "type": "sse",
-            "url": "http://${TS_Z890}:8105/api/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+            "url": "http://${TS_Z890}:8105/mcp/sse",
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
             "timeout": 30,
         },
         required_env="CIPHER_API_TOKEN",
@@ -298,8 +306,8 @@ MCP_SPECS: List[MCPSpec] = [
         key="pmoves-cipher-local",
         config={
             "type": "sse",
-            "url": "http://localhost:8105/api/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+            "url": "http://localhost:8105/mcp/sse",
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
             "timeout": 30,
         },
         required_env="CIPHER_API_TOKEN",
