@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 from config import CacheSettings, get_settings
@@ -48,9 +49,13 @@ def _contracts_dir() -> Path | None:
     env_dir = os.environ.get("PMOVES_CONTRACTS_DIR")
     if env_dir and (Path(env_dir) / "topics.json").is_file():
         return Path(env_dir)
-    # Repo layout: pmoves/services/semantic-cache/ -> pmoves/contracts/
-    for parents in (2, 3):
-        candidate = Path(__file__).resolve().parents[parents] / "contracts"
+    # Repo layout: pmoves/services/semantic-cache/ -> pmoves/contracts/.
+    # In the container this file is copied to /app/tokenism.py, which has
+    # only two parents -- indexing [2] there raised IndexError instead of
+    # returning None, turning a clean refusal into a crash on the publish
+    # path. Walking the parents cannot go out of range.
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "contracts"
         if (candidate / "topics.json").is_file():
             return candidate
     return None
@@ -83,12 +88,36 @@ def validate_attribution(payload: dict) -> tuple[bool, str]:
     except (KeyError, OSError, ValueError) as exc:
         return False, f"schema for {TokenismPublisher.SUBJECT} unusable: {exc}"
 
+    from jsonschema import FormatChecker
+
+    checker = FormatChecker()
     errors = sorted(
-        Draft202012Validator(schema).iter_errors(payload),
+        Draft202012Validator(schema, format_checker=checker).iter_errors(payload),
         key=lambda e: list(e.path),
     )
     if errors:
         return False, "; ".join(e.message for e in errors[:6])
+
+    # A FormatChecker ALONE does not enforce `format: date-time`. The
+    # date-time checker is only registered when `rfc3339_validator` is
+    # installed, and it is not here. Measured: `timestamp: "not-a-date"`
+    # produced ZERO errors both with and without the FormatChecker. Adding
+    # it and calling the job done would ship a validator that LOOKS
+    # format-checking and is not -- the exact defect this guard removes.
+    #
+    # So the ledger's timestamp is checked explicitly rather than left to an
+    # optional dependency being present.
+    if "date-time" not in checker.checkers:
+        stamp = payload.get("timestamp")
+        try:
+            datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return False, (
+                f"timestamp {stamp!r} is not a valid date-time (checked "
+                "explicitly: jsonschema's date-time checker is unregistered "
+                "without rfc3339_validator, so the schema's `format` "
+                "annotation alone enforces nothing here)"
+            )
     return True, "ok"
 
 

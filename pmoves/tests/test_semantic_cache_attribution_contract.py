@@ -130,3 +130,46 @@ def test_the_publisher_actually_calls_the_guard():
     assert call != -1, "publish_attribution does not validate"
     assert publish != -1, "publish_attribution no longer publishes"
     assert call < publish, "validation must happen BEFORE the publish, not after"
+
+
+def test_a_bad_timestamp_is_refused_without_the_optional_dependency():
+    """The finding Codex raised, and the fix it proposed would not have closed.
+
+    `format: date-time` is only enforced when jsonschema's date-time checker is
+    registered, which needs `rfc3339_validator`. It is absent here. Measured:
+    `"not-a-date"` produced ZERO errors both with and WITH a FormatChecker, so
+    adding one would have shipped a validator that looks format-checking and
+    is not.
+    """
+    ok, reason = tk.validate_attribution(dict(VALID_PAYLOAD, timestamp="not-a-date"))
+    assert not ok
+    assert "date-time" in reason
+
+
+def test_the_explicit_timestamp_check_is_the_one_doing_the_work():
+    """Pins WHY the test above passes. If a future image installs
+    rfc3339_validator, the schema path takes over and this still holds -- but
+    the assertion documents that today it does not."""
+    from jsonschema import FormatChecker
+    if "date-time" in FormatChecker().checkers:
+        pytest.skip("rfc3339_validator is installed; the schema path enforces it")
+    # A STRING in the wrong shape: an int would be caught by the schema's
+    # type check first, which would make this test pass without ever
+    # reaching the explicit date-time check it claims to pin.
+    ok, reason = tk.validate_attribution(dict(VALID_PAYLOAD, timestamp="25/08/2026"))
+    assert not ok and "not a valid date-time" in reason
+
+
+def test_a_shallow_container_path_refuses_instead_of_crashing(monkeypatch, tmp_path):
+    """`/app/tokenism.py` has two parents; indexing [2] raised IndexError.
+
+    A crash on the publish path is worse than the bug being fixed -- it turns a
+    refusal into an exception inside a fire-and-forget publisher.
+    """
+    shallow = tmp_path / "tokenism.py"
+    shallow.write_text("", encoding="utf-8")
+    monkeypatch.setattr(tk, "__file__", str(shallow))
+    monkeypatch.delenv("PMOVES_CONTRACTS_DIR", raising=False)
+    ok, reason = tk.validate_attribution(VALID_PAYLOAD)
+    assert not ok
+    assert "not reachable" in reason
