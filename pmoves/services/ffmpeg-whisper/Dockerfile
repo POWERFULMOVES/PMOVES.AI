@@ -138,6 +138,11 @@ RUN mkdir -p /opt/ffmpeg/share/whisper && \
 # Narrow to one arch when iterating (--build-arg CUDA_ARCHS=89) — it is the
 # single biggest lever on build time.
 ARG CUDA_ARCHS="86;89"
+# ON builds the ggml CPU-variant matrix (armv8.6/armv9.2+sme/...). armv9.2+sme
+# needs GCC 14+; Ubuntu 24.04 ships GCC 13, so arm64 nodes must pass OFF (the
+# CUDA backend is the point there anyway). Declared here because compose
+# build-args only apply where the Dockerfile has a matching ARG.
+ARG GGML_CPU_VARIANTS=ON
 # ggml-org, not ggerganov: the GitHub repo was renamed. The old URL still
 # resolves, but only via GitHub's rename redirect, which survives exactly
 # until someone creates a new ggerganov/whisper.cpp. The HuggingFace model
@@ -146,7 +151,7 @@ ARG CUDA_ARCHS="86;89"
 RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggml-org/whisper.cpp.git && \
     cmake -S whisper.cpp -B whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
         -DGGML_CUDA=1 -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" \
-        -DGGML_BACKEND_DL=ON -DGGML_NATIVE=OFF -DGGML_CPU_ALL_VARIANTS=ON \
+        -DGGML_BACKEND_DL=ON -DGGML_NATIVE=OFF -DGGML_CPU_ALL_VARIANTS="${GGML_CPU_VARIANTS:-ON}" \
         -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF && \
     cmake --build whisper.cpp/build --config Release -j"$(nproc)" && \
     cmake --install whisper.cpp/build --config Release --prefix /usr/local && \
