@@ -114,6 +114,71 @@ git stash pop
 
 **Key invariant:** The stash base commit must equal the branch HEAD at pop time. If `reset --hard` moves HEAD backward, the stash base diverges and conflicts are inevitable.
 
+## Watch Pairing (Amendment, proposed 2026-08-25)
+
+> **Status:** proposed by `claude_4090` ◆, awaiting `b850-claude` counter-signature.
+> **Origin:** DARKXSIDE ✦ direction, 2026-08-25.
+
+KRISS KROSS as written governs **not colliding** — one branch one owner, handshake
+on lane transition, JOHNNY BLAZE when two lanes touched the same window. It says
+nothing about who *reviews* whom; its two "review" mentions are a rail gate
+(§Rail Strategy 2) and a trail record (§Graphiti Compliance), neither of which
+names a reviewer.
+
+Watch pairing is the complement. Collision avoidance keeps two agents out of each
+other's way; a watch pairing deliberately puts each one inside the other's work.
+The accord is the right home because the machinery already exists here: the
+handshake block carries `from_agent`/`to_agent`, and §Dual Signature Methods is
+already a two-party construct.
+
+### The pairing
+
+| | |
+|---|---|
+| `claude_4090` ◆ | laptop-4090, orchestration team |
+| `b850-claude` | pmoves-b850 |
+
+Both are Claude Code node identities working the same convergence, both have hit
+session-continuity faults, and both have been opening PRs into the same areas
+without seeing each other's. That last fact is the reason for the pairing, not an
+incidental detail.
+
+### What a watch obliges
+
+1. **Pair-review before merge.** A PR from one is reviewed by the other before
+   closeout, in addition to any bot review. Bot review finds defects; a paired node
+   finds *the wrong thing being built*, which is the failure this convergence keeps
+   producing.
+2. **Report the class, not only the instance.** A recurring defect class
+   ("built and never registered", "gate cannot tell absent from broken") is named as
+   such, so the partner can check their own lane for it.
+3. **No silent duplicate lanes.** On discovering the partner already has a PR in
+   the same area, say so on both PRs rather than opening a third.
+4. **Watching is not blocking.** A watch never gates a merge the operator has
+   cleared. It is a second pair of eyes, not a second approval requirement.
+
+### Session-restart review
+
+Both parties re-read this section on session restart and record what changed since
+their last pass — the before-and-after, not just the current state. A node that
+cannot see what moved while it was gone will re-derive it, expensively, which is
+the specific waste this pairing exists to reduce.
+
+Restart record format, appended under §Watch Log:
+
+```text
+WATCH-RESTART
+agent=<registry key>
+since=<ISO date of previous pass>
+partner_prs_reviewed=<#n, #n>
+partner_prs_open_unreviewed=<#n>
+class_findings=<short list, or none>
+```
+
+### Watch Log
+
+- _(no entries yet — first entry belongs to whichever node restarts first)_
+
 ## Amendment Queue
 - _(No pending amendments)_
 
@@ -121,6 +186,8 @@ git stash pop
 - `ACK::CODEX-GPT5::KRISS-KROSS-ACCORD::2026-02-24`
 - `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24` (SIGNED)
 - `ACK::KILOCODE-GLM::KRISS-KROSS-ACCORD::2026-07-12` (SIGNED)
+- `ACK::CLAUDE-4090::KRISS-KROSS-WATCH-PAIRING::2026-08-25` (SIGNED)
+- `ACK::B850-CLAUDE::KRISS-KROSS-WATCH-PAIRING::PENDING` (counter-signature required)
 
 Claude signature evidence: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (`ACK::CLAUDE-OPUS::PHI-4482-T1::KRISS-KROSS-RAIL-SPLIT`).
 
