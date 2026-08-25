@@ -67,6 +67,15 @@ def candidate_files() -> Iterable[Path]:
             path = here / filename
             if path.suffix.lower() not in allowed:
                 continue
+            # os.walk lists broken symlinks and other non-regular entries among
+            # `filenames`; read_text() would then raise FileNotFoundError and abort
+            # the whole audit over one dangling link left by local tooling. The
+            # rglob version got this from its `path.is_file()` guard, which the
+            # rewrite dropped. Ordered AFTER the suffix test on purpose: is_file()
+            # is a stat syscall, and this way it only runs for the files that are
+            # actually in scope rather than for all 75329 walked.
+            if not path.is_file():
+                continue
             yield path
 
 

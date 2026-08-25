@@ -67,3 +67,23 @@ def test_a_normal_path_containing_worktree_like_names_is_still_audited(audit, tm
     owned = _touch(tmp_path, "pmoves/worktrees/docs/.claude/notes.md")
     found = set(audit.candidate_files())
     assert owned in found
+
+
+def test_broken_symlinks_do_not_abort_the_audit(audit, tmp_path):
+    """os.walk lists dangling symlinks; read_text() on one aborts the whole run.
+
+    The rglob implementation filtered these out via `path.is_file()`. Pruning
+    with os.walk dropped that guard, so a single broken `.py` link left by local
+    tooling would take the audit down with FileNotFoundError.
+    """
+    import os
+
+    owned = _touch(tmp_path, "pmoves/tools/thing.py")
+    os.symlink(tmp_path / "nonexistent.py", tmp_path / "broken.py")
+
+    found = set(audit.candidate_files())
+
+    assert owned in found
+    assert all(p.is_file() for p in found), "a non-regular entry reached the caller"
+    for path in found:
+        audit.read_text(path)  # must not raise
