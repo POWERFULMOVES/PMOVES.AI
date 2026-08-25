@@ -15,9 +15,17 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGURATOR = REPO_ROOT / "pmoves" / "tools" / "crush_configurator.py"
-LAUNCHER = REPO_ROOT / "deploy" / "provision" / "crush-pmoves.sh"
+# BOTH loaders. `make install-tools` installs pmoves/scripts/crush-pmoves, which
+# sources crush-env.sh -- the first cut bridged only the deploy/provision path,
+# which the installed command never takes (Codex P1 on #2764).
+LAUNCHERS = [
+    REPO_ROOT / "pmoves" / "scripts" / "crush-env.sh",
+    REPO_ROOT / "deploy" / "provision" / "crush-pmoves.sh",
+]
 
 PMOVES_NAME = "Z_AI_API_KEY"   # what the funnel and the GitHub secret call it
 CRUSH_NAME = "ZAI_API_KEY"     # what Crush's own README documents
@@ -25,7 +33,8 @@ CRUSH_NAME = "ZAI_API_KEY"     # what Crush's own README documents
 
 def test_files_exist():
     assert CONFIGURATOR.is_file()
-    assert LAUNCHER.is_file()
+    for path in LAUNCHERS:
+        assert path.is_file(), f"launcher/loader missing: {path}"
 
 
 def test_configurator_does_not_write_the_resolved_secret():
@@ -40,7 +49,8 @@ def test_configurator_does_not_write_the_resolved_secret():
     )
 
 
-def test_launcher_bridges_the_two_names():
+@pytest.mark.parametrize("LAUNCHER", LAUNCHERS, ids=lambda p: p.name)
+def test_launcher_bridges_the_two_names(LAUNCHER):
     """Without the alias, Crush cannot see a key the funnel already delivers."""
     text = LAUNCHER.read_text(encoding="utf-8")
     assert CRUSH_NAME in text, f"launcher never sets {CRUSH_NAME}"
@@ -53,7 +63,8 @@ def test_launcher_bridges_the_two_names():
     assert bridge, f"no {PMOVES_NAME} -> {CRUSH_NAME} assignment found"
 
 
-def test_bridge_does_not_clobber_an_explicit_value():
+@pytest.mark.parametrize("LAUNCHER", LAUNCHERS, ids=lambda p: p.name)
+def test_bridge_does_not_clobber_an_explicit_value(LAUNCHER):
     """An operator who exports ZAI_API_KEY themselves must win."""
     text = LAUNCHER.read_text(encoding="utf-8")
     guarded = re.search(rf'-z\s+"\$\{{{CRUSH_NAME}:-\}}"', text)
@@ -63,9 +74,12 @@ def test_bridge_does_not_clobber_an_explicit_value():
     )
 
 
-def test_launcher_bridges_before_exec():
+def test_bridge_precedes_exec_where_the_file_execs():
     """An export after `exec crush` would never run."""
-    text = LAUNCHER.read_text(encoding="utf-8")
-    assert text.index(CRUSH_NAME) < text.index("exec crush"), (
-        "the name bridge appears after `exec crush` and can never take effect"
-    )
+    for path in LAUNCHERS:
+        text = path.read_text(encoding="utf-8")
+        if "exec crush" not in text:
+            continue  # a sourced loader has no exec of its own
+        assert text.index(CRUSH_NAME) < text.index("exec crush"), (
+            f"{path.name}: the bridge appears after `exec crush`"
+        )

@@ -91,3 +91,20 @@ fi
 # Export local node identity
 export TS_LOCAL_IP="$(tailscale ip -4 2>/dev/null || echo '127.0.0.1')"
 export TS_LOCAL_HOST="$(hostname -s 2>/dev/null || echo 'localhost')"
+
+# --- name bridge: PMOVES calls it Z_AI_API_KEY, Crush reads ZAI_API_KEY -------
+# Crush's own README documents the Z.ai variable as `ZAI_API_KEY`; the funnel and
+# the GitHub secret spell it `Z_AI_API_KEY` (102 references across the repo). One
+# underscore apart, so Crush could never see a key env.shared already carried --
+# which is why a key got pasted into ~/.config/crush/crush.json by hand.
+#
+# Lives HERE, in the loader every launcher sources, because the first cut put it
+# in deploy/provision/crush-pmoves.sh -- which `make install-tools` does not
+# install. The installed command is pmoves/scripts/crush-pmoves, and it sources
+# this file. Same shape as the identity binding that missed the Windows launcher:
+# correct, tested, and on a path the real entry point never takes.
+#
+# Guarded on unset so an explicitly-exported ZAI_API_KEY still wins.
+if [ -z "${ZAI_API_KEY:-}" ] && [ -n "${Z_AI_API_KEY:-}" ]; then
+  export ZAI_API_KEY="$Z_AI_API_KEY"
+fi
