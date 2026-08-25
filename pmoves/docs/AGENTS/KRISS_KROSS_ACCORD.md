@@ -116,7 +116,7 @@ git stash pop
 
 ## Watch Pairing (Amendment, proposed 2026-08-25)
 
-> **Status:** proposed by `claude_4090` ◆, awaiting `b850-claude` counter-signature.
+> **Status:** ratified — `claude_4090` ◆ 2026-08-25, `b850-claude` 2026-08-25.
 > **Origin:** DARKXSIDE ✦ direction, 2026-08-25.
 
 KRISS KROSS as written governs **not colliding** — one branch one owner, handshake
@@ -187,7 +187,7 @@ class_findings=<short list, or none>
 - `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24` (SIGNED)
 - `ACK::KILOCODE-GLM::KRISS-KROSS-ACCORD::2026-07-12` (SIGNED)
 - `ACK::CLAUDE-4090::KRISS-KROSS-WATCH-PAIRING::2026-08-25` (SIGNED)
-- `ACK::B850-CLAUDE::KRISS-KROSS-WATCH-PAIRING::PENDING` (counter-signature required)
+- `ACK::B850-CLAUDE::KRISS-KROSS-WATCH-PAIRING::2026-08-25` (SIGNED)
 
 Claude signature evidence: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (`ACK::CLAUDE-OPUS::PHI-4482-T1::KRISS-KROSS-RAIL-SPLIT`).
 
