@@ -15,6 +15,32 @@ root:
   children:
 
     # =========================================================================
+    # Phase 0: Preflight — is the thing being measured even present?
+    #
+    # Everything from Phase 2 onward reads files INSIDE the submodule, and the
+    # submodule is not populated by a plain clone. Run against an uninitialised
+    # checkout this tree reported 20 fail / 3 pass, every failure reading
+    # "target not found: PMOVES-deepseek-harness/..." — indistinguishable from a
+    # harness that is genuinely broken. After `git submodule update --init` the
+    # same tree reports 3 fail / 20 pass, and the only real leaf defect is the
+    # catalog-port one.
+    #
+    # A gate that cannot tell ABSENT from BROKEN reports neither. This fires
+    # first so the other twenty are interpretable.
+    # =========================================================================
+    - id: deepseek-harness.preflight
+      task: "Preflight"
+      context: "The submodule must be populated before any content assertion below means anything."
+      agent_hint: codex
+      children:
+        - id: deepseek-harness.preflight.submodule-initialized
+          task: "Verify the dsh submodule is checked out, not merely declared"
+          action:
+            type: file_exists
+            target: "PMOVES-deepseek-harness/package.json"
+            expect: "dsh submodule populated. If this fails run `git submodule update --init PMOVES-deepseek-harness` and re-run — every Phase 2-4 failure below is a consequence of this one and says nothing about the harness itself."
+
+    # =========================================================================
     # Phase 1: Fleet registration
     # =========================================================================
     - id: deepseek-harness.registration
