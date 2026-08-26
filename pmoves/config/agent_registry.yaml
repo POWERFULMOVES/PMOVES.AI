@@ -226,9 +226,47 @@ agents:
       compose_profile: null
     description: "B850/Knuckles node CLI identity -- data-tier host, infra + governance lane"
 
+  crush_glm52:
+    name: "Crush GLM-5.2 (Knuckles)"
+    class: standard
+    # The crush-harness twin of claude_b850 directly above: same node, same
+    # declared-not-inferred principle, different harness. The generic `crush`
+    # entry claims z890/5090 and cannot answer for this node, which is exactly
+    # why the resolver had nothing to bind when crush-pmoves launched.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # The SIGNING roster is agent_signatures.yaml; the `crush` contributor
+    # (open-diamond glyph) already exists there and is shared by every Crush
+    # instance fleet-wide. This entry is the operational half for knuckles.
+    signature: crush
+    # Same posture as claude_b850: publishes nothing today. The generic `crush`
+    # entry carries the fleet-level subjects; duplicating them here would be the
+    # undeclared-emission defect #2734 exists to catch.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [pmoves-b850]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "B850/Knuckles Crush-on-GLM-5.2 identity -- the terminal companion harness on this node (Z.AI coding plan)"
+
   kilocode_glm:
     name: "KiloCode GLM"
     class: standard
+    # A harness hosts models; a fitting may name it. Distinguished from agent
+    # services (agent_zero, archon), a UI (a2ui) and a launcher (pinokio), which
+    # appear in cross_agent for component compatibility but host nothing.
+    kind: harness
     primary_type: agent
     secondary_type: llm
     port: null
@@ -2145,6 +2183,10 @@ agents:
   clawz:
     name: "ClawZ (OpenClaw)"
     class: standard
+    # A harness hosts models; a fitting may name it. Distinguished from agent
+    # services (agent_zero, archon), a UI (a2ui) and a launcher (pinokio), which
+    # appear in cross_agent for component compatibility but host nothing.
+    kind: harness
     primary_type: ui
     secondary_type: agent
     port: 18789

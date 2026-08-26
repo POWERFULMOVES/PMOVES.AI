@@ -111,6 +111,25 @@ cross_agent:
   a2ui: full
   kilocode: full  # KiloCode MiniMax edition
 
+# Harness fit. Seeded fresh, harness-only — NOT migrated from cross_agent, which
+# answers a different question (which components can address this model) and whose
+# key space includes agents, a UI and a launcher. Note the registry key is
+# kilocode_glm, not the cross_agent spelling `kilocode` (which does not resolve).
+fit:
+  clawz:
+    "*":
+      - verdict: limited
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+        note: "requires adapter layer; tool-call parsing assumes an Anthropic-shaped response"
+  kilocode_glm:
+    "*":
+      - verdict: full
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+
 metadata:
   source: pmoves/minimax-integration
   last_verified: 2026-05-13

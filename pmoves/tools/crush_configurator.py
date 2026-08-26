@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -505,6 +508,96 @@ def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str
     return models_config
 
 
+# ---------------------------------------------------------------------------
+# Pair-review finding (2026-08-26): the same unresolvable-${TS_*} bug that
+# PR #2769 killed for Claude's roster was still live here. `pmoves-cipher`
+# emits http://${TS_Z890}:8105/mcp/sse; on a node without the tailscale CLI,
+# Crush receives the literal string as a hostname -- a silent 404 in the exact
+# harness whose cipher fix (#2762) had just deliberately dropped required_env.
+# #2762 removed the token gate; this restores a *narrower* one for the hostname.
+# ---------------------------------------------------------------------------
+
+# Only cross-node hostnames. Credential vars stay OUT of this gate: the shim
+# accepts an empty bearer, and credentials were #2762's decision to un-gate.
+_TS_VAR_RE = re.compile(r"\$\{(TS_[A-Za-z0-9_]+)[^}]*\}")
+
+TS_HELPER = PROJECT_ROOT / "scripts" / "tailscale-node-ips.sh"
+
+
+def _resolve_ts_vars(names, env):
+    """Resolve TS_* names from env, falling back to the shared tailscale helper.
+
+    The helper is the ONE definition (crush-env.sh and claude-pmoves.sh both
+    source it); running it here rather than reimplementing keeps this from
+    becoming a third copy of the resolution. Never fatal: a missing helper or
+    a failed run just leaves the name unresolved.
+    """
+    resolved = {name: (env.get(name) or "").strip() for name in names}
+    missing = [n for n, v in resolved.items() if not v]
+    if not missing or not TS_HELPER.is_file():
+        return resolved
+    listing = " ".join(missing)
+    # Built by concatenation, not one f-string: the shell's ${!n} indirection
+    # is not parseable inside f-string braces.
+    cmd = (
+        f'source "{TS_HELPER}" >/dev/null 2>&1 || exit 0; '
+        + "for n in "
+        + listing
+        + '; do printf "%s=%s\\n" "$n" "${!n}"; done'
+    )
+    try:
+        proc = subprocess.run(
+            ["bash", "-c", cmd], capture_output=True, text=True, timeout=30,
+            env={k: v for k, v in env.items() if k != "PMOVES_PYTHON"},
+        )
+        for line in proc.stdout.splitlines():
+            name, _, value = line.partition("=")
+            if name in resolved and not resolved[name] and value.strip():
+                resolved[name] = value.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return resolved
+
+
+def guard_unresolvable_ts(mcp_config, env=None):
+    """Disable any spec whose URL references an unresolvable ${TS_*} var.
+
+    Deliberately does NOT bake the resolved IP into the config: the runtime env
+    (crush-env.sh sources the same helper) carries live resolution on every
+    launch, and persisting tailnet topology into ~/.config/crush.json would
+    leak what the helper itself is careful never to hardcode. The guard only
+    converts the would-be-silent case (var unresolvable at generation time)
+    into a disabled entry with a named reason on stderr.
+    """
+    env = dict(os.environ) if env is None else dict(env)
+    names = sorted({
+        m.group(1)
+        for cfg in mcp_config.values()
+        if isinstance(cfg, dict)
+        for m in _TS_VAR_RE.finditer(str(cfg.get("url", "")))
+    })
+    if not names:
+        return []
+    resolved = _resolve_ts_vars(names, env)
+    notes = []
+    for key, cfg in mcp_config.items():
+        if not isinstance(cfg, dict) or cfg.get("disabled"):
+            continue
+        for m in _TS_VAR_RE.finditer(str(cfg.get("url", ""))):
+            var = m.group(1)
+            if not resolved.get(var):
+                cfg["disabled"] = True
+                notes.append(
+                    f"{key}: disabled — {var} unresolvable (env + tailscale helper "
+                    f"both empty); the url would be handed to Crush as the literal "
+                    f"${{{var}}} and 404 silently"
+                )
+                break
+    for note in notes:
+        print(f"[crush-config] {note}", file=sys.stderr)
+    return notes
+
+
 def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
     """Build Crush config with TensorZero as the preferred provider.
 
@@ -678,6 +771,12 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
             config["disabled"] = True
         mcp_config[spec.key] = config
 
+    # Pair-review finding: ${TS_*} in a url with no resolution is the silent-404
+    # class this roster shares with Claude's; guard it the same way (drop with a
+    # named reason, never silently). Credential vars are deliberately NOT gated
+    # here — that is #2762's un-gating decision and it stands.
+    guard_unresolvable_ts(mcp_config)
+
     repo_root = PROJECT_ROOT.parent
     context_candidates = [
         Path("CRUSH.md"),
@@ -691,12 +790,24 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         Path("pmoves/docs/SMOKETESTS.md"),
         Path("pmoves/chit/secrets_manifest.yaml"),
         Path("docs/PMOVES_MINI_CLI_SPEC.md"),
+        # Written at launch by crush-pmoves (node_identity.py resolver). Crush
+        # has no --append-system-prompt, so this generated context file is how
+        # the session's node identity reaches the model. exists() keeps nodes
+        # that never ran the launcher clean. Gitignored runtime state.
+        # ABSOLUTE, unlike every other candidate: Crush joins relative
+        # context_paths to its working directory, so launching from a repo
+        # subdirectory would resolve a nested pmoves/data/... that never
+        # exists and silently drop the identity (review P2). The committed
+        # candidates are repo-relative because they predate this concern and
+        # are read from the project root; runtime state gets the robust form.
+        (repo_root / "pmoves/data/identity/node-identity.md").resolve(),
     ]
 
     context_paths = [
         candidate.as_posix()
         for candidate in context_candidates
-        if (repo_root / candidate).exists()
+        if (candidate.is_absolute() and candidate.exists())
+        or (not candidate.is_absolute() and (repo_root / candidate).exists())
     ]
 
     config = {
