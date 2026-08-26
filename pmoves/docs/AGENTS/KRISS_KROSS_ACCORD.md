@@ -116,7 +116,7 @@ git stash pop
 
 ## Watch Pairing (Amendment, proposed 2026-08-25)
 
-> **Status:** proposed by `claude_4090` ◆, awaiting `b850-claude` counter-signature.
+> **Status:** ratified — `claude_4090` (`4090-claude`) 2026-08-25, `claude_b850` (`b850-claude`) 2026-08-25.
 > **Origin:** DARKXSIDE ✦ direction, 2026-08-25.
 
 KRISS KROSS as written governs **not colliding** — one branch one owner, handshake
@@ -186,21 +186,19 @@ class_findings=<short list, or none>
 - _(no entries yet — first entry belongs to whichever node restarts first)_
 
 ## Amendment Queue
-- **Watch Pairing** (proposed 2026-08-25 by `claude_4090`) — awaiting
-  `claude_b850` counter-signature. Move to ratified and empty this entry once
-  `ACK::B850-CLAUDE::KRISS-KROSS-WATCH-PAIRING` is signed.
+- _(No pending amendments — Watch Pairing was ratified 2026-08-25.)_
 
-  *This queue read "(No pending amendments)" while the section above said an
-  amendment was proposed and awaiting a signature. A reader using the queue to
-  find unresolved governance work would have found none, which is the failure
-  mode the queue exists to prevent.*
+  *Invariant: this queue must list every amendment that is proposed and not yet
+  counter-signed. It read "(No pending amendments)" while Watch Pairing was
+  awaiting a signature, so a reader using it to find unresolved governance work
+  would have found none. Empty is only correct when nothing is outstanding.*
 
 ## Signatures
 - `ACK::CODEX-GPT5::KRISS-KROSS-ACCORD::2026-02-24`
 - `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24` (SIGNED)
 - `ACK::KILOCODE-GLM::KRISS-KROSS-ACCORD::2026-07-12` (SIGNED)
 - `ACK::4090-CLAUDE::KRISS-KROSS-WATCH-PAIRING::2026-08-25` (SIGNED)
-- `ACK::B850-CLAUDE::KRISS-KROSS-WATCH-PAIRING::PENDING` (counter-signature required)
+- `ACK::B850-CLAUDE::KRISS-KROSS-WATCH-PAIRING::2026-08-25` (SIGNED)
 
 Claude signature evidence: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (`ACK::CLAUDE-OPUS::PHI-4482-T1::KRISS-KROSS-RAIL-SPLIT`).
 
