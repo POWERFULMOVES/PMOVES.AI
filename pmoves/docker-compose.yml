@@ -3202,7 +3202,11 @@ services:
     - PORT=8080
     # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
-    - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
+    # Readiness via the DOCUMENTED connector surface: capabilities returns
+    # 200 + protocol/version dict only when the plugin system (including the
+    # connector) booted — a stronger signal than the bare /health route, which
+    # only proves Flask is up. Fallback chain kept for older forks.
+    - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/api/plugins/_a0_connector/v1/capabilities}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
     # Wrapper -> inner contract (validated live 2026-08-26 on SPARK):
@@ -3217,7 +3221,16 @@ services:
     #      normalize_settings() seeds from A0_SET_mcp_server_token (set below
     #      from MCP_SERVER_TOKEN). AGENT_ZERO_API_KEY is the wrapper-side
     #      client field that sends that header.
-    - AGENT_ZERO_MESSAGE_PATH=${AGENT_ZERO_MESSAGE_PATH:-/api/api_message}
+    # Documented integration point: the fork's _a0_connector plugin exposes a
+    # versioned v1 HTTP API (POST /api/plugins/_a0_connector/v1/<handler>)
+    # with 29 handlers — message_send, chats_list, chat_get, log_tail, pause,
+    # nudge, model_switcher... This is the stable external contract the fork
+    # maintains (plugin AGENTS.md), unlike the raw api/api_message handler
+    # which is internal surface. message_send returns the SAME shape the
+    # wrapper requires ({context_id, status, response}) — live-verified on
+    # SPARK: 200 in 6.3s. Auth: ProtectedConnectorApiHandler accepts the
+    # loopback caller the wrapper is (127.0.0.1 in-container).
+    - AGENT_ZERO_MESSAGE_PATH=${AGENT_ZERO_MESSAGE_PATH:-/api/plugins/_a0_connector/v1/message_send}
     # Same resolved value A0_SET_mcp_server_token below pins the inner runtime
     # to: fleet-canonical AGENT_ZERO_MCP_TOKEN (issue #2056), legacy
     # MCP_SERVER_TOKEN fallback. Do NOT source AGENT_ZERO_API_KEY from env:
