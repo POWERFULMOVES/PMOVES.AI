@@ -1,4 +1,21 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["pyyaml"]
+# ///
+#
+# The dependency is DECLARED here, not merely installed somewhere, because the
+# configured hook command is a bare `uv run` from a directory with no
+# pyproject.toml. Without this block uv hands the script an interpreter that
+# has no PyYAML, `_load_folder()` catches the ImportError, and the hook falls
+# back to comparing owner strings exactly -- which is the defect this file was
+# changed to remove. It degrades to a warning on stderr, so nothing fails and
+# nothing reports failure.
+#
+# It is invisible on a developer box: %APPDATA%\Python\Python3xx\site-packages
+# is on sys.path for EVERY interpreter, so PyYAML looks universally present
+# locally and is absent on a clean node. Reproduce the clean condition with
+# `PYTHONNOUSERSITE=1 uv run --no-project ...`.
 """claim-collision-pre.py — PreToolUse (Write/Edit matcher) governance hook.
 
 Enforces the Village Rule: "one owner per branch at a time."
@@ -26,8 +43,9 @@ unkeyed path as unguarded, not as passing. The durable fix is an explicit
 `lane:` field in the register format; until then this is a partial gate that
 admits it.
 
-OPT-IN: not wired by default. Operator activates via PreToolUse Write/Edit
-matcher in .claude/settings.json.
+WIRED: this branch activates the hook on the PreToolUse Write/Edit matchers
+in .claude/settings.json (:120, :135). It was opt-in before; the line saying
+so outlived the commit that turned it on.
 
 Owner-ID format in the register (per existing entries):
   `<ISO_TIMESTAMP>` CLAIM `<OWNER-ID>` scope: ...
@@ -57,12 +75,79 @@ LANE_RE = re.compile(
 )
 
 
-def open_claims_in(text: str) -> dict[str, tuple[int, set[str]]]:
-    """Map owner -> (line number of their open CLAIM, lanes that CLAIM names).
+_UNSET = object()
+_FOLDER = _UNSET
 
-    A CLAIM is "open" if no later RELEASE for the same owner-ID follows it.
-    RELEASE still pairs by owner, because that is how the register closes a
-    lane: a release must carry the exact string its claim was opened with.
+
+def _load_folder():
+    """Return a name-folding callable, or None if it is unavailable."""
+    global _FOLDER
+    if _FOLDER is not _UNSET:
+        return _FOLDER
+    _FOLDER = None
+    try:
+        import importlib.util
+        root = Path(__file__).resolve().parents[3]
+        spec = importlib.util.spec_from_file_location(
+            "identity_lineage",
+            root / "pmoves" / "tools" / "identity_lineage.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        # MUST be registered before exec_module: identity_lineage defines
+        # @dataclass, and dataclasses._is_type resolves the owning module
+        # via sys.modules[cls.__module__]. Unregistered, that is None and
+        # the import dies with a bare AttributeError about __dict__.
+        sys.modules["identity_lineage"] = module
+        spec.loader.exec_module(module)
+        vocab = module.load_vocabulary()
+
+        def _fold(owner: str) -> str:
+            return module.canonical_identity(owner, vocab) or owner
+
+        _FOLDER = _fold
+    except Exception as exc:  # noqa: BLE001 -- a guard must not die here
+        sys.stderr.write(
+            f"claim-collision-pre: identity vocabulary unavailable ({exc}); "
+            "comparing owner strings exactly, as before. Spelling drift "
+            "will not be folded.\n"
+        )
+    return _FOLDER
+
+
+def canonical_owner(owner: str) -> str:
+    """Fold an owner string to its canonical identity.
+
+    WHY: this hook compared owner strings with `==`, and one identity writes
+    several. B850 alone appears as `(Knuckles)` x16, `(Knuckles, opus 4.7
+    1M)` x7, `(Opus 5)` x2, `(Claude Opus 5)` x1 -- so a RELEASE under one
+    spelling did not close a CLAIM opened under another, and a lane stayed
+    open for a week (2026-08-25). The same equality also makes an identity
+    collide with ITSELF as soon as its parenthetical changes.
+
+    FAIL-SAFE: with no vocabulary this returns the string unchanged, which
+    is exactly the previous behaviour. A guard that cannot fold keys is no
+    worse than it was; a guard that raises stops guarding.
+    """
+    fold = _load_folder()
+    return fold(owner) if fold else owner
+
+
+def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
+    """Map canonical owner -> LIST of (line, lanes, as-written) still open.
+
+    A LIST, not a single tuple. Keying one claim per owner silently forgot
+    every lane but the newest: two open claims by one identity collapsed to
+    one, and a later release dropped the survivor too -- so a lane another
+    node genuinely held stopped colliding. That was true before
+    canonicalisation for two claims under the SAME spelling, and folding
+    spellings widened it to the whole identity.
+
+    A CLAIM is "open" if no later RELEASE for the same owner follows it.
+    Pairing is on the CANONICAL identity, not the literal string: a release
+    no longer has to carry the exact spelling its claim was opened with,
+    which is the defect that left a lane open for a week. The as-written
+    string is kept for the message -- `B850-CLAUDE (Knuckles)` locates the
+    entry and `b850-claude` does not.
 
     Line numbers are 1-based to match editor conventions.
 
@@ -75,12 +160,33 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str]]]:
     A line number that does not resolve sends the reader hunting, and this hook
     only speaks when it is blocking someone.
     """
-    open_claims: dict[str, tuple[int, set[str]]] = {}
+    open_claims: dict[str, list[tuple[int, set[str], str]]] = {}
     for lineno, line in enumerate(text.split("\n"), start=1):
         if m := CLAIM_RE.search(line):
-            open_claims[m.group(1)] = (lineno, set(LANE_RE.findall(line)))
+            open_claims.setdefault(canonical_owner(m.group(1)), []).append(
+                (lineno, set(LANE_RE.findall(line)), m.group(1))
+            )
         elif m := RELEASE_RE.search(line):
-            open_claims.pop(m.group(1), None)
+            owner = canonical_owner(m.group(1))
+            released = set(LANE_RE.findall(line))
+            if not released:
+                # A BARE release closes everything that owner holds. 99 of
+                # the register's 120 RELEASE lines name no branch, so this
+                # is the convention, not a guess -- a bare release is a
+                # full handoff.
+                open_claims.pop(owner, None)
+            else:
+                # A release that NAMES lanes closes only those. Anything
+                # else the owner still holds stays held.
+                kept = [
+                    (ln, lanes - released, raw)
+                    for ln, lanes, raw in open_claims.get(owner, [])
+                    if lanes - released
+                ]
+                if kept:
+                    open_claims[owner] = kept
+                else:
+                    open_claims.pop(owner, None)
     return open_claims
 
 
@@ -127,11 +233,15 @@ def main() -> None:
         if not lanes:
             unkeyed.append(owner)
             continue
-        for other, (lineno, held) in existing_open.items():
-            if other == owner:
+        owner_key = canonical_owner(owner)
+        for other_key, open_list in existing_open.items():
+            # Canonical: re-claiming your own lane under a different
+            # spelling of your own name is not a collision.
+            if other_key == owner_key:
                 continue
-            for lane in sorted(lanes & held):
-                collisions.append((lane, other, lineno))
+            for lineno, held, other_as_written in open_list:
+                for lane in sorted(lanes & held):
+                    collisions.append((lane, other_as_written, lineno))
 
     if collisions:
         sys.stderr.write(
