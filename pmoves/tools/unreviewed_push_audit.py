@@ -24,6 +24,21 @@ DETECTIVE, NOT PREVENTIVE. A ruleset cannot scope a bypass by path, so this
 cannot be enforced at push time without removing the ledger exception. It
 reports after the fact instead, which is the honest thing a gate can do here
 rather than pretending to prevent what it cannot.
+
+REVIEW IS ESTABLISHED BY PR ASSOCIATION, NEVER BY COMMIT SHAPE. Two earlier
+versions of this file got that wrong in opposite directions and both looked
+correct:
+
+  - skipping merge commits, on the reasoning that "a merge commit on main is
+    the result of a PR". An admin can create one locally and push it straight
+    to main -- two parents, no pull request -- so the skip was a blind spot
+    shaped exactly like the bypass being audited.
+  - reading a "(#N)" suffix as proof of a PR. That is a formatting convention
+    anyone can type into a direct push to opt out of the audit.
+
+Both are inferences about what a commit looks like. The check is whether
+GitHub associates it with a pull request, so that is what is asked, for every
+commit, merges included.
 """
 from __future__ import annotations
 
@@ -61,45 +76,68 @@ def has_associated_pr(repo: str, sha: str) -> bool:
     return bool(json.loads(out or "[]"))
 
 
-def changed_paths(sha: str) -> list[str]:
-    out = subprocess.run(
-        ["git", "show", "--pretty=", "--name-only", sha],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    ).stdout
-    return [line.strip() for line in out.splitlines() if line.strip()]
+def _git(args: list[str]) -> str:
+    """Run git, raising on failure.
+
+    A failing `git rev-list` returns EMPTY STDOUT, which became an empty commit
+    list, which printed "no findings" and exited 0. An unresolvable range --
+    malformed, or reaching past a shallow checkout -- must read as an
+    incomplete audit, never as a clean one.
+    """
+    proc = subprocess.run(
+        ["git", *args], capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"git {' '.join(args)} failed (exit {proc.returncode}): "
+            f"{proc.stderr.strip()[:200]}"
+        )
+    return proc.stdout
+
+
+def changed_paths(sha: str, first_parent: bool = False) -> list[str]:
+    """Files the commit changed.
+
+    `first_parent` compares a merge against the branch it landed on, which is
+    what "what did this merge introduce to main" means. Without it, `git show`
+    on a merge prints only conflict resolutions and usually looks empty.
+    """
+    args = ["show", "--pretty=", "--name-only"]
+    if first_parent:
+        args.append("--first-parent")
+    args.append(sha)
+    return [line.strip() for line in _git(args).splitlines() if line.strip()]
 
 
 def is_merge_commit(sha: str) -> bool:
-    out = subprocess.run(
-        ["git", "rev-list", "--parents", "-n", "1", sha],
-        capture_output=True, text=True, encoding="utf-8",
-    ).stdout.split()
-    return len(out) > 2
+    return len(_git(["rev-list", "--parents", "-n", "1", sha]).split()) > 2
 
 
 def audit(repo: str, rev_range: str) -> list[dict]:
     """Commits in `rev_range` that landed with no PR and touched non-ledger paths."""
-    shas = subprocess.run(
-        ["git", "rev-list", rev_range],
-        capture_output=True, text=True, encoding="utf-8",
-    ).stdout.split()
+    shas = _git(["rev-list", rev_range]).split()
 
     findings: list[dict] = []
     for sha in shas:
-        if is_merge_commit(sha):
-            continue
+        # A merge commit is NOT evidence of review. An admin can create one
+        # locally and push it straight to main: two parents, no pull request,
+        # and the previous version of this loop skipped it -- a blind spot
+        # shaped exactly like the bypass being audited. Parent count is an
+        # inference; PR association is the check. Ask the API for both.
+        merge = is_merge_commit(sha)
         if has_associated_pr(repo, sha):
             continue
-        paths = changed_paths(sha)
+        paths = changed_paths(sha, first_parent=merge)
         outside = [p for p in paths if not p.startswith(LEDGER_PREFIXES)]
         if not outside:
             continue  # ledger-only: the sanctioned exception
-        meta = subprocess.run(
-            ["git", "show", "-s", "--format=%an|%ad|%s", "--date=short", sha],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-        ).stdout.strip().split("|", 2)
+        meta = _git(
+            ["show", "-s", "--format=%an|%ad|%s", "--date=short", sha]
+        ).strip().split("|", 2)
         findings.append({
             "sha": sha,
+            "kind": "merge" if merge else "direct",
             "author": meta[0] if meta else "?",
             "date": meta[1] if len(meta) > 1 else "?",
             "subject": meta[2] if len(meta) > 2 else "?",
@@ -141,7 +179,7 @@ def main(argv: list[str]) -> int:
     print(f"{len(findings)} commit(s) reached the branch with no pull request "
           f"and changed files outside {LEDGER_PREFIXES[0]}:\n")
     for f in findings:
-        print(f"  {f['sha'][:9]}  {f['date']}  {f['author']}")
+        print(f"  {f['sha'][:9]}  {f['date']}  {f['author']}  [{f['kind']}]")
         print(f"      {f['subject'][:88]}")
         print(f"      {f['files_outside_ledger_count']} file(s) outside the ledger:")
         for p in f["files_outside_ledger"]:

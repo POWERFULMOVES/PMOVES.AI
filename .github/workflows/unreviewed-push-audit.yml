@@ -28,6 +28,10 @@ on:
 
 permissions:
   contents: read
+  # Required by /repos/{o}/{r}/commits/{sha}/pulls. Without it every lookup
+  # returns "Resource not accessible by integration", the tool exits 2, and
+  # every run is an incomplete audit rather than a detection.
+  pull-requests: read
 
 jobs:
   audit:
