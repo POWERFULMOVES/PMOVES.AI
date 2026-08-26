@@ -114,9 +114,18 @@ fi
 # ---------------------------------------------------------------------------
 IDENTITY_ARGS=()
 IDENT_TOOL="$ROOT/pmoves/tools/node_identity.py"
-IDENT_PY="${PMOVES_PYTHON:-python}"
-if [ -f "$IDENT_TOOL" ] && command -v "$IDENT_PY" >/dev/null 2>&1; then
-  if IDENT_OUT="$("$IDENT_PY" "$IDENT_TOOL" --harness claude-code --shell 2>/dev/null)"; then
+# Shared discovery (pm-python.sh), not a scalar `python`: on hosts where only
+# python3 exists, or where python lacks PyYAML while .venv-pmoves has it, the
+# scalar form silently never ran the resolver and sessions launched unbound —
+# the exact gap #2763 fixed for crush-pmoves, which this launcher then still
+# carried (pair-review finding on #2769).
+. "$ROOT/pmoves/scripts/pm-python.sh"
+IDENT_PY=()
+if [ -f "$IDENT_TOOL" ] && pm_pick_python yaml; then
+  IDENT_PY=("${PM_PY[@]}")
+fi
+if [ -f "$IDENT_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
+  if IDENT_OUT="$("${IDENT_PY[@]}" "$IDENT_TOOL" --harness claude-code --shell 2>/dev/null)"; then
     # The tool emits PMOVES_RESOLVED_IDENTITY, not PMOVES_NODE_IDENTITY: the
     # latter is the operator's INPUT override, and a resolver that answers under
     # the same name it reads cannot be called twice safely.
@@ -136,7 +145,7 @@ if [ -f "$IDENT_TOOL" ] && command -v "$IDENT_PY" >/dev/null 2>&1; then
     echo "[claude-pmoves] node identity: $IDENT_TOOL failed; launching without it." >&2
   fi
 elif [ -f "$IDENT_TOOL" ]; then
-  echo "[claude-pmoves] node identity: '$IDENT_PY' not on PATH; launching without it." >&2
+  echo "[claude-pmoves] node identity: no usable python found (tried .venv-pmoves, python3, py -3, python — yaml required); launching without it." >&2
 fi
 
 if [ ! -f "$LAUNCHER" ]; then

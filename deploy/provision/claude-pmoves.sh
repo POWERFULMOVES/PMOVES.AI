@@ -123,6 +123,22 @@ else
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2
 fi
 
+# Resolve ${TS_<NODE>} for the cross-node MCP servers in the roster.
+#
+# .claude/mcp.json addresses cipher, agent-zero and archon as ${TS_Z890}. That
+# name had exactly one definition in the repo -- an inline block in
+# pmoves/scripts/crush-env.sh -- and only the Crush launcher sourced it. Same
+# roster, two launchers, one of them blind: Claude got the literal string as a
+# hostname and cipher never connected. The helper is shared, not copied.
+#
+# Best-effort: a node without the tailscale CLI just leaves them unset, and the
+# normalizer below turns that into a named WARN instead of a silent 404.
+TS_HELPER="$ROOT/pmoves/scripts/tailscale-node-ips.sh"
+if [ -f "$TS_HELPER" ]; then
+  # shellcheck source=../../pmoves/scripts/tailscale-node-ips.sh
+  . "$TS_HELPER"
+fi
+
 # Point Claude Code at the tracked PMOVES MCP roster. Claude Code only reads
 # `.mcp.json` at the repo root (project scope), `~/.claude.json` (user/local),
 # or an explicit `--mcp-config` — it does NOT read `.claude/mcp.json`. Without
@@ -141,34 +157,32 @@ if [ -f "$MCP_ROSTER" ]; then
   #        real MCP off-switch, so Claude would otherwise launch the broken dupe).
   #   P3 — rewrite repo-relative ("./…") command/arg paths to absolute $ROOT paths
   #        so `uv --directory ./pmoves-nats-mcp` launches from any caller CWD.
-  # (Codex #2243). The transform needs JSON parsing; python3 is present on PMOVES
-  # nodes. If it is missing we fall back to the raw roster (previous behavior).
-  RESOLVED="${TMPDIR:-/tmp}/claude-pmoves-mcp-roster.$(id -u).json"
+  #   P4 — expand ${VAR} in url/headers/env, and DROP any server whose variables
+  #        are unset. Claude Code's documented behaviour for an unresolvable
+  #        reference is to warn and then use the literal ${VAR} text as-is, so an
+  #        unresolvable server looked well-formed and failed where nobody could
+  #        see it. Announced-and-dropped is recoverable; silently-404ing is not.
+  #
+  # (Codex #2243 for P2/P3.) The transform used to be a heredoc right here, which
+  # is why P4 was missing for so long: a heredoc cannot be tested. It now lives in
+  # pmoves/tools/mcp_roster_normalize.py with pmoves/tests/test_mcp_roster_normalize.py
+  # on it. If python3 or the tool is absent we fall back to the raw roster.
+  # The tool PRINTS the path it wrote; it is not a name we pick. The old fixed
+  # name (…-roster.$(id -u).json) is squattable in a world-writable /tmp, and
+  # since the file now holds expanded bearer tokens, losing that race would both
+  # fail the write AND silently fall back to the raw roster -- reinstating the
+  # literal-${TS_Z890} failure on demand.
+  NORMALIZER="$ROOT/pmoves/tools/mcp_roster_normalize.py"
+  RESOLVED=""
   resolved_ok=0
-  if command -v python3 >/dev/null 2>&1; then
-    if PM_ROOT="$ROOT" python3 - "$MCP_ROSTER" "$RESOLVED" <<'PY'
-import json, os, sys
-root = os.environ["PM_ROOT"]
-src, dst = sys.argv[1], sys.argv[2]
-def resolve(p):
-    return os.path.join(root, p[2:]) if isinstance(p, str) and p.startswith("./") else p
-with open(src) as fh:
-    data = json.load(fh)
-clean = {}
-for name, cfg in (data.get("mcpServers") or {}).items():
-    if name.startswith("_"):          # disabled-in-name-only — exclude
-        continue
-    if isinstance(cfg, dict):
-        if isinstance(cfg.get("command"), str):
-            cfg["command"] = resolve(cfg["command"])
-        if isinstance(cfg.get("args"), list):
-            cfg["args"] = [resolve(a) for a in cfg["args"]]
-    clean[name] = cfg
-data["mcpServers"] = clean
-with open(dst, "w") as fh:
-    json.dump(data, fh)
-PY
-    then
+  # Shared discovery (pm-python.sh) — the third python convention this file
+  # grew (scalar python in the identity twin, bare python3 here, inline chain
+  # in crush-pmoves) was the pair-review finding: unify, don't re-add. No
+  # probe: the normalizer needs only the stdlib (json/os/re).
+  . "$ROOT/pmoves/scripts/pm-python.sh"
+  if [ -f "$NORMALIZER" ] && pm_pick_python; then
+    if RESOLVED="$("${PM_PY[@]}" "$NORMALIZER" "$MCP_ROSTER" \
+                     --root "$ROOT" --label claude-pmoves)" && [ -n "$RESOLVED" ]; then
       resolved_ok=1
     fi
   fi

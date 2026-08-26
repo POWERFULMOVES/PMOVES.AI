@@ -132,3 +132,49 @@ def test_identity_file_is_gitignored():
     assert IDENTITY_FILE_REL in lines, (
         f"{IDENTITY_FILE_REL} must be listed in .gitignore verbatim."
     )
+
+
+# ---------------------------------------------------------------------------
+# Pair-review finding (2026-08-26): three python-discovery conventions across
+# the launchers. pm-python.sh is the one answer; these pin that the launchers
+# actually use it and that the old forms are gone.
+# ---------------------------------------------------------------------------
+
+PM_PYTHON_HELPER = REPO_ROOT / "pmoves" / "scripts" / "pm-python.sh"
+PROVISION_LAUNCHER = REPO_ROOT / "deploy" / "provision" / "claude-pmoves.sh"
+
+
+def test_the_shared_helper_exists_and_is_sourceable():
+    text = PM_PYTHON_HELPER.read_text(encoding="utf-8")
+    assert "pm_pick_python()" in text
+    # The array doctrine: `py -3` is two words, venv paths may hold spaces.
+    assert "PM_PY=(" in text
+    assert "${!n}" not in text  # bash-indirection has no place in the helper
+
+
+def test_claude_launcher_uses_the_helper_not_a_scalar_python():
+    text = LAUNCHER.read_text(encoding="utf-8")
+    assert "pm-python.sh" in text and "pm_pick_python yaml" in text, (
+        "claude-pmoves must resolve its interpreter through the shared helper "
+        "with a yaml probe (the resolver imports pyyaml)"
+    )
+    assert 'IDENT_PY="${PMOVES_PYTHON:-python}"' not in text, (
+        "the scalar form is back: on hosts where only python3 exists or python "
+        "lacks PyYAML, the resolver silently never ran"
+    )
+
+
+def test_provision_launcher_uses_the_helper_for_the_normalizer():
+    text = PROVISION_LAUNCHER.read_text(encoding="utf-8")
+    assert "pm-python.sh" in text and "pm_pick_python" in text
+    # The old third convention: bare python3 with no venv/py fallbacks.
+    assert 'if command -v python3 >/dev/null 2>&1 && [ -f "$NORMALIZER" ]' not in text
+
+
+def test_crush_launcher_dropped_its_inline_chain():
+    text = LAUNCHER.read_text(encoding="utf-8")  # crush-pmoves is LAUNCHER here
+    assert "pm-python.sh" in text and "pm_pick_python yaml" in text
+    assert '.venv-pmoves/bin/python" ]; then' not in text, (
+        "the inline chain is back — it was one of the three conventions the "
+        "helper replaced"
+    )
