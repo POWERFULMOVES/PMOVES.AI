@@ -695,13 +695,20 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         # has no --append-system-prompt, so this generated context file is how
         # the session's node identity reaches the model. exists() keeps nodes
         # that never ran the launcher clean. Gitignored runtime state.
-        Path("pmoves/data/identity/node-identity.md"),
+        # ABSOLUTE, unlike every other candidate: Crush joins relative
+        # context_paths to its working directory, so launching from a repo
+        # subdirectory would resolve a nested pmoves/data/... that never
+        # exists and silently drop the identity (review P2). The committed
+        # candidates are repo-relative because they predate this concern and
+        # are read from the project root; runtime state gets the robust form.
+        (repo_root / "pmoves/data/identity/node-identity.md").resolve(),
     ]
 
     context_paths = [
         candidate.as_posix()
         for candidate in context_candidates
-        if (repo_root / candidate).exists()
+        if (candidate.is_absolute() and candidate.exists())
+        or (not candidate.is_absolute() and (repo_root / candidate).exists())
     ]
 
     config = {

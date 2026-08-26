@@ -35,10 +35,31 @@ source "$REPO_ROOT/pmoves/scripts/crush-env.sh"
 # ---------------------------------------------------------------------------
 IDENTITY_FILE="$REPO_ROOT/pmoves/data/identity/node-identity.md"
 IDENT_TOOL="$REPO_ROOT/pmoves/tools/node_identity.py"
-IDENT_PY="${PMOVES_PYTHON:-python}"
+# Discover the interpreter the same way crush-fleet-bootstrap.sh does (review
+# P2): the canonical venv first (it has PyYAML — preflight installs it there),
+# then platform launchers. A bare `python` scalar fails on hosts where only
+# python3 exists, or where `python` lacks PyYAML while .venv-pmoves has it —
+# and every such failure writes an unresolved context while bootstrap itself
+# succeeds in the same environment. An ARRAY: the venv branch may contain
+# spaces, the launcher branch is genuinely two words (py -3).
+if [ -n "${PMOVES_PYTHON:-}" ]; then
+  IDENT_PY=($PMOVES_PYTHON)
+elif [ -x "$REPO_ROOT/pmoves/.venv-pmoves/bin/python" ]; then
+  IDENT_PY=("$REPO_ROOT/pmoves/.venv-pmoves/bin/python")
+elif [ -x "$REPO_ROOT/pmoves/.venv-pmoves/Scripts/python.exe" ]; then
+  IDENT_PY=("$REPO_ROOT/pmoves/.venv-pmoves/Scripts/python.exe")
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
+  IDENT_PY=(python3)
+elif command -v py >/dev/null 2>&1; then
+  IDENT_PY=(py -3)
+elif command -v python >/dev/null 2>&1 && python -c "import yaml" >/dev/null 2>&1; then
+  IDENT_PY=(python)
+else
+  IDENT_PY=()
+fi
 mkdir -p "$(dirname "$IDENTITY_FILE")"
-if [ -f "$IDENT_TOOL" ] && command -v "$IDENT_PY" >/dev/null 2>&1; then
-  if IDENT_OUT="$("$IDENT_PY" "$IDENT_TOOL" --harness crush --shell 2>/dev/null)"; then
+if [ -f "$IDENT_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
+  if IDENT_OUT="$("${IDENT_PY[@]}" "$IDENT_TOOL" --harness crush --shell 2>/dev/null)"; then
     eval "$IDENT_OUT"
     PMOVES_NODE_IDENTITY="${PMOVES_RESOLVED_IDENTITY:-}"
     export PMOVES_NODE PMOVES_NODE_IDENTITY
@@ -62,7 +83,7 @@ if [ -f "$IDENT_TOOL" ] && command -v "$IDENT_PY" >/dev/null 2>&1; then
     echo "# Node identity (generated at launch) — resolver FAILED; launching unbound." > "$IDENTITY_FILE"
   fi
 else
-  echo "[crush-pmoves] node identity: $IDENT_TOOL or $IDENT_PY unavailable; launching unbound." >&2
+  echo "[crush-pmoves] node identity: $IDENT_TOOL or a usable python (tried .venv-pmoves, python3, py -3, python — each must import yaml) unavailable; launching unbound." >&2
   echo "# Node identity (generated at launch) — resolver unavailable on this host." > "$IDENTITY_FILE"
 fi
 
