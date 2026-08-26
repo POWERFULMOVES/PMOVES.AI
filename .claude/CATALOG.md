@@ -31,6 +31,8 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Archon** `:3090` API/UI/MCP (unified), `:3737` host alias → 3090 — Archon 0.6.0 (TypeScript/Bun) remote-coding-agent, Postgres-backed (pg_notify), prompt/form management. Connects to Agent Zero MCP. Health: `GET http://localhost:3090/api/health`. _(0.6.0 rewrote the old Python `:8091`/`:8051` service — #2217.)_
 
+**DeepSeek Harness (dsh)** `:3080` web UI — Cordis-based harness where everything is a plugin (profile/bundle/patch composition). Hosts OTHER harnesses via `packages/hooks/hook-protocol` plus per-harness dialects (`hooks-claude-code`, `hooks-codex`); capability seams keyed `ctx.*` with swappable LLM impls (`llm-deepseek`, `llm-pi-ai`, `llm-retry`). The reference the PMOVES harness registry is measured against — see `pmoves/configs/tac_trees/deepseek-harness.tac.yaml`. Port is the boot default (`packages/boot/cmdline`, `ctx.webStartup.port ?? 3080`); verified unclaimed in this catalog and in every compose file. Submodule is **not populated by default** — `git submodule update --init PMOVES-deepseek-harness` before use.
+
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
 
 **HF MCP Server** `:8203` (host) / `:8096` (container) — HuggingFace Hub MCP server. Tools: `hf.model.search/info/download/list/convert_gguf`. SSE MCP at `/mcp/sse` (real JSON-RPC over SSE via `mcp.server.MCPServer`; POST messages to `/mcp/messages/`), REST API at `/api/*`, publishes `hf.model.downloaded.v1`. Downloads to `${HF_HOME:-./data/models}`:/models; inference services can mount the same path or import converted GGUF artifacts. Health: `GET /healthz`. Profile: `agents`/`research`.

@@ -231,3 +231,7 @@ submodule-promote: ## Create PR from integration -> hardened after audit passes
 	  --head integration \
 	  --title "promote: integration → hardened" \
 	  --body "Automated promotion from integration branch after CI gate passed."
+
+secrets-rotate-db-role: ## Rotate a Postgres role password client-side (SCRAM verifier; plaintext never reaches the server) then funnel it. Usage: make secrets-rotate-db-role ROLE=juicefs_meta KEY=JUICEFS_META_PASSWORD [CONTAINER=..] [LEN=64] [DRY_RUN=1]
+	$(if $(strip $(ROLE)),,$(error Usage: make -C pmoves secrets-rotate-db-role ROLE=<pg role> KEY=<env.shared key> [CONTAINER=<db container>] [LEN=<n>] [DRY_RUN=1]))
+	@bash scripts/rotate_db_role.sh --role "$(ROLE)" $(if $(KEY),--key "$(KEY)",) $(if $(CONTAINER),--container "$(CONTAINER)",) $(if $(LEN),--length $(LEN),) $(if $(DRY_RUN),--dry-run,)

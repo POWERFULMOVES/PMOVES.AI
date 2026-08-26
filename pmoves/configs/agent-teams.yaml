@@ -14,6 +14,9 @@ teams:
     ci_runner: ai-lab
     compose_profiles: [agents, tier-agent]
     agents:
+      - claude_4090       # Claude Code CLI identity on laptop-4090 (drives A0/Archon)
+      - claude_b850       # Claude Code CLI identity on B850/Knuckles (data-tier host)
+      - crush_glm52       # Crush CLI identity on B850/Knuckles (GLM-5.2 companion harness)
       - agent_zero        # Port 8080 — Primary orchestrator
       - archon            # Port 8091 — Planning/execution copilot
       - supaserch         # Port 8099 — Holographic deep research

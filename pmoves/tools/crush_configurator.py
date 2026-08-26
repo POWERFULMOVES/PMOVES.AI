@@ -284,25 +284,39 @@ MCP_SPECS: List[MCPSpec] = [
         },
         required_commands=["pmoves-mini"],
     ),
+    # Cipher URL + bearer are MIRRORED from pmoves/config/mcp_inventory.json,
+    # which is canonical and was already correct. This generator does not read it,
+    # which is exactly how it kept two defects the inventory had fixed: the path
+    # (/api/mcp/sse answers 404; /mcp/sse answers 200 -- a property of the server,
+    # not of one container) and the bearer (an unset ${VAR} is sent LITERALLY, and
+    # the shim 401s any non-empty token, so cipher never connected). #2729 fixed
+    # both for claude/kilo through the inventory; crush was missed because nothing
+    # linked it. test_crush_cipher_matches_inventory.py now fails if they diverge.
     MCPSpec(
         key="pmoves-cipher",
         config={
             "type": "sse",
-            "url": "http://${TS_Z890}:8105/api/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+            "url": "http://${TS_Z890}:8105/mcp/sse",
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
             "timeout": 30,
         },
-        required_env="CIPHER_API_TOKEN",
+        # Deliberately NO required_env: the shim accepts an EMPTY bearer
+        # (dev-skip when CIPHER_API_TOKEN is unset), which is exactly what the
+        # `:-` default in the header above exists to send. Keeping the token
+        # required would re-disable the spec on tokenless nodes through
+        # missing_envs() -- URL and header fixed, entry still dark, the same
+        # silence this PR exists to end.
     ),
     MCPSpec(
         key="pmoves-cipher-local",
         config={
             "type": "sse",
-            "url": "http://localhost:8105/api/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
+            "url": "http://localhost:8105/mcp/sse",
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
             "timeout": 30,
         },
-        required_env="CIPHER_API_TOKEN",
+        # See pmoves-cipher above: no required_env, the empty bearer is
+        # supported by the server.
     ),
     MCPSpec(
         key="agent-zero",
@@ -677,12 +691,24 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
         Path("pmoves/docs/SMOKETESTS.md"),
         Path("pmoves/chit/secrets_manifest.yaml"),
         Path("docs/PMOVES_MINI_CLI_SPEC.md"),
+        # Written at launch by crush-pmoves (node_identity.py resolver). Crush
+        # has no --append-system-prompt, so this generated context file is how
+        # the session's node identity reaches the model. exists() keeps nodes
+        # that never ran the launcher clean. Gitignored runtime state.
+        # ABSOLUTE, unlike every other candidate: Crush joins relative
+        # context_paths to its working directory, so launching from a repo
+        # subdirectory would resolve a nested pmoves/data/... that never
+        # exists and silently drop the identity (review P2). The committed
+        # candidates are repo-relative because they predate this concern and
+        # are read from the project root; runtime state gets the robust form.
+        (repo_root / "pmoves/data/identity/node-identity.md").resolve(),
     ]
 
     context_paths = [
         candidate.as_posix()
         for candidate in context_candidates
-        if (repo_root / candidate).exists()
+        if (candidate.is_absolute() and candidate.exists())
+        or (not candidate.is_absolute() and (repo_root / candidate).exists())
     ]
 
     config = {
