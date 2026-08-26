@@ -1,4 +1,21 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["pyyaml"]
+# ///
+#
+# The dependency is DECLARED here, not merely installed somewhere, because the
+# configured hook command is a bare `uv run` from a directory with no
+# pyproject.toml. Without this block uv hands the script an interpreter that
+# has no PyYAML, `_load_folder()` catches the ImportError, and the hook falls
+# back to comparing owner strings exactly -- which is the defect this file was
+# changed to remove. It degrades to a warning on stderr, so nothing fails and
+# nothing reports failure.
+#
+# It is invisible on a developer box: %APPDATA%\Python\Python3xx\site-packages
+# is on sys.path for EVERY interpreter, so PyYAML looks universally present
+# locally and is absent on a clean node. Reproduce the clean condition with
+# `PYTHONNOUSERSITE=1 uv run --no-project ...`.
 """claim-collision-pre.py — PreToolUse (Write/Edit matcher) governance hook.
 
 Enforces the Village Rule: "one owner per branch at a time."
@@ -26,8 +43,9 @@ unkeyed path as unguarded, not as passing. The durable fix is an explicit
 `lane:` field in the register format; until then this is a partial gate that
 admits it.
 
-OPT-IN: not wired by default. Operator activates via PreToolUse Write/Edit
-matcher in .claude/settings.json.
+WIRED: this branch activates the hook on the PreToolUse Write/Edit matchers
+in .claude/settings.json (:120, :135). It was opt-in before; the line saying
+so outlived the commit that turned it on.
 
 Owner-ID format in the register (per existing entries):
   `<ISO_TIMESTAMP>` CLAIM `<OWNER-ID>` scope: ...
