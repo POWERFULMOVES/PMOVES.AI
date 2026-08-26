@@ -50,7 +50,16 @@ if [ -f "${PMOVES_DIR}/env.shared" ]; then
   done < "${PMOVES_DIR}/env.shared"
 fi
 
-# Export vars that Crush MCP servers need
+# Export vars that Crush MCP servers need.
+#
+# This is an ALLOWLIST, not a filter layered on a bulk export: everything else
+# parsed above stays in ENV_MAP and never reaches a child process. A key the
+# funnel delivers correctly is still invisible to Crush unless it is named here.
+# Keep it narrow -- it governs which secrets enter Crush's process env.
+#
+# Z_AI_API_KEY is on it because the name bridge at the bottom of this file reads
+# it. Without this line that bridge's `-n "${Z_AI_API_KEY:-}"` guard can never be
+# true and the bridge is a no-op -- which is exactly how the first cut shipped.
 for var in \
   SUPABASE_SERVICE_KEY \
   SUPABASE_SERVICE_ROLE_KEY \
@@ -64,7 +73,8 @@ for var in \
   OLLAMA_BASE_URL \
   TAILSCALE_API_KEY \
   TAILSCALE_TAILNET \
-  AGENT_ZERO_MCP_TOKEN; do
+  AGENT_ZERO_MCP_TOKEN \
+  Z_AI_API_KEY; do
   if [ -n "${ENV_MAP[$var]:-}" ] && [ -z "${!var:-}" ]; then
     export "$var"="${ENV_MAP[$var]}"
   fi
