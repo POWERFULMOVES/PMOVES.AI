@@ -14,6 +14,9 @@ on:
       - "pmoves/config/agent_registry.yaml"
       - "pmoves/configs/agent-teams.yaml"
       - "pmoves/config/rooms/**"
+      - "pmoves/configs/model-suits/*.yaml"
+      - "pmoves/configs/model-roles.yaml"
+      - "pmoves/tools/fittings.py"
       - "pmoves/scripts/validate_agent_registry.py"
       - ".github/workflows/validate-agents-config.yml"
   workflow_dispatch:
