@@ -159,6 +159,8 @@ yarn-error.log*
 pmoves/data/agent-zero/memory/
 pmoves/data/agent-zero/logs/
 pmoves/data/open-notebook/surreal_data/
+# Generated at launch by crush-pmoves — per-node runtime state, never committed
+pmoves/data/identity/node-identity.md
 
 # =============================================================================
 # Docker
