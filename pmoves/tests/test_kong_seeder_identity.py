@@ -39,9 +39,15 @@ def test_every_suit_file_yields_a_routable_entry():
 def test_routing_fields_match_the_committed_snapshot():
     """Presence and count are not enough. A change that re-parents only
     base_url/api_key_env leaves name/provider resolvable through the parser's
-    fallback chain, so the entry still appends and the count still reads 18 —
+    fallback chain, so the entry still appends and the COUNT IS UNCHANGED —
     while Kong silently falls back to _infer_api_base()/_infer_key_env()
     instead of the file's real values. Pin all four fields by value.
+
+    Regenerate only after proving the existing entries are untouched: compare
+    old against new and require the changed-and-removed sets to be empty, so a
+    genuine re-parenting cannot be absorbed as "just an addition". Done once
+    already, when main added the MiniMax-M3 suit (#2712) after this snapshot
+    was taken: 18 -> 19, 0 changed, 0 removed.
     """
     seeder = _seeder()
     snapshot_path = Path(__file__).parent / "data" / "kong_route_identity.json"
