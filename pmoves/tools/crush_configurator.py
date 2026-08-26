@@ -700,11 +700,18 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
             default_large=ZAI_SPEC.default_large,
             default_small=ZAI_SPEC.default_small,
         )
+        # NO `api_key` VALUE. Crush reads ZAI_API_KEY from the environment (its
+        # own README documents that name), and crush-pmoves bridges the funnel's
+        # Z_AI_API_KEY onto it. Writing the resolved secret here put it in
+        # ~/.config/crush/crush.json in plaintext, at rest, where rotating the
+        # funnel value changed nothing -- the config kept serving the stale one.
+        #
+        # The presence of Z_AI_API_KEY is still what GATES adding the provider;
+        # only the value is no longer copied out of the environment onto disk.
         providers_dict["zai"] = {
             "id": "zai",
             "name": "Z.AI Coding Plan",
             "base_url": zai_spec.base_url,
-            "api_key": zai_key,
         }
         available_specs["zai"] = zai_spec
         provider_models["zai"] = zai_spec.models

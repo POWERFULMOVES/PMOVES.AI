@@ -119,4 +119,19 @@ else
   echo "[crush-pmoves]       run: make -C pmoves ensure-env-shared" >&2
 fi
 
+# --- name bridge: PMOVES calls it Z_AI_API_KEY, Crush reads ZAI_API_KEY -------
+# Crush's own README documents the Z.ai variable as `ZAI_API_KEY`; the funnel and
+# the GitHub secret both spell it `Z_AI_API_KEY` (102 references across the repo).
+# One underscore apart, so Crush could never pick up the key env.shared already
+# carries -- which is why an operator had to paste one into ~/.config/crush/crush.json
+# by hand, where it sits in plaintext and cannot rotate.
+#
+# Aliasing here rather than renaming either side: the PMOVES name is load-bearing
+# in 102 places, and the upstream name is not ours to change. Only set when unset,
+# so an explicitly-exported ZAI_API_KEY still wins.
+if [ -z "${ZAI_API_KEY:-}" ] && [ -n "${Z_AI_API_KEY:-}" ]; then
+  export ZAI_API_KEY="$Z_AI_API_KEY"
+  echo "[crush-pmoves] ZAI_API_KEY <- Z_AI_API_KEY (upstream/PMOVES name bridge)" >&2
+fi
+
 exec crush "$@"
