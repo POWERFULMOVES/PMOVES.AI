@@ -2,7 +2,9 @@
 
 **Written 2026-08-25 on `laptop-4090`, before this identity's first grounded
 restart.** Paired with `CONTROL_B850-CLAUDE_PRE-GROUNDING.md`, written the same
-day on `knuckles`. Two specimens exist so a later reader can separate what is
+day on `knuckles` and delivered separately in #2757 — the companion is not in
+this tree by design, since a specimen authored alongside this one by this
+session would be worthless as a control. Two specimens exist so a later reader can separate what is
 the *model* from what is the *node* or the *task*: anything present in both is
 substrate; anything in only one is local.
 
