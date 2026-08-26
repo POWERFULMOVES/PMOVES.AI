@@ -135,6 +135,131 @@ agents:
       compose_profile: agents
     description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
 
+  claude_4090:
+    name: "4090 Claude"
+    class: standard
+    # ui/agent mirrors `crush` -- the other terminal coding harness. The surface a
+    # human drives is a UI; what it drives is an agent.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. This is a CLI session, not a service -- same as crush.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # Points at the existing external_contributors entry, exactly as agent_zero
+    # carries `signature: claude-opus`. The contributor list is the SIGNING roster
+    # and is referenced by CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/roster/users.yaml,
+    # so the name stays there; this adds the operational half that was missing.
+    signature: 4090-claude
+    # Deliberately empty. 41 of 99 registry agents publish nothing -- including
+    # archon -- and declaring subjects this session does not actually publish would
+    # be the same defect #2734 fixed: a definition describing an architecture that
+    # does not exist. Populate when the bus wiring is real.
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories:
+        - agent_plan
+        - agent_checkpoint
+        - agent_completion
+    topology:
+      # The node this identity IS. `kilocode_glm` sets the precedent for an agent
+      # claiming laptop-4090 while its team's own node_affinity does not list it.
+      node_affinity:
+        - laptop-4090
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: null
+    description: >-
+      Claude Code CLI identity on the laptop-4090 node. Operates the PMOVES stack
+      from the terminal -- review, merge, secrets funnel, service bring-up -- and
+      drives Agent Zero and Archon rather than being driven by them. Launched via
+      `claude-pmoves`, which supplies the MCP roster (incl. Cipher) and a role
+      agent; this entry supplies the node identity that pairing was missing.
+  claude_b850:
+    name: "B850 Claude"
+    class: standard
+    # Mirrors claude_4090, which mirrors `crush`: the surface a human drives is a
+    # UI; what it drives is an agent. Same harness family, same shape.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # `b850-claude` was ALREADY in external_contributors before this change -- the
+    # attribution half has existed all along, only the operational half was
+    # missing. Same split #2739 found for 4090: that list is the SIGNING roster and
+    # is referenced outside this repo, so the name stays there and this points at
+    # it rather than moving it.
+    signature: b850-claude
+    # Deliberately empty. This session publishes nothing to NATS today, and
+    # declaring subjects it does not publish is the defect #2734 exists to fix.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      # `pmoves-b850` is the spelling the registry already uses for this machine
+      # (hermes_agent claims it the same way). node-vocabulary.yaml canonicalises
+      # it to `knuckles`, so either resolves -- this matches the existing rows.
+      node_affinity: [pmoves-b850]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "B850/Knuckles node CLI identity -- data-tier host, infra + governance lane"
+
+  crush_glm52:
+    name: "Crush GLM-5.2 (Knuckles)"
+    class: standard
+    # The crush-harness twin of claude_b850 directly above: same node, same
+    # declared-not-inferred principle, different harness. The generic `crush`
+    # entry claims z890/5090 and cannot answer for this node, which is exactly
+    # why the resolver had nothing to bind when crush-pmoves launched.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # The SIGNING roster is agent_signatures.yaml; the `crush` contributor
+    # (open-diamond glyph) already exists there and is shared by every Crush
+    # instance fleet-wide. This entry is the operational half for knuckles.
+    signature: crush
+    # Same posture as claude_b850: publishes nothing today. The generic `crush`
+    # entry carries the fleet-level subjects; duplicating them here would be the
+    # undeclared-emission defect #2734 exists to catch.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [pmoves-b850]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "B850/Knuckles Crush-on-GLM-5.2 identity -- the terminal companion harness on this node (Z.AI coding plan)"
+
   kilocode_glm:
     name: "KiloCode GLM"
     class: standard

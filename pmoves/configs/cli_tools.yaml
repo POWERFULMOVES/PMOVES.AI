@@ -117,6 +117,62 @@ host_clis:
       windows: "npm install -g skills"
       linux: "npm install -g skills"
     check: "npx skills --version"
+  tailscale:
+    purpose: "Tailscale — fleet mesh. NOTE: raw 'tailscale status' leaks IPs — use 'make fleet-status' (Known Road)"
+    required: false
+    install:
+      windows: "winget install Tailscale.Tailscale"
+      linux: "curl -fsSL https://tailscale.com/install.sh | sh"
+    check: "tailscale version"
+  opencode:
+    purpose: "OpenCode — KiloCode runtime (kilo-pmoves selects per-node configs)"
+    required: false
+    install:
+      windows: "winget install sst.opencode  # or: curl -fsSL https://opencode.ai/install | bash"
+      linux: "curl -fsSL https://opencode.ai/install | bash"
+    check: "opencode --version"
+  node:
+    purpose: "Node.js — web toolchains (jest/eslint run via package.json scripts, not global). Windows: nvm4w manages versions"
+    required: false
+    install:
+      windows: "winget install CoreyButler.NVMforWindows  # then: nvm install lts"
+      linux: "curl -fsSL https://fnm.vercel.app/install | bash  # or nvm"
+    check: "node --version"
+  npm:
+    purpose: "npm — package management for JS toolchains; global installs discouraged, prefer package.json+npx"
+    required: false
+    install:
+      windows: "ships with node (nvm4w)"
+      linux: "ships with node"
+    check: "npm --version"
+
+project_devtools:
+  # Tools pinned by package.json (NOT host CLIs — always run via the owning
+  # workspace's npm scripts so every node gets the version from ITS lockfile;
+  # never install globally, never bare `npx` from the repo root: there is no
+  # root package.json, and bare npx would fetch unrelated versions)
+  jest:
+    entry: "jest.config.js (pmoves/ui)"
+    run_via: "npm --prefix pmoves/ui test   # or: cd pmoves/ui && npm test"
+    purpose: "JS test runner (pmoves/ui workspace)"
+  eslint:
+    entry: "pmoves/ui package.json devDependencies"
+    run_via: "npm --prefix pmoves/ui run lint"
+    purpose: "JS/TS lint (pmoves/ui workspace)"
+
+pinokio_ecosystem:
+  # Fleet Pinokio plane — launchers self-install deps into per-app venvs
+  # (the pattern the PMOVES launchers mirror via make env-bootstrap-lite)
+  pinokio:
+    purpose: "Pinokio app server — fleet launcher plane (D:/pinokio on Windows nodes)"
+    docs: "D:/pinokio/prototype/PINOKIO.md + .claude/PINOKIO_LAUNCHER_GUIDE.md"
+    check: "pinokio --version  # via Pinokio install"
+  pterm:
+    purpose: "Pinokio terminal CLI — clipboard, notifications, dialogs, script testing"
+    docs: ".claude/skills/pterm/SKILL.md"
+  gepeto:
+    purpose: "Pinokio built-in code-assistant skill (Jetson JONS native skill)"
+    docs: "~/.agents/skills/gepeto"
 
 service_clis:
   # CLIs that live inside PMOVES services/submodules

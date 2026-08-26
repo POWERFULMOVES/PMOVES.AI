@@ -1,0 +1,149 @@
+# Controlled vocabulary for node names.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# `agent_registry.yaml`'s `topology.node_affinity` had no controlled vocabulary,
+# so the same machine accumulated several spellings and nothing could tell them
+# apart. Measured on 2026-08-25, the 4090 laptop appears in the registry under
+# THREE names -- `4090` (a YAML integer), `laptop-4090`, and `pmoves-laptop` --
+# while the runtime id that `AUTOMODE_FLEET_CONFIG.md` documents for it,
+# `pmoves-4090`, appears zero times. Its hostname is a fourth string.
+#
+# Any resolver written against one spelling silently matches nothing on a node
+# that uses another, falls back, and reports success. That is the defect this
+# file removes: an unknown node name is now a stated finding, not a miss.
+#
+# THE INTEGER TRAP
+# ----------------
+# `node_affinity: [5090]` parses as int 5090, not "5090" -- 38 registry entries
+# are integers today. Consumers MUST normalise with `canonical_node()` rather
+# than comparing raw values; `str(5090) == "5090"` is the whole fix, but only if
+# something actually applies it.
+#
+# NOT EVERY VALUE IN USE IS A NODE
+# --------------------------------
+# Some `node_affinity` values name a CI runner label, a hardware class, or a
+# placeholder. Those are recorded here with their real `kind` rather than
+# promoted to nodes, so the gate can say "declared" without also saying
+# "reachable machine". Reconciling them is a separate decision with an owner --
+# see the `note` on each.
+#
+# ADDING A NODE: add a `canonical` entry with every spelling in use as an alias.
+# The gate (`pmoves/tests/test_node_identity.py`) fails on any registry value
+# not declared here, so a new spelling cannot enter silently.
+
+version: 1
+
+nodes:
+  # --- real machines -------------------------------------------------------
+  - canonical: "4090"
+    kind: node
+    reach: pmoves-laptop
+    aliases: ["4090", "laptop-4090", "pmoves-laptop", "pmoves-4090", "PMOVES-4090"]
+    note: >-
+      The mobile node. `4090` matches operator_nodes.yaml (the scheduler's
+      vocabulary); the rest are spellings found in the registry, the automode
+      doc, and this machine's own hostname.
+    # Which registered agent a session on this node IS, per harness. Declared,
+    # never inferred: eight registry agents claim the 4090 under one spelling or
+    # another, so "the agent whose node_affinity matches" is ambiguous here and
+    # picking one would be a guess wearing a resolver's clothes.
+    #
+    # A harness with no entry resolves to no identity and says so. Other nodes
+    # add their own; nobody else's identity is declared from this node.
+    default_identity:
+      claude-code: claude_4090
+
+  - canonical: "5090"
+    kind: node
+    reach: pmoves-5090
+    aliases: ["5090", "pmoves-5090", "PMOVES-5090"]
+    note: Primary workhorse. 38 registry entries spell it as a YAML integer.
+
+  - canonical: spark
+    kind: node
+    reach: pmoves-spark
+    aliases: [spark, pmoves-spark, dgx-spark, PMOVES-SPARK]
+
+  - canonical: z890
+    kind: node
+    reach: pmoves-z890
+    aliases: [z890, pmoves-z890, Z890, PMOVES-Z890]
+
+  - canonical: knuckles
+    kind: node
+    reach: pmoves-b850-ai-top
+    aliases: [knuckles, pmoves-b850, b850, pmoves-b850-ai-top, PMOVES-B850]
+    note: >-
+      AMD 9850X3D + dual R9700. operator_nodes.yaml calls it `knuckles`; the
+      registry and the automode doc call it `pmoves-b850`.
+    default_identity:
+      claude-code: claude_b850
+      crush: crush_glm52
+
+  - canonical: nano-1
+    kind: node
+    reach: pmoves-nano-1
+    aliases: [nano-1, pmoves-nano-1]
+    note: Not schedulable -- see operator_nodes.yaml.
+
+  - canonical: kvm4-1
+    kind: node
+    reach: pmoves-kvm4-1
+    aliases: [kvm4-1, pmoves-kvm4-1]
+
+  - canonical: kvm4-2
+    kind: node
+    reach: pmoves-kvm4-2
+    aliases: [kvm4-2, pmoves-kvm4-2]
+
+  - canonical: kvm2
+    kind: node
+    reach: pmoves-kvm2
+    aliases: [kvm2, pmoves-kvm2]
+
+  - canonical: rdna4
+    kind: node
+    reach: pmoves-rdna4
+    aliases: [rdna4, pmoves-rdna4]
+
+  - canonical: elder-melchor
+    kind: node
+    reach: pmoves-elder-melchor
+    aliases: [elder-melchor]
+    note: >-
+      Hermes elder node; `pmoves/config/pinokio/hermes-elder-melchor.pinokio.json`
+      sets PMOVES_NODE_ID to this value.
+
+  # --- declared, but NOT a single machine ----------------------------------
+  # Recorded so the gate can distinguish "unknown spelling" from "known to be
+  # something other than a node". Identity resolution never binds to these.
+  - canonical: powerfulmoves
+    kind: unresolved
+    aliases: [powerfulmoves]
+    note: >-
+      Used by 9 registry entries. It is the GitHub org/account name, not a
+      machine, and no node in operator_nodes.yaml answers to it. Needs an owner
+      decision: either it means a specific node or those entries want a class.
+
+  - canonical: jetson
+    kind: class
+    aliases: [jetson]
+    note: A hardware class covering the nano-* nodes, not one machine.
+
+  - canonical: ai-lab
+    kind: runner-label
+    aliases: [ai-lab]
+    note: >-
+      A GitHub Actions runner label (see `topology.ci_runner`), which landed in
+      node_affinity on one entry. Almost certainly a field mix-up.
+
+  - canonical: cloud
+    kind: placeholder
+    aliases: [cloud]
+    note: 7 entries. Means "not pinned to the local fleet".
+
+  - canonical: any
+    kind: placeholder
+    aliases: [any]
+    note: Explicitly unpinned.

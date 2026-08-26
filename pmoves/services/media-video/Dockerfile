@@ -16,12 +16,20 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
 # Security: Force weights_only=True for torch.load() (prevents arbitrary code execution)
 ENV TORCH_FORCE_WEIGHTS_ONLY_LOAD=1
+# timm 0.9.16 runs @torch.jit.script at IMPORT time (timm/layers/activations_me.py),
+# and torch.jit compilation SEGFAULTS on aarch64 + torch 2.9 (exit 139, reproduced
+# via faulthandler: torch/jit/_script.py:_script_impl). transformers imports timm
+# eagerly when building the DETR pipeline (modeling_detr.py), so without this the
+# model-loader thread kills the container in a restart loop. PYTORCH_JIT=0 is the
+# documented torch knob that makes torch.jit.script an identity function; the DETR
+# and YOLO inference paths do not depend on jit scripting.
+ENV PYTORCH_JIT=0
 
 RUN pip install --no-cache-dir --upgrade pip
 
 # Build context is ./services/media-video (service directory)
 # Security: Reproducible builds from lockfile
-COPY requirements.txt requirements.lock ./
+COPY requirements.txt requirements.lock requirements.arm64.lock ./
 # Install torch from cu128 index FIRST (matching Hi-RAG GPU pattern).
 ARG TORCH_CUDA=cu128
 ARG TORCH_VERSION=2.9.0
@@ -30,10 +38,18 @@ RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TO
 
 # Then install remaining deps
 RUN --mount=type=cache,target=/root/.cache/pip \
+    # amd64 uses the x86-resolved lock; arm64/Jetson uses the aarch64-compiled
+    # lock (requirements.arm64.lock, pins from arm64-overrides.txt). The
+    # unpinned requirements.txt path is retired on arm64: it floated
+    # torch 2.13.0 + transformers 5.15.1 (torch._dynamo died at import and the
+    # DETR pipeline never loaded). The preinstall pins the wheel SOURCE
+    # (single index) for the torchvision pair member; the lock then sees its
+    # torch/torchvision pins already satisfied (torch came from the step above).
     if [ "$(uname -m)" = "x86_64" ]; then \
       pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.lock; \
     else \
-      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.txt; \
+      pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TORCH_CUDA} torchvision==0.24.0 && \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.arm64.lock; \
     fi
 COPY . ./
 

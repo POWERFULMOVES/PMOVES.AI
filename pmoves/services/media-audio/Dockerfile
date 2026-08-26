@@ -28,18 +28,26 @@ RUN pip install --no-cache-dir --upgrade pip
 # neither — which is exactly why _maybe_publish used to hand-roll a partial contract
 # check and publish a bare payload instead of going through services.common.events.
 # Security: Reproducible builds from lockfile
-COPY pmoves/services/media-audio/requirements.txt pmoves/services/media-audio/requirements.lock ./
+COPY pmoves/services/media-audio/requirements.txt pmoves/services/media-audio/requirements.lock pmoves/services/media-audio/requirements.arm64.lock ./
 # Install torch from cu128 index (ARM64 wheels available, proven by Hi-RAG GPU on SPARK)
 # Security: PyTorch extra-index-url required for CUDA packages (+cu128 variants)
 ARG TORCH_CUDA=cu128
 RUN --mount=type=cache,target=/root/.cache/pip \
-    # amd64 uses the x86-resolved lock (reproducible); arm64/Jetson
-    # falls back to marker-aware requirements.txt.
+    # amd64 uses the x86-resolved lock (reproducible); arm64/Jetson uses the
+    # aarch64-compiled lock (requirements.arm64.lock, pins from
+    # arm64-overrides.txt). The unpinned requirements.txt path is retired on
+    # arm64: it floated torch 2.13.0 (PyPI) against torchaudio 2.11.0+cu128 and
+    # torch._dynamo died at import (Duplicate dispatch rule for intern). The
+    # arm64 lock pins the SPARK-proven stack (torch 2.9.0+cu128 +
+    # transformers 4.57.6 = the healthy hi-rag-gateway-v2-gpu set on GB10).
+    # The preinstall pins the wheel SOURCE (single index) so pip cannot pick a
+    # PyPI CUDA variant; the lock then sees its torch pins already satisfied.
     # cu128 has ARM64 wheels (verified on SPARK GB10 via Hi-RAG GPU).
     if [ "$(uname -m)" = "x86_64" ]; then \
       pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.lock; \
     else \
-      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.txt; \
+      pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TORCH_CUDA} torch==2.9.0+${TORCH_CUDA} torchaudio==2.9.0 && \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.arm64.lock; \
     fi
 # Diarization deps (pyannote) installed separately so they land regardless of the
 # lock-vs-requirements.txt path above — the x86_64 lock does not pin pyannote, which

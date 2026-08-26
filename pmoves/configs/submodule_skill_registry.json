@@ -44,7 +44,10 @@
     ],
     "llm": [
       "tensorzero/*",
-      "model/*"
+      "model/*",
+      "model/dispatch",
+      "model/list-suits",
+      "model/verify"
     ],
     "math": [
       "chit/*",
@@ -97,7 +100,14 @@
     ],
     "mcp": [
       "agents/*",
-      "deploy:services"
+      "deploy:services",
+      "mcp/connect",
+      "mcp/list-tools",
+      "mcp/invoke"
+    ],
+    "local-models": [
+      "model/dispatch",
+      "model/list-suits"
     ]
   },
   "submodules": {
@@ -238,7 +248,11 @@
     },
     "PMOVES-deepseek-harness": {
       "context_tier": 3,
-      "domain_tags": ["agents", "llm", "mcp"],
+      "domain_tags": [
+        "agents",
+        "llm",
+        "mcp"
+      ],
       "skills": [],
       "context_files": [],
       "agents_docs": []

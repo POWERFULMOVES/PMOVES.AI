@@ -118,18 +118,26 @@ model_suit:
   harnesses:
     claude_pmoves:
       fit:
-        "*":   {verdict: full, by: darkxside, method: hand, on: 2026-08-25}
-      roles:                 # relocated from harness_mappings
+        "*":   {verdict: full, by: darkxside, method: hand, "on": 2026-08-25}
+      roles:                 # seeded fresh; harness_mappings stays where it is
         deep_debugging:   {temperature: 0.3, top_p: 0.90, system_prompt: directive_debugger}
         code_review:      {temperature: 0.4, top_p: 0.95}
       budget:
         prompt_ceiling: 40000    # see §5
     clawz:
       fit:
-        "*": {verdict: limited, by: darkxside, method: hand, on: 2026-06-11,
+        "*": {verdict: limited, by: darkxside, method: hand, "on": 2026-06-11,
               note: "requires adapter layer; tool-call parsing assumes an Anthropic-shaped response"}
-        code_review: {verdict: full, by: provider_verifier, method: measured, on: 2026-08-19}
+        code_review: {verdict: full, by: provider_verifier, method: measured, "on": 2026-08-19}
 ```
+
+**`"on"` is quoted deliberately — do not tidy it.** YAML 1.1 (what PyYAML's
+`safe_load` implements) reads a bare `on` as the boolean `True`, so `on: 2026-08-25`
+parses to the key `True` and `obs.get("on")` returns `None`. The provenance vanishes
+silently: no error, no missing-key warning, just a record that looks complete and
+carries no date. An earlier draft of this spec wrote it unquoted, an implementer hit
+it while seeding, and the gate now rejects both the bare-`on` case and a `True` key
+with a message naming the quoting. The same trap catches `y`, `yes`, `no` and `off`.
 
 `cross_agent` is left exactly as it is, answering the question it was built for. No
 value is reinterpreted, so nothing can silently change meaning.
@@ -140,10 +148,29 @@ CLI harness want different settings for the same task. Where a model needs no
 per-harness variation, `roles` may be declared once at fitting level and inherited —
 the nesting permits variation, it does not require it.
 
-**Migration is mechanical.** A `cross_agent` map becomes `harnesses.<h>.fit`; a
-`harness_mappings` block becomes `harnesses.<h>.roles` under whichever harness the
-suit was written for. Neither half is discarded, and a fitting that gains only one
-half is still valid — it is simply incomplete, and reports as such.
+**Nothing is migrated. `harnesses` is seeded fresh.** [codex, verified] An earlier
+draft of this section said migration was mechanical — `cross_agent` becoming
+`harnesses.<h>.fit`, `harness_mappings` becoming `harnesses.<h>.roles` "under
+whichever harness the suit was written for". That is not mechanical and the same
+sentence says why: there is no source value for `<h>`. **Measured: all 9 files
+carrying `harness_mappings` record no harness anywhere — zero occurrences of
+`harness:`, `harness_id:` or `written_for:` across the nine.** Picking one would
+invent routing semantics, and it also contradicted the schema block above, which
+already says `harnesses` is seeded fresh and not migrated.
+
+So both existing halves stay exactly where they are:
+
+- `cross_agent` is untouched, answering the question it was built for. Its keys
+  (`typer`, `pinokio`, `agent_zero`, `a2ui`, …) are component-compatibility
+  claims, **not** harness keys, and are NOT subject to §2's resolution gate —
+  which is why `typer` and `pinokio` being absent from `agent_registry.yaml`
+  does not fail it. *(Measured: the gate exits 0 today with both unregistered.)*
+- `harness_mappings` is untouched. A human names the harness when seeding a
+  fitting, because that is a fact about intent that the file never recorded.
+
+A fitting that carries only one half is still valid — it is simply incomplete, and
+reports as such. No value is reinterpreted anywhere, so nothing can silently change
+meaning; that is the same rule `cross_agent` already gets, applied uniformly.
 
 ### 1b. A role binds seams, not just sampling parameters
 
@@ -203,18 +230,27 @@ routing for that pair, which is exactly the failure class this repo keeps hittin
 `.gitmodules`, `fork_registry.json` and `submodule_skill_registry.json` but absent
 from `agent_registry.yaml` (see #2740). `claude_4090` was added by #2739.
 
-**No harness marker is proposed, and the omission is deliberate.** The obvious
-candidate does not fit: `role_classes` is a declared enum of `planner` / `worker` /
-`reviewer` — a workflow role, not an entity kind — so `role_class: harness` would
-extend an enum with a category error. The `types` taxonomy has no harness member
-either, but it does not need one: `crush` and `clawz`, both terminal harnesses,
-already register cleanly as `ui`/`agent`, and `claude_4090` follows them.
+**A first-class `kind: harness` marker IS proposed.** This reverses the draft
+above it, and the reversal is recorded rather than edited away. The draft argued
+that no marker was needed, since `role_classes` is a workflow enum (`planner` /
+`worker` / `reviewer`) that `harness` would extend with a category error, and
+since `crush` and `clawz` already register cleanly as `ui`/`agent`.
 
-So the validation requirement is the weaker and truer one: **a harness key must
-resolve to a registered agent.** The fitting asserting the pairing is itself the
-claim that the target hosts models; the registry does not have to carry a second,
-redundant assertion that can drift from it. Whether a first-class harness marker
-earns its place is left open below.
+What changed the answer is what happens without a marker: the key space silently
+mixes categories. A reviewer with full repo access resolved `typer` to a
+same-named Python dependency and had to retract — an entity kind that has to be
+inferred will be inferred wrongly. So `kind:` is added on the registry entry, and
+a fitting's harness key must resolve to an entry declaring `kind: harness`,
+not merely to *some* registered agent.
+
+This is the weaker claim it replaces made checkable. It does not duplicate the
+fitting's assertion — the fitting says *this model fits this harness*; the
+registry says *this key is a harness at all*, which is the part a typo destroys.
+
+Implemented in #2747 as `fittings.load_harnesses()`. **Registered today:
+`clawz`, `kilocode_glm`.** Harnesses named in fittings but not yet registered —
+`dsh` (#2740), `claude_pmoves`, `claude_4090` — must be registered before a
+fitting may name them; that is the gate working, not a defect in it.
 
 ### 3. Controlled role vocabulary
 
@@ -333,6 +369,10 @@ the router's contract, and migrating the 18 existing suits.
    the **referent** moves, and a diff cannot see it. The criterion is therefore
    structural, not value-based: `cross_agent` is byte-identical after migration, and
    `fit` contains only entries whose harness key is a genuine harness.
+1b. **No `harness_mappings` block is migrated either.** All 9 files carrying one
+   record no harness, so relocating them under `harnesses.<h>` would require
+   inventing `<h>`. They stay byte-identical for the same reason `cross_agent`
+   does, and criterion 1's structural test applies to them unchanged.
 2. `kong_route_seeder._parse_model_suits` returns the same 18 entries with identical
    `model_id` / `provider` / `api_base` / `api_key_env` — asserted by running it, not
    by inspection. This is the criterion the original schema would have failed.
@@ -367,9 +407,9 @@ nobody re-checks. Two extractions agreeing is the check.
    clawz:
      fit: limited                       # effective value the router uses
      observations:
-       - {verdict: limited, by: darkxside,        method: hand,    on: 2026-06-11,
+       - {verdict: limited, by: darkxside,        method: hand,    "on": 2026-06-11,
           note: "tool-call parsing assumes an Anthropic-shaped response"}
-       - {verdict: limited, by: provider_verifier, method: measured, on: 2026-08-19}
+       - {verdict: limited, by: provider_verifier, method: measured, "on": 2026-08-19}
    ```
 
    The effective `fit` is the most conservative verdict among observations, so a
