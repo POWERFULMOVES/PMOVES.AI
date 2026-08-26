@@ -437,7 +437,11 @@ routing = ["ollama_local"]
 
 [models.coding_qwen3_coder_next_80b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://host.docker.internal:11434/v1"
+# In-network compose ollama (service alias pmoves-ollama, port 11434) — NOT
+# host.docker.internal: the 51.7GB qwen3-coder-next:latest pull completed in
+# the pmoves-ollama container (2026-08-25); the host instance does not carry
+# it. Cold load ~200ms verified from the gateway container.
+api_base = "http://pmoves-ollama:11434/v1"
 model_name = "qwen3-coder-next:latest"
 api_key_location = "none"
 
@@ -1009,14 +1013,13 @@ type = "chat_completion"
 model = "gemma_4_26b_a4b_rocm"
 weight = 0.0
 
-# Qwen3-Coder-Next 80B-A3B — tag corrected to :latest (the :80b tag never
-# existed on the registry). Weight 0 until the 51.7GB pull completes — the
-# SPARK pull was disk-bound (100% full) and the partial blob reclaimed.
-# Re-enable at soak weight when a disk lane frees space and the pull lands.
+# Qwen3-Coder-Next 80B-A3B — current qwen coder generation. Tag corrected
+# to :latest (the :80b tag never existed on the registry); served from the
+# in-network compose ollama where the 51.7GB pull completed (2026-08-25).
 [functions.agent_zero.variants.local_qwen3_coder_next]
 type = "chat_completion"
 model = "coding_qwen3_coder_next_80b_local"
-weight = 0.0
+weight = 0.3
 
 # GLM-5-Turbo — KiloCode primary (agentic, tool calling, long chains)
 # Temperature override: Z.AI default is 1.0; coding/agentic workflows need 0.0-0.3
