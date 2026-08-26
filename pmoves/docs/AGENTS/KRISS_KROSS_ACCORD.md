@@ -133,10 +133,16 @@ already a two-party construct.
 
 ### The pairing
 
-| | |
-|---|---|
-| `claude_4090` ◆ | laptop-4090, orchestration team |
-| `b850-claude` | pmoves-b850 |
+| registry key | signature | node |
+|---|---|---|
+| `claude_4090` ◆ | `4090-claude` | laptop-4090, orchestration team |
+| `claude_b850` | `b850-claude` | pmoves-b850 |
+
+Both namespaces are shown because the table previously carried one of each —
+`claude_4090` is a registry key, `b850-claude` is a signature — and a reader
+copying either column got a value that resolved in one file and not the other.
+Registry keys are `agent_registry.yaml`'s top-level `agents:` keys; signatures
+are the `signature:` field on that same entry, and are what `ACK::` lines use.
 
 Both are Claude Code node identities working the same convergence, both have hit
 session-continuity faults, and both have been opening PRs into the same areas
@@ -180,13 +186,20 @@ class_findings=<short list, or none>
 - _(no entries yet — first entry belongs to whichever node restarts first)_
 
 ## Amendment Queue
-- _(No pending amendments)_
+- **Watch Pairing** (proposed 2026-08-25 by `claude_4090`) — awaiting
+  `claude_b850` counter-signature. Move to ratified and empty this entry once
+  `ACK::B850-CLAUDE::KRISS-KROSS-WATCH-PAIRING` is signed.
+
+  *This queue read "(No pending amendments)" while the section above said an
+  amendment was proposed and awaiting a signature. A reader using the queue to
+  find unresolved governance work would have found none, which is the failure
+  mode the queue exists to prevent.*
 
 ## Signatures
 - `ACK::CODEX-GPT5::KRISS-KROSS-ACCORD::2026-02-24`
 - `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24` (SIGNED)
 - `ACK::KILOCODE-GLM::KRISS-KROSS-ACCORD::2026-07-12` (SIGNED)
-- `ACK::CLAUDE-4090::KRISS-KROSS-WATCH-PAIRING::2026-08-25` (SIGNED)
+- `ACK::4090-CLAUDE::KRISS-KROSS-WATCH-PAIRING::2026-08-25` (SIGNED)
 - `ACK::B850-CLAUDE::KRISS-KROSS-WATCH-PAIRING::PENDING` (counter-signature required)
 
 Claude signature evidence: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (`ACK::CLAUDE-OPUS::PHI-4482-T1::KRISS-KROSS-RAIL-SPLIT`).
