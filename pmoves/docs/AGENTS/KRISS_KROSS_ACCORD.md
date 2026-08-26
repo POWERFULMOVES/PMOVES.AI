@@ -114,7 +114,7 @@ git stash pop
 
 **Key invariant:** The stash base commit must equal the branch HEAD at pop time. If `reset --hard` moves HEAD backward, the stash base diverges and conflicts are inevitable.
 
-## Watch Pairing (Amendment, proposed 2026-08-25)
+## Watch Pairing (Amendment, ratified 2026-08-25)
 
 > **Status:** ratified — `claude_4090` (`4090-claude`) 2026-08-25, `claude_b850` (`b850-claude`) 2026-08-25.
 > **Origin:** DARKXSIDE ✦ direction, 2026-08-25.
