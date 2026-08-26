@@ -69,6 +69,17 @@ cross_agent:
   typer: untested
   pinokio: none
 
+# Harness fit. Seeded fresh, harness-only — NOT migrated from cross_agent, which
+# answers a different question (which components can address this model) and whose
+# key space includes agents, a UI and a launcher.
+fit:
+  clawz:
+    "*":
+      - verdict: full
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+
 metadata:
   source: anthropic_docs
   notes: "ClaWZ uses Claude as its native model — full compatibility"
