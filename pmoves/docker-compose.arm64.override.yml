@@ -7,9 +7,87 @@ services:
     platform: linux/arm64
   ffmpeg-whisper:
     platform: linux/arm64
+    # platform alone is not enough. This image compiles CUDA kernels, and the
+    # x86 defaults are wrong here: CUDA_ARCHS "86;89" are Z890/4090. Neither
+    # arm64 node is in that list, so the build would succeed, ship, and have no
+    # cubins for the GPU it lands on — which the libggml-cuda.so guard could not
+    # catch, because the backend IS built. That guard now asserts per-arch with
+    # cuobjdump (see the Dockerfile), so this class fails loudly at build.
+    #
+    # ONE LIST SERVES BOTH ARM64 NODES, on CUDA 13:
+    #
+    #   Jetson Orin    sm_87    JetPack 7.2+ ships CUDA 13
+    #   DGX Spark GB10 sm_121   driver 13.0, needs nvcc >= 12.9 to compile for
+    #
+    # This was NOT true on CUDA 12.8 — sm_121 cannot be compiled there at all,
+    # which is why an earlier revision split them. JetPack 7.2+ is the platform
+    # target, so CUDA 13 is the correct floor and the split is unnecessary.
+    #
+    # Arch numbers are NOT inferred. Authoritative source is dusty-nv's
+    # jetson-containers get_cuda_arch() (jetson_containers/l4t_version.py):
+    #     Nano/TX1 53 | TX2 62 | Xavier 72 | Orin 87
+    #     Orin on JetPack 7.2+  -> [87, 110, 120, 121]
+    #     Thor                  -> [110, 120, 121]
+    # sm_110 is THOR, not GB10 — that error cost this PR a build arg that could
+    # not compile. GB10 is sm_121, read from NVML on the node (ollama logs
+    # compute=12.1 / cc=1210 for "NVIDIA GB10", driver 13.0).
+    #
+    # Listing only 87;121 rather than dusty-nv's full JP7.2+ set: 110 is Thor and
+    # 120 is consumer Blackwell, and neither is an arm64 node in this fleet. Each
+    # extra arch is another kernel compile and more image weight. Widen to
+    # "87;110;120;121" if a Thor lands, or to match jetson-containers exactly.
+    #
+    # STRATEGIC NOTE — this image is hand-rolled on nvidia/cuda base images while
+    # dusty-nv/jetson-containers already solves the L4T/JetPack/CUDA matrix, and
+    # pmoves/config/profiles/jetson-orin-nano.yaml already names
+    # nvcr.io/nvidia/l4t-jetpack:r36.4.4 as that node's base. Building the Jetson
+    # path from those images instead of re-deriving arch and toolkit pins by hand
+    # is the better long-term shape; this override is the correct short-term fix,
+    # not the destination.
+    #
+    # REQUIRED, not defaulted -- and that is the point.
+    #
+    # These used to default to CUDA 13.0.1 / "87;121". ARM64 is not one platform
+    # here: SPARK GB10 is Grace-Blackwell sm_121 and NEEDS CUDA 13
+    # (dgx-spark-grace-blackwell.yaml declares cuda_version 13.0.2), while the
+    # Jetsons are sm_87 on JetPack 6.2 / L4T 36.4 (jetson-jons-*.yaml declares
+    # jetpack.target "6.2"). A CUDA 13 image cannot run on JetPack 6.2.
+    #
+    # So the default was wrong for every Jetson, and silently: nothing populates
+    # ARM64_CUDA_VERSION. It has exactly ONE consumer -- these two lines -- and no
+    # profile loader, bootstrap script, or make target sets it. The documented
+    # per-node override only helped an operator who already knew to apply it, and
+    # a node that did not got an image that cannot start. Raised in review on
+    # #2446.
+    #
+    # The profiles carry the right values; the wiring to read them does not exist
+    # yet. Until it does, refuse rather than guess -- an unset variable now fails
+    # at `docker compose` interpolation with this text, instead of producing an
+    # unrunnable image several minutes into a build.
+    #
+    #   SPARK GB10   : ARM64_CUDA_VERSION=13.0.1  ARM64_CUDA_ARCHS=121
+    #   Jetson (6.2) : ARM64_CUDA_VERSION=12.8.1  ARM64_CUDA_ARCHS=87
+    #
+    # `:?` and not `:-`: blank is not absent, and an empty value here would
+    # interpolate into a nonexistent image tag.
+    build:
+      context: ..
+      dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
+      args:
+        CUDA_VERSION: "${ARM64_CUDA_VERSION:?Set per node. SPARK GB10 (sm_121) needs 13.0.1; Jetson on JetPack 6.2 (sm_87) needs 12.8.1. No safe default exists -- CUDA 13 will not run on JetPack 6.2, and 12.8 has no sm_121.}"
+        CUDA_ARCHS: "${ARM64_CUDA_ARCHS:?Set per node. 121 for SPARK GB10, 87 for Jetson Orin. Must match ARM64_CUDA_VERSION above.}"
+        # Ubuntu 24.04's GCC 13 rejects the armv9.2-a+sme CPU variant that
+        # GGML_CPU_ALL_VARIANTS=ON compiles (+sme is GCC 14+). On these nodes
+        # the CUDA backend is the point; the single generic CPU backend is
+        # enough. Keep ON where the compiler supports it.
+        GGML_CPU_VARIANTS: "${ARM64_GGML_CPU_VARIANTS:-OFF}"
   channel-monitor:
     platform: linux/arm64
-  archon-server:
+  # The service is `archon` in every defining overlay; `archon-server` is a
+  # network alias, never a service name. Patching the alias name made compose
+  # fail the whole project with "neither an image nor a build context" as soon
+  # as any full-file-set build included this override.
+  archon:
     platform: linux/arm64
   mai-ui-agent:
     platform: linux/arm64

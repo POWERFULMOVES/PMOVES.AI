@@ -94,13 +94,58 @@ else
   AGENT="$DEFAULT_AGENT"
 fi
 
+# ---------------------------------------------------------------------------
+# NODE IDENTITY — the half the agent selection above does not answer.
+#
+# `--agent node-steward` says what this session DOES. It says nothing about
+# which node it is on or which registered agent it IS, so every session began
+# by rediscovering both. `topology.node_affinity` in agent_registry.yaml was
+# written for exactly this and nothing read it.
+#
+# Resolution is declared, not inferred: eight registry agents claim the 4090
+# under one spelling or another, so "the agent whose affinity matches" would be
+# a guess wearing a resolver's clothes. See pmoves/tools/node_identity.py.
+#
+# FAIL-OPEN, LOUDLY. Every failure here -- no python, no config, unknown node,
+# identity declared but not yet registered -- leaves the session launching
+# exactly as it did before, and prints why. An identity is a convenience;
+# losing it must never cost you the launch. Losing it SILENTLY is the defect
+# this file keeps having to fix, so the reason is always printed.
+# ---------------------------------------------------------------------------
+IDENTITY_ARGS=()
+IDENT_TOOL="$ROOT/pmoves/tools/node_identity.py"
+IDENT_PY="${PMOVES_PYTHON:-python}"
+if [ -f "$IDENT_TOOL" ] && command -v "$IDENT_PY" >/dev/null 2>&1; then
+  if IDENT_OUT="$("$IDENT_PY" "$IDENT_TOOL" --harness claude-code --shell 2>/dev/null)"; then
+    # The tool emits PMOVES_RESOLVED_IDENTITY, not PMOVES_NODE_IDENTITY: the
+    # latter is the operator's INPUT override, and a resolver that answers under
+    # the same name it reads cannot be called twice safely.
+    eval "$IDENT_OUT"
+    PMOVES_NODE_IDENTITY="${PMOVES_RESOLVED_IDENTITY:-}"
+    export PMOVES_NODE PMOVES_NODE_IDENTITY
+    if [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
+      echo "[claude-pmoves] node=${PMOVES_NODE} identity=${PMOVES_NODE_IDENTITY} agent=${AGENT}" >&2
+      # Put it where the session can actually READ it. Exported variables do
+      # not reach the model's context; an appended system prompt does. This is
+      # the difference between the identity existing and the identity working.
+      IDENTITY_ARGS=(--append-system-prompt "You are running on PMOVES node '${PMOVES_NODE}'. Your registered identity in pmoves/config/agent_registry.yaml is '${PMOVES_NODE_IDENTITY}'. Disclose it at session start rather than rediscovering it. Your selected role for this session is the '${AGENT}' agent.")
+    else
+      echo "[claude-pmoves] node=${PMOVES_NODE:-unknown} identity=unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}" >&2
+    fi
+  else
+    echo "[claude-pmoves] node identity: $IDENT_TOOL failed; launching without it." >&2
+  fi
+elif [ -f "$IDENT_TOOL" ]; then
+  echo "[claude-pmoves] node identity: '$IDENT_PY' not on PATH; launching without it." >&2
+fi
+
 if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still
   # loads, MCP creds do not. Warn so the missing half is visible, not silent.
   echo "[claude-pmoves] WARN: $LAUNCHER not found — launching without env.shared or the MCP roster." >&2
-  exec claude --agent "$AGENT" "$@"
+  exec claude --agent "$AGENT" ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"
 fi
 
 # The launcher forwards "$@" straight to claude after --mcp-config=, so --agent
 # rides through unchanged.
-exec bash "$LAUNCHER" --agent "$AGENT" "$@"
+exec bash "$LAUNCHER" --agent "$AGENT" ${IDENTITY_ARGS[@]+"${IDENTITY_ARGS[@]}"} "$@"

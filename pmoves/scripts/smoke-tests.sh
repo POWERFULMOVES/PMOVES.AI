@@ -121,16 +121,24 @@ test_http_endpoint() {
     print_info "Testing: $url"
 
     if [ "$VERBOSE" = true ]; then
-        response=$(curl -sf --max-time "$TIMEOUT" -w "\n%{http_code}" "$url" 2>&1)
+        response=$(curl -s --max-time "$TIMEOUT" -w "\n%{http_code}" "$url" 2>&1)
         status=$?
         http_code=$(echo "$response" | tail -n1)
         body=$(echo "$response" | head -n-1)
     else
-        http_code=$(curl -sf --max-time "$TIMEOUT" -w "%{http_code}" -o /dev/null "$url" 2>/dev/null)
+        http_code=$(curl -s --max-time "$TIMEOUT" -w "%{http_code}" -o /dev/null "$url" 2>/dev/null)
         status=$?
     fi
 
-    if [ $status -eq 0 ] && [ "$http_code" = "$expected_status" ]; then
+    # No -f on the two calls above: -f turns any 4xx into exit 22, so this helper
+    # could only ever assert a 2xx status -- $status -eq 0 rejected a 401 before
+    # http_code was ever compared. The http_code comparison is the real assertion;
+    # transport failures still surface as exit 7 (refused) and 28 (timeout).
+    # expected_status may be an alternation ("200|401") for checks whose correct
+    # answer is deployment-dependent. NOTE: =~ with the pattern from a variable,
+    # not case: bash parses case-alternation before expansion, so a "|" arriving
+    # via $expected_status would be a literal pipe, never an alternation.
+    if [ $status -eq 0 ] && [[ "$http_code" =~ ^(${expected_status})$ ]]; then
         print_pass "$name"
         [ "$VERBOSE" = true ] && echo "       Response: $body"
         return 0
@@ -309,7 +317,21 @@ main() {
     # Data Tier Services
     print_section "Data Tier Services"
     test_tcp_connectivity "Supabase Postgres" "localhost" "5432" "default"
-    test_http_endpoint "Supabase PostgREST" "http://localhost:3010/" "200" "default"
+    # 200 or 401, not one hardcoded: the root's unauthenticated status is
+    # deployment-dependent and BOTH are healthy. Fresh bootstrap sets
+    # PGRST_ANON_ROLE=anon (docker-compose.core.yml) with the role granted in
+    # supabase/initdb/01_public_init.sql, so root is served as anon and answers
+    # 200 with the OpenAPI document; PGRST_JWT_SECRET only validates supplied
+    # tokens, it does not require them. A node that revokes the anon role
+    # (B850's hardening) gets 401 instead. Either proves PostgREST is up and
+    # answering; the smoke asserts liveness, the security posture is audited by
+    # auth-alignment/secrets-audit. This also keeps the shell harness consistent
+    # with tests/smoke/test_critical_path.py, which asserts 200.
+    # Port: read the same knob compose does (${SUPABASE_POSTGREST_PORT:-3010});
+    # hardcoding 3010 fails on nodes whose env overrides it (observed on SPARK,
+    # where the CLI-stack postgrest binds 127.0.0.1:3000).
+    SUPABASE_POSTGREST_PORT="${SUPABASE_POSTGREST_PORT:-3010}"
+    test_http_endpoint "Supabase PostgREST" "http://localhost:${SUPABASE_POSTGREST_PORT}/" "200|401" "default"
     test_tcp_connectivity "Qdrant" "localhost" "6333" "default"
     test_http_endpoint "Qdrant health" "http://localhost:6333/healthz" "200" "default"
     test_tcp_connectivity "Neo4j HTTP" "localhost" "7474" "default"
