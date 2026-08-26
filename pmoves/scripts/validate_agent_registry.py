@@ -243,7 +243,16 @@ def main(argv: list[str]) -> int:
     # never an uncaught exception -- a traceback here would abort the whole run
     # and suppress the registry/teams report for every other file.
     harnesses = load_harnesses()
-    roles = load_roles()
+    try:
+        roles = load_roles()
+    except ValueError as exc:
+        # An erased or malformed vocabulary is a gate failure, not a crash: the
+        # rest of the report must still run, per the note above. It used to be
+        # neither -- load_roles() normalised `roles: {}` to `{}`, every fitting
+        # uses `*`, and the gate printed "OK" over a vocabulary that no longer
+        # existed.
+        errors.append(f"model-roles.yaml: {exc}")
+        roles = {}
     for suit_path in sorted(SUITS_DIR.glob("*.yaml")):
         doc = _load_yaml(suit_path) or {}
         if "fit" not in doc:

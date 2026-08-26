@@ -21,11 +21,41 @@ WILDCARD_ROLE = "*"
 
 
 def load_roles(path: Path | None = None) -> dict[str, dict[str, Any]]:
-    """Read the controlled role vocabulary."""
+    """Read the controlled role vocabulary.
+
+    Raises rather than normalising an absent or empty vocabulary to ``{}``.
+    Returning an empty mapping made erasure indistinguishable from a healthy
+    load: every seeded fitting uses the ``*`` role, and ``resolve_role()``
+    honours ``*`` without consulting the mapping, so deleting the whole
+    vocabulary left `validate_agent_registry.py` exiting 0. A gate that cannot
+    tell "no vocabulary" from "vocabulary satisfied" is not checking anything.
+    """
     target = path or ROLES_PATH
     with open(target, encoding="utf-8") as handle:
         doc = yaml.safe_load(handle) or {}
-    return doc.get("roles") or {}
+    roles = doc.get("roles")
+    if not isinstance(roles, dict) or not roles:
+        raise ValueError(
+            f"{target} declares no roles. The controlled vocabulary must be a "
+            "non-empty mapping -- an empty one silently permits every role key, "
+            "which is the opposite of what this file is for."
+        )
+    for name, body in roles.items():
+        if body is not None and not isinstance(body, dict):
+            raise ValueError(
+                f"{target}: role {name!r} must be a mapping or empty, got "
+                f"{type(body).__name__}."
+            )
+        supersedes = (body or {}).get("supersedes")
+        if supersedes is not None and (
+            not isinstance(supersedes, list)
+            or not all(isinstance(s, str) for s in supersedes)
+        ):
+            raise ValueError(
+                f"{target}: role {name!r} has a non-list `supersedes`. A rename "
+                "that does not parse is a routing outage that reads as a typo."
+            )
+    return roles
 
 
 def resolve_role(
@@ -91,5 +121,20 @@ def effective_fit(observations: list[dict[str, Any]]) -> str | None:
                 f"unknown fit verdict {verdict!r}; permitted: {', '.join(FIT_ORDER)}. "
                 "An unmeasured pairing must have NO observation rather than a null one."
             )
+        if verdict == "delegate":
+            # The spec (SS1b) already requires this: delegate "is the only value
+            # that must name a target", because it routes to a DIFFERENT
+            # substrate rather than choosing a model. Without it a router
+            # receives a verdict that looks actionable and cannot be honoured.
+            # Enforced now, while nothing is seeded with it, so the ambiguity
+            # never enters the data.
+            destination = (obs or {}).get("to")
+            if not isinstance(destination, str) or not destination.strip():
+                raise ValueError(
+                    "a `delegate` observation must name where the work goes: "
+                    "add `to: <destination>` (optionally with `seam:`). Every "
+                    "other verdict selects a model; this one selects a "
+                    "substrate, so an unrouted delegate is not a fit at all."
+                )
         ranks.append(FIT_ORDER.index(verdict))
     return FIT_ORDER[min(ranks)]
