@@ -175,8 +175,13 @@ if [ -f "$MCP_ROSTER" ]; then
   NORMALIZER="$ROOT/pmoves/tools/mcp_roster_normalize.py"
   RESOLVED=""
   resolved_ok=0
-  if command -v python3 >/dev/null 2>&1 && [ -f "$NORMALIZER" ]; then
-    if RESOLVED="$(python3 "$NORMALIZER" "$MCP_ROSTER" \
+  # Shared discovery (pm-python.sh) — the third python convention this file
+  # grew (scalar python in the identity twin, bare python3 here, inline chain
+  # in crush-pmoves) was the pair-review finding: unify, don't re-add. No
+  # probe: the normalizer needs only the stdlib (json/os/re).
+  . "$ROOT/pmoves/scripts/pm-python.sh"
+  if [ -f "$NORMALIZER" ] && pm_pick_python; then
+    if RESOLVED="$("${PM_PY[@]}" "$NORMALIZER" "$MCP_ROSTER" \
                      --root "$ROOT" --label claude-pmoves)" && [ -n "$RESOLVED" ]; then
       resolved_ok=1
     fi

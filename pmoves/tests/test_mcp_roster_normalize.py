@@ -360,3 +360,54 @@ def test_the_helper_hardcodes_no_tailnet_address():
     assert not re.search(
         r"\b100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.", TS_HELPER.read_text()
     )
+
+
+# ---------------------------------------------------------------------------
+# Pair-review finding: the verdict must survive the TUI. stderr lines printed
+# immediately before `exec claude` are overwritten within a second; the payload
+# is the durable channel (the tracked roster already ships a `_pinned_versions_note`
+# top-level key, so a `_`-prefixed sibling is established convention).
+# ---------------------------------------------------------------------------
+
+def test_verdicts_land_in_the_payload_not_only_stderr(tmp_path):
+    proc = _run_cli(
+        tmp_path,
+        _roster(
+            dead={"url": "http://${TS_VGONE}:8105/mcp/sse"},
+            soft={"url": "http://x/y", "headers": {"Authorization": "Bearer ${TS_VSOFT}"}},
+        ),
+        {},
+    )
+    assert proc.returncode == 0
+    payload = json.loads(Path(proc.stdout.strip()).read_text())
+    verdicts = payload.get("_pmoves_roster_verdicts")
+    assert verdicts, "verdict key missing — the announcement dies with the TUI again"
+    assert {"server": "dead", "missing": ["TS_VGONE"]} in verdicts["dropped"]
+    assert {"server": "soft", "missing": ["TS_VSOFT"]} in verdicts["degraded"]
+    assert verdicts.get("generated_utc"), "no timestamp — a stale verdict is indistinguishable from a current one"
+
+
+def test_verdict_key_is_written_even_when_clean(tmp_path):
+    """Empty lists are a positive assertion the check RAN; absence would be
+    indistinguishable from the fallback path that never invoked the tool."""
+    proc = _run_cli(tmp_path, _roster(good={"url": "https://e.com/mcp"}), {})
+    payload = json.loads(Path(proc.stdout.strip()).read_text())
+    assert payload["_pmoves_roster_verdicts"]["dropped"] == []
+    assert payload["_pmoves_roster_verdicts"]["degraded"] == []
+
+
+def test_verdict_key_lives_at_top_level_not_as_a_server(tmp_path):
+    """Inside mcpServers, Claude Code would try to LAUNCH it (that is why P2
+    drops `_`-keys). The verdict must ride as a top-level sibling."""
+    proc = _run_cli(tmp_path, _roster(good={"url": "https://e.com/mcp"}), {})
+    payload = json.loads(Path(proc.stdout.strip()).read_text())
+    assert "_pmoves_roster_verdicts" not in payload["mcpServers"]
+
+
+def test_stale_window_is_one_hour_not_twelve(tmp_path):
+    """Startup-read file; 12h bounded token-on-disk 12x looser than needed."""
+    text = TOOL.read_text()
+    m = re.search(r"_STALE_SECONDS = (\d+)", text)
+    assert m and int(m.group(1)) <= 3600, (
+        f"stale window is {m.group(1) if m else '?'}s — pair-review nit said 1h"
+    )

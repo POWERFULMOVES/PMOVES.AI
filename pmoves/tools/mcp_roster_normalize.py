@@ -65,7 +65,19 @@ _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 _OUT_PREFIX = "claude-pmoves-mcp-roster."
 _OUT_SUFFIX = ".json"
-_STALE_SECONDS = 12 * 3600
+# Startup-read file: the only consumer is Claude Code's config load at session
+# start. 1h bounds token-on-disk tightly with no realistic session-start miss
+# (pair-review nit: the earlier 12h window was 12x looser than needed).
+_STALE_SECONDS = 3600
+
+# Top-level key carrying the P5 verdicts into the roster itself. Pair-review
+# finding: the stderr warnings print immediately before `exec claude` and the
+# TUI overwrites them within a second -- no agent can read what was dropped or
+# degraded. The payload is the durable channel: Claude Code reads only
+# `mcpServers`, and the tracked roster already ships a `_pinned_versions_note`
+# top-level key, so a `_`-prefixed sibling is established convention and rides
+# the file the session (or any doctor check) can re-read.
+_VERDICTS_KEY = "_pmoves_roster_verdicts"
 
 
 def _match_brace(text: str, start: int) -> int:
@@ -311,6 +323,22 @@ def main(argv: list[str] | None = None) -> int:
         data = json.load(fh)
 
     payload, dropped, degraded = normalize(data, args.root, os.environ)
+
+    # The durable half of the announcement. stderr still gets the human-facing
+    # lines; this key is what survives the TUI for the session/agent that has to
+    # work out why a server is missing. Written even when clean -- empty lists
+    # are a positive assertion the check RAN, distinguishable from a fallback
+    # path that never invoked this tool at all.
+    payload[_VERDICTS_KEY] = {
+        "source": os.path.abspath(args.src),
+        "dropped": [
+            {"server": server, "missing": missing} for server, missing in dropped
+        ],
+        "degraded": [
+            {"server": server, "missing": missing} for server, missing in degraded
+        ],
+        "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
 
     for server, missing in dropped:
         _warn(args.label, [
