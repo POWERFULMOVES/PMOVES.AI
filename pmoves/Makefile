@@ -1691,7 +1691,7 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 	@docker ps --format "table {{.Names}}\t{{.Networks}}" 2>/dev/null | grep pmoves-net | grep -v "supabase\|archon\|agent-zero" || echo "✅ No unexpected services on pmoves-net"
 
 .PHONY: validate-agents
-validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check
+validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check + node-vocabulary default_identity wiring
 	@echo "🔍 Validating agent registry ↔ teams coupling (pydantic gate)..."
 	@# Workflow-only deps — the script imports pyyaml + pydantic, which aren't in the
 	@# base env. Mirror the CI gate (validate-agents-config.yml) so a fresh local

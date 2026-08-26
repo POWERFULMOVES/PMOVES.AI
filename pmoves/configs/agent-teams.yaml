@@ -225,6 +225,9 @@ teams:
 
 # Validation: enforced by the pydantic gate `make -C pmoves validate-agents`
 # (pmoves/scripts/validate_agent_registry.py); CI: .github/workflows/validate-agents-config.yml.
+# Team membership is also a precondition for a node identity: an agent named by
+# `default_identity` in node-vocabulary.yaml must appear here, or the identity
+# gate fails (pmoves/tests/test_identity_coupling_gate.py).
 # The snippet below is the original informal rule, kept for reference.
 # Validation: all agents from agent_registry.yaml must appear in exactly one team
 # Run: python -c "

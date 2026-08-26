@@ -31,6 +31,22 @@
 # ADDING A NODE: add a `canonical` entry with every spelling in use as an alias.
 # The gate (`pmoves/tests/test_node_identity.py`) fails on any registry value
 # not declared here, so a new spelling cannot enter silently.
+#
+# DECLARING AN IDENTITY (`default_identity`)
+# ------------------------------------------
+# `default_identity: {<harness>: <agent_id>}` says WHO a session on this node is
+# -- a reference into `agent_registry.yaml`. It was checked by nothing generic:
+# one hand-written test covered `knuckles.crush` and no other pair, so a
+# declaration naming an agent that does not exist read as a live binding and
+# resolved to nothing, with every gate green.
+#
+# Three things must now hold for every declaration, enforced by
+# `pmoves/tests/test_identity_coupling_gate.py` (required `python-tests`
+# context) and repeated in `pmoves/scripts/validate_agent_registry.py`:
+#   1. the agent exists in agent_registry.yaml;
+#   2. its own `topology.node_affinity` resolves back to THIS node;
+#   3. it belongs to exactly one team in agent-teams.yaml.
+# Adding a declaration without doing all three is "declared and not wired".
 
 version: 1
 
