@@ -81,8 +81,12 @@ fi
 # by the same names, but Claude's launcher never sourced this file, so the roster
 # resolved under Crush and stayed literal under Claude. One definition, both
 # launchers -- not a second copy.
-# shellcheck source=./tailscale-node-ips.sh
-. "${SCRIPT_DIR}/tailscale-node-ips.sh"
+# Guarded like the Claude launcher's identical source: this file runs under
+# `set -e`, so an absent helper would abort Crush's whole env setup.
+if [ -f "${SCRIPT_DIR}/tailscale-node-ips.sh" ]; then
+  # shellcheck source=./tailscale-node-ips.sh
+  . "${SCRIPT_DIR}/tailscale-node-ips.sh"
+fi
 
 # Export local node identity
 export TS_LOCAL_IP="$(tailscale ip -4 2>/dev/null || echo '127.0.0.1')"

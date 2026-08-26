@@ -85,36 +85,36 @@ if (Test-Path $envf) {
 # `make -C pmoves mcp-toolkit-connect` stays live alongside the tracked roster.
 $roster = Join-Path $root '.claude\mcp.json'
 if (Test-Path $roster) {
-    # Normalize the roster before handing it to Claude (Codex #2243):
-    #   P2 - drop servers whose key starts with "_" (disabled-in-name-only, e.g.
-    #        `_pmoves-cipher-legacy-python-wrapper`; `_disabled` is metadata, not a
-    #        real off-switch, so Claude would otherwise launch the broken dupe).
-    #   P3 - rewrite repo-relative ("./...") command/arg paths to absolute $root
-    #        paths so `uv --directory ./pmoves-nats-mcp` launches from any CWD.
+    # Normalize the roster before handing it to Claude. The transform used to be
+    # inline here AND, separately, as a heredoc in claude-pmoves.sh -- two copies
+    # that drifted: the POSIX one grew ${VAR} resolution and this one did not, so
+    # a Windows node still got `http://${TS_Z890}:8105/mcp/sse` handed over as a
+    # literal hostname. Z890 is itself a Windows node, so the blind launcher was
+    # the one running on the machine the URL names.
+    #
+    # Both now call the same platform-neutral tool (P2 drop `_` keys, P3 absolute
+    # ./ paths, P4 expand ${VAR}, P5 drop unresolvable urls / warn on degraded
+    # creds). Falls back to the raw roster if python or the tool is unavailable,
+    # which is the behaviour this block had before.
     $useRoster = $roster
-    try {
-        $cfg = Get-Content -Raw $roster | ConvertFrom-Json
-        function Resolve-RelPath($p) {
-            if ($p -is [string] -and $p.StartsWith('./')) { Join-Path $root ($p.Substring(2)) } else { $p }
-        }
-        $clean = [ordered]@{}
-        foreach ($prop in $cfg.mcpServers.PSObject.Properties) {
-            if ($prop.Name.StartsWith('_')) { continue }   # disabled-in-name-only
-            $s = $prop.Value
-            if (($s.PSObject.Properties.Name -contains 'command') -and ($s.command -is [string])) {
-                $s.command = Resolve-RelPath $s.command
+    $normalizer = Join-Path $root 'pmoves\tools\mcp_roster_normalize.py'
+    $py = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
+    if ($py -and (Test-Path $normalizer)) {
+        try {
+            # The tool prints the path it wrote on stdout; warnings go to stderr
+            # and pass through to the console.
+            $out = & $py.Source $normalizer $roster '--root' $root '--label' 'claude-pmoves'
+            if (($LASTEXITCODE -eq 0) -and $out) {
+                $useRoster = ([string](@($out)[-1])).Trim()
+            } else {
+                Write-Warning "[claude-pmoves] could not normalize roster (exit $LASTEXITCODE); using raw $roster"
             }
-            if (($s.PSObject.Properties.Name -contains 'args') -and $s.args) {
-                $s.args = @($s.args | ForEach-Object { Resolve-RelPath $_ })
-            }
-            $clean[$prop.Name] = $s
+        } catch {
+            Write-Warning "[claude-pmoves] could not normalize roster ($($_.Exception.Message)); using raw $roster"
         }
-        $cfg.mcpServers = [pscustomobject]$clean
-        $resolved = Join-Path $env:TEMP 'claude-pmoves-mcp-roster.json'
-        $cfg | ConvertTo-Json -Depth 32 | Set-Content -Encoding UTF8 $resolved
-        $useRoster = $resolved
-    } catch {
-        Write-Warning "[claude-pmoves] could not normalize roster ($($_.Exception.Message)); using raw $roster"
+    } else {
+        Write-Warning "[claude-pmoves] python or $normalizer missing; using raw $roster"
     }
     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
     # (`<configs...>`), so the space form would swallow a trailing positional

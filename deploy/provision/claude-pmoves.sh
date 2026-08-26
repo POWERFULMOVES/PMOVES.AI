@@ -167,12 +167,17 @@ if [ -f "$MCP_ROSTER" ]; then
   # is why P4 was missing for so long: a heredoc cannot be tested. It now lives in
   # pmoves/tools/mcp_roster_normalize.py with pmoves/tests/test_mcp_roster_normalize.py
   # on it. If python3 or the tool is absent we fall back to the raw roster.
-  RESOLVED="${TMPDIR:-/tmp}/claude-pmoves-mcp-roster.$(id -u).json"
+  # The tool PRINTS the path it wrote; it is not a name we pick. The old fixed
+  # name (…-roster.$(id -u).json) is squattable in a world-writable /tmp, and
+  # since the file now holds expanded bearer tokens, losing that race would both
+  # fail the write AND silently fall back to the raw roster -- reinstating the
+  # literal-${TS_Z890} failure on demand.
   NORMALIZER="$ROOT/pmoves/tools/mcp_roster_normalize.py"
+  RESOLVED=""
   resolved_ok=0
   if command -v python3 >/dev/null 2>&1 && [ -f "$NORMALIZER" ]; then
-    if python3 "$NORMALIZER" "$MCP_ROSTER" "$RESOLVED" \
-         --root "$ROOT" --label claude-pmoves; then
+    if RESOLVED="$(python3 "$NORMALIZER" "$MCP_ROSTER" \
+                     --root "$ROOT" --label claude-pmoves)" && [ -n "$RESOLVED" ]; then
       resolved_ok=1
     fi
   fi
