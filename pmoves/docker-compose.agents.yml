@@ -54,6 +54,10 @@ services:
     # MCP_SERVER_TOKEN fallback. Do NOT source AGENT_ZERO_API_KEY from env:
     # env.shared carries a dev placeholder MCP_SERVER_TOKEN=dev-local-mcp-token
     # that would win interpolation and never match the inner token.
+    # NOTE: when BOTH token vars are unset the inner runtime auto-generates a
+    # token the wrapper cannot know — /sessions will then 401 by design
+    # (api_message requires the key). The wrapper session path REQUIRES a
+    # pinned token; the auto-generate mode only serves the UI/MCP discovery.
     - AGENT_ZERO_API_KEY=${AGENT_ZERO_MCP_TOKEN:-${MCP_SERVER_TOKEN:-}}
     # --dockerized=true is REQUIRED on A0 2.5: runtime.is_development() is
     # simply "not --dockerized", and a development-mode inner routes file
