@@ -21,6 +21,72 @@ fi
 echo "◇ crush-pmoves → sourcing PMOVES tier env..."
 source "$REPO_ROOT/pmoves/scripts/crush-env.sh"
 
+# ---------------------------------------------------------------------------
+# NODE IDENTITY — the crush twin of claude-pmoves's block. The registry and
+# node-vocabulary.yaml already describe this node's crush identity
+# (knuckles.default_identity.crush); the launcher's job is to resolve it and
+# put it where the SESSION can read it. Crush has no --append-system-prompt,
+# so the delivery mechanism is a context file: the configurator lists
+# pmoves/data/identity/node-identity.md in context_paths, and Crush loads
+# context files into the system prompt. Written BEFORE crush-bootstrap so the
+# configurator's exists() check sees it on the very first run.
+# Losing the identity must never cost the launch; losing it SILENTLY is the
+# defect, so every failure mode writes its reason into the file instead.
+# ---------------------------------------------------------------------------
+IDENTITY_FILE="$REPO_ROOT/pmoves/data/identity/node-identity.md"
+IDENT_TOOL="$REPO_ROOT/pmoves/tools/node_identity.py"
+# Discover the interpreter the same way crush-fleet-bootstrap.sh does (review
+# P2): the canonical venv first (it has PyYAML — preflight installs it there),
+# then platform launchers. A bare `python` scalar fails on hosts where only
+# python3 exists, or where `python` lacks PyYAML while .venv-pmoves has it —
+# and every such failure writes an unresolved context while bootstrap itself
+# succeeds in the same environment. An ARRAY: the venv branch may contain
+# spaces, the launcher branch is genuinely two words (py -3).
+if [ -n "${PMOVES_PYTHON:-}" ]; then
+  IDENT_PY=($PMOVES_PYTHON)
+elif [ -x "$REPO_ROOT/pmoves/.venv-pmoves/bin/python" ]; then
+  IDENT_PY=("$REPO_ROOT/pmoves/.venv-pmoves/bin/python")
+elif [ -x "$REPO_ROOT/pmoves/.venv-pmoves/Scripts/python.exe" ]; then
+  IDENT_PY=("$REPO_ROOT/pmoves/.venv-pmoves/Scripts/python.exe")
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
+  IDENT_PY=(python3)
+elif command -v py >/dev/null 2>&1; then
+  IDENT_PY=(py -3)
+elif command -v python >/dev/null 2>&1 && python -c "import yaml" >/dev/null 2>&1; then
+  IDENT_PY=(python)
+else
+  IDENT_PY=()
+fi
+mkdir -p "$(dirname "$IDENTITY_FILE")"
+if [ -f "$IDENT_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
+  if IDENT_OUT="$("${IDENT_PY[@]}" "$IDENT_TOOL" --harness crush --shell 2>/dev/null)"; then
+    eval "$IDENT_OUT"
+    PMOVES_NODE_IDENTITY="${PMOVES_RESOLVED_IDENTITY:-}"
+    export PMOVES_NODE PMOVES_NODE_IDENTITY
+    echo "[crush-pmoves] node=${PMOVES_NODE:-unknown} identity=${PMOVES_NODE_IDENTITY:-unresolved: ${PMOVES_IDENTITY_WHY:-no reason given}}" >&2
+    {
+      echo "# Node identity (generated at launch by crush-pmoves — do not edit)"
+      echo ""
+      echo "You are running on PMOVES node \`${PMOVES_NODE:-unknown}\`."
+      if [ -n "${PMOVES_NODE_IDENTITY:-}" ]; then
+        echo "Your registered identity in pmoves/config/agent_registry.yaml is \`${PMOVES_NODE_IDENTITY}\` (harness: crush)."
+        echo "Disclose it at session start rather than rediscovering it."
+      else
+        echo "No identity is bound for the crush harness on this node:"
+        echo "\`${PMOVES_IDENTITY_WHY:-no reason given}\`."
+        echo "Declare one in pmoves/configs/node-vocabulary.yaml (\`default_identity.crush\`)"
+        echo "or set PMOVES_NODE_IDENTITY — do not guess an identity."
+      fi
+    } > "$IDENTITY_FILE"
+  else
+    echo "[crush-pmoves] node identity: resolver failed; writing the reason." >&2
+    echo "# Node identity (generated at launch) — resolver FAILED; launching unbound." > "$IDENTITY_FILE"
+  fi
+else
+  echo "[crush-pmoves] node identity: $IDENT_TOOL or a usable python (tried .venv-pmoves, python3, py -3, python — each must import yaml) unavailable; launching unbound." >&2
+  echo "# Node identity (generated at launch) — resolver unavailable on this host." > "$IDENTITY_FILE"
+fi
+
 echo "◇ crush-pmoves → bootstrapping from $REPO_ROOT"
 make -C "$REPO_ROOT/pmoves" crush-bootstrap
 
