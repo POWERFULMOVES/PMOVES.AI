@@ -36,6 +36,25 @@ services:
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
+    # Wrapper -> inner contract (validated live 2026-08-26 on SPARK):
+    #   1. The inner fork registers its handlers under the /api/ prefix
+    #      (helpers/api.py register_api_route -> "/api/<path:path>"), so the
+    #      message endpoint is /api/api_message — the fork's own
+    #      docs/developer/connectivity.md lists the logical name without the
+    #      prefix, which is what the old default encoded. Posting the bare
+    #      /api_message hit Flask's catch-all and returned a werkzeug 405.
+    #   2. api_message is decorated requires_api_key -> the inner runtime
+    #      validates X-API-KEY against its mcp_server_token setting, which
+    #      normalize_settings() seeds from A0_SET_mcp_server_token (set below
+    #      from MCP_SERVER_TOKEN). AGENT_ZERO_API_KEY is the wrapper-side
+    #      client field that sends that header.
+    - AGENT_ZERO_MESSAGE_PATH=${AGENT_ZERO_MESSAGE_PATH:-/api/api_message}
+    # Same resolved value A0_SET_mcp_server_token below pins the inner runtime
+    # to: fleet-canonical AGENT_ZERO_MCP_TOKEN (issue #2056), legacy
+    # MCP_SERVER_TOKEN fallback. Do NOT source AGENT_ZERO_API_KEY from env:
+    # env.shared carries a dev placeholder MCP_SERVER_TOKEN=dev-local-mcp-token
+    # that would win interpolation and never match the inner token.
+    - AGENT_ZERO_API_KEY=${AGENT_ZERO_MCP_TOKEN:-${MCP_SERVER_TOKEN:-}}
     # --dockerized=true is REQUIRED on A0 2.5: runtime.is_development() is
     # simply "not --dockerized", and a development-mode inner routes file
     # browsing + prompt extensions through RFC calls that die with
@@ -116,10 +135,17 @@ services:
     # MCP_SERVER_TOKEN project-env is the fallback; both unset → empty, no
     # hard-fail, Agent Zero auto-generates at startup.
     - A0_SET_mcp_server_token=${AGENT_ZERO_MCP_TOKEN:-${MCP_SERVER_TOKEN:-}}
-    # Host environment leak guard (see x-host-leak-guard docs above)
-    - SSL_CERT_FILE=
-    - SSL_CERT_DIR=
-    - REQUESTS_CA_BUNDLE=
+    # Host environment leak guard (see x-host-leak-guard docs above) — except
+    # SSL_CERT_FILE/SSL_CERT_DIR/REQUESTS_CA_BUNDLE: the empty-string guard
+    # breaks TLS clients that treat "" as a real path. Agent Zero downloads
+    # embedding/rerank models from HuggingFace at first use; with the blanks it
+    # dies with "Can't load the model for
+    # 'sentence-transformers/all-MiniLM-L6-v2'" (no CA to verify hf.co).
+    # Re-point at the container's own store (same anti-leak intent, working
+    # chain) — same fix already shipped for media-audio/media-video.
+    - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    - SSL_CERT_DIR=/etc/ssl/certs
+    - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     - CURL_CA_BUNDLE=
     - NODE_EXTRA_CA_CERTS=
     - HTTP_PROXY=
