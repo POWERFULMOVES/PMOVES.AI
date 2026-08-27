@@ -1,3 +1,4 @@
+- 2026-08-24: bumped yt-dlp to 2026.8.19 (scheduled)
 # PMOVES Hardening Tracker v4.0
 
 Comprehensive hardening posture, CI/CD build infrastructure, and service runtime status for the PMOVES.AI platform.
