@@ -3,6 +3,10 @@ name: "Desktop – AMD 9950XD / RTX 5090"
 description: >
   High-end workstation with Ryzen 9 9950XD, RTX 5090, 192GB RAM. Preferred for full
   PMOVES stack, GPU inference (vLLM), and heavy media pipelines.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
 hardware:
   cpu:
     vendor: AMD
