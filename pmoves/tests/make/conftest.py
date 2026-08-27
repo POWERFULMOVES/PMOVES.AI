@@ -7,5 +7,7 @@ timeout on every run and whose results are therefore discarded entirely (it is
 recorded as a known no-report group in configs/pytest_ratchet/_known_failures.yaml).
 
 A gate whose own results CI throws away is not a gate. Anchoring here keeps this
-directory a one-file group that always completes and always counts.
+directory a small group that always completes and always counts. Keep it well
+under the 20-file chunk boundary; these are static Makefile scans, so the whole
+group runs in well under a second.
 """

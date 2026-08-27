@@ -90,7 +90,8 @@ mcp-toolkit-verify: ## End-to-end MCP Toolkit fixture (5 phases — see tools/ve
 
 mcp-core-bootstrap: mcp-config-bootstrap ## Alias: register native PMOVES MCP servers (writes Kimi + KiloCode configs)
 
-mcp-config-bootstrap: ## Write Kimi + KiloCode + OpenCode + OpenClaw scope MCP configs from canonical inventory
+mcp-config-bootstrap: ## Write Claude + Kimi + KiloCode + OpenCode + OpenClaw scope MCP configs from canonical inventory
+	@PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.mcp_config_generator --client claude
 	@PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.mcp_config_generator --client kimi
 	@PYTHONPATH="$(CURDIR)/.." $(PYTHON) -m pmoves.tools.mcp_config_generator --client kilocode
 	@$(MAKE) --no-print-directory opencode-bootstrap

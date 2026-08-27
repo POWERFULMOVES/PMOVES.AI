@@ -1,0 +1,23 @@
+# AMD-node (ROCm) overrides — Knuckles/B850 class, no NVIDIA runtime.
+#
+# Pattern proven by docker-compose.amd-voice.yml: `devices: !reset []` strips
+# the NVIDIA device reservation the base file declares, so the container runs
+# its CPU path. ffmpeg-whisper's image links both libggml-cpu and libggml-cuda;
+# with the reservation reset it degrades to CPU transcription instead of
+# failing to schedule (`could not select device driver "nvidia"`).
+#
+# Usage on AMD nodes:
+#   docker compose ... -f docker-compose.yml -f docker-compose.amd.yml \
+#     --profile media up -d ffmpeg-whisper
+services:
+  ffmpeg-whisper:
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+          driver: !reset null
+    environment:
+      # CPU-only on this class; the CUDA path is unreachable without the
+      # runtime and the value documents that rather than leaving a GPU
+      # request silently unanswered.
+      - WHISPER_DEVICE=cpu
