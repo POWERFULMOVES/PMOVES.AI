@@ -42,7 +42,7 @@ Wrapper env contract — **requires PR #2780's compose wiring to be merged** (un
 
 ## 3. Archon — REST only
 
-MCP deliberately disabled (fleet decision, PR #2303 — archon is REST-only). Same service on :3090/:3737/:8091:
+MCP deliberately disabled (fleet decision, PR #2303 — archon is REST-only). Native Archon 0.6.0 serves API/UI/MCP unified on **:3090**, with **:3737** a host alias onto it. **:8091 is NOT this service** — it was the old Python/Supabase Archon that 0.6.0 rewrote (#2217), and `make -C pmoves` starts native Archon standalone on :3090 only. Probing :8091 on a current node reaches nothing; see `.claude/CATALOG.md`:
 
 ```
 GET /api/health   → {"status":"ok","adapter":"web","concurrency":{...}}   # rich
