@@ -144,6 +144,18 @@ tracked:
     severity: P2
     description: "Archon mint-contract current state — archon.mint.* implementation + registration gaps; authoritative over the mint-agent command doc"
 
+  # ── yt-dlp currency ────────────────────────────────────────────────────
+  # Enrolled 2026-08-27. This doc exists because #2713 landed a `chore(...): bump
+  # yt-dlp to 2026.8.19` subject on a docs-only change, and no tracked doc could
+  # contradict it. Section 1 is a mechanism and does not rot; section 2 is a dated
+  # measurement and will. Enrolling it makes that rot visible instead of silent —
+  # a stale number here is the exact failure mode being corrected, so it must be
+  # something CI can see.
+  - path: pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md
+    freshness_days: 60
+    severity: P2
+    description: "yt-dlp currency — measured pin/runtime/upstream versions, the commands that re-derive them, and the fork-sync gap"
+
   # ── Cross-service health-endpoint truth ────────────────────────────────
   # The doc that would have caught the Archon blackbox probe pointing at a dead
   # port and path (#2448). Untracked until now.

@@ -69,14 +69,34 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 - Use the metadata to filter notebook syncs or n8n workflows by brand/namespace
   without additional joins — e.g. `channel_tags @> '{"darkxside"}'`.
 
-### yt-dlp configuration & images (2025-12)
-- `yt-dlp[default]` + `curl-cffi` ship from PyPI at build time; `ffmpeg` and `atomicparsley`
-  are installed via apt so metadata/thumbnail embedding works out of the box.
+### yt-dlp configuration & images
+
+> **Which Dockerfile actually ships (corrected 2026-08-27).** The deployed
+> `pmoves-yt` image is **not** built from this directory. `docker-compose.yml` and
+> `docker-compose.apps.yml` both use `context: ../PMOVES.YT` with
+> `dockerfile: pmoves_yt_service/Dockerfile`, which installs the **fork from
+> source**. The Dockerfile in *this* directory installs **stock yt-dlp from PyPI**
+> and is a known orphan (`pmoves/configs/dockerfiles/_known_orphans.yaml`) kept as
+> the upstream image source; CI builds it. Everything in this section describes
+> that orphan path. For the version the running service reports, and the commands
+> that establish it, see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md.
+
+- In the orphan Dockerfile in this directory, `yt-dlp[default]` + `curl-cffi` ship
+  from PyPI at build time; `ffmpeg` and `atomicparsley` are installed via apt so
+  metadata/thumbnail embedding works out of the box.
 - Build args:
   - `YTDLP_VERSION=YYYY.MM.DD` to pin an exact release.
   - `YTDLP_PIP_URL=<pip URL>` to consume a fork (e.g., git+https). `YTDLP_PIP_URL` wins over `YTDLP_VERSION`.
-- Weekly bump workflow `.github/workflows/yt-dlp-bump.yml` opens a PR with the latest yt-dlp and validates a multi-arch build.
-  Override or skip by supplying your own `YTDLP_VERSION`/`YTDLP_PIP_URL` in image builds.
+- Weekly workflow `.github/workflows/yt-dlp-bump.yml` (in **this** repo, not in the
+  `PMOVES.YT` submodule) resolves the latest yt-dlp from PyPI, build-validates the
+  orphan Dockerfile above multi-arch with `push: false`, and opens a PR whose entire
+  content is one line appended to `docs/hardening/PMOVES-hardening-tracker.md`.
+  **It changes no pin** — not this directory's, not the submodule's, not the
+  gitlink. Treat its PRs as an upstream-release notification, not a bump.
+  Supplying `YTDLP_VERSION` / `YTDLP_PIP_URL` in an image build *replaces* the
+  packaged fork with PyPI yt-dlp, discarding the PMOVES commits that ride on it;
+  that is an escape hatch, not the upgrade path. The upgrade path is a fork-sync
+  plus a gitlink promotion — see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md.
 
 Example:
 
@@ -85,7 +105,11 @@ Example:
 docker build --build-arg YTDLP_VERSION=2025.10.15 -t ghcr.io/powerfulmoves/pmoves-yt:dev services/pmoves-yt
 
 # Or install from a fork/commit (full pip URL)
-docker build --build-arg YTDLP_PIP_URL='git+https://github.com/POWERFULMOVES/yt-dlp.git@main#egg=yt-dlp[default]' \
+# The fork repo is POWERFULMOVES/PMOVES.YT and its tracked branch is
+# PMOVES.AI-Edition-Hardened. The previous `POWERFULMOVES/yt-dlp.git@main` form here
+# still resolved via GitHub's rename redirect, but `main` carries none of the PMOVES
+# commits, so it silently installed a plain upstream mirror. Corrected 2026-08-27.
+docker build --build-arg YTDLP_PIP_URL='git+https://github.com/POWERFULMOVES/PMOVES.YT.git@PMOVES.AI-Edition-Hardened#egg=yt-dlp[default]' \
   -t ghcr.io/powerfulmoves/pmoves-yt:dev services/pmoves-yt
 ```
 
