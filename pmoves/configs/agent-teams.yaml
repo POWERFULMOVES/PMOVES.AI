@@ -1,252 +1,250 @@
-# PMOVES.AI Agent Team Definitions
-# Full agent roster grouped into functional teams with node affinity and runner assignments.
-#
-# Query: python -c "import yaml; t=yaml.safe_load(open('pmoves/configs/agent-teams.yaml')); [print(f'{k}: {len(v[\"agents\"])} agents') for k,v in t['teams'].items()]"
-# Last updated: 2026-03-15
-
-version: "1.0.0"
-
+version: 1.0.0
 teams:
   orchestration:
-    name: "Orchestration"
-    description: "Core agent coordination, MCP routing, task delegation"
-    node_affinity: [kvm4-1, z890, powerfulmoves]
+    name: Orchestration
+    description: Core agent coordination, MCP routing, task delegation
+    node_affinity:
+    - kvm4-1
+    - z890
+    - powerfulmoves
     ci_runner: ai-lab
-    compose_profiles: [agents, tier-agent]
+    compose_profiles:
+    - agents
+    - tier-agent
     agents:
-      - claude_4090       # Claude Code CLI identity on laptop-4090 (drives A0/Archon)
-      - claude_b850       # Claude Code CLI identity on B850/Knuckles (data-tier host)
-<<<<<<< HEAD
-      - crush_glm52       # Crush CLI identity on B850/Knuckles (GLM-5.2 companion harness)
-=======
-      - claude_5090       # Claude Code CLI identity on the 5090 (primary workhorse)
-      - claude_z890       # Claude Code CLI identity on the Z890 (infra coordinator)
->>>>>>> dd3a3e473 (feat(identity): register claude_5090 and claude_z890 — and the 5090 cannot bind by hostname)
-      - agent_zero        # Port 8080 — Primary orchestrator
-      - archon            # Port 8091 — Planning/execution copilot
-      - supaserch         # Port 8099 — Holographic deep research
-      - botz_gateway      # Port 8054 — Work item distribution
-      - gateway_agent     # Port 8100 — MCP tool orchestration
-      - p7_room_orchestrator  # Port 8122 — room stage/session control plane
-      - consciousness_service  # CGP consciousness mapper
-      - botz_architect    # BoTZ skill architect (registry topology.team=orchestration)
-      - botz_builder      # BoTZ skill builder
-      - botz_auditor      # BoTZ skill auditor
-      - space_agent       # Port 3010 — spatial/canvas agent
-      - a0_plugins        # Agent Zero community plugin index + validation CI
-      - hermes_agent      # HERMES gateway/reasoning agent (hermes-agent.room.control)
-      - mavis             # MiniMax Edition orchestrator (pmoves.agent.task.v1 dispatcher; 5090/spark affinity)
-      - missinglinc_validator  # External peer-review validator (DangerRuss frame; 4090-field.room.control; mint spec MISSINGLINC_MINT_SPEC.md)
-
+    - claude_4090
+    - claude_b850
+    - crush_glm52
+    - claude_5090       # Claude Code CLI identity on the 5090 (primary workhorse)
+    - claude_z890       # Claude Code CLI identity on the Z890 (infra coordinator)
+    - agent_zero
+    - archon
+    - supaserch
+    - botz_gateway
+    - gateway_agent
+    - p7_room_orchestrator
+    - consciousness_service
+    - botz_architect
+    - botz_builder
+    - botz_auditor
+    - space_agent
+    - a0_plugins
+    - hermes_agent
+    - mavis
+    - missinglinc_validator
   implementation:
-    name: "Implementation"
-    description: "Blueprint-first coding and delivery agents"
-    node_affinity: [5090, powerfulmoves, z890]
+    name: Implementation
+    description: Blueprint-first coding and delivery agents
+    node_affinity:
+    - 5090
+    - powerfulmoves
+    - z890
     ci_runner: ai-lab
-    compose_profiles: [agents]
+    compose_profiles:
+    - agents
     agents:
-      - kilocode_glm      # KiloCode GLM delivery agent (5090-kilocode room)
-
+    - kilocode_glm
   research:
-    name: "Research & Knowledge"
-    description: "RAG, search, embedding, document processing"
-    node_affinity: [kvm4-1, kvm4-2, z890]
+    name: Research & Knowledge
+    description: RAG, search, embedding, document processing
+    node_affinity:
+    - kvm4-1
+    - kvm4-2
+    - z890
     ci_runner: vps
-    compose_profiles: [workers]
+    compose_profiles:
+    - workers
     agents:
-      - hirag_v2          # Port 8086/8087 — Hybrid RAG
-      - hf_agent
-      - hf_research_agent
-      - hf_mcp_server     # Port 8203 — HuggingFace Hub MCP server
-      - deep_research     # Port 8098 — Research planner
-      - extract_worker    # Port 8083 — Text embedding + indexing
-      - langextract       # Port 8084 — Language detection/NLP
-      - pdf_ingest        # Port 8092 — Document ingestion
-      - notebook_sync     # Port 8095 — Open Notebook sync
-      - dox               # Document intelligence
-      - open_notebook     # Knowledge base (SurrealDB)
-      - cipher_memory     # Port 8105 — Knowledge graph memory
-      - notebooklm_agent  # NotebookLM source-grounded research (registry topology.team=research)
-      - autoresearch      # Autonomous ML training/experiment loop
-
+    - hirag_v2
+    - hf_agent
+    - hf_research_agent
+    - hf_mcp_server
+    - deep_research
+    - extract_worker
+    - langextract
+    - pdf_ingest
+    - notebook_sync
+    - dox
+    - open_notebook
+    - cipher_memory
+    - notebooklm_agent
+    - autoresearch
   media:
-    name: "Media & Voice"
-    description: "Audio/video processing, TTS, transcription, content creation"
-    node_affinity: [powerfulmoves, z890]
+    name: Media & Voice
+    description: Audio/video processing, TTS, transcription, content creation
+    node_affinity:
+    - powerfulmoves
+    - z890
     ci_runner: ai-lab
-    compose_profiles: [gpu, yt]
+    compose_profiles:
+    - gpu
+    - yt
     agents:
-      - pmoves_yt         # Port 8077 — YouTube ingestion
-      - ffmpeg_whisper    # Port 8078 — Whisper transcription (GPU)
-      - media_video       # Port 8079 — YOLOv8 video analysis
-      - media_audio       # Port 8082 — Emotion/speaker detection
-      - ultimate_tts      # Port 7861 — Multi-engine TTS (GPU)
-      - flute_gateway     # Port 8055 — Prosodic voice synthesis
-      - channel_monitor   # Port 8097 — Content watcher
-      - jellyfin_bridge   # Port 8093 — Jellyfin metadata
-      - jellyfin_ai       # AI-enhanced media management
-      - creator           # ComfyUI render pipeline
-      - transcribe_and_fetch  # Standalone transcription
-      - cast_tts_gateway  # Port 8060 — Chromecast/Google Home TTS casting
-      - remotion_renderer # Port 8107 — A2UI Remotion video rendering
-      - podcast_producer  # Port 8110 — Podcast RSS feed generation + multi-episode TTS
-      - youtube_publisher # Port 8111 — YouTube upload + metadata + thumbnail generation
-      - cipher_beats_analyst  # audio beats/CGP analyst (registry topology.team=media)
-      - darkxside_persona     # private co-creator/witness room agent
-
+    - pmoves_yt
+    - ffmpeg_whisper
+    - media_video
+    - media_audio
+    - ultimate_tts
+    - flute_gateway
+    - channel_monitor
+    - jellyfin_bridge
+    - jellyfin_ai
+    - creator
+    - transcribe_and_fetch
+    - cast_tts_gateway
+    - remotion_renderer
+    - podcast_producer
+    - youtube_publisher
+    - cipher_beats_analyst
+    - darkxside_persona
   data:
-    name: "Data & Storage"
-    description: "Databases, message bus, object storage, monitoring"
-    node_affinity: [kvm4-2, z890]
+    name: Data & Storage
+    description: Databases, message bus, object storage, monitoring
+    node_affinity:
+    - kvm4-2
+    - z890
     ci_runner: vps
-    compose_profiles: [monitoring, supabase-local]
+    compose_profiles:
+    - monitoring
+    - supabase-local
     agents:
-      - nats              # Port 4222 — Event broker
-      - supabase          # Port 3010 — Postgres + pgvector
-      - qdrant            # Port 6333 — Vector embeddings
-      - neo4j             # Port 7474 — Knowledge graph
-      - meilisearch       # Port 7700 — Full-text search
-      - minio             # Port 9000 — Object storage
-      - prometheus        # Port 9090 — Metrics
-      - grafana           # Port 3002 — Dashboards
-      - loki              # Port 3100 — Log aggregation
-
+    - nats
+    - supabase
+    - qdrant
+    - neo4j
+    - meilisearch
+    - minio
+    - prometheus
+    - grafana
+    - loki
   ui:
-    name: "User Interfaces"
-    description: "Frontend surfaces, visualization, remote access"
-    node_affinity: [z890, powerfulmoves]
+    name: User Interfaces
+    description: Frontend surfaces, visualization, remote access
+    node_affinity:
+    - z890
+    - powerfulmoves
     ci_runner: ubuntu-latest
     compose_profiles: []
     agents:
-      - mai_ui            # Main user interface
-      - crush             # Terminal AI coding assistant
-      - a2ui              # Research UI / artifact-to-UI
-      - hyperdimensions   # CHIT geometry visualization
-      - invidious         # Port 3333 — Privacy video frontend
-      - rustdesk          # Port 21115 — Remote desktop
-
+    - mai_ui
+    - crush
+    - a2ui
+    - hyperdimensions
+    - invidious
+    - rustdesk
   automation:
-    name: "Automation & Notifications"
-    description: "Workflow automation, notifications, webhook handling"
-    node_affinity: [kvm4-1, z890]
+    name: Automation & Notifications
+    description: Workflow automation, notifications, webhook handling
+    node_affinity:
+    - kvm4-1
+    - z890
     ci_runner: vps
-    compose_profiles: [workers]
+    compose_profiles:
+    - workers
     agents:
-      - n8n               # Port 5678 — Workflow automation
-      - publisher_discord  # Port 8094 — Discord notifications
-      - render_webhook    # Port 8085 — ComfyUI callback handler
-      - presign           # Port 8088 — MinIO URL presigner
-      - clawz             # Multi-channel messaging gateway (OpenClaw, 25+ platforms)
-      - pmoves_ci_bot     # CI automation bot
-      - pr_hedge_trim     # PR review-thread trimmer
-
+    - n8n
+    - publisher_discord
+    - render_webhook
+    - presign
+    - clawz
+    - pmoves_ci_bot
+    - pr_hedge_trim
   evolution:
-    name: "Evolution & CHIT"
-    description: "Evolutionary optimization, CHIT encoding, swarm attribution"
-    node_affinity: [powerfulmoves, z890]
+    name: Evolution & CHIT
+    description: Evolutionary optimization, CHIT encoding, swarm attribution
+    node_affinity:
+    - powerfulmoves
+    - z890
     ci_runner: ai-lab
-    compose_profiles: [gpu]
+    compose_profiles:
+    - gpu
     agents:
-      - evoswarm_controller  # Port 8113 — Evolutionary optimizer
-      - swarm_attribution    # Shape-attribution engine
-      - tensorzero        # Port 3030 — LLM gateway (all model calls)
-      - llama_lab         # LLM benchmarking
-      - nemotron_claw    # Beefy NVIDIA GPU claw (Nemotron/NIM local reasoning)
-
+    - evoswarm_controller
+    - swarm_attribution
+    - tensorzero
+    - llama_lab
+    - nemotron_claw
   infra:
-    name: "Infrastructure & Networking"
-    description: "VPN, fleet management, node coordination, edge GPU agents"
-    node_affinity: [kvm4-1, kvm2, jetson]
+    name: Infrastructure & Networking
+    description: VPN, fleet management, node coordination, edge GPU agents
+    node_affinity:
+    - kvm4-1
+    - kvm2
+    - jetson
     ci_runner: vps
     compose_profiles: []
     agents:
-      - mesh_agent        # Node announcer
-      - container_agent   # Port 8111 — Docker networking diagnostics + sidecar bridge
-      - headscale         # Port 8096 — Mesh VPN
-      - vps_fleet_manager # Hostinger KVM orchestration
-      - nemoclaw          # Jetson edge GPU agent (hybrid: Kilo Code + Agent Zero subordinate)
-
+    - mesh_agent
+    - container_agent
+    - headscale
+    - vps_fleet_manager
+    - nemoclaw
   sandbox:
-    name: "Sandbox & Execution"
-    description: "Isolated code execution environments (E2B)"
-    node_affinity: [cloud]
+    name: Sandbox & Execution
+    description: Isolated code execution environments (E2B)
+    node_affinity:
+    - cloud
     ci_runner: ubuntu-latest
     compose_profiles: []
     agents:
-      - e2b_danger_room   # Sandboxed code execution
-      - e2b_desktop       # Desktop sandbox (GUI)
-      - e2b_spells        # Sandbox templates/recipes
-      - danger_infra      # E2B infrastructure provisioning
-      - surf              # Browser automation agent
-      - agentgym          # Agent training gymnasium
-      - agentgym_rl       # RL extension for AgentGym
-      - pmoves_e2b_mcp_server  # MCP bridge for E2B sandboxed execution
-
+    - e2b_danger_room
+    - e2b_desktop
+    - e2b_spells
+    - danger_infra
+    - surf
+    - agentgym
+    - agentgym_rl
+    - pmoves_e2b_mcp_server
   external:
-    name: "External Contributors"
-    description: "AI agents and humans who contribute via git (no node affinity)"
+    name: External Contributors
+    description: AI agents and humans who contribute via git (no node affinity)
     node_affinity: []
     ci_runner: null
     compose_profiles: []
     agents: []
-    # External contributors are tracked in agent_registry.yaml under external_contributors:
-    # claude-opus, kilocode, codex, gemini, cline, powerfulmoves, crush
-
   life:
-    name: "Life Integration"
-    description: "Health, wealth, and personal data integrations"
-    node_affinity: [z890]
+    name: Life Integration
+    description: Health, wealth, and personal data integrations
+    node_affinity:
+    - z890
     ci_runner: ubuntu-latest
     compose_profiles: []
     agents:
-      - wealth            # Firefly III finance tracking
-      - health            # wger fitness tracking
-
+    - wealth
+    - health
   observability:
-    name: "Observability & Monitoring"
-    description: "Metrics, logs, traces, dashboards, and alerting for MOF surface area"
-    node_affinity: [kvm4-1, z890]
+    name: Observability & Monitoring
+    description: Metrics, logs, traces, dashboards, and alerting for MOF surface area
+    node_affinity:
+    - kvm4-1
+    - z890
     ci_runner: ai-lab
-    compose_profiles: [monitoring]
+    compose_profiles:
+    - monitoring
     agents:
-      - metrics_specialist      # Prometheus metrics analysis
-      - dashboard_specialist    # Grafana dashboard management
-      - logs_specialist         # Loki log analysis
-      - tracing_specialist      # Jaeger distributed tracing
-      - llm_observability       # TensorZero LLM performance
-
+    - metrics_specialist
+    - dashboard_specialist
+    - logs_specialist
+    - tracing_specialist
+    - llm_observability
   fordham_community:
-    name: "Fordham Hill Community"
-    description: "Community mesh cost-pooling + co-op self-governance pilot: onboarding, pooled-dues ledger, resident materials/dashboard, accessible voice. Agents runtime-minted by Archon for room fordham.room.community. DRAFT - REQUIRES LEGAL REVIEW."
-    node_affinity: [kvm4-1, kvm4-2, kvm2, z890, powerfulmoves]
+    name: Fordham Hill Community
+    description: 'Community mesh cost-pooling + co-op self-governance pilot: onboarding,
+      pooled-dues ledger, resident materials/dashboard, accessible voice. Agents runtime-minted
+      by Archon for room fordham.room.community. DRAFT - REQUIRES LEGAL REVIEW.'
+    node_affinity:
+    - kvm4-1
+    - kvm4-2
+    - kvm2
+    - z890
+    - powerfulmoves
     ci_runner: vps
-    compose_profiles: [agents, tier-agent]
+    compose_profiles:
+    - agents
+    - tier-agent
     agents:
-      - fordham_steward       # room coordinator / host (manifest owner: fordham-steward)
-      - fordham_onboarding    # mesh enrollment + eligible-voter roll (record-only)
-      - fordham_transaction   # pooled dues / Firefly co-op ledger / surplus (deterministic-tools-only)
-      - fordham_creator       # resident materials + pilot dashboard
-      - fordham_voice         # accessible spoken interaction (FlOO$ suit)
-
-# Validation: enforced by the pydantic gate `make -C pmoves validate-agents`
-# (pmoves/scripts/validate_agent_registry.py); CI: .github/workflows/validate-agents-config.yml.
-# Team membership is also a precondition for a node identity: an agent named by
-# `default_identity` in node-vocabulary.yaml must appear here, or the identity
-# gate fails (pmoves/tests/test_identity_coupling_gate.py).
-# The snippet below is the original informal rule, kept for reference.
-# Validation: all agents from agent_registry.yaml must appear in exactly one team
-# Run: python -c "
-# import yaml
-# reg = yaml.safe_load(open('pmoves/config/agent_registry.yaml'))
-# teams = yaml.safe_load(open('pmoves/configs/agent-teams.yaml'))
-# reg_agents = set(reg['agents'].keys())
-# team_agents = set()
-# for t in teams['teams'].values():
-#     team_agents.update(t.get('agents', []))
-# missing = reg_agents - team_agents
-# extra = team_agents - reg_agents
-# print(f'Registry: {len(reg_agents)}, Teams: {len(team_agents)}')
-# if missing: print(f'Missing from teams: {missing}')
-# if extra: print(f'Extra in teams: {extra}')
-# if not missing and not extra: print('All agents assigned!')
-# "
+    - fordham_steward
+    - fordham_onboarding
+    - fordham_transaction
+    - fordham_creator
+    - fordham_voice

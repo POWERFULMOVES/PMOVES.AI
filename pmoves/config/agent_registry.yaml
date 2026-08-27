@@ -225,19 +225,6 @@ agents:
       ci_runner: null
       compose_profile: null
     description: "B850/Knuckles node CLI identity -- data-tier host, infra + governance lane"
-
-<<<<<<< HEAD
-  crush_glm52:
-    name: "Crush GLM-5.2 (Knuckles)"
-    class: standard
-    # The crush-harness twin of claude_b850 directly above: same node, same
-    # declared-not-inferred principle, different harness. The generic `crush`
-    # entry claims z890/5090 and cannot answer for this node, which is exactly
-    # why the resolver had nothing to bind when crush-pmoves launched.
-    primary_type: ui
-    secondary_type: agent
-    # No listening socket. A CLI session, not a service.
-=======
   claude_5090:
     name: "5090 Claude"
     class: standard
@@ -245,7 +232,6 @@ agents:
     # a human drives is a UI; what it drives is an agent.
     primary_type: ui
     secondary_type: agent
->>>>>>> dd3a3e473 (feat(identity): register claude_5090 and claude_z890 — and the 5090 cannot bind by hostname)
     port: null
     health: null
     layers:
@@ -253,33 +239,16 @@ agents:
       - L2
       - L4
     evolution_stage: stage_1
-<<<<<<< HEAD
-    # The SIGNING roster is agent_signatures.yaml; the `crush` contributor
-    # (open-diamond glyph) already exists there and is shared by every Crush
-    # instance fleet-wide. This entry is the operational half for knuckles.
-    signature: crush
-    # Same posture as claude_b850: publishes nothing today. The generic `crush`
-    # entry carries the fleet-level subjects; duplicating them here would be the
-    # undeclared-emission defect #2734 exists to catch.
-=======
     # `5090-claude` was ALREADY in external_contributors -- the signing roster,
     # referenced outside this repo. The attribution half has existed all along;
     # this adds the operational half and points back at it rather than moving it.
     signature: 5090-claude
     # Deliberately empty: this identity publishes nothing to NATS today, and
     # declaring subjects it does not publish is the defect #2734 exists to fix.
->>>>>>> dd3a3e473 (feat(identity): register claude_5090 and claude_z890 — and the 5090 cannot bind by hostname)
     nats:
       publishes: []
       subscribes: []
     topology:
-<<<<<<< HEAD
-      node_affinity: [pmoves-b850]
-      team: orchestration
-      ci_runner: null
-      compose_profile: null
-    description: "B850/Knuckles Crush-on-GLM-5.2 identity -- the terminal companion harness on this node (Z.AI coding plan)"
-=======
       node_affinity: [5090]
       team: orchestration
       ci_runner: null
@@ -288,7 +257,6 @@ agents:
     # NOTE: hostname fallback does NOT reach this node. `POWERFULMOVES`
     # casefolds onto the org-name vocabulary entry, so PMOVES_NODE_ID=5090
     # must be set for the identity to bind. See node-vocabulary.yaml.
-
   claude_z890:
     name: "Z890 Claude"
     class: standard
@@ -318,7 +286,40 @@ agents:
       ci_runner: null
       compose_profile: null
     description: "Z890 node CLI identity -- infrastructure coordinator, NATS hub"
->>>>>>> dd3a3e473 (feat(identity): register claude_5090 and claude_z890 — and the 5090 cannot bind by hostname)
+
+  crush_glm52:
+    name: "Crush GLM-5.2 (Knuckles)"
+    class: standard
+    # The crush-harness twin of claude_b850 directly above: same node, same
+    # declared-not-inferred principle, different harness. The generic `crush`
+    # entry claims z890/5090 and cannot answer for this node, which is exactly
+    # why the resolver had nothing to bind when crush-pmoves launched.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # The SIGNING roster is agent_signatures.yaml; the `crush` contributor
+    # (open-diamond glyph) already exists there and is shared by every Crush
+    # instance fleet-wide. This entry is the operational half for knuckles.
+    signature: crush
+    # Same posture as claude_b850: publishes nothing today. The generic `crush`
+    # entry carries the fleet-level subjects; duplicating them here would be the
+    # undeclared-emission defect #2734 exists to catch.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [pmoves-b850]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "B850/Knuckles Crush-on-GLM-5.2 identity -- the terminal companion harness on this node (Z.AI coding plan)"
 
   kilocode_glm:
     name: "KiloCode GLM"
