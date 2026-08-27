@@ -53,6 +53,7 @@ class ServerSpec:
     clients: Optional[List[str]] = None
     endpoint: Optional[str] = None
     endpoint_prefix: Optional[str] = None
+    endpoint_pinned: bool = False
     disabled: bool = False
 
     def supports_client(self, client: str) -> bool:
@@ -158,6 +159,7 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
                 clients=server.get("clients"),
                 endpoint=server.get("endpoint"),
                 endpoint_prefix=server.get("endpoint_prefix"),
+                endpoint_pinned=server.get("endpoint_pinned", False),
                 disabled=server.get("disabled", False),
             )
             if not spec.supports_client(client):
@@ -166,7 +168,15 @@ def _collect_servers(inventory: Dict[str, Any], client: str, endpoint: str) -> L
             # The caller's endpoint preference overrides the server's default so
             # the same server key can be rendered for fleet (Tailscale) or local
             # (localhost) consumers without duplicating inventory entries.
-            target_endpoint = endpoint or spec.endpoint
+            # An entry may instead PIN its endpoint. A pinned entry is not a
+            # server rendered at whichever endpoint the caller wants -- it
+            # exists to sit alongside its sibling at the other endpoint, so
+            # letting the caller rewrite it would collapse the pair into two
+            # copies of one URL and silently drop the endpoint it was added for.
+            if spec.endpoint_pinned and spec.endpoint:
+                target_endpoint = spec.endpoint
+            else:
+                target_endpoint = endpoint or spec.endpoint
             if target_endpoint and spec.url is None:
                 prefix = spec.endpoint_prefix or spec.key.split("-")[0]
                 key = f"{prefix}_{target_endpoint}_url"
