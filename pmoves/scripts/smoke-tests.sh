@@ -356,7 +356,12 @@ main() {
     print_section "Agent Coordination Services"
     test_http_endpoint "Agent Zero" "http://localhost:8080/healthz" "200" "agents"
     test_http_endpoint "Agent Zero UI" "http://localhost:8081/" "200" "agents"
-    test_http_endpoint "Archon" "http://localhost:8091/healthz" "200" "agents"
+    # Archon 0.6.0 retired the Python :8091/:8051 service — unified :3090
+    # (CATALOG: "0.6.0 rewrote the old Python :8091/:8051 service"). :3737 is
+    # the host alias onto 3090; the health path is /api/health.
+    # ${ARCHON_PORT:-3090} is the published host port (compose:3503); probe
+    # the configured one or an override silently skips the deployed instance.
+    test_http_endpoint "Archon" "http://localhost:${ARCHON_PORT:-3090}/api/health" "200" "agents"
     test_http_endpoint "Archon UI" "http://localhost:3737/" "200" "agents"
     test_http_endpoint "Channel Monitor" "http://localhost:8097/healthz" "200" "orchestration"
 
@@ -370,7 +375,7 @@ main() {
 
     # Media Ingestion Services
     print_section "Media Ingestion Services"
-    test_http_endpoint "PMOVES.YT" "http://localhost:8077/health" "200" "yt"
+    test_http_endpoint "PMOVES.YT" "http://localhost:8077/healthz" "200" "yt"
     test_http_endpoint "FFmpeg-Whisper" "http://localhost:8078/healthz" "200" "gpu"
     test_http_endpoint "Media-Video Analyzer" "http://localhost:8079/healthz" "200" "gpu"
     test_http_endpoint "Media-Audio Analyzer" "http://localhost:8082/healthz" "200" "gpu"
