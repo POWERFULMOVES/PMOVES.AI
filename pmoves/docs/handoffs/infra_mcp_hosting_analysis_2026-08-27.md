@@ -93,9 +93,19 @@ Founder strategy of record (`docs/architecture/kvm-exit-node-hosting-strategy.md
 
 **Lane A — Docker MCP Gateway rehearsal (on 4090):**
 1. `make -C pmoves secrets-funnel` (env.tier-agent provides gateway token).
-2. Clone #2665's verified sequence on the 4090 compose stack: gateway manifest (pmoves profile) → secrets rotate → funnel → `up` → `mcp-gateway-verify` — expect **23 tools** green.
-3. Point this instance's mcporter at the local gateway endpoint and round-trip one low-effect tool per adapter.
-4. CHIT `sign-trail` at close.
+2. **`make -C pmoves up-botz-mcp-bridge` FIRST.** `up-mcp-gateway` depends on
+   `mcp-gateway-preflight`, which fails closed unless the `pmoves_pmoves_app`
+   network exists *and* `pmoves-botz-mcp-bridge` is running — that bridge is the
+   only catalogued server, and the network is created by the PMOVES-BoTZ project,
+   not this repo. Skipping it does not merely reorder the run: on a clean 4090
+   the gateway aborts, and pre-creating the network by hand yields an EMPTY
+   federation instead. `pmoves/mk/infra.mk:143` records why this step is called
+   out — "Codex P1 on #2665: verification passed on B850 only because that stack
+   happened to be up." The 23-tool figure below is only reachable with the bridge
+   up; treat a green run without it as unverified.
+3. Clone #2665's verified sequence on the 4090 compose stack: gateway manifest (pmoves profile) → secrets rotate → funnel → `up` → `mcp-gateway-verify` — expect **23 tools** green.
+4. Point this instance's mcporter at the local gateway endpoint and round-trip one low-effect tool per adapter.
+5. CHIT `sign-trail` at close.
 
 **Lane B — Cipher tailnet rebind rehearsal (on 4090):**
 1. Copy `CIPHER_BIND` widening into git-ignored `env.mesh-bind.local` (never a raw compose diff).
