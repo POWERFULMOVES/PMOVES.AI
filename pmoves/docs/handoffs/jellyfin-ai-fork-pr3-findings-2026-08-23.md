@@ -1,8 +1,17 @@
 # Jellyfin-AI fork PR #3 — 7 review findings (2026-08-23)
 
-**Status:** brief for fixing `POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack#3`
-**Domains needed:** `compose` (the stack's `docker-compose.yml`) and `dockerfile` (audio-processor, dashboard)
-**Unblocks:** PMOVES.AI#2695, which is correctly held as draft until this merges and the gitlink advances
+**Status:** **HISTORICAL — RESOLVED. Do not action this as an open lane.**
+Written 2026-08-23 as a brief for `POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack#3`.
+Both lanes closed the next day: fork PR #3 merged 2026-08-24 12:38Z, and
+PMOVES.AI#2695 merged 2026-08-24 16:27Z, after which the gitlink advanced and
+the ARM64 validation was recorded. The findings below are **already applied**.
+Applying them again would re-edit fixed code.
+
+Kept as a record of *why* the fixes were made — in particular the canonical-copy
+decision in the next section, which is still load-bearing for anyone choosing
+where to edit this stack.
+
+**Domains needed (at the time):** `compose` (the stack's `docker-compose.yml`) and `dockerfile` (audio-processor, dashboard)
 
 ## Canonical copy — settled before touching anything
 
