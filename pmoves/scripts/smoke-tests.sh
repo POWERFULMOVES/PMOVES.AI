@@ -359,7 +359,9 @@ main() {
     # Archon 0.6.0 retired the Python :8091/:8051 service — unified :3090
     # (CATALOG: "0.6.0 rewrote the old Python :8091/:8051 service"). :3737 is
     # the host alias onto 3090; the health path is /api/health.
-    test_http_endpoint "Archon" "http://localhost:3090/api/health" "200" "agents"
+    # ${ARCHON_PORT:-3090} is the published host port (compose:3503); probe
+    # the configured one or an override silently skips the deployed instance.
+    test_http_endpoint "Archon" "http://localhost:${ARCHON_PORT:-3090}/api/health" "200" "agents"
     test_http_endpoint "Archon UI" "http://localhost:3737/" "200" "agents"
     test_http_endpoint "Channel Monitor" "http://localhost:8097/healthz" "200" "orchestration"
 
