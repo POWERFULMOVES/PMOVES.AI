@@ -225,6 +225,67 @@ agents:
       ci_runner: null
       compose_profile: null
     description: "B850/Knuckles node CLI identity -- data-tier host, infra + governance lane"
+  claude_5090:
+    name: "5090 Claude"
+    class: standard
+    # Same shape as claude_4090 / claude_b850, which mirror `crush`: the surface
+    # a human drives is a UI; what it drives is an agent.
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # `5090-claude` was ALREADY in external_contributors -- the signing roster,
+    # referenced outside this repo. The attribution half has existed all along;
+    # this adds the operational half and points back at it rather than moving it.
+    signature: 5090-claude
+    # Deliberately empty: this identity publishes nothing to NATS today, and
+    # declaring subjects it does not publish is the defect #2734 exists to fix.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [5090]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "5090 node CLI identity -- primary workhorse, GPU/TTS host"
+    # NOTE: hostname fallback does NOT reach this node. `POWERFULMOVES`
+    # casefolds onto the org-name vocabulary entry, so PMOVES_NODE_ID=5090
+    # must be set for the identity to bind. See node-vocabulary.yaml.
+  claude_z890:
+    name: "Z890 Claude"
+    class: standard
+    # Same shape as claude_4090 / claude_b850, which mirror `crush`: the surface
+    # a human drives is a UI; what it drives is an agent.
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # `z890-claude` was ALREADY in external_contributors -- the signing roster,
+    # referenced outside this repo. The attribution half has existed all along;
+    # this adds the operational half and points back at it rather than moving it.
+    signature: z890-claude
+    # Deliberately empty: this identity publishes nothing to NATS today, and
+    # declaring subjects it does not publish is the defect #2734 exists to fix.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [z890]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "Z890 node CLI identity -- infrastructure coordinator, NATS hub"
 
   crush_glm52:
     name: "Crush GLM-5.2 (Knuckles)"
