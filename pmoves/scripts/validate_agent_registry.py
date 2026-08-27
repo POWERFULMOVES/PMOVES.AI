@@ -374,6 +374,10 @@ def main(argv: list[str]) -> int:
                     errors.append(f"{suit_path.name} [{harness_key}/{role_key}]: {exc}")
 
 
+    # Harness keys the launchers actually request (verified by grepping the
+    # --harness invocations in pmoves/scripts/claude-pmoves.sh and crush-pmoves).
+    _LAUNCHER_HARNESSES = frozenset({"claude-code", "crush"})
+
     # 5. Vocabulary default_identity -> registry/teams coupling --------------
     # `node-vocabulary.yaml` declares WHO a session on a node is:
     #     <node>.default_identity.<harness>: <agent_id>
@@ -447,6 +451,18 @@ def main(argv: list[str]) -> int:
             declared_identities += 1
             where = f"node-vocabulary.yaml: {node}.default_identity.{harness}"
 
+            # P1 (review on #2786): validate the HARNESS key itself. The
+            # launchers request fixed keys (claude-pmoves: --harness
+            # claude-code; crush-pmoves: --harness crush); a misspelled key
+            # (claude_code) validates its agent fine but can NEVER be
+            # requested, so the declaration is dead at write-time.
+            if harness not in _LAUNCHER_HARNESSES:
+                errors.append(
+                    f"{where}: unknown harness {harness!r} — launchers request "
+                    f"{sorted(_LAUNCHER_HARNESSES)}; a key no launcher passes "
+                    "can never bind, so this declaration is unreachable")
+                continue
+
             if not isinstance(agent_id, str) or not agent_id.strip():
                 errors.append(
                     f"{where}: expected an agent_registry.yaml key, got {agent_id!r}")
@@ -500,6 +516,18 @@ def main(argv: list[str]) -> int:
                     f"{where} -> {agent_id!r} is registered but belongs to no team in "
                     f"agent-teams.yaml; add it to one (see claude_b850 / crush_glm52 "
                     f"under `orchestration`)")
+
+    # P1 (review on #2786): zero declared identities is a vacuous pass. The
+    # fleet has live declarations (knuckles, 4090 at minimum); a run reporting
+    # zero means every default_identity block was deleted (or the vocabulary
+    # failed to parse into something the loop could read), and the gate would
+    # sail through having verified nothing.
+    if declared_identities == 0:
+        errors.append(
+            "node-vocabulary.yaml: zero default_identity declarations found — "
+            "the fleet declares node identities (knuckles, 4090, ...); zero "
+            "means the blocks were deleted or the file failed to load, and "
+            "this gate would otherwise pass having verified nothing")
 
     # --- Report ------------------------------------------------------------
     print(f"registry agents: {len(registry_keys)} | team agents: {len(teamed)} "
