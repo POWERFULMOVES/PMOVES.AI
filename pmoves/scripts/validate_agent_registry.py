@@ -19,6 +19,11 @@ What it enforces
    violation. Do not grow the baselines — reconcile them separately.
 4. **Room cross-check** (advisory): every room manifest ``agent_id`` resolves to
    a registry agent (via kebab->snake) or an external contributor.
+5. **Identity coupling**: every ``default_identity`` declared in
+   ``node-vocabulary.yaml`` names an agent that is registered, claims the node
+   it is declared for, and belongs to a team. A declaration meeting none of
+   those is *declared and not wired* -- it reads as a live binding and resolves
+   to nothing.
 
 Exit code: 0 = pass (baseline-only), 1 = new violation (CI gate).
 Run:  python pmoves/scripts/validate_agent_registry.py [-v]
@@ -45,6 +50,7 @@ for _stream in (sys.stdout, sys.stderr):
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = ROOT / "pmoves" / "config" / "agent_registry.yaml"
 TEAMS = ROOT / "pmoves" / "configs" / "agent-teams.yaml"
+VOCABULARY = ROOT / "pmoves" / "configs" / "node-vocabulary.yaml"
 ROOMS_DIR = ROOT / "pmoves" / "config" / "rooms"
 
 sys.path.insert(0, str(ROOT / "pmoves" / "tools"))
@@ -54,6 +60,11 @@ from fittings import (  # noqa: E402
     load_harnesses,
     load_roles,
     resolve_role,
+)
+from node_identity import (  # noqa: E402
+    NON_NODE_KINDS,
+    canonical_node,
+    load_vocabulary,
 )
 
 SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -362,9 +373,191 @@ def main(argv: list[str]) -> int:
                 except ValueError as exc:
                     errors.append(f"{suit_path.name} [{harness_key}/{role_key}]: {exc}")
 
+
+    # Harness keys the launchers actually request (verified by grepping the
+    # --harness invocations in pmoves/scripts/claude-pmoves.sh and crush-pmoves).
+    _LAUNCHER_HARNESSES = frozenset({"claude-code", "crush"})
+
+    # 5. Vocabulary default_identity -> registry/teams coupling --------------
+    # `node-vocabulary.yaml` declares WHO a session on a node is:
+    #     <node>.default_identity.<harness>: <agent_id>
+    # Three files must agree for that to mean anything -- the vocabulary
+    # DECLARES it, the registry WIRES it (topology.node_affinity), and
+    # agent-teams.yaml COUPLES it. Nothing checked the first against the other
+    # two. This validator never opened the vocabulary at all, and the only
+    # enforcement anywhere was a hand-written, single-identity assertion for
+    # knuckles.crush in test_crush_node_identity.py.
+    #
+    # The gap is reachable, not theoretical. PR #2766's registry conflict
+    # interleaves mid-mapping (port/health/layers/evolution_stage are shared
+    # context lines between two hunks), so an `--ours` resolution silently drops
+    # two agents from the registry AND the teams file -- while the vocabulary,
+    # which merges cleanly and conflicts with nothing, keeps declaring them. The
+    # coupling check above then sees registry and teams agreeing with each other
+    # and reports "no new drift". Two identities declared and not wired, green.
+    # The opposite resolution deletes an agent the teams file still lists and IS
+    # caught -- which is what made the existing guard asymmetric.
+    #
+    # node_identity.resolve_identity() already names this exact failure -- but
+    # only for the one node it happens to be running on, at runtime, after the
+    # merge. This is the static, whole-fleet form of the same assertions.
+    #
+    # ERROR, not advisory: an unresolvable identity means every session on that
+    # node launches unbound, and the launchers fail OPEN (announce and continue),
+    # so nothing downstream turns red on its own.
+    try:
+        vocab_raw = _load_yaml(VOCABULARY) or {}
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"node-vocabulary.yaml: unreadable ({exc})")
+        vocab_raw = {}
+
+    # An alias claimed by two nodes makes load_vocabulary() raise GLOBALLY, so it
+    # breaks identity resolution on every node at once. Report it as a gate error
+    # rather than letting the traceback abort the run and suppress the
+    # registry/teams report for every other file (same posture as load_roles()).
+    try:
+        vocab_index = load_vocabulary(VOCABULARY)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"node-vocabulary.yaml: {exc}")
+        vocab_index = {}
+
+    reg_agents = reg_raw.get("agents") or {}
+    declared_identities = 0
+    # P2 (review on #2787): duplicate canonical nodes. load_vocabulary()
+    # builds a dict keyed by canonical, so the LAST entry silently wins at
+    # resolution time while this loop would happily validate BOTH. Detect
+    # before validating so a duplicate can never produce a green run that
+    # resolves differently than it validated.
+    seen_canonical: dict[str, str] = {}
+    for entry in vocab_raw.get("nodes") or []:
+        if not isinstance(entry, dict):
+            continue
+        node = str(entry.get("canonical", "")).strip()
+        if node in seen_canonical:
+            errors.append(
+                f"node-vocabulary.yaml: duplicate canonical node {node!r} — "
+                "load_vocabulary() keeps only the last entry, so identities "
+                "declared on the earlier one silently never resolve; merge or "
+                "rename the entries")
+            continue
+        seen_canonical[node] = "seen"
+        declared = entry.get("default_identity") or {}
+        if not declared:
+            continue
+        if not isinstance(declared, dict):
+            errors.append(
+                f"node-vocabulary.yaml: {node}.default_identity must be a mapping "
+                f"of harness -> agent id, got {type(declared).__name__} ({declared!r})")
+            continue
+
+        # Identity does not bind to a class/placeholder/runner-label/unresolved
+        # entry -- resolve_identity() refuses before it ever reads
+        # default_identity. A declaration here can never take effect.
+        kind = entry.get("kind", "node")
+        if kind in NON_NODE_KINDS:
+            errors.append(
+                f"node-vocabulary.yaml: {node} declares default_identity "
+                f"{sorted(declared)} but is kind={kind!r}, which is not a machine; "
+                f"identity never binds to it, so the declaration is unreachable")
+            continue
+
+        for harness, agent_id in sorted(declared.items()):
+            declared_identities += 1
+            where = f"node-vocabulary.yaml: {node}.default_identity.{harness}"
+
+            # P1 (review on #2786): validate the HARNESS key itself. The
+            # launchers request fixed keys (claude-pmoves: --harness
+            # claude-code; crush-pmoves: --harness crush); a misspelled key
+            # (claude_code) validates its agent fine but can NEVER be
+            # requested, so the declaration is dead at write-time.
+            if harness not in _LAUNCHER_HARNESSES:
+                errors.append(
+                    f"{where}: unknown harness {harness!r} — launchers request "
+                    f"{sorted(_LAUNCHER_HARNESSES)}; a key no launcher passes "
+                    "can never bind, so this declaration is unreachable")
+                continue
+
+            if not isinstance(agent_id, str) or not agent_id.strip():
+                errors.append(
+                    f"{where}: expected an agent_registry.yaml key, got {agent_id!r}")
+                continue
+            # P2 (review on #2787): reject padding, do not trim it away.
+            # load_vocabulary() preserves the raw string, so " claude_4090 "
+            # would validate here (after strip) yet never resolve at runtime —
+            # the validator and the resolver would disagree about the same
+            # declaration. The file must carry the exact key.
+            if agent_id != agent_id.strip():
+                errors.append(
+                    f"{where}: agent id has surrounding whitespace ({agent_id!r}) — "
+                    "the resolver matches raw strings, so this can never bind; "
+                    "write the exact registry key")
+                continue
+            agent_id = agent_id.strip()
+
+            if agent_id not in registry_keys:
+                # Claimants are the repair hint: they say whether ANY agent
+                # is wired to this node. Truncated because the honest count is
+                # 38 for the 5090 and 78 for the z890 -- printing them all
+                # buries the one line that matters under a wall of names, and
+                # this list is a pointer, not the answer. Ambiguity is exactly
+                # why identity is declared rather than inferred from affinity.
+                claimants = sorted(
+                    k for k, v in reg_agents.items()
+                    if isinstance(v, dict) and vocab_index and any(
+                        canonical_node(a, vocab_index) == node
+                        for a in ((v.get("topology") or {}).get("node_affinity") or []))
+                )
+                shown = ", ".join(claimants[:6]) or "none"
+                if len(claimants) > 6:
+                    shown += f", and {len(claimants) - 6} more"
+                errors.append(
+                    f"{where} -> {agent_id!r} is DECLARED AND NOT WIRED: it is not an "
+                    f"agent in agent_registry.yaml. Every session on {node} using "
+                    f"harness {harness!r} launches unbound. Register it, or remove the "
+                    f"declaration. {len(claimants)} agent(s) already claim {node}: "
+                    f"{shown}")
+                continue
+
+            # Registered, but for a different machine. resolve_identity() refuses
+            # to bind an identity to a node it does not claim, so this is unbound
+            # too -- just for a second reason.
+            affinity = ((reg_agents.get(agent_id) or {}).get("topology") or {}).get(
+                "node_affinity") or []
+            if vocab_index and not any(
+                    canonical_node(a, vocab_index) == node for a in affinity):
+                errors.append(
+                    f"{where} -> {agent_id!r} is registered but its own node_affinity "
+                    f"{affinity!r} does not resolve to {node}. An identity that does "
+                    f"not claim the node it is declared for is a misbinding; the "
+                    f"resolver refuses it")
+
+            # The coupling #2754/#2763 established: a registered identity is a
+            # team member. The registry<->teams check above already enforces this
+            # for every registry agent, so reaching here means the agent is BOTH
+            # declared and registered yet still unteamed -- report it against the
+            # declaration, which is where a reader is looking.
+            if agent_id not in team_map:
+                errors.append(
+                    f"{where} -> {agent_id!r} is registered but belongs to no team in "
+                    f"agent-teams.yaml; add it to one (see claude_b850 / crush_glm52 "
+                    f"under `orchestration`)")
+
+    # P1 (review on #2786): zero declared identities is a vacuous pass. The
+    # fleet has live declarations (knuckles, 4090 at minimum); a run reporting
+    # zero means every default_identity block was deleted (or the vocabulary
+    # failed to parse into something the loop could read), and the gate would
+    # sail through having verified nothing.
+    if declared_identities == 0:
+        errors.append(
+            "node-vocabulary.yaml: zero default_identity declarations found — "
+            "the fleet declares node identities (knuckles, 4090, ...); zero "
+            "means the blocks were deleted or the file failed to load, and "
+            "this gate would otherwise pass having verified nothing")
+
     # --- Report ------------------------------------------------------------
     print(f"registry agents: {len(registry_keys)} | team agents: {len(teamed)} "
-          f"| external contributors: {len(external)}")
+          f"| external contributors: {len(external)} "
+          f"| declared identities: {declared_identities}")
     if verbose or warnings:
         for w in warnings:
             print(f"  WARN  {w}")
@@ -373,7 +566,8 @@ def main(argv: list[str]) -> int:
         for e in errors:
             print(f"  ERROR {e}")
         return 1
-    print("OK — registry/teams coupling clean (no new drift); naming conventions hold.")
+    print("OK — registry/teams coupling clean (no new drift); naming conventions "
+          "hold; every declared identity is wired.")
     return 0
 
 
