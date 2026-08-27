@@ -71,25 +71,55 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 
 ### yt-dlp configuration & images
 
-> **Which Dockerfile actually ships (corrected 2026-08-27).** The deployed
-> `pmoves-yt` image is **not** built from this directory. `docker-compose.yml` and
-> `docker-compose.apps.yml` both use `context: ../PMOVES.YT` with
-> `dockerfile: pmoves_yt_service/Dockerfile`, which installs the **fork from
-> source**. The Dockerfile in *this* directory installs **stock yt-dlp from PyPI**
-> and is a known orphan (`pmoves/configs/dockerfiles/_known_orphans.yaml`) kept as
-> the upstream image source; CI builds it. Everything in this section describes
-> that orphan path. For the version the running service reports, and the commands
-> that establish it, see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md.
+> **Two deployment paths, two different yt-dlp builds (corrected 2026-08-27).**
+> This is the fact to carry away: **which yt-dlp you run depends on which `make`
+> entrypoint you used**, and only one of the two paths is described by the
+> recorded `PMOVES.YT` gitlink.
+>
+> | Path | Started by | Image built from | yt-dlp installed |
+> |---|---|---|---|
+> | **Local compose build** | `make -C pmoves up-yt` | `context: ../PMOVES.YT`, `dockerfile: pmoves_yt_service/Dockerfile` (`docker-compose.yml:2543`, `docker-compose.apps.yml:169`) | `pip install ".[default]"` — the **fork, from source**. Runtime version == the recorded gitlink. |
+> | **Published image** | `make -C pmoves up-yt-published` (`pmoves/Makefile:2582`) | GHCR `ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest`, pinned at `docker-compose.integrations.images.yml:3`, built by `.github/workflows/integrations-ghcr.yml` from **`pmoves/services/pmoves-yt/Dockerfile`** (this directory) per `integrations-ghcr.matrix.json` | `pip install "yt-dlp[default]"`, unpinned — **stock PyPI yt-dlp**. The gitlink tells you nothing about it. |
+>
+> The published path carries **none** of the PMOVES fork commits: no CHIT
+> HMAC-SHA256 signing on geometry emit, no thread-safe NATS publish from sync
+> FastAPI endpoints, no Phase-9C multi-client fallback chain, none of the
+> SoundCloud ingest fixes. A currency audit that reads only
+> `git ls-tree HEAD -- PMOVES.YT` gives the **wrong answer** for anyone running
+> `up-yt-published`.
+>
+> Either path can also be short-circuited: **both** local-build stanzas declare
+> `image: ${PMOVES_YT_IMAGE:-}`, so setting `PMOVES_YT_IMAGE` makes even `up-yt`
+> pull a published image instead of building the fork.
+>
+> For the version the running service reports, and the commands that establish it,
+> see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md.
 
-- In the orphan Dockerfile in this directory, `yt-dlp[default]` + `curl-cffi` ship
-  from PyPI at build time; `ffmpeg` and `atomicparsley` are installed via apt so
-  metadata/thumbnail embedding works out of the box.
+**The rest of this section describes the published-image Dockerfile in this
+directory** — the `up-yt-published` path, not the `up-yt` path.
+
+- It is listed in `pmoves/configs/dockerfiles/_known_orphans.yaml`. That registry
+  tracks Dockerfiles with **no compose `build:` stanza**, and by that definition
+  the entry is correct — but "orphan" in that narrow sense does **not** mean
+  unused. GHCR builds and pushes this file (`push: true`,
+  `integrations-ghcr.yml:691`), and `docker-compose.integrations.images.yml`
+  consumes the result. Read the registry as "not built by compose", never as
+  "not deployed".
+- `yt-dlp[default]` + `curl-cffi` ship from PyPI at build time; `ffmpeg` and
+  `atomicparsley` are installed via apt so metadata/thumbnail embedding works out
+  of the box. The GHCR matrix entry sets `"build_args": ""`, so **no
+  `YTDLP_VERSION` is passed** — the published image carries whatever PyPI's latest
+  yt-dlp was on the day that image was built. Nothing in this repo records that
+  version. Ask the image (§ 1b of YTDLP_CURRENCY.md); do not infer it.
 - Build args:
   - `YTDLP_VERSION=YYYY.MM.DD` to pin an exact release.
   - `YTDLP_PIP_URL=<pip URL>` to consume a fork (e.g., git+https). `YTDLP_PIP_URL` wins over `YTDLP_VERSION`.
+  - The *fork's* `pmoves_yt_service/Dockerfile` accepts the same two args with the
+    same precedence, so passing either on the `up-yt` path also replaces the
+    packaged fork with PyPI yt-dlp.
 - Weekly workflow `.github/workflows/yt-dlp-bump.yml` (in **this** repo, not in the
   `PMOVES.YT` submodule) resolves the latest yt-dlp from PyPI, build-validates the
-  orphan Dockerfile above multi-arch with `push: false`, and opens a PR whose entire
+  Dockerfile above multi-arch with `push: false`, and opens a PR whose entire
   content is one line appended to `docs/hardening/PMOVES-hardening-tracker.md`.
   **It changes no pin** — not this directory's, not the submodule's, not the
   gitlink. Treat its PRs as an upstream-release notification, not a bump.
@@ -130,9 +160,12 @@ export PMOVES_YT_IMAGE=ghcr.io/powerfulmoves/pmoves-yt:dev
 make -C pmoves up-yt
 ```
 
-The compose service honors `PMOVES_YT_IMAGE` (pulls from GHCR) or builds from
-`services/pmoves-yt` when unset. Use the `yt-image-local` make target to build
-and tag a local image quickly with a custom `YTDLP_VERSION`.
+The compose service honors `PMOVES_YT_IMAGE` (pulls from GHCR) or, when unset,
+builds from the **`../PMOVES.YT` submodule** via `pmoves_yt_service/Dockerfile` —
+*not* from `services/pmoves-yt`. Setting `PMOVES_YT_IMAGE` therefore swaps a
+fork-from-source build for a published stock-yt-dlp image. Use the
+`yt-image-local` make target to build and tag a local image quickly with a custom
+`YTDLP_VERSION`.
 - `YT_ARCHIVE_DIR` (default `/data/yt-dlp`) + `YT_ENABLE_DOWNLOAD_ARCHIVE=true`
   configure yt-dlp's archive file. Override per channel with
   `yt_options.download_archive` to dedupe imports per playlist.

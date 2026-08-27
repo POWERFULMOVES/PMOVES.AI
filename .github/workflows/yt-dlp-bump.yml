@@ -83,8 +83,10 @@ jobs:
           branch="docs/yt-dlp-upstream-${VERSION}"
           git checkout -b "$branch"
           # This workflow moves NO pin. It resolves the latest upstream release,
-          # build-validates a Dockerfile the deployed stack does not use, discards
-          # the image (push: false), and records a note. Saying "bumped" here
+          # build-validates pmoves/services/pmoves-yt/Dockerfile -- which is NOT
+          # what the local-build path (`up-yt`) uses, though it IS what GHCR
+          # publishes for `up-yt-published` -- discards the image (push: false),
+          # and records a note. Saying "bumped" here
           # produced a git log of chore(...) subjects that read as version bumps
           # and were not -- see #2713 and pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md.
           # The note is worded to be self-describing because its position in the
@@ -105,7 +107,9 @@ jobs:
 
           What ran: the latest upstream release was resolved from PyPI, and `pmoves/services/pmoves-yt` was built against it multi-arch with `push: false`. The image was then discarded.
 
-          What did **not** run: nothing upgraded the `PMOVES.YT` submodule, which is the yt-dlp fork the deployed image actually installs from source. Upgrading it means a fork-sync plus a gitlink promotion, which this workflow does not do.
+          What did **not** run: nothing upgraded the `PMOVES.YT` submodule, which is the yt-dlp fork the *locally built* image (`make -C pmoves up-yt`) installs from source. Upgrading it means a fork-sync plus a gitlink promotion, which this workflow does not do.
+
+          Note that the Dockerfile validated above is also the one GHCR publishes as `ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest` for the `up-yt-published` path -- and that published image installs **stock PyPI yt-dlp**, not the fork. This workflow does not change which version it gets either, because the real GHCR build passes no `YTDLP_VERSION`.
 
           To find out which yt-dlp version PMOVES actually runs, and what an upgrade would involve, see `pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md`.
           BODY
