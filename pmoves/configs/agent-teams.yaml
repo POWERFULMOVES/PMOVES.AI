@@ -16,7 +16,12 @@ teams:
     agents:
       - claude_4090       # Claude Code CLI identity on laptop-4090 (drives A0/Archon)
       - claude_b850       # Claude Code CLI identity on B850/Knuckles (data-tier host)
+<<<<<<< HEAD
       - crush_glm52       # Crush CLI identity on B850/Knuckles (GLM-5.2 companion harness)
+=======
+      - claude_5090       # Claude Code CLI identity on the 5090 (primary workhorse)
+      - claude_z890       # Claude Code CLI identity on the Z890 (infra coordinator)
+>>>>>>> dd3a3e473 (feat(identity): register claude_5090 and claude_z890 — and the 5090 cannot bind by hostname)
       - agent_zero        # Port 8080 — Primary orchestrator
       - archon            # Port 8091 — Planning/execution copilot
       - supaserch         # Port 8099 — Holographic deep research

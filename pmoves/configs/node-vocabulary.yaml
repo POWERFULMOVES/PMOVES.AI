@@ -73,8 +73,17 @@ nodes:
   - canonical: "5090"
     kind: node
     reach: pmoves-5090
-    aliases: ["5090", "pmoves-5090", "PMOVES-5090"]
-    note: Primary workhorse. 38 registry entries spell it as a YAML integer.
+    aliases: ["5090", "pmoves-5090", "PMOVES-5090", "powerfulmoves-1"]
+    note: >-
+      Primary workhorse. 38 registry entries spell it as a YAML integer. Its
+      HOSTNAME is `POWERFULMOVES`, which casefolds onto the `powerfulmoves`
+      entry below -- the org name, claimed by 9 registry entries as affinity.
+      An alias names exactly one node, so the two cannot be split, and hostname
+      fallback therefore resolves this machine to a non-node. Set
+      PMOVES_NODE_ID=5090 on it; that is what the override exists for.
+      `powerfulmoves-1` is the tailnet name and resolved to nothing before now.
+    default_identity:
+      claude-code: claude_5090
 
   - canonical: spark
     kind: node
@@ -85,6 +94,8 @@ nodes:
     kind: node
     reach: pmoves-z890
     aliases: [z890, pmoves-z890, Z890, PMOVES-Z890]
+    default_identity:
+      claude-code: claude_z890
 
   - canonical: knuckles
     kind: node
