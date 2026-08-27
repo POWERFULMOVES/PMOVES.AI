@@ -423,10 +423,24 @@ def main(argv: list[str]) -> int:
 
     reg_agents = reg_raw.get("agents") or {}
     declared_identities = 0
+    # P2 (review on #2787): duplicate canonical nodes. load_vocabulary()
+    # builds a dict keyed by canonical, so the LAST entry silently wins at
+    # resolution time while this loop would happily validate BOTH. Detect
+    # before validating so a duplicate can never produce a green run that
+    # resolves differently than it validated.
+    seen_canonical: dict[str, str] = {}
     for entry in vocab_raw.get("nodes") or []:
         if not isinstance(entry, dict):
             continue
         node = str(entry.get("canonical", "")).strip()
+        if node in seen_canonical:
+            errors.append(
+                f"node-vocabulary.yaml: duplicate canonical node {node!r} — "
+                "load_vocabulary() keeps only the last entry, so identities "
+                "declared on the earlier one silently never resolve; merge or "
+                "rename the entries")
+            continue
+        seen_canonical[node] = "seen"
         declared = entry.get("default_identity") or {}
         if not declared:
             continue
@@ -466,6 +480,17 @@ def main(argv: list[str]) -> int:
             if not isinstance(agent_id, str) or not agent_id.strip():
                 errors.append(
                     f"{where}: expected an agent_registry.yaml key, got {agent_id!r}")
+                continue
+            # P2 (review on #2787): reject padding, do not trim it away.
+            # load_vocabulary() preserves the raw string, so " claude_4090 "
+            # would validate here (after strip) yet never resolve at runtime —
+            # the validator and the resolver would disagree about the same
+            # declaration. The file must carry the exact key.
+            if agent_id != agent_id.strip():
+                errors.append(
+                    f"{where}: agent id has surrounding whitespace ({agent_id!r}) — "
+                    "the resolver matches raw strings, so this can never bind; "
+                    "write the exact registry key")
                 continue
             agent_id = agent_id.strip()
 
