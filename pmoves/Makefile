@@ -2641,6 +2641,7 @@ up-core-capable: ## Capable tier: dependency-ordered core (data tier BEFORE agen
 	@echo "🧩 Capable tier: hardened dep-ordered core + Consciousness/CHIT (consciousness-service, cipher-api)…"
 	@$(MAKE) --no-print-directory up-core-hardened
 	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d consciousness-service cipher-api
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 	@echo "✅ Capable tier up (data tier + agents + Consciousness/CHIT)."
 
 up-core-gpu: ## GPU tier: capable tier + GPU services (best-effort; requires NVIDIA container runtime)
@@ -3285,6 +3286,7 @@ up-jellyfin:
 .PHONY: up-agents up-agents-stack
 up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
 	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
 .PHONY: up-notebooklm
 up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
@@ -3294,15 +3296,19 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 .PHONY: up-cipher
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
-	@# Idempotent, and non-fatal here: a schema mismatch (exit 2) should not
-	@# block the memory service from starting — cipher-memory-smoke is the
-	@# gate that fails loudly on it.
-	@$(MAKE) --no-print-directory qdrant-provision-cipher || true
+	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
+	@# gate fails loudly on it); every other failure — bad Qdrant creds,
+	@# network timeout, missing python image — must abort the road instead
+	@# of printing "ready" over a dead collection (review P2).
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
 
 .PHONY: up-cipher-nobuild
 up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
 	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
+	@# Provisioning on EVERY cipher-starting road (review P1): a fresh volume
+	@# recreated here is exactly as empty as a fresh build's.
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 	@echo "✔ Cipher Memory recreated (no rebuild) at http://localhost:$${CIPHER_PORT:-8105}"
 
 .PHONY: up-p7
