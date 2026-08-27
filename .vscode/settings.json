@@ -79,5 +79,13 @@
     "docker-compose.yml": "docker-compose.*.yml,.env*"
   },
   "makefile.configureOnOpen": false,
-  "java.compile.nullAnalysis.mode": "automatic"
+  "java.compile.nullAnalysis.mode": "automatic",
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.metadata/**",
+    "**/archetype-resources/**",
+    "**/META-INF/maven/**",
+    "**/PMOVES-*/**"
+  ],
+  "java.configuration.updateBuildConfiguration": "disabled"
 }
