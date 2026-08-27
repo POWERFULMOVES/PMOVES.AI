@@ -4,6 +4,10 @@ description: >
   NVIDIA Jetson Orin Nano Super 8GB edge inference node. 6-core Cortex-A78AE
   + Ampere GPU (1024 CUDA cores, SM_87, 67 TOPS) + 8GB unified LPDDR5X.
   JetPack 6.x (L4T 36.x). Pinokio 7 with gepeto and pmoves-services skills.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
 hardware:
   cpu:
     vendor: NVIDIA

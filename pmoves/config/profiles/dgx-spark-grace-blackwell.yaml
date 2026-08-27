@@ -8,6 +8,10 @@ description: >
   unified memory eliminates VRAM copies. Torch MUST be built against cu130 with
   compute_121 kernels (torch 2.8+ or worldmirror torch 2.11.0+cu130).
   nvidia-smi reports 'Memory-Usage: Not Supported' — expected on UMA.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
 hardware:
   cpu:
     vendor: NVIDIA
