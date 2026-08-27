@@ -215,3 +215,33 @@ def test_geometry_decode_text_uses_new_payload(monkeypatch, load_service_module)
     assert request_body["constellation_ids"] == ["const-123"]
     assert request_body["per_constellation"] == 3
     assert request_body["shape_id"] == "shape-789"
+
+
+def test_send_message_without_a_pinned_token_fails_with_an_actionable_error(
+    monkeypatch, load_service_module
+):
+    """A missing API key must name its own cause, not surface a bare 401.
+
+    When AGENT_ZERO_MCP_TOKEN and MCP_SERVER_TOKEN are both unset the wrapper
+    key is empty while the inner runtime auto-generates its own, so every
+    session POST is rejected. `_headers` simply omits X-API-KEY, so without
+    this guard the operator sees an unexplained 401 from a request that could
+    never have succeeded. Codex P2 on #2780.
+    """
+    import asyncio
+
+    import pytest as _pytest
+
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+
+    config = module.AgentZeroRuntimeConfig()
+    config.api_key = ""
+    client = module.AgentZeroClient(config)
+
+    with _pytest.raises(module.AgentZeroRequestError) as excinfo:
+        asyncio.run(client.send_message({"text": "hello"}))
+
+    assert excinfo.value.status_code == 503
+    body = excinfo.value.message
+    assert "AGENT_ZERO_MCP_TOKEN" in body
+    assert "MCP_SERVER_TOKEN" in body
