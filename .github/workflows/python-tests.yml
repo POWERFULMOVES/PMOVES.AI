@@ -46,6 +46,11 @@ on:
       - 'pmoves/services/**/*.py'
       - 'pmoves/services/**/tests/**'
       - 'pmoves/libs/**'
+      # Shared conftest consumed by every pytest target here (review P2 on
+      # #2785): pmoves/conftest.py imports load_service_module and
+      # stub_external_modules from pmoves/tests/conftest.py, so a PR touching
+      # only that file changes this workflow's fixtures and must run it.
+      - 'pmoves/tests/conftest.py'
       - 'pmoves/pyproject.toml'
       - '.github/workflows/python-tests.yml'
   pull_request:
@@ -55,6 +60,7 @@ on:
       - 'pmoves/services/**/*.py'
       - 'pmoves/services/**/tests/**'
       - 'pmoves/libs/**'
+      - 'pmoves/tests/conftest.py'
       - 'pmoves/pyproject.toml'
       - '.github/workflows/python-tests.yml'
   workflow_dispatch:
