@@ -124,6 +124,19 @@ IDENT_PY=()
 if [ -f "$IDENT_TOOL" ] && pm_pick_python yaml; then
   IDENT_PY=("${PM_PY[@]}")
 fi
+# The resolver reads the process env, but this launcher runs BEFORE the harness
+# loads .claude/settings.local.json. So a node whose HOSTNAME collides — the 5090,
+# whose POWERFULMOVES casefolds onto the `powerfulmoves` org vocabulary entry
+# (kind=unresolved) — resolves to nothing and fail-opens to an unbound session,
+# even though its identity is declared in settings.local.json's env block. Read
+# PMOVES_NODE_ID from that SAME block so declaring it once binds both the launcher
+# and the session. A shell env value still wins if already set (kept parity with
+# claude-pmoves.bat; node_identity.py invocation below is unchanged).
+if [ -z "${PMOVES_NODE_ID:-}" ] && [ ${#IDENT_PY[@]} -gt 0 ] && [ -f "$ROOT/.claude/settings.local.json" ]; then
+  _sid="$("${IDENT_PY[@]}" -c 'import json,sys;print((json.load(open(sys.argv[1])).get("env") or {}).get("PMOVES_NODE_ID","") or "")' "$ROOT/.claude/settings.local.json" 2>/dev/null || true)"
+  [ -n "$_sid" ] && export PMOVES_NODE_ID="$_sid"
+  unset _sid
+fi
 if [ -f "$IDENT_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
   if IDENT_OUT="$("${IDENT_PY[@]}" "$IDENT_TOOL" --harness claude-code --shell 2>/dev/null)"; then
     # The tool emits PMOVES_RESOLVED_IDENTITY, not PMOVES_NODE_IDENTITY: the
