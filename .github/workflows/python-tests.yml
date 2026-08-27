@@ -1,5 +1,43 @@
 name: Python Tests
 
+# SCOPE: this job runs the SERVICE test suites under `pmoves/services/*/tests`,
+# strictly (no ratchet). It is not the required merge check — `main`'s required
+# contexts are `python-tests`, `hardening-validation`, `verify` and
+# `submodule-gitlink-gate`, and the first of those is the job of the same name in
+# merge-gate.yml, which is a different thing from the `tests (3.11)` check this
+# file produces. The two names being one word apart is a trap; see below.
+#
+# `pmoves/tests/**` and `pytest.ini` used to be listed in the two `paths:`
+# filters below. Neither belonged there:
+#
+#   * `pmoves/tests` was a TRIGGER but never a TARGET. The pytest invocation at
+#     the bottom of this file passes only `pmoves/services/*/tests` directories.
+#     So a PR touching nothing but `pmoves/tests` woke this workflow, collected
+#     none of the 155 test files it had just changed, and reported `tests (3.11)`
+#     green. A filter that claims a tree the run step never looks at is worse
+#     than no filter: it reads, in the checks list, as coverage.
+#
+#     That tree is NOT untested. merge-gate.yml's `python-tests` job runs
+#     `pmoves/tools/pytest_ratchet.py` on every PR to main with no paths filter
+#     at all; it discovered and ran 151 of those 155 files on the most recent
+#     measured run. It runs them RATCHETED, tolerating 249 baselined failures of
+#     which 175 sit under `pmoves/tests`. Adding the tree here as a strict target
+#     would therefore turn this job red on ~175 known failures on its first run.
+#     Fixing those is a separate lane; hiding them with --ignore or a skip marker
+#     to make this green is not on the table. Until then the honest statement is
+#     the one now encoded: this workflow covers services, merge-gate covers the
+#     rest, and `pmoves/tests` is not advertised here.
+#
+#   * `pytest.ini` does not exist. Not in the repo root, not anywhere. It was a
+#     trigger on a file that could never change.
+#
+# `pmoves/pyproject.toml` replaces them, because it is the file pytest actually
+# resolves as `configfile` for this job (it supplies --strict-markers,
+# --import-mode and asyncio_mode). Editing it changes what this workflow does,
+# and it was not previously a trigger.
+#
+# The pairing is enforced by pmoves/tests/test_python_tests_workflow_scope.py.
+
 on:
   push:
     branches: [main, PMOVES.AI-Edition-Hardened]
@@ -8,8 +46,12 @@ on:
       - 'pmoves/services/**/*.py'
       - 'pmoves/services/**/tests/**'
       - 'pmoves/libs/**'
-      - 'pmoves/tests/**'
-      - 'pytest.ini'
+      # Shared conftest consumed by every pytest target here (review P2 on
+      # #2785): pmoves/conftest.py imports load_service_module and
+      # stub_external_modules from pmoves/tests/conftest.py, so a PR touching
+      # only that file changes this workflow's fixtures and must run it.
+      - 'pmoves/tests/conftest.py'
+      - 'pmoves/pyproject.toml'
       - '.github/workflows/python-tests.yml'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened]
@@ -18,8 +60,8 @@ on:
       - 'pmoves/services/**/*.py'
       - 'pmoves/services/**/tests/**'
       - 'pmoves/libs/**'
-      - 'pmoves/tests/**'
-      - 'pytest.ini'
+      - 'pmoves/tests/conftest.py'
+      - 'pmoves/pyproject.toml'
       - '.github/workflows/python-tests.yml'
   workflow_dispatch:
 
