@@ -85,9 +85,15 @@ def test_fleet_nodes_tagged_private_mesh():
     later gate keys on must be present where we KNOW the answer."""
     fleet = {
         "desktop-9950xd.yaml",        # 5090
+        "workstation_5090.yaml",      # 5090 (legacy id spelling)
         "dgx-spark-grace-blackwell.yaml",  # SPARK
         "intel-265kf-3090ti.yaml",    # z890
+        "z890-coordinator.yaml",      # z890 (coordinator spelling)
+        "laptop-4090.yaml",           # 4090
+        "workstation-9850x3d-dual-r9700.yaml",  # B850/Knuckles
         "jetson-jons-1.yaml",
+        "jetson-jons-2.yaml",
+        "jetson-jons-3.yaml",
     }
     names = {p.name for p in PROFILES}
     assert fleet <= names, f"fleet profiles missing: {fleet - names}"

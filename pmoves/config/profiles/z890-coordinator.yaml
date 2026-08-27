@@ -4,6 +4,10 @@ description: >
   Primary infrastructure coordinator running full PMOVES.AI stack.
   Docker Compose host (~66 services), NATS hub, Supabase self-hosted,
   monitoring stack, and development toolchain.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
 hardware:
   cpu:
     vendor: Intel
