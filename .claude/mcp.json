@@ -209,6 +209,14 @@
         "--profile",
         "pmoves_5090_web"
       ]
+    },
+    "pmoves-cipher-local": {
+      "description": "Local agent memory on this node (cipher is published on loopback, so the fleet URL is unreachable cross-node)",
+      "type": "sse",
+      "url": "http://localhost:8105/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer ${CIPHER_API_TOKEN:-}"
+      }
     }
   }
 }

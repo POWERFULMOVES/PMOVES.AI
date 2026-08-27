@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Canonical inventory of PMOVES MCP servers. Used by pmoves/tools/mcp_config_generator.py to produce client-native config snippets for Claude, Kimi, KiloCode, Hermes, and Crush. Server entries support an optional 'disabled: true' field to mark servers that should be emitted as disabled in generated configs.",
+  "note": "Canonical inventory of PMOVES MCP servers. Used by pmoves/tools/mcp_config_generator.py to produce client-native config snippets for Claude, Kimi, KiloCode, Hermes, and Crush. Server entries support an optional 'disabled: true' field to mark servers that should be emitted as disabled in generated configs, and an optional 'endpoint_pinned: true' field meaning the entry's 'endpoint' is what the entry IS rather than a default the caller's --endpoint may override (used by local/fleet sibling pairs that must both be emitted).",
   "defaults": {
     "cipher_local_url": "http://localhost:8105/mcp/sse",
     "cipher_fleet_url": "http://${TS_Z890}:8105/mcp/sse",
@@ -26,15 +26,18 @@
         },
         {
           "key": "pmoves-cipher-local",
-          "description": "Local agent memory on this node",
+          "description": "Local agent memory on this node (cipher is published on loopback, so the fleet URL is unreachable cross-node)",
           "transport": "sse",
           "endpoint": "local",
+          "endpoint_pinned": true,
           "endpoint_prefix": "cipher",
-          "url": "http://localhost:8105/mcp/sse",
           "headers": {
             "Authorization": "Bearer ${CIPHER_API_TOKEN:-}"
           },
-          "clients": ["hermes"]
+          "clients": [
+            "hermes",
+            "claude"
+          ]
         },
         {
           "key": "agent-zero",
@@ -138,6 +141,19 @@
           "env": {
             "HOSTINGER_API_TOKEN": "${HOSTINGER_API_TOKEN}"
           }
+        },
+        {
+          "key": "composio",
+          "description": "Composio hosted MCP gateway - SaaS toolkits behind one server; exact per-toolkit server URL + COMPOSIO_API_KEY come from the operator's Composio dashboard via the secrets funnel (never committed)",
+          "transport": "sse",
+          "endpoint": "external",
+          "url": "https://mcp.composio.dev",
+          "headers": {
+            "X-API-Key": "${COMPOSIO_API_KEY}"
+          },
+          "disabled": true,
+          "_note": "Operator-approved 2026-08-27, registered but NOT served to any client. `clients: []` is the fail-closed switch -- ServerSpec.applies_to() in mcp_config_generator.py returns `client in self.clients`, so an empty list matches nothing. `disabled: true` alone does NOT keep it out: that key is a Cline/Roo convention absent from Claude Code's .mcp.json schema, so the renderer passes it straight through -- verified, with COMPOSIO_API_KEY set the unscoped entry WAS emitted into the Claude config. Populate `clients` only after the toolkit URL, transport and header name are verified against the Composio dashboard AND COMPOSIO_API_KEY is registered in the canonical CHIT secrets manifest plus the client launcher allowlists.",
+          "clients": []
         }
       ]
     },
@@ -157,7 +173,12 @@
             "--profile",
             "pmoves_5090_web"
           ],
-          "clients": ["claude", "kimi", "opencode", "crush"]
+          "clients": [
+            "claude",
+            "kimi",
+            "opencode",
+            "crush"
+          ]
         },
         {
           "key": "pmoves-docker-gateway-sse",
@@ -168,7 +189,10 @@
           "headers": {
             "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
           },
-          "clients": ["hermes", "kilocode"]
+          "clients": [
+            "hermes",
+            "kilocode"
+          ]
         }
       ]
     }

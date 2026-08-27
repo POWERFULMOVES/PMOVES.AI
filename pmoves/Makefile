@@ -1691,7 +1691,7 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 	@docker ps --format "table {{.Names}}\t{{.Networks}}" 2>/dev/null | grep pmoves-net | grep -v "supabase\|archon\|agent-zero" || echo "✅ No unexpected services on pmoves-net"
 
 .PHONY: validate-agents
-validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check
+validate-agents: ## Pydantic gate: agent registry<->teams coupling + naming + room owner cross-check + node-vocabulary default_identity wiring
 	@echo "🔍 Validating agent registry ↔ teams coupling (pydantic gate)..."
 	@# Workflow-only deps — the script imports pyyaml + pydantic, which aren't in the
 	@# base env. Mirror the CI gate (validate-agents-config.yml) so a fresh local
@@ -2170,6 +2170,17 @@ STACK_FILES ?= \
 	-f docker-compose.archon.submodule.yml \
 	-f docker-compose.apps.yml
 
+# AMD/ROCm nodes (Knuckles/B850 class) have no NVIDIA container runtime, so the
+# deploy.resources.reservations.devices block ffmpeg-whisper declares in
+# docker-compose.yml makes it fail to schedule outright ("could not select device
+# driver nvidia"). docker-compose.amd.yml resets that reservation so the image
+# runs its CPU path instead. Injected through WHISPER_NODE_OVERLAY rather than
+# added to STACK_FILES, so NVIDIA nodes are untouched by default; the `-amd`
+# sibling of each ffmpeg-whisper bring-up target sets it. Same shape as
+# up-voice-amd / docker-compose.amd-voice.yml.
+AMD_OVERLAY := -f docker-compose.amd.yml
+WHISPER_NODE_OVERLAY ?=
+
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
 DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
@@ -2543,7 +2554,11 @@ up-yt:
 	# (/app/config/cookies) - downloads then run cookie-less and bot-gate.
 	# JuiceFS media overlay is opt-in: only nodes with a host-side FUSE mount
 	# (JUICEFS_HOST_MOUNT set) can satisfy its rshared bind.
-	@extra=""; if [ -n "$${JUICEFS_HOST_MOUNT:-}" ]; then extra="-f docker-compose.yt-media.yml"; fi; $(COOKIES_DC) $$extra --profile data --profile workers --profile yt --profile yt-cookies up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@extra=""; if [ -n "$${JUICEFS_HOST_MOUNT:-}" ]; then extra="-f docker-compose.yt-media.yml"; fi; $(COOKIES_DC) $$extra $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt --profile yt-cookies up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+
+.PHONY: up-yt-amd
+up-yt-amd: ## Start YouTube ingest stack on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 .PHONY: channel-monitor-up
 channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
@@ -2563,10 +2578,13 @@ channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
 	  done; \
 	'
 
-.PHONY: up-yt-published
+.PHONY: up-yt-published up-yt-published-amd
 up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
-	@$(DC) -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) -f docker-compose.integrations.images.yml $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started using published image. Override PMOVES_YT_IMAGE to pin versions."
+
+up-yt-published-amd: ## up-yt-published on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt-published WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 .PHONY: up-agents-hardened up-workers-hardened up-yt-hardened up-core-hardened up-agents-standalone up-agents-auto up-core-capable up-core-gpu
 up-agents-hardened: ## Start Agents (NATS, Agent Zero, Archon, Mesh Agent) with hardened security options
@@ -2633,8 +2651,12 @@ up-core-gpu: ## GPU tier: capable tier + GPU services (best-effort; requires NVI
 	@echo "✅ GPU tier bring-up attempted (capable + GPU services)."
 
 up-yt-hardened: ## Start YT stack with hardened security options (published images)
-	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started (hardened overrides applied)."
+
+.PHONY: up-yt-hardened-amd
+up-yt-hardened-amd: ## up-yt-hardened on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt-hardened WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 # Optional media analyzers (video+audio)
 up-media:
@@ -4086,14 +4108,18 @@ flute-gateway-smoke: ## Smoke test Flute-Gateway health + provider status
 # FFMPEG-WHISPER STT SERVICE (mic chain — STT only, narrower than up-yt)
 # ────────────────────────────────────────────────────────────────────────────
 
-.PHONY: up-ffmpeg-whisper ffmpeg-whisper-smoke
+.PHONY: up-ffmpeg-whisper up-ffmpeg-whisper-amd ffmpeg-whisper-smoke
 up-ffmpeg-whisper: ## Start ffmpeg-whisper STT service (port 8078, requires GPU)
 	@echo "Starting ffmpeg-whisper..."
-	@$(DC) --profile workers up -d --build ffmpeg-whisper
+	@$(DC) $(WHISPER_NODE_OVERLAY) --profile workers up -d --build ffmpeg-whisper
 	@sleep 5
 	@curl -sf http://localhost:8078/healthz > /dev/null 2>&1 \
 	  && echo "ffmpeg-whisper ready at http://localhost:8078" \
 	  || echo "ffmpeg-whisper may still be starting (check: curl http://localhost:8078/healthz)"
+
+up-ffmpeg-whisper-amd: ## Start ffmpeg-whisper on AMD/ROCm nodes (CPU transcription, no NVIDIA runtime)
+	@echo "AMD/ROCm node: stripping the NVIDIA device reservation, ffmpeg-whisper runs its CPU path."
+	@$(MAKE) --no-print-directory up-ffmpeg-whisper WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 ffmpeg-whisper-smoke: ## Smoke test ffmpeg-whisper health
 	@echo "ffmpeg-whisper smoke test..."
