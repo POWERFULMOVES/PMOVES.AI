@@ -132,8 +132,14 @@ def test_pmoves_tests_is_a_trigger_if_and_only_if_it_is_a_target():
     wf = _workflow()
     script = _run_script(wf)
 
+    # pmoves/tests/conftest.py is exempt from the iff rule: it is not a test
+    # file but the fixture source every pytest target here LOADS
+    # (pmoves/conftest.py imports load_service_module and
+    # stub_external_modules from it). Triggering on it is triggering on a
+    # dependency of the targets, not on tests that will not run (review P2
+    # on #2785). Any OTHER pmoves/tests path must still satisfy the iff.
     triggered = any(
-        entry.startswith("pmoves/tests")
+        entry.startswith("pmoves/tests") and entry != "pmoves/tests/conftest.py"
         for paths in _path_filters(wf).values()
         for entry in paths
     )
