@@ -43,8 +43,16 @@ python_pinned := $(strip $(filter-out default file undefined,$(origin PYTHON)))
 #
 # `-c pass` is a no-op for a real interpreter and non-zero for anything else.
 # Same conclusion PR #2809 reached for the Windows launcher: presence is not
-# runnability. Costs at most two forks at parse time.
-precheck_venv_py := $(shell for p in '$(PRECHECK_VENV_WIN)' '$(PRECHECK_VENV_UNIX)'; do "$$p" -c pass >/dev/null 2>&1 && { printf '%s' "$$p"; break; }; done)
+# runnability.
+#
+# Recursively expanded (`=`, not `:=`) so the probe runs ONLY on the branch that
+# needs it. With `:=` this executed at parse time on every make invocation,
+# including when PYTHON is pinned -- so an operator pinning an interpreter
+# precisely BECAUSE the local one is broken would still have every target
+# blocked by probing the broken one, and the higher-priority override could
+# never be reached. A hung interpreter (network path, AV scan) would hang
+# unrelated targets.
+precheck_venv_py = $(shell for p in '$(PRECHECK_VENV_WIN)' '$(PRECHECK_VENV_UNIX)'; do "$$p" -c pass >/dev/null 2>&1 && { printf '%s' "$$p"; break; }; done)
 
 ifeq ($(OS),Windows_NT)
 # Detect Python: operator pin > .venv-pmoves > py -3 (Windows launcher)
