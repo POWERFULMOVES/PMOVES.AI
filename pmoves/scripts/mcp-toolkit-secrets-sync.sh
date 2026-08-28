@@ -55,7 +55,11 @@ declare -A SECRET_MAP=(
   [DOCKERHUB_PAT]="dockerhub.pat_token"
   [DOCKERHUB_TOKEN]="dockerhub.pat_token"
   [DISCORD_TOKEN]="discord.token"
-  [POSTMAN_API_KEY]="postman.api_key"
+  # `postman.postman-api-key`, NOT `postman.api_key`. Verified against
+  # `docker mcp profile show` on 2026-08-28: the field really is doubled.
+  # The short form wrote a secret under a name no server reads -- the sync
+  # reported success and postman still started unauthenticated.
+  [POSTMAN_API_KEY]="postman.postman-api-key"
 )
 
 info "Reading tier file: ${TIER_FILE}"

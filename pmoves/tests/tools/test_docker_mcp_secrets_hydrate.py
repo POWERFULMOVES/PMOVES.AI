@@ -222,3 +222,62 @@ def test_profile_and_registry_requirements_are_merged_without_duplicates(monkeyp
         ("e2b", "e2b.api_key"),
         ("github-official", "github.personal_access_token"),
     ], pairs
+
+
+# --- the two sync tools must agree on Docker's secret NAMES ------------------
+# There are two writers into the same Docker MCP secret store:
+#   scripts/mcp-toolkit-secrets-sync.sh   env-var -> docker-secret-name
+#   config/docker_mcp_secret_map.yaml     docker-secret-name -> env.shared key
+# They are keyed on the same strings from opposite directions, with nothing
+# holding them together. `postman.api_key` in the shell script vs
+# `postman.postman-api-key` everywhere else is what that costs: the sync writes
+# a secret under a name no server reads, reports success, and the server still
+# starts unauthenticated.
+
+
+def _shell_secret_names() -> set[str]:
+    """Docker secret names the shell sync script writes."""
+    import re
+
+    script = (
+        Path(__file__).resolve().parents[3]
+        / "pmoves" / "scripts" / "mcp-toolkit-secrets-sync.sh"
+    )
+    text = script.read_text(encoding="utf-8")
+    block = text.split("declare -A SECRET_MAP=(", 1)[1].split(")", 1)[0]
+    return set(re.findall(r'\]="([^"]+)"', block))
+
+
+def _map_secret_names() -> set[str]:
+    """Docker secret names the hydrate key-map knows."""
+    path = (
+        Path(__file__).resolve().parents[3]
+        / "pmoves" / "config" / "docker_mcp_secret_map.yaml"
+    )
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return set((doc.get("map") or {}).keys())
+
+
+def test_the_shell_sync_and_the_hydrate_map_agree_on_secret_names():
+    """A name in one and not the other is a secret nobody provisions correctly.
+
+    Measured against the live profile on 2026-08-28, Docker's own names are
+    hostinger-mcp-server.api_token, dockerhub.pat_token,
+    github.personal_access_token and postman.postman-api-key. Any name here that
+    Docker does not use writes into a slot no server reads.
+    """
+    shell = _shell_secret_names()
+    mapped = _map_secret_names()
+
+    only_shell = shell - mapped
+    assert not only_shell, (
+        "secret names the shell sync writes but the hydrate map does not know "
+        f"(hydrate will never resolve them): {sorted(only_shell)}"
+    )
+
+
+def test_every_mapped_name_is_dotted_and_lowercase():
+    """Docker MCP secret ids are `<server>.<field>`. A typo here is silent."""
+    for name in _map_secret_names():
+        assert "." in name, f"not a namespaced Docker secret id: {name!r}"
+        assert name == name.lower(), f"Docker secret ids are lowercase: {name!r}"
