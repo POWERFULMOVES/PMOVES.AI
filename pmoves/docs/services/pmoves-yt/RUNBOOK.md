@@ -304,13 +304,13 @@ hazard — a submodule pinned at an unmerged newer commit while `.gitmodules` de
 branch:
 
 ```
-### the hazard: git submodule update --remote SUB
+--- the hazard: git submodule update --remote SUB
   gitlink(HEAD) 3e8fcf3   SUB HEAD f500dc2   SUB content v1-OLD   status [ M SUB]
 
-### git checkout -- SUB
+--- git checkout -- SUB
   gitlink(HEAD) 3e8fcf3   SUB HEAD f500dc2   SUB content v1-OLD   status [ M SUB]   <-- unchanged
 
-### git submodule update --init --force SUB
+--- git submodule update --init --force SUB
   gitlink(HEAD) 3e8fcf3   SUB HEAD 3e8fcf3   SUB content v2-NEW   status []         <-- restored
 ```
 
