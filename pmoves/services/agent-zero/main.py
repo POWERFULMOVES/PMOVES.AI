@@ -13,6 +13,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 # Bootstrap import paths using shared module
 from services.common.bootstrap import bootstrap_import_paths
@@ -99,6 +100,16 @@ class AgentZeroRuntimeConfig:
     )
     health_timeout: float = field(
         default_factory=lambda: float(os.environ.get("AGENT_ZERO_HEALTH_TIMEOUT", "5"))
+    )
+    message_timeout: float = field(
+        default_factory=lambda: float(
+            os.environ.get("AGENT_ZERO_MESSAGE_TIMEOUT", "600")
+        )
+    )
+    health_method: str = field(
+        default_factory=lambda: os.environ.get(
+            "AGENT_ZERO_HEALTH_METHOD", "GET"
+        ).upper()
     )
     message_path: str = field(
         default_factory=lambda: os.environ.get(
@@ -309,7 +320,7 @@ class AgentZeroClient:
     async def health(self) -> Dict[str, Any]:
         try:
             result = await self._request(
-                "GET",
+                self._config.health_method,
                 self._config.health_path,
                 timeout=self._config.health_timeout,
             )
@@ -373,7 +384,10 @@ class AgentZeroClient:
                 "same value on both sides.",
             )
         result = await self._request(
-            "POST", self._config.message_path, json_body=payload
+            "POST",
+            self._config.message_path,
+            json_body=payload,
+            timeout=self._config.message_timeout,
         )
         if not isinstance(result, dict):
             raise AgentZeroRequestError(
@@ -832,6 +846,12 @@ async def healthz() -> Dict[str, Any]:
             detail["runtime"] = runtime_health
         except AgentZeroRequestError as exc:
             detail["runtime"] = {"status": "error", "detail": str(exc)}
+    if not running:
+        # Inner runtime down: a 200 here kept Docker's healthcheck green while
+        # every message call failed (green-while-dead). Surface the real state;
+        # ensure_runtime_running on the next functional request lazily relaunches.
+        http_requests_total.labels(method='GET', endpoint='/healthz', status='503').inc()
+        return JSONResponse(status_code=503, content=detail)
     http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
     return detail
 
