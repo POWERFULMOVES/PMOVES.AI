@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check_prereqs.sh — verify system binaries required for PMOVES.
 #
-# Two tiers:
+# Three tiers:
 #   bringup (default) — non-Python prerequisites bringup can't pip-install: jq,
 #                       make, curl, git, python3. Missing => exit 1 (CI gate /
 #                       Make target failure). Unchanged from the original.
@@ -10,6 +10,17 @@
 #                       Road in .claude/BOOTSTRAP.md. Advisory by default
 #                       (exit 0), because a node may legitimately lack some;
 #                       --strict makes gaps fatal.
+#   env               — the bringup interpreter and whether the modules the
+#                       tools actually import are importable BY IT. A binary on
+#                       PATH is half the contract; the other half is the
+#                       interpreter the Make targets shell out through.
+#
+# A gap prints what it UNLOCKS, not merely that it is absent. A missing CLI
+# rarely breaks loudly -- it removes a capability elsewhere, in a skill or Make
+# target that then degrades or skips silently. `nats` missing does not error;
+# it takes the GEOMETRY BUS offline. `glances` missing does not error; the node
+# probe stops writing hardware profiles. Naming the consequence is the
+# difference between "install this" and "here is what you cannot currently do".
 #
 # Every binary lands in one of three states, not two:
 #   present   — resolves on this shell's PATH.
@@ -82,6 +93,38 @@ declare -A HINTS=(
   [pterm]="ships with Pinokio — add <pinokio-root>/bin/npm to PATH"
   [rg]="apt: sudo apt install ripgrep | brew: brew install ripgrep | winget: winget install BurntSushi.ripgrep.MSVC"
   [ffmpeg]="apt: sudo apt install ffmpeg | brew: brew install ffmpeg | winget: winget install Gyan.FFmpeg"
+  [glances]="make -C pmoves venv-bringup (INCLUDE_BRINGUP=1 installs it) | pipx install glances"
+)
+
+# What a binary UNLOCKS, not just that it is absent. A missing CLI does not
+# usually break loudly here -- it removes a capability somewhere else, often in
+# a skill or Make target that then degrades or skips silently. Naming the
+# consequence is the difference between "install this" and "here is what you
+# currently cannot do".
+#
+# Each claim is grounded in a file in this repo, not inferred. Keep it that way:
+# an unlocks line that overstates is worse than none, because it will be trusted.
+declare -A UNLOCKS=(
+  [nats]="GEOMETRY BUS + CHIT event surface (.claude/context/geometry-nats-subjects.md); the nats:* skills and the publishers in pmoves/scripts/*.sh degrade to a silent skip"
+  [nsc]="minting/inspecting NATS creds against the trust hierarchy (operator PMOVES + SYS/CORE/EDGE/CLOUD)"
+  [glances]="node hardware/network probe — deploy/provision/glances-autodetect.{sh,ps1} and the node-*-probe skills that write pmoves/config/profiles/<node>.yaml"
+  [tailscale]="fleet reachability + cross-node delegation; Known Road \`make -C pmoves fleet-status\`"
+  [docker]="every \`make -C pmoves up-<service>\` Known Road, and the docker MCP server in .claude/mcp.json"
+  [uv]="the uv/uvx-launched MCP servers in .claude/mcp.json, and venv-bringup's installer path"
+  [uvx]="stdio MCP entrypoints launched as \`uvx <server>\` (see .claude/mcp.json)"
+  [gh]="PR/CI Known Roads; the coding-plan policy routes GitHub work through gh rather than raw API calls"
+  [pterm]="the pinokio:* skills (app-list/start/stop/search) and Pinokio clipboard/notify helpers"
+  [node]="npx-launched MCP servers in .claude/mcp.json"
+  [npm]="same as node — npx-launched MCP servers"
+  [ffmpeg]="the media pipeline (YouTube/Whisper ingest, a2ui-renderer video output)"
+  [rg]="fast repo search; note plain grep treats AGNOTE4482PHI.t1.md as binary, so rg is not a like-for-like substitute"
+  [claude]="Claude Code sessions on this node, including the claude-pmoves launcher"
+  [crush]="the PMOVES-Crush lane (GLM/Kimi coding plans)"
+  [python3]="every Make target that shells out to pmoves/tools/*.py"
+  [jq]="JSON handling in the bringup and smoke-test scripts"
+  [make]="the Known Roads themselves — nearly every documented operation is a make target"
+  [git]="submodule fleet, worktrees, and the claim/branch workflow"
+  [curl]="health probes in the smoke tests and bringup scripts"
 )
 
 REQUIRED=(jq make curl git python3)
@@ -90,7 +133,7 @@ REQUIRED=(jq make curl git python3)
 # Known Roads (make / docker / tailscale / gh / uv), its MCP entrypoint table
 # (uvx), the NATS publishers in pmoves/scripts/*.sh (nats), the minted NATS
 # trust hierarchy (nsc), and the Pinokio skills (pterm).
-AGENT=(claude crush uv uvx gh docker node npm tailscale nats nsc pterm rg ffmpeg)
+AGENT=(claude crush uv uvx gh docker node npm tailscale nats nsc pterm rg ffmpeg glances)
 
 # ── Stale-session PATH scan (Windows) ────────────────────────────────────────
 # Persisted PATH directories this shell cannot see, plus an index of what lives
@@ -206,9 +249,11 @@ check_tier() {
     elif found_at=$(find_in_stale "$bin"); then
       TIER_SHADOWED=$((TIER_SHADOWED+1))
       printf "  ⚠️  %-10s SHADOWED — installed at %s, not on this shell's PATH\n" "$bin" "$found_at"
+      [[ -n "${UNLOCKS[$bin]:-}" ]] && printf "     %-10s dark while shadowed: %s\n" "" "${UNLOCKS[$bin]}"
     else
       TIER_MISSING=$((TIER_MISSING+1))
       printf "  ❌ %-10s MISSING — %s\n" "$bin" "${HINTS[$bin]:-<no install hint>}"
+      [[ -n "${UNLOCKS[$bin]:-}" ]] && printf "     %-10s unlocks: %s\n" "" "${UNLOCKS[$bin]}"
     fi
   done
   echo
