@@ -1,4 +1,20 @@
+<!-- yt-dlp currency notes. `yt-dlp-bump.yml` prepends a dated line to this file
+     each week; those lines are UPSTREAM-RELEASE NOTIFICATIONS, not bumps. The
+     workflow moves no pin. Historical lines are preserved verbatim for provenance
+     and annotated in place rather than rewritten. This file is NOT a source of
+     truth for what yt-dlp version PMOVES runs -- do not read one off it, and do
+     not add one to it. Measured state and the commands that re-derive it live in
+     pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md. -->
+
 - 2026-08-24: bumped yt-dlp to 2026.8.19 (scheduled)
+  - **2026-08-27 correction — this note is a note, not a bump.** The PR it landed
+    in (#2713, `47c0c0d3b`) changed exactly one file — this tracker,
+    `1 insertion(+)`. No pin moved. `2026.8.19` is what PyPI reported as the latest
+    *upstream* release that morning, not what PMOVES runs. yt-dlp here is not a pip
+    dependency to bump: it is the `PMOVES.YT` submodule, which is itself a yt-dlp
+    fork, and the deployed image installs that fork from source. Changing the
+    version means a fork-sync plus a gitlink promotion — which `yt-dlp-bump.yml`
+    does not do and cannot do. See pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md.
 # PMOVES Hardening Tracker v4.0
 
 Comprehensive hardening posture, CI/CD build infrastructure, and service runtime status for the PMOVES.AI platform.
@@ -126,7 +142,7 @@ Tracked in `pmoves/docs/security/P2_SUBMODULE_TRACKER.md`.
 | `env-preflight.yml` | Windows env validation | PR + manual |
 | `sync-secrets-local.yml` | CGP/env secret sync | Manual |
 | `webhook-smoke.yml` | Render webhook smoke test | Manual |
-| `yt-dlp-bump.yml` | Weekly yt-dlp dependency bump | Schedule (Mon 08:00) |
+| `yt-dlp-bump.yml` | Weekly upstream-release *check*. Build-validates the non-deployed `pmoves/services/pmoves-yt/Dockerfile` against the latest PyPI yt-dlp and files a tracker note; moves no pin (see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md) | Schedule (Mon 08:00) |
 | `python-images-toolchain-canary.yml` | Weekly pinned Python image toolchain canary (build + Trivy + PR) | Schedule (Mon 09:00) + manual |
 
 ### Build Matrix (`pmoves/images.yaml` -- 16 services)
@@ -167,7 +183,12 @@ Use two documentation sinks on purpose:
 - Code scanning:
   - `codeql.yml` provides recurring code-level CVE/security signal.
 - Dependency freshness:
-  - `yt-dlp-bump.yml` keeps the extractor lane current on a weekly cadence.
+  - `yt-dlp-bump.yml` reports weekly on upstream yt-dlp releases. It does **not**
+    keep the extractor lane current, and nothing else does either: it builds a
+    throwaway image (`push: false`) from a Dockerfile the deployed stack does not
+    use, then commits a prose line. The extractor code that ships is the
+    `PMOVES.YT` submodule at its recorded gitlink. To learn how current that is,
+    run the commands in pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md — do not read a version off this tracker.
   - `python-images-toolchain-canary.yml` tests pinned Python image candidates weekly with a Trivy gate before opening a PR.
 - Image / runtime release gates:
   - `make -C pmoves ghcr-prepublish-inrepo`
