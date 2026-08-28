@@ -229,6 +229,8 @@ jobs:
           set -euo pipefail
           cfg_url='${{ steps.cfg.outputs.git_url }}'
           cfg_ref='${{ steps.cfg.outputs.ref }}'
+          cfg_context='${{ steps.cfg.outputs.context }}'
+          cfg_dockerfile='${{ steps.cfg.outputs.dockerfile }}'
           case "$cfg_url" in
             https://github.com/*) ;;
             *)
@@ -243,15 +245,30 @@ jobs:
 
           if [ "$cfg_url" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
             echo "Using checked-out PMOVES.AI workspace as integration source"
-            # Init pmoves/integrations/* submodules so build contexts under those
-            # paths get materialized. `git archive HEAD` (the prior approach)
-            # only includes gitlink mode 160000 entries — submodule contents
-            # would be missing. Use `git ls-files --recurse-submodules` instead.
+            # Materialize the submodule content this build actually needs.
+            # `git archive HEAD` (the prior approach) only emits gitlink mode
+            # 160000 entries, so submodule contents would be missing; we tar up
+            # `git ls-files --recurse-submodules` instead, which requires the
+            # submodule to be initialized first.
+            #
+            # TWO selectors, not one:
+            #  - every pmoves/integrations/* submodule (pre-existing behaviour)
+            #  - the submodule that IS, or contains, THIS entry's build context.
+            #    pmoves-yt builds from the repo-root PMOVES.YT submodule, which
+            #    the pmoves/integrations/ prefix filter never matched — so its
+            #    context arrived empty and the image was built from the shim.
             if [ -f .gitmodules ]; then
               git config --file .gitmodules --get-regexp '^submodule\..+\.path$' \
                 | awk '{print $2}' \
-                | grep '^pmoves/integrations/' \
                 | while IFS= read -r submod_path; do
+                    want=0
+                    case "$submod_path" in
+                      pmoves/integrations/*) want=1 ;;
+                    esac
+                    case "${cfg_context%/}/" in
+                      "${submod_path}/"*) want=1 ;;
+                    esac
+                    [ "$want" = "1" ] || continue
                     echo "→ Initializing submodule ${submod_path}"
                     git submodule update --init --depth=1 "${submod_path}" 2>&1 \
                       || echo "  (init failed — continuing without submodule content)"
@@ -263,6 +280,16 @@ jobs:
           else
             git clone --depth=1 --branch "$cfg_ref" "$cfg_url" integration-src
           fi
+
+          # Fail here, loudly, rather than letting docker/build-push-action emit a
+          # confusing "failed to read dockerfile". A missing Dockerfile at this
+          # point almost always means the entry's build context lives in a git
+          # submodule that was not materialized above.
+          if [ ! -f "integration-src/${cfg_dockerfile}" ]; then
+            echo "::error::Dockerfile 'integration-src/${cfg_dockerfile}' not found after source preparation. If this entry's build context is a git submodule, its content was not materialized — check the submodule init step above."
+            exit 1
+          fi
+          echo "✔ build context ready: integration-src/${cfg_context} (dockerfile: ${cfg_dockerfile})"
 
       - name: Free disk space (runner)
         run: |
@@ -418,6 +445,7 @@ jobs:
           import os
           import pathlib
           import sys
+          import uuid
 
           name = os.environ["MATRIX_NAME"]
           matrix_path = pathlib.Path(".github/workflows/integrations-ghcr.matrix.json")
@@ -496,6 +524,8 @@ jobs:
           set -euo pipefail
           cfg_url='${{ steps.cfg.outputs.git_url }}'
           cfg_ref='${{ steps.cfg.outputs.ref }}'
+          cfg_context='${{ steps.cfg.outputs.context }}'
+          cfg_dockerfile='${{ steps.cfg.outputs.dockerfile }}'
           case "$cfg_url" in
             https://github.com/*) ;;
             *)
@@ -510,15 +540,30 @@ jobs:
 
           if [ "$cfg_url" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
             echo "Using checked-out PMOVES.AI workspace as integration source"
-            # Init pmoves/integrations/* submodules so build contexts under those
-            # paths get materialized. `git archive HEAD` (the prior approach)
-            # only includes gitlink mode 160000 entries — submodule contents
-            # would be missing. Use `git ls-files --recurse-submodules` instead.
+            # Materialize the submodule content this build actually needs.
+            # `git archive HEAD` (the prior approach) only emits gitlink mode
+            # 160000 entries, so submodule contents would be missing; we tar up
+            # `git ls-files --recurse-submodules` instead, which requires the
+            # submodule to be initialized first.
+            #
+            # TWO selectors, not one:
+            #  - every pmoves/integrations/* submodule (pre-existing behaviour)
+            #  - the submodule that IS, or contains, THIS entry's build context.
+            #    pmoves-yt builds from the repo-root PMOVES.YT submodule, which
+            #    the pmoves/integrations/ prefix filter never matched — so its
+            #    context arrived empty and the image was built from the shim.
             if [ -f .gitmodules ]; then
               git config --file .gitmodules --get-regexp '^submodule\..+\.path$' \
                 | awk '{print $2}' \
-                | grep '^pmoves/integrations/' \
                 | while IFS= read -r submod_path; do
+                    want=0
+                    case "$submod_path" in
+                      pmoves/integrations/*) want=1 ;;
+                    esac
+                    case "${cfg_context%/}/" in
+                      "${submod_path}/"*) want=1 ;;
+                    esac
+                    [ "$want" = "1" ] || continue
                     echo "→ Initializing submodule ${submod_path}"
                     git submodule update --init --depth=1 "${submod_path}" 2>&1 \
                       || echo "  (init failed — continuing without submodule content)"
@@ -540,6 +585,16 @@ jobs:
               exit 1
             fi
           fi
+
+          # Fail here, loudly, rather than letting docker/build-push-action emit a
+          # confusing "failed to read dockerfile". A missing Dockerfile at this
+          # point almost always means the entry's build context lives in a git
+          # submodule that was not materialized above.
+          if [ ! -f "integration-src/${cfg_dockerfile}" ]; then
+            echo "::error::Dockerfile 'integration-src/${cfg_dockerfile}' not found after source preparation. If this entry's build context is a git submodule, its content was not materialized — check the submodule init step above."
+            exit 1
+          fi
+          echo "✔ build context ready: integration-src/${cfg_context} (dockerfile: ${cfg_dockerfile})"
         env:
           APP_TOKEN: ${{ steps.app_token.outputs.token }}
 
@@ -694,9 +749,90 @@ jobs:
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
           platforms: ${{ steps.cfg.outputs.platforms }}
-          tags: ${{ steps.meta.outputs.tags }}
+          # ONE immutable candidate tag, not the real ones. The runtime gate
+          # below runs AFTER this step, so publishing `:pmoves-latest` here
+          # meant a startup regression was already pullable by everyone the
+          # moment the gate failed -- red workflow, unsigned image, and users
+          # still getting the broken artifact. That is the failure this whole
+          # change exists to prevent, so the mutable tags are promoted onto the
+          # gated digest further down instead.
+          # run_id+run_attempt makes it unique per attempt, so a re-run never
+          # verifies a previous attempt's manifest.
+          tags: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache,mode=max
+
+      # RUNTIME GATE. Everything above proves the image BUILT. Nothing above
+      # proves it RUNS -- which is how ghcr.io/powerfulmoves/pmoves-yt shipped
+      # green for five months as an artifact that died at import
+      # (pmoves/docs/services/pmoves-yt/RUNBOOK.md section 1.3).
+      #
+      # Placed BEFORE attestation/cosign/SBOM on purpose: a digest that fails
+      # this gate gets no SLSA provenance and no cosign signature, because a
+      # failed step skips the rest of the job.
+      #
+      # `services:` cannot do this job. Per the context-availability table,
+      # jobs.<job_id>.services accepts only github/needs/strategy/matrix/vars/
+      # inputs -- NOT `steps` -- so it cannot reference the digest we just
+      # built, and would have to name a mutable tag, i.e. verify a stale
+      # artifact. That is the defect class, not the fix.
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability
+      - name: Verify pushed image starts (runtime gate)
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.build.outputs.digest != '' }}
+        env:
+          PRIMARY_TAG: ${{ steps.meta.outputs.primary_tag }}
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+          MATRIX_NAME: ${{ matrix.name }}
+          # Every platform in the manifest, not just the runner's own arch.
+          # build-publish runs on X64 while this matrix publishes
+          # linux/amd64,linux/arm64 -- so a plain `docker run` left the arm64
+          # variant unstarted and still signed it into the manifest. QEMU is
+          # configured in this job, which is what makes the arm64 leg runnable.
+          VERIFY_PLATFORMS: ${{ steps.cfg.outputs.platforms }}
+          VERIFY_PORT: ${{ steps.cfg.outputs.verify_port }}
+          VERIFY_HEALTH_PATH: ${{ steps.cfg.outputs.verify_health_path }}
+          VERIFY_TIMEOUT_SECONDS: ${{ steps.cfg.outputs.verify_timeout_seconds }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERIFY_PORT:-}" ] || [ -z "${VERIFY_HEALTH_PATH:-}" ]; then
+            echo "::warning title=No runtime gate for ${MATRIX_NAME}::Image pushed with no check that it starts. Add \"verify_port\" and \"verify_health_path\" to this entry in .github/workflows/integrations-ghcr.matrix.json to gate it."
+            exit 0
+          fi
+          # Verify by DIGEST, never by tag. ':pmoves-latest' is mutable and a
+          # concurrent matrix leg can move it between push and check;
+          # steps.build.outputs.digest is the exact manifest THIS job pushed.
+          # https://github.com/docker/build-push-action#outputs
+          ref="${PRIMARY_TAG%:*}@${BUILD_DIGEST}"
+          bash .github/scripts/verify-image-starts.sh "$ref"
+
+      # PROMOTION. Only reached if the runtime gate above passed, because a
+      # failed step skips the rest of the job. This is what makes the gate
+      # preventive rather than merely reportive: until this runs, the only
+      # thing in the registry is the candidate tag nobody pulls.
+      #
+      # `imagetools create` copies the MANIFEST LIST by digest -- no rebuild, no
+      # re-push of layers, and the digest the gate verified is the digest the
+      # tags end up pointing at. Multi-arch is preserved; a `docker pull && tag
+      # && push` round-trip would flatten it to the runner's own arch.
+      - name: Promote gated digest to release tags
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.build.outputs.digest != '' }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          SOURCE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [ -z "${tag}" ] && continue
+            args+=(--tag "${tag}")
+          done <<< "${TAGS}"
+          if [ "${#args[@]}" -eq 0 ]; then
+            echo "::error title=Nothing to promote::The runtime gate passed but no release tags were generated."
+            exit 1
+          fi
+          echo "Promoting ${SOURCE} to:"
+          printf '  %s\n' "${TAGS}"
+          docker buildx imagetools create "${args[@]}" "${SOURCE}"
 
       - name: Attest build provenance (SLSA L3)
         if: steps.build.outputs.digest != '' && steps.meta.outputs.has_tags == 'true'

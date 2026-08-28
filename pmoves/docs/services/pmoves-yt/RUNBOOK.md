@@ -26,8 +26,8 @@ version number off the wrong artifact and troubleshoot an extractor bug that is 
 |---|---|---|
 | Compose files | `docker-compose.yml` + `docker-compose.yt-cookies.yml` (via `COOKIES_DC`) | `docker-compose.yml` + `docker-compose.integrations.images.yml` (via `DC`) |
 | `image:` resolves to | *(empty)* → compose auto-names `pmoves-pmoves-yt` | `ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest` |
-| Built from | `../PMOVES.YT`, `pmoves_yt_service/Dockerfile` — the **fork**, vendored yt-dlp tree | `pmoves/services/pmoves-yt/Dockerfile` — the **shim**, `pip install yt-dlp[default]` |
-| yt-dlp | the fork: CHIT signing, NATS publish, SoundCloud fixes, phase9c multi-client | **n/a — a genuinely pulled published image does not start at all** (§1.3) |
+| Built from | `../PMOVES.YT`, `pmoves_yt_service/Dockerfile` — the **fork**, vendored yt-dlp tree | **the same recipe**: `PMOVES.YT/pmoves_yt_service/Dockerfile` (was the shim until §1.3.2) |
+| yt-dlp | the fork: CHIT signing, NATS publish, SoundCloud fixes, phase9c multi-client | the fork, same as the source path — verified at push time by a runtime gate (§1.3.2) |
 | Cookie volume | yes — `--profile yt-cookies`, `yt-cookies-vol` mounted at `/app/config/cookies` | **no** — see §5.1 |
 
 The published image is built by `.github/workflows/integrations-ghcr.matrix.json`:
@@ -36,27 +36,23 @@ The published image is built by `.github/workflows/integrations-ghcr.matrix.json
 $ python3 -c "import json;d=json.load(open('.github/workflows/integrations-ghcr.matrix.json'));[print(json.dumps(i,indent=1)) for i in (d if isinstance(d,list) else d.get('include',[])) if i.get('name')=='pmoves-yt']"
 {
  "name": "pmoves-yt",
- "context": "pmoves/services/pmoves-yt",
- "dockerfile": "pmoves/services/pmoves-yt/Dockerfile",
+ "context": "PMOVES.YT",
+ "dockerfile": "PMOVES.YT/pmoves_yt_service/Dockerfile",
  "image_name": "pmoves-yt",
+ "verify_port": "8077",
+ "verify_health_path": "/healthz",
  ...
 }
 ```
 
-Note what that means alongside [`README.md`](./README.md), which describes
-`pmoves/services/pmoves-yt` as *"a compatibility mirror/shim, not the source of truth"*. The
-published image is built from the **shim**, and the shim's Dockerfile installs yt-dlp from PyPI,
-not from the fork:
+**The two paths now build the same thing.** That is deliberate and is the fix described in §1.3.2:
+the entry used to point at `pmoves/services/pmoves-yt/Dockerfile`, which [`README.md`](./README.md)
+describes as *"a compatibility mirror/shim, not the source of truth"*, and which installed yt-dlp
+from PyPI rather than from the fork. That image could not start at all. It now builds the fork's own
+Dockerfile, so a pulled image carries the fork's yt-dlp — `/healthz` reports the pinned fork version
+and `yt_dlp` imports from `/opt/pmoves-yt/yt_dlp`, not from site-packages.
 
-```
-$ grep -n 'yt-dlp' pmoves/services/pmoves-yt/Dockerfile
-16:    && if [ -n "$YTDLP_PIP_URL" ]; then pip install --no-cache-dir "$YTDLP_PIP_URL"; \
-17:       elif [ -n "$YTDLP_VERSION" ]; then pip install --no-cache-dir "yt-dlp[default]==${YTDLP_VERSION}"; \
-18:       else pip install --no-cache-dir "yt-dlp[default]"; fi
-```
-
-That PyPI install is real, but it is **not** what you get by pulling the image — because nothing you
-pull will start. Read §1.3 before planning any work around the published path.
+Read §1.3 for what the artifact used to do — a stale pull still does it — and §1.3.2 for the fix.
 
 ### 1.1 The discriminator — run all three
 
@@ -145,7 +141,12 @@ settled from the Dockerfile and shim in this repo, and it is a startup crash. Se
 
 ### 1.3 DEFECT: the published image cannot start — it is not a deployable artifact
 
-`ghcr.io/powerfulmoves/pmoves-yt:*` builds green and is unrunnable. Its entrypoint is
+> **FIXED — read §1.3.2 before acting on this section.** The diagnosis below is preserved because it
+> is what the artifact did for five months and what a stale pull still does. The recipe has since
+> been corrected: the GHCR entry is now built from the fork's own Dockerfile, and a runtime gate
+> fails the workflow if the pushed image does not start.
+
+`ghcr.io/powerfulmoves/pmoves-yt:*` built green and was unrunnable. Its entrypoint is
 `uvicorn yt:app`, and `yt.py` is a shim that walks **three directory levels up** to find the
 submodule runtime:
 
@@ -214,27 +215,55 @@ NOT PRESENT in the build context
    fork locally and tags it with the GHCR name**. The broken artifact is bypassed by the very target
    named after it.
 
-#### 1.3.2 What to do about it
+#### 1.3.2 What was done about it
 
-- **Operators:** do not plan around `up-yt-published` as a way to run stock yt-dlp. On a node with
-  `PMOVES.YT` checked out it silently hands you the fork; on a node without it, a genuine pull hands
-  you a container that will not start. Use `up-yt`, and use §1.1 (b) to read what is actually
-  running.
-- **Maintainers — the finding:** `pmoves-yt` **should not be published in its current form.** Fixing
-  the shim means moving the build context to the repo root and vendoring the submodule into the
-  image, which yields a *fork* image under a name whose whole stated purpose was to be stock PyPI —
-  it removes the reason the entry exists. Dropping the `pmoves-yt` entry from
-  `integrations-ghcr.matrix.json`, along with the `docker-compose.integrations.images.yml` override
-  and the two Make targets that point at it (`up-yt-published` at `Makefile:2582`,
-  `up-yt-published-amd` at `Makefile:2586`), is the smaller and more honest change.
-  **No code change is made here — this is a docs branch.** Tracked in
-  [#2802](https://github.com/POWERFULMOVES/PMOVES.AI/issues/2802).
+This runbook originally recommended **dropping** `pmoves-yt` from the matrix, on the grounds that
+fixing the shim yields a *fork* image under a name whose stated purpose was stock PyPI. That
+recommendation was **overruled, and the reasoning behind the override is the more important fact:**
+the repo is public and the nodes are private. All ten classed fleet profiles are `private-mesh`, so
+no node exercises the published path — but a community, school, or partner install has **no
+submodule to build from** and can only pull. Deleting the entry does not remove a burden; it removes
+the only delivery path for everyone outside the mesh. So the image was fixed and republished
+instead. Tracked in [#2802](https://github.com/POWERFULMOVES/PMOVES.AI/issues/2802).
 
-> **This voids [`YTDLP_CURRENCY.md`](./YTDLP_CURRENCY.md) §1b's mapping** of
-> `ghcr.io/powerfulmoves/pmoves-yt:...` → "published image (stock PyPI yt-dlp)". There is no state in
-> which that image serves stock PyPI yt-dlp: pulled, it does not start; locally rebuilt under that
-> name, it is the fork. Both documents still agree on the rule that matters — **when the layers
-> disagree, the running container wins** — and §1.1 (b) is how you settle it.
+**The shape of the fix.** `integrations-ghcr.matrix.json` now points `pmoves-yt` at the fork's own
+build recipe — the same one `up-yt` has always used:
+
+```
+"context":    "PMOVES.YT",
+"dockerfile": "PMOVES.YT/pmoves_yt_service/Dockerfile",
+```
+
+That Dockerfile uses `WORKDIR /opt/pmoves-yt`, `COPY . /opt/pmoves-yt`, `pip install ".[default]"`
+and `CMD ["uvicorn","pmoves_yt_service.yt:app",...]`. It imports the runtime directly and never
+touches the three-levels-up shim, so the defect above has no path to recur. **The published image
+and the locally built image are now the same recipe** — one artifact, one build, no divergence to
+reconcile.
+
+Two supporting changes were required:
+
+- **Source preparation had to learn about repo-root submodules.** `integrations-ghcr.yml` initialized
+  only `pmoves/integrations/*`, so a `PMOVES.YT` context would have arrived empty. It now also
+  initializes the submodule that *is*, or contains, the entry's build context, and hard-fails with a
+  named error if the declared Dockerfile is missing after preparation.
+- **A runtime gate.** `.github/scripts/verify-image-starts.sh` pulls the just-pushed image **by
+  digest** (`steps.build.outputs.digest`, not the mutable `:pmoves-latest`), runs it, and requires
+  `/healthz` to answer 200. It runs *before* attestation and cosign signing, so a digest that cannot
+  start receives neither. Entries opt in via `verify_port` / `verify_health_path`; entries that do
+  not emit a `::warning::` naming themselves as ungated.
+
+**Operators:** `up-yt-published` is now a real path. Note it remains cookie-less as written (§5.1),
+and §1.2 still holds — the images overlay does not remove `build:`, so on a node with the submodule
+checked out the target still rebuilds locally. §1.1 (b) remains the way to settle what is running.
+
+> **[`YTDLP_CURRENCY.md`](./YTDLP_CURRENCY.md) §1b's mapping** of
+> `ghcr.io/powerfulmoves/pmoves-yt:...` → "published image (stock PyPI yt-dlp)" **is void, and stays
+> void.** Before the fix there was no state in which that image served stock PyPI yt-dlp — pulled it
+> did not start, locally rebuilt under that name it was the fork. After the fix it serves the fork
+> *by design*: `/healthz` on a freshly pulled image reports the pinned fork version, and `yt_dlp`
+> imports from `/opt/pmoves-yt/yt_dlp`, not from site-packages. Both documents still agree on the
+> rule that matters — **when the layers disagree, the running container wins** — and §1.1 (b) is how
+> you settle it.
 
 ---
 
