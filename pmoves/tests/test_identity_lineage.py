@@ -167,6 +167,27 @@ def test_all_seven_annotated_corrections_are_recorded():
         assert il.correction_for(timestamp, kind) is not None, (timestamp, kind)
 
 
+def test_writing_about_the_convention_is_not_using_it():
+    """A register entry may cite `[CORRECTION ...]` while surveying the
+    convention. A substring test counts that as an eighth correction, which
+    both overcounts the ratchet and reports the register unclean -- for an
+    entry that corrects nothing. The 2026-08-25T15:00:00Z preflight entry does
+    exactly this, so the discriminator is real traffic, not a hypothetical.
+    """
+    survey = (
+        "- `2026-08-25T15:00:00Z` CLAIM+RELEASE `B850-CLAUDE (Knuckles)` scope: "
+        "the survey found six hand-edited `[CORRECTION ...]` annotations "
+        "rewriting history in place.\n"
+    )
+    assert il.annotated_corrections(survey) == []
+
+    real = (
+        "- `2026-03-19T22:00:00Z` CLAIM `B850-CLAUDE (Knuckles)` scope: work. "
+        "**[CORRECTION 2026-08-25: lane key drift.]**\n"
+    )
+    assert len(il.annotated_corrections(real)) == 1, "a real annotation must still count"
+
+
 def test_the_six_reattributions_are_not_recorded_as_succession():
     """They were MIS-SIGNED, not handed over.
 
