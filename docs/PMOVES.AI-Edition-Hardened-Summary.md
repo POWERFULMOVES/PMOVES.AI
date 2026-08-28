@@ -222,7 +222,7 @@ _Note: PMOVES-DoX tracks `PMOVES.AI-Edition-Hardened-DoX` branch (contains neste
 | `deploy-gateway-agent.yml` | 3 runner types | RED | Requires self-hosted runners |
 | `sync-secrets-local.yml` | `self-hosted, ai-lab` | FIXED | Switched from cleartext to base64 encoding |
 | `webhook-smoke.yml` | `self-hosted, vps` | YELLOW | Manual only |
-| `yt-dlp-bump.yml` | `self-hosted, vps` | RED | Scheduled, fails silently when offline |
+| `yt-dlp-bump.yml` | `ubuntu-latest` | YELLOW | Runs, but cannot do what its name implies — it build-validates a non-deployed Dockerfile and files a tracker note without moving any pin (pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md). Runner label corrected 2026-08-27: this row read `self-hosted, vps`; the workflow has `runs-on: ubuntu-latest`. |
 
 ### CI Improvements Made (2026-02-13)
 

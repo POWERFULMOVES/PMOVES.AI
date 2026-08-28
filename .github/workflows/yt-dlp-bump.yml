@@ -80,14 +80,41 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          branch="chore/bump-yt-dlp-${VERSION}"
+          branch="docs/yt-dlp-upstream-${VERSION}"
           git checkout -b "$branch"
-          # Record version in tracker to surface provenance
-          sed -i "1i- $(date +%Y-%m-%d): bumped yt-dlp to ${VERSION} (scheduled)" docs/hardening/PMOVES-hardening-tracker.md
+          # This workflow moves NO pin. It resolves the latest upstream release,
+          # build-validates pmoves/services/pmoves-yt/Dockerfile -- which is NOT
+          # what the local-build path (`up-yt`) uses, though it IS what GHCR
+          # publishes for `up-yt-published` -- discards the image (push: false),
+          # and records a note. Saying "bumped" here
+          # produced a git log of chore(...) subjects that read as version bumps
+          # and were not -- see #2713 and pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md.
+          # The note is worded to be self-describing because its position in the
+          # tracker is not stable (each run prepends above the previous one).
+          sed -i "1i- $(date +%Y-%m-%d): upstream yt-dlp ${VERSION} released -- build-validated only, NO pin moved (see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md)" docs/hardening/PMOVES-hardening-tracker.md
           git add docs/hardening/PMOVES-hardening-tracker.md
-          git commit -m "chore(pmoves-yt): bump yt-dlp to ${VERSION}"
+          git commit -m "docs(pmoves-yt): note upstream yt-dlp ${VERSION} release (no pin moved)"
           git push origin "$branch"
           # No `|| true`: if the PR cannot be opened, this workflow has done
           # nothing useful and must say so. `set -e` is already on.
-          gh pr create --title "chore(pmoves-yt): bump yt-dlp to ${VERSION}"             --body "Automated weekly bump to yt-dlp ${VERSION}."
+          # Body written via a quoted heredoc: markdown with blank lines cannot sit
+          # at column 0 inside a YAML block scalar, and backticks must not reach
+          # the shell. ${VERSION} is substituted explicitly after the heredoc.
+          cat > /tmp/pr-body.md <<'BODY'
+          Automated weekly **notification**, not a bump.
+
+          Upstream yt-dlp `__VERSION__` is available on PyPI. This PR changes **one line of documentation** and moves **no pin**.
+
+          What ran: the latest upstream release was resolved from PyPI, and `pmoves/services/pmoves-yt` was built against it multi-arch with `push: false`. The image was then discarded.
+
+          What did **not** run: nothing upgraded the `PMOVES.YT` submodule, which is the yt-dlp fork the *locally built* image (`make -C pmoves up-yt`) installs from source. Upgrading it means a fork-sync plus a gitlink promotion, which this workflow does not do.
+
+          Note that the Dockerfile validated above is also the one GHCR publishes as `ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest` for the `up-yt-published` path -- and that published image installs **stock PyPI yt-dlp**, not the fork. This workflow does not change which version it gets either, because the real GHCR build passes no `YTDLP_VERSION`.
+
+          To find out which yt-dlp version PMOVES actually runs, and what an upgrade would involve, see `pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md`.
+          BODY
+          sed -i "s/__VERSION__/${VERSION}/g" /tmp/pr-body.md
+          gh pr create \
+            --title "docs(pmoves-yt): note upstream yt-dlp ${VERSION} release (no pin moved)" \
+            --body-file /tmp/pr-body.md
 
