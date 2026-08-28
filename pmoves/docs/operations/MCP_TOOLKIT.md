@@ -245,14 +245,46 @@ restart**, so a restart alone is not the fix.
 
 ```bash
 python pmoves/tools/mcp_toolkit_preflight.py --profile <id>
-#   0  ready
-#   1  resolver down — servers WILL start unauthenticated (it names which)
-#   3  could not measure — NOT a pass
+#   0  ready — resolver answers AND every secret the profile requires is in
+#      the store
+#   1  measured a problem — the resolver is down, OR a required secret is
+#      absent from the store. Either way the affected servers WILL start
+#      unauthenticated; the report names which servers and which secret NAMES
+#   3  could not measure — no docker, no Toolkit, no such profile, no
+#      interpreter that can run the preflight, or a secret store that could
+#      not be enumerated. NOT a pass
 ```
+
+Readiness is the conjunction on purpose. An earlier cut set the verdict from
+`resolver_healthy()` alone while already holding, unread, the list of secrets
+the profile requires — so a live resolver over a store where a secret had never
+been hydrated (or had since been wiped) reported ready, strict startup and CI
+passed, and the server still 401'd at call time. Same for the enumeration
+itself: a `docker mcp secret ls` that cannot be read is exit 3, never an empty
+list of problems.
 
 `make -C pmoves mcp-toolkit-gateway-start` runs this automatically and reports
 non-zero as advisory. Set `PMOVES_MCP_STRICT=1` to refuse to start instead —
-which is what CI and unattended bring-up should do.
+which is what CI and unattended bring-up should do. Under strict that now also
+covers "the preflight could not be run at all" (no interpreter, tool absent),
+which used to warn and launch the gateway unchecked.
+
+**Interpreter selection.** The listener picks its Python through
+`pmoves/scripts/pm-python.sh` — the canonical discovery shared with
+`claude-pmoves.sh` and `crush-pmoves` — probing each candidate for PyYAML,
+which the preflight imports. Order: `$PMOVES_PYTHON`, then
+`pmoves/.venv-pmoves`, then `python3` / `py -3` / `python`. It previously called
+bare `python3`, which exits 127 on nodes where Python is `py -3` or lives only
+in the canonical venv, and fails on hosts whose system Python lacks PyYAML even
+though that venv has it. Pin explicitly when a node needs it:
+
+```bash
+PMOVES_PYTHON="py -3" make -C pmoves mcp-toolkit-gateway-start
+```
+
+A node with no equipped interpreter reports exit **3** (could not measure), not
+exit 1 — "I could not run the check" and "the check found a problem" are
+different answers and no longer share a bucket.
 
 **Recovery, in order:**
 
