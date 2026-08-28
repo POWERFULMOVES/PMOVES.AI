@@ -4,7 +4,7 @@ Status: Implemented (compose)
 
 > **Operating this service?** See [`RUNBOOK.md`](./RUNBOOK.md) — bring-up, health checks,
 > the cookie chain, failure triage, teardown. Start with its §1: there are two deployment
-> paths and they run different yt-dlp builds.
+> paths, only one of them actually runs, and §1.1 is how you tell which you are on.
 
 Overview
 - YouTube ingest and processing; integrates with MinIO and Supabase.
