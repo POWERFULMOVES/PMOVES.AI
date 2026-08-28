@@ -41,6 +41,50 @@
 
 set -uo pipefail
 
+# Bash 4+ is required: associative arrays (already used by the original version
+# of this script), namerefs, and ${var,,}. Stock macOS still ships Bash 3.2 as
+# /bin/bash, and pmoves/AGENTS.md documents a macOS bootstrap, so this would
+# otherwise fail with a parse error that names none of the above.
+#
+# Re-exec under a newer bash when one is installed (Homebrew puts it in
+# /opt/homebrew/bin or /usr/local/bin and does NOT replace /bin/bash), so the
+# common macOS case just works instead of erroring.
+if [[ -z "${BASH_VERSINFO:-}" || "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+  # One-shot: never re-exec twice. Without this, any situation where the
+  # re-exec target still fails the version test loops forever spawning shells.
+  if [[ -z "${PMOVES_PREREQ_REEXEC:-}" ]]; then
+    for _cand in /opt/homebrew/bin/bash /usr/local/bin/bash /usr/bin/bash; do
+      if [[ -x "$_cand" ]] && [[ "$("$_cand" -c 'echo ${BASH_VERSINFO[0]}' 2>/dev/null || echo 0)" -ge 4 ]]; then
+        PMOVES_PREREQ_REEXEC=1 exec "$_cand" "$0" "$@"
+      fi
+    done
+  fi
+  echo "check_prereqs.sh: needs bash 4+ (found ${BASH_VERSION:-unknown, likely not bash})." >&2
+  case "$(uname -s 2>/dev/null || echo unknown)" in
+    Darwin)
+      echo "  macOS ships bash 3.2 as /bin/bash and Homebrew does not replace it." >&2
+      echo "    brew install bash" >&2
+      echo "    \"\$(brew --prefix)/bin/bash\" pmoves/scripts/check_prereqs.sh" >&2 ;;
+    Linux)
+      echo "  Most distros ship bash 5. Hitting this usually means either a minimal" >&2
+      echo "  image (Alpine/BusyBox provide ash, not bash) or invocation via 'sh'." >&2
+      echo "    Debian/Ubuntu: apt-get install -y bash" >&2
+      echo "    Alpine:        apk add bash" >&2
+      echo "    Then run it as 'bash <script>', not 'sh <script>'." >&2 ;;
+    MINGW*|MSYS*|CYGWIN*)
+      echo "  Git Bash ships bash 4.4+, so this is unexpected here. Check that the" >&2
+      echo "  script is not being run through a stripped-down sh on PATH." >&2
+      echo "    \"C:/Program Files/Git/bin/bash.exe\" pmoves/scripts/check_prereqs.sh" >&2 ;;
+    *)
+      echo "  Install bash 4 or newer and invoke the script with it directly." >&2 ;;
+  esac
+  echo >&2
+  echo "  Environment setup across Windows / WSL / Linux / macOS:" >&2
+  echo "    pmoves/docs/operations/LOCAL_TOOLING_REFERENCE.md" >&2
+  echo "    make -C pmoves venv-bringup   # provisions .venv-pmoves + tool deps" >&2
+  exit 2
+fi
+
 QUIET=0
 STRICT=0
 TIER=""
@@ -113,6 +157,26 @@ declare -A UNLOCKS=(
   [make]="the Known Roads themselves — nearly every documented operation is a make target"
 )
 
+# Repo root, from BASH_SOURCE rather than cwd: the Make target runs this from
+# inside pmoves/ while an operator runs it from the repo root.
+PMOVES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Some agent-tier tools are installed INTO the bringup environment rather than
+# onto PATH -- glances is, via `venv-bringup`. Reporting those as plain MISSING
+# makes the advertised remedy look like it failed: you run venv-bringup, it
+# succeeds, and the next check-prereqs-strict still exits non-zero telling you
+# to install the thing you just installed. Look in the environment too, and
+# distinguish "absent" from "present but not on PATH" -- different remedies.
+find_in_bringup_env() {
+  local b="$1" d f
+  for d in "$PMOVES_DIR/.venv-pmoves/Scripts" "$PMOVES_DIR/.venv-pmoves/bin"; do
+    for f in "$d/$b" "$d/$b.exe"; do
+      [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }
+    done
+  done
+  return 1
+}
+
 REQUIRED=(jq make curl git python3)
 
 # Grounded in .claude/BOOTSTRAP.md Known Roads (make/docker/tailscale/gh/uv),
@@ -131,7 +195,7 @@ TIER_MISSING=0
 
 check_tier() {
   local label="$1"; local -n _bins="$2"
-  local bin version
+  local bin version found_at
   TIER_MISSING=0
   echo "🔍 ${label}"
   for bin in "${_bins[@]}"; do
@@ -143,6 +207,13 @@ check_tier() {
         [[ -n "$version" ]] || version="<version-unknown>"
         printf "  ✅ %-10s %s\n" "$bin" "$version"
       fi
+    elif found_at=$(find_in_bringup_env "$bin"); then
+      # Present, just not reachable from this shell. An activation gap, not a
+      # missing package -- and reinstalling is the wrong remedy.
+      TIER_MISSING=$((TIER_MISSING+1))
+      printf "  ⚠️  %-10s in the bringup env but NOT on PATH\n" "$bin"
+      printf "     %-10s at: %s\n" "" "$found_at"
+      printf "     %-10s activate the env or call it by path — reinstalling will not help\n" ""
     else
       TIER_MISSING=$((TIER_MISSING+1))
       printf "  ❌ %-10s MISSING — %s\n" "$bin" "${HINTS[$bin]:-<no install hint>}"
@@ -165,12 +236,30 @@ env_tier_report() {
 
   echo "🔍 Bringup interpreter (advisory)"
 
+  # Probe the interpreter Make will ACTUALLY use, when it tells us which that
+  # is. The Make targets export PMOVES_PREREQ_PY="$(PRECHECK_PY)", so an
+  # operator on the documented Conda bootstrap (pmoves/AGENTS.md: "Preferred
+  # Python: Conda 3.11+") or a PYTHON=/custom pin gets that interpreter checked
+  # rather than a .venv-pmoves that may not exist. Probing only .venv-pmoves
+  # would fail a healthy Conda setup and, worse, could pass while the
+  # interpreter Make really invokes lacks the modules -- an instrument
+  # reporting on something other than what runs.
+  if [[ -n "${PMOVES_PREREQ_PY:-}" ]]; then
+    # May be multi-word ("py -3"); word-splitting is intended here.
+    # shellcheck disable=SC2086
+    if ${PMOVES_PREREQ_PY} -c pass >/dev/null 2>&1; then
+      interp="${PMOVES_PREREQ_PY}"; layout="as selected by make (PRECHECK_PY)"
+    fi
+  fi
+
   # Run the candidate rather than test for it. MSYS reports any file ending
   # .exe as executable regardless of content, so -x cannot tell a real
   # interpreter from an interrupted install.
-  for c in "$win:Windows (Scripts/python.exe)" "$nix:POSIX (bin/python)"; do
-    if "${c%%:*}" -c pass >/dev/null 2>&1; then interp="${c%%:*}"; layout="${c#*:}"; break; fi
-  done
+  if [[ -z "$interp" ]]; then
+    for c in "$win:Windows (Scripts/python.exe)" "$nix:POSIX (bin/python)"; do
+      if "${c%%:*}" -c pass >/dev/null 2>&1; then interp="${c%%:*}"; layout="${c#*:}"; break; fi
+    done
+  fi
 
   if [[ -z "$interp" ]]; then
     printf "  ❌ %-22s not provisioned or not runnable (both layouts probed)\n" "bringup env"
@@ -189,7 +278,8 @@ env_tier_report() {
     # lies: pmoves/ contains a `nats/` directory that shadows the real nats-py
     # package, so a plain `import nats` PASSES from pmoves/ and FAILS from the
     # repo root for the same interpreter.
-    if "$interp" -I -c "import $m" >/dev/null 2>&1; then
+    # shellcheck disable=SC2086  # interp may be "py -3"; splitting is intended
+    if ${interp} -I -c "import $m" >/dev/null 2>&1; then
       [[ "$QUIET" -eq 0 ]] && printf "  ✅ %-22s importable\n" "$m"
     else
       printf "  ❌ %-22s NOT importable by the bringup interpreter\n" "$m"

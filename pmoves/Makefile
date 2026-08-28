@@ -218,19 +218,19 @@ check-prereqs: ## Verify system binaries required for bringup (jq, make, curl, g
 
 .PHONY: check-prereqs-agent
 check-prereqs-agent: ## Verify the agent CLI contract (Known Road tools + agent binaries); advisory, reports what each gap costs
-	@bash scripts/check_prereqs.sh --agent
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --agent
 
 .PHONY: check-prereqs-env
 check-prereqs-env: ## Verify the bringup interpreter resolves and the tool imports work; advisory
-	@bash scripts/check_prereqs.sh --env
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --env
 
 .PHONY: check-prereqs-all
 check-prereqs-all: ## All tiers: bringup prereqs (fatal) + agent CLI contract + bringup interpreter (advisory)
-	@bash scripts/check_prereqs.sh --all
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --all
 
 .PHONY: check-prereqs-strict
 check-prereqs-strict: ## All tiers, non-zero exit on ANY gap (CI gate). --strict covers the env tier too.
-	@bash scripts/check_prereqs.sh --all --strict
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --all --strict
 
 .PHONY: venv
 venv: ## Create pmoves/.venv-pmoves and install service + tool requirements
