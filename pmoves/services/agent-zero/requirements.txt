@@ -63,4 +63,4 @@ pytest-asyncio
 # (sph_legendre_p) that only register under numpy 2.x -- run_ui.py dies at
 # import with "All ufuncs must have type numpy.ufunc". scipy 1.14.x is the
 # newest line that supports numpy>=1.23.5,<2.3.
-scipy<1.15
+scipy<1.19
