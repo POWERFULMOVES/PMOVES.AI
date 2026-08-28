@@ -121,6 +121,12 @@ the `PMOVES.YT` submodule checked out can end up with a **locally-built fork ima
 name** rather than the stock-yt-dlp image the name implies. So the image name tells you which target
 someone *ran*; only `/healthz` tells you what is *running*.
 
+> **This refines [`YTDLP_CURRENCY.md`](./YTDLP_CURRENCY.md) §1b**, which maps
+> `ghcr.io/powerfulmoves/pmoves-yt:...` → "published image (stock PyPI yt-dlp)". That mapping holds
+> for an image genuinely pulled from the registry, but it is not guaranteed by the image *name*,
+> because the overlay leaves `build:` in place. Both documents agree on the conclusion that matters:
+> **when the layers disagree, the running container wins.**
+
 Do **not** try to settle this with `RepoDigests` — it does not discriminate. This node's
 locally-built image carries one:
 
@@ -141,17 +147,17 @@ they are pulling without a `read:packages` token. Verify against `/healthz` afte
 
 ### 2.1 Use `git ls-tree`, never `git ls-files -s`
 
-`git ls-files -s` reads the **index**, which lies the moment anything is staged. `git ls-tree HEAD`
-reads the commit. On this node 30 submodule checkouts have drifted from their pins, so this
-distinction is not academic.
-
 ```bash
 git ls-tree HEAD -- PMOVES.YT          # correct — reads the commit
 git -C PMOVES.YT rev-parse HEAD        # what is actually checked out
 ```
 
-A detached HEAD in the submodule is **normal** and is not drift by itself. Drift is when these two
-disagree.
+`git ls-files -s` reads the **index**, which lies the moment anything is staged. A detached HEAD in
+the submodule is **normal** and is not drift by itself — drift is when these two disagree.
+
+[`YTDLP_CURRENCY.md`](./YTDLP_CURRENCY.md) §1a covers the pin-reading mechanism in full, including
+the working-checkout-vs-pin trap and how to count drift across the fleet. Go there for
+"what version *should* ship"; stay here for "my node is misbehaving right now".
 
 ### 2.2 HAZARD: `git submodule update --remote` downgrades the extractor set
 
