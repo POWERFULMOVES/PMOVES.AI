@@ -503,3 +503,74 @@ def test_a_release_citing_a_file_still_closes_the_whole_claim(tmp_path):
     assert result.returncode == ALLOW, (
         "the release closed the lane, so AGENT-B may take it:\n" + result.stderr
     )
+
+
+# --- Codex findings on #2755 -------------------------------------------------
+
+def test_replacement_commands_are_advised(tmp_path):
+    """`cp`/`mv`/`perl -pi` rewrite a file with no redirect and no sed -i.
+
+    None of them carried a WRITE_TOKENS match, so the gate stayed silent while
+    the register was replaced wholesale -- the exact hole the Bash advisory
+    exists to close, reachable by the most ordinary way to overwrite a file.
+    """
+    for command in (
+        f"cp updated.md {REGISTER_NAME}",
+        f"mv staged.md {REGISTER_NAME}",
+        f"perl -pi -e 's/a/b/' {REGISTER_NAME}",
+        f"install -m 644 new.md {REGISTER_NAME}",
+    ):
+        r = _run_bash(tmp_path, command)
+        assert _decision(r) == "ask", f"silent on a register rewrite: {command!r}"
+
+
+def test_read_only_redirection_is_not_advised(tmp_path):
+    """A redirect that does not TARGET the register is not a write to it.
+
+    `2>/dev/null` and a redirect to report.txt matched the bare `>` token, so
+    routine reads prompted. This hook runs on every Bash call, so a false ask
+    here is friction on ordinary work -- and friction is what trains people to
+    click through the prompt that actually matters.
+    """
+    for command in (
+        f"cat {REGISTER_NAME} 2>/dev/null",
+        f"grep CLAIM {REGISTER_NAME} > report.txt",
+        f"wc -l < {REGISTER_NAME}",
+    ):
+        r = _run_bash(tmp_path, command)
+        assert _decision(r) is None, f"false prompt on a read: {command!r}"
+
+
+def test_redirection_onto_the_register_is_still_advised(tmp_path):
+    """The other half of the above: a redirect AT the register must still ask."""
+    r = _run_bash(tmp_path, f"echo '- entry' >> {REGISTER_NAME}")
+    assert _decision(r) == "ask"
+
+
+def test_an_explicitly_marked_branch_keeps_its_file_suffix(tmp_path):
+    """A branch may legitimately end in `.py`; the suffix filter dropped it.
+
+    Both claims then became unkeyed, so two owners could hold one branch with
+    no collision -- the gate failing OPEN, silently. The suffix filter still
+    earns its place for bare cited paths, so an explicit `Branch` marker is
+    what distinguishes a claimed lane from a referenced file.
+    """
+    existing = "- `t0` CLAIM `AGENT-A` scope: **parser.** Branch `fix/parser.py`\n"
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: **same parser.** Branch `fix/parser.py`",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK, f"gate failed OPEN on a suffixed branch: {r.returncode}"
+    assert "fix/parser.py" in r.stderr
+
+
+def test_a_cited_file_path_is_still_not_a_lane(tmp_path):
+    """Negative control for the fix above: no marker, so the suffix filter holds."""
+    existing = "- `t0` CLAIM `AGENT-A` scope: reviewed `docs/superpowers/specs/x-design.md`\n"
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: also read `docs/superpowers/specs/x-design.md`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, "a merely-cited spec file must not register as a lane"

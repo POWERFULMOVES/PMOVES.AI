@@ -101,12 +101,30 @@ FILE_SUFFIXES = (
 )
 
 
+# `Branch \`x\`` / `branch: \`x\`` -- how 68 claims in the live register already
+# mark their lane. A token behind this marker is a DECLARED branch, so the
+# suffix filter must not touch it: a real branch may end `.py` or `.md`, and
+# dropping it left BOTH claims unkeyed, which let two owners hold one lane with
+# no collision. The gate failed open, silently. The filter still applies to
+# unmarked tokens, where a backticked `docs/...` really is usually a cited file.
+BRANCH_MARKER_RE = re.compile(
+    r'\bbranch\b[:=]?\s*`([^`]+)`',
+    re.IGNORECASE,
+)
+
+
 def lanes_in(text: str) -> set[str]:
-    """Branch-shaped tokens in a line, with file paths excluded."""
-    return {
+    """Branch-shaped tokens in a line, with cited file paths excluded.
+
+    Explicitly marked branches are kept whatever they end in; everything else
+    must survive FILE_SUFFIXES to count as a lane.
+    """
+    declared = {lane for lane in BRANCH_MARKER_RE.findall(text) if lane.strip()}
+    inferred = {
         lane for lane in LANE_RE.findall(text)
         if not lane.lower().endswith(FILE_SUFFIXES)
     }
+    return declared | inferred
 
 
 _UNSET = object()
@@ -227,13 +245,35 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
 # Shell tokens that mean "this command can modify a file". Deliberately broad:
 # a false positive costs one prompt, a false negative is the hole this closes.
 WRITE_TOKENS = re.compile(
-    r">>?|"                       # redirect
     r"\btee\b|"                    # tee / tee -a
     r"\bsed\b[^|]*-i|"             # sed -i
     r"\bdd\b|"
+    # Replacement-style rewrites. These carry no redirect and no -i, so the
+    # advisory was silent while the register was overwritten wholesale -- the
+    # most ordinary way to replace a file walked straight through the gate.
+    r"\b(?:cp|mv|install|rsync|truncate)\b|"
+    r"\bperl\b[^|]*-[a-zA-Z]*i|"   # perl -pi / -i.bak
     r"\b(?:write_text|open)\s*\(|"  # python inside a heredoc
     r"\bcat\b[^|]*<<"              # heredoc
 )
+
+# Redirects are handled separately from the tokens above, because `>` alone
+# says nothing about WHICH file is written. `cat REGISTER 2>/dev/null` and
+# `grep REGISTER > report.txt` both name the register and both redirect, yet
+# neither writes it. This hook runs on every Bash call, so those false asks are
+# friction on ordinary reads -- and friction is what teaches people to click
+# through the one prompt that matters.
+REDIRECT_TARGET_RE = re.compile(r">>?\s*([^\s;|&<>]+)")
+
+
+def _writes_the_register(command: str) -> bool:
+    """True when `command` plausibly MODIFIES the register (not merely reads it)."""
+    if WRITE_TOKENS.search(command):
+        return True
+    return any(
+        REGISTER_NAME in target
+        for target in REDIRECT_TARGET_RE.findall(command)
+    )
 
 
 def _advise_on_shell_write(payload: dict) -> None:
@@ -243,7 +283,7 @@ def _advise_on_shell_write(payload: dict) -> None:
     write token, so ordinary `grep`/`sed -n` reads stay silent.
     """
     command = ((payload.get("tool_input") or {}).get("command") or "")
-    if REGISTER_NAME not in command or not WRITE_TOKENS.search(command):
+    if REGISTER_NAME not in command or not _writes_the_register(command):
         return
 
     register = _locate_register(payload, command)
