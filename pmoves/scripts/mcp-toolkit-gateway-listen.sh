@@ -75,6 +75,31 @@ if ! docker mcp profile ls 2>/dev/null | awk 'NR>1 {print $1}' | grep -Fxq "${PR
   fail "Profile '${PROFILE_ID}' not imported. Run: make mcp-toolkit-bootstrap"
 fi
 
+# Preflight. ADVISORY on purpose -- see tools/mcp_toolkit_preflight.py for why a
+# wedged resolver should not refuse to start 25 servers because 4 cannot
+# authenticate. It exists because this script used to start a gateway whose
+# credentialed servers were guaranteed to 401, and said nothing.
+#   exit 0  ready
+#   exit 1  measured a problem (resolver down) -- reported, not blocked here
+#   exit 3  could not measure -- NOT a pass; surfaced so it is not mistaken for one
+# Set PMOVES_MCP_STRICT=1 to refuse to start on anything but 0, which is what
+# CI and unattended bring-up should do.
+PREFLIGHT_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tools/mcp_toolkit_preflight.py"
+if [ -f "${PREFLIGHT_PY}" ]; then
+  set +e
+  python3 "${PREFLIGHT_PY}" --profile "${PROFILE_ID}"
+  preflight_rc=$?
+  set -e
+  if [ "${preflight_rc}" -ne 0 ]; then
+    if [ "${PMOVES_MCP_STRICT:-0}" = "1" ]; then
+      fail "preflight exit ${preflight_rc} and PMOVES_MCP_STRICT=1 -- refusing to start."
+    fi
+    warn "preflight exit ${preflight_rc}; starting anyway (set PMOVES_MCP_STRICT=1 to gate)."
+  fi
+else
+  warn "preflight tool missing at ${PREFLIGHT_PY} -- starting unchecked."
+fi
+
 # Generate MCP_GATEWAY_AUTH_TOKEN if not already set. Persist to env.shared so
 # clients (E2B sandboxes, BoTZ Gateway, this host's secrets-funnel consumers)
 # can read the same value. The Toolkit gateway reads the env var directly.
