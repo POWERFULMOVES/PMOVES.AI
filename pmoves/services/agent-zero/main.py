@@ -355,6 +355,23 @@ class AgentZeroClient:
             raise
 
     async def send_message(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Fail fast, and say why. The inner runtime auto-generates its own
+        # mcp_server_token when AGENT_ZERO_MCP_TOKEN and MCP_SERVER_TOKEN are
+        # both unset -- a supported mode for UI/MCP discovery, but one the
+        # wrapper cannot participate in, because it never learns the generated
+        # value. `_headers` then omits X-API-KEY and every message POST is
+        # rejected. Without this guard the operator gets a bare 401 (or, with
+        # no runtime up, "All connection attempts failed") from a request that
+        # could never have succeeded, and nothing points at the cause.
+        if not self._config.api_key:
+            raise AgentZeroRequestError(
+                503,
+                "Agent Zero message endpoint requires a pinned API key, but none "
+                "is configured. The inner runtime auto-generates a token the "
+                "wrapper cannot read, so this request would be rejected. Set "
+                "AGENT_ZERO_MCP_TOKEN (or the legacy MCP_SERVER_TOKEN) to the "
+                "same value on both sides.",
+            )
         result = await self._request(
             "POST", self._config.message_path, json_body=payload
         )

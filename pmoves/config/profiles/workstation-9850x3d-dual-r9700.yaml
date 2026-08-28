@@ -8,6 +8,10 @@ description: >
   gfx1201 kernels NOT in stock Ollama as of 2026-04). llama-server on :8090
   exposes OpenAI-compatible API; rocm-smi-exporter on :9835 feeds Prometheus.
   Dual-GPU mode: --tensor-split 0.5,0.5 --split-mode row.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
 hardware:
   cpu:
     vendor: AMD

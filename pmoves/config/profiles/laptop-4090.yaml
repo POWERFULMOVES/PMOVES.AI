@@ -3,6 +3,10 @@ name: "Laptop – i9 + RTX 4090"
 description: >
   Mobile coding workstation with RTX 4090 laptop GPU (16GB VRAM) and 64GB RAM.
   Supports 5 cloud coding plans with local GPU fallback, VRAM-managed model swapping.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
 hardware:
   cpu:
     vendor: Intel

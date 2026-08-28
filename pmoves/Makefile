@@ -2170,6 +2170,17 @@ STACK_FILES ?= \
 	-f docker-compose.archon.submodule.yml \
 	-f docker-compose.apps.yml
 
+# AMD/ROCm nodes (Knuckles/B850 class) have no NVIDIA container runtime, so the
+# deploy.resources.reservations.devices block ffmpeg-whisper declares in
+# docker-compose.yml makes it fail to schedule outright ("could not select device
+# driver nvidia"). docker-compose.amd.yml resets that reservation so the image
+# runs its CPU path instead. Injected through WHISPER_NODE_OVERLAY rather than
+# added to STACK_FILES, so NVIDIA nodes are untouched by default; the `-amd`
+# sibling of each ffmpeg-whisper bring-up target sets it. Same shape as
+# up-voice-amd / docker-compose.amd-voice.yml.
+AMD_OVERLAY := -f docker-compose.amd.yml
+WHISPER_NODE_OVERLAY ?=
+
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
 DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
@@ -2543,7 +2554,11 @@ up-yt:
 	# (/app/config/cookies) - downloads then run cookie-less and bot-gate.
 	# JuiceFS media overlay is opt-in: only nodes with a host-side FUSE mount
 	# (JUICEFS_HOST_MOUNT set) can satisfy its rshared bind.
-	@extra=""; if [ -n "$${JUICEFS_HOST_MOUNT:-}" ]; then extra="-f docker-compose.yt-media.yml"; fi; $(COOKIES_DC) $$extra --profile data --profile workers --profile yt --profile yt-cookies up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@extra=""; if [ -n "$${JUICEFS_HOST_MOUNT:-}" ]; then extra="-f docker-compose.yt-media.yml"; fi; $(COOKIES_DC) $$extra $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt --profile yt-cookies up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+
+.PHONY: up-yt-amd
+up-yt-amd: ## Start YouTube ingest stack on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 .PHONY: channel-monitor-up
 channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
@@ -2563,10 +2578,13 @@ channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
 	  done; \
 	'
 
-.PHONY: up-yt-published
+.PHONY: up-yt-published up-yt-published-amd
 up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
-	@$(DC) -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) -f docker-compose.integrations.images.yml $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started using published image. Override PMOVES_YT_IMAGE to pin versions."
+
+up-yt-published-amd: ## up-yt-published on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt-published WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 .PHONY: up-agents-hardened up-workers-hardened up-yt-hardened up-core-hardened up-agents-standalone up-agents-auto up-core-capable up-core-gpu
 up-agents-hardened: ## Start Agents (NATS, Agent Zero, Archon, Mesh Agent) with hardened security options
@@ -2623,6 +2641,7 @@ up-core-capable: ## Capable tier: dependency-ordered core (data tier BEFORE agen
 	@echo "🧩 Capable tier: hardened dep-ordered core + Consciousness/CHIT (consciousness-service, cipher-api)…"
 	@$(MAKE) --no-print-directory up-core-hardened
 	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d consciousness-service cipher-api
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 	@echo "✅ Capable tier up (data tier + agents + Consciousness/CHIT)."
 
 up-core-gpu: ## GPU tier: capable tier + GPU services (best-effort; requires NVIDIA container runtime)
@@ -2633,8 +2652,12 @@ up-core-gpu: ## GPU tier: capable tier + GPU services (best-effort; requires NVI
 	@echo "✅ GPU tier bring-up attempted (capable + GPU services)."
 
 up-yt-hardened: ## Start YT stack with hardened security options (published images)
-	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml $(WHISPER_NODE_OVERLAY) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started (hardened overrides applied)."
+
+.PHONY: up-yt-hardened-amd
+up-yt-hardened-amd: ## up-yt-hardened on AMD/ROCm nodes (ffmpeg-whisper on the CPU path)
+	@$(MAKE) --no-print-directory up-yt-hardened WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 # Optional media analyzers (video+audio)
 up-media:
@@ -3263,6 +3286,7 @@ up-jellyfin:
 .PHONY: up-agents up-agents-stack
 up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon 0.6.0 + its Postgres, Cipher Memory, etc.)
 	@$(DC) --profile agents up -d --build nats agent-zero archon-postgres archon mesh-agent deepresearch publisher-discord cipher-api
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 
 .PHONY: up-notebooklm
 up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
@@ -3272,11 +3296,19 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 .PHONY: up-cipher
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
+	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
+	@# gate fails loudly on it); every other failure — bad Qdrant creds,
+	@# network timeout, missing python image — must abort the road instead
+	@# of printing "ready" over a dead collection (review P2).
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8105}"
 
 .PHONY: up-cipher-nobuild
 up-cipher-nobuild: ## Recreate Cipher from the EXISTING image (no rebuild) — applies env/port changes when the Pmoves-cipher submodule build is unavailable (gitlink drift). Honors COMPOSE_ENV_FILES via $(DC).
 	@$(DC) --profile agents up -d --no-build --force-recreate cipher-api
+	@# Provisioning on EVERY cipher-starting road (review P1): a fresh volume
+	@# recreated here is exactly as empty as a fresh build's.
+	@$(MAKE) --no-print-directory qdrant-provision-cipher || rc=$$?; 	rc=$${rc:-0}; if [ $$rc -ne 0 ] && [ $$rc -ne 2 ]; then echo "qdrant-provision-cipher failed (exit $$rc)"; exit $$rc; fi
 	@echo "✔ Cipher Memory recreated (no rebuild) at http://localhost:$${CIPHER_PORT:-8105}"
 
 .PHONY: up-p7
@@ -3304,30 +3336,115 @@ smoke-p7: ## Run P7 service smoke tests (catalog load + transition gate + idempo
 	@# must run from the service dir or those imports shadow/miss.
 	@cd services/p7-room-orchestrator && $(PYTHON) -m pytest -q tests/ -x
 
+.PHONY: qdrant-provision-cipher
+qdrant-provision-cipher: ## Provision the Qdrant collection Cipher Memory writes into (idempotent; safe to re-run)
+	@# Cipher's embedding sidecar auto-creates pmoves_cipher_memory, but ONLY
+	@# from storeVector/search/deleteVector, which are all gated behind a
+	@# successful sidecar.embed(). Where the embedding backend is unreachable,
+	@# embed() returns null, the create never fires, and every vector write is
+	@# silently dropped while POST /api/memory still answers 201 off the
+	@# lexical fallback. This target creates the collection eagerly so the
+	@# schema does not depend on a lucky first write.
+	@#
+	@# Runs in a one-shot container on pmoves_data because Qdrant is not
+	@# guaranteed to publish a host port (it does not on B850) — a host-side
+	@# curl/python cannot reach it. Same shape as the kong-migrations one-shot
+	@# in supa-start. Image is the repo's standard pinned python base, so this
+	@# pulls nothing new on a node that has built any Python service.
+	@echo "🧠 Provisioning Qdrant collection for Cipher Memory..."
+	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+		-v "$(CURDIR)/scripts:/scripts:ro" \
+		-e PYTHONDONTWRITEBYTECODE=1 \
+		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
+		-e QDRANT_API_KEY=$${QDRANT__API_KEY:-$${QDRANT_API_KEY:-}} \
+		-e QDRANT_CIPHER_COLLECTION=$${QDRANT_CIPHER_COLLECTION:-pmoves_cipher_memory} \
+		-e EMBEDDING_DIM=$${EMBEDDING_DIM:-2560} \
+		-e QDRANT_WAIT_SECONDS=$${QDRANT_WAIT_SECONDS:-60} \
+		-e QDRANT_RECREATE_ON_MISMATCH=$${QDRANT_RECREATE_ON_MISMATCH:-false} \
+		python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 \
+		python3 -u /scripts/provision_qdrant_cipher_memory.py
+
+.PHONY: qdrant-verify-cipher
+qdrant-verify-cipher: ## Provision + round-trip a probe through the Cipher collection (dense + BM25 + RRF)
+	@# Answers "can this collection serve what embedding.ts asks of it?" without
+	@# needing a reachable embedding backend — the dense half uses a synthetic
+	@# vector. Use cipher-memory-smoke for the end-to-end check through Cipher's
+	@# own HTTP surface.
+	@echo "🧠 Verifying Qdrant collection round trip for Cipher Memory..."
+	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
+		-v "$(CURDIR)/scripts:/scripts:ro" \
+		-e PYTHONDONTWRITEBYTECODE=1 \
+		-e QDRANT_URL=$${QDRANT_URL:-http://qdrant:6333} \
+		-e QDRANT_API_KEY=$${QDRANT__API_KEY:-$${QDRANT_API_KEY:-}} \
+		-e QDRANT_CIPHER_COLLECTION=$${QDRANT_CIPHER_COLLECTION:-pmoves_cipher_memory} \
+		-e EMBEDDING_DIM=$${EMBEDDING_DIM:-2560} \
+		-e QDRANT_WAIT_SECONDS=$${QDRANT_WAIT_SECONDS:-60} \
+		python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 \
+		python3 -u /scripts/provision_qdrant_cipher_memory.py --self-test
+
 .PHONY: up-cipher-full
 up-cipher-full: ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
 	@echo "Starting full Cipher embedding stack..."
 	@$(DC) up -d nats qdrant
 	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
 	@$(DC) --profile agents up -d --build cipher-api
+	@$(MAKE) --no-print-directory qdrant-provision-cipher
 	@echo "✔ Cipher Memory + embedding pipeline ready"
 	@echo "  Cipher:    http://localhost:$${CIPHER_PORT:-8105}"
 	@echo "  Qdrant:    http://localhost:6333"
 	@echo "  Ollama:    http://localhost:11434"
 
 .PHONY: cipher-memory-smoke
-cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search (requires up-cipher-full)
+cipher-memory-smoke: ## Smoke test cipher /api/memory POST + search — FAILS if the vector path is dead (requires up-cipher-full)
+	@# This target previously had two defects, both fixed here.
+	@#
+	@# 1. Its POST body omitted agentId, which memory-routes.ts requires
+	@#    ("agentId is required for per-agent scope" -> 400). Under `curl -sf`
+	@#    that surfaced as `POST FAILED:` with an empty message, because -f
+	@#    discards the response body. The target has been failing on every node
+	@#    without ever printing why.
+	@#
+	@# 2. It asserted only curl's exit status. Both endpoints answer 2xx with
+	@#    the entire vector pipeline down: POST falls back to ByteRover's
+	@#    lexical store and returns 201, and search falls back to
+	@#    lexicalFallback() and returns 200 with results. So once defect 1 was
+	@#    fixed it would have reported "✔ passed" on a node where no embedding
+	@#    backend is reachable and pmoves_cipher_memory does not exist.
+	@#
+	@# Two fields distinguish the real path from the fallback:
+	@#   POST   -> embedding_id is non-null only when sidecar.embed() succeeded
+	@#   SEARCH -> results carry `score` only when they came from Qdrant
+	@#             (memory-routes.ts sets score from the vector hit; the lexical
+	@#             fallback has no score field at all)
+	@# A missing agentId is a 400, so the payload must carry one.
 	@echo "Testing cipher /api/memory POST..."
 	@resp=$$(curl -sf -X POST http://localhost:$${CIPHER_PORT:-8105}/api/memory \
 		-H 'Content-Type: application/json' \
-		-d '{"content":"PMOVES cipher smoke test","category":"test","tags":["smoke"]}' 2>&1) \
+		-d '{"content":"PMOVES cipher smoke test","category":"test","tags":["smoke"],"agentId":"cipher-memory-smoke"}' 2>&1) \
 		&& echo "  POST OK: $$resp" \
-		|| (echo "  POST FAILED: $$resp" && exit 1)
+		|| (echo "  POST FAILED: $$resp" && exit 1); \
+	case "$$resp" in \
+		*'"embedding_id":null'*) \
+			echo "  ✗ POST stored NOTHING in Qdrant — embedding_id is null."; \
+			echo "    sidecar.embed() returned null, so storeVector() never ran and"; \
+			echo "    ensureCollection() never fired. Check that TENSORZERO_URL or"; \
+			echo "    OLLAMA_URL is reachable FROM the cipher container:"; \
+			echo "      docker exec pmoves-cipher-api-1 node -e 'fetch(process.env.TENSORZERO_URL+\"/health\").then(r=>console.log(r.status))'"; \
+			exit 1;; \
+	esac
 	@echo "Testing cipher /api/memory/search..."
 	@resp=$$(curl -sf "http://localhost:$${CIPHER_PORT:-8105}/api/memory/search?q=cipher&limit=1" 2>&1) \
 		&& echo "  SEARCH OK: $$resp" \
-		|| (echo "  SEARCH FAILED: $$resp" && exit 1)
-	@echo "✔ Cipher memory pipeline smoke passed"
+		|| (echo "  SEARCH FAILED: $$resp" && exit 1); \
+	case "$$resp" in \
+		*'"score"'*) ;; \
+		*) \
+			echo "  ✗ SEARCH returned lexical-fallback results, not vector hits (no score field)."; \
+			echo "    Either the query embedding failed or Qdrant returned no points."; \
+			echo "    Provision the collection with: make -C pmoves qdrant-provision-cipher"; \
+			exit 1;; \
+	esac
+	@echo "✔ Cipher memory pipeline smoke passed (vector path live)"
 
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
@@ -4086,14 +4203,18 @@ flute-gateway-smoke: ## Smoke test Flute-Gateway health + provider status
 # FFMPEG-WHISPER STT SERVICE (mic chain — STT only, narrower than up-yt)
 # ────────────────────────────────────────────────────────────────────────────
 
-.PHONY: up-ffmpeg-whisper ffmpeg-whisper-smoke
+.PHONY: up-ffmpeg-whisper up-ffmpeg-whisper-amd ffmpeg-whisper-smoke
 up-ffmpeg-whisper: ## Start ffmpeg-whisper STT service (port 8078, requires GPU)
 	@echo "Starting ffmpeg-whisper..."
-	@$(DC) --profile workers up -d --build ffmpeg-whisper
+	@$(DC) $(WHISPER_NODE_OVERLAY) --profile workers up -d --build ffmpeg-whisper
 	@sleep 5
 	@curl -sf http://localhost:8078/healthz > /dev/null 2>&1 \
 	  && echo "ffmpeg-whisper ready at http://localhost:8078" \
 	  || echo "ffmpeg-whisper may still be starting (check: curl http://localhost:8078/healthz)"
+
+up-ffmpeg-whisper-amd: ## Start ffmpeg-whisper on AMD/ROCm nodes (CPU transcription, no NVIDIA runtime)
+	@echo "AMD/ROCm node: stripping the NVIDIA device reservation, ffmpeg-whisper runs its CPU path."
+	@$(MAKE) --no-print-directory up-ffmpeg-whisper WHISPER_NODE_OVERLAY="$(AMD_OVERLAY)"
 
 ffmpeg-whisper-smoke: ## Smoke test ffmpeg-whisper health
 	@echo "ffmpeg-whisper smoke test..."
