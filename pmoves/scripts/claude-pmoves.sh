@@ -161,6 +161,44 @@ elif [ -f "$IDENT_TOOL" ]; then
   echo "[claude-pmoves] node identity: no usable python found (tried .venv-pmoves, python3, py -3, python — yaml required); launching without it." >&2
 fi
 
+# CIPHER — persistent memory. Same reasoning as the identity block above: the
+# agent has to be TOLD, in context, whether it has memory. An MCP server that
+# never connects contributes no tools, so a session with no memory looks exactly
+# like a session with memory and nothing to recall. That is the silent failure
+# this check exists to end.
+#
+# It reports WHICH endpoint answered, not merely that one did. The roster
+# carries a fleet cipher (${TS_Z890}) and a local one, and #2792 exists because
+# it once carried only the fleet entry -- "memory that silently wasn't there"
+# whenever Z890 was unreachable. "Memory is up" must not quietly mean "someone
+# else's memory is up".
+#
+# NEVER blocks: a session without memory is degraded, not unusable, and refusing
+# to launch would be worse than launching informed.
+CIPHER_TOOL="$ROOT/pmoves/tools/cipher_preflight.py"
+if [ -f "$CIPHER_TOOL" ] && [ ${#IDENT_PY[@]} -gt 0 ]; then
+  CIPHER_OUT=""
+  set +e
+  CIPHER_OUT="$("${IDENT_PY[@]}" "$CIPHER_TOOL" 2>&1)"
+  cipher_rc=$?
+  set -e
+  case "$cipher_rc" in
+    0)
+      CIPHER_WHICH="$(printf '%s\n' "$CIPHER_OUT" | awk '/^cipher OK/ {print $3; exit}')"
+      echo "[claude-pmoves] cipher=up (${CIPHER_WHICH:-unknown endpoint})" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "Persistent memory IS available this session via the Cipher MCP server '${CIPHER_WHICH:-unknown}'. Use it for recall and for writes; do not fall back to the auto-memory directory while it is up.")
+      ;;
+    *)
+      # 1 = every endpoint was reached and none answered. 3 = nothing to measure
+      # (no cipher entry in the roster at all). Both mean no memory; the agent
+      # is told which, because the fixes differ.
+      echo "[claude-pmoves] cipher=DOWN (exit ${cipher_rc}) — session has no persistent memory" >&2
+      printf '%s\n' "$CIPHER_OUT" >&2
+      IDENTITY_ARGS+=(--append-system-prompt "Cipher is NOT reachable this session (preflight exit ${cipher_rc}), so you have NO persistent memory. Say so at session start rather than recalling nothing silently, and use the file-based auto-memory directory instead. Recovery: pmoves/docs/operations/MCP_TOOLKIT.md.")
+      ;;
+  esac
+fi
+
 if [ ! -f "$LAUNCHER" ]; then
   # Degrade to the pre-delegation behavior rather than failing: the agent still
   # loads, MCP creds do not. Warn so the missing half is visible, not silent.
