@@ -42,24 +42,24 @@ set -u
 # `claude --agent` with no creds — the silent-credless class this file exists to
 # close.
 #
-# WHY `CDPATH= cd -P --`: dirname yields a bare relative path when the script is
+# WHY `CDPATH='' cd -P --`: dirname yields a bare relative path when the script is
 # invoked relatively; `cd` consults CDPATH for such arguments, which both jumps
 # elsewhere AND echoes the destination, embedding a newline in the captured path.
 # ---------------------------------------------------------------------------
 SELF="${BASH_SOURCE[0]:-$0}"
 while [ -L "$SELF" ]; do
-  link_dir="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+  link_dir="$(CDPATH='' cd -P -- "$(dirname -- "$SELF")" && pwd)"
   SELF="$(readlink -- "$SELF")"
   case "$SELF" in /*) ;; *) SELF="$link_dir/$SELF" ;; esac
 done
-SELF_DIR="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+SELF_DIR="$(CDPATH='' cd -P -- "$(dirname -- "$SELF")" && pwd)"
 
 # PMOVES_LAUNCHER_ROOT, not PMOVES_REPO_ROOT: the latter is already consumed by
 # pmoves/services/creator-operator/config.py.
 if [ -n "${PMOVES_LAUNCHER_ROOT:-}" ]; then
   ROOT="$PMOVES_LAUNCHER_ROOT"
 else
-  ROOT="$(CDPATH= cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
+  ROOT="$(CDPATH='' cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
 fi
 
 LAUNCHER="$ROOT/deploy/provision/claude-pmoves.sh"
@@ -119,6 +119,7 @@ IDENT_TOOL="$ROOT/pmoves/tools/node_identity.py"
 # scalar form silently never ran the resolver and sessions launched unbound —
 # the exact gap #2763 fixed for crush-pmoves, which this launcher then still
 # carried (pair-review finding on #2769).
+# shellcheck source=./pm-python.sh
 . "$ROOT/pmoves/scripts/pm-python.sh"
 IDENT_PY=()
 if [ -f "$IDENT_TOOL" ] && pm_pick_python yaml; then

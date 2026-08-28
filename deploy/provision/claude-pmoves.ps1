@@ -94,27 +94,72 @@ if (Test-Path $roster) {
     #
     # Both now call the same platform-neutral tool (P2 drop `_` keys, P3 absolute
     # ./ paths, P4 expand ${VAR}, P5 drop unresolvable urls / warn on degraded
-    # creds). Falls back to the raw roster if python or the tool is unavailable,
-    # which is the behaviour this block had before.
+    # creds). When it cannot run, the block below names WHICH of the four causes
+    # it was and refuses if the raw roster would leave credentials as literal
+    # ${VAR} text -- see the gate for why that is not the fail-open call the
+    # identity resolver makes.
+    # Kept deliberately in step with the POSIX twin (deploy/provision/claude-pmoves.sh).
+    # The comment above records what happened last time these two drifted: the
+    # POSIX one grew ${VAR} resolution and this one did not, and the blind
+    # launcher was the one running on the machine the URL names. The same
+    # applies to the FAILURE path, which is why the diagnosis and the
+    # fail-closed gate below are mirrored rather than left as "warn and go".
     $useRoster = $roster
+    $resolvedOk = $false
+    $why = ''
     $normalizer = Join-Path $root 'pmoves\tools\mcp_roster_normalize.py'
     $py = Get-Command python -ErrorAction SilentlyContinue
     if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
-    if ($py -and (Test-Path $normalizer)) {
+    if (-not (Test-Path $normalizer)) {
+        $why = "the normalizer is missing: $normalizer"
+    } elseif (-not $py) {
+        $why = 'no usable python interpreter (tried python, then python3)'
+    } else {
         try {
             # The tool prints the path it wrote on stdout; warnings go to stderr
             # and pass through to the console.
             $out = & $py.Source $normalizer $roster '--root' $root '--label' 'claude-pmoves'
-            if (($LASTEXITCODE -eq 0) -and $out) {
-                $useRoster = ([string](@($out)[-1])).Trim()
+            if ($LASTEXITCODE -ne 0) {
+                $why = "the normalizer exited $LASTEXITCODE under '$($py.Source)' (its own stderr is above)"
+            } elseif (-not $out) {
+                $why = 'the normalizer exited 0 but printed no roster path - nothing was written'
             } else {
-                Write-Warning "[claude-pmoves] could not normalize roster (exit $LASTEXITCODE); using raw $roster"
+                $useRoster = ([string](@($out)[-1])).Trim()
+                $resolvedOk = $true
             }
         } catch {
-            Write-Warning "[claude-pmoves] could not normalize roster ($($_.Exception.Message)); using raw $roster"
+            $why = "the normalizer could not be run under '$($py.Source)': $($_.Exception.Message)"
         }
-    } else {
-        Write-Warning "[claude-pmoves] python or $normalizer missing; using raw $roster"
+    }
+
+    if (-not $resolvedOk) {
+        # FAIL CLOSED when the raw roster would carry literal ${VAR}s. Claude
+        # Code's documented response to an unresolvable reference is to warn and
+        # then use the unexpanded text AS THE VALUE, so the bearer header goes
+        # out as the string 'Bearer ${CIPHER_API_TOKEN}' and a cross-node url as
+        # the hostname '${TS_Z890}'. Those servers load, look configured, and
+        # never authenticate -- and nothing inside the session can tell that
+        # apart from "the service is down".
+        Write-Warning "[claude-pmoves] could not normalize the MCP roster."
+        Write-Warning "[claude-pmoves] cause: $why"
+        if (Select-String -Path $roster -SimpleMatch '${' -Quiet) {
+            Write-Warning ('[claude-pmoves] LOST: ' + $roster + ' still contains ${VAR} references;')
+            Write-Warning '[claude-pmoves]       they are sent LITERALLY, so those MCP servers cannot authenticate.'
+            if (-not $env:PMOVES_ALLOW_RAW_ROSTER) {
+                Write-Warning '[claude-pmoves] Refusing to start a session whose MCP credentials are placeholders.'
+                Write-Warning '[claude-pmoves] Fix: install python, or run make -C pmoves preflight.'
+                Write-Warning '[claude-pmoves] Or accept a credential-less session on purpose, this once:'
+                Write-Warning '[claude-pmoves]   $env:PMOVES_ALLOW_RAW_ROSTER=1; <your usual command>'
+                exit 1
+            }
+            Write-Warning '[claude-pmoves] PMOVES_ALLOW_RAW_ROSTER is set - launching anyway.'
+        } else {
+            # Nothing left to expand: the raw file authenticates exactly as the
+            # normalized one would, so refusing here would be a lock with
+            # nothing behind it. Say what IS lost and start.
+            Write-Warning "[claude-pmoves] launching with the RAW roster $roster; credentials are intact."
+            Write-Warning "[claude-pmoves] Lost: '_'-prefixed disabled duplicates are not dropped, and ./ paths stay relative to your CWD."
+        }
     }
     # `--mcp-config=<file>` (the `=` form): `--mcp-config` is variadic
     # (`<configs...>`), so the space form would swallow a trailing positional
