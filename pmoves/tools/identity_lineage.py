@@ -226,12 +226,26 @@ def predecessors(identity: str, vocab: Vocabulary | None = None) -> list[dict]:
     return [s for s in vocab.successions if s.get("to") == identity]
 
 
+# An inline code span. A register entry that DESCRIBES the correction
+# convention writes it in backticks -- as this module's own docstring does one
+# line down -- and a substring test cannot tell that apart from an entry that
+# USES it. B850's 2026-08-25T15:00:00Z entry surveys "six hand-edited
+# `[CORRECTION ...]` annotations" and was counted as a seventh, which failed
+# both the count assertion and the register-clean gate. Stripping code spans
+# first is the discriminator: an actual annotation is written bare, in bold.
+CODE_SPAN = re.compile(r"`[^`]*`")
+
+
 def annotated_corrections(text: str | None = None) -> list[tuple[str, str, str]]:
-    """Register entries carrying a prose `[CORRECTION ...]` annotation."""
+    """Register entries carrying a prose `[CORRECTION ...]` annotation.
+
+    Mentions inside inline code spans do not count -- writing about the
+    convention is not using it.
+    """
     text = text if text is not None else read_register()
     out = []
     for line in text.splitlines():
-        if "[CORRECTION" not in line:
+        if "[CORRECTION" not in CODE_SPAN.sub("", line):
             continue
         match = ENTRY.match(line)
         if match:
