@@ -203,6 +203,39 @@ def _init_submodule(repo_root: pathlib.Path, submodule_rel: str) -> None:
     )
 
 
+def _declared_submodule_paths(repo_root: pathlib.Path) -> list[str]:
+    """Submodule paths declared in .gitmodules, longest first.
+
+    Read from the file rather than `git config` so this works on a plain
+    directory copy with no git metadata.
+    """
+    gitmodules = repo_root / ".gitmodules"
+    if not gitmodules.is_file():
+        return []
+    paths = [
+        line.split("=", 1)[1].strip()
+        for line in gitmodules.read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("path")
+    ]
+    return sorted(paths, key=len, reverse=True)
+
+
+def _submodule_owning(repo_root: pathlib.Path, context_rel: str) -> str | None:
+    """The submodule that IS, or contains, this build context.
+
+    Previously this was a hardcoded `pmoves/integrations/*` prefix test, so a
+    repo-root submodule context (PMOVES.YT) was never initialized and its paths
+    read as missing.
+    """
+    context_rel = context_rel.strip("/")
+    if not context_rel or context_rel == ".":
+        return None
+    for candidate in _declared_submodule_paths(repo_root):
+        if context_rel == candidate or context_rel.startswith(f"{candidate}/"):
+            return candidate
+    return None
+
+
 def check_paths(entry: dict[str, object], repo_root: pathlib.Path) -> ValidationResult:
     name = str(entry.get("name", ""))
     image_name = str(entry.get("image_name", ""))
@@ -217,9 +250,9 @@ def check_paths(entry: dict[str, object], repo_root: pathlib.Path) -> Validation
         return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note="paths must be repo-relative")
 
     repo_root_resolved = repo_root.resolve()
-    parts = context_rel.split("/")
-    if len(parts) >= 3 and parts[0] == "pmoves" and parts[1] == "integrations":
-        _init_submodule(repo_root, "/".join(parts[:3]))
+    owning_submodule = _submodule_owning(repo_root, context_rel)
+    if owning_submodule:
+        _init_submodule(repo_root, owning_submodule)
 
     context_path = (repo_root / context_rel_path).resolve()
     dockerfile_path = (repo_root / dockerfile_rel_path).resolve()
@@ -403,6 +436,11 @@ def main() -> int:
 
             if git_url == LOCAL_REPO_URL:
                 source_root = repo_root
+                # The build context may live in a submodule that this checkout
+                # has only as a gitlink (e.g. pmoves-yt builds from PMOVES.YT).
+                owning = _submodule_owning(repo_root, str(entry.get("context", "")))
+                if owning:
+                    _init_submodule(repo_root, owning)
             else:
                 key = (git_url, git_ref)
                 source_root = clone_cache.get(key)

@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import sys
 import subprocess
 from pathlib import Path
 
@@ -242,3 +243,40 @@ def test_gate_rejects_bad_invocation(argv: list[str], env: dict) -> None:
     assert "usage:" in result.stderr or "are required" in result.stderr, (
         f"gate failed for the wrong reason: {result.stderr!r}"
     )
+
+# --------------------------------------------------------------------------
+# The prepublish path validator must resolve submodules generically
+# --------------------------------------------------------------------------
+
+def _load_prepublish():
+    import importlib.util
+
+    path = _REPO_ROOT / "pmoves" / "tools" / "ghcr_local_prepublish.py"
+    spec = importlib.util.spec_from_file_location("ghcr_local_prepublish", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    # Register before exec: @dataclass resolves annotations via
+    # sys.modules[cls.__module__], which is None for an unregistered module.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_prepublish_resolves_the_owning_submodule() -> None:
+    """This validator carried the same hardcoded `pmoves/integrations/` prefix
+    as the workflow, so a repo-root submodule context read as a missing path on
+    any checkout holding only the gitlink."""
+    mod = _load_prepublish()
+    assert mod._submodule_owning(_REPO_ROOT, "PMOVES.YT") == "PMOVES.YT"
+    assert (
+        mod._submodule_owning(_REPO_ROOT, "PMOVES.YT/pmoves_yt_service")
+        == "PMOVES.YT"
+    )
+
+
+@pytest.mark.parametrize("context", ["pmoves", "pmoves/images/jellyfin", ".", ""])
+def test_prepublish_does_not_over_match(context: str) -> None:
+    """Non-submodule contexts must resolve to nothing, or every entry would
+    trigger a spurious submodule init."""
+    mod = _load_prepublish()
+    assert mod._submodule_owning(_REPO_ROOT, context) is None
