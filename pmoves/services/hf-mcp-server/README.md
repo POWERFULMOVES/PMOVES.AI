@@ -56,33 +56,40 @@ Model Context Protocol (MCP) server for Hugging Face Hub integration with PMOVES
 ### Docker Compose
 
 ```bash
-docker-compose -f pmoves/docker-compose/hf-mcp-server.yml up -d
+# Standalone within the agents overlay
+docker compose -f pmoves/docker-compose.base.yml -f pmoves/docker-compose.agents.yml --profile research up -d hf-mcp-server
+
+# Or as part of the full agents profile
+docker compose -f pmoves/docker-compose.yml --profile agents --profile research up -d hf-mcp-server
 ```
 
 ### Direct API Usage
 
+When running through the agents overlay, the host-published port is `8203`.
+When running the container standalone, the internal port is `8096`.
+
 ```bash
 # Health check
-curl http://localhost:8096/health
+curl http://localhost:8203/healthz
 
 # Search models
-curl -X POST http://localhost:8096/api/model/search \
+curl -X POST http://localhost:8203/api/model/search \
   -H "Content-Type: application/json" \
   -d '{"tier": "medium", "use_case": "coding"}'
 
 # Get model info
-curl http://localhost:8096/api/model/qwen2.5-7b
+curl http://localhost:8203/api/model/qwen2.5-7b
 
 # List cached models
-curl http://localhost:8096/api/models
+curl http://localhost:8203/api/models
 
 # Download model
-curl -X POST http://localhost:8096/api/model/download \
+curl -X POST http://localhost:8203/api/model/download \
   -H "Content-Type: application/json" \
   -d '{"model_id": "qwen2.5-7b"}'
 
 # Generate TensorZero config
-curl http://localhost:8096/api/config/tensorzero
+curl http://localhost:8203/api/config/tensorzero
 ```
 
 ### MCP Integration
@@ -92,7 +99,7 @@ Add to your MCP client configuration:
 ```yaml
 mcp_servers:
   huggingface:
-    url: "http://localhost:8096/sse"
+    url: "http://localhost:8203/mcp/sse"
     transport: "sse"
 ```
 
@@ -104,7 +111,7 @@ mcp_servers:
 | `HF_HUB_CACHE` | `/models/hub` | Hugging Face Hub cache |
 | `HUGGINGFACE_HUB_TOKEN` | - | HF Hub API token (for gated models) |
 | `HF_HUB_ENABLE_HF_TRANSFER` | `1` | Enable HF transfer acceleration |
-| `NATS_URL` | `nats://localhost:4222` | NATS server URL |
+| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
 | `PORT` | `8096` | Server port |
 
 ## NATS Events
@@ -126,7 +133,7 @@ The server publishes events to:
 Generate TensorZero configuration with:
 
 ```bash
-curl http://localhost:8096/api/config/tensorzero
+curl http://localhost:8203/api/config/tensorzero
 ```
 
 This generates TOML configuration for all catalog models that can be appended to `tensorzero.toml`.
@@ -144,7 +151,8 @@ python main.py
 ## Testing
 
 ```bash
-pytest tests/
+# From repo root — runs against in-memory state, no live HF/NATS needed
+pytest pmoves/tests/services/test_hf_services.py -v
 ```
 
 ## License

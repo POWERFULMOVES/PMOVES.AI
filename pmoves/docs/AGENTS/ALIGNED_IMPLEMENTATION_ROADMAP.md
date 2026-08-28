@@ -1,7 +1,7 @@
 # AGENTS Aligned Implementation Roadmap
 
-**Date:** 2026-02-02
-**Branch:** PMOVES.AI-Edition-Hardened
+**Date:** 2026-02-02 (status annotations updated 2026-04-10)
+**Branch:** PMOVES.AI-Edition-Hardened → main
 **Based On:** PMOVES-ToKenism-Multi, PMOVES-DoX, PMOVES-BoTZ patterns
 
 ---
@@ -29,7 +29,7 @@ This roadmap synthesizes the best patterns from PMOVES-ToKenism-Multi (event-dri
 
 ---
 
-## Phase 1: Security Foundation (Week 1-2)
+## Phase 1: Security Foundation (Week 1-2) — COMPLETE (4/4) ✅ verified 2026-04-10
 
 ### Pattern Source: PMOVES-BoTZ `patterns.yaml` and `hooks/`
 
@@ -366,7 +366,7 @@ class AuditLogger:
 
 ---
 
-## Phase 2: A2A Protocol Integration (Week 3-4)
+## Phase 2: A2A Protocol Integration (Week 3-4) — PARTIAL (1/2) ⚠️ verified 2026-04-10
 
 ### Pattern Source: PMOVES-BoTZ `features/a2a/`
 
@@ -545,7 +545,7 @@ async def submit_to_agent_zero(agent_url: str, instruction: str):
 
 ---
 
-## Phase 3: SKILL.md Pattern (Week 4-5)
+## Phase 3: SKILL.md Pattern (Week 4-5) — TEMPLATE COMPLETE ⚠️ verified 2026-04-10
 
 ### Pattern Source: PMOVES-DoX + PMOVES-BoTZ skill structure
 
@@ -714,7 +714,7 @@ data/agent-zero/instruments/default/    pmoves/services/agent-zero/skills/
 
 ---
 
-## Phase 4: Event-Driven Coordination (Week 5-6)
+## Phase 4: Event-Driven Coordination (Week 5-6) — COMPLETE ✅ verified 2026-04-10
 
 ### Pattern Source: PMOVES-ToKenism-Multi `event-bus/`
 
@@ -766,7 +766,7 @@ class EventBus:
     - Metrics tracking
     """
 
-    def __init__(self, nats_url: str = "nats://localhost:4222"):
+    def __init__(self, nats_url: str = "nats://nats:pmoves@nats:4222"):
         self.nats_url = nats_url
         self.nc: Optional[NATSClient] = None
         self.validators: Dict[str, SchemaValidator] = {}
@@ -900,7 +900,7 @@ ALL_WORK_EVENTS = "pmoves.work.>"
 
 ---
 
-## Phase 5: Threading and Orchestration (Week 6-7)
+## Phase 5: Threading and Orchestration (Week 6-7) — COMPLETE ✅ verified 2026-04-10
 
 ### Pattern Source: PMOVES-BoTZ `.mprocs.yaml` + `gateway/`
 

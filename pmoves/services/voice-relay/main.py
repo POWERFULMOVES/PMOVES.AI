@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from nats.aio.client import Client as NATS
+from nats.js import JetStreamContext
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 # Schema-validated envelope (available when services/common is on PYTHONPATH)
@@ -40,6 +41,9 @@ NATS_URL = get_secret("NATS_URL", "nats://nats:pmoves@nats:4222") or "nats://nat
 NATS_URL_REDACTED = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 INPUT_SUBJECT = os.getenv("VOICE_RELAY_INPUT_SUBJECT", "agentzero.task.result.v1")
 OUTPUT_SUBJECT = os.getenv("VOICE_RELAY_OUTPUT_SUBJECT", "voice.agent.response.v1")
+JETSTREAM_ENABLED = os.getenv("VOICE_RELAY_JETSTREAM", "true").lower() in ("true", "1", "yes")
+JETSTREAM_STREAM = os.getenv("VOICE_RELAY_STREAM", "voice_relay")
+JETSTREAM_CONSUMER = os.getenv("VOICE_RELAY_CONSUMER", "voice_relay_worker")
 PORT = int(os.getenv("PORT", "8121"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -56,6 +60,7 @@ ERRORS = Counter("voice_relay_errors_total", "Errors during relay processing")
 # Global state
 # ---------------------------------------------------------------------------
 _nc: NATS | None = None
+_js: JetStreamContext | None = None
 _nats_loop_task: asyncio.Task | None = None
 
 
@@ -107,8 +112,21 @@ async def _handle_message(msg) -> None:
         "meta": meta,
     }
 
+    js = _js
     nc = _nc
-    if nc and nc.is_connected:
+    if JETSTREAM_ENABLED and js:
+        payload = json.dumps(voice_event).encode("utf-8")
+        if envelope:
+            env = envelope(
+                OUTPUT_SUBJECT, voice_event,
+                correlation_id=data.get("task_id"),
+                source="voice-relay",
+            )
+            payload = json.dumps(env).encode("utf-8")
+        ack = await js.publish(OUTPUT_SUBJECT, payload, stream=JETSTREAM_STREAM)
+        RELAYED.inc()
+        logger.info("relayed task_id=%s text_len=%d js_seq=%s", data.get("task_id"), len(response_text), ack.seq)
+    elif nc and nc.is_connected:
         if envelope:
             env = envelope(
                 OUTPUT_SUBJECT, voice_event,
@@ -124,6 +142,13 @@ async def _handle_message(msg) -> None:
         ERRORS.inc()
         logger.warning("cannot publish — NATS not connected")
 
+    # JetStream ack for input message
+    if JETSTREAM_ENABLED and hasattr(msg, "ack"):
+        try:
+            await msg.ack()
+        except Exception:
+            pass
+
 
 # ---------------------------------------------------------------------------
 # NATS callback factory — avoids Ruff B023 (loop-variable closure capture)
@@ -132,9 +157,10 @@ def _make_nats_callbacks(nc_ref: NATS, disconnect_event: asyncio.Event):
     """Create NATS callbacks bound to a specific connection instance."""
 
     def _mark_lost(reason: str) -> None:
-        global _nc
+        global _nc, _js
         if _nc is nc_ref:
             _nc = None
+            _js = None
         if not disconnect_event.is_set():
             disconnect_event.set()
         logger.warning("nats connection lost: %s", reason)
@@ -150,10 +176,9 @@ def _make_nats_callbacks(nc_ref: NATS, disconnect_event: asyncio.Event):
 
 # ---------------------------------------------------------------------------
 # NATS resilience loop (mirrors publisher-discord pattern)
-# Design note: uses core NATS (not JetStream) intentionally — voice relay
-# events are ephemeral; a missed response during a reconnect is acceptable
-# for TTS playback, and JetStream adds consumer/stream lifecycle complexity.
-# Revisit if guaranteed delivery becomes a requirement.
+# Design note: JetStream enabled by default (VOICE_RELAY_JETSTREAM=true) for
+# guaranteed delivery. Falls back to core NATS if JetStream setup fails.
+# Set VOICE_RELAY_JETSTREAM=false to use core NATS (at-most-once, no acks).
 # ---------------------------------------------------------------------------
 async def _nats_resilience_loop() -> None:
     global _nc
@@ -182,7 +207,36 @@ async def _nats_resilience_loop() -> None:
         _nc = nc
         backoff = 1.0
         logger.info("NATS connected — subscribing to %s", INPUT_SUBJECT)
-        await nc.subscribe(INPUT_SUBJECT, cb=_handle_message)
+
+        # JetStream setup for guaranteed delivery
+        if JETSTREAM_ENABLED:
+            global _js
+            try:
+                js = nc.jetstream()
+                await js.add_stream(
+                    name=JETSTREAM_STREAM,
+                    subjects=[OUTPUT_SUBJECT],
+                    retention="limits",
+                    max_msgs=10000,
+                    max_age=3600,
+                )
+                await js.subscribe(
+                    subject=INPUT_SUBJECT,
+                    queue=JETSTREAM_CONSUMER,
+                    cb=_handle_message,
+                    manual_ack=True,
+                    durable=JETSTREAM_CONSUMER,
+                    ack_policy="explicit",
+                    max_deliver=3,
+                )
+                _js = js
+                logger.info("JetStream enabled: stream=%s consumer=%s", JETSTREAM_STREAM, JETSTREAM_CONSUMER)
+            except Exception as js_exc:
+                logger.warning("JetStream setup failed, falling back to core NATS: %s", js_exc)
+                _js = None
+                await nc.subscribe(INPUT_SUBJECT, cb=_handle_message)
+        else:
+            await nc.subscribe(INPUT_SUBJECT, cb=_handle_message)
 
         try:
             await disconnect_event.wait()

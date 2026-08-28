@@ -1,0 +1,37 @@
+# Token Verticals — active contract types for tokenization
+# Contract type values must match tokenism_simulator.sql CHECK constraint:
+# gro_token, food_usd, group_purchase, gro_vault, coop_governor
+
+verticals:
+  - id: gro_token
+    name: GroToken
+    description: Base governance/utility token
+    active: true
+    contract_type: gro_token
+
+  - id: food_usd
+    name: FoodUSD
+    description: Food-secured stablecoin (1:1 USD peg via food reserves)
+    active: true
+    contract_type: food_usd
+
+  - id: group_purchase
+    name: GroupPurchase
+    description: Cooperative buying pool token
+    active: false
+    contract_type: group_purchase
+    notes: Pending pilot program design
+
+  - id: gro_vault
+    name: GroVault
+    description: Yield-bearing savings vault token
+    active: false
+    contract_type: gro_vault
+    notes: Requires wallet custody decision before activation
+
+  - id: coop_governor
+    name: CoopGovernor
+    description: Cooperative governance voting token
+    active: false
+    contract_type: coop_governor
+    notes: Requires DAO governance framework selection

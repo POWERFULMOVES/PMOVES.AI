@@ -5,13 +5,41 @@ as our interactive coding bestie alongside the PMOVES stack.
 
 ## Quick Start
 
+**Option A: `crush-pmoves` (one-shot)** — bootstraps config + CHIT + MCP, then launches Crush:
+
+```bash
+crush-pmoves          # bootstrap + launch
+crush-pmoves --help   # pass args to Crush
+```
+
+Install the wrapper once on each fleet node:
+```bash
+cp pmoves/scripts/crush-pmoves ~/.local/bin/crush-pmoves
+chmod +x ~/.local/bin/crush-pmoves
+# alias pmoves-crush="crush-pmoves"  # optional convenience alias
+```
+
+**Option B: `make crush-bootstrap`** — same as above but doesn't auto-launch:
+
+```bash
+make -C pmoves crush-bootstrap
+crush
+```
+
+**Option C: Manual setup** — for nodes without secrets funnel:
+
 1. Install Crush (see upstream README for the package manager of your choice) and
    make sure it is on your `PATH`.
 2. Install the `typer` and `PyYAML` dependencies for the mini CLI (recommended via uv):
    ```bash
    uv pip install typer[all] PyYAML
    ```
-3. With both packages installed, prime the environment and provisioning bundle in one shot:
+3. Install LSP servers for IDE-like diagnostics:
+   ```bash
+   npm install -g pyright typescript-language-server
+   pip install ruff
+   ```
+4. With both packages installed, prime the environment and provisioning bundle in one shot:
    ```bash
    python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults
    ```
@@ -31,8 +59,11 @@ as our interactive coding bestie alongside the PMOVES stack.
 
 The generated configuration:
 
-- Prefers models whose API keys are present in `.env.generated` / `.env.local`
-  (OpenAI, Anthropic, Gemini, DeepSeek, Ollama fallback).
+The generated configuration uses TensorZero as the sole provider, routing all
+LLM calls through `http://localhost:3030/v1`. For direct Z.AI Coding Plan
+usage (GLM-5.2 large / GLM-5-Turbo small at `https://api.z.ai/api/coding/paas/v4`),
+populate `~/.config/crush/crush.json` manually with the `Z_AI_API_KEY` env var
+or inline key — see the live config on this node for the working pattern.
 - Registers MCP stubs for the upcoming `pmoves-mini` stdio server, Docker MCP, and
   the n8n HTTP bridge. Entries are auto-disabled until their binaries or API keys
   are detected.
@@ -51,6 +82,37 @@ generator automatically skips any missing files):
 
 Run `python3 -m pmoves.tools.mini_cli crush status` to confirm the active config
 path and provider list.
+
+## Operating Autonomy — Push, PR, Merge
+
+Crush operates under PMOVES fleet rules, not generic "ask before push" defaults.
+The authoritative sources are `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md`,
+`.claude/PATTERNS.md` §PR Review & Merge Workflow, and
+`pmoves/docs/operations/PR_CLOSEOUT.md`.
+
+| Operation | Autonomous? | Gate |
+|-----------|-------------|------|
+| `git push` to feature branches (`feat/`, `fix/`, `chore/`, `docs/`) on POWERFULMOVES repos | **Yes — routine** | None. `AUTOMODE_FLEET_CONFIG.md:48`: *"Pushing to, creating branches on, and opening/merging PRs across any POWERFULMOVES repo is a routine internal operation, NOT exfiltration."* |
+| `gh pr create` on POWERFULMOVES repos | **Yes — routine** | None. Same source. `gh pr create` is a documented Known Road in `PATTERNS.md`. |
+| Cross-submodule fetch / checkout / branch / merge-forward / gitlink promotion | **Yes — routine** | `AUTOMODE_FLEET_CONFIG.md:49`. Gitlink promotion via `git update-index --cacheinfo 160000,<sha>,<path>` is the standard flow. |
+| `git push --force` / `--force-with-lease` on **Hardened** branches | **No — soft_deny** | `AUTOMODE_FLEET_CONFIG.md:63`. History rewrites on `PMOVES.AI-Edition-Hardened` are destructive (the gitlink deploys the tip). Normal merge-forward and fast-forward pushes are fine. |
+| `git push --force` on `main` | **No — hard block** | Damage-control Strand A: force-push is in the hard-block tier. |
+| `gh pr merge` (any PR) | **No — gated** | `signoff-gate.sh` (PreToolUse, opt-in) blocks without 3-body ACK (`[ACK: delivery]`, `[ACK: control]`, `[ACK: memory]`) in `AGNOTE4482_SIGNOFF_CHECKLIST.md`. Admin-merge requires `CONFIRM="MERGE #<PR> @ <full-SHA>"` matching live head (`PR_CLOSEOUT.md:76-92`). |
+
+**Default posture:** when in doubt on a feature branch, push and open the PR.
+Merging is gated — the 3-body ACK + SHA confirmation above is the *minimum*;
+the full closeout contract (`pmoves/docs/operations/PR_CLOSEOUT.md`) also
+requires: current branch (rebased onto latest main), all review threads
+resolved, all checklist tasks completed, all required CI checks settled,
+and a passing live-head audit before `make pr-closeout-merge`. Do not
+shortcut to a raw `gh pr merge` — use the closeout flow.
+The Village Rule (claim → work → sign → release in `AGNOTE4482PHI.t1.md`) is
+the coordination discipline, not a per-push gate.
+
+**The damage-control hooks** (`.claude/hooks/damage-control/`) route raw `docker`,
+`netsh`, and destructive git through `ask` prompts that point at Known Road
+Make targets — those gates are about *dangerous commands*, not about pushes.
+Pushing a feature branch is not dangerous.
 
 ## Integrating with PMOVES Mini CLI
 
@@ -73,6 +135,18 @@ python3 -m pmoves.tools.mini_cli models pull --bundle ollama-high  # (future)
 - The `crush setup` command reads from `.env.generated` / `env.shared.generated`
   and only activates providers when the corresponding secrets exist.
 
+### Trail Signing
+
+Crush signs trail entries using `make -C pmoves sign-trail`. The CHIT passphrase
+is resolved automatically from:
+1. `CHIT_SIGNING_KEY` env var
+2. `CHIT_PASSPHRASE` env var
+3. `CHIT_SIGNING_KEY_FILE` / `CHIT_PASSPHRASE_FILE`
+4. `pmoves/env.tier-*` files (populated by `make secrets-funnel`)
+
+When no passphrase is found, signing degrades to unsigned (acceptable in dev).
+Run `make -C pmoves crush-bootstrap` to verify signing works end-to-end.
+
 ## n8n & Messaging Hooks
 
 The automation scanner available via
@@ -82,6 +156,7 @@ subcommand, making it easy to plug them into Crush prompts or MCP actions.
 
 ## Updating Configuration
 
+- **Fleet bootstrap** (recommended): `make -C pmoves crush-bootstrap`
 - Regenerate the config after rotating API keys or adding new secrets:
   `python3 -m pmoves.tools.mini_cli crush setup`
 - To preview the JSON without writing it, run:
@@ -131,4 +206,6 @@ including bootstrap sequence, trail-writing guide, and integration points.
 - Implement `pmoves mini mcp serve` so the Crush stdio MCP can call into the mini
   CLI.
 - Package the config generator as part of a future `pmoves` Python package.
-- Add a `crush` target to `Makefile` once the MCP bridge is battle-tested.
+- ~~Add a `crush` target to `Makefile`~~ — **Done**: `make -C pmoves crush-bootstrap`
+- Deploy Crush to SPARK node (handoff doc: `pmoves/docs/handoffs/SPARK_CRUSH_AWAKENING_2026-07-12.md`)
+- Install `gopls` on fleet nodes that work with Go codebases

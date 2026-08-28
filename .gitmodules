@@ -11,9 +11,16 @@
 #   - Security Hardening: Container security baseline enforcement
 #
 # Branch Strategy:
-#   All submodules track PMOVES.AI-Edition-Hardened branch
-#   Exception: PMOVES-DoX tracks PMOVES.AI-Edition-Hardened-DoX
-#   Reason: DoX has a nested instance of Agent Zero as MCP tool for standalone mode
+#   Most submodules track PMOVES.AI-Edition-Hardened branch
+#   Exceptions tracking main:
+#     - E2B/infra tier: E2B-Danger-Room, Danger-infra, Pipecat, MAI-UI, Headscale
+#       (independent release cadence from hardened fleet)
+#     - Tooling: ClawZ, skills/* (5 forks — Pmoves-skills, awesome-agent-skills,
+#       fork-repository-skill, agent-sandbox-skill, claude-d3js-skill)
+#   Note: Pmoves-cipher was migrated from main → PMOVES.AI-Edition-Hardened
+#     on 2026-07-13 (PR #2116, A1-Shim re-fork from campfirein/byterover-cli upstream).
+#   Exception tracking PMOVES.AI-Edition-Hardened-DoX:
+#     - PMOVES-DoX (nested Agent Zero MCP tool for standalone mode)
 #
 # GitHub Actions CI/CD:
 #   Push to hardened triggers automated builds via integrations-ghcr.yml
@@ -204,6 +211,7 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
 	branch = PMOVES.AI-Edition-Hardened
 
+
 # =============================================================================
 # LLM Gateway & Model Services
 # =============================================================================
@@ -308,4 +316,132 @@
 [submodule "PMOVES-ClawZ"]
 	path = PMOVES-ClawZ
 	url = https://github.com/POWERFULMOVES/PMOVES-ClawZ.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-space-agent"]
+	path = PMOVES-space-agent
+	url = https://github.com/POWERFULMOVES/PMOVES-space-agent.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "skills/PMOVES-awesome-agent-skills"]
+	path = skills/PMOVES-awesome-agent-skills
+	url = https://github.com/POWERFULMOVES/PMOVES-awesome-agent-skills.git
+	branch = main
+[submodule "skills/pmoves-fork-repository-skill"]
+	path = skills/pmoves-fork-repository-skill
+	url = https://github.com/POWERFULMOVES/pmoves-fork-repository-skill.git
+	branch = main
+[submodule "skills/PMOVES-agent-sandbox-skill"]
+	path = skills/PMOVES-agent-sandbox-skill
+	url = https://github.com/POWERFULMOVES/PMOVES-agent-sandbox-skill.git
+	branch = main
+[submodule "skills/Pmoves-claude-d3js-skill"]
+	path = skills/Pmoves-claude-d3js-skill
+	url = https://github.com/POWERFULMOVES/Pmoves-claude-d3js-skill.git
+	branch = main
+[submodule "pmoves-cipher-mcp"]
+	path = pmoves-cipher-mcp
+	url = https://github.com/POWERFULMOVES/pmoves-cipher-mcp.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-jcodemunch-mcp"]
+	path = PMOVES-jcodemunch-mcp
+	url = https://github.com/POWERFULMOVES/PMOVES-jcodemunch-mcp.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves-hirag-mcp"]
+	path = pmoves-hirag-mcp
+	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-OpenRoom"]
+	path = PMOVES-OpenRoom
+	url = https://github.com/POWERFULMOVES/PMOVES-OpenRoom.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all
+[submodule "Pmoves-pretext"]
+	path = Pmoves-pretext
+	url = https://github.com/POWERFULMOVES/Pmoves-pretext.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all
+[submodule "PMOVES-Spark-VSS"]
+	path = PMOVES-Spark-VSS
+	url = https://github.com/POWERFULMOVES/PM-Spark-video-search-and-summarization.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-ollama"]
+	path = PMOVES-ollama
+	url = https://github.com/POWERFULMOVES/PMOVES-ollama.git
+	branch = PMOVES.AI-Edition-Hardened
+	ignore = all
+[submodule "PMOVES-hermes-agent"]
+	path = PMOVES-hermes-agent
+	url = https://github.com/POWERFULMOVES/PMOVES-hermes-agent.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-pinokio"]
+	path = PMOVES-pinokio
+	url = https://github.com/POWERFULMOVES/PMOVES-pinokio.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-obico-server"]
+	path = PMOVES-obico-server
+	url = https://github.com/POWERFULMOVES/PMOVES-obico-server.git
+	branch = release
+[submodule "PMOVES-moonraker-obico"]
+	path = PMOVES-moonraker-obico
+	url = https://github.com/POWERFULMOVES/PMOVES-moonraker-obico.git
+	branch = master
+[submodule "PMOVES-OrcaSlicer"]
+	path = PMOVES-OrcaSlicer
+	url = https://github.com/POWERFULMOVES/PMOVES-OrcaSlicer.git
+	branch = main
+[submodule "PMOVES-OctoPrint-Obico"]
+	path = PMOVES-OctoPrint-Obico
+	url = https://github.com/POWERFULMOVES/PMOVES-OctoPrint-Obico.git
+	branch = master
+[submodule "PMOVES-fluidd"]
+	path = PMOVES-fluidd
+	url = https://github.com/POWERFULMOVES/PMOVES-fluidd.git
+	branch = develop
+[submodule "PMOVES-nats-server"]
+	path = PMOVES-nats-server
+	url = https://github.com/POWERFULMOVES/PMOVES-nats-server.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "skills/PMOVES-skills"]
+	path = skills/PMOVES-skills
+	url = https://github.com/POWERFULMOVES/PMOVES-skills.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-MiniMax-MCP"]
+	path = PMOVES-MiniMax-MCP
+	url = https://github.com/POWERFULMOVES/PMOVES-MiniMax-MCP.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "Pmoves-minimax-cli"]
+	path = Pmoves-minimax-cli
+	url = https://github.com/POWERFULMOVES/Pmoves-minimax-cli.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "Pmoves-MiniMax-Provider-Verifier"]
+	path = Pmoves-MiniMax-Provider-Verifier
+	url = https://github.com/POWERFULMOVES/Pmoves-MiniMax-Provider-Verifier.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-agents.md"]
+	path = PMOVES-agents.md
+	url = https://github.com/POWERFULMOVES/PMOVES-agents.md.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves-keygen"]
+	path = pmoves-keygen
+	url = https://github.com/POWERFULMOVES/pmoves-keygen.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-pterm"]
+	path = PMOVES-pterm
+	url = https://github.com/POWERFULMOVES/PMOVES-pterm.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-gepeto"]
+	path = PMOVES-gepeto
+	url = https://github.com/POWERFULMOVES/PMOVES-gepeto.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-pinokiod"]
+	path = PMOVES-pinokiod
+	url = https://github.com/POWERFULMOVES/PMOVES-pinokiod.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-mcp-gateway"]
+	path = PMOVES-mcp-gateway
+	url = https://github.com/POWERFULMOVES/PMOVES-mcp-gateway.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-deepseek-harness"]
+	path = PMOVES-deepseek-harness
+	url = https://github.com/POWERFULMOVES/PMOVES-deepseek-harness.git
 	branch = PMOVES.AI-Edition-Hardened

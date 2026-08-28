@@ -2,3 +2,21 @@
 
 # Note: Pipecat deps are installed separately via requirements-pipecat.txt
 # to avoid hash verification conflicts
+
+# Gemini Omni Integration
+google-genai==2.10.0
+
+# DO NOT REMOVE AS REDUNDANT. This is already pinned in requirements.lock above
+# (python-multipart==0.0.20), and it is restated here on purpose:
+# .github/workflows/python-tests.yml collects CI test deps by reading each
+# service's requirements.txt line by line and skipping every line starting with
+# "-" — which silently drops the `-r requirements.lock` include. The collector
+# therefore sees exactly ONE package from this service, so nothing in the lock is
+# installed for CI unless some other service happens to name it too.
+#
+# main.py uses fastapi Form(), and FastAPI raises at ROUTE-DEFINITION time
+# without python-multipart, so `import main` fails outright in CI. Restating it
+# here is the narrowest fix; teaching the collector to follow `-r` includes is
+# the real one, but that would pull this entire 1,387-line lock into the CI
+# install and is not this PR's blast radius.
+python-multipart==0.0.20

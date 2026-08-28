@@ -1,0 +1,132 @@
+name: Branch Protection Drift
+
+# Daily drift check on the PMOVES org's branch protection rulesets.
+# Runs pmoves/tools/branch_protection_publisher.py drift-check on the
+# POWERFULMOVES org, publishes the per-repo drift to
+# pmoves.branch_protection.drift.v1 (NATS) so the Mavis orchestrator
+# can dispatch a remediation session, and writes the report to the
+# step summary + a JSONL artifact for offline inspection.
+#
+# The publisher is the ruleset-only side (per the PR #2490 ownership
+# split: this workflow owns RULESETS, .github/workflows/branch-
+# protection-sync.yml owns CLASSIC). Drift here means the ruleset
+# differs from the spec; classic drift is the existing workflow's
+# concern and is NOT audited here.
+#
+# Schedule: daily 06:00 UTC (matches fork-sync.yml + branch-protection-
+# sync.yml). workflow_dispatch for manual runs.
+#
+# Exit codes:
+#   0 = drift check ran (compliant or non-compliant — both are OK)
+#   1 = spec / publisher failure (the script's CLI returns 2 for
+#       publish failure, which becomes workflow run: failure)
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      org:
+        description: 'GitHub org to audit'
+        required: false
+        type: string
+        default: 'POWERFULMOVES'
+      sink:
+        description: 'Publisher sink (file = JSONL to artifact; nats = pmoves-nats-mcp live)'
+        required: false
+        type: choice
+        options: [file, nats]
+        default: 'file'
+
+permissions: {}
+
+jobs:
+  drift:
+    name: branch-protection-drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Mint the GitHub App token. branch_protection.drift_check() shells
+      # out to `gh api` for every repo in per_repo_overrides, which
+      # requires auth. With `permissions: {}` and no App-token step,
+      # every call 401s and is reported as an `audit_error` (false
+      # drift). The token scope is every repo in per_repo_overrides
+      # (the drift audit needs read access to all of them).
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ github.repository_owner }}
+          permission-contents: read
+          # permission-administration: read is not required for drift
+          # audit (only writes need administration). The token is
+          # least-privilege for the drift surface.
+
+      # Run the drift check + publish. The default sink is `file`
+      # (JSONL to stdout + the per-run artifact). Operators flip to
+      # `nats` when pmoves-nats-mcp is wired on the runner.
+      #
+      # `set -e -o pipefail` is required: the `python ... | tee ...`
+      # pipeline's exit status is `tee`'s (always 0) by default, which
+      # would mask a publisher failure (e.g. NATS sink can't import its
+      # package). pipefail propagates python's exit, so the step fails
+      # when the publisher fails — which is the documented contract.
+      - name: Run drift check + publish
+        id: drift
+        env:
+          ORG: ${{ inputs.org || 'POWERFULMOVES' }}
+          SINK: ${{ inputs.sink || 'file' }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e -o pipefail
+          mkdir -p .drift
+          # Default to file sink writing to the artifact path. The publisher
+          # is a stdlib-only Python tool; the workflow does not need
+          # network for the file sink.
+          python -m pmoves.tools.branch_protection_publisher \
+            --org "$ORG" \
+            --spec pmoves/configs/branch_protection/pmoves_standard.json \
+            --sink "$SINK" \
+            --out .drift/drift.jsonl \
+            | tee .drift/summary.json
+
+      - name: Surface drift summary
+        if: always()
+        run: |
+          if [ -f .drift/summary.json ]; then
+            echo "## Drift summary" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat .drift/summary.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # `.drift/` is a DOT directory and upload-artifact excludes hidden files by
+      # default, so every run uploaded nothing while the publisher was writing
+      # drift.jsonl and summary.json normally. `if-no-files-found: ignore` then
+      # turned the empty upload into a bare log line rather than a warning, so the
+      # job went green with no artifact at all. The first run that ever completed
+      # (2026-08-20, after the fabricated action pin was fixed in #2622) reported
+      # `"published": 23` and produced:
+      #
+      #     No files were found with the provided path: .drift/.
+      #     No artifacts will be uploaded.
+      #
+      # Two silences stacked: hidden-by-default, then ignore-if-empty.
+      - name: Upload drift artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: branch-protection-drift-${{ github.run_id }}
+          path: .drift/
+          include-hidden-files: true
+          # warn, not ignore: the publisher always tees summary.json, so an empty
+          # .drift/ means the publish step did not do its job and that should be
+          # visible in the log rather than swallowed.
+          if-no-files-found: warn

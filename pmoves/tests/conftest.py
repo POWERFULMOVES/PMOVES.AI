@@ -1,12 +1,37 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import socket
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Callable, Dict
 
 import pytest
+import pytest_asyncio
+import yaml as _yaml
+
+
+def _compose_override_tag(loader, node):
+    """Tolerate Docker Compose custom merge tags (!override, !reset) under PyYAML.
+
+    docker-compose.hardened.yml uses `!override` (Compose 2.24+ replace-don't-append
+    semantics) on list fields. PyYAML's SafeLoader/FullLoader otherwise raise a
+    constructor error on these tags, breaking tests that yaml.safe_load the compose
+    files (e.g. tests/hardening, tests/smoke). Construct the underlying value so the
+    parsed structure matches the post-merge intent.
+    """
+    if isinstance(node, _yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    if isinstance(node, _yaml.MappingNode):
+        return loader.construct_mapping(node)
+    return loader.construct_scalar(node)
+
+
+for _compose_tag in ("!override", "!reset"):
+    _yaml.SafeLoader.add_constructor(_compose_tag, _compose_override_tag)
+    _yaml.FullLoader.add_constructor(_compose_tag, _compose_override_tag)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -141,8 +166,10 @@ def stub_external_modules() -> None:
         client_module = ModuleType("nats.aio.client")
 
         class _FakeNATS:
+            is_connected = True
+
             async def connect(self, *args, **kwargs):  # pragma: no cover - trivial
-                return None
+                return self
 
             async def publish(self, *args, **kwargs):  # pragma: no cover - trivial
                 return None
@@ -154,6 +181,56 @@ def stub_external_modules() -> None:
         _install_module("nats", nats_module)
         _install_module("nats.aio", aio_module)
         _install_module("nats.aio.client", client_module)
+
+
+@pytest.fixture(scope="session")
+def nats_url() -> str:
+    """Return the canonical authenticated NATS URL.
+
+    Prefers the NATS_URL environment variable (useful for CI overrides);
+    otherwise falls back to the production-authenticated default used
+    throughout PMOVES.AI (``nats://nats:pmoves@nats:4222``).
+    """
+    return os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+
+
+@pytest.fixture(scope="session")
+def nats_available() -> bool:
+    """Return True when a NATS broker is reachable on localhost:4222."""
+    try:
+        with socket.create_connection(("127.0.0.1", 4222), timeout=1.0):
+            return True
+    except OSError:
+        return False
+
+
+@pytest_asyncio.fixture(scope="function")
+async def nats_client(nats_url: str, nats_available: bool):
+    """Yield an authenticated NATS client or skip when broker is unavailable.
+
+    The session-wide ``stub_external_modules`` fixture installs a lightweight
+    fake ``nats`` module so unit tests can import ``nats`` without the real
+    dependency. This fixture bypasses that stub and loads the real
+    ``nats-py`` package (installed in CI when a broker is running).
+    """
+    if not nats_available:
+        pytest.skip("NATS not reachable on localhost:4222")
+    import importlib
+
+    for mod_name in ("nats", "nats.aio", "nats.aio.client"):
+        sys.modules.pop(mod_name, None)
+    try:
+        nats_real = importlib.import_module("nats")
+    except ImportError:
+        pytest.skip("nats-py not installed")
+    nc = await nats_real.connect(nats_url)
+    try:
+        yield nc
+    finally:
+        try:
+            await nc.close()
+        except Exception:
+            pass
 
 
 @pytest.fixture(scope="session")

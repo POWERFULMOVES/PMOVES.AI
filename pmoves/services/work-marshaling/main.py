@@ -55,7 +55,7 @@ logger = structlog.get_logger(__name__)
 def get_settings():
     """Get service settings from environment variables."""
     return {
-        "nats_url": os.getenv("NATS_URL", "nats://localhost:4222"),
+        "nats_url": os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
         "registry_url": os.getenv("NODE_REGISTRY_URL", "http://localhost:8082"),
         "api_host": os.getenv("WORK_MARSHALING_HOST", "0.0.0.0"),
         "api_port": int(os.getenv("WORK_MARSHALING_PORT", "8100")),
@@ -298,6 +298,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
         sys.exit(0)
-    except Exception as e:
+    except Exception:
         logger.exception("Fatal error in Work Marshaling service")
         sys.exit(1)

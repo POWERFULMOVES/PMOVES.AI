@@ -12,9 +12,15 @@ import json
 import os
 import platform
 import shutil
+import re
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
+
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 
 @dataclass(frozen=True)
@@ -47,8 +53,46 @@ LANES: tuple[RunnerLane, ...] = (
 )
 
 
-def run_cmd(args: list[str], check: bool = True,
-            timeout: int = 120) -> subprocess.CompletedProcess[str]:
+def _load_env_shared() -> dict[str, str]:
+    """Read env.shared into a dict."""
+    env_path = Path(_REPO_ROOT) / "pmoves" / "env.shared"
+    result: dict[str, str] = {}
+    if not env_path.exists():
+        return result
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, _, val = line.partition("=")
+                result[key.strip()] = val.strip()
+    return result
+
+
+def _ensure_env_loaded() -> None:
+    """Load env.shared into os.environ as fallback if not already loaded.
+
+    This makes the script self-contained when invoked directly
+    (e.g. `python tools/local_cert_runners.py up`) without requiring
+    the with-env.sh wrapper. Mirrors the fallback pattern in
+    provider_cascade.py._read_env_shared().
+    """
+    if os.getenv("PMOVES_ENV_LOADER"):
+        return  # already loaded by with-env.sh
+    for key, value in _load_env_shared().items():
+        if key not in os.environ:
+            os.environ[key] = value
+
+
+
+
+def run_cmd(
+    args: list[str],
+    check: bool = True,
+    timeout: int = 120,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run a subprocess command with timeout handling.
 
     TimeoutExpired is re-raised when check=True but returns a synthetic
@@ -62,6 +106,7 @@ def run_cmd(args: list[str], check: bool = True,
             text=True,
             capture_output=True,
             timeout=timeout,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         if check:
@@ -78,6 +123,7 @@ def require_tool(name: str) -> None:
 
 def registration_token(repo: str, lane: str) -> str:
     """Fetch a short-lived GitHub runner registration token (~1h validity)."""
+    require_tool("gh")
     env_name = f"RUNNER_TOKEN_{lane.replace('-', '_').upper()}"
     lane_token = os.getenv(env_name)
     if lane_token:
@@ -103,35 +149,72 @@ def registration_token(repo: str, lane: str) -> str:
     return token
 
 
-def access_token(repo: str, lane: str) -> tuple[str, bool]:
-    """Get a GitHub PAT for persistent runner auto-registration.
+def access_token(repo: str, lane: str) -> tuple[str, bool, str]:
+    """Get auth credentials for persistent runner registration.
 
-    With ACCESS_TOKEN, the myoung34/github-runner container auto-fetches
-    fresh registration tokens on each restart, preventing the perpetual
-    404 loop caused by expired RUNNER_TOKENs.
+    Priority:
+      0. GitHub App (APP_ID + APP_PRIVATE_KEY) — auto-renewing, no PAT needed
+      1. Lane-specific PAT (RUNNER_PAT_{LANE})
+      2. Shared PAT (RUNNER_PAT / GH_TOKEN / GITHUB_TOKEN)
+      3. Short-lived registration token (~1h, deprecated)
 
-    Returns (token, is_pat) — is_pat=True means use ACCESS_TOKEN env var,
-    is_pat=False means fall back to short-lived RUNNER_TOKEN.
+    Returns (token_or_app_id, is_persistent, auth_mode) where:
+      auth_mode = "app" | "pat" | "registration"
+    For "app" mode, token_or_app_id is the APP_ID (APP_PRIVATE_KEY read separately).
     """
+    # Priority 0: GitHub App credentials — the myoung34/github-runner image
+    # natively supports APP_ID + APP_PRIVATE_KEY and mints its own tokens.
+    from pmoves.tools._secrets_common import is_placeholder
+
+    app_id = os.getenv("GH_APP_ID", "")
+    app_key = os.getenv("GH_APP_SEC", "")
+    # Reject obviously-truncated PEM bodies. _load_env_shared() reads env.shared
+    # line-by-line and only captures the first line of multi-line values, so a
+    # PEM stored raw (BEGIN...lines...END) collapses to its 31-char BEGIN header
+    # and the runner registration crashes with "short header" / "Expecting: ANY
+    # PRIVATE KEY". If the key is too short to be a real PEM, fall through to
+    # the PAT cascade rather than handing a broken value to the runner image.
+    pem_looks_valid = (
+        bool(app_key)
+        and len(app_key) > 256
+        and "BEGIN" in app_key
+        and "END" in app_key
+    )
+    if app_id and pem_looks_valid and not is_placeholder(app_id) and not is_placeholder(app_key):
+        return (app_id, app_key), True, "app"
+
+    # Priority 1-2: PAT cascade
     env_name = f"RUNNER_PAT_{lane.replace('-', '_').upper()}"
-    lane_pat = os.getenv(env_name)
-    if lane_pat:
-        return lane_pat, True
+    lane_pat = os.getenv(env_name, "")
+    if lane_pat and not is_placeholder(lane_pat):
+        return lane_pat, True, "pat"
+    # GITHUB_PAT is the Phase 9G-canonical name (set by inject_github_pat_from_gh_cli.py)
+    # — accept it in the cascade so runners can authenticate via the same PAT the
+    # github-runner-ctl monitor uses, without forcing the operator to duplicate
+    # the value under a runner-specific name.
     shared_pat = (
         os.getenv("RUNNER_PAT")
+        or os.getenv("GITHUB_PAT")
         or os.getenv("GH_TOKEN")
         or os.getenv("GITHUB_TOKEN")
     )
+    if shared_pat and not is_placeholder(shared_pat):
+        return shared_pat, True, "pat"
     if shared_pat:
-        return shared_pat, True
-    # Fallback: short-lived registration token (expires in ~1h)
+        print(
+            "WARNING: Ignoring placeholder shared PAT "
+            "(RUNNER_PAT/GH_TOKEN/GITHUB_TOKEN); "
+            "falling back to registration token.",
+            file=sys.stderr,
+        )
+    # Priority 3: short-lived registration token (expires in ~1h)
     print(
-        f"WARNING: No PAT found (set RUNNER_PAT or GH_TOKEN). "
+        f"WARNING: No App credentials or PAT found. "
         f"Using short-lived registration token for lane '{lane}' — "
         f"container will fail to re-register after ~1 hour.",
         file=sys.stderr,
     )
-    return registration_token(repo, lane), False
+    return registration_token(repo, lane), False, "registration"
 
 
 def docker_rm(container_name: str) -> None:
@@ -171,8 +254,22 @@ def _docker_socket_mount() -> str:
     return "/var/run/docker.sock:/var/run/docker.sock"
 
 
+def _secrets_volume_mount() -> str:
+    """Return host↔container bind-mount for persisting synced secrets.
+
+    Uses canonical path from _secrets_common.host_config_dir() to avoid
+    duplication of the APPDATA/XDG resolution logic.
+    """
+    from pmoves.tools._secrets_common import host_config_dir
+
+    host_dir = str(host_config_dir())
+    os.makedirs(host_dir, exist_ok=True)
+    return f"{host_dir}:/root/.config/pmoves"
+
+
 def docker_run(
-    repo: str, image: str, lane: RunnerLane, token: str, *, is_pat: bool = True,
+    repo: str, image: str, lane: RunnerLane, token: str,
+    *, is_pat: bool = True, auth_mode: str = "pat",
 ) -> None:
     resources = LANE_RESOURCES.get(lane.lane, {"cpus": "4", "memory": "8g"})
     cmd = [
@@ -196,29 +293,53 @@ def docker_run(
         cmd.extend(["-e", "NVIDIA_VISIBLE_DEVICES=all"])
         cmd.extend(["-e", "NVIDIA_DRIVER_CAPABILITIES=compute,utility"])
 
-    # Use ACCESS_TOKEN (PAT) for persistent auto-registration, or fall back
-    # to short-lived RUNNER_TOKEN when no PAT is available.
-    if is_pat:
-        token_env = f"ACCESS_TOKEN={token}"
+    # Security: pass secrets via bare -e KEY (inherits from parent env)
+    # instead of -e KEY=VALUE which leaks into /proc/<pid>/cmdline.
+    env = os.environ.copy()
+    token_env_flags: list[str] = []
+
+    if auth_mode == "app":
+        # GitHub App: myoung34/github-runner natively supports APP_ID +
+        # APP_PRIVATE_KEY and mints installation tokens internally.
+        # token is a (app_id, app_key) tuple — validated in access_token().
+        app_id, app_key = token
+        env["APP_ID"] = app_id
+        env["APP_PRIVATE_KEY"] = app_key
+        token_env_flags = ["APP_ID", "APP_PRIVATE_KEY"]
+    elif is_pat:
+        env["ACCESS_TOKEN"] = token
+        token_env_flags = ["ACCESS_TOKEN"]
     else:
-        token_env = f"RUNNER_TOKEN={token}"
+        env["RUNNER_TOKEN"] = token
+        token_env_flags = ["RUNNER_TOKEN"]
+
+    # Enable runner reuse to prevent restart loop when containers are recreated
+    # Runner state persists in the mounted volume at /root/.config/pmoves
+    env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
+
+    # Add RUNNER_ALLOW_RUNNER_REUSE to the docker command flags
+    # This must be passed via -e to reach the container
+    token_env_flags.append("RUNNER_ALLOW_RUNNER_REUSE")
+
+    env["REPO_URL"] = f"https://github.com/{repo}"
+    env["RUNNER_NAME"] = lane.runner_name
+    env["LABELS"] = lane.labels
+    env["RUNNER_WORKDIR"] = "/tmp/runner/_work"
 
     cmd.extend([
-        "-e",
-        f"REPO_URL=https://github.com/{repo}",
-        "-e",
-        f"RUNNER_NAME={lane.runner_name}",
-        "-e",
-        token_env,
-        "-e",
-        f"LABELS={lane.labels}",
-        "-e",
-        "RUNNER_WORKDIR=/tmp/runner/_work",
-        "-v",
-        _docker_socket_mount(),
+        "-e", "REPO_URL",
+        "-e", "RUNNER_NAME",
+        "-e", "LABELS",
+        "-e", "RUNNER_WORKDIR",
+    ])
+    for flag in token_env_flags:
+        cmd.extend(["-e", flag])
+    cmd.extend([
+        "-v", _docker_socket_mount(),
+        "-v", _secrets_volume_mount(),
         image,
     ])
-    run_cmd(cmd)
+    run_cmd(cmd, env=env)
 
 def _runner_log_args(lane: RunnerLane) -> list[str]:
     info = run_cmd(
@@ -256,13 +377,16 @@ def _selected_lanes(names: list[str] | None) -> tuple[RunnerLane, ...]:
 
 def cmd_up(repo: str, image: str, lanes: tuple[RunnerLane, ...]) -> int:
     require_tool("docker")
-    require_tool("gh")
     for lane in lanes:
-        token, is_pat = access_token(repo, lane.lane)
+        token, is_pat, auth_mode = access_token(repo, lane.lane)
         docker_rm(lane.container_name)
-        docker_run(repo, image, lane, token, is_pat=is_pat)
-        mode = "ACCESS_TOKEN (PAT)" if is_pat else "RUNNER_TOKEN (short-lived)"
-        print(f"started {lane.container_name} ({lane.runner_name}) [{mode}]")
+        docker_run(repo, image, lane, token, is_pat=is_pat, auth_mode=auth_mode)
+        mode_labels = {
+            "app": "APP_ID + APP_PRIVATE_KEY (GitHub App)",
+            "pat": "ACCESS_TOKEN (PAT)",
+            "registration": "RUNNER_TOKEN (short-lived)",
+        }
+        print(f"started {lane.container_name} ({lane.runner_name}) [{mode_labels.get(auth_mode, auth_mode)}]")
     return 0
 
 
@@ -329,7 +453,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--image",
-        default=os.getenv("RUNNER_IMAGE", "myoung34/github-runner:latest"),
+        default=os.getenv("RUNNER_IMAGE", "ghcr.io/powerfulmoves/github-runner-pmoves:latest"),
         help="Docker image used for runner containers.",
     )
     parser.add_argument(
@@ -338,12 +462,62 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         choices=tuple(lane.lane for lane in LANES),
         help="Runner lane to target. Repeat to target multiple lanes. Default: all lanes.",
     )
+    parser.add_argument(
+        "--node-label",
+        default=os.getenv("PMOVES_RUNNER_NODE_LABEL"),
+        help=(
+            "Node sub-label to append (e.g. 4090, b850). Workflows that address a "
+            "specific node use runs-on: [self-hosted, <lane>, <node>], so without "
+            "this the runner joins the lane but cannot be targeted individually. "
+            "Also suffixes the runner name, which GitHub requires to be unique per "
+            "runner -- two nodes registering the bare lane name collide. Pass the "
+            "SAME value to up/down/status: status looks the runner up by its "
+            "suffixed name. A PMOVES_RUNNER_NODE_LABEL default belongs in a "
+            "node-local env, NOT pmoves/env.shared -- env.shared is loaded "
+            "fleet-wide before parsing, so a value there would label every node "
+            "identically and defeat the point of a node label."
+        ),
+    )
     return parser.parse_args(argv)
 
 
+_NODE_LABEL_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
+
+
+def _apply_node_label(lanes: tuple[RunnerLane, ...], node_label: str) -> tuple[RunnerLane, ...]:
+    """Return `lanes` re-stamped for a specific node.
+
+    GitHub matches a job's `runs-on` list against a runner's labels as a SUBSET
+    test, so appending a node label keeps every existing lane match working --
+    `[self-hosted, ai-lab]` still selects this runner -- while additionally
+    allowing `[self-hosted, ai-lab, 4090]` to select it and only it.
+
+    The runner name is suffixed too. GitHub requires runner names to be unique
+    within a repository; two nodes both registering `pmoves-ai-lab-runner`
+    collide, and the second either fails to register or (with reuse enabled)
+    silently replaces the first.
+    """
+    if not _NODE_LABEL_RE.fullmatch(node_label):
+        raise ValueError(
+            f"invalid --node-label {node_label!r}: must match [a-z0-9][a-z0-9-]* "
+            "(the same shape workflow inputs validate, e.g. 4090, b850, kvm4-2)"
+        )
+    return tuple(
+        replace(
+            lane,
+            runner_name=f"{lane.runner_name}-{node_label}",
+            labels=f"{lane.labels},{node_label}",
+        )
+        for lane in lanes
+    )
+
+
 def main(argv: list[str]) -> int:
+    _ensure_env_loaded()
     args = parse_args(argv)
     lanes = _selected_lanes(args.lane)
+    if args.node_label:
+        lanes = _apply_node_label(lanes, args.node_label)
     try:
         if args.action == "up":
             return cmd_up(args.repo, args.image, lanes)

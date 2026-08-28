@@ -1,0 +1,334 @@
+# TAC Tree: Pinokio 7 Integration
+# Tracks P7 upgrade, SKILL.md discovery, Agent Interpreter integration,
+# cross-machine routing via Tailscale, and PMOVES service exposure.
+#
+# Key files:
+#   D:\pinokio\                                       (Pinokio install root)
+#   D:\pinokio\api\Ultimate-TTS-Studio.git\           (TTS app — P7 discovery target)
+#   PMOVES-pinokio/api/pmoves-services/                 (Docker Compose launcher)
+#   PMOVES-Pinokio-Ultimate-TTS-Studio/               (TTS launcher submodule)
+#   pmoves/configs/tac_trees/voice-agents.tac.yaml    (voice pipeline TAC)
+#   pmoves/config/agent_registry.yaml                 (agent identities)
+
+name: "Pinokio 7 Integration"
+version: "1.0.0"
+description: "Track Pinokio 7 upgrade, Agent Interpreter readiness, SKILL.md exposure, and cross-machine agent routing across the PMOVES fleet"
+
+root:
+  id: pinokio-p7
+  task: "Pinokio 7 integration review"
+  context: "D:\\pinokio\\ + PMOVES-pinokio/ + PMOVES-Pinokio-Ultimate-TTS-Studio/"
+  agent_hint: 5090-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: P7 Upgrade Status
+    # =========================================================================
+    - id: p7.upgrade
+      task: "Pinokio 7 upgrade status per machine"
+      context: "Desktop Electron app — manual upgrade via auto-updater"
+      agent_hint: 5090-claude
+      children:
+        - id: p7.upgrade.5090
+          task: "5090 (POWERFULMOVES) upgraded to v7.0.0"
+          action:
+            type: manual
+            expect: "Pinokio UI shows 'Agents' tab, version >= 7.0.0"
+          context: "D:\\pinokio\\ — primary GPU node, 16 apps installed"
+          agent_hint: 5090-claude
+          status: done
+          notes: "Confirmed 2026-03-21 by 5090-claude — Agents tab visible, showing chats. Requirements: cli+py+ffmpeg pending (install via P7 UI Settings)"
+
+        - id: p7.upgrade.z890
+          task: "Z890 upgraded to v7.0.0"
+          action:
+            type: manual
+            expect: "Pinokio UI shows 'Agents' tab on Z890"
+          agent_hint: z890-claude
+          status: done
+          notes: "Confirmed 2026-03-22 — agents.js present in prototype/system/, Electron app at :42000. All requirements installed: py (bin/py), pterm v0.0.24 (bin/npm/pterm), ffmpeg 7.0.2 (bin/miniconda/Library/bin/ffmpeg.exe)"
+
+        - id: p7.upgrade.4090
+          task: "4090 Laptop upgraded to v7.0.0"
+          action:
+            type: manual
+            expect: "Pinokio UI shows 'Agents' tab on 4090 laptop"
+          agent_hint: 4090-claude
+          status: done
+          notes: "Upgraded 2026-03-21 — user confirmed manual Pinokio desktop upgrade complete"
+
+    # =========================================================================
+    # Phase 2: Agent Interpreter — SKILL.md Discovery
+    # =========================================================================
+    - id: p7.interpreter
+      task: "P7 Agent Interpreter discovers and launches PMOVES apps"
+      context: "Official docs: built-in `pinokio` skill auto-discovers installed apps, auto-launches them when needed, waits for readiness, and can generate reusable clients"
+      agent_hint: 5090-claude
+      children:
+        - id: p7.interpreter.tts
+          task: "Ultimate-TTS-Studio discoverable via Agent Interpreter"
+          action:
+            type: manual
+            expect: "Claude Code 'speak hello' routes through Pinokio to TTS at :7860 or a fixed HTTPS domain"
+          context: "D:\\pinokio\\api\\Ultimate-TTS-Studio.git\\ — Gradio API at /gradio_api"
+          agent_hint: 5090-claude
+          status: pending
+
+        - id: p7.interpreter.services
+          task: "PMOVES Services launcher discoverable"
+          action:
+            type: grep
+            target: "PMOVES-pinokio/api/pmoves-services/pinokio.js"
+            pattern: "PMOVES Services"
+            expect: "pmoves-services app visible in Pinokio with start/stop controls"
+          context: "PMOVES-pinokio/api/pmoves-services/ — Docker Compose profile launcher"
+          agent_hint: 5090-claude
+          status: pending
+
+        - id: p7.interpreter.wan
+          task: "WanGP video generation discoverable"
+          action:
+            type: manual
+            expect: "Agent can request 'generate a video' and route to WanGP"
+          context: "D:\\pinokio\\api\\wan.git\\ — video generation app"
+          agent_hint: 5090-claude
+          status: pending
+
+    # =========================================================================
+    # Phase 3: App Assistant (Sidebar Chat)
+    # =========================================================================
+    - id: p7.assistant
+      task: "P7 App Assistant sidebar functional"
+      context: "P7 'Ask AI' sidebar for in-app chat without leaving the app"
+      agent_hint: 5090-claude
+      children:
+        - id: p7.assistant.tts
+          task: "Ask AI works for Ultimate-TTS-Studio"
+          action:
+            type: manual
+            expect: "Sidebar slides in when clicking 'Ask AI', can ask TTS questions"
+          agent_hint: 5090-claude
+          status: pending
+
+    # =========================================================================
+    # Phase 4: Agent Launcher (Session Tracking)
+    # =========================================================================
+    - id: p7.launcher
+      task: "P7 Agent Launcher tracks Claude/Gemini sessions"
+      context: "P7 'Agents' tab indexes past sessions by AI agent"
+      agent_hint: 5090-claude
+      children:
+        - id: p7.launcher.tab
+          task: "'Agents' tab visible in Pinokio UI"
+          action:
+            type: manual
+            expect: "Agents tab shows past Claude Code, Gemini, Codex sessions"
+          agent_hint: 5090-claude
+          status: pending
+
+        - id: p7.launcher.resume
+          task: "Session resumption works"
+          action:
+            type: manual
+            expect: "Click a past session → picks up where last conversation left off"
+          agent_hint: 5090-claude
+          status: pending
+
+    # =========================================================================
+    # Phase 5: Cross-Machine Routing (Tailscale Mesh)
+    # =========================================================================
+    - id: p7.mesh
+      task: "Cross-machine P7 agent routing via Tailscale"
+      context: "Tailscale provides the cross-machine path; Pinokio provides the HTTPS/runtime surface that remote agents consume"
+      agent_hint: 4090-claude
+      status: done
+      notes: "Gate 3 VERIFIED 2026-03-22: 4090→5090 TTS via Tailscale (200 OK, 173ms). All 3 machines on P7. Mobile agent pending."
+      children:
+        - id: p7.mesh.tailscale
+          task: "All 3 dev machines on Tailscale mesh"
+          action:
+            type: shell
+            command: "tailscale status"
+            expect: "pmoves-powerfulmoves, pmoves-z890, pmoves-laptop all online"
+          agent_hint: 5090-claude
+          status: done
+
+        - id: p7.mesh.remote-tts
+          task: "4090 laptop can reach 5090 Pinokio/TTS surface via Tailscale"
+          action:
+            type: manual
+            expect: "From 4090: 5090 Pinokio HTTPS proxy and Ultimate-TTS-Studio endpoints are reachable over Tailscale"
+          context: "Tailscale provides the WAN path; Pinokio provides the HTTPS/runtime surface on the 5090 node"
+          agent_hint: 4090-claude
+          status: done
+          notes: "Verified 2026-03-22: curl https://powerfulmoves-1.tailcad9b4.ts.net/gradio_api/info → 200 OK in 173ms from 4090 laptop. Network path is proven; full Agent Interpreter UX remains tracked separately under p7.interpreter.tts."
+
+        - id: p7.mesh.mobile
+          task: "Mobile agent (Discord/Openclaw) reaches 5090 via mesh"
+          action:
+            type: manual
+            expect: "Discord message from phone triggers TTS on 5090 via P7"
+          context: "Openclaw/Hermes Agent pattern from P7 announcement"
+          agent_hint: 4090-claude
+          status: pending
+          notes: "UNBLOCKED by p7.mesh.remote-tts. Pending full Discord/Openclaw/Hermes end-to-end validation."
+
+    # =========================================================================
+    # Phase 6: PMOVES Service SKILL.md Registration
+    # =========================================================================
+    - id: p7.skillmd
+      task: "PMOVES launchers expose Pinokio metadata, with optional SKILL.md hints"
+      context: "Official Pinokio docs say Agent Interpreter baseline does not require per-app SKILL.md; PMOVES SKILL.md files remain additive hints/docs"
+      agent_hint: z890-claude
+      status: done
+      notes: "All 3 children done: format (5 examples), services (PR #1085), TTS (ARTSTUFF). These hints are additive on top of Pinokio's built-in pinokio/gepeto skills."
+      children:
+        - id: p7.skillmd.format
+          task: "SKILL.md format spec understood"
+          action:
+            type: manual
+            expect: "P7 SKILL.md format documented (after upgrade, check P7 source)"
+          agent_hint: 5090-claude
+          status: done
+          notes: "Format self-evident from 5 shipped SKILL.md files: cipher-beats, holographic-blocks, pmoves-services, pmoves-remote, model-registry (all in PMOVES-pinokio/api/*/SKILL.md)"
+
+        - id: p7.skillmd.tts
+          task: "Ultimate-TTS-Studio optional SKILL.md hint created"
+          action:
+            type: manual
+            expect: "SKILL.md in TTS app folder describes Gradio API endpoints"
+          context: "D:\\pinokio\\api\\Ultimate-TTS-Studio.git\\"
+          agent_hint: 5090-claude
+          status: done
+          depends_on: [p7.skillmd.format]
+          notes: "Shipped at pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio.git/SKILL.md"
+
+        - id: p7.skillmd.services
+          task: "PMOVES Services launcher optional SKILL.md hint created"
+          action:
+            type: manual
+            expect: "SKILL.md in pmoves-services describes Docker profile start/stop"
+          context: "PMOVES-pinokio/api/pmoves-services/"
+          agent_hint: z890-claude
+          status: done
+          depends_on: [p7.skillmd.format]
+          notes: "Shipped at PMOVES-pinokio/api/pmoves-services/SKILL.md (PR #1085)"
+
+    # =========================================================================
+    # Phase 7: NATS Integration
+    # Foundation: PR #1082 shipped CGP producers, embedding standardization,
+    #   and HF enrichment (2026-03-24). Some nodes now PENDING.
+    # =========================================================================
+    - id: p7.nats
+      task: "P7 events published to NATS"
+      context: "Agent sessions, app launches, CGP correlation, model discovery"
+      agent_hint: z890-claude
+      children:
+        - id: p7.nats.session
+          task: "Agent session events on pinokio.agent.session.v1"
+          action:
+            type: manual
+            expect: "P7 agent sessions emit NATS events for observability"
+          context: "P7 Agent Launcher tracks sessions — emit start/stop/resume events"
+          agent_hint: z890-claude
+          status: future
+          notes: "Requires P7 Launcher hooks or pterm event bridge"
+
+        - id: p7.nats.launch
+          task: "App launch events on pinokio.app.launched.v1"
+          action:
+            type: manual
+            expect: "P7 app launches emit NATS events with app name, port, machine"
+          context: "shell.run start → NATS publish; shell.run stop → NATS publish"
+          agent_hint: z890-claude
+          status: in_progress
+          claimed_by: z890-claude
+          claimed_at: "2026-05-18"
+          notes: |
+            Claimed 2026-05-18 by z890-claude (DARKXSIDE authorized).
+            Implementation surface: pinokio.js `on` event handlers in PMOVES launchers
+            under PMOVES-pinokio/api/ + D:\pinokio\api\, publishing to NATS subject
+            `pinokio.app.launched.v1` via the existing fleet NATS bus.
+            Unblocks p7.nats.cgp-correlation (already done) downstream consumers and
+            p7.nats.embedding-quality which depend_on this node.
+
+        - id: p7.nats.cgp-correlation
+          task: "P7-originated actions produce CGP-correlated events"
+          action:
+            type: manual
+            expect: "P7 launch → ingestion → Extract Worker CGP → traceable to P7 session ID"
+          context: "Extract Worker + FFmpeg-Whisper accept context_id (body or X-Context-ID header), propagate to CGP meta and NATS hooks."
+          agent_hint: 4090-claude
+          status: done
+          depends_on: [p7.nats.launch]
+          notes: "Shipped: context_id in Extract Worker /ingest + FFmpeg-Whisper /transcribe + /transcribe_file. Callers opt-in."
+
+        - id: p7.nats.model-discovery
+          task: "P7 agents query Model Registry for available models"
+          action:
+            type: shell
+            command: "curl -s http://localhost:8110/api/models?model_type=embedding"
+            expect: "JSON array of models with dimensions, hf_id, cuda_supported fields"
+          context: "Model Registry HF enrichment endpoints live (PR #1082). P7 agents can discover model capabilities before dispatching inference."
+          agent_hint: 4090-claude
+          status: done
+          notes: "SKILL.md created at PMOVES-pinokio/api/pmoves-model-registry/SKILL.md. P7 Agent Interpreter can now discover Model Registry (port 8110) for model catalog queries, HF enrichment, TensorZero config export, and GPU deployment tracking."
+
+        - id: p7.nats.embedding-quality
+          task: "P7-triggered ingestion uses 2560d Qwen3 embeddings"
+          action:
+            type: manual
+            expect: "Extract Worker processes P7-originated content with EMBEDDING_BACKEND=tensorzero"
+          context: "Stack standardized to TensorZero/Qwen3-embedding:4b (PR #1082). Any P7 app that triggers ingestion gets high-quality vectors."
+          agent_hint: 5090-claude
+          status: in_progress
+          depends_on: [p7.nats.launch]
+          notes: "Provisioning script + runbook landed via L9 (2026-05-20). Operator runs `python3 pmoves/scripts/provision_qdrant_pmoves_chunks_qwen3.py` against prod Qdrant with QDRANT_URL+QDRANT_API_KEY loaded (Method 1 in QDRANT_PROVISIONING_PMOVES_CHUNKS_QWEN3.md). Dim is 2560 (NOT 3072) per pmoves/services/extract-worker/CLAUDE.md. Status flips to done once operator confirms successful provisioning + first Extract Worker write."
+
+        - id: p7.nats.telemetry
+          task: "P7 session telemetry on pinokio.telemetry.v1"
+          action:
+            type: manual
+            expect: "Agent Interpreter activity (tool calls, SKILL.md invocations) emits NATS metrics"
+          context: "Enables Prometheus scraping of P7 agent activity across mesh"
+          agent_hint: z890-claude
+          status: future
+          notes: "Depends on pterm event hooks or custom pinokio.js observer"
+
+    # =========================================================================
+    # Phase 8: MoF (Mixture of Frameworks) Integration
+    # Tracks the unified P7 management surface bridging multiple skill frameworks
+    # Context: pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md
+    # =========================================================================
+    - id: p7.mof
+      task: "MoF integration for P7 lifecycle management"
+      context: "Using a Mixture of Frameworks (pterm, pinokio, gepeto, cipher) to coordinate agentic behavior, terminal execution, and state across the P7 fleet"
+      agent_hint: z890-claude
+      status: pending
+      children:
+        - id: p7.mof.gepeto-pinokio
+          task: "Native Pinokio capabilities leveraged"
+          action:
+            type: manual
+            expect: "Built-in gepeto and pinokio skills coordinate app discovery, launching, and basic coding assistance within P7"
+          context: "Native skills provide baseline interpreter functions"
+          agent_hint: 5090-claude
+          status: done
+
+        - id: p7.mof.pterm
+          task: "pterm bridged for local execution and NATS events"
+          action:
+            type: manual
+            expect: "pterm skill invokes local shell commands and pipes telemetry/events into the pmoves ecosystem"
+          context: "Crucial for crossing the boundary between Pinokio JS space and PMOVES OS space"
+          agent_hint: z890-claude
+          status: pending
+
+        - id: p7.mof.cipher
+          task: "cipher integration for P7 state and alignment"
+          action:
+            type: manual
+            expect: "cipher skill (e.g., cipher-beats) manages state alignment and specialized agent orchestration"
+          context: "Aligns P7 state vectors with the broader PMOVES topological definitions"
+          agent_hint: 4090-claude
+          status: pending

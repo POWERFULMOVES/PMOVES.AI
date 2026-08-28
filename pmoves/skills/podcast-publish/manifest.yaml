@@ -1,0 +1,65 @@
+# Podcast Publishing Skill
+# Combine audio segments, generate RSS XML, upload to MinIO
+
+name: podcast-publish
+version: "1.0.0"
+description: "Publish podcast episodes: combine TTS audio segments, generate RSS feed entry, upload to MinIO"
+author: PMOVES.AI
+
+# Skill configuration
+category: content
+tier: agent
+
+# Input schema
+input:
+  type: object
+  required: [episode_script, audio_url]
+  properties:
+    episode_script:
+      type: string
+      description: "Episode script/notes for show notes generation"
+    audio_url:
+      type: string
+      description: "MinIO URL to synthesized TTS audio"
+    title:
+      type: string
+      description: "Episode title"
+    description:
+      type: string
+      description: "Episode description for RSS feed"
+    tags:
+      type: array
+      items:
+        type: string
+      description: "Episode tags/categories"
+
+# Output schema
+output:
+  type: object
+  properties:
+    rss_entry:
+      type: object
+      description: "New RSS feed entry XML"
+    episode_url:
+      type: string
+      description: "Public URL to episode audio (MinIO presigned)"
+    show_notes_url:
+      type: string
+      description: "URL to generated show notes page"
+
+# Service endpoint
+service:
+  url: "http://localhost:8110/publish"
+  method: POST
+  timeout_ms: 60000
+
+# Dependencies
+dependencies:
+  services:
+    - minio    # Audio storage
+    - presign  # URL generation
+  nats_subjects:
+    - skills.pipeline.podcast-production.v1
+
+# Agent binding
+agent: podcast_producer

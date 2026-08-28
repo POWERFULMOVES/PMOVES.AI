@@ -1,0 +1,56 @@
+# Controlled vocabulary for fitting role keys.
+#
+# Before this file, 31 distinct role keys existed across the suits, 22 of them
+# appearing exactly once, with overlapping near-duplicates. A key with no permitted
+# set cannot be validated and a router cannot dispatch on free text.
+#
+# `supersedes` carries consolidation WITHOUT silently dropping the old name: a
+# fitting using a superseded key still resolves, and warns. Removing a name outright
+# would turn a rename into a routing outage.
+#
+# `*` is reserved and always valid: it means "every role in this harness".
+roles:
+  deep_debugging:
+    description: "Fault isolation in existing code. Low temperature, high precision."
+    supersedes: [debugging]
+  code_review:
+    description: "Reading a diff for defects, not authoring changes."
+  agentic_coding:
+    description: "Multi-step autonomous implementation with tool use."
+    supersedes: [agentic_workflow, plan_routed_coding]
+  code_generation:
+    description: "Single-shot authoring from a clear specification."
+    supersedes: [lightweight_coding]
+  large_scale_implementation:
+    description: "Long-horizon implementation spanning many files."
+    supersedes: [blueprint_implementation, system_engineering]
+  refactoring:
+    description: "Behaviour-preserving restructuring."
+  long_context_analysis:
+    description: "Reading a corpus larger than a working window allows in one pass."
+    supersedes: [long_context_research, complex_analysis]
+  multi_step_reasoning:
+    description: "Chained inference where intermediate steps matter."
+    supersedes: [deep_reasoning]
+  automated_research:
+    description: "Unattended retrieval and synthesis across sources."
+  documentation:
+    description: "Prose authored for humans, from code or specs."
+  quick_chat:
+    description: "Short conversational turns, latency-sensitive."
+    supersedes: [streaming_response]
+  architecture_planning:
+    description: "Design decisions ahead of implementation."
+  workflow_execution:
+    description: "Running a defined pipeline rather than deciding one."
+  long_session:
+    description: "Sustained work where context retention dominates."
+  monitoring:
+    description: "Watching a running system and reporting deviation."
+  orchestration_overflow:
+    description: "Absorbing dispatch load an orchestrator cannot hold."
+  voice_synthesis:
+    description: "Text to speech, including prosody control."
+    supersedes: [expressive_voice_cast, prosodic_bpm_encoding, persona_voice_resolution]
+  chinese_language:
+    description: "Work where Chinese-language capability is the deciding factor."

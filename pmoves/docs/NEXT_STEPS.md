@@ -1,9 +1,103 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-12_
+_Last updated: 2026-07-17_
+
+## Latest changes (July 17, 2026) - P7 room contract reconciliation
+
+- Room catalog `1.2.0` now carries nine explicit `rehearsal` stages; all nine
+  manifests validate against the guarded room schema.
+- Persistent room stage and transient P7 session state are separate contracts.
+- `p7-room-orchestrator` is wired on port 8122 with CHIT-gated live promotion,
+  fail-closed stage audit/fact delivery, restart hydration, per-room transition
+  serialization, PBnJ command compatibility, and focused tests.
+- Environment gate passed for `4090-field.room.control` in session
+  `0db7c6ff-8e93-44a5-a1bb-3a749c314c34`: Supabase history retained the signed
+  live checkpoint, six NATS facts were observed, and the session ended at review.
+- Next gate: activate additional rooms individually through the checklist and
+  surface audited stage state in UI/A2UI. Do not bulk-promote the catalog.
+- Before persistent P7 deployment, reconcile the stale service-role projection
+  through `make -C pmoves secrets-funnel`; current shared service-role variables
+  fail PostgREST auth, while the successful gate used a short-lived local token.
+- Keep A2UI PRs #2132/#2133/#2134 gated until their stacked merge sequence,
+  visual/CHIT/resident review, and tenant signing-card requirements are satisfied.
+
+## Latest changes (June 5, 2026) - Disaster-recovery targets
+- Added **RTO/RPO targets per service tier**: `pmoves/docs/operations/rto-rpo-targets.md` (closes #1428). Per-tier Recovery Time / Recovery Point objectives anchored to the real `env.tier-*` model, per-tier recovery runbooks citing `make -C pmoves backup` + `up-*` layering, split-brain notes for the NATS island/fleet + Postgres + RustDesk-relay pairs, and a backup-isolation/restore-drill checklist. State concentrates in `tier-data` + `tier-supabase`; everything else is fast rebuild.
+
+## Latest changes (May 27, 2026) - Big Ball 5090 closeout
+- Big Ball CHIT/Tokenism hardening is merged: PR `#1633` landed the review-fix branch and PR `#1638` landed the transcribe LFS cleanup gitlink.
+- Dependabot PR `#1561` (`sigstore/cosign-installer` 4.1.1 -> 4.1.2 pinned SHA bump) was reviewed and merged with green checks.
+- Closeout validation on host `POWERFULMOVES` confirms RTX 5090 visibility, TensorZero gateway health, and clean parent submodule integrity after initialization.
+- Tokenism remains guarded: Firefly and contract settlement lanes are dry-run/approval/deployment-gated until real production manifests, chain/RPC/wallet references, FireFly binding, and operator approvals are signed.
+- New starter docs:
+  - `pmoves/docs/TOKENISM_PRODUCTION_ACTIVATION_PACK_2026-05-27.md`
+  - `pmoves/docs/operations/5090_CODEX_VALIDATION_2026-05-27.md`
+
+## Immediate Actions
+
+1. Finish Tokenism production activation pack.
+   - collect real deployed contract addresses, chain id, RPC endpoint reference, wallet custody reference, FireFly endpoint reference, deployment manifest id, operator approval id, signed deployment attestation, rollback plan, and incident/ops contact list
+   - keep FireFly and contract live execution blocked until the full signed activation pack, rollback plan, incident contacts, and dry-run settlement evidence are present
+   - run dry-run settlement end to end before enabling any live executor mode
+
+2. Wire the trusted optimizer bridge.
+   - verify PMOVES-AGENT-ZERO-CODEX, HERMES, and Claw identities in the registry/signing-card config
+   - accept optimizer output as trusted only when TensorZero fitness evidence and signed Graphiti trail entries agree
+
+3. Complete model-fitness integration.
+   - connect Hugging Face candidate discovery to registry candidates
+   - normalize TensorZero inference telemetry plus Pinokio/Unsloth eval output into persisted `model.fitness.recorded.v1` scorecards
+
+4. Close remaining 5090 runtime setup gaps.
+   - make Unsloth callable in the intended Pinokio/5090 training environment
+   - investigate `pmoves-supabase-vector-1` unhealthy and `pmoves-supabase-edge-functions-1` restart loop from the 2026-05-27 Docker snapshot
+   - keep `make -C pmoves submodule-integrity` green after any new gitlink movement
+
+5. Keep math claims honest.
+   - write the zeta method-design doc before implementation
+   - keep hyperbolic geometry described as embedding support and zeta/swarm as heuristic/tracking until proofs and production operators are validated
+
+### Latest changes (Apr 25, 2026) — Agent Zero Fork Sync Complete
+- Agent Zero fork sync completed: branch `PMOVES.AI-Edition-v1.9` pushed to `POWERFULMOVES/PMOVES-Agent-Zero`, closing the 604-commit gap against upstream v1.9.
+- Fresh Overlay strategy applied: 28 clean cherry-picks + 6 conflicting files re-implemented on v1.9 base.
+- MiniMax litellm_provider format corrected from `openai-compatible` to `openai`.
+- Old branch `PMOVES.AI-Edition-Hardened` (pin 2e000aa, Mar 7) retained as fallback.
+- Next step: boot validation of PMOVES.AI-Edition-v1.9 before switching default branch.
 
 ## Current Status
+
+### Latest changes (Mar 29, 2026) — KiloCode Claw Configuration + GLM-5.1 Taxonomy
+- PR `#1151` establishes the `.kilo/` claw configuration framework for 5090:
+  - 3 agent definitions (darkxside, powerfulmoves, kilocode-glm), 14 commands
+  - CLAW_TAXONOMY.md codifies the bespoke model integration principle
+  - PMOVES.Flare namespace (`pmoves/`) for consistent model naming
+  - Z.AI MCP servers (Vision, Web Search, Web Reader, Zread) configured
+  - ClaWz orphaned gitlink repaired (cfb4e3a → fork main 2a406120)
+  - Profile ID normalization (workstation_5090 → desktop-9950xd) across 14 files
+  - 5090-kilocode room manifest added to rooms/stage system
+- DARKXSIDE ✦ attested to KiloCode integration in DARKXSIDE_SIGNATURE.md and KRISS_KROSS_ACK.md
+- Agent Zero v1.3 gap assessed: fork pinned to March 7, upstream at v1.3 (March 27),
+  502 upstream commits behind. Recommended: dedicated post-merge sync lane in PMOVES-Agent-Zero
+  submodule, re-apply PMOVES hardened patches, validate MCP/personas/Supabase wiring.
+- Next focus: land #1151, #1155, #1156, then open Agent Zero v1.3 sync lane and
+  provider cascade wiring (connect Z.AI MCP with provider_cascade.py from #1155).
+
+### Latest changes (Mar 28, 2026) — Agent Zero v1.3 + Rooms/Stage Prospectus
+- Verified the upstream Agent Zero source of truth has moved to `v1.3` on **March 27, 2026** (`agent0ai/agent-zero`), while the PMOVES hardened fork and current gitlink pin still reflect the **March 7, 2026** hardened state.
+- Published `pmoves/docs/AGENTS/AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md` so the sync discussion now has exact commit math and a preserve/re-apply checklist instead of a generic "fork is behind" warning.
+- Published `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md` so the remote coding lanes and safe suit-scaling posture are explicit: local-first stays primary, coding plans are profile-governed, and seat/token-aware fallback is part of the contract.
+- Published `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_GAP_REPORT.md` so the ClaWz conversation now reflects the real repo state too: upstream `openclaw/openclaw` is current, the PMOVES fork has no fork-specific releases/tags yet, `PMOVES.AI-Edition-Hardened` is an old upstream ancestor, and the root PMOVES gitlink is pinned to an orphaned SHA.
+- Published `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md` so AGNOTE4482 merge readiness now has a shared multi-agent signoff surface instead of scattered reviewer memory.
+- Confirmed the new room/stage wave is now part of live PMOVES shape, not just concept:
+  - `#1136` room catalog contracts + dashboard loader
+  - `#1137` home launcher selection through room entry paths
+  - `#1142` review/voice/media dashboard routes
+  - `#1143` runtime taxonomy in the room manifest schema
+- Prospectus implication: P7, Discord, and cataclysmstudios.com should all describe the platform as **rooms on a stage with selectable suits/personas**, not just a collection of services.
+- Release/CVE intake implication: keep Agent Zero and ClaWz release-note/security awareness on a weekly/sprint funnel through the hardening tracker and planning docs, instead of treating it as ad hoc repo memory.
+- Config implication: the PMOVES profile system is real, but it still needs naming cleanup for suit lanes because `pmoves/config/profiles/*.yaml` uses repo-backed ids like `desktop-9950xd` while model-profile tooling still defaults `HOST=workstation_5090`.
+- Next focus: use the new gap reports to decide the PMOVES Agent Zero sync posture against upstream `v1.3`, repair the ClaWz branch/pin baseline, normalize suit profile ids, and keep P7/AGNOTE/docs aligned around the room/stage model before more surface polish.
 
 ### Latest changes (Mar 12, 2026) — PMOVES.YT Authoritative Runtime Refresh
 - `PMOVES.YT` is now the authoritative runtime/docs lane for `pmoves-yt`; the root repo now builds the service from the submodule Dockerfile instead of treating `pmoves/services/pmoves-yt` as the source of truth.
@@ -26,7 +120,7 @@ _Last updated: 2026-03-12_
 - Added Supabase tracking schema `pmoves_core.n8n_workflow_registry` plus `make -C pmoves n8n-sync-supabase-registry` so PMOVES can inventory live workflow state.
 - Next focus: validate the full bootstrap against Postgres-backed n8n, refresh PMOVES.YT from demo to production against the same automation lane, and decide which BotZ/MCP workflows join the shared canonical catalog.
 
-## Immediate Actions
+## Historical Immediate Actions (Mar 2026)
 
 1. Close the current hardened merge lane.
    - merge `PMOVES.YT #4`
@@ -42,6 +136,21 @@ _Last updated: 2026-03-12_
    - validate Postgres-backed `PMOVES-n8n` bootstrap end-to-end
    - decide which BotZ/MCP workflows become canonical shared automation flows
    - keep Supabase workflow registry sync green as creator automation expands
+
+4. Codex follow-through for the active creator/publishing sprint.
+   - close the real Supabase -> Agent Zero -> Publisher -> Discord activation loop and log evidence in `pmoves/docs/PMOVES.AI PLANS/SUPABASE_DISCORD_AUTOMATION.md`
+   - choose one canonical published-event Discord path (`services/publisher-discord` subscriber vs `pmoves/n8n/flows/echo_publisher.json`) and mark the other as fallback/test-only
+   - tighten dashboard/operator visibility so `approved`, `waiting for poller`, `published`, and publish-failed states are explicit in the `studio-board` / `videos` UI lanes
+
+5. Refresh the prospectus around rooms, stage, and Agent Zero suits.
+   - classify the PMOVES-specific Agent Zero hardening/persona/MCP overlays that must survive an upstream `v1.3` sync
+   - use `pmoves/docs/AGENTS/AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md` as the canonical comparison instead of ad hoc recollection
+   - use `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md` as the canonical remote coding inventory + safe-density note for ClaWz and other suit-bearing lanes
+   - use `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_GAP_REPORT.md` as the canonical ClaWz branch/pin reality check before more suit claims
+   - align AGNOTE4482, P7 playground, and main planning docs so rooms are the entry topology and stage is the live state model
+   - decide which P7 entry path becomes canonical: raw launcher grid, room selector, or home-room-first
+   - formalize the weekly/sprint release-note + CVE funnel for Agent Zero, ClaWz, and other suit-defining submodules
+   - normalize suit-routing config onto the real profile ids in `pmoves/config/profiles/*.yaml` instead of legacy `workstation_5090` placeholders
 
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
@@ -488,6 +597,9 @@ Next 48 hours
 ### 1. Finish the M2 Automation Loop
 **Status note:** Infrastructure is complete, but end-to-end validation remains blocked until the n8n approval poller is activated and runs successfully.
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
+- [ ] Choose and document the canonical Discord publish lane now that both `services/publisher-discord` and `pmoves/n8n/flows/echo_publisher.json` can carry `content.published.v1`; keep only one production-default path.
+- [ ] Add one deterministic smoke/integration path proving a real `content.published.v1` payload reaches Discord with cover art, duration, and Jellyfin deep link.
+- [ ] Update dashboard/operator UX so approvals no longer look complete before the background publish handoff finishes; show `approved`, `waiting for poller`, `published`, and `publish_failed` distinctly.
 - [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
 - [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
 - [x] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; use `make jellyfin-verify` before publisher smokes (2025-10-13). Re-ran on 2025-10-14 after populating `JELLYFIN_USER_ID=c26d57363bad4318a37c0bf8673c389c`.
@@ -607,7 +719,7 @@ Next 48 hours
 - **Manual verification checklist**
   1. Insert a `studio_board` row with `status='approved'`, `content_url='s3://...'`, and confirm `meta.publish_event_sent_at` is null.
   2. Trigger the approval poller (activate or execute once) and confirm Agent Zero logs a `content.publish.approved.v1` event.
-  3. Verify Supabase row updates to `status='published'` with `meta.publish_event_sent_at` timestamp.
+  3. Verify Supabase row first moves to `status='publishing'` with `meta.publish_request_id` / `meta.publish_requested_at`, then finalizes to `status='published'` with `meta.publish_event_sent_at`.
   4. POST a `content.published.v1` envelope to the webhook (`/webhook/pmoves/content-published`) and confirm Discord receives an embed (title, path, artifact, optional thumbnail).
   5. Deactivate flows after testing or leave active with schedules confirmed.
 

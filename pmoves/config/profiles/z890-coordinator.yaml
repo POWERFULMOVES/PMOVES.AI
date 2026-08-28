@@ -1,0 +1,109 @@
+id: z890-coordinator
+name: "Z890 – Infrastructure Coordinator"
+description: >
+  Primary infrastructure coordinator running full PMOVES.AI stack.
+  Docker Compose host (~66 services), NATS hub, Supabase self-hosted,
+  monitoring stack, and development toolchain.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
+hardware:
+  cpu:
+    vendor: Intel
+    # Detected spelling (with (R)/(TM) markers) so profile_loader's substring
+    # match `cpu_model in cpu` selects this profile via `pmoves mini profile detect`.
+    model: Intel(R) Core(TM) Ultra 7 265K
+    cores: 20
+    threads: 20
+  gpu:
+    type: nvidia  # Probed 2026-08-15: RTX 3090 Ti 24GB installed (nvidia-smi 610.62)
+    models: ["RTX 3090 Ti"]
+    memory_gb: 24
+  ram_gb: 32
+  tags: [coordinator, docker, infra, development, cuda]
+
+compose_overrides:
+  - docker-compose.hardened.yml
+  - docker-compose.vps.override.yml
+  - docker-compose.media.yml
+
+services:
+  nats: nats-leaf
+  supabase: self-hosted
+  cipher: cipher-api
+  monitoring: full-stack
+  agent_zero: docked
+
+# No local GPU — delegates to 5090 (GLM-5) and 4090 (Qwen 3) via Tailscale mesh
+coding_stacks:
+  claude_code:
+    cloud_primary: anthropic
+    remote_gpu: qwen3-coder:30b@5090  # Route to 5090 for local GPU fallback
+    tz_function: coding_claude_distributed
+  codex_openai:
+    cloud_primary: openai
+    remote_gpu: qwen3-coder:30b@5090
+    tz_function: coding_codex_distributed
+  glm_coding_plan:
+    cloud_primary: zai
+    cloud_model: glm-5-turbo
+    remote_gpu: glm-5-turbo@5090  # Native 5090 GLM-5 Turbo
+    tz_function: coding_glm_native
+
+# Tailscale mesh endpoints for delegated services
+tailscale_endpoints:
+  ts_5090: ${TS_5090:-100.90.223.15}  # GLM-5 Turbo, large model inference
+  ts_4090: ${TS_4090:-100.105.120.61}  # Qwen 3, mobile inference
+  ts_jetson1: ${TS_JETSON1:-100.105.53.76}  # Nemotron edge inference
+  ts_jetson2: ${TS_JETSON2:-100.105.53.77}  # Nemotron edge inference
+
+# Z890 runs the full observability stack
+monitoring_stack:
+  prometheus: prometheus:9090
+  grafana: grafana:3000
+  loki: loki:3100
+  tempo: tempo:4318
+  alertmanager: alertmanager:9093
+
+# Development toolchain paths
+dev_toolchain:
+  docker: "/mnt/c/Program Files/Docker/Docker/resources/bin/docker.exe"
+  git: "/usr/bin/git"
+  python: "/mnt/c/Python/python.exe"  # Windows Python via WSL mount
+  node: "/usr/bin/node"
+  uv: "/home/linuxbrew/.linuxbrew/bin/uv"
+
+# Multi-boot awareness
+multi_boot:
+  current_slot: windows  # Primary: Windows 11 23H2
+  slots:
+    - id: windows
+      detection: '$env:OS == "Windows_NT"'
+      compose: docker-compose.yml
+    - id: ubuntu
+      detection: 'ID=ubuntu in /etc/os-release'
+      compose: docker-compose.yml
+    - id: pop
+      detection: 'ID=pop'
+      compose: docker-compose.yml
+    - id: fedora
+      detection: 'ID=fedora'
+      compose: docker-compose.yml
+    - id: cachyos
+      detection: 'ID=cachyos'
+      compose: docker-compose.yml
+    - id: nixos
+      detection: 'ID=nixos'
+      compose: docker-compose.nixos.yml
+
+# Port bindings for external access
+external_ports:
+  cipher: 8105
+  agent_zero: 8080
+  nats: 4222
+  nats_monitoring: 8222
+  supabase_kong: 8000
+  supabase_studio: 54323
+  grafana: 3000
+  prometheus: 9090

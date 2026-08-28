@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
 
@@ -11,9 +11,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # --- CUDA-enabled Torch for Qwen reranker (optional) ---
 # If the host uses NVIDIA runtime, install CUDA wheels (cu121). This is safe on CPU-only hosts too,
 # but you can skip by setting TORCH_SKIP_CUDA=1 at build time.
+# x86_64 only: the cu121 index carries no modern aarch64 torch, so on ARM hosts the
+# unpinned install silently resolves to torch 2.0.1 and clobbers the locked 2.9.x
+# (observed on GB10/SPARK 2026-08-22: transformers 4.57.3 then dies on torch.compiler).
 ARG TORCH_CUDA_VERSION=cu121
 ARG TORCH_SKIP_CUDA=0
-RUN if [ "$TORCH_SKIP_CUDA" != "1" ]; then pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TORCH_CUDA_VERSION} torch torchvision torchaudio || true ; else echo "Skipping CUDA Torch install"; fi
+RUN if [ "$TORCH_SKIP_CUDA" != "1" ] && [ "$(uname -m)" = "x86_64" ]; then pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TORCH_CUDA_VERSION} torch torchvision torchaudio || true ; else echo "Skipping CUDA Torch install"; fi
 
 # Copy service code and shared libraries
 COPY services/hi-rag-gateway/ .
@@ -25,11 +28,22 @@ RUN mkdir -p /app/pmoves \
     && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
 COPY chit /app/pmoves/chit
 
+# PMOVES shared tools (imported as tools.chit_security)
+COPY tools/__init__.py /app/tools/__init__.py
+COPY tools/chit_security.py /app/tools/chit_security.py
+
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
     chown -R pmoves:pmoves /app
 
+
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 USER pmoves:pmoves
 EXPOSE 8086
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8086/ || exit 1
 CMD ["uvicorn","gateway:app","--host","0.0.0.0","--port","8086"]

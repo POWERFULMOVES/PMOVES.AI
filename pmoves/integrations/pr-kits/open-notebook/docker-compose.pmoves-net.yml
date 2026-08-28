@@ -1,7 +1,11 @@
 version: "3.9"
 services:
   open-notebook:
-    image: ghcr.io/POWERFULMOVES/Pmoves-open-notebook:main
+    # `:main` tag was never published — the PMOVES fork's default branch is
+    # PMOVES.AI-Edition-Hardened, and the GHCR build workflow tags as
+    # `pmoves-latest` plus date-SHA variants.
+    image: ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest
+    container_name: pmoves-open-notebook
     restart: unless-stopped
     networks: [pmoves-net]
     ports:

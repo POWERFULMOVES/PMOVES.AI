@@ -4,6 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
 import useInfiniteSupabaseQuery from "../../../hooks/useInfiniteSupabaseQuery";
 import {
+  describePublishState,
+  PUBLISH_DETAIL_CLASS,
+  PUBLISH_TONE_CLASS,
+  shouldRenderSupplementalPublishFailureDetail,
+} from "../publishState";
+import {
   getSupabaseBrowserClient,
   getSupabaseRestUrl,
 } from "../../../lib/supabaseClient";
@@ -20,6 +26,14 @@ interface VideoRowMeta {
   rejection_reason?: string | null;
   reviewed_at?: string | null;
   reviewed_by?: string | null;
+  publish_started_at?: string | null;
+  publish_completed_at?: string | null;
+  publish_event_sent_at?: string | null;
+  publish_requested_at?: string | null;
+  publish_approval_event_sent_at?: string | null;
+  publish_failed_at?: string | null;
+  publish_failure_reason?: string | null;
+  publish_failure_stage?: string | null;
   thumb?: string | null;
   channel?: {
     title?: string | null;
@@ -501,6 +515,11 @@ export default function VideosDashboardPage() {
               const lastReview = history.length
                 ? history[history.length - 1]
                 : null;
+              const publishState = describePublishState({
+                approvalStatus: status,
+                reviewedAt: meta.reviewed_at,
+                meta,
+              });
               return (
                 <tr key={row.id} className="align-top">
                   <td className="px-3 py-2 text-brand-subtle">
@@ -522,6 +541,37 @@ export default function VideosDashboardPage() {
                   <td className="px-3 py-2 text-brand-ink">{row.namespace || "—"}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium capitalize text-brand-ink">{status}</div>
+                    {publishState ? (
+                      <div className={`text-xs font-semibold uppercase tracking-wide ${PUBLISH_TONE_CLASS[publishState.tone]}`}>
+                        {publishState.label}
+                      </div>
+                    ) : null}
+                    {publishState?.detailLabel && publishState.detailValue ? (
+                      <div className={`text-xs ${PUBLISH_DETAIL_CLASS[publishState.tone]}`}>
+                        {publishState.detailLabel}{" "}
+                        {publishState.detailLabel.endsWith("@")
+                          ? formatDate(publishState.detailValue)
+                          : publishState.detailValue}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_reason &&
+                    shouldRenderSupplementalPublishFailureDetail(
+                      publishState,
+                      "publish failure:"
+                    ) ? (
+                      <div className="text-xs text-brand-crimson">
+                        publish failure: {meta.publish_failure_reason}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_stage &&
+                    shouldRenderSupplementalPublishFailureDetail(
+                      publishState,
+                      "failure stage:"
+                    ) ? (
+                      <div className="text-xs text-brand-crimson">
+                        failure stage: {meta.publish_failure_stage}
+                      </div>
+                    ) : null}
                     {meta.rejection_reason ? (
                       <div className="text-xs text-brand-crimson">
                         rejected: {meta.rejection_reason}

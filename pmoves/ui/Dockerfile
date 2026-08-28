@@ -12,7 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 COPY package*.json ./
 RUN npm install
 
-# Copy source and build
+# Copy source and build.
+# NEXT_PUBLIC_* values are inlined into the browser bundle at build time —
+# runtime container env cannot reach client code. Compose passes these as
+# build args (the anon key is Supabase's publishable key by design). When
+# absent (e.g. bare CI builds) the build still succeeds via the build-phase
+# placeholders in lib/supabaseClient.ts / config/index.ts.
+ARG NEXT_PUBLIC_SUPABASE_URL=
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL     NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 COPY . .
 RUN npm run build
 

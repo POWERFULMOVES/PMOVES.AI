@@ -8,7 +8,7 @@ taxonomy, ensuring that personas meet quality gates before publishing.
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import nats

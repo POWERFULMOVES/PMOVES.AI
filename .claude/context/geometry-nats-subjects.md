@@ -1,6 +1,6 @@
 # GEOMETRY BUS NATS Subject Catalog
 
-Comprehensive reference for GEOMETRY BUS NATS subjects - the event-driven communication layer for CHIT (Context-Hybrid Information Token) and geometric attribution across PMOVES.AI services.
+Comprehensive reference for GEOMETRY BUS NATS subjects - the event-driven communication layer for CHIT (Compressed Hierarchical Information Transfer) and geometric attribution across PMOVES.AI services.
 
 ## Overview
 

@@ -108,9 +108,9 @@ See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 ### Agents UIs one‑click bring‑up
 
 - Published images (default):
-  - `make -C pmoves up-agents-ui` — starts NATS, Agent Zero API, Archon API, and the Archon UI. Open the UIs:
+  - `make -C pmoves up-agents-ui` — starts NATS, Agent Zero API, and the consolidated Archon service (API on 8091 + UI on 3737). Open the UIs:
     - Agent Zero UI: `${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}`
-    - Archon UI: `${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}` (uses the Vite proxy to reach the Archon API on the Docker alias `archon-server`; keep `ARCHON_UI_API_URL` unset unless you explicitly need to point the UI at a remote/hosted Archon instance)
+    - Archon UI: `${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}` (served by the same `archon` container that hosts the API)
 
 ### MCP (Agent‑to‑Agent) wiring
 
@@ -120,7 +120,7 @@ See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 ```
 A0_MCP_ENABLE_DEFAULTS=true
 A0_MCP_FILESYSTEM_ROOTS=/data
-A0_MCP_ARCHON_ENDPOINT=http://archon-server:8051
+A0_MCP_ARCHON_ENDPOINT=http://archon-server:3090
 A0_MCP_NEO4J_URL=bolt://neo4j:7687
 A0_MCP_SUPABASE_URL=http://kong:8000
 A0_MCP_GATEWAY_ENDPOINT=http://gateway:8086
@@ -131,7 +131,7 @@ A0_MCP_SERVERS=
 - Optional advanced override (must be a single line):
 
 ```
-A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=http://archon-server:8051";
+A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=http://archon-server:3090";
 ```
 
 - Seed the runtime mapping file for Agent Zero (writes to `pmoves/data/agent-zero/runtime/mcp/servers.env`):
@@ -157,15 +157,14 @@ Archon runs headless for orchestrations (Agent Zero → Archon via MCP) while th
 The GHCR workflow (`.github/workflows/integrations-ghcr.yml`) builds/publishes multi‑arch images nightly and on demand for:
 
 - Agent Zero API (`pmoves-agent-zero`)
-- Archon API (`pmoves-archon`)
-- Archon UI (`pmoves-archon-ui`)
+- Archon API + UI (`pmoves-archon`)
 - Open Notebook (`pmoves-open-notebook`)
 - Jellyfin (`pmoves-jellyfin`)
 - Firefly III (`pmoves-firefly-iii`)
 - Wger (`pmoves-health-wger`)
 - PMOVES.YT (`pmoves-yt`)
 
-Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and `PMOVES_YT_IMAGE` in `pmoves/env.shared`.
+Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, and `PMOVES_YT_IMAGE` in `pmoves/env.shared`.
 
 ## Bring-Up Sequence (CLI on pmoves-net)
 - Prefer `make first-run` (see `docs/FIRST_RUN.md`) to bootstrap secrets, start Supabase CLI, seed data, and run smokes.

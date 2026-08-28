@@ -72,7 +72,6 @@ from prometheus_client import Counter, Histogram, generate_latest
 
 from models.simulation import (
     SimulationParameters,
-    SimulationResult,
     SimulationScenario,
 )
 from services.simulation_engine import get_simulation_engine
@@ -125,6 +124,42 @@ def _shutdown_executor() -> None:
 
 # Register shutdown handler to run on process exit
 atexit.register(_shutdown_executor)
+
+
+def _approval_gate_skip_response(data: dict[str, Any] | None) -> tuple[Any, int] | None:
+    """Return a skip response when a request is approval-gated but unapproved.
+
+    Tokenism simulation requests may be queued by Codex/Hermes lanes before the
+    operator has signed the production activation pack.  Those requests must be
+    visible to callers, but they must not execute or publish side effects until
+    an explicit approval identifier is attached.
+    """
+    if not isinstance(data, dict):
+        return None
+
+    approval_gated = bool(
+        data.get('approval_gated')
+        or data.get('requires_approval')
+        or data.get('approval_required')
+    )
+    operator_approval_id = str(data.get('operator_approval_id') or '').strip()
+
+    if not approval_gated or operator_approval_id:
+        return None
+
+    scenario = str(data.get('scenario') or 'baseline')
+    simulation_requests.labels(
+        scenario=scenario,
+        status='skipped_approval_required'
+    ).inc()
+    return jsonify({
+        'status': 'skipped',
+        'reason': 'approval_required',
+        'message': (
+            'Tokenism simulation is approval-gated; attach operator_approval_id '
+            'after human approval to execute this lane.'
+        ),
+    }), 202
 
 
 def _get_executor() -> ThreadPoolExecutor:
@@ -307,7 +342,7 @@ def metrics():
         as configured in the Prometheus scrape configuration. The metrics
         include labels for scenario type and status (success/error/queued).
     """
-    return generate_latest(), 200
+    return generate_latest(), 200, {'Content-Type': 'text/plain; version=0.0.4; charset=utf-8'}
 
 
 @simulation_bp.route('/api/v1/simulate', methods=['POST'])
@@ -379,6 +414,9 @@ def run_simulation():
     """
     try:
         data = request.get_json()
+        skip_response = _approval_gate_skip_response(data)
+        if skip_response is not None:
+            return skip_response
 
         # Parse scenario
         scenario_str = data.get('scenario', 'baseline')
@@ -509,6 +547,10 @@ def run_simulation_async():
     """
     try:
         data = request.get_json()
+        skip_response = _approval_gate_skip_response(data)
+        if skip_response is not None:
+            return skip_response
+
         webhook_url = data.get('webhook_url')
 
         # Parse and validate input

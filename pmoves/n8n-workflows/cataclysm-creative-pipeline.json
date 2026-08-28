@@ -1,0 +1,43 @@
+{
+  "name": "Cataclysm Creative Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "cataclysm-start",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "topic": "={{ $json.creative_brief }}"
+      },
+      "id": "cataclysm-concept",
+      "name": "Concept Exploration",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "notes": "STUB — Wire to NATS creative.concept.explore.v1 or PMOVES API"
+    },
+    {
+      "parameters": {},
+      "id": "cataclysm-end",
+      "name": "End",
+      "type": "n8n-nodes-base.end",
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [[{"node": "Concept Exploration", "type": "main", "index": 0}]]
+    },
+    "Concept Exploration": {
+      "main": [[{"node": "End", "type": "main", "index": 0}]]
+    }
+  },
+  "meta": {
+    "instanceId": "cataclysm-studios",
+    "templateId": "cataclysm-creative-pipeline",
+    "status": "stub",
+    "notes": "TODO: Implement full 5-tier pipeline with NATS integration. See pmoves/configs/tac_trees/cataclysm-studios.tac.yaml"
+  }
+}

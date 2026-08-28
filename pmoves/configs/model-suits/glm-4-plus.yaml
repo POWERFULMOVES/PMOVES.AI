@@ -1,0 +1,65 @@
+# ============================================================
+# GLM-4-Plus Model Suit
+# Role: Premium quality, complex reasoning
+# Best for: Critical accuracy, review tasks, analysis
+# Provider: Zhipu AI (Z.AI)
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: glm-4-plus
+  provider: zai
+  base_url: "https://api.z.ai/v1"
+  api_key_env: Z_AI_API_KEY
+  
+  architecture:
+    type: moe
+    total_params: "130B"
+    active_params: "130B"
+    attention: standard
+    
+  context:
+    max_window: 128000
+    effective_window: 64000
+    working_window: 32000
+    
+  defaults:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 4096
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+  advanced:
+    tool_call_parser: glm4
+    enable_thinking: true
+    mtp_steps: 1
+    
+  harness_mappings:
+    code_review:
+      temperature: 0.15
+      top_p: 0.80
+      max_tokens: 16384
+      system_prompt: directive_critical
+      
+    complex_analysis:
+      temperature: 0.3
+      top_p: 0.90
+      max_tokens: 8192
+      system_prompt: directive_analytical
+      
+    documentation:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 4096
+      system_prompt: conversational_writer
+
+  cgp_state_vector:
+    delta: 0.2
+    Hz: 0.05
+    kappa: 2.0
+    A: 0.3
+    F: 0.03
+    
+  fallback_to: glm-4.7
+  priority: 7

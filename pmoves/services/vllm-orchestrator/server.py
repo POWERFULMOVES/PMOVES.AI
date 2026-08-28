@@ -11,9 +11,7 @@ from typing import Dict, List, Optional
 
 from .config import (
     VLLMConfig,
-    MODEL_CONFIGS,
     create_vllm_config,
-    ParallelismStrategy,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,7 +26,7 @@ class VLLMOrchestrator:
 
     def __init__(
         self,
-        nats_url: str = "nats://localhost:4222",
+        nats_url: str = "nats://nats:pmoves@nats:4222",
         model_path: str = "/models",
         compose_dir: str = "/tmp/vllm-compose",
     ):
@@ -77,7 +75,6 @@ class VLLMOrchestrator:
 
     async def _subscribe_work_requests(self):
         """Subscribe to vLLM work requests."""
-        import nats
         import json
 
         async def on_request(msg):
@@ -370,7 +367,7 @@ class VLLMOrchestrator:
 
 
 async def run_orchestrator(
-    nats_url: str = "nats://localhost:4222",
+    nats_url: str = "nats://nats:pmoves@nats:4222",
     model_path: str = "/models",
     compose_dir: str = "/tmp/vllm-compose",
 ):
@@ -400,14 +397,13 @@ async def run_orchestrator(
 
 
 if __name__ == "__main__":
-    import sys
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
+    nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
     model_path = os.environ.get("MODEL_PATH", "/models")
 
     try:

@@ -1,3 +1,18 @@
+> [!CAUTION]
+> **SUPERSEDED for API/subject detail (marked 2026-08-06).**
+>
+> The endpoint and NATS-subject tables in this TAC repeat the invented API from
+> `.claude/context/agent-zero-orchestration.md` — `/mcp/health`, `/mcp/agents`,
+> `/mcp/subordinate/create`, and the `agent.zero.*` subject family. None exist in
+> `pmoves/services/agent-zero/main.py`.
+>
+> Real endpoints: `/healthz`, `/config/environment`, `/metrics`, `/mcp/commands`,
+> `POST /mcp/execute` `{cmd, arguments}`, `/tasks`, `/jobs/{context_id}`, `/sessions`,
+> `/memory` CRUD, `/events/publish`.
+> Real subjects: `agentzero.task.v1`, `agentzero.memory.update`.
+>
+> **Canonical:** `pmoves/docs/operations/AGENT_ZERO_API.md`. TAC roadmap items below remain valid.
+
 # TAC Tree: Agent Zero
 
 > Technology-Architecture-Context tree for the Agent Zero control-plane orchestrator — the primary L1 coordinator with embedded agent runtime and MCP API.
@@ -23,7 +38,7 @@
 | TensorZero (3030) | LLM gateway for agent conversations | Yes |
 | NATS (4222) | Event bus for task coordination and mesh announcements | Yes |
 | Supabase PostgREST (3010) | Persistent state and context storage | Yes |
-| Cipher Memory (8096) | Agent plan/checkpoint/completion persistence | Yes |
+| Cipher Memory (8105) | Agent plan/checkpoint/completion persistence | Yes |
 | Neo4j (7474) | Knowledge graph queries | Optional |
 | Qdrant (6333) | Semantic search for agent context | Optional |
 

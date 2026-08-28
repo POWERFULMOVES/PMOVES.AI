@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#050508" />
+
+  <title>PMOVES.AI — The Stage</title>
+  <meta name="description" content="Rooms-on-a-stage: the public PMOVES rooms, rendered live through the A2UI protocol — the same surface an agent can spawn." />
+  <link rel="canonical" href="https://pmoves.ai/stage/" />
+  <meta name="robots" content="index,follow" />
+
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/assets/favicon.ico" sizes="any" />
+
+  <!-- P3 (openroom-realization slice 2): Enter button on each room card
+       navigates to this URL + ?room=<id>. stage.js reads the content attribute
+       and uses it as the OpenRoom base URL. The default is for local dev;
+       production deployments override via the same meta tag in the build. -->
+  <meta name="pmoves-openroom-base-url" content="http://localhost:5173/webuiapps" />
+
+  <link rel="stylesheet" href="/stage/stage.css" />
+  <link rel="modulepreload" href="/stage/vendor/a2ui.mjs" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="stage-header">
+    <a class="stage-home" href="/">&larr; PMOVES.AI</a>
+    <span class="stage-header-right">
+      <span class="stage-badge" role="status" aria-live="polite">&#9679; LIVE</span>
+      <span class="stage-signature" aria-hidden="true">&#10022;</span>
+    </span>
+  </header>
+
+  <main id="main" class="stage-main">
+    <h1 class="stage-title">The Stage</h1>
+    <p class="stage-lede">
+      PMOVES runs as <strong>rooms on a stage</strong> — each room a curated
+      workspace an agent can walk into. These are the public rooms, rendered
+      through the <a href="https://github.com/POWERFULMOVES/PMOVES-A2UI" rel="noopener noreferrer" target="_blank">A2UI protocol</a>:
+      the cards below are drawn by the real agent-UI renderer from the same
+      message stream an agent would send. Eventually every surface here is
+      spawnable — this is the recommended opening cast.
+    </p>
+
+    <nav class="stage-personas" aria-label="Persona theme switcher">
+      <span class="stage-personas-label">See the stage through an agent's colors:</span>
+      <a href="/stage/">armor</a>
+      <a href="/stage/?agent=5090-claude">5090-claude</a>
+      <a href="/stage/?agent=4090-claude">4090-claude</a>
+      <a href="/stage/?agent=fordham-steward">fordham-steward</a>
+      <a href="/stage/?agent=hermes-agent">hermes-agent</a>
+      <span class="stage-personas-note">(accents resolve via the on-net BoTZ registry; off-net visitors keep the armor palette)</span>
+    </nav>
+
+    <section id="stage-surfaces" class="stage-surfaces" aria-label="Public rooms">
+      <noscript>The stage needs JavaScript to render its A2UI surfaces.</noscript>
+    </section>
+  </main>
+
+  <footer class="stage-footer">
+    <p>Room manifests: <code>pmoves/config/rooms/</code> &middot; curated by <code>access.visibility</code> &middot; baked by <code>make stage-data</code></p>
+  </footer>
+
+  <script type="module" src="/stage/stage.js"></script>
+  <!-- DL-4.2: persona accents + Showtime live flip (?agent=<id>) — no-op without the query param -->
+  <script type="module" src="/stage/persona-boot.js"></script>
+</body>
+</html>

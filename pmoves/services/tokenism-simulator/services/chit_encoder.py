@@ -17,6 +17,13 @@ import json
 
 import numpy as np
 
+from pmoves.tools.chit_security import sign_cgp as _sign_cgp, verify_cgp as _verify_cgp
+
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
+
 from models.simulation import (
     SimulationResult,
     WeeklyMetrics,
@@ -24,6 +31,8 @@ from models.simulation import (
 )
 
 logger = logging.getLogger(__name__)
+
+_CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE") or get_secret("CHIT_SIGNING_KEY")
 
 
 class CHITEncoder:
@@ -34,10 +43,70 @@ class CHITEncoder:
     - Hyperbolic representation of wealth distribution
     - Temporal evolution as geometric paths
     - Network relationships as edges
+    - CHIT canonical HMAC signing and verification
     """
 
     def __init__(self, cgp_version: str = "0.2"):
         self.cgp_version = cgp_version
+
+    # -- CHIT Canonical Signing Integration --------------------------------
+
+    def sign_cgp_packet(self, cgp: CGPPacket) -> CGPPacket:
+        """Sign a CGPPacket using canonical CHIT HMAC signing.
+
+        Converts CGPPacket to dict, signs via chit_security.sign_cgp,
+        and returns a new CGPPacket with the signature embedded.
+        In dev mode (no CHIT_PASSPHRASE), logs warning and returns unsigned.
+        """
+        passphrase = _CHIT_PASSPHRASE
+        if not passphrase:
+            logger.warning(
+                "CHIT_PASSPHRASE not set — publishing CGP unsigned (dev mode)"
+            )
+            return cgp
+        try:
+            cgp_dict = cgp.model_dump(mode="json")
+            signed_dict = _sign_cgp(cgp_dict, passphrase=passphrase)
+            return CGPPacket(**signed_dict)
+        except Exception as exc:
+            logger.error("Failed to sign CGP packet: %s", exc)
+            return cgp
+
+    def verify_cgp_packet(self, cgp: CGPPacket) -> bool:
+        """Verify the HMAC signature on a CGPPacket.
+
+        Returns True if signature is valid, False otherwise.
+        Returns True in dev mode when no passphrase is configured.
+        """
+        passphrase = _CHIT_PASSPHRASE
+        if not passphrase:
+            logger.warning(
+                "CHIT_PASSPHRASE not set — skipping verification (dev mode)"
+            )
+            return True
+        try:
+            cgp_dict = cgp.model_dump(mode="json")
+            return _verify_cgp(cgp_dict, passphrase=passphrase)
+        except Exception as exc:
+            logger.error("Failed to verify CGP packet: %s", exc)
+            return False
+
+    def sign_cgp_dict(self, cgp_dict: dict) -> dict:
+        """Sign a raw CGP dict using canonical CHIT HMAC signing.
+
+        Returns the signed dict. In dev mode, returns unsigned.
+        """
+        passphrase = _CHIT_PASSPHRASE
+        if not passphrase:
+            logger.warning(
+                "CHIT_PASSPHRASE not set — publishing CGP dict unsigned (dev mode)"
+            )
+            return cgp_dict
+        try:
+            return _sign_cgp(cgp_dict, passphrase=passphrase)
+        except Exception as exc:
+            logger.error("Failed to sign CGP dict: %s", exc)
+            return cgp_dict
 
     def encode_simulation_result(
         self,

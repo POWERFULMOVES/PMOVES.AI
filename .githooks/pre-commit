@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Pre-commit hook: regenerate compose split overlays when the monolithic
+# docker-compose.yml changes. This keeps CI's Validate Compose Files drift
+# gate green without manual intervention.
+#
+# Enable: git config core.hooksPath .githooks
+# Disable: git config --unset core.hooksPath
+
+set -euo pipefail
+
+COMPOSE_FILE="pmoves/docker-compose.yml"
+
+# Only run if the canonical compose file is staged for commit.
+if ! git diff --cached --name-only | grep -qx "${COMPOSE_FILE}"; then
+    exit 0
+fi
+
+echo "[pre-commit] ${COMPOSE_FILE} changed; regenerating compose split overlays..."
+
+# Run from the pmoves directory so the Makefile targets resolve correctly.
+make -C pmoves compose-split
+
+OVERLAYS=(
+    pmoves/docker-compose.base.yml
+    pmoves/docker-compose.core.yml
+    pmoves/docker-compose.agents.yml
+    pmoves/docker-compose.media.yml
+    pmoves/docker-compose.ui.yml
+    pmoves/docker-compose.workers.yml
+    pmoves/docker-compose.apps.yml
+)
+
+# Re-stage regenerated overlays so the commit stays atomic.
+for overlay in "${OVERLAYS[@]}"; do
+    if [ -f "${overlay}" ]; then
+        git add "${overlay}"
+    fi
+done
+
+echo "[pre-commit] Compose split overlays regenerated and staged."

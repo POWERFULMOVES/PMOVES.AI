@@ -1,0 +1,161 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# PMOVES.AI — Z890 / RTX 3090 Ti GPU Node (Standalone)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Self-contained compose file for Z890 GPU node. Only defines services that
+# actually run on this node — no profiles, no overrides, no disabled services.
+#
+# All data, agent, and gateway services are consumed from the main PC (5090)
+# via Tailscale MagicDNS or LAN.
+#
+# Usage:
+#   make -C pmoves up-z890
+#   # or manually:
+#   docker compose -f docker-compose.z890.yml --env-file env.z890 up -d
+
+services:
+  # ── NATS Leaf Node ──────────────────────────────────────────────────────────
+  # Local NATS instance bridging Docker containers to 5090 hub via leafnodes.
+  # Containers connect here (nats-leaf:4222) instead of crossing the Docker
+  # bridge → LAN boundary which Docker Desktop WSL2 can't route.
+  nats-leaf:
+    image: nats:2.11.8-alpine
+    restart: unless-stopped
+    command: ["-c", "/etc/nats/leaf.conf"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./configs/nats-leaf-z890.conf:/etc/nats/leaf.conf:ro
+      - nats-leaf-data:/data
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+    networks:
+      - z890_net
+    healthcheck:
+      # Verify NATS is running AND has at least one upstream leaf connection
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/leafz 2>/dev/null | grep -q '\"num_remotes\":[^0]' || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Container Agent (CA) ────────────────────────────────────────────────────
+  # Network diagnostics + sidecar. Exposes /healthz, /diagnostic, /metrics.
+  container-agent:
+    build: ./services/container-agent
+    restart: unless-stopped
+    env_file:
+      - env.shared
+      - env.z890
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE, NET_RAW]
+    security_opt: [no-new-privileges:true]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - CA_PORT=8111
+      - NODE_NAME=${NODE_NAME:-pmoves-3090ti}
+      - NATS_URL=nats://nats:pmoves@nats-leaf:4222
+      - DOCKED_MODE=${DOCKED_MODE:-true}
+      - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+      - "127.0.0.1:8111:8111"
+    networks:
+      - z890_net
+    depends_on:
+      nats-leaf:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8111/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  pmoves-ollama:
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.31.2@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a}
+    restart: unless-stopped
+    env_file:
+      - env.shared
+      - env.tier-llm
+      - env.z890
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE, CHOWN, SETGID, SETUID]
+    security_opt: [no-new-privileges:true]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_MODELS=/root/.ollama/models
+      - DOCKED_MODE=${DOCKED_MODE:-true}
+      - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    volumes:
+      - pmoves-ollama-models:/root/.ollama/models
+    dns:
+      - ${OLLAMA_DNS_PRIMARY:-1.1.1.1}
+      - ${OLLAMA_DNS_SECONDARY:-8.8.8.8}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      # Host publish is env-driven (default :11435) so the container Ollama coexists
+      # with a Windows-native Ollama on :11434 — matches docker-compose.yml. The
+      # container still listens on 11434 internally (OLLAMA_HOST above).
+      - "${OLLAMA_BIND:-0.0.0.0}:${OLLAMA_HOST_PORT:-11435}:11434"
+    networks:
+      - z890_net
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  mesh-agent:
+    build: ./services/mesh-agent
+    restart: unless-stopped
+    env_file:
+      - env.shared
+      - env.tier-agent
+      - env.z890
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+      - /var/tmp:noexec,nosuid,size=64m
+    environment:
+      - NODE_NAME=${NODE_NAME:-pmoves-3090ti}
+      - NODE_TYPE=${NODE_TYPE:-gpu-desktop}
+      - NODE_CAPABILITIES=${NODE_CAPABILITIES:-cuda,rtx3090ti,24gb-vram}
+      # NATS_URL comes from env.z890 → nats://nats:pmoves@nats-leaf:4222
+      - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
+    depends_on:
+      nats-leaf:
+        condition: service_healthy
+    networks:
+      - z890_net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  pmoves-ollama-models: {}
+  nats-leaf-data: {}
+
+networks:
+  z890_net:
+    name: z890_net
+    driver: bridge

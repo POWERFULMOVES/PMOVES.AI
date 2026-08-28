@@ -16,8 +16,9 @@ if [ -z "$INPUT" ]; then
     exit 0
 fi
 
-# Resolve Python command (python3 on Linux/macOS, python on Windows)
-PYTHON_CMD="$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")"
+# Resolve Python via shared resolver (test-then-trust, uv-first)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/resolve-python.sh"
 if [ -z "$PYTHON_CMD" ]; then
     exit 0
 fi
@@ -47,8 +48,7 @@ case "$FILE_PATH" in
         ;;
 esac
 
-# Resolve paths
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve paths (SCRIPT_DIR already set by resolver above)
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SIGN_TOOL="$PROJECT_DIR/pmoves/tools/sign_trail.py"
 

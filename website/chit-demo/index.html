@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CHIT Playground — encode, sign, verify</title>
+  <link rel="stylesheet" href="/chit-tour/styles.css" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='none' stroke='%234f98a3' stroke-width='2'/><circle cx='16' cy='16' r='6' fill='%234f98a3'/></svg>" />
+  <style>
+    .demo-grid { display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-top:24px }
+    @media (max-width:900px){ .demo-grid { grid-template-columns:1fr } }
+    .step-card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px }
+    .step-card h3 { margin-bottom:12px }
+    .step-num { display:inline-block; background:var(--accent); color:var(--bg); width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; font-weight:700; margin-right:8px }
+    .scenario-pick { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px }
+    .scenario-btn { padding:8px 16px; border:1px solid var(--border); border-radius:8px; background:var(--panel); color:var(--text); cursor:pointer; font-size:14px }
+    .scenario-btn.active { border-color:var(--accent); background:var(--accent-tint) }
+    .scenario-btn:hover { border-color:var(--accent) }
+    pre.json-out { background:#0d1117; color:#c9d1d9; padding:16px; border-radius:8px; overflow-x:auto; font-size:13px; line-height:1.5; max-height:400px }
+    .badge-ok { background:#1a6f33; color:#fff; padding:2px 8px; border-radius:4px; font-size:12px }
+    .badge-fail { background:#8b1a1a; color:#fff; padding:2px 8px; border-radius:4px; font-size:12px }
+    .spectrum-bar { display:inline-block; width:30px; margin-right:2px; background:var(--accent); border-radius:2px 2px 0 0; vertical-align:bottom; transition:height 0.3s }
+    .spectrum-row { height:80px; display:flex; align-items:flex-end; gap:4px; padding:8px 0 }
+    .anchor-viz { font-family:var(--mono); font-size:12px; color:var(--text-dim) }
+    .tamper-btn { background:#8b1a1a; color:#fff; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:13px }
+    .tamper-btn:hover { background:#a52525 }
+    .sign-btn { background:var(--accent); color:var(--bg); border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600 }
+    .sign-btn:hover { opacity:0.85 }
+    .verify-btn { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600 }
+    .verify-btn:hover { background:var(--accent-tint) }
+    .bus-flow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:16px 0 }
+    .bus-node { padding:8px 14px; border:1px solid var(--border); border-radius:8px; background:var(--panel); font-size:13px }
+    .bus-node.active { border-color:var(--accent); box-shadow:0 0 12px rgba(79,152,163,0.3) }
+    .bus-arrow { color:var(--text-dim); font-size:18px }
+    .check { color:#3fb950 }
+    .cross { color:#f85149 }
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" aria-label="Navigation">
+    <div class="brand">
+      <div class="brand-name">CHIT Playground</div>
+      <div class="brand-sub">encode · sign · verify · publish</div>
+    </div>
+    <nav><ol class="nav">
+      <li><a data-target="fundamentals" class="active"><span class="num">01</span> Fundamentals</a></li>
+      <li><a data-target="encode"><span class="num">02</span> Encode</a></li>
+      <li><a data-target="sign"><span class="num">03</span> Sign</a></li>
+      <li><a data-target="bus"><span class="num">04</span> Geometry Bus</a></li>
+      <li><a data-target="verify"><span class="num">05</span> Verify &amp; Tamper</a></li>
+    </ol></nav>
+    <div class="sidebar-footer">
+      <a class="repo-link" href="/chit-tour/">← Back to Visual Tour</a>
+    </div>
+  </aside>
+
+  <main id="main" tabindex="-1">
+
+    <!-- ═══ 01 FUNDAMENTALS ═══ -->
+    <section id="fundamentals" class="section">
+      <div class="eyebrow">01 · Start here</div>
+      <h2>What is a CGP packet?</h2>
+      <p class="lede">
+        A CGP (Consciousness Geometry Packet) is how CHIT encodes meaning as geometry instead of token streams.
+        Think of it as a weather map for ideas: a super_node is a continent, a constellation is a weather system,
+        the anchor is the wind direction, the spectrum is the pressure distribution, and the points are weather
+        stations reporting what they see.
+      </p>
+
+      <div class="step-card">
+        <h3>Choose a scenario to explore</h3>
+        <div class="scenario-pick" id="scenario-pick">
+          <button class="scenario-btn active" data-scenario="consciousness">Theories of Consciousness</button>
+          <button class="scenario-btn" data-scenario="urban-farming">Urban Farming</button>
+          <button class="scenario-btn" data-scenario="economics">Cooperative Economics</button>
+          <button class="scenario-btn" data-scenario="agent-taxonomy">Agent Taxonomy</button>
+        </div>
+        <div id="scenario-desc"></div>
+      </div>
+
+      <div class="step-card">
+        <h3>The CGP structure — annotated</h3>
+        <div class="demo-grid">
+          <div>
+            <p>Every CGP packet has this shape:</p>
+            <pre class="json-out" id="cgp-template"></pre>
+          </div>
+          <div>
+            <p>Field dictionary:</p>
+            <table class="table">
+              <thead><tr><th>Field</th><th>What it means</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">spec</td><td>Version — <span class="mono">chit.cgp.v1.0</span> (production)</td></tr>
+                <tr><td class="mono">super_nodes[]</td><td>Top-level containers (a domain, a topic cluster)</td></tr>
+                <tr><td class="mono">constellations[]</td><td>A concept within the domain — has an anchor + spectrum</td></tr>
+                <tr><td class="mono">anchor</td><td>Direction vector — "where the wind blows" in embedding space</td></tr>
+                <tr><td class="mono">spectrum</td><td>Energy distribution — histogram of projections onto the anchor</td></tr>
+                <tr><td class="mono">points[]</td><td>Individual units (sentences, audio clips, records) with projection + confidence</td></tr>
+                <tr><td class="mono">sig</td><td>HMAC-SHA256 signature — proves the packet wasn't tampered with</td></tr>
+              </tbody>
+            </table>
+            <p class="u-caption">▸ spec: <a class="src" target="_blank" rel="noopener" href="https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/contracts/schemas/geometry/cgp.v1.schema.json">cgp.v1.schema.json</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 02 ENCODE ═══ -->
+    <section id="encode" class="section" style="display:none">
+      <div class="eyebrow">02 · From text to geometry</div>
+      <h2>Encoding: how words become shapes</h2>
+      <p class="lede">
+        The encoding pipeline: <strong>text → embed → harvest (CHR) → measure (spectrum) → package (CGP)</strong>.
+        Below is the actual CGP for the selected scenario, with live spectrum visualization.
+      </p>
+
+      <div class="step-card">
+        <h3><span class="step-num">1</span>Raw input → embedding</h3>
+        <p>The source text is split into units (sentences, audio segments, economic records). Each unit is embedded into a vector using a sentence-transformer model.</p>
+        <div id="encode-units"></div>
+      </div>
+
+      <div class="step-card">
+        <h3><span class="step-num">2</span>CHR harvest → anchor discovery</h3>
+        <p>The CHR (Constellation Harvest Regularization) algorithm discovers K anchor directions in the embedding space. Each anchor defines a constellation — a cluster of related units.</p>
+        <div id="encode-anchors"></div>
+      </div>
+
+      <div class="step-card">
+        <h3><span class="step-num">3</span>Spectrum measurement</h3>
+        <p>For each constellation, all points are projected onto the anchor and binned into a histogram — the spectrum. This is the "energy distribution" of meaning along that direction.</p>
+        <div id="encode-spectra"></div>
+      </div>
+
+      <div class="step-card">
+        <h3><span class="step-num">4</span>The assembled CGP packet</h3>
+        <pre class="json-out" id="encode-cgp"></pre>
+      </div>
+    </section>
+
+    <!-- ═══ 03 SIGN ═══ -->
+    <section id="sign" class="section" style="display:none">
+      <div class="eyebrow">03 · Cryptographic signing</div>
+      <h2>Sign the CGP with HMAC-SHA256</h2>
+      <p class="lede">
+        CHIT signs every CGP packet with HMAC-SHA256. The signature is computed over the canonical JSON
+        (sorted keys, no whitespace) minus the <span class="mono">sig</span> field itself. This runs
+        <strong>real WebCrypto in your browser</strong> — not a simulation.
+      </p>
+
+      <div class="step-card">
+        <h3>The signing flow</h3>
+        <div class="bus-flow">
+          <div class="bus-node" id="sign-step-1">① Canonicalize JSON</div>
+          <span class="bus-arrow">→</span>
+          <div class="bus-node" id="sign-step-2">② Derive key (PBKDF2)</div>
+          <span class="bus-arrow">→</span>
+          <div class="bus-node" id="sign-step-3">③ HMAC-SHA256 sign</div>
+          <span class="bus-arrow">→</span>
+          <div class="bus-node" id="sign-step-4">④ Attach sig field</div>
+        </div>
+
+        <div class="demo-grid u-mt-18">
+          <div>
+            <p><strong>Passphrase (signing key):</strong></p>
+            <input id="passphrase" value="pmoves-chit-demo-key" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-family:var(--mono)" />
+            <p class="u-caption">In production this is <span class="mono">CHIT_SIGNING_KEY</span> from the secrets funnel.</p>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button class="sign-btn" id="do-sign">Sign CGP</button>
+              <button class="verify-btn" id="go-verify">→ Verify it</button>
+            </div>
+          </div>
+          <div>
+            <p><strong>Canonical JSON (sorted keys, no whitespace, sig stripped):</strong></p>
+            <pre class="json-out" id="sign-canonical" style="max-height:150px"></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-card" id="sign-result-card" style="display:none">
+        <h3>Signed CGP <span class="badge-ok" id="sign-badge">SIGNED</span></h3>
+        <pre class="json-out" id="sign-result"></pre>
+      </div>
+    </section>
+
+    <!-- ═══ 04 GEOMETRY BUS ═══ -->
+    <section id="bus" class="section" style="display:none">
+      <div class="eyebrow">04 · NATS JetStream</div>
+      <h2>The Geometry Bus</h2>
+      <p class="lede">
+        Signed CGP packets travel the Geometry Bus — NATS JetStream with 30-day replay.
+        Producers publish, consumers subscribe, ShapeStore persists. Below is the actual
+        publish flow with the real NATS subjects.
+      </p>
+
+      <div class="step-card">
+        <h3>Publish flow</h3>
+        <div class="bus-flow">
+          <div class="bus-node active">Producer<br><span class="mono" style="font-size:11px">tokenism.cgp.ready.v1</span></div>
+          <span class="bus-arrow">→</span>
+          <div class="bus-node active">NATS JetStream<br><span class="mono" style="font-size:11px">GEOMETRY_CGP stream</span></div>
+          <span class="bus-arrow">→</span>
+          <div class="bus-node active">ShapeStore<br><span class="mono" style="font-size:11px">SHA-256 → disk</span></div>
+          <span class="bus-arrow">→</span>
+          <div class="bus-node active">Consumers<br><span class="mono" style="font-size:11px">tokenism.cgp.weekly.v1</span></div>
+        </div>
+
+        <p>The ShapeStore computes a <strong>Shape ID</strong> (truncated SHA-256 of the canonical CGP) and writes it to disk + Supabase. This is the persistent record that future decode/verify calls reference.</p>
+
+        <div class="demo-grid">
+          <div>
+            <h4>Key NATS subjects</h4>
+            <table class="table">
+              <thead><tr><th>Subject</th><th>Direction</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">tokenism.cgp.ready.v1</td><td>Producer → Bus</td></tr>
+                <tr><td class="mono">tokenism.cgp.weekly.v1</td><td>Bus → Consumer</td></tr>
+                <tr><td class="mono">tokenism.attribution.recorded.v1</td><td>Shape attribution</td></tr>
+                <tr><td class="mono">tokenism.export.result.v1</td><td>Wealth export</td></tr>
+                <tr><td class="mono">tokenism.swarm.population.v1</td><td>Swarm fitness</td></tr>
+                <tr><td class="mono">tokenism.settlement.recorded.v1</td><td>Settlement proof</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h4>Shape ID computation</h4>
+            <p>The canonical JSON (sorted keys, no whitespace, sig stripped) is SHA-256 hashed. The first 16 hex chars become the Shape ID.</p>
+            <button class="sign-btn" id="compute-shape-id">Compute Shape ID</button>
+            <pre class="json-out" id="shape-id-out" style="margin-top:12px;min-height:60px"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 05 VERIFY & TAMPER ═══ -->
+    <section id="verify" class="section" style="display:none">
+      <div class="eyebrow">05 · Proof of integrity</div>
+      <h2>Verify &amp; tamper</h2>
+      <p class="lede">
+        Anyone can verify a CGP's signature without trusting the producer. The verification re-canonicalizes
+        the JSON (stripping sig), re-derives the key, and checks the HMAC. If even one byte changes,
+        verification fails. Try it.
+      </p>
+
+      <div class="step-card">
+        <h3>Verification</h3>
+        <div style="display:flex;gap:12px;margin-bottom:16px">
+          <button class="verify-btn" id="do-verify">Verify signature</button>
+          <button class="tamper-btn" id="do-tamper">Tamper: change first amount</button>
+          <button class="sign-btn" id="do-reset">Reset</button>
+        </div>
+        <div id="verify-status" style="font-size:18px;margin-bottom:16px"></div>
+        <pre class="json-out" id="verify-cgp"></pre>
+      </div>
+
+      <div class="step-card">
+        <h3>What just happened?</h3>
+        <div id="verify-explanation"></div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div>CHIT Playground · real WebCrypto HMAC-SHA256 · scenarios from PMOVES.AI repo ·
+        <a href="/chit-tour/">Visual Tour</a> ·
+        <a href="http://localhost:3000">Tokenism Simulator</a>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<script src="data.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

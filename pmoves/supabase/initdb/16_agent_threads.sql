@@ -87,24 +87,18 @@ DROP POLICY IF EXISTS agent_threads_update ON pmoves_core.agent_threads;
 DROP POLICY IF EXISTS agent_threads_delete ON pmoves_core.agent_threads;
 DROP POLICY IF EXISTS agent_threads_all ON pmoves_core.agent_threads;
 
--- Create policies for local development (permissive)
--- NOTE: Review and restrict for production deployment
-CREATE POLICY agent_threads_select ON pmoves_core.agent_threads
-    FOR SELECT USING (true);
+-- Service role only — internal services use this key (H-01)
+CREATE POLICY agent_threads_svc ON pmoves_core.agent_threads
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-CREATE POLICY agent_threads_insert ON pmoves_core.agent_threads
-    FOR INSERT WITH CHECK (true);
+-- Authenticated: read-only
+CREATE POLICY agent_threads_auth_read ON pmoves_core.agent_threads
+    FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY agent_threads_update ON pmoves_core.agent_threads
-    FOR UPDATE USING (true);
+-- Deny anon entirely
+CREATE POLICY agent_threads_anon_deny ON pmoves_core.agent_threads
+    FOR ALL TO anon USING (false) WITH CHECK (false);
 
-CREATE POLICY agent_threads_delete ON pmoves_core.agent_threads
-    FOR DELETE USING (true);
-
--- Grant permissions
-GRANT SELECT, INSERT, UPDATE, DELETE ON pmoves_core.agent_threads TO anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON pmoves_core.agent_threads TO authenticated;
+-- Grant permissions: no anon access
+GRANT SELECT ON pmoves_core.agent_threads TO authenticated;
 GRANT ALL ON pmoves_core.agent_threads TO service_role;
-
--- Grant usage on sequences (if any)
--- GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO anon, authenticated, service_role;

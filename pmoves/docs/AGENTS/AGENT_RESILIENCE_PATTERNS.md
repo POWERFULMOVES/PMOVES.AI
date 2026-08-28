@@ -102,7 +102,7 @@ Agents should minimize output verbosity:
 
 **Store a plan:**
 ```bash
-curl -X POST http://localhost:8096/api/memory \
+curl -X POST http://localhost:8105/api/memory \
   -H "Content-Type: application/json" \
   -d '{
     "content": "Plan: fix NATS auth in Agent Zero. Scope: 3 Dockerfiles (USER directive) + 3 pmoves libs (NATS URL). Branch: fix/phase-c-hardening",
@@ -113,7 +113,7 @@ curl -X POST http://localhost:8096/api/memory \
 
 **Store a checkpoint:**
 ```bash
-curl -X POST http://localhost:8096/api/memory \
+curl -X POST http://localhost:8105/api/memory \
   -H "Content-Type: application/json" \
   -d '{
     "content": "Checkpoint: Agent Zero phase-c. DONE: 3 pmoves lib NATS fixes (committed abc1234). REMAINING: 3 Dockerfile USER directives. BLOCKER: none.",
@@ -124,7 +124,7 @@ curl -X POST http://localhost:8096/api/memory \
 
 **Store completion summary:**
 ```bash
-curl -X POST http://localhost:8096/api/memory \
+curl -X POST http://localhost:8105/api/memory \
   -H "Content-Type: application/json" \
   -d '{
     "content": "Complete: Agent Zero phase-c hardening. PR #6 created. Changes: NATS auth in 3 pmoves libs + USER directive in 3 Dockerfiles. Branch: fix/phase-c-hardening.",
@@ -135,7 +135,7 @@ curl -X POST http://localhost:8096/api/memory \
 
 **Search for recovery context:**
 ```bash
-curl "http://localhost:8096/api/memory/search?q=phase-c+agent-zero&category=agent_checkpoint"
+curl "http://localhost:8105/api/memory/search?q=phase-c+agent-zero&category=agent_checkpoint"
 ```
 
 ### Checkpoint Content Format
@@ -299,6 +299,6 @@ This is a Claude Code CLI architectural limitation, not a PMOVES bug. The workar
 
 - [Agent Class Taxonomy](./PMOVES_AGENT_CLASS_TAXONOMY.md)
 - [Taxonomy Cross-Reference](./AGENT_TAXONOMY_CROSS_REFERENCE.md)
-- [Cipher Memory Service](../../.claude/context/services-catalog.md) (port 8096)
+- [Cipher Memory Service](../../.claude/context/services-catalog.md) (port 8105)
 - [Phase C Audit Summary](../../../docs/hardening/PMOVES-hardening-tracker.md)
 - [Model Source of Truth](../MODEL_SOURCE_OF_TRUTH.md) — Role names vs concrete model IDs

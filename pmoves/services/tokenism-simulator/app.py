@@ -14,9 +14,11 @@ CHIT/Geometry Bus:
 - Hyperbolic visualization of wealth distribution
 """
 
+import asyncio
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 
 from flask import Flask
@@ -29,6 +31,8 @@ sys.path.insert(0, str(service_dir))
 
 from config import config
 from api.simulation import simulation_bp
+from api.contracts import contracts_bp
+from nats_consumer import start_nats_consumer
 
 # Configure structured logging
 structlog.configure(
@@ -56,6 +60,39 @@ logging.basicConfig(
 logger = structlog.get_logger(__name__)
 
 
+# Guard so we only spawn the NATS consumer thread once per process
+# (matters under gunicorn preload and Flask debug-reload scenarios).
+_nats_consumer_started = False
+_nats_consumer_lock = threading.Lock()
+
+
+def _spawn_nats_consumer() -> None:
+    """Launch the CGP -> BPM consumer in a daemon asyncio thread.
+
+    Idempotent: safe to call multiple times (e.g. from gunicorn workers).
+    The consumer owns its own retry envelope and will not raise back to
+    the Flask app, so this never blocks startup.
+    """
+    global _nats_consumer_started
+    with _nats_consumer_lock:
+        if _nats_consumer_started:
+            return
+        _nats_consumer_started = True
+
+    def _run_nats() -> None:
+        try:
+            asyncio.run(start_nats_consumer())
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.warning(
+                'NATS consumer thread exited unexpectedly', error=str(exc)
+            )
+
+    threading.Thread(
+        target=_run_nats, name='tokenism-nats-consumer', daemon=True
+    ).start()
+    logger.info('NATS consumer thread started (geometry.cgp.v1 -> tokenism.prosodic.bpm.v1)')
+
+
 def create_app() -> Flask:
     """Create and configure the Flask application."""
     app = Flask(__name__)
@@ -74,6 +111,7 @@ def create_app() -> Flask:
 
     # Register blueprints
     app.register_blueprint(simulation_bp)
+    app.register_blueprint(contracts_bp)
 
     # Root endpoint
     @app.route('/')
@@ -116,6 +154,11 @@ def create_app() -> Flask:
         port=config.port,
         debug=config.debug,
     )
+
+    # Subscribe to geometry.cgp.v1 in a background asyncio thread so the
+    # rhythm tracker has live BPM input from the voice synthesis pipeline.
+    if os.getenv('TOKENISM_DISABLE_NATS_CONSUMER', '').lower() not in {'1', 'true', 'yes'}:
+        _spawn_nats_consumer()
 
     return app
 

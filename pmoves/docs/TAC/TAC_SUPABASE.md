@@ -21,10 +21,10 @@
 
 Supabase is a **self-hosted 13-service platform** providing the unified data layer for PMOVES.AI. It provides:
 
-1. **PostgreSQL database** — Primary relational store (Postgres 17.6.1) with 42 migrations
-2. **Authentication** — GoTrue for JWT-based auth, single `JWT_SECRET` signs `ANON_KEY` + `SERVICE_ROLE_KEY`
-3. **REST API** — PostgREST v14.3 auto-generates REST endpoints from database schema
-4. **Realtime** — WebSocket channels (v2.72.0) for chat, ingestion queue, geometry bus
+1. **PostgreSQL database** — Primary relational store (Postgres 15.8.1.085) with 40 upstream migrations (plus PMOVES initdb, below)
+2. **Authentication** — GoTrue (v2.189.0) JWT auth; `JWT_SECRET` signs `ANON_KEY` + `SERVICE_ROLE_KEY`. Upstream now ALSO ships the newer **publishable/secret API-key model** (`SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY`) alongside the legacy anon/service_role keys — see § Auth-key evolution.
+3. **REST API** — PostgREST v14.12 auto-generates REST endpoints from database schema
+4. **Realtime** — WebSocket channels (v2.102.3) for chat, ingestion queue, geometry bus
 5. **Storage** — S3-compatible object storage with presign integration
 6. **Edge Functions** — Deno-based serverless functions (youtube_oembed_cache, yt_chapters_ingest)
 7. **RLS policies** — 7+ policy sets (geometry bus, channels, service catalog, persona, studio board)
@@ -49,6 +49,52 @@ Supabase is a **self-hosted 13-service platform** providing the unified data lay
 | Edge Functions | 54321 | Deno serverless runtime |
 | imgproxy | 5001 | Image transformation proxy |
 
+### Pinned image versions (synced from `supabase/supabase@master`, 2026-06-10)
+
+Source of truth = the fork's `docker/docker-compose.yml` on `PMOVES.AI-Edition-Hardened`
+(gitlink `61116aee`, after the 2233-commit upstream sync). Refresh this table whenever
+the gitlink advances.
+
+| Image | Version |
+|-------|---------|
+| `supabase/postgres` | `15.8.1.085` |
+| `supabase/gotrue` | `v2.189.0` |
+| `postgrest/postgrest` | `v14.12` |
+| `supabase/realtime` | `v2.102.3` |
+| `supabase/storage-api` | `v1.60.4` |
+| `supabase/studio` | `2026.06.03-sha-0bca601` |
+| `kong/kong` | `3.9.1` |
+| `supabase/postgres-meta` | `v0.96.6` |
+| `supabase/edge-runtime` | `v1.74.0` |
+| `supabase/supavisor` | `2.9.5` |
+| `darthsim/imgproxy` | `v3.30.1` |
+
+> **Note:** a prior revision of this TAC pinned Postgres `17.6.1` / PostgREST `v14.3` /
+> Realtime `v2.72.0` — those did not match the deployed stack. The table above is read
+> directly from the synced compose and is authoritative.
+
+### Auth-key evolution (upstream enhancement to evaluate)
+
+The 2026-06 sync surfaces upstream's **publishable/secret API-key model**
+(`SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY`) shipped alongside the legacy
+`ANON_KEY` / `SERVICE_ROLE_KEY` (both still signed by `JWT_SECRET`). PMOVES currently
+consumes the legacy anon/service_role keys (see Downstream Consumers). Migrating to the
+publishable/secret model is an **opt-in upstream enhancement** — not required by the sync,
+but worth evaluating as it is the direction upstream is steering API auth. Preserve the
+PMOVES JWT hardening (`JWT_SECRET` naming, RLS) through any such migration.
+
+### Kong / CLI reconciliation (§3 acceptance gate — PASSED for this sync)
+
+The sync took **upstream's `docker/volumes/api/kong.yml` wholesale** (+138/−13) because PMOVES
+carried **no local Kong customization**. kong.yml and `docker-compose.yml` are therefore a
+**matched upstream pair** (declarative DB-less Kong 3.9.1; `key-auth` + `acl` +
+`request-transformer` + `cors` plugins gating the anon/service_role consumers). The new routes
+are upstream's **SSO + JWKS** additions (`auth-v1-open-jwks`, `auth-v1-open-sso-acs`,
+`auth-v1-open-sso-metadata`). Because there is no PMOVES Kong overlay to drift from the
+CLI/compose-generated stack, the recurring "mix-n-match" risk is **LOW for this sync** and the
+acceptance gate is satisfied. Re-verify gateway routes resolve at deploy time
+(`/kong-status` stack probe) before declaring runtime-green.
+
 ## Upstream Dependencies
 
 | Dependency | Type | Required |
@@ -69,7 +115,7 @@ Supabase is a **self-hosted 13-service platform** providing the unified data lay
 | Render Webhook (8085) | PostgREST API | ComfyUI render callbacks |
 | Jellyfin Bridge (8093) | PostgREST API | Media metadata sync |
 | Channel Monitor (8097) | PostgREST API | Content watch state |
-| Cipher Memory (8096) | PostgREST API | Memory index metadata |
+| Cipher Memory (8105) | PostgREST API | Memory index metadata |
 | Extract Worker (8083) | PostgREST API | Embedding job tracking |
 | UI (A2UI, MAI-UI) | PostgREST + Realtime | Frontend data + live updates |
 | NATS-connected services | Via Supabase data | Event-driven state coordination |

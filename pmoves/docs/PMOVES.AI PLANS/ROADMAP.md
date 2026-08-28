@@ -1,11 +1,46 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-03-12
+Last updated: 2026-03-29
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
 ## Audit Snapshot (2026-03-12)
 
+- March 29 KiloCode claw configuration and GLM-5.1 taxonomy:
+  - `#1151` adds .kilo/ directory (3 agents, 14 commands), kilo.json, CLAW_TAXONOMY.md,
+    PMOVES.Flare model namespace, OS image catalog, Z.AI MCP servers, 5090 room manifest.
+  - ClaWz orphaned gitlink repaired (cfb4e3a → 2a406120, branch → main).
+  - Profile ID normalization: `workstation_5090` → `desktop-9950xd` across 14 files.
+  - 4090 promoted from field agent to active GPU contributor.
+  - Z.AI MCP servers (Vision, Web Search, Web Reader, Zread) configured for 5090.
+  - DARKXSIDE ✦ COCREATOR witness wired as KiloCode co-creation identity.
+  - Agent Zero v1.3 gap assessed — post-merge sync lane recommended, zero coupling to PR.
+  - prospectus implication: KiloCode GLM is now a first-class agent on 5090 alongside Claude and Codex;
+    the .kilo/ command structure establishes the pattern for future agent tooling.
+- March 27-28 room/stage wave landed on `main`:
+  - `#1136` added room catalog contracts + dashboard loader.
+  - `#1137` routed home launcher selection through room entry paths.
+  - `#1142` added review, voice, and media dashboard routes.
+  - `#1143` added runtime taxonomy to the room manifest schema.
+  - prospectus implication: PMOVES now has a real room/stage language that should be reflected in P7, Discord classrooms, and cataclysmstudios.com instead of being treated as UI-only work.
+- March 28 Agent Zero release validation:
+  - upstream `agent0ai/agent-zero` published `v1.3` on **March 27, 2026**.
+  - PMOVES hardened fork `POWERFULMOVES/PMOVES-Agent-Zero` is still pinned to the **March 7, 2026** hardened commit (`2e000aa`).
+  - release concern: further P7/theming/suit work should use the explicit `v1.3` gap report at `pmoves/docs/AGENTS/AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md` rather than continuing from the older fork state by assumption.
+  - operating cadence: release-note and CVE intake for Agent Zero should now flow through the hardening tracker and planning docs on weekly/sprint intervals before any gitlink bump.
+- March 28 coding-plan alignment refresh:
+  - the approved remote coding inventory is now documented at `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md`.
+  - PMOVES should treat ChatGPT Business, Claude Code Max, GLM coding plan Max, MiniMax token plan, and Alibaba coding plan as named remote lanes behind the local-first model fabric, not as ad hoc endpoint choices.
+  - scaling more Agent Zero / ClaW suits should be profile-governed so seat/token limits and node capacity remain explicit.
+- March 28 ClaWz repo validation:
+  - `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_GAP_REPORT.md` now records the real ClaWz baseline.
+  - upstream `openclaw/openclaw` is current through release `v2026.3.24` published on **March 25, 2026**.
+  - the PMOVES fork does not yet publish fork-specific tags/releases, and `PMOVES.AI-Edition-Hardened` is just an old upstream-derived branch from **February 15, 2026**.
+  - the root PMOVES gitlink is still pinned to orphaned SHA `cfb4e3a936262315948628d2da32d7158c4fbb30`, so ClaWz needs branch/pin repair before more suit expansion should be treated as production-ready.
+  - model-profile tooling still defaults `HOST=workstation_5090`, but the repo-backed hardware profiles are now named through `pmoves/config/profiles/*.yaml` ids like `desktop-9950xd`; that naming drift should be closed as part of the next suit-control pass.
+- March 28 AGNOTE4482 signoff gate:
+  - `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md` is now the shared multi-agent readiness checklist for this prospectus/suit lane.
+  - merge readiness should now be signed against one checklist instead of recreated in PR comments or chat memory.
 - March 12 PMOVES.YT production-path remediation landed locally:
   - `PMOVES.YT` is now the authoritative runtime/docs lane for the YouTube ingest service; root `pmoves` consumes the submodule Dockerfile directly instead of treating `pmoves/services/pmoves-yt` as canon.
   - live `pmoves-yt` docs/status endpoints now expose real yt-dlp metadata (`/healthz`, `/yt/docs/catalog`, `/yt/docs/sync`) from the submodule runtime.
@@ -23,6 +58,13 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - workflow activation now targets the n8n 2.1 Public API (`/api/v1/workflows/{id}/activate|deactivate`) instead of the brittle CLI publish fallback.
   - Supabase tracking contract added: `pmoves_core.n8n_workflow_registry` stores live workflow state synced from n8n.
   - creator-control traversal now explicitly routes through `PMOVES-Creator`, `PMOVES-Open-Notebook`, and `CATACLYSM_STUDIOS_INC` so strategy, drafting, and platform-governance context are part of the operator path instead of living outside the service runbooks.
+- March 26 data-plane ops cleanup is active:
+  - operator docs are being normalized around one modular provisioning contract: Supabase system-of-record first, then Neo4j/Qdrant/Meilisearch, then optional n8n automation/control-plane overlays.
+  - the runtime choice is now treated as explicit operator intent instead of an implicit default: `SUPABASE_RUNTIME=cli` for bootstrap/data repair, `SUPABASE_RUNTIME=compose` for release-mode parity and guard rails.
+  - release-note/CVE intake is being funneled through the existing weekly/scheduled lanes (`codeql.yml`, `yt-dlp-bump.yml`, `python-images-toolchain-canary.yml`) plus local GHCR/Trivy gates, with outcomes tracked in the production audit dashboard and hardening tracker.
+- March 26 creator/publishing follow-through is the active Codex lane:
+  - bootstrap edge-case hardening landed in PR #1126 (superseded #1114) so the remaining creator-control work can move independently of the publisher review lane.
+  - next implementation focus is operational, not scaffolding: activate the Supabase -> Agent Zero -> Publisher -> Discord loop, choose the canonical Discord publish path, and make `approved` vs `publishing` vs `published` vs `publish_failed` obvious in operator UX.
 - March 7 merge wave completed on `main`: `#814`, `#815`, `#816`, `#817`, `#818`, `#819`, `#820`, `#821` (8 PRs, 3 batches).
 - Chrome extension security hardening landed in `#821`: 9 CodeRabbit review items addressed (auth storage isolation, XSS remediation, mock server hardening, timeout guards, state management fixes, CSP).
 - Distributed topology documentation + examples landed in `#820`.
@@ -166,6 +208,8 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - backfill historic publisher assets into the updated metadata/envelope scheme once adoption is validated
 - Supabase approval dashboards (studio board + videos) now live under `pmoves/ui/app/dashboard/*`; follow the usage notes in [SESSION_IMPLEMENTATION_PLAN.md](SESSION_IMPLEMENTATION_PLAN.md#4-supabase-approval-dashboards-studio-board--videos) when routing reviewers
 - add published-event Discord embeds via `content.published.v1`; execution plan staged in `SESSION_IMPLEMENTATION_PLAN.md`
+- choose the canonical production lane for `content.published.v1` delivery (`publisher-discord` subscriber vs n8n relay) and keep the non-canonical path as fallback/test-only
+- make the dashboard/operator state explicit across `approved`, `waiting for poller`, `published`, and publish-failed transitions so the creator lane reflects real automation progress
 - wire Supabase ROI dashboards to the new publisher telemetry rollups; document interpretation guidance alongside ROI reporting (**see `docs/TELEMETRY_ROI.md` for the latest walkthrough**).
 - build the Supabase→Discord automation inside the n8n exports and track discrete workflow validation steps in the implementation log
 - execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log the validation timestamp (see operational reminders captured in the implementation plan)
@@ -240,6 +284,13 @@ Planned
 - ✅ Makefile/operator preflight stabilization — `help`, `preflight`, `flight-check*`, `bringup-showtime`, and mini CLI `preflight` now provide a consistent diagnostics path across Windows/WSL/Linux
 - ✅ Model operations source-of-truth + dynamic tooling — runtime routing now documented against Supabase model registry, local profile fallback is codified, and `pmoves/tools/models/*` is restored for profile apply/swap/seed/snapshot workflows
 - ✅ Submodule integration contract for SDK scale-out — standardized `pmoves-integrations/` layout (compose/models/n8n/secrets/auth/docs) documented for future PMOVES SDK onboarding
+- ✅ P7 room/stage activation foundation — the reconciled catalog/schema/runtime contract
+  landed on 2026-07-17: nine schema-valid rehearsal rooms, persistent room stage
+  separated from transient session state, CHIT-gated live promotion, and an
+  orchestrator on :8122. Session `0db7c6ff-8e93-44a5-a1bb-3a749c314c34`
+  passed the NATS/Supabase live gate and ended safely at review. Remaining work is
+  per-room activation evidence, UI stage indicators, and Discord/site language parity.
+- 🚧 Agent Zero suit baseline refresh — upstream `v1.3` is real; PMOVES hardened fork/pin now needs an explicit sync-and-overlay decision before more suit/theming expansion
 - ✅ Integration contract CI gate for onboarding quality — `.github/workflows/integration-contract.yml` enforces strict template checks and validates opted-in overlays for announcer/model/gpu hook wiring
 - ✅ Submodule docs coverage dossier + audit gate — `make -C pmoves submodule-docs-audit` now generates `pmoves/docs/SUBMODULE_DOCS_DOSSIER.md` so repo docs always reference local submodule documentation entry points
 - ✅ Local certification hard-stop for runner/deploy spread — runner phase policy + lane map tooling now enforce `local-certification` by default, and staging/production deploy workflows are gated behind `PMOVES_AUDIT_CERTIFIED=true`.

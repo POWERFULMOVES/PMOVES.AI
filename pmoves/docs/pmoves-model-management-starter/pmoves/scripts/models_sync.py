@@ -71,8 +71,8 @@ def sync_media(m, host):
     if "asr" in m:
         if host.startswith("jetson"):
             asr = m["asr"]["jetson_orin_8gb"]
-        elif "workstation" in host:
-            asr = m["asr"]["workstation_5090"]
+        elif "desktop-9950xd" in host or "workstation" in host:
+            asr = m["asr"]["desktop-9950xd"]
         else:
             asr = m["asr"]["laptop_4090"]
         envmap["WHISPER_MODEL"] = asr.split()[0]
@@ -80,7 +80,7 @@ def sync_media(m, host):
     return write_override(ENV_DIR/".env.media.override", envmap)
 
 def sync_creator(m, host):
-    vlm = m["vlm"]["workstation_5090"] if "workstation" in host else m["vlm"]["laptop_4090"]
+    vlm = m["vlm"]["desktop-9950xd"] if ("desktop-9950xd" in host or "workstation" in host) else m["vlm"]["laptop_4090"]
     flows = ",".join(m.get("sd_workflows",{}).get("comfyui",[]))
     envmap = {
         "VLM_MODEL": vlm,

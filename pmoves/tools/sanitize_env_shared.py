@@ -49,9 +49,11 @@ def build_allowlist() -> set:
                 if key:
                     allowed.add(key)
 
-    # 4. Always allow these infrastructure vars
+    # 4. Always allow these infrastructure vars (empty = nullify host leaks)
     allowed.update({
         "SSL_CERT_FILE", "SSL_CERT_DIR",
+        "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+        "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "NODE_EXTRA_CA_CERTS",
         "DOCKED_MODE", "TOPOLOGY_MODE", "PARENT_SYSTEM", "PARENT_VERSION",
     })
 
@@ -97,7 +99,7 @@ def sanitize(env_path: Path, dry_run: bool = False) -> dict:
     env_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
     print(f"Sanitized: kept {len(kept)} lines, removed {len(removed)} non-allowlisted vars")
     if removed:
-        print(f"Removed (first 10):")
+        print("Removed (first 10):")
         for r in removed[:10]:
             print(f"  - {r[:80]}")
         if len(removed) > 10:

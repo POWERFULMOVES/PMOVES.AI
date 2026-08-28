@@ -1,0 +1,75 @@
+# pmoves/docker/runner/docker-compose.runner.yml
+#
+# CROSS-NODE GitHub Actions ai-lab runner — Linux containers via Docker
+# (Docker Desktop/WSL2 on Windows nodes, native Engine on Linux). One
+# parameterized compose for EVERY Docker host (z890, 4090, 5090, …) instead of a
+# per-node hardcoded file. Supersedes docker-compose.4090.yml.
+#
+# Bring up (any node) -- CANONICAL, pipeline-correct entrypoint:
+#   make -C pmoves gha-runner-up RUNNER_NODE=z890
+# The make target resolves the token by precedence (GITHUB_PAT in env.tier-agent ->
+# gh auth token), runs the preflight, and uses a dedicated per-node compose project.
+# Do NOT bring this up with a raw `docker compose up` -- it skips pipeline token
+# resolution + preflight (see gha-runner-up in mk/infra.mk).
+#
+# Knobs (env-driven, sane defaults):
+#   RUNNER_NODE          node sub-label + name prefix (default: host)  e.g. z890 / 4090
+#   RUNNER_ACCESS_TOKEN  GitHub PAT with repo scope (GITHUB_PAT / `gh auth token`)
+#   RUNNER_EXTRA_LABELS  optional extra labels (e.g. gpu,cuda)
+#
+# The ${RUNNER_NODE} sub-label is what sync-secrets-local.yml targets, so the
+# node's local.env hydrates on THIS host. Names are node-scoped so multiple nodes
+# register distinct runners on the same repo.
+# Token scope: repo. Do NOT use GH_PAT_PUBLISH. See WORKFLOW_RUNNER_MAP.md.
+
+x-runner-base: &runner-base
+  image: myoung34/github-runner:ubuntu-jammy
+  restart: unless-stopped
+  network_mode: host
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+x-runner-env: &runner-env
+  REPO_URL: https://github.com/POWERFULMOVES/PMOVES.AI
+  RUNNER_SCOPE: repo
+  LABELS: "self-hosted,ai-lab,Linux,X64,${RUNNER_NODE:-host}${RUNNER_EXTRA_LABELS:+,${RUNNER_EXTRA_LABELS}}"
+  RUNNER_NAME_PREFIX: "pmoves-${RUNNER_NODE:-host}"
+  RANDOM_RUNNER_SUFFIX: "true"
+  RUNNER_WORKDIR: /tmp/pmoves-runner
+  EPHEMERAL: "false"
+  DISABLE_AUTO_UPDATE: "false"
+
+services:
+  runner-1:
+    <<: *runner-base
+    container_name: "pmoves-${RUNNER_NODE:-host}-runner-1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/pmoves-runner-1:/tmp/pmoves-runner
+      # sync-secrets-local.yml's "Copy secrets to host config dir" step resolves
+      # the config dir INSIDE the runner (image runs as root -> /root/.config/pmoves).
+      # Without this mount the CHIT bundle is stranded in the container and the
+      # host funnel never sees it (issue #2053). Linux Pattern-A nodes only;
+      # Windows nodes use the Pattern-B artifact-pull path instead.
+      - ${HOME}/.config/pmoves:/root/.config/pmoves
+    environment:
+      <<: *runner-env
+      # PAT (auto re-registers) OR a pre-minted registration token (RUNNER_TOKEN).
+      # The make target supplies whichever it could resolve; image prefers RUNNER_TOKEN.
+      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN:-}
+      RUNNER_TOKEN: ${RUNNER_REG_TOKEN:-}
+
+  runner-2:
+    <<: *runner-base
+    container_name: "pmoves-${RUNNER_NODE:-host}-runner-2"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/pmoves-runner-2:/tmp/pmoves-runner
+      # Same host config-dir mount as runner-1 (issue #2053, see comment there).
+      - ${HOME}/.config/pmoves:/root/.config/pmoves
+    environment:
+      <<: *runner-env
+      # PAT (auto re-registers) OR a pre-minted registration token (RUNNER_TOKEN).
+      # The make target supplies whichever it could resolve; image prefers RUNNER_TOKEN.
+      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN:-}
+      RUNNER_TOKEN: ${RUNNER_REG_TOKEN:-}

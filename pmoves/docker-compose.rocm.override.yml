@@ -1,0 +1,83 @@
+# docker-compose.rocm.override.yml — AMD RDNA4 / ROCm node overlay
+#
+# Referenced by pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml under
+# `compose_overrides`. That reference pointed at a file which did not exist anywhere
+# in the repo (recorded as a divergence in that profile's probe: block); this is it.
+#
+# Brief: pmoves/docs/handoffs/rocm-device-metrics-exporter-2026-08-15.md
+#
+# Usage — rdna4 nodes only (a node without /dev/kfd cannot start this service):
+#   docker compose -f docker-compose.yml -f docker-compose.rocm.override.yml up -d
+#
+# WHY THIS EXPORTER, AND WHY AS A CONTAINER
+# ---------------------------------------------------------------------------
+# Replaces the hand-rolled rocm-smi exporter that ran on the host as a systemd
+# socket unit on :9835. Two independent reasons:
+#
+#  1. REACHABILITY. Prometheus could not scrape the host-native listener. On this
+#     node docker-published ports bypass UFW (the DOCKER-USER chain is empty) but a
+#     host-native listener does not, so it fell under UFW's `default deny (incoming)`
+#     on the bridge. Measured from the Prometheus container via its own gateway:
+#     NATS :4222 OPEN, exporter :9835 refused. The socket itself was healthy — from
+#     the host, both loopback and the bridge address returned 200 — so it was a
+#     packet-path problem. Running the exporter ON the network removes the host hop
+#     entirely rather than opening a firewall hole for it.
+#
+#  2. UPSTREAM. `rocm-smi` is deprecated in favour of `amd-smi`, and AMD's older
+#     amd_smi_exporter is EOL; ROCm/device-metrics-exporter is the maintained
+#     replacement. It also emits far more — 103 metric families vs 4, including
+#     per-block ECC counters (umc, gfx, xgmi_wafl, hdp, bif, df, ...), package power
+#     and PCIe stats, none of which the hand-rolled collector could see.
+#
+# NOT --privileged: AMD's docs show `--privileged`, but it is not required for this
+# metric set. Verified on B850 with only the device nodes and a read-only /sys —
+# HTTP 200, 83358 bytes, 238 samples. Keep the narrower grant.
+#
+# Prereqs (met on B850): ROCm >= 6.2.0 (this node 7.1.0), /dev/kfd present, and
+# /dev/dri render nodes present.
+
+services:
+  device-metrics-exporter:
+    image: rocm/device-metrics-exporter:v1.5.1
+    container_name: pmoves-device-metrics-exporter
+    restart: unless-stopped
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    volumes:
+      # Read-only; AMD documents this as needed for inband-ras.
+      - /sys:/sys:ro
+    # NO `ports:` — deliberately, and it is not merely a preference:
+    # pmoves_monitoring is declared `internal: true` (network-tier segmentation, see
+    # docs/architecture/network-tier-segmentation.md), and Docker cannot publish a
+    # host port from an internal network. A `ports:` entry here resolves in
+    # `compose config` and then silently does nothing — the container comes up
+    # healthy with the binding recorded in HostConfig and no host listener.
+    #
+    # It is also the right shape: this is internal telemetry. Prometheus reaches it
+    # by service name on the same internal network, which is the entire point of
+    # moving off the host-native listener. Publishing to the host would reintroduce
+    # the exposure problem — published ports bypass UFW on this node because the
+    # DOCKER-USER chain is empty.
+    #
+    # To inspect it by hand:  docker exec pmoves-device-metrics-exporter \
+    #                           wget -qO- http://localhost:5000/metrics | head
+    # or:                     make -C pmoves rocm-exporter-status
+    networks:
+      - pmoves_monitoring
+    healthcheck:
+      # Assert the endpoint serves SAMPLES, not merely that it answers. The bug this
+      # whole change came from was an endpoint returning 200 with an empty body while
+      # every health check stayed green.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/metrics | grep -q '^gpu_' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  # Canonical monitoring network, defined in docker-compose.base.yml. Declared
+  # external so this overlay parses standalone — see the Compose Overlay Layering
+  # section in .claude/PATTERNS.md: the network must still EXIST at runtime.
+  pmoves_monitoring:
+    external: true

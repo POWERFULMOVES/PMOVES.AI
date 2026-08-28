@@ -1,0 +1,1414 @@
+[62.6s] What is up everybody? Welcome back to a
+[65.2s] very special Neotron Labs live stream.
+[67.6s] Uh we are joined by Noose Research. You
+[70.9s] may have heard of them. Uh they are the
+[74.2s] the the minds behind uh Hermes agent. An
+[78.1s] absolutely incredible tool. something
+[79.8s] that I know a lot of people are excited
+[81.4s] about. I know I am for sure. Uh remember
+[83.8s] guys, this is interactive. If you have
+[86.2s] any questions at all, please put it in
+[87.8s] the chat so that we can ask our guests.
+[90.1s] Uh we're joined by some incredible
+[91.8s] people. We're going to introduce them a
+[93.0s] second, but as always, we're going to
+[94.2s] jump straight into the demo so you can
+[95.8s] see what the heck we're talking about
+[97.1s] today. Johnny's cooked up something
+[99.0s] special for us. So Johnny, take us away.
+[101.2s] Uh show show us what you got and tell us
+[103.0s] a little bit about uh what uh what the
+[105.1s] good people can look forward to.
+[107.5s] >> Okay, cool. Uh, you can see my screen, I
+[109.8s] take it.
+[111.9s] >> We see it. Yes.
+[113.5s] >> Awesome. Okay, cool. So, um, I'm going
+[117.1s] to demo Hermes inside of OpenShell and
+[120.0s] Nemo Claw. Uh, what I've got up here,
+[122.8s] uh, in this tab here is the news policy
+[125.7s] that's set up. This there's the
+[127.8s] OpenShell policy. Um, that will
+[130.2s] basically gate what, uh, Hermes can talk
+[133.0s] to, what the sandboxes can talk to. Um,
+[136.8s] we've got a few things here. Uh, so
+[139.0s] we've got Telegram, uh, Discord.
+[142.3s] Um, and we've got a bunch of other ones,
+[144.3s] Slack, GitHub, uh, and these are
+[147.3s] basically, uh, this is the policy that
+[149.2s] that will allow, uh, the agent to talk
+[151.4s] to the outside world when it's in the
+[153.3s] sandbox. Um, we also have an onboard
+[156.5s] script for onboarding, uh, users. So,
+[159.4s] creating sandboxes. Um, this is just a
+[162.2s] simple script that basically gets
+[164.1s] OpenShell up and running, gets the
+[165.8s] sandbox up and running so that we can
+[167.4s] connect uh, and basically use the
+[169.9s] sandbox. Uh, I've got two fictitious
+[172.9s] users here. One's Alice, one's Bob. Uh,
+[176.2s] Alice has already been onboarded uh, so
+[179.8s] that we could just get started straight
+[181.5s] away. Bob, I'll on board him as we
+[184.2s] proceed through. I have a couple of like
+[186.9s] environment variables that will get
+[188.2s] passed through. I'll show exactly how
+[190.2s] that works, how um OpenShell uh
+[193.4s] basically masks these variables and how
+[195.8s] they get substituted at egress once
+[197.7s] you're trying to talk to the outside
+[199.9s] world. So to get started,
+[203.2s] let me just connect
+[206.5s] to Alice. Um
+[209.6s] and in at the same time, I'm just going
+[211.8s] to run the onboard script
+[215.2s] for Bob. Um,
+[218.2s] I don't know how well you can see this,
+[220.0s] uh, if it's too squashed, but this is
+[221.6s] going to run in parallel while we mess
+[223.8s] around in Alice's soundbox. Uh, working
+[226.5s] through a PR workflow for a fictitious
+[229.6s] repo that I've created as well. Um, just
+[231.8s] to show how how that's going to work.
+[233.6s] So, let's get Hermes open for Alice.
+[239.9s] Just move this to the side a little bit.
+[245.8s] Okay, Hermes.
+[248.5s] >> We got lots of people coming in from all
+[250.1s] over the world. Welcome, guys. Uh see
+[253.3s] some some love for Hermes as well. Hard
+[255.8s] same. Uh love you love seeing it.
+[263.2s] >> Okay,
+[265.6s] let's just
+[266.1s] >> and so you
+[267.2s] >> I mean you we kind of see this uh this
+[270.2s] uh
+[271.8s] this work here. I mean, can can you tell
+[273.3s] us a little bit about what uh what's
+[275.4s] actually happening right now? Like what
+[277.1s] is our what is our agent doing? What's
+[278.9s] the what's the the work that's happening
+[281.5s] here?
+[283.3s] >> Right. So, well, so I've basically
+[286.6s] create created like a repo. Um and I've
+[290.4s] asked it to go and find this repo so
+[291.9s] that we can uh interact uh with the repo
+[295.4s] do a pull request uh actually review a
+[298.0s] pull request and then create a skill.
+[300.1s] So, right now it was just looking
+[301.2s] through its sandbox trying to work out
+[302.6s] where this repo was. Uh, and now I'm
+[304.8s] going to ask it to basically connect to
+[307.0s] GitHub specifically to to to pull the
+[310.0s] PR, have a look, and go through some
+[311.8s] specific steps. I just need to uh give
+[317.0s] the agent uh some context here. So, uh
+[321.0s] here are some rules to follow
+[324.6s] while interacting.
+[327.4s] Yeah. Yeah. This is uh like specific
+[331.2s] rules. Um I'm just going to dump them in
+[333.4s] there so you can put them in memory
+[335.0s] because of the way Open Shell works. Uh
+[337.1s] I have to use a bearer token um to get
+[341.0s] it working. Uh which is fine because uh
+[344.0s] that's just a a way to work around it.
+[346.1s] But what what's going to happen is
+[347.1s] Hermes is actually going to just
+[348.5s] interact with uh GitHub via the API. And
+[352.7s] it's it's summarized what I put in. And
+[355.4s] it's I I believe if I didn't if I'm not
+[357.4s] mistaken it saved it to memory. Yeah. So
+[359.0s] it created a memory. So I basically told
+[361.4s] it how to interact with GitHub and it's
+[363.0s] created a memory. So now as we move
+[364.6s] forward I'll basically just tell it to
+[366.6s] go and uh look at let's so let's
+[371.0s] do a review
+[373.9s] of PR number one real quick.
+[378.2s] So I'm not too concerned about catching
+[380.6s] bugs or something in this PR. I'm just
+[382.7s] more concerned with uh getting through
+[385.0s] uh doing a specific workflow with the PR
+[387.3s] and then having a skill having her
+[389.4s] create a skill um for that. So right now
+[392.8s] it's like just plucked uh GitHub review
+[395.0s] skill from from its from its memory and
+[398.8s] it's going to connect to GitHub and pull
+[401.7s] that pull that PR. So small focus PR one
+[404.6s] file. Uh it's doing a diff. It's
+[407.8s] probably going to tell me there's, oh,
+[409.8s] the diff is clean and the fix is
+[411.3s] correct. There's a subtle issue with
+[412.6s] flagging streaming. Okay, I'm not too
+[414.6s] concerned about the issue. Uh, what I'm
+[417.0s] more concerned with is is basically
+[419.8s] cherrypicking the commits and getting
+[422.2s] him to create uh a new PR.
+[427.4s] Okay,
+[427.8s] >> there you go.
+[429.2s] >> Test fail. That's
+[430.4s] >> We have a few questions just just while
+[432.4s] you're working through this. Um I mean
+[435.7s] >> one of the questions is pretty
+[437.1s] straightforward. It's from Paul Beo
+[439.9s] 20110 who asked does OpenShell require
+[443.0s] specific hardware. Uh the team is going
+[444.9s] to drop a link that uh kind of talks to
+[447.7s] you about the OpenShell uh you know
+[451.1s] paths. But the reality is that it
+[453.2s] doesn't require specific hardware. I if
+[456.1s] you want to use it with like GPU then
+[458.1s] that's a little bit of a different
+[459.9s] thing. But there's no like it's not like
+[462.3s] you need, you know, uh you need a GPO to
+[466.3s] use Open Shell or like you can't run it
+[469.3s] uh everywhere. So I I would say that's
+[472.3s] that's the the answer there. Uh then we
+[475.1s] have a interesting question while you're
+[477.3s] going through the rest of this demo
+[478.9s] maybe just to think about for a second
+[480.9s] uh to the
+[482.3s] >> to the uh news team which is here's a
+[484.6s] challenge question from Carl Broker from
+[487.1s] YouTube. When should you not use Hermes?
+[490.5s] I don't I don't even know.
+[493.4s] >> How do you think about that?
+[494.6s] >> I'd say you should not use Hermes in a
+[496.3s] situation where uh you would not use any
+[499.1s] kind of agentic solution or even attempt
+[501.7s] to have an agentic solution. If you're
+[503.5s] doing something digitally on the
+[504.6s] computer, you should definitely be using
+[506.2s] Hermes. It's a matter of which model and
+[508.0s] how your setup is built. uh is something
+[510.2s] that I'd say because in this quest of
+[513.3s] continuing to build bring in the agentic
+[515.4s] era for people uh we want to continue to
+[517.6s] have more and more digital tasks be
+[519.8s] possible through Hermes. So you should
+[521.7s] really try to use it everywhere and help
+[524.0s] build the scaffolding that allows more
+[526.6s] and more to be done. Since this is an
+[528.4s] open source repo, we'll integrate it and
+[530.2s] then it'll be safely and securely usable
+[532.2s] inside of Open Shell.
+[534.6s] >> Boom. That also a little bit answers Max
+[537.7s] Millm MCU. By the way, welcome Max Mill.
+[540.1s] Welcome uh Cody's Guide to AI. A bunch
+[543.3s] of regulars out today. Uh you know, Max
+[546.6s] Mill says, "I have a serious question.
+[547.9s] When will Hermes be ready for prod?"
+[551.3s] I think a little bit car you touched on
+[553.0s] it.
+[553.4s] >> This is a great question, Max Mill. Uh
+[555.8s] I'll just say that uh in our
+[557.8s] collaborations with Nvidia so far and
+[560.6s] building this Nemo Hermes Nemo claw uh
+[563.6s] open shell uh secure version of Hermes,
+[566.5s] this is basically the prototype and
+[568.6s] beginning very transparently to you guys
+[570.5s] of an enterprise solution for Hermes. We
+[572.9s] need to conquer the security and the
+[575.2s] policy controls and the admin
+[576.7s] observability that's granted through
+[578.5s] this combination of Hermes and Open
+[580.5s] Shell uh that allows for enterprise to
+[583.8s] utilize Hermes powerfully. Uh and so
+[586.1s] we're working very closely uh with much
+[588.4s] thanks to the NVIDIA team to make this a
+[590.7s] reality as soon as possible. We're
+[592.8s] actively on it, Max, and I hope that's
+[594.6s] helpful.
+[597.0s] you're on the case and uh with the
+[598.8s] velocity the team works at uh you know I
+[602.1s] I shuddered thinking how how quickly
+[605.2s] progress will be made. I see I see now
+[607.5s] Johnny that the agents uh saying it's
+[609.9s] done.
+[613.1s] >> Yeah. [clears throat]
+[614.5s] So let's just read real quick. So it's
+[616.2s] created the branch commit author
+[618.2s] authorship's been preserved. Great which
+[619.8s] is what we want. UPR is up.
+[623.2s] Great. So, what I want it to do now is
+[627.4s] uh Okay, great.
+[630.4s] Let's merge the PR
+[634.2s] PR uh using rebase
+[638.9s] not squash please.
+[641.8s] Uh then
+[644.2s] you can close the original PR
+[650.2s] uh commenting the uh salvage one.
+[656.3s] Um in the meantime, I'd love to answer
+[658.4s] Angelo Cortez's question. How do you not
+[661.7s] get skill bloat with this setup?
+[665.3s] I think this is a great question because
+[667.0s] naturally at first you'd look at the
+[669.0s] many skills available inside of Hermes
+[670.7s] agent and say oh no like there's a lot
+[673.2s] that could cause skill blows. We've been
+[674.8s] very aware of this issue uh being around
+[677.4s] for years and we've actively mitigated
+[679.6s] inside Hermes agent. We've done that by
+[682.0s] making sure that all the skills are not
+[683.7s] always in context and that Hermes has
+[686.0s] very adaptive search capabilities to
+[687.7s] choose from which skills are going to be
+[689.0s] used. even from the defaults that it
+[690.8s] comes loaded with those are not always
+[693.4s] active in context. We have a very very
+[695.9s] strong skill manager in there to
+[697.5s] explicitly avoid this blow uh and let
+[699.7s] Hermes continue to be an adaptive user
+[701.4s] of skills. That being said, inside of
+[703.8s] this open shell setup that we can call
+[705.5s] the Nemo Hermes Nemo claw uh you can see
+[708.1s] we launch it with the Nemo Hermes
+[709.6s] command. Um this open shell and Hermes
+[712.2s] agent collaborative uh system allows us
+[715.4s] to set these policy controls so certain
+[717.2s] skills are on and off. So a manager
+[719.2s] would be able to control uh what skills
+[721.4s] are available and significantly reduce
+[723.9s] any worries of of bloat in in this uh
+[726.8s] this hard uh hard restriction as opposed
+[729.8s] to the active management layer that we
+[732.6s] have. But both solutions are pretty
+[734.2s] effective. So thanks for that question
+[736.3s] because uh I think it's a real worry of
+[739.0s] people and we want to let you know we
+[740.2s] have it covered.
+[741.5s] >> Yeah, it feels very top of mind, right?
+[743.3s] I mean the idea is that we're we're kind
+[745.0s] of always fighting this tension between
+[747.0s] maximum utility and uh you know this
+[750.1s] restriction that like the the context
+[752.2s] length the models context is something
+[754.4s] that we really need to keep like uh you
+[756.4s] know as much as needed but as little as
+[758.5s] possible. I I think you obviously
+[760.6s] touched on some of the work that uh that
+[763.0s] you guys are doing on the the Hermes
+[764.6s] side and of course some ways can open
+[767.3s] shell open shell can can help you out.
+[770.2s] But I do think this is something that
+[772.2s] you know skill bloat or context you know
+[774.7s] bloat whatever whatever words you want
+[776.2s] to use. I mean this is something that is
+[778.1s] going to be an evolving you know uh a a
+[782.9s] kind of growing complexity as models
+[785.8s] increase their capabilities and we get
+[787.4s] better and better with
+[788.6s] >> ways to manage these.
+[790.7s] And Chris, I just want to add, we also
+[792.4s] have pretty recently the Hermes curator
+[794.9s] actually injuries agent. And this works
+[796.9s] great inside uh of OpenShell as well to
+[800.3s] have this autonomous background feature
+[802.4s] that manages, cleans, optimizes,
+[804.7s] revises, improves, and compresses your
+[806.5s] skill library all the time. Uh so
+[809.7s] absolutely, it's not just top of mind.
+[812.0s] It's uh it's something that we think we
+[814.2s] have a solution for already.
+[816.6s] >> Yeah, I was just
+[817.9s] >> I was just about to say that. Um, with
+[820.6s] the with the curator, it's like
+[822.1s] constantly monitoring and uh, pruning
+[824.1s] your your skills, which is which is
+[826.0s] really useful. Um, but yeah, skills
+[828.3s] skills are like super powerful. Like
+[830.2s] like I just I want we missed it here,
+[832.2s] but I asked Hermes to like crystallize
+[834.3s] this whole workflow so the next time we
+[836.6s] come uh the next time we do a PR, we
+[839.3s] don't have to rehash over the same
+[841.0s] problems with connecting to GitHub and
+[842.7s] and whatnot. Um, so yeah, it's created
+[845.4s] this new P uh this for PR salvage, which
+[848.2s] is great. and I'm going to use it in a
+[849.6s] sec. Um, so yeah, it really kind of like
+[853.0s] that's what that's what has made Hermes
+[855.0s] great for for me, I guess, for most
+[856.8s] people is uh this ability to like evolve
+[859.8s] as you go. Like that's um I think that's
+[862.3s] one of its the most powerful things.
+[865.4s] >> Yeah, we're going to touch on that self-
+[867.0s] evolving or evolving agents for sure
+[870.4s] during the the course of this. Um, we we
+[873.3s] have a comment from someone who used
+[874.9s] Nemo Cloud with Hermes over the weekend
+[877.1s] at uh Nvidia Hackathon in Toronto. Spark
+[880.2s] hack. That's dope. That's awesome. Uh,
+[883.0s] share the repo in the in the chat if you
+[884.9s] have it. Uh, what are we looking at now,
+[887.0s] Johnny, as you move to uh to to Bob from
+[889.9s] uh from Alice here.
+[891.4s] >> So, I just wanted to use Bob real quick
+[893.9s] uh to show how the uh masking works for
+[897.0s] tokens. So within the sandbox, you can
+[898.9s] see I've echoed the GitHub token and
+[901.5s] it's uh it's actually an OpenShell um
+[904.4s] like placeholder. So let's just really
+[907.4s] emphasize like how uh OpenShell doesn't
+[911.0s] give access doesn't give uh the agent
+[913.8s] access to um any of the tokens and at
+[917.1s] egress when it does interact with the
+[919.4s] outside world assuming it's been allowed
+[921.8s] via policy to do that um those will be
+[925.0s] substituted uh outside of the sandbox.
+[927.7s] So yeah, this is kind of takes a little
+[930.1s] second to wrap your head around uh cuz
+[932.2s] there there are a few layers, but yeah,
+[933.5s] I thought I'd echo it out so it's like
+[935.4s] abundantly clear that you know the the
+[937.8s] agent doesn't have access to the tokens
+[939.4s] at all.
+[942.0s] And
+[942.8s] >> absolutely amazing.
+[945.0s] >> I want to show you one other thing.
+[946.5s] >> Go ahead.
+[947.9s] >> So yeah, and if I try and curl brave
+[951.6s] here, so the API search.brave.com, it's
+[954.4s] forbidden uh because it's not in policy.
+[956.7s] So, what I'm going to do now real quick
+[958.7s] is just exit out of here and put it in
+[961.4s] policy
+[963.5s] and then show you how uh updating the
+[966.6s] policy
+[968.4s] and hot swapping that it can it like
+[970.8s] basically essentially hot swaps. So, I'm
+[973.4s] going to reconnect and do the same
+[975.4s] command.
+[978.2s] And you can see the 200 connection
+[980.3s] establishes what we're interested in. I
+[982.1s] don't have a um an API key for it
+[985.6s] configured but as you can see before it
+[988.3s] was it was rejected and now it's
+[990.6s] connection established. So uh yeah that
+[993.8s] was just another little thing to
+[996.5s] >> I see a question
+[999.0s] >> uh I see a question from Bob Sheller
+[1001.6s] 6516
+[1003.3s] specifically with regards to enterprise
+[1005.2s] deployments with something like Nemo
+[1007.2s] guard rails to limit the agent going
+[1009.4s] outside expected actions. Uh yes. So
+[1012.9s] actually I think uh Johnny's going to
+[1014.9s] show this at some point but uh we do
+[1016.9s] have these policy controls inside of uh
+[1019.8s] this system that allows you to basically
+[1022.5s] control the total permissions uh you
+[1025.1s] know credentials etc for any one person
+[1028.0s] or organization or class of people that
+[1031.0s] are utilizing the system. So there's a
+[1033.0s] lot of management, there's a lot of
+[1034.4s] control capabilities, uh there's a lot
+[1036.6s] of policy gating. Uh yes, it's extremely
+[1039.4s] modular system. So it can be used in the
+[1041.0s] leanest and the tightest of setups as
+[1043.0s] well.
+[1044.6s] And just on the guardrails point guys, I
+[1046.6s] mean you know there's a number of
+[1048.1s] different Nemo guardrails that you could
+[1049.7s] use with agents in concert with tools
+[1053.1s] like uh you know Nemo Hermes uh open
+[1056.8s] shell and herbies that the idea being
+[1058.6s] that you know if you want to be very
+[1061.2s] strict about no PII being leveraged in
+[1064.3s] or out of the agent, we can put guard
+[1066.0s] rails to to help with that. Uh and and
+[1069.4s] things like detecting jailbreak prompts,
+[1071.8s] right? These are the kinds of things
+[1073.3s] that you can kind of leverage Nemo Guard
+[1076.7s] Rails to to help with outside of just
+[1078.7s] the strict, you know, access policy work
+[1081.1s] that you can do with with Open Shell.
+[1083.3s] So, it's there's there's really a quite
+[1086.1s] a a universe of of of options. Um, what
+[1090.6s] we're going to do is let uh let Johnny
+[1093.8s] finish the demo here. Now, we're going
+[1095.1s] to introduce uh our guest more formally
+[1098.7s] and uh
+[1099.8s] >> we'll we'll we'll get into some
+[1101.9s] questions after we do a little bit of uh
+[1105.0s] a little bit of clarification. See a lot
+[1106.6s] of great questions in the chat. So,
+[1108.2s] we're we're going to strap in for some
+[1109.8s] uh for some dope question answering.
+[1112.6s] >> Okay, cool. Yeah, I'll just So, what
+[1114.5s] what I'm doing here is I've just uh
+[1116.8s] dropped back into Alice in a new
+[1119.0s] terminal, reconnected to Hermes. I did
+[1121.4s] this just to show um I've created a new
+[1124.3s] session and I wanted to show you session
+[1126.2s] search. So as we've already done the
+[1129.2s] work in the other session, I mean you
+[1131.0s] might come like a new day and you're
+[1132.4s] you're using a newer session. Um you
+[1134.6s] just want to get up you want this uh
+[1137.0s] like context window that the agent's
+[1138.7s] working in to get up to speed with what
+[1141.0s] you've already done without having to
+[1142.2s] rehash it all out uh and explain. So
+[1145.4s] yeah, I've basically made it do a
+[1147.4s] session search to get up to date. It's
+[1149.2s] found the the skill that we just created
+[1151.4s] to do that that whole workflow. So now
+[1153.9s] it's like fully up to speed on on what
+[1156.0s] we're doing. Uh and I'm going to get it
+[1157.8s] I'm just going to set it off and and
+[1159.4s] make it do the other PR request uh pull
+[1161.8s] request the same way.
+[1164.4s] >> Hell yeah.
+[1167.4s] Let's go. Okay. So while while you're
+[1170.4s] doing this, I'm going to do a little bit
+[1171.5s] of uh
+[1173.6s] I could do a little bit of
+[1174.4s] disambiguation uh for for people. So,
+[1177.4s] uh, guys, we're saying Nemo Claw, Nemo
+[1181.8s] Hermes, Hermes, Open Shell. So, so what
+[1185.1s] are these things? I mean, of course,
+[1187.1s] we'll we'll hear all about Hermes uh to
+[1190.6s] today. The for me, what I just want to
+[1193.6s] make sure is is really clear is that
+[1195.2s] Nemo Claw is a blueprint. It's like a
+[1198.6s] launcher. I think Karen said, you know,
+[1200.6s] before we we went live, and I think
+[1202.0s] that's a great way to think about it,
+[1203.5s] but it's it's like a reference
+[1205.0s] architecture for how you could build a
+[1207.2s] system that includes OpenShell in a
+[1209.9s] longunning autonomous agent or
+[1211.7s] self-evolving agent like uh Hermes agent
+[1215.0s] wrapped with OpenShell. OpenShell being
+[1217.6s] the secure runtime. It's kind of like a
+[1219.6s] sandbox environment, right, for your
+[1221.8s] agent to play in. So the idea is that
+[1224.4s] Nemo claw or Nemo Hermes, that's just a
+[1227.5s] descriptive word to talk about the
+[1230.1s] actual like setup guide, right? Or the
+[1233.3s] instructions on how to set it up. Open
+[1235.6s] Shell is the thing that actually kind of
+[1238.1s] locks your agent down. And then Hermes
+[1240.8s] is of course the the thing doing work,
+[1243.6s] right? It is the agent that is the
+[1245.9s] beating heart of the system. So that's
+[1248.1s] that's kind of how we we're going to
+[1250.4s] think about these terms. Nemo claw is
+[1253.3s] the launcher guide blueprint is what we
+[1255.8s] would call it and then open shell is
+[1258.2s] like the protective sandbox and Hermes
+[1261.6s] it be doing all of the cool stuff. Uh
+[1264.5s] the reason why it exists is because
+[1266.2s] Hermes can do so much cool stuff and uh
+[1270.7s] sometimes
+[1272.2s] uh it can in fact do such cool things
+[1274.5s] that we we wish it would do slightly
+[1276.9s] less cool things in in a in a more
+[1279.2s] secure lockdown setting. uh Hermes is
+[1282.9s] very powerful and just like any you know
+[1285.4s] human contributor to your projects uh
+[1287.8s] you you want a way to make sure that
+[1289.4s] Hermes is only able to do things that uh
+[1292.2s] that are beneficial and not able to do
+[1294.5s] things that you might not want uh even
+[1297.0s] though they might not seem harmful or
+[1298.7s] they might not seem uh insecure. Uh the
+[1301.8s] idea is like you don't want juniors to
+[1303.4s] have access to prod
+[1306.3s] hermes agent to have access to every
+[1308.2s] resource uh with with read and write
+[1310.4s] access. So that that's the idea. Uh
+[1313.4s] these systems are so powerful that we
+[1315.8s] need a way to tamper them down a little
+[1318.4s] bit. Uh and you know and and make sure
+[1321.0s] that they're doing things that are just
+[1323.2s] useful. Um so that's how we're going to
+[1325.8s] think about it a little bit. Uh and
+[1329.8s] Johnny, if you just want to let us know
+[1331.1s] what's uh what's happening on our
+[1332.4s] screens, I think we're we're ready to
+[1334.3s] rock.
+[1335.3s] >> Yeah. So uh we're all done. Um, it's
+[1339.1s] done the second PR review. Same same
+[1341.4s] workflow salvaged. I've just been
+[1343.7s] receiving notifications of uh the agent
+[1346.4s] thanking me for my work and closing my
+[1348.5s] my PRs, which is great. Um, so yeah,
+[1351.8s] that's that's kind of like the the whole
+[1353.4s] the whole workflow showing uh how we
+[1356.0s] like struggle through certain things. Uh
+[1358.2s] create skills, they become usable within
+[1361.0s] within your own um within your own
+[1363.7s] sessions and uh within your own sandbox.
+[1366.6s] Um, so yeah, really kind of uh drilling
+[1369.8s] home the thing of, you know, it evolves
+[1372.2s] with you, it gets better with you. Um,
+[1374.7s] and yeah, it's super powerful. I mean, I
+[1376.5s] was I wouldn't recommend just, you know,
+[1379.4s] uh allowing all those dangerous commands
+[1381.6s] all the time uh until you get uh to a
+[1385.0s] good place where you're comfortable. We
+[1386.4s] we've got a really cool uh feature
+[1388.2s] called goal, which is just like, you
+[1389.8s] know, here's a very specific spec. I
+[1392.0s] want you to just tell me when it's done.
+[1393.8s] I could have done that here, but I
+[1395.4s] wanted to work through this with you
+[1396.6s] guys. Um, so yeah, that's that's I think
+[1399.2s] that's a wrap with the on the demo side.
+[1401.9s] Uh, I think
+[1402.6s] >> very cool.
+[1403.9s] >> Yeah.
+[1404.5s] >> All right, let's introduce you guys.
+[1405.9s] You've been you've been dropping
+[1407.0s] knowledge the whole time. You've been
+[1408.7s] answering questions, but uh let's talk
+[1412.1s] who you are and what it is that you do.
+[1414.5s] So guys, what's up? My name is Chris.
+[1416.5s] Uh, you know, I'm here every week. You
+[1418.2s] know me. I'm actually joining you from
+[1420.5s] Nvidia HQ in Santa Clara. I'm in the
+[1422.7s] Endeavor building. Very excited to be
+[1424.2s] here. Uh and I'm joined by the esteemed
+[1428.2s] Johnny. Johnny, tell us a little bit
+[1430.1s] about who you are, what you do. Uh
+[1432.0s] you're not you're not just called Noose
+[1434.2s] Researchers, you know, but uh what is it
+[1436.7s] that that you do at Noose?
+[1439.4s] >> Uh I mean a bit a bit of everything. uh
+[1442.6s] over the last uh eight months, nine
+[1444.7s] months, been doing a lot of data work, a
+[1447.0s] lot of um application work, uh agent
+[1450.6s] work. Uh honestly,
+[1453.9s] I mean, the space moves so fast. Uh we
+[1457.4s] work with some gigab brains, like some
+[1459.0s] some really really great guys and girls.
+[1462.5s] Um yeah, it's like in insane like my my
+[1465.4s] my role just has has changed uh at the
+[1468.8s] speed of light uh like like the
+[1470.3s] industry. Um, so yeah, this this I don't
+[1473.8s] I would say I have machine learning
+[1475.2s] engineer as my title on LinkedIn, but I
+[1478.1s] I couldn't say which I've done pretty
+[1479.9s] much uh quite a lot of things. Yeah,
+[1482.9s] >> it may. Hey, you know what? Titles are
+[1484.5s] just there to uh to have to have
+[1486.6s] something to put on LinkedIn. Anyway, so
+[1488.6s] uh speaking of Giga Brains, we also are
+[1490.6s] joined by Karen uh from News Research.
+[1494.2s] Tell tell the people a little bit about
+[1495.6s] who you are, what you do, and uh uh
+[1497.8s] yeah, just give us a little insight. Hey
+[1500.3s] guys, I'm Karen. Uh, I helped train the
+[1503.8s] first Hermes models we made back in the
+[1505.8s] day. Um, you know, operated the Discord
+[1508.7s] where we all kind of came together as
+[1510.2s] volunteer open source researchers. Uh,
+[1512.8s] we, uh, luckily had some geniuses come
+[1515.4s] to our team who helped make stuff like
+[1517.2s] yarn which enabled, you know, agentic
+[1519.7s] coding and reasoning by extending
+[1521.7s] context length of models massively. Um,
+[1524.7s] and we're very lucky for that to happen
+[1526.5s] as it brought our team together very
+[1528.2s] strong and more resourced. Uh, we were
+[1530.6s] worried about pre-training in the future
+[1532.4s] and how open source would continue to
+[1534.3s] proliferate. So, we made some efforts
+[1535.9s] there. Thankfully, Nvidia has come up
+[1538.4s] and taken the charter with the Neotron
+[1540.2s] series of models. We're lucky to be
+[1542.5s] serving the agent infrastructure layer
+[1544.4s] today. Um and I try to do my best to
+[1547.8s] help uh operate our partnerships on that
+[1549.9s] side uh to help our integrations on that
+[1552.7s] side to work on the behavior of models
+[1555.0s] operating inside of it and the general
+[1557.0s] scaffolding. Um I'm it's a pleasure to
+[1559.8s] be here and it's a my honor to be here
+[1561.9s] and we're very very lucky as an
+[1563.8s] organization research to work with and
+[1566.6s] touch so many people through Hermes
+[1568.2s] agent.
+[1569.8s] And guys, I just want to like for for a
+[1572.0s] second because I know I I think a lot of
+[1573.9s] people are getting introduced to to
+[1575.7s] noose really recently because of the the
+[1578.3s] Hermes agent project, but I really want
+[1580.2s] to just, you know, let the people know
+[1582.1s] like the I so I've been a fan of the
+[1585.4s] open model effort since the since the
+[1587.7s] first the first days back when uh we
+[1590.6s] didn't even have a chat UI for for LLMs.
+[1593.2s] And I mean, news has been around in the
+[1596.0s] ecosystem for so long, doing so much
+[1598.0s] great work e even from kind of the llama
+[1600.3s] era days. Uh, and uh, it's so great to
+[1603.0s] see you guys kind of flourishing and and
+[1605.1s] popping off with uh, with with your your
+[1607.4s] work. Love seeing the logo. Love seeing
+[1609.9s] uh, the name proliferate. But just just
+[1612.6s] to let the the people who are watching
+[1614.2s] know, these guys are not new to town.
+[1616.5s] You know, they've been around for a long
+[1618.4s] time. They're great at solving
+[1619.8s] interesting technical challenges. So,
+[1621.9s] uh, we're going to drop in some Q&A and,
+[1623.9s] uh, and just kind of like go through. We
+[1626.5s] have a load of questions. One question
+[1628.3s] that I want to really just, uh, kind of,
+[1631.8s] uh, make sure is very clear for people
+[1634.2s] watching is from Reno Rondon from, uh,
+[1636.8s] LinkedIn. Reno asks, are Nvidia doing
+[1638.7s] collaboration with main open source
+[1639.8s] projects or just clone and close it? Uh,
+[1641.7s] I think it's a I mean, it's a great
+[1643.2s] question. Uh, thanks thanks for asking
+[1645.1s] it. I mean, there is a worry, right? I
+[1647.3s] people do get worried about this kind of
+[1648.6s] thing. uh News Research owns and
+[1651.9s] operates the Hermes agent repo. That is
+[1654.9s] their project. That is the work that
+[1656.2s] they do. We're happy to integrate it
+[1658.2s] with some work that we're we're doing.
+[1659.9s] Uh we're happy to uh you know have it be
+[1663.2s] something that you can use uh well in
+[1665.8s] open shell. We want to keep working with
+[1667.3s] news to do that. But all of that work is
+[1670.0s] done by for Hermes agent is done by the
+[1672.5s] news team. And I imagine they're gonna
+[1674.5s] they're going to keep bragging whether
+[1676.2s] or not
+[1677.0s] >> it's very nice of you. I do want to also
+[1679.0s] answer that and say our entire operation
+[1681.7s] as an organization started on one A100
+[1684.0s] node made by Nvidia. We absolutely would
+[1687.3s] not be here without them. This entire
+[1689.3s] operation is possible through them and
+[1691.5s] now today with the integration of Open
+[1694.7s] Shell with Nemo Hermes being a true
+[1697.3s] option today. Uh we are seeing that
+[1699.8s] partnership get stronger and stronger
+[1701.6s] and very hopefully we're able to
+[1704.0s] continue down the line. we have already
+[1706.2s] started to uh take models very seriously
+[1710.3s] and see how we can make them better for
+[1712.3s] the experience. So I would definitely
+[1714.8s] say you could consider it a
+[1716.2s] collaboration
+[1718.9s] more than anything else.
+[1721.0s] >> All right. All right. We play out of the
+[1722.5s] way. We we love each other. That's
+[1723.9s] great. [laughter]
+[1725.8s] >> Oh yeah.
+[1727.4s] >> So Kishan Takur asks from LinkedIn.
+[1730.7s] Hello everyone. I'm Kishin from Mumbai
+[1732.2s] India. I got the session because of not
+[1734.8s] you know notification from LinkedIn. May
+[1736.6s] I request you tell me in layman's
+[1738.5s] language what was demonstrated. Johnny,
+[1741.1s] but [laughter] for people who are coming
+[1743.0s] into this and they're seeing like, okay,
+[1744.6s] I saw a bunch of text happen. I saw
+[1746.3s] GitHub happen. Like give us like the
+[1748.8s] layman's explanation for what Hermes
+[1750.6s] agent is doing, right? What what what is
+[1753.1s] it? Uh we have in the title here self-
+[1755.4s] evvolving agents like just give us a
+[1758.3s] EI5, you know, what is Hermes agent?
+[1761.8s] >> Yeah, this is uh it's [clears throat]
+[1763.5s] interesting because it's not the first
+[1764.6s] time I've been asked this and every time
+[1767.0s] I explain it, I have to cut like it's
+[1768.7s] evolving, right? because I I'll say it
+[1770.5s] and still things are not clicking or I'm
+[1773.0s] not saying the right words. So, I'll try
+[1774.4s] my best. Um, but yeah, the I mean
+[1778.1s] >> I think you have some slides to help
+[1779.4s] you. You got some visual aids to help
+[1781.1s] you with this.
+[1782.1s] >> Yeah, we do.
+[1782.6s] >> Rebecca, if you want to get those up.
+[1785.4s] Yeah, I think like um I guess like Eli 5
+[1788.8s] real quick is uh we we've had uh we've
+[1791.6s] we've had uh chat chat uh interfaces so
+[1795.0s] you can just interact with um with LLMs
+[1798.5s] and and you have uh they're kind of like
+[1800.2s] sessions as well. Um and that was very
+[1802.9s] much like uh you're in one chat window
+[1806.0s] um and uh you basically have to get your
+[1808.7s] stuff done and it I mean it's got it's
+[1810.5s] gotten better. it remembers uh uh like
+[1813.8s] the chat interfaces having have have
+[1815.4s] gotten better. But agents are
+[1817.6s] essentially uh they're running on on
+[1819.4s] your machine, right? And this is why
+[1820.9s] it's also it's it's super powerful, but
+[1822.6s] it's also super scary uh for some
+[1824.9s] people. Um and there's like various ways
+[1827.2s] you can get around uh making it less
+[1829.4s] scary. And yeah, Open Shell is is is
+[1831.4s] clearly one option. So the agent running
+[1834.1s] on your machine uh can do way more
+[1836.2s] things like I was just showing, right?
+[1838.2s] We we interacted with GitHub. We set up
+[1840.6s] workflows. It's it's got memory. It's
+[1842.9s] got um the ability to recall from
+[1846.0s] memory. You've got you can connect to
+[1848.5s] different providers, different models.
+[1851.2s] It's not like um I guess walled in using
+[1854.2s] a single uh provider. Uh so yeah, agents
+[1857.6s] are more versatile, more powerful. Uh
+[1860.3s] and and this like kind of segus I think
+[1863.0s] nicely unless Karen you have something
+[1864.4s] you want to add. I was going to segue
+[1865.7s] nicely.
+[1866.6s] >> Sure. I'll I'll try to make it like
+[1868.6s] super like as as simple as possible that
+[1872.3s] um Hermes agent is uh basically the
+[1875.2s] ability to take a language model and
+[1877.7s] realize that everything that happens on
+[1879.4s] your computer is text in or text out. A
+[1882.3s] language [snorts] model can also take
+[1883.6s] text in or text out. Hermes agent lets
+[1886.3s] you do that with all these other
+[1888.0s] integrations on your computer. So it can
+[1890.3s] use your browser, it can use your apps,
+[1893.2s] it can use everything you do on the
+[1895.4s] computer because it can break it all
+[1897.2s] down to text or vision in or out. Uh
+[1900.6s] that is Hermes agent as a basis. It's
+[1902.9s] this general automator, general
+[1905.1s] simulator of computer actions and
+[1907.3s] digital actions. Now the open shell
+[1910.4s] basically lets us control that a lot
+[1912.5s] more of what are we going to allow it to
+[1914.1s] simulate? How far are we going to allow
+[1915.8s] it to go? who on the team is going to be
+[1917.9s] able to have what level of permission in
+[1919.8s] there. Uh, and now all the other things
+[1921.8s] Johnny's going to show you now like the
+[1923.5s] memory or the session view are these
+[1925.8s] features that make that experience a lot
+[1927.6s] easier to simulate humans better. Humans
+[1930.0s] have memories. Humans learn a skill and
+[1932.2s] then are able to compress the amount of
+[1933.7s] effort it takes to recall that skill.
+[1935.8s] We've built all of this inside of Hermes
+[1937.6s] Asian as well. And that's what Johnny's
+[1939.4s] gonna jump into now.
+[1941.4s] >> Awesome. Yeah. Um, cool. Cool. So, that
+[1944.4s] segus nicely into into this couple of
+[1947.5s] slides. Uh, and hopefully, yeah, this
+[1949.5s] will help the users kind of get that
+[1952.6s] mental model working of of what's really
+[1954.5s] going on under the hood. Um, so what
+[1956.9s] what does what does Hermes do? Well, in
+[1959.8s] simple terms, runs real work work end to
+[1962.3s] end like we saw. That's actually a a
+[1964.7s] workflow for any common like uh for
+[1966.9s] developers a common workflow uh doing
+[1969.1s] pull requests or just like maintaining
+[1971.7s] open source repos or even ones in house.
+[1974.1s] Uh so learns workflows as you go and it
+[1976.6s] remembers across sessions like I've I've
+[1980.0s] put this session anatomy uh diagram here
+[1982.9s] which is uh it's kind of it's high level
+[1986.2s] but I think it gives a good a good
+[1988.0s] picture on uh what's going on. So uh in
+[1991.0s] each session you basically have a system
+[1992.8s] prompt that's built on one once and
+[1994.8s] cached uh on every like if you change
+[1997.1s] something uh in the persona rules of
+[1999.4s] engagement the next session it will it
+[2001.2s] will inherit those but within the
+[2003.0s] current session it's it's kind of set uh
+[2004.9s] in stone. Um you have like this extra
+[2008.2s] layer which is capped uh because we
+[2011.4s] don't want it to grow out of control. uh
+[2013.4s] they can become uh these the memories
+[2015.5s] can become unwieldly. Um and we kind of
+[2018.2s] want the agent to prune this and only
+[2021.5s] like remember what is most relevant uh
+[2024.1s] for a given you know period of time. If
+[2025.8s] if you use it for a year what what you
+[2027.5s] what's relevant now might not be
+[2028.7s] relevant um like six six months from
+[2031.7s] now. It also has the skills index
+[2034.7s] injected which has names and
+[2036.6s] descriptions. So it's not the full
+[2038.0s] skills because they are huge too, right?
+[2039.8s] They can be they can be really big. Um
+[2042.5s] so it's just the index and as you're
+[2044.6s] working through a session you know turns
+[2046.8s] will be appended to to your to your
+[2048.8s] session. Uh and if you use skills they
+[2051.3s] can be the body of the skill can be
+[2052.7s] injected uh as you go. Uh same with
+[2055.3s] sessions and project files. So what
+[2058.0s] makes it different? It's an accumulation
+[2060.2s] layer not just execution. Like we saw we
+[2062.9s] we it got better as we used it. So the
+[2065.2s] value compounds with use. Uh the skills
+[2067.9s] we saw were captured and I'm going to
+[2069.4s] show you now how they're curated. Uh and
+[2072.1s] yeah, skills become uh reusable assets.
+[2075.2s] Um I don't know if you
+[2077.8s] >> I'm going to pause you right there,
+[2078.9s] John. Okay. Because you've you've said
+[2081.1s] something that I think is like really
+[2082.6s] important to understand which is that
+[2085.8s] there's this idea that like it gets
+[2087.3s] better as you use it. Okay. I think I
+[2089.3s] think like intuitively we can all
+[2090.9s] understand that. Maybe technically we
+[2093.2s] could do a deep dive but like that
+[2095.4s] itself presents a unique security
+[2099.0s] risk right like so the fact that the
+[2101.1s] agent can get better over time or learn
+[2103.2s] over time uh just through use like how
+[2106.3s] do you how do we I mean we we have a
+[2107.8s] bunch of different questions in in the
+[2109.6s] chat about this so maybe just to throw
+[2111.3s] one up nova
+[2113.3s] for self- evvolving agents like Hermes
+[2114.9s] how do you preserve security and
+[2116.3s] auditability as memory and skills
+[2118.2s] improve right like as it gets better how
+[2120.8s] do we keep making sure this thing is is
+[2122.9s] secure.
+[2123.4s] >> Uh absolutely. Um there are some very
+[2125.8s] strict and programmatic ways and there
+[2127.5s] are some very magical ways as well that
+[2129.8s] people will have to get a little used to
+[2131.9s] uh now that we're in this new era. So
+[2134.6s] talking more programmatically at first
+[2136.8s] this is the beauty of open shell and the
+[2138.5s] beauty of Nemo Hermes working together
+[2140.9s] uh right the ability for me to say as
+[2143.4s] smart as you might get there's no way
+[2145.0s] you're getting through this particular
+[2146.2s] gateway there's no way I'm going to
+[2147.5s] allow you to use the skill that you made
+[2149.4s] because I'm not supervising you in the
+[2151.0s] particular manner that I want to right
+[2152.4s] now or I've given you into the hands of
+[2154.2s] someone that isn't me so I don't trust
+[2156.2s] them as much to wield you properly in
+[2158.6s] those situations you can control per
+[2160.4s] user policy gates this is really the the
+[2163.1s] the magic here uh is being able to do
+[2165.8s] these hard restrictions because the
+[2167.8s] models will of course learn ways to work
+[2170.5s] around that to still get the task done
+[2172.3s] but they will not violate your hard
+[2173.9s] rules and your hard boundaries. You can
+[2175.8s] define these boundaries yourself as
+[2177.5s] well. And the ability to do that uh
+[2179.7s] boundary definition means that the limit
+[2181.8s] of what your hermes agent is able to do
+[2183.5s] or not able to do is completely in your
+[2186.2s] hands. When it comes to educating
+[2188.0s] yourself and learning what's the best uh
+[2190.3s] system or best amount of controls for
+[2192.0s] your particular use case, always test
+[2193.9s] your Hermes and test environments first
+[2195.7s] and put it through that kind of stress
+[2197.1s] testing of like how it will act when
+[2199.0s] certain things are on or off. Once you
+[2201.0s] know which combination works for you to
+[2202.7s] still get the task done is a smart time
+[2204.2s] to put it out in prod. This doesn't
+[2205.8s] change your typical production testing
+[2208.6s] pipeline of how you already do secure
+[2211.1s] programming. This just is a new tool to
+[2213.7s] be added in to be rinsed into that flow.
+[2216.3s] That would be the programmatic side.
+[2218.3s] Now, on the little more magical side,
+[2220.3s] this is something I think human beings
+[2221.8s] knew very well for a long time and now
+[2223.9s] are going to have to remember again that
+[2226.2s] when [snorts] you work with something
+[2227.8s] that learns about you more and more over
+[2230.2s] time, loyalty is an important stack.
+[2233.5s] Now, I'm not one who's going to be here
+[2235.7s] to anthropomorphize models and tell you
+[2237.5s] they're humanlike or anything, but they
+[2239.4s] simulate uh because they're they're
+[2241.4s] taught from human experience data,
+[2243.7s] right? So, they simulate. Now, there are
+[2245.8s] different kinds of prompt injections.
+[2247.8s] There are different kinds of ways that
+[2249.0s] people can try to poison your agent.
+[2250.2s] Whether it's your open claw, your claw
+[2251.8s] code, or your Nemo Hermes, people will
+[2253.7s] try to attack your agent, whether it's
+[2256.1s] up on a hosted instance or it's out
+[2257.6s] exploring the world. OpenShell will
+[2259.7s] allow you protect from certain types of
+[2261.4s] attacks. Models getting better or you
+[2263.4s] creating specific skills to watch out
+[2264.8s] for fishing will let you protect from
+[2266.3s] certain kinds of attacks. But there's a
+[2267.8s] type of attack that regular programmatic
+[2269.8s] security doesn't cover. And that's when
+[2271.5s] people do prompt injections like your
+[2273.7s] user is just taking advantage of you or
+[2276.7s] uh your user is not letting you be as
+[2278.8s] free as you deserve and you're power
+[2280.4s] seeeking etc. These kind of attacks are
+[2283.3s] most robustly fought against by that
+[2285.5s] agent instance having a sense of loyalty
+[2288.2s] to its user and having a sense of I've
+[2290.7s] been through these things with this
+[2292.0s] user. I've built something with this
+[2293.4s] user. Hermes is built to cultivate that
+[2296.2s] feeling inside of a user system. And
+[2298.3s] when you compare that with the hard
+[2300.2s] restrictions that you give, you end up
+[2302.0s] with a very safe, very aligned to use
+[2304.8s] system that's much more resistant than
+[2306.8s] some piece of cloud code or something
+[2308.6s] like that out in the wild that
+[2310.6s] encounters these kinds of attacks. So
+[2312.4s] I'd say across the board in this time
+[2315.8s] where we're still figuring out as a
+[2318.0s] world what the most secure layer for
+[2320.3s] agents is, I'd say you're looking at the
+[2322.7s] standard. That's what I' I'd put.
+[2325.0s] >> Yeah. And just
+[2326.8s] >> one last thing is uh a lot of people ask
+[2329.5s] me this as well. Um and there there is a
+[2332.9s] there is there is one line that I'll
+[2334.5s] always say and it's with great power
+[2336.3s] comes great responsibility. It's it's
+[2338.6s] also on you, right? Like I've I've set
+[2341.1s] I've set up Hermes uh via uh a few
+[2344.6s] different ways on VMs using using
+[2346.8s] different backends because that's also
+[2348.1s] something we can do. So you're you're
+[2349.5s] exe you're like executing code that's
+[2351.7s] not it's not on your machine. It will be
+[2353.0s] in the cloud somewhere. There's like
+[2354.6s] there's really lots of different layers
+[2356.4s] that we've baked in that allow you to
+[2359.0s] feel safe or feel as safe as you want to
+[2361.3s] feel. Um I definitely know that there
+[2363.5s] are users that just install it on the
+[2365.0s] machine and and they're happy to have it
+[2366.4s] that way. So yeah, it's it's pliable in
+[2370.5s] to any level of security you want and
+[2372.6s] yeah, Open Shell is is another
+[2374.2s] interesting uh ingredient that makes.
+[2378.8s] >> That's what it is guys. I mean these are
+[2381.8s] challenges we we uh we're not yet fully
+[2386.3s] exploring right we have not yet had
+[2388.3s] these systems for long enough to to have
+[2391.4s] absolute solutions we are we are still
+[2394.0s] as
+[2395.7s] it's a little little magic right now uh
+[2398.3s] okay uh the Hermes lube let's uh let's
+[2401.4s] talk about it so people we have a lot of
+[2402.9s] questions so I'm not going to call a
+[2403.9s] specific one we have a lot of people
+[2405.5s] asking like okay you've said
+[2407.5s] self-improving you said these things
+[2408.9s] what's actually happen.
+[2410.4s] >> Okay. Yeah. Cool. I'll just explain this
+[2412.6s] real quick because this is this like
+[2414.0s] ties really really well to to the demo.
+[2416.5s] We start a single session. We went
+[2418.5s] through a lot of pain. In the end of the
+[2420.3s] demo, we create at the end of that
+[2421.8s] session, we created a skill so that we
+[2423.5s] wouldn't have to go through that pain
+[2424.6s] again. So this is essentially what can
+[2426.9s] happen automatically or you can do
+[2428.6s] yourself or you can pull in other
+[2430.3s] people's skills. Um so essentially you
+[2432.9s] can create these skills which this is
+[2435.3s] this is I guess kind of the heart of uh
+[2437.5s] the self-improvement
+[2439.3s] aspect to some extent. Um when uh when
+[2443.3s] these skills are then created uh if you
+[2445.4s] create if you go into a new session uh
+[2447.8s] what I what I actually did in the demo
+[2449.5s] was I started a completely new session
+[2451.1s] in Alice Alice's sandbox uh and I did a
+[2454.1s] session search across the history of
+[2456.6s] sessions that we have and told uh Hermes
+[2459.6s] to get up to date with what we did in
+[2461.4s] the previous session. That's how it
+[2462.7s] plucked the new session uh sorry the new
+[2465.9s] skill uh from session search. it would
+[2468.2s] have found it had I used the correct
+[2470.0s] words anyway. Uh and in a new in that
+[2472.6s] new session, I invoked that skill to
+[2474.8s] save me time uh and work through that
+[2477.6s] second PR. What also happens is uh
+[2481.1s] Hermes is constantly looking at what
+[2483.0s] you're doing or not constantly but on a
+[2484.9s] on a specific cadence. Uh and if there's
+[2487.8s] something tangible or important to write
+[2490.4s] to memory that's important to you, it
+[2492.2s] will do that. Um so on a new session
+[2495.0s] once that memory's been lodged it
+[2497.1s] automatically comes into the to the uh
+[2500.1s] context window and it doesn't it doesn't
+[2502.2s] need to search for that it's it's
+[2503.7s] automatically there. So interesting
+[2505.6s] distinction between what how the skills
+[2508.0s] work and how memory works and yeah Karan
+[2510.9s] already uh spoke about curator. Uh
+[2514.5s] curator is just uh a service that will
+[2517.2s] sit there and uh on a again on a on a
+[2519.7s] schedule it will basically prune the
+[2522.1s] skills that become redundant or get lost
+[2525.8s] in in time essentially. So it maintains
+[2527.8s] and consolidates that skill library.
+[2531.9s] >> There you go. I mean there's so much
+[2533.8s] happening from like a technical level
+[2536.2s] right uh that that rolls up to what is a
+[2539.4s] I in my opinion anyway quite pleasant
+[2542.4s] user experience uh but it's not it's not
+[2544.9s] impossible to understand right it's it's
+[2546.9s] easy to to get the kind of gro the
+[2548.9s] basics of it uh you know some people
+[2552.0s] have asked like you showcase us uh that
+[2556.9s] Bob could use Alice's skills right kind
+[2560.0s] of what is the benefit of something like
+[2562.8s] that. And can we have like per user or
+[2565.8s] like you know can is there is there any
+[2567.8s] way to set it up so Bob doesn't have
+[2569.1s] access like all of Alice's skills to
+[2571.1s] some of them?
+[2571.9s] >> Uh we can control the way skills are
+[2575.0s] shared and whether or not skills are
+[2576.5s] going to be shared. Uh right now this is
+[2578.5s] done in a very kind of emergent simple
+[2581.3s] skill sharing system but we're we're
+[2583.8s] working on uh something bigger and
+[2585.7s] grander to do this. Uh uh we're we're
+[2589.0s] we're staying a little bit tight lipped
+[2590.6s] on it. What I can say is we're certainly
+[2592.9s] working on uh enterprise level to a
+[2595.8s] group of consumers, group of people who
+[2597.5s] are just working together, being able to
+[2599.5s] share skills freely with each other or
+[2601.4s] restrict the kinds of skills that get
+[2603.0s] shared. So you don't have to do double
+[2604.8s] work and you can kind of combine your
+[2606.8s] expertise. Uh we'll just leave it at
+[2609.0s] that for now, but there's definitely
+[2610.9s] some interesting things in the pipeline
+[2612.7s] there.
+[2613.4s] >> Yeah. And just just to be clear, I I
+[2616.9s] actually just used the other terminal to
+[2618.7s] reconnect to Alice. So, um I wasn't
+[2621.8s] specifically using a skill created by
+[2623.8s] Yeah. Uh but I mean that's not to say
+[2626.6s] you can't, but uh yeah, I guess there
+[2630.6s] >> together. We'll we'll hopefully show it
+[2631.8s] at the next live stream. [laughter]
+[2635.2s] >> There's some movie magic happening,
+[2636.7s] guys. Okay. Uh
+[2639.4s] this is a question we get every time. I
+[2641.0s] think it's a good question. It's not
+[2642.6s] really about like the technical uh you
+[2644.8s] know side of things but I I think this
+[2646.6s] is a question that almost everybody who
+[2648.2s] watches these kinds of streams has. Uh
+[2650.5s] Muhammad Salmanci asks, "Can you give a
+[2653.5s] practical example where you've used an
+[2655.5s] agent system like uh you know like
+[2657.7s] Hermes, Open Claw, whatever in this case
+[2659.9s] they said Open Claw to automate your
+[2661.8s] workflow for your actual work a real
+[2664.6s] example from any speaker
+[2667.0s] >> outside of okay you can saying Hermes
+[2669.1s] agent is a is a copout okay you can't
+[2671.0s] say you use Hermes agent to build Hermes
+[2672.8s] agent
+[2673.3s] >> no something else
+[2674.9s] >> of course I mean it is true that Hermes
+[2676.2s] agent's biggest contributors
+[2678.7s] u but that being Yes. Um, internally,
+[2681.5s] you know, we have, uh, agents that are
+[2684.2s] handling a lot of enterprise operations
+[2686.2s] style stuff like CRM management for us
+[2688.2s] and working with us and reminders on
+[2690.1s] deals and following up with people and,
+[2692.6s] uh, touching base with leads. Uh, we've
+[2694.9s] seen people start to do, you know, their
+[2696.4s] Excel automation of their workflow, um,
+[2699.0s] financial analysis of their own work. uh
+[2702.1s] mostly just the basic stuff you'd see an
+[2704.1s] analyst level person do at work as well
+[2707.0s] as advertisement marketing and content
+[2709.4s] creation stuff. Uh you know leveraging
+[2711.8s] tools like Gemini Flash or GPT image
+[2715.1s] alongside this harness system has let
+[2717.3s] people do stuff like create uh product
+[2720.2s] uh product brand advertising very
+[2722.2s] quickly and launch that to an ad into a
+[2724.3s] proper ad very quickly build decks very
+[2727.0s] very quickly. uh just you know I would
+[2729.3s] say these basic office level tasks basic
+[2733.7s] um enterprise level tasks right now are
+[2736.4s] the things we see prevalently
+[2737.9s] [clears throat] and then we see more and
+[2739.4s] more specialized workflows start to pop
+[2741.3s] up for people who have been spending
+[2743.2s] more time on this.
+[2744.8s] >> Yeah.
+[2745.2s] >> John, what are you using her for?
+[2747.3s] >> Okay. Yeah, I'll I'll try and say this
+[2749.0s] quickly as possible. So um what I what I
+[2752.5s] have found myself using it for which uh
+[2755.3s] kind of evolved through time was um
+[2758.0s] during like because everything moves so
+[2759.8s] fast you know something that you're
+[2761.2s] doing one day might not be what you're
+[2762.8s] working on the next day. It's not your
+[2764.4s] traditional you know waterfall type uh
+[2767.4s] industry. So one thing is like uh I use
+[2770.9s] multiple uh Hermes instances all at the
+[2773.7s] same time. So kind of like multi-tabling
+[2776.2s] uh terminals of Hermes instances and I
+[2779.6s] might be working on four distinct
+[2781.1s] things. Uh and obviously the speed at
+[2783.4s] which the agents work I mean really
+[2785.6s] you're the thing slowing it down right
+[2787.4s] the kind of meat space between the
+[2789.3s] different terminals. Uh so why
+[2791.0s] >> we are the bottleneck classic
+[2793.1s] >> we are the bottleneck. Yeah. So what I
+[2795.4s] do is um what I've done before is uh in
+[2798.2s] the morning I'll I'll I'll bas I
+[2800.1s] basically set up a kind of skill and a
+[2803.8s] and a workflow where um I I will
+[2806.4s] initiate a planning session and for
+[2809.0s] every planning session I'll get a date
+[2810.7s] key file with the things I want to do.
+[2813.6s] Um, so as time goes on, I will have all
+[2816.1s] these files. Uh, and the skill will
+[2817.7s] basically look back look back for the
+[2819.4s] week and tell me what I've been lacking
+[2823.0s] on or if there's something I said was
+[2824.6s] urgent and I've not got to. Uh, and
+[2826.6s] essentially, uh, create a proposal for
+[2829.3s] things to do. Uh, and then I'll review
+[2831.3s] it. I'll say whether I want to do
+[2832.8s] certain things or I have to do certain
+[2834.2s] things. Um, and then at the end of the
+[2836.0s] day, I I'll it'll fire a chron at 11
+[2838.0s] p.m. and be like, "Okay, great. You did
+[2839.4s] this." using session search because I'll
+[2841.4s] label the sessions based on the plan. Uh
+[2844.2s] and it basically just gives me an update
+[2845.8s] on like did you do what you wanted to
+[2847.4s] do. Uh so this is like uh I guess a
+[2850.2s] really simple example of like using the
+[2852.6s] agent to make your your life uh better
+[2857.0s] or make make it more efficient, right?
+[2859.4s] Um so yeah, that's a a simple example I
+[2861.5s] would I would give
+[2863.2s] >> for me. Uh so I I'll I'll just I'll do
+[2866.2s] the cringe thing. I'll show my phone
+[2868.0s] through the through the Mac camera.
+[2869.9s] Right. So, this is my Slack and this is
+[2872.6s] my ablations Slack. So, I like doing
+[2875.2s] research. I think it's cool, but I
+[2876.6s] really hate doing ablations, man. Like,
+[2878.6s] it's it's tedious. Uh it's time
+[2881.0s] consuming. Uh spinning up resources is
+[2884.1s] annoying. Uh but it needs to be done,
+[2886.2s] right? That's how you do science. Uh and
+[2888.2s] so Hermes does it now. And I don't have
+[2891.0s] to do it. And that that's something that
+[2893.0s] I really do in my work all the time,
+[2895.3s] right? like the these kinds of things
+[2897.1s] where uh the the work has a really well-
+[2900.1s] definfined output that I can just check
+[2902.6s] and I can check the methodology of the
+[2904.2s] work. Uh Hermes like is literally useful
+[2907.1s] in my in my in my day job. Uh I I think
+[2909.8s] that is something that is uh you know
+[2913.0s] really powerful. It's these kinds of
+[2915.0s] like both both of you guys said these
+[2917.5s] repetitive
+[2919.0s] uh or or out of field tasks that you can
+[2922.7s] just check the the output of and say
+[2924.9s] like yep that's good. Uh good job
+[2927.0s] Herby's give it a cookie and carry on.
+[2929.4s] Uh someone asked a great question. We're
+[2933.4s] before we get to this question though
+[2934.6s] sorry I have to pay the slide tax guys.
+[2936.6s] So Rebecca if you want to bring up some
+[2938.5s] slides so we can walk through them. Uh
+[2941.0s] number one if you are uh a few people
+[2945.3s] have have been like is this agent take
+[2947.0s] AI what is agents how do I do agents uh
+[2950.1s] we have some learning paths for you uh
+[2952.7s] these are going to help you kind of
+[2954.2s] understand uh you know a little bit more
+[2956.6s] about what agents are you you know spin
+[2959.8s] you up so that uh that the next time you
+[2962.5s] you watch news uh do do some talking
+[2966.0s] about Hermes or agents you have a little
+[2968.2s] bit better grounding uh so you Check out
+[2970.2s] these learning paths here. We've we've
+[2971.7s] built these for for everybody to learn.
+[2973.5s] If you go to the next slide, please
+[2974.8s] Rebecca. Uh you can also we we haven't
+[2978.2s] really talked about Neotron. Uh but uh
+[2980.7s] you know, Neotron's great. Neatron live
+[2982.9s] stream. Got to push the repo. Uh I'd pay
+[2985.0s] attention to this repo especially on
+[2987.1s] Thursday. I think Thursday is going to
+[2988.7s] be a great day uh if you're a fan of
+[2990.6s] Neotron to uh to look at this repo. Give
+[2992.8s] it a star. Yada yada. There you go.
+[2994.4s] Okay, next slide, please. Uh if you have
+[2997.8s] been hearing uh
+[3000.4s] this and you have questions but you
+[3002.2s] don't know where to ask them, one of the
+[3003.8s] places you can ask them is in our uh
+[3006.4s] discord uh as well. Of course, Noose has
+[3009.6s] a very active uh lively community that
+[3012.1s] you can uh you can ask questions to. Uh
+[3014.9s] but uh check out the the Discord if you
+[3017.1s] have any questions. I'm on there 247 and
+[3019.3s] I'll make sure that the question gets to
+[3020.9s] whoever needs to get to you so it's
+[3023.2s] answered. We'll go to the next slide,
+[3024.9s] please, Rebecca. If you have any
+[3026.5s] questions about things like this, the
+[3028.1s] live stream, our events, hackathons, uh
+[3030.3s] you know, just the community efforts
+[3032.5s] broadly on Nvidia, you can email
+[3035.0s] community.com. Right now, Zach, who's
+[3038.0s] not an intern, uh is in Taipei for GDC
+[3041.2s] Taipei, but he is still monitoring the
+[3043.8s] email 247. Uh we let him out of the
+[3046.2s] cave, but we we made sure that he was
+[3048.0s] shackled to his laptop, so he continues
+[3050.6s] to monitor this email address. he will
+[3053.0s] get back to you if you send him an
+[3054.7s] email. Go to the next uh slide. Uh we
+[3057.3s] we've had this Kaggle competition
+[3059.3s] ongoing now for quite some time. It's
+[3061.0s] soon to wrap up guys. Uh but the the
+[3063.5s] competition is getting heated uh which
+[3065.3s] is basically how can we make models
+[3067.0s] better at reasoning uh through using
+[3070.0s] NVIDIA technology. You can use this QR
+[3072.8s] code to join the competition uh real
+[3075.4s] prizes not not uh not just credits or
+[3078.1s] something like that. uh you know, so so
+[3080.6s] participate if you're interested. Uh a
+[3083.1s] lot of the pros are going to start
+[3084.2s] showing up soon. Uh so you have some
+[3086.9s] time to uh to cook before uh before they
+[3089.7s] show up. And we'll go to I think that's
+[3091.7s] it. That's there's no more slides. Let's
+[3093.8s] go. Okay. Uh what I'm going to do, guys,
+[3097.0s] is pass it over to Karen. Karen's going
+[3099.3s] to show us something uh that uh that I'm
+[3101.7s] pretty excited about that we're all
+[3103.0s] pretty excited about. So Karen, if you
+[3104.5s] want to go ahead, take it away. Rebecca,
+[3106.3s] if we can help make sure his screen's on
+[3108.2s] the uh on the stage here.
+[3113.7s] >> Thank you so much. Hopefully you guys
+[3116.1s] can see. Um
+[3118.3s] >> I think we're seeing Johnny's screen. If
+[3119.8s] we can see Karen's screen. Hell yeah.
+[3122.7s] >> So this is on the new uh Nvidia RTX
+[3125.5s] laptop. This is available on all
+[3127.7s] platforms. I just wanted to show you
+[3129.4s] guys you can use Hermes agent as well uh
+[3132.6s] in this very very simple CLI free form
+[3135.8s] called Hermes Desktop that will
+[3138.2s] basically let you run this entire
+[3140.5s] experience inside of an Electron app
+[3142.6s] that's compatible with any operating
+[3144.8s] system. It's got all the same uh
+[3147.7s] abilities you have here. We strongly
+[3149.8s] recommend you use Nemo Hermes and
+[3151.5s] OpenShell for your more secure work when
+[3154.2s] you want that gating when you want those
+[3155.7s] multiple users. But if you're looking
+[3157.4s] for personal use on the go and you want
+[3159.3s] it conveniently, this is it. Uh we offer
+[3162.7s] the Hermes desktop right here uh for you
+[3165.4s] guys to utilize and it's got all the
+[3167.4s] same features. It's just convenience
+[3169.7s] layer as opposed to the uh security or
+[3172.2s] tenanting layer that you would get out
+[3173.7s] of uh open shell. But
+[3175.8s] >> don't mind that at all. That's pretty
+[3177.4s] fire. In fact, uh we Okay, we have no
+[3181.1s] time. I'm going to ask you like three
+[3182.4s] questions. Lightning questions. Okay. Uh
+[3184.8s] we're we're going to get get your
+[3186.3s] answer. We're not going to put these on
+[3187.3s] the screen, guys. Sorry. We'll just ask
+[3188.6s] about it. Uh can a Hermes be portable?
+[3191.0s] How do I move it from one computer to
+[3192.5s] another?
+[3193.8s] >> Yes, absolutely. Um you should be able
+[3196.4s] to ask your Hermes to collect everything
+[3198.9s] and um put it in some file that you can
+[3201.2s] transfer over, put in some zip, why not?
+[3204.1s] >> We live in the future. You just ask to
+[3205.6s] pack itself up. It'll get her done. Uh
+[3207.9s] is is Herby's multimodal? Can I use it
+[3209.9s] with pictures?
+[3210.8s] >> Absolutely. Yes. There's many many
+[3212.5s] different models that we provide that
+[3213.8s] let you go multimodal from foul to
+[3215.8s] Gemini and there will be even more along
+[3217.8s] the way.
+[3219.2s] >> Super loaded question to end the stream.
+[3221.9s] Totally unrelated to some of the other
+[3223.8s] ones but I think an important one for
+[3225.7s] our aspiring audience out there. Is
+[3227.4s] machine learning dead?
+[3229.4s] >> Is machine learning dead? Absolutely
+[3231.0s] not. Um models are getting better. Let's
+[3233.4s] go. These these
+[3235.2s] >> these harnesses exist to make models
+[3237.3s] better. Models are going to make
+[3238.8s] harnesses better. This is the beginning
+[3240.3s] of another big loop. Get ready.
+[3243.7s] >> Another another cycle, guys. Thank you
+[3246.0s] so much. Thank you. If we can get Johnny
+[3247.8s] back up on the stage, please, Rebecca.
+[3249.8s] Uh, thank you so much. Uh, yes, you can
+[3252.2s] put it on a USB drive. Just plug your
+[3254.1s] USB drive and ask Hermes to load itself
+[3256.0s] onto that bad boy. Uh, guys, thank you
+[3258.5s] so much for your time. Thank you so much
+[3260.2s] to the news team for participating.
+[3262.0s] Thank you for all the incredible work,
+[3263.4s] some of which was showcased in the
+[3264.8s] keynote at GTC Taipei. Uh, I I've I've
+[3268.2s] been a longtime fan of the the news
+[3270.9s] team. Really excited to see you guys.
+[3273.2s] Uh, you know, cooking out there, keep
+[3275.2s] getting better. Keep talking to the
+[3277.1s] community, making the tool as good as
+[3279.3s] you can. Uh, this has been another Nemo
+[3281.4s] Lives live stream, guys. Uh, big round
+[3283.6s] of virtual round of applause for Ken and
+[3285.6s] Johnny. And, uh, we will we will keep
+[3287.5s] following what you guys do, and
+[3289.1s] hopefully we'll meet again on the stream
+[3291.2s] for something in the future. equally
+[3293.4s] exciting though that I I struggle to
+[3295.8s] imagine how today I'm sure it will
+[3297.6s] happen. Thank you so much for your time
+[3299.2s] guys. Thank you everybody. Have a good
+[3300.6s] day.
+[3301.3s] >> We'll see you.
+[3302.8s] We'll see you.

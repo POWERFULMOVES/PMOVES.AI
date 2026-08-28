@@ -1,0 +1,352 @@
+{
+  "room_id": "4090-field.room.control",
+  "version": "1.0.0",
+  "stage": "rehearsal",
+  "display_name": "4090 Field Control Room",
+  "description": "Noise-reduction room for review, topology, and handoff control.",
+  "agent_id": "4090-claude",
+  "alter": "4090-field",
+  "room_type": "scout",
+  "owner_mode": "alter",
+  "access": {
+    "visibility": "unlisted"
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "field-control",
+      "accent_color": "#065F46",
+      "skin": "signal-grid",
+      "icon": "fresnel"
+    },
+    "layout": {
+      "default_route": "/dashboard/notebook/runtime",
+      "panels": [
+        {
+          "panel_id": "chat-main",
+          "kind": "chat",
+          "position": "left",
+          "size": 26,
+          "pinned": true
+        },
+        {
+          "panel_id": "notebook-main",
+          "kind": "notebook",
+          "position": "center",
+          "size": 52,
+          "pinned": true
+        },
+        {
+          "panel_id": "graphiti-side",
+          "kind": "graph",
+          "position": "right",
+          "size": 22,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "notebook-workbench",
+      "kind": "notebook",
+      "route": "/notebook-workbench",
+      "provider": "pmoves-notebook-workbench",
+      "action_namespace": "notebook",
+      "capabilities": ["threads", "entries", "snapshots", "search", "handoff-notes"],
+      "pinned": true
+    },
+    {
+      "app_id": "graphiti-status",
+      "kind": "graph",
+      "route": "/dashboard/graphiti",
+      "provider": "pmoves-ui",
+      "action_namespace": "graphiti",
+      "capabilities": ["trail", "audit", "handoff", "claim-register"],
+      "pinned": false
+    },
+    {
+      "app_id": "review-console",
+      "kind": "dashboard",
+      "route": "/dashboard/review",
+      "provider": "pmoves-ui",
+      "action_namespace": "review",
+      "capabilities": ["pr-triage", "thread-classify", "risk-notes"],
+      "pinned": false,
+      "status": "active"
+    },
+    {
+      "app_id": "mcp-e2b",
+      "kind": "custom",
+      "route": "/mcp/e2b",
+      "provider": "pmoves-e2b-mcp-server",
+      "action_namespace": "mcp.v1.e2b",
+      "capabilities": ["sandbox", "execution", "artifacts"],
+      "status": "planned"
+    },
+    {
+      "app_id": "mcp-hirag",
+      "kind": "custom",
+      "route": "/mcp/hirag",
+      "provider": "pmoves-hirag-mcp",
+      "action_namespace": "mcp.v1.hirag",
+      "capabilities": ["retrieve", "graph", "search", "notebook"],
+      "status": "planned"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "ops-control",
+    "thread_ref": "agent-handoffs",
+    "default_page": "current-lane",
+    "sync": {
+      "mode": "mirrored",
+      "writeback_targets": ["entries", "threads", "snapshots"],
+      "artifact_prefix": "rooms/4090-field"
+    }
+  },
+  "persona": {
+    "signature_ref": "4090-claude",
+    "voice": "terse",
+    "glyph": "◎",
+    "resonance": ["polymorphic-ops", "alter-discovery", "pattern-mining", "node-gateway"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "handoff-scout",
+      "skill_id": "submodule-parity",
+      "room_id": "4090-field.room.control",
+      "display_name": "Scout Handoff",
+      "intent": ["handoff", "review", "triage"],
+      "activation": {
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["prepare handoff", "review this lane", "triage this branch"],
+        "requires_selection": true
+      },
+      "surface": {
+        "app_id": "notebook-workbench",
+        "target": "toolbar",
+        "route": "/notebook-workbench"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 6
+      },
+      "context": {
+        "sources": ["notebook-thread", "graphiti-trail", "persona", "room-state"],
+        "include_last_turns": 8,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "notebook-entry",
+          "delivery": "append",
+          "path": "threads/agent-handoffs",
+          "artifact_type": "text"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 300,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["handoff", "graphiti", "control"]
+    },
+    {
+      "binding_id": "pattern-miner",
+      "skill_id": "persona-grounding",
+      "room_id": "4090-field.room.control",
+      "display_name": "Pattern Miner",
+      "intent": ["alter-discovery", "persona", "classification"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["find the pattern", "discover the alter"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "review-console",
+        "target": "panel",
+        "route": "/dashboard/review"
+      },
+      "execution": {
+        "mode": "panel",
+        "run_as": "agent",
+        "stream": "tokens",
+        "max_steps": 5
+      },
+      "context": {
+        "sources": ["graphiti-trail", "agent-registry", "search-results", "user-intent"],
+        "include_last_turns": 4,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "analysis/persona-clusters",
+          "artifact_type": "json"
+        },
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/identity-forensics",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 240,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["identity", "review", "discovery"]
+    },
+    {
+      "binding_id": "e2b-mcp-bridge",
+      "skill_id": "pmoves_e2b_mcp",
+      "room_id": "4090-field.room.control",
+      "display_name": "E2B Sandbox MCP Bridge",
+      "intent": ["sandbox", "execution", "artifacts"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["open e2b mcp", "run sandbox"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "mcp-e2b",
+        "target": "sidebar",
+        "route": "/mcp/e2b"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "room-service",
+        "stream": "events",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["room-state", "agent-registry"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "mcp/e2b/last-result",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 120,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": false,
+      "tags": ["mcp", "e2b", "planned"],
+      "metadata": {
+        "status": "planned"
+      }
+    },
+    {
+      "binding_id": "hirag-mcp-bridge",
+      "skill_id": "pmoves_hirag_mcp",
+      "room_id": "4090-field.room.control",
+      "display_name": "HiRAG MCP Bridge",
+      "intent": ["retrieve", "graph", "search", "notebook"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["open hirag mcp", "search graph"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "mcp-hirag",
+        "target": "sidebar",
+        "route": "/mcp/hirag"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "room-service",
+        "stream": "events",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["room-state", "notebook-thread", "agent-registry"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "mcp/hirag/last-result",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 60,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": false,
+      "tags": ["mcp", "hirag", "planned"],
+      "metadata": {
+        "status": "planned"
+      }
+    }
+  ],
+  "team_refs": ["orchestration", "research"],
+  "service_refs": ["agent-zero", "archon", "hirag-v2", "cipher-memory"],
+  "launcher_refs": ["up-agents", "up-hirag"],
+  "policies": {
+    "model_routing": "hybrid",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": ["agent.graphiti.signed.v1", "ops.pr.review.completed.v1"]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "Control Room",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/audit/summary"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-03-27T12:30:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/infrastructure/UI_NOTEBOOK_WORKBENCH.md",
+      "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"
+    ]
+  }
+}

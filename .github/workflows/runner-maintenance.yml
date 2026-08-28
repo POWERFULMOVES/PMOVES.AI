@@ -1,0 +1,158 @@
+# Runner Maintenance — Periodic disk cleanup for self-hosted runners
+# =============================================================================
+# Self-hosted runners accumulate Docker images, BuildKit cache, and workspace
+# artifacts over time. This workflow runs on a schedule to aggressively clean
+# up resources before they cause disk-exhaustion failures.
+#
+# Triggered:
+#   - Nightly at 03:00 UTC
+#   - Manual dispatch (for emergency cleanup, optionally scoped to one host)
+#
+# HOSTS TARGETED — one job per PHYSICAL HOST, keyed on a label that only that
+# host carries. Disk is a property of the host, not of the runner process, so
+# an ambiguous label means some hosts get cleaned twice and others never:
+#
+#   b850    — AI-lab GPU host. Two runners registered; both carry `b850`, and
+#             either satisfies the job because they share one disk. Do NOT use
+#             `ai-lab` here: SPARK also carries `ai-lab`, so that label could
+#             schedule both this job and the SPARK job onto SPARK, leaving b850
+#             uncleaned.
+#   spark   — ARM64 full PMOVES.AI node.
+#   kvm4-1  — VPS. Distinct label; see below.
+#   kvm4-2  — VPS. Distinct label; see below.
+#
+# `kvm4` is carried by BOTH VPS runners, so the single `cleanup-kvm4` job this
+# replaces landed on whichever was free. kvm4-2 won most nights; kvm4-1 went
+# unattended and filled to 100% disk, taking its BuildKit daemon down with it.
+# The two nodes are now addressed explicitly.
+#
+# NOT COVERED — pmoves-kvm2 has NO registered runner (verified against the
+# repo runners API 2026-08-06: the only labels in existence are b850, ai-lab,
+# spark, vps, kvm4, production, kvm4-1, kvm4-2). The `cleanup-kvm2` job this
+# replaces targeted `[self-hosted, kvm2]`, matched nothing, sat queued for the
+# full 24h GitHub scheduling window, and was then cancelled — which set the
+# WHOLE run's conclusion to `cancelled` every single night even though the
+# other three jobs succeeded. That destroyed the only signal an operator had.
+# kvm2 is not a build host any more, so it grows no new BuildKit state; it is
+# maintained by hand per pmoves/docs/operations/PMOVES_DISK_CLEANUP.md. If a
+# runner is ever registered there, add `kvm2` to the matrix below.
+
+name: Runner Maintenance
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: 'Specific host label to target (empty = all)'
+        required: false
+        default: ''
+
+jobs:
+  cleanup:
+    name: Cleanup ${{ matrix.label }}
+    runs-on: [self-hosted, "${{ matrix.label }}"]
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        label: [b850, spark, kvm4-1, kvm4-2]
+    steps:
+      # The dispatch filter lives at STEP level, not job level: the `matrix`
+      # context is not available to `jobs.<id>.if`. A skipped host still claims
+      # its runner for a few seconds, which is cheaper than the `fromJSON`
+      # matrix-rewriting alternative and far easier to read.
+      - name: Aggressive Docker cleanup
+        if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == matrix.label }}
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system df || true
+
+          # Reclaim stopped containers + images + build cache (system prune,
+          # minus --volumes). NEVER --volumes: these runners (esp. SPARK full
+          # PMOVES.AI node + b850/Z890) co-host LIVE fleet data volumes;
+          # volume-pruning destroys fleet data whose service is briefly stopped.
+          # Known Road: prune containers/images/cache, never volumes
+          # (use `make volume-reset SERVICE=<name>` to reset a volume on purpose).
+          docker system prune -af --filter "until=48h" || true
+
+          # Prune BuildKit cache older than 48h
+          docker builder prune -af --filter "until=48h" || true
+
+          # ---------------------------------------------------------------
+          # Reclaim STALE BUILDX BUILDERS. This is the actual leak.
+          #
+          # setup-buildx-action creates a NEW builder for every CI run and
+          # never removes it. Each builder is a running container plus a named
+          # `*_state` volume, and the build cache lives INSIDE that volume —
+          # which is why `docker system df` reports "Build Cache: 0B" while the
+          # disk fills, and why this went unnoticed until kvm4-1 hit 100%.
+          # kvm2 had 15 builders alive for four weeks holding 33GB.
+          #
+          # None of the steps above reach it:
+          #   - `docker system prune` skips volumes entirely.
+          #   - `docker builder prune` clears cache inside builders but leaves
+          #     the builders (and their volumes) in place.
+          #   - the orphan-volume sweep below CANNOT remove a volume that is
+          #     still attached to a RUNNING container — and every leaked
+          #     builder is running. It silently no-ops on exactly the volumes
+          #     that matter.
+          # So the builder itself has to go first.
+          #
+          # 24h floor: a builder younger than a day may belong to an in-flight
+          # build on this host, so it is left alone. Scoped to the
+          # `buildx_buildkit_builder-` name prefix, so it can never touch a
+          # `pmoves_*` data volume.
+          # ---------------------------------------------------------------
+          CUTOFF=$(( $(date +%s) - 86400 ))
+          for c in $(docker ps -a --filter 'name=^buildx_buildkit_builder-' --format '{{.Names}}'); do
+            created="$(docker inspect -f '{{.Created}}' "$c" 2>/dev/null)" || continue
+            ts="$(date -d "$created" +%s 2>/dev/null)" || continue
+            [ -n "$ts" ] || continue
+            if [ "$ts" -ge "$CUTOFF" ]; then
+              echo "keep $c (created less than 24h ago — may be in flight)"
+              continue
+            fi
+            # Container name is "buildx_buildkit_<builder><node-index>"; strip
+            # the prefix and the trailing index to recover the builder name.
+            builder="${c#buildx_buildkit_}"
+            builder="${builder%0}"
+            if docker buildx rm "$builder" >/dev/null 2>&1; then
+              echo "reclaimed builder $builder"
+            else
+              # Orphan: the container outlived its entry in ~/.docker/buildx
+              # (different user, or state file wiped). Remove it directly so
+              # the volume sweep below can reach its state volume.
+              docker stop "$c" >/dev/null 2>&1 || true
+              docker rm "$c" >/dev/null 2>&1 || true
+              echo "reclaimed orphaned builder container $c"
+            fi
+          done
+
+          # Sweep any `*_state` volumes left behind by builders that were
+          # already gone. Scoped to `buildx_buildkit_*` so it can NEVER match a
+          # `pmoves_*` data volume — targeted reclaim, NOT the banned
+          # `docker volume prune`.
+          docker volume ls -q 2>/dev/null | grep -E '^buildx_buildkit_builder-.*_state$' \
+            | while read -r v; do docker volume rm "$v" 2>/dev/null || true; done || true
+
+          # Runner workspaces + diagnostic pages. One glob covers every host:
+          # /opt/actions-runner, /opt/actions-runner-kvm4, etc. The per-host
+          # globs this replaces were needless variation between four otherwise
+          # identical jobs — which is how the kvm2 copy rotted unnoticed.
+          for workdir in /opt/actions-runner*/_work /home/*/actions-runner/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
+          done
+
+          for diagdir in /opt/actions-runner*/_diag/pages /home/*/actions-runner/_diag/pages; do
+            [ -d "$diagdir" ] || continue
+            find "$diagdir" -type f -mtime +1 -delete || true
+          done
+
+          echo "Disk after cleanup:"
+          df -h
+          docker system df || true

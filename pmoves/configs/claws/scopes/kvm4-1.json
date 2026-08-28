@@ -1,0 +1,147 @@
+{
+  "identity": {
+    "node": "kvm4-1",
+    "role": "api-gateway",
+    "description": "API gateway node \u2014 orchestration, health checks, NATS routing",
+    "hostname": "kvm4-1"
+  },
+  "openclaw_overrides": {
+    "agents.defaults.model.primary": "claude-sonnet-4",
+    "tools.profile": "restricted",
+    "tools.exec.ask": "auto",
+    "channels": {
+      "discord": {
+        "enabled": true
+      }
+    }
+  },
+  "exec_approvals": {
+    "main": {
+      "allowlist": [
+        {
+          "pattern": "/usr/bin/curl",
+          "note": "Health checks and API calls"
+        },
+        {
+          "pattern": "/usr/bin/gh",
+          "note": "GitHub CLI \u2014 PR and issue management"
+        },
+        {
+          "pattern": "/usr/bin/nats",
+          "note": "NATS CLI \u2014 message bus operations"
+        },
+        {
+          "pattern": "/usr/bin/dig",
+          "note": "DNS diagnostics"
+        },
+        {
+          "pattern": "/usr/bin/systemctl",
+          "note": "Service management"
+        },
+        {
+          "pattern": "/usr/bin/journalctl",
+          "note": "Log inspection"
+        },
+        {
+          "pattern": "/usr/bin/git",
+          "note": "Git operations"
+        },
+        {
+          "pattern": "/usr/bin/tailscale",
+          "note": "Tailscale status (read-only)"
+        }
+      ]
+    }
+  },
+  "mcp_servers": {
+    "pmoves-cipher": {
+      "description": "Agent memory (Neo4j knowledge graph)",
+      "type": "sse",
+      "url": "http://${TS_Z890}:8105/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer ${CIPHER_API_TOKEN}"
+      }
+    },
+    "agent-zero": {
+      "description": "Agent Zero orchestrator",
+      "type": "http",
+      "url": "http://${TS_Z890}:8080/mcp"
+    },
+    "pmoves-nats-fleet": {
+      "description": "NATS fleet messaging bridge",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./pmoves-nats-mcp",
+        "run",
+        "python",
+        "-m",
+        "nats_mcp.server"
+      ],
+      "env": {
+        "NATS_URL": "${NATS_URL}"
+      }
+    },
+    "pmoves-supabase": {
+      "description": "Supabase PostgREST API",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-postgrest@0.1.1",
+        "--apiUrl",
+        "http://localhost:8000/rest/v1",
+        "--apiKey",
+        "${SUPABASE_SERVICE_KEY}",
+        "--schema",
+        "public"
+      ]
+    },
+    "supabase-db": {
+      "description": "Supabase Postgres database",
+      "command": "uvx",
+      "args": [
+        "postgres-mcp@0.3.0",
+        "--access-mode=unrestricted"
+      ],
+      "env": {
+        "DATABASE_URI": "${SUPABASE_DB_URI}"
+      }
+    },
+    "huggingface": {
+      "description": "HuggingFace model/paper/space search",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@llmindset/hf-mcp-server@0.3.30"
+      ],
+      "env": {
+        "HF_TOKEN": "${HF_TOKEN}"
+      }
+    },
+    "tailscale": {
+      "description": "Tailscale network administration",
+      "command": "npx",
+      "args": [
+        "-y",
+        "tailscale-mcp@2026.4.10-1"
+      ],
+      "env": {
+        "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",
+        "TAILSCALE_TAILNET": "${TAILSCALE_TAILNET}"
+      }
+    },
+    "pmoves-docker-gateway": {
+      "description": "Docker MCP Toolkit gateway (stdio) for Claude/Kimi/OpenCode/Crush",
+      "command": "docker",
+      "args": [
+        "mcp",
+        "gateway",
+        "run",
+        "--profile",
+        "pmoves_5090_web"
+      ]
+    }
+  },
+  "damage_control_hooks": true,
+  "sign_trail": true
+}

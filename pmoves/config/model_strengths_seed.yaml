@@ -168,6 +168,33 @@ models:
     cost_efficiency_score: 8.3
     notes: "The heir apparent — next-gen Qwen, sharper edges, deeper thoughts."
 
+  # 4090 Coding Workstation additions
+  qwen3-coder-30b:
+    primary_strength: coding
+    strength_scores:
+      reasoning: 0.75
+      speed: 0.85
+      coding: 0.95
+      multilingual: 0.40
+      creativity: 0.50
+      context_handling: 0.92
+    preferred_functions: [coding, coding_claude_fallback, coding_codex, coding_alibaba]
+    cost_efficiency_score: 9.0
+    notes: "The surgeon — MoE architecture, 3.3B active, SWE-Bench champion. Codes like a 70B, eats like a 3B."
+
+  deepseek-r1-14b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.90
+      speed: 0.65
+      coding: 0.78
+      multilingual: 0.60
+      creativity: 0.70
+      context_handling: 0.80
+    preferred_functions: [pmoves_research_coordinator, deepresearch]
+    cost_efficiency_score: 7.0
+    notes: "The philosopher — chain-of-thought native. Thinks out loud, thinks deep."
+
   # Qwen 3.5 Family (March 2026 — multimodal, vision, tools, thinking)
   qwen3.5-0.8b:
     primary_strength: speed
@@ -539,6 +566,131 @@ models:
     preferred_functions: [agent_zero, langextract]
     cost_efficiency_score: 8.5
     notes: "The edge runner — Cloudflare Workers AI, inference at the edge. Low latency everywhere."
+
+  # ===========================================================================
+  # Cloud Models — Provider Catalog Additions (4090 Coding Workstation Stack)
+  # ===========================================================================
+
+  minimax-text-01:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.72
+      speed: 0.88
+      coding: 0.68
+      multilingual: 0.65
+      creativity: 0.70
+      context_handling: 0.80
+    preferred_functions: [coding_minimax]
+    cost_efficiency_score: 7.5
+    notes: "The tokenist — MiniMax's flagship, 456B MoE with 46B active. Lightning inference, massive context."
+
+  glm-5.1:
+    primary_strength: coding
+    strength_scores:
+      reasoning: 0.80
+      speed: 0.78
+      coding: 0.82
+      multilingual: 0.92
+      creativity: 0.70
+      context_handling: 0.75
+    preferred_functions: [coding_glm, langextract]
+    cost_efficiency_score: 7.0
+    notes: "The polyglot coder — Zhipu's latest, strong CJK coding and multilingual reasoning."
+
+  glm-5-turbo:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.92
+      speed: 0.88
+      coding: 0.88
+      multilingual: 0.93
+      creativity: 0.78
+      context_handling: 0.90
+    preferred_functions: [agent_zero, coding_glm, orchestrator, archon_work_orders, agent_zero_subordinate]
+    cost_efficiency_score: 8.0
+    notes: "The claw engine — purpose-built for OpenClaw. Tool calling, long chains, scheduled tasks, agentic workflows. ZClawBench champion."
+
+  glm-5v-turbo:
+    primary_strength: coding
+    strength_scores:
+      reasoning: 0.90
+      speed: 0.82
+      coding: 0.90
+      multilingual: 0.92
+      creativity: 0.82
+      context_handling: 0.88
+    preferred_functions: [vl_sentinel, coding_glm, agent_zero, deepresearch, pmoves_research_coordinator]
+    cost_efficiency_score: 7.5
+    notes: "The eyes — multimodal coding foundation. Reads screenshots, recreates frontends, explores GUIs, tracks video objects. Sees what Turbo can't."
+    multimodal: true
+    input_modalities: ["text", "image", "video", "file"]
+
+  glm-4-plus:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.82
+      speed: 0.70
+      coding: 0.65
+      multilingual: 0.90
+      creativity: 0.72
+      context_handling: 0.70
+    preferred_functions: [agent_zero, deepresearch]
+    cost_efficiency_score: 5.5
+    notes: "The mandarin strategist — quality tier for complex reasoning. CJK-native excellence."
+
+  glm-4-long:
+    primary_strength: context_handling
+    strength_scores:
+      reasoning: 0.75
+      speed: 0.60
+      coding: 0.55
+      multilingual: 0.88
+      creativity: 0.65
+      context_handling: 0.95
+    preferred_functions: [deepresearch, pmoves_research_coordinator]
+    cost_efficiency_score: 5.0
+    notes: "The archivist dragon — 128K context, reads entire codebases in one breath."
+
+  qwen3-coder-plus:
+    primary_strength: coding
+    strength_scores:
+      reasoning: 0.82
+      speed: 0.75
+      coding: 0.92
+      multilingual: 0.85
+      creativity: 0.55
+      context_handling: 0.88
+    preferred_functions: [coding_alibaba, coding, archon_code_review]
+    cost_efficiency_score: 6.0
+    notes: "The cloud surgeon — Alibaba's flagship code model. What qwen3-coder:30b does locally, this does at scale."
+
+  gemini-2.5-flash:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.85
+      speed: 0.92
+      coding: 0.78
+      multilingual: 0.82
+      creativity: 0.80
+      context_handling: 0.88
+    preferred_functions: [agent_zero, orchestrator, deepresearch]
+    cost_efficiency_score: 8.0
+    notes: "The flash thinker — Google's speed demon with surprising depth. 1M context window."
+
+  claude_sonnet_4:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.92
+      speed: 0.75
+      coding: 0.90
+      multilingual: 0.80
+      creativity: 0.82
+      context_handling: 0.92
+    preferred_functions: [agent_zero, coding_claude_fallback, orchestrator, archon_code_review]
+    cost_efficiency_score: 5.5
+    multimodal: true
+    input_modalities: ["text", "image"]
+    notes: "The craftsman — Anthropic's balanced powerhouse. 200K context, strong tool use, excellent structured output. Codes like a senior, reasons like an architect."
 
   # ===========================================================================
   # PMOVES-Built Models (CHIT-Distilled)

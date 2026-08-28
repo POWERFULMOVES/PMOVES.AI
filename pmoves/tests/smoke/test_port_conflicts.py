@@ -132,7 +132,7 @@ DOCUMENTED_CONFLICTS = {
 # Now that we use a YAML parser, these should only be true cross-profile
 # or cross-file conflicts — not regex false positives.
 PROFILE_GUARDED_PORTS = {
-    3737,   # archon-ui (agents profile) vs DoX frontend (separate compose)
+    3737,   # archon UI port (agents profile) vs DoX frontend (separate compose)
     8000,   # surrealdb (Open-Notebook) vs DoX backend (separate compose)
     21116,  # rustdesk (remote profile, TCP+UDP on same service)
 }

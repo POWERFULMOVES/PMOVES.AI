@@ -6,7 +6,7 @@ services:
       args:
         - VIBEVOICE_GIT_REMOTE=${VIBEVOICE_GIT_REMOTE:-https://github.com/microsoft/VibeVoice.git}
         - VIBEVOICE_GIT_REF=${VIBEVOICE_GIT_REF:-main}
-    image: pmoves/vibevoice-realtime:dev
+    image: ${VIBEVOICE_IMAGE:-ghcr.io/powerfulmoves/pmoves-vibevoice-realtime:pmoves-latest}
     container_name: pmoves-vibevoice
     restart: unless-stopped
     environment:
@@ -25,14 +25,7 @@ services:
       - vibevoice-models:/models
     ports:
       - "${VIBEVOICE_HOST_PORT:-3000}:3000"
-    profiles: ["voice"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              capabilities: [compute,utility]
-              count: ${GPU_COUNT:-all}
+    profiles: ["voice", "media"]
     networks: [api_tier]
 
 networks:

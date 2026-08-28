@@ -1,0 +1,40 @@
+# Capacity registry — the fleet, by capacity class + GPU vendor.
+# caps: gpu vendor (cuda|rocm) + workload tags (comfyui, browser, voice).
+# reach = Tailscale hostname (NEVER a raw 100.x IP).
+nodes:
+  - node_id: "4090"
+    reach: "pmoves-laptop"
+    vram_gb: 16
+    caps: ["cuda", "comfyui", "browser", "voice"]
+  - node_id: "5090"
+    reach: "pmoves-5090"
+    vram_gb: 32
+    caps: ["cuda", "comfyui", "browser", "voice"]
+  - node_id: "spark"
+    reach: "pmoves-spark"
+    vram_gb: 128
+    caps: ["cuda", "comfyui", "browser", "voice"]
+  - node_id: "z890"
+    reach: "pmoves-z890"
+    vram_gb: 24
+    caps: ["cuda", "comfyui", "browser", "voice"]
+  - node_id: "knuckles"
+    reach: "pmoves-b850-ai-top"  # AMD 9850X3D + dual R9700 (ROCm). OmniVoice-on-ROCm = seam.
+    vram_gb: 32
+    caps: ["rocm", "voice"]
+  # Jetson edge tier. There are three; only nano-1's reach is confirmed, and the
+  # other two are deliberately NOT guessed — an invented hostname here would be
+  # worse than an absent one, because it would silently satisfy the anchor check
+  # for docs that name a machine nobody can reach. Add each as it is confirmed.
+  - node_id: "nano-1"
+    reach: "pmoves-nano-1"
+    vram_gb: 8
+    caps: ["cuda", "edge"]
+    # NOT schedulable: this node is not compose-bootstrapped — no /opt/pmoves and
+    # no arm64 worker images — so nothing can consume a job assigned to it. It is
+    # listed anyway so its hostname resolves for topology and `ssh` recipes
+    # naming it stop being recorded as UNKNOWN_HOST gaps. Because select_node()
+    # picks the LOWEST-VRAM match, omitting this flag would make nano-1 win every
+    # job with needs ["cuda"] and min_vram_gb <= 8. Flip to true once the worker
+    # stack is deployed.
+    schedulable: false

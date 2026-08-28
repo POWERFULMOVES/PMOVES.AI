@@ -44,29 +44,12 @@ from optimize import OptimizationManager
 from persistence import SupabasePersistence
 from security import SecurityManager
 from auth import auth_middleware
-from types import (
-    SuccessResponse,
-    ErrorResponse,
-    CastSpeechResponse,
-    QueueAnnouncementResponse,
-    QueueStatusResponse,
-    VoiceProfileResponse,
-    VoiceProfilesListResponse,
-    GroupResponse,
-    GroupsListResponse,
-    HealthCheckResponse,
-    ScheduleResponse,
-    SchedulesListResponse,
-    DeviceDiscoveryResponse,
-    DevicesListResponse,
-    CastStatusResponse,
-)
 
 
 # Configuration
 PORT = int(os.getenv("PORT", "8060"))
 FLUTE_URL = os.getenv("FLUTE_GATEWAY_URL", "http://localhost:8055")
-ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://localhost:7861")
+ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://localhost:7860")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 
 # Prometheus Metrics
@@ -1928,7 +1911,6 @@ class CastTTSGateway:
                 )
 
             # SecurityManager doesn't have list_permissions exposed, so we'll use the internal access control
-            from security import AccessControl
 
             # Get permissions from access control
             # Note: This is a simplified implementation
@@ -1994,7 +1976,7 @@ class CastTTSGateway:
             # Consider successful if command completed
             return (proc.returncode == 0, latency_ms)
 
-        except Exception as e:
+        except Exception:
             return (False, int((time.time() - start_time) * 1000))
 
     async def _scheduler_cast_fn(

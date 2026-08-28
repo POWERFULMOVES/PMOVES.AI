@@ -40,7 +40,7 @@ DARKXSIDE, as COCREATOR witness of POWERFULMOVES, formally acknowledges the KRIS
 | Gate | Description | Evidence |
 |------|-------------|----------|
 | RG-1 | No production path invokes dev-only targets | `gh run list --workflow=codeql-analysis.yml --limit 3` |
-| RG-2 | Dynamic port/namespace parity | `make -C pmoves env-check` — A2UI on 8105, Hyperdimensions on 8100 |
+| RG-2 | Dynamic port/namespace parity | `make -C pmoves env-check` — A2UI on 8107, Hyperdimensions on 8100 |
 | RG-3 | Supabase collation/version hygiene | `make -C pmoves verify-all` |
 | RG-4 | Auth unification regression | All protected endpoints fail-closed, CHIT Safe Passage headers present |
 
@@ -89,6 +89,36 @@ This amendment would add a "Stash-Safe Rail Split" rule to the KRISS KROSS Accor
 
 ---
 
+## KiloCode GLM — Third Agent on 5090
+
+> **Added:** 2026-03-27 | **Status:** ACTIVE | **Witness:** DARKXSIDE ✦
+
+### Agent Identity
+
+KiloCode GLM (`KILOCODE-GLM`) operates as the third agentic interface on the 5090 node, alongside Claude (`5090-CLAUDE`) and Codex (`CODEX-GPT5`). GLM serves as the coding plan model lane, executing tasks through the KiloCode claw configuration in the `PMOVES.AI-kilo-claw` worktree.
+
+### DARKXSIDE Co-Creation Wiring
+
+DARKXSIDE co-creates with POWERFULMOVES through all three agent interfaces on the 5090 node:
+
+| Agent | Interface | DARKXSIDE Role |
+|-------|-----------|----------------|
+| Claude (`5090-CLAUDE`) | Claude Code CLI | Witness ✦ |
+| Codex (`CODEX-GPT5`) | Codex CLI | Witness ✦ |
+| KiloCode (`KILOCODE-GLM`) | KiloCode CLI | Witness ✦ |
+
+### Collision Avoidance
+
+All three agents share the 5090 node and coordinate through AGNOTE4482PHI.t1. Claim/release protocol governs lane ownership per the Three-Body Collision-Avoidance Protocol. DARKXSIDE ✦ witnesses all claim transitions and attests to trail integrity across all three interfaces.
+
+### Configuration Artifacts
+
+- `.kilo/` directory: 3 agents, 10 commands
+- `kilo.json`: project config
+- `.kilocodemodes`: `pmoves-glm` + `pmoves-cocreate` modes
+- `agent_signatures.yaml`: `kilocode-glm` alter entry
+
+---
 
 ## Source References
 

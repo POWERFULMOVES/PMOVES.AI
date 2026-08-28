@@ -43,6 +43,21 @@ fi
 declare -a FAILED_SERVICES=()
 declare -a TIMEOUT_SERVICES=()
 
+# Readiness timeouts that should fail the bring-up because the stack is unusable without them.
+CRITICAL_TIMEOUT_SERVICES=(
+  "Archon API"
+  "Archon UI"
+  "Agent Zero API"
+  "Agent Zero UI"
+  "Agent Zero Env"
+  "Agent Zero MCP"
+  "TensorZero UI"
+  "TensorZero GW"
+  "Supabase REST"
+  "Supabase PostgREST"
+  "Supabase Studio"
+)
+
 # Error reporting function
 report_failure() {
     local service="$1"
@@ -191,8 +206,19 @@ if ! make ensure-env-shared 2>&1; then
 fi
 
 # Production: only start Supabase, don't reset DB
-if make supa-status >/dev/null 2>&1; then
-  echo "✔ Supabase already running"
+supabase_running=0
+if [ "$SUPABASE_RUNTIME" = "compose" ]; then
+  if docker ps --format '{{.Names}}' | grep -qE '^pmoves-supabase-(db|kong)-1$'; then
+    supabase_running=1
+  fi
+else
+  if curl -sf -m 3 "${SUPABASE_REST_READY_URL}" >/dev/null 2>&1; then
+    supabase_running=1
+  fi
+fi
+
+if [ "$supabase_running" = "1" ]; then
+  echo "✔ Supabase already running ($SUPABASE_RUNTIME)"
 else
   if ! make supa-start; then
       echo "❌ Supabase failed to start. Check Docker and port availability."
@@ -233,11 +259,11 @@ if [ "${PUBLISHED_AGENTS:-0}" = "1" ]; then
     # races during compose service recreation.
     make down-agents >/dev/null 2>&1 || true
     docker compose -f docker-compose.agents.images.yml --profile agents stop \
-      agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
+      agent-zero archon deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
     docker compose -f docker-compose.agents.images.yml --profile agents rm -f \
-      agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
+      agent-zero archon deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
     docker rm -f \
-      pmoves-agent-zero-1 pmoves-archon-1 pmoves-archon-ui-1 \
+      pmoves-agent-zero-1 pmoves-archon-1 \
       pmoves-deepresearch-1 pmoves-supaserch-1 pmoves-mesh-agent-1 pmoves-publisher-discord-1 >/dev/null 2>&1 || true
     start_service "Agents + UIs (fallback)" "up-agents-ui" "true" || exit 1
   fi
@@ -388,9 +414,23 @@ if [ ${#FAILED_SERVICES[@]} -gt 0 ]; then
     exit 1
 fi
 
+critical_timeouts=()
+for svc in "${TIMEOUT_SERVICES[@]}"; do
+  for crit in "${CRITICAL_TIMEOUT_SERVICES[@]}"; do
+    if [ "$svc" = "$crit" ]; then
+      critical_timeouts+=("$svc")
+      break
+    fi
+  done
+done
+
 if [ ${#TIMEOUT_SERVICES[@]} -gt 0 ]; then
     echo ""
-    echo "⚠️  TIMEOUT SERVICES (not ready within expected time):"
+    if [ ${#critical_timeouts[@]} -gt 0 ]; then
+      echo "❌ CRITICAL TIMEOUTS (services required for a healthy stack):"
+    else
+      echo "⚠️  TIMEOUT SERVICES (not ready within expected time):"
+    fi
     for svc in "${TIMEOUT_SERVICES[@]}"; do
         echo "   • $svc"
     done
@@ -400,7 +440,7 @@ if [ ${#TIMEOUT_SERVICES[@]} -gt 0 ]; then
     echo ""
 fi
 
-if [ ${#FAILED_SERVICES[@]} -eq 0 ] && [ ${#TIMEOUT_SERVICES[@]} -eq 0 ]; then
+if [ ${#FAILED_SERVICES[@]} -eq 0 ] && [ ${#critical_timeouts[@]} -eq 0 ] && [ ${#TIMEOUT_SERVICES[@]} -eq 0 ]; then
     echo ""
     echo "✅ ALL SERVICES STARTED SUCCESSFULLY"
     echo ""
@@ -410,7 +450,20 @@ if [ ${#FAILED_SERVICES[@]} -eq 0 ] && [ ${#TIMEOUT_SERVICES[@]} -eq 0 ]; then
     echo "   Grafana:    http://localhost:3002"
     echo "   Agent Zero: http://localhost:8081"
     echo "   Archon:     http://localhost:3737"
+    echo "   A2A card:   http://localhost:8080/.well-known/agent-card.json"
     echo ""
+elif [ ${#FAILED_SERVICES[@]} -eq 0 ] && [ ${#critical_timeouts[@]} -eq 0 ]; then
+    echo ""
+    echo "⚠️  BRING-UP DEGRADED — non-critical services timed out"
+    echo ""
+    echo "   Agent Zero: http://localhost:8081"
+    echo "   Archon:     http://localhost:3737"
+    echo "   A2A card:   http://localhost:8080/.well-known/agent-card.json"
+    echo ""
+fi
+
+if [ ${#FAILED_SERVICES[@]} -gt 0 ] || [ ${#critical_timeouts[@]} -gt 0 ]; then
+    exit 1
 fi
 
 echo "═══════════════════════════════════════════════════════════"

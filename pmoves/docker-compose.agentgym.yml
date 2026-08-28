@@ -34,7 +34,10 @@ services:
       - env.shared.generated
       - env.shared
       - .env.generated
-      - .env.local
+      # .env.local is a per-node opt-in; short-form listing made it REQUIRED
+      # and hard-failed bring-up on nodes without it.
+      - path: .env.local
+        required: false
     environment:
       # Service config
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -72,7 +75,7 @@ services:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - NATS_URL=${NATS_URL}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL}
 
       # Monitoring
@@ -164,7 +167,10 @@ services:
       - env.shared.generated
       - env.shared
       - .env.generated
-      - .env.local
+      # .env.local is a per-node opt-in; short-form listing made it REQUIRED
+      # and hard-failed bring-up on nodes without it.
+      - path: .env.local
+        required: false
     environment:
       # Environment server config
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

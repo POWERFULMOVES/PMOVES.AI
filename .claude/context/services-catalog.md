@@ -41,6 +41,25 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Compose Profile:** `agents`
 - **CI Pipeline:** `none` (no Dockerfile — uses agent-zero image or inline build)
 
+### PMOVES Space-Agent
+- **Port:** 3010
+- **Submodule:** `PMOVES-space-agent` (branch: `PMOVES.AI-Edition-Hardened`)
+- **Purpose:** Node.js space/widget customware bridge — surfaces CRUD actions and lifecycle events on NATS
+- **Key APIs:**
+  - `GET /api/health` — Health check (HTTP 200)
+  - `GET /api/pmoves_bridge` — Bridge status + NATS connection state
+  - `POST /api/pmoves_bridge` — Space/widget CRUD actions (`create_space`, `update_widget`, `delete_space`, `list_spaces`, `read_space`)
+  - `GET /api/pmoves_nats_status` — NATS connection details
+- **Auth:** `X-PMOVES-API-KEY` header → `PMOVES_BRIDGE_API_KEY` env var
+- **NATS Subjects:** Publishes `pmoves.space.action.v1`, `pmoves.space.event.v1`
+- **Compose Profile:** `agents`
+- **Router constraint:** Single-segment paths only (`/api/<name>`) — no nested paths
+- **Environment:**
+  - `PMOVES_BRIDGE_API_KEY` — REQUIRED, generate with `openssl rand -hex 32`
+  - `PMOVES_NATS_URL` — defaults to `nats://nats:pmoves@nats:4222`
+  - `SPACE_AGENT_SRC` — host path to submodule `pmoves/` dir (default: `../PMOVES-space-agent/pmoves`)
+  - `SPACE_AGENT_DATA` — host path for customware persistence (default: `./data/space-agent`)
+
 ### Channel Monitor
 - **Ports:** 8097
 - **Purpose:** External content watcher (YouTube, RSS feeds)
@@ -50,6 +69,21 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** PMOVES.YT, Supabase
 - **Compose Profile:** `orchestration`
 - **CI Pipeline:** `self-hosted-builds` (amd64)
+
+### Fleet Audit Watcher
+- **Ports:** None (NATS client + local JSONL log only)
+- **Purpose:** KVM2-side journal watcher for RustDesk registration, relay connection, and watcher heartbeat events
+- **Runtime Form:** Host systemd service on KVM2 (`fleet-audit-watcher.service`), not a Docker service
+- **Publish Path:**
+  - `fleet.device.registered.v1`
+  - `fleet.audit.connection.v1`
+  - `fleet.audit.heartbeat.v1`
+- **Health / Startup Probe:** Validate with `systemctl status fleet-audit-watcher` on KVM2 and confirm new lines in `/var/log/pmoves/fleet-audit.jsonl`
+- **Dependencies:** `nats` CLI, `/var/log/pmoves`, `hbbs` + `hbbr` journals, and a NATS broker reachable from KVM2
+- **Operational Notes:**
+  - The repo-default NATS bind is localhost-only on port `4222`; remote publishes require one broker exposed on a Tailscale-reachable interface
+  - NATS publish is fire-and-forget; local JSONL logging is the fallback evidence path when broker reachability is not available
+  - Tailscale admin credentials (`TAILSCALE_API_KEY`) are for device/ACL operations only and are separate from watcher publish configuration
 
 ### BoTZ MCP Gateway
 - **Ports:** 2091
@@ -448,7 +482,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Route advertisement
   - ACL policy enforcement
 - **Key APIs:**
-  - `GET /healthz` - Service health
+  - `GET /health` - Service health
   - `GET /metrics` - Prometheus metrics
   - `POST /api/v1/apikey` - Create auth keys
   - `GET /api/v1/machines` - List connected nodes
@@ -487,7 +521,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **CI Pipeline:** `build-images` (amd64, manual dispatch — via PMOVES-BoTZ submodule)
 
 ### Cipher Memory API (cipher-api)
-- **Port:** 8096 (remapped from internal 3000 to avoid Grafana conflict)
+- **Port:** 8105 (remapped from internal 3000 to avoid Grafana conflict)
 - **Purpose:** Knowledge-graph memory service for Claude Code and agents
 - **Backend:** Node.js + Neo4j
 - **API Endpoints:**
@@ -506,7 +540,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Neo4j (shared), NATS
 - **Compose Profile:** `agents`
 - **CI Pipeline:** `local-build-only` (compose `build:` directive)
-- **Health:** `GET http://localhost:8096/health`
+- **Health:** `GET http://localhost:8105/health`
 
 ## CHIT & Geometry Services
 
@@ -620,6 +654,18 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Auth:** `nats://nats:pmoves@nats:4222` (always use authenticated URL)
 - **WebSocket:** DoX standalone uses 9222, docker-compose docked mode uses 9223
 - **Key Subjects:** See `.claude/context/nats-subjects.md`
+- **Health / Monitoring:** `GET /connz?subs=1` on monitor port 8222 from inside
+  `pmoves-nats-1`; the monitor endpoint was not host-bound in the 2026-05-21
+  desktop snapshot.
+- **Current 5090-CODEX Snapshot:** 2026-05-21T04:54Z `connz?subs=1` reported
+  21 connections and 0 subscriptions matching `claw`, `5090`, `codex`, `task`,
+  `chit`, `pinokio`, `branch`, or `owner.presence`.
+- **5090 Receive Path:** `make -C pmoves nats-agent-inbox` runs a host-side
+  persistent subscriber for `claw.task.assign.v1`, branch trail, CHIT, P7, and
+  owner-presence subjects via `uv run --script`, writing a JSONL inbox outside the
+  repo tree by default. Direct receive is considered restored only after this
+  subscriber, or an equivalent agent runtime, is visible in `connz?subs=1` on the
+  target NATS broker.
 - **Compose Profile:** Default (always required)
 - **CI Pipeline:** `vendor` (upstream nats:2.10-alpine image)
 

@@ -1,0 +1,85 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.ts'
+      - '**.tsx'
+      - '**.jsx'
+      - '**.sh'
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - 'Makefile'
+      - 'pmoves/mk/**'
+      - '.github/workflows/**'
+      # Config + behaviour-defining files are as risky as code (a misconfigured
+      # compose/rooms-catalog or a bad agent/skill definition can break prod):
+      - '**.yaml'
+      - '**.yml'
+      - '**.json'
+      - 'pmoves/config/**'
+      - 'pmoves/configs/**'
+      - '.claude/agents/**'
+      - '.claude/skills/**'
+
+concurrency:
+  group: claude-review-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    # Re-enabled 2026-08-24. The previous note said the OAuth token "expired and
+    # won't be rotated"; it has been rotated, and this job now runs on the coding
+    # plan rather than a metered API key — which is what the note wanted.
+    #
+    # It does not displace the fleet review model (Codex bot + CodeRabbit + CLI
+    # agents on self-hosted runners). It adds the pre-push lane those cannot
+    # cover: a diff-scoped review that runs on PR open/update rather than after
+    # a human or bot notices something.
+    #
+    # Same-repo only. GitHub withholds Actions secrets from fork-originated
+    # `pull_request` runs, so on a fork PR CLAUDE_CODE_OAUTH_TOKEN is empty and
+    # this action fails instead of reviewing -- recreating the failing-check
+    # noise `if: false` was added to stop. Skipping is correct there: there is
+    # no credential to review with. Mirrors review-autofix.yml.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Least-privilege for a comment-only reviewer: it reads the diff and posts
+    # PR review comments — it does not push commits or write attestations.
+    # (claude.yml keeps contents:write because @claude can apply fix-ups.)
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Review
+        id: claude-review
+        # v1.0.205 (Claude Code 2.1.245) — v1.0.193–v1.0.201 died at SDK init
+        # (is_error:true, num_turns:1, cost:0) on every PR since ~2026-08-23:
+        # anthropics/claude-code-action#1720. The "directory mismatch for
+        # tsconfig.json" line in the logs is Bun oven-sh/bun#25730 via #1568,
+        # noise from the same crash. If this recurs, the reported workaround is
+        # show_full_output: true (#1568, 5/5 correlated) — but action.yml warns
+        # it echoes tool results into PUBLIC logs, so it is a debug escape
+        # hatch, never a permanent setting.
+        uses: anthropics/claude-code-action@16b3b310c3d7b5279df73130324d5205aeea8eac # v1.0.205
+        with:
+          # Coding plan, not the metered API key. See review-comment-monitor.yml.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
+

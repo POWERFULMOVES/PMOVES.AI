@@ -20,6 +20,22 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:8080"]
 
+  # AMD GPU metrics — AMD's official Device Metrics Exporter, run as a CONTAINER
+  # on the shared network rather than a host-native listener.
+  #
+  # WHY A CONTAINER: the previous host-native exporter (systemd socket on :9835)
+  # was unreachable from here. Docker-published ports bypass UFW on this node
+  # (DOCKER-USER is empty) but a host-native listener does not, so it fell under
+  # UFW's default deny on the bridge — measured: NATS :4222 OPEN, exporter :9835
+  # refused. Running on the network removes the host hop entirely instead of
+  # opening a firewall rule for it.
+  #
+  # Only scrapes where the exporter is deployed (rdna4 nodes); a missing target
+  # shows as down rather than breaking other jobs.
+  - job_name: amd-gpu
+    static_configs:
+      - targets: ["pmoves-device-metrics-exporter:5000"]
+
   - job_name: loki
     static_configs:
       - targets: ["loki:3100"]
@@ -52,6 +68,17 @@ scrape_configs:
   - job_name: gpu-orchestrator
     static_configs:
       - targets: ["gpu-orchestrator:8200"]
+
+  # otel-collector liveness: the image is distroless so Docker healthchecks
+  # can't run inside it (docker-compose.tracing.yml disables them) — this
+  # scrape of the collector's Prometheus exporter is the external liveness
+  # probe: up{job="otel-collector"} drops to 0 if the collector dies.
+  # Container name (not service name): prometheus lives in the monitoring
+  # compose project and reaches the collector over the shared
+  # pmoves_monitoring network.
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["pmoves-otel-collector:8889"]
 
   # === Tier 2 Services (Added 2025-12-24) ===
 
@@ -96,7 +123,13 @@ scrape_configs:
     params:
       module: [http_2xx]
     static_configs:
-      - targets: ["http://archon:8091/healthz"]
+      # Archon 0.6.0 (TS/Bun rewrite, #2217) serves everything on a single port,
+      # 3090, and its health route is /api/health. This probe runs on the compose
+      # network, so it must use the CONTAINER port: the 8091 alias in
+      # docker-compose.agents.yml maps HOST 8091 -> container 3090 and does not
+      # exist inside the network. Probing 8091 here was connection-refused, not a
+      # 404, so blackbox reported Archon permanently DOWN.
+      - targets: ["http://archon:3090/api/health"]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -137,9 +170,7 @@ scrape_configs:
     static_configs:
       - targets: ["session-context-worker:8100"]
 
-  - job_name: messaging-gateway
-    static_configs:
-      - targets: ["messaging-gateway:8101"]
+  # messaging-gateway removed — service no longer exists in docker-compose.yml
 
   # === GitHub Runner Controller metrics ===
   # Exposes github_runner_* metrics matching the github-runners Grafana dashboard
@@ -183,7 +214,8 @@ scrape_configs:
           - http://hi-rag-gateway-v2:8086/hirag/admin/stats # hi-rag v2 CPU
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://presign:8080/healthz                    # presign
-          - http://archon:8091/healthz                     # archon
+          - http://archon:3090/api/health                  # archon (0.6.0: single port 3090, /api/health)
+          - http://pmoves-firefly:8080/                      # firefly-iii (upstream Laravel, no /healthz)
           - http://host.docker.internal:8097/healthz        # channel monitor
           - http://host.docker.internal:4000                # tensorzero playground
           - http://host.docker.internal:8055/healthz        # flute-gateway
@@ -247,3 +279,55 @@ scrape_configs:
   # - job_name: channel_monitor
   #   static_configs:
   #     - targets: ["channel-monitor:8097"]
+
+  # === Tailscale fleet metrics (Added 2026-06-15, ENABLED 2026-08-04) ===
+  # Tailscale client metrics (tailscaled_inbound_bytes_total,
+  # tailscaled_outbound_bytes_total, tailscaled_*_packets_total, advertised/approved
+  # routes, health) are exported per node via node-exporter's textfile collector.
+  # Each node runs `tailscale metrics write` on a systemd timer; node-exporter on
+  # :9100 surfaces the result; Prometheus scrapes node-exporter over the tailnet.
+  # This avoids opening the Tailscale local API (:5252) or needing a Tailscale API key.
+  # Setup + unit files: tailscale-textfile-collector.md (this directory).
+  #
+  # The job name MUST stay "node-exporter" — the Tailscale Network Health dashboard
+  # (grafana/dashboards/tailscale-network.json) keys its node-reachability panel off
+  # up{job="node-exporter"}. Producers were deployed to the KVMs by #2012; this
+  # consumer half was never enabled, so the board rendered empty and read as
+  # "exit node offline" even while all three nodes were up.
+  #
+  # Enable precondition (verified 2026-08-04 on all three KVMs): node_exporter live on
+  # :9100, tailscale-metrics.timer + exit-node-observer.timer active, 27 tailscaled_*
+  # and 9 pmoves_exit_* series present, reachable from inside this container by
+  # tailnet hostname.
+  #
+  # scrape_interval is 60s, not the 15s global: both writer timers fire once a minute,
+  # so faster scraping resamples identical values across the mesh for nothing.
+  - job_name: node-exporter
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    static_configs:
+      - targets:
+          - pmoves-kvm2:9100
+          - pmoves-kvm4-1:9100
+          - pmoves-kvm4-2:9100
+    # pmoves-4090:9100 intentionally omitted — no node_exporter deployed there yet
+    # (connection times out). Adding it would pin a permanently-down node on the
+    # reachability panel, i.e. manufacture the exact false "offline" this fixes.
+    # Re-add once the exporter is installed on that node.
+    #     - pmoves-4090:9100
+    metric_relabel_configs:
+      # Drop the systemd collector's per-unit state matrix: 5 states x ~220 units x 3
+      # nodes = ~3300 series, 41% of everything this job ingests, and nothing in
+      # monitoring/ queries it. Measured on enable: node-exporter came in at 8115
+      # series against a total head of 11527 — one job at 70% of the TSDB, on a
+      # Prometheus running the default 15d retention with no explicit cap. This fleet
+      # has a documented history of disk-fill incidents (KVM4-1 /tmp balloon, the
+      # ClickHouse syslog runaway), so unbounded growth here is not a theoretical cost.
+      #
+      # The rest of node_exporter is deliberately KEPT, not trimmed to just the
+      # dashboard's tailscaled_*/pmoves_exit_* — node_filesystem_*, CPU and memory on
+      # the exit nodes are precisely the signals that would have caught both of those
+      # incidents before they took a service stack down.
+      - source_labels: [__name__]
+        regex: node_systemd_unit_state
+        action: drop

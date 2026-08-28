@@ -1,0 +1,235 @@
+name: Branch Protection Sync
+
+# Applies a STANDARD branch-protection policy to every PMOVES fork's consumable
+# (gitlink-tracked) branch — closing the audit gap where "hardened" branches had
+# NO protection (force-push / deletion / direct-push all allowed). See
+# deploy/runbooks/github-app-permission-matrix.md and
+# pmoves/docs/operations/GITHUB_APP.md § Branch protection.
+#
+# WHY this exists: a 2026-06-09 audit found 8/11 hardened fork branches were
+# unprotected or had zero required checks — a "hardened" branch with no gate is
+# aspirational. fork-sync pushes upstream merges through sync/* PRs; without
+# protection nothing stops a force-push from silently stripping the hardening
+# overlay.
+#
+# PREREQUISITE (operator, one-time): the PMOVES.AI GitHub App installation must
+# have **Administration: Read & Write** granted (App settings → Permissions tab;
+# checklist in github-app-permission-matrix.md §8). If it is NOT granted, the
+# token-mint step below FAILS — so this workflow doubles as a live validation of
+# the grant (something the in-repo docs disagreed on as of 2026-06-09).
+#
+# SAFETY: default is dry_run=true (audit only, no writes). The policy is designed
+# NOT to deadlock automation — required_approving_review_count=0 means a PR is
+# REQUIRED (no direct pushes) but the App / dependabot can still self-merge.
+
+# TRIGGERS: coverage is derived from .gitmodules, so it must follow .gitmodules.
+# Before this workflow had a push/schedule trigger it was dispatch-only and had
+# run three times ever (last: 2026-06-10). Every submodule added or re-pointed
+# since silently fell out of coverage — 15 consumed branches ended up with no
+# protection at all, none of them because the workflow got anything wrong. See
+# pmoves/docs/audit/FLEET_RULESET_EXPOSURE_2026-08-10.md.
+#
+#   push (.gitmodules)  — the primary vector. A submodule added or re-pointed
+#                         is exactly the event that drops it from coverage, so
+#                         the check runs on the commit that causes it.
+#   schedule (weekly)   — backstop for drift that does NOT touch .gitmodules:
+#                         a fork's branch renamed or deleted, protection removed
+#                         by hand, a new fork created outside a superproject
+#                         commit. Weekly, not daily, because push already covers
+#                         the frequent vector and a daily audit that nobody reads
+#                         is noise rather than signal.
+#
+# SAFETY — automated runs are AUDIT-ONLY and cannot write.
+# `inputs.*` is empty on any trigger other than workflow_dispatch, and the script
+# tests `[ "$DRY_RUN" = "true" ]`. An unguarded schedule/push trigger would
+# therefore evaluate DRY_RUN="" as "not dry run" and issue live PUTs across every
+# derived fork, with ONLY_UNPROTECTED="" also disabling the gap-only filter — a
+# fleet-wide write on the first tick. The env block below pins both to "true" for
+# non-dispatch events. Writing stays a deliberate human act: workflow_dispatch
+# with dry_run=false. See the env block for how to arm it.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Audit only — report current protection, write nothing.'
+        required: false
+        type: boolean
+        default: true
+      only_unprotected:
+        description: 'Skip branches that already have ANY protection (only fix the gaps).'
+        required: false
+        type: boolean
+        default: false
+      required_reviews:
+        description: 'Required approving reviews (0 = require PR but allow automation self-merge).'
+        required: false
+        default: '0'
+  push:
+    branches: [main]
+    paths:
+      - '.gitmodules'
+  schedule:
+    # Mondays 06:00 UTC — audit-only, see SAFETY above.
+    - cron: '0 6 * * 1'
+
+permissions: {}
+
+jobs:
+  protect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Derive (fork, branch) from .gitmodules — self-maintaining (new submodules
+      # auto-covered) and the SINGLE source for both the token scope and the apply
+      # loop, so they can never drift (a hardcoded list would 403 the forks it
+      # missed). Only POWERFULMOVES-owned forks.
+      - name: Derive fork list from .gitmodules
+        id: forks
+        run: |
+          : > forks.tsv
+          while read key url; do
+            name="${key#submodule.}"; name="${name%.url}"
+            case "$url" in *github.com[:/]POWERFULMOVES/*) : ;; *) continue ;; esac
+            repo="${url##*/}"; repo="${repo%.git}"
+            branch=$(git config -f .gitmodules --get "submodule.${name}.branch")
+            [ -z "$branch" ] && branch="main"
+            printf '%s\t%s\n' "$repo" "$branch" >> forks.tsv
+          done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.url$')
+          sort -u forks.tsv -o forks.tsv
+          echo "Derived $(wc -l < forks.tsv) fork/branch pair(s):"
+          sed 's/^/  /' forks.tsv
+          # Token scope = the exact, deduped repo set (least privilege).
+          {
+            echo "repos<<__EOF__"
+            cut -f1 forks.tsv | sort -u
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      # Mint INLINE in this job (not via _app-token.yml) on purpose: the token is
+      # consumed in the SAME job as the API calls, sidestepping the cross-job
+      # output-token auto-revoke nuance of the reusable (branch-protection-sync
+      # would be its first real consumer). _app-token.yml gains the matching
+      # permission-administration knob in this PR for future / Pages use.
+      #
+      # If the App lacks the Administration grant, THIS step fails with
+      # "the app does not have permission to request 'administration'" — that is
+      # the intended live validation of the operator grant.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.forks.outputs.repos }}
+          permission-administration: write
+          permission-contents: read
+
+      - name: Apply standard branch protection
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Non-dispatch events carry no inputs, and the script treats an empty
+          # DRY_RUN as "write". Pin both flags for schedule/push so an automated
+          # run can only ever audit, and can only ever look at gaps.
+          #
+          # To ARM live writes, the operator runs the workflow manually:
+          #   Actions -> Branch Protection Sync -> Run workflow
+          #     dry_run: false            (issues the PUTs)
+          #     only_unprotected: true    (add protection where there is none;
+          #                                leave already-protected branches alone)
+          # only_unprotected=false rewrites every derived branch from the policy
+          # below, which LOWERS any branch currently stricter than it — see the
+          # downgrade table in the PR that added these triggers.
+          DRY_RUN: ${{ github.event_name != 'workflow_dispatch' && 'true' || inputs.dry_run }}
+          ONLY_UNPROTECTED: ${{ github.event_name != 'workflow_dispatch' && 'true' || inputs.only_unprotected }}
+          REQUIRED_REVIEWS: ${{ inputs.required_reviews || '0' }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set +e  # best-effort per-fork loop; we summarize at the end
+
+          # Standard policy for a consumable/hardened mirror branch:
+          #   - require a PR before merging (blocks direct pushes to the branch)
+          #     with REQUIRED_REVIEWS approvals (default 0 => automation can still
+          #     self-merge sync/* + dependabot PRs; the real gates are CodeRabbit
+          #     on the fork + the parent gitlink-promote checks)
+          #   - NO force pushes (prevents history rewrite that strips hardening)
+          #   - NO deletions (prevents accidental branch loss)
+          #   - require conversation resolution
+          #   - enforce_admins=false (operator/admin can break-glass; matches the
+          #     sanctioned --admin merge path for self-authored fleet PRs)
+          #   - required_status_checks: PRESERVE whatever the branch already has
+          #     (passed in as $1). We never null-out a fork that already gates on
+          #     CI (e.g. Agent-Zero/Archon/DoX) — that would be a downgrade. Naked
+          #     branches get null (operators add per-fork contexts deliberately;
+          #     requiring an un-greenable fork-secret check would permanently block).
+          # Built with jq (not a heredoc) so the body is always valid JSON and
+          # $rsc is injected as real JSON, not interpolated text.
+          policy() {
+            jq -cn --argjson rsc "${1:-null}" --argjson rev "${REQUIRED_REVIEWS:-0}" '{
+              required_status_checks: $rsc,
+              enforce_admins: false,
+              required_pull_request_reviews: {required_approving_review_count: $rev, dismiss_stale_reviews: true},
+              restrictions: null,
+              allow_force_pushes: false,
+              allow_deletions: false,
+              required_conversation_resolution: true,
+              required_linear_history: false
+            }'
+          }
+
+          APPLIED=0; SKIPPED=0; FAILED=0
+          while IFS="$(printf '\t')" read repo branch; do
+            [ -z "$repo" ] && continue
+
+            # State detection via EXIT CODE — gh api prints the 404/403 error JSON
+            # to stdout, so testing output-emptiness mis-reads every branch as
+            # "protected". Branch on the actual HTTP result instead.
+            cur=$(gh api "repos/${OWNER}/${repo}/branches/${branch}/protection" 2>/tmp/bp_err)
+            rc=$?
+            rsc="null"
+            if [ "$rc" -eq 0 ]; then
+              checks=$(printf '%s' "$cur" | jq -r '.required_status_checks.contexts | length // 0' 2>/dev/null)
+              force=$(printf '%s'  "$cur" | jq -r '.allow_force_pushes.enabled' 2>/dev/null)
+              del=$(printf '%s'    "$cur" | jq -r '.allow_deletions.enabled' 2>/dev/null)
+              state="protected[checks=${checks} force=${force} del=${del}]"
+              # Preserve existing required checks verbatim.
+              rsc=$(printf '%s' "$cur" | jq -c 'if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end' 2>/dev/null)
+              [ -z "$rsc" ] && rsc="null"
+            elif grep -qiE 'Upgrade to GitHub Pro|make this repository public' /tmp/bp_err; then
+              echo "  s ${repo}@${branch}: SKIP — needs GitHub Pro (private repo) or public visibility"
+              SKIPPED=$((SKIPPED+1)); continue
+            else
+              state="UNPROTECTED"
+            fi
+
+            if [ "$ONLY_UNPROTECTED" = "true" ] && [ "$state" != "UNPROTECTED" ]; then
+              echo "  = ${repo}@${branch}: ${state} (skip, already protected)"
+              SKIPPED=$((SKIPPED+1)); continue
+            fi
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "  ~ ${repo}@${branch}: ${state} -> WOULD apply (preserve checks=${rsc})"
+              continue
+            fi
+
+            out=$(policy "$rsc" | gh api -X PUT "repos/${OWNER}/${repo}/branches/${branch}/protection" --input - 2>&1)
+            if [ $? -eq 0 ]; then
+              echo "  + ${repo}@${branch}: applied (checks preserved=${rsc})"
+              APPLIED=$((APPLIED+1))
+            else
+              echo "  ! ${repo}@${branch}: FAILED"; FAILED=$((FAILED+1))
+              echo "$out" | head -3 | sed 's/^/      /'
+              case "$out" in
+                *"Upgrade to GitHub Pro"*|*"make this repository public"*)
+                  echo "      -> needs GitHub Pro (private repo) or public visibility." ;;
+                *403*|*"Resource not accessible"*)
+                  echo "      -> 403: App may lack Administration:write, or fork outside minted scope (matrix §8)." ;;
+                *404*|*"Branch not found"*)
+                  echo "      -> 404: tracked branch '${branch}' missing on ${repo} (fix .gitmodules)." ;;
+              esac
+            fi
+          done < forks.tsv
+
+          echo ""
+          echo "Done. dry_run=${DRY_RUN} only_unprotected=${ONLY_UNPROTECTED} reviews=${REQUIRED_REVIEWS}"
+          [ "$DRY_RUN" != "true" ] && echo "applied=${APPLIED} skipped=${SKIPPED} failed=${FAILED}"
+          echo "Legend: ~ would-apply  + applied  = skipped(protected)  s skipped(needs-pro)  ! failed"

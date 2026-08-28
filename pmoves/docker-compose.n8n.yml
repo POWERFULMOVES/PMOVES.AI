@@ -1,6 +1,14 @@
-# YAML anchors for tier-based env file loading
+# YAML anchors for tier-based env file loading.
+# Mirrors docker-compose.yml's x-env-tier-worker which loads env.shared first,
+# then env.tier-worker. Without env.shared here, n8n cannot see shared secrets
+# like DISCORD_WEBHOOK_URL, GH_WEBHOOK_SECRET, AGENT_ZERO_EVENTS_TOKEN even
+# after the bootstrap registry populates them — which is why previous revisions
+# of this file added environment-block overrides that then empty-stringed the
+# values in standalone `docker compose -f ...` runs.
 x-env-tier-worker: &env-tier-worker
   env_file:
+    - path: env.shared
+      required: false
     - path: env.tier-worker
       required: false
 
@@ -9,7 +17,7 @@ services:
     build:
       context: ../PMOVES-n8n
       dockerfile: compose/n8n/Dockerfile
-    image: pmoves/n8n:2.1.0-runtime
+    image: pmoves/n8n:2.1.5-runtime
     container_name: pmoves-n8n
     restart: unless-stopped
     <<: *env-tier-worker
@@ -43,9 +51,15 @@ services:
       - AGENT_ZERO_BASE_URL=${AGENT_ZERO_BASE_URL:-http://agent-zero:8080}
       # Discord webhook for echo publisher
       - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
+      # DISCORD_WEBHOOK_URL, GH_WEBHOOK_SECRET, AGENT_ZERO_EVENTS_TOKEN, and
+      # SUPABASE_SERVICE_ROLE_KEY are provided via env.shared (loaded by the
+      # x-env-tier-worker anchor above). We intentionally do NOT override them
+      # in this environment block because compose `environment:` takes
+      # precedence over `env_file:` and `${VAR:-}` empty defaults would blank
+      # out working secrets when n8n is started standalone without shell env.
       - N8N_LOG_LEVEL=debug
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-    ports: ["5678:5678"]
+    ports: ["${N8N_BIND:-127.0.0.1}:${N8N_PORT:-5678}:5678"]
     networks: [cataclysm]
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -53,7 +67,7 @@ services:
       - n8n-data:/home/node/.n8n
       - ../PMOVES-n8n/workflows:/flows:ro
   n8n-runners:
-    image: n8nio/runners:2.1.0
+    image: n8nio/runners:2.1.5
     container_name: pmoves-n8n-runners
     restart: unless-stopped
     <<: *env-tier-worker

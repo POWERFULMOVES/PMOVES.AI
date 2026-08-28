@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/comfy/collab.artifact.v1.schema.json",
+  "title": "Comfy Collab Artifact v1",
+  "description": "A ComfyUI workflow produced an artifact (image, video, audio, model, text). Carries the artifact type, content URI, and minimal metadata. Linked to the parent prompt via prompt_id. Consumed by the room notebook + creator-canvas-primary to surface the artifact in the room.",
+  "type": "object",
+  "required": [
+    "room_id",
+    "session_id",
+    "prompt_id",
+    "app_slug",
+    "artifact_id",
+    "artifact_type",
+    "uri",
+    "produced_at"
+  ],
+  "properties": {
+    "room_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Room manifest identifier the artifact was produced in."
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "P7 room session id the artifact belongs to."
+    },
+    "prompt_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The prompt that produced this artifact. Matches a comfy.collab.prompt.v1.prompt_id."
+    },
+    "app_slug": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pinokio app slug that produced the artifact (e.g. comfyui-desktop, ace-step, wan)."
+    },
+    "artifact_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique id for this artifact."
+    },
+    "artifact_type": {
+      "type": "string",
+      "enum": ["image", "video", "audio", "model", "text", "json"],
+      "description": "Modality of the artifact."
+    },
+    "uri": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Resolvable URI for the artifact content. Typically minio://bucket/key or pinokio://api/<slug>/outputs/<file>."
+    },
+    "thumbnail_uri": {
+      "type": ["string", "null"],
+      "description": "Optional thumbnail URI for the artifact (smaller, faster to load)."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional artifact metadata (dimensions, size_bytes, seed, model, duration_sec, etc.). Free-form.",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    },
+    "produced_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp the artifact was produced."
+    }
+  },
+  "additionalProperties": false
+}

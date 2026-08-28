@@ -1,0 +1,483 @@
+{
+  "spec": "chit.cgp.v0.2",
+  "type": "geometry.cgp.v1",
+  "id": "dbf60c46d089",
+  "label": "Allegro_balanced_Bright_c5",
+  "source": "cipher_beats_analyst",
+  "ts": 1778441778.6314292,
+  "super_nodes": [
+    {
+      "id": "c5e8fab485d0",
+      "label": "Beats: Allegro_balanced_Bright_c5",
+      "type": "beats_constellation",
+      "x": 0.4949,
+      "y": 0.25,
+      "r": 12.5,
+      "state_vector": {
+        "delta": 0.4949,
+        "kappa": -0.1153,
+        "Hz": 0.25,
+        "A": 0.0,
+        "F": 0.5
+      },
+      "constellations": [
+        {
+          "id": "662fa37b8ac7",
+          "label": "Allegro_balanced_Bright_c5",
+          "anchor": [
+            0.0,
+            12.498,
+            0.2
+          ],
+          "spectrum": [
+            0.25,
+            0.4949,
+            0.8847
+          ],
+          "points": [
+            {
+              "id": "ea4c4fe96253",
+              "label": "14 Track 14",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4917,
+                0.125
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4917,
+                "kappa": -0.125,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.016599999999999948,
+                -0.5,
+                -0.125
+              ],
+              "duration_s": 100.797823,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\14 Track 14.m4a"
+            },
+            {
+              "id": "7f0633eea267",
+              "label": "808 SIGNS",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4983,
+                0.105
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4983,
+                "kappa": -0.105,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.0033999999999999586,
+                -0.5,
+                -0.105
+              ],
+              "duration_s": 51.702833,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\808 SIGNS.opus"
+            },
+            {
+              "id": "9b77c7a90200",
+              "label": "BoomBap Low Long",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4933,
+                0.12
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4933,
+                "kappa": -0.12,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.013399999999999967,
+                -0.5,
+                -0.12
+              ],
+              "duration_s": 193.011313,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\BoomBap Low Long.opus"
+            },
+            {
+              "id": "0f8e9f5263e8",
+              "label": "Crush no # 71",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5033,
+                0.09
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5033,
+                "kappa": -0.09,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.006599999999999939,
+                -0.5,
+                -0.09
+              ],
+              "duration_s": 106.795083,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Crush no # 71.opus"
+            },
+            {
+              "id": "54e30909b5da",
+              "label": "Darque 8",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4867,
+                0.14
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4867,
+                "kappa": -0.14,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.026599999999999957,
+                -0.5,
+                -0.14
+              ],
+              "duration_s": 278.44025,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Darque 8.opus"
+            },
+            {
+              "id": "6c58ee770b3b",
+              "label": "Final Chrono 3",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4883,
+                0.135
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4883,
+                "kappa": -0.135,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.023399999999999976,
+                -0.5,
+                -0.135
+              ],
+              "duration_s": 200.0065,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Final Chrono 3.opus"
+            },
+            {
+              "id": "6bc9b2ab10aa",
+              "label": "Final Chrono Dark Rev A",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.495,
+                0.115
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.495,
+                "kappa": -0.115,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.010000000000000009,
+                -0.5,
+                -0.115
+              ],
+              "duration_s": 254.873792,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Final Chrono Dark Rev A.opus"
+            },
+            {
+              "id": "8ce16b68419d",
+              "label": "FLATTERY 4",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5033,
+                0.09
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5033,
+                "kappa": -0.09,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.006599999999999939,
+                -0.5,
+                -0.09
+              ],
+              "duration_s": 180.773854,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\FLATTERY 4.opus"
+            },
+            {
+              "id": "2137e0890aa9",
+              "label": "Happy Practice",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4983,
+                0.105
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4983,
+                "kappa": -0.105,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.0033999999999999586,
+                -0.5,
+                -0.105
+              ],
+              "duration_s": 102.863667,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Happy Practice.opus"
+            },
+            {
+              "id": "bdd0e21b759d",
+              "label": "Harbinger",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4933,
+                0.12
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4933,
+                "kappa": -0.12,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.013399999999999967,
+                -0.5,
+                -0.12
+              ],
+              "duration_s": 80.439208,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Harbinger.opus"
+            },
+            {
+              "id": "e46387818651",
+              "label": "Lost Tapes A Side B Side - 1",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4683,
+                0.195
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4683,
+                "kappa": -0.195,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.06340000000000001,
+                -0.5,
+                -0.195
+              ],
+              "duration_s": 66.789146,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Lost Tapes A Side B Side - 1.opus"
+            },
+            {
+              "id": "d6b7da8653e3",
+              "label": "RAKS SLOW",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.505,
+                0.085
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.505,
+                "kappa": -0.085,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.010000000000000009,
+                -0.5,
+                -0.085
+              ],
+              "duration_s": 357.648958,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\RAKS SLOW.opus"
+            },
+            {
+              "id": "9de547e07211",
+              "label": "Starscreams and Loud Scars",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5067,
+                0.08
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5067,
+                "kappa": -0.08,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.013400000000000079,
+                -0.5,
+                -0.08
+              ],
+              "duration_s": 160.372229,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Starscreams and Loud Scars.opus"
+            },
+            {
+              "id": "b3735c6fe77d",
+              "label": "Storms",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4967,
+                0.11
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4967,
+                "kappa": -0.11,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.00660000000000005,
+                -0.5,
+                -0.11
+              ],
+              "duration_s": 103.398458,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Storms.m4a"
+            },
+            {
+              "id": "29faff2c0a6c",
+              "label": "The Calm Storm",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5017,
+                0.095
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5017,
+                "kappa": -0.095,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.0034000000000000696,
+                -0.5,
+                -0.095
+              ],
+              "duration_s": 88.282333,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\The Calm Storm.opus"
+            },
+            {
+              "id": "d96890523ae8",
+              "label": "The Harbringer",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4933,
+                0.12
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4933,
+                "kappa": -0.12,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.013399999999999967,
+                -0.5,
+                -0.12
+              ],
+              "duration_s": 80.439208,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\The Harbringer.opus"
+            },
+            {
+              "id": "4e97aeeaa8b1",
+              "label": "When",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.49,
+                0.13
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.49,
+                "kappa": -0.13,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.020000000000000018,
+                -0.5,
+                -0.13
+              ],
+              "duration_s": 127.790167,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\When.opus"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "control_plane": {
+    "state_vector": {
+      "delta": 0.4949,
+      "kappa": -0.1153,
+      "Hz": 0.25,
+      "A": 0.0,
+      "F": 0.5
+    },
+    "param_surface": {
+      "sense_mode_threshold": 0.5,
+      "n_groups_hint": 6,
+      "temperature": 0.49796,
+      "top_k": 5
+    }
+  }
+}

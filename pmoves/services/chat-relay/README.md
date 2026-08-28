@@ -92,10 +92,12 @@ chat-relay:
 pip install -r requirements.txt
 
 # Run locally
-export NATS_URL="nats://localhost:4222"
+export NATS_URL="nats://nats:pmoves@nats:4222"
 export SUPABASE_URL="http://localhost:65421"
 export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 python main.py
+
+> **Production:** Credentials are managed via CHIT secrets. Do not hardcode.
 ```
 
 ## Related Services

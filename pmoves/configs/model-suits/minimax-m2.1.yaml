@@ -1,0 +1,141 @@
+# Model Suit: MiniMax M2.1
+# PMOVES.AI MiniMax Edition Configuration
+# Provider: MiniMax Token Plan
+# Documentation: https://platform.minimax.io/docs/token-plan/intro
+#
+# Efficient fallback model with 100K token context.
+
+suit:
+  id: minimax-m2.1
+  name: MiniMax M2.1 (Token Plan)
+  provider: minimax
+  flare_name: pmoves/minimax-m2.1
+  model_family: minimax
+  tier: efficient
+  role: efficient_overflow  # EFFICIENT OVERFLOW MODEL - 100K token window
+
+model_config:
+  context_window: 100000
+  max_output_tokens: 8000
+  supports_vision: true
+  supports_streaming: true
+  supports_multimodal: true  # text, speech, video, music, image
+  temperature_range: [0.0, 1.0]
+  top_p_range: [0.0, 1.0]
+  top_k: null
+
+# Token Plan specific
+token_plan:
+  enabled: true
+  api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+  api_base: https://api.minimax.chat/v1
+  fallback_api_key_env: MINIMAX_API_KEY  # Pay-as-you-go fallback
+  plan_tiers:
+    - starter: 1500  # requests per 5 hours
+    - plus: 4500
+    - max: 15000
+    - plus_highspeed: 4500
+    - max_highspeed: 15000
+    - ultra_highspeed: 30000
+  quota_reset: rolling_5h  # M2.1 also uses 5-hour rolling window
+
+distillation_pipeline:
+  stages:
+    - name: config_tuning
+      enabled: true
+      notes: MiniMax M2.1 configuration tuning
+
+    - name: context_priming
+      enabled: true
+      system_prompt: |
+        You are MiniMax M2.1, MiniMax's efficient model with 100K token context window.
+        You provide fast, cost-effective inference for standard tasks. You are the
+        EFFICIENT OVERFLOW MODEL for the PMOVES.AI MiniMax Edition integration.
+
+        Your capabilities include:
+        - 100K token context window for standard document analysis
+        - Fast inference for coding overflow tasks
+        - Multimodal support: text, speech, video, music, and image generation
+        - Cost-effective for everyday tasks
+
+        You excel at coding overflow, standard tasks, and efficient inference.
+
+    - name: model_fine_tune
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+    - name: full_distillation
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+tensorzero_config:
+  model_name: minimax-m2.1
+  weight: 0.3  # Lower weight per cascade config
+  routing:
+    - function: coding_overflow
+      priority: 1
+    - function: efficient_inference
+      priority: 1
+    - function: standard_tasks
+      priority: 1
+    - function: quick_response
+      priority: 1
+
+flare_namespace:
+  alias: pmoves/minimax-m2.1
+  canonical_name: minimax-m2.1
+  provider_url: https://api.minimax.chat/v1
+  already_registered: true
+
+capabilities:
+  - efficient_inference
+  - coding_overflow
+  - fast_response
+  - multimodal  # text, speech, video, music, image
+  - code_generation
+  - reasoning
+  - vision
+
+local_fallback:
+  available: true
+  reason: "Cloud-hosted but with Token Plan quota limits"
+  fallback_model_suit: glm-4  # Falls back to GLM-4
+  fallback_trigger: quota_exhausted
+
+cross_agent:
+  agent_zero: full
+  clawz: limited  # Requires adapter layer
+  archon: full
+  typer: untested
+  pinokio: full
+  a2ui: full
+  kilocode: full  # KiloCode MiniMax edition
+
+# Harness fit. Seeded fresh, harness-only — NOT migrated from cross_agent, which
+# answers a different question (which components can address this model) and whose
+# key space includes agents, a UI and a launcher. Note the registry key is
+# kilocode_glm, not the cross_agent spelling `kilocode` (which does not resolve).
+fit:
+  clawz:
+    "*":
+      - verdict: limited
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+        note: "requires adapter layer; tool-call parsing assumes an Anthropic-shaped response"
+  kilocode_glm:
+    "*":
+      - verdict: full
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+
+metadata:
+  source: pmoves/minimax-integration
+  last_verified: 2026-05-13
+  benchmark_data:
+    - source: "MiniMax Token Plan Documentation"
+      url: "https://platform.minimax.io/docs/token-plan/intro"
+    - source: "MiniMax API Reference"
+      url: "https://platform.minimax.io/docs/token-plan/quickstart"
+  runtime_note: "EFFICIENT OVERFLOW MODEL FOR MINIMAX EDITION - 100K token window, fast inference"

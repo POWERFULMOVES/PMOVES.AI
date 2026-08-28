@@ -15,7 +15,7 @@ except ImportError as exc:  # pragma: no cover - missing optional dependency
         "  python -m pip install --user nats-py\n"
     ) from exc
 
-DEFAULT_NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
+DEFAULT_NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 
 
 def _format_json(data: bytes, pretty: bool) -> str:

@@ -1,0 +1,126 @@
+# PMOVES Z890 Multi-Boot Distro Manifest
+#
+# Single source of truth for ISO URLs, SHA256 checksums, and iPXE kernel args
+# across all Z890 multi-boot slots. Consumed by:
+#   - pxe/netboot-menu-pmoves.ipxe  (iPXE chainload menu on netboot.xyz-on-5090)
+#   - media/prepare-usb.sh          (fallback per-device USB installer)
+#   - media/prepare-nvme-target.sh  (partition layout reference)
+#   - 99-explain.sh                 (stub cites this file in Phase 1)
+#
+# When a new distro needs to be added:
+#   1. Pin an exact ISO release + verified checksum (never "latest")
+#   2. Record the EFI boot entry name so peers can discover each other
+#   3. List recommended kernel args for GPU + NVMe SSD behavior
+#
+# Checksums last verified: 2026-04-21 (update this date on every checksum change)
+
+schema_version: 1
+reference_date: "2026-04-21"
+
+# ── Partition layout (GPT) on external NVMe install target ────────────────
+partition_layout:
+  total_disk_gb_min: 2000
+  partitions:
+    - { idx: 1, name: "EFI",             size_mib: 1024, fs: "vfat",  mount: "/boot/efi" }
+    - { idx: 2, name: "windows-msr",     size_mib: 16,   fs: "msr",   notes: "Microsoft Reserved" }
+    - { idx: 3, name: "windows-system",  size_gb:  300,  fs: "ntfs",  mount: "C: (Windows)" }
+    - { idx: 4, name: "shared-data",     size_gb:  500,  fs: "exfat", mount: "D: / /mnt/shared — crosses OS boundaries" }
+    - { idx: 5, name: "ubuntu-24.04",    size_gb:  200,  fs: "ext4",  mount: "/" }
+    - { idx: 6, name: "popos-22.04",     size_gb:  150,  fs: "ext4",  mount: "/" }
+    - { idx: 7, name: "fedora-or-nobara",size_gb:  150,  fs: "ext4",  mount: "/" }
+    - { idx: 8, name: "cachyos",         size_gb:  150,  fs: "btrfs", mount: "/" }
+    - { idx: 9, name: "nixos",           size_gb:  200,  fs: "ext4",  mount: "/" }
+    - { idx: 10, name: "swap",           size_gb:  32,   fs: "swap",  notes: "shared by Linux slots" }
+  windows_first: true
+  rationale: |
+    Windows installer is aggressive about reclaiming space — we lock it into a
+    fixed-size slot first, then add Linux slots around it. D:/ exFAT is the
+    cross-OS data partition (readable from both Windows and Linux).
+
+# ── Distro sources ─────────────────────────────────────────────────────────
+distros:
+
+  ubuntu-24.04:
+    display_name: "Ubuntu 24.04.2 LTS (Noble)"
+    iso_url:     "https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso"
+    sha256:      "d7fe3d6a0419667d2f8eff12796996328daa2d4f90cd9f87aa9371b362f987bf"
+    kernel_args: "autoinstall ds=nocloud;s=/cdrom/nocloud/"
+    efi_boot_entry: "ubuntu"
+    post_install_script: "deploy/provision/z890/ubuntu-24.04-post.sh"
+    notes: |
+      Primary Linux fleet-parity slot. Matches KVM4-1/KVM4-2 baseline.
+      Preferred for all claw/container workloads.
+
+  pop-os-22.04:
+    display_name: "Pop!_OS 22.04 NVIDIA"
+    iso_url:     "https://iso.pop-os.org/22.04/amd64/nvidia/24/pop-os_22.04_amd64_nvidia_24.iso"
+    sha256:      ""   # Pop!_OS rolls respin images; verify before install
+    kernel_args: ""
+    efi_boot_entry: "Pop!_OS"
+    post_install_script: "deploy/provision/z890/pop-os-22.04-post.sh"
+    notes: |
+      System76's NVIDIA-preloaded image. 30-nvidia-drivers.sh skips driver
+      install (only container toolkit is added). 24.04 image will supersede
+      when System76 releases it GA.
+
+  fedora-40:
+    display_name: "Fedora Workstation 40"
+    iso_url:     "https://download.fedoraproject.org/pub/fedora/linux/releases/40/Workstation/x86_64/iso/Fedora-Workstation-Live-x86_64-40-1.14.iso"
+    sha256:      ""   # Verify against https://fedoraproject.org/security/ before each install
+    kernel_args: ""
+    efi_boot_entry: "Fedora"
+    post_install_script: "deploy/provision/z890/fedora-nobara-post.sh"
+    notes: "akmod-nvidia via RPM Fusion; ~5 min kernel module build after first install."
+
+  nobara-40:
+    display_name: "Nobara 40 (NVIDIA-preloaded Fedora downstream)"
+    iso_url:     "https://github.com/Nobara-Project/downloads/releases/download/v40/Nobara-40-NVIDIA-2026.iso"
+    sha256:      ""
+    kernel_args: ""
+    efi_boot_entry: "Nobara"
+    post_install_script: "deploy/provision/z890/fedora-nobara-post.sh"
+    notes: "NVIDIA driver + container toolkit preloaded — ready immediately."
+
+  cachyos-current:
+    display_name: "CachyOS (rolling)"
+    iso_url:     "https://iso.cachyos.org/240401/cachyos-desktop-linux-240401.iso"
+    sha256:      ""
+    kernel_args: ""
+    efi_boot_entry: "CachyOS"
+    post_install_script: "deploy/provision/z890/cachyos-post.sh"
+    notes: "Rolling — always pin to a dated image, verify upstream before each install."
+
+  nixos-23.11:
+    display_name: "NixOS 23.11 Gnome"
+    iso_url:     "https://channels.nixos.org/nixos-23.11/latest-nixos-gnome-x86_64-linux.iso"
+    sha256:      ""
+    kernel_args: ""
+    efi_boot_entry: "NixOS"
+    post_install_fragment: "deploy/provision/z890/nixos-post.nix"
+    notes: |
+      Declarative install — import nixos-post.nix into configuration.nix then
+      nixos-rebuild switch. Imperative common/* scripts still run post-rebuild
+      for repo clone + tailscale auth-key.
+
+  windows11-23h2:
+    display_name: "Windows 11 23H2 (operator downloads manually)"
+    iso_url:     ""   # Microsoft requires operator download from account — never scripted
+    sha256:      ""
+    kernel_args: ""
+    efi_boot_entry: "Windows Boot Manager"
+    post_install_script: "deploy/provision/z890/windows11-post.ps1"
+    notes: |
+      Operator downloads the 23H2 ISO from Microsoft and boots the installer
+      directly (Rufus recommended). windows11-post.ps1 extends the existing
+      windows_bootstrap.ps1 + z890_host_setup.ps1 after first login.
+
+# ── Playlist reference (Phase 2 ingestion target) ─────────────────────────
+playlist_reference:
+  url:     "https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8"
+  phase:   "Phase 2"
+  blocker: "5090-claude's YT-pipeline fix PR must merge before ingestion via /yt:add-playlist"
+  ingest_command: "/yt:add-playlist https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8"
+  note: |
+    Phase 1 operators consult this manifest directly for distro references.
+    Phase 2 will replace 99-explain.sh stub with a Hi-RAG v2 query against
+    the ingested playlist transcripts.

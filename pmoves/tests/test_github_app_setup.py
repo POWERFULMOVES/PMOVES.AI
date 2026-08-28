@@ -20,12 +20,14 @@ import subprocess
 import sys
 from pathlib import Path
 import tempfile
-import io
 
-# Set UTF-8 encoding for Windows compatibility
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# NOTE: Previously this module set sys.stdout/sys.stderr to UTF-8 TextIOWrappers
+# at import time for Windows compatibility. That broke pytest's capture subsystem
+# because pytest's stop_global_capturing() does tmpfile.seek(0) on the wrapped
+# stream and hits "I/O operation on closed file". The wrapper is now applied
+# inside the __main__ block (see bottom of this file) so direct `python
+# test_github_app_setup.py` invocations still get UTF-8 on Windows, while
+# pytest's own capture subsystem stays intact.
 
 
 class TestGitHubAppSetup:
@@ -60,7 +62,7 @@ class TestGitHubAppSetup:
         """Test that env.shared contains GitHub App credential lines."""
         assert self.env_shared.exists(), "env.shared not found"
 
-        with open(self.env_shared) as f:
+        with open(self.env_shared, encoding="utf-8") as f:
             content = f.read()
 
         # Check for credential lines (commented or uncommented)
@@ -82,7 +84,7 @@ class TestGitHubAppSetup:
             print("⚠ Skipping env.tier-agent tests (file not found)")
             return
 
-        with open(self.env_tier_agent) as f:
+        with open(self.env_tier_agent, encoding="utf-8") as f:
             content = f.read()
 
         gh_app_keys = ['GH_APP_ID', 'GH_APP_CLIENT_ID', 'GH_APP_INSTALLATION_ID', 'GH_APP_SEC']
@@ -99,7 +101,7 @@ class TestGitHubAppSetup:
         """Test that docker-compose.yml references GitHub App credentials."""
         assert self.docker_compose.exists(), "docker-compose.yml not found"
 
-        with open(self.docker_compose) as f:
+        with open(self.docker_compose, encoding="utf-8") as f:
             content = f.read()
 
         # Check for GH_APP_ references
@@ -120,7 +122,7 @@ class TestGitHubAppSetup:
             print("⚠ Skipping CHIT manifest tests (file not found)")
             return
 
-        with open(self.chit_manifest) as f:
+        with open(self.chit_manifest, encoding="utf-8") as f:
             content = f.read()
 
         # Check for gh_app entries
@@ -251,6 +253,12 @@ def main():
 
 
 if __name__ == '__main__':
+    # Apply UTF-8 stdio wrapper only when running directly, not under pytest
+    # (pytest's capture subsystem breaks if stdout/stderr are wrapped at import).
+    import io
+    if sys.platform == 'win32':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
     try:
         sys.exit(main())
     except KeyboardInterrupt:

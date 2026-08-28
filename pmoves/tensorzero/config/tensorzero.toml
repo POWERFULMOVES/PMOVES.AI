@@ -6,13 +6,38 @@
 
 
 [gateway.observability]
-enabled = true
-async_writes = true
+# CHIT GATE: Disabled per Cyber Defence Initiative (2026-04-25).
+# TensorZero observability.enabled=true auto-creates ClickHouse inference
+# tables that store full prompt text + response text with no TTL.
+# This violates Data Retention Policy T0 classification (prompts are
+# ephemeral) and creates a warrantable data store for user content.
+#
+# RE-ENABLE CONDITIONS (all required):
+# 1. ClickHouse TTL of 14 days on auto-created Inference table
+#    (ALTER TABLE Inference MODIFY TTL timestamp + INTERVAL 14 DAY)
+# 2. Prompt text column dropped or masked in Inference table
+# 3. CHIT_REQUIRE_SIGNATURE=true in production
+# 4. Data Retention Policy section 3.5 updated to reflect prompt storage
+# 5. Security audit confirms no PII in stored prompts
+# 6. Approval: CTO + security lead signed commit message
+#
+# See: docs/data-retention-deletion-policy.md (section 3.5)
+# See: docs/biometric-data-handling-policy.md (section 3.4)
+# CHIT Trail: discovered during production verification 2026-04-25.
+#   Memory system fabricated verified-clean state from policy document
+#   rather than code reality - flagged as CHIT intrusion.
+enabled = false
+async_writes = false
 
-# OTLP export disabled — re-enable when OTel collector is running
-# [gateway.export.otlp.traces]
-# enabled = true
-# format = "opentelemetry"
+# OTLP export — disabled by default so the gateway boots without the tracing
+# overlay. P7 P0.2 enabled this against docker-compose.tracing.yml, but the
+# tracing stack isn't part of the default bring-up; TensorZero 2026.1.8 panics
+# with "invalid URI . Reason empty string" when enabled=true and the
+# OTEL_EXPORTER_OTLP_TRACES_ENDPOINT env var is unset. Re-enable together
+# with the tracing overlay and a populated endpoint.
+[gateway.export.otlp.traces]
+enabled = false
+format = "opentelemetry"
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
 # Updated 2026-03-15: Replaced stale models with Qwen 3.5 + LFM2 family
@@ -22,7 +47,7 @@ routing = ["ollama_local"]
 
 [models.qwen35_9b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3.5:9b"
 api_key_location = "none"
 
@@ -31,7 +56,7 @@ routing = ["ollama_local"]
 
 [models.qwen35_4b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3.5:4b"
 api_key_location = "none"
 
@@ -40,7 +65,7 @@ routing = ["ollama_local"]
 
 [models.qwen35_27b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3.5:27b"
 api_key_location = "none"
 
@@ -49,7 +74,7 @@ routing = ["ollama_local"]
 
 [models.qwen35_0_8b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3.5:0.8b"
 api_key_location = "none"
 
@@ -58,8 +83,58 @@ routing = ["ollama_local"]
 
 [models.lfm2_24b_a2b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "lfm2:24b"
+api_key_location = "none"
+
+# --- SPARK-proven local tags (2026-08-25, live-verified on PMOVES-SPARK GB10) ---
+# Pulled weights on the SPARK host Ollama. Nodes without a tag fail that roll;
+# the Z.AI coding-plan variants are the hosted backstop. Reconcile via
+# `pmoves/tools/models/models_sync.py registry-snapshot` when pulling new tags.
+
+[models.qwen3_coder_30b_local]
+routing = ["ollama_local"]
+
+[models.qwen3_coder_30b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "qwen3-coder:30b"
+api_key_location = "none"
+
+[models.qwen3_30b_a3b_local]
+routing = ["ollama_local"]
+
+[models.qwen3_30b_a3b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "qwen3:30b-a3b-q4_K_M"
+api_key_location = "none"
+
+[models.qwen35_35b_a3b_local]
+routing = ["ollama_local"]
+
+[models.qwen35_35b_a3b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "qwen3.5:35b-a3b-q8_0"
+api_key_location = "none"
+
+[models.gemma4_26b_local]
+routing = ["ollama_local"]
+
+[models.gemma4_26b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "gemma4:26b"
+api_key_location = "none"
+
+[models.hermes3_8b_local]
+routing = ["ollama_local"]
+
+[models.hermes3_8b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "hermes3:8b"
 api_key_location = "none"
 
 [models.qwen35_4b_edge]
@@ -86,7 +161,7 @@ routing = ["ollama_local"]
 
 [models.langextract_qwen7b_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3:8b"
 api_key_location = "none"
 
@@ -95,7 +170,7 @@ routing = ["ollama_local"]
 
 [models.chat_ollama_llama3.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "llama3.1"
 api_key_location = "none"
 
@@ -105,7 +180,7 @@ routing = ["ollama_local"]
 
 [models.qwen2_5_32b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen2.5:32b"
 api_key_location = "none"
 
@@ -115,7 +190,7 @@ routing = ["ollama_local"]
 
 [models.qwen2_5_14b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen2.5:14b"
 api_key_location = "none"
 
@@ -125,7 +200,7 @@ routing = ["ollama_local"]
 
 [models.qwen2_vl_7b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen2-vl:7b"
 api_key_location = "none"
 
@@ -135,7 +210,7 @@ routing = ["ollama_local"]
 
 [models.qwen3_reranker_4b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-reranker:4b"
 api_key_location = "none"
 
@@ -145,7 +220,7 @@ routing = ["ollama_local"]
 
 [models.nemotron_mini.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "nemotron-mini"
 api_key_location = "none"
 
@@ -155,7 +230,7 @@ routing = ["ollama_local"]
 
 [models.qwen3_8b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3:8b"
 api_key_location = "none"
 
@@ -186,6 +261,15 @@ routing = ["moonshot_primary"]
 type = "openai"
 api_base = "https://api.moonshot.ai/v1"
 model_name = "moonshot-v1-32k"
+api_key_location = "env::MOONSHOT_API_KEY"
+
+[models.chat_kimi_k2_7_code]
+routing = ["moonshot_primary"]
+
+[models.chat_kimi_k2_7_code.providers.moonshot_primary]
+type = "openai"
+api_base = "https://api.moonshot.ai/v1"
+model_name = "kimi-k2.7-code"
 api_key_location = "env::MOONSHOT_API_KEY"
 
 [models.chat_openrouter]
@@ -220,7 +304,9 @@ api_key_location = "env::VENICE_API_KEY"
 # --- Z.ai (Primary OpenAI-Compatible Provider) -------------------------------
 # Z.ai serves as the primary OpenAI-compatible endpoint for PMOVES.AI
 # Endpoint: https://api.z.ai/api/coding/paas/v4
-# Supports: gpt-4o-mini, glm-4-flash, and other OpenAI-compatible models
+# 2026-08-25: the coding endpoint serves GLM models only — "gpt-4o-mini"
+# was rejected with error 1214 (invalid model code). glm-5.2 is the proven
+# coding-plan quality tier (verified live on SPARK).
 
 [models.chat_zai]
 routing = ["zai_primary"]
@@ -228,18 +314,345 @@ routing = ["zai_primary"]
 [models.chat_zai.providers.zai_primary]
 type = "openai"
 api_base = "https://api.z.ai/api/coding/paas/v4"
-model_name = "gpt-4o-mini"
+model_name = "glm-5.2"
 api_key_location = "env::Z_AI_API_KEY"
 
-# Z.ai GLM models (for Chinese LLM capabilities)
+# Z.ai GLM Flash — CODING endpoint (code gen scenarios only, not general API)
+# See: https://api.z.ai/api/coding/paas/v4 vs https://api.z.ai/api/paas/v4
+# 2026-08-25: "glm-4-flash" is unknown to the current coding plan (error 1211);
+# glm-5-turbo is the proven fast tier (verified live on SPARK).
 [models.chat_zai_glm]
 routing = ["zai_glm"]
 
 [models.chat_zai_glm.providers.zai_glm]
 type = "openai"
 api_base = "https://api.z.ai/api/coding/paas/v4"
-model_name = "glm-4-flash"
+model_name = "glm-5-turbo"
 api_key_location = "env::Z_AI_API_KEY"
+
+# --- MiniMax (Token Plan Provider) ---
+[models.chat_minimax]
+routing = ["minimax_primary"]
+
+[models.chat_minimax.providers.minimax_primary]
+type = "openai"
+# 2026-08-25: api.minimaxi.chat was a nonexistent domain (typo-mash of the
+# China host minimaxi.com and retired .chat). Current global host per docs:
+# https://platform.minimax.io — api.minimax.io/v1 (OpenAI-compat) and
+# /anthropic (Anthropic-compat for coding tools). chatcompletion_v2 retired.
+# MiniMax-M3 is the current token-plan model. TP key is primary, PAYG fallback.
+api_base = "https://api.minimax.io/v1"
+model_name = "MiniMax-M3"
+api_key_location = "env::MINIMAX_TOKEN_PLAN_API_KEY"
+
+# --- GLM 5.1 (Upgraded per Z.AI coding plan docs — PR #1151) ---
+[models.chat_zai_glm51]
+routing = ["zai_glm51"]
+
+[models.chat_zai_glm51.providers.zai_glm51]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.1"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM-5-Turbo (KiloCode primary — agentic workflows, tool calling, long chains) ---
+# Synced from provider_catalog.yaml: serves coding_glm (w=0.8) + agent_zero (w=0.6)
+[models.chat_zai_glm53]
+routing = ["zai_glm53"]
+
+[models.chat_zai_glm53.providers.zai_glm53]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.3"
+api_key_location = "env::Z_AI_API_KEY"
+
+[models.chat_zai_glm5_turbo]
+routing = ["zai_glm5_turbo"]
+
+[models.chat_zai_glm5_turbo.providers.zai_glm5_turbo]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5-turbo"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM-5.2 (Latest GLM — primary coding + reasoning via Z.AI coding endpoint) ---
+# Serves agent_zero, coding_glm, coding_kilocode, archon functions.
+# Also available via Ollama Cloud as chat_ollama_cloud_default (glm-5.2 at ollama.com/v1).
+[models.chat_zai_glm52]
+routing = ["zai_glm52"]
+
+[models.chat_zai_glm52.providers.zai_glm52]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.2"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM-5V-Turbo (Vision + coding — frontend recreation, GUI exploration, visual debugging) ---
+# Synced from provider_catalog.yaml: serves coding_glm (w=0.4) + vl_sentinel (w=0.7)
+[models.chat_zai_glm5v_turbo]
+routing = ["zai_glm5v_turbo"]
+
+[models.chat_zai_glm5v_turbo.providers.zai_glm5v_turbo]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5v-turbo"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
+[models.coding_qwen3_coder_30b_local]
+routing = ["ollama_local"]
+
+[models.coding_qwen3_coder_30b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "qwen3-coder:30b"
+api_key_location = "none"
+
+# --- DeepSeek-R1 14B (Chain-of-thought reasoning) ---
+[models.reasoning_deepseek_r1_14b_local]
+routing = ["ollama_local"]
+
+[models.reasoning_deepseek_r1_14b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "deepseek-r1:14b"
+api_key_location = "none"
+
+# --- Nemotron Super 49B (NVIDIA NIM hosted — 30GB VRAM) ---
+# Llama-3.3-Nemotron-Super-49B via NVIDIA NIM container (OpenAI-compatible)
+[models.nemotron_super_49b_nim]
+routing = ["nvidia_nim"]
+
+[models.nemotron_super_49b_nim.providers.nvidia_nim]
+type = "openai"
+api_base = "http://nvidia-nim:8000/v1"
+model_name = "nvidia/llama-3.3-nemotron-super-49b-v1"
+api_key_location = "none"
+
+# --- Qwen3-Coder-Next 80B-A3B MoE (Apache 2.0, Q4 ~51.7GB, pulled 2026-08-25) ---
+# Tag corrected: ":80b" never existed on the registry (dead tag from the Supabase
+# registry snapshot); the real tag is ":latest" per registry.ollama.ai manifest.
+[models.coding_qwen3_coder_next_80b_local]
+routing = ["ollama_local"]
+
+[models.coding_qwen3_coder_next_80b_local.providers.ollama_local]
+type = "openai"
+# In-network compose ollama (service alias pmoves-ollama, port 11434) — NOT
+# host.docker.internal: the 51.7GB qwen3-coder-next:latest pull completed in
+# the pmoves-ollama container (2026-08-25); the host instance does not carry
+# it. Cold load ~200ms verified from the gateway container.
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-coder-next:latest"
+api_key_location = "none"
+
+# --- Qwen3-Coder 480B (Alibaba Cloud DashScope — 35B active MoE, cloud-only) ---
+# Env var: ALIBABA_PRO_CODING_PLAN is the PMOVES canonical name for this secret
+# (also used by chat_alibaba_qwen at line 209 for the same DashScope endpoint,
+# and plumbed through docker-compose.yml with a `:-local-disabled` fallback).
+[models.coding_qwen3_coder_480b_cloud]
+routing = ["alibaba_dashscope"]
+
+[models.coding_qwen3_coder_480b_cloud.providers.alibaba_dashscope]
+type = "openai"
+api_base = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+model_name = "qwen3-coder"
+api_key_location = "env::ALIBABA_PRO_CODING_PLAN"
+
+# --- Gemma 3n E4B (Multimodal edge — ~3.5GB VRAM) ---
+[models.gemma_3n_e4b_local]
+routing = ["ollama_local"]
+
+[models.gemma_3n_e4b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "gemma3n:e4b"
+api_key_location = "none"
+
+# --- Gemma 3n E2B (Jetson edge — ~2GB VRAM) ---
+[models.gemma_3n_e2b_edge]
+routing = ["ollama_edge"]
+
+[models.gemma_3n_e2b_edge.providers.ollama_edge]
+type = "openai"
+api_base = "http://jetson-ollama:11434/v1"
+model_name = "gemma3n:e2b"
+api_key_location = "none"
+
+# --- Gemma 4 Family (Google, Apache 2.0, released 2026-04-02) ---
+# Current SOTA open multimodal — beats Llama 4 on AIME/LiveCodeBench/GPQA.
+# All variants routed to ollama_local by default. DGX Spark and AMD R9700
+# add dedicated routing variants in follow-up PRs.
+
+# Gemma 4 E2B (Effective 2B, 128K ctx, ~3GB Q4)
+[models.gemma_4_e2b_local]
+routing = ["ollama_local"]
+
+[models.gemma_4_e2b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "gemma4:e2b"
+api_key_location = "none"
+
+# Gemma 4 E4B (Effective 4B, 128K ctx, ~5GB Q4)
+[models.gemma_4_e4b_local]
+routing = ["ollama_local"]
+
+[models.gemma_4_e4b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "gemma4:e4b"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE (3.8B active, 256K ctx, ~15GB Q4)
+[models.gemma_4_26b_a4b_local]
+routing = ["ollama_local"]
+
+[models.gemma_4_26b_a4b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+# Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
+# Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
+model_name = "gemma4:26b"
+api_key_location = "none"
+
+# Gemma 4 31B Dense (SOTA multimodal, 256K ctx, ~18GB Q4)
+[models.gemma_4_31b_local]
+routing = ["ollama_local"]
+
+[models.gemma_4_31b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "gemma4:31b"
+api_key_location = "none"
+
+# --- DGX Spark Node Routing (GB10 Grace-Blackwell, 128GB unified LPDDR5X) ---
+# Heavyweight inference via Ollama CUDA backend on pmoves-spark.
+# Unified memory fits 200B-param-class models without VRAM copies.
+
+# Gemma 4 31B on DGX Spark (SOTA multimodal, unified memory)
+[models.gemma_4_31b_spark]
+routing = ["ollama_spark"]
+
+[models.gemma_4_31b_spark.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-spark:11434/v1"
+model_name = "gemma4:31b"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE on DGX Spark
+[models.gemma_4_26b_a4b_spark]
+routing = ["ollama_spark"]
+
+[models.gemma_4_26b_a4b_spark.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-spark:11434/v1"
+# Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
+# Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
+model_name = "gemma4:26b"
+api_key_location = "none"
+
+# Nemotron Super 49B on DGX Spark (Ollama native, no NIM container required)
+[models.nemotron_super_49b_spark]
+routing = ["ollama_spark"]
+
+[models.nemotron_super_49b_spark.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-spark:11434/v1"
+model_name = "nemotron:49b"
+api_key_location = "none"
+
+# --- AMD R9700 RDNA4 Node Routing (dual R9700, 64GB VRAM, ROCm 7.1+) ---
+# Port 8090: 8080 is reserved for Agent Zero fleet-wide (HERMES_AGENT_INTEGRATION.md).
+# Heavyweight inference via llama.cpp HIP backend on pmoves-9850x3d-r9700.
+# Ollama is NOT used here because its bundled ROCm v6 libs lack gfx1201 kernels.
+# Canonical runtime is `llama-server` (OpenAI-compatible, ships with llama.cpp).
+
+# Gemma 4 31B on AMD R9700 (llama.cpp ROCm, Q4 single card or FP16 dual split)
+[models.gemma_4_31b_rocm]
+routing = ["llamacpp_rocm"]
+
+[models.gemma_4_31b_rocm.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-9850x3d-r9700:8090/v1"
+model_name = "gemma-4-31b-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE on AMD R9700
+[models.gemma_4_26b_a4b_rocm]
+routing = ["llamacpp_rocm"]
+
+[models.gemma_4_26b_a4b_rocm.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-9850x3d-r9700:8090/v1"
+model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# --- Phase C: DGX Spark (GB10) + dual R9700 (RDNA4) dedicated variants -------
+# Added with new profile YAMLs (dgx-spark-grace-blackwell, workstation-9850x3d-
+# dual-r9700). All weight=0.0 for safe rollout — flip to small % after 48h soak
+# + load test, and after Phase D ships ARM64 multi-arch CI for Spark images.
+
+# Gemma 4 31B on DGX Spark (FP16, unified LPDDR5X)
+[models.ollama_spark_gemma4_31b_fp16]
+routing = ["ollama_spark"]
+
+[models.ollama_spark_gemma4_31b_fp16.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-gb10-spark:11434/v1"
+model_name = "gemma4:31b"
+api_key_location = "none"
+
+# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark
+# HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
+# License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201 lacks
+# FP8/NVFP4 kernels in ROCm 7.1 as of this date.
+[models.ollama_spark_nemotron3_super_120b_fp8]
+routing = ["ollama_spark"]
+
+[models.ollama_spark_nemotron3_super_120b_fp8.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-gb10-spark:11434/v1"
+model_name = "nemotron-3-super-120b-nvfp4"
+api_key_location = "none"
+
+# Gemma 4 31B on AMD R9700 (Q4_K_M single-GPU, llama.cpp HIP)
+# Custom fork: tlee933/llama.cpp-rdna4-gfx1201 (ROCm 7.1 + gfx1201 kernels)
+[models.llamacpp_rdna4_gemma4_31b_q4km]
+routing = ["llamacpp_rocm"]
+
+[models.llamacpp_rdna4_gemma4_31b_q4km.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-9850x3d-r9700:8090/v1"
+model_name = "gemma-4-31b-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split, --tensor-split 0.5,0.5)
+[models.llamacpp_rdna4_gemma4_26b_dual]
+routing = ["llamacpp_rocm"]
+
+[models.llamacpp_rdna4_gemma4_26b_dual.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-9850x3d-r9700:8090/v1"
+model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# --- Phase C: DGX Spark (GB10) + dual R9700 (RDNA4) dedicated variants -------
+# Added with new profile YAMLs (dgx-spark-grace-blackwell, workstation-9850x3d-
+# dual-r9700). All weight=0.0 for safe rollout — flip to small % after 48h soak
+# + load test, and after Phase D ships ARM64 multi-arch CI for Spark images.
+
+# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark
+# HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
+# License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201 lacks
+# FP8/NVFP4 kernels in ROCm 7.1 as of this date.
+[models.ollama_spark_nemotron3_super_120b_nvfp4]
+routing = ["ollama_spark"]
+
+[models.ollama_spark_nemotron3_super_120b_nvfp4.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-spark:11434/v1"
+model_name = "nemotron-3-super:120b"
+api_key_location = "none"
 
 [models.chat_together]
 routing = ["together_primary"]
@@ -259,6 +672,93 @@ api_base = "https://api.cloudflare.com/client/v4/accounts/fe5ef93f1ffc7070b2218b
 model_name = "@cf/openai/gpt-oss-20b"
 api_key_location = "env::CLOUDFLARE_API_TOKEN"
 
+# --- Gemini (Google AI via OpenAI-compatible endpoint) ---
+[models.chat_gemini_pro]
+routing = ["google_ai"]
+
+[models.chat_gemini_pro.providers.google_ai]
+type = "openai"
+api_base = "https://generativelanguage.googleapis.com/v1beta/openai"
+model_name = "gemini-2.5-flash"
+api_key_location = "env::GEMINI_API_KEY"
+
+# --- Claude (Anthropic native provider) ---
+[models.claude_sonnet_4]
+routing = ["anthropic_direct"]
+
+[models.claude_sonnet_4.providers.anthropic_direct]
+type = "anthropic"
+model_name = "claude-sonnet-4-20250514"
+api_key_location = "env::ANTHROPIC_API_KEY"
+
+# --- GLM-4 Model Family (Zhipu AI) ------------------------------------------
+#
+# Two endpoint classes — use them accordingly:
+#   CODING: https://api.z.ai/api/coding/paas/v4  (Z.ai Coding Plan — code gen only)
+#   GENERAL: https://open.bigmodel.cn/api/paas/v4 (BigModel.cn — all capabilities)
+#
+# The Coding endpoint is restricted to coding scenarios. General endpoint
+# supports reasoning, multilingual, long-context, and all other use cases.
+# chat_zai_glm (above, line ~237) uses the Coding endpoint for glm-4-flash.
+#
+# Three tiers: Flash (speed via Z.ai Coding), Plus (quality), Long (128k context)
+# HiRAG already uses glm-4-plus + embedding-3 (2048d) — see hi_Search_glm.py
+# TensorZero variant weights let you A/B test across tiers via ClickHouse metrics
+
+# GLM-4 Plus: quality tier for complex reasoning (direct BigModel.cn — general endpoint)
+[models.glm_4_plus]
+routing = ["bigmodel_direct"]
+
+[models.glm_4_plus.providers.bigmodel_direct]
+type = "openai"
+api_base = "https://open.bigmodel.cn/api/paas/v4"
+model_name = "glm-4-plus"
+api_key_location = "env::GLM_API_KEY"
+
+# GLM-4 Long: 128k context for large document analysis (direct BigModel.cn — general endpoint)
+[models.glm_4_long]
+routing = ["bigmodel_long"]
+
+[models.glm_4_long.providers.bigmodel_long]
+type = "openai"
+api_base = "https://open.bigmodel.cn/api/paas/v4"
+model_name = "glm-4-long"
+api_key_location = "env::GLM_API_KEY"
+
+# --- Multi-engine serving tier (llama.cpp / vLLM / NIM on SPARK) -----------
+# All three expose OpenAI-compatible endpoints. Weight=0.0 for safe rollout.
+# Flip weights after throughput-lab benchmarks confirm fitness.
+
+# llama.cpp (native ARM64+CUDA build, :8130)
+[models.llamacpp_spark_qwen30b]
+routing = ["llamacpp_spark"]
+
+[models.llamacpp_spark_qwen30b.providers.llamacpp_spark]
+type = "openai"
+api_base = "http://host.docker.internal:8130/v1"
+model_name = "qwen3"
+api_key_location = "none"
+
+# vLLM (community GB10 image, :8131)
+[models.vllm_spark_qwen35]
+routing = ["vllm_spark"]
+
+[models.vllm_spark_qwen35.providers.vllm_spark]
+type = "openai"
+api_base = "http://host.docker.internal:8131/v1"
+model_name = "qwen3.5"
+api_key_location = "none"
+
+# NIM (DGX-Spark model-free container, :8132)
+[models.nim_spark_llama8b]
+routing = ["nim_spark"]
+
+[models.nim_spark_llama8b.providers.nim_spark]
+type = "openai"
+api_base = "http://host.docker.internal:8132/v1"
+model_name = "meta/llama-3.1-8b-instruct"
+api_key_location = "none"
+
 # --- Embedding models ------------------------------------------------------
 
 [embedding_models.qwen3_embedding_4b_local]
@@ -266,7 +766,7 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.qwen3_embedding_4b_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-embedding:4b"
 api_key_location = "none"
 
@@ -276,16 +776,27 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.qwen3_embedding_8b_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-embedding:8b"
 api_key_location = "none"
 
 [embedding_models.gemma_embed_local]
 routing = ["ollama_local_embedding"]
+# BGE-M3 (568M, 1024d dense + sparse + ColBERT) — multi-tier embedding keystone.
+# Used by Hi-RAG hybrid search and the pmoves_hybrid collection. MIT license.
+[embedding_models.bge_m3_local]
+routing = ["ollama_local_embedding"]
+
+[embedding_models.bge_m3_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+model_name = "bge-m3"
+api_key_location = "none"
+
 
 [embedding_models.gemma_embed_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "embeddinggemma:300m"
 api_key_location = "none"
 
@@ -294,7 +805,7 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.archon_nomic_embed_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "nomic-embed-text"
 api_key_location = "none"
 
@@ -353,11 +864,16 @@ model_name = "togethercomputer/text-embedding-20-light"
 api_key_location = "env::TOGETHER_AI_API_KEY"
 
 # --- Functions -------------------------------------------------------------
+# NOTE: Embedding models are accessed directly via /v1/embeddings using
+# the model name (e.g., "qwen3_embedding_4b_local"). No function wrapper needed.
+# See embedding_models section above for available models.
 
 [functions.agent_zero]
 type = "chat"
 
 [functions.agent_zero.variants.local_qwen35_9b]
+# 2026-08-25 live-probe: tag not pulled on this node; zeroed until pulled (see models_sync registry-snapshot)
+weight = 0.0
 type = "chat_completion"
 model = "qwen35_9b"
 
@@ -366,52 +882,227 @@ type = "chat_completion"
 model = "qwen3_8b"
 
 [functions.agent_zero.variants.local_qwen35_27b]
+# 2026-08-25 live-probe: tag not pulled on this node; zeroed until pulled (see models_sync registry-snapshot)
+weight = 0.0
 type = "chat_completion"
 model = "qwen35_27b"
 
 [functions.agent_zero.variants.local_qwen35_4b]
+# 2026-08-25 live-probe: tag not pulled on this node; zeroed until pulled (see models_sync registry-snapshot)
+weight = 0.0
 type = "chat_completion"
 model = "qwen35_4b"
 
 [functions.agent_zero.variants.local_lfm2_24b]
+# 2026-08-25 live-probe: tag not pulled on this node; zeroed until pulled (see models_sync registry-snapshot)
+weight = 0.0
 type = "chat_completion"
 model = "lfm2_24b_a2b"
 
 [functions.agent_zero.variants.edge_qwen35_4b]
+# 2026-08-25: jetson-ollama host not present on this node
+weight = 0.0
 type = "chat_completion"
 model = "qwen35_4b_edge"
 
 [functions.agent_zero.variants.edge_qwen35_0_8b]
+# 2026-08-25: jetson-ollama host not present on this node
+weight = 0.0
 type = "chat_completion"
 model = "qwen35_0_8b_edge"
 
 [functions.agent_zero.variants.hosted_openai]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
 type = "chat_completion"
 model = "chat_openai_platform"
 
 [functions.agent_zero.variants.hosted_moonshot]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
 type = "chat_completion"
 model = "chat_moonshot"
 
 [functions.agent_zero.variants.hosted_openrouter]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
 type = "chat_completion"
 model = "chat_openrouter"
 
 [functions.agent_zero.variants.hosted_alibaba_qwen]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
 type = "chat_completion"
 model = "chat_alibaba_qwen"
 
 [functions.agent_zero.variants.hosted_venice]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
 type = "chat_completion"
 model = "chat_venice"
 
 [functions.agent_zero.variants.hosted_together]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
 type = "chat_completion"
 model = "chat_together"
 
 [functions.agent_zero.variants.hosted_gpt_oss]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
 type = "chat_completion"
 model = "chat_cloudflare_gpt_oss"
+
+[functions.agent_zero.variants.hosted_gemini]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
+type = "chat_completion"
+model = "chat_gemini_pro"
+
+# Claude — native Anthropic provider for orchestration quality
+[functions.agent_zero.variants.hosted_claude_sonnet]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
+type = "chat_completion"
+model = "claude_sonnet_4"
+
+[functions.agent_zero.variants.hosted_zai]
+type = "chat_completion"
+model = "chat_zai"
+
+# GLM Flash — fast multilingual utility (Z.ai Coding endpoint)
+[functions.agent_zero.variants.hosted_glm_flash]
+type = "chat_completion"
+model = "chat_zai_glm"
+
+# GLM Plus — quality tier for complex reasoning (BigModel.cn general endpoint)
+[functions.agent_zero.variants.hosted_glm_plus]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
+type = "chat_completion"
+model = "glm_4_plus"
+
+# GLM Long — 128k context for large documents (BigModel.cn general endpoint)
+[functions.agent_zero.variants.hosted_glm_long]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+weight = 0.0
+type = "chat_completion"
+model = "glm_4_long"
+
+# Nemotron Super 49B — NVIDIA NIM hosted (safe rollout, weight=0)
+[functions.agent_zero.variants.hosted_nim_nemotron]
+type = "chat_completion"
+model = "nemotron_super_49b_nim"
+weight = 0.0
+
+# Nemotron Super 49B on DGX Spark — Ollama native, no NIM container (weight=0)
+[functions.agent_zero.variants.hosted_spark_nemotron]
+type = "chat_completion"
+model = "nemotron_super_49b_spark"
+weight = 0.0
+
+# Gemma 4 31B on AMD R9700 — llama.cpp ROCm fallback for agent_zero (weight=0)
+[functions.agent_zero.variants.local_gemma_4_31b_rocm]
+type = "chat_completion"
+model = "gemma_4_31b_rocm"
+weight = 0.0
+
+# Gemma 4 26B-A4B MoE on AMD R9700 — llama.cpp ROCm fallback (weight=0)
+[functions.agent_zero.variants.local_gemma_4_26b_a4b_rocm]
+type = "chat_completion"
+model = "gemma_4_26b_a4b_rocm"
+weight = 0.0
+
+# Qwen3-Coder-Next 80B-A3B — current qwen coder generation. Tag corrected
+# to :latest (the :80b tag never existed on the registry); served from the
+# in-network compose ollama where the 51.7GB pull completed (2026-08-25).
+[functions.agent_zero.variants.local_qwen3_coder_next]
+type = "chat_completion"
+model = "coding_qwen3_coder_next_80b_local"
+weight = 0.3
+
+# GLM-5-Turbo — KiloCode primary (agentic, tool calling, long chains)
+# Temperature override: Z.AI default is 1.0; coding/agentic workflows need 0.0-0.3
+# per Z.AI coding plan docs + 4090 handoff report 2026-05-14
+# (research/HANDOFF_4090_FIXES_MAY2026.md item #1). 0.1 = deterministic enough
+# for tool-call correctness while preserving small variation for retries.
+[functions.agent_zero.variants.hosted_zai_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.6
+temperature = 0.1
+
+# GLM-5V-Turbo — vision + coding (frontend, GUI, visual debugging)
+# Same 0.1 override rationale as hosted_zai_turbo above.
+[functions.agent_zero.variants.hosted_zai_vision_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5v_turbo"
+# 2026-08-25 live-probe: 429 plan-gated ("subscription does not include
+# GLM-5V-Turbo"); re-enable when the coding plan adds vision access
+weight = 0.0
+temperature = 0.1
+
+# GLM-5.2 — latest GLM model (coding + reasoning via Z.AI coding endpoint)
+# Primary cloud model for orchestration when coding plan is active.
+# GLM-5.3 — newest quality tier on the Z.AI coding plan (verified live
+# 2026-08-25; thinking model — reasoning_content, needs real max_tokens)
+[functions.agent_zero.variants.hosted_zai_glm53]
+type = "chat_completion"
+model = "chat_zai_glm53"
+weight = 0.8
+
+[functions.agent_zero.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.8
+temperature = 0.1
+
+# --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
+# SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
+# Nemotron tag verified via /api/tags (nemotron-3-super:120b). R9700 variants remain 0.0.
+# Gemma 4 31B FP16 on DGX Spark
+[functions.agent_zero.variants.ollama_spark_gemma4_31b_fp16]
+# 2026-08-25: pmoves-gb10-spark DNS unresolvable from gateway; use host.docker.internal models
+weight = 0.0
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+
+# Nemotron-3-Super 120B on DGX Spark — model verified on SPARK 2026-05-10 (tag: nemotron-3-super:120b)
+[functions.agent_zero.variants.ollama_spark_nemotron3_super_120b_nvfp4]
+# 2026-08-25: pmoves-spark DNS unresolvable from gateway; use host.docker.internal models
+weight = 0.0
+type = "chat_completion"
+model = "ollama_spark_nemotron3_super_120b_nvfp4"
+
+# Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
+[functions.agent_zero.variants.llamacpp_rdna4_gemma4_31b_q4km]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_31b_q4km"
+weight = 0.0
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split)
+[functions.agent_zero.variants.llamacpp_rdna4_gemma4_26b_dual]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_26b_dual"
+weight = 0.0
+
+# Kimi K2.7-code — secondary cloud model for coding tasks
+[functions.agent_zero.variants.hosted_kimi_k2_7]
+# 2026-08-25 live-probe: provider key dead (401) — operator key custody; zeroed so routing only rolls working coding-plan/local variants
+type = "chat_completion"
+model = "chat_kimi_k2_7_code"
+weight = 0.0
+temperature = 0.2
+
+[functions.coding_kimi]
+type = "chat"
+
+[functions.coding_kimi.variants.cloud_kimi_k2_7_code]
+type = "chat_completion"
+model = "chat_kimi_k2_7_code"
+weight = 1.0
+temperature = 0.2
+max_tokens = 8192
 
 [functions.langextract]
 type = "chat"
@@ -586,6 +1277,17 @@ model = "chat_alibaba_qwen"
 type = "chat_completion"
 model = "chat_together"
 
+[functions.archon_work_orders.variants.hosted_gemini]
+type = "chat_completion"
+model = "chat_gemini_pro"
+
+# GLM-5.2 — Z.AI coding plan for work order generation
+[functions.archon_work_orders.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.7
+temperature = 0.2
+
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]
 type = "chat"
@@ -601,6 +1303,13 @@ model = "chat_openrouter"
 [functions.archon_code_review.variants.hosted_alibaba_qwen]
 type = "chat_completion"
 model = "chat_alibaba_qwen"
+
+# GLM-5.2 — Z.AI coding plan for code review
+[functions.archon_code_review.variants.hosted_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.6
+temperature = 0.1
 
 # --- Hi-RAG Reranking Function -----------------------------------------------
 [functions.hirag_rerank]
@@ -653,7 +1362,7 @@ api_key_location = "env::CLOUDFLARE_API_TOKEN"
 routing = ["ollama_local"]
 [models.vl_sentinel_qwen3vl_local.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://host.docker.internal:11434/v1"
 model_name = "qwen3-vl:8b"
 api_key_location = "none"
 
@@ -689,6 +1398,24 @@ type = "chat_completion"
 model = "chat_alibaba_qwen"
 weight = 0.0
 
+# Qwen3-Coder-Next 80B — local MoE (safe rollout, weight=0)
+[functions.coding.variants.local_qwen3_coder_next]
+type = "chat_completion"
+model = "coding_qwen3_coder_next_80b_local"
+weight = 0.0
+
+# Qwen3-Coder 480B — Alibaba Cloud (safe rollout, weight=0)
+[functions.coding.variants.cloud_qwen3_coder_480b]
+type = "chat_completion"
+model = "coding_qwen3_coder_480b_cloud"
+weight = 0.0
+
+# Gemma 4 31B FP16 on SPARK — Phase C soak for coding workloads (weight=0.1)
+[functions.coding.variants.spark_gemma4_31b_fp16]
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+weight = 0.1
+
 # Function: Orchestrator
 [functions.orchestrator]
 type = "chat"
@@ -716,4 +1443,485 @@ type = "chat_completion"
 model = "vl_sentinel_qwen3vl_local"
 weight = 1.0
 
+# --- Function: Multimodal Edge ------------------------------------------------
+# Gemma 3n models for lightweight multimodal inference on edge and local GPU
+[functions.multimodal_edge]
+type = "chat"
 
+[functions.multimodal_edge.variants.gemma_3n_e4b]
+type = "chat_completion"
+model = "gemma_3n_e4b_local"
+weight = 1.0
+
+[functions.multimodal_edge.variants.gemma_3n_e2b_edge]
+type = "chat_completion"
+model = "gemma_3n_e2b_edge"
+weight = 0.0
+
+# Gemma 4 E2B — new SOTA edge multimodal (safe rollout, weight=0)
+[functions.multimodal_edge.variants.gemma_4_e2b]
+type = "chat_completion"
+model = "gemma_4_e2b_local"
+weight = 0.0
+
+# Gemma 4 E4B — new SOTA edge multimodal (safe rollout, weight=0)
+[functions.multimodal_edge.variants.gemma_4_e4b]
+type = "chat_completion"
+model = "gemma_4_e4b_local"
+weight = 0.0
+
+# --- Function: Multimodal Large ----------------------------------------------
+# Gemma 4 26B-A4B and 31B for high-quality multimodal inference on heavyweight
+# GPU nodes (DGX Spark, dual R9700, 5090). Dedicated function keeps the
+# routing policy separate from multimodal_edge (E2B/E4B on smaller nodes).
+[functions.multimodal_large]
+type = "chat"
+
+# Gemma 4 26B-A4B — local Ollama DEFAULT route.
+# NOTE: This variant has no explicit weight, so it defaults to positive.
+# multimodal_large is a brand-new function (Phase 7); TensorZero requires at
+# least one positive-weight variant or it refuses to start the gateway.
+# 26B-A4B is the smallest local Gemma 4 option (~15GB VRAM via Q4_K_M),
+# making it the most defensible default across the fleet.
+[functions.multimodal_large.variants.gemma_4_26b_a4b]
+type = "chat_completion"
+model = "gemma_4_26b_a4b_local"
+
+# Gemma 4 31B — local Ollama fallback (safe rollout, weight=0)
+[functions.multimodal_large.variants.gemma_4_31b]
+type = "chat_completion"
+model = "gemma_4_31b_local"
+weight = 0.0
+
+# DGX Spark variants — all weight=0.0 for safe rollout
+[functions.multimodal_large.variants.gemma_4_31b_spark]
+type = "chat_completion"
+model = "gemma_4_31b_spark"
+weight = 0.0
+
+[functions.multimodal_large.variants.gemma_4_26b_a4b_spark]
+type = "chat_completion"
+model = "gemma_4_26b_a4b_spark"
+weight = 0.0
+
+# AMD R9700 variants — llama.cpp ROCm (safe rollout, weight=0)
+[functions.multimodal_large.variants.gemma_4_31b_rocm]
+type = "chat_completion"
+model = "gemma_4_31b_rocm"
+weight = 0.0
+
+[functions.multimodal_large.variants.gemma_4_26b_a4b_rocm]
+type = "chat_completion"
+model = "gemma_4_26b_a4b_rocm"
+weight = 0.0
+
+# --- Phase C multimodal_large variants — SPARK at 0.1 soak, R9700 at 0.0 ----
+# Gemma 4 31B FP16 on DGX Spark (unified memory, SOTA multimodal)
+[functions.multimodal_large.variants.ollama_spark_gemma4_31b_fp16]
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+weight = 0.1
+
+# Gemma 4 31B Q4_K_M on single R9700 (dedicated variant distinct from gemma_4_31b_rocm)
+[functions.multimodal_large.variants.llamacpp_rdna4_gemma4_31b_q4km]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_31b_q4km"
+weight = 0.0
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split, distinct from gemma_4_26b_a4b_rocm)
+[functions.multimodal_large.variants.llamacpp_rdna4_gemma4_26b_dual]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_26b_dual"
+weight = 0.0
+
+# --- Per-Stack Coding Functions (4090 Coding Workstation) ---
+# Each coding plan gets its own function for independent observability,
+# failover policies, and A/B testing between providers.
+
+# Claude Code local fallback (when Anthropic API unavailable)
+[functions.coding_claude_fallback]
+type = "chat"
+
+[functions.coding_claude_fallback.variants.local_qwen3_coder]
+type = "chat_completion"
+model = "coding_qwen3_coder_30b_local"
+
+[functions.coding_claude_fallback.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+[functions.coding_claude_fallback.variants.cloud_claude]
+type = "chat_completion"
+model = "claude_sonnet_4"
+
+[functions.coding_claude_fallback.variants.cloud_alibaba]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
+# Codex / OpenAI (cloud primary, local fallback)
+[functions.coding_codex]
+type = "chat"
+
+[functions.coding_codex.variants.cloud_openai]
+type = "chat_completion"
+model = "chat_openai_platform"
+
+[functions.coding_codex.variants.local_qwen3_coder]
+type = "chat_completion"
+model = "coding_qwen3_coder_30b_local"
+
+[functions.coding_codex.variants.cloud_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+# GLM Coding Plan — GLM-5-Turbo primary (synced from provider_catalog.yaml)
+
+# --- SPARK-proven local variants (2026-08-25) — real pulled weights, live-verified ---
+
+[functions.agent_zero.variants.local_qwen3_coder_30b]
+type = "chat_completion"
+model = "qwen3_coder_30b_local"
+weight = 0.4
+
+[functions.agent_zero.variants.local_qwen3_30b_a3b]
+type = "chat_completion"
+model = "qwen3_30b_a3b_local"
+weight = 0.4
+
+[functions.agent_zero.variants.local_qwen35_35b_a3b]
+type = "chat_completion"
+model = "qwen35_35b_a3b_local"
+weight = 0.3
+
+[functions.agent_zero.variants.local_gemma4_26b]
+type = "chat_completion"
+model = "gemma4_26b_local"
+weight = 0.3
+
+[functions.agent_zero.variants.local_hermes3_8b]
+type = "chat_completion"
+model = "hermes3_8b_local"
+weight = 0.3
+
+
+[functions.coding_glm]
+type = "chat"
+
+# Coding-focused variants — Z.AI defaults to temperature=1.0 which is too
+# creative for code generation. Override to 0.1 per Z.AI coding plan docs +
+# 4090 handoff report 2026-05-14 (research/HANDOFF_4090_FIXES_MAY2026.md #1).
+# Applies to all 4 coding_glm cloud variants (glm5-turbo, glm5v-turbo, glm5.1,
+# glm-flash) — the entire Z.AI coding endpoint family.
+[functions.coding_glm.variants.cloud_zai_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.8
+temperature = 0.1
+
+[functions.coding_glm.variants.cloud_zai_vision_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5v_turbo"
+weight = 0.4
+temperature = 0.1
+
+[functions.coding_glm.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.1
+
+[functions.coding_glm.variants.cloud_zai_glm_flash]
+type = "chat_completion"
+model = "chat_zai_glm"
+temperature = 0.1
+
+# GLM-5.2 — flagship, highest priority for coding plan
+[functions.coding_glm.variants.cloud_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.9
+temperature = 0.1
+
+[functions.coding_glm.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+# KiloCode GLM Coding Plan (KiloCode plan-routed + GLM fallback)
+# Dedicated function for KiloCode VS Code agent on 5090.
+# Uses KiloCode's own kilo-auto/balanced as primary with GLM-5.2/Turbo fallback.
+[functions.coding_kilocode]
+type = "chat"
+
+[functions.coding_kilocode.variants.cloud_kilocode]
+type = "chat_completion"
+model = "chat_kilocode"
+weight = 0.7
+temperature = 0.1
+
+[functions.coding_kilocode.variants.cloud_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+weight = 0.5
+temperature = 0.1
+
+[functions.coding_kilocode.variants.cloud_zai_glm5_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.3
+temperature = 0.1
+
+[functions.coding_kilocode.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+[functions.coding_kilocode.variants.cloud_zai_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.8
+
+[functions.coding_kilocode.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.2
+
+# MiniMax Token Plan (cloud primary, local fallback)
+[functions.coding_minimax]
+type = "chat"
+
+[functions.coding_minimax.variants.cloud_minimax]
+type = "chat_completion"
+model = "chat_minimax"
+
+[functions.coding_minimax.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+[functions.coding_minimax.variants.cloud_together]
+type = "chat_completion"
+model = "chat_together"
+
+# Alibaba Coding Plan (cloud primary, local fallback)
+[functions.coding_alibaba]
+type = "chat"
+
+[functions.coding_alibaba.variants.cloud_alibaba]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
+[functions.coding_alibaba.variants.local_qwen3_coder]
+type = "chat_completion"
+model = "coding_qwen3_coder_30b_local"
+
+[functions.coding_alibaba.variants.cloud_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+
+
+# =====================================================================
+# Cloud-hybrid tiers (2026-07-02, spec rev 4): cloud coding plans
+# orchestrate; local models are worker siblings. Sibling escalation is
+# same-family only. Worker model rows are REGISTRY-MANAGED (Supabase via
+# model-registry :8110) — no hardcoded local model IDs in this file.
+# =====================================================================
+
+# --- Kilo Code (coding plan, OpenRouter-compatible gateway) ---
+# Verified 2026-07-02 via GET https://api.kilocode.ai/api/openrouter/models
+[models.chat_kilocode]
+routing = ["kilocode_primary"]
+
+[models.chat_kilocode.providers.kilocode_primary]
+type = "openai"
+api_base = "https://api.kilocode.ai/api/openrouter"
+model_name = "kilo-auto/balanced"
+api_key_location = "env::KILOCODE_API_KEY"
+
+# --- Ollama Cloud (Ollama Pro plan) ---
+# Verified 2026-07-02 via this account's model list (glm-5.2 present)
+[models.chat_ollama_cloud_default]
+routing = ["ollama_cloud_primary"]
+
+[models.chat_ollama_cloud_default.providers.ollama_cloud_primary]
+type = "openai"
+api_base = "https://ollama.com/v1"
+model_name = "glm-5.2"
+api_key_location = "env::OLLAMA_API_KEY"
+
+# --- HuggingFace Inference Router (orchestrator fallback) ---
+# Verified 2026-07-02 via GET https://router.huggingface.co/v1/models
+[models.chat_hf_router]
+routing = ["hf_router_primary"]
+
+[models.chat_hf_router.providers.hf_router_primary]
+type = "openai"
+api_base = "https://router.huggingface.co/v1"
+model_name = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+api_key_location = "env::HF_TOKEN"
+
+# ============================================================================
+# BEGIN REGISTRY-MANAGED MODELS (generated — do not hand-edit)
+# Source of truth: model-registry :8110 (Supabase pmoves_core.*).
+# Refresh: python pmoves/tools/tz_registry_sync.py
+# Bootstrap state: lane aliases route to same-family CLOUD PARENTS until
+# signed local candidates are promoted through /api/model-candidates.
+# ============================================================================
+
+[models.registry_worker_glm]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_glm.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.1"
+api_key_location = "env::Z_AI_API_KEY"
+
+[models.registry_worker_qwen]
+routing = ["local_active"]
+
+[models.registry_worker_qwen.providers.local_active]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+# qwen3.5:35b-a3b (q4_K_M GGUF, 24GB, MoE 3B-active): current-gen open worker,
+# replaces stale qwen3-coder:30b (never pulled on 5090). Needs ollama >= 0.31.
+# NOTE: the smaller -int4 tag is an MLX quant — macOS-only (412 on Linux).
+model_name = "qwen3.5:35b-a3b"
+api_key_location = "none"
+
+[models.registry_worker_hermes]
+routing = ["bootstrap_parent"]
+
+# Verified 2026-07-02 via GET https://openrouter.ai/api/v1/models
+[models.registry_worker_hermes.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://openrouter.ai/api/v1"
+model_name = "nousresearch/hermes-4-70b"
+api_key_location = "env::OPENROUTER_API_KEY"
+
+[models.registry_worker_kimi]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_kimi.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://api.moonshot.ai/v1"
+model_name = "moonshot-v1-32k"
+api_key_location = "env::MOONSHOT_API_KEY"
+
+# ============================================================================
+# END REGISTRY-MANAGED MODELS
+# ============================================================================
+
+# --- Orchestrator functions (cloud coding plans) ---
+
+[functions.pmoves_orchestrator_coding]
+type = "chat"
+
+[functions.pmoves_orchestrator_coding.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.2
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_orchestrator_coding.variants.cloud_zai_glm52]
+type = "chat_completion"
+model = "chat_zai_glm52"
+temperature = 0.2
+max_tokens = 131072
+weight = 0.9
+
+[functions.pmoves_orchestrator_coding.variants.cloud_kimi]
+type = "chat_completion"
+model = "chat_kimi_k2_7_code"
+temperature = 0.2
+max_tokens = 131072
+weight = 0.5
+
+[functions.pmoves_orchestrator_coding.variants.cloud_alibaba]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.0
+
+[functions.pmoves_orchestrator_coding.variants.cloud_kilocode]
+type = "chat_completion"
+model = "chat_kilocode"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.3
+
+[functions.pmoves_orchestrator_coding.variants.cloud_ollama_default]
+type = "chat_completion"
+model = "chat_ollama_cloud_default"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.0
+
+[functions.pmoves_orchestrator_coding.variants.cloud_hf_router]
+type = "chat_completion"
+model = "chat_hf_router"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.0
+
+[functions.pmoves_orchestrator_chat]
+type = "chat"
+
+[functions.pmoves_orchestrator_chat.variants.cloud_ollama_default]
+type = "chat_completion"
+model = "chat_ollama_cloud_default"
+temperature = 0.7
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_orchestrator_chat.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.7
+max_tokens = 8192
+weight = 0.0
+
+# --- Worker functions: registry lane aliases ONLY (no-hardcoded-models gate) ---
+
+[functions.pmoves_worker_glm]
+type = "chat"
+
+[functions.pmoves_worker_glm.variants.lane]
+type = "chat_completion"
+model = "registry_worker_glm"
+temperature = 0.2
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_worker_qwen]
+type = "chat"
+
+[functions.pmoves_worker_qwen.variants.lane]
+type = "chat_completion"
+model = "registry_worker_qwen"
+temperature = 0.2
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_worker_hermes]
+type = "chat"
+
+[functions.pmoves_worker_hermes.variants.lane]
+type = "chat_completion"
+model = "registry_worker_hermes"
+temperature = 0.7
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_worker_kimi]
+type = "chat"
+
+[functions.pmoves_worker_kimi.variants.lane]
+type = "chat_completion"
+model = "registry_worker_kimi"
+temperature = 0.2
+max_tokens = 8192
+weight = 1.0

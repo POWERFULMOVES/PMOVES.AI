@@ -1,14 +1,14 @@
 # PMOVES.AI Agents Documentation
 
-**Last updated:** 2026-03-12
-**Files:** 73+ documents across 7 tiers
-**Registry:** 60 agents in `pmoves/config/agent_registry.yaml` (taxonomy v1.4.0)
+**Last updated:** 2026-04-01
+**Files:** 109 documents across 7 tiers (67 root + 41 SUBMODULE_CODEX_HOMES)
+**Registry:** 76 agents in `pmoves/config/agent_registry.yaml` (taxonomy v1.4.0)
 
 ---
 
 ## Start Here
 
-1. **[agent_registry.yaml](../../config/agent_registry.yaml)** — Single source of truth for all 60 agents (class, type, port, NATS, CHIT toggles)
+1. **[agent_registry.yaml](../../config/agent_registry.yaml)** — Single source of truth for all 76 agents (class, type, port, NATS, CHIT toggles)
 2. **[PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md)** — 4 classes (legendary/standard/specialized/utility), 7 service tiers, evolution stages
 3. **[AGENT_TAXONOMY_CROSS_REFERENCE.md](./AGENT_TAXONOMY_CROSS_REFERENCE.md)** — Maps 18 documents with change-impact matrix
 4. **[IMPLEMENTATION_GAP_ANALYSIS.md](./IMPLEMENTATION_GAP_ANALYSIS.md)** — What's built vs. what's planned
@@ -47,7 +47,7 @@ The creator-network lane treats Codex as a legendary operator that can traverse:
 - Channel Monitor for source discovery, scheduling, and event routing
 - transcribe-and-fetch for transcript and fetch augmentation
 - Jellyfin and publisher surfaces for playback, packaging, and downstream publishing
-- Discord and BoTZ for agent-mediated response, routing, and operator interaction
+- Discord via ClaWZ (PMOVES-ClawZ) for agent-mediated response, routing, and operator interaction
 - CATACLYSM_STUDIOS_INC for business, brand, and community constraints that govern what the stack should do
 - local and remote model tiers for extraction, embedding, rerank, narration, and orchestration
 
@@ -61,8 +61,8 @@ Foundation documents defining the agent classification system.
 
 | File | Purpose |
 |------|---------|
-| [PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md) | Class definitions, evolution stages, layer model (v1.4.0) |
-| [PMOVES_UNIFIED_AGENT_TAXONOMY.md](./PMOVES_UNIFIED_AGENT_TAXONOMY.md) | Unified view across all 60 agents |
+| [PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md) | Class definitions, evolution stages, layer model (v1.5.0) |
+| [PMOVES_UNIFIED_AGENT_TAXONOMY.md](./PMOVES_UNIFIED_AGENT_TAXONOMY.md) | Unified view across all 76 agents |
 | [PERSONAS.md](./PERSONAS.md) | Persona framework: schema, inheritance, CHIT attribution, 325+ catalog vision |
 | [PMOVES_AGENT_TOPOLOGY.md](./PMOVES_AGENT_TOPOLOGY.md) | Network topology and inter-agent communication patterns |
 
@@ -76,7 +76,7 @@ Cross-cutting patterns that govern how agents interact.
 | [AGENT_RESILIENCE_PATTERNS.md](./AGENT_RESILIENCE_PATTERNS.md) | 3-layer resilience model (preventive → Cipher recovery → registry systemic) |
 | [AGENT_CONTEXT_PATTERNS.md](./AGENT_CONTEXT_PATTERNS.md) | Universal 4-tier context hierarchy for all agents |
 | [PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md](./PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md) | Geometry visualization surface and toggle schema |
-| [BOTZ_GATEWAY_AGENT_INTEGRATION.md](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) | BoTZ Gateway integration proposal (speculative — not yet implemented) |
+| [BOTZ_GATEWAY_AGENT_INTEGRATION.md](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) | ~~BoTZ Gateway integration proposal~~ **ARCHIVED (2026-04-19)** — see `archive/founding-strategy/` |
 | [PmovesSKillZ.md](./PmovesSKillZ.md) | Skill bundle definitions and marketplace patterns |
 
 ### Tier 3: Configuration (3 files)
@@ -85,11 +85,11 @@ Machine-readable configuration referenced by scripts and services.
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `agent_registry.yaml` | `pmoves/config/` | Single source of truth (60 agents) |
+| `agent_registry.yaml` | `pmoves/config/` | Single source of truth (76 agents) |
 | `model_strengths.yaml` | `pmoves/config/` | Model capability ratings for routing |
 | `skill-pairings.yaml` | `pmoves/configs/` | 7 FlOO$ skill pairings with dependencies |
 
-### Tier 4: Operator Guides (9 files)
+### Tier 4: Operator Guides (10 files)
 
 Runbooks for Codex and Claude operators.
 
@@ -104,6 +104,7 @@ Runbooks for Codex and Claude operators.
 | [CODEX_PERSONA_STYLE_PLAYBOOK.md](./CODEX_PERSONA_STYLE_PLAYBOOK.md) | Persona voice/style configuration |
 | [KRISS_KROSS_ACCORD.md](./KRISS_KROSS_ACCORD.md) | Multi-agent collision safety protocol (ratified 2026-02-25) |
 | [KRISS_KROSS_ACK.md](./KRISS_KROSS_ACK.md) | Witness attestation for KRISS KROSS ratification |
+| [OPERATOR_FACING_CLAUDE_MD_MIRRORS.md](./OPERATOR_FACING_CLAUDE_MD_MIRRORS.md) | Operator-facing mirrors of `.claude/CLAUDE.md` runbook sections (submodule recovery, CodeQL sanitizer) |
 
 ### Creator Control Plane
 
@@ -132,7 +133,8 @@ Cultural anchors, aspirational notes, and vision documents.
 | [AGNOTE4482.BEATS.md](./AGNOTE4482.BEATS.md) | Aspirational/cultural anchor (4 lines) |
 | [AGNOTE4482.FlOO$.md](./AGNOTE4482.FlOO%24.md) | FlOO$ lyrical/cultural anchor |
 | [AGNOTE4482FLUTE.md](./AGNOTE4482FLUTE.md) | Flute voice stack aspirational (4 lines) |
-| [agent_vision_notes.md](./agent_vision_notes.md) | Prosodic bridge spec (BPM encoder — actionable, implementation pending) |
+| [AGNOTE4482DnB.PHI.Orchestra.md](./AGNOTE4482DnB.PHI.Orchestra.md) | Z890 DnB convergence score — dual jewels, topology, handoff to 4090+5090 |
+| [agent_vision_notes.md](./agent_vision_notes.md) | Prosodic bridge spec (BPM encoder — implemented in `pmoves/tools/bpm_encoder.py`, 574 lines, PR #1168) |
 | [agnotes2.md](./agnotes2.md) | Shell output snapshot (historical) |
 | [agnotes3.md](./agnotes3.md) | 4-line vision note (historical) |
 | [CRUSH_OPERATOR_HOME.md](./CRUSH_OPERATOR_HOME.md) | Crush CLI companion operator guide |
@@ -163,7 +165,7 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 | File | Purpose |
 |------|---------|
 | [AI Agent Integration and Best Practices.md](<./AI Agent Integration and Best Practices.md>) | A2A blueprint and thread engineering patterns |
-| [Aligning AI Agents with Indy Dev Dan.md](<./Aligning AI Agents with Indy Dev Dan.md>) | Theoretical foundation for agent alignment |
+| [Aligning AI Agents with Indy Dev Dan.md](<./Aligning AI Agents with Indy Dev Dan.md>) | ~~Theoretical foundation~~ **ARCHIVED (2026-04-19)** — see `archive/founding-strategy/` |
 | [PMOVES.AI Agentic Architecture Deep Dive.md](<./PMOVES.AI Agentic Architecture Deep Dive.md>) | Architecture deep dive with geometric cognitive architectures |
 
 ### Additional Files
@@ -182,12 +184,13 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 
 ## Quick Links
 
-- **Agent count:** 60 registered agents (`python -m pmoves.tools.agent_taxonomy_helper list`)
-- **External contributors:** 7 listed in `pmoves/config/agent_registry.yaml` (`claude-opus`, `kilocode`, `codex`, `gemini`, `cline`, `powerfulmoves`, `crush`)
-- **Taxonomy version:** v1.4.0
+- **Agent count:** 76 registered agents (+ 13 external contributors) (`python -m pmoves.tools.agent_taxonomy_helper list`)
+- **External contributors:** 13 listed in `pmoves/config/agent_registry.yaml` (`claude-opus`, `kilocode`, `codex`, `gemini`, `cline`, `powerfulmoves`, `crush`, `z890-claude`, `5090-claude`, `4090-claude`, `botz-architect`, `botz-builder`, `botz-auditor`)
+- **Taxonomy version:** v1.5.0
 - **Persona seeds:** 8 standard personas in `pmoves/supabase/initdb/17_persona_seed.sql`
 - **Model registry:** `pmoves/config/gpu-models.yaml`
 - **Skill pairings:** `pmoves/configs/skill-pairings.yaml` (7 FlOO$ pairings)
+- **Model Integration Framework:** `../PMOVES_MODEL_INTEGRATION_FRAMEWORK.md` _(lands via PR #1309)_
 - **Submodule skill routing:** `pmoves/configs/submodule_skill_registry.json`
 - **Mermaid diagrams:** 5 regenerable via `python -m pmoves.tools.agent_taxonomy_helper`
 
@@ -197,13 +200,14 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 
 | Priority | Gap | Owner |
 |----------|-----|-------|
-| P0 | BoTZ JWT HAS_JOSE fail-open (`features/mcp_bridge/auth.py:57-59`) | BoTZ submodule PR |
-| P0 | 111 unauthenticated NATS references across submodules | Batch migration effort |
-| P0 | A2A server (`/.well-known/agent.json`) not exposed on Agent Zero | Architecture work |
-| P1 | BoTZ Gateway integration speculative (proposal, not implemented) | See [BOTZ_GATEWAY_AGENT_INTEGRATION.md](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) |
-| P1 | Health/Wealth services pre-stage (no healthz, metrics, NATS, CHIT) | See [AGNOTE4482.md](./AGNOTE4482.md) |
-| P2 | BPM encoder spec exists but `bpm_encoder.py` not implemented | See [agent_vision_notes.md](./agent_vision_notes.md) |
-| P2 | Observability Map (`OBSERVABILITY_MAP.md`) referenced but doesn't exist | Create from Production Audit Lane C |
+| ~~P0~~ | ~~BoTZ JWT HAS_JOSE fail-open~~ | **RESOLVED** — BoTZ PR #79 merged. `gateway.py` and `auth.py` both return HTTPException 500 (fail-closed) when HAS_JOSE or JWT_SECRET is missing. Verified 2026-04-01. |
+| ~~P0~~ | ~~~100+ unauthenticated NATS references in `pmoves/`~~ | **CLOSED NON-URGENT (#1690, 2026-06-04)** — deployment already authed via `env.shared`; DoX migrated. Down to ~23 stale `:4222` refs in `pmoves/`; do not sweep the drifted copies (`[[project_nats_auth_lane_b_non_urgent]]`). |
+| P0 | A2A server (`/.well-known/agent.json`) — code at `services/agent-zero/python/features/a2a/server.py`; **now wired into compose** (`docker-compose.agents.yml`) | **Runtime-verify only** — confirm the endpoint serves; exposure gap closed. |
+| ~~P1~~ | ~~BoTZ Gateway integration speculative~~ | **ARCHIVED (2026-04-19)** — BoTZ era doc moved to `archive/founding-strategy/`. Discord now via ClaWZ. |
+| ~~P2~~ | ~~BPM encoder spec exists but `bpm_encoder.py` not implemented~~ | **RESOLVED** — `pmoves/tools/bpm_encoder.py` implemented (574 lines), delivered in PR #1168 (Shift Crew tools, 2026-04-01). |
+| ~~P2~~ | ~~Observability Map (`OBSERVABILITY_MAP.md`) referenced but doesn't exist~~ | **RESOLVED** — `pmoves/docs/services/monitoring/OBSERVABILITY_MAP.md` now on `main`. |
+
+> **Fleet-governance state (2026-06-11, Z890 campaign):** all fork-sync drift cleared (auto-tier + high-ahead + CRITICAL-huge synced, gitlinks promoted); branch protection applied to 31 naked hardened forks (`branch-protection-sync.yml`, App `Administration:RW` validated); supabase CRITICAL sync landed; Archon CI green (`test` lint + E2E). See claim register § *Fleet Fork-Sync + Branch-Protection + Supabase + Archon CI Campaign (2026-06-09 → 06-11)*.
 
 ---
 

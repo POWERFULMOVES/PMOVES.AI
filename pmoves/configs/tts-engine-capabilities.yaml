@@ -1,0 +1,725 @@
+# TTS Engine Capability Registry
+# Source of truth for all 14 engines in Ultimate-TTS-Studio.
+# Agents query this file to discover expressive dimensions per engine.
+#
+# Schema:
+#   id:                    Internal engine identifier (matches test script + Gradio API)
+#   name:                  Display name (matches Gradio dropdown label)
+#   category:              preset-voices | voice-cloning | emotion-control | multilingual | podcast
+#   voice_cloning:         Whether the engine supports reference-audio voice cloning
+#   license:               SPDX-ish license identifier for the upstream model weights (see license_policy below)
+#   upstream:               Hugging Face / GitHub URL of the engine's authors (attribution + traffic)
+#   expressive_dimensions: Machine-readable knob map — every tunable parameter agents can set
+#   languages:             Supported language codes
+#   latency_tier:          ultra-fast | fast | medium | slow
+#   vram_estimate_mb:      Approximate GPU VRAM when model is loaded
+#   prosodic_technique:    Primary technique for expressiveness (links to HARDWARE_TTS_REQUIREMENTS.md)
+#   best_for:              One-line description of ideal use case
+#   persona_default:       Default voice-persona slug (links to voice-personas.md)
+#   ref_audio:             Reference audio requirements (for cloning engines)
+#   synth_endpoint:        "unified" (default) or "separate" (e.g., VibeVoice)
+
+# ═══════════════════════════════════════════════════════════════════
+# License Policy — Self-Host Transparency, Not Gatekeeping
+# ═══════════════════════════════════════════════════════════════════
+#
+# This registry orchestrates SELF-HOSTED engines; the repo ships routing
+# config, not model weights. Each operator runs engines on their own
+# servers under the engine's own license.
+#
+#   - Private / community self-host: run under the engine's terms.
+#   - Commercial redistribution of a license-restricted engine: reach out
+#     to partner with the upstream author (PMOVES amplifies + credits
+#     upstream — win-win, non-extractive, never strip attribution).
+#
+# We keep EVERY engine available, including CC-BY-NC / custom-EULA ones —
+# this file makes each engine's license VISIBLE so a cloner or commercial
+# builder can decide for themselves, and so PMOVES can drive traffic to,
+# and partner with, the upstream authors.
+#
+# Verify each engine's current license on its upstream card before a
+# commercial build — licenses change between checkpoints/releases.
+license_policy:
+  summary: >
+    PMOVES ships self-host routing config, not model weights. Each operator
+    self-hosts the listed engines under that engine's own license terms.
+    Community/private self-host: run under the engine's terms as-is.
+    Commercial redistribution of a license-restricted engine: contact the
+    upstream author to partner (PMOVES amplifies + credits upstream —
+    non-extractive, win-win). All engines stay listed regardless of license
+    — transparency over removal. Verify current license on the upstream
+    card before any commercial build; license terms can change per release.
+  last_verified: "2026-07-10"
+
+engines:
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: preset-voices — No voice cloning, fixed voice set
+  # ═══════════════════════════════════════════════════════════════════
+
+  kitten_tts:
+    name: KittenTTS
+    category: preset-voices
+    voice_cloning: false
+    license: Apache-2.0
+    upstream: https://huggingface.co/KittenML/kitten-tts-nano-0.1
+    voices:
+      - expr-voice-2-m
+      - expr-voice-2-f
+      - expr-voice-3-m
+      - expr-voice-3-f
+      - expr-voice-4-m
+      - expr-voice-4-f
+      - expr-voice-5-m
+      - expr-voice-5-f
+    expressive_dimensions:
+      kitten_voice:
+        type: enum
+        values: [expr-voice-2-m, expr-voice-2-f, expr-voice-3-m, expr-voice-3-f,
+                 expr-voice-4-m, expr-voice-4-f, expr-voice-5-m, expr-voice-5-f]
+        default: expr-voice-2-f
+    languages: [en]
+    latency_tier: ultra-fast
+    vram_estimate_mb: 500
+    prosodic_technique: none
+    best_for: "Low-latency real-time, CLI agent voice"
+    persona_default: pmoves-crush
+
+  kokoro:
+    name: Kokoro TTS
+    category: preset-voices
+    voice_cloning: false
+    license: Apache-2.0
+    upstream: https://huggingface.co/hexgrad/Kokoro-82M
+    voices: [af_heart, af_sarah, am_adam, am_michael, bf_emma, bm_lewis]
+    expressive_dimensions:
+      kokoro_voice:
+        type: enum
+        values: [af_heart, af_sarah, am_adam, am_michael, bf_emma, bm_lewis]
+        default: af_heart
+      kokoro_speed:
+        type: float
+        range: [0.5, 2.0]
+        default: 1.0
+        description: "Speech speed multiplier"
+    languages: [en]
+    latency_tier: fast
+    vram_estimate_mb: 800
+    prosodic_technique: punctuation-engineering
+    best_for: "Warm narration, introductions, host voice"
+    persona_default: agent-zero-default
+
+  higgs:
+    name: Higgs Audio
+    category: preset-voices
+    voice_cloning: false
+    license: "Custom EULA (Boson AI community license, license:other on HF) — VERIFY per checkpoint"
+    upstream: https://huggingface.co/bosonai
+    expressive_dimensions:
+      higgs_voice_preset:
+        type: enum
+        values: [EMPTY]
+        default: EMPTY
+        description: "Voice preset selector (EMPTY = default voice)"
+      higgs_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 1.0
+        description: "Sampling temperature — higher = more expressive/varied"
+      higgs_top_p:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.95
+        description: "Nucleus sampling threshold"
+      higgs_top_k:
+        type: int
+        range: [1, 200]
+        default: 50
+        description: "Top-k token selection"
+      higgs_max_tokens:
+        type: int
+        range: [128, 4096]
+        default: 1024
+        description: "Maximum generation tokens"
+    languages: [en]
+    latency_tier: fast
+    vram_estimate_mb: 1500
+    prosodic_technique: temperature-control
+    best_for: "Streaming synthesis, pre-cached model"
+    persona_default: streaming-agent
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: voice-cloning — Reference-audio based voice cloning
+  # ═══════════════════════════════════════════════════════════════════
+
+  f5_tts:
+    name: F5-TTS
+    category: voice-cloning
+    voice_cloning: true
+    license: "CC-BY-NC-4.0 (NON-COMMERCIAL)"
+    upstream: https://huggingface.co/SWivid/F5-TTS
+    models: [F5-TTS Base, F5-TTS v1 Base, F5-TTS French, F5-TTS German, F5-TTS Japanese, F5-TTS Spanish]
+    expressive_dimensions:
+      f5_speed:
+        type: float
+        range: [0.5, 2.0]
+        default: 1.0
+        description: "Speech speed multiplier"
+      f5_cross_fade:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.15
+        description: "Cross-fade duration between chunks"
+      f5_remove_silence:
+        type: bool
+        default: false
+        description: "Strip silence from output"
+    ref_audio:
+      required: true
+      ref_text: true
+      duration_sec: "10-15"
+      format: "WAV or MP3, 44.1kHz"
+    languages: [en, fr, de, ja, es]
+    latency_tier: medium
+    vram_estimate_mb: 2000
+    prosodic_technique: reference-audio-cloning
+    best_for: "High-quality cloning, GRAMS narration, beat-sync"
+    persona_default: archon-narrator
+
+  fish:
+    name: Fish Speech S1
+    category: voice-cloning
+    voice_cloning: true
+    license: "CC-BY-NC-SA-4.0 (fishaudio) — VERIFY per checkpoint"
+    upstream: https://huggingface.co/fishaudio
+    expressive_dimensions:
+      fish_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      fish_top_p:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.8
+        description: "Nucleus sampling threshold"
+      fish_repetition_penalty:
+        type: float
+        range: [1.0, 2.0]
+        default: 1.1
+        description: "Repetition penalty factor"
+      fish_max_tokens:
+        type: int
+        range: [128, 4096]
+        default: 1024
+        description: "Maximum generation tokens"
+    ref_audio:
+      required: false
+      ref_text: false
+      duration_sec: "5-15"
+    languages: [en, zh, ja]
+    latency_tier: medium
+    vram_estimate_mb: 1500
+    prosodic_technique: temperature-control
+    best_for: "Quick zero-shot voice cloning demos"
+    persona_default: quick-clone
+
+  fish_s2:
+    name: Fish Speech S2 Pro
+    category: voice-cloning
+    voice_cloning: true
+    license: "CC-BY-NC-SA-4.0 (fishaudio, e.g. OpenAudio-S1) — VERIFY per checkpoint"
+    upstream: https://huggingface.co/fishaudio
+    expressive_dimensions:
+      fish_s2_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      fish_s2_top_p:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.8
+        description: "Nucleus sampling threshold"
+      fish_s2_repetition_penalty:
+        type: float
+        range: [1.0, 2.0]
+        default: 1.1
+        description: "Repetition penalty factor"
+      fish_s2_max_tokens:
+        type: int
+        range: [128, 4096]
+        default: 1024
+        description: "Maximum generation tokens"
+    ref_audio:
+      required: false
+      ref_text: false
+      duration_sec: "5-15"
+    languages: [en, zh, ja, ko, fr, de, ar, es, pt, it, th, vi, ru]
+    latency_tier: medium
+    vram_estimate_mb: 2000
+    prosodic_technique: reference-audio-cloning
+    best_for: "Agent card voice profiles, 13-language zero-shot clone"
+    persona_default: agent-card-voice
+
+  voxcpm:
+    name: VoxCPM
+    category: voice-cloning
+    voice_cloning: true
+    license: Apache-2.0
+    upstream: https://huggingface.co/openbmb/VoxCPM-0.5B
+    expressive_dimensions:
+      voxcpm_cfg_value:
+        type: float
+        range: [0.5, 5.0]
+        default: 2.0
+        description: "Classifier-free guidance scale"
+      voxcpm_inference_timesteps:
+        type: int
+        range: [1, 50]
+        default: 10
+        description: "Diffusion inference steps — more = higher quality, slower"
+      voxcpm_normalize:
+        type: bool
+        default: true
+        description: "Normalize output audio levels"
+      voxcpm_denoise:
+        type: bool
+        default: true
+        description: "Apply denoising to output"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en, zh]
+    latency_tier: medium
+    vram_estimate_mb: 2000
+    prosodic_technique: diffusion-guidance
+    best_for: "Voice cloning + transcription verification"
+    persona_default: clone-verify
+
+  indextts:
+    name: IndexTTS
+    category: voice-cloning
+    voice_cloning: true
+    license: Apache-2.0
+    upstream: https://huggingface.co/IndexTeam/Index-TTS
+    expressive_dimensions:
+      indextts_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en, zh]
+    latency_tier: fast
+    vram_estimate_mb: 1200
+    prosodic_technique: temperature-control
+    best_for: "Fast batch synthesis with lightweight model"
+    persona_default: batch-synth
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: emotion-control — Fine-grained emotion vector control
+  # ═══════════════════════════════════════════════════════════════════
+
+  indextts2:
+    name: IndexTTS2
+    category: emotion-control
+    voice_cloning: true
+    license: "No OSI license tag on HF — custom bilibili Model Use License (non-commercial-leaning) — VERIFY before commercial use"
+    upstream: https://huggingface.co/IndexTeam/IndexTTS-2
+    expressive_dimensions:
+      indextts2_emotion_mode:
+        type: enum
+        values: [audio_reference, vector_control, text_description]
+        default: audio_reference
+        description: "Emotion control mode"
+      # 8-dimensional emotion vector (vector_control mode)
+      indextts2_happy:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Happiness intensity"
+      indextts2_angry:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Anger intensity"
+      indextts2_sad:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Sadness intensity"
+      indextts2_afraid:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Fear intensity"
+      indextts2_disgusted:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Disgust intensity"
+      indextts2_melancholic:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Melancholy intensity"
+      indextts2_surprised:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Surprise intensity"
+      indextts2_calm:
+        type: float
+        range: [0.0, 1.0]
+        default: 1.0
+        description: "Calm intensity"
+      indextts2_emo_alpha:
+        type: float
+        range: [0.0, 1.0]
+        default: 1.0
+        description: "Emotion blend strength (0=ignore emotions, 1=full)"
+      indextts2_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+    ref_audio:
+      required: true
+      ref_text: false
+    languages: [en, zh]
+    latency_tier: medium
+    vram_estimate_mb: 3000
+    prosodic_technique: style-prompts
+    best_for: "Emotion-driven synthesis, ClawZ reveals"
+    persona_default: clawz-reveal
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: multilingual — Expressiveness + language control
+  # ═══════════════════════════════════════════════════════════════════
+
+  chatterbox:
+    name: ChatterboxTTS
+    category: multilingual
+    voice_cloning: true
+    license: MIT
+    upstream: https://huggingface.co/ResembleAI/chatterbox
+    expressive_dimensions:
+      chatterbox_exaggeration:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Expression exaggeration — 0=flat, 1=theatrical"
+      chatterbox_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      chatterbox_cfg_weight:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Classifier-free guidance weight"
+      chatterbox_chunk_size:
+        type: int
+        range: [50, 500]
+        default: 300
+        description: "Text chunk size for streaming"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en]
+    latency_tier: medium
+    vram_estimate_mb: 2000
+    prosodic_technique: exaggeration-control
+    best_for: "Expressive narration with emotion control"
+    persona_default: expressive-narrator
+
+  chatterbox_turbo:
+    name: Chatterbox Turbo
+    category: multilingual
+    voice_cloning: true
+    license: MIT
+    upstream: https://huggingface.co/ResembleAI/chatterbox-turbo
+    expressive_dimensions:
+      chatterbox_turbo_exaggeration:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Expression exaggeration — 0=flat, 1=theatrical"
+      chatterbox_turbo_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      chatterbox_turbo_cfg_weight:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Classifier-free guidance weight"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en]
+    latency_tier: fast
+    vram_estimate_mb: 1500
+    prosodic_technique: exaggeration-control
+    best_for: "Fast expressive synthesis with exaggeration control"
+    persona_default: multilingual-agent
+
+  chatterbox_multilingual:
+    name: Chatterbox Multilingual
+    category: multilingual
+    voice_cloning: true
+    license: MIT
+    upstream: https://huggingface.co/ResembleAI/chatterbox
+    expressive_dimensions:
+      chatterbox_mtl_language:
+        type: enum
+        values: [en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh, ja, hu, ko, hi]
+        default: en
+        description: "Target synthesis language"
+      chatterbox_mtl_exaggeration:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Expression exaggeration"
+      chatterbox_mtl_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      chatterbox_mtl_cfg_weight:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Classifier-free guidance weight"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh, ja, hu, ko, hi]
+    latency_tier: medium
+    vram_estimate_mb: 2500
+    prosodic_technique: exaggeration-control
+    best_for: "17-language synthesis with expression control"
+    persona_default: polyglot-agent
+
+  qwen:
+    name: Qwen Voice Design
+    category: multilingual
+    voice_cloning: true
+    license: Apache-2.0
+    upstream: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+    models:
+      base: [Base 1.7B, Base 0.5B]
+      clone: [Clone 1.7B, Clone 0.5B]
+    expressive_dimensions:
+      qwen_mode:
+        type: enum
+        values: [voice_design, voice_clone]
+        default: voice_design
+        description: "Voice design (from text) or voice cloning (from audio)"
+      qwen_speaker:
+        type: enum
+        values: [Ryan, Ethan, Anna, Sarah, Emily]
+        default: Ryan
+        description: "Speaker preset (voice_design mode)"
+      qwen_language:
+        type: enum
+        values: [Auto, Chinese, English, Japanese, Korean]
+        default: Auto
+        description: "Target language"
+      qwen_clone_model_size:
+        type: enum
+        values: ["0.5B", "1.7B"]
+        default: "1.7B"
+        description: "Model size for cloning mode"
+      qwen_chunk_size:
+        type: int
+        range: [50, 500]
+        default: 200
+        description: "Text chunk size for streaming"
+    ref_audio:
+      required: false  # Only required in voice_clone mode
+      ref_text: false
+    languages: [zh, en, ja, ko]
+    latency_tier: medium
+    vram_estimate_mb: 2500
+    prosodic_technique: speaker-design
+    best_for: "Multilingual synthesis with voice design or cloning"
+    persona_default: voice-designer
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: podcast — Multi-speaker, separate endpoint
+  # ═══════════════════════════════════════════════════════════════════
+
+  vibevoice:
+    name: VibeVoice
+    category: podcast
+    voice_cloning: true
+    license: MIT
+    upstream: https://huggingface.co/microsoft/VibeVoice-1.5B
+    synth_endpoint: separate  # Uses generate_vibevoice_podcast, NOT unified endpoint
+    expressive_dimensions: {}  # Multi-speaker podcast — dimensions controlled per-speaker in podcast script
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en]
+    latency_tier: slow
+    vram_estimate_mb: 3000
+    prosodic_technique: speaker-labeling
+    best_for: "Multi-speaker podcast generation"
+    persona_default: podcast-host
+    notes: "Uses separate generate_vibevoice_podcast endpoint. Load-only via unified test."
+
+# ═══════════════════════════════════════════════════════════════════
+# Category Summary
+# ═══════════════════════════════════════════════════════════════════
+#
+# preset-voices (3):   kitten_tts, kokoro, higgs
+# voice-cloning (4):   f5_tts, fish, fish_s2, voxcpm, indextts
+# emotion-control (1): indextts2
+# multilingual (4):    chatterbox, chatterbox_turbo, chatterbox_multilingual, qwen
+# podcast (1):         vibevoice
+#
+# Total: 14 engines
+#
+# VRAM budget (all loaded): ~24,000 MB
+# Recommended: load 2-3 engines concurrently on 32GB GPU
+
+# ═══════════════════════════════════════════════════════════════════
+# Persona ↔ Engine Mapping (Default Assignments)
+# ═══════════════════════════════════════════════════════════════════
+#
+# | Persona Slug          | Engine              | Expressive Dimensions Used                        |
+# |-----------------------|---------------------|---------------------------------------------------|
+# | pmoves-crush          | kitten_tts          | voice preset (ultra-fast, minimal knobs)           |
+# | agent-zero-default    | kokoro              | speed + punctuation engineering                    |
+# | archon-narrator       | f5_tts              | speed + voice cloning + cross_fade                 |
+# | grams-narrator        | f5_tts              | speed + voice cloning + cross_fade                 |
+# | clawz-reveal          | indextts2           | 8-dim emotion vectors + emo_alpha + temperature    |
+# | agent-card-voice      | fish_s2             | temperature + top_p + voice cloning                |
+# | multilingual-agent    | chatterbox_turbo    | exaggeration + temperature + cfg_weight            |
+# | streaming-agent       | higgs               | voice_preset + temperature + top_p                 |
+# | expressive-narrator   | chatterbox          | exaggeration + temperature + cfg_weight            |
+# | polyglot-agent        | chatterbox_multi... | language + exaggeration + temperature              |
+# | voice-designer        | qwen                | mode + speaker + language                          |
+# | quick-clone           | fish                | temperature + top_p + voice cloning                |
+# | batch-synth           | indextts            | temperature (lightweight)                          |
+# | clone-verify          | voxcpm              | cfg_value + timesteps + normalize/denoise          |
+# | podcast-host          | vibevoice           | multi-speaker (separate endpoint)                  |
+# | announcer-broadcast   | kokoro              | speed 0.9 + am_adam for authority                   |
+
+# =============================================================================
+# Service Runners — Always-On and On-Demand Engine Assignments
+# =============================================================================
+# Agents/runners can reference these roles without specifying engine details.
+# "always_on" engines stay warm (preloaded) for sub-second response.
+# "on_demand" engines load when first requested, unload after idle timeout.
+#
+# VRAM budget: always_on should fit within ~1.5GB total.
+# On 5090 (32GB): leaves 30GB+ for on-demand and inference models.
+# On Z890 (24GB): leaves 22GB+ for ComfyUI, Ollama, etc.
+
+service_runners:
+  always_on:
+    - engine: kitten_tts
+      role: cli-voice
+      persona: pmoves-crush
+      preload: true
+      use_case: "CLI notifications, quick alerts, terminal gateway voice"
+      latency_target_ms: 100
+
+    - engine: kokoro
+      role: announcer
+      persona: announcer-broadcast
+      preload: true
+      use_case: "System announcements, PR completions, deploy events, Cast speakers"
+      latency_target_ms: 500
+
+  on_demand:
+    - engine: f5_tts
+      role: narrator
+      persona: grams-narrator
+      use_case: "Story narration, documentation read-aloud, beat-sync"
+
+    - engine: higgs
+      role: streaming
+      persona: streaming-agent
+      use_case: "Real-time WebSocket streaming, live commentary"
+
+    - engine: vibevoice
+      role: podcast
+      persona: podcast-host
+      use_case: "Multi-speaker podcast generation, panel discussions"
+      endpoint: separate  # Uses VIBEVOICE_URL, not unified TTS API
+
+    - engine: indextts2
+      role: expressive
+      persona: clawz-reveal
+      use_case: "Emotion-driven reveals, dramatic narration with 8-dim vectors"
+
+# =============================================================================
+# Host Affinity — per-engine fleet-node routing (persona → engine → NODE)
+# =============================================================================
+# The missing routing dimension: which fleet node can run each engine, by
+# hardware fit. persona_default (above) picks the ENGINE; this table picks the
+# NODE. Consumed by flute-gateway `persona_selector.resolve_engine_host()`.
+#
+# Schema per engine:
+#   requires:     cpu | cuda | rocm   — compute class the engine needs
+#   min_vram_mb:  int (GPU engines)   — omit for cpu-viable engines
+#   nodes:        [slug, ...]         — eligible fleet nodes (hardware fits)
+#   preferred:    slug                — best-fit default when several are up
+#
+# Fleet node legend. A node's presence in a `nodes:` list is class-eligibility;
+# the resolver + Pinokio 8 `{{vram}}` still gate on actual detected VRAM at
+# runtime, so these lists must never be the sole guard. VERIFY per-node hardware
+# with an ON-node probe (nvidia-smi / node-4090-probe / glances) — never assert a
+# node's GPU from a doc line (a runner-topology.md line wrongly claimed z890 was a
+# GTX 1650; on-node nvidia-smi 2026-07-10 proved it is a 3090 Ti — see below).
+#   CPU-only VPS (no GPU):  kvm4-1, kvm4-2, kvm2  (Hostinger)
+#   CUDA GPU:  spark (~128GB unified, ARM64-CUDA, always-on),
+#              5090 (~32GB x86-CUDA, pending standup),
+#              z890 (RTX 3090 Ti 24GB, sm_86 Ampere — VERIFIED 2026-07-10 via
+#                    on-node nvidia-smi; live now, so a real GPU fallback while
+#                    5090 stands up. The "GTX 1650" doc line was a DIFFERENT node),
+#              4090 (~16GB laptop — burst only, no heavy VRAM budget)
+#   ROCm GPU:  knuckles (B850 rig, dual R9700 64GB RDNA4) — AMD; most CUDA TTS
+#              engines don't run on ROCm unported, so knuckles serves voice on
+#              CPU here (revisit if a ROCm TTS path is validated). Slug MUST be
+#              "knuckles" per operator_nodes.yaml node_id — bare "b850" matches
+#              no fleet registry, so registry-fed resolution would skip the node.
+#
+# Design intent: only the two CPU-viable engines (kokoro, kitten_tts) route to
+# the KVMs — this is what makes "agents talking on GPU-less nodes" real (the
+# kokoro-tts CPU deploy unit, services/kokoro-tts). GPU engines list the verified
+# CUDA nodes (spark/5090/z890/4090); z890's 24GB fits every engine below.
+#
+# DB-LATER (see #32): a future `pmoves_core.voice_profiles.host_affinity` jsonb
+# column can OVERRIDE a specific voice's node when it must differ from its
+# engine's default here. This table is the engine-level default + that column's
+# seed shape (one row per engine). Config is authoritative until that lands.
+host_affinity:
+  # --- CPU-viable: run anywhere, preferred on a cheap KVM (agents-talking goal) ---
+  kitten_tts:   { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, knuckles, z890, "4090", spark], preferred: kvm4-2 }
+  kokoro:       { requires: cpu, nodes: [kvm4-2, kvm4-1, kvm2, knuckles, z890, "4090", spark], preferred: kvm4-2 }
+
+  # --- CUDA GPU engines: gated by VRAM. spark (128GB) + 5090 (32GB) are the
+  #     primary hosts; z890 (3090 Ti 24GB, VERIFIED) is a live real-GPU fallback
+  #     — its 24GB fits every engine below, incl. the 3GB heavy ones. ---
+  higgs:        { requires: cuda, min_vram_mb: 1500, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  indextts:     { requires: cuda, min_vram_mb: 1200, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  fish:         { requires: cuda, min_vram_mb: 1500, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  chatterbox_turbo: { requires: cuda, min_vram_mb: 1500, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  f5_tts:       { requires: cuda, min_vram_mb: 2000, nodes: ["5090", spark, z890, "4090"], preferred: "5090" }
+  fish_s2:      { requires: cuda, min_vram_mb: 2000, nodes: ["5090", spark, z890], preferred: "5090" }
+  voxcpm:       { requires: cuda, min_vram_mb: 2000, nodes: ["5090", spark, z890], preferred: "5090" }
+  chatterbox:   { requires: cuda, min_vram_mb: 2000, nodes: ["5090", spark, z890], preferred: "5090" }
+  chatterbox_multilingual: { requires: cuda, min_vram_mb: 2500, nodes: ["5090", spark, z890], preferred: "5090" }
+  qwen:         { requires: cuda, min_vram_mb: 2500, nodes: ["5090", spark, z890], preferred: "5090" }
+  # --- Heavy CUDA (3GB+): prefer spark's 128GB headroom; z890 24GB also fits ---
+  indextts2:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, "5090", z890], preferred: spark }
+  vibevoice:    { requires: cuda, min_vram_mb: 3000, nodes: [spark, "5090", z890], preferred: spark }

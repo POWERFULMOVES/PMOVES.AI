@@ -2,23 +2,132 @@
 
 > Single source of truth for all physical/virtual nodes, service assignments, agent teams, route flows, and runner strategy.
 >
-> Last updated: 2026-03-15
+> Last updated: 2026-05-16
 
 ---
 
 ## Node Inventory
 
-| Node | LAN IP | Tailscale Hostname | Public IP | Role | Runner Labels | vCPU / RAM | Cost |
-|------|--------|--------------------|-----------|------|---------------|------------|------|
-| Z890 (Windows 11) | — | pmoves-z890 | — | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
-| POWERFULMOVES (Windows 11) | — | pmoves-powerfulmoves | — | Dev, Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
-| KVM4-1 | — | pmoves-kvm4-1 | Hostinger (TBD) | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
-| KVM4-2 | — | pmoves-kvm4-2 | Hostinger (TBD) | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
-| KVM2 | — | pmoves-kvm2 | Hostinger (TBD) | Exit Node / Proxy | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
-| Cloudflare Edge | — | — | Anycast | DNS, Worker routing | — | Edge | Free plan |
+| Node | LAN IP | Tailscale IP | Tailscale Hostname | Role | Runner Labels | vCPU / RAM | Cost |
+|------|--------|-------------|--------------------|----- |---------------|------------|------|
+| Z890 (Multi-Boot: Win11 / Ubuntu / Pop / Fedora / Cachy / Nix) | LAN (dual NIC) | `ts:<z890-<distro>>` | pmoves-z890-<distro> | Production ai-lab node, GPU (RTX 3090 Ti); workstation co-located with dev workflow; multi-boot runbook: `deploy/provision/z890/README.md` | `self-hosted, ai-lab` (secondary; re-evaluate after RDNA Phase-C bringup per PR #1472) | 32C / 128GB | electricity |
+| POWERFULMOVES (5090) | LAN (dual NIC) | `ts:<5090-linux>`, `ts:<5090-win>` | pmoves-powerfulmoves, powerfulmoves-1 | Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
+| 4090 Laptop (Windows) | LAN | `ts:<laptop>` | pmoves-4090 | Control Plane, Edge Orchestration, Agent Zero + Claws | — | RTX 4090 | electricity |
+| DGX Spark | LAN | `ts:<dgx-spark>` | pmoves-dgx-spark | Heavyweight Inference (Gemma 4 31B, Nemotron Super 49B, Qwen3-Coder 480B) | `self-hosted, ai-lab, gpu, cuda, spark` (pending) | 20C Arm / 128GB unified LPDDR5X | electricity |
+| R9700 Workstation (Linux) — alias **B850 "Knuckles"** | LAN | `ts:<rdna4>` (target) — current `100.122.182.3` | pmoves-rdna4 (target); **current `pmoves-b850-ai-top`** | Heavyweight ROCm Inference (Gemma 4 31B/26B-A4B via llama.cpp). **Current state (2026-05-16): 1× R9700 detected (PCI dev `7551`), 32GB RAM, Ubuntu 24.04.4, /dev/kfd present, ROCm install operator-pending Phase-C.** Box hosts the Claude Code dev shell as `cataclysmstudios@pmoves-b850-ai-top`. | `self-hosted, ai-lab, gpu, rocm, rdna4` (pending) | 9850X3D / 30GB + 1× R9700 currently (target: 2× R9700 / 64GB VRAM total per Phase-C) | electricity |
+| Jetson Orin #1 (Nemotron) | LAN (RustDesk + SSH) | `ts:<nano>` | pmoves-nemotron-1 (rename pending; JetPack 7.0 reflash scheduled) | Edge Inference (Nemotron/NemoClaw), Claws — CUDA 12.8, L4T r37 | — | Orin (sm_87) | electricity |
+| Jetson Orin #2 (NemoClaw) | LAN (RustDesk + SSH) | TBD | pmoves-nemotron-2 (JetPack 7.0 reflash scheduled) | Edge Inference (Nemotron/NemoClaw), Claws — CUDA 12.8, L4T r37 | — | Orin (sm_87) | electricity |
+| KVM4-1 | — | `ts:<kvm4-1>` | pmoves-kvm4-1 | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
+| KVM4-2 | — | — | pmoves-kvm4-2 | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
+| KVM2 | — | — | pmoves-kvm2 | Reverse Proxy (nginx SSL) / RustDesk Relay | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
+| Cloudflare Edge | — | — | — | DNS, Worker routing | — | Edge | Free plan |
 | GitHub Cloud | — | — | — | Lightweight CI | `ubuntu-latest` | 2C / 7GB | $0.008/min |
 
+### Mobile & IoT Devices
+
+| Device | LAN IP | Tailscale IP | Notes |
+|--------|--------|-------------|-------|
+| Pixel 10 Pro XL | — | `ts:<pixel>` | Mobile agent (Discord/Openclaw) |
+| Nest Audio (x2) | LAN | — | Cast speakers, voice output |
+| Nest Mini | LAN | — | Den speaker near 5090 |
+| TCL 75QM850G TV | LAN | — | Chromecast built-in |
+| Creality 3DMax | LAN | — | 3D printer — future Danger Room fabrication |
+
+### Jetson Orin Status
+
+Both Jetson Orin Nanos have SSH configured (`pmovesnvme@.110`, `pmovesnvme@.144`) and are accessible via **RustDesk** relay through KVM2. Both registered on KVM2 RustDesk server with root + user config deployed via `restart-jetson-rustdesk.sh`.
+
+**Completed:**
+- SSH key-only auth (password disabled)
+- RustDesk config: KVM2 relay, both root and user paths
+- pmoves-claw SSH key injected to root
+
+**Remaining (2026-04-28 update — USB Provisioning Sweep doc-side ready):**
+1. Jetson #1: Tailscale active (pmoves-nano, 100.x), rename to `pmoves-nemotron-1` queued
+2. Jetson #2: Fresh Tailscale install needed, join as `pmoves-nemotron-2`
+3. **JetPack 7.0 reflash — doc-side ready, operator-pending Phase C** — see `deploy/provision/jetson/` for scripts and documentation; runbook drift-verified 2026-04-28 (no findings against `jetpack7-reflash.sh` / `post-flash-bootstrap.sh` / `verify-jetson-fleet.sh`)
+   - ~45 min per device, sequential (SDK Manager binds USB recovery one device at a time); do not schedule during UNFCU demos
+   - Per-device flow: `make -C pmoves fleet-enroll ROLE=edge DEVICE=nemotron-N` → recovery mode → `sudo TAILSCALE_AUTHKEY=... bash deploy/provision/jetson/jetpack7-reflash.sh --device nemotron-N` → `make -C pmoves jetson-verify DEVICE=nemotron-N`
+4. Registration in `agent-teams.yaml` and `node-agent-specialization.yaml`
+5. Agent Zero + Claws deployment
+6. arm64 compose override: `pmoves/docker-compose.arm64.override.yml` (expand for JetPack 7 — see session plan)
+
 **Total VPS cost:** $30/mo + electricity for local nodes.
+
+### DGX Spark — Heavyweight Inference Node (Pending)
+
+NVIDIA DGX Spark (GB10 Grace-Blackwell Superchip) on Tailscale. Purpose-built for 200B-param-class inference via unified memory:
+
+- **CPU+GPU:** 20-core Arm (10x Cortex-X925 + 10x Cortex-A725) + GB10 Grace-Blackwell
+- **Memory:** 128GB unified LPDDR5X (CPU+GPU coherent, no VRAM↔RAM copies)
+- **Throughput:** 1 petaFLOP FP4
+- **Target models:** Gemma 4 31B (FP16), Gemma 4 26B-A4B, Nemotron Super 49B, Qwen3-Coder 480B
+- **Runtime:** Ollama (CUDA) primary; NVIDIA NIM optional
+- **Ports:** 11434 (Ollama), 8200 (NIM if deployed — same default as 5090)
+- **Tailscale hostname:** `pmoves-dgx-spark`
+
+**Pending setup:**
+1. Tailscale join + tag assignment (`tag:spark`)
+2. Ollama install + `gemma4:31b`, `gemma4:26b`, `nemotron:49b` model pulls
+3. Registration in `agent-teams.yaml` under `agents/gpu-inference` tier
+4. TensorZero `ollama_spark` provider points at `http://pmoves-dgx-spark:11434/v1`
+5. `spark_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
+
+### AMD R9700 (RDNA4) — ROCm Inference Node (Operator-Pending Flash)
+
+AMD Radeon AI PRO R9700 dual-GPU workstation on Tailscale. Unique value: 64GB VRAM (2x32GB) at lower capital cost than equivalent NVIDIA cards, with native RDNA4 support in ROCm 7.1+:
+
+- **CPU:** AMD Ryzen 9 9850X3D (8-core with 3D V-Cache)
+- **RAM:** 32GB DDR5
+- **GPU:** 2x AMD Radeon AI PRO R9700 (32GB VRAM each, 64GB total, gfx1201 / RDNA4)
+- **Runtime:** llama.cpp HIP backend (ROCm 7.1+). **Ollama is NOT used** — its bundled ROCm v6 libs lack gfx1201 kernels as of 2026-04.
+- **Server:** `llama-server` (OpenAI-compatible, ships with llama.cpp) on port 8080
+- **Target models:** Gemma 4 31B Q4 (single card), Gemma 4 31B FP16 (dual-card split), Gemma 4 26B-A4B, any GGUF up to 64GB
+- **Benchmark reference:** ~99 tok/s for 7B Q4 (tlee933/llama.cpp-rdna4-gfx1201 fork); competitive with RTX 4070 Ti
+- **Tailscale hostname:** `pmoves-rdna4`
+- **Node doc:** [`pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md`](../AGENTS/AGNOTE-pmoves-rdna4.md) — status block, near-term lane, known risks
+- **USB Provisioning Sweep (2026-04-28):** doc + script side ready; operator owns Phase B physical flash. See `AGNOTE4482.md` "USB Provisioning Sweep" audit record.
+
+**Doc-side ready (✅) / operator-pending (⏳):**
+1. ✅ Cloud-init autoinstall `deploy/provision/autoinstall/rdna4-workstation.yaml`
+2. ✅ ROCm 7.1 + llama.cpp HIP installer `deploy/provision/rdna4-gpu-install.sh` (bug fixed 2026-04-28: missing `log_section` function)
+3. ✅ Hostinger node-type wired (`rdna4-workstation` in `hostinger-kvm-setup.sh`)
+4. ✅ Make integration `pmoves/mk/amd-rdna4.mk` (six targets)
+5. ⏳ Operator: build USB via `deploy/provision/build-usb.sh --iso=... --autoinstall=... --device=/dev/sdY` (requires Ubuntu 22.04 host for SDK Manager parity in same session)
+6. ⏳ Operator: boot AMD box → first-boot systemd unit auto-installs ROCm + llama.cpp HIP
+7. ⏳ Operator: `make -C pmoves fleet-enroll ROLE=workstation DEVICE=pmoves-rdna4` + `tailscale up` with `--auth-key`
+8. ⏳ Operator: GGUF model download via `make -C pmoves rdna4-model-pull HF_REPO=bartowski/google_gemma-4-31B-it-GGUF FILE=gemma-4-31b-it-Q4_K_M.gguf` (Note: script default is Gemma 2 27B; explicit Gemma 4 override required for fleet parity)
+9. ⏳ Operator: `make -C pmoves rdna4-llamacpp-up` to start llama-server with dual-GPU tensor-split
+10. ⏳ Post-flash: registration in `agent-teams.yaml` under `agents/gpu-inference` tier
+11. ⏳ Post-flash: TensorZero `llamacpp_rocm` provider added to `tensorzero.toml` (always `weight = 0.0` initially)
+12. ⏳ Post-flash: `signing_identity_cards.yaml` row for `rdna4-runner` (label `self-hosted, ai-lab, gpu, rocm, rdna4`) — seed only when agent emits first trail entry
+13. ⏳ `rocm_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
+
+**Verification gates** (operator runs after Phase B):
+- `make -C pmoves rdna4-rocm-status` — both R9700s visible in `rocminfo | grep gfx1201`
+- `make -C pmoves rdna4-llamacpp-status` — `/v1/models` reachable on `:8080`
+- `make -C pmoves fleet-status | grep rdna4` — Tailscale online
+- `nats sub 'mesh.gpu.status.v1'` — node publishes heartbeats
+
+---
+
+## Node Agent Cognitive Specialization
+
+Each GPU node runs a Claude Code CLI agent with a declared cognitive specialization.
+Config: `pmoves/configs/node-agent-specialization.yaml`
+
+| Node Agent | Specialization | Strength | Default Work | NATS Subject |
+|------------|---------------|----------|-------------|-------------|
+| z890-claude | Infrastructure Coordinator | Docker, NATS, secrets, compose | Commit hygiene, service wiring | `mesh.agent.z890.capabilities.v1` |
+| 5090-claude | GPU Inference Specialist | Voice, TTS, models, media | Pipeline design, model evaluation | `mesh.agent.5090.capabilities.v1` |
+| 4090-claude | Noise Reducer (Jewel Finder) | PR triage, patterns, docs | Review threads, submodule audit | `mesh.agent.4090.capabilities.v1` |
+
+**Routing:** PR review threads are keyword-scored and routed to the best-fit agent.
+The 4090 is the default handler — its "noise reducer" role catches anything unmatched.
+See `suggest_reviewer()` in `pmoves/tools/pr_hedge_trim.py`.
+
+**Insight Sharing:** Agents publish `ops.pr.insight.shared.v1` to share cross-PR
+patterns, blockers, and learnings for validation by peer agents.
 
 ---
 
@@ -54,11 +163,21 @@ Services deployed via `docker-compose.vps.override.yml`:
 | Loki | 3100 | `/ready` | monitoring |
 | MinIO | 9000 (API) / 9001 (Console) | `/minio/health/live` | — |
 
-### KVM2 — Exit Node / Reverse Proxy
+### KVM2 — Reverse Proxy / RustDesk Relay
+
+> Note (Phase 9Q, 2026-04-16): KVM2 provides nginx SSL ingress (reverse
+> proxy for public endpoints) and RustDesk relay. The egress exit node for
+> outbound traffic (e.g., PMOVES.YT routing around YouTube residential-IP
+> blocks) is **KVM4-1**, not KVM2. The `deploy/provision/kvm2-exit-node.sh`
+> script is an older draft never activated in production.
 
 | Service | Port | Health | Notes |
 |---------|------|--------|-------|
 | nginx | 80 / 443 | `nginx -t` | SSL termination via Let's Encrypt |
+| RustDesk hbbs | 21115-21116 | `journalctl -u hbbs` | Rendezvous server with `-r` relay flag |
+| RustDesk hbbr | 21117-21119 | `journalctl -u hbbr` | Relay server |
+
+**RustDesk Fleet:** Self-hosted relay on KVM2. All LAN nodes (Z890, 5090, 4090, Jetson #1, Jetson #2) registered. Mobile devices pending QR enrollment. See `docs/operations/RUSTDESK_SELF_HOSTED.md` for details.
 
 ### POWERFULMOVES — Primary GPU + AI Lab Runner
 
@@ -75,9 +194,9 @@ Primary GPU inference node (RTX 5090, 32GB VRAM). Runs containerized `ai-lab` Gi
 | Channel Monitor | 8097 | Active | — |
 | PMOVES.YT | 8077 | Active | yt |
 
-### Z890 — Development (Local)
+### Z890 — Production ai-lab node (workstation, local Docker Compose)
 
-All services can run locally via Docker Compose profiles. Secondary GPU (RTX 3090 Ti). Self-hosted runner available as fallback.
+Joined to ai-lab as a production node — all services can run locally via Docker Compose profiles, and the box also serves dev workflow co-located on the same hardware. Secondary GPU (RTX 3090 Ti); primary heavyweight inference will shift to RDNA Phase-C (dual R9700) per PR #1472 once USB flash + ROCm install complete. Self-hosted CI runner present.
 
 ---
 
@@ -226,12 +345,15 @@ Key secrets:
 
 | Item | Blocker | Depends On |
 |------|---------|------------|
-| ~~5090 Tailscale join~~ | ~~OpenSSH not installed~~ | **DONE** — POWERFULMOVES connected as `pmoves-powerfulmoves` |
-| GPU Docker passthrough | NVIDIA Container Toolkit segfaults on RTX 5090/WSL2 | Update toolkit to latest version |
+| ~~5090 Tailscale join~~ | — | **DONE** — dual entry: pmoves-powerfulmoves (Linux) + powerfulmoves-1 (Windows) |
+| ~~4090 Laptop Tailscale~~ | — | **DONE** — pmoves-laptop connected |
+| Jetson #1 Tailscale reinstall | RustDesk access needed to open terminal | User connects via RustDesk, runs `deploy.sh --role edge` |
+| Jetson #2 Tailscale install | Same as #1 | User connects via RustDesk |
+| JetPack update (both Jetsons) | Need to check current version first | `cat /etc/nv_tegra_release` via RustDesk terminal |
+| GPU Docker passthrough | NVIDIA Container Toolkit on RTX 5090/WSL2 | Update toolkit to latest version |
 | DNS records creation | pmoves.ai zone not in Cloudflare | User adds zone + updates NS at Hostinger |
 | KVM public IPs | Not retrieved yet | Hostinger MCP or dashboard |
 | Cloudflare Worker deploy | Config ready, needs manual `wrangler deploy` | Zone active |
-| Hostinger MCP | `HOSTINGER_API_KEY` not local | Run `sync-secrets-local.yml` or copy manually |
 
 ---
 

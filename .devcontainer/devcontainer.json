@@ -1,0 +1,69 @@
+{
+  "name": "PMOVES.AI — P7 Student Workspace",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropics.claude-code",
+        "ms-azuretools.vscode-docker",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "redhat.vscode-yaml",
+        "foxundermoon.shell-format",
+        "ms-vscode.makefile-tools",
+        "mhutchie.git-graph",
+        "timonwong.shellcheck",
+        "christian-kohler.path-intellisense",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "yaml.schemas": {
+          "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+        }
+      }
+    }
+  },
+  "forwardPorts": [
+    3000,
+    3030,
+    4222,
+    7861,
+    8055,
+    8080,
+    8086,
+    8105,
+    9090
+  ],
+  "portsAttributes": {
+    "3000": { "label": "Grafana Dashboard", "onAutoForward": "notify" },
+    "3030": { "label": "TensorZero LLM Gateway", "onAutoForward": "silent" },
+    "4222": { "label": "NATS Message Bus", "onAutoForward": "silent" },
+    "7861": { "label": "TTS Studio (Pinokio)", "onAutoForward": "notify" },
+    "8055": { "label": "Flute Voice Gateway", "onAutoForward": "silent" },
+    "8080": { "label": "Agent Zero Orchestrator", "onAutoForward": "silent" },
+    "8086": { "label": "Hi-RAG v2 Knowledge Search", "onAutoForward": "notify" },
+    "8105": { "label": "Cipher Memory", "onAutoForward": "silent" },
+    "9090": { "label": "Prometheus Metrics", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "containerEnv": {
+    "PMOVES_PROFILE": "student",
+    "PYTHONIOENCODING": "utf-8"
+  },
+  "remoteUser": "vscode"
+}

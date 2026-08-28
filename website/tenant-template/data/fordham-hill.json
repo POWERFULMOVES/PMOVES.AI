@@ -1,0 +1,304 @@
+{
+  "a2uiVersion": "0.2",
+  "tenant": {
+    "id": "fordham-hill",
+    "name": "Fordham Hill Community Room",
+    "theme": "armor",
+    "tagline": "Community cost-pooling + self-governance pilot room"
+  },
+  "messages": [
+    {
+      "type": "pageMeta",
+      "tenant": {
+        "id": "fordham-hill",
+        "name": "Fordham Hill Community Room",
+        "theme": "armor",
+        "tagline": "Community cost-pooling + self-governance pilot room"
+      }
+    },
+    {
+      "type": "pageHeader",
+      "title": "Fordham Hill Community Room",
+      "tagline": "Community cost-pooling + self-governance pilot room"
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "When the mesh node goes down, the block fixes it. When the cell tower goes down, we wait.",
+        "attribution": "Sample voice — Maya R.",
+        "attributionRole": "illustrative persona (not a real resident)"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-image",
+      "props": {
+        "src": "./assets/fordham-gateway.jpg",
+        "alt": "Mobile mesh node rig in a hard case, Fordham Hill pilot",
+        "caption": "Fordham Hill pilot gateway, installed 2026-04",
+        "credit": "Render: PMOVES (generated, pending sign-off)"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "DARKXSIDE",
+        "agentRole": "operator",
+        "glyph": "✦",
+        "presence": "live"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "CLAUDE-OPUS",
+        "agentRole": "analytical",
+        "glyph": "◆",
+        "presence": "live"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "B850-CLAUDE",
+        "agentRole": "orchestrator",
+        "glyph": "◆",
+        "presence": "rehearsal"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-space-agent-card",
+      "props": {
+        "agentName": "4090-CLAUDE",
+        "agentRole": "field",
+        "glyph": "◆",
+        "presence": "offline"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Mesh pilot: Fordham Hill",
+        "description": "50-family Wi-Fi HaLow mesh on OpenMANET 902-928 MHz. Voice agents that go through walls — no cell tower, no ISP dependency. Community-owned infrastructure at ~$1K/family/year vs traditional ISP pricing.",
+        "status": "rehearsal",
+        "tags": [
+          "mesh",
+          "voice",
+          "openmanet",
+          "community-owned"
+        ],
+        "links": [
+          {
+            "label": "Capability brief",
+            "href": "#brief"
+          },
+          {
+            "label": "Discord",
+            "href": "#discord"
+          }
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Pooled-dues ledger",
+        "description": "Dual-token cooperative model: $CAT (governance), $WORK (reputation SBT), $CRED (community credits). Two-house voting — token house 50%+ and citizen house 60%+. Quadratic voting via GroToken. 3.25x revenue / 4.4x profit projection vs traditional.",
+        "status": "planned",
+        "tags": [
+          "governance",
+          "tokenomics",
+          "dao",
+          "voting"
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Food co-op group buying",
+        "description": "Bulk grocery purchasing via Food-USD stablecoin. Hydroponics + fermentation micro-factory in underutilized spaces. AI-driven demand forecasting from household meal-plan data. $CRED credits keep value circulating locally.",
+        "status": "planned",
+        "tags": [
+          "food-coop",
+          "stablecoin",
+          "hydroponics",
+          "ai"
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Creator guild",
+        "description": "Resident-run media pods: AI video, music, and art production. On-chain revenue splits via smart contracts. Pre-order funded events and merch. DARKXSIDE'S SCHOOL OF POWERFULMOVES curriculum built in.",
+        "status": "planned",
+        "tags": [
+          "creator",
+          "media",
+          "revenue-split",
+          "education"
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-project-card",
+      "props": {
+        "title": "Pilot-1 (archived)",
+        "description": "Initial mesh test, 5 families, 3 months. Lessons learned.",
+        "status": "archived"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Mesh uptime (pilot target)",
+        "value": "99.4",
+        "unit": "%",
+        "trend": "up",
+        "format": "percent"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Active sessions (pilot target)",
+        "value": "47",
+        "trend": "up"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Latency (p95) (pilot target)",
+        "value": "142",
+        "unit": "ms",
+        "trend": "down",
+        "format": "duration"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Families connected (pilot target)",
+        "value": "23",
+        "trend": "up"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Revenue projection (vs traditional)",
+        "value": "3.25",
+        "unit": "x",
+        "trend": "up",
+        "format": "plain"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-metric-tile",
+      "props": {
+        "label": "Household savings (annual target)",
+        "value": "1000",
+        "unit": "USD",
+        "trend": "up",
+        "format": "currency"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-timeline",
+      "props": {
+        "events": [
+          {
+            "ts": "2026-07-20T12:00:00Z",
+            "title": "DAO proposal presented to board",
+            "body": "Cataclysm Studios DAO Fordham Hill Proposal v0.1 — parent DAO with 3 guilds (Infra & Cloud, Creator, Wealth & Learning). 90-day rollout with milestone gates.",
+            "icon": "⚙"
+          },
+          {
+            "ts": "2026-07-18T14:00:00Z",
+            "title": "Token suite designed",
+            "body": "$CAT (governance, ERC-20), $WORK (reputation SBT, non-transferable), $CRED (community credits, stable). Two-house voting architecture locked.",
+            "icon": "⚙"
+          },
+          {
+            "ts": "2026-07-15T10:00:00Z",
+            "title": "Mesh gateway came up",
+            "body": "Fordham Hill pilot gateway online. 47 households on the lattice.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-07-15T06:00:00Z",
+            "title": "Voice agent RVC model loaded",
+            "body": "Flute-Gateway finished loading the Kokoro + RVC stack. Latency p95 = 142ms.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-07-14T08:00:00Z",
+            "title": "Tokenism W1 closed",
+            "body": "G1 export wrapper + G3 firefly compose merge. 156 dry-run transactions.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-07-12T19:00:00Z",
+            "title": "Community co-design session",
+            "body": "12 residents, 3 hours, mapped the pooled-dues ledger schema.",
+            "icon": "◆"
+          },
+          {
+            "ts": "2026-04-20T15:00:00Z",
+            "title": "Pilot kickoff",
+            "body": "PMOVES.AI / Fordham Hill co-op. First node live.",
+            "icon": "◆"
+          }
+        ]
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-voice-clip",
+      "props": {
+        "title": "DARKXSIDE: why mesh, why now (placeholder audio — final clip pending)",
+        "speaker": "DARKXSIDE",
+        "duration": "0:04",
+        "src": "./assets/placeholder-voice.mp3",
+        "transcript": "So the question I keep getting is why bother with mesh when 5G exists. The answer is simple: 5G is not a right, it's a subscription. When the cell tower goes down in St. Maarten, the block goes dark. When the mesh node goes down, the block fixes it."
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "We started with five families and a question. Eight weeks later, 23 households are on the lattice and the block votes on its own infrastructure.",
+        "attribution": "Sample voice — Devon A.",
+        "attributionRole": "illustrative persona (not a real resident)"
+      }
+    },
+    {
+      "type": "createComponent",
+      "component": "pm-quote-block",
+      "props": {
+        "quote": "This could be your voice. If you live at Fordham Hill and want to share what the pilot means to your household, reach out to the PMOVES team. Your story replaces this placeholder.",
+        "attribution": "PMOVES Team",
+        "attributionRole": "community liaison"
+      }
+    }
+  ]
+}

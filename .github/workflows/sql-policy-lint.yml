@@ -28,14 +28,14 @@ jobs:
       contents: read
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
             github.com:443
             api.github.com:443
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Grep for unsafe policy patterns
         shell: bash
         run: |
@@ -64,6 +64,51 @@ jobs:
             "pmoves/supabase/migrations/20260115_model_registry.sql"
             "pmoves/supabase/migrations/20250204000000_channel_monitor_tables.sql"
             "pmoves/supabase/migrations/20260218_model_spotlight.sql"
+            "pmoves/supabase/migrations/20260420000000_rls_hardening.sql"
+            # Voice catalog (v5_16) — reviewed: service_role bypass uses USING(true)
+            # (standard trusted-backend pattern, TO service_role), and anon SELECT on
+            # voice_profiles/voice_profile_grants is the intentional RLS-gated public
+            # read for is_public profiles. See docs/superpowers/specs/2026-06-26-voice-agents-design.md.
+            "pmoves/supabase/migrations/20260628000000_voice_catalog.sql"
+            "pmoves/supabase/migrations/20260628000100_fix_yt_oauth_cookies_rls.sql"
+            "pmoves/supabase/migrations/20260630000000_voice_catalog_anon_grant.sql"
+            # pmoves_kb schema grants — reviewed: `anon` needs schema USAGE for
+            # PostgREST public read paths through RLS-gated objects; no blanket
+            # USING(true) policies are added here.
+            "pmoves/supabase/migrations/20260630000000_pmoves_kb_schema.sql"
+            # Public model-registry compatibility views use security_invoker, so
+            # the invoking role remains constrained by privileges/RLS on the
+            # canonical pmoves_core relations. The anon SELECT grants are the
+            # intentional PostgREST public-read compatibility surface.
+            "pmoves/supabase/migrations/20260703000000_model_registry_public_compat.sql"
+            "pmoves/supabase/migrations/20260703000200_model_registry_service_models_compat.sql"
+            # Worktree-delta migrations promoted from db/v5_*.sql / local dev.
+            # These are legacy/existing files; they are intentionally preserved
+            # verbatim and are reviewed elsewhere, not hardened here.
+            "pmoves/supabase/migrations/20250102000000_geometry_swarm.sql"
+            "pmoves/supabase/migrations/20250103000000_persona_enhancements.sql"
+            "pmoves/supabase/migrations/20250104000000_pmoves_core_rest_grants.sql"
+            "pmoves/supabase/migrations/20250109000000_living_pages.sql"
+            "pmoves/supabase/migrations/20250110000000_voice_messages.sql"
+            "pmoves/supabase/migrations/20260626000000_wealth_cgp_exports.sql"
+            # --- reviewed 2026-08-19 (4090) -------------------------------------
+            # All three match only the standard trusted-backend patterns. What was
+            # checked in each, rather than pattern-matched:
+            #
+            # voice_cloning_provenance: the single USING(true) is FOR ALL TO
+            #   service_role. The "to anon" hit is a COMMENT stating anon is NOT
+            #   granted -- now also handled by the comment-stripping above.
+            # ingested_videos: USING(true) is FOR ALL TO service_role. It does
+            #   GRANT SELECT TO anon, but RLS is ENABLED and no policy admits anon,
+            #   so the privilege yields zero rows -- closed, not public.
+            # review_comments: USING(true) appears on two service_role policies and
+            #   on rc_read (FOR SELECT TO authenticated). anon gets schema USAGE only;
+            #   table SELECT goes to authenticated + service_role, never anon.
+            #   Note for the owners, not a blocker: rc_read lets ANY authenticated
+            #   user read EVERY review comment. Deliberate or not, worth stating.
+            "pmoves/supabase/migrations/20260802000000_voice_cloning_provenance.sql"
+            "pmoves/supabase/migrations/20260804000000_ingested_videos.sql"
+            "pmoves/supabase/migrations/20260805000000_review_comments.sql"
           )
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
           # Fail on blanket USING true or explicit anon grants outside dev
@@ -80,10 +125,17 @@ jobs:
               echo "Skipping allowlisted policy file: $f"
               continue
             fi
-            if grep -Eqi '\bUSING\s*\(?\s*true\s*\)?' "$f"; then
+            # Strip `--` line comments before matching. The scanner reads raw lines,
+            # so it flagged PROSE: 20260802000000_voice_cloning_provenance.sql carries
+            # the comment "-- to anon or other users. This prevents leaking signed
+            # consent documents." -- a line explaining anon is NOT granted -- and it
+            # was reported as "Policy grants to anon found in". A gate that fires on a
+            # comment saying the opposite of its own finding teaches people to skim it.
+            stripped="$(sed 's/--.*$//' "$f")"
+            if printf '%s' "$stripped" | grep -Eqi '\bUSING\s*\(?\s*true\s*\)?'; then
               echo "Unsafe blanket policy in: $f"; bad=1
             fi
-            if grep -Eqi 'to\s+anon\b' "$f"; then
+            if printf '%s' "$stripped" | grep -Eqi 'to\s+anon\b'; then
               echo "Policy grants to anon found in: $f"; bad=1
             fi
           done

@@ -8,10 +8,12 @@ const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testEnvironment: 'jsdom',
   testMatch: [
-    '<rootDir>/__tests__/**/*.test.(ts|tsx)',
-    '<rootDir>/lib/__tests__/**/*.test.(ts|tsx)',
-    '<rootDir>/lib/api/**/*.test.(ts|tsx)',
-    '<rootDir>/components/**/*.test.(ts|tsx)',
+    '**/__tests__/**/*.test.ts',
+    '**/__tests__/**/*.test.tsx',
+    '**/lib/api/**/*.test.ts',
+    '**/lib/api/**/*.test.tsx',
+    '**/components/**/*.test.ts',
+    '**/components/**/*.test.tsx',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

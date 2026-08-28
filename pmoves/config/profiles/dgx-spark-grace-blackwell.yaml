@@ -1,0 +1,137 @@
+id: dgx-spark-grace-blackwell
+name: "NVIDIA DGX Spark (GB10 Grace-Blackwell)"
+description: >
+  NVIDIA DGX Spark workstation — ARM64 node with GB10 Grace-Blackwell SoC.
+  20-core Arm CPU (10x Cortex-X925 + 10x Cortex-A725) + Blackwell GPU sharing
+  128 GB unified LPDDR5X memory (SM_121 / compute 12.1). DGX OS 7.5.0 provides
+  CUDA 13.0.2 on ARM64. Target hardware for 200B-class models at NVFP4/FP4 —
+  unified memory eliminates VRAM copies. Torch MUST be built against cu130 with
+  compute_121 kernels (torch 2.8+ or worldmirror torch 2.11.0+cu130).
+  nvidia-smi reports 'Memory-Usage: Not Supported' — expected on UMA.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
+hardware:
+  cpu:
+    vendor: NVIDIA
+    model: "GB10 (20-core Arm - 10x Cortex-X925 + 10x Cortex-A725)"
+    cores: 20
+    threads: 20
+    arch: arm64
+  gpu:
+    type: nvidia-blackwell
+    models: ["GB10 Blackwell (integrated)"]
+    memory_gb: 128                # Unified with CPU (LPDDR5X)
+    compute_capability: "12.1"    # SM_121 — unique to GB10, NOT sm_120
+    cuda_version: "13.0.2"
+    driver_version: "580.159.03"
+    dgx_os: "7.5.0"
+    kernel: "6.17"
+    nccl: "2.30u1"
+  ram_gb: 128                     # Unified memory shared with GPU
+  unified_memory_gb: 128
+  storage: "NVMe SSD"
+  tags: [workstation, dgx, arm64, grace-blackwell, sm_121, unified-memory, cuda130]
+compose_overrides:
+  - docker-compose.arm64.override.yml
+model_bundles:
+  # P0 — Agent Zero brain + coding (from SPARK_MODEL_STRATEGY.md, 2026-05-08)
+  - qwen3.5-35b-a3b-q4km        # MoE 3B active, ~20GB, 15-25 tok/s — primary brain
+  - qwen2.5-coder-32b-q4km      # 32B, ~18GB, 12-20 tok/s — MCP forms, code gen
+  # P1 — Quality + general (optional, deploy after P0 soak)
+  - gemma-4-31b-fp16            # Spark flagship multimodal
+  - llama3.3-70b-q4km           # Quality-critical orchestration, ~40GB
+  # P2 — Future evaluation (NVFP4 when Ollama supports SM_121)
+  # - nemotron-3-super-nvfp4    # 120B-A12B NVFP4 — requires NVFP4 support on GB10
+
+# Which coding agent stacks this node supports
+# Mirrors laptop-4090 with SPARK-appropriate local fallbacks
+coding_stacks:
+  claude_code:
+    cloud_primary: anthropic
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_claude_fallback
+  codex_openai:
+    cloud_primary: openai
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_codex
+  glm_coding_plan:
+    cloud_primary: zai
+    cloud_model: glm-5-turbo
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_glm
+  minimax_token_plan:
+    cloud_primary: minimax
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_minimax
+  alibaba_coding_plan:
+    cloud_primary: alibaba
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_alibaba
+  kimi_coding_plan:
+    cloud_primary: moonshot
+    cloud_model: kimi-k2.7-code
+    local_fallback: qwen3.5:35b-a3b-q4_K_M
+    tz_function: coding_kimi
+
+# VRAM budget (128 GB unified, 8 GB system reserve = 120 GB usable)
+vram_budget:
+  total_mb: 131072
+  system_reserve_mb: 8192
+  usable_mb: 122880
+  max_concurrent_models: 4
+  idle_timeout_seconds: 300
+  always_resident:
+    - model: qwen3-embedding:8b
+      vram_mb: 4700
+      reason: "HiRAG, extract-worker, cipher-memory embeddings"
+  co_residency_groups:
+    coding_focus:
+      models: [qwen3.5:35b-a3b-q4_K_M, qwen3-embedding:8b]
+      total_mb: 30000
+
+services:
+  - mesh-agent                  # Node announcer (NATS every 15s)
+  - fleet-agent                 # Fleet watcher / audit participant
+  - ollama                      # ARM64 Ollama with CUDA-on-ARM
+mcp:
+  - docker
+  - host
+messaging:
+  telegram: optional
+  discord: true
+  whatsapp: false
+  webrtc: true
+tailscale:
+  role: gpu-node
+  hostname_pattern: "pmoves-gb10-spark"
+torch_requirements:
+  minimum_version: "2.8"
+  cuda_variant: "cu130"
+  compute_target: "compute_121"
+  torch_index: "https://download.pytorch.org/whl/cu130"
+  pip_install: "pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu130"
+  notes:
+    - "torch 2.7+cu128 does NOT support sm_121 — iSTFTNet/deepspeed/flash-attn JIT all fail"
+    - "torch 2.11.0+cu130 confirmed working on this node (worldmirror Pinokio env)"
+    - "Kokoro TTS iSTFTNet requires cu130 for GPU inference; CPU mode works as fallback"
+    - "llama.cpp must be built with GGML_CUDA_SM_121 or GGML_CUDA_ARCHITECTURES=121"
+spark_specifics:
+  nvidia_container_toolkit: pre-installed
+  docker_gpu_flag: "--gpus=all"
+  ngc_containers: arm64_only
+  nim_support: "Check build.nvidia.com/spark/nim-llm for Spark-compatible NIM images"
+  connectx7_clustering:
+    max_dual_spark: "405B params"
+    qsfp_cables: ["Amphenol NJAAKK-N911", "Luxshare LMTQF022-SD-R"]
+  playbooks: "https://build.nvidia.com/spark"
+  recovery_image: "developer.nvidia.com (NOT Enterprise DGX OS ISO)"
+notes:
+  - "Unified 128 GB LPDDR5X — GPU and CPU share the pool. Fits 200B-class models at FP4 without VRAM copies."
+  - "nvidia-smi shows 'Memory-Usage: Not Supported' — expected on UMA, not an error."
+  - "ARM64 platform — requires arm64 image variants (Phase D multi-arch CI work)."
+  - "Docker must use --runtime nvidia. Set in /etc/docker/daemon.json."
+  - "Inference backend: Ollama (ARM64 build with CUDA-on-ARM, stock DGX OS)."
+  - "Phase C: all TensorZero variants weight=0.0 pending 48h soak + load test."
+  - "Target models: Gemma 4 31B FP16, Gemma 4 26B-A4B, Nemotron-3-Super 120B-A12B NVFP4 (HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4)."

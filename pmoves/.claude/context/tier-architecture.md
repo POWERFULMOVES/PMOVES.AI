@@ -104,7 +104,7 @@ The network tier model implements **container communication segmentation** via D
 | Network | Name | Purpose |
 |---------|------|---------|
 | **supabase_net** | `supabase_network_PMOVES.AI` | Bridge to Supabase CLI stack for direct container-to-container communication |
-| **cataclysm** | `cataclysim-net` | Legacy external network (jellyfin-bridge only) |
+| **cataclysm** | `cataclysm-net` | Legacy external network (jellyfin-bridge only) |
 
 ### Network Security Rules
 

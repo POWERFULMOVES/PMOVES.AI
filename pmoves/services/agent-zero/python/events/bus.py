@@ -31,13 +31,21 @@ import uuid
 import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, Optional, Set
+from urllib.parse import urlparse, urlunparse
 
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
-import nats
 
 logger = logging.getLogger("pmoves.agent_zero.events.bus")
+
+
+def _redact_url(url: str) -> str:
+    p = urlparse(url)
+    if not p.username:
+        return url
+    netloc = p.hostname + (f":{p.port}" if p.port else "")
+    return urlunparse(p._replace(netloc=netloc))
 
 
 @dataclass
@@ -107,7 +115,7 @@ class EventBus:
         )
     """
 
-    def __init__(self, nats_url: str = "nats://localhost:4222", use_jetstream: bool = False):
+    def __init__(self, nats_url: str = "nats://nats:pmoves@nats:4222", use_jetstream: bool = False):
         """
         Initialize event bus.
 
@@ -178,7 +186,7 @@ class EventBus:
                         logger.warning(f"JetStream not available: {e}")
                         self.js = None
 
-                logger.info(f"Event bus connected to {self.nats_url}")
+                logger.info(f"Event bus connected to {_redact_url(self.nats_url)}")
 
             except Exception as e:
                 logger.error(f"Failed to connect to NATS: {e}")
@@ -388,7 +396,7 @@ class EventBus:
         try:
             if self.use_jetstream and self.js:
                 # JetStream push subscription
-                sub = await self.js.subscribe(
+                await self.js.subscribe(
                     subject,
                     queue=queue_group,
                     cb=wrapper,
@@ -544,7 +552,7 @@ _bus: Optional[EventBus] = None
 _bus_lock = asyncio.Lock()
 
 
-async def get_event_bus(nats_url: str = "nats://localhost:4222") -> EventBus:
+async def get_event_bus(nats_url: str = "nats://nats:pmoves@nats:4222") -> EventBus:
     """
     Get or create singleton event bus instance.
 

@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# Submodule branch-strategy gate (API-based — no submodule clone, no deep history).
+#
+# Enforces, at PR time, that every submodule gitlink CHANGED in the PR obeys the
+# .gitmodules branch strategy:
+#   1. DANGLING — the new gitlink must be ON its declared tracked branch. A
+#      pointer to a commit that isn't on the tracked branch (a feature branch, a
+#      fork-default, an un-merged sha) is "dangling / not pointed correctly".
+#   2. LEFT / ROLLBACK — the new gitlink must be a forward advance from the base
+#      gitlink. A backward or sideways move ("left/right") is a rollback.
+#
+# Ancestry is resolved server-side via the GitHub compare API (gh api
+# repos/<fork>/compare/A...B -> .status), so this needs NO local submodule clone
+# and NO deep superproject history — only `git ls-tree` of the base + head
+# commits (which the workflow fetches shallow). That keeps it disk-free, which
+# matters: the self-hosted runners ran out of disk doing full-history checkouts.
+#
+# compare A...B .status semantics (B relative to A):
+#   identical  B == A
+#   behind     B is an ancestor of A   (B is "behind" A)
+#   ahead      B has commits A doesn't  (B is "ahead" of A)
+#   diverged   both sides have unique commits
+#
+# Requires: gh (authenticated via GH_TOKEN). Tracked branches + fork slugs are
+# derived from .gitmodules, so ALL submodules are covered (no hardcoded list).
+#
+# Usage: validate_submodule_gitlinks.sh <base-ref> [--all]
+set -uo pipefail
+
+BASE_REF="${1:?usage: validate_submodule_gitlinks.sh <base-ref> [--all]}"
+MODE="${2:-changed}"
+fail=0
+
+# The BASE .gitmodules, held in memory so a change to a submodule's declared
+# BRANCH is detectable even when its gitlink is untouched. Without this the
+# unchanged-gitlink skip below fires first and a branch-only edit is never
+# validated -- which is exactly how three submodules came to declare a branch
+# that did not exist on their fork, and how the PR that corrected them passed
+# this gate without making a single API call.
+BASE_GITMODULES="$(git show "$BASE_REF:.gitmodules" 2>/dev/null || true)"
+
+# Read `branch` out of the base .gitmodules for one submodule. Section-aware:
+# stops at the next [submodule ...] header so it cannot read a neighbour's value.
+base_branch_of() {
+  printf '%s\n' "$BASE_GITMODULES" | awk -v want="$1" '
+    /^[[:space:]]*\[submodule "/ {
+      insec = (index($0, "\"" want "\"]") > 0); next
+    }
+    insec && /^[[:space:]]*branch[[:space:]]*=/ {
+      sub(/^[^=]*=[[:space:]]*/, ""); gsub(/[[:space:]]+$/, ""); print; exit
+    }'
+}
+
+names=$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
+          | sed -E 's/^submodule\.(.*)\.path .*/\1/')
+
+while IFS= read -r name; do
+  [ -z "$name" ] && continue
+  path=$(git config -f .gitmodules --get "submodule.$name.path")
+  branch=$(git config -f .gitmodules --get "submodule.$name.branch" 2>/dev/null || true)
+  url=$(git config -f .gitmodules --get "submodule.$name.url" 2>/dev/null || true)
+
+  # Fail-closed. This used to warn-and-skip, which made the gate silently blind
+  # to exactly the submodules most likely to drift: pmoves-keygen carried no
+  # branch pin, so its gitlink sat AHEAD of master (pinned to the head of an open
+  # PR) across every PR this gate ran on, and every run reported ok. A submodule
+  # with no declared strategy is an unchecked submodule, which is the condition
+  # this gate exists to prevent — not an exemption from it.
+  if [ -z "${branch:-}" ]; then
+    echo "FAIL  $name: no .gitmodules branch pin — declare 'branch = <tracked>' in .gitmodules"
+    fail=1; continue
+  fi
+  # Derive OWNER/REPO from the submodule URL (https or ssh form).
+  slug=$(printf '%s' "$url" | sed -E 's#(git@github\.com:|https?://github\.com/)##; s#\.git$##')
+
+  head_link=$(git ls-tree HEAD -- "$path" 2>/dev/null | awk '$2=="commit"{print $3}')
+  base_link=$(git ls-tree "$BASE_REF" -- "$path" 2>/dev/null | awk '$2=="commit"{print $3}')
+
+  base_branch="$(base_branch_of "$name")"
+
+  [ -z "$head_link" ] && continue                                  # not a gitlink / removed
+  # Skip only when NEITHER the gitlink NOR the declared branch moved. A
+  # branch-only edit changes what this gate compares against, so it has to be
+  # revalidated even though the pointer is untouched.
+  if [ "$MODE" != "--all" ] \
+     && [ "$head_link" = "$base_link" ] \
+     && [ "$branch" = "$base_branch" ]; then
+    continue                                                       # unchanged in this PR
+  fi
+  if [ -z "$slug" ]; then
+    echo "FAIL  $name: no resolvable github.com URL in .gitmodules"
+    fail=1; continue
+  fi
+
+  ok=1
+  # 0. Does the declared branch even EXIST on the fork? The compare below 404s
+  #    for a missing branch AND for an unreachable sha, and the catch-all used to
+  #    report both as "bad branch pin or unreachable sha?" — one message covering
+  #    two conditions with opposite fixes. Three submodules declared
+  #    PMOVES.AI-Edition-Hardened on forks that only had `main`; their gitlinks
+  #    were IDENTICAL to that fork's main, i.e. perfectly healthy, and they read
+  #    as broken pointers for as long as the gate had been running. Probing the
+  #    ref first separates "create the branch / fix the declaration" from
+  #    "the pinned commit is gone".
+  if ! gh api "repos/$slug/git/ref/heads/$branch" --jq '.object.sha' >/dev/null 2>&1; then
+    echo "FAIL  $name: declared branch '$branch' does not exist on $slug — create it, or correct the .gitmodules declaration (the gitlink itself may be fine)"
+    fail=1; continue
+  fi
+
+  # 1. DANGLING — compare tracked-branch...head; on-branch iff head is behind/== branch.
+  st=$(gh api "repos/$slug/compare/$branch...$head_link" --jq '.status' 2>/dev/null || echo "error")
+  case "$st" in
+    behind|identical) : ;;                                          # head is on the branch
+    ahead)    echo "FAIL  $name: gitlink ${head_link:0:9} is AHEAD of '$branch' — commits not merged to the tracked branch (off-strategy)"; fail=1; ok=0 ;;
+    diverged) echo "FAIL  $name: gitlink ${head_link:0:9} has DIVERGED from '$branch' (dangling — not on the tracked branch)"; fail=1; ok=0 ;;
+    *)        echo "FAIL  $name: cannot compare ${head_link:0:9} against '$branch' on $slug (status='$st'). The branch exists, so the pinned commit is unreachable — force-pushed away, or never pushed to this fork."; fail=1; ok=0 ;;
+  esac
+
+  # 2. LEFT / ROLLBACK — compare base...head; forward iff head is ahead/== base.
+  #    Skip when DANGLING passed as "identical" (head IS the tracked branch HEAD):
+  #    a force-push/rebase on the submodule repo makes the old pointer unreachable
+  #    from the new history, producing a false "diverged" ROLLBACK failure even
+  #    though the new gitlink is correct.
+  if [ -n "$base_link" ] && [ "$base_link" != "$head_link" ] && [ "$st" != "identical" ]; then
+    st2=$(gh api "repos/$slug/compare/$base_link...$head_link" --jq '.status' 2>/dev/null || echo "error")
+    case "$st2" in
+      ahead|identical) : ;;                                         # forward advance
+      behind)   echo "FAIL  $name: gitlink ${base_link:0:9} -> ${head_link:0:9} ROLLBACK (head is behind the base gitlink)"; fail=1; ok=0 ;;
+      diverged) echo "FAIL  $name: gitlink ${base_link:0:9} -> ${head_link:0:9} SIDEWAYS (diverged — not a forward advance)"; fail=1; ok=0 ;;
+      *)        echo "warn  $name: cannot compare base..head on $slug (status='$st2') — rollback check skipped" ;;
+    esac
+  fi
+
+  [ "$ok" -eq 1 ] && echo "ok    $name ($branch): ${head_link:0:9}"
+done <<< "$names"
+
+echo ""
+if [ "$fail" -ne 0 ]; then
+  echo "❌ Submodule branch-strategy gate FAILED — see FAIL lines above."
+  echo "   Every changed gitlink must be ON its .gitmodules tracked branch and a forward advance."
+  echo "   Fix: check out a commit that is on origin/<tracked-branch> in the submodule"
+  echo "        (sync the fork, or 'git submodule update --remote <path>'), then re-commit the gitlink."
+  exit 1
+fi
+echo "✅ Submodule branch-strategy gate PASSED."

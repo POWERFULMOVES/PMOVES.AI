@@ -6,7 +6,7 @@ match workloads with appropriate nodes.
 """
 
 import dataclasses
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 # Try relative import first (for normal package imports), fallback to direct import
 try:

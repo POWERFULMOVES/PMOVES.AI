@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 try:
     from nats.aio.client import Client as NATS
-except Exception as exc:  # pragma: no cover
+except Exception:  # pragma: no cover
     print("nats-py is required: pip install nats-py", file=sys.stderr)
     raise
 

@@ -1,0 +1,303 @@
+# TAC Tree: Node Z890 (Coordinator)
+# Per-node capability tree for the infrastructure coordinator workstation.
+# Z890 runs Docker Compose (66+ services), NATS hub, and delegates TTS to 5090.
+#
+# Key paths:
+#   pmoves/docker-compose.yml                       (main compose stack)
+#   pmoves/configs/                                  (all config files)
+# Cross-refs:
+#   pmoves/configs/tac_trees/networking-defense-in-depth.tac.yaml
+#   pmoves/configs/tac_trees/node-5090-powerfulmoves.tac.yaml
+#   pmoves/configs/tac_trees/pinokio-p7.tac.yaml
+
+name: "Node Z890 Coordinator"
+version: "1.0.0"
+description: >
+  Per-node TAC tree for Z890 (pmoves-z890) infrastructure coordinator.
+  Runs Docker Compose (~66 services), NATS hub, Supabase, monitoring stack.
+  Does NOT run TTS — delegates to 5090 via Tailscale mesh.
+  Hostname: pmoves-z890 | Tailscale: pmoves-z890.ts | Role: Infra Coordinator
+
+root:
+  id: nz890
+  task: "Z890 coordinator node health and capability review"
+  context: "pmoves/docker-compose.yml — ~66 services, infra coordinator"
+  agent_hint: z890-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Docker Compose Health
+    # =========================================================================
+    - id: nz890.compose
+      task: "Docker Compose stack health (~66 services)"
+      context: "pmoves/docker-compose.yml with tier+hardening anchors"
+      agent_hint: z890-claude
+      children:
+        - id: nz890.compose.core-infra
+          task: "Core infrastructure services healthy"
+          action:
+            type: shell
+            command: "docker compose -f pmoves/docker-compose.yml ps --format json | jq -r 'select(.Health==\"healthy\") | .Name'"
+            expect: >
+              nats, supabase-db, supabase-kong, qdrant, meilisearch,
+              neo4j, minio — all showing healthy
+          context: >
+            Core infra must be healthy before any dependent services.
+            NATS is the most critical — 10+ services depend on service_healthy.
+          agent_hint: z890-claude
+
+        - id: nz890.compose.agent-profile
+          task: "Agent profile services healthy"
+          action:
+            type: shell
+            command: "docker compose --profile agents ps"
+            expect: "agent-zero, archon, mesh-agent all running"
+          context: "Agent Zero (8080), Archon (8091), Mesh Agent (no HTTP)"
+          agent_hint: z890-claude
+
+        - id: nz890.compose.worker-profile
+          task: "Worker profile services healthy"
+          action:
+            type: shell
+            command: "docker compose --profile workers ps"
+            expect: "extract-worker, langextract, media analyzers running"
+          context: "Extract Worker (8083), LangExtract (8084), media workers"
+          agent_hint: z890-claude
+
+        - id: nz890.compose.monitoring
+          task: "Monitoring stack healthy"
+          action:
+            type: shell
+            command: "docker compose --profile monitoring ps"
+            expect: "prometheus, grafana, loki, promtail, cadvisor running"
+          context: "Prometheus (9090), Grafana (3000), Loki (3100)"
+          agent_hint: z890-claude
+
+        - id: nz890.compose.container-count
+          task: "Total running containers matches expected count"
+          action:
+            type: shell
+            command: "docker ps --format '{{.Names}}' | wc -l"
+            expect: ">= 60 containers running (of ~66 defined)"
+          context: >
+            As of 2026-03-16: 92 containers, 63 healthy. Some services
+            are profile-gated and may not always be running.
+          agent_hint: z890-claude
+
+    # =========================================================================
+    # Phase 2: NATS Hub Status
+    # =========================================================================
+    - id: nz890.nats
+      task: "NATS hub status and JetStream"
+      context: "Z890 runs the primary NATS hub for the mesh"
+      agent_hint: z890-claude
+      children:
+        - id: nz890.nats.healthy
+          task: "NATS healthcheck at :8222/varz"
+          action:
+            type: http
+            url: "http://localhost:8222/varz"
+            expect: "200 OK with server info, JetStream enabled"
+          context: "Primary message bus. Auth: nats://nats:pmoves@nats:4222"
+          agent_hint: z890-claude
+
+        - id: nz890.nats.jetstream
+          task: "JetStream enabled with adequate storage"
+          action:
+            type: http
+            url: "http://localhost:8222/jsz"
+            expect: "JetStream active, streams and consumers listed"
+          context: "JetStream provides persistent messaging for reliable delivery"
+          agent_hint: z890-claude
+
+        - id: nz890.nats.leaf-config
+          task: "Leaf node configuration for 5090 connectivity"
+          action:
+            type: file_exists
+            target: "pmoves/configs/nats-leaf-z890.conf"
+            expect: "Leaf node config exists, points to 5090 hub"
+          context: >
+            Cross-ref: networking-defense-in-depth.tac.yaml → net.nats-leaf.
+            Z890 connects to 5090 NATS via leaf node protocol.
+          agent_hint: z890-claude
+
+        - id: nz890.nats.websocket
+          task: "WebSocket ports correctly mapped"
+          action:
+            type: manual
+            instruction: "Verify WS ports: 9222 (standalone DoX), 9223 (docked via compose)"
+            expect: "Both WebSocket ports accessible for browser-based NATS clients"
+          context: "DoX and A2UI use WebSocket NATS connections"
+          agent_hint: z890-claude
+
+    # =========================================================================
+    # Phase 3: Pinokio TTS Delegation
+    # =========================================================================
+    - id: nz890.tts-delegation
+      task: "Z890 delegates TTS to 5090 — no local TTS apps"
+      context: >
+        Z890 had 3 redundant TTS apps (OpenAudio, Qwen3-TTS, Ultimate-TTS-Studio).
+        These should be removed — 5090 is the canonical TTS host.
+      agent_hint: z890-claude
+      children:
+        - id: nz890.tts-delegation.apps-removed
+          task: "All 3 TTS apps removed from Z890 Pinokio"
+          action:
+            type: manual
+            instruction: >
+              Verify no TTS apps in Z890's Pinokio network view:
+              - OpenAudio (Fish Speech) — REMOVED
+              - Qwen3-TTS — REMOVED
+              - Ultimate-TTS-Studio SUP3R Edition — REMOVED
+            expect: "Zero TTS apps installed on Z890. TTS comes from 5090 via mesh."
+          context: >
+            Cross-machine duplication audit 2026-03-22. 5090 (RTX 5090 GPU)
+            is the canonical TTS host. Z890 has no GPU suitable for TTS.
+            Removing these saves disk and eliminates confusion.
+          agent_hint: z890-claude
+          status: pending
+
+        - id: nz890.tts-delegation.mesh-reachable
+          task: "5090 TTS reachable from Z890 via Pinokio LWW"
+          action:
+            type: manual
+            instruction: >
+              Verify cross-machine TTS access via Pinokio LWW:
+              1. Open http://powerfulmoves-1.ts:42000 from Z890 browser
+              2. Navigate to Network tab, verify Ultimate-TTS-Studio appears
+              3. Click to open — Gradio UI should load with 14 engine tabs
+            expect: "TTS accessible via Pinokio LWW network view on port 42000"
+          context: >
+            Direct HTTP to Tailscale IP on app ports does NOT work — Pinokio's
+            Caddy HTTPS proxy on 0.0.0.0:PORT requires TLS SNI (hostname, not IP).
+            Cross-machine access works through Pinokio LWW network view (port 42000).
+            Reference: PINOKIO.md Section 8 (LWW) and Section 9 (HTTPS domains).
+          agent_hint: z890-claude
+
+        - id: nz890.tts-delegation.flute-bridge
+          task: "Flute Gateway routes to 5090 TTS"
+          action:
+            type: http
+            url: "http://localhost:8055/healthz"
+            expect: "200 OK, ultimate_tts endpoint configured to powerfulmoves-1.ts:7860"
+          context: >
+            Flute Gateway (port 8055) on Z890 should route TTS synthesis
+            requests to 5090's Ultimate-TTS-Studio via Tailscale mesh.
+          agent_hint: z890-claude
+
+    # =========================================================================
+    # Phase 4: CI Runner
+    # =========================================================================
+    - id: nz890.ci
+      task: "CI runner container healthy"
+      context: "myoung34/github-runner with self-hosted, ai-lab labels"
+      agent_hint: z890-claude
+      children:
+        - id: nz890.ci.runner-up
+          task: "GitHub runner container running"
+          action:
+            type: shell
+            command: "docker ps --filter name=runner --format '{{.Names}} {{.Status}}'"
+            expect: "Runner container Up, healthy"
+          context: >
+            Started via make ci-runners-local-cert-up. Uses unless-stopped
+            restart policy. Needs restart after machine reboot.
+          agent_hint: z890-claude
+
+        - id: nz890.ci.labels
+          task: "Runner registered with correct labels"
+          action:
+            type: manual
+            instruction: "Check GitHub Settings > Actions > Runners for ai-lab labels"
+            expect: "Labels: self-hosted, ai-lab (for GPU workflows)"
+          agent_hint: z890-claude
+
+        - id: nz890.ci.volume-mount
+          task: "Secrets volume mounted for secrets-sync"
+          action:
+            type: manual
+            instruction: "Verify $APPDATA/pmoves mounted in runner container"
+            expect: "Volume mount present for secrets-sync-trigger workflow"
+          context: >
+            Containerized runners need host volume mount for secrets persistence.
+            See memory: feedback_secrets_sync_runner_gap.md
+          agent_hint: z890-claude
+
+    # =========================================================================
+    # Phase 5: Cross-Machine Connectivity
+    # =========================================================================
+    - id: nz890.cross-machine
+      task: "Z890 cross-machine connectivity to 5090 and 4090"
+      context: "Tailscale mesh, port forwarding, service discovery"
+      agent_hint: z890-claude
+      children:
+        - id: nz890.cross-machine.tts-5090
+          task: "TTS on 5090 reachable via Pinokio LWW"
+          action:
+            type: manual
+            instruction: >
+              Open http://powerfulmoves-1.ts:42000 from Z890 browser.
+              Navigate to Network tab, verify Ultimate-TTS-Studio is listed.
+            expect: "5090 TTS visible in Pinokio LWW network view"
+          context: >
+            Cross-machine access uses Pinokio LWW on port 42000, not direct
+            app port access. Caddy HTTPS proxy on app ports requires TLS SNI.
+          agent_hint: z890-claude
+
+        - id: nz890.cross-machine.ollama-5090
+          task: "Ollama on 5090 reachable at powerfulmoves-1.ts:11434"
+          action:
+            type: http
+            url: "http://powerfulmoves-1.ts:11434/api/tags"
+            expect: "200 OK — model list from 5090's Ollama"
+          context: "GPU inference delegation to 5090"
+          agent_hint: z890-claude
+
+        - id: nz890.cross-machine.portproxy
+          task: "Windows netsh portproxy rules active"
+          action:
+            type: shell
+            command: "netsh interface portproxy show v4tov4"
+            expect: "Port 7422 → 5090 NATS leaf, other forwarding rules"
+          context: >
+            Routes Docker container traffic through Windows host to 5090.
+            Cross-ref: networking-defense-in-depth.tac.yaml → net.nats-leaf.portproxy
+          agent_hint: z890-claude
+
+    # =========================================================================
+    # Phase 6: NATS Announcement
+    # =========================================================================
+    - id: nz890.announce
+      task: "Z890 NATS capability announcement"
+      context: "Mesh agent announces coordinator role and capabilities"
+      agent_hint: z890-claude
+      children:
+        - id: nz890.announce.subject
+          task: "Publishes mesh.agent.z890.capabilities.v1"
+          action:
+            type: manual
+            instruction: >
+              Verify mesh agent publishes capability announcement.
+              Payload should include: hostname (pmoves-z890), role (coordinator),
+              services running (~66), NATS hub, Docker Compose, no GPU.
+            expect: "NATS message received with Z890 coordinator capabilities"
+          context: >
+            Z890 is the infrastructure coordinator. Its announcement
+            should reflect: NATS hub, Docker Compose orchestrator,
+            CI runner, monitoring stack — NOT GPU/TTS capabilities.
+          agent_hint: z890-claude
+          status: future
+
+        - id: nz890.announce.coordinator-role
+          task: "Coordinator role includes TTS delegation metadata"
+          action:
+            type: manual
+            instruction: >
+              Announcement payload should include:
+              tts_delegate: { node: "5090", endpoint: "powerfulmoves-1.ts:7860" }
+            expect: "Other agents know Z890 delegates TTS to 5090"
+          context: >
+            When agents on Z890 need TTS, the coordinator announcement
+            tells them to route to 5090 instead of looking locally.
+          agent_hint: z890-claude
+          status: future

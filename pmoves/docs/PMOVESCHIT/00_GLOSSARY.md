@@ -10,7 +10,11 @@ Quick-reference definitions for terms used throughout the CHIT documentation sui
 
 **CGP (CHIT Geometry Packet)** — The wire format for CHIT data. A JSON document containing metadata, super nodes, constellations, spectra, and optional signatures. The current production version is `chit.cgp.v1.0`. See: [CGP_v1.0_SPECIFICATION.md](CGP_v1.0_SPECIFICATION.md).
 
-**CHIT (Cymatic-Holographic Information Transfer)** — A geometric protocol that encodes information as boundary representations (constellations of anchors and spectra) instead of raw token streams. The core thesis: meaning has shape, and that shape is enough to reconstruct content. See: [01_WHAT_IS_CHIT.md](01_WHAT_IS_CHIT.md).
+**CHIT** — a deliberate two-meaning term (canon: [`AGNOTE4482PHI.t1.md`](../AGENTS/AGNOTE4482PHI.t1.md), DARKXSIDE 2026-06-09):
+- **concept — Cymatic Holographic Information Theory**: the educational / geometry-of-meaning lens. CHIT is a geometric protocol that encodes information as boundary representations (constellations of anchors and spectra) instead of raw token streams. The core thesis: *meaning has shape*, and that shape is enough to reconstruct content — a "neural esperanto" for high-dimensional AI communication. (The *Cymatic* framing is a PMOVES-internal extension of the wave-interference/holographic model.)
+- **mechanism — Compressed Hierarchical Information Transfer**: the signing/secrets + transport layer. CHIT packets moving over the NATS **GEOMETRY BUS** (plus Hi-RAG retrieval) are the actual transfer — the "teleportation"; `chit:encode` / `chit:sign-trail` sign the CGP + agent trail.
+
+Usage rule: use *…Information Theory* for the concept/geometry-of-meaning lens, *…Information Transfer* for the signing/transport engineering. See: [01_WHAT_IS_CHIT.md](01_WHAT_IS_CHIT.md).
 
 **CHR (Constellation Harvest Regularization)** — The encoding algorithm that discovers anchor directions and computes soft assignments of data points to constellations. Optimizes anchors via gradient descent on assignment entropy. See: [CGP_v1.0_SPECIFICATION.md](CGP_v1.0_SPECIFICATION.md) § Encoding Pipeline.
 

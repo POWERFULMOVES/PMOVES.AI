@@ -15,14 +15,16 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import nats
 from nats.aio.client import Client as NATS
 import httpx
+import yaml
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -32,13 +34,24 @@ logger = logging.getLogger("botz-gateway")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase-kong:8000")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+# Fail-closed: refuse to start without a valid service role key (C-04)
+if not SUPABASE_KEY:
+    raise RuntimeError(
+        "SUPABASE_SERVICE_ROLE_KEY is not set or empty. "
+        "BoTZ Gateway cannot start without a valid service role key. "
+        "Set SUPABASE_SERVICE_ROLE_KEY in the environment and restart."
+    )
 TENSORZERO_URL = os.getenv("TENSORZERO_URL", "http://tensorzero:3030")
 HEARTBEAT_INTERVAL = int(os.getenv("BOTZ_HEARTBEAT_INTERVAL", "30"))
 STALE_THRESHOLD_MINUTES = int(os.getenv("BOTZ_STALE_THRESHOLD", "5"))
+AGENT_SIGNATURES_PATH = os.getenv("AGENT_SIGNATURES_PATH", "/app/config/agent_signatures.yaml")
 
 # Global state
 nc: Optional[NATS] = None
 supabase_headers: Dict[str, str] = {}
+agent_signatures: Dict[str, Any] = {}
+active_providers: Dict[str, Dict[str, Any]] = {}  # provider_name -> activation payload
 
 
 # Pydantic models
@@ -81,10 +94,32 @@ class WorkItemFilter(BaseModel):
     limit: int = 20
 
 
+def _alter_name(alter: Dict[str, Any]) -> str:
+    """Return the canonical lookup/display key for an agent alter."""
+    return alter.get("name") or alter.get("id") or alter.get("display_name", "?")
+
+
+def load_agent_signatures():
+    """Load agent signatures from YAML config."""
+    global agent_signatures
+    try:
+        with open(AGENT_SIGNATURES_PATH, "r") as f:
+            data = yaml.safe_load(f)
+            agent_signatures = data.get("signatures", {})
+            logger.info(f"Loaded {len(agent_signatures)} agent signatures from {AGENT_SIGNATURES_PATH}")
+    except FileNotFoundError:
+        logger.warning(f"Agent signatures file not found: {AGENT_SIGNATURES_PATH}")
+    except Exception as e:
+        logger.error(f"Error loading agent signatures: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
     global nc, supabase_headers
+
+    # Load agent signatures
+    load_agent_signatures()
 
     # Setup Supabase headers
     supabase_headers = {
@@ -102,7 +137,10 @@ async def lifespan(app: FastAPI):
         # Subscribe to BoTZ events
         await nc.subscribe("botz.heartbeat.v1", cb=handle_heartbeat_event)
         await nc.subscribe("botz.register.v1", cb=handle_register_event)
-        logger.info("Subscribed to BoTZ NATS subjects")
+        # Subscribe to provider cascade events for routing awareness
+        await nc.subscribe("claw.provider.activated.v1", cb=handle_provider_activated)
+        await nc.subscribe("claw.provider.deactivated.v1", cb=handle_provider_deactivated)
+        logger.info("Subscribed to BoTZ + provider cascade NATS subjects")
     except Exception as e:
         logger.warning(f"NATS connection failed: {e}")
         nc = None
@@ -126,6 +164,28 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS — the persona-adaptive preview (5090 DL-3) fetches /v1/agent/theme/* and
+# /v1/agent/whoami cross-origin. Explicit allow-list (never "*"), env-overridable;
+# mirrors showtime-api's SHOWTIME_CORS_ORIGINS pattern. Same-lane consistency.
+# DL-3.3 adds the CF-site origins (?agent= persona demo): the deployed Pages
+# origin, the future custom domain, and the documented local preview (:8000).
+_cors_origins = [
+    o.strip()
+    for o in os.environ.get(
+        "BOTZ_GATEWAY_CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:3001,http://localhost:4482,http://localhost:9225"
+        ",http://localhost:8000,https://pmoves-ai.pages.dev,https://pmoves.ai",
+    ).split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 
 # NATS event handlers
 async def handle_heartbeat_event(msg):
@@ -147,6 +207,30 @@ async def handle_register_event(msg):
         await register_botz_instance(registration)
     except Exception as e:
         logger.error(f"Error handling registration: {e}")
+
+
+async def handle_provider_activated(msg):
+    """Track provider activations for routing decisions."""
+    try:
+        import json
+        data = json.loads(msg.data.decode())
+        provider = data.get("provider", "unknown")
+        active_providers[provider] = data
+        logger.info(f"Provider activated: {provider} (models: {data.get('models_added', [])})")
+    except Exception as e:
+        logger.error(f"Error handling provider activation: {e}")
+
+
+async def handle_provider_deactivated(msg):
+    """Remove deactivated providers from routing table."""
+    try:
+        import json
+        data = json.loads(msg.data.decode())
+        provider = data.get("provider", "unknown")
+        active_providers.pop(provider, None)
+        logger.info(f"Provider deactivated: {provider}")
+    except Exception as e:
+        logger.error(f"Error handling provider deactivation: {e}")
 
 
 async def cleanup_stale_instances():
@@ -532,6 +616,145 @@ async def get_stats():
         return stats
 
 
+# --- W1 CLI Bridge: Agent Identity & Theming ---
+
+@app.get("/v1/agent/signatures")
+async def list_agent_signatures():
+    """List all agent signatures with glyph, color, and voice."""
+    if not agent_signatures:
+        raise HTTPException(status_code=503, detail="Agent signatures not loaded")
+    return {"signatures": agent_signatures, "count": len(agent_signatures)}
+
+
+@app.get("/v1/agent/theme/{agent_id}")
+async def get_agent_theme(agent_id: str):
+    """Get theme (glyph, color, accent, voice) for a specific agent."""
+    sig = agent_signatures.get(agent_id)
+    if not sig:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+    response = {
+        "agent_id": agent_id,
+        "display_name": sig.get("display_name"),
+        "glyph": sig.get("glyph"),
+        "color": sig.get("color"),
+        "accent": sig.get("accent"),
+        "voice": sig.get("voice"),
+        "resonance": sig.get("resonance", []),
+        "description": sig.get("description"),
+    }
+    alters = sig.get("alters")
+    if alters:
+        response["alters"] = alters
+    return response
+
+
+@app.get("/v1/agent/theme/{agent_id}/alter/{alter_name}")
+async def get_agent_alter_theme(agent_id: str, alter_name: str):
+    """Get theme for a specific alter of an agent."""
+    sig = agent_signatures.get(agent_id)
+    if not sig:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+    alters = sig.get("alters", [])
+    for alter in alters:
+        if alter_name in {
+            alter.get("name"),
+            alter.get("id"),
+            alter.get("display_name"),
+        }:
+            return {
+                "agent_id": agent_id,
+                "alter_name": _alter_name(alter),
+                "glyph": alter.get("glyph"),
+                "color": alter.get("color"),
+                "accent": alter.get("accent"),
+                "voice": alter.get("voice"),
+                "resonance": alter.get("resonance", []),
+                "description": alter.get("description"),
+            }
+    available = [_alter_name(a) for a in alters]
+    raise HTTPException(
+        status_code=404,
+        detail=f"Alter '{alter_name}' not found for {agent_id}. Available: {available}",
+    )
+
+
+@app.get("/v1/agent/whoami")
+async def whoami(instance_id: Optional[str] = None):
+    """Identify the calling agent based on instance_id or hostname."""
+    # Try to match by instance_id → registered BoTZ → agent signature
+    if instance_id:
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/botz_instances",
+                    headers=supabase_headers,
+                    params={"instance_id": f"eq.{instance_id}"}
+                )
+            except httpx.RequestError as exc:
+                logger.warning("Supabase lookup failed: %s", exc)
+                raise HTTPException(
+                    status_code=502,
+                    detail="Upstream service unavailable",
+                ) from exc
+            if response.status_code != 200:
+                logger.warning("Supabase returned %d for instance lookup", response.status_code)
+                raise HTTPException(
+                    status_code=502,
+                    detail="Upstream service error",
+                )
+            instances = response.json()
+            if instances:
+                botz = instances[0]
+                agent_id = botz.get("metadata", {}).get("agent_id", botz.get("botz_name"))
+                sig = agent_signatures.get(agent_id, {})
+                return {
+                    "agent_id": agent_id,
+                    "botz_name": botz.get("botz_name"),
+                    "instance_id": instance_id,
+                    "theme": {
+                        "glyph": sig.get("glyph", "?"),
+                        "color": sig.get("color", "#888888"),
+                        "voice": sig.get("voice", "unknown"),
+                    },
+                    "available_alters": [_alter_name(a) for a in sig.get("alters", [])],
+                    "skill_level": botz.get("skill_level"),
+                    "is_available": botz.get("is_available"),
+                }
+            # instance_id provided but not found in Supabase — 404, not a fake identity
+            raise HTTPException(
+                status_code=404,
+                detail=f"No BoTZ instance found for instance_id={instance_id}",
+            )
+
+    # Fallback: no instance_id provided — return hostname-based identity
+    hostname = os.getenv("HOSTNAME", "unknown")
+    return {
+        "agent_id": "unknown",
+        "hostname": hostname,
+        "theme": {"glyph": "?", "color": "#888888", "voice": "unknown"},
+        "hint": "Pass ?instance_id=<id> for full identity lookup",
+    }
+
+
+@app.get("/v1/providers")
+async def get_active_providers():
+    """Return providers activated via cascade NATS events."""
+    return {
+        "providers": {
+            name: {
+                "models": payload.get("models_added", []),
+                "node_id": payload.get("node_id"),
+                "activated_at": payload.get("timestamp"),
+            }
+            for name, payload in active_providers.items()
+        },
+        "count": len(active_providers),
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8054)
+
+
+

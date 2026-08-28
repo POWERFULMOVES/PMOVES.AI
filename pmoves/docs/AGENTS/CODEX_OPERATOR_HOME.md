@@ -1,5 +1,5 @@
 # Codex Operator Home (PMOVES)
-_Last updated: 2026-03-12_
+_Last updated: 2026-05-26_
 
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
@@ -73,6 +73,45 @@ surfaces.
 - `make -C pmoves a0-plugins-check`
 - `make -C pmoves a0-plugins-check-remote`
 
+## Fleet remote access control plane
+
+Use this lane when the operator task touches Tailscale, RustDesk, Hostinger VPS access,
+remote rebuilds, stale-node cleanup, or z890 fleet ownership.
+
+### Primary traversal order
+
+1. `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`
+2. `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`
+3. `pmoves/docs/TAILSCALE_NODE_HYGIENE.md`
+4. `.claude/CLAUDE.md`
+5. `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+6. `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
+7. `pmoves/docs/CHIT_TOOLS_CATALOG.md`
+8. `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+
+### Lane rules
+
+- z890 Codex and z890 Claude are dual-responsible for this infra lane.
+- Tailscale ACLs are the enforcement layer; RustDesk is the transport/operator UX layer.
+- Run `make -C pmoves secrets-funnel` before restarts, rebuilds, or infra bring-up.
+- Prefer Known Roads make targets over raw `docker compose` manifests.
+- Store non-trivial infra handoffs in Cipher and sign the lane in AGNOTE4482.
+
+### Fleet checks
+
+- `tailscale status --json`
+- `curl -fsS http://localhost:8105/health | jq .`
+- `curl -fsS http://localhost:8094/healthz | jq .`
+- `curl -fsS http://localhost:8055/healthz | jq .`
+
+### Fleet Known Roads
+
+- `make -C pmoves fleet-status`
+- `make -C pmoves fleet-stale-audit`
+- `make -C pmoves fleet-enroll ROLE=... DEVICE="..."`
+- `make -C pmoves fleet-rustdesk-fix`
+- There is no dedicated make target for ACL drift yet; use `TAILSCALE_API_KEY` with the read-only audit flow in `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`.
+
 ## Creator network control plane
 
 Use this lane when the operator task spans YouTube channels, playlists, creator outreach,
@@ -140,6 +179,35 @@ transcripts, Discord, Jellyfin, or cross-model orchestration.
   - `geometry.swarm.meta.v1`
   - `pmoves.geometry.cgp.ready.v1`
 
+### Big Ball 5090 Codex settlement lanes
+
+Use this lane when work touches CHIT attribution, ToKenism settlement, Model Nexus fitness,
+or 5090 TensorZero validation.
+
+Primary traversal order:
+
+1. `pmoves/docs/AGENTS/AGNOTE4482.md`
+2. `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md`
+3. `pmoves/docs/TOKENISM_PLAN_ALIGNMENT_2026-05-22.md`
+4. `pmoves/docs/TAC/TAC_TOKENISM.md`
+5. `PMOVES-ToKenism-Multi/IMPLEMENTATION_STATUS.md`
+6. `PMOVES-ToKenism-Multi/integrations/contracts/SETTLEMENT_FLOW.md`
+
+Current lanes:
+- `firefly` settlement lane: dry-run drafts, live writes gated by signed executor identity,
+  matching operator approval, and signed deployment attestation.
+- `contract` settlement lane: manifest-backed chain call drafts, live writes gated by signed
+  deployment attestation, RPC/wallet custody references, signed executor identity, and matching
+  operator approval.
+- `model-fitness` lane: parent PMOVES records signed scorecards; trusted optimizer publishing
+  still needs PMOVES-AGENT-ZERO-CODEX/HERMES/Claw identities in live runner topology.
+
+5090 validation checks:
+- `Invoke-WebRequest -UseBasicParsing http://localhost:3030/health`
+- `make -C pmoves submodule-integrity`
+- In `PMOVES-ToKenism-Multi/integrations`: `npm run typecheck`
+- In `PMOVES-ToKenism-Multi/contracts/solidity`: `npm test`
+
 ## EvoSwarm
 
 - Controller health:
@@ -152,8 +220,8 @@ transcripts, Discord, Jellyfin, or cross-model orchestration.
 
 - Flute health:
   - `curl -fsS http://localhost:8055/healthz | jq .`
-- Flute session status:
-  - `curl -fsS http://localhost:8055/v1/sessions -H "Authorization: Bearer $FLUTE_API_KEY" | jq .`
+- Flute config + feature matrix (no session registry exists):
+  - `curl -fsS http://localhost:8055/v1/voice/config | jq .`
 - TTS backend:
   - `curl -fsS http://localhost:7861/gradio_api/info | jq .`
 
@@ -169,7 +237,7 @@ transcripts, Discord, Jellyfin, or cross-model orchestration.
 ## Cipher MCP bridge
 
 - Cipher API health:
-  - `curl -fsS http://localhost:8096/health | jq .`
+  - `curl -fsS http://localhost:8105/health | jq .`
 - Local MCP bridge server:
   - `uv run --directory ./pmoves-cipher-mcp python -m cipher_mcp.server`
 - Compose service check:

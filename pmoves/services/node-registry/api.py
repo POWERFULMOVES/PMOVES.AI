@@ -7,9 +7,9 @@ Complements the NATS-based message bus with direct HTTP access.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from .registry import NodeRegistry, SUBJECTS
+from .registry import NodeRegistry
 from ..resource_detector.models import NodeCapabilities, NodeHeartbeat
 
 logger = logging.getLogger(__name__)
@@ -75,7 +75,6 @@ class NodeRegistryAPI:
 
     def _setup_routes(self, app):
         """Setup HTTP routes."""
-        from aiohttp import web
 
         # Node registration
         app.add_post("/register", self._handle_register)

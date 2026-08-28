@@ -1,0 +1,327 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Slice 7 — nats_event_bus live state</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0b1220; color: #d4d4d4; margin: 0; padding: 24px; }
+  h1, h2 { color: #7dd3fc; font-weight: 600; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; }
+  .kv { display: grid; grid-template-columns: 200px 1fr; gap: 4px 16px; font-size: 13px; }
+  .kv div:nth-child(odd) { color: #94a3b8; }
+  pre { background: #111827; border: 1px solid #1f2937; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; line-height: 1.4; color: #e5e7eb; }
+  .topic { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; background: #1e293b; border: 1px solid #334155; border-radius: 12px; font-size: 11px; }
+  .ok { color: #34d399; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .pill-ok { background: #064e3b; color: #6ee7b7; }
+  .pill-fail { background: #7f1d1d; color: #fecaca; }
+</style></head><body>
+<h1>nats_event_bus — live state (slice 7 evidence)</h1>
+<div class="kv">
+  <div>URL</div><div><code>http://127.0.0.1:8131</code></div>
+  <div>Status</div><div><span class="pill pill-ok">ok</span> OK</div>
+  <div>NATS connected</div><div>yes</div>
+  <div>Writes enabled</div><div>yes</div>
+  <div>Topics (8)</div><div><span class="topic">comfy.collab.prompt.v1</span> <span class="topic">comfy.collab.progress.v1</span> <span class="topic">comfy.collab.artifact.v1</span> <span class="topic">room.presence.v1</span> <span class="topic">room.directory.v1</span> <span class="topic">helpdesk.intake.opened.v1</span> <span class="topic">helpdesk.intake.routed.v1</span> <span class="topic">helpdesk.room.suggested.v1</span></div>
+</div>
+<h2>room.presence.v1 events (latest 3)</h2>
+<pre>--- 2026-07-30T13:13:32.663273+00:00Z ---
+{
+  "id": "e6bfa1a6-35f5-4cc3-9b27-95cdd1105c9c",
+  "topic": "room.presence.v1",
+  "ts": "2026-07-30T13:13:32.663273+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "room_id": "r",
+    "presence_id": "2784190d-fda3-41d4-ba68-3ff210932aad",
+    "actor": "test",
+    "actor_kind": "user",
+    "action": "join",
+    "observed_at": "2026-07-30T13:00:00Z"
+  }
+}
+
+--- 2026-07-30T13:14:20.609027+00:00Z ---
+{
+  "id": "1c190c00-291d-49ac-be78-292fe72d49cf",
+  "topic": "room.presence.v1",
+  "ts": "2026-07-30T13:14:20.609027+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "room_id": "r",
+    "presence_id": "2af5e026-df16-4e22-a363-a34521f5f2cf",
+    "actor": "test",
+    "actor_kind": "user",
+    "action": "join",
+    "observed_at": "2026-07-30T13:00:00Z"
+  }
+}
+
+--- 2026-07-30T13:16:00.648016+00:00Z ---
+{
+  "id": "177b69b0-7054-40ae-a5af-66daa05a1234",
+  "topic": "room.presence.v1",
+  "ts": "2026-07-30T13:16:00.648016+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "room_id": "pmoves.room.helpdesk",
+    "presence_id": "ff4cb524-f0ab-4e4f-9719-44ab499ac4ea",
+    "actor": "fordham-resident-001",
+    "actor_kind": "user",
+    "action": "join",
+    "surface": "helpdesk-chat",
+    "actor_metadata": {
+      "persona_role": "resident",
+      "home_node": "fordham-hill-mesh",
+      "display_name": "Fordham Resident"
+    },
+    "observed_at": "2026-07-30T13:15:59Z"
+  }
+}</pre>
+<h2>helpdesk.intake.opened.v1 events (latest 3)</h2>
+<pre>--- 2026-07-30T13:12:30.048538+00:00Z ---
+{
+  "id": "782e25bd-ffc4-4865-89c2-0f2bf67fabdf",
+  "topic": "helpdesk.intake.opened.v1",
+  "ts": "2026-07-30T13:12:30.048538+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "intake_id": "757e8de2-6c62-4eb2-8404-3743ac6b09a8",
+    "room_id": "pmoves.room.helpdesk",
+    "agent_id": "pmoves-helpdesk-steward",
+    "persona_role": "resident",
+    "intent_hint": "Hey, I'm a Fordham resident - how do I render an image with PMOVES?",
+    "directory_version": "87d10700-7993-477f-9d2d-c28137d38627",
+    "opened_at": "2026-07-30T13:12:29Z",
+    "meta": {
+      "source": "slice7_fordham_e2e",
+      "first_question": "Hey, I'm a Fordham resident - how do I render an image with PMOVES?"
+    }
+  }
+}
+
+--- 2026-07-30T13:16:01.102238+00:00Z ---
+{
+  "id": "79449317-f218-4645-b2bc-cc0f9e1e5565",
+  "topic": "helpdesk.intake.opened.v1",
+  "ts": "2026-07-30T13:16:01.102238+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "intake_id": "04308a09-d524-4ce8-b17d-42fc5fdb75fd",
+    "room_id": "pmoves.room.helpdesk",
+    "agent_id": "pmoves-helpdesk-steward",
+    "persona_role": "resident",
+    "intent_hint": "Hey, I'm a Fordham resident - how do I render an image with PMOVES?",
+    "directory_version": "16460b3f-091a-4144-8c92-1e232de094c6",
+    "opened_at": "2026-07-30T13:15:59Z",
+    "meta": {
+      "source": "slice7_fordham_e2e",
+      "first_question": "Hey, I'm a Fordham resident - how do I render an image with PMOVES?"
+    }
+  }
+}</pre>
+<h2>helpdesk.intake.routed.v1 events (latest 3)</h2>
+<pre>--- 2026-07-30T13:12:30.505828+00:00Z ---
+{
+  "id": "72621754-fde1-4532-895b-922bca98a068",
+  "topic": "helpdesk.intake.routed.v1",
+  "ts": "2026-07-30T13:12:30.505828+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "intake_id": "757e8de2-6c62-4eb2-8404-3743ac6b09a8",
+    "from_room_id": "pmoves.room.helpdesk",
+    "to_room_id": "pmoves.room.helpdesk",
+    "rationale": "Top match on intent 'render' for Fordham resident; persona_role=resident + room_purpose=pmoves.room.helpdesk (score 0.457)",
+    "intent_match": {
+      "intents": [
+        "render",
+        "community",
+        "render-2d"
+      ],
+      "matched_room_capabilities": [
+        "creator-canvas",
+        "ambient-mesh-render"
+      ],
+      "score": 0.457
+    },
+    "deep_link": "/helpdesk/intake",
+    "routed_at": "2026-07-30T13:12:30Z"
+  }
+}
+
+--- 2026-07-30T13:16:01.527625+00:00Z ---
+{
+  "id": "c8dfbc78-7cf8-45fe-acb5-c673d7d69dc1",
+  "topic": "helpdesk.intake.routed.v1",
+  "ts": "2026-07-30T13:16:01.527625+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "intake_id": "04308a09-d524-4ce8-b17d-42fc5fdb75fd",
+    "from_room_id": "pmoves.room.helpdesk",
+    "to_room_id": "pmoves.room.helpdesk",
+    "rationale": "Top match on intent 'render' for Fordham resident; persona_role=resident + room_purpose=pmoves.room.helpdesk (score 0.457)",
+    "intent_match": {
+      "intents": [
+        "render",
+        "community",
+        "render-2d"
+      ],
+      "matched_room_capabilities": [
+        "creator-canvas",
+        "ambient-mesh-render"
+      ],
+      "score": 0.457
+    },
+    "deep_link": "/helpdesk/intake",
+    "routed_at": "2026-07-30T13:15:59Z"
+  }
+}</pre>
+<h2>helpdesk.room.suggested.v1 events (latest 3)</h2>
+<pre>--- 2026-07-30T13:12:30.952753+00:00Z ---
+{
+  "id": "bae25b54-4572-48b3-a90a-91e89abb4cb3",
+  "topic": "helpdesk.room.suggested.v1",
+  "ts": "2026-07-30T13:12:30.952753+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "suggestion_id": "c9a2904d-bb36-48f5-a42e-9a1ac21f91b8",
+    "parent_intake_id": "757e8de2-6c62-4eb2-8404-3743ac6b09a8",
+    "context": {
+      "agent_id": "pmoves-helpdesk-steward",
+      "persona_role": "resident",
+      "intents": [
+        "render",
+        "community",
+        "render-2d"
+      ]
+    },
+    "candidates": [
+      {
+        "room_id": "pmoves.room.helpdesk",
+        "score": 0.457,
+        "rationale": "intent_match=0.333 persona_bonus=0.3 capability_coverage=1.0",
+        "matched_intents": [
+          "render",
+          "community",
+          "render-2d"
+        ],
+        "matched_capabilities": [
+          "creator-canvas",
+          "ambient-mesh-render"
+        ],
+        "deep_link": "/helpdesk/intake"
+      },
+      {
+        "room_id": "persona.room.livingdoc",
+        "score": 0.367,
+        "rationale": "intent_match=0.333 persona_bonus=0.0 capability_coverage=1.0",
+        "matched_intents": [
+          "render",
+          "community",
+          "render-2d"
+        ],
+        "matched_capabilities": [
+          "creator-canvas",
+          "ambient-mesh-render"
+        ],
+        "deep_link": "/persona/livingdoc"
+      },
+      {
+        "room_id": "creator-studio.room.collab",
+        "score": 0.367,
+        "rationale": "intent_match=0.333 persona_bonus=0.0 capability_coverage=1.0",
+        "matched_intents": [
+          "render",
+          "community",
+          "render-2d"
+        ],
+        "matched_capabilities": [
+          "creator-canvas",
+          "ambient-mesh-render"
+        ],
+        "deep_link": "/notebook-workbench"
+      }
+    ],
+    "directory_version": "87d10700-7993-477f-9d2d-c28137d38627",
+    "suggested_at": "2026-07-30T13:12:30Z"
+  }
+}
+
+--- 2026-07-30T13:16:01.992791+00:00Z ---
+{
+  "id": "3736262b-ecdb-491d-8c23-31e7fee073f6",
+  "topic": "helpdesk.room.suggested.v1",
+  "ts": "2026-07-30T13:16:01.992791+00:00Z",
+  "version": "v1",
+  "source": "nats_event_bus",
+  "payload": {
+    "suggestion_id": "a82aea03-7de8-4fda-b5d4-7e051e437885",
+    "parent_intake_id": "04308a09-d524-4ce8-b17d-42fc5fdb75fd",
+    "context": {
+      "agent_id": "pmoves-helpdesk-steward",
+      "persona_role": "resident",
+      "intents": [
+        "render",
+        "community",
+        "render-2d"
+      ]
+    },
+    "candidates": [
+      {
+        "room_id": "pmoves.room.helpdesk",
+        "score": 0.457,
+        "rationale": "intent_match=0.333 persona_bonus=0.3 capability_coverage=1.0",
+        "matched_intents": [
+          "render",
+          "community",
+          "render-2d"
+        ],
+        "matched_capabilities": [
+          "creator-canvas",
+          "ambient-mesh-render"
+        ],
+        "deep_link": "/helpdesk/intake"
+      },
+      {
+        "room_id": "persona.room.livingdoc",
+        "score": 0.367,
+        "rationale": "intent_match=0.333 persona_bonus=0.0 capability_coverage=1.0",
+        "matched_intents": [
+          "render",
+          "community",
+          "render-2d"
+        ],
+        "matched_capabilities": [
+          "creator-canvas",
+          "ambient-mesh-render"
+        ],
+        "deep_link": "/persona/livingdoc"
+      },
+      {
+        "room_id": "creator-studio.room.collab",
+        "score": 0.367,
+        "rationale": "intent_match=0.333 persona_bonus=0.0 capability_coverage=1.0",
+        "matched_intents": [
+          "render",
+          "community",
+          "render-2d"
+        ],
+        "matched_capabilities": [
+          "creator-canvas",
+          "ambient-mesh-render"
+        ],
+        "deep_link": "/notebook-workbench"
+      }
+    ],
+    "directory_version": "16460b3f-091a-4144-8c92-1e232de094c6",
+    "suggested_at": "2026-07-30T13:15:59Z"
+  }
+}</pre>
+</body></html>

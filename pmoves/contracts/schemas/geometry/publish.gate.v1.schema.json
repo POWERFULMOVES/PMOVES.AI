@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Geometry Publish Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact_uri", "title", "approved_by"],
+  "properties": {
+    "artifact_uri": { "type": "string", "pattern": "^s3://" },
+    "title": { "type": "string" },
+    "namespace": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "description": { "type": "string" },
+    "meta": { "type": "object" },
+    "studio_board_id": { "type": "integer", "minimum": 1 },
+    "mode": { "type": "string", "enum": ["manual", "village-rules-auto"] },
+    "approved_by": { "type": "string" }
+  }
+}

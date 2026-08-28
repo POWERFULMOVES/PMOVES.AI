@@ -38,10 +38,35 @@ def parse_gitmodules(path: Path) -> list[BranchRow]:
     return rows
 
 
+def _expand_entries(values: list[str]) -> list[str]:
+    """Expand comma-packed entries like 'A=b,C=d' into ['A=b', 'C=d'].
+
+    Commas that appear *before* the first '=' in a token are name
+    separators (e.g. 'A,B=branch'), not entry delimiters.  Only commas
+    that are followed by a new 'name=branch' pair split entries.
+    """
+    entries: list[str] = []
+    for raw in values:
+        # Split on commas that precede a new NAME=BRANCH pair.
+        # We detect this by re-joining fragments that lack '='.
+        buf = ""
+        for fragment in raw.split(","):
+            if "=" in fragment and buf and "=" in buf:
+                # buf is already a complete entry; emit it and start fresh
+                entries.append(buf.strip())
+                buf = fragment
+            elif buf:
+                buf += "," + fragment
+            else:
+                buf = fragment
+        if buf.strip():
+            entries.append(buf.strip())
+    return entries
+
+
 def parse_allow(values: list[str]) -> dict[str, set[str]]:
     allowed: dict[str, set[str]] = {}
-    for raw in values:
-        text = (raw or "").strip()
+    for text in _expand_entries(values):
         if not text or "=" not in text:
             continue
         key, rhs = text.split("=", 1)

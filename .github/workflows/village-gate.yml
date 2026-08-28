@@ -1,0 +1,61 @@
+# Village Gate — automated evaluator gate before Village Rule signoff
+# (P0 Evaluation Gates, ARCHON_ENHANCEMENT_ROADMAP §2).
+#
+# Runs the declarative quality-threshold checks in
+# pmoves/configs/village_gate_thresholds.yaml via pmoves/tools/village_gate.py
+# and uploads the verdict (JSON + Prometheus textfile exposition) as machine
+# evidence for the AGNOTE4482 signoff checklist.
+#
+# NOT yet a required status check: adding `village-gate` to branch protection
+# is a deliberate operator step (branch-protection-sync preserves existing
+# contexts; a required gate must also pass on dependabot/App PRs or it
+# deadlocks the fork-sync automation). GitHub-hosted on purpose — required
+# gates must not depend on self-hosted runner availability.
+
+name: Village Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: village-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  village-gate:
+    name: village-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install gate dependencies
+        # The 1,100-violation ratchet was measured with Ruff 0.14.14
+        # (1,032 baseline; currently 1,040). Ruff 0.16 changed the unconfigured
+        # default rule surface and inflated the same tree to ~9,450 findings,
+        # making the budget nondeterministic. Bump the pin and ratchet together.
+        run: pip install --quiet pyyaml "ruff==0.14.14"
+
+      - name: Run Village Gate
+        run: |
+          PYTHONPATH="$PWD" python pmoves/tools/village_gate.py \
+            --strict-tools \
+            --prom-textfile village_gate.prom
+
+      - name: Upload verdict artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: village-gate-verdict
+          path: |
+            pmoves/docs/logs/village_gate_latest.json
+            village_gate.prom
+          retention-days: 30

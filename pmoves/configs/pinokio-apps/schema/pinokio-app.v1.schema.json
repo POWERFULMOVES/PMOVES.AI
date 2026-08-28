@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://configs/pinokio-apps/schema/pinokio-app.v1.schema.json",
+  "title": "Pinokio App Registry Entry v1",
+  "description": "Contract for a single Pinokio app entry in pmoves/configs/pinokio-apps/{curated,user}/<slug>.yaml. Per the slice-4 design, the entry declares the app's runtime facts, hardware contract, P8 surface, and network_exposure across the 4 reachability layers (L1 venv / L2 same-host container / L3 tailnet mesh / L4 public via kvm2 Cloudflare-Tunnel + hostinger.cloudflare.com DNS). Schema is additionalProperties:false at every level — drift is rejected at the validator. The metadata block is the only free-form escape hatch and is constrained to {string,number,boolean,null}.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "slug",
+    "title",
+    "description",
+    "owner",
+    "version_seen",
+    "runtime",
+    "endpoints",
+    "pinokio_skill_ref",
+    "network_exposure"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semver of the schema this entry targets. Locks the contract version so a future v2 schema can reject v1 entries cleanly."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "minLength": 1,
+      "description": "Pinokio app directory name (e.g. comfyui-desktop). Matches the on-disk slug in ~/pinokio/api/<slug>/."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable display name."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-paragraph plain-text description of the app."
+    },
+    "owner": {
+      "type": "string",
+      "enum": ["pinokio", "docker", "docker-compose", "nvidia", "cloudflared", "tailscale", "pmoves"],
+      "description": "Runtime owner of the app. pinokio = runs in the Pinokio venv on the host; docker / docker-compose = runs in a PMOVES container; nvidia / cloudflared / tailscale = system-level; pmoves = PMOVES-side synthetic entry."
+    },
+    "version_seen": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of the app as observed when the entry was last edited (e.g. 0.3.41). Free-form so launcher authors can use semver, calver, or their own scheme."
+    },
+    "runtime": {
+      "type": "object",
+      "description": "Runtime facts P7 needs at session-open + the bridge needs to launch. The venv manager is intentionally omitted — Pinokio 8 owns the Miniforge runtime (conda-forge-first, OSS-aligned).",
+      "required": [
+        "launcher_script",
+        "autostart",
+        "gpu_required",
+        "min_vram_mb",
+        "gpu_arch",
+        "gpu_reservation_mb",
+        "gpu_reservation_mode",
+        "dependencies",
+        "requires_hf_login"
+      ],
+      "properties": {
+        "launcher_script": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pinokio launcher script (e.g. start.js). The bridge calls pterm run --slug <slug> --script <launcher_script> via structured shell.run argv."
+        },
+        "autostart": {
+          "type": "boolean",
+          "description": "If true, P7 starts the app on room launch (subject to the 4-quadrant autostart × gpu_reservation_mode matrix in room.manifest.v1). If false, the app is on-demand only — the skill that needs it launches it."
+        },
+        "gpu_required": {
+          "type": "boolean",
+          "description": "Whether the app needs a GPU. Mirrors the room manifest's hardware_requirements.gpu for consistent routing."
+        },
+        "min_vram_mb": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum VRAM in MB the app needs. 0 when gpu_required=false."
+        },
+        "gpu_arch": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["sm_75", "sm_80", "sm_86", "sm_87", "sm_89", "sm_90", "sm_100", "sm_110", "sm_120", "sm_121", "gfx900", "gfx906", "gfx908", "gfx90a", "gfx940", "gfx941", "gfx942", "gfx1010", "gfx1030", "gfx1100", "gfx1101", "gfx1200", "gfx1201"]
+          },
+          "minItems": 0,
+          "description": "Allowed GPU compute capabilities (NVIDIA sm_* + AMD gfx*). Empty array means any GPU is acceptable (when gpu_required=true) or no GPU is needed (when gpu_required=false)."
+        },
+        "gpu_reservation_mb": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "VRAM this app claims on the host. 0 when the app doesn't reserve (e.g. CPU-only, gpu_required=false)."
+        },
+        "gpu_reservation_mode": {
+          "type": "string",
+          "enum": ["concurrent", "exclusive"],
+          "description": "How the VRAM claim interacts with other concurrent refs. concurrent = shares the host GPU (counts toward the host's concurrent sum); exclusive = claims the whole host GPU (P7 rejects rooms that mix auto-launched exclusive + auto-launched concurrent refs)."
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "description": "Intra-node launch order: which other Pinokio apps must be ready before this one starts. Recursive (per Pinokio 8 orchestration). Cross-node orchestration stays with P7."
+        },
+        "requires_hf_login": {
+          "type": "boolean",
+          "description": "If true, the launch wrapper calls Pinokio 8's hf.login device-auth before starting the app. The native login modal handles the user interaction; the wrapper just gates the start on success."
+        }
+      },
+      "additionalProperties": false
+    },
+    "endpoints": {
+      "type": "object",
+      "description": "How to reach the app. primary is the main HTTP/WS surface; alt is for additional service ports (e.g. a metrics endpoint).",
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "type": "object",
+          "required": ["port", "protocol"],
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535,
+              "description": "TCP port the app listens on. 0 = dynamic (Pinokio assigns at runtime; the actual port is resolved via the bridge's /v1/apps/{slug}/status)."
+            },
+            "protocol": {
+              "type": "string",
+              "enum": ["http", "https", "ws", "wss", "grpc", "tcp"],
+              "description": "Wire protocol the app speaks."
+            },
+            "health": {
+              "type": ["string", "null"],
+              "description": "Path the mesh/PMOVES polls to check app health (e.g. /gradio_api/info, /healthz). null = no health endpoint."
+            }
+          },
+          "additionalProperties": false
+        },
+        "alt": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["port", "protocol"],
+            "properties": {
+              "port": {"type": "integer", "minimum": 0, "maximum": 65535},
+              "protocol": {"type": "string", "enum": ["http", "https", "ws", "wss", "grpc", "tcp"]},
+              "purpose": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "pinokio_skill_ref": {
+      "type": ["string", "null"],
+      "description": "Slug of the P8 managed skill that covers this app, or null if the app is a raw Pinokio app (not a managed skill). The bridge's /v1/skills endpoint mirrors P8's managed-skills library."
+    },
+    "network_exposure": {
+      "type": "object",
+      "description": "4-level ladder (operator-approved Q1). Per-layer reachability contract. L1+L2 are host-local; L3 is the tailnet mesh; L4 is the public website via kvm2 Cloudflare-Tunnel + hostinger.cloudflare.com DNS.",
+      "required": [
+        "l1_venv",
+        "l2_container_same_host",
+        "l3_mesh",
+        "l4_public"
+      ],
+      "properties": {
+        "l1_venv": {
+          "type": "object",
+          "description": "Same-host, same-process space: apps call each other in the Pinokio venv graph.",
+          "required": ["reachable"],
+          "properties": {
+            "reachable": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        "l2_container_same_host": {
+          "type": "object",
+          "description": "PMOVES container on the same host as the Pinokio venv. Talks via host.docker.internal:<port>.",
+          "required": ["reachable"],
+          "properties": {
+            "reachable": {"type": "boolean"},
+            "address": {
+              "type": ["string", "null"],
+              "description": "Concrete address when reachable. Convention: http://host.docker.internal:<port>."
+            }
+          },
+          "additionalProperties": false
+        },
+        "l3_mesh": {
+          "type": "object",
+          "description": "Other host on the headscale tailnet. Talks via <slug>.<tailscale_host>.ts.pmoves.net:<port>. WireGuard-encrypted. ACL gates which ports each group can reach.",
+          "required": ["reachable"],
+          "properties": {
+            "reachable": {"type": "boolean"},
+            "address": {
+              "type": ["string", "null"],
+              "description": "Concrete FQDN when reachable. Convention: http://<slug>.<tailscale_host>.ts.pmoves.net:<port>."
+            },
+            "headscale_acl_ports": {
+              "type": "array",
+              "items": {"type": "integer", "minimum": 1, "maximum": 65535},
+              "description": "Ports the mesh_exposure service adds to pmoves/config/headscale/acl.yaml so other groups can reach the app over the mesh."
+            },
+            "tags_required": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Tags a client must have to reach the app (per headscale ACL). Empty = any group."
+            }
+          },
+          "additionalProperties": false
+        },
+        "l4_public": {
+          "type": "object",
+          "description": "Public website via kvm2's Cloudflare-Tunnel + Tailscale-Funnel + hostinger.cloudflare.com DNS. The mesh_exposure service (slice 4) reconciles this end-to-end.",
+          "required": ["reachable"],
+          "properties": {
+            "reachable": {"type": "boolean"},
+            "tunnel": {
+              "type": ["string", "null"],
+              "description": "kvm2 Cloudflare-Tunnel name (e.g. pmoves-edge). The mesh_exposure service creates/updates the tunnel ingress entry to point at the L3 mesh endpoint."
+            },
+            "dns_record": {
+              "type": ["string", "null"],
+              "description": "Hostinger / Cloudflare-managed DNS record (e.g. comfyui.pmoves.ai). The mesh_exposure service ensures the CNAME points at the tunnel."
+            },
+            "public_url": {
+              "type": ["string", "null"],
+              "format": "uri",
+              "description": "Public URL end users hit (e.g. https://comfyui.pmoves.ai)."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "notes": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Free-form notes (operator commentary, history, follow-ups). Each note is a single line."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form escape hatch for app-specific knobs that don't fit the schema. Constrained to scalar values so YAML stays diffable.",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    }
+  },
+  "additionalProperties": false
+}

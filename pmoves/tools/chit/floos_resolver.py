@@ -251,20 +251,22 @@ class PipelineResult:
 # ── NATS Hook Publisher ───────────────────────────────────────────
 
 
-async def publish_hook(
+def _strict_hooks_enabled() -> bool:
+    return os.environ.get("FLOOS_STRICT_HOOKS", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _manual_hook_envelope(
     subject: str,
     payload: dict,
     *,
     correlation_id: str | None = None,
     source: str = "floos",
-    nats_url: str | None = None,
 ) -> dict:
-    """Publish a hook event to NATS without contract schema validation.
-
-    Builds a lightweight envelope compatible with the PMOVES envelope
-    wire format but skips topics.json lookup (hook subjects are
-    convention-based, not contract-registered).
-    """
     env = {
         "id": str(uuid.uuid4()),
         "topic": subject,
@@ -275,6 +277,77 @@ async def publish_hook(
     }
     if correlation_id:
         env["correlation_id"] = correlation_id
+    return env
+
+
+def _build_hook_envelope(
+    subject: str,
+    payload: dict,
+    *,
+    correlation_id: str | None = None,
+    source: str = "floos",
+) -> dict:
+    """Build a hook envelope, using topics.json validation when registered."""
+    try:
+        from pmoves.services.common.events import envelope as contract_envelope
+
+        return contract_envelope(
+            subject,
+            payload,
+            correlation_id=correlation_id,
+            source=source,
+        )
+    except KeyError:
+        if _strict_hooks_enabled():
+            raise
+        print(
+            f"WARNING: hook '{subject}' is not registered in topics.json; "
+            "publishing without schema validation",
+            file=sys.stderr,
+        )
+        return _manual_hook_envelope(
+            subject,
+            payload,
+            correlation_id=correlation_id,
+            source=source,
+        )
+
+
+async def publish_hook(
+    subject: str,
+    payload: dict,
+    *,
+    correlation_id: str | None = None,
+    source: str = "floos",
+    nats_url: str | None = None,
+) -> dict:
+    """Publish a hook event to NATS.
+
+    Registered subjects are validated through topics.json. Unregistered
+    convention-based hook subjects warn by default and fail when
+    FLOOS_STRICT_HOOKS=true.
+    """
+    try:
+        env = _build_hook_envelope(
+            subject,
+            payload,
+            correlation_id=correlation_id,
+            source=source,
+        )
+    except Exception as exc:
+        if _strict_hooks_enabled():
+            raise
+        print(
+            f"WARNING: hook '{subject}' envelope build failed: "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+        env = _manual_hook_envelope(
+            subject,
+            payload,
+            correlation_id=correlation_id,
+            source=source,
+        )
 
     url = nats_url or os.environ.get(
         "NATS_URL", "nats://nats:pmoves@nats:4222"
@@ -290,8 +363,13 @@ async def publish_hook(
         finally:
             await nc.close()
     except ImportError:
-        pass  # nats-py not installed, hooks disabled
+        print(
+            f"WARNING: hook '{subject}' not published because nats-py is not installed",
+            file=sys.stderr,
+        )
     except Exception as exc:
+        if _strict_hooks_enabled():
+            raise
         print(
             f"WARNING: hook '{subject}' publish failed: "
             f"{type(exc).__name__}: {exc}",
@@ -390,7 +468,13 @@ async def execute_step(
     start = time.monotonic()
 
     arguments = _resolve_step_input(step, context)
-    endpoint = handoff.get("mcp_endpoint", "http://localhost:8080/mcp/command")
+    # /mcp/execute, not /mcp/command. The Agent Zero supervisor on 8080 serves
+    # `POST /mcp/execute` and `GET /mcp/commands`; `/mcp/command` (singular) was
+    # never implemented -- it is documented only in .claude/context/mcp-api.md,
+    # which is marked SUPERSEDED for exactly that reason. The request body below
+    # already matches /mcp/execute's {cmd, arguments} contract, so only the path
+    # was stale: wet mode would have 404'd on every step.
+    endpoint = handoff.get("mcp_endpoint", "http://localhost:8080/mcp/execute")
     timeout = handoff.get("step_timeout", 300)
 
     retry_cfg = handoff.get("retry", {})
@@ -582,7 +666,6 @@ def check_health(url: str, timeout: int = 5) -> tuple[bool, str]:
     """Check a health endpoint. Returns (healthy, message)."""
     try:
         from urllib.request import urlopen
-        from urllib.error import URLError
 
         resp = urlopen(url, timeout=timeout)
         status = resp.getcode()
@@ -892,7 +975,7 @@ def cli_run(args: argparse.Namespace) -> int:
         print(f"FlOO$ Dry Run: {args.pairing}")
         print("=" * 50)
         print(f"Pipeline: {pairing.get('name', args.pairing)}")
-        print(f"MCP endpoint: {handoff.get('mcp_endpoint', 'http://localhost:8080/mcp/command')}")
+        print(f"MCP endpoint: {handoff.get('mcp_endpoint', 'http://localhost:8080/mcp/execute')}")
         print(f"Step timeout: {handoff.get('step_timeout', 300)}s")
         retry = handoff.get("retry", {})
         print(f"Retry: {retry.get('max_attempts', 3)} attempts, {retry.get('backoff_ms', 1000)}ms backoff")

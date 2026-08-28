@@ -1,0 +1,60 @@
+name: Validate Composes Ratchet
+
+# Hard gate: every `pmoves/docker-compose*.yml` overlay must use the
+# long-form `path: ... / required: false` for `.env.local` (or have
+# no entry at all). Short-form `.env.local` is REQUIRED by default
+# in docker-compose and hard-fails bring-up on nodes that don't ship
+# the file. PR #2374 + #2403 + #2415 closed the stragglers; this
+# ratchet prevents re-introduction.
+#
+# Same shape as the fork-registry ratchet (no network, no token
+# privilege, ~100ms) so it runs cheaply on every PR that touches
+# the overlay set, the ratchet script, the ratchet tests, or the
+# workflow itself.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/docker-compose*.yml"
+      - "pmoves/tools/validate_composes.py"
+      - "pmoves/tools/tests/test_validate_composes.py"
+      - ".github/workflows/validate-composes-ratchet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  validate-composes-ratchet:
+    name: validate-composes-ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Run ratchet (read-only, no network)
+        run: |
+          # pmoves/conftest.py is shared across the tools/tests suite and
+          # imports pytest_asyncio + pyyaml; the ratchet test file inherits
+          # both requirements even though the ratchet tests are sync +
+          # json-only — conftest import chain still resolves.
+          python -m pip install --quiet pyyaml
+          python pmoves/tools/validate_composes.py
+
+      - name: Pytest the ratchet (regression net for the ratchet itself)
+        run: |
+          python -m pip install --quiet pytest pytest-asyncio pyyaml
+          python -m pytest pmoves/tools/tests/test_validate_composes.py -v

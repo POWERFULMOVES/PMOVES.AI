@@ -2,6 +2,17 @@
 
 > Technology-Architecture-Context tree for the Tailscale mesh VPN layer — node registration, auth key management, exit node routing, DNS, and the Headscale self-hosted migration path.
 
+## Current State (verified live 2026-07-10) — supersedes stale tables below
+
+Tailnet `tailcad9b4.ts.net`. Authoritative runbook: [`../operations/TAILSCALE_EXIT_NODE_RUNBOOK.md`](../operations/TAILSCALE_EXIT_NODE_RUNBOOK.md).
+
+- **Exit nodes: ALL 3 KVMs live + approved** — `pmoves-kvm2`, `pmoves-kvm4-1` (designated egress), `pmoves-kvm4-2` (pilot exit). Reference by MagicDNS hostname, never public IP (repo no-IPs policy). Each has IP forwarding (sysctl) + `--advertise-exit-node` and carries `tag:exit`, so all three **self-approve** via the `autoApprovers.exitNode` rule. Verified from `pmoves-4090` on 2026-07-10: all three appear in `tailscale exit-node list`, and a live egress `curl` confirmed the 4090's traffic exits through `pmoves-kvm4-1` (egress IP == the KVM's DC address, direct WireGuard path, not DERP). Clients can auto-select via `tailscale exit-node suggest`.
+- **Tailscale SSH server enabled on all KVMs** (`RunSSH=true`) — ACL `ssh: autogroup:admin → * (root)` + a member self-SSH `check` rule. This is the out-of-band fleet management plane and **retires the kvm2 blocked-port-22 P0** (manage hbbs/hbbr over the tailnet).
+- **MCP control (two complementary)**: npm `tailscale-mcp` (admin API — ACL/routes/devices, needs `TAILSCALE_API_KEY`, wiring pending) + **custom `pmoves-tailscale-mcp/`** (local CLI wrapper — exit-node/serve/funnel/ssh/metrics/netcheck/ping, no creds; PR #1821).
+- **Serve/Funnel** sanctioned: `tailscale serve` (tailnet HTTPS — Jellyfin/Pinokio) + `tailscale funnel` (public 443/8443/10000). ACL `nodeAttrs: tag:exit → funnel`.
+- **Observability**: tailscaled Prometheus metrics → node-exporter textfile collector → Grafana "Tailscale Network Health" (PR #1822).
+- **Still open**: `TAILSCALE_API_KEY`/`TAILSCALE_TAILNET` wiring for the admin MCP (operator-direct manifest edit); `tag:exit` reusable authkey for auto-approving new exit nodes; Headscale migration (unchanged, planned).
+
 ## Service Identity
 
 | Field | Value |
@@ -10,7 +21,7 @@
 | **Control Plane** | Tailscale Cloud (Headscale planned) |
 | **Ports** | — (overlay network, no dedicated port) |
 | **Health** | `tailscale status` / `tailscale ping <host>` |
-| **Metrics** | Headscale: `GET :8181/metrics` (when deployed) |
+| **Metrics** | Headscale: `GET :8096/metrics` (when deployed) |
 | **Submodules** | [`PMOVES-Tailscale`](../../PMOVES-Tailscale/), [`PMOVES-Headscale`](../../PMOVES-Headscale/) |
 | **Docker Profile** | Standalone (`docker-compose.tailscale.yml`) |
 | **Tier** | api (cross-cutting infrastructure) |
@@ -145,8 +156,13 @@ Target: **Headscale** (self-hosted on KVM2)
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| All production nodes on tailnet | Partial | KVM nodes + POWERFULMOVES connected; offline: nano, laptop, pixel |
-| Exit node approved | GREEN | KVM2 approved as exit node |
+| All production nodes on tailnet | Partial | KVM nodes + 4090 + POWERFULMOVES connected; offline: nano, laptop, pixel |
+| Exit nodes approved | GREEN | **All 3 KVMs** (kvm2, kvm4-1, kvm4-2) advertised + approved (2026-06-15) |
+| Tailscale SSH (out-of-band mgmt) | GREEN | `RunSSH=true` on all KVMs; retires kvm2 blocked-port-22 |
+| Local control MCP | GREEN | `pmoves-tailscale-mcp/` (CLI wrapper) — PR #1821; registration operator-opt-in |
+| Admin-API MCP creds | Pending | `TAILSCALE_API_KEY`/`TAILSCALE_TAILNET` manifest wiring (operator-direct) |
+| Metrics → observability | GREEN | tailscaled metrics → node-exporter textfile → Grafana (PR #1822) |
+| Auto-onboarding (tag:exit authkey) | Pending | mint reusable tagged authkey → new exit nodes self-approve |
 | Auth key rotation | Partial | Reusable keys don't expire; single-use keys have 90d TTL |
 | Headscale readiness | Pending | Submodule tracked, deployment not started |
 | Firewall rules per node | GREEN | VPS provisioned with ufw |
@@ -169,4 +185,4 @@ Target: **Headscale** (self-hosted on KVM2)
 - ACL policy definition for node-level access control
 - Automated auth key rotation
 
-<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TAILSCALE::2026-03-15 -->
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TAILSCALE::2026-07-10 -->

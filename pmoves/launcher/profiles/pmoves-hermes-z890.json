@@ -1,0 +1,229 @@
+{
+  "launcher_profile_version": "1.0.0",
+  "node_id": "pmoves-z890",
+  "display_name": "PMOVES HERMES Z890",
+  "description": "Local-first infrastructure coordinator for PMOVES.AI with legal-assist, email organization, messaging gateway, and n8n/Archon workflows. No local GPU; heavy inference delegates to BoTZ/5090/Knuckles via Tailscale mesh.",
+  "platform": "win32",
+  "pmoves_profile": "z890-coordinator",
+  "hermes_profile": "PMOVES-HERMES-Z890",
+  "room": {
+    "room_id": "z890-infra.room.fabric",
+    "stage": "live",
+    "suits": ["z890-infra", "pmoves-hermes", "legal-assist"]
+  },
+  "requirements": {
+    "min_ram_gb": 32,
+    "gpu_required": false,
+    "docker_desktop": true,
+    "ollama": true,
+    "hermes_cli": true
+  },
+  "env_secrets": [
+    "OLLAMA_HOST",
+    "BOTZ_OLLAMA_HOST",
+    "OLLAMA_CLOUD_BASE_URL",
+    "OLLAMA_CLOUD_API_KEY",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_API_TOKEN",
+    "E2B_API_KEY",
+    "COURTLISTENER_API_TOKEN",
+    "TITAN_EMAIL",
+    "TITAN_PASSWORD",
+    "GMAIL_EMAIL",
+    "GMAIL_PASSWORD",
+    "N8N_BASIC_AUTH_USER",
+    "N8N_BASIC_AUTH_PASSWORD",
+    "N8N_RUNNERS_AUTH_TOKEN",
+    "ARCHON_API_KEY",
+    "TELEGRAM_BOT_TOKEN",
+    "DISCORD_BOT_TOKEN",
+    "WHATSAPP_SESSION",
+    "SIGNAL_USERNAME",
+    "MSTEAMS_APP_ID",
+    "MSTEAMS_APP_PASSWORD",
+    "FACEBOOK_PAGE_TOKEN",
+    "MESSENGER_PAGE_TOKEN"
+  ],
+  "skills": [
+    "pmoves-legal-assist",
+    "pmoves-folder-monitor",
+    "pmoves-email-organizer",
+    "pmoves-yt-monitor",
+    "pmoves-n8n-archon-bridge"
+  ],
+  "launcher_refs": [
+    "up-agents",
+    "up-monitoring",
+    "secrets-funnel",
+    "up-n8n",
+    "up-archon-native"
+  ],
+  "model_routing": {
+    "default": "local",
+    "local": {
+      "provider": "ollama",
+      "model": "qwen3-coder:30b",
+      "base_url": "http://localhost:11434"
+    },
+    "remote_gpu": {
+      "provider": "ollama",
+      "model": "qwen3-coder:30b",
+      "base_url_env": "BOTZ_OLLAMA_HOST"
+    },
+    "fallback": {
+      "provider": "openai",
+      "model": "glm-5.2",
+      "base_url": "https://ollama.com/v1",
+      "api_key_env": "OLLAMA_CLOUD_API_KEY"
+    }
+  },
+  "platform_toolsets": [
+    "whatsapp",
+    "telegram",
+    "discord",
+    "signal",
+    "teams",
+    "facebook",
+    "messenger",
+    "google_chat",
+    "slack"
+  ],
+  "hermes_config_overrides": {
+    "model": {
+      "default": "qwen3-coder:30b",
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_key": "",
+      "context_length": 32768,
+      "ollama_num_ctx": 32768
+    },
+    "model_gpu": {
+      "provider": "ollama",
+      "model": "qwen3-coder:30b",
+      "base_url": "${BOTZ_OLLAMA_HOST}",
+      "api_key": "",
+      "context_length": 32768,
+      "ollama_num_ctx": 32768
+    },
+    "models": {
+      "local": {
+        "provider": "ollama",
+        "model": "qwen3-coder:30b",
+        "base_url": "http://localhost:11434",
+        "api_key": ""
+      },
+      "remote_gpu": {
+        "provider": "ollama",
+        "model": "qwen3-coder:30b",
+        "base_url": "${BOTZ_OLLAMA_HOST}",
+        "api_key": ""
+      }
+    },
+    "agent": {
+      "max_turns": 90,
+      "verbose": false,
+      "reasoning_effort": "medium"
+    },
+    "terminal": {
+      "backend": "local",
+      "cwd": "D:\\PMOVES.AI\\PMOVES.AI",
+      "timeout": 300,
+      "home_mode": "auto",
+      "container_cpu": 1,
+      "container_memory": 5120,
+      "container_disk": 51200,
+      "container_persistent": true,
+      "docker_mount_cwd_to_workspace": false,
+      "lifetime_seconds": 300
+    },
+    "delegation": {
+      "model": "qwen3-coder:30b",
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_key": "",
+      "max_iterations": 50,
+      "remote_model": "remote_gpu"
+    },
+    "platform_toolsets": {
+      "cli": [
+        "browser",
+        "clarify",
+        "code_execution",
+        "computer_use",
+        "cronjob",
+        "delegation",
+        "file",
+        "image_gen",
+        "kanban",
+        "memory",
+        "session_search",
+        "skills",
+        "terminal",
+        "todo",
+        "tts",
+        "vision",
+        "web"
+      ],
+      "telegram": ["hermes-telegram"],
+      "discord": ["hermes-discord"],
+      "whatsapp": ["hermes-whatsapp"],
+      "slack": ["hermes-slack"],
+      "signal": ["hermes-signal"],
+      "homeassistant": ["hermes-homeassistant"],
+      "qqbot": ["hermes-qqbot"],
+      "yuanbao": ["hermes-yuanbao"],
+      "teams": ["hermes-teams"],
+      "google_chat": ["hermes-google_chat"],
+      "facebook": ["hermes-facebook"],
+      "messenger": ["hermes-messenger"]
+    },
+    "fallback_model": {
+      "provider": "openai",
+      "model": "glm-5.2",
+      "base_url": "https://ollama.com/v1",
+      "api_key": "${OLLAMA_CLOUD_API_KEY}"
+    },
+    "security": {
+      "redact_secrets": true,
+      "tirith_enabled": true,
+      "tirith_path": "tirith",
+      "tirith_timeout": 5,
+      "tirith_fail_open": true
+    },
+    "memory": {
+      "memory_enabled": true,
+      "user_profile_enabled": true,
+      "memory_char_limit": 2200,
+      "user_char_limit": 1375,
+      "nudge_interval": 10,
+      "flush_min_turns": 6
+    },
+    "display": {
+      "compact": false,
+      "busy_input_mode": "interrupt",
+      "bell_on_complete": false,
+      "show_reasoning": false,
+      "streaming": true,
+      "skin": "default",
+      "interim_assistant_messages": true,
+      "tool_progress": "all",
+      "cleanup_progress": false,
+      "long_running_notifications": true,
+      "busy_ack_detail": true,
+      "background_process_notifications": "all"
+    },
+    "compression": {
+      "enabled": true,
+      "threshold": 0.5,
+      "target_ratio": 0.2,
+      "protect_last_n": 20,
+      "protect_first_n": 3
+    }
+  },
+  "notes": [
+    "No local GPU; heavy inference routes to BoTZ/5090/Knuckles via BOTZ_OLLAMA_HOST.",
+    "Cloud fallback follows env.shared.example order: ollama_cloud -> cloudflare_free -> coding_plan.",
+    "OpenRouter/direct providers disabled by default unless a lane waiver is approved.",
+    "Profile is local-only; do not push the Hermes profile .env or this file's secrets to remote."
+  ]
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -12,6 +13,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from pmoves.tools._secrets_common import (
+    is_placeholder as _looks_placeholder,
+    parse_env_file as _parse_env_file,
+)
 
 DEFAULT_ENV_FILE = Path(__file__).resolve().parents[1] / "env.shared"
 DEFAULT_AUTH_HEALTH_URL = "http://127.0.0.1:65421/auth/v1/health"
@@ -25,49 +34,10 @@ class Finding:
     message: str
 
 
-def _parse_env_file(path: Path) -> Dict[str, str]:
-    values: Dict[str, str] = {}
-    if not path.exists():
-        return values
-    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key:
-            values[key] = value.strip()
-    return values
-
-
 def _is_true(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _looks_placeholder(value: str | None) -> bool:
-    if value is None:
-        return True
-    trimmed = value.strip()
-    if not trimmed:
-        return True
-    lowered = trimmed.lower()
-    looks_example_email = lowered.endswith("@example.com")
-    host = ""
-    try:
-        candidate = trimmed if "://" in trimmed else f"https://{trimmed}"
-        host = (urllib.parse.urlparse(candidate).hostname or "").lower()
-    except Exception:
-        host = ""
-    looks_example_host = host in {"example.com", "www.example.com"}
-    return (
-        lowered.startswith("placeholder_")
-        or "your_" in lowered
-        or looks_example_email
-        or looks_example_host
-        or lowered in {"changeme", "change_me", "none", "null"}
-    )
 
 
 def _looks_email(value: str | None) -> bool:

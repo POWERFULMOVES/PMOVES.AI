@@ -20,12 +20,20 @@ CREATE TABLE IF NOT EXISTS realtime.tenants (
     updated_at timestamptz DEFAULT now()
 );
 
+-- JWT secret injected via: SET app.realtime_jwt_secret = '<from env>'; in container init.
+-- NEVER hardcode secrets in committed SQL.
 INSERT INTO realtime.tenants (name, external_id, jwt_secret)
-VALUES ('PMOVES Local', 'realtime', 'pmoves_dev_jwt_secret_32_chars!!')
+VALUES ('PMOVES', 'realtime', current_setting('app.realtime_jwt_secret', true))
 ON CONFLICT (external_id) DO UPDATE SET
     name = EXCLUDED.name,
     jwt_secret = EXCLUDED.jwt_secret,
     updated_at = now();
+
+-- Rate-limit realtime tenants (M-03)
+UPDATE realtime.tenants SET
+    max_channels_per_client = 10,
+    max_events_per_second = 100
+WHERE external_id = 'realtime';
 
 GRANT USAGE ON SCHEMA realtime TO service_role, authenticated, anon;
 DO $$

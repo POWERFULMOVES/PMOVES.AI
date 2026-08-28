@@ -19,7 +19,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from hooks.deterministic import DeterministicHook, pre_command_check, _regex_timeout
+from hooks.deterministic import DeterministicHook, _regex_timeout
 from hooks.audit_log import AuditLogger, _scrub_secrets
 
 
@@ -54,10 +54,10 @@ class TestPathTraversalProtection:
         hook = DeterministicHook(patterns_path=self.patterns_file)
 
         # Test normal protected paths
-        assert hook._is_protected(".env", "zero_access") == True
-        assert hook._is_protected("config.pem", "zero_access") == True
-        assert hook._is_protected("/home/user/secrets/api_key.txt", "zero_access") == True
-        assert hook._is_protected("/root/.ssh/id_rsa", "zero_access") == True
+        assert hook._is_protected(".env", "zero_access")
+        assert hook._is_protected("config.pem", "zero_access")
+        assert hook._is_protected("/home/user/secrets/api_key.txt", "zero_access")
+        assert hook._is_protected("/root/.ssh/id_rsa", "zero_access")
 
     def test_path_traversal_attacks_blocked(self):
         """Test that path traversal attacks are blocked."""
@@ -82,7 +82,7 @@ class TestPathTraversalProtection:
             result = hook._is_protected(attempt, "zero_access")
             # The key point: path traversal should be resolved, not bypassed
             if ".env" in absolute or "secrets" in absolute or ".ssh" in absolute:
-                assert result == True, f"Path traversal not blocked: {attempt}"
+                assert result, f"Path traversal not blocked: {attempt}"
 
     def test_absolute_vs_relative_path_consistency(self):
         """Test that absolute and relative paths are treated consistently."""
@@ -97,8 +97,8 @@ class TestPathTraversalProtection:
         absolute_path = str(test_env.absolute())
 
         # Both should be detected as protected
-        assert hook._is_protected(relative_path, "zero_access") == True
-        assert hook._is_protected(absolute_path, "zero_access") == True
+        assert hook._is_protected(relative_path, "zero_access")
+        assert hook._is_protected(absolute_path, "zero_access")
 
     def test_symlink_protection(self):
         """Test that symlinks are resolved correctly."""
@@ -133,7 +133,7 @@ class TestPathTraversalProtection:
         try:
             result = hook._is_protected("/etc/passwd\x00.env", "zero_access")
             # If it doesn't crash, it should fail secure
-            assert result == True or result == False  # Just don't crash
+            assert result or not result  # Just don't crash
         except (ValueError, OSError):
             # Expected to raise an exception
             pass
@@ -144,7 +144,6 @@ class TestReDoSProtection:
 
     def test_regex_timeout_context_manager(self):
         """Test that regex timeout context manager works."""
-        import time
         import re
 
         # This should complete quickly

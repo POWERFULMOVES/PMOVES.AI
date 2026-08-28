@@ -210,7 +210,7 @@ Raw research outputs proving the journey from idea to implementation. See `evide
 
 ## CHIT Geometry Bus -- The Through-Line
 
-The Compressed Hierarchical Information Transmission (CHIT) system is the mathematical backbone connecting all five tiers:
+The Compressed Hierarchical Information Transfer (CHIT) system is the mathematical backbone connecting all five tiers:
 
 ```
 L1 Research signals

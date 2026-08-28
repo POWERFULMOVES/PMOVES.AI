@@ -1,0 +1,142 @@
+[
+    {
+        "file": "sphere_tutorial.json",
+        "name": "Sphere (Tutorial)"
+    },
+    {
+        "file": "hypersphere.json",
+        "name": "Hypersphere (5-Sphere)"
+    },
+    {
+        "file": "torus.json",
+        "name": "Torus"
+    },
+    {
+        "file": "mobius_strip.json",
+        "name": "M\u00f6bius Strip"
+    },
+    {
+        "file": "klein_bottle.json",
+        "name": "Klein Bottle"
+    },
+    {
+        "file": "torus_knot.json",
+        "name": "Torus Knot"
+    },
+    {
+        "file": "trefoil_knot.json",
+        "name": "Trefoil Knot"
+    },
+    {
+        "file": "breather_surface.json",
+        "name": "Breather Surface"
+    },
+    {
+        "file": "dini_surface.json",
+        "name": "Dini's Surface"
+    },
+    {
+        "file": "hopf_fibration.json",
+        "name": "Hopf Fibration"
+    },
+    {
+        "file": "shells.json",
+        "name": "Shells"
+    },
+    {
+        "file": "nautilus.json",
+        "name": "Nautilus"
+    },
+    {
+        "file": "planet.json",
+        "name": "Planet"
+    },
+    {
+        "file": "ocean_planet.json",
+        "name": "Ocean Planet"
+    },
+    {
+        "file": "rose.json",
+        "name": "Flower"
+    },
+    {
+        "file": "jellyfish.json",
+        "name": "Jellyfish"
+    },
+    {
+        "file": "hotdog.json",
+        "name": "Hotdog"
+    },
+    {
+        "file": "donut.json",
+        "name": "Donut"
+    },
+    {
+        "file": "cosmic_bloom.json",
+        "name": "Cosmic Bloom"
+    },
+    {
+        "file": "mandelbulb.json",
+        "name": "Mandelbulb"
+    },
+    {
+        "file": "weierstrass.json",
+        "name": "Weierstrass Asteroid"
+    },
+    {
+        "file": "perceptron.json",
+        "name": "Perceptron"
+    },
+    {
+        "file": "mlp.json",
+        "name": "Multi-Layer Perceptron"
+    },
+    {
+        "file": "fourier.json",
+        "name": "Fourier Surface"
+    },
+    {
+        "file": "taylor.json",
+        "name": "Taylor Surface"
+    },
+    {
+        "file": "chit_manifold.json",
+        "name": "\u26a1 CHIT Manifold"
+    },
+    {
+        "file": "beats_constellation.json",
+        "name": "\ud83c\udfb5 Beats Constellation (DARKXSIDE)"
+    },
+    {
+        "file": "beats_5.json",
+        "name": "\ud83c\udfb5 Allegro_balanced_Bright_c5"
+    },
+    {
+        "file": "beats_1.json",
+        "name": "\ud83c\udfb5 Allegro_balanced_Bright_c1"
+    },
+    {
+        "file": "beats_0.json",
+        "name": "\ud83c\udfb5 Allegro_balanced_Bright_c0"
+    },
+    {
+        "file": "beats_2.json",
+        "name": "\ud83c\udfb5 Moderato_balanced_Bright_c2"
+    },
+    {
+        "file": "beats_7.json",
+        "name": "\ud83c\udfb5 Allegro_balanced_Bright_c7"
+    },
+    {
+        "file": "beats_3.json",
+        "name": "\ud83c\udfb5 Allegro_balanced_Bright_c3"
+    },
+    {
+        "file": "beats_6.json",
+        "name": "\ud83c\udfb5 Presto_balanced_Bright_c6"
+    },
+    {
+        "file": "beats_4.json",
+        "name": "\ud83c\udfb5 Moderato_balanced_Bright_c4"
+    }
+]

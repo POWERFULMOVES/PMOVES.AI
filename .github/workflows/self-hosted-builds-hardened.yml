@@ -28,7 +28,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
-  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || github.token }}
+  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || github.token }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,7 +45,11 @@ jobs:
   # ============================================================================
   build-gpu:
     name: GPU Services
-    runs-on: [self-hosted, Linux, X64, ai-lab, gpu]
+    # `gpu` is not a registered label and never has been — this job has been
+    # unschedulable since 2025-12-13, queuing until GitHub cancelled it. b850 is
+    # the ai-lab GPU host; target it by a label that exists. If a second GPU host
+    # is ever added, add a real `gpu` label to both runners and revert to it.
+    runs-on: [self-hosted, Linux, X64, ai-lab, b850]
     timeout-minutes: 90
     if: |
       github.event_name == 'push' ||
@@ -54,7 +58,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit  # Start with audit mode; migrate to 'block' after validating endpoints
           disable-sudo: false
@@ -70,7 +74,7 @@ jobs:
             cuda.repo.nvidia.com:443
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
 
@@ -80,25 +84,25 @@ jobs:
           docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: ./.github/actions/pmoves-buildx
 
       - name: Generate GitHub App token
         id: app_token
-        continue-on-error: true
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
-          app-id: ${{ secrets.GH_APP_ID }}
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
+          permission-packages: write
 
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Build Ollama CUDA
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ./services/ollama
           file: ./services/ollama/Dockerfile.cuda
@@ -113,7 +117,7 @@ jobs:
 
       - name: Scan Ollama CUDA with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda-${{ github.sha }}
           format: sarif
@@ -125,13 +129,13 @@ jobs:
 
       - name: Upload Trivy results for Ollama CUDA
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: trivy-ollama-cuda.sarif
           category: trivy-ollama-cuda
 
       - name: Build Hi-RAG GPU
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ./services/hirag-gateway
           file: ./services/hirag-gateway/Dockerfile.gpu
@@ -146,7 +150,7 @@ jobs:
 
       - name: Scan Hi-RAG GPU with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:gpu-${{ github.sha }}
           format: sarif
@@ -158,7 +162,7 @@ jobs:
 
       - name: Upload Trivy results for Hi-RAG GPU
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: trivy-hirag-gpu.sarif
           category: trivy-hirag-gpu
@@ -205,9 +209,7 @@ jobs:
           - name: channel-monitor
             context: ./pmoves/services/channel-monitor
           - name: archon
-            context: ./pmoves/services/archon
-          - name: archon-ui
-            context: ./pmoves/services/archon-ui
+            context: ./pmoves
           - name: ffmpeg-whisper
             context: ./pmoves/services/ffmpeg-whisper
           - name: hirag-gateway-v2
@@ -215,7 +217,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           disable-sudo: false
@@ -234,32 +236,33 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: ./.github/actions/pmoves-buildx
 
       - name: Generate GitHub App token
         id: app_token
-        continue-on-error: true
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
-          app-id: ${{ secrets.GH_APP_ID }}
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
+          permission-packages: write
 
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Build ${{ matrix.service.name }}
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile || 'Dockerfile' }}
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             PIP_CONSTRAINT=requirements.lock
@@ -274,7 +277,7 @@ jobs:
 
       - name: Scan ${{ matrix.service.name }} with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:${{ github.sha }}
           format: sarif
@@ -287,7 +290,7 @@ jobs:
 
       - name: Upload Trivy results for ${{ matrix.service.name }}
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: trivy-${{ matrix.service.name }}.sarif
           category: trivy-${{ matrix.service.name }}
@@ -302,7 +305,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           disable-sudo: true
@@ -312,12 +315,12 @@ jobs:
             registry.npmjs.org:443
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install ajv-cli
         run: npm install -g ajv-cli ajv-formats
@@ -347,17 +350,26 @@ jobs:
   # ============================================================================
   deploy-staging:
     name: Deploy Staging
+    # NEITHER `cloudstartup` NOR `staging` is a registered label. There is a
+    # cloudstartup-runner signing card but no runner registered against it, so
+    # this job cannot schedule. Disabled explicitly rather than left to queue and
+    # be cancelled, which reads as 'someone stopped it' instead of 'impossible'.
     runs-on: [self-hosted, cloudstartup, staging]
     timeout-minutes: 30
     needs: [build-cpu, validate-contracts]
+    # Leading `false &&` is the disable; the original predicate is kept verbatim
+    # so re-enabling is a two-token delete once a cloudstartup runner exists.
+    # It must live in THIS key, not a second `if:` above — a duplicate mapping key
+    # does not error, the later one silently wins, and the disable evaporates.
     if: |
+      false && (
       github.ref == 'refs/heads/develop' ||
-      github.event.inputs.deploy_target == 'staging'
+      github.event.inputs.deploy_target == 'staging' )
     environment: staging
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           disable-sudo: false
@@ -367,7 +379,7 @@ jobs:
             ghcr.io:443
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Deploy to staging
         run: |
@@ -395,7 +407,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           disable-sudo: false
@@ -406,7 +418,7 @@ jobs:
             discord.com:443
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Pull latest images
         run: |
@@ -444,7 +456,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           disable-sudo: true
@@ -456,7 +468,7 @@ jobs:
             staging:4222
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run TensorZero tests
         run: |

@@ -19,18 +19,41 @@ Architecture:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Query
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, Field
 import uvicorn
+
+from hf_client import (
+    fetch_model_info,
+    fetch_model_config,
+    parse_embedding_dimensions,
+    parse_model_summary,
+)
+
+_HERE = Path(__file__).resolve()
+for _path in _HERE.parents:
+    if not (_path / "pmoves").is_dir():
+        continue
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+    break
+
+from pmoves.services.common.events import validate_payload  # noqa: E402
+from pmoves.services.common.model_fitness import (  # noqa: E402
+    build_model_fitness_event,
+    require_trusted_agent_identity,
+)
 
 try:
     from nats.aio.client import Client as NATS
@@ -160,6 +183,54 @@ class ModelDeployment(BaseModel):
     error_message: Optional[str] = None
 
 
+class ModelCandidateRecord(BaseModel):
+    """HuggingFace/autoresearch candidate waiting for validation."""
+
+    id: Optional[str] = None
+    model_id: str
+    hf_id: str
+    task: Optional[str] = None
+    license: Optional[str] = None
+    params: Optional[int] = None
+    context_length: Optional[int] = None
+    capabilities: List[str] = Field(default_factory=list)
+    backend_fit: List[str] = Field(default_factory=list)
+    vram_mb_estimate: Optional[int] = None
+    quantization_support: List[str] = Field(default_factory=list)
+    intended_lane: str = "agent_mesh"
+    validation_status: str = Field(default="candidate", pattern=r'^(candidate|validated|rejected|activated)$')
+    source: str = "huggingface"
+    agent_id: str = "codex"
+    signed_trail_ref: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ModelFitnessRequest(BaseModel):
+    """Input for normalized model-fitness recording."""
+
+    model_id: str
+    source: str = Field(pattern=r'^(tensorzero|pinokio|unsloth|hf-autoresearch|evoswarm|manual)$')
+    lane: str
+    tensorzero_metrics: Dict[str, Any] = Field(default_factory=dict)
+    training_metrics: Dict[str, Any] = Field(default_factory=dict)
+    run_id: Optional[str] = None
+    agent_id: str
+
+
+class ModelFitnessRecord(BaseModel):
+    """Persisted model-fitness scorecard event."""
+
+    model_id: str
+    source: str
+    lane: str
+    score: float = Field(ge=0, le=1)
+    metrics: Dict[str, Any]
+    run_id: str
+    timestamp: str
+    agent_id: str
+    signature: Dict[str, Any]
+
+
 # ============================================================================
 # Supabase Client
 # ============================================================================
@@ -256,6 +327,35 @@ class SupabaseClient:
             pass
         return await self._request("POST", "model_deployments", data=data)
 
+    async def create_model_candidate(self, candidate: ModelCandidateRecord) -> Dict:
+        """Persist or merge a model candidate record."""
+        data = candidate.model_dump(exclude_unset=True, exclude={"id"})
+        headers = {
+            **self.headers,
+            "Prefer": "resolution=merge-duplicates,return=representation",
+        }
+        url = f"{self.url}/rest/v1/model_candidates?on_conflict=hf_id,intended_lane"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=data)
+        if response.status_code >= 400:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        return response.json()
+
+    async def create_model_fitness_record(self, record: ModelFitnessRecord) -> Dict:
+        """Persist a normalized model-fitness event."""
+        data = {
+            "model_id": record.model_id,
+            "source": record.source,
+            "lane": record.lane,
+            "score": record.score,
+            "metrics": record.metrics,
+            "run_id": record.run_id,
+            "agent_id": record.agent_id,
+            "signature": record.signature,
+            "recorded_at": record.timestamp,
+        }
+        return await self._request("POST", "model_fitness_records", data=data)
+
 
 # Global Supabase client
 supabase = SupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -268,12 +368,15 @@ supabase = SupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 class RegistryNatsClient:
     """NATS client for model registry — subscribes to GPU events, publishes catalog changes."""
 
-    # Subjects we subscribe to (from gpu-orchestrator)
+    # Subjects we subscribe to (from gpu-orchestrator + pipeline sources)
     SUB_MODEL_LOADED = "mesh.gpu.model.loaded.v1"
     SUB_MODEL_UNLOADED = "mesh.gpu.model.unloaded.v1"
+    SUB_HF_EVALUATED = "hf.model.evaluated.v1"          # G4: from hf-research-agent
+    SUB_AGENTGYM_PUBLISHED = "agentgym.model.published.v1"  # G5: from agentgym-rl-coordinator
 
     # Subject we publish on catalog mutations
     PUB_REGISTRY_UPDATED = "model.registry.updated.v1"
+    PUB_MODEL_FITNESS_RECORDED = "model.fitness.recorded.v1"
 
     def __init__(self, nats_url: str, supabase_client: SupabaseClient):
         self.nats_url = nats_url
@@ -300,6 +403,14 @@ class RegistryNatsClient:
             await self._nc.subscribe(self.SUB_MODEL_LOADED, cb=self._on_model_loaded)
             await self._nc.subscribe(self.SUB_MODEL_UNLOADED, cb=self._on_model_unloaded)
             logger.info("Subscribed to mesh.gpu.model.{loaded,unloaded}.v1")
+
+            # G4: Subscribe to HF research evaluations (auto-register high-scoring candidates)
+            await self._nc.subscribe(self.SUB_HF_EVALUATED, cb=self._on_hf_evaluated)
+            logger.info("Subscribed to hf.model.evaluated.v1 (G4 pipeline link)")
+
+            # G5: Subscribe to AgentGym model publications (register RL-trained models)
+            await self._nc.subscribe(self.SUB_AGENTGYM_PUBLISHED, cb=self._on_agentgym_published)
+            logger.info("Subscribed to agentgym.model.published.v1 (G5 pipeline link)")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to NATS: {e}")
@@ -337,6 +448,22 @@ class RegistryNatsClient:
             await self._nc.publish(self.PUB_REGISTRY_UPDATED, payload)
         except Exception as e:
             logger.error(f"Error publishing catalog change: {e}")
+
+    async def publish_model_fitness(self, event: Dict[str, Any]) -> None:
+        """Publish a signed model.fitness.recorded.v1 payload."""
+        if not self._nc or not self._connected:
+            logger.warning(
+                "NATS disconnected — model fitness notification dropped: "
+                f"{event.get('model_id')}/{event.get('run_id')}"
+            )
+            return
+        try:
+            await self._nc.publish(
+                self.PUB_MODEL_FITNESS_RECORDED,
+                json.dumps(event).encode(),
+            )
+        except Exception as e:
+            logger.error(f"Error publishing model fitness: {e}")
 
     async def _on_model_loaded(self, msg) -> None:
         """Handle mesh.gpu.model.loaded.v1 — upsert deployment as loaded."""
@@ -391,6 +518,95 @@ class RegistryNatsClient:
             logger.error(f"Malformed NATS message on {self.SUB_MODEL_UNLOADED}: {e}")
         except Exception as e:
             logger.error(f"Error handling model unloaded event: {e}", exc_info=True)
+
+    async def _on_hf_evaluated(self, msg) -> None:
+        """Handle hf.model.evaluated.v1 — G4: auto-register high-scoring candidates.
+
+        The hf-research-agent scores models by downloads/likes/tags.
+        If score exceeds threshold, register as a candidate.
+        """
+        try:
+            data = json.loads(msg.data.decode())
+            model_id = data.get("model_id") or data.get("id") or ""
+            score = float(data.get("score") or 0)
+
+            if not model_id or score < 50:
+                return
+
+            lane = data.get("lane", "chat")
+            logger.info(f"G4: registering candidate {model_id} (score={score})")
+
+            await self.supabase.create_model_candidate(ModelCandidateRecord(
+                hf_id=model_id,
+                model_id=model_id,
+                source="hf-autoresearch",
+                lane=lane,
+                intended_lane=lane,
+                pipeline_tag="text-generation",
+                validation_status="candidate",
+                metadata={
+                    "hf_score": score,
+                    "downloads": data.get("downloads"),
+                    "likes": data.get("likes"),
+                    "tags": data.get("tags"),
+                    "reasons": data.get("reasons"),
+                },
+            ))
+            await self.publish_catalog_change("create", "model_candidate", model_id)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Malformed NATS message on {self.SUB_HF_EVALUATED}: {e}")
+        except Exception as e:
+            logger.error(f"Error handling hf.model.evaluated event: {e}", exc_info=True)
+
+    async def _on_agentgym_published(self, msg) -> None:
+        """Handle agentgym.model.published.v1 — G5: register RL-trained models.
+
+        The agentgym-rl-coordinator publishes models to HF Hub after RL training.
+        Register them as candidates and record initial training fitness.
+        """
+        try:
+            data = json.loads(msg.data.decode())
+            # Codex P1: AgentGym publishes model_id, dataset_id, repo_url
+            # (not hf_id or model_repo)
+            hf_id = data.get("hf_id") or data.get("repo_url") or ""
+            model_id = data.get("model_id") or ""
+            if not hf_id and model_id:
+                hf_id = model_id
+            if not hf_id:
+                return
+
+            logger.info(f"G5: registering RL-trained candidate {hf_id}")
+
+            await self.supabase.upsert_model_candidate(
+                hf_id=hf_id,
+                lane="agentgym",
+                source="evoswarm",
+                status="candidate",
+                metadata={
+                    "training_id": data.get("training_id") or data.get("run_id"),
+                    "mean_reward": data.get("mean_reward"),
+                    "mean_reward_normalized": data.get("mean_reward_normalized"),
+                    "episodes": data.get("episodes"),
+                    "training_metrics": data.get("training_metrics"),
+                },
+            )
+            await self.publish_catalog_change("create", "model_candidate", hf_id)
+
+            # Record initial fitness from training if present
+            if data.get("mean_reward_normalized"):
+                score = max(0.0, min(1.0, float(data["mean_reward_normalized"])))
+                await self.supabase.create_model_fitness_record({
+                    "model_id": hf_id,
+                    "source": "evoswarm",
+                    "lane": "agentgym",
+                    "score": score,
+                    "run_id": data.get("training_id") or data.get("run_id"),
+                })
+                logger.info(f"G5: initial fitness for {hf_id}: score={score:.3f}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Malformed NATS message on {self.SUB_AGENTGYM_PUBLISHED}: {e}")
+        except Exception as e:
+            logger.error(f"Error handling agentgym.model.published event: {e}", exc_info=True)
 
 
 # Global NATS client
@@ -547,7 +763,7 @@ class TensorZeroConfigBuilder:
                 lines.extend([
                     f"[functions.{function_name}.variants.{variant}]",
                     f'type = "chat:{variant_key}"',
-                    f'weight = 1.0',
+                    'weight = 1.0',
                     ""
                 ])
 
@@ -583,6 +799,10 @@ async def root():
             "healthz": "Health check",
             "models": "List all active models",
             "models/{id}": "Get model details",
+            "models/{id}/enrich-hf": "Enrich model from HuggingFace metadata",
+            "models/enrich-hf-bulk": "Batch-enrich all models with hf_id",
+            "model-candidates": "Register signed HF/autoresearch model candidates",
+            "model-fitness": "Record normalized TensorZero/Pinokio/Unsloth fitness",
             "services/{service}/models": "Get models for a service",
             "tensorzero/config": "Export TensorZero TOML configuration",
             "deployments": "List active GPU deployments"
@@ -661,6 +881,166 @@ async def register_deployment(deployment: ModelDeployment):
             "updated", "deployment", deployment.model_id
         )
     return result
+
+
+@app.post("/api/model-candidates")
+async def register_model_candidate(candidate: ModelCandidateRecord):
+    """Register a signed model candidate from HF/autoresearch."""
+    try:
+        identity = require_trusted_agent_identity(candidate.agent_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if not candidate.signed_trail_ref:
+        raise HTTPException(
+            status_code=400,
+            detail="signed_trail_ref is required before candidate persistence",
+        )
+    result = await supabase.create_model_candidate(candidate)
+    if nats_client:
+        await nats_client.publish_catalog_change(
+            "candidate_registered",
+            "model_candidate",
+            candidate.hf_id,
+        )
+    return {"identity": identity.to_dict(), "items": result}
+
+
+@app.post("/api/model-fitness", response_model=ModelFitnessRecord)
+async def record_model_fitness(request: ModelFitnessRequest):
+    """Record a signed model fitness scorecard."""
+    try:
+        require_trusted_agent_identity(request.agent_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    event = build_model_fitness_event(
+        model_id=request.model_id,
+        source=request.source,
+        lane=request.lane,
+        tensorzero_metrics=request.tensorzero_metrics,
+        training_metrics=request.training_metrics,
+        run_id=request.run_id,
+        agent_id=request.agent_id,
+    )
+    try:
+        validate_payload("model.fitness.recorded.v1", event)
+    except JsonSchemaValidationError as exc:
+        logger.warning("model.fitness.recorded.v1 validation failed: %s", exc)
+        raise HTTPException(status_code=422, detail=f"Invalid model fitness event: {exc}") from exc
+    record = ModelFitnessRecord(**event)
+    await supabase.create_model_fitness_record(record)
+    if nats_client:
+        await nats_client.publish_model_fitness(event)
+    return record
+
+
+# ============================================================================
+# HuggingFace Enrichment Endpoints
+# ============================================================================
+
+@app.post("/api/models/{model_id}/enrich-hf")
+async def enrich_from_huggingface(model_id: str):
+    """Fetch model card metadata from HuggingFace and update registry.
+
+    Looks up the model in Supabase, resolves its hf_id from metadata,
+    fetches HF API data, and merges enrichment back into the record.
+    """
+    # 1. Get model from Supabase
+    model = await supabase.get_model_by_id(model_id)
+    metadata = model.get("metadata") or {}
+    hf_id = metadata.get("hf_id")
+
+    if not hf_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model {model_id} has no hf_id in metadata. Set metadata.hf_id first.",
+        )
+
+    # 2. Fetch from HuggingFace
+    try:
+        hf_info = await fetch_model_info(hf_id)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"HuggingFace API error for {hf_id}: {e.response.status_code}",
+        )
+
+    enrichment = parse_model_summary(hf_info)
+
+    # 3. Try to get config.json for dimensions
+    hf_config = await fetch_model_config(hf_id)
+    if hf_config:
+        dims = parse_embedding_dimensions(hf_config)
+        if dims:
+            enrichment["dimensions"] = dims
+
+    # 4. Merge into existing metadata and update Supabase
+    merged = {**enrichment, **metadata}
+    await supabase._request(
+        "PUT",
+        f"models?id=eq.{model_id}",
+        data={"metadata": merged},
+    )
+
+    # 5. Publish catalog change
+    if nats_client:
+        await nats_client.publish_catalog_change("enriched", "model", model_id)
+
+    logger.info(f"Enriched model {model_id} from HuggingFace ({hf_id})")
+    return {
+        "model_id": model_id,
+        "hf_id": hf_id,
+        "enrichment": enrichment,
+    }
+
+
+@app.post("/api/models/enrich-hf-bulk")
+async def enrich_all_from_huggingface(
+    model_type: Optional[str] = Query(default="embedding", description="Filter by model type"),
+):
+    """Batch-enrich all models that have hf_id in metadata."""
+    models = await supabase.get_active_models()
+
+    if model_type:
+        models = [m for m in models if m.get("model_type") == model_type]
+
+    results = {"enriched": [], "skipped": [], "failed": []}
+
+    for model in models:
+        model_id = model.get("id")
+        metadata = model.get("metadata") or {}
+        hf_id = metadata.get("hf_id")
+
+        if not hf_id:
+            results["skipped"].append({"id": model_id, "name": model.get("name"), "reason": "no hf_id"})
+            continue
+
+        try:
+            hf_info = await fetch_model_info(hf_id)
+            enrichment = parse_model_summary(hf_info)
+
+            hf_config = await fetch_model_config(hf_id)
+            if hf_config:
+                dims = parse_embedding_dimensions(hf_config)
+                if dims:
+                    enrichment["dimensions"] = dims
+
+            merged = {**enrichment, **metadata}
+            await supabase._request(
+                "PUT",
+                f"models?id=eq.{model_id}",
+                data={"metadata": merged},
+            )
+
+            results["enriched"].append({"id": model_id, "hf_id": hf_id, "dimensions": enrichment.get("dimensions")})
+            logger.info(f"Enriched {model.get('name')} from HF ({hf_id})")
+        except Exception as e:
+            results["failed"].append({"id": model_id, "hf_id": hf_id, "error": str(e)})
+            logger.warning(f"Failed to enrich {model.get('name')}: {e}")
+
+    if nats_client and results["enriched"]:
+        await nats_client.publish_catalog_change("bulk_enriched", "models", str(len(results["enriched"])))
+
+    return results
 
 
 # ============================================================================

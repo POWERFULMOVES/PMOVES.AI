@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import ipaddress
 import json
 import logging
@@ -13,7 +12,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -29,6 +28,21 @@ from prometheus_client import (
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+# CGP (CHIT Geometry Packet) publish configuration.
+# When CGP_PUBLISH_ENABLED is False, _emit_cgp_packet short-circuits and returns False.
+# CGP_SUBJECT is the NATS subject the geometry bus listens on (default geometry.cgp.v1).
+CGP_PUBLISH_ENABLED = os.getenv("CGP_PUBLISH_ENABLED", "true").strip().lower() == "true"
+CGP_SUBJECT = os.getenv("CGP_SUBJECT", "geometry.cgp.v1")
+
+
+def _redact_url(url: str) -> str:
+    p = urlparse(url)
+    if not p.username:
+        return url
+    netloc = p.hostname + (f":{p.port}" if p.port else "")
+    return urlunparse(p._replace(netloc=netloc))
+
 
 # Module-level task reference for proper cleanup
 _nats_task: Optional[asyncio.Task[None]] = None
@@ -498,17 +512,17 @@ async def _handle_nats_message(msg: Msg) -> None:
 
 
 async def _connect_nats() -> None:
-    url = os.getenv("NATS_URL", "nats://localhost:4222")
+    url = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
     nc = NATS()
     try:
         await nc.connect(url)
         app.state.nats = nc
         await nc.subscribe("supaserch.request.v1", cb=_handle_nats_message)
         NATS_CONNECTION_GAUGE.set(1)
-        logger.info("Connected to NATS at %s", url)
+        logger.info("Connected to NATS at %s", _redact_url(url))
     except Exception as exc:  # noqa: BLE001
         NATS_CONNECTION_GAUGE.set(0)
-        logger.warning("Failed to connect to NATS at %s: %s", url, exc)
+        logger.warning("Failed to connect to NATS at %s: %s", _redact_url(url), exc)
 
 
 @app.get("/healthz")
@@ -539,7 +553,7 @@ async def search(q: str = Query(..., min_length=1, description="Search query")) 
     try:
         result = await process_request(q, context=context, envelope={"query": q, "channel": channel})
         return result
-    except ValueError as exc:
+    except ValueError:
         REQUEST_ERRORS.labels(channel=channel, reason="ValueError").inc()
         raise HTTPException(status_code=400, detail="Invalid search request") from None
     except Exception as exc:  # noqa: BLE001

@@ -63,7 +63,6 @@ PORTS[jellyfin-bridge]=8093
 PORTS[agent-zero]=8080
 PORTS[agent-zero-ui]=8081
 PORTS[archon]=8091
-PORTS[archon-ui]=8051
 PORTS[deepresearch]=8098
 PORTS[supaserch]=8099
 PORTS[pmoves-yt]=8077

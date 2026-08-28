@@ -4,7 +4,7 @@ embedding:
 reranker:
   default: Qwen/Qwen3-Reranker-4B@fp16   # small, accurate; int8 ok if needed
 router_llm:
-  workstation_5090: qwen3-7b-instruct@int8
+  desktop-9950xd:   qwen3-7b-instruct@int8
   laptop_4090:     qwen3-3b-instruct@int8
   desktop_3090ti:  qwen3-7b-instruct@int8
 hirag:

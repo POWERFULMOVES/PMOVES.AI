@@ -1,0 +1,33 @@
+# TAC ratchet baseline — `validate-tac` does not fail on these types.
+#
+# This is the operator-acknowledged set of action.type values that
+# the runner does not currently implement. Each entry is a string
+# key. Adding a new type that is NOT in this baseline is a ratchet
+# failure. Removing a type from this baseline (because the runner
+# gained an implementation) is a counted-down ratchet.
+#
+# The set below is a snapshot of the 14 unique unknown types that
+# PR #2371 measured across the 44-tree fleet (141 inert nodes
+# total). When a new type is introduced in a TAC tree, the ratchet
+# fails CI; the operator then either (a) implements the type in
+# tac_runner.py and removes it from this list, or (b) acknowledges
+# it here with a comment in tac_runner.py saying why it's inert.
+#
+# Format: list of strings. Each string is an action.type.
+# To add a type: append a new line with the type name, plus a # comment
+# explaining why it's inert and what would unblock removal.
+
+- shell                  # 72 nodes — same shape as 'command' but action.command (not action.target). Aliasing needs the allowlist decision.
+- file.exists            # 7 nodes — alias of 'file_exists' but the YAML key is dotted. Same aliasing decision.
+- supabase_migration     # 4 nodes — bespoke runner needed (sqlx-style migration state check). Not implemented.
+- script                 # 3 nodes — same shape as 'command' but action.script (multi-line). Aliasing decision pending.
+- env_check              # 3 nodes — checks an env var is set; trivial to implement as a 'grep' on `printenv` but not done.
+- edit                   # 3 nodes — file mutation assertions; intentionally inert (edit is write-side, not read-side).
+- nats_subject            # 3 nodes — needs `nats` CLI allowlist addition; same as 'command' once added.
+- pytest                 # 2 nodes — invokes a pytest run; deferred until tests/ has a smoke entry point.
+- pr_state                # 2 nodes — needs GitHub App token in the runner; deferred.
+- web                     # 1 node — needs HTTP allowlist expansion (currently loopback + tailnet only).
+- gh_issue                # 1 node — same as pr_state, deferred.
+- file_or                  # 1 node — boolean OR over two file_exists checks; trivial but not done.
+- nats_messages_seen       # 1 node — needs NATS JetStream consumer state; deferred.
+- grep_negative            # 1 node — alias of 'grep' with invert=true; the runner's invert field already handles this in some trees, but not in this one. Trivial fix.

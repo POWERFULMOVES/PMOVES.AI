@@ -1,0 +1,217 @@
+# PMOVES.AI Living Documents Registry
+# ============================================================================
+# Files tracked for freshness by `pmoves/tools/docs_reconcile.py`.
+# Each entry: path (relative to repo root), freshness_days (max age before
+# stale), severity (P1/P2/INFO), and an optional description.
+#
+# Stale findings:
+#   severity: P1  → CI fails (`--check` exits 1)
+#   severity: P2  → CI warns but does not fail
+#   severity: INFO → reported but never gates
+#
+# Add new entries here. The reconciler picks them up on the next `--check`.
+# ============================================================================
+
+tracked:
+  # ── Root keystones (CLAUDE.md fleet) ───────────────────────────────────
+  - path: pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md
+    freshness_days: 365
+    severity: INFO
+    description: "Foundational doctrine — Human/AI/System three-body problem stabilized by CHIT; root of the Village Rule and register Three-Body Pattern (rewired to discovery surfaces 2026-08-09 after going unfindable)"
+  - path: CLAUDE.md
+    freshness_days: 60
+    severity: P2
+    description: "Root keystone — points to BOOTSTRAP/CATALOG/PATTERNS/AGENTS/AGNOTE4482"
+  - path: AGENTS.md
+    freshness_days: 30
+    severity: P2
+    description: "Universal coding-agent format — project structure, build/test commands, canonical doc index"
+
+  # ── .claude tier ──────────────────────────────────────────────────────
+  - path: .claude/BOOTSTRAP.md
+    freshness_days: 90
+    severity: P1
+    description: "Flat foundation — Emperor-CHIT-Humility, Known Roads, MCP entrypoints"
+  - path: .claude/CATALOG.md
+    freshness_days: 30
+    severity: P1
+    description: "Service catalog (ports, URLs, health endpoints) — drifts faster as services move"
+  - path: .claude/PATTERNS.md
+    freshness_days: 60
+    severity: P2
+    description: "Known Roads, CHIT, skill pairings, dev patterns"
+  - path: .claude/PINOKIO_LAUNCHER_GUIDE.md
+    freshness_days: 90
+    severity: INFO
+    description: "Pinokio launcher guide — on-demand context, slow-changing"
+
+  # ── AGNOTE4482 multi-agent coordination family ─────────────────────────
+  - path: pmoves/docs/AGENTS/AGNOTE4482.md
+    freshness_days: 14
+    severity: P1
+    description: "Multi-agent coordination gateway (Three-Body, Village Rule, signoff)"
+  - path: pmoves/docs/AGENTS/AGNOTE4482_SITREP.md
+    freshness_days: 7
+    severity: P1
+    description: "Cold-start sitrep — current convergence state, must stay current"
+  - path: pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md
+    freshness_days: 3
+    severity: P1
+    description: "Active claim register — Village Rule coordination, fastest-moving doc"
+  - path: pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md
+    freshness_days: 30
+    severity: P1
+    description: "Sign-off checklist — release/governance gate; verified by .claude/hooks/governance/signoff-gate.sh"
+  - path: pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md
+    freshness_days: 30
+    severity: P1
+    description: "Wave roadmap W1-W5 — operational milestones cited from SITREP"
+  - path: pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md
+    freshness_days: 14
+    severity: P1
+    description: "Per-service CHIT integration tier (Full/Partial/None) — high-velocity"
+  - path: pmoves/docs/AGENTS/AGNOTE4482.BEATS.md
+    freshness_days: 180
+    severity: P2
+    description: "BPM encoding + prosodic bridge spec (referenced by W6 Convergence)"
+  - path: pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md
+    freshness_days: 180
+    severity: P2
+    description: "FlOO$ skill pairings spec (ToKenism bridge)"
+  - path: pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md
+    freshness_days: 90
+    severity: INFO
+    description: "Multi-agent collision protocol — stable, slow-changing"
+  - path: pmoves/docs/AGENTS/KRISS_KROSS_ACK.md
+    freshness_days: 90
+    severity: INFO
+    description: "KRISS-KROSS ratification witness — stable, slow-changing"
+
+  # ── Navigable index (front-and-center entry point) ─────────────────────
+  - path: LIVING_DOCS_INDEX.md
+    freshness_days: 30
+    severity: P2
+    description: "Navigable index of all living docs + UI/CLI surfaces — operator entry point"
+
+  # ── Architecture thesis ────────────────────────────────────────────────
+  - path: pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md
+    freshness_days: 90
+    severity: INFO
+    description: "MOF architecture thesis — slow-changing"
+  - path: pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md
+    freshness_days: 90
+    severity: INFO
+    description: "Grand Convergence five-layer thesis — slow-changing"
+  - path: pmoves/docs/architecture/AGENT_AUTHORIZATION_MODEL.md
+    freshness_days: 90
+    severity: INFO
+    description: "Agent authorization model — principals, evaluation contract, enforcement gaps"
+
+  # ── Service docs (a2ui-renderer) ──────────────────────────────────────
+  - path: pmoves/services/a2ui-renderer/README.md
+    freshness_days: 30
+    severity: P2
+    description: "A2UI Renderer (port 8107) — Remotion animation engine for creator pipeline"
+
+  # ── Agent Zero integration ─────────────────────────────────────────────
+  # Enrolled 2026-08-06. Previously untracked — which is why this integration's
+  # docs drifted from its code unnoticed. Two other docs
+  # (.claude/context/agent-zero-orchestration.md, pmoves/docs/TAC/TAC_AGENT_ZERO.md)
+  # documented an /mcp/* API and an agent.zero.* / agent.task.* NATS family that
+  # were never implemented, including copy-pasteable curl and `nats sub` commands
+  # that cannot work. Those are retired in the companion commit.
+  #
+  # Severity P2 (warn, do not gate) is deliberate: freshness is measured from
+  # last-commit date, and AGENT_ZERO_API.md is already outside budget. Enrolling
+  # at P1 would fail CI the moment this merges. Promote to P1 after a refresh
+  # pass brings them inside budget.
+  - path: pmoves/docs/operations/AGENT_ZERO_API.md
+    freshness_days: 30
+    severity: P2
+    description: "Agent Zero live-state API — probed from /openapi.json; canonical endpoint reference for the outer supervisor (:8080)"
+  - path: pmoves/services/agent-zero/README.md
+    freshness_days: 60
+    severity: P2
+    description: "Agent Zero service README — env vars, build (upstream agent0ai base + PMOVES overlay), make targets"
+
+  # ── Archon integration ─────────────────────────────────────────────────
+  # Enrolled 2026-08-06, same root cause. Archon 0.6.0 (#2217) replaced the
+  # Python service with a TypeScript/Bun app on a single port (3090, /api/health),
+  # but four untracked docs still described the pre-0.6.0 Python/Supabase
+  # split-port architecture and nothing reconciled them against the code.
+  - path: pmoves/docs/handoffs/ARCHON_MINT_CONTRACT_REVIEW.md
+    freshness_days: 60
+    severity: P2
+    description: "Archon mint-contract current state — archon.mint.* implementation + registration gaps; authoritative over the mint-agent command doc"
+
+  # ── yt-dlp currency ────────────────────────────────────────────────────
+  # Enrolled 2026-08-27. This doc exists because #2713 landed a `chore(...): bump
+  # yt-dlp to 2026.8.19` subject on a docs-only change, and no tracked doc could
+  # contradict it. Section 1 is a mechanism and does not rot; section 2 is a dated
+  # measurement and will. Enrolling it makes that rot visible instead of silent —
+  # a stale number here is the exact failure mode being corrected, so it must be
+  # something CI can see.
+  - path: pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md
+    freshness_days: 60
+    severity: P2
+    description: "yt-dlp currency — measured pin/runtime/upstream versions, the commands that re-derive them, and the fork-sync gap"
+
+  # ── Cross-service health-endpoint truth ────────────────────────────────
+  # The doc that would have caught the Archon blackbox probe pointing at a dead
+  # port and path (#2448). Untracked until now.
+  - path: pmoves/docs/operations/SERVICE_HEALTH_ENDPOINTS.md
+    freshness_days: 90
+    severity: P2
+    description: "Per-service health endpoint truth — reference for compose healthchecks and Prometheus blackbox probes"
+
+
+# ============================================================================
+# Renderable entries (Lane 2228, 2026-08-02)
+# ============================================================================
+# These docs are rendered to MP4 living-doc artifacts via the a2ui-renderer
+# service (port 8107) by `make docs-render-living` (see pmoves/Makefile).
+# The output goes to:
+#   - $${A2UI_RENDERER_RENDER_DIR}/<id>.<format>     (local working copy)
+#   - s3://$${MINIO_BUCKET}/a2ui/living-docs/<id>.<format>  (MinIO)
+# Each entry: id, source_doc, output_key, format (mp4|gif|webm), ttl_days.
+# ============================================================================
+  - path: pmoves/docs/SERVICE_DEPENDENCY_MATRIX.md
+    freshness_days: 30
+    severity: P2
+    description: "GENERATED by pmoves/tools/service_dependency_matrix.py — layered bring-up / reverse shutdown order derived from the compose graph. Regenerate with `make -C pmoves dep-matrix`; never hand-edit"
+
+renderable:
+  - id: chit-visual-tour-walkthrough
+    source_doc: pmoves/docs/PMOVESCHIT/VISUAL_TOUR.md
+    output_key: chit-visual-tour
+    format: mp4
+    ttl_days: 14
+    description: "Interactive code-walkthrough tour of CHIT (8 sections, 60 min read-time)"
+
+  - id: agnote-active-claims
+    source_doc: pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md
+    output_key: agnote-active-claims
+    format: mp4
+    ttl_days: 3
+    description: "Active claim register - fastest-moving doc, re-render weekly"
+
+  - id: services-catalog-dashboard
+    source_doc: .claude/context/services-catalog.md
+    output_key: services-catalog
+    format: mp4
+    ttl_days: 14
+    description: "Service catalog (ports, URLs, health endpoints) - drift-detected via recon"
+
+  - id: a2ui-renderer-readme
+    source_doc: pmoves/services/a2ui-renderer/README.md
+    output_key: a2ui-renderer-readme
+    format: mp4
+    ttl_days: 30
+    description: "A2UI renderer readme - the renderer that produces these artifacts"
+
+  - id: chit-tour-public
+    source_doc: pmoves/docs/handoffs/chit-tour-public-edge.md
+    output_key: chit-tour-public-edge
+    format: mp4
+    ttl_days: 30
+    description: "CHIT tour public-edge handoff - hosting + DNS + cache config"

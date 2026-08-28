@@ -17,8 +17,15 @@ load_env_file() {
   # shellcheck disable=SC2046
   set +H 2>/dev/null || true  # disable history expansion to tolerate '!'
   tmpfile=$(mktemp)
-  # Build a sanitized assignment file
-  while IFS= read -r line; do
+  # Build a sanitized assignment file.
+  #
+  # Performance note: this loop is on the hot path — it runs once per tier
+  # file per Make invocation. Earlier versions forked `sed` three times per
+  # input line for whitespace trim + quote escape; on Windows/MSYS2 that was
+  # ~100ms/line × ~500 lines × 10+ files = minutes of overhead per Make target.
+  # We replace every sed call with pure-bash parameter expansion so the whole
+  # loop stays in-process. Drops z890 env-setup from ~108s to <2s per file.
+  while IFS= read -r line || [ -n "$line" ]; do
     # Normalize CRLF when running on Windows/WSL.
     line="${line%$'\r'}"
     # ignore comments/blank
@@ -26,17 +33,21 @@ load_env_file() {
     if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=.*$ ]]; then
       key=${line%%=*}
       val=${line#*=}
-      key=$(echo "$key" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
-      # trim leading spaces on value
-      val=$(echo "$val" | sed -E 's/^[[:space:]]+//')
+      # Trim trailing whitespace from key (leading stripped by regex anchor).
+      # The %%/## idiom: `${key##*[![:space:]]}` matches everything through the
+      # last non-whitespace char, leaving only trailing whitespace; stripping
+      # that suffix gives the trimmed key. Pure-bash, no fork.
+      key="${key%"${key##*[![:space:]]}"}"
+      # Trim leading whitespace from val (trailing kept — callers may need it).
+      val="${val#"${val%%[![:space:]]*}"}"
       val="${val%$'\r'}"
       # If value contains ${ for variable expansion, output line directly for shell evaluation
       # Otherwise wrap in single quotes to handle spaces and special characters
       if [[ "$val" =~ \$\{ ]]; then
-        echo "$line" >> "$tmpfile"
+        printf "%s\n" "$line" >> "$tmpfile"
       else
-        # Escape single quotes by replacing ' with '\''
-        esc=$(echo "$val" | sed "s/'/'\\\\''/g")
+        # Escape single quotes: ' -> '\''  (pure-bash substitution)
+        esc="${val//\'/\'\\\'\'}"
         printf "%s='%s'\n" "$key" "$esc" >> "$tmpfile"
       fi
     fi
@@ -65,6 +76,9 @@ load_env_file "$ROOT_DIR/env.tier-media"
 load_env_file "$ROOT_DIR/env.tier-agent"
 load_env_file "$ROOT_DIR/env.tier-worker"
 load_env_file "$ROOT_DIR/env.tier-ui"
+
+# URL-encoded credential overlay (passwords with @/:  for asyncpg/DSN-safe URLs)
+load_env_file "$ROOT_DIR/env.tier-supabase.urlencoded"
 
 # Local/runtime overlays last.
 load_env_file "$ROOT_DIR/.env.generated"
@@ -103,11 +117,18 @@ fi
 if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && [ -n "${SERVICE_ROLE_KEY:-}" ]; then
   export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
 fi
-if [ -z "${SUPABASE_PUBLISHABLE_KEY:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
-  export SUPABASE_PUBLISHABLE_KEY="$SUPABASE_ANON_KEY"
-fi
-if [ -z "${SUPABASE_SECRET_KEY:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-  export SUPABASE_SECRET_KEY="$SUPABASE_SERVICE_ROLE_KEY"
-fi
+# Do NOT back-fill SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY from the
+# legacy JWT keys. They are the NEW opaque API-key model (sb_publishable_*/
+# sb_secret_*): Kong's declarative config registers all four as distinct
+# keyauth credentials, so aliasing them to the legacy values is a uniqueness
+# violation that crash-loops Kong at init. Empty = legacy-only mode (the
+# kong-entrypoint strips the empty credential lines).
 
 export PMOVES_ENV_LOADER=1
+
+# Execute any remaining arguments as a command with the loaded environment.
+# This enables the pattern: bash scripts/with-env.sh <command> <args>
+# When sourced (no arguments), the env is simply exported and control returns.
+if [ $# -gt 0 ]; then
+  exec "$@"
+fi

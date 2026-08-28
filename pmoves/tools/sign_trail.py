@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pyyaml>=6"]
+# ///
 """Sign a Graphiti trail entry with CHIT HMAC.
+
+DEPENDENCY NOTE — why the inline block above matters for correctness, not just
+convenience: `_load_signature()` imports yaml INSIDE its try, and the surrounding
+`except Exception: pass` returns `_FALLBACK`. Under `uv run` (a bare env with no
+pyyaml) that path was taken silently, so signatures were emitted with default
+presentation — glyph ◆ / colour #7C3AED — instead of the agent's registered identity,
+while the HMAC itself was perfectly valid. A trail entry whose purpose is provenance
+was misattributing at the presentation layer with no warning. Declaring pyyaml here
+makes the registry actually load under every invocation path.
+
 
 CLI tool that creates an agent.graphiti.signed.v1 payload and HMAC-signs it
 using sign_cgp() from chit_security.py.  Never contains its own crypto —
@@ -7,6 +21,7 @@ chit_security is the single source of truth.
 
 Usage:
     python tools/sign_trail.py --agent-id claude-opus --summary "Completed X"
+    python tools/sign_trail.py --agent-id 4090-claude --alter 4090-field --summary "Infra work"
     python tools/sign_trail.py --stdin < payload.json
     echo '{"agent_id":"claude-opus","summary":"test"}' | python tools/sign_trail.py --stdin
 """
@@ -21,11 +36,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 # ---------------------------------------------------------------------------
-# Resolve project root (pmoves/) so sibling imports work when invoked from
-# Make or hooks without PYTHONPATH gymnastics.
+# Resolve project root (repo root) and pmoves root so both `pmoves.tools.*`
+# and legacy `tools.*` imports work when invoked directly or from Make/hooks.
 # ---------------------------------------------------------------------------
 _TOOLS_DIR = Path(__file__).resolve().parent
 _PMOVES_ROOT = _TOOLS_DIR.parent
+_REPO_ROOT = _PMOVES_ROOT.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 if str(_PMOVES_ROOT) not in sys.path:
     sys.path.insert(0, str(_PMOVES_ROOT))
 
@@ -35,10 +53,20 @@ from tools.chit_security import sign_cgp  # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 _SIGNATURES_PATH = _PMOVES_ROOT / "config" / "agent_signatures.yaml"
+_SIGNING_CARDS_PATH = _PMOVES_ROOT / "config" / "signing_identity_cards.yaml"
 _SCHEMA_PATH = (
     _PMOVES_ROOT / "contracts" / "schemas" / "agent-graphiti" / "signature.v1.schema.json"
 )
 _LOG_PATH = _PMOVES_ROOT / "docs" / "logs" / "graphiti_signed_latest.json"
+
+# Phase 0 (CHIT-sign-triggered expressive voice): subject the signed trail is
+# published to when CHIT_SIGN_PUBLISH=1. Consumed by voice_cast_on_sign.py.
+# NOTE: this is the canonical RAW signature.v1 subject (nats-subjects.md:441) —
+# NOT chit.signed.v1, which is a live multi-consumer channel (Consciousness 8106,
+# Tokenism 8103, Evo 8113, Fordham receipts) carrying the pmoves-chit-sign
+# {schema,tier} envelope. Publishing the raw payload there would collide two
+# shapes on one subject (5090-CLAUDE pair-review PR #2048, finding #1).
+_SIGN_PUBLISH_SUBJECT = "agent.graphiti.signed.v1"
 
 # Fallback glyph/color when agent_signatures.yaml is unavailable
 _FALLBACK = {"glyph": "\u25C6", "color": "#7C3AED", "accent": "#A78BFA", "voice": "analytical"}
@@ -54,10 +82,141 @@ def _load_signature(agent_id: str) -> Dict[str, Any]:
         sigs = data.get("signatures", {})
         if agent_id in sigs:
             return sigs[agent_id]
-    except Exception:
-        pass
-    # Return a minimal fallback so the tool never hard-fails on missing YAML
+        reason = f"'{agent_id}' is not registered in {_SIGNATURES_PATH.name}"
+    except ImportError as exc:
+        reason = f"pyyaml unavailable ({exc})"
+    except OSError as exc:
+        reason = f"cannot read {_SIGNATURES_PATH} ({exc})"
+    except Exception as exc:  # malformed YAML, unexpected shape
+        reason = f"{type(exc).__name__}: {exc}"
+
+    # Still non-fatal by design (see module docstring) — but never SILENT.
+    # This function warned loudly about a missing ALTER twenty lines below while
+    # saying nothing when it could not resolve the AGENT at all, so a run that
+    # substituted the whole identity looked identical to a clean one. A provenance
+    # tool must be able to report not knowing who is signing.
+    print(
+        f"[warn] identity not resolved: {reason}; signing with FALLBACK "
+        f"presentation (glyph {_FALLBACK['glyph']} / {_FALLBACK['color']}) — "
+        f"this is NOT the agent's registered identity",
+        file=sys.stderr,
+    )
     return {"agent_id": agent_id, **_FALLBACK}
+
+
+def _resolve_signing_card_id(agent_id: str) -> Optional[str]:
+    """Look up the active signing card for an agent_id (5×5 channel #4).
+
+    Reads ``pmoves/config/signing_identity_cards.yaml`` and returns the
+    ``card_id`` of the unique active card whose ``h.agent_id`` matches.
+    Returns ``None`` (with a stderr warning) when:
+
+      * the cards file is missing or unparseable,
+      * no active card exists for this agent_id,
+      * multiple active cards exist (data integrity bug — let the audit
+        gate catch it; don't pick one silently here).
+
+    Advisory mode per Owner-Decision D: signing continues without a
+    card_id stamp.  ``signing_card_id`` is stamped on the ``signature.v1``
+    payload when a card is found; mandatory enforcement is deferred.
+    """
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except Exception:
+        return None
+    if not _SIGNING_CARDS_PATH.exists():
+        print(
+            f"[warn] signing_identity_cards.yaml missing at {_SIGNING_CARDS_PATH} — "
+            f"no signing_card_id will be stamped (advisory)",
+            file=sys.stderr,
+        )
+        return None
+    try:
+        with open(_SIGNING_CARDS_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except Exception as exc:
+        print(f"[warn] cards file parse error: {exc}", file=sys.stderr)
+        return None
+    cards = data.get("cards") or []
+    matches = [
+        c for c in cards
+        if isinstance(c, dict)
+        and c.get("active")
+        and ((c.get("h") or {}).get("agent_id") == agent_id)
+    ]
+    if not matches:
+        print(
+            f"[warn] no active signing card for agent_id={agent_id} — "
+            f"trail entry signed without signing_card_id (advisory)",
+            file=sys.stderr,
+        )
+        return None
+    if len(matches) > 1:
+        ids = [c.get("card_id") for c in matches]
+        print(
+            f"[warn] multiple active cards for agent_id={agent_id}: {ids} — "
+            f"refusing to stamp until audit reconciles",
+            file=sys.stderr,
+        )
+        return None
+    return matches[0].get("card_id")
+
+
+def _top_level_signature_ids() -> set:
+    """Ids that `_load_signature` can find directly (no alter resolution needed)."""
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        with open(_SIGNATURES_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+        return set((data.get("signatures") or {}).keys())
+    except Exception:
+        return set()
+
+
+def _resolve_alter_parent(agent_id: str) -> Optional[tuple]:
+    """Map an ALTER id back to its parent signer.
+
+    ``_load_signature`` only searches top-level ``signatures`` keys, so an id
+    that exists solely as an entry in some agent's ``alters`` array (e.g.
+    ``claude-opus-5`` under ``claude-opus``) previously fell through to the
+    synthetic ``_FALLBACK`` identity and found no signing card -- a machine
+    trail signed under that id could not be matched to the declared identity.
+
+    Returns ``(parent_id, alter_dict)`` for the first match, or None. The caller
+    is expected to sign AS the parent and stamp ``selected_alter``, which is the
+    representation the rest of this module already uses.
+    """
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        with open(_SIGNATURES_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except Exception:
+        return None
+    for parent_id, sig in (data.get("signatures") or {}).items():
+        if not isinstance(sig, dict):
+            continue
+        alter = _resolve_alter(sig, agent_id)
+        if alter is not None:
+            return parent_id, alter
+    return None
+
+
+def _resolve_alter(sig: Dict[str, Any], alter_name: str) -> Optional[Dict[str, Any]]:
+    """Find an alter by name within an agent's signature entry.
+
+    Returns the alter dict if found, or None.
+    """
+    alters = sig.get("alters", [])
+    for alter in alters:
+        if alter_name in {
+            alter.get("name"),
+            alter.get("id"),
+            alter.get("display_name"),
+        }:
+            return alter
+    return None
 
 
 def _validate_schema(payload: Dict[str, Any]) -> Optional[str]:
@@ -80,21 +239,71 @@ def build_payload(
     summary: str,
     phase: str = "Phase H",
     resonance: Optional[list] = None,
+    alter: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build an unsigned Graphiti signature payload."""
+    """Build an unsigned Graphiti signature payload.
+
+    If *alter* is provided, override visual identity fields (glyph, color,
+    accent, voice, resonance) with the named alter from the agent's ``alters``
+    array.  The ``agent_id`` stays the same — ``selected_alter`` records which
+    persona was active.
+    """
+    # An agent_id that exists only as an ALTER resolves to its parent signer, and
+    # is treated exactly as `--agent-id <parent> --alter <this>`. Without this an
+    # alter id silently degrades to the synthetic fallback identity with no
+    # signing card, so the signed trail cannot be matched to the declared
+    # identity in agent_signatures.yaml.
+    if agent_id not in _top_level_signature_ids():
+        parent = _resolve_alter_parent(agent_id)
+        if parent is not None:
+            parent_id, _ = parent
+            if alter is None:
+                alter = agent_id
+            agent_id = parent_id
+
     sig = _load_signature(agent_id)
+
+    # Resolve alter overlay if requested
+    alter_data: Optional[Dict[str, Any]] = None
+    if alter:
+        alter_data = _resolve_alter(sig, alter)
+        if alter_data is None:
+            available = [
+                a.get("name") or a.get("id") or a.get("display_name", "?")
+                for a in sig.get("alters", [])
+            ]
+            print(
+                f"[warn] alter '{alter}' not found for {agent_id}; "
+                f"available: {available or 'none'}",
+                file=sys.stderr,
+            )
+
+    # Build identity — alter fields override primary when present
+    identity = alter_data if alter_data else sig
+
     payload: Dict[str, Any] = {
         "agent_id": agent_id,
         "display_name": sig.get("display_name", agent_id),
-        "glyph": sig.get("glyph", _FALLBACK["glyph"]),
-        "color": sig.get("color", _FALLBACK["color"]),
-        "accent": sig.get("accent", _FALLBACK.get("accent")),
-        "voice": sig.get("voice", _FALLBACK["voice"]),
+        "glyph": identity.get("glyph", _FALLBACK["glyph"]),
+        "color": identity.get("color", _FALLBACK["color"]),
+        "accent": identity.get("accent", _FALLBACK.get("accent")),
+        "voice": identity.get("voice", _FALLBACK["voice"]),
         "phase": phase,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "resonance": resonance or sig.get("resonance", []),
+        "resonance": resonance or identity.get("resonance", sig.get("resonance", [])),
         "summary": summary[:200],
     }
+
+    # Record which alter was selected (agent_id stays primary)
+    if alter_data:
+        payload["selected_alter"] = alter
+
+    # 5×5 channel #4: stamp signing_card_id when an active card exists.
+    # Advisory mode — missing card warns but does not block (Owner-Decision D).
+    card_id = _resolve_signing_card_id(agent_id)
+    if card_id:
+        payload["signing_card_id"] = card_id
+
     return payload
 
 
@@ -104,6 +313,7 @@ def sign_trail(
     phase: str = "Phase H",
     resonance: Optional[list] = None,
     passphrase: Optional[str] = None,
+    alter: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build and optionally HMAC-sign a Graphiti trail payload.
 
@@ -113,11 +323,12 @@ def sign_trail(
         phase: Project phase label.
         resonance: Optional list of resonance domains.
         passphrase: CHIT_PASSPHRASE.  If None, returns unsigned payload.
+        alter: Optional alter name to select from the agent's alters array.
 
     Returns:
         Signed (or unsigned) payload dict.
     """
-    payload = build_payload(agent_id, summary, phase, resonance)
+    payload = build_payload(agent_id, summary, phase, resonance, alter)
 
     # Schema validation (advisory)
     err = _validate_schema(payload)
@@ -139,7 +350,94 @@ def _write_log(payload: Dict[str, Any]) -> None:
         json.dump(payload, fh, indent=2)
 
 
+def _publish_signed_trail(payload: Dict[str, Any]) -> None:
+    """Best-effort NATS publish of the signed trail to ``chit.signed.v1``.
+
+    Phase 0 (CHIT-sign-triggered expressive voice, no speak tool call): the
+    normal CHIT trail-sign becomes the trigger for ``voice_cast_on_sign.py``.
+
+    Gated on BOTH ``CHIT_SIGN_PUBLISH=1`` and ``NATS_URL`` being set — a no-op
+    (immediate return) otherwise, so existing signing behavior is completely
+    unchanged when the env vars are absent. Uses the same lazy-import async
+    ``nats-py`` pattern as ``beats_to_voice._nats_publish_cgp`` (optional dep;
+    a missing/unreachable NATS server never breaks signing — failures are
+    logged to stderr and swallowed).
+    """
+    if os.environ.get("CHIT_SIGN_PUBLISH") != "1":
+        return
+    nats_url = os.environ.get("NATS_URL")
+    if not nats_url:
+        return
+
+    try:
+        import asyncio
+
+        async def _publish() -> None:
+            import nats as natspy  # optional dep — lazy import, same pattern as beats_to_voice.py
+
+            # Fail fast: this is a fire-and-forget trigger publish, not a
+            # long-lived connection. Disable reconnect looping so an
+            # unreachable NATS server surfaces (and is swallowed) in a few
+            # seconds instead of retrying for minutes.
+            nc = await natspy.connect(
+                nats_url,
+                connect_timeout=2,
+                allow_reconnect=False,
+                max_reconnect_attempts=1,
+            )
+            try:
+                await nc.publish(
+                    _SIGN_PUBLISH_SUBJECT, json.dumps(payload).encode("utf-8")
+                )
+                await nc.flush(timeout=2)
+            finally:
+                await nc.close()
+
+        asyncio.run(asyncio.wait_for(_publish(), timeout=10))
+        print(
+            f"[info] published signed trail to {_SIGN_PUBLISH_SUBJECT}",
+            file=sys.stderr,
+        )
+    except Exception as exc:
+        # Best-effort: NATS being down/misconfigured must never break signing.
+        print(f"[warn] CHIT_SIGN_PUBLISH publish skipped: {exc}", file=sys.stderr)
+
+
+def _resolve_chit_passphrase() -> Optional[str]:
+    """Resolve CHIT passphrase from env var, _FILE, or tier env files.
+
+    Priority:
+    1. CHIT_SIGNING_KEY env var
+    2. CHIT_PASSPHRASE env var
+    3. CHIT_SIGNING_KEY_FILE file contents
+    4. CHIT_PASSPHRASE_FILE file contents
+    5. Scan pmoves/env.tier-* files for CHIT_PASSPHRASE=
+    """
+    for key in ("CHIT_SIGNING_KEY", "CHIT_PASSPHRASE"):
+        val = os.environ.get(key)
+        if val:
+            return val
+        file_path = os.environ.get(f"{key}_FILE")
+        if file_path:
+            p = Path(file_path)
+            if p.is_file():
+                content = p.read_text(encoding="utf-8").strip()
+                if content:
+                    return content
+    for tier_file in _PMOVES_ROOT.glob("env.tier-*"):
+        try:
+            for line in tier_file.read_text(encoding="utf-8").splitlines():
+                if line.startswith("CHIT_PASSPHRASE="):
+                    val = line.split("=", 1)[1].strip()
+                    if val:
+                        return val
+        except Exception:
+            pass
+    return None
+
+
 def main() -> None:
+    """CLI entry point for signing a Graphiti trail entry."""
     parser = argparse.ArgumentParser(
         description="Sign a Graphiti trail entry with CHIT HMAC"
     )
@@ -159,6 +457,11 @@ def main() -> None:
         help="Project phase label",
     )
     parser.add_argument(
+        "--alter",
+        default=None,
+        help="Select an alternate identity from the agent's alters array",
+    )
+    parser.add_argument(
         "--resonance",
         nargs="*",
         help="Resonance domains (space-separated)",
@@ -175,7 +478,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    passphrase = os.environ.get("CHIT_PASSPHRASE")
+    passphrase = _resolve_chit_passphrase()
 
     if args.stdin:
         raw = sys.stdin.read().strip()
@@ -187,17 +490,24 @@ def main() -> None:
         summary = data.get("summary", args.summary)
         phase = data.get("phase", args.phase)
         resonance = data.get("resonance", args.resonance)
+        alter = data.get("alter", args.alter)
     else:
         agent_id = args.agent_id
         summary = args.summary
         phase = args.phase
         resonance = args.resonance
+        alter = args.alter
 
-    payload = sign_trail(agent_id, summary, phase, resonance, passphrase)
+    payload = sign_trail(agent_id, summary, phase, resonance, passphrase, alter)
 
     # Write log artifact
     if not args.no_log:
         _write_log(payload)
+
+    # Phase 0: env-gated NATS publish trigger for CHIT-sign-driven expressive
+    # voice. No-op unless CHIT_SIGN_PUBLISH=1 and NATS_URL are both set;
+    # runs regardless of --no-log so the trigger works standalone too.
+    _publish_signed_trail(payload)
 
     # Print to stdout for downstream piping
     print(json.dumps(payload, indent=2))
@@ -205,3 +515,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

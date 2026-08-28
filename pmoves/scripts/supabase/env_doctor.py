@@ -74,6 +74,18 @@ def main() -> int:
         if shared and host and shared != host:
             conflicts.append(f"{key}: env.shared != host env")
 
+    # Check POSTGRES_PASSWORD ↔ SUPABASE_DB_PASSWORD alignment
+    # These MUST be identical — DB reads SUPABASE_DB_PASSWORD, GoTrue falls back
+    # through POSTGRES_PASSWORD. Divergence causes auth failures after volume-reset.
+    env_tier_supa = parse_env_file(repo_root / "env.tier-supabase")
+    pg_pass = env_tier_supa.get("POSTGRES_PASSWORD") or env_shared.get("POSTGRES_PASSWORD", "")
+    supa_pass = env_tier_supa.get("SUPABASE_DB_PASSWORD") or env_shared.get("SUPABASE_DB_PASSWORD", "")
+    if pg_pass and supa_pass and pg_pass != supa_pass:
+        conflicts.append(
+            "POSTGRES_PASSWORD != SUPABASE_DB_PASSWORD (GoTrue/DB auth will fail; "
+            "run 'make brand-defaults && make secrets-funnel' to realign)"
+        )
+
     if conflicts:
         print("Supabase env doctor: conflicts detected")
         for item in conflicts:

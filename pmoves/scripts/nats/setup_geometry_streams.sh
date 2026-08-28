@@ -14,7 +14,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-NATS_URL="${NATS_URL:-nats://localhost:4222}"
+NATS_URL="${NATS_URL:-nats://nats:pmoves@nats:4222}"
 NATS_USER="${NATS_USER:-}"
 NATS_PASS="${NATS_PASS:-}"
 

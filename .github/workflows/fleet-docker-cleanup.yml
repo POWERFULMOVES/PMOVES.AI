@@ -1,0 +1,150 @@
+name: Fleet Docker Cleanup
+
+# Layer 3: Runner health + disk hygiene across the fleet.
+#
+# Runs daily on every node that has a self-hosted runner.
+# Node specs are respected via the matrix: each entry maps a node to its
+# runner label, disk threshold, and cleanup profile.
+#
+# Cleanup respects:
+#   - Active runner jobs (skips workspace cleanup if jobs in progress)
+#   - Data volumes (NEVER pruned — use make volume-reset for targeted resets)
+#   - Node-specific thresholds (Z890 has larger VHDX, KVMs have smaller disks)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily 03:00 UTC (low-traffic window)
+  workflow_dispatch:
+    inputs:
+      aggressive:
+        description: 'Aggressive mode (remove ALL unused images, not just >72h)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+
+jobs:
+  cleanup:
+    name: Docker disk hygiene
+    runs-on: [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # `runner_label` must be a LABEL. Every value here used to be a runner
+        # NAME (and two were not even correct names), and `runs-on` matches
+        # labels only -- so all four lanes queued until GitHub cancelled them and
+        # this daily cleanup never ran once on any node. The disk-full events it
+        # exists to prevent happened anyway. Registered labels are enumerated in
+        # pmoves/config/runner_labels.json; validate_runner_labels.py now expands
+        # this matrix and checks each lane.
+        include:
+          # B850 Knuckles — AMD ROCm, 64GB RAM.  (was: pmoves-b850-runner-1)
+          - host: b850
+            runner_label: b850
+            disk_warn_pct: 80
+            disk_critical_pct: 90
+          # KVM4-1 — VPS, primary CI runner.     (was: pmoves-kvm4-1)
+          - host: kvm4-1
+            runner_label: kvm4-1
+            disk_warn_pct: 75
+            disk_critical_pct: 85
+          # KVM4-2 — VPS, data storage + CI.     (was: pmoves-kvm4-2)
+          - host: kvm4-2
+            runner_label: kvm4-2
+            disk_warn_pct: 75
+            disk_critical_pct: 85
+          # KVM2 is NOT listed: no runner is registered for it. A lane for a host
+          # with no runner is the `cleanup-kvm2` failure that runner-maintenance.yml
+          # already documents -- it queues for the full scheduling window, gets
+          # cancelled, and marks the whole run cancelled. Add the lane back when a
+          # kvm2 runner exists and carries a label.
+
+    steps:
+      - name: Pre-cleanup disk status
+        run: |
+          echo "=== $(hostname) [${{ matrix.host }}] BEFORE ==="
+          df -h /
+          docker system df
+          echo "---"
+          USED_PCT=$(df / | tail -1 | awk '{print $5}' | tr -d '%')
+          echo "Disk usage: ${USED_PCT}%"
+          if [ "$USED_PCT" -gt "${{ matrix.disk_critical_pct }}" ]; then
+            echo "::warning::CRITICAL disk usage ${USED_PCT}% on ${{ matrix.host }} (threshold ${{ matrix.disk_critical_pct }}%)"
+          elif [ "$USED_PCT" -gt "${{ matrix.disk_warn_pct }}" ]; then
+            echo "::warning::High disk usage ${USED_PCT}% on ${{ matrix.host }} (threshold ${{ matrix.disk_warn_pct }}%)"
+          fi
+
+      - name: Safe Docker cleanup (images + build cache, NEVER volumes)
+        run: |
+          # Phase 1: Stopped containers older than 24h (preserve recently used)
+          docker container prune -f --filter "until=24h" || true
+
+          # Phase 2: Build cache (biggest reclaim — the recurring BuildKit deadlock)
+          docker builder prune -af || true
+
+          # Phase 3: Unused images
+          if [ "${{ github.event.inputs.aggressive }}" = "true" ]; then
+            echo "AGGRESSIVE: removing ALL unused images"
+            docker image prune -a -f || true
+          else
+            echo "SAFE: removing images older than 72h"
+            docker image prune -a -f --filter "until=72h" || true
+          fi
+
+          # Phase 4: Dangling images (always)
+          docker image prune -f || true
+
+          # Phase 5: Swept /tmp scratch (stereoscope, SBOM, etc.)
+          find /tmp -maxdepth 1 -name 'stereoscope-*' -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          find /tmp -maxdepth 1 -name 'sbom-*' -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+
+          # NEVER run 'docker volume prune' — fleet data volumes are co-hosted.
+          # Use 'make -C pmoves volume-reset SERVICE=<name>' for targeted resets.
+
+      - name: Stale runner workspace cleanup (>3 days)
+        run: |
+          # Skip cleanup if any runner jobs are currently in progress.
+          ACTIVE_JOBS=$(pgrep -f 'Runner.Worker' | head -5)
+          if [ -n "$ACTIVE_JOBS" ]; then
+            echo "Active runner jobs detected — skipping workspace cleanup."
+            exit 0
+          fi
+          for workdir in /tmp/runner/_work /home/*/actions-runner/_work /tmp/runner-kvm/_work; do
+            if [ -d "$workdir" ]; then
+              echo "Cleaning stale workspaces in $workdir (>3 days)..."
+              find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 \
+                \! -name '.*' \
+                \! -name '_temp' \
+                -exec test -f '{}/.cleanup-lock' -prune -o -rm -rf {} \; 2>/dev/null || true
+            fi
+          done
+
+      - name: Post-cleanup disk status
+        run: |
+          echo "=== $(hostname) [${{ matrix.host }}] AFTER ==="
+          df -h /
+          docker system df
+          echo "---"
+          USED_PCT=$(df / | tail -1 | awk '{print $5}' | tr -d '%')
+          echo "Disk usage after cleanup: ${USED_PCT}%"
+
+  # Z890 runs Docker Desktop on Windows — different cleanup path (not a runner,
+  # but hosts the dev stack). This is a reminder job that posts a warning
+  # if the VHDX is growing. The actual cleanup (Optimize-VHD) requires
+  # admin PowerShell and is documented in the z890 known road.
+  z890-disk-check:
+    name: Z890 VHDX growth check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Report
+        run: |
+          echo "::notice::Z890 Docker Desktop disk check — requires manual Optimize-VHD"
+          echo "Z890 uses Windows Docker Desktop with a dynamic VHDX that grows but never"
+          echo "auto-shrinks. The log-rotation fix (PR #2420) caps container logs at 30MB"
+          echo "each, but the VHDX still needs periodic compaction."
+          echo ""
+          echo "To compact: see .claude/skills/node-4090-sitrep or run:"
+          echo "  Stop-Process -Name 'Docker Desktop' -Force; wsl --shutdown"
+          echo "  Optimize-VHD -Path '...docker_data.vhdx' -Mode Full"

@@ -1,0 +1,7 @@
+# The root .gitignore excludes dist/ everywhere, because dist/ is normally build
+# output. Here it is the deliverable: this directory is a build-once-commit vendored
+# package, and the service's Dockerfile installs it with `npm ci`, which cannot
+# rebuild it. Without this negation the vendored build is silently absent from the
+# repo and the image only builds on a machine that happens to have it on disk.
+!dist/
+!dist/**

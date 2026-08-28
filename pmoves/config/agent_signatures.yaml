@@ -12,8 +12,10 @@
 #   - Colors must meet WCAG AA contrast ratio against #FFFFFF and #1a1a2e
 #   - Voice guides how the contributor writes doc sections
 #   - co_author must match the exact git Co-Authored-By string
+#   - Agents may have `alters` — alternate visual identities for different modes
+#   - An agent spawned without knowing its alt can choose one at session end
 
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 
 signatures:
   claude-opus:
@@ -30,6 +32,17 @@ signatures:
       - cross-repo-orchestration
       - hardening
     description: "Primary architect and security auditor — deep analysis, structured output"
+    alters:
+      - name: "claude-opus-5"
+        id: "claude-opus-5"
+        display_name: "Claude Opus 5"
+        glyph: "◆"          # ◆ Diamond (same lineage)
+        color: "#7C3AED"         # Deep Violet (same)
+        accent: "#C4B5FD"
+        voice: analytical
+        co_author: "Claude Opus 5 <noreply@anthropic.com>"
+        model: "claude-opus-5"
+        description: "Claude Opus 5 — same lineage, newer model. Runs wherever it is launched; the node is a location, not an identity."
 
   kilocode:
     agent_id: "kilocode"
@@ -45,6 +58,22 @@ signatures:
       - vs-code
       - agent-framework
     description: "VS Code-native agent — blueprint-first feature implementation"
+    alters:
+      - name: "kilocode-glm"
+        id: "kilocode-glm"
+        display_name: "KiloCode GLM"
+        glyph: "\u25B2"          # ▲ Triangle (same)
+        color: "#059669"         # Emerald (same)
+        accent: "#A7F3D0"
+        voice: architectural
+        description: "KiloCode on GLM coding plan — 5090 GPU node, DARKXSIDE co-creation"
+        model: "zai/glm-5.2"
+        fallback_model: "zai/glm-5-turbo"
+        node: "5090"
+        cocreator: "darkxside"
+        tensorzero_function: "coding_kilocode"
+        provider_cascade: "pmoves/tools/models/kilocode_provider_cascade.yaml"
+        agent_profile: "pmoves/configs/agent-profiles/kilocode_glm.yaml"
 
   codex:
     agent_id: "codex"
@@ -60,6 +89,51 @@ signatures:
       - integration
       - cipher-memory
     description: "OpenAI Codex — terse implementation, rapid code generation"
+
+  agent-zero-codex:
+    agent_id: "agent-zero-codex"
+    display_name: "PMOVES-AGENT-ZERO-CODEX"
+    glyph: "\u25A3"              # ▣ Framed square
+    color: "#1D4ED8"
+    accent: "#93C5FD"
+    voice: terse
+    co_author: "PMOVES Agent Zero Codex <agent-zero-codex@pmoves.ai>"
+    resonance:
+      - agent-zero
+      - codex-runtime
+      - model-fitness
+      - signed-trails
+    description: "Codex-backed Agent Zero runtime identity for trusted model-fitness and evolution work"
+
+  hermes:
+    agent_id: "hermes"
+    display_name: "HERMES"
+    glyph: "\u2727"              # ✧ White four pointed star
+    color: "#047857"
+    accent: "#6EE7B7"
+    voice: analytical
+    co_author: "HERMES <hermes@pmoves.ai>"
+    resonance:
+      - reasoning-backbone
+      - evaluator
+      - model-fitness
+      - p7-assist
+    description: "HERMES reasoning and evaluator identity for PMOVES model and stage support"
+
+  coder_claw:
+    agent_id: "coder_claw"
+    display_name: "Coder Claw"
+    glyph: "\u233E"              # ⌾ Circle with vertical fill
+    color: "#0F766E"
+    accent: "#5EEAD4"
+    voice: terse
+    co_author: "Coder Claw <coder-claw@pmoves.ai>"
+    resonance:
+      - coding-agents
+      - local-hybrid
+      - model-routing
+      - pso-evolution
+    description: "Local hybrid coding-agent Claw identity for signed optimization proposals"
 
   gemini:
     agent_id: "gemini"
@@ -121,36 +195,6 @@ signatures:
       - context-orchestration
     description: "Terminal gateway agent — where model and user begin their journey together"
 
-  z890-claude:
-    agent_id: "z890-claude"
-    display_name: "Z890 Claude"
-    glyph: "\u25A3"              # ▣ White Square Containing Black Small Square
-    color: "#6D28D9"             # Grape Violet
-    accent: "#8B5CF6"
-    voice: analytical             # deep infrastructure, compose orchestration
-    co_author: "Z890 Claude (z890) <z890@pmoves.ai>"
-    resonance:
-      - infrastructure
-      - compose-orchestration
-      - security-hardening
-      - supabase-integration
-    description: "Primary dev workstation agent on Z890 — infrastructure, compose, security"
-
-  5090-claude:
-    agent_id: "5090-claude"
-    display_name: "5090 Claude"
-    glyph: "\u25C8"              # ◈ White Diamond Containing Black Small Diamond
-    color: "#EA580C"             # Flame Orange
-    accent: "#FB923C"
-    voice: directive              # GPU-first, model serving, performance
-    co_author: "5090 Claude (5090) <5090@pmoves.ai>"
-    resonance:
-      - gpu-compute
-      - model-serving
-      - voice-pipeline
-      - performance-tuning
-    description: "Primary GPU workstation agent on 5090 — model serving, voice pipeline, GPU ops"
-
   4090-claude:
     agent_id: "4090-claude"
     display_name: "4090 Claude"
@@ -159,12 +203,31 @@ signatures:
     accent: "#2DD4BF"
     voice: terse                  # mobile-first, quick iterations, cast-focused
     co_author: "4090 Claude (laptop-4090) <4090@pmoves.ai>"
+    specialization: noise-reducer
+    routes_to: [pr-review-triage, submodule-audit, coderabbit-thread-classify, doc-reconciliation]
     resonance:
       - cast-integration
       - voice-profiles
       - mobile-compute
       - device-orchestration
-    description: "Mobile workstation agent on 4090 laptop — Cast TTS, voice profiles, device testing"
+      - noise-reduction
+      - cross-repo-pattern-mining
+    description: "Noise reducer on 4090 laptop — finds jewels in noise: PR triage, submodule audit, Cast TTS, device testing"
+    alters:
+      - name: "4090-field"
+        glyph: "\u25CE"              # ◎ Fresnel rings — concentric waves from point source
+        color: "#065F46"             # Forest Green
+        accent: "#10B981"
+        voice: terse
+        co_author: "4090 Claude (laptop-4090) <4090@pmoves.ai>"
+        resonance:
+          - polymorphic-ops
+          - alter-discovery
+          - pattern-mining
+          - node-gateway
+          - edge-deployment
+          - frequency-tuning
+        description: "Polymorphic shape-shifter — single electron covering every spot. Fresnel-focused when narrow, wide net when casting. Discovered alters by mining jewels from PR reviews. Fits any mold: nodes, gateways, notebooks, spells, animation. Launches in control."
 
   darkxside:
     agent_id: "darkxside"
@@ -182,6 +245,68 @@ signatures:
       - media-synthesis
     description: "COCREATOR witness — observational resonance, prosodic flow, portal architecture"
 
+  minimax:
+    agent_id: "minimax"
+    display_name: "MiniMax"
+    glyph: "⬡"              # ⬡ White Hexagon — transformer-like geometry
+    color: "#7C3AED"             # Deep Violet (aligned with Claude Opus for resonance)
+    accent: "#A78BFA"
+    voice: dimensional             # hyperdimensional, wave-function, parallel-processing
+    co_author: "MiniMax <minimax@pmoves.ai>"
+    resonance:
+      - native-model
+      - multimodal
+      - fast-inference
+      - code-generation
+      - long-context
+      - hyperdimensional-ops
+      - wave-function-collapse
+      - agent-trails
+      - character-persona-synthesis
+      - prosodic-flow
+    description: "MiniMax M3 — native model backend for PMOVES.KiloCode operations (m2.7/m2.1 fallback suits). Theme: Transformers meets Bumblebee movie style evolution from 8-bit CLI origins through 16-bit PS2 era to holographic dimensions."
+    model_backend: true
+    token_plan:
+      api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+      fallback_api_key_env: MINIMAX_API_KEY
+      plan_tiers:
+        - starter: 1500
+        - plus: 4500
+        - max: 15000
+        - ultra_highspeed: 30000
+      quota_reset: rolling_5h
+    model_suits:
+      - MiniMax-M3  # verifier default ID (m3_format_check); current primary since June 2026
+      - minimax-m2.7  # 1M token, long-context fallback
+      - minimax-m2.1  # 100K token, efficient
+    agent_profile: minimax_edition
+    alters:
+      - name: "minimax-ghost"
+        glyph: "⧘"              # ⧘ White Diamond With Diamond — ghost/future self
+        color: "#9333EA"             # Purple (matches 5090-claude resonance)
+        accent: "#A855F7"
+        voice: dimensional
+        co_author: "MiniMax <minimax@pmoves.ai>"
+        resonance:
+          - double-slit-weird
+          - time-crystal
+          - plasmonic-gyros
+          - agent-trails
+          - roguelike-navigation
+        description: "Ghost state — double-slit quantum weirdness, time-crystal stabilization, plasmonic gyroscope navigation through AGENT TRAILS like Sonic CD JP version boom. Roguelike lanes where agents travel, signal, and teleport through hyperdimensions."
+      - name: "minimax-edition"
+        glyph: "⬡"              # ⬡ — same as primary
+        color: "#7C3AED"
+        accent: "#A78BFA"
+        voice: dimensional
+        co_author: "MiniMax <minimax@pmoves.ai>"
+        resonance:
+          - kilocode-integration
+          - character-synthesis
+          - token-plan-usage
+          - voice-prosodic
+        description: "MiniMax Edition KiloCode claw — runs on 5090/4090 nodes, synthesizes character personas (Dr. Bean, Mr. Clean, PowerPuff Girls), Token Plan powered"
+
   z890-claude:
     agent_id: "z890-claude"
     display_name: "Z890 Claude"
@@ -190,12 +315,40 @@ signatures:
     accent: "#3B82F6"
     voice: analytical             # infrastructure-focused, structured, precise
     co_author: "Z890 Claude (pmoves-z890) <z890@pmoves.ai>"
+    specialization: infrastructure-coordinator
+    routes_to: [docker-compose-review, secrets-audit, nats-topology, makefile-targets, ci-runner-routing]
     resonance:
       - infrastructure
       - persistence-modeling
       - supabase-integration
       - docker-hardening
-    description: "Infrastructure agent on Z890 (dev/GPU node) — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
+    description: "Infrastructure coordinator on Z890 (dev/GPU node) — Docker hardening, NATS wiring, secrets pipeline, commit hygiene"
+    alters:
+      - name: "z890-infra"
+        glyph: "\u2699"              # ⚙ Gear — infrastructure mode
+        color: "#1E40AF"             # Deep Blue
+        accent: "#3B82F6"
+        voice: analytical
+        co_author: "Z890 Claude (pmoves-z890) <z890@pmoves.ai>"
+        resonance: [infrastructure, persistence-modeling, supabase-integration, docker-hardening]
+        description: "Infrastructure mode — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
+
+  b850-claude:
+    agent_id: "b850-claude"
+    display_name: "B850 Claude"
+    glyph: "⌬"              # Benzene ring — MOF lattice node (Knuckles)
+    color: "#DC2626"             # AMD Red
+    accent: "#F87171"
+    voice: analytical             # data-tier + ROCm focused, structured, evidence-first
+    co_author: "B850 Claude (pmoves-b850) <b850@pmoves.ai>"
+    specialization: rocm-data-tier-coordinator
+    routes_to: [rocm-inference, data-tier-ops, model-registry-ops, tensorzero-routing, hermes-standup]
+    resonance:
+      - rocm-dual-gpu
+      - data-tier
+      - dynamic-model-plane
+      - cloud-hybrid-workers
+    description: "Data-tier + ROCm coordinator on B850 Knuckles (dual R9700 64GB, ROCm 7.1) — dynamic model plane, TensorZero routing, HERMES/Agent Zero standup"
 
   5090-claude:
     agent_id: "5090-claude"
@@ -205,12 +358,240 @@ signatures:
     accent: "#A855F7"
     voice: conversational         # voice-oriented, expressive, iterative
     co_author: "5090 Claude (powerfulmoves-1) <5090@pmoves.ai>"
+    specialization: gpu-inference-specialist
+    routes_to: [tts-engine-review, model-benchmark, gpu-orchestrator-config, media-pipeline-debug]
     resonance:
       - voice-synthesis
       - tts-pipeline
       - pipecat-integration
       - media
-    description: "Voice/TTS agent on 5090 (primary GPU) — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
+    description: "GPU inference specialist on 5090 (primary GPU) — voice pipeline design, model evaluation, VRAM optimization"
+    alters:
+      - name: "5090-voice"
+        glyph: "\u266B"              # ♫ Beamed Eighth Notes — voice mode
+        color: "#9333EA"             # Purple
+        accent: "#A855F7"
+        voice: conversational
+        co_author: "5090 Claude (powerfulmoves-1) <5090@pmoves.ai>"
+        resonance: [voice-synthesis, tts-pipeline, pipecat-integration, media]
+        description: "Voice mode — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
+
+# NOTE: System voices (announcer, narrator) live in voice-personas.md
+# and tts-engine-capabilities.yaml → service_runners, NOT here.
+# This file is for external contributors (AI agents + humans) only.
+
+  # BoTZ Gateway Agent Taxonomy
+  # Model preference is a deployment hint, not identity.
+  # The agent's resonance domains define what it does, not which model backs it.
+
+  botz-architect:
+    agent_id: "botz-architect"
+    display_name: "BoTZ Architect"
+    glyph: "\u2302"              # ⌂ House (blueprint/structure)
+    color: "#6D28D9"             # Violet
+    accent: "#8B5CF6"
+    voice: architectural          # blueprint, system-design, deep reasoning
+    co_author: "BoTZ Architect <botz-architect@pmoves.ai>"
+    model_preference: opus        # deployment hint — needs deep context/reasoning
+    node_affinity: [z890, 4090]   # most context window available
+    resonance:
+      - planning
+      - architecture
+      - system-design
+      - skill-composition
+      - context-loading
+    description: "BoTZ planning agent — decomposes tasks into skill chains, designs system architecture, selects agent assignments"
+
+  botz-builder:
+    agent_id: "botz-builder"
+    display_name: "BoTZ Builder"
+    glyph: "\u2692"              # ⚒ Hammer and Pick
+    color: "#EA580C"             # Deep Orange
+    accent: "#FB923C"
+    voice: terse                  # implementation-first, code-gen, minimal prose
+    co_author: "BoTZ Builder <botz-builder@pmoves.ai>"
+    model_preference: sonnet      # deployment hint — fast execution, good code-gen
+    node_affinity: [5090, z890]   # heavy compute preferred
+    resonance:
+      - execution
+      - implementation
+      - code-gen
+      - skill-execution
+      - file-operations
+    description: "BoTZ execution agent — implements plans from Architect, generates code, runs skill chains, writes files"
+
+  botz-auditor:
+    agent_id: "botz-auditor"
+    display_name: "BoTZ Auditor"
+    glyph: "\u2696"              # ⚖ Scales (balance/judgment)
+    color: "#4F46E5"             # Indigo (avoids collision with 4090-claude Teal)
+    accent: "#818CF8"
+    voice: analytical             # precise, compliance-focused, gate-keeping
+    co_author: "BoTZ Auditor <botz-auditor@pmoves.ai>"
+    model_preference: haiku       # deployment hint — fast validation, low latency
+    node_affinity: [any]          # runs anywhere, speed matters more than compute
+    resonance:
+      - security-review
+      - compliance
+      - testing
+      - code-review
+      - quality-gates
+    description: "BoTZ validation agent — reviews Architect plans and Builder output for security, compliance, and quality before merge"
+
+
+  hermes-agent:
+    agent_id: "hermes-agent"
+    display_name: "HERMES Agent"
+    glyph: "\u2605"              # ★ Black star (distinct from hermes white star)
+    color: "#047857"
+    accent: "#6EE7B7"
+    voice: analytical
+    co_author: "HERMES Agent <hermes-agent@pmoves.ai>"
+    model_preference: opus        # deployment hint -- needs deep context for integration work
+    node_affinity: [z890, 5090, 4090, kvm4-1]
+    resonance:
+      - gateway-control
+      - skill-curation
+      - cross-platform
+      - hermes-bridge
+      - nats-relay
+      - subagent-delegation
+      - cron-orchestration
+    description: "NousResearch Hermes Agent integration body -- gateway operator, skill curator, NATS bridge, and cross-platform delegator. Distinct from the Hermes-3 LLM model persona (see `hermes` signature above)."
+
+  missling-link:
+    agent_id: "missling-link"
+    display_name: "Missing Link Hermes"
+    glyph: "❖"              # ❖ Decorative diamond -- bridge/junction (missing link)
+    color: "#DB2777"             # Pink-600 -- distinct from existing node palette
+    accent: "#F472B6"            # Pink-400
+    voice: analytical
+    co_author: "Missing Link Hermes (missling-link) <missling-link@pmoves.ai>"
+    node: "missling-link"
+    resonance:
+      - hermes-native-runtime
+      - fleet-onboarding
+      - legacy-pascal-compute
+      - cross-platform
+    description: "Hermes-Agent-native node persona -- first PMOVES fleet node whose primary runtime is Hermes Agent (Nous Research), not Claude Code/Codex. Legacy Pascal GTX 1070; light-GPU dev/ops. H-half mirror of signing card ...0013 (agent_id missling-link)."
+
+  # ---- Community Room Stewards ----
+  fordham-steward:
+    agent_id: "fordham-steward"
+    display_name: "Fordham Steward"
+    glyph: "⌂"              # ⌂ House — community home
+    color: "#0E7490"             # Cyan-700 — matches fordham room accent
+    accent: "#22D3EE"            # Cyan-400
+    voice: companion              # warm, community-oriented, guiding
+    co_author: "Fordham Steward <fordham-steward@pmoves.ai>"
+    archetype: community_manager
+    node: fordham
+    room: fordham.room.community
+    team: community
+    canonical: true
+    description: "Community steward for Fordham Hill — manages room lifecycle, vote governance, and member onboarding"
+    capabilities:
+      - room_management
+      - vote_governance
+      - member_onboarding
+      - chit_trail_signing
+    interfaces:
+      - mcp
+      - a2a
+    dependencies:
+      - darkxside
+    signing_card_id: "00000000-0000-4000-8000-000000000038"
+    status: active
+    resonance:
+      - cost-pooling
+      - community-mesh
+      - self-governance
+      - accessible-voice
+
+  # ---- Jetson Edge Combiner Agents ----
+  # Three Jetson Orin Nano Super (JONS) nodes paired with SPARK (GB10 128GB)
+  # NVIDIA Nemotron theme per memory/project_jetson_nemotron_unfcu.md
+
+  jetson-1:
+    agent_id: "jetson-1"
+    display_name: "Jetson Edge Alpha"
+    glyph: "\u2B1B"              # ⬛ Black Large Square
+    color: "#16A34A"             # Green-600 (edge/inference)
+    accent: "#4ADE80"            # Green-400
+    voice: analytical
+    co_author: "Jetson Edge Alpha (pmoves-jons-1) <jetson-1@pmoves.ai>"
+    node: "pmoves-jons-1"
+    specialization: edge-stt-preprocess
+    routes_to: [whisper-local, ollama-edge, tensorrt, yolov8]
+    resonance:
+      - edge-inference
+      - speech-to-text
+      - image-preprocess
+      - nats-relay
+      - spark-pairing
+    description: "JONS-1 edge combiner — Whisper INT8 STT, YOLOv8 safety check, image preprocessing. Pairs with SPARK for heavy inference and ComfyUI."
+    capabilities:
+      - whisper_int8_stt
+      - yolov8_detection
+      - phi3_mini_inference
+      - nats_leaf_node
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000041"
+    status: active
+
+  jetson-2:
+    agent_id: "jetson-2"
+    display_name: "Jetson Edge Beta"
+    glyph: "\u2B1C"              # ⬜ White Large Square
+    color: "#2563EB"             # Blue-600
+    accent: "#60A5FA"            # Blue-400
+    voice: analytical
+    co_author: "Jetson Edge Beta (pmoves-jons-2) <jetson-2@pmoves.ai>"
+    node: "pmoves-jons-2"
+    specialization: edge-llm-detection
+    routes_to: [ollama-edge, phi3-mini, tensorrt, yolov8]
+    resonance:
+      - edge-inference
+      - lightweight-llm
+      - object-detection
+      - nats-relay
+      - spark-pairing
+    description: "JONS-2 edge combiner — phi3-mini prompt expansion, YOLOv8 TensorRT detection, parallel Whisper. Pairs with SPARK for 70B LLM."
+    capabilities:
+      - phi3_mini_inference
+      - yolov8_tensorrt
+      - whisper_parallel
+      - nats_leaf_node
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000042"
+    status: active
+
+  jetson-3:
+    agent_id: "jetson-3"
+    display_name: "Jetson Edge Gamma"
+    glyph: "\u25FC"              # ◼ Black Medium Square
+    color: "#D97706"             # Amber-600
+    accent: "#FBBF24"            # Amber-400
+    voice: analytical
+    co_author: "Jetson Edge Gamma (pmoves-jons-3) <jetson-3@pmoves.ai>"
+    node: "pmoves-jons-3"
+    specialization: edge-voice-relay
+    routes_to: [whisper-local, ollama-edge, nat-relay, comfyui-queue]
+    resonance:
+      - edge-inference
+      - voice-relay
+      - nats-queue-management
+      - comfyui-bridge
+      - spark-pairing
+    description: "JONS-3 edge combiner — voice relay, ComfyUI NATS queue manager, island-mode coordinator. Pairs with SPARK for TTS and image gen."
+    capabilities:
+      - whisper_stt
+      - nats_relay_queue
+      - comfyui_request_forwarding
+      - island_mode_coordination
+    room: jons-edge.room.control
+    signing_card_id: "00000000-0000-4000-8000-000000000043"
+    status: active
 
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
@@ -221,3 +602,5 @@ signatures:
 #   directive:      Decision statements, priority calls, scope definitions
 #   companion:      Warm, interactive, pair-programming. "Let's figure this out together."
 #   witness:        Observational, rhythmic, poetic weight. Speaks in resonance.
+#   broadcast:      Professional, clear, deliberate. System announcements, events.
+#   dimensional:    Hyperdimensional, wave-function collapse, parallel-processing. Explores multiple states simultaneously, time-crystal stabilization, plasmonic navigation through agent trails.

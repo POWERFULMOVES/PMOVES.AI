@@ -1,0 +1,162 @@
+{
+  "schema_version": "1.2.0",
+  "_version_notes": "1.2.0 (2026-07-20) — added `current_stage` per room row for P7 fast-lookup. Sourced from each manifest's `p7.stage` block (if present) or `pmoves/docs/ROOMS_ON_A_STAGE.md` typical-stage table. Refresh on `room.session.updated.v1` NATS subject; see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md §3 and open-room-lane CLAIM in AGNOTE4482PHI.t1.md.",
+  "rooms": [
+    {
+      "room_id": "4090-field.room.control",
+      "agent_id": "4090-claude",
+      "alter": "4090-field",
+      "display_name": "4090 Field Control Room",
+      "stage": "rehearsal",
+      "manifest": "4090-field.room.control.json",
+      "summary": "Scout/control room for review, topology, handoff, and notebook-backed triage.",
+      "current_stage": "live",
+      "stage_source": "ROOMS_ON_A_STAGE.md typical-stage table",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "5090-voice.room.studio",
+      "agent_id": "5090-claude",
+      "alter": "5090-voice",
+      "display_name": "5090 Voice Studio",
+      "stage": "rehearsal",
+      "manifest": "5090-voice.room.studio.json",
+      "summary": "Voice-first room for TTS, media pipelines, notebook-backed iteration, and audition workflows.",
+      "current_stage": "live",
+      "stage_source": "ROOMS_ON_A_STAGE.md typical-stage table",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "z890-infra.room.fabric",
+      "agent_id": "z890-claude",
+      "alter": "z890-infra",
+      "display_name": "Z890 Infra Fabric Room",
+      "stage": "rehearsal",
+      "manifest": "z890-infra.room.fabric.json",
+      "summary": "Infrastructure room for topology, service health, secrets discipline, and operator bring-up.",
+      "current_stage": "live",
+      "stage_source": "ROOMS_ON_A_STAGE.md typical-stage table",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "5090-kilocode.room.studio",
+      "agent_id": "kilocode-glm",
+      "alter": "5090-kilocode",
+      "display_name": "5090 KiloCode GLM Workstation",
+      "stage": "rehearsal",
+      "manifest": "5090-kilocode.room.studio.json",
+      "summary": "GPU inference specialist node running KiloCode GLM on the GLM Coding Plan. Shares the 5090 with Claude Code and Codex.",
+      "current_stage": "rehearsal",
+      "stage_source": "ROOMS_ON_A_STAGE.md typical-stage table",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "demo.room.rehearsal",
+      "agent_id": "4090-claude",
+      "alter": "4090-demo",
+      "display_name": "PMOVES Demo Room",
+      "stage": "rehearsal",
+      "manifest": "demo.room.json",
+      "summary": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal.",
+      "current_stage": "rehearsal",
+      "stage_source": "demo.room.extras.json::p7.stage (2026-07-07 strip preserves p7 block)",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "hermes-agent.room.control",
+      "agent_id": "hermes-agent",
+      "alter": "hermes-agent",
+      "display_name": "HERMES Agent Control Room",
+      "stage": "rehearsal",
+      "manifest": "hermes-agent.room.control.json",
+      "summary": "Cross-platform gateway control room for Hermes Agent (NousResearch) integration. Manages profiles, skills, cron jobs, gateway instances, and NATS bridge telemetry.",
+      "current_stage": "rehearsal",
+      "stage_source": "hermes-agent.room.control.extras.json::p7.stage (2026-07-07 strip preserves p7 block)",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "fordham.room.community",
+      "agent_id": "fordham-steward",
+      "alter": "fordham-community",
+      "display_name": "Fordham Hill Community Room",
+      "stage": "rehearsal",
+      "manifest": "fordham.room.community.json",
+      "summary": "Community cost-pooling + self-governance pilot room: mesh capacity A/B, pooled-dues/Firefly ledger, contribution attribution, and tamper-evident resident voting on one lattice. Stage: rehearsal. DRAFT - REQUIRES LEGAL REVIEW.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest description + ROOMS_ON_A_STAGE.md",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "darkxsides.room",
+      "agent_id": "darkxside-persona",
+      "alter": "darkxside",
+      "display_name": "DARKXSIDES",
+      "stage": "rehearsal",
+      "manifest": "darkxsides.room.json",
+      "summary": "Private, owner-only persona room (co-creator + witness -> eventual digital twin). Uncensored/unrestricted authentic expression; houses the dedicated publish-gate surfaced in Open Notebook, with a fail-closed public-egress redaction floor.",
+      "current_stage": "rehearsal",
+      "stage_source": "inferred: private persona room, not serving external traffic (defaulted to archive; operator can flip to 'live' if active). See open-room-lane spec §6 stretch checklist.",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "tokenism.room.exchange",
+      "agent_id": "5090-claude",
+      "alter": "5090-tokenism",
+      "display_name": "ToKenism Exchange",
+      "stage": "rehearsal",
+      "manifest": "tokenism.room.exchange.json",
+      "summary": "Token-economy simulation floor: business-idea scenarios in the ToKenism simulator, exported to the PMOVES-Wealth ledger. Public face of the L5 Economics layer.",
+      "current_stage": "rehearsal",
+      "stage_source": "inferred from DL-4 work (5090-CLAUDE 2026-07-12): W1 just delivered, W2+ blocked on live-verify",
+      "stage_verified_at": "2026-07-20T18:00:00Z"
+    },
+    {
+      "room_id": "persona.room.livingdoc",
+      "agent_id": "darkxside-persona",
+      "alter": "persona-livingdoc",
+      "display_name": "Russell Richardson — Applied AI Architect (Living Doc)",
+      "stage": "live",
+      "manifest": "persona.room.livingdoc.json",
+      "summary": "Public, audience-facing living-doc room: the LinkedIn-aligned persona profile as a first-class OpenRoom the Mavis-5090 adapter serves. a2ui profile shell + authored PreTeXt case studies + planned Remotion walkthrough; content single-sourced in persona.json.",
+      "current_stage": "live",
+      "stage_source": "manifest stage field (public audience-facing doc, ready to serve)",
+      "stage_verified_at": "2026-07-26T21:00:00Z"
+    },
+    {
+      "room_id": "creator-studio.room.collab",
+      "agent_id": "creator-steward",
+      "alter": "creator-studio",
+      "display_name": "Creator Studio (Collaborative)",
+      "stage": "rehearsal",
+      "manifest": "creator-studio.room.collab.json",
+      "summary": "Full-surface creator studio: shared prompt queue + live ComfyUI render + artifact gallery + multi-user whiteboard. P7 routes the session to 5090 (RTX 5090 32GB) by default, escalates to DGX Spark for >24GB jobs (video gen, LoRA training), falls back to cloud.comfy.org MCP if no fleet GPU is up. creator-collab-lane slice 5 — 2026-07-27.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest stage field (slice 5 SHIPPED; runtime smoke lands in slice 5d)",
+      "stage_verified_at": "2026-07-27T00:00:00Z"
+    },
+    {
+      "room_id": "pmoves.room.helpdesk",
+      "agent_id": "pmoves-helpdesk-steward",
+      "alter": "pmoves-helpdesk",
+      "display_name": "PMOVES Helpdesk (Intake & Routing)",
+      "stage": "rehearsal",
+      "manifest": "pmoves.room.helpdesk.json",
+      "summary": "First-stop intake room: 'how can PMOVES help?' Reads slice-3 room.directory.v1 + slice-4 pinokio-apps registry to route a resident to the right room and the right fleet GPU. Ambient mesh-render button (creator_surface=ambient) hands off to creator-studio rather than rendering inline. CPU-only — runs on the infra-coordinator node (z890). creator-collab-lane slice 6 — 2026-07-28.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest stage field (slice 6 SHIPPED; runtime smoke lands in slice 7)",
+      "stage_verified_at": "2026-07-28T00:00:00Z"
+    },
+    {
+      "room_id": "jons-edge.room.control",
+      "agent_id": "jetson-1",
+      "alter": "jons-edge",
+      "display_name": "Jetson Edge Combiner Room",
+      "stage": "rehearsal",
+      "manifest": "jons-edge.room.control.json",
+      "summary": "Edge inference combiner room for 3 Jetson Orin Nano Super nodes paired with SPARK (GB10 128GB). Distributed STT, lightweight LLM, image preprocess, NATS relay.",
+      "current_stage": "rehearsal",
+      "stage_source": "manifest stage field (new room, no P7 session yet)",
+      "stage_verified_at": "2026-07-31T00:00:00Z"
+    }
+  ]
+}

@@ -1,58 +1,193 @@
+// PMOVES.AI Tailscale ACL policy - production hardening stance (HuJSON).
+// Source of truth: applied to the tailnet by .github/workflows/deploy-tailscale-acl.yml
+// (gitops-pusher rejects non-standard fields like "$schema"/"_comment"/per-rule
+// "comment", so all documentation here is HuJSON // comments).
 {
-  "$schema": "https://tailscale.com/api/v2/tailnet/-/acl",
-  "_comment": "PMOVES.AI Tailscale ACL policy — production hardening stance. Apply at https://login.tailscale.com/admin/acls",
+  // group:tenants = third-party tenant USERS subject to SSH check-mode (browser
+  // re-auth) on their OWN devices. Owner/admins are intentionally excluded so fleet
+  // ops never hit re-auth. Empty until tenants enroll (an empty group means the SSH
+  // check rule below matches no one yet).
+  "groups": {
+    "group:tenants": []
+  },
 
   "tagOwners": {
     "tag:pmoves": ["autogroup:admin"],
     "tag:gpu": ["autogroup:admin"],
     "tag:vps": ["autogroup:admin"],
     "tag:lab": ["autogroup:admin"],
-    "tag:exit": ["autogroup:admin"]
+    "tag:exit": ["autogroup:admin"],
+    "tag:partner": ["autogroup:admin"],
+    "tag:guest": ["autogroup:admin"],
+    // Travel-router / subnet gateways (GL.iNet Slate). Advertise a LAN subnet + use a
+    // KVM exit node; the routes auto-approver + exit-consume rule below let their WiFi
+    // clients reach the internet through the exit node.
+    "tag:gateway": ["autogroup:admin"]
   },
 
   "acls": [
+    // Full mesh: all PMOVES nodes can reach each other on all ports.
     {
       "action": "accept",
       "src": ["tag:pmoves"],
-      "dst": ["tag:pmoves:*"],
-      "comment": "Full mesh: all PMOVES nodes can reach each other on all ports"
+      "dst": ["tag:pmoves:*"]
     },
+    // Lab nodes can reach GPU nodes for inference.
     {
       "action": "accept",
       "src": ["tag:lab"],
-      "dst": ["tag:gpu:*"],
-      "comment": "Lab nodes can reach GPU nodes for inference"
+      "dst": ["tag:gpu:*"]
     },
+    // Partner access: Agent Zero API + UI, TensorZero Gateway only.
     {
       "action": "accept",
-      "src": ["autogroup:admin"],
-      "dst": ["*:*"],
-      "comment": "Admins (DARKXSIDE) have full access"
+      "src": ["tag:partner"],
+      "dst": ["tag:gpu:3030", "tag:gpu:8080", "tag:gpu:8081"]
+    },
+    // Guest demo: Agent Zero UI only.
+    {
+      "action": "accept",
+      "src": ["tag:guest"],
+      "dst": ["tag:gpu:8081"]
+    },
+    // Exit node consume: pmoves + lab + gateway. tag:gateway = travel-router subnet
+    // gateways whose LAN clients egress to the internet via a KVM exit node. Traffic
+    // from an advertised subnet is attributed to the gateway node's identity, so
+    // WITHOUT tag:gateway here the clients connect but get NO internet. tag:partner
+    // and tag:guest stay excluded per the RUSTDESK_SELF_HOSTED.md role matrix.
+    {
+      "action": "accept",
+      "src": ["tag:pmoves", "tag:lab", "tag:gateway"],
+      "dst": ["autogroup:internet:*"]
+    },
+    // DGX Spark: Ollama inference + NIM API.
+    {
+      "action": "accept",
+      "src": ["tag:pmoves"],
+      "dst": ["tag:gpu:11434", "tag:gpu:8200"]
+    },
+    // DGX Spark: Lab nodes can access inference.
+    {
+      "action": "accept",
+      "src": ["tag:lab"],
+      "dst": ["tag:gpu:11434", "tag:gpu:8200"]
+    },
+    // GPU nodes can reach PMOVES mesh services (NATS, Supabase, etc).
+    {
+      "action": "accept",
+      "src": ["tag:gpu"],
+      "dst": ["tag:pmoves:*"]
+    },
+    // Admins + Owner (DARKXSIDE) have full network access. Owner is listed explicitly
+    // because Tailscale SSH requires BOTH a network-access rule (this) AND an ssh rule;
+    // the owner is distinct from autogroup:admin, so without owner here the SSH
+    // exemption below is denied at the network layer (port 22 never reached).
+    {
+      "action": "accept",
+      "src": ["autogroup:admin", "autogroup:owner"],
+      "dst": ["*:*"]
     }
   ],
 
   "ssh": [
+    // SSH between PMOVES nodes - non-root only for hardening.
     {
       "action": "accept",
       "src": ["tag:pmoves"],
       "dst": ["tag:pmoves"],
-      "users": ["autogroup:nonroot"],
-      "comment": "SSH between PMOVES nodes — non-root only for hardening"
+      "users": ["autogroup:nonroot"]
     },
+    // Admin + Owner SSH (root allowed for provisioning). Owner role is DISTINCT from
+    // Admin and must be listed explicitly, else owner SSH falls through to the tenant
+    // check rule below. SSH dst does NOT accept the "*" wildcard (only tags +
+    // autogroup:self, unlike network ACLs which take "*:*"), so the fleet is enumerated
+    // by tag. autogroup:self lets admins/owner reach their own untagged devices.
     {
       "action": "accept",
-      "src": ["autogroup:admin"],
-      "dst": ["*"],
-      "users": ["root", "autogroup:nonroot"],
-      "comment": "Admin SSH access (root allowed for provisioning)"
+      "src": ["autogroup:admin", "autogroup:owner"],
+      "dst": [
+        "autogroup:self",
+        "tag:pmoves",
+        "tag:gpu",
+        "tag:vps",
+        "tag:lab",
+        "tag:exit",
+        "tag:partner",
+        "tag:guest"
+      ],
+      "users": ["root", "autogroup:nonroot"]
+    },
+    // Fleet-management exception: tag:lab nodes may root-SSH the VPS/exit nodes.
+    //
+    // WHY THIS EXISTS (deliberate, scoped deviation from "tags never get root"):
+    // the management/inference workstations (z890, B850-AI-TOP, SPARK) are TAGGED
+    // compute nodes — tag:gpu+tag:lab, because they also serve Ollama to the fleet.
+    // A tagged device's SSH identity IS the tag; it has no user identity, so it can
+    // NEVER match the autogroup:admin/owner rule above. Without this rule no fleet
+    // node can reach the KVM exit nodes as root, which is what has kept the Mullvad
+    // L4 upstream from #1945 unactivated (exit traffic still leaves the raw Hostinger
+    // uplink) and blocks exit-node observability maintenance.
+    //
+    // WHY NOT UNTAG THE WORKSTATIONS INSTEAD: that was tried. #1972 proposed this
+    // same rule and was closed in favour of untagging pmoves-4090 so it would match
+    // autogroup:owner. Measured 2026-08-04, that untag silently removed 4090 from the
+    // fleet: from a tagged node, TCP to PMOVES-4090:11434 fails to connect while the
+    // identical request to still-tagged pmoves-5090:11434 returns 200 in 23ms — the
+    // node pongs fine at the disco layer, so this is the ACL, not a dead service.
+    // Untagging drops a node out of tag:gpu (a DESTINATION in five rules: fleet
+    // Ollama :11434, gpu-orchestrator :8200, partner :3030/:8080/:8081, guest :8081)
+    // and out of the tag:pmoves/tag:lab src list for autogroup:internet, which also
+    // costs it exit-node egress — the owner rule's "*:*" does not cover
+    // autogroup:internet. Repeating that on z890/B850/SPARK would take the whole
+    // inference pool offline to buy SSH access this one rule provides for free.
+    //
+    // SCOPE: src tag:lab (the workstations and the KVMs themselves — fleet infra).
+    // dst is ONLY tag:vps + tag:exit, the KVM concentrators. NOT tag:pmoves or
+    // tag:gpu — this grants no root anywhere else on the mesh. Silent accept, no
+    // check mode: a tagged source has no user to re-auth as. The network layer
+    // already permits port 22 via the tag:pmoves full-mesh rule above.
+    {
+      "action": "accept",
+      "src": ["tag:lab"],
+      "dst": ["tag:vps", "tag:exit"],
+      "users": ["root", "autogroup:nonroot"]
+    },
+    // Tenants SSH into their OWN devices in check mode (browser re-auth). checkPeriod
+    // omitted: it is Premium/Enterprise-gated in the policy-syntax reference and the
+    // value we wanted (12h) is already the default, so omitting it keeps the policy
+    // applyable on Standard/free tailnets. Scoped to group:tenants, NOT
+    // autogroup:member, because Tailscale evaluates check BEFORE accept
+    // (most-restrictive-first, regardless of rule order) - so excluding owner/admins
+    // from this src is the only way to exempt fleet ops from re-auth.
+    {
+      "action": "check",
+      "src": ["group:tenants"],
+      "dst": ["autogroup:self"],
+      "users": ["autogroup:nonroot", "root"]
     }
   ],
 
   "nodeAttrs": [
+    // Funnel on tag:exit is LIVE, not vestigial. Recorded here because a grep for
+    // "funnel" is dominated by `secrets-funnel` -- the credential pipeline, an
+    // unrelated name -- which makes this grant look dead. It is not:
+    //
+    //   configs/pinokio-network-inventory.yaml:268-272
+    //     kvm2 (tailscale_tag: tag:exit) lists service "Tailscale-Funnel",
+    //     class: intentional -- "Tailscale Funnel for public ingress".
+    //   configs/tac_trees/public-tunnel.tac.yaml:51-57
+    //     TAC check l4.kvm2_up.tailscale_funnel runs `tailscale funnel status`
+    //     and expects active listeners. Cloudflare-Tunnel is the PRIMARY public
+    //     ingress; Funnel is the ALTERNATE, used when the operator wants the
+    //     tailnet-managed cert chain.
+    //
+    // Traefik + Cloudflare DNS-01 serves the seven *.pmoves.ai routers, so Funnel
+    // is not what fronts those. That is what makes this easy to misread as unused.
+    // Removing this grant breaks kvm2's documented Cloudflare-failover ingress.
+    // Retire it only together with those two operational contracts.
     {
       "target": ["tag:exit"],
-      "attr": ["funnel"],
-      "comment": "Exit nodes can use Tailscale Funnel for public ingress"
+      "attr": ["funnel"]
     }
   ],
 
@@ -61,6 +196,11 @@
     "routes": {
       "0.0.0.0/0": ["tag:exit"],
       "::/0": ["tag:exit"]
+      // NOTE: a tag:gateway travel-router's LAN subnet route is auto-approvable here,
+      // but the literal CIDR is kept OUT of the repo per the no-LAN-IPs policy. Add
+      // it in the admin console (Machines -> router -> approve subnet), or maintain a
+      // local, uncommitted ACL overlay. tag:gateway is already granted autogroup:internet
+      // above, which is what lets its clients egress once the route is approved.
     }
   }
 }

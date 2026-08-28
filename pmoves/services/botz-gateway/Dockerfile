@@ -1,14 +1,17 @@
-# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
-FROM python:3.11-slim@sha256:d6e4d224f70f9e0172a06a3a2eba2f768eb146811a349278b38fff3a36463b47
+# Digest-pinned base — refreshed 2026-03-25
+FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0
 
 LABEL org.opencontainers.image.source="https://github.com/POWERFULMOVES/PMOVES.AI"
 LABEL org.opencontainers.image.description="PMOVES-BoTZ Gateway - Work item coordination service"
 
 WORKDIR /app
 
+# Install uv for fast, reliable dependency resolution
+RUN pip install --no-cache-dir uv
+
 # Install dependencies
 COPY requirements.txt requirements.lock .
-RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+RUN uv pip install --system --no-cache --constraint requirements.lock -r requirements.txt
 
 # Copy application
 COPY main.py .

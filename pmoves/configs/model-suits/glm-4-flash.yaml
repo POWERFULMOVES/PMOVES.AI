@@ -1,0 +1,65 @@
+# ============================================================
+# GLM-4-Flash Model Suit
+# Role: Fastest inference, lowest latency
+# Best for: Real-time responses, streaming, quick tasks
+# Provider: Zhipu AI (Z.AI)
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: glm-4-flash
+  provider: zai
+  base_url: "https://api.z.ai/v1"
+  api_key_env: Z_AI_API_KEY
+  
+  architecture:
+    type: dense
+    total_params: "9B"
+    active_params: "9B"
+    attention: standard
+    
+  context:
+    max_window: 128000
+    effective_window: 32000
+    working_window: 8000
+    
+  defaults:
+    temperature: 0.7
+    top_p: 0.95
+    max_tokens: 4096
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+  advanced:
+    tool_call_parser: glm4
+    enable_thinking: false
+    mtp_steps: 1
+    
+  harness_mappings:
+    quick_chat:
+      temperature: 0.8
+      top_p: 0.98
+      max_tokens: 1024
+      system_prompt: conversational_assistant
+      
+    streaming_response:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 2048
+      system_prompt: conversational_narrator
+      
+    lightweight_coding:
+      temperature: 0.6
+      top_p: 0.93
+      max_tokens: 2048
+      system_prompt: directive_engineer
+
+  cgp_state_vector:
+    delta: 0.5
+    Hz: 0.2
+    kappa: 1.2
+    A: 0.5
+    F: 0.1
+    
+  fallback_to: glm-4-air
+  priority: 9

@@ -1,7 +1,7 @@
 # PMOVES Tokenism Simulator
 # Hardened service following PMOVES.AI patterns
 
-# Base image pinned 2026-03-05 — refresh weekly via Dependabot
+# Needs apt-get for system libs — cannot use DHI; pinned digest
 FROM python:3.11-slim@sha256:d6e4d224f70f9e0172a06a3a2eba2f768eb146811a349278b38fff3a36463b47
 
 # Set metadata
@@ -12,6 +12,10 @@ LABEL version="1.0.0"
 # Set working directory
 WORKDIR /app
 
+# Ensure pmoves.* namespace packages import regardless of invocation cwd
+# (mirrors hi-rag-gateway-v2 pattern)
+ENV PYTHONPATH=/app
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -19,14 +23,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
-COPY requirements.txt .
+COPY services/tokenism-simulator/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY services/tokenism-simulator/. .
+
+# PMOVES namespace + shared tools (imported as pmoves.tools.*)
+RUN mkdir -p /app/pmoves \
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+COPY tools/__init__.py /app/pmoves/tools/__init__.py
+COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
+COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
+
+# services/common/env.py — CHIT passphrase + secret helpers.
+# Keep this partial package initializer empty: the repository initializer imports
+# modules that are intentionally not bundled in this narrow service image.
+RUN mkdir -p /app/services/common \
+    && printf '' > /app/services/common/__init__.py
+COPY services/common/env.py /app/services/common/env.py
 
 # Create non-root user for PMOVES hardening
 RUN useradd -m -u 1001 pmoves && \

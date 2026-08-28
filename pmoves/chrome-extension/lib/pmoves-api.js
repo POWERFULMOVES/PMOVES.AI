@@ -3,7 +3,7 @@
 
 import { DEFAULT_SERVICES, HEALTH_ENDPOINTS } from './constants.js';
 
-let _services = { ...DEFAULT_SERVICES };
+let _services = { ...DEFAULT_SERVICES, n8n: 'http://localhost:5678' };
 
 /** Update service URLs (call after loading config from storage). */
 export function setServiceUrls(urls) {
@@ -318,6 +318,18 @@ export const chit = {
 export function shapeSvgUrl(shapeId) {
   return `${_services.gateway}/viz/shape/${encodeURIComponent(shapeId)}.svg`;
 }
+
+// ─── Creator Pipeline (n8n Webhooks) ──────────────
+
+export const creator = {
+  async webhook(type, payload = {}) {
+    // Expected types: 'wan-to-cgp', 'qwen-to-cgp', 'vibevoice-to-cgp'
+    return request('n8n', `/webhook/${type}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+};
 
 // ─── Health Check All ────────────────────────────
 

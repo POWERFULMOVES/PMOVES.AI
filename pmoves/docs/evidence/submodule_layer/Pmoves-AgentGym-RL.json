@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:42 UTC",
+  "generated_at": "2026-04-05 15:06 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "Pmoves-AgentGym-RL",
       "url": "https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git",
       "status_prefix": " ",
-      "commit": "b30b84a37223b01a68f843be8a8b2af7f80fcb07",
+      "commit": "a159ee07013a2ad00f7c3fe3a5e78186d00de8b4",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

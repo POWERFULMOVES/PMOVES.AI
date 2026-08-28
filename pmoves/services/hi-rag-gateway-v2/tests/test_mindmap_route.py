@@ -8,6 +8,19 @@ from pathlib import Path
 import pytest
 
 
+def _purge_hirag_submodules():
+    prefixes = (
+        'config', 'models', 'embeddings', 'rerank', 'security', 'geometry_bus',
+        'clients', 'routes',
+        'hirag_gateway_v2_test', 'hirag_gateway_v2_disabled', 'hirag_gateway_v2_enabled',
+        'pmoves.services.hi_rag_gateway_v2',
+    )
+    to_remove = [k for k in list(sys.modules) if any(k == p or k.startswith(p + '.') for p in prefixes)]
+    for k in to_remove:
+        sys.modules.pop(k, None)
+
+
+
 def _install_stub(name: str, module: types.ModuleType, stash: dict[str, types.ModuleType | None]) -> None:
     stash[name] = sys.modules.get(name)
     sys.modules[name] = module
@@ -205,6 +218,98 @@ def _load_gateway_module(monkeypatch: pytest.MonkeyPatch):
     neo4j_mod.GraphDatabase = _GraphDatabase
     _install_stub("neo4j", neo4j_mod, stubs)
 
+    # fastapi stub with APIRouter for modular route imports
+    _purge_hirag_submodules()
+    fastapi_mod = types.ModuleType("fastapi")
+
+    class _HTTPException(Exception):
+        def __init__(self, status_code: int = 0, detail: str | None = None):
+            self.status_code = status_code
+            self.detail = detail or ""
+            super().__init__(self.detail)
+
+    class _Request:
+        def __init__(self, client=None, headers=None):
+            self.client = client
+            self.headers = headers or {}
+
+    class _Depends:
+        def __init__(self, dependency=None):
+            self.dependency = dependency
+
+    class _Body:
+        def __init__(self, default=..., **kwargs):
+            self.default = default
+
+    class _WebSocket:
+        def __init__(self):
+            self.client = type('NS', (), {'host': '127.0.0.1'})()
+        async def accept(self): return None
+        async def receive_json(self): return {}
+        async def send_json(self, msg): return None
+        async def close(self, *a, **kw): return None
+
+    class _WebSocketDisconnect(Exception):
+        pass
+
+    class _FastAPI:
+        def __init__(self, *a, **kw): pass
+        def on_event(self, _e):
+            def d(f): return f
+            return d
+        def get(self, *a, **kw):
+            def d(f): return f
+            return d
+        def post(self, *a, **kw):
+            def d(f): return f
+            return d
+        def websocket(self, *a, **kw):
+            def d(f): return f
+            return d
+        def mount(self, *a, **kw): return None
+        def include_router(self, *a, **kw): pass
+
+    class _APIRouter:
+        def __init__(self, *a, **kw): pass
+        def get(self, *a, **kw):
+            def d(f): return f
+            return d
+        def post(self, *a, **kw):
+            def d(f): return f
+            return d
+        def websocket(self, *a, **kw):
+            def d(f): return f
+            return d
+        def include_router(self, *a, **kw): pass
+
+    fastapi_mod.FastAPI = _FastAPI
+    fastapi_mod.APIRouter = _APIRouter
+    fastapi_mod.HTTPException = _HTTPException
+    fastapi_mod.Request = _Request
+    fastapi_mod.Depends = _Depends
+    fastapi_mod.Body = _Body
+    fastapi_mod.WebSocket = _WebSocket
+    fastapi_mod.WebSocketDisconnect = _WebSocketDisconnect
+    _install_stub("fastapi", fastapi_mod, stubs)
+
+    staticfiles_mod = types.ModuleType("fastapi.staticfiles")
+    staticfiles_mod.StaticFiles = type('StaticFiles', (), {'__init__': lambda *a, **kw: None})
+    _install_stub("fastapi.staticfiles", staticfiles_mod, stubs)
+
+    pydantic_mod = types.ModuleType("pydantic")
+
+    class _BaseModel:
+        def __init__(self, **data):
+            for k, v in data.items(): setattr(self, k, v)
+        def model_dump(self): return dict(self.__dict__)
+
+    pydantic_mod.BaseModel = _BaseModel
+    pydantic_mod.Field = lambda default=None, **kw: default
+    _install_stub("pydantic", pydantic_mod, stubs)
+
+    # Ensure NEO4J_URL empty so clients/neo4j.py sets driver=None
+    monkeypatch.setenv("NEO4J_URL", "")
+
     repo_root = Path(__file__).resolve().parents[4]
     module_path = repo_root / "pmoves/services/hi-rag-gateway-v2/app.py"
     module_name = "hirag_gateway_v2_test"
@@ -286,7 +391,9 @@ def test_mindmap_route_returns_items(gateway_module, monkeypatch):
             "media": {"uid": "m2", "modality": "text"},
         },
     ]
-    monkeypatch.setattr(gateway_module, "driver", _FakeDriver(records))
+    neo4j_mod = sys.modules.get('clients.neo4j')
+    if neo4j_mod is not None:
+        monkeypatch.setattr(neo4j_mod, 'driver', _FakeDriver(records))
     body = gateway_module.mindmap_route(
         constellation_id="demo",
         modalities="text,video",
@@ -307,7 +414,9 @@ def test_mindmap_route_returns_items(gateway_module, monkeypatch):
 
 
 def test_mindmap_route_handles_missing_driver(gateway_module, monkeypatch):
-    monkeypatch.setattr(gateway_module, "driver", None)
+    neo4j_mod = sys.modules.get('clients.neo4j')
+    if neo4j_mod is not None:
+        monkeypatch.setattr(neo4j_mod, 'driver', None)
     with pytest.raises(gateway_module.HTTPException) as exc:
         gateway_module.mindmap_route(constellation_id="demo")
     assert exc.value.status_code == 503

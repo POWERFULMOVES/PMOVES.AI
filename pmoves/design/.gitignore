@@ -1,0 +1,5 @@
+# DL-1: the generated token build is intentionally committed so consumers
+# (A2UI, Tailwind, preview.html) need no build step. Override the repo-root
+# `build/` ignore for this directory only.
+!build/
+!build/**

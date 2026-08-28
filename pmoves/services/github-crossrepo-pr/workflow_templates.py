@@ -4,7 +4,7 @@ Defines reusable templates for common pull request patterns across
 PMOVES.AI repositories.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from dataclasses import dataclass
 from enum import Enum
 

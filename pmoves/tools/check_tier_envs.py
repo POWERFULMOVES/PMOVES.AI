@@ -11,7 +11,6 @@ Checks:
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 
@@ -41,7 +40,7 @@ def check_existence() -> list[str]:
             continue
         if example.exists():
             print(f"WARN: {env_file} missing (example exists)")
-            print(f"   Fix: run 'make bootstrap-tier-envs' or 'make secrets-funnel'")
+            print("   Fix: run 'make bootstrap-tier-envs' or 'make secrets-funnel'")
         else:
             print(f"ERROR: {env_file} missing (no example found)")
             missing_hard.append(str(env_file))
@@ -64,18 +63,30 @@ def check_drift() -> list[str]:
             drift.append(f"DRIFT env.tier-{tier}: {len(missing)} keys in .example but not in runtime")
             for key in missing:
                 drift.append(f"  - {key}")
-            drift.append(f"  Fix: run 'make secrets-funnel' to regenerate from CHIT source,")
-            drift.append(f"       or add missing keys to secrets_manifest_v2.yaml")
+            drift.append("  Fix: run 'make secrets-funnel' to regenerate from CHIT source,")
+            drift.append("       or add missing keys to secrets_manifest_v2.yaml")
     return drift
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate tiered env files.")
+    # Drift ON by default. It shipped opt-in, the Makefile target passed no
+    # flags, and so the check that catches "declared in .example, absent from the
+    # runtime tier" never ran in the pipeline. That is how Z_AI_API_KEY reached
+    # env.tier-llm.example, two hardcoded TIER_MAPPINGs, and the funnel -- while
+    # being absent from the runtime tier on every node that reads it. SPARK hit
+    # the same shape with Hermes.
     parser.add_argument(
         "--drift",
         action="store_true",
-        default=False,
-        help="Also check for key drift between .example and runtime files",
+        default=True,
+        help="Check key drift between .example and runtime files (default: on)",
+    )
+    parser.add_argument(
+        "--no-drift",
+        dest="drift",
+        action="store_false",
+        help="Skip the drift check (existence only).",
     )
     parser.add_argument(
         "--strict",
@@ -87,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print("Checking tier environment files...")
     rc = 0
+    drift_found = False
 
     # 1. Existence check
     missing_hard = check_existence()
@@ -103,11 +115,22 @@ def main(argv: list[str] | None = None) -> int:
             print("")
             for line in drift:
                 print(line)
+            drift_found = True
             if args.strict:
                 rc = 1
 
     if rc == 0:
-        if args.drift:
+        if args.drift and drift_found:
+            # Previously this branch printed "no drift detected" unconditionally,
+            # immediately after listing the drift. A summary that contradicts the
+            # output above it is worse than no summary: the reader believes the
+            # last line.
+            print(
+                "DRIFT PRESENT (not failing: pass --strict to make this an error). "
+                "Keys above are declared in .example but absent from the runtime "
+                "tier, so every consumer reading that tier gets nothing."
+            )
+        elif args.drift:
             print("OK: All tier env files exist, no drift detected.")
         else:
             print("OK: All tier env files exist.")

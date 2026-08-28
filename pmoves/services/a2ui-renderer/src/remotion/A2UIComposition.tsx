@@ -6,8 +6,9 @@
  */
 
 import React from 'react';
-import { Composition, AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
+import { AbsoluteFill, Composition, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { DarkxsidePortal } from './DarkxsidePortal';
+import { resolveTextLayout, type TextLayoutConfig, type TextStyleConfig } from './pretextLayout';
 
 interface A2UISpec {
   version: string;
@@ -17,19 +18,46 @@ interface A2UISpec {
     id: string;
     label: string;
     duration_ms: number;
-    elements: Array<{
-      type: string;
-      content?: unknown;
-      enter_at_ms?: number;
-    }>;
+    elements: A2UIElement[];
   }>;
 }
 
+interface A2UIElement {
+  type: string;
+  id?: string;
+  content?: unknown;
+  symbol?: string;
+  enter_at_ms?: number;
+  style?: TextStyleConfig;
+  position?: {
+    x?: number | string;
+    y?: number | string;
+  };
+  size?: {
+    width?: number | string;
+    height?: number | string;
+  };
+  text_layout?: TextLayoutConfig;
+  [key: string]: unknown;
+}
+
+function resolveElementPosition(el: A2UIElement): { x?: number | string; y?: number | string } {
+  return {
+    x: el.position?.x ?? el.style?.x,
+    y: el.position?.y ?? el.style?.y,
+  };
+}
+
+function resolveCssTextAlign(value: unknown): React.CSSProperties['textAlign'] {
+  return value === 'center' || value === 'right' ? value : 'left';
+}
+
 const A2UIScene: React.FC<{
-  scene: A2UISpec['scenes'][0];
+  scene: A2UISpec['scenes'][number];
   fps: number;
 }> = ({ scene, fps }) => {
   const frame = useCurrentFrame();
+  const { width: canvasWidth } = useVideoConfig();
 
   return (
     <AbsoluteFill style={{
@@ -46,6 +74,8 @@ const A2UIScene: React.FC<{
           extrapolateLeft: 'clamp',
           extrapolateRight: 'clamp',
         });
+        const style = el.style || {};
+        const position = resolveElementPosition(el);
 
         if (el.type === 'bar_chart') {
           const content = el.content as { labels?: string[]; values?: number[] } | undefined;
@@ -81,16 +111,122 @@ const A2UIScene: React.FC<{
           );
         }
 
-        if (el.type === 'text') {
+        if (el.type === 'text' || el.type === 'heading') {
+          const textContent = String(el.content || '');
+          const layout = resolveTextLayout(
+            textContent,
+            style,
+            el.text_layout,
+            el.size,
+            canvasWidth,
+          );
+          const renderWidth = layout?.renderWidth ?? el.size?.width ?? style.width ?? style.maxWidth;
+          const fontSize = style.fontSize || (el.type === 'heading' ? 52 : 36);
+          const fontWeight = style.fontWeight || (el.type === 'heading' ? 700 : 400);
+          const containerStyle: React.CSSProperties = {
+            position: position.x !== undefined || position.y !== undefined ? 'absolute' : 'relative',
+            left: position.x,
+            top: position.y,
+            opacity,
+            color: style.color || '#fff',
+            fontSize,
+            fontFamily: style.fontFamily || 'inherit',
+            fontWeight,
+            fontStyle: style.fontStyle,
+            width: renderWidth,
+            maxWidth: layout?.maxWidth,
+            letterSpacing: layout?.letterSpacing ?? style.letterSpacing,
+            textAlign: layout?.textAlign ?? resolveCssTextAlign(style.textAlign),
+            lineHeight: layout?.lineHeight ?? style.lineHeight,
+            whiteSpace: layout ? 'normal' : 'pre-wrap',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0,
+          };
+
+          if (layout) {
+            return (
+              <div key={i} style={containerStyle}>
+                {layout.lines.map((line, lineIndex) => (
+                  <div
+                    key={`${i}-${lineIndex}`}
+                    style={{
+                      minHeight: layout.lineHeight,
+                      lineHeight: `${layout.lineHeight}px`,
+                    }}
+                  >
+                    {line}
+                  </div>
+                ))}
+                {layout.debugBoxes ? (
+                  <>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        border: '1px dashed rgba(251, 113, 133, 0.7)',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        bottom: -22,
+                        padding: '2px 6px',
+                        borderRadius: 6,
+                        background: 'rgba(26, 26, 46, 0.85)',
+                        color: '#FB7185',
+                        fontSize: 12,
+                        lineHeight: '16px',
+                        letterSpacing: 0,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {`PRETEXT ${layout.visibleLineCount}/${layout.lineCount} lines :: ${Math.round(layout.renderWidth)}px`}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            );
+          }
+
           return (
-            <div key={i} style={{ opacity, color: '#fff', fontSize: 36, padding: 40 }}>
-              {String(el.content || '')}
+            <div key={i} style={{
+              position: position.x !== undefined || position.y !== undefined ? 'absolute' : 'relative',
+              left: position.x,
+              top: position.y,
+              opacity,
+              color: style.color || '#fff',
+              fontSize,
+              fontFamily: style.fontFamily || 'inherit',
+              fontWeight,
+            }}>
+              {textContent}
+            </div>
+          );
+        }
+
+        if (el.type === 'glyph') {
+          return (
+            <div key={i} style={{
+              position: position.x !== undefined || position.y !== undefined ? 'absolute' : 'relative',
+              left: position.x, top: position.y,
+              opacity, color: style.color || '#00FFCC',
+              fontSize: style.fontSize || 24,
+              transform: 'translate(-50%, -50%)' // Center the glyph on the coordinate
+            }}>
+              {el.symbol || '●'}
             </div>
           );
         }
 
         if (el.type === 'glyph_pulse') {
           return <DarkxsidePortal key={i} opacity={opacity} />;
+        }
+
+        if (el.type === 'geometry_mesh') {
+           return <div key={i} style={{ opacity, position: 'absolute', bottom: 20, right: 20, color: '#666' }}>[Geometry Mesh: {String(el.edges_count || 'unknown')} edges]</div>;
         }
 
         return (
@@ -141,7 +277,28 @@ export const A2UIComposition: React.FC = () => {
               id: 'default',
               label: 'A2UI',
               duration_ms: 6000,
-              elements: [{ type: 'text', content: 'A2UI Renderer', enter_at_ms: 0 }],
+              elements: [{
+                type: 'text',
+                content: 'A2UI Renderer',
+                enter_at_ms: 0,
+                style: {
+                  x: 480,
+                  y: 420,
+                  fontSize: 42,
+                  fontFamily: 'Inter, sans-serif',
+                  color: '#ffffff',
+                },
+                size: {
+                  width: 420,
+                },
+                text_layout: {
+                  engine: 'pretext',
+                  maxWidth: 420,
+                  lineHeight: 50,
+                  shrinkWrap: true,
+                  debugBoxes: true,
+                },
+              }],
             }],
           },
         }}

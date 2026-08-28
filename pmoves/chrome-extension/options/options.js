@@ -12,7 +12,7 @@ const FEATURES = [
 ];
 
 const HEALTH_PATHS = {
-  tensorzero:      '/v1/models',
+  tensorzero:      '/health',
   gpuOrchestrator: '/api/gpu/status',
   hirag:           '/',
   pmovesYt:        '/healthz',

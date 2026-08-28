@@ -1,0 +1,260 @@
+# =============================================================================
+# KiloCode Provider Cascade Configuration
+# =============================================================================
+# KiloCode GLM provider activation cascade for PMOVES.AI.
+# Primary model: GLM-5-Turbo via Z.AI Coding Plan (agentic, tool-calling)
+# Fallback: GLM-5.1 (long-horizon autonomy)
+# Direct: kilo-auto/balanced via KiloCode API (plan-routed lane)
+#
+# Reference: pmoves/docs/AGENTS/KILOCODE_OPERATOR_HOME.md
+# Parity: pmoves/docs/AGENTS/KILOCODE_CLAUDE_PARITY_MAP.md
+# Integration: pmoves/config/provider_catalog.yaml (zai + kilocode providers)
+# =============================================================================
+
+schema_version: "1.1"
+provider: "kilocode"
+description: >
+  KiloCode GLM provider cascade for PMOVES.AI. Routes through Z.AI Coding Plan
+  (GLM-5-Turbo primary, GLM-5.1 fallback) with a direct KiloCode plan-routed
+  lane (kilo-auto/balanced) for orchestration overflow. Blueprint-first
+  implementation, VS Code native, MCP-integrated.
+
+# =============================================================================
+# Coding Plan Integration
+# =============================================================================
+coding_plan:
+  enabled: true
+  api_key_env: Z_AI_API_KEY
+  kilocode_api_key_env: KILOCODE_API_KEY
+  api_base: "https://api.z.ai/api/coding/paas/v4"
+  kilocode_api_base: "https://api.kilocode.ai/api/openrouter"
+  documentation: "https://docs.z.ai/devpack/using5.1"
+
+  # Plan characteristics
+  plan_tiers:
+    zai_coding: "Z.AI International Coding Plan — GLM-5-Turbo primary"
+    kilocode_plan: "KiloCode Plan — kilo-auto/* lane (provider-routed)"
+
+  # Fallback strategy
+  fallback:
+    on_primary_unavailable: switch_to_kilocode_plan
+    on_quota_exhausted: switch_to_kilocode_plan
+    fallback_provider: kilocode
+    fallback_model: kilo-auto/balanced
+    local_fallback_model: qwen3.5:9b
+
+# =============================================================================
+# Provider Cascade
+# =============================================================================
+cascade:
+  kilocode_glm:
+    # Models in cascade priority order (highest first)
+    models:
+      - glm-5-turbo       # Primary — agentic workflow, tool-calling (355B MoE, 32B active)
+      - glm-5.1           # Fallback — long-horizon autonomy (744B MoE, 40B active)
+      - glm-4-air         # Edge — cost-efficient (9B dense)
+      - kilo-auto/balanced # Overflow — KiloCode plan-routed lane
+
+    # Cascade priority for provider selection
+    cascade_priority: high
+
+    # Thinking mode: GLM-5-Turbo supports thinking but optimized for action
+    thinking_mode: adaptive  # enable for reasoning tasks, disable for fast execution
+
+    # Resonance domains — KiloCode's core competencies
+    resonance_domains:
+      - feature-impl
+      - mcp-integration
+      - vs-code
+      - agent-framework
+      - blueprint-first
+      - gpu-model-serving
+
+    # Provider endpoints
+    endpoints:
+      zai_coding:
+        api_base: "https://api.z.ai/api/coding/paas/v4"
+        api_key_env: "Z_AI_API_KEY"
+      kilocode_direct:
+        api_base: "https://api.kilocode.ai/api/openrouter"
+        api_key_env: "KILOCODE_API_KEY"
+
+    # Model-specific configurations
+    model_configs:
+      glm-5-turbo:
+        context_window: 128000
+        effective_context: 32000
+        max_output: 8192
+        supports_tools: true
+        supports_streaming: true
+        supports_vision: false
+        recommended_uses:
+          - agentic-workflow-execution
+          - multi-step-coding
+          - tool-chaining
+          - mcp-operations
+
+      glm-5.1:
+        context_window: 204800
+        effective_context: 128000
+        max_output: 131072
+        supports_tools: true
+        supports_streaming: true
+        supports_vision: false
+        recommended_uses:
+          - long-horizon-planning
+          - complex-architecture
+          - deep-code-analysis
+
+      glm-4-air:
+        context_window: 32000
+        effective_context: 32000
+        max_output: 4096
+        supports_tools: true
+        supports_streaming: true
+        supports_vision: false
+        recommended_uses:
+          - fast-completions
+          - simple-edits
+          - edge-deployments
+
+      kilo-auto/balanced:
+        context_window: variable  # Provider determines based on routing
+        supports_tools: true
+        supports_streaming: true
+        recommended_uses:
+          - orchestration-overflow
+          - plan-routed-inference
+
+# =============================================================================
+# TensorZero Routing
+# =============================================================================
+tensorzero:
+  gateway_url: "http://localhost:3030"
+  functions:
+    primary: coding_glm           # GLM-5-Turbo at weight 0.8
+    secondary: coding_kilocode    # KiloCode direct at weight 0.3
+    orchestration: pmoves_orchestrator_coding
+  variants:
+    cloud_zai_turbo:
+      model: chat_zai_glm5_turbo
+      weight: 0.8
+    cloud_kilocode:
+      model: chat_kilocode
+      weight: 0.3
+    cloud_zai_glm51:
+      model: chat_zai_glm51
+      weight: 0.2
+
+# =============================================================================
+# BoTZ Framework Role
+# =============================================================================
+botz:
+  role: implementation-completer
+  glyph: "▲"
+  color: "#059669"
+  description: >
+    KiloCode GLM picks up field briefs from Claude/Codex and executes with
+    blueprint-first GLM-5-Turbo. The Three-Body split: Claude = analysis +
+    field brief; KiloCode = implementation + commit; Memory = CHIT trail.
+
+  # Affinity: which agents KiloCode complements
+  affinity:
+    claude_opus:
+      role: receives_field_briefs_from
+      complement: "Claude analyzes, KiloCode implements"
+    codex:
+      role: parallel_implementation
+      complement: "Codex for terse gen, KiloCode for blueprint-first"
+    minimax:
+      role: tactical_partner
+      complement: "MiniMax for fast inference, KiloCode for structured impl"
+
+# =============================================================================
+# Mode Binding — maps KiloCode modes to models
+# =============================================================================
+mode_binding:
+  pmoves-glm:
+    model: glm-5-turbo
+    resonance: [feature-impl, mcp-integration]
+    priority: high
+
+  pmoves-code:
+    model: glm-5-turbo
+    resonance: [feature-impl, service-dev]
+    priority: high
+
+  pmoves-architect:
+    model: glm-5.1
+    resonance: [architecture, planning]
+    priority: medium
+
+  pmoves-debug:
+    model: glm-5-turbo
+    resonance: [diagnostics, troubleshooting]
+    priority: high
+
+  pmoves-review:
+    model: glm-5.1
+    resonance: [security-audit, code-review]
+    priority: medium
+
+  pmoves-cocreate:
+    model: glm-5-turbo
+    resonance: [cocreation, darkxside-witness]
+    priority: high
+
+# =============================================================================
+# Profile Hints — hardware to model preferences
+# =============================================================================
+profile_hints:
+  desktop-5090:
+    primary_model: glm-5-turbo
+    fallback_model: glm-5.1
+    gpu_acceleration: true
+    local_models: [qwen3.5:9b, qwen3-coder:30b]
+
+  laptop-4090:
+    primary_model: glm-5-turbo
+    fallback_model: glm-4-air
+    gpu_acceleration: true
+    local_models: [qwen3.5:9b]
+
+# =============================================================================
+# Activation Commands
+# =============================================================================
+activation_commands:
+  check_zai: 'curl -sf -H "Authorization: Bearer $Z_AI_API_KEY" https://api.z.ai/api/coding/paas/v4/models'
+  check_kilocode: 'curl -sf -H "Authorization: Bearer $KILOCODE_API_KEY" https://api.kilocode.ai/api/openrouter/models'
+  check_tensorzero: "curl -sf http://localhost:3030/health"
+  check_ollama: "curl -sf http://localhost:11434/api/tags"
+
+# =============================================================================
+# Parity Status
+# =============================================================================
+parity_status:
+  provider_catalog: true       # Registered in provider_catalog.yaml
+  tensorzero_model: true       # chat_kilocode + chat_zai_glm5_turbo registered
+  tensorzero_function: true    # coding_kilocode function
+  model_suit: true             # kilo-auto-balanced.yaml
+  agent_profile: true          # kilocode_glm.yaml
+  provider_cascade: true       # This file
+  agent_signature: true        # agent_signatures.yaml kilocode + alter
+  agent_registry: false        # Full entry pending (external_contributor only)
+  operator_home: false         # KILOCODE_OPERATOR_HOME.md pending
+  parity_map: false            # KILOCODE_CLAUDE_PARITY_MAP.md pending
+  kriss_kross_signed: false    # ACK::KILOCODE-GLM::KRISS-KROSS-ACCORD pending
+
+# =============================================================================
+# Model Suits Reference
+# =============================================================================
+model_suits:
+  - glm-5-turbo    # pmoves/configs/model-suits/glm-5-turbo.yaml
+  - glm-5.1        # pmoves/configs/model-suits/glm-5.1.yaml
+  - glm-4-air      # pmoves/configs/model-suits/glm-4-air.yaml
+  - kilo-auto-balanced  # pmoves/configs/model-suits/kilo-auto-balanced.yaml
+
+# =============================================================================
+# Agent Profile Reference
+# =============================================================================
+agent_profile: kilocode_glm  # pmoves/configs/agent-profiles/kilocode_glm.yaml

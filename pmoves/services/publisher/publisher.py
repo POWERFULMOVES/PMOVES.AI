@@ -42,6 +42,7 @@ try:  # pragma: no cover - optional shared helper
 except Exception:  # pragma: no cover - fallback used in tests without dependency
     import datetime
     import uuid
+    from datetime import timezone
 
     def envelope(
         topic: str,
@@ -77,7 +78,6 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev testi
 
 from services.common.telemetry import (
     PublisherMetrics,
-    PublishTelemetry,
     compute_publish_telemetry,
 )
 
@@ -123,6 +123,8 @@ MEDIA_LIBRARY_PATH = os.environ.get("MEDIA_LIBRARY_PATH", "/library/images")
 MEDIA_LIBRARY_PUBLIC_BASE_URL = os.environ.get("MEDIA_LIBRARY_PUBLIC_BASE_URL")
 DOWNLOAD_RETRIES = int(os.environ.get("PUBLISHER_DOWNLOAD_RETRIES", "3"))
 DOWNLOAD_RETRY_BACKOFF_SEC = float(os.environ.get("PUBLISHER_DOWNLOAD_RETRY_BACKOFF", "1.5"))
+STUDIO_BOARD_SYNC_RETRIES = max(1, int(os.environ.get("PUBLISHER_STUDIO_BOARD_SYNC_RETRIES", "3")))
+STUDIO_BOARD_SYNC_BACKOFF_SEC = max(0.0, float(os.environ.get("PUBLISHER_STUDIO_BOARD_SYNC_BACKOFF_SEC", "1.0")))
 METRICS_HOST = os.environ.get("PUBLISHER_METRICS_HOST", "0.0.0.0")
 METRICS_PORT = int(os.environ.get("PUBLISHER_METRICS_PORT", "9095"))
 METRICS_ROLLUP_TABLE = os.environ.get("PUBLISHER_METRICS_TABLE", "publisher_metrics_rollup")
@@ -176,6 +178,44 @@ def _coerce_float(value: Any) -> Optional[float]:
         return None
 
 
+def _coerce_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_studio_board_id(payload: Dict[str, Any]) -> Optional[int]:
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    candidates = [
+        payload.get("studio_board_id"),
+        payload.get("row_id"),
+        meta.get("studio_board_id") if isinstance(meta, dict) else None,
+        meta.get("row_id") if isinstance(meta, dict) else None,
+    ]
+    for candidate in candidates:
+        value = _coerce_int(candidate)
+        if value is not None:
+            return value
+    return None
+
+
+def _extract_publish_request_id(payload: Dict[str, Any], fallback: Optional[str]) -> Optional[str]:
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    candidates = [
+        payload.get("publish_request_id"),
+        meta.get("publish_request_id") if isinstance(meta, dict) else None,
+        fallback,
+    ]
+    for candidate in candidates:
+        text = _coerce_text(candidate)
+        if text:
+            return text
+    return None
+
+
 def _extract_reviewer(payload: Dict[str, Any]) -> Optional[str]:
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
     candidates = [
@@ -226,6 +266,7 @@ def _record_audit(
     correlation_id: Optional[str],
     artifact_uri: Optional[str],
     artifact_path: Optional[str],
+    studio_board_id: Optional[int],
     namespace: Optional[str],
     reviewer: Optional[str],
     reviewed_at: Optional[str],
@@ -252,6 +293,7 @@ def _record_audit(
         "correlation_id": correlation_id,
         "artifact_uri": artifact_uri,
         "artifact_path": artifact_path,
+        "studio_board_id": studio_board_id,
         "namespace": namespace,
         "reviewer": reviewer,
         "reviewed_at": reviewed_at,
@@ -365,6 +407,8 @@ def merge_metadata(
 def build_published_payload(
     *,
     artifact_uri: str,
+    studio_board_id: Optional[int],
+    publish_request_id: Optional[str],
     published_path: str,
     namespace: str,
     title: str,
@@ -387,6 +431,10 @@ def build_published_payload(
         "published_path": published_path,
         "namespace": namespace,
     }
+    if studio_board_id is not None:
+        payload["studio_board_id"] = studio_board_id
+    if publish_request_id:
+        payload["publish_request_id"] = publish_request_id
     if title:
         payload["title"] = title
     if description:
@@ -411,6 +459,8 @@ def build_published_payload(
             additional_meta=_combine_meta(
                 jellyfin_meta,
                 {
+                    "studio_board_id": studio_board_id,
+                    "publish_request_id": publish_request_id,
                     "thumbnail_url": thumbnail_url,
                     "duration": duration,
                     "jellyfin_public_url": jellyfin_public_url,
@@ -435,6 +485,8 @@ def build_failure_payload(
     retryable: bool,
     outcome: str,
     artifact_uri: Optional[str],
+    studio_board_id: Optional[int],
+    publish_request_id: Optional[str],
     namespace: Optional[str],
     publish_event_id: Optional[str],
     public_url: Optional[str],
@@ -451,6 +503,10 @@ def build_failure_payload(
     }
     if artifact_uri:
         payload["artifact_uri"] = artifact_uri
+    if studio_board_id is not None:
+        payload["studio_board_id"] = studio_board_id
+    if publish_request_id:
+        payload["publish_request_id"] = publish_request_id
     if namespace:
         payload["namespace"] = namespace
     if publish_event_id:
@@ -477,6 +533,8 @@ async def emit_publish_failure(
     retryable: bool,
     outcome: str = "fatal",
     artifact_uri: Optional[str],
+    studio_board_id: Optional[int],
+    publish_request_id: Optional[str],
     namespace: Optional[str],
     public_url: Optional[str],
     jellyfin_public_url: Optional[str],
@@ -492,6 +550,8 @@ async def emit_publish_failure(
         retryable=retryable,
         outcome=outcome,
         artifact_uri=artifact_uri,
+        studio_board_id=studio_board_id,
+        publish_request_id=publish_request_id,
         namespace=namespace,
         publish_event_id=publish_event_id,
         public_url=public_url,
@@ -520,6 +580,109 @@ async def emit_publish_failure(
                 "publish_event_id": publish_event_id,
             },
         )
+
+
+async def _sync_studio_board_publish_completion(
+    *,
+    studio_board_id: int,
+    publish_request_id: str,
+    published_event_id: Optional[str],
+    published_at: Optional[str],
+    completion_meta: Dict[str, Any],
+) -> Optional[str]:
+    attempts = max(1, STUDIO_BOARD_SYNC_RETRIES)
+    last_error: Optional[str] = None
+
+    if supabase_client is None:
+        return "studio_board completion sync unavailable"
+
+    for attempt in range(1, attempts + 1):
+        if not hasattr(supabase_client, "complete_studio_board_publish"):
+            last_error = "studio_board completion sync unavailable"
+            break
+        try:
+            synced = await asyncio.to_thread(
+                supabase_client.complete_studio_board_publish,
+                studio_board_id,
+                publish_request_id,
+                published_event_id,
+                published_at,
+                completion_meta,
+            )
+            if synced:
+                return None
+            last_error = "studio_board row was not updated after publish"
+            logger.warning(
+                "Studio board publish completion returned no update",
+                extra={
+                    "studio_board_id": studio_board_id,
+                    "publish_request_id": publish_request_id,
+                    "attempt": attempt,
+                },
+            )
+        except RuntimeError as exc:  # pragma: no cover - supabase config missing
+            last_error = _describe_exception(exc)
+            logger.warning(
+                "Supabase not configured for studio_board publish completion",
+                extra={
+                    "studio_board_id": studio_board_id,
+                    "publish_request_id": publish_request_id,
+                    "attempt": attempt,
+                },
+                exc_info=exc,
+            )
+        except Exception as exc:
+            last_error = _describe_exception(exc)
+            logger.warning(
+                "Failed to sync studio_board published state",
+                extra={
+                    "studio_board_id": studio_board_id,
+                    "publish_request_id": publish_request_id,
+                    "attempt": attempt,
+                },
+                exc_info=exc,
+            )
+        if attempt < attempts and STUDIO_BOARD_SYNC_BACKOFF_SEC > 0:
+            await asyncio.sleep(STUDIO_BOARD_SYNC_BACKOFF_SEC * attempt)
+
+    if hasattr(supabase_client, "reconcile_studio_board_publish_completion"):
+        try:
+            reconciled = await asyncio.to_thread(
+                supabase_client.reconcile_studio_board_publish_completion,
+                studio_board_id,
+                publish_request_id,
+                published_event_id,
+                published_at,
+                completion_meta,
+            )
+            if reconciled:
+                logger.warning(
+                    "Recovered studio_board publish completion via direct update fallback",
+                    extra={
+                        "studio_board_id": studio_board_id,
+                        "publish_request_id": publish_request_id,
+                    },
+                )
+                return None
+            last_error = last_error or "studio_board completion sync unavailable"
+        except RuntimeError as exc:  # pragma: no cover - supabase config missing
+            last_error = _describe_exception(exc)
+            logger.error(
+                "Supabase not configured for studio_board completion recovery",
+                extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
+                exc_info=exc,
+            )
+        except Exception as exc:
+            last_error = _describe_exception(exc)
+            logger.error(
+                "Failed to recover studio_board published state",
+                extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
+                exc_info=exc,
+            )
+
+    return last_error or "studio_board completion sync unavailable"
+
+
 async def download_with_retries(minio: MinioClientType, bucket: str, key: str, dest: str) -> None:
     last_error: Optional[Exception] = None
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
@@ -822,8 +985,14 @@ async def main() -> None:
         namespace = _coerce_text(payload.get("namespace")) or "pmoves-demo"
         reviewer = _extract_reviewer(payload)
         reviewed_at = _extract_reviewed_at(payload, approval_event_ts)
+        studio_board_id = _extract_studio_board_id(payload)
+        publish_request_id = _extract_publish_request_id(payload, publish_event_id)
 
         base_meta: Dict[str, Any] = {}
+        if studio_board_id is not None:
+            base_meta["studio_board_id"] = studio_board_id
+        if publish_request_id:
+            base_meta["publish_request_id"] = publish_request_id
         if isinstance(payload.get("meta"), dict):
             base_meta["source_meta"] = payload["meta"]
 
@@ -850,6 +1019,8 @@ async def main() -> None:
                 retryable=retryable,
                 outcome=outcome,
                 artifact_uri=artifact_uri,
+                studio_board_id=studio_board_id,
+                publish_request_id=publish_request_id,
                 namespace=namespace,
                 public_url=public_url_value,
                 jellyfin_public_url=jellyfin_public_url_value,
@@ -863,6 +1034,7 @@ async def main() -> None:
                 correlation_id=correlation_id,
                 artifact_uri=artifact_uri,
                 artifact_path=artifact_path_value,
+                studio_board_id=studio_board_id,
                 namespace=namespace,
                 reviewer=reviewer,
                 reviewed_at=reviewed_at,
@@ -870,6 +1042,95 @@ async def main() -> None:
                 failure_reason=reason,
                 meta=combined_meta,
             )
+            if (
+                outcome != "partial"
+                and studio_board_id is not None
+                and publish_request_id
+                and supabase_client is not None
+                and hasattr(supabase_client, "fail_studio_board_publish")
+            ):
+                try:
+                    await asyncio.to_thread(
+                        supabase_client.fail_studio_board_publish,
+                        studio_board_id,
+                        publish_request_id,
+                        stage,
+                        reason,
+                        _utc_now_iso(),
+                        combined_meta,
+                    )
+                except RuntimeError as exc:  # pragma: no cover - supabase config missing
+                    logger.debug(
+                        "Supabase not configured; skipping studio_board failure sync",
+                        extra={"studio_board_id": studio_board_id, "stage": stage},
+                        exc_info=exc,
+                    )
+                except Exception as exc:  # pragma: no cover - network/driver errors
+                    logger.warning(
+                        "Failed to sync studio_board failure state",
+                        extra={"studio_board_id": studio_board_id, "stage": stage},
+                        exc_info=exc,
+                    )
+
+        if studio_board_id is not None and publish_request_id:
+            if supabase_client is None or not hasattr(supabase_client, "claim_studio_board_publish"):
+                logger.error(
+                    "Studio board publish sync unavailable",
+                    extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
+                )
+                await record_failure(
+                    stage="sync_claim",
+                    reason="studio_board publish sync unavailable",
+                    retryable=True,
+                    meta_base=base_meta,
+                    details={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
+                )
+                return
+            try:
+                claimed = await asyncio.to_thread(
+                    supabase_client.claim_studio_board_publish,
+                    studio_board_id,
+                    publish_request_id,
+                    approval_event_ts,
+                )
+            except RuntimeError as exc:  # pragma: no cover - supabase config missing
+                logger.error(
+                    "Supabase not configured for studio_board claim",
+                    extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
+                    exc_info=exc,
+                )
+                await record_failure(
+                    stage="sync_claim",
+                    reason=_describe_exception(exc),
+                    retryable=True,
+                    meta_base=base_meta,
+                    details={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id, "exception": exc.__class__.__name__},
+                )
+                return
+            except Exception as exc:
+                logger.error(
+                    "Failed to claim studio_board row for publish",
+                    extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
+                    exc_info=exc,
+                )
+                await record_failure(
+                    stage="sync_claim",
+                    reason=_describe_exception(exc),
+                    retryable=True,
+                    meta_base=base_meta,
+                    details={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id, "exception": exc.__class__.__name__},
+                )
+                return
+            if not claimed:
+                logger.info(
+                    "Skipping duplicate or already-complete publish event",
+                    extra={
+                        "studio_board_id": studio_board_id,
+                        "publish_request_id": publish_request_id,
+                        "artifact_uri": artifact_uri,
+                    },
+                )
+                return
 
         if not artifact_uri:
             logger.error(
@@ -1007,11 +1268,14 @@ async def main() -> None:
 
         published_payload: Dict[str, Any] = {}
         evt: Optional[Dict[str, Any]] = None
+        studio_board_sync_error: Optional[str] = None
         failure_stage = "build_payload"
 
         try:
             published_payload = build_published_payload(
                 artifact_uri=artifact_uri,
+                studio_board_id=studio_board_id,
+                publish_request_id=publish_request_id,
                 published_path=out_path,
                 namespace=namespace,
                 title=title,
@@ -1062,6 +1326,24 @@ async def main() -> None:
                 source="publisher",
             )
             await nc.publish("content.published.v1", json.dumps(evt).encode())
+
+            if studio_board_id is not None and publish_request_id:
+                completion_meta = {
+                    "public_url": published_payload.get("public_url"),
+                    "jellyfin_public_url": published_payload.get("jellyfin_public_url"),
+                    "jellyfin_item_id": published_payload.get("jellyfin_item_id"),
+                    "published_path": published_payload.get("published_path"),
+                    "thumbnail_url": published_payload.get("thumbnail_url"),
+                    "duration": published_payload.get("duration"),
+                    "publish_request_id": publish_request_id,
+                }
+                studio_board_sync_error = await _sync_studio_board_publish_completion(
+                    studio_board_id=studio_board_id,
+                    publish_request_id=publish_request_id,
+                    published_event_id=_coerce_text(evt.get("id")),
+                    published_at=_coerce_text(evt.get("ts")),
+                    completion_meta=completion_meta,
+                )
         except Exception as exc:
             logger.exception(
                 "Failed to finalize publish pipeline",
@@ -1098,6 +1380,12 @@ async def main() -> None:
         success_context: Dict[str, Any] = {"stage": "published"}
         if jellyfin_item_id:
             success_context["jellyfin_item_id"] = jellyfin_item_id
+        if studio_board_id is not None:
+            success_context["studio_board_id"] = studio_board_id
+        if publish_request_id:
+            success_context["publish_request_id"] = publish_request_id
+        if studio_board_sync_error:
+            success_context["studio_board_sync_error"] = studio_board_sync_error
         success_context.update(jellyfin_meta)
         success_meta = _combine_meta(
             path_meta_with_url,
@@ -1113,6 +1401,7 @@ async def main() -> None:
             correlation_id=correlation_id,
             artifact_uri=artifact_uri,
             artifact_path=out_path,
+            studio_board_id=studio_board_id,
             namespace=namespace,
             reviewer=reviewer,
             reviewed_at=reviewed_at,

@@ -34,12 +34,20 @@ RUN python -m pip install --no-cache-dir -e .
 COPY services/vibevoice-realtime/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Security: Run as non-root user
-RUN groupadd -r pmoves --gid=65532 && \
+# Security: Run as non-root user.
+# Pre-create /models and hand it to pmoves so the entrypoint's HF snapshot
+# download (mkdir /models/<model>) works — a fresh named volume mounted at
+# /models inherits these image perms on first mount.
+RUN mkdir -p /models && \
+    groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
-    chown -R pmoves:pmoves /app /app/vibevoice
+    chown -R pmoves:pmoves /app /app/vibevoice /models
 
 USER pmoves
 
 EXPOSE 3000
+
+# Health check (GPU service — extended start-period)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:3000/healthz || exit 1
 ENTRYPOINT ["/entrypoint.sh"]

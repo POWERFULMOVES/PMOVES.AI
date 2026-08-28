@@ -1,0 +1,117 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PMOVES: fleet-status",
+      "type": "shell",
+      "command": "make -C pmoves fleet-status",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: up-dev",
+      "type": "shell",
+      "command": "make -C pmoves up-dev",
+      "group": "build",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: down-dev",
+      "type": "shell",
+      "command": "make -C pmoves down-dev",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: ps-dev",
+      "type": "shell",
+      "command": "make -C pmoves ps-dev",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: logs-dev",
+      "type": "shell",
+      "command": "make -C pmoves logs-dev",
+      "group": "test",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: worktree-sitrep",
+      "type": "shell",
+      "command": "make -C pmoves worktree-sitrep-strict",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: docs-reconcile-check",
+      "type": "shell",
+      "command": "make -C pmoves docs-reconcile-check",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: verify-dev",
+      "type": "shell",
+      "command": "make -C pmoves verify-dev",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: env-status",
+      "type": "shell",
+      "command": "make -C pmoves env-status",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: secrets-status",
+      "type": "shell",
+      "command": "make -C pmoves secrets-status",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PMOVES: agentgym-run (BabyAI)",
+      "type": "shell",
+      "command": "make -C pmoves agentgym-run ENV=BabyAI EPISODES=5",
+      "group": "test",
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "git: worktree list",
+      "type": "shell",
+      "command": "git worktree list",
+      "group": "build",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "NATS: health check",
+      "type": "shell",
+      "command": "curl -sf http://localhost:8222/healthz && echo 'NATS: OK' || echo 'NATS: DOWN'",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "4090: sitrep",
+      "type": "shell",
+      "command": "git log --oneline -3 && git worktree list && curl -sf http://localhost:8222/healthz && echo 'NATS OK' || echo 'NATS DOWN'",
+      "group": "test",
+      "presentation": { "panel": "shared", "reveal": "always" },
+      "problemMatcher": []
+    }
+  ]
+}

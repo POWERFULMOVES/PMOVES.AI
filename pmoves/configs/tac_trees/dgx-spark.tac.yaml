@@ -1,0 +1,278 @@
+# TAC Tree: DGX Spark (pmoves-dgx-spark)
+# Per-node capability tree for the DGX Spark GPU inference node.
+# GB10 Grace-Blackwell 128GB unified memory — fleet inference backbone.
+#
+# Key paths:
+#   /opt/ollama/                                   (Ollama inference engine)
+#   /opt/nim/                                      (NVIDIA NIM inference API)
+# Cross-refs:
+#   pmoves/configs/tac_trees/networking-defense-in-depth.tac.yaml
+#   pmoves/configs/pinokio-network-inventory.yaml
+#   pmoves/mk/nvidia-dgx-spark.mk
+#   pmoves/prompts/spark_claw.yaml                  (agent profile)
+
+name: "DGX Spark pmoves-dgx-spark"
+version: "1.0.0"
+description: >
+  Per-node TAC tree for the DGX Spark (pmoves-dgx-spark) GPU inference node.
+  GB10 Grace-Blackwell 128GB unified memory. Fleet inference backbone.
+  Hostname: pmoves-dgx-spark | Tailscale: pmoves-dgx-spark | Role: GPU Inference
+
+root:
+  id: dgx-spark
+  task: "DGX Spark node health and capability review"
+  context: "/opt/ollama /opt/nim — GB10 Grace-Blackwell 128GB"
+  agent_hint: spark_claw
+  children:
+
+    # =========================================================================
+    # Phase 1: Service Health
+    # =========================================================================
+    - id: dgx-spark.services
+      task: "DGX Spark service health verification"
+      context: "Ollama + NIM inference endpoints"
+      agent_hint: spark_claw
+      children:
+        - id: dgx-spark.services.ollama
+          task: "Ollama healthy at :11434"
+          action:
+            type: http
+            url: "http://localhost:11434/api/tags"
+            expect: "200 OK with model list including gemma4:31b"
+          context: >
+            Primary inference engine. CUDA-accelerated on GB10.
+            Default model: gemma4:31b. Also hosts nemotron-super-49b,
+            qwen3-coder-480b when loaded.
+          agent_hint: spark_claw
+
+        - id: dgx-spark.services.nim
+          task: "NIM API healthy at :8200"
+          action:
+            type: http
+            url: "http://localhost:8200/v1/models"
+            expect: "200 OK with NIM model list (optional service)"
+          context: >
+            NVIDIA NIM inference API. Optional — may not be running
+            if Ollama handles all inference. Provides OpenAI-compatible
+            /v1/chat/completions endpoint.
+          agent_hint: spark_claw
+
+    # =========================================================================
+    # Phase 2: Model Registry
+    # =========================================================================
+    - id: dgx-spark.models
+      task: "DGX Spark model registry"
+      context: "Available models and VRAM allocation per model"
+      agent_hint: spark_claw
+      children:
+        - id: dgx-spark.models.default
+          task: "gemma4:31b loaded as default"
+          action:
+            type: http
+            url: "http://localhost:11434/api/show"
+            expect: "200 OK — gemma4:31b model details"
+          context: >
+            Default inference model. ~20GB VRAM at fp16.
+            Used by PMOVES MAX preset via ollama_spark provider.
+            Cross-ref: .a0proj/plugins/_model_config/config.yaml
+          agent_hint: spark_claw
+
+        - id: dgx-spark.models.nemotron
+          task: "nemotron-super-49b available"
+          action:
+            type: manual
+            instruction: "Verify nemotron-super-49b is pulled and loadable"
+            expect: "Model file exists in Ollama registry, loadable within 128GB"
+          context: >
+            NVIDIA Nemotron Super 49B. ~100GB at fp16 — fits in 128GB
+            unified memory. Requires explicit pull: ollama pull nemotron-super-49b
+          agent_hint: spark_claw
+
+        - id: dgx-spark.models.qwen3
+          task: "qwen3-coder-480b available"
+          action:
+            type: manual
+            instruction: "Verify qwen3-coder-480b is pulled and loadable"
+            expect: "Model file exists in Ollama registry, loadable within 128GB"
+          context: >
+            Qwen3 Coder 480B. Quantized variants fit in 128GB.
+            Requires explicit pull: ollama pull qwen3-coder-480b
+          agent_hint: spark_claw
+          status: future
+
+    # =========================================================================
+    # Phase 3: NATS Mesh Integration
+    # =========================================================================
+    - id: dgx-spark.mesh
+      task: "DGX Spark NATS mesh integration"
+      context: "GPU mesh command/status subjects via NATS"
+      agent_hint: spark_claw
+      children:
+        - id: dgx-spark.mesh.subjects
+          task: "NATS subjects registered for GPU mesh"
+          action:
+            type: manual
+            instruction: >
+              Verify GPU mesh agent subscribes/publishes on:
+              mesh.gpu.command.v1 (receive commands)
+              mesh.gpu.status.v1 (publish heartbeat)
+              mesh.gpu.model.loaded.v1 (publish on model load)
+              mesh.gpu.model.unloaded.v1 (publish on model unload)
+              mesh.gpu.command.result.v1 (publish command results)
+            expect: "All 5 subjects active in NATS monitoring"
+          context: >
+            GPU mesh uses dedicated subject namespace mesh.gpu.*
+            Commands: load model, unload model, health check, benchmark.
+            Status: 10s heartbeat interval on mesh.gpu.status.v1.
+          agent_hint: spark_claw
+          status: future
+
+        - id: dgx-spark.mesh.heartbeat
+          task: "Health heartbeat every 10s on mesh.gpu.status.v1"
+          action:
+            type: manual
+            instruction: >
+              Subscribe to mesh.gpu.status.v1 and verify messages arrive
+              every ~10s with payload: {node, gpu, vram_total, vram_used,
+              models_loaded, uptime, timestamp}
+            expect: "Steady 10s heartbeat with GPU utilization data"
+          context: >
+            Heartbeat enables fleet-wide GPU health monitoring.
+            Consumed by Grafana dashboards and the PMOVES health check service.
+          agent_hint: spark_claw
+          status: future
+
+        - id: dgx-spark.mesh.command
+          task: "mesh.gpu.command.v1 command handling"
+          action:
+            type: manual
+            instruction: >
+              Publish test command to mesh.gpu.command.v1:
+              {action: "health", target: "pmoves-dgx-spark"}
+              Verify result appears on mesh.gpu.command.result.v1
+            expect: "Command acknowledged and result published"
+          context: >
+            Command protocol supports: load, unload, health, benchmark.
+            Results always published to mesh.gpu.command.result.v1
+            with correlation ID matching the command.
+          agent_hint: spark_claw
+          status: future
+
+    # =========================================================================
+    # Phase 4: Network Connectivity
+    # =========================================================================
+    - id: dgx-spark.network
+      task: "DGX Spark network connectivity"
+      context: "Tailscale mesh, ACL compliance, cross-node access"
+      agent_hint: spark_claw
+      children:
+        - id: dgx-spark.network.tailscale
+          task: "Tailscale identity and tag assignment"
+          action:
+            type: manual
+            instruction: >
+              Verify pmoves-dgx-spark appears in Tailscale admin console
+              with tag:gpu assigned. Check IP and MagicDNS name.
+            expect: "tag:gpu assigned, pmoves-dgx-spark.ts resolves"
+          context: >
+            DGX Spark needs Tailscale identity for ACL enforcement.
+            Tag:gpu enables ACL rules for inference port access.
+            Cross-ref: pmoves/configs/tailscale-acl-policy.json
+          agent_hint: spark_claw
+          status: future
+
+        - id: dgx-spark.network.acl-inference
+          task: "ACL allows tag:pmoves and tag:lab to reach :11434 and :8200"
+          action:
+            type: manual
+            instruction: >
+              From a tag:pmoves node (e.g., pmoves-z890), test:
+              curl -s http://pmoves-dgx-spark.ts:11434/api/tags
+              From a tag:lab node, test the same.
+              Verify both get 200 OK.
+            expect: "Both tag:pmoves and tag:lab can reach inference ports"
+          context: >
+            ACL rules added: tag:pmoves→tag:gpu:11434,8200 and
+            tag:lab→tag:gpu:11434,8200. These enable fleet-wide
+            inference access to DGX Spark.
+          agent_hint: spark_claw
+          status: future
+
+        - id: dgx-spark.network.acl-mesh
+          task: "ACL allows tag:gpu to reach tag:pmoves:* (mesh services)"
+          action:
+            type: manual
+            instruction: >
+              From DGX Spark, test connectivity to mesh services:
+              curl -s http://pmoves-z890.ts:4222 (NATS)
+              Verify connection succeeds.
+            expect: "DGX Spark can reach NATS and other mesh services"
+          context: >
+            ACL rule added: tag:gpu→tag:pmoves:* enables DGX Spark
+            to connect to NATS, Supabase, and other PMOVES mesh services.
+          agent_hint: spark_claw
+          status: future
+
+    # =========================================================================
+    # Phase 5: GPU Utilization
+    # =========================================================================
+    - id: dgx-spark.gpu
+      task: "GB10 Grace-Blackwell GPU utilization"
+      context: "128GB unified memory — VRAM budgeting across models"
+      agent_hint: spark_claw
+      children:
+        - id: dgx-spark.gpu.baseline
+          task: "Baseline GPU memory with no models loaded"
+          action:
+            type: shell
+            command: "nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader"
+            expect: "Baseline < 4GB (driver + system overhead)"
+          context: "GB10 = 131072 MB total unified memory. Baseline is minimal."
+          agent_hint: spark_claw
+
+        - id: dgx-spark.gpu.gemma4-vram
+          task: "gemma4:31b VRAM usage measured"
+          action:
+            type: manual
+            instruction: >
+              Load gemma4:31b, check nvidia-smi, record VRAM usage.
+              Unload and verify memory freed.
+            expect: "~20GB at fp16, memory freed on unload"
+          context: >
+            Default model. VRAM measurement needed for concurrent
+            model loading budget calculations.
+          agent_hint: spark_claw
+          status: future
+
+    # =========================================================================
+    # Phase 6: Provider Integration
+    # =========================================================================
+    - id: dgx-spark.provider
+      task: "Ollama provider integration for Agent Zero"
+      context: "ollama_spark provider routes to DGX Spark Ollama"
+      agent_hint: spark_claw
+      children:
+        - id: dgx-spark.provider.config
+          task: "ollama_spark provider configured in model_providers.yaml"
+          action:
+            type: file_exists
+            target: "/a0/conf/model_providers.yaml"
+            expect: "ollama_spark entry pointing to http://pmoves-gb10-spark:11434"
+          context: >
+            Provider added to /a0/conf/model_providers.yaml.
+            PMOVES Spark preset uses this provider.
+            Cross-ref: PMOVES_AI_CONFIG.promptinclude.md
+          agent_hint: spark_claw
+
+        - id: dgx-spark.provider.preset
+          task: "PMOVES Spark preset available"
+          action:
+            type: manual
+            instruction: >
+              Verify PMOVES Spark preset exists in presets.yaml
+              and routes chat+utility to ollama_spark/gemma4:31b
+            expect: "Preset selectable in model switcher UI"
+          context: >
+            PMOVES Spark is Tier 2 in model cascade.
+            Used when Z.AI/Groq APIs are down but DGX Spark is online.
+          agent_hint: spark_claw

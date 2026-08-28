@@ -1,4 +1,4 @@
-# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
+# Needs apt-get for system libs (curl) — cannot use DHI; pinned digest
 FROM python:3.11-slim@sha256:d6e4d224f70f9e0172a06a3a2eba2f768eb146811a349278b38fff3a36463b47
 
 LABEL org.opencontainers.image.source="https://github.com/POWERFULMOVES/PMOVES.AI"
@@ -21,6 +21,16 @@ RUN useradd --create-home --shell /bin/bash pmoves
 
 # Copy shared common module (evo-controller imports services.common.env)
 COPY services/common/ services/common/
+
+# Canonical CHIT verifier chain: services.common.geometry_decoder imports
+# pmoves.tools.chit_security and pmoves.services.common.geometry_models, so
+# the pmoves package namespace must exist in the image (review #2082 P1 —
+# without it the import fails and signing degrades to dev mode).
+COPY __init__.py pmoves/__init__.py
+COPY tools/__init__.py pmoves/tools/__init__.py
+COPY tools/chit_common.py tools/chit_security.py pmoves/tools/
+COPY services/__init__.py pmoves/services/__init__.py
+COPY services/common/ pmoves/services/common/
 
 # Copy source
 COPY services/evo-controller/ .

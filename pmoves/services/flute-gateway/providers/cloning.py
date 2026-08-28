@@ -9,7 +9,6 @@ This module handles:
 The actual RVC training is performed by the Ultimate-TTS GPU service.
 """
 
-import asyncio
 import json
 import logging
 from datetime import datetime, timezone

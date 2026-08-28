@@ -1,0 +1,211 @@
+name: build-nats-workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pmoves/services/shape-attestation-bridge/**
+      - pmoves/services/decoded-consumer/**
+      - pmoves/services/bpm-encoder-worker/**
+      - .github/workflows/build-nats-workers.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  NAMESPACE: powerfulmoves
+  IMAGE_TAG: pmoves-latest
+
+jobs:
+  detect-changed:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+          allowed-endpoints:
+            github.com:443
+            api.github.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the matrix step diffs the ENTIRE pushed range
+          # (github.event.before..github.sha), not just the tip. checkout
+          # defaults to fetch-depth 1, so HEAD~1 did not even exist, the diff
+          # failed, its return code was never checked, and `changed` came back
+          # empty — NO service was ever detected as changed. fetch-depth: 2
+          # would fix that single-commit case but still miss every service
+          # touched by an earlier commit of a multi-commit push (Codex P1 on
+          # #2670: a rebase-merged PR is exactly that shape).
+          fetch-depth: 0
+
+      - name: Build service matrix
+        id: set-matrix
+        env:
+          # `github.event.before` is the tip BEFORE this push — the start of the
+          # pushed range. Passed as env rather than interpolated into the heredoc
+          # so a crafted ref cannot be injected into the script body.
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+
+          services = ["shape-attestation-bridge", "decoded-consumer", "bpm-encoder-worker"]
+          include = []
+
+          # On workflow_dispatch, build all services that have a Dockerfile
+          if "${{ github.event_name }}" == "workflow_dispatch":
+              for svc in services:
+                  import pathlib
+                  dockerfile = pathlib.Path(f"pmoves/services/{svc}/Dockerfile")
+                  if dockerfile.exists():
+                      include.append({"service": svc})
+          else:
+              # On push, detect which services changed across the WHOLE pushed
+              # range. `git diff HEAD~1 HEAD` only ever describes the tip
+              # commit, so a service touched by an earlier commit in the same
+              # push kept a stale image.
+              import subprocess
+              before = os.environ.get("EVENT_BEFORE", "")
+              head = os.environ.get("GITHUB_SHA", "HEAD")
+
+              def _resolvable(ref):
+                  if not ref or set(ref) <= {"0"}:
+                      return False  # all-zero: branch creation / initial push
+                  return subprocess.run(
+                      ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
+                      capture_output=True,
+                  ).returncode == 0
+
+              if _resolvable(before):
+                  rng = [f"{before}..{head}"]
+              else:
+                  # Unknown range (initial push, or `before` gone after a
+                  # force-push). Building nothing would silently ship stale
+                  # images, so fall back to the workflow_dispatch behaviour and
+                  # consider every service. Stated in the log, not implied.
+                  print("No resolvable push range; considering all services")
+                  rng = None
+
+              if rng is None:
+                  changed = None
+              else:
+                  result = subprocess.run(
+                      ["git", "diff", "--name-only", *rng],
+                      capture_output=True, text=True,
+                  )
+                  if result.returncode != 0:
+                      # A swallowed failure here is what produced the permanent
+                      # __none__ placeholder. Fail loudly instead.
+                      raise SystemExit(
+                          f"git diff {rng[0]} failed: {result.stderr.strip()}"
+                      )
+                  changed = set(result.stdout.strip().split("\n"))
+              for svc in services:
+                  import pathlib
+                  dockerfile = pathlib.Path(f"pmoves/services/{svc}/Dockerfile")
+                  svc_prefix = f"pmoves/services/{svc}/"
+                  if dockerfile.exists() and (
+                      changed is None or any(f.startswith(svc_prefix) for f in changed)
+                  ):
+                      include.append({"service": svc})
+
+          matrix = {"include": include} if include else {"include": [{"service": "__none__"}]}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"matrix={json.dumps(matrix)}\n")
+          print(f"Matrix: {json.dumps(matrix)}")
+          EOF
+
+  build:
+    needs: detect-changed
+    if: needs.detect-changed.outputs.matrix != ''
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJson(needs.detect-changed.outputs.matrix) }}
+    steps:
+      - name: Skip placeholder
+        if: matrix.service == '__none__'
+        run: echo "No changed services to build" && exit 0
+
+      - name: Harden Runner
+        if: matrix.service != '__none__'
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+          allowed-endpoints:
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            archive.ubuntu.com:80
+            security.ubuntu.com:80
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: matrix.service != '__none__'
+
+      - name: Set up QEMU (multi-arch)
+        if: matrix.service != '__none__'
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+
+      - name: Set up Docker Buildx
+        if: matrix.service != '__none__'
+        uses: ./.github/actions/pmoves-buildx
+
+      - name: Generate GitHub App token
+        if: matrix.service != '__none__'
+        id: app_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          permission-packages: write
+
+      - name: Login to GHCR
+        if: matrix.service != '__none__'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ steps.app_token.outputs.token && 'x-access-token' || github.actor }}
+          password: ${{ steps.app_token.outputs.token || secrets.GHCR_TOKEN }}
+
+      - name: Build & push multi-arch image
+        if: matrix.service != '__none__'
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: pmoves/services/${{ matrix.service }}
+          file: pmoves/services/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=pmoves-${{ matrix.service }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}:buildcache,mode=max
+
+      - name: Generate artifact attestation
+        if: matrix.service != '__none__'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/pmoves-${{ matrix.service }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+        continue-on-error: true

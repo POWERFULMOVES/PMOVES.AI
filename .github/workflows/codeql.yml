@@ -62,14 +62,16 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # PMOVES.AI: Use self-hosted Linux for protected branch/scheduled scans.
-    # For PRs, fall back to GitHub-hosted Linux so scans do not deadlock when
-    # self-hosted Linux runners are offline.
+    # PMOVES.AI: All CodeQL lanes run on GitHub-hosted ubuntu-latest.
+    # Previously scheduled + push-to-main runs used self-hosted (pmoves-kvm2-runner),
+    # but the runner killed the Python query-evaluation lane mid-run consistently
+    # (build/extraction succeed, runner terminates ~3min into query evaluation).
+    # ubuntu-latest validated working in PR #1581 — all 3 language lanes succeed
+    # in ~5-10min total per run.
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
-    # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
@@ -107,23 +109,27 @@ jobs:
         # your codebase is analyzed, see https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/codeql-code-scanning-for-compiled-languages
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     # Add any setup steps before running the `github/codeql-action/init` action.
     # This includes steps like installing compilers or runtimes (`actions/setup-node`
     # or others). This is typically only required for manual builds.
     - name: Setup Node.js
       if: matrix.language == 'javascript-typescript'
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
       with:
-        node-version: '20'
+        node-version: '24'
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
+      uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
+        # Analysis-scope exclusions (vendored JS, venvs, node_modules, ...).
+        # The negated patterns under `on.paths` above are only a TRIGGER filter —
+        # they do not narrow what CodeQL scans once the workflow starts.
+        config-file: ./.github/codeql-config.yml
         # If you wish to specify custom queries, you can do so here or in a config file.
         # By default, queries listed here will override any specified in a config file.
         # Prefix the list here with "+" to use these queries and those in the config file.
@@ -149,6 +155,6 @@ jobs:
         exit 1
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
+      uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
       with:
         category: "/language:${{matrix.language}}"

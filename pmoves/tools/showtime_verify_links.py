@@ -16,6 +16,9 @@ from urllib.request import urlopen
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_PREFIX = os.environ.get("COMPOSE_PROJECT_NAME", "pmoves-")
+if not PROJECT_PREFIX.endswith("-"):
+    PROJECT_PREFIX += "-"
 DEFAULT_JSON = REPO_ROOT / "pmoves" / "docs" / "evidence" / "showtime_links.json"
 DEFAULT_MD = REPO_ROOT / "pmoves" / "docs" / "SHOWTIME_VERIFY_LINKS.md"
 DEFAULT_HTML = REPO_ROOT / "pmoves" / "docs" / "SHOWTIME_VERIFY_LINKS.html"
@@ -33,9 +36,10 @@ except ImportError as exc:  # pragma: no cover - startup guard
 DEFAULT_REQUIRED = {
     "Supabase REST",
     "Archon API",
+    "Archon UI",
     "Agent Zero API",
+    "Agent Zero A2A",
     "Grafana",
-    "Console UI",
 }
 
 
@@ -75,38 +79,50 @@ def check(url: str, timeout: float) -> tuple[str, int, str]:
 
 
 def compose_services_snapshot() -> list[dict[str, str]]:
-    cmd = ["docker", "compose", "ps", "--format", "json"]
+    """Snapshot of PMOVES containers from the Docker daemon.
+
+    Uses ``docker ps`` directly so the worker table is populated even when
+    ``docker compose ps`` would fail because required tier env files are not
+    loaded on the subprocess command line.
+    """
+    cmd = ["docker", "ps", "--format", "json"]
     try:
-        proc = subprocess.run(cmd, cwd=str(REPO_ROOT / "pmoves"), text=True, capture_output=True, check=False, timeout=20)
+        proc = subprocess.run(cmd, text=True, capture_output=True, check=False, timeout=20)
     except Exception:
         return []
     if proc.returncode != 0 or not proc.stdout.strip():
         return []
 
-    raw = proc.stdout.strip()
     rows: list[dict[str, str]] = []
-    try:
-        parsed = json.loads(raw)
-        if isinstance(parsed, dict):
-            parsed = [parsed]
-        if isinstance(parsed, list):
-            for item in parsed:
-                if isinstance(item, dict):
-                    rows.append({str(k): str(v) for k, v in item.items()})
-            return rows
-    except Exception:
-        pass
-
-    for line in raw.splitlines():
+    for line in proc.stdout.strip().splitlines():
         line = line.strip()
         if not line:
             continue
         try:
             item = json.loads(line)
-            if isinstance(item, dict):
-                rows.append({str(k): str(v) for k, v in item.items()})
         except Exception:
             continue
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("Names", "")).strip()
+        if not name.startswith(f"{PROJECT_PREFIX}"):
+            continue
+        status = str(item.get("Status", "unknown"))
+        health = "n/a"
+        if "healthy" in status.lower():
+            health = "healthy"
+        elif "unhealthy" in status.lower():
+            health = "unhealthy"
+        elif "starting" in status.lower():
+            health = "starting"
+        # Derive a service slug from the container name: pmoves-<service>-1
+        service = name[len(PROJECT_PREFIX):].rstrip("-1")
+        rows.append({
+            "Service": service,
+            "State": str(item.get("State", "unknown")),
+            "Health": health,
+            "Status": status,
+        })
     return rows
 
 

@@ -1,0 +1,117 @@
+{
+  "_note": "Extended fields stripped from the manifest to conform to room.manifest.v1 (operator chose lossy conform, 2026-07-07). Preserved here so nothing is destroyed; runtime P7 + hermes read these. Restore if the schema is later extended to allow p7/config/sandbox_policy/multi_user.",
+  "room_id": "hermes-agent.room.control",
+  "app_config": {
+    "hermes-gateway-webui": {
+      "port": 7700,
+      "profile": "pmoves-hermes",
+      "start_script": "hermes gateway run",
+      "health_endpoint": "/api/health"
+    },
+    "hermes-mcp-bridge": {
+      "mcp_command": "hermes mcp serve",
+      "nats_subject_prefix": "hermes.mcp",
+      "profile": "pmoves-hermes"
+    },
+    "hermes-skill-curator": {
+      "skill_namespace": "pmoves",
+      "hub_source": "https://github.com/POWERFULMOVES/hermes-skills-pmoves",
+      "auto_curate": true
+    },
+    "openshell-gateway": {
+      "policy_file": "config/openshell-policy.yaml",
+      "masking_enabled": true,
+      "audit_log": "logs/openshell-audit.log"
+    }
+  },
+  "p7": {
+    "launch_subject": "p7.nats.launch",
+    "session_subject": "p7.nats.session",
+    "stage": "rehearsal",
+    "suits": [
+      "hermes-gateway",
+      "mcp-bridge",
+      "skill-curator"
+    ]
+  },
+  "sandbox_policy": {
+    "enabled": true,
+    "description": "OpenShell-inspired policy-based egress controls for agent sandboxes",
+    "egress_rules": [
+      {
+        "service": "telegram",
+        "allowed": true,
+        "scope": "bot_api_only"
+      },
+      {
+        "service": "discord",
+        "allowed": true,
+        "scope": "bot_api_only"
+      },
+      {
+        "service": "slack",
+        "allowed": true,
+        "scope": "webhook_api_only"
+      },
+      {
+        "service": "github",
+        "allowed": true,
+        "scope": "api_only"
+      },
+      {
+        "service": "nats",
+        "allowed": true,
+        "scope": "internal_mesh_only"
+      },
+      {
+        "service": "openrouter",
+        "allowed": true,
+        "scope": "inference_only"
+      },
+      {
+        "service": "ollama",
+        "allowed": true,
+        "scope": "localhost_only"
+      },
+      {
+        "service": "web",
+        "allowed": true,
+        "scope": "search_and_extract"
+      }
+    ],
+    "forbidden_patterns": [
+      "*.internal.pmoves.ai",
+      "127.0.0.1:*",
+      "localhost:*"
+    ],
+    "masking": {
+      "enabled": true,
+      "description": "Environment variable masking -- secrets hidden inside sandbox, substituted at egress",
+      "variables": [
+        "GITHUB_TOKEN",
+        "NATS_AUTH_TOKEN",
+        "OPENROUTER_API_KEY",
+        "ELEVENLABS_API_KEY",
+        "DISCORD_BOT_TOKEN",
+        "TELEGRAM_BOT_TOKEN"
+      ]
+    }
+  },
+  "multi_user": {
+    "enabled": true,
+    "description": "Alice/Bob-style per-user sandbox instances inspired by NousResearch OpenShell demo",
+    "onboard_script": "scripts/hermes-onboard-user.sh",
+    "max_users_per_node": 10,
+    "user_isolation": {
+      "skills": "per_user",
+      "memory": "per_user",
+      "sandbox": "per_user",
+      "env_vars": "per_user"
+    }
+  },
+  "dropped_binding_sources": {
+    "hermes-gateway-launch": [
+      "nats-events"
+    ]
+  }
+}

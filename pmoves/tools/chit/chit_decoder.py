@@ -18,9 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import pathlib
-import re
 from typing import Any, Dict, List
 
 import numpy as np
@@ -38,14 +36,6 @@ except Exception:
 
 # Optional: T5 for learning-based decoder
 try:
-    from datasets import Dataset  # type: ignore
-    from transformers import (  # type: ignore
-        T5ForConditionalGeneration,
-        T5Tokenizer,
-        DataCollatorForSeq2Seq,
-        Trainer,
-        TrainingArguments,
-    )
     TRANSFORMERS_AVAILABLE = True
 except Exception:
     TRANSFORMERS_AVAILABLE = False

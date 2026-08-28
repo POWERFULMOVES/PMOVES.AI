@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="St. Maarten — photo pending sign-off">
+  <rect width="800" height="450" fill="#0b0b10"/>
+  <rect x="1" y="1" width="798" height="448" fill="none" stroke="#3a3a4c" stroke-width="2" stroke-dasharray="8 6"/>
+  <circle cx="400" cy="186" r="38" fill="none" stroke="#E11D48" stroke-width="5"/>
+  <path d="M400 167 v38 M381 186 h38" stroke="#E11D48" stroke-width="5" stroke-linecap="round"/>
+  <text x="400" y="274" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="30" font-weight="700" text-anchor="middle">St. Maarten — photo pending sign-off</text>
+  <text x="400" y="308" fill="#c2c6cf" font-family="system-ui, -apple-system, sans-serif" font-size="17" text-anchor="middle">Placeholder image (self-hosted)</text>
+</svg>

@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Room Skill Binding",
+  "description": "Contract that binds a reusable skill to a room surface, context envelope, and output targets.",
+  "type": "object",
+  "required": [
+    "binding_id",
+    "skill_id",
+    "room_id",
+    "surface",
+    "execution",
+    "context",
+    "outputs"
+  ],
+  "properties": {
+    "binding_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Stable identifier for this room-specific skill binding"
+    },
+    "skill_id": {
+      "type": "string",
+      "description": "Canonical skill identifier or marketplace key"
+    },
+    "room_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Room manifest identifier that owns this binding"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable binding label shown in the room UI"
+    },
+    "intent": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "High-level intents this binding serves"
+    },
+    "activation": {
+      "type": "object",
+      "properties": {
+        "invocation_mode": {
+          "type": "string",
+          "enum": ["explicit", "suggested", "ambient", "workflow"],
+          "description": "How this binding becomes eligible to run"
+        },
+        "trigger_phrases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional natural-language hints for activation"
+        },
+        "requires_selection": {
+          "type": "boolean",
+          "description": "Whether the room must have a current notebook or UI selection"
+        }
+      },
+      "additionalProperties": false
+    },
+    "surface": {
+      "type": "object",
+      "required": ["app_id", "target"],
+      "properties": {
+        "app_id": {
+          "type": "string",
+          "description": "App or panel that hosts this skill"
+        },
+        "target": {
+          "type": "string",
+          "enum": ["panel", "canvas", "sidebar", "composer", "toolbar", "modal", "floating", "background"],
+          "description": "Primary room surface where the skill appears or runs"
+        },
+        "route": {
+          "type": "string",
+          "description": "Optional route or deep-link for the hosting surface"
+        },
+        "tab_id": {
+          "type": "string",
+          "description": "Optional sub-surface or tab identifier"
+        }
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["inline", "panel", "workflow", "background", "deferred"],
+          "description": "Runtime execution pattern for the skill"
+        },
+        "run_as": {
+          "type": "string",
+          "enum": ["agent", "room-service", "worker"],
+          "description": "Execution principal"
+        },
+        "stream": {
+          "type": "string",
+          "enum": ["none", "status", "tokens", "events"],
+          "description": "Expected stream behavior during execution"
+        },
+        "max_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional ceiling for multi-step skill workflows"
+        }
+      },
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "required": ["sources"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "room-state",
+              "notebook-thread",
+              "notebook-selection",
+              "graphiti-trail",
+              "persona",
+              "agent-registry",
+              "clipboard",
+              "open-apps",
+              "search-results",
+              "user-intent"
+            ]
+          },
+          "description": "Context lanes injected before skill execution"
+        },
+        "include_last_turns": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many recent turns to include when a chat surface is active"
+        },
+        "notebook_writeback": {
+          "type": "boolean",
+          "description": "Whether the skill is allowed to persist structured notes back into notebook state"
+        },
+        "artifact_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["text", "image", "audio", "video", "json", "graph"]
+          },
+          "description": "Artifact modalities the skill expects or emits"
+        }
+      },
+      "additionalProperties": false
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["room", "notebook", "persona", "graphiti", "user", "literal"]
+              },
+              "path": {
+                "type": "string",
+                "description": "JSONPath-style selector or semantic handle inside the source"
+              },
+              "value": {
+                "type": ["string", "number", "boolean", "null"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["target", "delivery"],
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": ["notebook-entry", "notebook-page", "room-state", "app-action", "nats-event", "artifact-store", "clipboard", "chat-response"]
+          },
+          "delivery": {
+            "type": "string",
+            "enum": ["append", "replace", "open", "emit", "notify", "none"]
+          },
+          "path": {
+            "type": "string",
+            "description": "Destination path, route, or logical state key"
+          },
+          "subject": {
+            "type": "string",
+            "description": "NATS subject when target is an event lane"
+          },
+          "artifact_type": {
+            "type": "string",
+            "enum": ["text", "image", "audio", "video", "json", "graph"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "tool_groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "network": {
+          "type": "boolean"
+        },
+        "filesystem": {
+          "type": "boolean"
+        },
+        "publish_subjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "guardrails": {
+      "type": "object",
+      "properties": {
+        "require_approval": {
+          "type": "boolean"
+        },
+        "max_runtime_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fail_open": {
+          "type": "boolean"
+        },
+        "one_active_run": {
+          "type": "boolean"
+        },
+        "provenance_table": {
+          "type": "string",
+          "description": "Table consulted before the skill may run, e.g. pmoves_core.voice_cloning_provenance. Used for rights-basis gates where execution requires a recorded consent artifact."
+        },
+        "provenance_check": {
+          "type": "string",
+          "description": "Predicate that must hold in provenance_table for the run to proceed, e.g. is_active=true AND rights_basis IN ('CONSENTED','LICENSED') AND consent_artifact_uri IS NOT NULL. Pair with fail_open:false so an unverifiable provenance lookup denies rather than allows."
+        }
+      },
+      "additionalProperties": false
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether the room should expose this binding at runtime"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean"]
+      }
+    }
+  },
+  "additionalProperties": false
+}

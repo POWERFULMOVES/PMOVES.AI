@@ -5,8 +5,10 @@ import shutil
 import sys
 from pathlib import Path
 from types import ModuleType
-
+import pytest
+pytest.importorskip('typer')
 from typer.testing import CliRunner
+
 
 
 def test_bootstrap_stages_bundle_and_updates_env(tmp_path, monkeypatch) -> None:

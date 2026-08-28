@@ -12,14 +12,22 @@ Steps:
   - POST /geometry/decode/text
   - POST /geometry/calibration/report
 """
-import os, json, argparse, requests, tempfile, subprocess, sys
+import os
+import json
+import argparse
+import requests
+import tempfile
+import subprocess
+import sys
+
+from gateway.api.chit import compute_shape_id
 
 from gateway.api.chit import compute_shape_id
 
 def maybe_sign(cgp: dict, sign: str=None, encrypt: bool=False) -> dict:
     if not sign and not encrypt: 
         return cgp
-    import importlib.util, pathlib
+    import pathlib
     # Load signer dynamically
     signer_path = pathlib.Path("scripts") / "chit_sign.py"
     if not signer_path.exists():

@@ -1,5 +1,43 @@
 name: Python Tests
 
+# SCOPE: this job runs the SERVICE test suites under `pmoves/services/*/tests`,
+# strictly (no ratchet). It is not the required merge check — `main`'s required
+# contexts are `python-tests`, `hardening-validation`, `verify` and
+# `submodule-gitlink-gate`, and the first of those is the job of the same name in
+# merge-gate.yml, which is a different thing from the `tests (3.11)` check this
+# file produces. The two names being one word apart is a trap; see below.
+#
+# `pmoves/tests/**` and `pytest.ini` used to be listed in the two `paths:`
+# filters below. Neither belonged there:
+#
+#   * `pmoves/tests` was a TRIGGER but never a TARGET. The pytest invocation at
+#     the bottom of this file passes only `pmoves/services/*/tests` directories.
+#     So a PR touching nothing but `pmoves/tests` woke this workflow, collected
+#     none of the 155 test files it had just changed, and reported `tests (3.11)`
+#     green. A filter that claims a tree the run step never looks at is worse
+#     than no filter: it reads, in the checks list, as coverage.
+#
+#     That tree is NOT untested. merge-gate.yml's `python-tests` job runs
+#     `pmoves/tools/pytest_ratchet.py` on every PR to main with no paths filter
+#     at all; it discovered and ran 151 of those 155 files on the most recent
+#     measured run. It runs them RATCHETED, tolerating 249 baselined failures of
+#     which 175 sit under `pmoves/tests`. Adding the tree here as a strict target
+#     would therefore turn this job red on ~175 known failures on its first run.
+#     Fixing those is a separate lane; hiding them with --ignore or a skip marker
+#     to make this green is not on the table. Until then the honest statement is
+#     the one now encoded: this workflow covers services, merge-gate covers the
+#     rest, and `pmoves/tests` is not advertised here.
+#
+#   * `pytest.ini` does not exist. Not in the repo root, not anywhere. It was a
+#     trigger on a file that could never change.
+#
+# `pmoves/pyproject.toml` replaces them, because it is the file pytest actually
+# resolves as `configfile` for this job (it supplies --strict-markers,
+# --import-mode and asyncio_mode). Editing it changes what this workflow does,
+# and it was not previously a trigger.
+#
+# The pairing is enforced by pmoves/tests/test_python_tests_workflow_scope.py.
+
 on:
   push:
     branches: [main, PMOVES.AI-Edition-Hardened]
@@ -8,8 +46,12 @@ on:
       - 'pmoves/services/**/*.py'
       - 'pmoves/services/**/tests/**'
       - 'pmoves/libs/**'
-      - 'pmoves/tests/**'
-      - 'pytest.ini'
+      # Shared conftest consumed by every pytest target here (review P2 on
+      # #2785): pmoves/conftest.py imports load_service_module and
+      # stub_external_modules from pmoves/tests/conftest.py, so a PR touching
+      # only that file changes this workflow's fixtures and must run it.
+      - 'pmoves/tests/conftest.py'
+      - 'pmoves/pyproject.toml'
       - '.github/workflows/python-tests.yml'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened]
@@ -18,8 +60,8 @@ on:
       - 'pmoves/services/**/*.py'
       - 'pmoves/services/**/tests/**'
       - 'pmoves/libs/**'
-      - 'pmoves/tests/**'
-      - 'pytest.ini'
+      - 'pmoves/tests/conftest.py'
+      - 'pmoves/pyproject.toml'
       - '.github/workflows/python-tests.yml'
   workflow_dispatch:
 
@@ -42,7 +84,7 @@ jobs:
       PYTHONPATH: .:pmoves:pmoves/services/gateway
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -51,25 +93,40 @@ jobs:
             pypi.org:443
             files.pythonhosted.org:443
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch PMOVES.YT submodule for shim tests
         shell: bash
         run: |
           git submodule sync -- PMOVES.YT
           git -c protocol.version=2 submodule update --init --depth=1 PMOVES.YT
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        continue-on-error: true          # Self-hosted runner: bash arithmetic fails on large disks (scientific notation)
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: false
-          swap-storage: false
+      - name: Free disk space (ubuntu-latest)
+        # Inline rather than jlumbroso/free-disk-space: that action is not on
+        # this repo's Actions allowlist, which made the WHOLE workflow
+        # uncompilable — `startup_failure`, 0 jobs, on 100 of its last 100
+        # runs. A required merge check that cannot launch is worse than a slow
+        # one. Reclaiming inline needs no allowlist entry and adds no
+        # third-party supply-chain surface.
+        #
+        # Mirrors what the action removed for us (android/dotnet/haskell/
+        # large-packages, tool-cache and swap left alone). Safe here ONLY
+        # because runs-on is ubuntu-latest — an ephemeral hosted VM. Do not
+        # copy this onto a self-hosted fleet runner: `docker image prune`
+        # there would delete live fleet images.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "before: $(df -h --output=avail / | tail -1 | tr -d ' ') avail"
+          for d in /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                   /usr/local/.ghcup /usr/local/share/boost /usr/local/share/powershell; do
+            [ -e "$d" ] && sudo rm -rf -- "$d" || true
+          done
+          sudo apt-get purge -y -qq '^llvm-.*' '^mongodb-.*' '^mysql-.*' azure-cli 2>/dev/null || true
+          sudo apt-get autoremove -y -qq 2>/dev/null || true
+          sudo apt-get clean 2>/dev/null || true
+          echo "after:  $(df -h --output=avail / | tail -1 | tr -d ' ') avail"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -108,25 +165,66 @@ jobs:
                   "librosa", "numba", "kokoro", "newspaper3k", "boto3",
                   "langchain", "langchain-community", "langchain-core",
                   "litellm", "pymupdf", "qdrant-client"}
+          skip_normalized = {s.lower().replace('-', '_') for s in skip}
 
-          # Collect unique package names (strip versions to let pip resolve)
-          packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov"]
+          # Keep resolver guardrails for packages with known bad upstream releases.
+          preserve_specs = {"pyreqwest-impersonate"}
+          preserve_normalized = {s.lower().replace('-', '_') for s in preserve_specs}
 
+          # Collect unique package specs. Most entries strip versions to let pip resolve;
+          # preserved specs keep explicit guardrails for packages with bad releases.
           import re
+          packages = set()
+          # Test-only dependencies. These are NOT collected from any service
+          # requirements.txt because the services do not need them at runtime —
+          # only the tests do. `common` in particular ships no requirements.txt
+          # at all, so anything its tests import has to be declared here.
+          #
+          # ruamel.yaml: pmoves/services/common/tests/test_topology_networks_wiring.py
+          # imports it, and its own docstring pins the version it expects
+          # (`uv run --with ruamel.yaml==0.19.1`). Matching that pin here keeps
+          # the CI run and the documented standalone invocation on one version.
+          #
+          # pydantic-settings: pmoves/services/common/config.py and four other
+          # services import it. SIX service requirements.txt files declare it -
+          # github-runner-ctl, gpu-orchestrator, graph-linker, model-registry,
+          # p7-room-orchestrator, semantic-cache - but NONE of those six are in
+          # services_with_tests, so CI never installed it from a declaration. It
+          # arrived transitively from agent-zero's requirements.txt, which listed
+          # 56 packages, 42 of them copies of the fork's own list. #2672 cut that
+          # file to the 8 packages PMOVES actually adds, and the accidental
+          # transitive went with it. Declaring it here makes the dependency real
+          # instead of a side effect of a file being too big.
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "ruamel.yaml==0.19.1",
+                           "pydantic-settings"]
+
           for path in requirements:
               with path.open() as handle:
                   for raw in handle:
-                      line = raw.strip()
+                      # Strip inline comments BEFORE anything else. pip treats
+                      # " #" as a comment separator, and a requirements.txt is
+                      # entitled to use it. This loop used to strip it only on
+                      # the preserve_specs path; every other package relied on
+                      # re.split() on a version operator to shed the comment as
+                      # a side effect. A bare name with an inline comment --
+                      # "nats-py  # NATS bus integration" -- has no operator to
+                      # split on, so the whole line, comment and all, was handed
+                      # to `pip install` as one requirement. That took every
+                      # branch's python-tests down until it was noticed.
+                      line = raw.split(" #", 1)[0].strip()
                       if not line or line.startswith("#") or line.startswith("-"):
                           continue  # Skip comments, empty lines, and pip options
                       # Extract just the package name
                       name = re.split(r'[>=<\[!~]', line)[0].strip()
-                      if name.lower().replace('-', '_') in {s.lower().replace('-', '_') for s in skip}:
+                      normalized = name.lower().replace('-', '_')
+                      if normalized in skip_normalized:
                           continue
-                      packages.add(name)
+                      if normalized in preserve_normalized:
+                          packages.add(line)  # already comment-stripped above
+                      else:
+                          packages.add(name)
 
-          # Install base packages + deduplicated requirements (no version pins)
+          # Install base packages + deduplicated requirements.
           to_install = base_packages + sorted(packages)
           subprocess.check_call([sys.executable, "-m", "pip", "install", *to_install])
           PY

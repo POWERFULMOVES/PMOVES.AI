@@ -37,15 +37,16 @@ from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
 
 import httpx
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
-# Try to import chit_security
+# CHIT security module is REQUIRED — fail-closed on import failure
 try:
     from pmoves.tools.chit_security import verify_cgp, decrypt_anchors
-    CHIT_SECURITY_AVAILABLE = True
-except ImportError:
-    CHIT_SECURITY_AVAILABLE = False
-    logging.warning("chit_security.py not available - signature verification disabled")
+except ImportError as e:
+    raise RuntimeError(
+        f"CHIT security module failed to import: {e}. "
+        f"Signature verification is REQUIRED — cannot proceed without chit_security."
+    ) from e
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ class CGPConstellation(BaseModel):
     points: List[CGPPoint] = Field(default_factory=list)
     meta: Dict[str, Any] = Field(default_factory=dict)
 
-    @validator('spectrum')
+    @field_validator('spectrum')
     def validate_spectrum(cls, v):
         """Spectrum must be normalized (sum to 1.0)"""
         if v and abs(sum(v) - 1.0) > 0.001:
@@ -152,7 +153,7 @@ class CGPDocument(BaseModel):
     updated_at: Optional[str] = None
     sig: Optional[CGPSignature] = None
 
-    @validator('spec')
+    @field_validator('spec')
     def validate_spec(cls, v):
         """Validate CGP schema version"""
         valid_specs = {ver.value for ver in CGPVersion}
@@ -274,7 +275,7 @@ class CGPValidator:
             CGPValidationError: If validation fails and exceptions are enabled
         """
         start_time = time.time()
-        validation_time = datetime.now(timezone.utc).isoformat()
+        datetime.now(timezone.utc).isoformat()
 
         try:
             # Determine required security level
@@ -343,7 +344,8 @@ class CGPValidator:
                     )
                     return False, "Signature required but not present"
 
-                if CHIT_SECURITY_AVAILABLE and self.passphrase:
+                _signing_key = os.getenv("CHIT_SIGNING_KEY", "")
+                if self.passphrase or _signing_key:
                     if not verify_cgp(cgp, self.passphrase):
                         self._log_audit(
                             cgp=cgp,
@@ -354,11 +356,19 @@ class CGPValidator:
                         )
                         return False, "Invalid CGP signature"
                 else:
-                    logger.warning("Signature verification requested but chit_security not available")
+                    # Fail-closed: no key available to verify signature
+                    self._log_audit(
+                        cgp=cgp,
+                        source=source,
+                        valid=False,
+                        error=ValidationErrorType.MISSING_SIGNATURE,
+                        duration=time.time() - start_time
+                    )
+                    return False, "Signature verification required but no signing key configured"
 
             # Decrypt anchors (if encrypted)
             if security_level == SecurityLevel.ENCRYPTED:
-                if CHIT_SECURITY_AVAILABLE and self.passphrase:
+                if self.passphrase:
                     try:
                         cgp = decrypt_anchors(cgp, self.passphrase)
                     except Exception as e:
@@ -571,7 +581,7 @@ def main():
         )
 
         if is_valid:
-            print(f"✓ CGP is valid")
+            print("✓ CGP is valid")
             print(f"  Spec: {cgp.get('spec')}")
             print(f"  Super nodes: {len(cgp.get('super_nodes', []))}")
             return 0

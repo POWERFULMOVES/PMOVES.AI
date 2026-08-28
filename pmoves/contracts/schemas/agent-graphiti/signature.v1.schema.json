@@ -66,6 +66,11 @@
       "maxLength": 200,
       "description": "One-line summary of the work signed"
     },
+    "selected_alter": {
+      "type": "string",
+      "description": "Name of the alter identity selected for this trail entry. When set, glyph/color/accent/voice/resonance reflect the alter rather than primary identity.",
+      "examples": ["z890-infra", "5090-voice", "4090-field"]
+    },
     "handoff": {
       "type": "object",
       "description": "Handoff context for the next contributor",
@@ -104,6 +109,11 @@
         }
       },
       "additionalProperties": false
+    },
+    "signing_card_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the active signing identity card authorizing this signature (5x5 channel #4). Stamped by sign_trail.py from signing_identity_cards.yaml."
     }
   },
   "additionalProperties": false

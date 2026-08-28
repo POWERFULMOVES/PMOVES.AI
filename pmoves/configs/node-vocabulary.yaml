@@ -1,0 +1,124 @@
+version: 1
+nodes:
+- canonical: '4090'
+  kind: node
+  reach: pmoves-laptop
+  aliases:
+  - '4090'
+  - laptop-4090
+  - pmoves-laptop
+  - pmoves-4090
+  - PMOVES-4090
+  note: The mobile node. `4090` matches operator_nodes.yaml (the scheduler's vocabulary);
+    the rest are spellings found in the registry, the automode doc, and this machine's
+    own hostname.
+  default_identity:
+    claude-code: claude_4090
+- canonical: '5090'
+  kind: node
+  reach: pmoves-5090
+  aliases:
+  - '5090'
+  - pmoves-5090
+  - PMOVES-5090
+  note: Primary workhorse. 38 registry entries spell it as a YAML integer.
+  default_identity:
+    claude-code: claude_5090
+- canonical: spark
+  kind: node
+  reach: pmoves-spark
+  aliases:
+  - spark
+  - pmoves-spark
+  - dgx-spark
+  - PMOVES-SPARK
+- canonical: z890
+  kind: node
+  reach: pmoves-z890
+  aliases:
+  - z890
+  - pmoves-z890
+  - Z890
+  - PMOVES-Z890
+  default_identity:
+    claude-code: claude_z890
+- canonical: knuckles
+  kind: node
+  reach: pmoves-b850-ai-top
+  aliases:
+  - knuckles
+  - pmoves-b850
+  - b850
+  - pmoves-b850-ai-top
+  - PMOVES-B850
+  note: AMD 9850X3D + dual R9700. operator_nodes.yaml calls it `knuckles`; the registry
+    and the automode doc call it `pmoves-b850`.
+  default_identity:
+    claude-code: claude_b850
+    crush: crush_glm52
+- canonical: nano-1
+  kind: node
+  reach: pmoves-nano-1
+  aliases:
+  - nano-1
+  - pmoves-nano-1
+  note: Not schedulable -- see operator_nodes.yaml.
+- canonical: kvm4-1
+  kind: node
+  reach: pmoves-kvm4-1
+  aliases:
+  - kvm4-1
+  - pmoves-kvm4-1
+- canonical: kvm4-2
+  kind: node
+  reach: pmoves-kvm4-2
+  aliases:
+  - kvm4-2
+  - pmoves-kvm4-2
+- canonical: kvm2
+  kind: node
+  reach: pmoves-kvm2
+  aliases:
+  - kvm2
+  - pmoves-kvm2
+- canonical: rdna4
+  kind: node
+  reach: pmoves-rdna4
+  aliases:
+  - rdna4
+  - pmoves-rdna4
+- canonical: elder-melchor
+  kind: node
+  reach: pmoves-elder-melchor
+  aliases:
+  - elder-melchor
+  note: Hermes elder node; `pmoves/config/pinokio/hermes-elder-melchor.pinokio.json`
+    sets PMOVES_NODE_ID to this value.
+- canonical: powerfulmoves
+  kind: unresolved
+  aliases:
+  - powerfulmoves
+  note: 'Used by 9 registry entries. It is the GitHub org/account name, not a machine,
+    and no node in operator_nodes.yaml answers to it. Needs an owner decision: either
+    it means a specific node or those entries want a class.'
+- canonical: jetson
+  kind: class
+  aliases:
+  - jetson
+  note: A hardware class covering the nano-* nodes, not one machine.
+- canonical: ai-lab
+  kind: runner-label
+  aliases:
+  - ai-lab
+  note: A GitHub Actions runner label (see `topology.ci_runner`), which landed in
+    node_affinity on one entry. Almost certainly a field mix-up.
+- canonical: cloud
+  kind: placeholder
+  aliases:
+  - cloud
+  note: 7 entries. Means "not pinned to the local fleet".
+- canonical: any
+  kind: placeholder
+  aliases:
+  - any
+  note: Explicitly unpinned.

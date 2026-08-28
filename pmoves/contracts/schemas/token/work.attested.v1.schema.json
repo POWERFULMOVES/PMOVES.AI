@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Token Work Attested",
+  "description": "Work attestation event: cryptographic proof that a contributor attested a unit of work",
+  "type": "object",
+  "required": [
+    "work_id",
+    "contributor",
+    "attestation_sig",
+    "attested_at",
+    "merkle_root"
+  ],
+  "properties": {
+    "work_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "contributor": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "attestation_sig": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{128}$",
+      "description": "Ed25519 signature in hexadecimal"
+    },
+    "attested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "merkle_root": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{64}$"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  }
+}

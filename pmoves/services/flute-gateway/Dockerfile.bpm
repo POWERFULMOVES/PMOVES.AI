@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+WORKDIR /app
+RUN pip install --no-cache-dir 'nats-py>=2.7'
+COPY bpm_encoder_worker.py .
+CMD ["python", "bpm_encoder_worker.py"]
+
+# Non-root runtime (house pattern; restores #2285 intent without truncating)
+RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+USER pmoves

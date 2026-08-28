@@ -10,7 +10,7 @@ from difflib import SequenceMatcher
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 import httpx
 from urllib.parse import urlencode
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -156,6 +156,35 @@ DEFAULT_MEDIA_TYPES = _parse_env_list(os.environ.get("JELLYFIN_DEFAULT_MEDIA_TYP
 DEFAULT_LIBRARY_IDS = _parse_env_list(os.environ.get("JELLYFIN_DEFAULT_LIBRARY_IDS"))
 JELLYFIN_SERVER_ID = os.environ.get("JELLYFIN_SERVER_ID", "local")
 JELLYFIN_DEVICE_ID = os.environ.get("JELLYFIN_DEVICE_ID", "")
+# Branded identity for the MediaBrowser auth scheme (Client/Device fields + the
+# /Auth/Keys app name). Default is the PMOVES brand.
+JELLYFIN_CLIENT_NAME = os.environ.get("JELLYFIN_CLIENT_NAME", "PMOVES.AI")
+JELLYFIN_BRIDGE_VERSION = os.environ.get("JELLYFIN_BRIDGE_VERSION", "1.0.0")
+
+
+def _jellyfin_auth_headers(extra=None):
+    """Build the official Jellyfin auth header: ``Authorization: MediaBrowser ... Token=``.
+
+    Replaces the deprecated ``X-Emby-Token`` header and ``api_key`` query param
+    (both removal-bound in Jellyfin 12.0; 10.11 added the EnableLegacyAuthorization
+    toggle). The declared securityScheme is ``X-Emby-Authorization``; ``Authorization``
+    is the recommended standard form carrying the same MediaBrowser token scheme.
+    Client/Device are branded via JELLYFIN_CLIENT_NAME (default "PMOVES.AI").
+    """
+    device_id = JELLYFIN_DEVICE_ID or JELLYFIN_SERVER_ID or "pmoves-jellyfin-bridge"
+    headers = {
+        "Authorization": (
+            f'MediaBrowser Client="{JELLYFIN_CLIENT_NAME}", '
+            f'Device="{JELLYFIN_CLIENT_NAME}", '
+            f'DeviceId="{device_id}", '
+            f'Version="{JELLYFIN_BRIDGE_VERSION}", '
+            f'Token="{JELLYFIN_API_KEY}"'
+        ),
+        "Accept": "application/json",
+    }
+    if extra:
+        headers.update(extra)
+    return headers
 
 _BRANDING_FIELD_METADATA: Dict[str, Dict[str, str]] = {
     "brand_name": {
@@ -436,19 +465,11 @@ def _search_jellyfin(query: str, filters: Optional[Dict[str, Any]] = None) -> Tu
     if not (JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID):
         raise HTTPException(412, "JELLYFIN_URL, JELLYFIN_API_KEY, and JELLYFIN_USER_ID required")
     params = _build_search_params(query, filters)
-    params.setdefault("api_key", JELLYFIN_API_KEY)
     try:
         r = httpx.get(
             f"{JELLYFIN_URL}/Users/{JELLYFIN_USER_ID}/Items",
             params=params,
-            headers={
-                "X-Emby-Authorization": (
-                    'MediaBrowser Client="PMOVES Bridge", Device="PMOVES Bridge", '
-                    'DeviceId="pmoves-jellyfin-bridge", Version="1.0", '
-                    f'Token="{JELLYFIN_API_KEY}"'
-                ),
-                "Accept": "application/json",
-            },
+            headers=_jellyfin_auth_headers(),
             timeout=8,
         )
         r.raise_for_status()
@@ -556,7 +577,7 @@ def _publish_to_notebook_sync(
 
         # Run async publisher from sync context
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # If we're in an async context, schedule on the existing loop
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
@@ -595,7 +616,7 @@ def jellyfin_refresh(body: Dict[str,Any] = Body({})):
     if not JELLYFIN_URL or not JELLYFIN_API_KEY:
         return {"ok": True, "skipped": True}
     try:
-        r = httpx.get(f"{JELLYFIN_URL}/System/Info", headers={"X-Emby-Token": JELLYFIN_API_KEY}, timeout=6)
+        r = httpx.get(f"{JELLYFIN_URL}/System/Info", headers=_jellyfin_auth_headers(), timeout=6)
         r.raise_for_status()
         return {"ok": True, "system": r.json().get('Version')}
     except Exception as e:
@@ -875,7 +896,7 @@ def jellyfin_theme_apply(body: Dict[str, Any] = Body(...)):
     if JELLYFIN_URL and JELLYFIN_API_KEY:
         try:
             branding_url = f"{JELLYFIN_URL}/System/Configuration/branding"
-            headers = {"X-Emby-Token": JELLYFIN_API_KEY, "Content-Type": "application/json"}
+            headers = _jellyfin_auth_headers({"Content-Type": "application/json"})
             # Fetch current branding config
             current = httpx.get(branding_url, headers=headers, timeout=8)
             current.raise_for_status()
@@ -972,7 +993,7 @@ def yt_channels(request: Request):
         return {"ok": True, "channels": r.json()}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="list_channels", status="error").inc()
         raise HTTPException(status_code=502, detail="Failed to list channels")
 
@@ -1007,7 +1028,7 @@ async def yt_create_station(
         return {"ok": True, "station": station}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="create_station", status="error").inc()
         raise HTTPException(status_code=502, detail="Station creation failed")
 
@@ -1029,7 +1050,7 @@ async def yt_delete_station(channel_id: str, request: Request):
         return {"ok": True, "channel_id": channel_id}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="delete_station", status="error").inc()
         raise HTTPException(status_code=502, detail="Station deletion failed")
 
@@ -1047,7 +1068,7 @@ def yt_stations(request: Request):
         return {"ok": True, "stations": r.json()}
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         STATION_REQUESTS.labels(endpoint="list_stations", status="error").inc()
         raise HTTPException(status_code=502, detail="Failed to list stations")
 

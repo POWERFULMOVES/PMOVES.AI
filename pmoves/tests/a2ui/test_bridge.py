@@ -6,10 +6,13 @@ Tests cover:
 - Metrics endpoint behavior
 """
 import sys
+from pathlib import Path
 import pytest
 
-# Add bridge service to path
-sys.path.insert(0, "pmoves/services/a2ui-nats-bridge")
+# Add bridge service to path (absolute, cwd-independent).
+# parents[2] resolves from pmoves/tests/a2ui/test_bridge.py up to pmoves/,
+# then down into services/a2ui-nats-bridge where bridge.py lives.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "a2ui-nats-bridge"))
 
 from bridge import A2UIEvent, app
 from fastapi.testclient import TestClient

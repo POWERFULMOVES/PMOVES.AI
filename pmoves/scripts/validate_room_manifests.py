@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Validate PMOVES room manifest seeds against the room schema and catalog."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Iterable
+
+try:
+    import jsonschema
+except ModuleNotFoundError as exc:  # pragma: no cover - dependency should exist in PMOVES envs
+    raise SystemExit("jsonschema is required to validate room manifests") from exc
+
+try:
+    from referencing import Registry, Resource
+except ModuleNotFoundError:  # pragma: no cover - fallback for older envs
+    Registry = None
+    Resource = None
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PMOVES_ROOT = SCRIPT_DIR.parent
+ROOM_DIR = PMOVES_ROOT / "config" / "rooms"
+SCHEMA_DIR = PMOVES_ROOT / "contracts" / "schemas" / "room"
+CATALOG_PATH = ROOM_DIR / "catalog.json"
+ROOM_SCHEMA_PATH = SCHEMA_DIR / "room.manifest.v1.schema.json"
+SKILL_SCHEMA_PATH = SCHEMA_DIR / "skill.binding.v1.schema.json"
+REGISTRY_PATH = PMOVES_ROOT / "config" / "agent_registry.yaml"
+
+# action_namespace values for MCP discovery entries all live under mcp_servers in
+# agent_registry.yaml; only those entries declare action_namespace, so a flat
+# regex extraction yields exactly the registered MCP namespaces (no yaml dep).
+_MCP_NS_RE = re.compile(r"""^\s*action_namespace:\s*["']?([^"'\s]+)["']?\s*$""", re.MULTILINE)
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def load_registered_mcp_namespaces() -> set[str]:
+    """Return MCP action_namespaces registered in agent_registry.yaml (mcp_servers)."""
+    if not REGISTRY_PATH.exists():
+        return set()
+    text = REGISTRY_PATH.read_text(encoding="utf-8")
+    return {ns for ns in _MCP_NS_RE.findall(text) if ns.startswith("mcp.")}
+
+
+def check_app_registry_consistency(
+    manifest: dict, registered_ns: set[str]
+) -> None:
+    """Cross-check: every room app bound to an MCP namespace (mcp.*) must resolve
+    to a registered mcp_servers entry in agent_registry.yaml. Non-MCP apps (the
+    common case) are untouched, keeping this check non-breaking for existing rooms.
+    Skips silently if the registry could not be read (no namespaces extracted)."""
+    if not registered_ns:
+        return
+    for app in manifest.get("apps", []):
+        namespace = app.get("action_namespace")
+        if not isinstance(namespace, str) or not namespace.startswith("mcp."):
+            continue
+        if namespace not in registered_ns:
+            raise ValueError(
+                f"app {app.get('app_id', '<unknown>')!r} references MCP "
+                f"action_namespace {namespace!r} with no matching mcp_servers "
+                f"entry in agent_registry.yaml"
+            )
+
+
+def build_validator() -> jsonschema.Draft202012Validator:
+    room_schema = read_json(ROOM_SCHEMA_PATH)
+    skill_schema = read_json(SKILL_SCHEMA_PATH)
+
+    room_schema.setdefault("$id", ROOM_SCHEMA_PATH.resolve().as_uri())
+    skill_schema.setdefault("$id", SKILL_SCHEMA_PATH.resolve().as_uri())
+
+    if Registry is not None and Resource is not None:
+        registry = Registry().with_resources(
+            [
+                (room_schema["$id"], Resource.from_contents(room_schema)),
+                (skill_schema["$id"], Resource.from_contents(skill_schema)),
+            ]
+        )
+        return jsonschema.Draft202012Validator(room_schema, registry=registry)
+
+    resolver = jsonschema.RefResolver(base_uri=room_schema["$id"], referrer=room_schema)
+    return jsonschema.Draft202012Validator(room_schema, resolver=resolver)
+
+
+def iter_catalog_entries(catalog: dict, only_room_id: str | None) -> Iterable[dict]:
+    rooms = catalog.get("rooms", [])
+    for entry in rooms:
+        if only_room_id and entry.get("room_id") != only_room_id:
+            continue
+        yield entry
+
+
+def discover_manifest_files() -> set[str]:
+    """Return canonical room manifests, excluding the catalog and extension sidecars."""
+    return {
+        path.name
+        for path in ROOM_DIR.glob("*.json")
+        if path.name != CATALOG_PATH.name and not path.name.endswith(".extras.json")
+    }
+
+
+def validate_entry(entry: dict, validator: jsonschema.Draft202012Validator) -> tuple[Path, dict]:
+    manifest_name = entry.get("manifest")
+    if not manifest_name:
+        raise ValueError(f"catalog entry {entry.get('room_id', '<unknown>')} is missing 'manifest'")
+
+    manifest_path = ROOM_DIR / manifest_name
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"manifest not found: {manifest_path}")
+
+    manifest = read_json(manifest_path)
+    validator.validate(manifest)
+
+    for key in ("room_id", "agent_id", "alter", "display_name", "stage"):
+        catalog_value = entry.get(key)
+        manifest_value = manifest.get(key)
+        if catalog_value is not None and manifest_value != catalog_value:
+            raise ValueError(
+                f"catalog mismatch for {manifest_name}: {key}={manifest_value!r} != {catalog_value!r}"
+            )
+
+    return manifest_path, manifest
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--room-id", help="Validate a single room_id from the catalog")
+    parser.add_argument("--quiet", action="store_true", help="Suppress per-room summary output")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    catalog = read_json(CATALOG_PATH)
+    validator = build_validator()
+    registered_ns = load_registered_mcp_namespaces()
+    matched = list(iter_catalog_entries(catalog, args.room_id))
+
+    if not matched:
+        raise SystemExit(f"No catalog entries found for room_id={args.room_id!r}")
+
+    # Validate every catalog entry and REPORT ALL results rather than crashing on
+    # the first invalid manifest — a single bad room must not hide the health of the
+    # rest. Exit non-zero if any room is invalid.
+    seen_ids: set[str] = set()
+    seen_manifests: set[str] = set()
+    failures: list[str] = []
+    ok = 0
+    for entry in matched:
+        room_ref = entry.get("room_id") or entry.get("manifest") or "<unknown>"
+        try:
+            manifest_path, manifest = validate_entry(entry, validator)
+            check_app_registry_consistency(manifest, registered_ns)
+            room_id = manifest["room_id"]
+            if room_id in seen_ids:
+                raise ValueError(f"duplicate room_id in selection: {room_id}")
+            manifest_name = manifest_path.name
+            if manifest_name in seen_manifests:
+                raise ValueError(f"manifest referenced more than once: {manifest_name}")
+            seen_ids.add(room_id)
+            seen_manifests.add(manifest_name)
+        except Exception as exc:  # noqa: BLE001 - surface each room's failure, keep going
+            first_line = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+            failures.append(f"{room_ref}: {first_line}")
+            print(f"FAIL {room_ref}: {first_line}")
+            continue
+
+        if not args.quiet:
+            apps = len(manifest.get("apps", []))
+            skills = len(manifest.get("skill_bindings", []))
+            route = manifest.get("shell", {}).get("layout", {}).get("default_route", "-")
+            stage = manifest.get("stage", "-")
+            print(
+                f"OK {manifest_path.name} room_id={room_id} stage={stage} "
+                f"apps={apps} skills={skills} route={route}"
+            )
+        ok += 1
+
+    if not args.room_id:
+        referenced = {
+            entry.get("manifest")
+            for entry in catalog.get("rooms", [])
+            if entry.get("manifest")
+        }
+        discovered = discover_manifest_files()
+        for manifest_name in sorted(discovered - referenced):
+            failures.append(f"uncataloged room manifest: {manifest_name}")
+            print(f"FAIL uncataloged room manifest: {manifest_name}")
+        for manifest_name in sorted(referenced - discovered):
+            failures.append(f"catalog references missing manifest: {manifest_name}")
+            print(f"FAIL catalog references missing manifest: {manifest_name}")
+
+    print(f"\nvalidated {len(matched)} room manifest(s): {ok} OK, {len(failures)} FAILED")
+    if failures:
+        print("FAILED rooms (fix separately — one bad manifest no longer hides the rest):")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

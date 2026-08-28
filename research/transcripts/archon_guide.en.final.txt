@@ -1,0 +1,4732 @@
+All right, we are live.
+Welcome everybody to the Archon live
+stream. We're going to be diving into
+everything with Archon today. So I
+posted a YouTube video just this week
+introducing the new version of Archon,
+but now we get to actually go deep into
+using it and there are a couple of
+things I have up my sleeve today that
+are kind of interesting. So I'm going to
+be
+building a what's called a dark factory
+this month. If that sounds spooky or
+interesting to you, we'll talk about
+that more in a little bit.
+That'll be kind of like the tail end of
+our live stream today.
+So yeah, but I want to start by actually
+introducing Archon to you guys just to
+give a whole, you know, overview of the
+tool. I know that I talked about it on
+Wednesday in the YouTube video, but I I
+want to be pretty comprehensive in the
+live stream today and then we'll build
+some workflows together. I'll show you
+what it looks like to use Archon, how I
+use it on a daily basis and then we'll
+get into the the dark factory stuff.
+I'm pretty excited. So
+yeah, I'm sitting down right now. I'm
+like actually like always standing in my
+live streams and my YouTube videos, but
+I had a couple of leg days like in a row
+and my legs are like toasted right now.
+So it's really it actually kind of like
+hurts to stand right now.
+Pretty crazy. So yeah, I'm actually
+sitting down for a live stream. I've
+like never done that before.
+But yeah, anyway, so I've got my left
+monitor here with all of the comments
+from you guys that I'm watching and then
+I've got my right monitor where I have
+my streaming software. So when you see
+me look around, that's what I'm doing
+and then obviously I'm sharing my screen
+on the main monitor right here.
+So I can actually switch to share my
+screen here and then I can pop up chats
+like this right here. Hey Cole, looking
+forward to this one. I appreciate it
+very much. Yeah, so I was I was checking
+out the chat as I was getting things
+started here. It's it's exciting to see
+everyone in here already. Congrats on
+the launch. Love seeing the structure
+for AI workflow. Still wrapping my head
+around its potential. You know,
+I appreciate Thomas and I still am as
+well cuz it's actually kind of crazy.
+Maybe we'll talk about this a little bit
+today, but we can use Archon for a lot
+more than just AI coding. Like you can
+use it for any kind of agentic workflow
+for deep research or any kind of like
+content creation.
+I'm not going to build anything around
+that now, but that's going to be more
+coming soon in videos and future live
+streams. So yeah, the the possibilities
+are pretty limitless here and I think as
+I really introduce Archon to you guys
+right now, you'll see what I'm talking
+about.
+Cool. I'm good sitting down. You still
+look great, Cole. Appreciate it, Eric.
+Yeah, it feels weird to me, but
+yeah, I definitely need it right now.
+It's exactly right. Exactly right. Never
+skip leg day.
+Yeah, so so I started doing so I was
+doing a lot of CrossFit last year
+and I took a break so I just like
+started going to like a regular
+commercial gym and I and I went back to
+doing CrossFit again
+and the workouts were pretty intense
+last couple days for the legs. So
+yesterday was a lot of Bulgarian split
+squats, jumping lunges, wall balls and
+um
+and biking.
+So yeah, I'm pretty cooked, but it's
+good. [laughter]
+All right. Cool. So
+I'm going to go ahead and
+pop up my Obsidian vault here.
+So I've got the diagram to really
+introduce
+why I built Archon in the first place.
+And I also want to be clear here. I did
+not build Archon by myself. There are a
+couple of people that helped me a lot
+with Archon.
+Rasmus and Thomas are the two that have
+really helped me the most with the
+project.
+Thomas is here. He's a DIY smart code.
+So he's here. I see him in the chat.
+Shout out to Thomas. Not sure why
+there's an echo for the stream, Thomas,
+but yeah, thank you for all the work
+that you've done on Archon. Rasmus, I
+don't know if he's here. But yeah, big
+shout out to him as well.
+Yeah, I don't think he is for today, but
+that's all good. So yeah, I've I've had
+I've had a lot of help building Archon
+and of course I've had a lot of help
+from Claude Code at building Archon as
+well.
+Let me tell you, I am using Archon to
+build Archon constantly. I'll show you
+guys what that looks like today as well,
+but let's talk about the evolution here.
+Why we care about Archon. Why why did I
+care about building it in the first
+place? So allow me to like talk about
+this for a little bit
+cuz I really want to get you guys on
+board with the vision that I have here
+and it is a big vision.
+So
+it's everyone knows that like prompt
+engineering was a big thing when
+generative AI first became a thing back
+in 2022. So we had like, you know, the
+release of GPT 3.5 Turbo. That's when
+everyone started giving a lot of hoots
+and hollers about generative AI and
+people were obsessed with prompt
+engineering. And the idea behind prompt
+engineering is how can we craft our
+prompts to the LLM to get the single
+best output. So at this point people are
+very much like caring about just you
+know, that very next turn with the LLM.
+How do we get it to do or output what we
+want?
+And then that evolved in 2025 to the
+idea of context engineering. So now we
+don't care about just single outputs.
+Now we care about entire sessions,
+especially for AI coding sessions.
+Context engineering is the idea of you
+know, how can we curate the perfect
+context. Nothing more than the coding
+agent needs, but exactly what it needs
+to have all the context it needs to
+plausibly do the task.
+So this was popularized by a lot of
+people like Toby, the CEO of Shopify. Of
+course Andrej Karpathy cuz whenever you
+post something, of course it goes viral.
+But context engineering, it's a very
+powerful evolution because it's treating
+the context for our coding agents as an
+engineered resource. So we evolve our AI
+layer as I like to call it just like we
+evolve our code base. So we version
+control our rules and our commands and
+our skills and whenever there's a
+problem that comes up with our
+system, like there's a bug that our
+coding agent produces, instead of just
+fixing the bug and moving on, the idea
+behind context engineering is we look
+into our process. Like what could we
+make better with our commands or what
+could we make better with our rules so
+that that issue doesn't happen again. Or
+at least that's the goal of evolving our
+context.
+So it's a very powerful concept and I
+created a lot of content last year
+around context engineering. Now the
+important thing is these different
+evolutions, it's not like they replace
+each other. Context engineering does not
+replace prompt engineering. In fact,
+prompt engineering is a part of context
+engineering. So it's it's a evolution
+where it builds on top of itself.
+And so this year we have evolved to
+harness engineering. And this is what
+Archon is all about. So harness
+engineering can mean a lot of different
+things, but in essence, a harness is a
+layer on top of the coding agent. It's
+the tooling and the process that you
+build on top of the coding agent to make
+it more reliable and basically taking
+your whole you know, process for
+building software
+and you know, building the the layer on
+top of the coding agent where you
+enforce that process. So a lot of
+different strategies out there like B
+Mad and GitHub Spec Kit and GSD, you
+could consider them harnesses because
+you're you're wrapping the coding agent
+with this higher level layer of your
+strategy for engineering. And we have a
+Stripe Minions. The Ralph Loop is a
+harness. Anthropic has open sourced
+quite a few harnesses. I've covered some
+on my channel.
+Really every single big company is
+converging on the idea of harnesses.
+Instead of focusing on making the model
+better or making the tool better like
+the coding agent better, it's it's all
+about like how do we create the system
+that wraps the coding agent, right?
+And so there's a lot of studies that
+have been done that have shown like even
+if you are using the exact same model,
+you're not improving underlying model or
+tool, you can go from a 6.7% pull
+request acceptance rate to almost 70%
+and the only thing is the harness. So
+building in your strategies around
+context curation and validation and your
+approach for planning, right? Like we'll
+talk about all that today when we cover
+building harnesses with Archon, but it's
+a big deal. Like maybe you guys heard of
+Stripe Minions. This went like super
+viral last month because Stripe
+they built their own internal harness.
+It's kind of like a more powerful
+version of the Ralph Loop that allows
+them to ship 1300 AI only generated pull
+requests every single week. And like
+Claude Code itself is starting to build
+a lot of harness into the tool. So not
+just calling the coding agent, you know,
+calling the LLM with the coding agent,
+but how can we like orchestrate many
+different Claude Code sessions together?
+So like Claude Code has support for
+agent teams. They're doing a ton of sub
+agents right now. So when they had their
+source code leak last month,
+it was shown that like 60% of the code
+is still like wrapping the underlying
+model itself like Sonnet and Opus and
+Haiku,
+but then 40% of their code is with these
+more like harness features like agent
+teams. And so all that to say, it's the
+direction that all of these companies
+are heading where they're building
+harnesses. The coding tools themselves
+are building this. All of the biggest
+companies like uh Stripe and Shopify and
+AWS, they're all building their own
+internal harnesses.
+But the problem with all these harnesses
+is they're not open-source and they're
+not custom to you.
+What if you want to take your software
+development life cycle, your process for
+working with AI coding assistance, and
+what if you want to package it up into
+your own harness? Well, that is the
+value proposition of Arkon. Arkon is the
+harness builder. So for the first time
+ever, we have an open-source platform
+that makes it easy for you to build your
+own harness. Up until this point, you've
+either had to build something internally
+like Stripe did, but obviously that's a
+massive amount of effort, or you just
+had to use a harness that's already out
+there like the Ralph Loop or B mad or
+whatever it is. And like yeah, those
+tools are very powerful, but they're not
+custom to you.
+And you you guys know if you've been
+following my content that uh I'm always
+a big proponent of like build it
+yourself. Take inspiration from what's
+already out there. And I'll even show
+you what it looks like to build
+something like a B mad or GSD harness in
+Arkon cuz we can take inspiration from
+the beautiful minds that are out there,
+but still make something that uh works
+how we want to work. And that's the
+unlock that I have for you guys here
+with Arkon.
+And um the other thing that I want to
+cover here is
+um you know, everyone already has their
+own skills and commands and rules. So
+I'm not I'm not expecting you to like
+start from zero. I know that you already
+have a process that you built around
+your AI coding assistant. Like you have
+skills for validation. You have commands
+for planning and maybe you have your PRD
+template, whatever that might be. And so
+it's not like Arkon replaces what you
+already do. It's that Arkon allows you
+to package everything together into a
+workflow that combines your skills and
+commands, right? Like the whole idea is
+before you have a harness, you have your
+commands and skills and you have to
+remember the order that you use them.
+You have to work between different AI
+coding sessions because you definitely
+don't want to do your planning in the
+same session where you do your
+implementation cuz your coding agent
+builds up a lot of bias.
+But if you don't have a harness to
+connect those steps together, you have
+to be the one to orchestrate that. I
+call it shepherding, right? Like you you
+go through some kind of PRD process with
+your coding agent. You create a PRD and
+then you're like, okay, good. Now let me
+go over to a new Claude code session or
+a new Codex session or whatever, and let
+me go and create a plan for the first
+phase. And then you get your plan and
+then you go and you create a new session
+and you go into implementation. And then
+you have a new session where you do a
+review on the pull request or on the
+code, whatever it is. And so you're
+still, even though you have your
+commands and skills and things to
+automate different parts of your
+workflow, you still have to walk the
+different coding agent sessions through
+each one. And Arkon is kind of like the
+next evolution of that. It allows you to
+run longer tasks, but still keep
+yourself in the loop. And so I have an
+example here
+of just what an Arkon workflow can look
+like. And and by the way, if you if you
+did watch the video on Wednesday, I am
+repeating myself a little bit here. So I
+covered this diagram in the video, but
+uh you just consider this a refresher if
+you watched it. And I just want to make
+sure that for those of you tuning into
+this live stream who didn't watch the
+video, I can like give you a really
+solid overview of what Arkon is. Um so
+yeah, here's just one example of the
+kind of workflow you can build with
+Arkon. And uh you'll have to excuse that
+the images are like not rendering right
+now for some reason for some of the
+icons, but my point can still be made
+here. Uh but yeah, so anyway, with
+Arkon, you obviously have some kind of
+trigger for your workflow.
+So traditionally without a harness, it
+would just be like sending a prompt into
+Claude code, right? Like that is your
+trigger. But with Arkon, there's a quite
+a few different ways that we can use it.
+And I'll I'll show you guys that today.
+We have the CLI. So we can have our
+Claude code or Codex, whatever um
+instance like trigger an Arkon workflow.
+So we can dispatch work to delegate
+behind the scenes. So we can do a lot of
+work in parallel. I also have a whole
+web interface. And I I'll definitely
+show that off today as well.
+Um that's the wrong link. This is it. So
+we have a whole web interface where we
+can manage our workflows
+and we can uh kick off workflows
+uh from the web UI directly.
+And uh so there's basically like a a
+coding agent sitting behind the web
+interface. So we can ask it to do work
+on our different repositories that we
+have registered with Arkon and it'll
+automatically route the request. It'll
+pick the right workflow and it will
+dispatch it. And we can do a ton of
+workflows in parallel if you want as
+well. So I'll I'll show you all of that
+today. But we have the web UI and then
+we even have different adapters so that
+you can, for example, talk to Arkon
+directly in Slack. So you can say like,
+hey, there's a GitHub issue for um this
+repo. Go and you know, handle that
+issue. I want to see a pull request in
+the end with a fix for that issue. And
+you can do that through Slack. And we
+have different conversations that you
+can manage through different threads in
+Slack. So for every single platform, we
+support parallel execution.
+Arkon handles work trees and isolation
+under the hood so you don't even have to
+worry about it. That's one of the other
+big unlocks with Arkon is how it
+supports working on things in parallel.
+And so I can go into my Claude code and
+I can have it use the CLI to fix eight
+GitHub issues at the exact same time.
+And they all run in different work trees
+so they don't step on each other's toes.
+They don't override each other's changes
+and we don't have to deal with merge
+conflicts just to get the pull requests
+created. It's really powerful.
+And so we start with our trigger. And
+then um again, this is just an example
+of a workflow we can create. So we could
+go like into planning mode. So maybe
+there's a new feature that we want to
+build. We want to start by going through
+the planning process with our coding
+agent.
+And so we have a step in our Arkon
+workflow where we are prompting our
+coding agent like here is the feature we
+want to build. Now help me plan. Like do
+research, do code base analysis,
+whatever that is. And when in Arkon, we
+can add in human in the loop. And so we
+can have essentially a loop here where
+we give feedback to have the coding
+agent revise the plan until we approve
+it and then it moves into the coding
+stage. And we do this in a brand new
+coding agent session because your
+planning session can get pretty bogged
+down and you can build up a lot of bias
+over time. And so you want to produce an
+artifact that you send into the next
+node for implementation.
+If you're in the Dynamis community, this
+is the pivot loop. You know what I'm
+talking about. I've covered it on my
+channel as well. The plan, implement,
+validate. And we used to have to do that
+between different coding agent sessions,
+but now we can package this all up as a
+single Arkon workflow.
+And then after the code is done, then we
+go into the testing step. And this is
+another one of the very big value
+propositions of Arkon. Our workflows do
+not have to be just prompts to a coding
+agent. Sometimes there are steps that we
+want to run deterministically. We want
+to take the control away from the coding
+agent to make sure that our process is
+followed to a T.
+If you've used any coding agent for a
+good amount of time, you know that like
+sometimes you'll tell the coding agent
+run the tests after you write the code
+and it won't listen to that. It's so
+frustrating. Or it'll do some of the
+testing like unit testing and linting,
+but it won't do the end-to-end testing.
+It's so frustrating. And so what we can
+do in Arkon is we can have certain steps
+of the workflow where we're just running
+code. Like we're doing some kind of
+context pulling or we're running our
+tests like we're doing right here. We're
+guaranteeing that that happens after the
+implementation. And then if there's any
+failures, we'll prompt the coding agent
+to fix those things. So we have like a
+little bit of a feedback loop as well
+built directly into Arkon.
+And then after everything passes and the
+coding agent figures that it's done,
+then we have the human approval.
+And so even though we are building
+longer running tasks with Arkon
+workflows, we're not taking ourselves
+out of the loop. We can inject ourselves
+wherever we want in an Arkon workflow.
+So no matter how you typically work with
+your coding agents, if you don't trust
+it that much and you want to validate it
+every step of the way, you can do that
+if you want. We have support built in to
+the web UI, the CLI, every single
+adapter for human in the loop. And
+that's one of the most important things
+because a lot of times when you have
+these harnesses, especially like the
+Ralph Loop for example. The Ralph Loop
+went viral a couple of months ago, but
+to me it felt like vibe coding, right?
+Because you were giving it a and it
+basically an entire PRD. Like many
+different phases of work and you would
+just have a coding agent rip through
+everything.
+And the problem with that is if the
+coding agent makes a mistake in the
+first iteration of the Ralph Loop, that
+issue can kind of propagate and like
+blow up from the rest of the loop
+because the coding agent is going to
+through each loop build on top of a code
+base that's already wrong, right? Like
+not aligned with what you actually want
+to create. And so the issues just
+compound on themselves. And so the idea
+that I wanted to be uh very confident in
+for Arkon is that it's not just enabling
+vibe coding. That we actually have like
+deterministic steps that enforce our
+process. We have human in the loop,
+right? And then we have the pull request
+at the end, and then we can review that
+our self before we merge as well.
+And so, yeah, that's that's sort of I I
+like to call it the hybrid secret for
+Archon.
+And um this this sometimes rubs people
+the wrong way, but I actually think it's
+smart to take as many decisions from
+away from the coding agent as you
+possibly can because they're
+non-deterministic. They don't make the
+same decisions every time even if you
+give it the same prompt. And so, there's
+a lot of inherent risk with that. The
+biggest reason why a lot of developers
+and companies are hesitant to adopt
+coding agents is because they're
+unreliable by nature. And so, Archon is
+the harness builder that allows you to
+take the process that you consider
+reliable and build it into the way you
+work with coding agents. And so, we have
+different nodes. Like if you have your
+testing strategy, if you have your
+strategy for like pulling information
+from Confluence, like whatever steps you
+have that like you want to have
+performed every single time, you build
+those nodes into Archon.
+And then the rest of the workflow is
+still going to be like you adding in
+your commands and skills and sub agents.
+Like everything that you already have,
+you can build in. So, you're not losing
+anything either. That's another thing
+that I want to be very clear on here is
+that you don't have to replace how you
+already work. Archon just allows you to
+package it up, right? Like that's the
+goal of a harness builder. So, I'm I'm
+so excited for this. And I'll I'll
+actually like install it from scratch
+with you guys today as well. So, uh
+right here I got the link to Archon. I'm
+going to go ahead and uh drop this in
+the chat.
+So, if you guys want to
+um try it out right now, even like
+install it along with me, I would highly
+encourage you to. It's very easy to
+install Archon because we can ask our
+coding agent to set it up. And I have an
+Archon skill that it loads
+automatically, and it'll walk you
+through the entire process, even
+installing the dependencies for you. So,
+I'll show you that live in a sec, but
+yeah, it's so easy to get it installed.
+Um yeah, so one other thing I want to
+show really quick. So, this is the read
+me for the new version of Archon.
+I want to show what a workflow actually
+looks like.
+So, this might look a little bit
+intimidating,
+but uh don't worry.
+You can use your coding agent to help
+you build workflows as well. I'll also
+show you that.
+Um so, this whole like YAML structure,
+it's it's quite beautifully simple,
+honestly.
+And uh but like even even so, like when
+you're trying to package up your entire
+workflow, it can start to look a little
+intimidating. So, it's really nice to
+use a coding agent to help you define
+these workflows.
+But just an example here. So, within the
+diagram here, I showed the whole like
+PIV loop workflow.
+And that that workflow can be summed up
+with this right here. So, this is a kind
+of a bit of a simplification just so it
+fits nicely in the read me, but it gives
+a good idea here. So, you start with the
+node for your planning, and then you go
+into implementation. And you can see
+that we have we support loops in Archon
+as well. So, uh maybe I can even go into
+the UI. Let's see if I have it run with
+a loop.
+I want to give like a demo of like what
+it actually looks like. Yeah, here we
+go.
+So, like we have we support loops in
+Archon. So, by the way, this is what the
+logs look like. When you invoke a
+workflow and you view the logs in the
+web UI, you can see like all the tool
+calls that your coding agent is making
+behind the scenes. You can see like the
+the node flow and like where it's
+currently running. So, like we have a
+loop right here that has like a certain
+number of iterations. And uh if I go to
+like a more fancy one like a GitHub
+issue fix, we can see like you can get
+pretty comprehensive with the workflows
+that you define. This is one of the the
+bread and butter workflows in Archon, uh
+the fix GitHub issue. So, you can throw
+this on any GitHub issue in any
+repository, and it works through this
+entire process of uh you know,
+classifying the issue. Is this a a new
+feature we have to plan, or is it a bug
+we have to investigate?
+And then it'll do some research. It'll
+fix the issues after investigating, and
+then it will validate, and then create a
+pull request and review it after. So,
+it's like super comprehensive workflow.
+And and yes, having this many steps does
+take a good amount of tokens, but
+another really powerful thing you can do
+in Archon is specify the model the at
+the individual node level. So, when
+you're classifying or investigating,
+maybe you only need to use Haiku. And
+so, it might only be the case that like
+a single node like the fix issue, this
+is the only one where you'd want to use
+Opus. Or you'd want to use high
+reasoning GPT Codex, for example. And
+so, you can make things very token
+efficient by determining at at each
+individual level what model do we want
+to use.
+And the other really powerful thing
+about harnesses, like I showed in this
+diagram here, is you get insane results
+building a harness on top of a model.
+So, the harness elevates the model. I've
+had better results using Archon with
+Sonnet than I have using Opus by itself
+in Claude Code.
+And so, uh another really cool thing is
+like
+you know, this um Archon kind of comes
+with good timing here because Anthropic
+has made their rate limits a lot worse
+for Claude Code recently. It's really
+unfortunate. But it's forced me to like
+start using Sonnet more for my coding
+because I hit my rate limit so
+incredibly fast. But with Archon, I feel
+like I'm not really losing the code
+quality, like the output quality,
+because the workflows
+they package up such a comprehensive
+process. And like using this whole thing
+with Sonnet is still cheaper than like
+asking Claude Code to fix an issue by
+itself with Opus cuz Opus is just so
+much more expensive.
+So, anyway, I got off track a little bit
+showing you guys the web UI here, but
+yeah, so we have the loop like we can,
+you know, implement a plan task by task
+in a loop, and then we run the
+validation. And the important thing is
+this is no AI. It is deterministic. So,
+we're guaranteed that our validation
+runs. That's powerful. And then we run
+the reviews afterwards, and then we have
+some kind of approval process with a
+human in the loop before we create our
+final pull request.
+And because we have Archon as a CLI and
+a skill, when you have it loaded into
+your Claude Code or your Codex, all you
+have to do is tell it to use Archon.
+And that like literally that's all your
+request has to be. And it'll
+automatically dispatch like create an
+Archon workflow. So, it'll run like
+let's say for example this idea to PR
+workflow. It'll create the work tree
+under the hood so you can keep working
+on your code base in parallel. And then
+it goes through the different stages,
+and you can have your coding agent
+monitor the workflow and or monitor it
+in the web UI like I showed right here.
+So, like obviously this is a completed
+run right now.
+But uh if this was in the middle of
+executing, you could like see the logs
+coming in real time and see like, you
+know, like what stage of the workflow
+the coding agent is currently on.
+And as far as which coding agents we
+support right now, we have support for
+Claude Code, and then Codex is almost
+done.
+And then also, we are working on uh or
+we want to add in support for other
+coding agents as well. So, like right
+now it's Claude and Codex,
+but uh we have a priority item right now
+to add support for Pi as well. So, Pi
+also has an SDK. Uh we're also
+interested in Amp and Open Code. I mean
+really like Archon, remember Archon is
+the layer above the coding agent cuz
+it's the harness builder, right? So, we
+don't really care about what coding
+agent you're using under the hood. We
+just have to build a little bit of
+support for like calling the SDK for the
+coding agent. So, like Codex has the
+SDK, Claude has the agent SDK. That's
+what Archon uses under the hood. So,
+when you use Claude with Archon, it is
+running Claude Code. It's just running
+it programmatically through the SDK.
+And um so, you can you are allowed to
+use your Anthropic and Codex
+subscriptions with Archon. You don't
+have to pay for API credits.
+Um and and that's that's a very
+important thing cuz a lot of people
+right now are getting their Anthropic
+subscriptions banned when they use it
+with Open Claw and Open Code.
+But the problem with those they're
+third-party harnesses. They're kind of
+doing a workaround to use the
+subscription, and that's against the
+Anthropic terms of service. But
+Anthropic has made it very clear. A
+couple of their team members like posted
+on X saying that like you are allowed to
+use your Anthropic subscription
+with the Claude agent SDK as long as it
+is for personal use. And Archon is for
+personal use, right? Like you're running
+it on your computer, you're hosting it
+yourself, and there aren't other people
+using your subscrip- subscription
+through a production deployed agent. So,
+it's a different story if other people
+are using your subscription through a
+Claude agent SDK agent you have like
+deployed to some production platform,
+then that's against the terms of
+service. But if it's a an application
+you're running yourself and is using the
+Claude agent SDK, then you are allowed.
+So, I've been using my subscription with
+Archon for, you know, months and months
+now. And the same thing with my second
+brain as well.
+And so, if they've made that very very
+clear. I don't have the exact tweet up
+right now, so I can't show you the exact
+thing, but Boris Cherney, he's the
+creator of Claude Code.
+He um he clarified like he made it super
+clear. Like yes, you can use your
+subscription for personal use with the
+agent SDK. So, we're good.
+&gt;&gt; [laughter]
+&gt;&gt; And I get that I get asked that question
+all the time as I'm doing my second
+brain content on YouTube, and I'm you
+know, I started showcasing Archon. And
+it is a fair question because um yeah,
+like people are really nervous about
+getting their subscription banned, but
+you are good with Archon.
+And yeah, I see some things in the chat
+here. People are excited for the pie
+support. Yeah, I'm excited for that as
+well.
+Because then it you will have like
+support for pretty much running any
+model that you want with Archon.
+All right.
+Cool.
+All right. So yeah, I'm going to go
+ahead and answer some questions in the
+chat here, and then we'll get right into
+installing Archon. So I have an instance
+already spun up
+in the cloud. I I installed Archon from
+scratch on my computer for the video on
+Wednesday. I don't really want to like
+reinstall it on my computer, cuz I
+already have some things going with it.
+So I'm going to reinstall it on a Linux
+VPS that I created just in Digital
+Ocean. But the installation process is
+going to be the same pretty much no
+matter your operating system. So whether
+you're installing it on a VPS or on your
+Linux, Mac, or Windows system, it's
+pretty much going to be the same.
+And the readme has good instructions for
+that. And I'll I'll walk you through it
+right now as well. But yeah, before we
+do that, I'm going to switch here to my
+full frame. Let's let's chat a little
+bit. So I'll I'll pop up some questions
+in the chat here
+and spend some time for Q&amp;A.
+All right.
+Jared said you said the magic words,
+customize B for inspiration into custom
+workflow. That's exactly right. So it
+works the way you need it, just the way
+I need it. This is fire, what I've been
+looking for.
+Yeah, I appreciate it a lot.
+And that exactly, like that's that's the
+thing is
+you can just like
+fork B mad, and you can just run it and
+change it yourself, but that's a lot
+more involved than creating an Archon
+workflow. I'll show you in a little bit
+what it looks like to customize
+a workflow taking inspiration from
+something like B mad. I'm going to use
+GSD as an example, cuz it's a bit
+simpler and easier to do, but you could
+do the same thing with B mad.
+All right.
+So basically, we could call Archon
+Stripe Minions, but open source.
+Exactly. Yep. And I'd even go further to
+say that like Stripe Minions is just a
+single harness. Archon can allow you to
+build anything. Like Archon allows you
+to build Stripe Minions, but for your
+company or yourself.
+Yeah.
+Can a node be simply an execution node,
+no AI model used? Yep. Yep. So we have
+support for running bash, Python, and
+TypeScript scripts. So anything like any
+part of the workflow where you're like,
+I want this thing to happen exactly,
+like no AI model to mess it up, then you
+can run it as a node in Archon.
+Yeah.
+Where does this differ from N8N?
+You know, that's a really good question.
+Actually, here, I'm going to switch back
+to my scene here. I'm going to share my
+screen. Cuz if we look at the the
+builder here, and sorry, I'm going to
+the wrong tabs. We're actually adding
+support soon for a visual builder. So
+you can like connect the nodes like
+this.
+And so it is going to be kind of similar
+to N8N. In fact, in the readme here,
+we say think N8N, but for software
+development. And so for those of you who
+use N8N or have used it in the past,
+this might actually click really nicely
+for you. Is like N8N doesn't really have
+direct connections with Claude code. And
+they don't have things like work tree
+isolation support, right? Like you don't
+use N8N for AI coding. You use it to
+build automations for your business,
+whether it's like LLM workflows or not.
+But Archon is going to allow you to
+build kind of like N8N workflows, but
+specifically for AI coding. So you're
+stringing together these coding agent
+sessions and deterministic steps like
+bash and Python scripts, and it's for
+coding processes. And so like there's a
+lot of things we have built in behind
+the scenes with Archon for how it
+integrates with our different coding
+agents and handles work trees and things
+like that that N8N doesn't have at all.
+So like there's no way you could build
+this kind of thing in N8N. You're you're
+not going to be able to build a coding
+agent harness in N8N, or at least it'd
+be very difficult and not really what
+the tool is meant for. So this is a very
+different use case, but you can think of
+it like N8N for AI coding. So yeah, I
+appreciate you asking that.
+All right.
+How can we know that the plan step is
+complete? Do we have human and approval
+gate for that?
+Yes. So you can have the coding agent
+decide itself that the plan is complete,
+or you can make it so that you have to
+approve.
+And so like going back to the diagram
+here,
+this step right here is what you're
+talking about. Like planning. And so
+what it does is it'll output some
+artifact. And you can have I know that I
+only show the human approval gate here,
+but you could like add that as a node
+right here as well. So like you get to
+look at the artifact, and it'll like
+give you a summary of it, or it'll give
+you like the full files, so you can like
+go through the markdown if you want.
+And then you can give feedback. So you
+can say like, "Hey, you didn't do enough
+validation, right?" So or like you
+didn't add enough planning around
+validation. So like go back, edit the
+plan, and then let me review again. So
+you can add that for any step in Archon.
+Or you can have it just decide itself.
+Like if you want it to be a little bit
+more hands-off, like you want to do
+something like the RALF loop, which by
+the way, we have a RALF loop workflow
+built into Archon for you to use out of
+the box,
+then you don't have to have the human in
+the loop. Like you can have it kind of
+like iterate by itself and kind of
+critique itself, and then decide when
+it's ready to move on. Which obviously
+that's a bit more or a lot more
+non-deterministic, but you can do
+whatever you'd like.
+And speaking of that actually, like
+workflows in Archon, we have a lot of
+Archon workflows that come shipped with
+the platform. So when you install
+Archon, all of these workflows here are
+ready for you to use immediately. So you
+can build your own. If you want to
+create your own harness, build your own
+workflows, you can. But if you just want
+to poke around with Archon initially, I
+have all of these ready for you guys to
+use. So we have like a human in the loop
+interactive PRD like walk you through
+creating PRDs.
+We have the whole like plan to pull
+request. We have the RALF loop one if
+you want to do the RALF loop in Archon.
+It's actually like a beautifully simple
+workflow.
+Most of it is just prompting here, but
+it'll walk you through like creating the
+PRD, it'll validate it, and then it'll
+go through the whole RALF loop.
+And like manage the state through like
+JSON and markdown files just like the
+RALF loop does, the original RALF loop.
+What else do we have? We have the GitHub
+issue fix. This is the one that I use
+the most out of all of the workflows in
+Archon. Because I'll I'll throw this on
+the issues that we have in Archon. Like
+I'll I'll say like, "All right, Claude
+code,
+we have a few people that have just
+opened up issues for Archon. We got, you
+know, like 1082, 80, 76, 72. I want you
+to spin up four GitHub issue fix Archon
+workflows in parallel, and then monitor
+them and let me know when they're done,
+and I can review the pull request." Or I
+could even have it like run the validate
+PR pull request after as well. So yeah,
+like I said, I'm always using Archon to
+build Archon.
+All right.
+Visualization is fantastic. I appreciate
+it. I assume you're talking about the
+the web UI here, but yeah, there's a lot
+of work that we've been putting into the
+visualization here.
+Can I use this with open code? Yeah, so
+not yet, but we want to add support for
+open code.
+So pretty much Archon is going to be
+able to be integrated with any coding
+agent that supports an SDK.
+So like like I said, with Claude, we
+have the agent SDK, Codex has their SDK,
+Pi has one, open code has one, and Amp
+has one. The Gemini CLI does not. That's
+another one that I wish I could add, but
+they don't have an SDK. Now you can just
+run the coding agent in headless mode,
+but it's it works better to use the
+coding agent programmatically. So this
+entire code base is TypeScript.
+Almost entirely TypeScript. Because
+that's the language most of the SDKs are
+written in. So the Claude agent SDK has
+both a Python and TypeScript version,
+but Codex is only TypeScript. So that's
+why I decided to go TypeScript for for
+this code base here.
+And in the end, like the actual language
+you pick doesn't matter a ton, cuz
+coding agents can just rock everything,
+right?
+In fact, TypeScript is even a bit better
+for coding agents than Python, because
+it has the type safety built right in.
+All right.
+Cool.
+All right. So yeah, there are so many
+good questions in the chat here. It's
+going to be hard for me to get to
+everything, but I'll answer a couple
+more here, and then I'll get on to the
+demo where I'll I'll install it from
+scratch with you guys and show you how I
+use it on the day-to-day.
+Why have you made this open source?
+That's a good question. So open source
+has always been a really big part of my
+ethos. So as I created started creating
+YouTube content in 2024,
+I I I really just had a passion for
+sharing my knowledge and everything that
+I'm diving into with the whole world.
+And open source is my way to share it
+the most I possibly can.
+Because otherwise, if I close source it,
+I'm going to tell you guys about it, but
+then you won't really care, cuz it's
+either going to be some paid product
+that you have to shell out a bunch for,
+or it's meant for enterprises or
+whatever, and then like no one is going
+to care about it. So open source is my
+way to get the most eyes on it, which it
+also is helpful for me, because then I
+get the most feedback for it. And
+obviously like for my channel, it helps,
+because then everyone has a reason to
+care about it. If it's not something
+that's open source, I can share what I'm
+building, but then maybe if you want to
+like follow along with my journey,
+that's interesting, but otherwise it's
+like nothing you can really try
+yourself. So, I feel like it just you
+either become be kind of like a brick
+wall you hit if I make a YouTube video
+on Archon, it's like look at this cool
+thing I built, and then you can't even
+try it. It's like what's the point?
+Um so, definitely like with YouTube
+being my primary like
+platform for sharing things with the
+world, like what I share has to be open
+source in my opinion. So.
+Yeah. It's a fair question, though.
+All right. Um yeah, so another person
+asked about this and NNN, so I talked
+about that already. But yeah, I
+appreciate you guys asking about that.
+Uh will it include the GitHub CLI or
+GitHub Copilot CLI in the future?
+So, if they build an SDK, yes, but I
+don't think
+they have an SDK.
+Um oh, wait a second.
+Do they actually?
+Look at this.
+When was this released?
+They
+Oh.
+Okay, so there is a SDK. So, actually we
+could integrate GitHub Copilot with
+Archon as well.
+That's pretty cool. And yep, they
+support TypeScript, which is what we
+would need for Archon. So, yeah, this is
+yet another one. And okay, here's the
+really cool thing.
+I I haven't really talked about this yet
+too much. I mean, this gets more
+technical,
+but um
+let me let me tell you, there is so much
+effort that I put into architecting the
+initial code base for Archon before I I
+ever wrote a single line of code.
+So, I have like a sort of like generic
+interface implementation for every
+single adapter and every single coding
+agent.
+So, when I built the initial version of
+Archon, I supported Claude and I
+supported Telegram. So, like Telegram
+was a way to talk to it remotely, and
+Claude was the only coding agent. But I
+built it in a way where it wasn't like
+super coupled with that specific tool,
+like Telegram or Claude. And so, when I
+asked Archon to build support for Slack
+as well as Telegram or or GitHub, we
+like support you can like talk to Archon
+directly in GitHub issues as well. It
+just one-shotted it. Like I didn't even
+have to iterate, it built it perfectly.
+And then when I asked it to build
+support for Codex, like following the
+pattern that I did for Claude, it
+one-shotted that as well.
+And so, if you wanted to create a pull
+request adding support for GitHub
+Copilot, you could. You could literally
+one-shot it because the documentation is
+there, the coding agent can reference
+that if you have like Claude code open
+up in the Archon repository or Codex.
+And um and then also like it can just
+copy how we already have it set up for
+an existing coding agent. So, we have
+Archon set up in a way where the code
+base is very easy to evolve because
+everything is set up as like super easy
+patterns to understand. Like the coding
+agent can understand very easily, like
+here's how I add a new coding agent,
+here's how I add a new adapter, uh
+whatever we want to do to evolve the
+system.
+Yeah.
+Um can workflows be told to obey token
+rates and limits?
+So, I think that's actually something we
+have an open issue for cuz there's not a
+way to like set a max budget for tokens,
+but it would be pretty easy to add that.
+Like on a per node level, it's like I
+want you to stop if this is taking more
+than 100,000 tokens cuz this that
+definitely means that like the coding
+agent is going off the rails here or
+whatever. So, we don't have support for
+that yet, but um I think I mean, I don't
+I don't really want to like go on a hunt
+here and try to find this exact one,
+but uh there are there is definitely an
+issue that we have out for for that.
+Let's see if I can find it. So, mo- most
+of these issues that we have right now
+are actually created by uh Rasmus. So,
+like I said, he's one of the guys that's
+been helping me an insane amount with
+Archon. So, most of these things are
+like just us kind of listing out things
+that we want to
+uh improve in in Archon.
+Um we had to port over so, we were
+working on a kind of like a private repo
+that was like just for the Dynamis
+community at one point. So, we had to
+port over a lot of the issues. I don't
+know. We might have changed the names
+for some of them,
+but that's definitely something we have
+on our radar.
+Um yeah, not sure if we I can't find it
+exactly right now. But yes, that's one
+of the things that's just like all of
+the different parameters that we have in
+like Codex and Claude code, we want to
+make sure that we can support those so
+you can build it directly into the
+configuration for each node of an Archon
+workflow.
+All right. Yeah, and so yeah, one thing
+I I want to mention really quick is like
+when we were first working on Archon,
+we were doing it like as an internal
+project in the Dynamis community. So, we
+called it the actually I still need I
+still need to archive this repository
+here. But we have the remote coding
+agent. It's funny cuz Archon the new
+version of Archon started as a a
+resource that I built for the Dynamis
+agentic coding course because it it
+originally wasn't a harness builder. It
+was just a platform that allowed you to
+talk to Claude code or Codex
+uh in a remote environment, like Slack,
+GitHub, or Telegram, like I was talking
+about earlier.
+So, that's how it started, and then it
+evolved into this beautiful thing where
+now you can like build any AI coding
+workflow as an Archon harness.
+Uh but this this is like the origin of
+Archon. So, it's cool. For everyone in
+the Dynamis community, you guys got to
+like see it evolve to the point where it
+is now, and obviously you got early
+access to it. Another thing is um within
+the Dynamis community, I am going to be
+doing a lot more workshops the next
+couple of months, like getting like
+really deep into using Archon, like
+building custom workflows. I'll show you
+guys more like how to build your own
+harnesses. Um it's it's always the place
+to be if you want to like be a part of
+Archon and get the the inside scoop on
+how to use the tool the best and like
+the evolutions that I'm doing to it. Uh
+so, I yeah, I just want to call out
+really quick for Dynamis. I'm going to
+put a link in the chat here. Uh I
+actually have a little live stream
+special for you guys
+for Dynamis. So, it's a 10% off the uh
+public price for the community. This
+discount here is going to go away
+uh by the time our live stream is done
+here. So, it's a special for literally
+just this live stream. So, if you like
+what I'm working on with Archon, if you
+want to be a part of of this, and um
+also all the other course content that I
+have in Dynamis, definitely check this
+out. I put the link in the chat just
+now. So, another big thing that I did in
+Dynamis recently is I did a 4-hour boot
+camp on building your own AI second
+brain. So, I took the entire second
+brain that I built for myself that
+literally saves me 20 hours a week, and
+I showed you how to build it from
+scratch. So, I did a a live workshop,
+and I'm also turning this into the third
+course for Dynamis as well. We also have
+the AI agent mastery and agentic coding
+courses, and I referenced the agentic
+coding course already because that was
+the origin of the this new version of
+Archon.
+So, yeah, lot a lot of value packed into
+Dynamis. I do weekly workshops as well.
+And so, that's where I'll be doing some
+more stuff with Archon if you are
+interested.
+So, all right. Uh with that here, I'm
+going to go ahead and show you guys how
+to install Archon from scratch.
+And uh like I said, I'm going to be
+doing it on a VPS
+just because I don't want to wipe my
+installation on my computer again. I I
+already reinstalled Archon from scratch
+um four times this week as I was testing
+things to get ready for the open source
+release. And so, I'm going to install it
+on the VPS where I'm going to build my
+dark factory. This is the exciting like
+last part of the live stream that I'll
+be covering with you guys here. Um yeah,
+I'm I'm actually pretty stoked for this.
+I don't know if you guys know what a
+dark factory is. Um it's
+kind of like a a term that was coined in
+the last Well, actually it was a a term
+that was coined in the late uh 1900s.
+Uh that sounds weird. It like 1990s, I
+think, like the idea of a dark factory
+is um you have a factory without lights
+because it's robots running the entire
+thing. And then recently people have
+been talking about like dark factory as
+it relates to code bases. And basically,
+a dark factory is a code base that
+self-evolves. Like AI is the only one
+writing code ever on the code base. And
+so, an experiment that I want to run,
+I'm giving you a little bit of a teaser
+to what I'll talk about at the end of
+the workshop here, an experiment I want
+to run is a public dark factory code
+base where every single evolution of the
+code base, like every pull request,
+every release, is managed by Archon
+workflows.
+Because we can build our process like we
+can define exactly how we want to manage
+issues and pull requests and releases,
+we can define it as Archon workflow. So,
+we basically use Archon as a dark
+factory harness, which sounds kind of
+it sounds silly. Uh but I'm actually
+like really excited to try this as a um
+kind of like public experiment here.
+Like I I literally wanted to get to the
+point where like anyone can create an
+issue, and then I'll have Archon like
+figure out is this an issue that we
+should uh address for this code base,
+and then it'll handle it automatically
+all the way to like pull request and
+reviewing and merging into the main
+branch.
+So, we'll talk about that, but obviously
+we got to get Archon uh spun up for the
+first time here. So, I'll show you guys
+the installation. I'll show you what it
+looks like to run workflows with Archon.
+And then I want to build a workflow with
+you guys. And then we'll do some of the
+dark fa- factory fancy stuff at the end.
+All right. So, I'm going to go into the
+readme here.
+So, I'll put a link to Arkon in the chat
+again.
+If you guys want to follow along and
+install with me on your machine or a
+VPS.
+If we scroll down to the get started,
+this is where we're going to work right
+now.
+&gt;&gt; [snorts]
+&gt;&gt; So, literally all you have to have
+installed before you run Arkon is your
+coding agent and the GitHub CLI. In
+fact, I list bun as a prerequisite, but
+the setup process is going to even
+install this automatically
+if you don't have it yet.
+So, I do list Claude code as a
+pre-wreck. You can use Codex as well.
+That's also supported with Arkon. It's
+just not quite as stable right now as
+Claude code. So, I'll definitely be
+updating the docs as I address that or
+as we address that.
+But then obviously the GitHub CLI is an
+important dependency as well.
+You don't need the GitHub CLI for every
+Arkon workflow.
+But um yeah, being able to work with
+GitHub is a very core part of Arkon
+because most workflows are relying on
+having the issue or pull request be like
+the starting point, right? Like
+reviewing pull requests or fixing GitHub
+issues. Most of the time when I'm
+working with Arkon, it's it's dealing
+with artifacts in GitHub essentially,
+right? So, that's why I have that as a
+prerequisite.
+So, once you have those things
+installed,
+&gt;&gt; [snorts]
+&gt;&gt; um we have the binary. So, we're working
+on making it so there's like a single
+install script. So, you can do this if
+you want. I'm just going to show you
+that my my approach of like cloning the
+repository and setting up from there cuz
+that's what I'm more comfortable with.
+This is like a newer thing that we're
+working on to make it like even easier
+to set up Arkon. So, I'm going to
+install it this way. So, I'll I'll copy
+this command to clone the repository and
+I'll do that within my VPS here.
+So, there we go. Clone Arkon and then
+obviously change my directory into Arkon
+and then check this out. Um so, I'm
+going to run in dangerously skip
+permission mode just because I don't
+want to have to deal with approving
+things right now.
+Open up the folder. Uh yes, I accept.
+There we go. All right. Now, watch this.
+All I have to do is say set up Arkon.
+I don't have to say anything else. It's
+going to walk me through the entire
+process. So, you if you have the
+pre-reqs and then you clone the repo,
+you just go into your Claude or Codex
+and you say set up Arkon and that's it.
+So, first it's going to uh see like what
+we already have set up. It's going to
+realize that we haven't set up anything
+and then what it should do is it should
+load the Arkon skill. So, we have this
+skill that like walks it through how to
+help us with Claude or with the the
+whole setup of Arkon with Claude.
+All right.
+&gt;&gt; [cough and clears throat]
+&gt;&gt; I guess I have to wait for it to to work
+here.
+And by the way,
+if we see it um I'm just did like
+control O to see the output here.
+It's just like understanding the code
+base. I'm actually surprised it didn't
+load the Arkon skill.
+Um you're in the let's see. What is it
+saying here? No, all right. Hold on.
+Load the Arkon skill and walk through
+the setup. I've actually never had to do
+this before,
+but it uh for some reason didn't load
+the Arkon skill. So, I'm just going to
+tell it to do that.
+But we're still going to get the same
+effect here. What will be super easy to
+go through everything.
+All right.
+There we go. So, now it's reading the
+setup guide. So, this is like a part of
+the skill
+that tells it how to walk us through
+everything.
+So, it's going to check all the
+prerequisites like making sure we have
+get and bun, things like that, which we
+already do on this machine.
+Um there we go. So, now the first
+question that it'll ask you in the setup
+is where like what's the repository that
+you want to use to work on with Arkon,
+right? So, like when we use Arkon, we
+want it to invoke workflows on another
+repository cuz we're going to use it to
+work on something else. So, that's why
+it says this should be your own project,
+not the Arkon repo.
+And so, I can either
+clone a repository from GitHub or I can
+just give it a local path if I wanted to
+work on a a project that I already have
+installed on my machine. So, number two
+is actually probably what you would end
+up doing cuz usually there's already
+something you're in the middle of
+working on that you want to use Arkon to
+like build a harness around, right? Um
+now, since I'm on a VPS, I am just going
+to clone something from GitHub here.
+So,
+I will select that and then it just says
+like please provide the repo URL.
+Um I need to actually find one here.
+I'll I'll just do let me open this up.
+I'll pull some like random
+um
+let's see. Let's just do this one. I'll
+just copy this repo. I just need kind of
+like a random one here to register. So,
+what this is going to do is it's going
+to register your first repository with
+Arkon.
+So, whenever you
+um run the Arkon CLI on a repo for the
+first time, it will register. So, like
+Arkon has a database under the hood or
+behind the scenes that like keeps track
+of the projects that you're using Arkon
+with and like all the conversations
+you've had where you've invoked Arkon
+workflows on those code bases. So, you
+do the automatic registration that way
+and then also in the web UI like I
+showed earlier, you can register
+projects this way, too. So, you just
+click the plus icon here and then you
+can give it the GitHub URL or the local
+path. So, also in the web UI, you can
+register your repos.
+And the cool thing is for all the
+projects that you have registered in the
+web UI, the agent automatically
+understands. So, if I say like what
+projects and workflows do I have,
+the Arkon agent that runs in the web UI
+either using Claude code or Codex, it it
+has the context injected for all of the
+Arkon workflows it can invoke and the
+different projects that it can invoke it
+in. And so, when we say like, "Hey, I
+want to fix this GitHub issue for this
+project." it will know like, "Okay, let
+me use the fix GitHub issue workflow and
+I'll route it to the rag YouTube chat
+repository.
+And the the web UI is one of the things
+that we can spin up once we go through
+the setup here. So, first it asks what
+platforms do you want to set up. So, the
+CLI is always included by default. I can
+also set up you know, like Telegram. So,
+you just do you know, like
+um enter to select or unselect. Um for
+this, I'm going to keep it really simple
+and just do the CLI.
+Um yeah, but you can set up like all the
+adapters that we support in Arkon right
+here. So, you specify the ones that you
+want and then in a little bit it'll go
+through a process where we can give our
+API keys. But it's a separate process
+because we don't want to just send our
+API keys directly into a coding agent or
+an an LLM. So, I'll submit these answers
+here.
+So, I just want to set up the CLI so I
+can run workflows there. So, the CLI and
+the web UI obviously don't require you
+to have any additional parameters or API
+keys. So, they'll just come they'll work
+right out the gate.
+So, then what it does here is it creates
+Arkon as a global command. So, that way
+we can just run you know, like Arkon the
+CLI to invoke workflows. But trust me,
+you're never going to do this yourself.
+You're just going to have your coding
+agent run Arkon workflows. So, you don't
+really have to understand the CLI
+yourself. That's the beauty of having an
+Arkon skill is your coding agent can
+load the skill and then it knows how to
+invoke the Arkon CLI to kick off
+workflows for you.
+All right. And so, now what happens is
+it helps you configure your credentials.
+But it runs this in a separate terminal
+because we don't want our coding agent
+to see our API keys. That would be a
+huge security risk.
+And so, it it will automatically spin up
+a new terminal for you to go through the
+setup. But depending on your operating
+system, it might not there might not be
+support to like automatically start a
+new terminal.
+And so, you might need to just use do
+this yourself. And so, for me because
+I'm running in a VPS, there's no like
+automatic terminal spin up. So, I just
+have to connect into the machine again.
+So,
+let me do that. So, I got to remember
+the path to my SSH key.
+Uh
+there we go.
+Goodness, I can't type today.
+Gosh. All right. And then
+um I forgot the IP of my machine. Shoot.
+What is the IP address of my machine?
+Here, I'm going to pull this up on
+another monitor here.
+Um
+All right. Pull this up.
+There we go. Okay.
+All right. So, SSH in and then I will go
+to
+the path here, dark factory Arkon.
+Wait, that's not it.
+Dark factory
+uh oh yeah, capital A. Okay.
+All right. So, then all you have to do
+in the separate terminal is run the
+Arkon setup command and it it walks you
+through this here. If it doesn't spin up
+the terminal automatically, you just do
+that yourself. And now we just go
+through the setup process. So, I'll zoom
+in on this here. So, first what database
+do you want to use? SQLite is the
+easiest to set up and so, I recommend
+that. You can use Postgres though if you
+want to have an external database you
+connect to. Uh which shoot, I
+accidentally entered that. So, let me go
+through the setup again. So, SQLite and
+then here's where it asks what coding
+agent you want to use. And so, these are
+the two we support right now. Like I
+talked about, we want to add more as
+well.
+So, space to select and then enter to
+confirm. And then it asks, "How do you
+want to authenticate with Claude?"
+And so, there's three options here. We
+can give an OAuth token. Like if you
+want to just run you know, the Claude
+like setup token command to get an OS
+token you can give your API key which I
+wouldn't recommend cuz it's going to get
+expensive and then like I said we are
+allowed to use our anthropic
+subscription with Claude code with the
+Claude Asian SDK and Archon. So I'm just
+going to use my global off. So on this
+instance I've already authenticated with
+Claude.
+If you use Claude code a lot and you're
+installing Archon on your machine then
+the authentication is already set right
+like you don't even have to set up any
+other environment variable.
+And then it asks what platforms I want
+to connect as in what ones do I want to
+enter in an API key for. I'm not
+actually going to I mean I guess I'll
+just do GitHub right now just so I can
+show you one of these. So you do
+space to select and then enter to
+confirm. And then what it'll do is for
+each of the platforms that you select
+that you want to install Archon with.
+This is very similar to the open claw
+setup.
+If you guys have installed open claw
+before is for each one of the platforms
+it'll like give you instructions. Like
+here's how you get your your GitHub
+personal access token.
+And so I'm going to off camera obviously
+go ahead and get that and copy it.
+So let me go to
+there we go.
+So I'll paste it in because it
+automatically hides it.
+Which is good wouldn't want to show that
+on the live stream
+but yeah gives you instructions for how
+to do that. It'll be the same for every
+single one of your platforms that you
+configure. And then another thing
+obviously for the sake of security is we
+for each of the platforms that we set up
+like GitHub and slack and telegram we
+want to have a comma separated list of
+users that are allowed to invoke Archon.
+Because if I have Archon running on a
+public repository I don't necessarily
+want anyone to be able to just say like
+you know at Archon fix this issue
+because then it's spending my tokens and
+it's not me invoking it. So I'll just
+say like this is the only user that's
+allowed to use it.
+And then you can change the mention
+names like in GitHub you do at Archon
+and then you give it the request like
+that's how you talk to it. So I'm good
+with with that as the default.
+So I don't need to set up anything
+separate.
+And then the other thing is it also for
+that repository that we we registered.
+So this repo that I found just as like a
+a random one where was it? Yeah this
+one. So like I I gave it this to
+register as the first repository.
+We can also copy the Archon skill into
+that project.
+And the the reason I want to do that is
+then I can open up my coding agent
+directly in that code base and since the
+Archon skill is there it knows how to
+use the Archon CLI. So that way I don't
+have to open my coding agent in the
+Archon repo in order to work on another
+repository.
+Because as long as the Archon skill is
+there the Archon CLI is a global CLI. So
+we can invoke it from anywhere on our
+machine. Like I can just open up my
+terminal right here and just say like
+Archon right and then that automatically
+works
+because it's a globally registered
+command but our coding agent only knows
+how to use it like use all the different
+commands and options if we have the
+skill. So I just want to copy it over
+into the code base. So
+All right and then the docs directory
+not to worry about that right now. And
+there we go our setup is complete. And
+so we go through all of this
+and then we go back here
+and we just say done. So like we
+finished and now it's going to validate
+all of the credentials
+and make sure that we're good to go and
+then it'll actually test the Archon CLI.
+So it'll run a workflow for us to make
+sure that everything is all configured
+properly.
+So we'll let that run here as well.
+All right.
+So here we go running a quick test here.
+So we can see that it is using the
+Archon CLI. So it thanks to the skill it
+knows how to. You never have to worry
+about running it yourself. You just ask
+the coding agent to do so. So it's
+running the Archon assist workflow
+and it is doing it on our repo that we
+registered the first repo that we
+registered.
+And so it's just you know say hello like
+a really basic test to make sure that it
+works. And there we go it's good.
+So yeah I'll copy the skill over. I
+guess it asks us here as well. Maybe
+that's something to touch up but anyway
+so every single time that you
+invoke a workflow from the CLI it's
+going to run as a background process. So
+Claude code or code X like it has access
+to
+the full logs from the workflow. So you
+can like ask it for a status if it's a
+longer running workflow or you can say
+like hey summarize what happened in the
+workflow like it's
+able to basically you know communicate
+with the workflow that it runs because
+all the logs are right there in the
+background process.
+So there we go our setup is complete. So
+it tells us what is configured and then
+it gives us next steps as well. So take
+a look at this.
+We are immediately ready
+to use Archon in our code base now and
+we can register it with any other code
+base we want as well. So like I can just
+say like you know
+I'll go into my speech to text tool here
+and I'll say like use the GitHub issue
+fix workflow to fix issue number two on
+XYZ repository right? Like I can send
+off this request
+and it will automatically if I you know
+give it obviously the path to the repo
+here it'll use the Archon CLI to run the
+GitHub fix issue workflow on this repo
+and then that also automatically
+registers that repository with Archon so
+it knows about it going forward if the
+repository wasn't registered already.
+And then the other thing is wherever I
+have the Archon skill copied which if
+you want to copy it yourself in the
+Archon repo it's just within the dot
+Claude skills. So this and I'll put a
+link to this in the chat right now as
+well. This skill
+which you can just ask your coding agent
+to copy it into your new like whatever
+repo you want to start using Archon with
+but this skill tells it how to use the
+CLI. Like this is literally the only
+requirement. So another thing is if you
+want to use your second brain with
+Archon all you have to do is put this
+skill into your second brain repo.
+And then it'll immediately be able to
+start using Archon workflows. So you can
+basically add Archon as the coding arm
+for your second brain. So you can create
+your own harnesses your own workflows
+and then you can tell your second brain
+to invoke it on whatever repo you you
+want as long as you give it the path and
+it loads the Archon skill then it knows
+how to use the CLI.
+And so for anything here if it's like
+confusing like okay what repo do I open
+up or like how do I get the skill or how
+do I register projects like you
+literally just ask Archon and it knows
+how to do everything because the skill
+walks it through everything. So let me
+actually show you this here. So in this
+other terminal here
+I'm going to
+um
+clear and then so it says I can change
+my directory into the Claude memory
+compiler.
+And then I can run Claude to launch
+Claude here. So I'll do
+the dangerously skip permissions again.
+Or I guess it's not here. I'll just have
+to type it out manually. So Claude
+dangerously skip permissions.
+And then you can see that since I copied
+over the skill to this repo during the
+setup I can just say load the Archon
+skill. Not that you have to say this
+explicitly every time but I'm just
+demonstrating that like we have the
+Archon skill in this repo. So now it's
+going to know how to invoke any
+workflow.
+And then within the repo here okay we
+actually have a couple of issues. Cool.
+This 6 p.m. thing is very edgy. I've
+never actually seen this issue before by
+the way cuz this is a public repo.
+Um
+That's okay. Massive token consumption.
+Interesting. [snorts]
+All right well I'm trying to find one
+that's actually like
+Um see it exists. Okay well let's try
+this one. This is kind of random but I'm
+just going to pick a random issue like
+number one here. So like watch this. All
+I have to do is say
+I want you to use Archon to fix issue
+number one.
+That's it. It's so simple cuz it knows
+the workflows it has access to. It's
+going to pick the right one right? Like
+it's going to pick the Archon fix GitHub
+issue. It knows how to use the CLI.
+Boom. That is it and we have this full
+process running now. So Archon fix
+GitHub issue is running in the
+background. It's going to check on the
+progress periodically and
+um
+Oh hold on.
+The workflow failed because you're not
+logged into the GitHub CLI.
+Oh that's a bummer. Okay hold on. I
+guess I have to do that. I thought I
+already did the login here.
+Um
+Let's see. Paste authentication token.
+Hold on. I'm going to do this off camera
+quick.
+Um I thought I already did that part of
+the setup so it's kind of weird that it
+says but I'm I'm just going to try the
+login here.
+All right. So
+Yeah see it says I'm already logged into
+this account. I think Claude might be
+tripping right now.
+Let me try resuming the conversation.
+Let's see.
+I logged in. Also it says I already was
+so I am confused. There might be
+something else I forgot to or I messed
+up in my configuration on this machine.
+Let's see.
+But it's cool like it can just rerun the
+workflow right? Like we can just talk to
+Claude as we normally would.
+And so it can use Archon as a tool just
+like it would use sub agents or just
+like it would use skills.
+It says it exited again.
+The error is actually from the Claude
+code off. The not logged in is coming
+from the Claude code agent that Archon
+spawns.
+Um
+Check Claude.
+Oh, I think I know what it is. I think
+it's because of the
+Uh it's because of this specific repo. I
+have the dot Claude folder with the
+settings.json.
+If I just remove this
+I might just do the demo on my computer
+instead of this VPS cuz I I think it's
+just this specific code base that I have
+some of my Claude code hooks that are
+running. It's a
+whole thing.
+Oh, wait. Oh, wait. I know what's wrong.
+It's because I have this already set up
+to use MiniMax M2.7 for the dark factory
+stuff I was going to show you guys.
+That's my bad.
+Uh okay, I have to I have to demo this
+on another machine here. And by the way,
+we were using MiniMax 2.7 for
+everything.
+&gt;&gt; [laughter]
+&gt;&gt; Um cuz I was getting some stuff set up
+ahead of time for the live stream here.
+Sorry guys, I'm complicating things more
+than I
+um
+I then I need to because I I'm I have
+some other things prepared for you guys
+here. So okay, here's what I'm going to
+do. I'm going to show you a
+demonstration by doing it right from
+Arkon. So um this will be better anyway
+cuz then I can show you guys the web UI.
+Uh which by the way, if you want to
+start the Arkon web UI, all you have to
+do is go into the Arkon code base and
+say start the back end and front end of
+Arkon. That's it.
+Um start the back end and front end of
+Arkon. I guess my speech text got cut
+off, but that's all you have to do. So I
+hope that like the pattern is clear here
+for your setup, for getting things up
+and running, for running Arkon. It just
+comes down to like the Arkon skill
+guides it through everything. All
+workflow execution managing the
+application, super super easy.
+So within my Arkon here let's go ahead
+and uh zoom in a bit. Let's say I just
+wanted to handle an issue. So this is
+going to be kind of meta cuz I'm using
+Arkon to improve Arkon. Um but like I
+said, you could do this on any code base
+where we have the Arkon skill.
+Um so I'm going to find an issue.
+There's quite a few issues that have
+been created in the last couple of days
+cuz we're we have a lot of eyes on Arkon
+right now. We're at 16.2 thousand stars,
+which I'm honored by the way. Um
+Okay.
+Uh let's see. So okay, this is a good
+one. So chat UI fails silently when the
+Claude OAuth refresh token is expired.
+So this is issue number 1076.
+So watch this. I'm going to go in this
+just like I was trying to do in the VPS.
+I just have things uh configured. We'll
+talk about the dark factory stuff in a
+bit cuz I want to use MiniMax um
+anyway. So I'll go in here and I'll say
+uh use Arkon to fix uh issue number
+1076.
+There we go.
+All right. Now now we'll see it in
+action. So uh again, it'll load the
+Arkon skill. Well, I guess first it'll
+view the GitHub issue. And then yep,
+load the Arkon skill so it knows how to
+invoke workflows and then it'll kick off
+the workflow.
+So Arkon fix GitHub issue and then uh
+we're doing it in a branch. So it's
+going to do this in a work tree so we
+have isolation. And there we go. So now
+the workflow is running in a background
+process. So Claude code has support for
+this. I don't know if Codex does as well
+cuz I haven't used Codex in a while if
+I'm going to be honest, but if you click
+into the shell here like if I if I press
+the down arrow and then hit enter, I can
+see the details and the logs of the
+workflow as it's running. So we can
+monitor it here.
+And then the cool thing is because it
+runs as a background process, I can
+continue. I can run more Arkon
+workflows. I can keep just talking to
+the agent here. I can also say give me a
+status update. So it can look into the
+logs for the background process and then
+tell me what stage of the workflow it's
+in. So if I want to check in cuz this is
+a longer running workflow, it can say
+like oh, it's currently investigating or
+it's in the middle of classifying the
+issue. So it it reads like I know it
+looks kind of long here, but this is the
+the logs that are stored internally on
+my machine for the background process.
+And then it says, all right, cool. So
+work tree is created. It uh extracted
+the issue number and it classified the
+issue. So it's currently running the web
+research step. And if we go to the web
+UI here
+I can actually see that. So take a look
+at this. We have it currently running so
+I can see it in my chat. If I go to the
+mission control right here, I can also
+see all of my running UI but especially
+as you're building your own custom
+workflows, it can be really really
+useful when you're first debugging
+things to dive into a workflow log and
+like make sure that things are actually
+happening as you intend them to.
+And so we can see the logs. I know like
+this one specifically the the web
+searching it it's um a longer step, but
+like we can see all these tool calls
+come in live
+as uh as it's working.
+Um and then we can invoke a ton of
+different workflows in parallel and we
+can watch them all here. And we can
+click between the logs for them. Uh it's
+pretty cool. So yeah, and so we can
+monitor it here or in the web UI.
+And uh you know what? Just for the sake
+of getting kind of fancy here
+I'm going to uh I'm going to show you
+guys how I how I actually use Arkon
+every single day. Cuz here's the thing.
+I am not just working on one issue at a
+time with Arkon.
+Um the fix GitHub issue workflow is my
+most often used, but I'm using it in
+parallel a lot. So take a look at this.
+I'm going to go into my speech-to-text
+tool.
+I'm going to say
+Okay, I also want to handle more issues.
+So let's see here.
+Uh let's tackle issue number 1067.
+Um
+Let's see. Let's also do
+um 1082
+uh and 1087.
+All right. So I'm going to send this in.
+Uh by the way, usually I'll do even more
+than this at once, but I just want to
+make sure that I don't hit my rate
+limits for Claude right now.
+Cuz it like I mean, we're doing a lot of
+work in parallel here. Not that Arkon is
+token inefficient. In fact, we've been
+doing a lot of things to make it more
+token efficient, but still like there is
+a a bunch that I'm doing at the same
+time right here.
+And watch this. Not only can I say, you
+know, spin up the workflows in parallel,
+but I can say I want you to, you know,
+run these workflows in parallel. I want
+you to wait until all of them are done.
+So monitor the workflows until we have
+pull requests for every single one of
+them. And then once we have pull
+requests for every single one of them,
+then I also want you to run the validate
+PR workflow on all these in parallel.
+And then when it produces the comments
+in the PRs, I want you to view the pull
+requests, look at all of the issues that
+we need to address. I want you to
+address them and push the changes to the
+branches for the pull request.
+And I could even combine all this into a
+single workflow if I wanted as well. But
+it's like look at how comprehensive this
+is. We are going all the way from issue
+to a final validated pull request.
+And we're doing it in parallel. So it's
+spinning up all of these at the exact
+same time
+as background processes. So now if I go
+into the four shells that I have open
+here in Claude code, we can see that
+they're they're all currently running.
+And then I can go hit enter to view the
+logs for any one of them.
+And um then of course, I can see them
+all running in the web UI as well. So
+let's go back to the dashboard and there
+we go. We got all four of them running.
+So we have each of them running in the
+last 20 seconds here and then this one
+that's been going on for 5 minutes now.
+Pretty cool.
+So yeah, we're still doing the web
+research on this one here.
+But yeah, that that's how I use Arkon on
+the day-to-day. Like most of the time
+when I'm working on a code base
+I'm I'm going to be filing things as
+issues, whether it's a bug that I'm
+going to be working on or it's a new
+feature that I want to add. Like both of
+those those fit as GitHub issues.
+And it's also nice because this is kind
+of like my personal mission control for
+everything I want to work on. And so
+that's why we see like Rasmus opening up
+so many GitHub issues. Like we're using
+this more than you know, other people
+are because this is where we document
+all the things that we want to work on.
+Like Rasmus is opening up issue after
+issue
+for you know, bugs and feature requests.
+And so it's also really nice because
+GitHub is where we're going to keep
+track of the versioning of Arkon. Like
+as you evolve your code base and you
+want your coding agent to remember
+things that you've worked on in the
+past, you're going to rely on Git
+commits. I actually love using the Git
+log as long-term memory for my coding
+agents. And so I'm already keeping track
+of all my work in in uh as the Git
+commits. And so I might as well like
+track things in issue in issues as well
+for like the upcoming work that I have.
+So you can of course hook in like a MCP
+server or skill for Arkon to use another
+external platform like Linear or Jira
+for your task management. I personally
+just love using uh GitHub as my task
+management. So that's why the GitHub CLI
+is so crucial for me for pretty much all
+of my Arkon workflows.
+Now of course, there are Arkon workflows
+that don't have anything to do with
+GitHub. So like for example, if I want
+to create a PRD, I can say, you know,
+use Arkon to walk me through creating a
+PRD. And so this is going to uh you
+know, hopefully load the Arkon skill
+here and then walk me through the
+interactive PRD workflow. So I'm just
+showing off another workflow really
+quickly. And this one's actually pretty
+cool cuz it has human in the loop. So it
+asks you some questions. It starts
+building the PRD and then it stops to
+ask you more questions. So maybe we'll
+see this in action really quick here.
+And then I also I do want to get into
+the other
+um
+the other thing I wanted to show you
+guys like building a workflow based on
+GSD.
+Okay.
+Um pick your starting points. Let's see.
+Okay, so it actually tells me like
+here's a few different workflows. Um I
+want to use the interactive PRD
+workflow.
+So, let's have it kick that off for us
+here.
+Okay.
+Interactive workflows.
+Uh got it. The interactive PRD workflow
+is a guided conversation where AI asks
+questions in rounds to build out a PRD.
+Cool. So,
+um
+I don't know.
+I want to build support for Pi agents in
+Arkon. Well, that I mean I think it's
+kind of an interesting example that you
+know, let me make sure actually my
+speech-to-text tool spells that right.
+And I'll just say uh with the SDK. Not
+that I'll build this right now, but I'll
+I'll show you guys quickly what it looks
+like to go through a different workflow
+cuz like I get so hyper-focused on using
+the fixed GitHub issue workflow. I want
+to show you guys something a little bit
+different here.
+Okay, so there we go. So, now it kicks
+off the Arkon investigate or sorry,
+interactive PRD. So, the workflow is
+running. It's going to explore the code
+base before it starts asking us some
+questions here.
+And we can obviously go and like view it
+in the logs along with the other ones.
+So, this workflow is actually in a
+paused state now. So, you can see in the
+web UI we have support for this where
+it'll show us like here is where we have
+a human-in-the-loop step. So, while the
+all the other workflows are running,
+this one we're more interacting with.
+So,
+uh let me So, it says it's paused. Let
+me grab the output. So, it's going to
+read the logs and it's going to uh ask
+us some questions here, right? So, we
+the workflow is in a paused state for us
+to give feedback. And this is very
+similar to what I was showing in the uh
+example in the diagram earlier where we
+could have like human-in-the-loop for a
+planning step.
+But, we get to actually review the plan
+and have the coding agent iterate on
+this before we go to the next step. So,
+asking some foundation questions.
+Uh let's see. So, who has this problem?
+Um
+everyone using Arkon. I think it's kind
+of a weird question actually. What
+problems are they facing?
+Uh the problem they're facing right now
+is there a lot of people that don't want
+to use Claude or Codex specifically.
+They want to use different models. Pi is
+more of a general agent that makes it
+really easy
+to uh to use other models.
+Um
+let's see. Why can't they solve it
+today? Uh well, we don't have support
+for Pi yet. And I want to build this now
+because we're currently working on
+making big improvements to Arkon and Pi
+is one of our priorities. We will know
+when it's solved. Success looks like we
+can use Pi any model in Pi with all of
+our Arkon workflows.
+So, these questions um if you aren't
+familiar, these are like really standard
+questions for product managers to ask
+when they're first creating a PRD. So,
+we have a like a lot of like product
+manager best practices built into this
+workflow.
+Um now, the some of the questions were a
+little awkward for me right now just for
+the demonstration here, but they they
+are like legitimately good questions to
+ask when you're first creating a product
+requirements document. So, now you can
+see that um using the Arkon skill, Arkon
+knows like, "Okay, let's resume the
+workflow within approve state." So,
+we're approving and then it's giving our
+feedback in.
+So, it passed our answers through. So,
+now the workflow is it went out of the
+paused state into the running state. We
+can of course view the logs here to see
+what's going on.
+So, this is the first node that it ran.
+And then it asked us some questions.
+Now, we move on to the next one. So,
+it's kind of just like a process of like
+asking us questions and going in a loop
+here.
+All right.
+Um oh, is it paused again? Hold on. No,
+it's still running. Okay. So, we'll wait
+for it again.
+Although, I might actually not continue
+with this demonstration cuz I think you
+guys get the idea. It really just does
+this in a loop where it has like a set
+of questions that are it goes through
+for each one of the the prompts that we
+have right here.
+So, I think you guys get the point. But,
+there's an example of a workflow where
+um it doesn't really have anything to do
+with GitHub cuz not all of them have to.
+That's what I wanted to show. The final
+artifact obviously of this workflow is
+going to be a markdown document which is
+our PRD. So, then we would, you know,
+break that up into tasks and and go
+through a PID loop as a separate Arkon
+workflow to uh knock out all the phases
+that we have in that PRD.
+And then if you really wanted to get
+fancy, you could even if you wanted to
+make it so that the whole like PID loop
+process and PRD creation like everything
+is a single Arkon workflow. Like I said,
+your entire software development life
+cycle, you can package that all up as an
+Arkon workflow.
+All right.
+Cool.
+So, yeah, I think with that I want to
+show you guys how to create a workflow
+from scratch.
+Cuz it's actually beautifully easy.
+So, I'm going to open up another Arkon
+session here. And you know, before I do
+that, I do want to spend some more time
+with Q&amp;A with you guys. So, let me go
+back to the full frame here.
+And I will open up some more questions.
+All right.
+So, give me a second to kind of read
+through what we got here.
+And then I think uh yeah, so Rasmus is
+is here in the live stream now answering
+questions. Appreciate it a lot, Rasmus.
+And then thank you, Thomas, as well.
+Um
+let's see.
+Uh what is the simplest path to get this
+to work with linear tasks instead of
+GitHub issues?
+Yeah, so my recommendation would be to
+use either the linear MCP or create a
+skill to use the linear API.
+And then you would build a custom
+workflow.
+So, instead of like fixed GitHub issue,
+it would be like fixed linear issue or
+like handle linear task. And you could
+even have Arkon reference the fixed
+GitHub issue workflow
+and use that as a starting point where
+you would just mold things to be all
+linear instead of all GitHub.
+So, it's actually very easy to
+integrate any platform that you want
+into Arkon because for every single
+node, you can inject skills or MCP
+servers.
+Um so, for the case of GitHub like
+coding agents are so good at using the
+GitHub CLI that I don't need a GitHub
+CLI skill. You might need that for
+linear though or like I said, the MCP
+server.
+But seriously, all you have to do and
+I'll show you this in a second is you
+like okay, watch this.
+Um
+I don't know I don't think I'll actually
+run this right now, but I Oh, here. Let
+me go back to my scene so you guys can
+see my screen. I forgot I wasn't sharing
+my screen. So, I can say like
+uh load the Arkon skill. I want to
+create a version of the GitHub fixed
+issue workflow, but specifically for
+linear instead of GitHub.
+Like that is all you have to do. Now,
+obviously, you're going to probably have
+to iterate quite a bit on the prompting
+and like really making things specific
+to you. Uh so, this is this is certainly
+an oversimplification, but like this
+literally could be your starting point.
+Like this is what you you send in.
+Um and so, yeah, after a little bit of
+Q&amp;A here, I'll show you what it looks
+like to create a workflow in like Man,
+the Arkon skill is so beautiful because
+it just it knows everything. It'll It'll
+walk you through everything. And And
+another thing I love doing with coding
+agents is
+I like asking it to ask me questions.
+And so, maybe I would send in Let me go
+back to my aqua voice here.
+So, I can paste this back in. Um and I
+can say like, you know, ask me questions
+to make sure you understand uh my linear
+setup and exactly how I want the
+workflow to function. Right? So, that
+way you're you're kind of reducing the
+assumptions that it makes up front.
+Um and so, what it produces in the end
+is going to be better aligned with what
+you actually want before you go into
+iterating. You'll probably still have to
+iterate, but that's the idea here is
+like go through a bit of a planning
+process with Arkon
+before it um
+before it creates the workflow for us.
+All right.
+Cool. What else do we got here?
+&gt;&gt; [snorts]
+&gt;&gt; Um with the session management within
+the workflows, how is context
+persistence handled? Is the data and
+context passed through the nodes?
+Okay, that is a really good question.
+And uh we have a few different ways to
+handle context persistence here.
+So,
+uh I'm trying to think if I have a good
+workflow to demonstrate this. Instead of
+poking around, I might just more answer
+your question at a high level.
+Um but yeah, one [clears throat] of the
+core things that we have in Arkon is a
+parameter for each node that specifies
+if we want to continue the session from
+the prior node or start fresh.
+And so, that that flexibility is pretty
+powerful because maybe you want a
+different node where you inject
+different skills
+or you just want to like have a new node
+for some reason cuz you want to like
+switch models or something, but you want
+to still continue the same conversation
+from the previous node. You can do that.
+Or you can say like I actually want to
+start completely from scratch in this
+node.
+And then another thing that we have in
+Arkon
+is we have like outputs. Like we can
+output artifacts.
+And so like for in this case, we have
+the planning step
+and it's going to output a plan to our
+artifact directory for our current
+workflow execution. So, this is like one
+of the primitives we have in workflows.
+It's like the artifact dir.
+And then we when we go in a brand new
+session in the implement stage,
+we are going to prompt it to read the
+plan from the artifact directory. So, if
+I look at the Archon fix issue command,
+let me open this up here cuz we you can
+prompt inline. I've shown that in some
+of the workflows. You can you can have
+the prompt right in the YAML for the
+workflow. Or if you want to and you want
+it to like kind of be more organized,
+you can have it reference a command in
+the commands folder. So, we'll go to
+Archon
+fix issue. There's a lot of commands
+here, so I have to find the right one.
+There we go.
+So, Archon fix issue, you'll see here
+that the argument is the artifacts path.
+So, Archon is smart enough to know like
+once we are done with the planning and
+we have our plan here, we're going to
+prompt in a brand new session for our
+coding agent to read that plan.
+Right? Like go to the artifact directory
+and read that plan and then go through
+the implementation here. So, it's a
+brand new session, but then we're still
+passing some context or like I said, you
+can just
+have the context be like continue
+instead of fresh.
+So, it's up to you like flexibility
+depending on how you typically work.
+All right.
+Let's see what else we got here.
+Let's see. Have you really given
+anything other than Opus a real try at
+agentic coding tasks? I haven't.
+Uh so, I I do mostly use Opus for my
+implementation. However, I have tested a
+lot of using Sonnet for my Archon
+workflows.
+So, I talked about this a little bit at
+the start of the live stream, but I get
+better results using Sonnet to fix
+GitHub issues with this workflow than
+just using Opus by itself in Claude
+code.
+Because of all of the context
+engineering that goes into you know,
+like this I guess you could call this
+like a GitHub issue harness, like a
+fixer harness.
+Uh so, I have run this with Sonnet. So,
+Sonnet is actually the default model for
+all the nodes here. Uh now for the
+implementation itself, I think we have
+it set to Yeah, so we have it set to
+using Opus. So, like the default
+workflow as it stands uses Opus
+specifically for implementation, but
+obviously, if you just delete this,
+it'll use Sonnet as the default or um
+you know, you can change the model
+manually or whatever. But let's say like
+at one point I had it set to Sonnet and
+I was using it Sonnet for everything.
+Sonnet or Haiku for everything here and
+I was still getting really good results.
+Obviously, obviously, the best model is
+always going to give you the best
+results.
+Um but for the sake of like making sure
+you don't hit your rate limits and
+stuff, you can use Sonnet for these
+workflows.
+And you can even like ask it to adjust
+the model at the default level or the
+specific node level before you run it if
+you want to.
+All right.
+People like seeing you failing. Pretty
+sure it makes you a normal human. I
+assume you referenced that when I was
+having all of the
+issues here in the VPS. So, I appreciate
+that. We'll talk about why I have those
+issues in a second cuz I have a Claude
+code I'm not actually authenticated with
+Claude.
+I am authenticated with the Minimax API.
+That's what was causing the problems on
+the VPS cuz I'm getting things set up
+for the Dark Factory.
+All right. How many tokens does start
+the app take?
+So, when I asked it to just like spin up
+the front end and back end of Archon,
+I mean, I don't know exactly, but it's
+probably just going to be a couple
+hundred unless it's like running into an
+issue for some reason. It's not going to
+take that many tokens.
+And by the way, you can see here that
+it's already kicking off the whole
+process here helping me create the
+linear version of the workflow. So,
+asking me some questions here. I'll
+answer those and then it'll create the
+workflow and test it for me and
+everything. Like I won't go through this
+full process here, but for the question
+earlier on on migrating to linear, like
+it's just so easy to have it walk
+through cuz pretty much like here's the
+thing. All of the default workflows that
+we have in Archon,
+there's two there's two uses for them.
+One is you can just use them directly
+out of the box if if there is one that
+like matches how you already work, but
+the other maybe even like more important
+part of these default workflows is it's
+a reference point for your coding agent
+to build something that's actually
+custom to you.
+And so, even if you're building
+something that's like super different
+than everything we have here, like some
+kind of like refactoring workflow for
+example. Actually, we have that as well.
+So, maybe that's not the best example,
+but even if you have some like super
+different workflow that's like not even
+close to anything we have here,
+you still want your coding agent like
+loaded in the Archon repo to look at
+these as a reference to understand like
+the different parameters we have for
+nodes and how we handle loops or
+whatever else like deterministic nodes,
+whatever you might want in your
+workflow.
+So, very easy to pretty much build any
+I'll show that in a second, but I just
+want to answer a couple more questions
+here cuz you guys have a lot of really
+good ones.
+All right.
+Let's see.
+All right. [snorts]
+Yep, Pi next week. Yeah, not not a
+promise that like we'll have it ready
+ready next week, but I'm definitely
+going to be working on me or Rasmus will
+be working on the pull request for
+adding in Pi.
+Um could I make a node to use Codex
+Spark in a workflow?
+Um I mean, there's nothing stopping you.
+You can make a node do literally
+anything because it can be a prompt to a
+coding agent or it can be a script. Even
+if you wanted to use a coding agent
+that's not supported by Archon directly,
+you can just make a script that invokes
+that. Like the Yeah, the world's your
+oyster here.
+All right.
+Um let's see. What about
+create a node to mention other workflow
+not only a command? I I I think what
+you're asking about here is if we can
+nest workflows. Like if we can have a
+workflow that calls another workflow.
+And uh that is something that we are
+planning on adding support for. Yeah.
+So, I haven't added that yet. Like sub
+workflow execution like you have in N8N.
+I haven't added that yet because I
+haven't found a clear use for it for me
+personally,
+but you're not the first one to ask
+about it. And so, like we are definitely
+interested in adding support for that.
+Show some love and hit the like. I
+appreciate it a lot. Yeah, if you guys
+want to like the stream, I of course
+would appreciate that.
+Like the stream and and subscribe
+because I'm going to be putting out a
+lot of content on Archon.
+Because like yeah, I'm getting pretty
+deep into the live stream here,
+but certainly a lot more I can show
+about like creating custom workflows and
+things that I'll be doing with future
+YouTube content and then of course in
+the Dynamis community as well. Uh so,
+yeah, I just want to mention this again.
+I am planning on doing a lot of of
+workshops around Archon
+um in Dynamis coming up here in the next
+couple of months including using Archon
+with your second brain and some
+strategies to show like
+how I use my second brain to delegate
+work across my codebases with Archon.
+It's a bit of outside of the scope for
+our live stream here, but yeah,
+certainly the second brain is another
+really big part of what I've been doing
+and what I'm covering in the Dynamis
+community. So, if you don't know, I did
+a full 4-hour course on building your
+own AI second brain in Dynamis. So, I
+took the entire system that saves me
+like no exaggeration at least 20 hours a
+week and I built it like from the ground
+up in a live stream so that you can
+follow along. And so, I am turning it
+into the third course for Dynamis. Uh
+and so, you know, I'll put this link in
+the chat again. If you're interested in
+really like being on the forefront of
+Archon and going through these workshops
+and all the courses and building your
+own second brain, there's so much value
+packed into the community. Not to
+mention all of the amazing minds in
+there sharing ideas every single day.
+Come join us in Dynamis. I'd I'd love to
+have you there.
+Uh and I I appreciate it. Dynamis
+community is great. Yeah, thank you very
+much for all of you guys who are in the
+community here in the stream. Always
+appreciate you guys being a part of it.
+Yeah. Appreciate your passion and
+sharing of knowledge.
+Yeah, you're very welcome. It is my
+pleasure.
+Yeah, I mean, I'm I'm excited. Like we
+had the question earlier of like why
+open source Archon? I mean, to me like
+there's not an alternative. I can't I
+can't imagine building something like
+this and just like hiding it from the
+world. Like I just I want people to to
+see what is possible with AI coding.
+Like in the end, that's like my number
+one goal with my I guess you could call
+it like my career. Like my with my
+career in business, like my number one
+goal is just to
+show people like what is possible with
+AI. And also to just like cut through a
+lot of the fluff. Like I want to be
+real, but inspirational at the same
+time. You know what I mean? Like there's
+a lot of people that are saying like you
+can vibe code everything and it's going
+to be perfect and you can make millions
+of dollars. Like I'm not one of those
+persons that's people that's like here's
+how to vibe code to make $10,000. Like
+no, I'm realistic like
+you have to have human in the loop. You
+can't just vibe code. Things take time.
+Coding agents make mistakes. Like I'm
+real on all of that. But then that's
+also why I'm building these tools
+specifically to add in deterministic
+steps, human in the loop, like building
+these harnesses because then that allows
+you to circumvent a lot of these real
+problems that a lot of people are
+ignoring.
+And so, actually going to my YouTube
+channel here, it's funny cuz like
+Wait, hold on. I I think I still have
+this in my YouTube channel.
+Um Yeah, yeah. So, I've had this like
+one-liner for my YouTube channel um for
+like literally ever since I started my
+channel in 2024, I've always had this
+sentence. Um join me as I push the
+limits of what's possible with AI. And
+I've always kept this sentence because
+that is really what I'm trying to do
+here. Like in a realistic way, like
+don't you can't just vibe code a $10,000
+a month site in a week. In a realistic
+way, I am showing what it's like to push
+the limits of AI. And I And I really
+think that like harness engineering is
+the forefront of AI right now, which is
+why I'm so excited about Archon.
+So, yeah, there's my little spiel on on
+my my vision and and why I want to make
+sure that Archon is available to
+everyone.
+Cool.
+All right. John said my brain is online
+thanks to Cole in the community.
+Couldn't have done it without the crew.
+I appreciate a lot, John. Yeah, I
+appreciate you being
+an active member of the community.
+Arun just joined the community. Thank
+you very much. Welcome to Dynamis, my
+friend.
+I'm going to be
+So, yeah, I'm I'm in Dynamis like
+literally every single day. So, I've
+been prepping for the live stream today.
+Haven't gotten to the posts in the last
+like 12 hours, but yeah, I mean like I'm
+replying to everything like every single
+day. So, I'll be sure to to greet you if
+you want to make an introduction post as
+well. I'd love to see that.
+All right.
+Let's see.
+Any plans to utilize local LLMs? So,
+that is actually one of the reasons I
+want to add in Pi cuz Pi will make it
+easier to use local LLMs. And then also
+within Claude Code, you can integrate it
+with things like Ollama to use local
+models.
+So, I I know that So, MiniMax M2.7, I'm
+not using That's not obviously running
+locally cuz it's a massive model.
+But, this is a demonstration of like I
+do actually have Claude working with a
+different model.
+Like check check this out. If I go back
+into Claude and I say, "What model are
+you?" Like this isn't just a gimmick. It
+is actually using MiniMax M2.7 through
+the MiniMax API. So, you can change
+Claude Code to work with other providers
+like GLM, MiniMax, Ollama so that you
+can talk to local models. So, I'm adding
+in Pi cuz it'll make it easier and it's
+more like natively supported. Uh hold
+on. I got a sneeze coming.
+Excuse me.
+&gt;&gt; [snorts]
+&gt;&gt; Um but yeah,
+you can you can connect Claude Code.
+Like you can already use Archon with
+local models. If you wanted to try like
+there's been a couple people in the
+Dynamis community that have actually
+used Gemma 4 with Archon workflows. Like
+Gemma 4 are kind of driving the whole
+ship. So, definitely possible already.
+Pi will make it even easier though.
+&gt;&gt; [snorts]
+&gt;&gt; Yeah.
+Uh is there a way to override some
+settings like the model without changing
+the default YAML files?
+So, I think there is a parameter to
+change the default model, but if it's
+overridden at the individual node
+configuration, there's not a way to
+change that right now.
+Uh but like you shouldn't be afraid to
+just ask Archon to change the YAML for
+you, even if it's just like a temporary
+thing or it like revert it after it's
+done with the workflow. Um it can
+definitely do that. Like I've actually
+been doing that a lot recently with
+Claude Code skills where the skill will
+like change its own scripts as before it
+runs them and then just like revert it
+after I'm done with that set of work for
+any kind of like PowerPoint diagram or
+PDF generation. I've been doing that.
+So, I wouldn't be afraid to, but but
+still like that maybe that is like a
+real sugge- like not maybe that is a
+good suggestion to make it even easier.
+Um let me actually ask it right here.
+Uh so, based on the Archon scale, what
+can you tell me about support for
+changing the model without having to
+change the YAML itself? Like is there a
+flag for the CLI to change the model
+that's used?
+So, I'm I guess I'm kind of like
+validating the answer that I gave you
+quick here cuz I mean Archon's such a
+massive code base, it's hard for me to
+remember like everything that we've
+decided, especially cuz like I said,
+Thomas and Rasmus have been helping me a
+lot in Archon as well. So, I'm also not
+the one that's built everything in the
+platform.
+Okay, let's see.
+Oh, there's no model CLI flag.
+Okay, so I I Yeah, I guess I have to
+take that back. We don't have a way to
+do it right now.
+Uh you would just have to edit the YAML
+directly.
+Which again like feel free to do that,
+but also like that that is a good
+suggestion. Even if you wanted to make a
+GitHub issue for that
+in the Archon repo, I'd be down to to
+address that.
+Cuz I'm just going to have it uh
+Okay, so I will say that like when I use
+Archon to work on your guys' issues in
+Archon, like don't worry. I am actually
+reviewing your issues and reviewing the
+pull requests as well. So, I am like
+legitimately considering the the things
+that you guys bring up. Um but yeah,
+just like as the I delegate the coding
+to the agent itself 100%.
+We can see that this workflow Actually,
+we are almost done here
+with the GitHub issue fix.
+And then if I look at my Claude rate
+limits, so I'm actually curious where we
+are at with that.
+Uh let's take a look.
+Okay, it's actually not too bad.
+Okay.
+So, here here's my Claude rate limits
+for right now.
+&gt;&gt; [clears throat and cough]
+&gt;&gt; This is This is not too bad.
+So,
+um
+I've used 37% of my 5-hour limit in the
+past
+like 3 hour or 4 3 hours and 45 minutes,
+right?
+And we're only at 37%. Before So,
+there's a lot of stuff I was doing to
+prep for the stream today
+this morning before I started. So, we
+were already at like
+15 to 20% before I kicked off all these
+workflows. And we've been doing quite a
+bit with Claude recently. I mean, we
+have so many workflows running right
+now. And it it used less than 20% of my
+5-hour limit. And we're almost done with
+all these workflows. Like they're pretty
+token efficient.
+You could you could run the fix GitHub
+issue workflow
+like does like at least a couple of
+dozen of times um and and until you hit
+your 5-hour limit. And like that's a lot
+of work with that Claude is doing.
+Uh now, the really unfortunate thing is
+my limit reset yesterday and I'm already
+at 32% for the week. That is a huge
+bummer. Like I'm probably going to hit
+my weekly limit around Tuesday or
+Wednesday.
+It's unfortunate.
+Uh so, yeah, there
+&gt;&gt; [laughter]
+&gt;&gt; there are always people that tell me
+they have like you know, two, three,
+four Claude subscriptions. I'm not one
+of those people, but honestly after
+Anthropic um making thing making the
+rate limits more harsh recently, I I
+might have to get a second subscription.
+I feel bad saying that cuz it's like
+Anthropic is being kind of frustrating
+recently and then I'm just giving them
+more money. But, it's like well, what
+can you do? Like I I don't really want
+to switch over to Codex because I test
+Codex from time to time and I I just I
+think Claude Code is better.
+But, anyway,
+so yeah,
+yeah, these workflows are pretty token
+efficient for how much they're actually
+doing. Like keep in mind, it's not just
+asking Claude Code to fix an issue. It's
+going through deep investigation, deep
+research, deep implementation, and deep
+code review using the right model at the
+right time. So, it's not super token
+heavy.
+All right.
+Uh working on something similar. And
+yeah, thank you for the $5 donation. I
+appreciate it a lot. Uh would love to
+discuss with you about how we could
+potentially partner if there's something
+you are open to.
+Yeah, so Archon is an open source repo.
+And for me, that means that partnerships
+would be like I love to chat and see
+what your ideas are. Uh but I I wouldn't
+really want to like go and work on a
+separate repo. But, if you're interested
+in like contributing to Archon and
+partnering in that way, um I am
+considering creating sort of like a core
+maintainer team for Archon. I think that
+would be the way to partner cuz I
+wouldn't want to like turn this into a
+separate venture. I am Like I said with
+like my core vision and and mission for
+Archon and my career as a whole is to be
+open source and share with the world.
+And so, I I don't want this
+to like create spin-offs that I'm
+dedicating time to instead of working on
+Archon as the core open source open to
+collaborations. Maybe even I'm thinking
+of like I said, making the maintainer
+team. Always open to issues and pull
+requests.
+And
+yeah, sometimes open source can get
+overwhelming. So, also like I don't
+always get to issues and pull requests
+even within the same week cuz it it gets
+a lot. Let me tell you guys from all the
+open source work that I did, but also
+it's more and more realistic to handle
+everything over time as I have coding
+agents help me
+and a maintainer team. And then like I
+said, like we kind of already have a
+maintainer team with me, Rasmus, and
+Thomas.
+But, also like thinking of extending
+that to just like
+the general
+you know, you guys in the YouTube
+community and in the Dynamis community.
+All right.
+Cool.
+Is it open source available on GitHub?
+Oh, I assume that was a question to
+someone else cuz yes, Archon is and and
+Thomas knows that.
+All right, is it possible to add Gemini?
+So, the Gemini CLI, I don't think has an
+SDK. Gemini CLI SDK.
+So, that's the thing is is for any
+coding agent that we integrate with
+Archon, it does need to have an SDK.
+Because I I work with the coding agents
+programmatically in TypeScript instead
+of using the headless mode for the CLI.
+That's like another way that you can
+automate the usage of um of coding
+agents.
+I've I've been checking on this a lot
+though cuz this is another one of the
+tools that I would obviously want to
+integrate. A lot of people love using
+Gemini, especially cuz Gemini 3 seems to
+be like the best model for building
+front ends. Like people always use
+Antigravity with Gemini 3 to build
+front-ends. And um so, I I would love to
+add support for it, but they don't have
+an SDK.
+Um however, you could always use the Pi
+SDK with Gemini.
+So, we add support for that, then it
+would work.
+Um I guess I can't find an exact link,
+but
+Uh
+Oh, wait. What is this?
+This must not be Hold on. Google Gen AI
+SDK. That's I think that's for general
+agents, not Yeah, that's not for AI
+coding. So, that's not that's not an SDK
+for the Gemini CLI, unfortunately.
+All right.
+Uh to reach these limits, you have to
+have the product first cuz you can't
+code multiple things without having
+verticals that do not conflict. That's
+true. Yeah. Yeah, when you're first
+getting started, it's like you can't
+really do as much work in parallel. It's
+more once you have the thing established
+and you're just working through
+different issues, like granny or sets of
+work for improvements or bug fixes, then
+that's definitely when you're going to
+start hitting the limits, 100%.
+All right.
+Um let's see. I'm on the $200 max plan.
+That is true. Will you hit limits much
+faster on the lower plan? I think yes. I
+mean, yeah. The answer 100% is yes. Cuz
+the um $20 plan doesn't take you very
+far, to be honest. And then the $100
+plan, like you can you can do quite a
+bit, but you still hit your rate limits
+decently quickly.
+I believe that the $200 month plan is
+four times better rate limits than the
+$100 month plan.
+And then the $200 is 20 times better
+than the $20 plan. There's a quite a big
+difference there.
+All right.
+Let's see. How is this different than uh
+B mad version 6?
+So, okay. Here's the thing. B mad is a
+harness.
+Archon is a harness builder.
+So, B mad is a an opinionated approach
+to building software. It's a good
+approach. I think it's kind of
+over-engineered, to be honest, but it's
+a it's a really inspirational approach.
+And you can literally take ideas from B
+mad and build it into your own Archon
+workflows and then customize it more for
+yourself. So, the big thing that I want
+to be clear on here is that uh Archon is
+not competing with GitHub spec kit or B
+mad or Claude flow or GSD.
+It's more like those tools are great,
+but what if you want to build your own?
+That's why it's a harness builder.
+And so, um yeah. In a second here, I'll
+show you what it looks like to literally
+just like take inspiration from GSD and
+like build it as an Archon workflow.
+Archon is very powerful. Going to scrap
+the GitLab AI reviewer I developed
+yesterday and use Archon instead. Archon
+offers much more room for expansion.
+Very cool. Yeah, I appreciate it. Uh and
+you know what you can do is not scrap
+what you built, but uh point the Archon
+repo to look at what you built for
+inspiration to turn it into an Archon
+workflow.
+And and so, yet another thing that I
+want to, you know, re-emphasize here is
+you don't have to ditch what you already
+have if you want to build Archon
+workflows cuz you can bring in your
+skills and commands. You can reference
+other other frameworks or other tools
+that you built to use as inspiration
+either for the prompting or just like
+the general process that you want to lay
+out at an node-by-node basis. You're
+always able to um
+work with what you already have cuz I
+don't I don't want to. That That's
+another one of the problems with with
+all the other harnesses that are out
+there,
+like they're cool, but they require you
+to pretty much change how you work
+fundamentally.
+And that's just not going to fly,
+especially if you're working on a team.
+Like, if you're at an enterprise level
+and you already have a process for your
+software development life cycle, it's
+really really hard for you as an
+enterprise level, like as a team, to
+adopt something like B mad cuz you have
+to change how you work. But with Archon,
+you don't change how you work because
+you're building the layer on top of the
+coding agent that actually enforces
+that. So, you get to even um in a better
+way take how you work and use coding
+agents with that.
+Um Yep, Rasmus, same here. Used it every
+day since November. No bans using the
+Claude Asian SDK with the Anthropic
+subscription.
+Oh, yeah. When are they going to be
+Archon hoodies and merch?
+I would be interested. Yeah.
+Um
+Yeah, I mean, merch for Dynamis and or
+Archon would be pretty cool. I don't
+know like how much of an interest
+there'd really be for that,
+but it could be cool. I mean, my man
+Nate Herc is always rocking his um his
+merch in his YouTube videos now. It
+would be cool to have a a sweatshirt or
+sweater that I something that I wear
+when I'm recording.
+Yeah.
+All right.
+Yeah, very cool. We'll meld Archon and
+my QA bot. That's the way to do it.
+Meld it with what you've already got,
+100%.
+All right.
+&gt;&gt; [laughter]
+&gt;&gt; At Pika, I had 30-something Archon
+workflows running in parallel across
+four projects.
+You know, with the Anthropic rate limits
+now, you probably won't be able to do
+that, but uh that's very cool.
+We We've been spoiled at some points.
+So, um within the like, you know, last
+couple of weeks up until this week,
+Archon or not Archon, Anthropic was
+doing a special where it's like in off
+hours, you had uh two times lower rate
+limits. And trust me, I was taking
+advantage of that, chugging through like
+eight pull requests in parallel for like
+the entire day straight multiple days.
+Well, not the entire day straight, but
+like during the off hours.
+Uh so, yeah. It's It's a little
+unfortunate, but
+I am I am doing some experimentation
+with uh like, other models that like,
+you know, MiniMax.
+It's just not as good as Opus, but you
+still get quite a bit of power. So, if
+you have the right harness, you can get
+really good results
+even with something like MiniMax M2.7.
+So, I am experimenting with some things
+that I'll get into the dark factory
+we'll talk about in a bit. I am
+experimenting with some things, though,
+to be able to scale the number of
+workflows I can run in parallel and not
+have to worry about rate limits. It'll
+get a little costly, but I mean, the
+point of using these smaller models is
+it won't get too costly.
+All right. Yeah, that's right, Sean.
+Spicy mango shirts. Man, spicy mango
+hasn't come up in a while now. I'll I'll
+need to fit that into more YouTube
+videos, but it's like an ongoing joke
+where
+um I don't even remember where it
+originated. It was like something with
+GPT where like I was asking for recipes
+in a YouTube video and it kept like
+bringing up spicy mango even between
+conversations where there's no long-term
+memory.
+So, it just kind of became a joke from
+there.
+All right.
+Let's see.
+All right. Um you know what? So, man,
+there's so many good questions in the
+chat still, but I do want to get to the
+next part here where I will uh build a
+workflow with you guys.
+So, let's let's go back into our
+repository.
+I'm going to close out of this session
+and start a new one.
+All right.
+&gt;&gt; [sighs and gasps]
+&gt;&gt; So, uh here, hold on. Let me clear.
+There we go.
+All right. So, what I want to show you
+guys now
+is how to build a custom workflow in
+Archon.
+And there are a million different ways
+or different kinds of workflows you can
+build.
+And like I said, you can take
+inspiration from all these existing
+ones, even pointing Archon to look at
+these to, you know, understand best
+practices and how we've been building
+workflows already. But as as an example,
+like I've teased already, I want to
+build GSD
+as an Archon workflow.
+So, with GSD, it's a a lightweight and
+powerful meta prompting context
+engineering spec-driven development
+system. With a little bit of word salad
+there, but basically, it's a simplistic
+approach to going from planning all the
+way to getting your work done with
+coding agents. It's It's It's nice.
+And um he I actually really appreciate
+the inspiration behind the project. So,
+he says, "Other spectrum development
+tools exist like B mad and spec kit, but
+they all seem to make things way more
+complicated than they need to be." Which
+I agree with this. I actually already
+said this in the live stream where these
+tools are very inspirational, but just
+like it's more than you really want in
+your process and they're so opinionated.
+You've got your sprint ceremonies and
+story points and stakeholder syncs and
+retrospectives and Jira workflows.
+I'm not a 50-person software company. I
+don't want to play enterprise theater.
+And like, preach, man. Like, that's
+good. [laughter]
+So, I built GSD. The complexity is in
+the system, not in your workflow.
+So, the the system gives Claude
+everything it needs to do the work and
+verify it, right? Like, that's that's
+the harness here is it's a system for
+planning, implementing, and validating,
+a lot of like what I've already been
+talking about. I trust the workflow it
+does It just does a good job. It just
+gets it done.
+And so, I want to take some of the these
+ideas here. So, I'm not like, okay, I'm
+not going to build this like
+step-by-step in Archon. I'm not going to
+build a replica, but I'm going to take
+the general flow
+of the different phases, like discussing
+and planning and executing and some of
+their strategies for splitting up work
+into different stages and their
+verification. I want to take inspiration
+from this.
+But I'm going to do it with Claude. So,
+watch this. I'm going to copy this repo.
+I'm going to paste it in
+and I'm just going to say, "Load the
+Archon skill. I want you to help me make
+an Archon workflow
+that takes very heavy inspiration from
+GSD, the repo that I gave you the path
+to here. So, I want you to analyze the
+repo. I want you to dig deep into the
+process here and how it goes through the
+different phases, how it manages tasks
+and does verification. And I want you to
+analyze other workflows in Archon, some
+of the defaults to get an idea for like
+how those work and how we can translate
+ideas from GSD into a new workflow that
+we'll create. That'll basically go
+through the same process having human
+approval gates for different steps of
+the way within planning and validation.
+So, actually one more thing that I want
+to add to the prompt here is I'll say I
+want you to, after you do your research,
+ask me questions. Make sure that we're
+aligned on what this workflow does and
+how we're going to take inspiration from
+GSD.
+And so, I mean, if you wanted to go so
+far, you could pretty much replicate all
+of GSD as an Archon workflow. That would
+take a lot of work. I think that would
+take too long to do in this live stream,
+which is why I'm doing it more like in
+like, you know, let's just take
+inspiration from GSD versus replicate it
+exactly, but we'll still get something
+pretty similar here. I actually did
+already test this before the live stream
+and the results were were pretty good.
+Now, it is going to take a while
+to do the research initially or at least
+a decent amount of time. So, I'll answer
+some more questions while we let this
+run.
+Uh but I think this is a nice demo
+because without getting too complex
+here, just showing you at a high level
+how it's like, no matter what you want
+to build, just describe your process.
+Have it look at existing workflows for
+reference and of course, Archon skill
+helps, and then just start building with
+it.
+In fact, one of the workflows that we
+have is a workflow builder. It's very
+meta, but whenever we want to build a
+workflow, we can use this. It just kind
+of provides some more structure, right?
+It's a harness around building more
+custom workflows. A harness around
+building harnesses. If I had a dime for
+every time I said harness in this live
+stream, I would just go retire.
+All right.
+Let's see.
+By the way, I built collab mem for agent
+memory context engine, close to 100
+stars already.
+Hey, that's pretty cool.
+Congratulations.
+Yeah, long-term memory for AI coding is
+it's very powerful, very needed.
+Let's see. Um do you have the
+possibility to temporarily run commands
+from the web UI? Like running a dev
+server from your work tree to check the
+look and feel of your change from your
+work tree.
+Yeah, so we have played around with the
+idea of having like a basic terminal
+in the web UI
+to do things like that, but we haven't
+built that yet.
+Um it's one of those things where it's
+like, let's see if people really need
+that before we build it. A lot of what
+we've built in Archon up until this
+point has been like
+you know, just a you know, only like
+three people really sharing their
+opinions.
+And well, [snorts] okay, obviously it's
+not just three people cuz we've had this
+in the Dynamis community for a while as
+well. But for the most part, we haven't
+had like hundreds of people using it yet
+or thousands of people using it yet like
+we are about to. We kind of already have
+now this week. And so, [snorts] we'll
+see how people really use it and I'm
+thinking about getting like feedback
+from the YouTube and Dynamis community
+as a whole for what kind of features we
+want. Things like this we might want to
+build, but
+I just want to be careful with feature
+bloat. I want to make sure like there
+are a lot of things that sound good on
+paper,
+but like maybe people don't actually end
+up needing that. So, for the old version
+of Archon that I was building over last
+summer and like released in August, that
+one we we made the mistake of building
+in way too many things up front. Like
+there was a ton of different
+configuration parameters and stuff that
+like sounded really good on paper, but
+then like no one ever actually used it.
+Like I'd constantly like showed things
+like that on live streams or in Dynamis
+workshops and people be like, "Wow, I
+didn't even know that was a thing." Like
+I well, I like saw it, but I just like
+glazed over it because I didn't really
+care about it. So, that that's the kind
+of thing I want to look out for.
+Uh but yeah, I definitely would be
+interested in like adding more support
+in the web UI for being able to like
+actually manage everything yourself, not
+just relying on Archon. Now, the other
+thing is you could just ask Archon to
+spin up the site in the work tree,
+right? Like it it could take care of
+that even by itself. You don't
+necessarily need a place for like you to
+run the commands yourself when you can
+just ask the coding agent to do it.
+But I I still think that that could
+definitely be a good addition to the web
+UI.
+All right.
+Let's see. How do you pause all or a
+graceful pause?
+Yeah, there's no way to do that right
+now in Archon cuz the pause is reserved
+for human-in-the-loop workflows. So, it
+really is like you either abandon the
+workflow.
+Well, okay, actually there there kind of
+is support for it. It's just not direct
+cuz you can abandon a workflow
+&gt;&gt; [snorts]
+&gt;&gt; and then you can resume it later.
+It's just if you click abandon, it's not
+going to like show up in the web UI as
+something you can resume, but there is a
+CLI option to resume a workflow. So, you
+could just if you have to like shut it
+down for whatever reason, you could just
+say like, "Hey, like I want you to
+interrupt and stop these workflows." And
+then later on, you could tell Claude
+like, "Okay, resume these workflows."
+And if it's in the same session, it'll
+it'll remember the workflow IDs that are
+stored in the you know, the SQLite
+database or Postgres database under the
+hood, so that it can it can just pick up
+where it left off.
+So, it'll basically just like retry the
+node that it that was interrupted and
+then continue the workflow from there.
+So, yeah, just kind of thing where you
+just ask the agent to do it and it knows
+how to how to do that.
+All right, cool. So, we got we're only
+at 50% and it resets to 55 minutes. So,
+our limit is good here and it's going
+through. So, you can see that it
+finished all of the GitHub fix issue
+workflows. Now, it's just doing the
+validation here. So, if I go back to
+Archon,
+um man, I have so many sessions open.
+Uh which one was it? Yeah, this one
+here.
+So, let's see.
+So, it's checking in on all of the
+workflows over time.
+Um done done done.
+There we go. So, yeah, you can see that
+all of the fix workflows were done. We
+have the pull requests created and then
+it launches the validate PR in parallel.
+So, sorry, I know I'm jumping around a
+little bit here, but I just wanted to
+show you the other thing that we've had
+running this entire time. We created the
+pull requests, those four in parallel,
+and now we're doing the the reviews all
+in parallel as well. And that's what
+we're seeing in the the web UI here as
+well.
+And then we have the interactive PRD
+that I'm just going to kind of abandon
+cuz I don't want to spend time on that
+right now.
+All right.
+Oh yeah, thank you very much. Yeah,
+congrats on the 200,000 subs.
+I appreciate it. Yeah, so that happened
+literally just yesterday. I I reached
+200,000 subscribers. So, yeah, pretty
+big milestone. I don't get a plaque for
+that like the 100,000 unfortunately, but
+still feels really good to get to that
+point. So, yeah, thank you.
+All right.
+Cool. So, all right, let's see what we
+got here. So, we got the core summary of
+GSD. It implements a spec-driven
+pipeline with these phases: questioning,
+parallel research, requirements,
+roadmap, uh per phase loop, and then um
+we get our complete milestone.
+So, that's like the end result of going
+through the whole spec-driven flow.
+Lists out some key patterns here like
+the plan checker as a gatekeeper before
+execution, goal backward verification,
+which um yeah.
+I mean, that this is the thing with all
+these frameworks is there's so much like
+word soup, word salad. Like what does
+that even mean? And obviously it's not
+that hard to like get into the readme
+and stuff, but I don't even remember
+exactly what all these things mean and
+I've used GSD before.
+Uh okay. So, here's what Archon supports
+for us.
+&gt;&gt; [cough]
+&gt;&gt; The closest existing workflow is the
+Archon piv loop.
+Which yeah, that's like literally the
+workflow that I described here in the
+diagram. So, this is the closest to GSD
+because it has the same stages of
+planning and then implementing and then
+validating.
+&gt;&gt; [snorts]
+&gt;&gt; Okay, so now it asks us some questions
+here.
+Uh wow, it asked us seven questions.
+Okay, let me try to get through these
+really quick. So, is this a full project
+or a single feature?
+GSD covers an entire project life cycle.
+Archon workflows typically target a
+single feature issue.
+Um
+Wait a second. I'm actually kind of
+confused by the question.
+Oh, I see. So, it's like do we want to
+have it build an entire PRD for like an
+entire project or is it more like a
+workflow that takes a PRD or feature
+description and runs GSD style plan
+execute. Yeah, actually let's do that.
+Yeah, so for question number one, let's
+do something in between. So, workflow
+that takes a PRD
+or feature description and runs GSD
+style plan execute verify. That makes
+more sense.
+Um
+for the planning rigor,
+yes, I want the full planning rigor of
+GSD.
+Uh I do want all layers of verification
+like GSD.
+Where should human humans have approval?
+Let's just do the same as GSD. Actually,
+a lot of these questions aren't that
+good cuz it's just saying like, "Hey,
+what part of GSD you want?" I really do
+want all parts of GSD for the sake of
+the demo here.
+And yep, so we'll do parallel research,
+100%.
+Uh where does the progress live?
+Yes, I want to create similar structured
+state files as GSD in the artifacts
+directory.
+That makes sense.
+Uh naming and positioning. How do you
+want to position this relative to
+existing workflows? Something like
+Archon GSD or Archon rigorous dev. Uh
+yeah, let's just call it Archon {dash}
+GSD.
+All right. Okay, honestly, I wasn't that
+impressed with the questions it asked me
+there cuz mostly it was like, "Do you
+really want all these parts of GSD?"
+Which maybe that kind of speaks to how
+GSD is a little over-engineered. Like
+they they claim to be the simple version
+of things like B-map. I still think it
+has a little much. Um but also like
+people get good results with it. Like
+trust me, it's popular for a reason. So
+I I do want to build an Archon workflow
+here that that uh really takes
+inspiration from every part of GSD.
+So, all right. We'll let it continue to
+rip here. So, it's reading through uh
+some example workflows here, reading
+through the rule my rules for workflows
+and how to build them,
+gathering context to then create the
+YAML for me here.
+Um open code integration. Yeah, so open
+code is one of the the uh coding agents
+we are we are considering adding. That
+and Pi agents. Yep.
+We'd love to add more.
+All right.
+Let's see. Um Archon doesn't work
+on Windows cuz it can't find the Claude
+code executable at runtime.
+Looks like it's a
+uh known cross-platform issue between
+Linux, Mac, and Windows builds.
+Uh so, I'm running on Windows myself.
+I've never had that problem before.
+Um so, I'm not sure why that would be
+the case. If you installed through the
+binary, there might be a bug in the
+binary. I would try doing the
+installation method that's higher up in
+the readme where you clone the repo.
+And then you go into Claude and you just
+ask it to help you set up Archon. I
+would try that instead. That's the only
+thing I could think of. Otherwise, I'm
+not sure why it would say it can't find
+the Claude code executable because when
+you're running Archon, it's just using
+Claude under the hood.
+And it it's just using it in the same
+way that you if you ran Claude from the
+terminal. So, it shouldn't be different.
+Uh what inspired me to build Archon?
+Aha, good question. So,
+yeah, I kind of talked about things
+related to this in the stream already,
+but
+uh really it's like I see the direction
+that we're heading with AI coding.
+So, this is what I talked about the very
+very start of the stream. So, may maybe
+you weren't there at the start of the
+stream, which I mean probably a lot of
+you guys watching right now weren't,
+which is all good. Um but like AI
+started with prompt engineering,
+generative AI. Like that was the big
+deal. Like how can we get the single
+best output from a model? And then that
+evolved into context engineering,
+especially for AI coding. It's like
+creating a whole ecosystem of context
+for our agent to handle longer-running
+tasks. And that's like the big thing in
+2025.
+And now this year, it's like how do we
+create a system that combines coding
+agent sessions together to do longer
+work? And how do we like really build
+our coding process as an agentic coding
+workflow? So, the harness is the layer
+that wraps the coding agent to combine
+sessions together and add in more
+control for us.
+That's how we really get reliable
+results with coding agents.
+And so, I've been really really doing a
+lot of research and deep dives into
+harness engineering over the past few
+months. But the problem is we have all
+of these closed-source harnesses. Like
+Stripe shared Stripe Minions and Shopify
+is Shopify Roast and AD AWS is building
+their internal harnesses and and we have
+things like Ralph Loops, which are open
+source, but also like not very intricate
+or like
+I mean, the main problem is there's
+nothing out there that's like custom to
+you. So, I wanted to build a tool that
+allows you to build your own harness.
+So, no matter what your process looks
+like for AI coding, you can create it as
+a full workflow in Archon.
+And then also run it at scale because we
+support the parallel execution like I've
+been demoing in the live stream here.
+So, that's the inspiration. It's like I
+see where AI coding is heading and
+there's nothing like Archon right now.
+Like literally the only examples we have
+of anything like Archon is is a single
+harness. So, it's not custom to use.
+It's very opinionated. Most of them are
+closed source. And now this is the layer
+that built where you can build any of
+them
+or build your own.
+Yeah.
+All right. Uh thank you very much for
+your donation. I appreciate it a lot.
+All right.
+Cool. So,
+let's see. What else we got here?
+Um
+I do like cancel over abandon as well.
+More severe and implies the token use
+loss. Right, yeah. I mean, you can
+resume it, but then you're restarting
+the last node that interrupted which is
+yeah, I guess kind of what you're
+getting at.
+All right. Uh so, anyway,
+true story, this is the missing link.
+Glad you think so. Yeah, I mean, I I
+really do. Like
+this all signal points to this this is
+the most important thing this year for
+AI coding, building software in general.
+And there's just not enough people
+paying attention to it.
+&gt;&gt; [snorts]
+&gt;&gt; Like okay, as much as I appreciate how
+much people are focusing on the new
+features in Claude code, like it seems
+like most people making AI content right
+now are just like covering the new
+things in Claude code like over and over
+and over again.
+And like yeah, Anthropic is doing some
+very incredible things. Like it is
+important to cover that. But also it's
+like like look look past that. Like
+what's what what are like the real ways
+to actually get good results with AI
+coding assistants? It's not just being
+hyper-focused on the individual features
+from Anthropic releasing the Claude
+code. It's it's focusing on how you
+build systems around AI coding. Like
+that's what I feel feel like people
+aren't paying enough attention to and
+what I'm really trying to focus on
+myself.
+All right.
+Cool. So, let me open up. Let's see
+where we're at right now. Okay, actually
+I I just saw it finish. Good. So,
+perfect timing here.
+All right.
+So, yeah, one moment. I'm I'm just
+looking at something on my other monitor
+here.
+Okay.
+All right. So, it built the full
+workflow.
+&gt;&gt; [laughter]
+&gt;&gt; Um let actually let me take a look at
+what it did here.
+Okay, so it built out the YAML.
+It registered it as one of my default
+workflows. So, I I could actually like
+ship this to Archon today. I might
+actually do that, but I'll probably have
+to do a lot of validation of this before
+I actually push this live. But it could
+be a cool workflow for you guys to use.
+All right.
+Um and then so, it ran the validate
+command to make sure that all the
+parameters are good. So, we have some
+things built into the CLI to validate
+workflows as well. I haven't tested it
+end-to-end yet, but we can definitely do
+that as well.
+And so, okay, here's our pipeline. So,
+we spin up four agents to research in
+parallel. We synthesize everything into
+a summary and then we extract
+requirements with acceptance criteria.
+And then we have an interactive loop to
+lock in the context. We create the plan.
+This is pretty comprehensive. GSD does a
+lot. Like it does more than you'd think
+when they claim to be something simple.
+But this is cool. It's really cool that
+we built this as a full Archon workflow.
+And then we verify the plan. We have the
+human review and then we execute.
+And then we do our verification, code
+review, and human acceptance at the end.
+Man, that is that is a lot.
+&gt;&gt; [laughter]
+&gt;&gt; But there we go. That's what we just
+built. So, let's actually take a look at
+this here.
+So, if I go in, we have the new
+workflow.
+And it's pretty long. I mean, it's it's
+over 1,200 lines long, but that's just
+because all the prompts are in line. So,
+if I were to like really make this
+concise, what I would do is I would take
+all these really long inline prompts and
+I would make them as commands like we
+saw in the GitHub issue fix workflow.
+Like this step is so much nicer looking
+because the whole prompt is just a
+command. So, it references the external
+markdown document. But anyway, we can
+address that. It's kind of nice to see
+it all in one place at first anyway.
+Which is why I have it built like that.
+Um so, okay. So, for research, we're we
+decided to use Sonnet. Maybe we'd want
+to change that to Haiku. Totally up to
+you. Obviously doing that in a fresh
+session. So, you are one of four
+parallel research agents. Your focus is
+on technology stack dependencies and
+development environment. And then we
+have researching the features. We're
+doing that in parallel as well.
+Um
+cool.
+And then yeah, so we just have a bunch
+of research agents here. So, four
+research agents running in parallel.
+And then we have the uh research
+synthesis. So, it depends on all these
+being done, right? So, these four can
+run in parallel, but now this one has to
+run after.
+So, it depends on these four being done.
+And then we do our synthesis. So, these
+agents like uh have explored in
+parallel. Now we need to bring
+everything together into a single
+document. And then we send that into the
+requirements gathering.
+So, I mean, most of what we're doing
+copying in GSD is just their prompting,
+right?
+And then like the different nodes for
+the different stages. So,
+what do we have here? Okay, yeah. So,
+here's where we have the human approval
+gate.
+So, we send the message to the user.
+Here's what you have to approve. Like
+here's the document that we just
+produced with the whole plan of attack
+split out into phases or whatever it
+does here. Uh so, yeah. I don't I don't
+really want to like go into the details
+of every single node here. It's not
+really the point. But what we can do is
+we can also view the workflow in the web
+UI. So, if I go to workflows here, I
+scroll down.
+Uh well, actually hold on. I might need
+to restart the back end. No, it's right
+here. Yeah, so if I click edit,
+um take a look at this. Look at that.
+That's pretty cool. So, we can also see
+the workflow in the UI. So, we can see
+that we have these four running in
+parallel. So, that that's set up that
+correctly. And then we do the research
+synthesis, requirements, blah blah blah.
+I mean, this is a lot. I I probably
+won't be able to run this whole thing
+with you guys right now.
+Um but I could I could get started. I
+think I have Yeah, I should be good on
+my limits here.
+So, let's let's try this right now.
+Um, trying to think what a good example
+would be to run this. We're We're not
+going to be able to see this run to
+completion cuz this is going to take way
+too long.
+Um, but at least just showing you guys
+the start of it because then that's like
+the full life cycle of like we had an
+idea for a workflow. We had Arkon
+research how to build it. We built it
+and then we run it. And like it's that
+easy to build anything.
+And so, maybe what I'll do is I'll run
+GSD to handle a GitHub issue. I guess we
+could do that. Um, or no, you know,
+here's what we'll do. We'll have it
+We'll have it create uh the Pi agent.
+Like Okay.
+I want you to
+uh run the GSD workflow here to build
+support for the Pi agent SDK into Arkon
+as the third coding agent.
+And then uh let me make sure I I I knew
+I would say that wrong. Pi agent SDK.
+I could do open code. I could handle an
+issue. I could I I could do whatever,
+right? This GSD workflow is very
+general. It's going to walk us through
+this very comprehensive process to build
+anything.
+There we go. So, we'll have it kick off
+the CLI here. So, we can monitor it in
+the web UI. We could even kick this off
+from the web UI as well. And I know I
+haven't really showed that in this live
+stream here, but we can run our
+workflows directly from the web UI as
+well. Like for example, check this out.
+I can go into the chat here
+and I can say um use the Arkon assist
+workflow to summarize the read me for
+Arkon. So, I just want to do kind of
+like a a faster example here. But
+anything that we're doing from the CLI
+where we're asking Claude code to invoke
+the CLI, we can just do it right from
+the web UI. So, if you want to like have
+this deployed to a VPS running remotely,
+you can definitely do that. So, you can
+see that it dispatches the workflow. It
+picks that So, it routes to the right
+repository out of our registered
+projects cuz it has knowledge of all of
+that injected into its context. And then
+we can also view the logs for the
+workflow in real time as well. This is
+just a simple single node workflow,
+obviously.
+But yeah, we'll get the results here and
+then we can see that uh populate in the
+chat as well. So, this is like the the
+main chat here is like your
+orchestrator, right? And then you can
+click into the logs for any individual
+workflow. Uh well, I don't know why that
+had that blip there, but yeah, anyway.
+So, you can click in and view the logs
+for individual workflows.
+Um, and then here, look. Let me click
+in. So, we have our um GSD workflow
+running as well.
+So, we can view the logs for this.
+We can see that it is currently in the
+middle of We can see the the like
+loading indicator for all of the initial
+research. So, all of these four are
+running in parallel right now. And we
+can see the logs coming in in real time
+right here as it's going through all the
+tool calls. So, basically all the tool
+calls from these nodes running in
+parallel are just being pushed here if
+we want to see what they're doing.
+Pretty cool.
+Uh but yeah, this will definitely take a
+while to go through this process. But I
+I am actually keen on going through this
+full GSD workflow. I'm going to end with
+a pull request for the Pi agent SDK and
+then I'll I'll circle back with Rasmus
+and see what he thinks if this is
+actually a good implementation cuz he's
+working on this as well.
+Um, but yeah, I I I might actually push
+this GSD workflow as one of the default
+bundled ones.
+Because I think it's just such a good
+example of how we can take a harness
+that's already out there and build it
+into Arkon. Not that there's necessarily
+a huge reason to use Arkon over just
+running GSD directly, but more just to
+show how like Arkon goes above any
+existing harness because it allows you
+to build any of them. That's the power
+of it.
+All right.
+Um, okay, what if this could also be
+task-centric? Pick the right workflow
+and the workflow combinations according
+to the task. I mean, you can basically
+already do that. Because you can have
+Arkon load the Arkon skill, look at all
+the workflows that it has access to, and
+then you can describe a larger scope of
+work and have it figure out the
+workflows to run.
+Or maybe it's just like a single
+workflow cuz you can wrap up your entire
+process. But
+I like where your head's at with that
+because I mean, yeah, certainly. And
+then this kind of gets into um
+integrating Arkon with your second
+brain. Your second brain it learns how
+you work over time, right? So, it kind
+of knows like based on Cole how Cole
+likes to work, I think like these Arkon
+workflows are what we should invoke to
+like handle this thing he wants to
+build. So, that's definitely like a
+different discussion for another day.
+But I I could do a whole live stream or
+a whole Dynamis workshop on that.
+All right. Very cool. So, yeah, while we
+wait for this to run here uh to for it
+to get to the next step, I'm going to
+chat about Dynamis with you guys really
+quick here as well. Oh, look Looks like
+two of the workflows ran or the nodes
+are done. So, it's just two more we're
+waiting on here.
+But yeah, um
+Arkon, lot more workshops coming in in
+the Dynamis community soon here.
+And then also, we got Okay. Man, this
+4-hour workshop that I did last week in
+Dynamis went so incredibly well. Like
+there there are dozens of people in the
+community that are building their second
+brains right now and like sharing what
+they're doing and like how they're
+adapting things to be more specific to
+them. Like there's so much energy in the
+community right now for people building
+their own second brains and like going
+off of like the template that I gave in
+the workshop. It's so cool to see. So,
+if if you want to be a part of that,
+like here, I'm going to I'm going to put
+a link to to this in the chat here.
+There's a a special that I'm running for
+just this live stream.
+So, if you go to the link here, we got a
+special 10% off the uh the usual price
+for the community. And the special is
+going to end once the live stream is
+done. So, this is your chance to join
+the community and get in on everything
+that I'm doing. More workshops for Arkon
+coming and uh also the whole like third
+course that I'm adding to Dynamis for
+the second based on the second brain
+boot camp. And then I got the AI agent
+mastery and agentic coding courses as
+well.
+Um, so yeah, all of everything that I'm
+doing with Arkon, I've used all of my
+strategies that I cover in the agentic
+coding course in order to build Arkon.
+So, I definitely
+um I don't just like, you know, say do
+as I
+say not as I do, right? Like I I
+actually like use all the approaches
+every single day that I cover in the
+courses and the workshops I do in the
+community. So, I'd love to see you join
+the community.
+And uh uh yeah, again, for everyone
+who's in the community in the stream
+already, always appreciate your guys'
+support in being here.
+So, all right. Let's see where we're at
+now.
+Um
+Okay, so it's still running actually.
+Let's see.
+Thought the research would be done by
+now.
+Uh oh, no. Okay, it's it's almost
+getting there.
+So, well, no. Oh, the research is done,
+but it has to create the plan before it
+gets our approval. So, we haven't
+reached the next approval step yet,
+which is why the workflow is um still
+running in the background. But once it's
+done and it gets to the first human
+approval gate, then the workflow will
+pause and we'll get some output here,
+questions for us or whatever. Like it'll
+give us the plan to review if we want.
+All right.
+Cool.
+Um, why define a model in the workflow?
+What if we want AI to judge the model on
+the fly based on complexity?
+That's a That's a very fair question.
+So, the main reason is
+how do you tell
+like
+the the the main AI agent that invokes
+the workflow,
+it doesn't really have a good idea of
+how powerful the models are. And it's a
+really tricky problem to solve. Like how
+do I describe what Haiku is capable of
+or what Sonnet is capable of?
+Like you'd have to be very confident in
+your prompting in order to like really
+like give that control to the agent,
+which is why we haven't really built
+that at this point.
+Now, if if you do want to like really
+take your time to build out some kind of
+framework for the agent to figure out
+like how powerful each model is or like
+you tell it how powerful each model is
+so it can figure out what nodes need
+what models, you definitely could leave
+it up to the agent. And And um that's
+definitely something we thought about
+adding support for is making it so that
+instead of it being hardcoded for each
+node, it's like the agent reads the
+workflow, picks the model for each step,
+and then sends it off based on the
+specific task. Cuz maybe the research
+for one specific implementation is
+actually going to be very complicated.
+So, we would want to use Opus for the
+research and then maybe we only need
+Sonnet for the verification cuz we think
+the research is going to be good enough.
+I don't know. I'm just kind of throwing
+a random example out there, but
+definitely like that could be a really
+good addition to Arkon.
+All right.
+Super cool that I can use my
+subscription with this tool we'll be
+driving in today.
+Yeah, sounds great. And yeah, it it's
+fantastic. If If I couldn't use my
+Anthropic subscription with Arkon, I
+would be using Codex instead with Arkon,
+100%.
+Yep.
+&gt;&gt; [snorts]
+&gt;&gt; Okay, so anyway, the workflow completed
+its first three phases and it's now
+paused at the requirements approval
+gate. Very good. So, here's what it
+finished.
+And
+um
+now it's saying,
+do the requirements look good?
+So, obviously I need to know where the
+requirements are.
+That might be something that I need to
+address. So, the workflow didn't like
+clearly state where the requirements
+are. So, I got I have to ask it. I mean,
+that's probably something I should
+improve in the workflow. So, keep in
+mind that like just like your code
+bases, when you use Arkon to build a
+workflow, it probably isn't going to be
+perfect first time around. You're going
+to have to iterate on the prompting and
+the nodes. So, like right here, it's
+kind of annoying that I have to ask like
+you know, where Where's the requirements
+document? Like give me the exact path so
+that I can actually read through this.
+Um, cuz right now it just kind of left
+me in the dark. So, I mean it's not a
+huge deal that I just ask for the path,
+but it's a little annoying.
+So, let's get that. Then we'll actually
+take a look quick.
+Okay, so this here is the path to it.
+Okay.
+So, I'll open this up in my IDE, and
+we'll go to the summary.
+I think Yeah, so I'm I'm building this
+so quickly live that like I don't have
+my head wrapped around the whole
+workflow right now, but I think the
+summary is is the synthesis from all So,
+these are like the research documents
+from each of the agents in parallel. And
+then this is the the synthesis that I'm
+going to have to review myself.
+So, we're adding the Pi Agent SDK as a
+third AI coding agent into Archon
+along with the existing Claude and
+Codex.
+Uh, key findings, what already exists.
+So, okay, this is good. This is what I
+talked about a little bit earlier in the
+stream. It is going to be so easy to
+build more coding agents into Archon
+because it just has to reference how
+we've built things already for Claude
+and Codex. It's definitely going to one
+shot this. So, make sure we research Pi
+Agent first. We'll create the Pi
+Assistant defaults. So, just again,
+based off the patterns that we already
+have for Claude and Codex.
+We'll implement We'll follow the
+Claude.ts structure as lay lazy logger,
+async generator to send the query into
+Pi. You guys probably don't care about
+the details here. I'm actually pretty
+interested in this. It It really
+understands what to do here.
+Um, defining uh, hooks and MCP and
+skills. Love that. Uh,
+laying out the critical risks as well.
+Like things that we have to make sure we
+validate and be extra careful with or do
+more research for.
+And then it has open questions for us as
+well.
+And, um, so maybe what I'll do right
+here is I will answer the open questions
+and then send it off like approve the
+the workflow to continue with the rest
+here. So,
+Okay.
+All right, there are some open questions
+in the summary. I'm going to answer this
+quickly, and then I want you to approve
+the workflow to continue.
+So, for the Pi Agent SDK package name,
+uh, well, you know, actually I don't
+know that. So, I need you to search the
+web
+um, for that.
+Um,
+Oh, actually none of these questions are
+for me. These are all things that it has
+to research. So, I need I need you to
+research each of the
+uh, answers to the open questions in the
+summary and then send that in as context
+to approve the workflow.
+Okay, so little bit of a pivot there. I
+thought it was like questions to align
+with me, but it was more just like, uh,
+you know, mechanically how does the Pi
+Agent SDK work? So, we'll have it figure
+these things out. I thought that it
+would find those things in its own
+research, but I guess it's just like
+these are the gaps in the research that
+aren't covered by the other agents.
+So, yeah, okay. So, it'll research these
+and then fill it in and then continue
+the workflow. So, it's pretty cool. We
+have a combination here of like we
+continue to work with Claude ourself,
+and then we like pass context into the
+workflow when we want to continue it.
+And like that's the flexibility that I
+love with Archon is we aren't like once
+we send off the workflow, as long as we
+have human approval gates, we don't have
+to just like let it go blindly and then
+end with that like final result. Like we
+get to work with it along the way and
+even talk to our main agent orchestrator
+to help us like guide the workflow. If
+we really want to make the process
+reliable in how we usually work.
+So, it takes a bit more time to do that,
+but in the end it's going to save you
+time when we have a process that's so
+elaborate like this with a human
+approval gates and everything.
+All right.
+Cool.
+Um, okay. So, one thing I got to be
+honest with you guys on
+is uh, the stream is going on so long
+that I I don't think Oops, I didn't mean
+to do that. Uh, I don't think I'll be
+able to do the dark factory stuff today.
+But, I might do You know, I probably
+will do a separate live stream uh, next
+week for the dark factory stuff. This is
+going to get very involved. So, I did a
+lot of prep for this. I'm like really
+excited for this, but it would take me
+at least another hour and a half to
+[laughter] like go through the whole
+setup here with you guys.
+Um, and I've just had such a blast like
+helping you guys understand the value
+propositions of Archon and how to use it
+and how to build workflows and going
+through all your questions. I really
+appreciate all of your guys's questions
+today.
+And so, I I'd much rather like focus on
+um, that and have more of an
+introduction to Archon live stream
+versus like trying to force in this
+really fancy dark factory thing that's
+going to be quite involved.
+Um, okay. So, cool. Now we got the
+research sending in the workflow. We'll
+let that run in the background. So, I
+hope that sounds good to you guys cuz I
+I might also make a YouTube video on the
+dark factory stuff as well. I think
+that'd be super interesting.
+Um, just to like
+maybe even kind of do like a build in
+public series where I show like how I'm
+setting up the Archon workflows to
+manage different parts of the dark
+factory, how I have the code base kind
+of like self-evolved AI managing
+literally all of the code review and
+code writing. I think that could be
+cool. So, I'm curious what you guys
+think as well.
+If you like the idea of that.
+Um, yeah. A lot of a lot of ideas I have
+swimming around in my mind right now for
+content for the next week. A lot of
+exciting things with Archon and second
+brain content and just general
+strategies for AI coding.
+Okay. Wow, the workflow is already done.
+Is there another human approval gate?
+Let me see what I'll curious what
+happened here.
+Oh, it's now in the discussion phase.
+It's re-asking the open questions
+because the research answers didn't
+fully propagate to discussion node.
+Okay, there might have been a problem in
+the workflow. So, again, there's always
+option or opportunities to improve your
+workflow when you run it for the first
+time.
+Okay.
+Let's check what our usage is at right
+now.
+Okay, we're at
+uh, 60%.
+Not bad.
+We've been doing [snorts] a lot with
+with Archon workflows this live stream,
+and we've only used We've used about 43%
+of our 5-hour limit in this live stream,
+but there's a lot of work. We We handled
+five or four GitHub issues, validated
+them entirely.
+We're running a GSD workflow, and
+there's a ton of other stuff that I've
+been prompting with Claude to like
+create workflows and stuff as well.
+Like it's pretty token efficient.
+So, when you create your own workflows,
+just be careful that you're not using
+Opus for literally everything. If you're
+using Claude code or you or make sure
+you're not using like the high reasoning
+GPT-5.4 Codex if you're using Codex
+uh, for everything. So, but as long as
+you're for the front the nodes that
+don't require as much reasoning, you're
+not using like the best model for
+everything. The workflows can be very
+comprehensive, but really token
+efficient at the same time.
+Okay, so there we go. We're continuing
+now in the workflow.
+All right, so I I think what I'm going
+to do here is I'm going to answer a
+couple more questions.
+And then I will um,
+end the stream.
+I think we'll call it there. But yeah, I
+definitely want to answer some more
+questions for you guys. We'll see how
+far we can get in this workflow here.
+One thing I just realized though
+&gt;&gt; [clears throat]
+&gt;&gt; is I think my
+my YouTube chat might be frozen. I might
+need to refresh.
+Yeah, hold on.
+Let me Let me do something quick.
+Sorry guys, I got to pop out the chat
+again.
+Pop out chat. So, my my streaming
+software is being like finicky right now
+for some reason. I'm not seeing the
+chats come in on my other platform.
+Uh, oh, I just lost them all. Shoot.
+That's unfortunate. Well, I can answer
+some questions, but I won't be able to
+show it on my screen.
+Um, let's see if I can blitz through a
+couple here.
+Let's see.
+Yeah, oh yeah, so someone mentioned
+Anthropic's advisor mode. Yeah, so I I
+am interested in building that into
+Archon. So, the advisor mode is
+basically uh, you can use less powerful
+Anthropic models to do like the grunt
+work, the implementation, and then you
+have it like call into a larger model
+like Opus or maybe Mythos if that's
+really going to become a thing for us.
+And then it like kind of like
+just asks it for guidance, and then it
+continues to do the implementation or
+planning or whatever. It's pretty cool.
+All right.
+And yes, Joe, you can use and you can
+use Archon through your Anthropic
+subscription. Yeah, 100%.
+All right.
+Um, can we let the user decide which
+models he wants to allocate to his task?
+Um, or is it kind of hardcoded at the
+node workflow level? So, you can have
+your coding agent edit the workflow
+live, otherwise it is hardcoded. It's
+not It is something we are interested in
+adding though, support for like defining
+the models up front or like live during
+the live execution.
+Yeah.
+All right.
+Um, let's see. What about rag and
+storing previous questions on SDKs and
+such? I wouldn't want every workflow
+that works with Python to search the
+SDK.
+So, well, the thing about Archon is you
+can build in your own memory system.
+Like if you have a way using Git logs or
+Claude mem or or rag, like whatever you
+have for memories for your agent, you
+can build that into Archon workflows cuz
+you can give it the skill or the MCP or
+or just like the prompting for it to use
+whatever.
+Um, so that the flexibility of Archon is
+like you don't have to abandon any
+approach or wait for us to support it
+directly. Like if you want to use
+linear, you You just attach in the MCP
+skill like if you want to use the Claude
+Mem framework or beads or whatever like
+you can build that directly into
+the Archon workflow.
+All right. Remind us what is the dark
+factory? Okay, yeah. Um
+I'll I'll bring I'll talk about that for
+a sec here.
+So okay, the dark factory
+it's the concept of having a code base
+that is entirely managed by coding
+agents. The coding agents handle the
+coding, the reviewing, the the pull
+requests, and the releases.
+And so the only thing that a human gives
+is the issues for bugs or new features
+that we're requesting.
+But there's no human approval allowed.
+All code just goes straight to the main
+branch once coding agents finish it. And
+for a public experiment, I'm actually
+really excited for this.
+For a public experiment
+I want to have a repository that is a
+dark factory and it's managed entirely
+by Archon workflows. I think it's going
+to be so cool and it's going to show the
+power of Archon cuz we're going to have
+workflows to triage issues like figure
+out which ones we actually want to
+address and then like do the
+implementation, do the review, manage
+the releases, deploy things to
+production. It's going to be so cool. So
+I was going to like maybe get started
+with that in a live stream today but
+there's no way like
+I got a
+I got to do that in a separate live
+stream or maybe even make a YouTube
+series on it. So that's what's up with
+the dark factory.
+It's kind of a silly name but it's also
+kind of a really cool name.
+So that's what I'm calling it. A lot of
+people have been like thinking about
+this kind of thing. There's a AI use
+case out there or like a anecdote out
+there from StrongDM. If you guys have
+heard of StrongDM
+they basically built an internal dark
+factory.
+StrongDM dark factory.
+So they're they're a company that
+So a StrongDM AI lab with a simple
+premise. How best to maximize building
+software with AI?
+So they've created a and this is like
+more internal so it's not like open
+source like what I'm going to do but
+they built a system where like they are
+pushing thousands and thousands of lines
+to production like like humans never
+review.
+Not that I recommend that as the way to
+go to get the most reliable production
+software but the point is like it's an
+experiment and I'm really excited to try
+that out.
+So that's the plan.
+All right.
+Um can we use local AI?
+Yeah, so you can you can have Claude
+code integrate with Ollama directly to
+use local AI within
+Archon. 100% I would just look into like
+the
+Ollama
+or Claude code.
+They have a direct integration if you
+want to look into how to do that.
+Yeah.
+What does a dark factory do on a sunny
+day?
+Well, you just have no windows.
+&gt;&gt; [laughter]
+&gt;&gt; That's what you do.
+Um what is the domain idea or function
+for my dark factory project?
+Yes, so this is going to be another big
+thing.
+Where is my repo? I have so many things
+open right now. This is another big
+project that I'm going to work on and
+the dark factory is going to be this is
+going to be the use case for the dark
+factory. I want to create an application
+that allows you to
+basically chat with my YouTube content.
+So you can ask questions and it's
+basically like you're talking to me
+directly because it performs rag over
+all my YouTube content.
+And then for those of you in the Dynamis
+community, I also wanted to ingest all
+of my course and workshop content in the
+community. So it's basically like your
+own personal AI coach that has access to
+all my information and maybe even going
+so far as to like ingest
+you know like community posts and things
+like that as well.
+I think this is going to be such a cool
+example for the dark factory cuz it's a
+relatively
+complex application like with the whole
+rag pipeline and the searching and the
+web UI and everything but also it's
+going to be very easily testable because
+we can just like test conversations with
+like the agent browser CLI. So you can
+have like browser automation for
+the dark factory to run like every time
+it does validation on the code base or
+like for a specific issue.
+Um so that this is this is what I'm
+planning on having as the use case for
+the dark factory and then it'll also be
+like a huge value add to the Dynamis
+community cuz then it'll give you like a
+chat platform to talk and ask any
+questions about any of the courses or
+workshops or even like point you to the
+videos in the courses or the workshops
+to watch for things that you want to
+learn.
+So yeah, I'm really really excited for
+this. I wish I had time to cover it in
+the live stream today but yeah, I'm
+definitely I'm definitely going to have
+to cover this later. But I'll be using
+Archon workflows to like guide the
+entire process of managing issues and
+pull requests and reviews and things
+like that.
+So it's going to be pretty exciting.
+And yeah, there there is there's so much
+content in the Dynamis community that
+like it's it's hard to like really
+navigate through it all. I mean I make
+it easy obviously to like look through
+past workshops and I'm always like
+letting you know like the things that
+I'm working on and the courses and stuff
+but like there's a lot of stuff there.
+So I think this is going to be a really
+big value add. So just yet another one
+of those things coming to the Dynamis
+community. So you know as I end the live
+stream I just want to give a link to
+this one more time cuz there is the
+special discount for Dynamis that's
+going away when the live stream ends.
+And so if you're interested in really
+being on the forefront of Archon and AI
+coding, if you want to be a part of the
+weekly workshops that I do and the new
+4-hour second brain and boot camp that I
+just did last week then come join and be
+a part of the Dynamis community. I would
+love to have you.
+So yeah, I know there there's a a lot of
+really really good questions that I
+didn't get to in the chat. It's always
+unfortunate. I love doing these live
+streams and I love all you guys'
+questions. It's just hard cuz there's
+like so much.
+Um but yeah, if you ever have any
+questions like feel free to you know
+comment on my YouTube videos as I do
+more on second brain and and Archon
+content or you know always available in
+the community to answer your questions
+there.
+Um so yeah, I'm going to go ahead and
+call the live stream here.
+But stay tuned for more content on
+Archon and the dark factory stuff as I
+start doing that. It's going to be a
+really really fun experiment. And yeah,
+thank you everyone for for being here.
+This is a really fun live stream. I just
+I'm so passionate about Archon right
+now. So it's really cool that I just
+demonstrate everything to you guys,
+answer your questions, and build
+workflows live. I might even push that
+GSD one to the repo if it works well.
+Probably to you know iterate on that
+though but yeah, anyway, thank you
+everyone for being here. I hope that you
+guys have a fantastic weekend and I will
+see you all on the channel and in the
+Dynamis community.
+Take care everyone.

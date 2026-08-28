@@ -1,0 +1,31 @@
+# CodeQL ANALYSIS configuration.
+#
+# Why this file exists: codeql.yml already lists `!**/vendor/**`,
+# `!**/node_modules/**` etc. under `on.paths`, but `on.paths` is a TRIGGER
+# filter — it only decides whether the workflow runs. Once any non-excluded
+# source file changes, the workflow starts and CodeQL analyses the WHOLE
+# checkout, vendored code included. Analysis-scope exclusions have to be
+# declared here and passed via `config-file:` on codeql-action/init.
+#
+# Concretely: PR #2076 failed with a HIGH `js/insecure-randomness` alert in
+# website/chit-tour/vendor/three.module.js — Three.js's UUID generator using
+# Math.random(). That is upstream third-party code we neither wrote nor patch,
+# and the existing `!**/vendor/**` intent was already to ignore it.
+#
+# Keep this list in sync with the negated patterns in codeql.yml `on.paths`.
+
+paths-ignore:
+  # Vendored / third-party JS shipped verbatim (three.module.js, etc.)
+  - '**/vendor/**'
+  - '**/node_modules/**'
+  # Python environments and installed packages
+  - '**/.venv/**'
+  - '**/venv/**'
+  - '**/site-packages/**'
+  - '**/.eggs/**'
+  # Scratch integration checkouts, not first-party source
+  - 'integrations-workspace/**'
+  # Generated bundles/minified artifacts — findings here are not actionable at
+  # the source level; fix the generator instead.
+  - '**/*.min.js'
+  - '**/*.generated.js'

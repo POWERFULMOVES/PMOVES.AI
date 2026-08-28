@@ -1,0 +1,23 @@
+# Baselined container-hardening gaps — hardening_ratchet.py
+#
+# Each entry is a tracked Dockerfile that runs as root: either it declares
+# no USER at all, or its last USER directive is root. They are recorded so
+# `hardening-validation` can be enforced today without turning main red in
+# a single step. They are NOT approved, and none of them is 'expected'.
+#
+# The list may shrink and must never silently grow. Removing an entry is
+# the goal; adding one should require saying why in the PR. A Dockerfile
+# that is fixed but still listed here fails the gate as a STALE entry, so
+# the count only goes down.
+#
+# Regenerate: python pmoves/tools/hardening_ratchet.py --write-baseline
+known_gaps:
+  - "NO_USER|.github/runners/Dockerfile"
+  - "NO_USER|pmoves-nats-mcp/Dockerfile"
+  - "NO_USER|pmoves/compose/n8n/Dockerfile"
+  - "NO_USER|pmoves/docker/pmoves-4090-web/Dockerfile"
+  - "NO_USER|pmoves/docs/PMOVES.AI PLANS/Enhanced Media Stack with Advanced AudioVideo Analysis/Dockerfile"
+  - "NO_USER|pmoves/docs/PMOVES.AI PLANS/cipher_pmoves_bundle/Dockerfile.cipher"
+  - "NO_USER|pmoves/services/voice-sampler/Dockerfile"
+  - "NO_USER|pmoves/services/watch-folder-router/Dockerfile"
+  - "ROOT_USER|pmoves/images/jellyfin/Dockerfile"

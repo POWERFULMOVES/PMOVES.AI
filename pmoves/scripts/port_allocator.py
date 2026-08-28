@@ -47,14 +47,22 @@ DEFAULT_PORTS = {
     # Agent & Orchestration
     "agent-zero": 8080,
     "agent-zero-ui": 8081,
-    "archon": 8091,
-    "archon-ui": 3737,
+    "archon": 8091,  # 3737 is the consolidated UI port (mapped to same container)
+    # HOST port only; the gateway listens on 8091 INSIDE the container. The host
+    # side had defaulted to 8091 too, which is archon's ARCHON_API_PORT default --
+    # so any node running both could not bind the gateway at all (observed on
+    # SPARK 2026-08-22: archon healthy, gateway "port is already allocated").
+    # Registered here so validate_ports() will refuse a future service that
+    # claims 8189 and quietly recreates the same collision.
+    "mcp-gateway": 8189,
     "mesh-agent": 0,  # No HTTP interface
     "service-registry": 8100,
+    "p7-room-orchestrator": 8122,
 
     # Retrieval & Knowledge
     "hi-rag-gateway-v2": 8086,
     "hi-rag-gateway-v2-gpu": 8087,
+    "hi-rag-gateway-v1-gpu": 8187,  # container 8086; 8090 reserved for retrieval-eval
     "deepresearch": 8098,
     "supaserch": 8099,
 

@@ -1,0 +1,50 @@
+literally just ask Archon and it knows
+how to do everything because the skill
+walks it through everything. So let me
+actually show you this here. So in this
+other terminal here
+I'm going to
+um
+clear and then so it says I can change
+my directory into the Claude memory
+compiler.
+And then I can run Claude to launch
+Claude here. So I'll do
+the dangerously skip permissions again.
+Or I guess it's not here. I'll just have
+to type it out manually. So Claude
+dangerously skip permissions.
+And then you can see that since I copied
+over the skill to this repo during the
+setup I can just say load the Archon
+skill. Not that you have to say this
+explicitly every time but I'm just
+demonstrating that like we have the
+Archon skill in this repo. So now it's
+going to know how to invoke any
+workflow.
+And then within the repo here okay we
+actually have a couple of issues. Cool.
+This 6 p.m. thing is very edgy. I've
+never actually seen this issue before by
+the way cuz this is a public repo.
+Um
+That's okay. Massive token consumption.
+Interesting. [snorts]
+All right well I'm trying to find one
+that's actually like
+Um see it exists. Okay well let's try
+this one. This is kind of random but I'm
+just going to pick a random issue like
+number one here. So like watch this. All
+I have to do is say
+I want you to use Archon to fix issue
+number one.
+That's it. It's so simple cuz it knows
+the workflows it has access to. It's
+going to pick the right one right? Like
+it's going to pick the Archon fix GitHub
+issue. It knows how to use the CLI.
+Boom. That is it and we have this full
+process running now. So Archon fix
+GitHub issue is running in the

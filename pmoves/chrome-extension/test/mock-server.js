@@ -1,6 +1,6 @@
-// Mock server simulating all 8 PMOVES.AI services for Chrome extension validation.
+// Mock server simulating all 9 PMOVES.AI services for Chrome extension validation.
 // Usage: node mock-server.js
-// Starts 8 HTTP servers on the same ports the extension expects.
+// Starts 9 HTTP servers on the same ports the extension expects.
 
 const http = require('http');
 
@@ -9,7 +9,7 @@ const services = [
     name: 'TensorZero',
     port: 3030,
     routes: {
-      'GET /v1/models': { models: [{ id: 'claude-sonnet-4-5' }, { id: 'gemma_embed_local' }] },
+      'GET /health': { status: 'ok' },
       'GET /healthz': 'ok',
       'POST /v1/chat/completions': (body) => ({
         choices: [{
@@ -168,6 +168,41 @@ const services = [
       'GET /viz/recent': { shapes: [{ shape_id: 'shape-abc1', label: 'Week 12 CGP', created_at: new Date().toISOString(), super_node_count: 3 }] },
       'GET /viz/shape': { constellations: [{ id: 'c1', summary: 'Primary cluster', point_count: 42 }] },
       'GET /events/recent': { events: [{ subject: 'geometry.cgp.v1', timestamp: new Date().toISOString() }, { subject: 'tokenism.cgp.ready.v1', timestamp: new Date().toISOString() }] },
+    },
+  },
+  {
+    name: 'BoTZ Gateway',
+    port: 8054,
+    routes: {
+      'GET /healthz': { status: 'ok', service: 'botz-gateway', version: '0.5.0' },
+      'GET /v1/agent/signatures': { signatures: 'loaded', count: 14 },
+      'GET /v1/agent/theme/4090-claude': {
+        agent_id: '4090-claude',
+        display_name: '4090 Claude',
+        glyph: '\u25c9',
+        color: '#0D9488',
+        accent: '#2DD4BF',
+        voice: 'terse',
+        resonance: ['cast-integration', 'voice-profiles', 'mobile-compute'],
+        alters: [{
+          name: '4090-field',
+          glyph: '\u25ce',
+          color: '#065F46',
+          accent: '#10B981',
+          voice: 'terse',
+          resonance: ['polymorphic-ops', 'alter-discovery', 'pattern-mining'],
+        }],
+      },
+      'GET /v1/agent/theme/4090-claude/alter/4090-field': {
+        agent_id: '4090-claude',
+        alter_name: '4090-field',
+        glyph: '\u25ce',
+        color: '#065F46',
+        accent: '#10B981',
+        voice: 'terse',
+        resonance: ['polymorphic-ops', 'alter-discovery', 'pattern-mining', 'node-gateway', 'edge-deployment', 'frequency-tuning'],
+        description: 'Polymorphic shape-shifter — single electron covering every spot.',
+      },
     },
   },
   {

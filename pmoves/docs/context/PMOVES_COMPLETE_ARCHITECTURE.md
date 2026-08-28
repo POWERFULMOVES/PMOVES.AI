@@ -405,8 +405,8 @@ n8n is labeled as the **"MCP Hub"** in `docs/PMOVES_Multi-Agent_System_Crush_CLI
 **Example M2 Workflows**:
 1. **Approval Poller** (`n8n/flows/approval_poller.json`)
    - Polls Supabase `studio_board` for `status='approved'`
-   - Posts `content.publish.approved.v1` to Agent Zero `/events/publish`
-   - Updates row to `status='published'`
+   - Posts `content.publish.approved.v1` to Agent Zero `/events/publish` with `studio_board_id` + `publish_request_id`
+   - Marks the row `status='publishing'` while the publisher owns downstream delivery
 
 2. **Echo Publisher** (`n8n/flows/echo_publisher.json`)
    - Receives webhook from `publisher` service with `content.published.v1` payload
@@ -437,7 +437,7 @@ n8n is labeled as the **"MCP Hub"** in `docs/PMOVES_Multi-Agent_System_Crush_CLI
 **Key Tables** (from `db/v5_12_*.sql` and `supabase/migrations/`):
 - `videos` - YouTube videos metadata (duration, channel, tags, s3_base_prefix)
 - `transcripts` - Whisper transcriptions (text, timestamps, language)
-- `studio_board` - Creator approval queue (status, content_url, meta.publish_event_sent_at)
+- `studio_board` - Creator approval queue (`approved` → `publishing` → `published`, content_url, `meta.publish_request_id`, `meta.publish_requested_at`, `meta.publish_event_sent_at`)
 - `chunks` - Extracted text chunks (from LangExtract)
 - `personas` - AI agent personas (embeddings, prompts, packs)
 - `packs` - Knowledge packs (manifests, selectors, age/size limits)
@@ -578,14 +578,14 @@ Crush CLI → MCP client
 
 1. **Supabase `studio_board` Table**
    - Rows represent content awaiting approval/publishing
-   - Columns: `status` (pending/approved/published), `content_url` (S3 path), `meta` (JSONB with `publish_event_sent_at`)
+   - Columns: `status` (`submitted`/`approved`/`publishing`/`published`), `content_url` (S3 path), `meta` (JSONB with `publish_request_id`, `publish_requested_at`, `publish_event_sent_at`)
 
 2. **n8n Approval Poller Workflow**
    - Cron: Every 5 minutes (configurable)
    - Query: `SELECT * FROM studio_board WHERE status='approved' AND meta->>'publish_event_sent_at' IS NULL`
    - For each row:
-     - POST to Agent Zero `/events/publish` with `content.publish.approved.v1` event
-     - PATCH row to `status='published'`, set `meta.publish_event_sent_at=<timestamp>`
+     - POST to Agent Zero `/events/publish` with `content.publish.approved.v1`, `studio_board_id`, and `publish_request_id`
+     - PATCH row to `status='publishing'`, set `meta.publish_request_id` + `meta.publish_requested_at`
 
 3. **Agent Zero Event Republisher**
    - Subscribes to `content.publish.approved.v1` (via JetStream controller)
@@ -593,9 +593,10 @@ Crush CLI → MCP client
 
 4. **Publisher Service** (port 8092)
    - Subscribes to `content.publish.approved.v1`
+   - Claims the matching `studio_board` row using `publish_request_id` to suppress duplicate deliveries
    - Uploads asset to Jellyfin library
    - Enriches with metadata: `jellyfin_item_id`, `jellyfin_public_url`, `thumbnail_url`, `duration`, tags
-   - Publishes `content.published.v1` event (enriched)
+   - Publishes `content.published.v1` and then finalizes the row to `status='published'` with `meta.publish_event_sent_at`
 
 5. **Jellyfin Bridge** (port 8093)
    - Provides `/map-by-title` endpoint for auto-linking assets by fuzzy title match

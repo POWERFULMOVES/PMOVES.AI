@@ -1,0 +1,131 @@
+name: Review Collect
+
+# Collects PR review threads (CodeRabbit, Codex, human) into LLM-readable
+# JSON + Markdown artifacts using the GitHub App token for auth.
+#
+# REPLACES the disabled review-comment-monitor.yml (which depended on
+# ANTHROPIC_API_KEY for Claude triage). This workflow is pure Python —
+# no API key needed beyond the App token. The App token provides
+# pull-requests:read scope to fetch review threads via GraphQL.
+#
+# Artifacts are uploaded for download and optionally committed to
+# pmoves/docs/logs/review-dumps/ for searchability.
+#
+# Ingestion into Hi-RAG/Cipher is OPT-IN via repository variables
+# (PMOVES_REVIEW_INGEST_HIRAG / PMOVES_REVIEW_INGEST_CIPHER).
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+  schedule:
+    # Every 2 hours — catches threads posted between events
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repo name (default: current repo; restricted to POWERFULMOVES org)"
+        required: false
+        default: ""
+      pr:
+        description: "Single PR number (blank = all open)"
+        required: false
+
+concurrency:
+  group: review-collect-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Mint INLINE in this job, NOT via the _app-token.yml reusable workflow.
+      # create-github-app-token revokes the installation token in its post-step,
+      # which fires when the minting JOB ends — `_app-token.yml:82` says so
+      # ("auto-revoked at job end"). Consuming it from a downstream job therefore
+      # gets a dead, masked-to-empty value, and `actions/checkout` fails hard with
+      # "Input required and not supplied: token". This workflow was the reusable's
+      # only cross-job consumer and failed on 100% of runs because of it.
+      #
+      # branch-protection-sync.yml:77-80 already documents this exact decision
+      # ("Mint INLINE in this job (not via _app-token.yml) on purpose ... the
+      # output-token auto-revoke nuance of the reusable"). Same pattern here.
+      #
+      # Token is always scoped to the current repository (event-triggered) or the
+      # manually-requested repo (workflow_dispatch), never both.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-pull-requests: read
+          permission-contents: read
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Collect review threads
+        # CR-3 fix: pass workflow inputs through env, never inline template
+        # expansion in bash — prevents shell injection via inputs.repo/pr.
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PMOVES_GITHUB_ORG: ${{ github.repository_owner }}
+          # CR-1 fix: honor workflow_dispatch inputs (repo/pr), fall back to event context
+          DISPATCH_REPO: ${{ inputs.repo || github.event.repository.name }}
+          DISPATCH_PR: ${{ inputs.pr || github.event.pull_request.number || '' }}
+          # CR-2 fix: wire ingestion service config from vars/secrets
+          HIRAG_UPSERT_URL: ${{ vars.HIRAG_UPSERT_URL }}
+          CIPHER_API_URL: ${{ vars.CIPHER_API_URL }}
+          CIPHER_API_TOKEN: ${{ secrets.CIPHER_API_TOKEN }}
+          INGEST_HIRAG: ${{ vars.PMOVES_REVIEW_INGEST_HIRAG }}
+          INGEST_CIPHER: ${{ vars.PMOVES_REVIEW_INGEST_CIPHER }}
+        run: |
+          # Reference env vars for dispatch inputs (not inline template expansion)
+          REPO="$DISPATCH_REPO"
+          PR="$DISPATCH_PR"
+
+          # Validate repo is a bare name (no shell metacharacters)
+          if ! echo "$REPO" | grep -qE '^[A-Za-z0-9._-]+$'; then
+            echo "ERROR: invalid repo name: $REPO"
+            exit 1
+          fi
+
+          # Build ingestion flags from opt-in variables
+          INGEST_FLAGS=""
+          if [ "$INGEST_HIRAG" = "true" ]; then
+            INGEST_FLAGS="$INGEST_FLAGS --ingest-hirag"
+          fi
+          if [ "$INGEST_CIPHER" = "true" ]; then
+            INGEST_FLAGS="$INGEST_FLAGS --ingest-cipher"
+          fi
+
+          # Only pass --dry-run when no ingestion is requested
+          DRY_RUN="--dry-run"
+          if [ -n "$INGEST_FLAGS" ]; then
+            DRY_RUN=""
+          fi
+
+          if [ -n "$PR" ]; then
+            python -m pmoves.tools.review_dump --repo "$REPO" --pr "$PR" $DRY_RUN $INGEST_FLAGS
+          else
+            python -m pmoves.tools.review_dump --repo "$REPO" --state open --limit 20 $DRY_RUN $INGEST_FLAGS
+          fi
+
+      - name: Upload review dump artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: review-dumps-${{ github.event.pull_request.number || github.run_id }}
+          path: pmoves/docs/logs/review-dumps/
+          retention-days: 90
+          if-no-files-found: warn
