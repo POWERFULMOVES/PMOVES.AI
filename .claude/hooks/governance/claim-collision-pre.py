@@ -43,9 +43,24 @@ unkeyed path as unguarded, not as passing. The durable fix is an explicit
 `lane:` field in the register format; until then this is a partial gate that
 admits it.
 
-WIRED: this branch activates the hook on the PreToolUse Write/Edit matchers
-in .claude/settings.json (:120, :135). It was opt-in before; the line saying
-so outlived the commit that turned it on.
+Wired via PreToolUse Write/Edit AND Bash matchers in .claude/settings.json.
+
+THE BASH PATH IS ADVISORY, NOT A BLOCK. A shell command that writes the register
+-- a heredoc, `tee`, `sed -i`, `>>` -- never reaches the Write/Edit matcher, so
+for a while the gate had a shell-shaped hole and the agent that filed its own
+CLAIM through a heredoc (this one) sailed straight through it.
+
+It cannot be closed the same way. The Write/Edit path works because the proposed
+TEXT is in the payload; a shell command only carries the command, and recovering
+"what will this write" from arbitrary shell is not something to attempt in a
+PreToolUse hook. So the Bash path does what it honestly can: it notices the
+register is being written, surfaces which lanes are currently open, and asks.
+
+That is also the right shape on the merits. The register is a shared ledger, not
+a lock -- nodes go offline, work gets handed off, and more than one node on a
+lane is the village working, not a violation. A gate that refuses cannot express
+any of that. `permissionDecision: "ask"` puts the state in front of whoever is
+deciding and lets them decide.
 
 Owner-ID format in the register (per existing entries):
   `<ISO_TIMESTAMP>` CLAIM `<OWNER-ID>` scope: ...
@@ -67,12 +82,49 @@ import sys
 from pathlib import Path
 
 REGISTER_NAME = "AGNOTE4482PHI.t1.md"
+REPO_ROOT_GUESS = Path(__file__).resolve().parents[3]
 CLAIM_RE = re.compile(r'CLAIM\s+`([^`]+)`')
 RELEASE_RE = re.compile(r'RELEASE\s+`([^`]+)`')
 # A branch as the register writes it: conventional-commit prefix, backticked.
 LANE_RE = re.compile(
     r'`((?:feat|fix|docs|chore|refactor|test|ci|perf|build)/[A-Za-z0-9._/-]+)`'
 )
+# A backticked `docs/...` token is just as often a FILE as a branch, and scopes
+# cite files constantly. Left unfiltered, `docs/superpowers/specs/x-design.md`
+# registered as a claimed lane -- so two agents who merely referenced the same
+# spec could collide on it, and the register showed lanes nobody was working.
+# Found by running the advisory against the live register, not by reading it.
+# Branches do not carry a file extension; paths in this repo reliably do.
+FILE_SUFFIXES = (
+    ".md", ".py", ".yaml", ".yml", ".json", ".sh", ".ts", ".tsx", ".js",
+    ".toml", ".txt", ".sql", ".conf", ".bat", ".ps1",
+)
+
+
+# `Branch \`x\`` / `branch: \`x\`` -- how 68 claims in the live register already
+# mark their lane. A token behind this marker is a DECLARED branch, so the
+# suffix filter must not touch it: a real branch may end `.py` or `.md`, and
+# dropping it left BOTH claims unkeyed, which let two owners hold one lane with
+# no collision. The gate failed open, silently. The filter still applies to
+# unmarked tokens, where a backticked `docs/...` really is usually a cited file.
+BRANCH_MARKER_RE = re.compile(
+    r'\bbranch\b[:=]?\s*`([^`]+)`',
+    re.IGNORECASE,
+)
+
+
+def lanes_in(text: str) -> set[str]:
+    """Branch-shaped tokens in a line, with cited file paths excluded.
+
+    Explicitly marked branches are kept whatever they end in; everything else
+    must survive FILE_SUFFIXES to count as a lane.
+    """
+    declared = {lane for lane in BRANCH_MARKER_RE.findall(text) if lane.strip()}
+    inferred = {
+        lane for lane in LANE_RE.findall(text)
+        if not lane.lower().endswith(FILE_SUFFIXES)
+    }
+    return declared | inferred
 
 
 _UNSET = object()
@@ -164,11 +216,11 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
     for lineno, line in enumerate(text.split("\n"), start=1):
         if m := CLAIM_RE.search(line):
             open_claims.setdefault(canonical_owner(m.group(1)), []).append(
-                (lineno, set(LANE_RE.findall(line)), m.group(1))
+                (lineno, lanes_in(line), m.group(1))
             )
         elif m := RELEASE_RE.search(line):
             owner = canonical_owner(m.group(1))
-            released = set(LANE_RE.findall(line))
+            released = lanes_in(line)
             if not released:
                 # A BARE release closes everything that owner holds. 99 of
                 # the register's 120 RELEASE lines name no branch, so this
@@ -190,6 +242,117 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
     return open_claims
 
 
+# Shell tokens that mean "this command can modify a file". Deliberately broad:
+# a false positive costs one prompt, a false negative is the hole this closes.
+WRITE_TOKENS = re.compile(
+    r"\btee\b|"                    # tee / tee -a
+    r"\bsed\b[^|]*-i|"             # sed -i
+    r"\bdd\b|"
+    # Replacement-style rewrites. These carry no redirect and no -i, so the
+    # advisory was silent while the register was overwritten wholesale -- the
+    # most ordinary way to replace a file walked straight through the gate.
+    r"\b(?:cp|mv|install|rsync|truncate)\b|"
+    r"\bperl\b[^|]*-[a-zA-Z]*i|"   # perl -pi / -i.bak
+    r"\b(?:write_text|open)\s*\(|"  # python inside a heredoc
+    r"\bcat\b[^|]*<<"              # heredoc
+)
+
+# Redirects are handled separately from the tokens above, because `>` alone
+# says nothing about WHICH file is written. `cat REGISTER 2>/dev/null` and
+# `grep REGISTER > report.txt` both name the register and both redirect, yet
+# neither writes it. This hook runs on every Bash call, so those false asks are
+# friction on ordinary reads -- and friction is what teaches people to click
+# through the one prompt that matters.
+REDIRECT_TARGET_RE = re.compile(r">>?\s*([^\s;|&<>]+)")
+
+
+def _writes_the_register(command: str) -> bool:
+    """True when `command` plausibly MODIFIES the register (not merely reads it)."""
+    if WRITE_TOKENS.search(command):
+        return True
+    return any(
+        REGISTER_NAME in target
+        for target in REDIRECT_TARGET_RE.findall(command)
+    )
+
+
+def _advise_on_shell_write(payload: dict) -> None:
+    """Ask (never block) when a shell command looks like it writes the register.
+
+    Emits nothing at all unless the command names the register AND carries a
+    write token, so ordinary `grep`/`sed -n` reads stay silent.
+    """
+    command = ((payload.get("tool_input") or {}).get("command") or "")
+    if REGISTER_NAME not in command or not _writes_the_register(command):
+        return
+
+    register = _locate_register(payload, command)
+    if register is None:
+        return
+    try:
+        existing_open = open_claims_in(register.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return
+
+    # open_claims_in maps owner -> LIST of (lineno, lanes, as-written), not a
+    # single tuple: one identity can hold several lanes at once, and #2760 made
+    # that explicit because keying one claim per owner silently forgot every
+    # lane but the newest. Count and list CLAIMS, therefore, not owners.
+    keyed = [c for claims in existing_open.values() for c in claims if c[1]]
+    total_open = sum(len(claims) for claims in existing_open.values())
+    lines = [
+        "This shell command writes the claim register. The collision gate reads "
+        "proposed text from Write/Edit payloads and cannot see inside a shell "
+        "command, so it has NOT checked this one.",
+        "",
+        f"Open lanes right now ({total_open} total, {len(keyed)} naming a branch):",
+    ]
+    # Report the AS-WRITTEN owner, not the canonical key: `B850-CLAUDE
+    # (Knuckles)` locates the entry in the register and `b850-claude` does not.
+    for lineno, lanes, raw in sorted(keyed, key=lambda c: c[0]):
+        lines.append(f"  L{lineno}  {raw} -> {', '.join(sorted(lanes))}")
+    unkeyed = total_open - len(keyed)
+    if unkeyed:
+        lines.append(
+            f"  (+{unkeyed} open claim(s) naming no branch -- not comparable)"
+        )
+    lines += [
+        "",
+        "A lane held by another node is not a stop sign: nodes go offline, and "
+        "more than one node on a lane is the village working. Coordinate, pick "
+        "it up, or proceed -- but do it knowingly.",
+    ]
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": "\n".join(lines),
+        }
+    }))
+
+
+def _locate_register(payload: dict, command: str) -> Path | None:
+    """Resolve the register THIS command writes -- or nothing.
+
+    Relative to the payload's cwd first. An earlier cut resolved bare filenames
+    against the hook's own cwd, missed, and fell through to the repo's real
+    register -- so it would have reported the live fleet's open lanes for a
+    command writing an unrelated file somewhere else. Reporting state from a
+    different file than the one being written is worse than reporting none.
+    """
+    cwd = Path(payload.get("cwd") or os.getcwd())
+    for token in re.findall(r"[\w./~-]*" + re.escape(REGISTER_NAME), command):
+        raw = Path(token).expanduser()
+        for candidate in ((cwd / raw), raw, (REPO_ROOT_GUESS / raw)):
+            if candidate.is_file():
+                return candidate
+    # The command names the register but no token resolved to a real file (a
+    # variable, a generated path). Fall back ONLY to a register under the
+    # command's own cwd -- never to the repo's.
+    hit = cwd / "pmoves" / "docs" / "AGENTS" / REGISTER_NAME
+    return hit if hit.is_file() else None
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -197,6 +360,9 @@ def main() -> None:
         sys.exit(0)
 
     tool = payload.get("tool_name", "")
+    if tool == "Bash":
+        _advise_on_shell_write(payload)
+        sys.exit(0)
     if tool not in ("Write", "Edit"):
         sys.exit(0)
     ti = payload.get("tool_input") or {}
@@ -208,7 +374,7 @@ def main() -> None:
     proposed = ti.get("new_string") if tool == "Edit" else ti.get("content")
     proposed = proposed or ""
     new_claims = [
-        (m.group(1), set(LANE_RE.findall(proposed)))
+        (m.group(1), lanes_in(proposed))
         for m in CLAIM_RE.finditer(proposed)
     ]
     if not new_claims:
