@@ -1,0 +1,84 @@
+# Deployment-class registry — the axis license answers depend on.
+#
+# WHY THIS FILE EXISTS
+#   The fleet can already express license class per model
+#   (creator_models.yaml: license: + requires_ack:) and per TTS engine
+#   (tts-engine-capabilities.yaml § License Policy). It could not express it
+#   per DEPLOYMENT: profiles/*.yaml are hardware shapes (cpu, gpu, jetpack,
+#   dual_gpu_flags) with no tenant_type anywhere, so nothing could answer "is
+#   this node an enterprise deployment?" — the exact question every licensing
+#   rule keys on. This registry names the classes; profiles reference them via
+#   an optional `deployment_class:` field; later gates (requires_ack
+#   enforcement beyond models, submodule licensing like jcodemunch) key on it.
+#
+# GATE (mirrors creator_models' framing, lifted one level):
+#   A component that is not confirmed commercial-OK (requires_ack=true in its
+#   own registry) may run self-hosted under its own terms on any class, and is
+#   EXCLUDED from the hosted/commercial path — which means: never baked into
+#   images or compose defaults served to classes with hosted_path: false.
+#
+# CLASSES (the four customer types; names are stable IDs, prose may evolve):
+#   private-mesh  — the operator's own nodes. Least constrained: run what we
+#                   want under each component's own terms. Longbow-class
+#                   self-hosted infra lives here.
+#   community     — a neighborhood/communal deployment (e.g. the Fordham Hill
+#                   mesh pilot). Self-hosted, shared infra, no commercial
+#                   offering of the stack itself.
+#   school        — an educational deployment. Like community, plus explicit
+#                   care that learner-facing defaults carry only
+#                   commercial-OK components.
+#   enterprise    — commercial/hosted path. Only requires_ack=false components
+#                   in defaults; anything else is BYO at the customer's edge.
+
+schema_version: 1
+
+classes:
+  private-mesh:
+    description: "Operator-owned fleet nodes (Z890, 5090, 4090, SPARK, B850/Knuckles, KVMs, Jetsons)"
+    hosted_path: false          # we self-host; we do not resell the stack
+    requires_ack_components: allowed
+    notes: >-
+      Least constrained class, not "no rules": each component still runs under
+      its own license terms. License-restricted engines and research-weighted
+      submodules are fine HERE; they are what requires_ack was designed to
+      fence away from the classes below.
+
+  community:
+    description: "Shared community deployment (e.g. Fordham Hill mesh pilot)"
+    hosted_path: false
+    requires_ack_components: allowed_self_hosted
+    notes: >-
+      Runs under each engine's own terms (tts-engine-capabilities § License
+      Policy, "Private / community self-host" row). The deployment itself is
+      not a commercial offering, so redistribution clauses are not triggered —
+      but operators should keep the boundary honest: no paid service on top.
+
+  school:
+    description: "Educational deployment"
+    hosted_path: false
+    requires_ack_components: discouraged
+    notes: >-
+      Learner-facing defaults should carry only commercial-OK
+      (requires_ack=false) components; a teacher/admin can still consciously
+      enable a requires_ack component for a lab, which is why this is
+      "discouraged" and not "excluded".
+
+  enterprise:
+    description: "Commercial / hosted path"
+    hosted_path: true
+    requires_ack_components: excluded
+    notes: >-
+      requires_ack=true components are never baked into images, compose
+      defaults, or hosted offerings for this class — try-locally/BYO at the
+      customer's edge only, exactly as creator_models gates models.
+      Commercial redistribution of a license-restricted engine means
+      partnering with the upstream author (amplify + credit), not shipping.
+
+# HOW PROFILES REFERENCE THIS
+#   pmoves/config/profiles/<node>.yaml gains an OPTIONAL field:
+#       deployment_class: private-mesh
+#   Unset means unset: loaders must not guess a default class for a node they
+#   cannot place (declare-never-infer, same posture as node identity).
+#   The coupling test (tests/test_deployment_class_registry.py) enforces:
+#     - every deployment_class in a profile resolves to a class above
+#     - schema_version matches what the loader was written against
