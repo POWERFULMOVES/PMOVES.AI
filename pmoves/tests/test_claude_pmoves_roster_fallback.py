@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -62,6 +63,49 @@ ROSTER_WITHOUT_PLACEHOLDERS = {
             "type": "sse",
             "url": "http://127.0.0.1:8105/mcp/sse",
             "headers": {"Authorization": "Bearer literal-value"},
+        }
+    }
+}
+
+# ``${VAR:-default}`` is the REMEDY the roster's own note prescribes, not the
+# disease: an unset var expands to the default, so nothing is ever sent as a
+# placeholder. ``.claude/mcp.json`` uses exactly this for the cipher bearer
+# today. A gate that refuses here refuses the fix.
+ROSTER_ONLY_DEFAULTED = {
+    "mcpServers": {
+        "defaulted": {
+            "type": "sse",
+            "url": "http://127.0.0.1:8105/mcp/sse",
+            "headers": {"Authorization": "Bearer ${PM_TEST_ABSENT_TOKEN:-}"},
+        }
+    }
+}
+
+# ``${...}`` inside a ``_``-prefixed metadata key is prose ABOUT placeholders,
+# not a placeholder. Not hypothetical: ``.claude/mcp.json`` carries the literal
+# text "uses the unexpanded ${VAR} text as-is" inside a ``_note``, so a node
+# that had expanded every real reference still could not pass a whole-file
+# match.
+ROSTER_PLACEHOLDER_ONLY_IN_PROSE = {
+    "_pinned_versions_note": "the docs say the unexpanded ${VAR} text is used as-is",
+    "mcpServers": {
+        "plain": {
+            "_note": "the remedy for ${PM_TEST_ABSENT_TOKEN} is the ':-' fallback",
+            "type": "sse",
+            "url": "http://127.0.0.1:8105/mcp/sse",
+            "headers": {"Authorization": "Bearer literal-value"},
+        }
+    }
+}
+
+# A bare reference in an ``env`` block rather than a header -- same cost, and
+# the narrowing must not lose it.
+ROSTER_BARE_PLACEHOLDER_IN_ENV = {
+    "mcpServers": {
+        "stdio-thing": {
+            "command": "uvx",
+            "args": ["some-mcp"],
+            "env": {"SOME_API_KEY": "${PM_TEST_ABSENT_TOKEN}"},
         }
     }
 }
@@ -305,6 +349,74 @@ def test_the_pinned_interpreter_is_shown_when_the_normalizer_itself_fails(
 
 
 # --------------------------------------------------------------------------
+# WHAT COUNTS AS A PLACEHOLDER.
+#
+# The policy is "refuse when credentials would go out as placeholders". The
+# first implementation asked "do the two characters ``${`` appear anywhere in
+# this JSON file", which is a different question and answers wrong in both
+# directions. These tests pin the policy, not the grep: they drive the real
+# launcher with the interpreter deliberately unavailable, so the gate is what
+# decides.
+# --------------------------------------------------------------------------
+
+
+def test_a_defaulted_reference_is_not_a_placeholder(repo: FakeRepo):
+    """``${TOK:-}`` sends the default, never the literal text.
+
+    Refusing here would refuse the documented remedy -- and it is the remedy
+    the tracked roster already uses for the cipher bearer, so this case is
+    live, not theoretical.
+    """
+    repo.set_roster(ROSTER_ONLY_DEFAULTED)
+    r = repo.launch(PMOVES_PYTHON=" ")
+    assert r.rc == 0, f"refused a roster with no placeholder in it: {r!r}"
+    assert r.claude_ran, r
+    assert "Refusing" not in r.stderr, (
+        f"claimed credentials are placeholders when none are: {r!r}"
+    )
+
+
+def test_a_placeholder_confined_to_metadata_prose_is_not_a_placeholder(
+    repo: FakeRepo,
+):
+    """Claude Code reads ``mcpServers``; ``_``-prefixed keys are documentation.
+
+    A node that has expanded every real reference must be able to launch even
+    though the file still *talks about* ``${VAR}``.
+    """
+    repo.set_roster(ROSTER_PLACEHOLDER_ONLY_IN_PROSE)
+    r = repo.launch(PMOVES_PYTHON=" ")
+    assert r.rc == 0, f"refused on prose about placeholders: {r!r}"
+    assert r.claude_ran, r
+    assert "Refusing" not in r.stderr, r
+
+
+def test_a_bare_reference_in_env_still_refuses(repo: FakeRepo):
+    """The narrowing must not become a hole: ``env`` costs the same as a header."""
+    repo.set_roster(ROSTER_BARE_PLACEHOLDER_IN_ENV)
+    r = repo.launch(PMOVES_PYTHON=" ")
+    assert r.rc != 0, f"launched with a literal ${{VAR}} credential in env: {r!r}"
+    assert not r.claude_ran, r
+
+
+def test_the_tracked_roster_itself_still_trips_the_gate(repo: FakeRepo):
+    """The anti-over-narrowing control.
+
+    The real ``.claude/mcp.json`` carries bare references in ``url`` and ``env``
+    today. If a future narrowing lets THAT through, the gate has been narrowed
+    into nothing -- and this test, unlike the constructed ones, moves with the
+    file the launcher actually reads.
+    """
+    tracked = REPO_ROOT / ".claude" / "mcp.json"
+    if not tracked.exists():  # pragma: no cover - tracked file is in-repo
+        pytest.skip("no tracked roster in this checkout")
+    repo.roster.write_text(tracked.read_text(encoding="utf-8"), encoding="utf-8")
+    r = repo.launch(PMOVES_PYTHON=" ")
+    assert r.rc != 0, f"the real roster no longer trips the gate: {r!r}"
+    assert not r.claude_ran, r
+
+
+# --------------------------------------------------------------------------
 # The Windows twin. There is no pwsh in CI, so this cannot be executed here --
 # but the drift it guards is documented in that file's own header: the POSIX
 # launcher grew ${VAR} resolution and the PowerShell one did not, and the blind
@@ -347,4 +459,163 @@ def test_the_powershell_twin_no_longer_emits_the_one_size_guess():
     offenders = [line for line in emitted if "python3 missing?" in line]
     assert not offenders, (
         f"the Windows launcher still reports one guess for four causes: {offenders}"
+    )
+
+
+# --------------------------------------------------------------------------
+# The Windows twin, part 2: WHAT FEEDS THE GATE.
+#
+# The three tests above assert the gate is PRESENT. That is not enough, and the
+# gap is not academic -- it is how a half-mirrored twin shipped. The gate was
+# copied to the ps1; the interpreter discovery it gates on was not, so the ps1
+# tried exactly `Get-Command python` then `Get-Command python3`. On a stock
+# Windows 10/11 node `python` resolves to the Microsoft Store stub under
+# %LOCALAPPDATA%\Microsoft\WindowsApps, `Get-Command` SUCCEEDS on it, running it
+# does not produce an interpreter -- and the node that used to warn and launch
+# now cannot start a session at all, via an override the ps1 never read.
+#
+# So: assert the INPUTS, not just the refusal. These are static assertions
+# because `command -v pwsh powershell` exits 1 here; they are the strongest
+# check available without a Windows runner, and each one is written to fail
+# against the twin as it stood.
+# --------------------------------------------------------------------------
+
+
+def _ps1_src() -> str:
+    return PS1.read_text(encoding="utf-8")
+
+
+def _ps1_emitted() -> list[str]:
+    """Lines whose text reaches the operator, excluding comments.
+
+    That is the emit calls plus the ``$why`` assignments, which are printed
+    verbatim one line later as ``cause: $why``.
+
+    Comments are excluded deliberately: both files quote the OLD messages as
+    the record of the fix, so a check that cannot tell a comment from an
+    emitted string fails on the documentation rather than on the behaviour.
+    """
+    return [
+        line
+        for line in _ps1_src().splitlines()
+        if not line.lstrip().startswith("#")
+        and (
+            "Write-Warning" in line
+            or "Error.WriteLine" in line
+            or line.lstrip().startswith("$why")
+        )
+    ]
+
+
+def test_the_powershell_twin_searches_the_same_interpreters_as_pm_python():
+    """Every rung `pm-python.sh` has, before the ps1 is allowed to refuse.
+
+    Without the venv rung the ps1 cannot see what `make -C pmoves preflight`
+    produces; without the PMOVES_PYTHON rung the operator has no override at
+    all; without `py -3` a stock Windows node has no real interpreter to find.
+    """
+    src = _ps1_src()
+    missing = []
+    if "PMOVES_PYTHON" not in src:
+        missing.append("$env:PMOVES_PYTHON (the operator pin -- there is no override without it)")
+    if ".venv-pmoves" not in src:
+        missing.append(".venv-pmoves (what `make -C pmoves preflight` provisions)")
+    if not re.search(r"""['"]py['"]\s*,\s*['"]-3['"]""", src):
+        missing.append("py -3 (the real interpreter on a Windows node)")
+    if "python3" not in src:
+        missing.append("python3")
+    if not re.search(r"""['"]python['"]""", src):
+        missing.append("python")
+    assert not missing, (
+        "the Windows launcher refuses on a healthy node because its discovery "
+        "ladder is missing: " + "; ".join(missing)
+    )
+
+
+def test_the_powershell_twin_runs_the_candidate_instead_of_trusting_get_command():
+    """`Get-Command` succeeding is exactly what makes the Store stub invisible.
+
+    `pm-python.sh` probes with `-c ''` -- a no-op for any real interpreter and
+    non-zero for anything that is not one. Presence is not runnability.
+    """
+    src = _ps1_src()
+    assert re.search(r"-c\s+'(pass)?'", src), (
+        "the Windows launcher accepts an interpreter it never ran; "
+        "Get-Command succeeds on the Microsoft Store stub, so presence proves "
+        "nothing (pm-python.sh probes with -c '')"
+    )
+
+
+def test_the_powershell_twin_names_the_store_stub_as_the_thing_it_rejects():
+    """The finding must not be silently un-fixed by a later tidy-up.
+
+    A probe with no recorded reason reads like defensive noise and gets removed.
+    """
+    src = _ps1_src().lower()
+    assert "windowsapps" in src or "microsoft store" in src, (
+        "nothing in the ps1 records WHY the candidate is probed, so the next "
+        "reader cannot tell the probe is load-bearing"
+    )
+
+
+def test_the_powershell_twin_cause_message_names_every_candidate_it_tried():
+    """Same contract as the POSIX `why` string.
+
+    The operator's next command depends on knowing what was searched. 'tried
+    python, then python3' sends them to install a python the launcher may
+    already have had.
+    """
+    causes = [line for line in _ps1_emitted() if "no usable python interpreter" in line]
+    assert causes, "the ps1 no longer reports the no-interpreter cause"
+    blob = " ".join(causes)
+    for token in ("PMOVES_PYTHON", ".venv-pmoves", "py -3", "python3", "python"):
+        assert token in blob, (
+            f"the no-interpreter message does not name {token!r}, so it "
+            f"under-reports what was searched: {causes}"
+        )
+
+
+def test_the_powershell_twin_only_prints_remedies_it_can_act_on():
+    """A printed fix that leaves the operator refused is worse than none.
+
+    `make -C pmoves preflight` provisions `pmoves/.venv-pmoves`. If the ps1
+    prints that as the remedy it must also LOOK there, or the operator follows
+    the instruction and stays refused.
+    """
+    src = _ps1_src()
+    emitted = _ps1_emitted()
+
+    if any("preflight" in line for line in emitted):
+        assert ".venv-pmoves" in src, (
+            "the ps1 tells the operator to run `make -C pmoves preflight` but "
+            "never looks in pmoves\\.venv-pmoves, which is what preflight "
+            "provisions -- following the printed fix leaves them refused"
+        )
+
+    pin = [line for line in emitted if "PMOVES_PYTHON" in line]
+    assert pin, (
+        "the refusal never offers the interpreter pin, so a node whose python "
+        "is somewhere the ladder does not look has only "
+        "PMOVES_ALLOW_RAW_ROSTER -- i.e. the thing the gate exists to prevent"
+    )
+
+
+def test_the_powershell_twin_uses_the_same_narrowed_placeholder_test():
+    """Both twins must agree on what a placeholder IS, not just on refusing.
+
+    A whole-file `${` match fires on `${VAR:-default}` (the remedy) and on
+    `${...}` in a `_note` (prose), and both twins carried it.
+    """
+    src = _ps1_src()
+    assert "-SimpleMatch '${'" not in src, (
+        "the ps1 still refuses on any occurrence of ${ anywhere in the file, "
+        "including the ':-' remedy and `_note` prose"
+    )
+    assert re.search(r"\\\$\\\{\[A-Za-z_\]", src), (
+        "the ps1 has no bare-${IDENT} test -- it cannot tell a placeholder "
+        "from a defaulted reference"
+    )
+    assert re.search(r'"_\[\^"\]\*"', src), (
+        "the ps1 does not skip `_`-prefixed metadata keys, so prose about "
+        "placeholders still reads as a placeholder"
     )

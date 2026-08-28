@@ -245,11 +245,42 @@ if [ -f "$MCP_ROSTER" ]; then
   # -------------------------------------------------------------------------
   echo "[claude-pmoves] ERROR: could not normalize the MCP roster." >&2
   echo "[claude-pmoves]        cause: $why" >&2
-  # -F: match the two characters literally; this is a placeholder check, not a
-  # regex, and SC2016 is exactly backwards here — non-expansion is the point.
-  # shellcheck disable=SC2016
-  if grep -qF '${' "$MCP_ROSTER" 2>/dev/null; then
-    echo "[claude-pmoves]        LOST: $MCP_ROSTER still contains \${VAR} references." >&2
+  # WHICH ${...} actually costs a credential? Not all of them, and the first
+  # cut of this gate (`grep -qF '${'`) answered a different question — "do these
+  # two characters appear anywhere in this JSON file" — which is wrong in both
+  # directions:
+  #   * FALSE POSITIVE, the `:-` idiom. `${CIPHER_API_TOKEN:-}` sends the
+  #     DEFAULT, never the literal text. It is the remedy Claude Code's own docs
+  #     prescribe and the one .claude/mcp.json already uses for the cipher
+  #     bearer, so a whole-file match refuses the fix.
+  #   * FALSE POSITIVE, prose. `.claude/mcp.json`'s `_note` quotes the docs
+  #     verbatim — "uses the unexpanded ${VAR} text as-is". Claude Code reads
+  #     `mcpServers`; `_`-prefixed keys are documentation. A node that had
+  #     expanded every real reference still could not pass.
+  # So the predicate is: a BARE ${IDENT} on a line that is not a `_`-prefixed
+  # key. Still a text match, deliberately — see the note below on why the
+  # semantically complete check cannot live here.
+  #
+  # WHY NOT `mcp_roster_normalize.py --check-only`, which already knows the
+  # difference (_IDENT, _split_default, the drop/warn field split)? Because this
+  # block is reached ONLY when the normalizer could not run: it is missing, or
+  # there is no interpreter, or it exited non-zero, or it printed nothing.
+  # In the first two it is unavailable; in the other two it is the component
+  # that just failed. A check that needs python is unavailable in exactly the
+  # four cases the gate exists for, so the gate has to be answerable with the
+  # tools present when python is not.
+  #
+  # KNOWN, DELIBERATE OVER-MATCH: the field restriction (only url/headers/env/
+  # args) is NOT implemented. `headers` and `env` are objects, so the key on the
+  # line carrying the reference is `Authorization`, not `headers` — restricting
+  # by field needs a parser, which is the thing we just established we cannot
+  # have here. The residue is a bare ${IDENT} in a non-`_` descriptive field,
+  # which over-refuses rather than under-refuses. A nested default
+  # (`${A:-${B}}`) also matches on its inner reference, correctly: if both are
+  # unset that IS a literal placeholder.
+  if grep -vE '^[[:space:]]*"_[^"]*"[[:space:]]*:' "$MCP_ROSTER" 2>/dev/null \
+       | grep -qE '\$\{[A-Za-z_][A-Za-z0-9_]*\}'; then
+    echo "[claude-pmoves]        LOST: $MCP_ROSTER still contains bare \${VAR} references." >&2
     echo "[claude-pmoves]              Claude Code sends an unresolvable reference as the" >&2
     echo "[claude-pmoves]              LITERAL text, so bearer tokens would go out as" >&2
     echo "[claude-pmoves]              'Bearer \${CIPHER_API_TOKEN}' and cross-node URLs as" >&2
@@ -267,7 +298,8 @@ if [ -f "$MCP_ROSTER" ]; then
     echo "[claude-pmoves]        PMOVES_ALLOW_RAW_ROSTER=1 is set — launching anyway." >&2
   else
     echo "[claude-pmoves] WARN: launching with the RAW roster $MCP_ROSTER." >&2
-    echo "[claude-pmoves]       No \${VAR} references remain, so credentials are intact." >&2
+    echo "[claude-pmoves]       No bare \${VAR} references remain (a \${VAR:-default}" >&2
+    echo "[claude-pmoves]       sends its default), so credentials are intact." >&2
     echo "[claude-pmoves]       Lost: '_'-prefixed disabled duplicates are NOT dropped, and" >&2
     echo "[claude-pmoves]       ./ paths stay relative to your CWD instead of the repo root." >&2
   fi
