@@ -121,3 +121,104 @@ def test_load_key_mapping_treats_blank_as_operator_only(tmp_path):
     m = mod.load_key_mapping(p)
     assert m["hostinger-mcp-server.api_token"] == "HOSTINGER_API_KEY"
     assert m["dockerhub.pat_token"] is None
+
+
+# --- profile-aware discovery -------------------------------------------------
+# The gateway runs `docker mcp gateway run --profile <p>`. The hydrator used to
+# discover only from registry.yaml (the Toolkit's enabled-server list). Those are
+# different sets, and on the 4090 the difference was silent: `github-official`
+# lives in the pmoves_5090_web profile the gateway actually runs, is absent from
+# registry.yaml, and so was never even considered -- not pushed, and not reported
+# as a gap either. The server started with an empty
+# GITHUB_PERSONAL_ACCESS_TOKEN and every call returned 401 Bad credentials.
+
+
+def test_profiles_are_read_from_the_gateway_invocation(tmp_path: Path):
+    """Ground truth for what runs is .mcp.json, not a hardcoded default.
+
+    Both mcp-toolkit-connect.sh and mcp-toolkit-bootstrap.sh default to
+    `pmoves_5090_web`, so trusting the default would report the same profile on
+    every node regardless of what that node's gateway was actually started with.
+    """
+    mcp_json = tmp_path / ".mcp.json"
+    mcp_json.write_text(
+        '{"mcpServers":{"MCP_DOCKER":{"command":"docker","args":'
+        '["mcp","gateway","run","--profile","pmoves_4090_web"],"type":"stdio"}}}',
+        encoding="utf-8",
+    )
+    assert mod.profiles_from_mcp_json(mcp_json) == ["pmoves_4090_web"]
+
+
+def test_no_mcp_json_yields_no_profiles_rather_than_a_guess(tmp_path: Path):
+    """Absent config must not fall back to a node-named default."""
+    assert mod.profiles_from_mcp_json(tmp_path / "nope.json") == []
+
+
+def test_profile_secrets_are_discovered(monkeypatch):
+    """A server's secrets are read from `docker mcp profile show` output."""
+    profile_yaml = textwrap.dedent(
+        """
+        version: 1
+        id: pmoves_5090_web
+        servers:
+            - type: image
+              snapshot:
+                server:
+                    name: github-official
+                    secrets:
+                        - name: github.personal_access_token
+                          env: GITHUB_PERSONAL_ACCESS_TOKEN
+            - type: image
+              snapshot:
+                server:
+                    name: context7
+        """
+    )
+    monkeypatch.setattr(mod, "_profile_show", lambda name: profile_yaml)
+    found = mod.load_required_from_profile("pmoves_5090_web")
+    assert [(r.server, r.docker_name, r.env_var) for r in found] == [
+        ("github-official", "github.personal_access_token", "GITHUB_PERSONAL_ACCESS_TOKEN")
+    ]
+
+
+def test_profile_and_registry_requirements_are_merged_without_duplicates(monkeypatch, tmp_path: Path):
+    """A server in BOTH sources is required once, not twice.
+
+    The union is the point: registry-only servers keep working, and profile-only
+    servers stop being invisible.
+    """
+    (tmp_path / "catalogs").mkdir()
+    (tmp_path / "registry.yaml").write_text(
+        yaml.safe_dump({"registry": {"e2b": {}}}), encoding="utf-8"
+    )
+    (tmp_path / "catalogs" / "docker-mcp.yaml").write_text(
+        yaml.safe_dump(
+            {"registry": {"e2b": {"secrets": [{"name": "e2b.api_key", "env": "E2B_API_KEY"}]}}}
+        ),
+        encoding="utf-8",
+    )
+    profile_yaml = textwrap.dedent(
+        """
+        servers:
+            - snapshot:
+                server:
+                    name: e2b
+                    secrets:
+                        - name: e2b.api_key
+                          env: E2B_API_KEY
+            - snapshot:
+                server:
+                    name: github-official
+                    secrets:
+                        - name: github.personal_access_token
+                          env: GITHUB_PERSONAL_ACCESS_TOKEN
+        """
+    )
+    monkeypatch.setattr(mod, "_profile_show", lambda name: profile_yaml)
+
+    merged = mod.load_required(tmp_path, profiles=["p"])
+    pairs = sorted((r.server, r.docker_name) for r in merged)
+    assert pairs == [
+        ("e2b", "e2b.api_key"),
+        ("github-official", "github.personal_access_token"),
+    ], pairs

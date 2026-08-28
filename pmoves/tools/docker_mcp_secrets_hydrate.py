@@ -27,6 +27,7 @@ run this AFTER Docker Desktop has been restarted and the resolver responds.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -96,8 +97,92 @@ class Plan:
     operator_only: List[Required] = field(default_factory=list)
 
 
-def load_required(docker_mcp_dir: Path) -> List[Required]:
-    """Discover required secrets for ENABLED servers from Docker's catalog+registry."""
+DEFAULT_MCP_JSON = PROJECT_ROOT.parent / ".mcp.json"
+
+
+def profiles_from_mcp_json(path: Path | None = None) -> List[str]:
+    """Profiles the gateway is ACTUALLY started with, read from .mcp.json.
+
+    Ground truth, deliberately, rather than the tooling's default. Both
+    scripts/mcp-toolkit-connect.sh and scripts/mcp-toolkit-bootstrap.sh default
+    to `pmoves_5090_web` -- a profile named after one node -- so a hardcoded
+    default reports the same answer on every node no matter what its gateway is
+    running. Returns [] when the file is absent: no config is not a licence to
+    guess.
+    """
+    path = path or DEFAULT_MCP_JSON
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    profiles: List[str] = []
+    for server in (data.get("mcpServers") or {}).values():
+        args = server.get("args") or []
+        for i, arg in enumerate(args):
+            if arg == "--profile" and i + 1 < len(args):
+                value = args[i + 1]
+                if value not in profiles:
+                    profiles.append(value)
+            elif isinstance(arg, str) and arg.startswith("--profile="):
+                value = arg.split("=", 1)[1]
+                if value and value not in profiles:
+                    profiles.append(value)
+    return profiles
+
+
+def _profile_show(name: str) -> str:
+    """Raw `docker mcp profile show <name>` YAML. Seam for tests."""
+    proc = subprocess.run(
+        ["docker", "mcp", "profile", "show", name],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"docker mcp profile show {name} failed (exit {proc.returncode}): "
+            f"{(proc.stderr or '').strip()[:200]}"
+        )
+    return proc.stdout
+
+
+def load_required_from_profile(name: str) -> List[Required]:
+    """Required secrets for every server in a PROFILE.
+
+    Distinct from the registry: a profile is what `docker mcp gateway run
+    --profile` serves, and it can contain servers the Toolkit's registry.yaml
+    does not enable. Those were previously invisible here -- neither pushed nor
+    reported as a gap -- so the server came up with an empty credential env var
+    and failed at call time instead of at hydrate time.
+    """
+    try:
+        doc = yaml.safe_load(_profile_show(name)) or {}
+    except (RuntimeError, yaml.YAMLError) as exc:
+        print(f"\u26a0 could not read profile {name}: {exc}", file=sys.stderr)
+        return []
+    required: List[Required] = []
+    for entry in doc.get("servers") or []:
+        server = ((entry or {}).get("snapshot") or {}).get("server") or {}
+        server_name = server.get("name")
+        if not server_name:
+            continue
+        for sec in server.get("secrets") or []:
+            secret_name = sec.get("name")
+            if not secret_name:
+                continue
+            required.append(
+                Required(server=server_name, docker_name=secret_name, env_var=sec.get("env", ""))
+            )
+    return required
+
+
+def load_required(
+    docker_mcp_dir: Path, profiles: Sequence[str] | None = None
+) -> List[Required]:
+    """Required secrets from the enabled registry UNIONED with any profiles.
+
+    Two sources because Docker has two: registry.yaml is what the Toolkit has
+    enabled, a profile is what the gateway actually serves. Hydrating only the
+    first left profile-only servers silently unprovisioned.
+    """
     registry_path = docker_mcp_dir / "registry.yaml"
     catalog_path = docker_mcp_dir / "catalogs" / "docker-mcp.yaml"
     if not registry_path.exists():
@@ -117,7 +202,22 @@ def load_required(docker_mcp_dir: Path) -> List[Required]:
             if not name:
                 continue
             required.append(Required(server=server, docker_name=name, env_var=env_var))
-    return required
+
+    for profile in profiles or []:
+        required.extend(load_required_from_profile(profile))
+
+    # Dedup on (server, secret): a server present in BOTH sources is one
+    # requirement, and pushing it twice would double the resolver calls on a
+    # resolver that is already the fragile part of this path.
+    seen = set()
+    deduped: List[Required] = []
+    for item in required:
+        marker = (item.server, item.docker_name)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        deduped.append(item)
+    return deduped
 
 
 def load_key_mapping(path: Path) -> Dict[str, str | None]:
@@ -215,13 +315,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Docker-secret-NAME -> env.shared-KEY-NAME overrides (names only, never values).",
     )
     parser.add_argument("--docker-mcp-dir", type=Path, default=None)
+    parser.add_argument(
+        "--profile",
+        dest="profiles",
+        action="append",
+        default=None,
+        help=(
+            "Also hydrate secrets for every server in this Docker MCP profile. "
+            "Repeatable. Defaults to the profiles .mcp.json starts the gateway with."
+        ),
+    )
+    parser.add_argument("--mcp-json", type=Path, default=None)
     parser.add_argument("--dry-run", action="store_true", help="Show what would be pushed; touch nothing")
     args = parser.parse_args(argv)
     force_utf8_stdio()
 
     docker_mcp_dir = args.docker_mcp_dir or default_docker_mcp_dir()
+    profiles = args.profiles
+    if profiles is None:
+        profiles = profiles_from_mcp_json(args.mcp_json)
+        if profiles:
+            print(f"Profiles from .mcp.json: {', '.join(profiles)}")
+        else:
+            print(
+                "No --profile given and .mcp.json names none: hydrating the enabled "
+                "registry only. Servers that exist ONLY in a gateway profile will not "
+                "be covered.",
+                file=sys.stderr,
+            )
     try:
-        required = load_required(docker_mcp_dir)
+        required = load_required(docker_mcp_dir, profiles=profiles)
     except FileNotFoundError as exc:
         print(f"⚠ {exc}", file=sys.stderr)
         return 1
