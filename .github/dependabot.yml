@@ -75,6 +75,26 @@ updates:
       agent-zero-pip-minor-patch:
         applies-to: version-updates
         update-types: ["minor", "patch"]
+    ignore:
+      # Runtime compatibility pin. See services/agent-zero/requirements.txt
+      # (the comment block above `scipy<1.15`), and keep the two in sync — a
+      # future editor who relaxes one should find the other.
+      #
+      # The base image (agent0ai/agent-zero-base) ships numpy 1.26.x. scipy
+      # >=1.15 registers ufuncs (sph_legendre_p) that only exist under numpy
+      # 2.x, and run_ui.py dies at import with "All ufuncs must have type
+      # numpy.ufunc".
+      #
+      # Crucially, package METADATA does not express this: scipy 1.15 declares
+      # numpy>=1.23.5,<2.5, so pip resolves it cleanly against numpy 1.26 and
+      # the container breaks at runtime instead of at resolve time. That is
+      # why a manual pin exists and why dependabot cannot be trusted to
+      # respect it — #2804 proposed scipy<1.19, which admits both that silent
+      # break (1.15-1.17) and a hard conflict (1.18 requires numpy>=2.0.0).
+      #
+      # Revisit only when the base image moves to numpy 2.x.
+      - dependency-name: "scipy"
+        versions: [">=1.15"]
     labels:
       - "dependencies"
       - "python"
