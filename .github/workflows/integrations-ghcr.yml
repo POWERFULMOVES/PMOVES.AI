@@ -749,7 +749,16 @@ jobs:
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
           platforms: ${{ steps.cfg.outputs.platforms }}
-          tags: ${{ steps.meta.outputs.tags }}
+          # ONE immutable candidate tag, not the real ones. The runtime gate
+          # below runs AFTER this step, so publishing `:pmoves-latest` here
+          # meant a startup regression was already pullable by everyone the
+          # moment the gate failed -- red workflow, unsigned image, and users
+          # still getting the broken artifact. That is the failure this whole
+          # change exists to prevent, so the mutable tags are promoted onto the
+          # gated digest further down instead.
+          # run_id+run_attempt makes it unique per attempt, so a re-run never
+          # verifies a previous attempt's manifest.
+          tags: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache,mode=max
 
@@ -774,6 +783,12 @@ jobs:
           PRIMARY_TAG: ${{ steps.meta.outputs.primary_tag }}
           BUILD_DIGEST: ${{ steps.build.outputs.digest }}
           MATRIX_NAME: ${{ matrix.name }}
+          # Every platform in the manifest, not just the runner's own arch.
+          # build-publish runs on X64 while this matrix publishes
+          # linux/amd64,linux/arm64 -- so a plain `docker run` left the arm64
+          # variant unstarted and still signed it into the manifest. QEMU is
+          # configured in this job, which is what makes the arm64 leg runnable.
+          VERIFY_PLATFORMS: ${{ steps.cfg.outputs.platforms }}
           VERIFY_PORT: ${{ steps.cfg.outputs.verify_port }}
           VERIFY_HEALTH_PATH: ${{ steps.cfg.outputs.verify_health_path }}
           VERIFY_TIMEOUT_SECONDS: ${{ steps.cfg.outputs.verify_timeout_seconds }}
@@ -789,6 +804,35 @@ jobs:
           # https://github.com/docker/build-push-action#outputs
           ref="${PRIMARY_TAG%:*}@${BUILD_DIGEST}"
           bash .github/scripts/verify-image-starts.sh "$ref"
+
+      # PROMOTION. Only reached if the runtime gate above passed, because a
+      # failed step skips the rest of the job. This is what makes the gate
+      # preventive rather than merely reportive: until this runs, the only
+      # thing in the registry is the candidate tag nobody pulls.
+      #
+      # `imagetools create` copies the MANIFEST LIST by digest -- no rebuild, no
+      # re-push of layers, and the digest the gate verified is the digest the
+      # tags end up pointing at. Multi-arch is preserved; a `docker pull && tag
+      # && push` round-trip would flatten it to the runner's own arch.
+      - name: Promote gated digest to release tags
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.build.outputs.digest != '' }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          SOURCE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [ -z "${tag}" ] && continue
+            args+=(--tag "${tag}")
+          done <<< "${TAGS}"
+          if [ "${#args[@]}" -eq 0 ]; then
+            echo "::error title=Nothing to promote::The runtime gate passed but no release tags were generated."
+            exit 1
+          fi
+          echo "Promoting ${SOURCE} to:"
+          printf '  %s\n' "${TAGS}"
+          docker buildx imagetools create "${args[@]}" "${SOURCE}"
 
       - name: Attest build provenance (SLSA L3)
         if: steps.build.outputs.digest != '' && steps.meta.outputs.has_tags == 'true'
