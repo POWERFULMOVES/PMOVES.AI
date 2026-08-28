@@ -146,6 +146,17 @@ def _redacted(rows: Optional[List[Dict[str, str]]]) -> Optional[List[Dict[str, s
     ]
 
 
+def _print_at_risk(rows: Optional[List[Dict[str, str]]]) -> None:
+    """The ONE place a server/secret-name pair is written to a stream.
+
+    Both failure paths (resolver wedged, required secret absent) used to carry
+    their own copy of this loop. One writer means one guard to audit, one
+    format for operators to learn, and no way for the two paths to drift.
+    """
+    for row in _redacted(rows) or []:
+        print(f"    {row['server']}  needs  {row['secret']}", file=sys.stderr)
+
+
 class Unmeasured(RuntimeError):
     """The check could not be performed. Never reported as a pass."""
 
@@ -346,8 +357,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "  call time (typically 401), not here.",
             file=sys.stderr,
         )
-        for row in _redacted(at_risk) or []:
-            print(f"    {row['server']}  needs  {row['secret']}", file=sys.stderr)
+        _print_at_risk(at_risk)
         print(
             "  Recovery: pmoves/docs/operations/MCP_TOOLKIT.md — resolver recovery",
             file=sys.stderr,
@@ -363,8 +373,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "  fail at call time (typically 401), not here.",
             file=sys.stderr,
         )
-        for row in _redacted(missing) or []:
-            print(f"    {row['server']}  needs  {row['secret']}", file=sys.stderr)
+        _print_at_risk(missing)
         print(
             "  Provision from the funnel (nothing is typed by hand, nothing is\n"
             "  rotated): make -C pmoves docker-mcp-secrets-hydrate DRY_RUN=1\n"
