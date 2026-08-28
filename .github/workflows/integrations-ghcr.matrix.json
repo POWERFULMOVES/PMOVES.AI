@@ -87,13 +87,16 @@
     "name": "pmoves-yt",
     "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
     "ref": "main",
-    "context": "pmoves/services/pmoves-yt",
-    "dockerfile": "pmoves/services/pmoves-yt/Dockerfile",
+    "context": "PMOVES.YT",
+    "dockerfile": "PMOVES.YT/pmoves_yt_service/Dockerfile",
     "image_name": "pmoves-yt",
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore",
+    "verify_port": "8077",
+    "verify_health_path": "/healthz",
+    "verify_timeout_seconds": "180"
   },
   {
     "name": "deepresearch",
