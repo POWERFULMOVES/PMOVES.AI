@@ -253,15 +253,24 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps({"measured": True, **report}, indent=2))
         return 0 if report["ok"] else 1
 
-    # Everything printed below is a NAME or a COUNT. Secret values are never
-    # returned by the GitHub API and are never handled here.
+    # Everything printed below is a NAME or a COUNT. `gh api .../secrets`
+    # returns `.secrets[].name` and no value, so no secret value exists in this
+    # process to leak.
+    #
+    # CodeQL flags the two name loops as py/clear-text-logging-sensitive-data:
+    # its heuristic taints anything returned by an identifier matching /secret/,
+    # so printing the names this tool exists to print will always alert. That is
+    # resolved by DISMISSING the alert with this justification, not by a comment
+    # marker -- `# lgtm[...]` is LGTM.com syntax that GitHub code scanning
+    # ignores. Three lines in launcher_profile_select.py carry that marker and
+    # remain open alerts today; do not copy it expecting suppression.
     print(f"repo: {report['repo']}")
     if report["assumed_single_scope"]:
         print(
             f"  scope: {report['scopes_read'][0]} only -- absence below is true ONLY if\n"
             f"    the funnel targets this scope (push-gh-secrets.sh --env)."
         )
-    for row in report["per_scope"]:  # lgtm[py/clear-text-logging-sensitive-data] -- counts and scope names only; the API never returns secret VALUES
+    for row in report["per_scope"]:
         flag = "  <- AT CAP" if row["at_cap"] else ""
         print(
             f"  {row['scope']:<24} {row['present']:>3}/{report['limit']}"
@@ -284,7 +293,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"  absent ({len(report['absent'])}): declared, present in NO scope read",
             file=sys.stderr,
         )
-        for name in report["absent"][:20]:  # lgtm[py/clear-text-logging-sensitive-data] -- secret NAMES only, never values
+        for name in report["absent"][:20]:
             print(f"    {name}", file=sys.stderr)
         if len(report["absent"]) > 20:
             print(f"    ... {len(report['absent']) - 20} more", file=sys.stderr)
@@ -294,7 +303,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"    unmanaged by the funnel; reconciling these is free headroom",
             file=sys.stderr,
         )
-        for name in report["orphans"][:20]:  # lgtm[py/clear-text-logging-sensitive-data] -- secret NAMES only, never values
+        for name in report["orphans"][:20]:
             print(f"    {name}", file=sys.stderr)
         if len(report["orphans"]) > 20:
             print(f"    ... {len(report['orphans']) - 20} more", file=sys.stderr)
