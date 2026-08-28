@@ -224,8 +224,12 @@ check-prereqs-agent: ## Verify the agent CLI contract (Known Road tools + agent 
 check-prereqs-agent-strict: ## Same as check-prereqs-agent but non-zero exit on any gap
 	@bash scripts/check_prereqs.sh --agent --strict
 
+.PHONY: check-prereqs-env
+check-prereqs-env: ## Verify the bringup interpreter resolves and tool imports work (catches the sign-trail FALLBACK-identity class); advisory
+	@bash scripts/check_prereqs.sh --env
+
 .PHONY: check-prereqs-all
-check-prereqs-all: ## Both tiers: bringup prereqs (fatal) + agent CLI contract (advisory)
+check-prereqs-all: ## All tiers: bringup prereqs (fatal) + agent CLI contract + bringup interpreter (advisory)
 	@bash scripts/check_prereqs.sh --all
 
 .PHONY: venv

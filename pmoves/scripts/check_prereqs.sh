@@ -32,7 +32,8 @@
 # Usage:
 #   bash pmoves/scripts/check_prereqs.sh                  # bringup tier (default)
 #   bash pmoves/scripts/check_prereqs.sh --agent          # agent CLI contract only
-#   bash pmoves/scripts/check_prereqs.sh --all            # both tiers
+#   bash pmoves/scripts/check_prereqs.sh --env            # bringup interpreter + tool imports
+#   bash pmoves/scripts/check_prereqs.sh --all            # all tiers
 #   bash pmoves/scripts/check_prereqs.sh --quiet          # only show failures
 #   bash pmoves/scripts/check_prereqs.sh --all --strict   # agent gaps are fatal
 
@@ -47,6 +48,7 @@ for arg in "$@"; do
     --quiet)  QUIET=1 ;;
     --strict) STRICT=1 ;;
     --agent)  TIER="agent" ;;
+    --env)    TIER="env" ;;
     --all)    TIER="all" ;;
     -h|--help)
       # Print the header block: line 2 through the last leading comment line.
@@ -230,11 +232,87 @@ virtualenv_report() {
   echo
 }
 
+# ── Interpreter / bringup-environment tier ───────────────────────────────────
+# A binary on PATH is only half the contract. The Make targets shell out to
+# tools/*.py through PYTHON / PRECHECK_PY / CODEX_PY, and those resolve to an
+# interpreter that may not be the provisioned one -- in which case tool
+# dependencies are missing and the target degrades rather than failing.
+#
+# The failure that motivated this: `make sign-trail` could not import yaml, so
+# it signed a provenance record with a FALLBACK identity ("this is NOT the
+# agent's registered identity") while the provisioned environment sat alongside
+# with yaml installed. Nothing on PATH was wrong. Checking binaries would never
+# have caught it.
+#
+# Probed rather than declared: `yaml` is the single most-imported module across
+# pmoves/tools/*.py and is NOT listed in tools/requirements.txt, so a
+# declaration-only check reports healthy while sign-trail is broken.
+BRINGUP_MODULES=(yaml httpx nats jsonschema)
+
+env_tier_report() {
+  # Derived from the script's own location, not the cwd: the Make target runs
+  # `bash scripts/check_prereqs.sh` from inside pmoves/, while an operator runs
+  # `bash pmoves/scripts/check_prereqs.sh` from the repo root. A cwd-relative
+  # path is correct for exactly one of those.
+  local root
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  local win="$root/.venv-pmoves/Scripts/python.exe"
+  local nix="$root/.venv-pmoves/bin/python"
+  local interp="" layout=""
+
+  echo "🔍 Bringup interpreter (advisory)"
+
+  if [[ -x "$win" ]]; then
+    interp="$win"; layout="Windows (Scripts/python.exe)"
+  elif [[ -x "$nix" ]]; then
+    interp="$nix"; layout="POSIX (bin/python)"
+  fi
+
+  if [[ -z "$interp" ]]; then
+    printf "  ❌ %-22s not provisioned — looked for both layouts under %s\n" \
+      "bringup env" "$root/.venv-pmoves/"
+    echo "     Remedy: make -C pmoves venv-bringup"
+    echo "     Until then, Make targets fall back to whatever python is on PATH,"
+    echo "     and tool imports may be missing without the target saying so."
+    echo
+    ENV_MISSING=1
+    return 0
+  fi
+
+  printf "  ✅ %-22s %s\n" "bringup env" "$layout"
+  if [[ "$QUIET" -eq 0 ]]; then
+    printf "  %-25s %s\n" "" "$("$interp" -c 'import sys;print(sys.version.split()[0])' 2>/dev/null || echo '?')"
+  fi
+
+  local m gaps=0
+  for m in "${BRINGUP_MODULES[@]}"; do
+    # -I (isolated): keeps the cwd OFF sys.path. Without it the probe is
+    # cwd-sensitive and lies -- pmoves/ contains a `nats/` directory that
+    # shadows the real nats-py package, so a plain `import nats` PASSES from
+    # pmoves/ and FAILS from the repo root, for the same interpreter. An
+    # instrument that reports fine without having measured anything is the
+    # exact failure this tier exists to catch.
+    if "$interp" -I -c "import $m" >/dev/null 2>&1; then
+      [[ "$QUIET" -eq 0 ]] && printf "  ✅ %-22s importable\n" "$m"
+    else
+      printf "  ❌ %-22s NOT importable by the bringup interpreter\n" "$m"
+      gaps=$((gaps + 1))
+    fi
+  done
+
+  if [[ "$gaps" -gt 0 ]]; then
+    echo "     Remedy: make -C pmoves venv-bringup   (re-runs the install)"
+    ENV_MISSING=$((ENV_MISSING + gaps))
+  fi
+  echo
+}
+
 # ── Run ──────────────────────────────────────────────────────────────────────
 req_missing=0
 req_shadowed=0
 agent_missing=0
 agent_shadowed=0
+ENV_MISSING=0
 
 path_staleness_scan
 
@@ -250,10 +328,20 @@ if [[ "$TIER" == "agent" || "$TIER" == "all" ]]; then
   agent_shadowed=$TIER_SHADOWED
 fi
 
+if [[ "$TIER" == "env" || "$TIER" == "agent" || "$TIER" == "all" ]]; then
+  env_tier_report
+fi
+
 path_staleness_report
 virtualenv_report
 
 rc=0
+
+if [[ "$ENV_MISSING" -gt 0 ]]; then
+  echo "⚠️  bringup interpreter gap(s) — advisory, not blocking."
+  echo "   Make targets that shell out to tools/*.py will use a fallback interpreter;"
+  echo "   sign-trail in particular then signs with a FALLBACK identity."
+fi
 
 if [[ "$req_missing" -gt 0 ]]; then
   echo "❌ $req_missing required prereq(s) missing. Install with the per-platform hint above and re-run."
@@ -290,7 +378,7 @@ if [[ "$agent_shadowed" -gt 0 ]]; then
   fi
 fi
 
-if [[ $((req_missing + req_shadowed + agent_missing + agent_shadowed)) -eq 0 ]]; then
+if [[ $((req_missing + req_shadowed + agent_missing + agent_shadowed + ENV_MISSING)) -eq 0 ]]; then
   echo "✅ All checked prereqs present."
 fi
 
