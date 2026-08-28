@@ -24,11 +24,46 @@ AUDIT_RUNTIME_GPU ?= 0
 PRECHECK_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 PRECHECK_VENV_UNIX ?= .venv-pmoves/bin/python
 
+# Did the operator pin PYTHON? $(origin) can return a TWO-WORD string
+# ("command line", "environment override"), and $(filter) word-splits its
+# pattern list, so matching those as phrases does not work -- `command\ line`
+# never matches anything. Filtering OUT the unpinned origins is word-split-safe:
+# any residue means someone set it deliberately, and a pin must outrank
+# discovery.
+python_pinned := $(strip $(filter-out default file undefined,$(origin PYTHON)))
+
+# RUN the candidate; do not test for its existence.
+#
+# $(wildcard) tests existence, and `[ -x ]` is worse than useless here: MSYS
+# reports ANY file ending .exe as executable regardless of content, verified --
+# `[ -x fake.exe ]` is true for a file containing the text "not-an-exe". An
+# interrupted `venv-bringup` therefore passes both tests while being unable to
+# run, and selecting it would hard-fail every consumer that previously fell
+# back to a working system python -- the inverse of this fix.
+#
+# `-c pass` is a no-op for a real interpreter and non-zero for anything else.
+# Same conclusion PR #2809 reached for the Windows launcher: presence is not
+# runnability. Costs at most two forks at parse time.
+precheck_venv_py := $(shell for p in '$(PRECHECK_VENV_WIN)' '$(PRECHECK_VENV_UNIX)'; do "$$p" -c pass >/dev/null 2>&1 && { printf '%s' "$$p"; break; }; done)
+
 ifeq ($(OS),Windows_NT)
-# Detect Python: py -3 (Windows launcher) > conda/system python > python3
+# Detect Python: operator pin > .venv-pmoves > py -3 (Windows launcher)
+# > conda/system python > python3.
 # `py` may not exist in Git Bash; `python3` may be a Windows Store stub.
-PRECHECK_PY ?= $(shell py -3 --version >NUL 2>&1 && echo "py -3" || (python --version 2>/dev/null | grep -q Python && echo "python" || echo "python3"))
+#
+# The .venv-pmoves rung is the one that was missing: sign-trail runs through
+# PRECHECK_PY (preflight.mk:sign-trail), and without the bringup env it cannot
+# import pyyaml, so it signs with a FALLBACK presentation that is explicitly
+# NOT the agent's registered identity. A provenance record attributed to a
+# fallback identity is a quiet way to get the wrong answer.
+PRECHECK_PY ?= $(if $(python_pinned),$(PYTHON),$(if $(precheck_venv_py),$(precheck_venv_py),$(shell py -3 --version >NUL 2>&1 && echo "py -3" || (python --version 2>/dev/null | grep -q Python && echo "python" || echo "python3"))))
 else
+# POSIX is deliberately UNTOUCHED. The bug is Windows-only: pmoves/Makefile
+# probes `.venv-pmoves/bin/python`, which exists on POSIX, so $(PYTHON) already
+# resolves to the bringup interpreter there and this line already inherited it.
+# Pointing it at $(PRECHECK_VENV_UNIX) instead would also swap an absolute path
+# for a relative one and break the `cd .. && $(PYTHON)` pattern used in
+# mk/provider.mk:22,32.
 PRECHECK_PY ?= $(PYTHON)
 endif
 
