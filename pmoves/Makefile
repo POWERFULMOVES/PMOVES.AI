@@ -56,7 +56,14 @@ export COMPOSE_PROFILES
 
 PYTHON ?= python3
 ifeq ($(OS),Windows_NT)
+# Guarded, because a bare `:=` overrides an ENVIRONMENT-supplied PYTHON (make
+# lets a makefile assignment beat the environment, though not the command line).
+# Unguarded, `PYTHON=/path make <target>` silently became `python` on Windows --
+# the contract the comment below promises for both override spellings held only
+# for the command-line one.
+ifeq ($(filter command\ line environment,$(origin PYTHON)),)
 PYTHON := python
+endif
 endif
 
 # Prefer the canonical bringup venv when it exists, so targets that shell out to
@@ -67,8 +74,14 @@ endif
 # Only applies when PYTHON was not explicitly supplied: $(origin) is "default" or
 # "file" here, but "command line"/"environment" when the operator set it, so both
 # `make <target> PYTHON=/path` and `PYTHON=/path make <target>` still win.
-venv_python := $(CURDIR)/.venv-pmoves/bin/python
-ifneq ($(wildcard $(venv_python)),)
+# Both venv layouts, because a venv is `Scripts/python.exe` on Windows and
+# `bin/python` on POSIX. Probing only the POSIX spelling made this whole block
+# dead on Windows: the wildcard never matched, PYTHON silently stayed bare
+# `python`, and the protection the comment above describes was never applied on
+# the platform that most needs it. wildcard yields only paths that exist, so
+# firstword picks the layout this node actually has.
+venv_python := $(firstword $(wildcard $(CURDIR)/.venv-pmoves/Scripts/python.exe $(CURDIR)/.venv-pmoves/bin/python))
+ifneq ($(venv_python),)
 ifeq ($(filter command\ line environment,$(origin PYTHON)),)
 PYTHON := $(venv_python)
 endif

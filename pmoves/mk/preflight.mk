@@ -25,11 +25,22 @@ PRECHECK_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 PRECHECK_VENV_UNIX ?= .venv-pmoves/bin/python
 
 ifeq ($(OS),Windows_NT)
-# Detect Python: py -3 (Windows launcher) > conda/system python > python3
+# Prefer the canonical bringup venv, then fall back.
+# Detect Python: .venv-pmoves > py -3 (Windows launcher) > conda/system python > python3
 # `py` may not exist in Git Bash; `python3` may be a Windows Store stub.
-PRECHECK_PY ?= $(shell py -3 --version >NUL 2>&1 && echo "py -3" || (python --version 2>/dev/null | grep -q Python && echo "python" || echo "python3"))
+#
+# The venv rung is the one that was missing. PRECHECK_VENV_WIN/UNIX were already
+# declared above and consumed by the runner ladders in the recipes below, but
+# PRECHECK_PY skipped straight to `py -3` -- so every target driven by this
+# variable ran outside the venv that `make venv-bringup` provisions. Observed:
+# `make sign-trail` emitted "identity not resolved: pyyaml unavailable" and
+# signed with a FALLBACK glyph/colour -- explicitly NOT the agent's registered
+# identity -- while .venv-pmoves sat alongside with pyyaml installed. A
+# provenance record attributed to a fallback identity is a quiet way to get the
+# wrong answer, so this rung is a correctness fix, not a convenience.
+PRECHECK_PY ?= $(if $(wildcard $(PRECHECK_VENV_WIN)),$(PRECHECK_VENV_WIN),$(shell py -3 --version >NUL 2>&1 && echo "py -3" || (python --version 2>/dev/null | grep -q Python && echo "python" || echo "python3")))
 else
-PRECHECK_PY ?= $(PYTHON)
+PRECHECK_PY ?= $(if $(wildcard $(PRECHECK_VENV_UNIX)),$(PRECHECK_VENV_UNIX),$(PYTHON))
 endif
 
 env-bootstrap-lite: ensure-env-shared ## Bootstrap lightweight runtime env (uv-first) and check core host tools
