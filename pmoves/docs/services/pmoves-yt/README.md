@@ -2,6 +2,10 @@
 
 Status: Implemented (compose)
 
+> **Operating this service?** See [`RUNBOOK.md`](./RUNBOOK.md) — bring-up, health checks,
+> the cookie chain, failure triage, teardown. Start with its §1: there are two deployment
+> paths and they run different yt-dlp builds.
+
 Overview
 - YouTube ingest and processing; integrates with MinIO and Supabase.
 - Authoritative runtime now lives in the [PMOVES.YT submodule](C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT) under `pmoves_yt_service/`.
