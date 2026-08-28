@@ -6,6 +6,67 @@ This is the operational guide for running the **Docker MCP Toolkit** across ever
 
 ---
 
+## 0. Topology — the KVM gateway is primary, Docker Desktop is the fallback
+
+**Refreshed 2026-08-28.** Sections 2-4 below still describe the per-node Docker
+Desktop bootstrap as though it were the whole story. It is not. It is the
+FALLBACK, and it is the one that breaks.
+
+| Layer | Role | Status |
+|---|---|---|
+| **KVM-hosted gateway** | **PRIMARY.** One self-hosted endpoint every node reaches over the tailnet, so a node needs no local Toolkit to have MCP. | **NOT YET DEPLOYED** — verified 2026-08-27, no MCP server runs on any KVM VPS (25+ ports probed across kvm2, kvm4-1, kvm4-2). See `pmoves/docs/handoffs/infra_mcp_hosting_analysis_2026-08-27.md`. |
+| **Docker Desktop Toolkit** | **FALLBACK / workstation dev.** Per-node, per-operator, needs a GUI. | Live on the workstation nodes. This is what sections 2-4 document. |
+| **Direct CLI + MCP** | Hostinger, Cloudflare and Tailscale are reachable directly, with their own CLIs and MCP servers. | Live. Does not depend on either gateway. |
+
+**Why KVM primary.** The Toolkit gateway is a workstation product: it needs
+Docker Desktop, a logged-in desktop session, and a per-node secret keychain that
+is a per-node point of failure (see § 5.1 — it wedged on the 4090 on 2026-08-28
+and survived a full Desktop restart). A KVM-hosted gateway is reachable by every
+node including the arm64 and headless ones, is provisioned by the same funnel
+that provisions everything else, and does not require anyone to be logged into a
+GUI for an agent to have tools.
+
+**Placement, from the 2026-08-27 capacity probe** (do not re-derive; re-measure
+before acting on it):
+
+- **kvm4-1 — best fit for the fleet-facing gateway.** 8C/16GB with roughly 6GB
+  usable headroom, already the API/agent tier, egress-separated.
+- **kvm2 — right host for light public SSE surfaces** behind its nginx; it has
+  the most free RAM (~7.5GB).
+- **kvm4-2 — add nothing.** Over-subscribed: ~29GB of declared container limits
+  on a 16GB host. Fix that before it hosts anything else.
+
+**Which gateway to clone.** The substrate decision is already made: the **Docker
+MCP Gateway** on port **8189** with `--static`, auth through the CHIT secrets
+pipeline, per #2656 / #2665 / #2681, with a verified 23-tool bring-up. The BoTZ
+MCP gateway (`:8052`) draft is **superseded for federation** — it is K8s-only and
+cannot federate existing servers. New gateway work clones #2665's pipeline.
+
+**Prerequisite that is easy to miss:** `up-mcp-gateway` depends on
+`mcp-gateway-preflight`, which fails closed unless the `pmoves_pmoves_app`
+network exists AND `pmoves-botz-mcp-bridge` is running — the bridge is the only
+catalogued server, and the network is created by the PMOVES-BoTZ project, not
+this repo. Run `make -C pmoves up-botz-mcp-bridge` FIRST. `pmoves/mk/infra.mk`
+records why this is called out: a previous verification passed on B850 only
+because that stack happened to already be up.
+
+### 0.1 Profile naming is drifting from the topology
+
+`docker.io/darkxside/pmoves_5090_web:latest` is the artifact every node
+bootstraps to — `scripts/mcp-toolkit-connect.sh:31` and
+`scripts/mcp-toolkit-bootstrap.sh:14-15` both default to it. **5090 is a node.**
+So every node in the fleet runs a profile named after one workstation, and on
+the 4090 that means the node's own `pmoves_4090_web` (24 servers) sits unused
+while it serves the 5090's (25 servers, and the only one carrying
+`github-official`).
+
+It works — the artifact really is the shared bundle — but the name says
+otherwise, and a fleet-wide bundle belongs with the fleet-wide gateway on a KVM,
+not under a workstation's name. Renaming is an operator decision; this section
+exists so the next reader does not mistake the current name for the intent.
+
+---
+
 ## 1. What Docker MCP Toolkit is, in PMOVES vocabulary
 
 | Toolkit term | PMOVES analog | What it actually is |
@@ -149,6 +210,86 @@ The bridge reads `pmoves/env.shared` by default (the canonical aggregate the sec
 Cloudflare's 13 OAuth-mediated servers need a one-time browser-mediated `docker mcp oauth authorize cloudflare-<service>` per node, OR a cached-token export from a paired node. Document the choice per-deployment.
 
 **Anti-pattern:** never paste secrets in chat; never bake them into the OCI profile artifact ([[vision_secrets_pipeline_never_chat]]). The profile is shareable; the secrets fill in headlessly per-node.
+
+---
+
+### 5.1 Recovery — when the secret resolver wedges
+
+**The symptom.** Everything else works and only secrets fail:
+
+```
+$ docker mcp secret ls
+deadline_exceeded: Post "http://unix/resolver.v1.ResolverService/GetSecrets": net/http: timeout awaiting response headers
+
+$ docker mcp profile ls    # OK
+$ docker mcp client ls     # OK
+$ docker mcp catalog ls    # OK
+$ docker mcp feature ls    # OK
+```
+
+Four of five subsystems answer; only the resolver is down. Docker itself is
+healthy — this is not a Docker outage.
+
+**Why it matters more than it looks.** A server whose secret cannot be fetched
+starts anyway, with an EMPTY credential env var. It then fails at call time with
+a 401, in whatever tool called it, with nothing pointing back here. On
+2026-08-28 that presented as "the GitHub token is missing" when the token was in
+fact present in every place the funnel routes it.
+
+**Recorded occurrences.** 2026-08-17 on the 5090 (fresh `mcp-toolkit.db`, stuck
+`.mcp-toolkit-migration.lock`, after a Docker Desktop VMM/backend migration) and
+2026-08-28 on the 4090. The 4090 case **survived a full Docker Desktop
+restart**, so a restart alone is not the fix.
+
+**Check for it before it bites:**
+
+```bash
+python pmoves/tools/mcp_toolkit_preflight.py --profile <id>
+#   0  ready
+#   1  resolver down — servers WILL start unauthenticated (it names which)
+#   3  could not measure — NOT a pass
+```
+
+`make -C pmoves mcp-toolkit-gateway-start` runs this automatically and reports
+non-zero as advisory. Set `PMOVES_MCP_STRICT=1` to refuse to start instead —
+which is what CI and unattended bring-up should do.
+
+**Recovery, in order:**
+
+1. Restart Docker Desktop. Re-check with `docker mcp secret ls`. If it answers,
+   go to step 4.
+2. If it still wedges, the migration state is stuck: stop Docker Desktop and
+   clear the stale `mcp-toolkit.db` / `.mcp-toolkit-migration.lock` under the
+   Docker MCP config directory, then start it again. **Operator step** — that
+   directory holds credentials and is out of scope for agents.
+3. Re-check. Do not proceed while `secret ls` still times out — every write in
+   step 4 goes through the same resolver.
+4. Re-provision without re-typing anything:
+   ```bash
+   make -C pmoves docker-mcp-secrets-hydrate DRY_RUN=1   # preview
+   make -C pmoves docker-mcp-secrets-hydrate             # push
+   ```
+   Values come from the funnel, so nothing is rotated and nothing is entered by
+   hand. Add `PROFILE=<id>` to force a profile; otherwise it is discovered from
+   `.mcp.json`, then `PMOVES_MCP_PROFILE_ID`.
+5. Re-run the preflight. Expect exit 0.
+
+**What hydrate does NOT cover:** the 13 Cloudflare servers are OAuth-mediated,
+not API-key. They need a one-time interactive `docker mcp oauth authorize
+<server>` per node and will still show unauthenticated after any hydrate. That
+is expected, not a regression.
+
+**If a secret is reported as a funnel gap** rather than pushed, the key exists in
+the map but has no value on this node. `GITHUB_PAT` materializes into
+`env.tier-agent`, and the hydrator reads the `env.shared` aggregate, so a stale
+aggregate can hide a populated key — point it at the tier file to tell the two
+apart:
+
+```bash
+python pmoves/tools/docker_mcp_secrets_hydrate.py --dry-run --env-shared pmoves/env.tier-agent
+```
+
+Only a value missing from BOTH needs `secrets-rotate`.
 
 ---
 
