@@ -281,3 +281,39 @@ def test_every_mapped_name_is_dotted_and_lowercase():
     for name in _map_secret_names():
         assert "." in name, f"not a namespaced Docker secret id: {name!r}"
         assert name == name.lower(), f"Docker secret ids are lowercase: {name!r}"
+
+
+# --- the SSE listener path has no .mcp.json ---------------------------------
+# Two supported ways to run the gateway, and they name the profile differently:
+#   stdio  -> root .mcp.json carries `--profile <p>`
+#   SSE    -> scripts/mcp-toolkit-gateway-listen.sh reads PMOVES_MCP_PROFILE_ID
+# Discovering only the first left the SSE path silently registry-only -- the
+# same hole this branch set out to close, on the path the Makefile documents.
+
+
+def test_the_sse_listener_profile_env_is_honoured(monkeypatch, tmp_path: Path):
+    """With no .mcp.json, PMOVES_MCP_PROFILE_ID is what the gateway was run with."""
+    monkeypatch.setenv("PMOVES_MCP_PROFILE_ID", "pmoves_4090_web")
+    assert mod.discover_profiles(mcp_json=tmp_path / "absent.json") == ["pmoves_4090_web"]
+
+
+def test_mcp_json_wins_over_the_env(monkeypatch, tmp_path: Path):
+    """A running stdio gateway is stronger evidence than an exported default."""
+    monkeypatch.setenv("PMOVES_MCP_PROFILE_ID", "pmoves_4090_web")
+    mcp_json = tmp_path / ".mcp.json"
+    mcp_json.write_text(
+        '{"mcpServers":{"MCP_DOCKER":{"args":["mcp","gateway","run","--profile","pmoves_5090_web"]}}}',
+        encoding="utf-8",
+    )
+    assert mod.discover_profiles(mcp_json=mcp_json) == ["pmoves_5090_web"]
+
+
+def test_an_unset_env_is_not_a_guess(monkeypatch, tmp_path: Path):
+    """The listener DEFAULTS to pmoves_5090_web when the var is unset.
+
+    Mirroring that default here would reintroduce exactly the node-named guess
+    this branch removed: every node would report the 5090's profile whether or
+    not it runs it. Only an explicitly exported value counts.
+    """
+    monkeypatch.delenv("PMOVES_MCP_PROFILE_ID", raising=False)
+    assert mod.discover_profiles(mcp_json=tmp_path / "absent.json") == []

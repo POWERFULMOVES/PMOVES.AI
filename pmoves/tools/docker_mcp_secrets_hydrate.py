@@ -130,6 +130,30 @@ def profiles_from_mcp_json(path: Path | None = None) -> List[str]:
     return profiles
 
 
+def discover_profiles(mcp_json: Path | None = None) -> List[str]:
+    """Profiles the gateway is running, across BOTH supported launch paths.
+
+    stdio: root `.mcp.json` carries `--profile <p>`.
+    SSE:   scripts/mcp-toolkit-gateway-listen.sh reads PMOVES_MCP_PROFILE_ID.
+
+    `.mcp.json` wins: a config file naming a running gateway is stronger
+    evidence than an exported shell default, which may be left over from a
+    session that started nothing.
+
+    An UNSET PMOVES_MCP_PROFILE_ID yields nothing, deliberately. The listener
+    script defaults it to `pmoves_5090_web`; mirroring that here would
+    reintroduce the node-named guess this function exists to avoid -- every node
+    would report the 5090's profile whether or not it runs it.
+    """
+    import os
+
+    from_json = profiles_from_mcp_json(mcp_json)
+    if from_json:
+        return from_json
+    env_profile = (os.environ.get("PMOVES_MCP_PROFILE_ID") or "").strip()
+    return [env_profile] if env_profile else []
+
+
 def _profile_show(name: str) -> str:
     """Raw `docker mcp profile show <name>` YAML. Seam for tests."""
     proc = subprocess.run(
@@ -333,14 +357,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     docker_mcp_dir = args.docker_mcp_dir or default_docker_mcp_dir()
     profiles = args.profiles
     if profiles is None:
-        profiles = profiles_from_mcp_json(args.mcp_json)
+        profiles = discover_profiles(args.mcp_json)
         if profiles:
-            print(f"Profiles from .mcp.json: {', '.join(profiles)}")
+            print(f"Gateway profiles discovered: {', '.join(profiles)}")
         else:
             print(
-                "No --profile given and .mcp.json names none: hydrating the enabled "
-                "registry only. Servers that exist ONLY in a gateway profile will not "
-                "be covered.",
+                "No --profile given, no .mcp.json, and PMOVES_MCP_PROFILE_ID is unset: "
+                "hydrating the enabled registry only. Servers that exist ONLY in a "
+                "gateway profile will NOT be covered -- pass --profile <id> to include "
+                "them.",
                 file=sys.stderr,
             )
     try:
