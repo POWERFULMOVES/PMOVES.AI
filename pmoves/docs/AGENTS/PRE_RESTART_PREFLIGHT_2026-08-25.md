@@ -81,7 +81,14 @@ An agent self-deploying to a bare node must: reach the node → get credentials 
 | **R9** | Be routable | **MUST-BUILD** | `work-marshaling/__init__.py:520-533,563-566` routes on `{online_only, requires_gpu, tier, min_cpu, min_ram_mb}` sorted by `utilization_score`. No skill, success rate, or reputation term. **[CORRECTED]** the *measurement* half exists and is deployed (model_fitness); the **routing consumer does not** — grep for `model_fitness_records\|fitness_score` outside the 3 owning files → one unrelated local var. |
 | **R10** | Verify membership | **MUST-BUILD** | `pmoves/scripts/bootstrap-node.sh` steps 4–7 are all warn-and-continue: NATS probe warns and skips if `nats` CLI missing; runner registration prints manual instructions; mesh announce warns "announce skipped"; MCP bootstrap warns. **Nothing fails the run.** `verify-jetson-fleet.sh:121` is a warn-only ping. "Done" is unfalsifiable. |
 
-**Cheapest high-value item in the whole contract: R8.** A rename or a 10-line bridge subscriber plus a Dockerfile turns fleet registration from "unbuilt" into "working". It is not a new service.
+**Cheapest high-value item in the whole contract: R8.** It is not a new service — but the minimum fix is four things, not two, and an earlier revision of this line listed only the first two:
+
+1. the subject rename (or a 10-line bridge subscriber),
+2. a Dockerfile,
+3. **a compose service entry**, and
+4. **a Make target in the bring-up path**.
+
+Steps 3 and 4 are not polish. A repo-wide search of the compose files and Makefiles finds `node-registry` in none of them, which is what R8a records one row above — so with only the rename and the Dockerfile, normal bring-up still never starts the service and fleet registration stays exactly as unbuilt as before. Add the `compute` stream to `init_streams.sh` at the same time, or it keeps falling back to core NATS.
 
 ---
 
@@ -148,7 +155,7 @@ Nowhere in the system does the tuple `(identity, harness, model, role)` exist.
 - The only working end-to-end producer is **`pmoves/tools/beats_to_cgp.py` — an operator-run typer CLI**, not a service.
 **Turn-on action:** run `beats_to_cgp` manually first. It is the only thing that will put a byte on the bus today.
 
-**B2 — No JetStream consumer binds.** tokenism-simulator's durable subscribe fails `NotFoundError` and falls back to core NATS. Streams with `retention=limits` and zero consumers are write-only archives — any packet published while a consumer is down is invisible to it forever. **Fix before B1, or the first traffic is unobservable.**
+**B2 — No JetStream consumer binds.** tokenism-simulator's durable subscribe fails `NotFoundError` and falls back to core NATS. Streams with `retention=limits` and zero consumers are write-only archives *for now* — nothing is reading them, so nothing acts on the traffic. They are **not** losing it: under `limits` JetStream keeps messages independently of whether any consumer is bound, until the stream's age/size caps discard them (`init_streams.sh` sets every stream to `limits`, 7-90d / 500MB-2GB), so a durable repaired later **can replay the backlog**. An earlier revision of this line said the packets were invisible forever; that describes *interest* retention, which line 33 already records as fixed — the doc contradicted itself. **Fix before B1 anyway**, because unobserved is not the same as retained forever: the age cap is the deadline.
 
 **B3 — A live publisher violates its own contract, into the settlement ledger.** `semantic-cache/tokenism.py:53-58` sends `{agent_id, tokens_saved, cost_saved_usd, cache_key}` to `tokenism.attribution.recorded.v1`, whose schema requires `{chit_id, address, action, amount, week, timestamp}` with `additionalProperties: false`. Wrong on all 6 required fields plus 4 forbidden. **Nothing validates at the broker.** If this service comes up, it writes invalid rows into `TOKENISM_ATTRIBUTION` undetected, and publisher-discord renders "Attribution Recorded: None". *(It currently has zero callers — keep it that way, or fix the payload first.)*
 
@@ -174,7 +181,10 @@ Nowhere in the system does the tuple `(identity, harness, model, role)` exist.
 1. Fix B8 (credential), then B2 (create the durable, or make the fallback loud instead of silent).
 2. Run `beats_to_cgp` by hand → confirm a nonzero `msgs` on `GEOMETRY_CGP` and a bound consumer.
 3. Only then bring up gated publishers, keeping semantic-cache out until B3 is fixed.
-4. `uv run pmoves/tools/geometry_bus_health.py --json` as the acceptance gate (last run: `active 0, idle 8, missing 16, health_pct 0.0`).
+4. `geometry_bus_health.py --json` as a **smoke check, not an acceptance gate** (last run: `active 0, idle 8, missing 16, health_pct 0.0`). Two limits, both measured, and neither is a reason to skip the run — they are reasons not to read a green as proof:
+
+   - **It cannot connect as written.** `NATS_URL` defaults to `nats://localhost:4222` (unauthenticated), the broker configured in R7 requires a username and password, and `uv run` does not load `env.shared`. From a fresh operator shell this returns `measured: false` rather than checking anything. Pass a reachable authenticated URL explicitly — `NATS_URL=nats://<user>:<pass>@127.0.0.1:4222` from the host, sourced through the funnel, never pasted.
+   - **`health_pct` cannot gate per-subject health even once it connects.** `geometry_bus_health.py` assigns the *enclosing stream's* aggregate `state.messages` to every catalog subject the stream pattern matches (`sh.message_count = stream_info.state.messages`). One message on any `geometry.>` subject therefore marks all of them active and inflates `health_pct`. To accept the claimed publisher/subscriber wiring, check the specific subject's consumer and its delivered count — not the stream total.
 
 ---
 
