@@ -60,6 +60,13 @@ set "PMOVES_IDENTITY_WHY="
 set "IDENT_ARGS="
 set "IDENT_TOOL=%REPO_ROOT%\pmoves\tools\node_identity.py"
 if not exist "%IDENT_TOOL%" goto ident_absent
+rem Parity with claude-pmoves.sh: this launcher runs before the harness loads
+rem .claude\settings.local.json, so a collision-hostname node (the 5090,
+rem POWERFULMOVES -> powerfulmoves org entry) needs PMOVES_NODE_ID from that
+rem env block to bind. A shell env value already set still wins.
+if not defined PMOVES_NODE_ID (
+  for /f "usebackq delims=" %%I in (`python -c "import json;print((json.load(open(r'%REPO_ROOT%\.claude\settings.local.json')).get('env') or {}).get('PMOVES_NODE_ID',''))" 2^>nul`) do set "PMOVES_NODE_ID=%%I"
+)
 for /f "usebackq tokens=1,* delims==" %%A in (
   `python "%IDENT_TOOL%" --harness claude-code --format cmd 2^>nul`
 ) do set "%%A=%%B"
