@@ -265,10 +265,6 @@ check-prereqs-all: ## All tiers: bringup prereqs (fatal) + agent CLI contract + 
 check-prereqs-strict: ## All tiers, non-zero exit on ANY gap (CI gate). --strict covers the env tier too.
 	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --all --strict
 
-.PHONY: check-prereqs-agent-strict
-check-prereqs-agent-strict: ## Same as check-prereqs-agent but non-zero exit on any gap
-	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --agent --strict
-
 .PHONY: venv
 venv: ## Create pmoves/.venv-pmoves and install service + tool requirements
 	@bash scripts/create_venv.sh
