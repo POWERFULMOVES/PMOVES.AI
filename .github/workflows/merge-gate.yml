@@ -17,7 +17,24 @@ name: Merge Gate
 
 on:
   pull_request:
-    branches: [main]
+    # `PMOVES.AI-Edition-Hardened` is here because its branch protection
+    # REQUIRES the `hardening-validation` context, and that context is a job in
+    # THIS workflow. While the trigger was main-only the job never ran for a
+    # hardened PR, so the required check was never reported, so no PR into that
+    # branch could ever satisfy its own protection. The branch had not been
+    # synced since 2026-03-17 -- not for want of trying, but because every
+    # attempt was structurally unmergeable.
+    #
+    # A required context that no workflow produces is the same defect this
+    # file's header already records removing: a name in the protection config
+    # that reads as THE gate while nothing stands behind it. There it was a job
+    # that could only report success; here it was a job that could not report
+    # at all.
+    #
+    # Every job in this gate is branch-agnostic -- checkout, a pinned toolchain,
+    # and a ratchet run -- so widening the trigger changes what is CHECKED, not
+    # how anything is checked.
+    branches: [main, PMOVES.AI-Edition-Hardened]
     types: [opened, synchronize, reopened]
 
 # All eight jobs are read-only: checkout, install, run a make target or a python
