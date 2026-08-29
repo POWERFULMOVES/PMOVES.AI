@@ -31,7 +31,7 @@ sys.modules["hardening_ratchet"] = hr
 spec.loader.exec_module(hr)
 
 
-def _wire(monkeypatch, *, tracked, findings, baseline, argv=(), allowance=None):
+def _wire(monkeypatch, *, tracked, findings, baseline, argv=(), allowance=None, kinds=None):
     """Stub discovery, scanning and the baseline.
 
     `tracked` is what `git ls-files` would return for this tree; `findings` are
@@ -49,6 +49,7 @@ def _wire(monkeypatch, *, tracked, findings, baseline, argv=(), allowance=None):
     # not about reasons are unaffected by the reason ratchet.
     mapping = baseline if isinstance(baseline, dict) else {k: "" for k in baseline}
     monkeypatch.setattr(hr, "load_baseline", lambda: dict(mapping))
+    monkeypatch.setattr(hr, "load_kinds", lambda: dict(kinds or {}))
     n_reasonless = sum(1 for v in mapping.values() if not v)
     monkeypatch.setattr(
         hr, "load_reasonless_allowance",
@@ -201,3 +202,61 @@ def test_both_entry_forms_load(tmp_path, monkeypatch):
     assert loaded["NO_USER|bare/Dockerfile"] == ""
     assert "drops privileges" in loaded["NO_USER|explained/Dockerfile"]
     assert hr.load_reasonless_allowance() == 1
+
+
+# --- kinds: the count was reading as debt when most of it was not -------------
+
+
+def test_an_unclassified_entry_counts_as_debt(monkeypatch, capsys):
+    """The safe direction. A gate that cannot tell must assume the worse case,
+    never quietly excuse an entry nobody classified."""
+    _wire(monkeypatch, tracked=["a/Dockerfile"], findings=["a/Dockerfile"],
+          baseline=["NO_USER|a/Dockerfile"], kinds={})
+    hr.main()
+    assert "Actual hardening debt: 1" in capsys.readouterr().out
+
+
+def test_an_unknown_kind_falls_back_to_debt(tmp_path, monkeypatch):
+    """A typo in the vocabulary must not silently downgrade an entry."""
+    baseline = tmp_path / "_known_gaps.yaml"
+    baseline.write_text(
+        'known_gaps:\n'
+        '  - entry: "NO_USER|a/Dockerfile"\n'
+        '    kind: not-a-real-kind\n'
+        'reasonless_allowance: 1\n', encoding="utf-8")
+    monkeypatch.setattr(hr, "BASELINE", baseline)
+    assert hr.load_kinds() == {"NO_USER|a/Dockerfile": "debt"}
+
+
+def test_a_not_deployed_entry_is_not_debt(monkeypatch, capsys):
+    """A documentation example has no runtime posture to harden. Counting it
+    overstates the number and gives nobody something to fix."""
+    _wire(monkeypatch, tracked=["docs/x/Dockerfile"], findings=["docs/x/Dockerfile"],
+          baseline={"NO_USER|docs/x/Dockerfile": "an example, built by nothing"},
+          kinds={"NO_USER|docs/x/Dockerfile": "not-deployed"})
+    hr.main()
+    out = capsys.readouterr().out
+    assert "Actual hardening debt: 0" in out
+    assert "not-deployed=1" in out
+
+
+def test_handled_elsewhere_is_not_debt(monkeypatch, capsys):
+    """The case that prompted this: the Dockerfile runs as root and something
+    ELSE constrains it -- compose `user:`, or an image that drops privileges
+    internally the way nginx spawns workers as `nginx`."""
+    _wire(monkeypatch, tracked=["a/Dockerfile"], findings=["a/Dockerfile"],
+          baseline={"NO_USER|a/Dockerfile": "docker-compose.hardened.yml sets user 65532"},
+          kinds={"NO_USER|a/Dockerfile": "handled-elsewhere"})
+    hr.main()
+    assert "Actual hardening debt: 0" in capsys.readouterr().out
+
+
+def test_the_kind_breakdown_is_printed(monkeypatch, capsys):
+    """A single total cannot be worked off if it mixes debt with non-debt."""
+    _wire(monkeypatch, tracked=["a/Dockerfile", "b/Dockerfile"],
+          findings=["a/Dockerfile", "b/Dockerfile"],
+          baseline={"NO_USER|a/Dockerfile": "r", "NO_USER|b/Dockerfile": "r"},
+          kinds={"NO_USER|b/Dockerfile": "deliberate"})
+    hr.main()
+    out = capsys.readouterr().out
+    assert "debt=1" in out and "deliberate=1" in out

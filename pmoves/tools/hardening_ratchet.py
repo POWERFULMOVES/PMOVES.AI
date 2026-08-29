@@ -174,6 +174,45 @@ def _key(f: dict) -> str:
 # gate, which is what makes "say why" enforceable instead of aspirational.
 REASONLESS_ALLOWANCE_KEY = "reasonless_allowance"
 
+# What KIND of baselined entry this is. The distinction matters because the
+# headline count is read as "how much hardening debt we carry", and only one of
+# these is debt:
+#
+#   debt              not fixed yet. The number that should shrink.
+#   handled-elsewhere the Dockerfile runs as root, and something ELSE already
+#                     constrains it -- `user:` in docker-compose.hardened.yml,
+#                     or an image that drops privileges internally the way
+#                     nginx spawns workers as `nginx`.
+#   deliberate        root is required and chosen, with the reason recorded.
+#   not-deployed      not a deployable image: a documentation example, a
+#                     fragment, a template nothing builds.
+#
+# Lumping them together overstates risk and makes progress unmeasurable: work
+# off three real gaps and the number barely moves, because most of what it
+# counts was never debt.
+KINDS = ("debt", "handled-elsewhere", "deliberate", "not-deployed")
+DEFAULT_KIND = "debt"
+
+
+def load_kinds() -> Dict[str, str]:
+    """`KIND|path` -> classification. Absent or unknown reads as `debt`.
+
+    Defaulting to `debt` is deliberate: an unclassified entry should count
+    AGAINST us, never be quietly excused. The safe direction for a gate that
+    cannot tell is to assume the worse case.
+    """
+    if not BASELINE.is_file():
+        return {}
+    doc = yaml.safe_load(BASELINE.read_text(encoding="utf-8")) or {}
+    out: Dict[str, str] = {}
+    for item in (doc.get("known_gaps") or []):
+        if isinstance(item, dict) and item.get("entry"):
+            kind = str(item.get("kind") or DEFAULT_KIND)
+            out[str(item["entry"])] = kind if kind in KINDS else DEFAULT_KIND
+        elif isinstance(item, str):
+            out[item] = DEFAULT_KIND
+    return out
+
 
 def load_baseline() -> Dict[str, str]:
     """`KIND|path` -> reason (empty string when none was given).
@@ -276,6 +315,12 @@ def main() -> int:
     # said, so it could not be checked. Now it can: entries with no reason are
     # counted, and the count may only go DOWN. Adding one without a reason
     # pushes it past the recorded allowance and fails.
+    kinds = load_kinds()
+    by_kind: Dict[str, int] = {}
+    for k in baseline:
+        by_kind[kinds.get(k, DEFAULT_KIND)] = by_kind.get(kinds.get(k, DEFAULT_KIND), 0) + 1
+    debt = sorted(k for k in baseline if kinds.get(k, DEFAULT_KIND) == "debt")
+
     reasonless = sorted(k for k in baseline if not reasons.get(k))
     allowance = load_reasonless_allowance()
     over_allowance = max(0, len(reasonless) - allowance)
@@ -316,6 +361,8 @@ def main() -> int:
                     "new": new,
                     "stale": stale,
                     "not_in_tree": not_in_tree,
+                    "debt": debt,
+                    "by_kind": by_kind,
                     "reasonless": reasonless,
                     "reasonless_allowance": allowance,
                 },
@@ -329,6 +376,13 @@ def main() -> int:
     # and a summary line that mislabels what it counted is how a gate ends up
     # trusted for a property it never checked.
     print(f"Findings: {len(found)} ({len(baseline)} baselined, {len(new)} new)")
+    if by_kind:
+        # Split, because the total is read as "how much debt we carry" and most
+        # of it may not be debt. A number that conflates a documentation
+        # example with an unhardened service cannot be worked off.
+        summary = "  ".join(f"{k}={by_kind[k]}" for k in KINDS if k in by_kind)
+        print(f"Baselined by kind: {summary}")
+        print(f"Actual hardening debt: {len(debt)}")
 
     if new:
         print("\nNEW - not in the baseline:")

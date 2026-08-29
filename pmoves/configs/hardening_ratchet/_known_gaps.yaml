@@ -16,14 +16,31 @@ known_gaps:
   - "NO_USER|pmoves-nats-mcp/Dockerfile"
   - "NO_USER|pmoves/compose/n8n/Dockerfile"
   - "NO_USER|pmoves/docker/pmoves-4090-web/Dockerfile"
-  - "NO_USER|pmoves/docs/PMOVES.AI PLANS/Enhanced Media Stack with Advanced AudioVideo Analysis/Dockerfile"
-  - "NO_USER|pmoves/docs/PMOVES.AI PLANS/cipher_pmoves_bundle/Dockerfile.cipher"
+  - entry: "NO_USER|pmoves/docs/PMOVES.AI PLANS/Enhanced Media Stack with Advanced AudioVideo Analysis/Dockerfile"
+    kind: not-deployed
+    reason: >-
+      A documentation example under pmoves/docs/, referenced by no compose
+      file. Nothing builds or runs it, so it has no runtime posture to
+      harden. Counting it as debt overstates the number without giving
+      anyone something to fix.
+  - entry: "NO_USER|pmoves/docs/PMOVES.AI PLANS/cipher_pmoves_bundle/Dockerfile.cipher"
+    kind: not-deployed
+    reason: >-
+      Same: a bundled example under pmoves/docs/, referenced by no compose
+      file. The running Cipher is the pmoves-cipher service, not this.
   - "NO_USER|pmoves/services/voice-sampler/Dockerfile"
   - "NO_USER|pmoves/services/watch-folder-router/Dockerfile"
-  - "ROOT_USER|pmoves/images/jellyfin/Dockerfile"
+  - entry: "ROOT_USER|pmoves/images/jellyfin/Dockerfile"
+    kind: deliberate
+    reason: >-
+      Root is chosen at the COMPOSE layer, not left by accident:
+      docker-compose.external.yml sets user: "${JELLYFIN_CONTAINER_USER:-0:0}"
+      with a numeric UID so the runtime stays valid on GHCR variants whose
+      image passwd lacks a named jellyfin entry. It is overridable per
+      deployment via that variable, which is where the decision belongs.
 
 # How many of the entries above may carry no `reason`. These predate the
 # field and are grandfathered, not approved. The number may only go DOWN:
 # add an entry without a reason and it exceeds this, and the gate fails.
 # Lower it every time one of the entries above gains a reason.
-reasonless_allowance: 9
+reasonless_allowance: 6
