@@ -26,17 +26,17 @@ set -u
 # of the SYMLINK made ROOT=$HOME, so env.shared and .claude/mcp.json both missed
 # and every cred-dependent MCP started empty — silently, with only a WARN.
 #
-# WHY `CDPATH= cd -P --`: dirname yields a bare relative path when the script is
+# WHY `CDPATH='' cd -P --`: dirname yields a bare relative path when the script is
 # invoked relatively; `cd` consults CDPATH for such arguments, which both jumps
 # elsewhere AND echoes the destination, embedding a newline in the captured path.
 # ---------------------------------------------------------------------------
 SELF="${BASH_SOURCE[0]:-$0}"
 while [ -L "$SELF" ]; do
-  link_dir="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+  link_dir="$(CDPATH='' cd -P -- "$(dirname -- "$SELF")" && pwd)"
   SELF="$(readlink -- "$SELF")"
   case "$SELF" in /*) ;; *) SELF="$link_dir/$SELF" ;; esac
 done
-SELF_DIR="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
+SELF_DIR="$(CDPATH='' cd -P -- "$(dirname -- "$SELF")" && pwd)"
 
 # PMOVES_LAUNCHER_ROOT, not PMOVES_REPO_ROOT: the latter is already consumed by
 # pmoves/services/creator-operator/config.py, so reusing it would let a shell
@@ -44,7 +44,7 @@ SELF_DIR="$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)"
 if [ -n "${PMOVES_LAUNCHER_ROOT:-}" ]; then
   ROOT="$PMOVES_LAUNCHER_ROOT"
 else
-  ROOT="$(CDPATH= cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
+  ROOT="$(CDPATH='' cd -P -- "$SELF_DIR/../.." && pwd)" || ROOT=""
 fi
 
 # Validate the derived ROOT the way the sibling launchers do (marker-file check)
@@ -103,6 +103,7 @@ if [ -f "$ENVF" ]; then
       continue
     fi
     val="${val#"${val%%[![:space:]]*}"}"       # trim leading whitespace on value
+    # shellcheck disable=SC2016  # the literal '${' is what is being matched
     if [ "${val#*'${'}" != "$val" ]; then
       printf '%s=%s\n' "$key" "$val" >> "$tmpf" # let the shell expand ${...}
     else
@@ -175,14 +176,34 @@ if [ -f "$MCP_ROSTER" ]; then
   NORMALIZER="$ROOT/pmoves/tools/mcp_roster_normalize.py"
   RESOLVED=""
   resolved_ok=0
+  why=""
   # Shared discovery (pm-python.sh) — the third python convention this file
   # grew (scalar python in the identity twin, bare python3 here, inline chain
   # in crush-pmoves) was the pair-review finding: unify, don't re-add. No
   # probe: the normalizer needs only the stdlib (json/os/re).
+  # shellcheck source=../../pmoves/scripts/pm-python.sh
   . "$ROOT/pmoves/scripts/pm-python.sh"
-  if [ -f "$NORMALIZER" ] && pm_pick_python; then
-    if RESOLVED="$("${PM_PY[@]}" "$NORMALIZER" "$MCP_ROSTER" \
-                     --root "$ROOT" --label claude-pmoves)" && [ -n "$RESOLVED" ]; then
+  # FOUR causes used to collapse into one guess: "(python3 missing?)". Keep them
+  # apart. The operator's next command differs for each, and a message that names
+  # the wrong cause sends them to fix the wrong thing — which is how this path
+  # stayed broken: it blamed a missing interpreter for a whitespace-valued
+  # PMOVES_PYTHON that made pm_pick_python return success with an EMPTY PM_PY,
+  # so `"${PM_PY[@]}" "$NORMALIZER"` ran the .py file as the command.
+  if [ ! -f "$NORMALIZER" ]; then
+    why="the normalizer is missing: $NORMALIZER"
+  # The empty probe is explicit, not an omission: the normalizer imports only
+  # json/os/re, so any interpreter will do — but it still has to RUN.
+  elif ! pm_pick_python ""; then
+    why="no usable python interpreter (tried \$PMOVES_PYTHON, $ROOT/pmoves/.venv-pmoves, python3, py -3, python)"
+  else
+    RESOLVED="$("${PM_PY[@]}" "$NORMALIZER" "$MCP_ROSTER" \
+                 --root "$ROOT" --label claude-pmoves)"
+    norm_rc=$?
+    if [ "$norm_rc" -ne 0 ]; then
+      why="the normalizer exited $norm_rc under '${PM_PY[*]}' (its own stderr is above)"
+    elif [ -z "$RESOLVED" ]; then
+      why="the normalizer exited 0 but printed no roster path — nothing was written"
+    else
       resolved_ok=1
     fi
   fi
@@ -193,10 +214,96 @@ if [ -f "$MCP_ROSTER" ]; then
   # exactly one value and leaves "$@" as separate arguments.
   if [ "$resolved_ok" -eq 1 ]; then
     exec claude --mcp-config="$RESOLVED" "$@"
-  else
-    echo "[claude-pmoves] WARN: could not normalize roster (python3 missing?); using raw $MCP_ROSTER" >&2
-    exec claude --mcp-config="$MCP_ROSTER" "$@"
   fi
+
+  # -------------------------------------------------------------------------
+  # FAIL CLOSED when the raw roster would carry literal ${VAR}s.
+  #
+  # The old behaviour warned once and launched anyway. What that produces is a
+  # session whose MCP servers are present, look configured, and cannot
+  # authenticate: Claude Code's documented response to an unresolvable reference
+  # is to warn and then use the unexpanded "${VAR}" text AS THE VALUE. So
+  # `Bearer ${CIPHER_API_TOKEN}` goes on the wire as that literal string (a
+  # measured 401 against our own cipher shim) and `http://${TS_Z890}:8105/…` is
+  # used as a hostname. Nothing inside the session can tell that apart from
+  # "cipher is down", the single stderr line has scrolled away before the TUI
+  # paints, and every subsequent session on that node repeats it.
+  #
+  # This is deliberately NOT the fail-open doctrine of the identity twin
+  # (pmoves/scripts/claude-pmoves.sh: "an identity is a convenience; losing it
+  # must never cost you the launch"), nor the "a lane is a ledger entry, not a
+  # lock" position. Both were settled about things that cost you a NAME. This
+  # costs credentials, and a credential that is silently a placeholder is worse
+  # than an absent one because it reports success. The refusal is bounded: the
+  # override is printed in the refusal itself, so it is one command rather than
+  # a lockout, and `claude` is still on PATH unwrapped.
+  #
+  # PROPORTIONATE. If no unexpanded ${…} remains, the raw file authenticates
+  # exactly as the normalized one would; that case warns about what it actually
+  # loses (P2 disabled-duplicate dropping, P3 ./-path rewriting) and launches.
+  # Refusing there would be a lock with nothing behind it.
+  # -------------------------------------------------------------------------
+  echo "[claude-pmoves] ERROR: could not normalize the MCP roster." >&2
+  echo "[claude-pmoves]        cause: $why" >&2
+  # WHICH ${...} actually costs a credential? Not all of them, and the first
+  # cut of this gate (`grep -qF '${'`) answered a different question — "do these
+  # two characters appear anywhere in this JSON file" — which is wrong in both
+  # directions:
+  #   * FALSE POSITIVE, the `:-` idiom. `${CIPHER_API_TOKEN:-}` sends the
+  #     DEFAULT, never the literal text. It is the remedy Claude Code's own docs
+  #     prescribe and the one .claude/mcp.json already uses for the cipher
+  #     bearer, so a whole-file match refuses the fix.
+  #   * FALSE POSITIVE, prose. `.claude/mcp.json`'s `_note` quotes the docs
+  #     verbatim — "uses the unexpanded ${VAR} text as-is". Claude Code reads
+  #     `mcpServers`; `_`-prefixed keys are documentation. A node that had
+  #     expanded every real reference still could not pass.
+  # So the predicate is: a BARE ${IDENT} on a line that is not a `_`-prefixed
+  # key. Still a text match, deliberately — see the note below on why the
+  # semantically complete check cannot live here.
+  #
+  # WHY NOT `mcp_roster_normalize.py --check-only`, which already knows the
+  # difference (_IDENT, _split_default, the drop/warn field split)? Because this
+  # block is reached ONLY when the normalizer could not run: it is missing, or
+  # there is no interpreter, or it exited non-zero, or it printed nothing.
+  # In the first two it is unavailable; in the other two it is the component
+  # that just failed. A check that needs python is unavailable in exactly the
+  # four cases the gate exists for, so the gate has to be answerable with the
+  # tools present when python is not.
+  #
+  # KNOWN, DELIBERATE OVER-MATCH: the field restriction (only url/headers/env/
+  # args) is NOT implemented. `headers` and `env` are objects, so the key on the
+  # line carrying the reference is `Authorization`, not `headers` — restricting
+  # by field needs a parser, which is the thing we just established we cannot
+  # have here. The residue is a bare ${IDENT} in a non-`_` descriptive field,
+  # which over-refuses rather than under-refuses. A nested default
+  # (`${A:-${B}}`) also matches on its inner reference, correctly: if both are
+  # unset that IS a literal placeholder.
+  if grep -vE '^[[:space:]]*"_[^"]*"[[:space:]]*:' "$MCP_ROSTER" 2>/dev/null \
+       | grep -qE '\$\{[A-Za-z_][A-Za-z0-9_]*\}'; then
+    echo "[claude-pmoves]        LOST: $MCP_ROSTER still contains bare \${VAR} references." >&2
+    echo "[claude-pmoves]              Claude Code sends an unresolvable reference as the" >&2
+    echo "[claude-pmoves]              LITERAL text, so bearer tokens would go out as" >&2
+    echo "[claude-pmoves]              'Bearer \${CIPHER_API_TOKEN}' and cross-node URLs as" >&2
+    echo "[claude-pmoves]              'http://\${TS_Z890}:8105/...'. Those servers load," >&2
+    echo "[claude-pmoves]              look configured, and never authenticate." >&2
+    if [ -z "${PMOVES_ALLOW_RAW_ROSTER:-}" ]; then
+      echo "[claude-pmoves]        Refusing to start a session whose MCP credentials are" >&2
+      echo "[claude-pmoves]        placeholders. Fix one of:" >&2
+      echo "[claude-pmoves]          make -C pmoves preflight      # provisions pmoves/.venv-pmoves" >&2
+      echo "[claude-pmoves]          PMOVES_PYTHON=/path/to/python # pin an interpreter explicitly" >&2
+      echo "[claude-pmoves]        Or accept a credential-less session on purpose, this once:" >&2
+      echo "[claude-pmoves]          PMOVES_ALLOW_RAW_ROSTER=1 <your usual command>" >&2
+      exit 1
+    fi
+    echo "[claude-pmoves]        PMOVES_ALLOW_RAW_ROSTER=1 is set — launching anyway." >&2
+  else
+    echo "[claude-pmoves] WARN: launching with the RAW roster $MCP_ROSTER." >&2
+    echo "[claude-pmoves]       No bare \${VAR} references remain (a \${VAR:-default}" >&2
+    echo "[claude-pmoves]       sends its default), so credentials are intact." >&2
+    echo "[claude-pmoves]       Lost: '_'-prefixed disabled duplicates are NOT dropped, and" >&2
+    echo "[claude-pmoves]       ./ paths stay relative to your CWD instead of the repo root." >&2
+  fi
+  exec claude --mcp-config="$MCP_ROSTER" "$@"
 else
   echo "[claude-pmoves] WARN: $MCP_ROSTER not found — PMOVES MCP servers will not load." >&2
   exec claude "$@"

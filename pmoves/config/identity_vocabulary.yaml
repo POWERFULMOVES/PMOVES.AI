@@ -206,6 +206,35 @@ corrections:
     asserted_on: "2026-08-25"
     evidence: "AGNOTE4482PHI.t1.md, B850-CLAUDE preflight"
 
+  # A MEASUREMENT correction, not an authorship one. The 144/15 figure first
+  # recorded on this entry reproduced under no grammar; Codex caught it on
+  # #2811 and the replacement figures reproduce exactly. There is no author to
+  # recover here -- the entry was signed correctly -- so this record carries
+  # `corrects: measurement` and no `actual`.
+  - entry:
+      timestamp: '2026-08-28T16:47:00Z'
+      kind: CLAIM
+    corrects: measurement
+    reason: >-
+      the 144/15 figure reproduced under no grammar and was wrong; the
+      replacement figures reproduce exactly
+    asserted_on: '2026-08-29'
+    evidence: 'Codex P2 review on #2811'
+  # A FACTUAL correction, not an authorship one. The entry originally claimed
+  # branch_cleanup.py already computed divergence; Codex showed it does not --
+  # the complete audit path calls only `git branch --merged` and `git log -1`,
+  # and BranchInfo carries no divergence field. The entry was signed correctly,
+  # so there is no author to recover and no `actual` to name.
+  - entry:
+      timestamp: '2026-08-28T17:44:00Z'
+      kind: CLAIM
+    corrects: fact
+    reason: >-
+      the entry claimed branch_cleanup.py already computed divergence; its
+      audit path calls only `git branch --merged` and `git log -1`, and
+      BranchInfo has no divergence field
+    asserted_on: '2026-08-29'
+    evidence: 'Codex P2 review on #2812'
 # The forward edge. "Identity A became identity B" -- what the register has
 # never been able to say, and the reason correction #1-6 were implemented as a
 # rewrite instead of an edge.
