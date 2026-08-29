@@ -186,6 +186,23 @@ def build_outputs(
         if source_key is None:
             if entry.required:
                 missing.append(entry.label)
+            # Cleared or never delivered -- either way this key must NOT survive
+            # in the generated targets. `write_env_files` runs in merge mode by
+            # default (SECRETS_SYNC_FLAGS), and merge PRESERVES keys it is not
+            # given, so omitting one leaves the previous value live for Compose.
+            #
+            # Concretely: clear CIPHER_API_TOKEN in env.shared, rerun
+            # `make -C pmoves secrets-funnel`, and without this the old token
+            # stays in env.tier-agent and Cipher keeps requiring auth -- the
+            # documented way to return it to unauthenticated mode silently does
+            # nothing. Omission is not removal.
+            #
+            # This is the same treatment the min_length branch below already
+            # gives a too-short value, and it is what `_first_usable` documents:
+            # absent and present-but-blank are handled identically.
+            if rejected_out is not None:
+                for target in entry.targets:
+                    rejected_out.setdefault(target.file, set()).add(target.key)
             continue
         value = secrets[source_key]
         # A secret can be present, non-empty, and still unusable because it is too
