@@ -140,6 +140,27 @@ class Launch:
         )
 
 
+BACKSLASH = chr(92)
+
+
+def names_path(haystack: str, path: Path, root: Path) -> bool:
+    """Does shell output name `path`, whatever path FORM it used?
+
+    The script under test runs in a POSIX shell and emits POSIX paths
+    (/tmp/pytest-of-.../repo/...). `str(Path)` on Windows gives the
+    backslashed Windows form instead. Both name the same file, and Git Bash
+    /tmp is not reachable from pathlib, so an exact string comparison can only
+    ever pass on a POSIX host -- it does not test the behaviour, it tests the
+    operating system.
+
+    Compare the portion BELOW the sandbox root instead. That part is identical
+    in both forms, and it carries the meaning: which file inside the fake repo
+    was named.
+    """
+    tail = path.relative_to(root).as_posix()
+    return tail in haystack.replace(BACKSLASH, "/")
+
+
 class FakeRepo:
     """A repo-shaped tree the real launcher can resolve itself inside."""
 
@@ -224,7 +245,7 @@ def test_a_working_normalizer_launches_with_the_normalized_roster(repo: FakeRepo
     r = repo.launch()
     assert r.rc == 0, r
     assert r.claude_ran, r
-    assert r.mcp_config != str(repo.roster), (
+    assert not names_path(r.mcp_config, repo.roster, repo.root), (
         f"launched with the raw roster despite a working normalizer: {r!r}"
     )
     assert "ERROR" not in r.stderr, r
@@ -271,7 +292,7 @@ def test_the_override_is_honoured_and_uses_the_raw_roster(repo: FakeRepo):
     r = repo.launch(PMOVES_PYTHON=" ", PMOVES_ALLOW_RAW_ROSTER="1")
     assert r.rc == 0, r
     assert r.claude_ran, f"the override did not launch anything: {r!r}"
-    assert r.mcp_config == str(repo.roster), r
+    assert names_path(r.mcp_config, repo.roster, repo.root), r
 
 
 def test_a_roster_with_nothing_left_to_expand_warns_and_launches(repo: FakeRepo):
@@ -285,7 +306,7 @@ def test_a_roster_with_nothing_left_to_expand_warns_and_launches(repo: FakeRepo)
     r = repo.launch(PMOVES_PYTHON=" ")
     assert r.rc == 0, r
     assert r.claude_ran, r
-    assert r.mcp_config == str(repo.roster), r
+    assert names_path(r.mcp_config, repo.roster, repo.root), r
     assert "WARN" in r.stderr, r
 
 
@@ -317,7 +338,7 @@ def test_a_missing_normalizer_is_named_as_such(repo: FakeRepo):
     repo.remove_normalizer()
     r = repo.launch()
     assert "normalizer is missing" in r.stderr, r
-    assert str(repo.normalizer) in r.stderr, (
+    assert names_path(r.stderr, repo.normalizer, repo.root), (
         f"does not say which file is missing: {r!r}"
     )
 

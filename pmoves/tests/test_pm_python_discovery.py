@@ -135,6 +135,26 @@ def _fake_interpreter(fails_import: str) -> str:
     )
 
 
+BACKSLASH = chr(92)
+
+
+def names_path(actual: str, path: Path, root: Path) -> bool:
+    """Does the shell-emitted argv element name `path`, whatever FORM it used?
+
+    pm-python.sh runs in a POSIX shell and puts a POSIX path in PM_PY
+    (/tmp/pytest-of-.../repo/...). `str(Path)` on Windows gives the
+    backslashed Windows form. Both name the same file, and Git Bash /tmp is
+    not reachable from pathlib, so an exact comparison can only ever pass on a
+    POSIX host -- it tests the operating system, not the discovery ORDER this
+    suite exists to pin.
+
+    Compare below the sandbox root: identical in both forms, and it is the
+    part that says WHICH interpreter was chosen.
+    """
+    tail = path.relative_to(root).as_posix()
+    return actual.replace(BACKSLASH, "/").endswith(tail)
+
+
 class Sandbox:
     """A throwaway repo-shaped tree with a fully controlled PATH."""
 
@@ -168,8 +188,27 @@ class Sandbox:
         return p
 
     def process_env(self, extra: dict[str, str] | None = None) -> dict[str, str]:
+        # PATH is the sandbox bin FIRST, so the stubs win discovery. On
+        # Windows it cannot be the sandbox bin ONLY: Git ships coreutils as
+        # msys binaries needing `msys-2.0.dll`, which lives beside them in
+        # Git's usr/bin. Strip that directory from PATH and every symlinked
+        # coreutil fails to START -- `dirname` produced EMPTY output, so
+        #     _pm_py_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+        # resolved to "/", the venv was looked for at /.venv-pmoves, and three
+        # tests reported COUNT=0 with nothing naming the cause.
+        #
+        # Appending it is safe for what these tests pin: that directory ships
+        # no python, py, or python3, so discovery ORDER is still decided
+        # entirely by the sandbox stubs ahead of it. On POSIX the coreutils
+        # directory is typically /usr/bin, which DOES carry python3 -- adding it
+        # there would defeat the "python3 absent" cases, so this is Windows-only.
+        path = str(self.bin)
+        if os.name == "nt":
+            coreutils = os.path.dirname(shutil.which("dirname") or "")
+            if coreutils:
+                path = path + os.pathsep + coreutils
         e = {
-            "PATH": str(self.bin),
+            "PATH": path,
             "PM_SCRIPT": str(self.script),
             "HOME": str(self.root),
         }
@@ -368,7 +407,8 @@ def test_venv_wins_and_survives_a_path_containing_spaces(tmp_path: Path):
     venv = sb.venv_python()
     r = sb.run()
     assert r.ok, r
-    assert r.argv == [str(venv)], f"venv path was split or skipped: {r!r}"
+    assert len(r.argv) == 1 and names_path(r.argv[0], venv, sb.root), (
+        f"venv path was split or skipped: {r!r}")
     assert " " in r.argv[0], "test did not actually exercise a spaced path"
 
 
@@ -377,7 +417,7 @@ def test_a_spaced_venv_path_also_survives_a_probe(tmp_path: Path):
     venv = sb.venv_python()
     r = sb.run("yaml")
     assert r.ok, r
-    assert r.argv == [str(venv)], r
+    assert len(r.argv) == 1 and names_path(r.argv[0], venv, sb.root), r
 
 
 def test_venv_failing_the_probe_falls_through_to_python3(tmp_path: Path):
@@ -395,7 +435,7 @@ def test_windows_venv_layout_is_found(tmp_path: Path):
     venv = sb.venv_python(subdir="Scripts")
     r = sb.run()
     assert r.ok, r
-    assert r.argv == [str(venv)], r
+    assert len(r.argv) == 1 and names_path(r.argv[0], venv, sb.root), r
 
 
 def test_python3_is_preferred_over_py_and_python(tmp_path: Path):
