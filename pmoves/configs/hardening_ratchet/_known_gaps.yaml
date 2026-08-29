@@ -21,3 +21,9 @@ known_gaps:
   - "NO_USER|pmoves/services/voice-sampler/Dockerfile"
   - "NO_USER|pmoves/services/watch-folder-router/Dockerfile"
   - "ROOT_USER|pmoves/images/jellyfin/Dockerfile"
+
+# How many of the entries above may carry no `reason`. These predate the
+# field and are grandfathered, not approved. The number may only go DOWN:
+# add an entry without a reason and it exceeds this, and the gate fails.
+# Lower it every time one of the entries above gains a reason.
+reasonless_allowance: 9

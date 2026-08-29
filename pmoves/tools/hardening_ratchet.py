@@ -72,6 +72,8 @@ import json
 import re
 import subprocess
 import sys
+
+import yaml
 from pathlib import Path
 from typing import Dict, List, Set
 
@@ -166,15 +168,50 @@ def _key(f: dict) -> str:
     return f"{f['kind']}|{f['where']}"
 
 
-def load_baseline() -> Set[str]:
+# How many baselined entries are allowed to carry no reason. These are the
+# entries that predate the reason field; the number may only go DOWN. A new
+# entry without a reason pushes the count over the allowance and fails the
+# gate, which is what makes "say why" enforceable instead of aspirational.
+REASONLESS_ALLOWANCE_KEY = "reasonless_allowance"
+
+
+def load_baseline() -> Dict[str, str]:
+    """`KIND|path` -> reason (empty string when none was given).
+
+    Two entry forms are accepted, because the older one is still correct for a
+    gap whose only story is "not fixed yet":
+
+        - "NO_USER|path/Dockerfile"                     bare, no reason
+        - entry: "NO_USER|path/Dockerfile"              with the story attached
+          reason: >-
+            nginx drops worker privileges internally ...
+
+    The reason belongs HERE and not in a PR description. The file's own header
+    has always said adding an entry "should require saying why", but there was
+    nowhere to say it, so the why lived in a commit message nobody reads when
+    they meet the entry two months later. A ratchet entry without a reason is
+    an allowlist with extra steps.
+    """
     if not BASELINE.is_file():
-        return set()
-    keys: Set[str] = set()
-    for line in BASELINE.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line.startswith("- "):
-            keys.add(line[2:].strip().strip('"'))
-    return keys
+        return {}
+    doc = yaml.safe_load(BASELINE.read_text(encoding="utf-8")) or {}
+    out: Dict[str, str] = {}
+    for item in (doc.get("known_gaps") or []):
+        if isinstance(item, str):
+            out[item] = ""
+        elif isinstance(item, dict) and item.get("entry"):
+            out[str(item["entry"])] = str(item.get("reason") or "").strip()
+    return out
+
+
+def load_reasonless_allowance() -> int:
+    if not BASELINE.is_file():
+        return 0
+    doc = yaml.safe_load(BASELINE.read_text(encoding="utf-8")) or {}
+    try:
+        return int(doc.get(REASONLESS_ALLOWANCE_KEY, 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def write_baseline(findings: List[dict]) -> None:
@@ -231,8 +268,17 @@ def main() -> int:
         print(f"Wrote {len({_key(f) for f in findings})} entries to {BASELINE}")
         return 0
 
-    baseline = load_baseline()
+    reasons = load_baseline()
+    baseline = set(reasons)
     found = {_key(f) for f in findings}
+
+    # "Say why" was already this file's stated rule; it just had nowhere to be
+    # said, so it could not be checked. Now it can: entries with no reason are
+    # counted, and the count may only go DOWN. Adding one without a reason
+    # pushes it past the recorded allowance and fails.
+    reasonless = sorted(k for k in baseline if not reasons.get(k))
+    allowance = load_reasonless_allowance()
+    over_allowance = max(0, len(reasonless) - allowance)
     new = sorted(found - baseline)
     detail: Dict[str, str] = {_key(f): f["detail"] for f in findings}
 
@@ -270,11 +316,13 @@ def main() -> int:
                     "new": new,
                     "stale": stale,
                     "not_in_tree": not_in_tree,
+                    "reasonless": reasonless,
+                    "reasonless_allowance": allowance,
                 },
                 indent=2,
             )
         )
-        return 1 if (new or stale) else 0
+        return 1 if (new or stale or over_allowance) else 0
 
     print(f"Scanned {len(files)} tracked Dockerfiles.")
     # "Findings", not "Root-running": NO_FROM is not a root-privilege problem,
@@ -321,7 +369,25 @@ def main() -> int:
             " exists SOMEWHERE -- an entry no branch carries is stale for real."
         )
 
-    if not new and not stale:
+    if over_allowance:
+        print(
+            f"\nNO REASON GIVEN -- {len(reasonless)} baselined entries carry"
+            f" no `reason`, and only {allowance} are grandfathered:"
+        )
+        for k in reasonless:
+            kind, path = k.split("|", 1)
+            print(f"  {kind:<10} {path}")
+        print(
+            "\nRecord WHY on the entry itself, not in a PR description:\n"
+            "    - entry: \"KIND|path\"\n"
+            "      reason: >-\n"
+            "        what makes this acceptable, or what it waits on\n"
+            "\n  Then lower `reasonless_allowance`. An entry with no reason is an"
+            " allowlist with extra steps: nobody meeting it later can tell"
+            " whether it was judged or merely tolerated."
+        )
+
+    if not new and not stale and not over_allowance:
         print("\nOK — no new root-running Dockerfiles, no stale baseline entries.")
         return 0
     return 1

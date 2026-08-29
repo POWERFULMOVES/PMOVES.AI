@@ -31,7 +31,7 @@ sys.modules["hardening_ratchet"] = hr
 spec.loader.exec_module(hr)
 
 
-def _wire(monkeypatch, *, tracked, findings, baseline, argv=()):
+def _wire(monkeypatch, *, tracked, findings, baseline, argv=(), allowance=None):
     """Stub discovery, scanning and the baseline.
 
     `tracked` is what `git ls-files` would return for this tree; `findings` are
@@ -44,7 +44,16 @@ def _wire(monkeypatch, *, tracked, findings, baseline, argv=()):
         hr, "scan",
         lambda: [{"kind": "NO_USER", "where": p, "detail": ""} for p in findings],
     )
-    monkeypatch.setattr(hr, "load_baseline", lambda: set(baseline))
+    # `baseline` may be a list of keys (no reasons) or a {key: reason} mapping.
+    # The default allowance is "however many are reasonless", so tests that are
+    # not about reasons are unaffected by the reason ratchet.
+    mapping = baseline if isinstance(baseline, dict) else {k: "" for k in baseline}
+    monkeypatch.setattr(hr, "load_baseline", lambda: dict(mapping))
+    n_reasonless = sum(1 for v in mapping.values() if not v)
+    monkeypatch.setattr(
+        hr, "load_reasonless_allowance",
+        lambda: n_reasonless if allowance is None else allowance,
+    )
     # `main()` parses sys.argv, so pytest's own arguments would otherwise reach
     # argparse and exit(2) before the ratchet judged anything.
     monkeypatch.setattr(sys, "argv", ["hardening_ratchet.py", *argv])
@@ -131,3 +140,64 @@ def test_a_path_containing_a_pipe_is_split_only_once(monkeypatch):
     odd = "weird|name/Dockerfile"
     _wire(monkeypatch, tracked=[odd], findings=[], baseline=[f"NO_USER|{odd}"])
     assert hr.main() == 1, "a piped path was misread as belonging to another tree"
+
+
+# --- the reason ratchet -------------------------------------------------------
+#
+# The file's header has always said adding an entry "should require saying
+# why". There was nowhere in the file to say it, so the why lived in a PR
+# description nobody reads when they meet the entry months later. These pin the
+# rule now that it is expressible.
+
+
+def test_an_entry_without_a_reason_beyond_the_allowance_fails(monkeypatch):
+    """Adding a bare entry is exactly what the allowance is meant to catch."""
+    _wire(monkeypatch, tracked=["a/Dockerfile"], findings=["a/Dockerfile"],
+          baseline={"NO_USER|a/Dockerfile": ""}, allowance=0)
+    assert hr.main() == 1
+
+
+def test_a_reason_satisfies_the_ratchet(monkeypatch):
+    _wire(monkeypatch, tracked=["a/Dockerfile"], findings=["a/Dockerfile"],
+          baseline={"NO_USER|a/Dockerfile": "nginx drops worker privileges itself"},
+          allowance=0)
+    assert hr.main() == 0
+
+
+def test_grandfathered_reasonless_entries_still_pass(monkeypatch):
+    """Existing entries predate the field; they are tolerated, not required to
+    be invented. The allowance is what stops that tolerance from growing."""
+    _wire(monkeypatch, tracked=["a/Dockerfile"], findings=["a/Dockerfile"],
+          baseline={"NO_USER|a/Dockerfile": ""}, allowance=1)
+    assert hr.main() == 0
+
+
+def test_the_missing_reasons_are_named(monkeypatch, capsys):
+    """A count alone would not say which entry to fix."""
+    _wire(monkeypatch, tracked=["a/Dockerfile"], findings=["a/Dockerfile"],
+          baseline={"NO_USER|a/Dockerfile": ""}, allowance=0)
+    hr.main()
+    out = capsys.readouterr().out
+    assert "NO REASON GIVEN" in out
+    assert "a/Dockerfile" in out
+
+
+def test_both_entry_forms_load(tmp_path, monkeypatch):
+    """A bare string and a mapping must both parse, or adopting the richer form
+    would orphan every existing entry."""
+    baseline = tmp_path / "_known_gaps.yaml"
+    baseline.write_text(
+        "known_gaps:\n"
+        '  - "NO_USER|bare/Dockerfile"\n'
+        '  - entry: "NO_USER|explained/Dockerfile"\n'
+        "    reason: >-\n"
+        "      the base image drops privileges internally\n"
+        "reasonless_allowance: 1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(hr, "BASELINE", baseline)
+    loaded = hr.load_baseline()
+    assert set(loaded) == {"NO_USER|bare/Dockerfile", "NO_USER|explained/Dockerfile"}
+    assert loaded["NO_USER|bare/Dockerfile"] == ""
+    assert "drops privileges" in loaded["NO_USER|explained/Dockerfile"]
+    assert hr.load_reasonless_allowance() == 1
