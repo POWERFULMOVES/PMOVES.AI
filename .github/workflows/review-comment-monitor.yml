@@ -56,7 +56,7 @@ jobs:
           fetch-depth: 0
 
       - name: Triage automated review
-        uses: anthropics/claude-code-action@16b3b310c3d7b5279df73130324d5205aeea8eac # v1.0.205
+        uses: anthropics/claude-code-action@a874e9ecd7bb36efdad65429c6b35815f5a08f10 # v1.0.210
         with:
           # Coding plan, not the metered API key. The subscription credential does
           # expire and needs re-minting with `claude setup-token` — but ANTHROPIC_API_KEY
