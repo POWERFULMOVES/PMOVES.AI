@@ -155,6 +155,45 @@ coverage while providing none is the failure this repo keeps finding elsewhere.
 
 ---
 
+## 5. `strict: true` serialises merges, and the register collision is its narrow case
+
+Measured on 2026-08-29: **8 PRs merged**, **10 `Merge main` resolution commits**
+(more than merges -- several PRs collided repeatedly), **13 still open**.
+
+The register collision is real and is documented above as its own problem: every
+CLAIM row appends to the end of one file, so concurrent claims conflict by
+construction. But it is the visible half of a wider cost.
+
+`main` has `required_status_checks.strict: true`. Every merge marks every other
+open PR out-of-date, so each one needs an update and a **full CI re-run** before
+it can merge -- whether or not it touches a single overlapping file. Four
+completely unrelated PRs went from green to `behind` the instant an unrelated
+fifth landed today.
+
+The arithmetic is unkind. Merging N ready PRs takes N sequential
+update-CI-merge cycles; keeping the whole set current as you go costs up to
+N(N-1)/2 CI runs. At the 13 open right now that is ~78 rebuilds to land work
+that does not conflict at all.
+
+So the register fix (per-node claim files, or dated sections) removes the
+CONFLICTS, and would still leave the serialisation. Both are worth doing, and
+they are different problems:
+
+  register shape  -> stops PRs conflicting with each other
+  strict + queue  -> stops PRs invalidating each other
+
+**No merge queue is configured.** The repository allows merge, squash and
+rebase; `merge_queue_enabled` is absent, and the `[ main ]` ruleset carries
+`deletion`, `pull_request`, `copilot_code_review`, `non_fast_forward` and no
+queue rule. A merge queue is the mechanism built for exactly this: it batches
+pending PRs, tests the COMBINED result once, and merges the batch -- which is
+what `strict` is trying to guarantee, without paying for it per-PR.
+
+Not proposed blindly: a queue changes when checks run and what a green tick on
+an individual PR means, and this repo's gates are the thing it trusts most. It
+belongs to the same decision as the App and the bus -- worth measuring against
+one real batch before switching.
+
 ## Why these are one lane
 
 Each is a **gate or signal asserting more than it measured** — the same defect
