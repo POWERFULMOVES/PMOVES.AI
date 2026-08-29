@@ -1,6 +1,6 @@
 {
   "python.venvPath": "${workspaceFolder}/pmoves",
-  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.terminal.activateEnvInCurrentTerminal": false,
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.autoImportCompletions": true,
   "editor.formatOnSave": true,
@@ -80,5 +80,5 @@
   },
   "makefile.configureOnOpen": false,
   "java.compile.nullAnalysis.mode": "automatic",
-  "python-envs.defaultEnvManager": "ms-python.python:system"
+  "python.defaultInterpreterPath": "${workspaceFolder}/pmoves/.venv-pmoves"
 }
