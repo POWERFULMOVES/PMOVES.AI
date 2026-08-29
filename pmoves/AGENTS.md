@@ -1,4 +1,26 @@
-# Repository Guidelines
+# Repository Guidelines — `pmoves/`
+
+> **Format.** This file follows the [agents.md open format](https://agents.md); the PMOVES fork of the
+> spec lives at [`PMOVES-agents.md/`](../PMOVES-agents.md/) (submodule). The three canonical sections —
+> `## Dev environment tips`, `## Testing instructions`, `## PR instructions` — are present below.
+>
+> **Scope.** This is the `pmoves/` subtree contract: service layout, ports, bring-up order, smoke
+> commands. For the repo-wide contract read [`../AGENTS.md`](../AGENTS.md) first — this file does not
+> replace it, it narrows it.
+>
+> **Read alongside** (a cold-start agent needs all four to act safely here):
+> - [`../AGENTS.md`](../AGENTS.md) — repo-wide agent contract
+> - [`../.claude/BOOTSTRAP.md`](../.claude/BOOTSTRAP.md) — Known Roads, MCP entrypoints, disclosure rules
+> - [`docs/AGENTS/AGNOTE4482_SITREP.md`](docs/AGENTS/AGNOTE4482_SITREP.md) — cold-start orientation
+> - [`docs/AGENTS/AGNOTE4482PHI.t1.md`](docs/AGENTS/AGNOTE4482PHI.t1.md) — active claim register
+>
+> **CHIT awareness.** Work in this subtree is provenance-bearing. Claim a lane before editing and sign
+> on completion (`claim → work → sign → release`); the Known Road is
+> `make -C pmoves sign-trail SUMMARY=... AGENT=...`. Signing is optional locally and never skipped for
+> session-end provenance. If `sign-trail` warns `identity not resolved`, the signature is a FALLBACK
+> presentation and **not** your registered identity — fix the interpreter rather than accepting it
+> (`make -C pmoves check-prereqs-env`). CHIT-aware service ports and per-service status live in
+> [`docs/audit/CHIT_INTEGRATION_STATUS.md`](docs/audit/CHIT_INTEGRATION_STATUS.md).
 
 ## Project Structure & Module Organization
 - `services/`: Python microservices (FastAPI workers, utilities). Examples: `agent-zero/`, `hi-rag-gateway/`, `retrieval-eval/`, `graph-linker/`, `publisher/`.
@@ -18,11 +40,14 @@
   - Jellyfin integration runbooks live under `pmoves/docs/PMOVES.AI PLANS/` (see `JELLYFIN_BRIDGE_INTEGRATION.md`, `JELLYFIN_BACKFILL_PLAN.md`, and `Enhanced Media Stack with Advanced AudioVideo Analysis/`).
   - Additional operational primers live alongside services (e.g., `services/**/README.md`) and should be consulted when touching those areas.
 
-## Build, Test, and Development Commands
+## Dev environment tips
 - `make up`: Starts core data services and workers (qdrant, neo4j, meilisearch, hi-rag-gateway, retrieval-eval) via Docker Compose profiles, assuming Supabase CLI is already running on the `pmoves-net` network.
 - `make down`: Stops all containers.
 - `make clean`: Stops and removes volumes (destructive for local data).
-- Run a service locally (example): `python services/agent-zero/main.py` (installs deps first: `pip install -r services/agent-zero/requirements.txt`).
+- Run a service locally (example): `uv run --with-requirements services/agent-zero/requirements.txt python services/agent-zero/main.py`.
+  Use `uv`, never `pip` — see `.claude/PATTERNS.md`. `make -C pmoves venv-bringup` provisions the
+  canonical environment; `make -C pmoves check-prereqs-env` verifies the interpreter it resolves to
+  can actually import the tool dependencies.
 - Logs: `docker compose logs -f <service>`.
 
 ## Coding Style & Naming Conventions
@@ -31,10 +56,10 @@
 - Event contracts: keep `v{n}` suffix in filenames (e.g., `*.v1.schema.json`) and update `contracts/topics.json` when adding topics.
 - Keep modules small and single‑purpose; share helpers in `services/common/`.
 
-## Testing Guidelines
+## Testing instructions
 - Current repo has minimal automated tests. When adding tests, use `pytest` with `tests/` per service (e.g., `services/<name>/tests/test_*.py`).
 - Mock external systems (NATS, MinIO, Neo4j) and validate envelope/schema with sample payloads.
-- Suggested commands: `pip install -r services/<name>/requirements.txt pytest` then `pytest -q`.
+- Suggested commands: `uv run --with-requirements services/<name>/requirements.txt --with pytest pytest -q`.
 - Before pushing, mirror the GitHub Actions checks documented in `docs/LOCAL_CI_CHECKS.md` (pytest suites, `make chit-contract-check`, `make jellyfin-verify` when the publisher is affected, SQL policy lint, env preflight). Capture each command/output in the PR template’s Testing section.
 - If you intentionally skip one of those checks (docs-only change, etc.), record the rationale in the PR Reviewer Notes so reviewers know the risk envelope.
 - UI updates: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"` to lint the Next.js bundle and validate Supabase connectivity. Reference `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md` when collecting smoke evidence.
@@ -204,7 +229,7 @@ Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, and `PMOVES_YT_IMAGE` 
 - Open Notebook UI → http://localhost:8503 (`docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`; keep password/token aligned).
 - n8n Automation → http://localhost:5678 (`make -C pmoves up-n8n`; flows sync from `pmoves/integrations`).
 
-## Commit & Pull Request Guidelines
+## PR instructions
 - Prefer Conventional Commits (e.g., `feat(hi-rag): hybrid search option`).
 - PRs should include: clear description, linked issues, affected services, run/rollback notes, and screenshots for UI/flows (e.g., retrieval-eval dashboard).
 - When opening a PR, start from `STARTER_PR_BODY.md` (repo root) and adjust sections as needed.
