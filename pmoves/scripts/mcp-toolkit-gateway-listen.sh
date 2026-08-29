@@ -43,6 +43,10 @@ Environment overrides:
   PMOVES_MCP_GATEWAY_PID        (default: /tmp/pmoves-mcp-gateway.pid)
   PMOVES_MCP_GATEWAY_LOG        (default: /tmp/pmoves-mcp-gateway.log)
   PMOVES_MCP_BLOCK_NETWORK      (default: 0 — set 1 to add --block-network)
+  PMOVES_MCP_STRICT             (default: 0 — set 1 to refuse to start unless
+                                 the preflight returns 0)
+  PMOVES_PYTHON                 (operator pin for the preflight interpreter;
+                                 space-separated, e.g. "py -3")
   MCP_GATEWAY_AUTH_TOKEN        (auto-generated and persisted to env.shared
                                  on first run; reused thereafter)
 
@@ -62,6 +66,10 @@ PID_FILE="${PMOVES_MCP_GATEWAY_PID:-/tmp/pmoves-mcp-gateway.pid}"
 LOG_FILE="${PMOVES_MCP_GATEWAY_LOG:-/tmp/pmoves-mcp-gateway.log}"
 BLOCK_NETWORK="${PMOVES_MCP_BLOCK_NETWORK:-0}"
 
+# Resolved once, used by both the preflight and the token persistence below.
+PMOVES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_SHARED="${PMOVES_DIR}/env.shared"
+
 color() { printf '\033[%sm%s\033[0m\n' "$1" "$2"; }
 info() { color "1;34" "[mcp-gateway] $*"; }
 warn() { color "1;33" "[mcp-gateway] WARN: $*" >&2; }
@@ -75,12 +83,79 @@ if ! docker mcp profile ls 2>/dev/null | awk 'NR>1 {print $1}' | grep -Fxq "${PR
   fail "Profile '${PROFILE_ID}' not imported. Run: make mcp-toolkit-bootstrap"
 fi
 
+# Preflight. ADVISORY on purpose -- see tools/mcp_toolkit_preflight.py for why a
+# wedged resolver should not refuse to start 25 servers because 4 cannot
+# authenticate. It exists because this script used to start a gateway whose
+# credentialed servers were guaranteed to 401, and said nothing.
+#   exit 0  ready
+#   exit 1  measured a problem (resolver down, or a required secret is absent
+#           from the store) -- reported, not blocked here
+#   exit 3  could not measure -- NOT a pass; surfaced so it is not mistaken for
+#           one. That now includes "no interpreter could run the preflight",
+#           which used to arrive as a bare 127 and land in the exit-1 bucket
+#           alongside real findings (Codex P1 on #2806).
+# Set PMOVES_MCP_STRICT=1 to refuse to start on anything but 0, which is what
+# CI and unattended bring-up should do.
+PREFLIGHT_PY="${PMOVES_DIR}/tools/mcp_toolkit_preflight.py"
+PM_PYTHON_SH="${PMOVES_DIR}/scripts/pm-python.sh"
+preflight_rc=0
+preflight_why=""
+
+if [ ! -f "${PREFLIGHT_PY}" ]; then
+  # A missing gate is an unmeasured gateway, not a clean one. It used to warn
+  # and start unchecked even under PMOVES_MCP_STRICT=1.
+  preflight_rc=3
+  preflight_why="preflight tool missing at ${PREFLIGHT_PY}"
+elif [ ! -f "${PM_PYTHON_SH}" ]; then
+  preflight_rc=3
+  preflight_why="python discovery missing at ${PM_PYTHON_SH}"
+else
+  # pm-python.sh is the ONE python discovery in this repo (claude-pmoves.sh and
+  # crush-pmoves both source it). Bare `python3` -- what this line used to be --
+  # exits 127 on nodes where Python is `py -3` or lives only in .venv-pmoves,
+  # and a 127 is indistinguishable here from a real preflight failure. The
+  # `yaml` argument is load-bearing: the preflight imports PyYAML, so a host
+  # whose system python lacks it is UNEQUIPPED, not failing, and the venv
+  # branch of pm_pick_python is the one that has it.
+  # shellcheck source=pmoves/scripts/pm-python.sh
+  . "${PM_PYTHON_SH}"
+  if pm_pick_python yaml; then
+    set +e
+    "${PM_PY[@]}" "${PREFLIGHT_PY}" --profile "${PROFILE_ID}"
+    preflight_rc=$?
+    set -e
+    if [ "${preflight_rc}" -eq 127 ]; then
+      # Belt and braces: pm_pick_python already probed this interpreter, so a
+      # 127 here means it disappeared between probe and use. Still unmeasured.
+      preflight_rc=3
+      preflight_why="preflight interpreter vanished between probe and use"
+    fi
+  else
+    preflight_rc=3
+    preflight_why="no python with PyYAML found (tried \$PMOVES_PYTHON, pmoves/.venv-pmoves, python3, py -3, python) -- run: make -C pmoves preflight, or pin PMOVES_PYTHON"
+  fi
+fi
+
+if [ "${preflight_rc}" -ne 0 ]; then
+  if [ -z "${preflight_why}" ]; then
+    case "${preflight_rc}" in
+      1) preflight_why="measured a problem: resolver down, or a required secret is absent from the store" ;;
+      3) preflight_why="COULD NOT MEASURE the gateway's readiness" ;;
+      *) preflight_why="unexpected preflight exit" ;;
+    esac
+  fi
+  if [ "${preflight_rc}" -eq 3 ]; then
+    preflight_why="${preflight_why} -- this is NOT a pass"
+  fi
+  if [ "${PMOVES_MCP_STRICT:-0}" = "1" ]; then
+    fail "preflight exit ${preflight_rc}: ${preflight_why}. PMOVES_MCP_STRICT=1 -- refusing to start."
+  fi
+  warn "preflight exit ${preflight_rc}: ${preflight_why}; starting anyway (set PMOVES_MCP_STRICT=1 to gate)."
+fi
+
 # Generate MCP_GATEWAY_AUTH_TOKEN if not already set. Persist to env.shared so
 # clients (E2B sandboxes, BoTZ Gateway, this host's secrets-funnel consumers)
 # can read the same value. The Toolkit gateway reads the env var directly.
-PMOVES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_SHARED="${PMOVES_DIR}/env.shared"
-
 if [ -z "${MCP_GATEWAY_AUTH_TOKEN:-}" ]; then
   if [ -f "${ENV_SHARED}" ] && grep -q '^MCP_GATEWAY_AUTH_TOKEN=' "${ENV_SHARED}"; then
     # shellcheck disable=SC2046

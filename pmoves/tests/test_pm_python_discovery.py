@@ -39,6 +39,24 @@ PM_PYTHON_SH = REPO_ROOT / "pmoves" / "scripts" / "pm-python.sh"
 # nor the stub shebangs may rely on a PATH lookup.
 BASH = shutil.which("bash")
 SH = shutil.which("sh")
+
+# A shebang needs a POSIX path, and `shutil.which` does not give one on
+# Windows: it returns a BACKSLASHED path containing a SPACE
+# (C:\Program Files\Git\usr\bin\sh.EXE). A shebang parser splits that at the
+# space and tries to exec "C:\Program", so every stub interpreter written with
+# it is unrunnable and each discovery test reports COUNT=0. Measured on the
+# 4090: 10 tests failed for exactly this, and no error named the shebang.
+#
+# The register recorded a different cause -- that the skipif below "reads Git
+# Bash as a POSIX host". It does, and that is CORRECT: these tests should run
+# here. Skipping them would have hidden a portability bug on the one node that
+# actually runs Windows.
+#
+# `/bin/sh` is right everywhere these tests run: POSIX guarantees it, and Git
+# Bash provides it inside its own view. The `which` result stays correct for
+# `subprocess`, which wants a real Windows path -- only the SHEBANG needs the
+# POSIX form.
+SHEBANG_SH = "/bin/sh"
 DIRNAME = shutil.which("dirname")
 
 pytestmark = pytest.mark.skipif(
@@ -109,7 +127,7 @@ def _fake_interpreter(fails_import: str) -> str:
     on a host that has both.
     """
     return (
-        f"#!{SH}\n"
+        f"#!{SHEBANG_SH}\n"
         'for a in "$@"; do\n'
         f'  case "$a" in "import {fails_import or _NEVER}") exit 1 ;; esac\n'
         "done\n"
