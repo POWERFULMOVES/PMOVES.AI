@@ -26,6 +26,10 @@ tracked:
     freshness_days: 30
     severity: P2
     description: "Universal coding-agent format — project structure, build/test commands, canonical doc index"
+  - path: pmoves/AGENTS.md
+    freshness_days: 30
+    severity: P2
+    description: "pmoves/ subtree agent contract — service layout, ports, bring-up order, smoke commands; narrows root AGENTS.md rather than replacing it. Was unregistered and drifted a month while 6 files referenced it, carrying pip guidance that contradicted the uv rule."
 
   # ── .claude tier ──────────────────────────────────────────────────────
   - path: .claude/BOOTSTRAP.md
