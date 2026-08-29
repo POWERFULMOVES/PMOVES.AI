@@ -269,6 +269,13 @@ def _parse_model_suits(model_suits_dir: Path) -> list[dict[str, Any]]:
             )
 
             if model_id and provider:
+                # An ENABLED token plan is the declared primary credential;
+                # the pay-as-you-go key is its declared FALLBACK (issue #2748
+                # break 3: _infer_key_env silently substituted the fallback,
+                # so every plan-backed route billed on the PAYG key).
+                token_plan = doc.get("token_plan") or {}
+                if token_plan.get("enabled") and token_plan.get("api_key_env"):
+                    api_key_env = api_key_env or token_plan["api_key_env"]
                 suits.append(
                     {
                         "file": yaml_file.name,
