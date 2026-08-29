@@ -70,6 +70,21 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "required": False,
         "aliases": ["MCP_SERVER_TOKEN"],
     },
+    # Tier 5: Agent — Cipher Memory's inbound bearer. Same shape as the
+    # GROQ_API_KEY note above: live in env.shared and consumed by compose
+    # (`CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}` in docker-compose.agents.yml)
+    # but never registered, so the funnel never routed it into env.tier-agent
+    # and `manifest-audit` showed no cipher row at all.
+    #
+    # The visible symptom is a 401, not a missing var: `.claude/mcp.json` sends
+    # `Bearer ${CIPHER_API_TOKEN:-}`, an unset var collapses to an empty bearer,
+    # and Cipher rejects it. `.claude/context/cipher.md` already documents that
+    # ("header expands empty without the env var -> 401, expected") — the gap
+    # was that nothing in the pipeline was responsible for supplying it.
+    #
+    # Registering it also makes rotation a Known Road instead of a hand-edit:
+    # change the value, `make -C pmoves secrets-funnel`, recreate cipher.
+    "CIPHER_API_TOKEN": {"tier": "agent", "required": False},
     # Tier 5: Agent — the Claude Code coding-plan credential.
     # env.tier-agent.example has declared this since PR #2359, and both compose
     # files wire `${CLAUDE_CODE_OAUTH_TOKEN:-}` into the archon service, but it
