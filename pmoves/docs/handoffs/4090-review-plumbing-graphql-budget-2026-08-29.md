@@ -189,6 +189,28 @@ queue rule. A merge queue is the mechanism built for exactly this: it batches
 pending PRs, tests the COMBINED result once, and merges the batch -- which is
 what `strict` is trying to guarantee, without paying for it per-PR.
 
+GitHub documents this as the exact case a merge queue exists for. From
+docs.github.com, "Managing a merge queue":
+
+  * on when to use one -- branches "that have a relatively high number of pull
+    requests merging each day from many different users". 14 merges landed on
+    2026-08-29.
+
+  * on what it replaces -- a queue "does not require a pull request author to
+    update their pull request branch and wait for status checks to finish
+    before trying to merge". That update-and-wait IS the tax measured above,
+    named by GitHub as the thing the queue removes.
+
+  * on the mechanism -- "the changes in the pull request are grouped into a
+    `merge_group` with the latest version of the `base_branch` as well as
+    changes from pull requests ahead of it in the queue", then merged "once the
+    checks required by the branch protections of `base_branch` pass". The
+    COMBINED result is tested, which is the guarantee `strict` is reaching for
+    and paying per-PR to get.
+
+So this is not a workaround for our protection settings; it is the supported
+answer to them, and the numbers above are what its absence costs.
+
 Not proposed blindly: a queue changes when checks run and what a green tick on
 an individual PR means, and this repo's gates are the thing it trusts most. It
 belongs to the same decision as the App and the bus -- worth measuring against
