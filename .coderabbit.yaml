@@ -6,12 +6,38 @@ language: "en-US"
 reviews:
   review_status: true
 
-  # Ensure CodeRabbit runs automatically on PR updates and non-draft PRs.
+  # ON DEMAND, not automatic -- because automatic is not available here.
+  #
+  # Measured 2026-08-29: CodeRabbit posts the same skip notice on every PR
+  # regardless of branch --
+  #
+  #     "This repository does not receive automatic reviews because it has
+  #      fewer than 10 stars."
+  #
+  # Checked across docs/, feat/ and chore/ branches (#2811, #2807, #2812,
+  # #2818): identical notice on each, and ZERO inline review comments on any of
+  # them. Every review in that window came from Codex alone.
+  #
+  # `enabled: true` therefore claimed a capability the account does not have,
+  # and the branch list below read as coverage that was never delivered. That
+  # is worse than no config: a reader checking "is this branch reviewed?" got
+  # yes.
+  #
+  # Set false to match reality. Review is still available and is TRIGGERED PER
+  # PR, from the checkbox in CodeRabbit's own comment:
+  #
+  #     - [ ] 🔍 Trigger review
+  #
+  # Use it when a diff warrants it -- like any other resource, in scope rather
+  # than always-on. The `path_instructions` below are NOT wasted by this: they
+  # apply whenever a review actually runs, however it was started.
   auto_review:
-    enabled: true
+    enabled: false
     drafts: false
 
-  # Hardened/default delivery branches and active work prefixes.
+  # Kept for when auto-review becomes available (10+ stars, or a paid plan).
+  # Inert today -- see the note above -- and left in place rather than deleted
+  # so the intended scope is not lost, but it does NOT describe what happens now.
   branches:
     - "PMOVES.AI-Edition-Hardened"
     - "PMOVES.AI-Edition-Hardened-Integrations"
