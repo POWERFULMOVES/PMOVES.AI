@@ -56,16 +56,26 @@ That makes it worse than useless as a health signal: a preflight that reads
 is currently **no endpoint showing fleet-wide consumption**, so no node can see
 what another has spent.
 
-What actually trips it is **burst of content-creating requests** (GitHub
-documents roughly 80/min, 500/hr), not volume. On 2026-08-29 a merge wave across
-eight PRs did ~24 `resolveReviewThread` mutations, ~13 comment/reply POSTs, 4
-branch updates, 3 merges and ~8 pushes — the resolve loops fired with **no
-pacing**, which is what tripped it. Reading PRs never does.
+The OBSERVED trigger on 2026-08-29 was a burst of content-creating requests
+(GitHub documents roughly 80/min, 500/hr): a merge wave across eight PRs did
+~24 `resolveReviewThread` mutations, ~13 comment/reply POSTs, 4 branch updates,
+3 merges and ~8 pushes, with the resolve loops firing at **no pacing**.
 
-**Wanted:** a real counter. Per-node attribution of content-creating calls,
-published to the bus, so the fleet can see its own spend and pace against it
-rather than discovering the ceiling by hitting it. The primary quota is a red
-herring — it was never touched.
+That is the trigger we saw, **not the only possible one**. GitHub also applies
+secondary CONCURRENCY, CPU-TIME and REQUEST-POINT limits to reads and to GraphQL
+queries, so a parallel or heavily paginated read loop can be throttled with no
+content created at all. An earlier draft of this handoff claimed "reading PRs
+never does" — that was inferred from which calls happened to trip it here, not
+measured, and it is wrong.
+
+It matters because a counter that records only WRITES would reproduce exactly
+the false-green this handoff exists to remove: quiet counter, throttled fleet.
+
+**Wanted:** a real counter covering reads and queries as well as
+content-creating calls, with per-node attribution published to the bus, so the
+fleet can see its own spend and pace against it rather than discovering the
+ceiling by hitting it. The primary quota is a red herring — it was never
+touched.
 
 ---
 
@@ -94,10 +104,30 @@ to thread state — it grants the quota that keeps GraphQL *available*.
 the App subscribes only to the latter. No repo-level webhooks are configured.
 
 **Wanted:** subscribe the App to `pull_request_review_thread`, publish to NATS,
-persist. Thread state becomes locally queryable with no GraphQL call at merge
-time, and `pr_closeout.py`'s `COULD NOT MEASURE` blocker stops depending on a
-throttled remote API. That blocker is correct and should stay — it should just
-become rare.
+persist. Thread state becomes locally queryable, and `pr_closeout.py`'s
+`COULD NOT MEASURE` blocker stops depending on a throttled remote API on every
+merge. That blocker is correct and should stay — it should just become rare.
+
+**The event stream is NOT sufficient on its own, and a cache built only from it
+would report PRs clear that are not.** `pull_request_review_thread` emits
+`resolved` / `unresolved` TRANSITIONS. It does not emit thread CREATION. So:
+
+  * a thread created and never touched again has no record at all
+  * every thread predating the subscription has no record
+
+Both read as "no unresolved threads" to a naive cache — a false green on the one
+question `pr_closeout` must never get wrong, since it has to block on EVERY
+unresolved thread.
+
+So the design is a cache **plus** reconciliation, not a cache instead of the
+query:
+
+  * ingest thread creation as well (`pull_request_review_comment` created, or a
+    GraphQL backfill on first sight of a PR)
+  * keep a fail-closed GraphQL reconciliation before the merge decision, and
+    treat a cache miss as UNMEASURED rather than as zero
+  * the win is that the query becomes a cheap confirmation of known state
+    instead of the sole source, which is what takes it off the critical path
 
 ---
 
