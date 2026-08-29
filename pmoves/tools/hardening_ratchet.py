@@ -47,8 +47,10 @@ direction — see the `--write-baseline` note in its baseline file.)
 
 Ratchet semantics — identical to pmoves/tools/pytest_ratchet.py:
 
-  new findings    not in the baseline            -> fail
-  stale entries   in the baseline, now compliant -> fail
+  new findings    not in the baseline                    -> fail
+  stale entries   in the baseline, now compliant, and the
+                  file IS tracked in this tree           -> fail
+  not-in-tree     in the baseline, file not tracked here -> report, do not fail
 
 Stale entries fail on purpose. Without that, a baseline silently becomes a
 permanent allowlist: someone fixes a Dockerfile, the entry stays, and the count
@@ -232,8 +234,31 @@ def main() -> int:
     baseline = load_baseline()
     found = {_key(f) for f in findings}
     new = sorted(found - baseline)
-    stale = sorted(baseline - found)
     detail: Dict[str, str] = {_key(f): f["detail"] for f in findings}
+
+    # A baselined entry can be absent from `found` for TWO unrelated reasons,
+    # and only one of them is a defect:
+    #
+    #   the file is in this tree and no longer fails  -> STALE. Fail, so a
+    #       baseline cannot rot into a permanent allowlist.
+    #   the file is not in this tree at all           -> NOT APPLICABLE. This
+    #       branch simply does not carry it.
+    #
+    # Treating both as stale makes ONE baseline unusable across branches whose
+    # file sets differ, which is not hypothetical: `PMOVES.AI-Edition-Hardened`
+    # carries CATACLYSM Dockerfiles main has never had. Baseline them and main
+    # goes red with stale entries; leave them out and hardened goes red with new
+    # ones. The ratchet became unsatisfiable on both branches at once, and the
+    # only escape was to stop running it on one of them.
+    #
+    # Splitting the two restores the ratchet's actual promise -- no silent
+    # allowlist -- while letting the same baseline serve trees that legitimately
+    # differ. Not-applicable entries are REPORTED, never silently dropped: an
+    # entry no branch carries any more is real rot and should be visible.
+    tracked = set(files)
+    absent = sorted(baseline - found)
+    stale = [entry for entry in absent if entry.split("|", 1)[-1] in tracked]
+    not_in_tree = [entry for entry in absent if entry.split("|", 1)[-1] not in tracked]
 
     if args.json:
         print(
@@ -244,6 +269,7 @@ def main() -> int:
                     "baselined": len(baseline),
                     "new": new,
                     "stale": stale,
+                    "not_in_tree": not_in_tree,
                 },
                 indent=2,
             )
@@ -275,6 +301,24 @@ def main() -> int:
         print(
             "\nA fixed Dockerfile still listed here would let the baseline become "
             "a permanent allowlist. Delete the line."
+        )
+
+    if not_in_tree:
+        # Reported, never silently dropped. These do not fail the gate -- this
+        # branch does not carry the files -- but an entry that NO branch carries
+        # any more is real rot, and it can only be seen if it is printed.
+        print(
+            f"\nNOT IN THIS TREE -- {len(not_in_tree)} baselined "
+            f"{'entry' if len(not_in_tree) == 1 else 'entries'} for files this "
+            f"branch does not track:"
+        )
+        for k in not_in_tree:
+            kind, path = k.split("|", 1)
+            print(f"  {kind:<10} {path}")
+        print(
+            "\nNot a failure: branches legitimately carry different files, and"
+            " one baseline serves them all. Do check that each of these still"
+            " exists SOMEWHERE -- an entry no branch carries is stale for real."
         )
 
     if not new and not stale:
