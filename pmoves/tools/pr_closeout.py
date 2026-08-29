@@ -141,6 +141,21 @@ def _rest(path: str, *extra: str) -> Any:
     return _run_json(["gh", "api", path, *extra])
 
 
+def _rest_pages(path: str) -> List[Any]:
+    """Every page of a paginated REST endpoint, as a list of page payloads.
+
+    `--paginate` ALONE emits one JSON value PER PAGE, concatenated, and
+    `json.loads` reads a single top-level value then chokes on the next. The
+    gh manual is explicit: "Each page is a separate JSON array or object",
+    and `--slurp` is what wraps them into one array.
+
+    Without this the REST fallback aborts on any PR busy enough to paginate --
+    which is precisely when an audit matters most.
+    """
+    payload = _run_json(["gh", "api", "--paginate", "--slurp", path])
+    return payload if isinstance(payload, list) else []
+
+
 def _pr_from_rest(repo: str, number: int) -> dict[str, Any]:
     """Rebuild the `gh pr view --json` shape from REST.
 
@@ -194,8 +209,9 @@ def _review_decision_from_rest(repo: str, number: int) -> str:
     toward REVIEW_REQUIRED: this value can only ADD a blocker, so guessing low
     is safe and guessing high would let a PR through.
     """
-    reviews = _rest(f"repos/{repo}/pulls/{number}/reviews", "--paginate")
-    if not isinstance(reviews, list):
+    reviews = [r for page in _rest_pages(f"repos/{repo}/pulls/{number}/reviews")
+               for r in (page if isinstance(page, list) else [])]
+    if not reviews:
         return "REVIEW_REQUIRED"
     latest: dict[str, str] = {}
     for review in reviews:
@@ -234,8 +250,8 @@ def _required_checks_from_rest(repo: str, number: int, head_sha: str) -> list[di
     # has at least one (CodeRabbit), so the gap is real, not hypothetical.
     by_name: dict[str, dict[str, Any]] = {}
 
-    runs_payload = _rest(f"repos/{repo}/commits/{head_sha}/check-runs", "--paginate")
-    runs = (runs_payload or {}).get("check_runs", []) if isinstance(runs_payload, dict) else []
+    runs = [r for page in _rest_pages(f"repos/{repo}/commits/{head_sha}/check-runs")
+            for r in ((page or {}).get("check_runs", []) if isinstance(page, dict) else [])]
     for run in runs:
         if isinstance(run, dict) and run.get("name"):
             by_name[str(run["name"])] = run

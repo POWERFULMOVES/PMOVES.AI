@@ -358,7 +358,7 @@ def test_rest_payload_is_respelled_into_the_graphql_vocabulary(monkeypatch):
             "base": {"ref": "main"}, "head": {"sha": "b" * 40},
             "mergeable": True, "mergeable_state": "blocked", "body": "",
         }
-    monkeypatch.setattr(pr_closeout, "_rest", fake_rest)
+    _install_rest(monkeypatch, fake_rest)
     pr = pr_closeout._pr_from_rest("o/r", 42)
     assert pr["state"] == "OPEN"
     assert pr["mergeable"] == "MERGEABLE"
@@ -374,19 +374,19 @@ def test_a_merged_pr_reads_as_MERGED_not_CLOSED(monkeypatch):
             return []
         return {"number": 1, "state": "closed", "merged": True, "head": {"sha": "c" * 40},
                 "base": {"ref": "main"}, "user": {"login": "x"}, "mergeable": None}
-    monkeypatch.setattr(pr_closeout, "_rest", fake_rest)
+    _install_rest(monkeypatch, fake_rest)
     assert pr_closeout._pr_from_rest("o/r", 1)["state"] == "MERGED"
 
 
 def test_review_decision_errs_toward_REVIEW_REQUIRED(monkeypatch):
     """This value can only ADD a blocker, so guessing low is safe and guessing
     high would let a PR through."""
-    monkeypatch.setattr(pr_closeout, "_rest", lambda p, *a: [])
+    _install_rest(monkeypatch, lambda p, *a: [])
     assert pr_closeout._review_decision_from_rest("o/r", 1) == "REVIEW_REQUIRED"
 
 
 def test_changes_requested_beats_approval(monkeypatch):
-    monkeypatch.setattr(pr_closeout, "_rest", lambda p, *a: [
+    _install_rest(monkeypatch, lambda p, *a: [
         {"user": {"login": "a"}, "state": "APPROVED"},
         {"user": {"login": "b"}, "state": "CHANGES_REQUESTED"},
     ])
@@ -396,13 +396,13 @@ def test_changes_requested_beats_approval(monkeypatch):
 def test_comments_are_not_approvals(monkeypatch):
     """A COMMENTED review neither approves nor blocks; counting it as approval
     would manufacture consent."""
-    monkeypatch.setattr(pr_closeout, "_rest", lambda p, *a: [
+    _install_rest(monkeypatch, lambda p, *a: [
         {"user": {"login": "a"}, "state": "COMMENTED"},
     ])
     assert pr_closeout._review_decision_from_rest("o/r", 1) == "REVIEW_REQUIRED"
 
 
-def _rest_router(protection_contexts, check_runs=(), statuses=()):
+def _rest_payload(protection_contexts, check_runs=(), statuses=()):
     def fake(path, *extra):
         if path.endswith("/protection"):
             return {"required_status_checks": {"contexts": list(protection_contexts)}}
@@ -414,8 +414,20 @@ def _rest_router(protection_contexts, check_runs=(), statuses=()):
     return fake
 
 
+def _install_rest(monkeypatch, payload_fn):
+    """Stub BOTH REST entry points.
+
+    `_rest_pages` returns a list of PAGE payloads, so the single-page stub is
+    wrapped in one page -- mirroring what `gh api --paginate --slurp` actually
+    returns. Stubbing only `_rest` would leave the paginated call sites hitting
+    the network.
+    """
+    monkeypatch.setattr(pr_closeout, "_rest", payload_fn)
+    monkeypatch.setattr(pr_closeout, "_rest_pages", lambda path: [payload_fn(path)])
+
+
 def test_required_checks_resolve_from_check_runs(monkeypatch):
-    monkeypatch.setattr(pr_closeout, "_rest", _rest_router(
+    _install_rest(monkeypatch, _rest_payload(
         ["python-tests"],
         check_runs=[{"name": "python-tests", "status": "completed",
                      "conclusion": "success", "html_url": "u"}],
@@ -428,7 +440,7 @@ def test_a_required_STATUS_context_is_not_reported_pending(monkeypatch):
     """The gap this closes: a required context can be a legacy commit status,
     served from a different endpoint than check-runs. Reading only check-runs
     reports a passing status as pending forever, and the merge never unblocks."""
-    monkeypatch.setattr(pr_closeout, "_rest", _rest_router(
+    _install_rest(monkeypatch, _rest_payload(
         ["CodeRabbit"],
         check_runs=[],
         statuses=[{"context": "CodeRabbit", "state": "success", "target_url": "u"}],
@@ -439,7 +451,7 @@ def test_a_required_STATUS_context_is_not_reported_pending(monkeypatch):
 
 def test_a_failing_status_context_is_a_failure_not_a_pass(monkeypatch):
     """Negative control for the mapping above."""
-    monkeypatch.setattr(pr_closeout, "_rest", _rest_router(
+    _install_rest(monkeypatch, _rest_payload(
         ["CodeRabbit"], statuses=[{"context": "CodeRabbit", "state": "failure"}],
     ))
     assert pr_closeout._required_checks_from_rest("o/r", 1, "a" * 40)[0]["bucket"] == "fail"
@@ -448,14 +460,72 @@ def test_a_failing_status_context_is_a_failure_not_a_pass(monkeypatch):
 def test_a_missing_required_check_is_pending_never_pass(monkeypatch):
     """Absence must never read as success — that is how a gate says yes to
     something it did not measure."""
-    monkeypatch.setattr(pr_closeout, "_rest", _rest_router(["verify"]))
+    _install_rest(monkeypatch, _rest_payload(["verify"]))
     assert pr_closeout._required_checks_from_rest("o/r", 1, "a" * 40)[0]["bucket"] == "pending"
 
 
 def test_a_check_run_wins_over_a_same_named_status(monkeypatch):
-    monkeypatch.setattr(pr_closeout, "_rest", _rest_router(
+    _install_rest(monkeypatch, _rest_payload(
         ["verify"],
         check_runs=[{"name": "verify", "status": "completed", "conclusion": "failure"}],
         statuses=[{"context": "verify", "state": "success"}],
     ))
     assert pr_closeout._required_checks_from_rest("o/r", 1, "a" * 40)[0]["bucket"] == "fail"
+
+
+# --- pagination: gh emits one JSON value PER PAGE (review on #2826) ----------
+#
+# `gh api --paginate` alone concatenates a separate JSON array or object per
+# page, and `json.loads` reads the first then chokes on the next. The fallback
+# therefore aborted on any PR busy enough to paginate -- precisely when an
+# audit matters most. `--slurp` wraps the pages; these pin the flattening.
+
+
+def test_check_runs_are_flattened_across_pages(monkeypatch):
+    monkeypatch.setattr(pr_closeout, "_rest", _rest_payload(["a", "b"]))
+    monkeypatch.setattr(pr_closeout, "_rest_pages", lambda path: (
+        [{"check_runs": [{"name": "a", "status": "completed", "conclusion": "success"}]},
+         {"check_runs": [{"name": "b", "status": "completed", "conclusion": "success"}]}]
+        if "/check-runs" in path else [{"statuses": []}]
+    ))
+    out = pr_closeout._required_checks_from_rest("o/r", 1, "a" * 40)
+    got = {c["name"]: c["bucket"] for c in out}
+    assert got == {"a": "pass", "b": "pass"}, (
+        "a check on page 2 was not seen: pages were not flattened")
+
+
+def test_a_check_on_a_later_page_is_not_reported_pending(monkeypatch):
+    """The failure this prevents: page-2 checks read as absent, so a fully
+    green PR is refused for checks that actually passed."""
+    monkeypatch.setattr(pr_closeout, "_rest", _rest_payload(["late"]))
+    monkeypatch.setattr(pr_closeout, "_rest_pages", lambda path: (
+        [{"check_runs": []},
+         {"check_runs": [{"name": "late", "status": "completed", "conclusion": "success"}]}]
+        if "/check-runs" in path else [{"statuses": []}]
+    ))
+    assert pr_closeout._required_checks_from_rest("o/r", 1, "a" * 40)[0]["bucket"] == "pass"
+
+
+def test_reviews_are_flattened_across_pages(monkeypatch):
+    """CHANGES_REQUESTED on page 2 must still block."""
+    monkeypatch.setattr(pr_closeout, "_rest", lambda p, *a: [])
+    monkeypatch.setattr(pr_closeout, "_rest_pages", lambda path: [
+        [{"user": {"login": "a"}, "state": "APPROVED"}],
+        [{"user": {"login": "b"}, "state": "CHANGES_REQUESTED"}],
+    ])
+    assert pr_closeout._review_decision_from_rest("o/r", 1) == "CHANGES_REQUESTED"
+
+
+def test_the_paginated_call_asks_gh_to_slurp(monkeypatch):
+    """Structural: without --slurp the pages cannot be parsed at all, so this
+    asserts on the ARGV rather than on behaviour a stub could fake."""
+    seen = {}
+
+    def fake(command, **kwargs):
+        seen["argv"] = command
+        return []
+
+    monkeypatch.setattr(pr_closeout, "_run_json", fake)
+    pr_closeout._rest_pages("repos/o/r/pulls/1/reviews")
+    assert "--slurp" in seen["argv"], seen["argv"]
+    assert "--paginate" in seen["argv"], seen["argv"]
