@@ -72,10 +72,8 @@ import json
 import re
 import subprocess
 import sys
-
-import yaml
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, NamedTuple, Set
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PMOVES = REPO_ROOT / "pmoves"
@@ -194,6 +192,83 @@ KINDS = ("debt", "handled-elsewhere", "deliberate", "not-deployed")
 DEFAULT_KIND = "debt"
 
 
+# Both quote styles, so an entry may be written either way.
+_QUOTES = chr(34) + chr(39)
+
+
+class BaselineEntry(NamedTuple):
+    """One recorded gap: what it is, why, and what kind of thing it is."""
+    ident: str
+    kind: str
+    reason: str
+
+
+def _parse_baseline():
+    """Read the baseline WITHOUT PyYAML.
+
+    `hardening-validation` runs this with no pip install -- the job says so
+    outright: "the ratchet is stdlib-only ... it needs the checkout and nothing
+    else". Importing yaml for the richer entry form broke that, and the gate
+    died with ModuleNotFoundError before judging a single file. The format is
+    small and entirely under this repo's control, so it is parsed here rather
+    than trading a deliberate no-dependency property for convenience.
+
+    Handles exactly two entry shapes and one scalar:
+
+        - "KIND|path"
+        - entry: "KIND|path"
+          kind: not-deployed
+          reason: >-
+            folded text, continued on more-indented lines
+        reasonless_allowance: 6
+    """
+    if not BASELINE.is_file():
+        return [], 0
+    entries = []
+    allowance = 0
+    state = {"ident": "", "kind": "", "reason": [], "in_reason": False}
+
+    def flush():
+        if state["ident"]:
+            entries.append(BaselineEntry(
+                state["ident"],
+                state["kind"] or DEFAULT_KIND,
+                " ".join(state["reason"]).strip(),
+            ))
+        state.update(ident="", kind="", reason=[], in_reason=False)
+
+    for raw in BASELINE.read_text(encoding="utf-8").splitlines():
+        s = raw.strip()
+        if (state["in_reason"] and raw.startswith("      ") and s
+                and not s.startswith("#")
+                and not re.match(r"^(entry|kind|reason):", s)):
+            state["reason"].append(s)
+            continue
+        if not s or s.startswith("#"):
+            continue
+        if s.startswith("- entry:"):
+            flush()
+            state["ident"] = s.split(":", 1)[1].strip().strip(_QUOTES)
+        elif s[:3] in ("- " + chr(34), "- " + chr(39)):
+            flush()
+            state["ident"] = s[2:].strip().strip(_QUOTES)
+        elif s.startswith("kind:") and state["ident"]:
+            state["kind"] = s.split(":", 1)[1].strip().strip(_QUOTES)
+        elif s.startswith("reason:") and state["ident"]:
+            rest = s.split(":", 1)[1].strip()
+            state["in_reason"] = True
+            if rest and rest not in (">-", ">", "|", "|-"):
+                state["reason"].append(rest.strip(_QUOTES))
+        elif s.startswith(REASONLESS_ALLOWANCE_KEY + ":"):
+            flush()
+            try:
+                allowance = int(s.split(":", 1)[1].strip())
+            except ValueError:
+                allowance = 0
+    flush()
+    return entries, allowance
+
+
 def load_kinds() -> Dict[str, str]:
     """`KIND|path` -> classification. Absent or unknown reads as `debt`.
 
@@ -201,79 +276,108 @@ def load_kinds() -> Dict[str, str]:
     AGAINST us, never be quietly excused. The safe direction for a gate that
     cannot tell is to assume the worse case.
     """
-    if not BASELINE.is_file():
-        return {}
-    doc = yaml.safe_load(BASELINE.read_text(encoding="utf-8")) or {}
-    out: Dict[str, str] = {}
-    for item in (doc.get("known_gaps") or []):
-        if isinstance(item, dict) and item.get("entry"):
-            kind = str(item.get("kind") or DEFAULT_KIND)
-            out[str(item["entry"])] = kind if kind in KINDS else DEFAULT_KIND
-        elif isinstance(item, str):
-            out[item] = DEFAULT_KIND
-    return out
+    return {
+        e.ident: (e.kind if e.kind in KINDS else DEFAULT_KIND)
+        for e in _parse_baseline()[0]
+    }
 
 
 def load_baseline() -> Dict[str, str]:
     """`KIND|path` -> reason (empty string when none was given).
 
-    Two entry forms are accepted, because the older one is still correct for a
-    gap whose only story is "not fixed yet":
-
-        - "NO_USER|path/Dockerfile"                     bare, no reason
-        - entry: "NO_USER|path/Dockerfile"              with the story attached
-          reason: >-
-            nginx drops worker privileges internally ...
-
-    The reason belongs HERE and not in a PR description. The file's own header
-    has always said adding an entry "should require saying why", but there was
-    nowhere to say it, so the why lived in a commit message nobody reads when
-    they meet the entry two months later. A ratchet entry without a reason is
-    an allowlist with extra steps.
+    Two entry forms are accepted, because the older one is still right for a
+    gap whose only story is "not fixed yet". The reason belongs HERE and not in
+    a PR description: the file's header has always said adding an entry should
+    require saying why, but there was nowhere to say it, so the why lived in a
+    commit message nobody reads on meeting the entry months later.
     """
-    if not BASELINE.is_file():
-        return {}
-    doc = yaml.safe_load(BASELINE.read_text(encoding="utf-8")) or {}
-    out: Dict[str, str] = {}
-    for item in (doc.get("known_gaps") or []):
-        if isinstance(item, str):
-            out[item] = ""
-        elif isinstance(item, dict) and item.get("entry"):
-            out[str(item["entry"])] = str(item.get("reason") or "").strip()
-    return out
+    return {e.ident: e.reason for e in _parse_baseline()[0]}
 
 
 def load_reasonless_allowance() -> int:
-    if not BASELINE.is_file():
-        return 0
-    doc = yaml.safe_load(BASELINE.read_text(encoding="utf-8")) or {}
-    try:
-        return int(doc.get(REASONLESS_ALLOWANCE_KEY, 0))
-    except (TypeError, ValueError):
-        return 0
+    return _parse_baseline()[1]
 
 
 def write_baseline(findings: List[dict]) -> None:
+    """Regenerate, MERGING rather than replacing.
+
+    The old implementation wrote only the current tree's findings, as bare
+    strings. Running it therefore deleted every entry belonging to a branch
+    this checkout does not carry, and every `kind` and `reason` besides -- so
+    the documented regeneration command silently undid the two properties this
+    file exists to hold, and the next run on the branch that owns those
+    Dockerfiles reported them as NEW and failed.
+
+    What is kept, and why:
+
+      not tracked here      KEPT verbatim. Another branch owns it; this
+                            checkout has no standing to judge it.
+      tracked and failing   KEPT, with its kind and reason.
+      tracked and fixed     DROPPED. That is what regeneration is for.
+      newly failing         ADDED, bare -- a reason has to be written by a
+                            human, and `reasonless_allowance` will require it.
+    """
     BASELINE.parent.mkdir(parents=True, exist_ok=True)
+    existing = _parse_baseline()[0]
+    tracked = set(discover_dockerfiles())
+    current = {_key(f) for f in findings}
+
+    keep: Dict[str, BaselineEntry] = {}
+    for entry in existing:
+        path = entry.ident.split("|", 1)[-1]
+        if path not in tracked or entry.ident in current:
+            keep[entry.ident] = entry
+    for ident in current:
+        keep.setdefault(ident, BaselineEntry(ident, DEFAULT_KIND, ""))
+
+    reasonless = sum(1 for e in keep.values() if not e.reason)
     lines = [
-        "# Baselined container-hardening gaps — hardening_ratchet.py",
+        "# Baselined container-hardening gaps -- hardening_ratchet.py",
         "#",
         "# Each entry is a tracked Dockerfile that runs as root: either it declares",
         "# no USER at all, or its last USER directive is root. They are recorded so",
         "# `hardening-validation` can be enforced today without turning main red in",
         "# a single step. They are NOT approved, and none of them is 'expected'.",
         "#",
-        "# The list may shrink and must never silently grow. Removing an entry is",
-        "# the goal; adding one should require saying why in the PR. A Dockerfile",
-        "# that is fixed but still listed here fails the gate as a STALE entry, so",
-        "# the count only goes down.",
+        "# The list may shrink and must never silently grow. A Dockerfile that is",
+        "# fixed but still listed here fails the gate as a STALE entry.",
+        "#",
+        "# Two forms. Use the second whenever the story is anything other than",
+        "# 'not fixed yet' -- an entry without a reason is an allowlist with extra",
+        "# steps, because nobody meeting it later can tell whether it was judged",
+        "# or merely tolerated:",
+        "#",
+        '#   - "KIND|path"',
+        '#   - entry: "KIND|path"',
+        "#     kind: debt | handled-elsewhere | deliberate | not-deployed",
+        "#     reason: >-",
+        "#       what makes this acceptable, or what it is waiting on",
+        "#",
+        "# Regenerating MERGES: entries for files this checkout does not track are",
+        "# kept verbatim, because another branch owns them.",
         "#",
         "# Regenerate: python pmoves/tools/hardening_ratchet.py --write-baseline",
         "known_gaps:",
     ]
-    for k in sorted({_key(f) for f in findings}):
-        lines.append(f'  - "{k}"')
-    BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    for ident in sorted(keep):
+        entry = keep[ident]
+        if entry.reason or entry.kind != DEFAULT_KIND:
+            lines.append('  - entry: "' + ident + '"')
+            if entry.kind != DEFAULT_KIND:
+                lines.append("    kind: " + entry.kind)
+            if entry.reason:
+                lines.append("    reason: >-")
+                lines.append("      " + entry.reason)
+        else:
+            lines.append('  - "' + ident + '"')
+    lines += [
+        "",
+        "# How many entries above may carry no `reason`. These are grandfathered,",
+        "# not approved, and the number may only go DOWN: add one without a reason",
+        "# and it exceeds this, and the gate fails.",
+        REASONLESS_ALLOWANCE_KEY + ": " + str(reasonless),
+    ]
+    BASELINE.write_text(chr(10).join(lines) + chr(10), encoding="utf-8")
 
 
 def main() -> int:

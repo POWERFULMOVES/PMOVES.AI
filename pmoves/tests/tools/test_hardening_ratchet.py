@@ -260,3 +260,73 @@ def test_the_kind_breakdown_is_printed(monkeypatch, capsys):
     hr.main()
     out = capsys.readouterr().out
     assert "debt=1" in out and "deliberate=1" in out
+
+
+# --- regeneration must MERGE, not replace (review on #2829) -------------------
+#
+# `--write-baseline` used to write only the current tree's findings as bare
+# strings, so running it deleted every entry belonging to a branch this
+# checkout does not carry, plus every kind and reason. The documented
+# regeneration command silently undid the two properties this file exists to
+# hold, and the next run on the owning branch reported those files as NEW.
+
+
+def _baseline_at(tmp_path, body: str):
+    f = tmp_path / "_known_gaps.yaml"
+    f.write_text(body, encoding="utf-8")
+    return f
+
+
+def test_regeneration_keeps_entries_for_files_this_tree_lacks(tmp_path, monkeypatch):
+    """The failure Codex named: regenerate on main and hardened's entries are
+    gone, so hardened's next run fails on files nobody changed."""
+    b = _baseline_at(tmp_path, 'known_gaps:\n  - "NO_USER|other/Dockerfile"\nreasonless_allowance: 1\n')
+    monkeypatch.setattr(hr, "BASELINE", b)
+    monkeypatch.setattr(hr, "discover_dockerfiles", lambda: ["here/Dockerfile"])
+    hr.write_baseline([{"kind": "NO_USER", "where": "here/Dockerfile", "detail": ""}])
+    after = set(hr.load_baseline())
+    assert "NO_USER|other/Dockerfile" in after, "another branch's entry was deleted"
+    assert "NO_USER|here/Dockerfile" in after
+
+
+def test_regeneration_preserves_kind_and_reason(tmp_path, monkeypatch):
+    """Losing these silently downgrades a judged entry back to raw debt."""
+    b = _baseline_at(tmp_path,
+        'known_gaps:\n'
+        '  - entry: "NO_USER|here/Dockerfile"\n'
+        '    kind: handled-elsewhere\n'
+        '    reason: >-\n'
+        '      compose sets user 65532\n'
+        'reasonless_allowance: 0\n')
+    monkeypatch.setattr(hr, "BASELINE", b)
+    monkeypatch.setattr(hr, "discover_dockerfiles", lambda: ["here/Dockerfile"])
+    hr.write_baseline([{"kind": "NO_USER", "where": "here/Dockerfile", "detail": ""}])
+    assert hr.load_kinds()["NO_USER|here/Dockerfile"] == "handled-elsewhere"
+    assert "compose sets user" in hr.load_baseline()["NO_USER|here/Dockerfile"]
+
+
+def test_regeneration_drops_a_fixed_file_in_this_tree(tmp_path, monkeypatch):
+    """Negative control. Preserving must not become "never remove anything" --
+    a tracked file that no longer fails is exactly what regeneration clears."""
+    b = _baseline_at(tmp_path, 'known_gaps:\n  - "NO_USER|here/Dockerfile"\nreasonless_allowance: 1\n')
+    monkeypatch.setattr(hr, "BASELINE", b)
+    monkeypatch.setattr(hr, "discover_dockerfiles", lambda: ["here/Dockerfile"])
+    hr.write_baseline([])          # nothing fails any more
+    assert hr.load_baseline() == {}
+
+
+def test_regeneration_recomputes_the_allowance(tmp_path, monkeypatch):
+    """A stale allowance would let a bare entry in for free after a regen."""
+    b = _baseline_at(tmp_path, 'known_gaps:\n  - "NO_USER|a/Dockerfile"\nreasonless_allowance: 9\n')
+    monkeypatch.setattr(hr, "BASELINE", b)
+    monkeypatch.setattr(hr, "discover_dockerfiles", lambda: ["a/Dockerfile"])
+    hr.write_baseline([{"kind": "NO_USER", "where": "a/Dockerfile", "detail": ""}])
+    assert hr.load_reasonless_allowance() == 1
+
+
+def test_the_parser_needs_no_pyyaml():
+    """`hardening-validation` installs nothing -- the job says the ratchet is
+    stdlib-only. Importing yaml killed the gate with ModuleNotFoundError before
+    it judged a single file."""
+    src = MODULE.read_text(encoding="utf-8")
+    assert "import yaml" not in src, "the gate runs with no pip install"
