@@ -104,6 +104,180 @@ def _run_json(command: list[str], *, allow_failure: bool = False) -> Any:
         ) from exc
 
 
+# --- transport fallback -------------------------------------------------------
+#
+# GitHub enforces a SECONDARY rate limit that is separate from the documented
+# hourly quota and INVISIBLE to `gh api rate_limit` -- that endpoint reports
+# every bucket at full capacity while GraphQL refuses each request. It governs
+# request rate and content-creating bursts, not volume, and it is scoped to the
+# USER, so every node and agent sharing one PAT shares one budget.
+#
+# GraphQL trips first, and REST usually keeps working. Nearly everything this
+# tool reads has a REST equivalent, so a throttled GraphQL endpoint should
+# degrade the audit, not abort it. The one exception is review-thread
+# RESOLUTION, which GitHub's REST API does not expose at all (confirmed against
+# docs.github.com/en/rest/pulls/comments: a review comment carries no resolution
+# field, and no REST endpoint returns thread state). That single gap is reported
+# as UNMEASURED and blocks the merge -- never assumed to be zero.
+
+_THROTTLE_MARKERS = (
+    "rate limit",
+    "secondary rate",
+    "abuse detection",
+    "submitted too quickly",
+)
+
+
+class ThreadsUnmeasured(RuntimeError):
+    """Review-thread resolution could not be read. Never treated as 'none'."""
+
+
+def _looks_throttled(text: str) -> bool:
+    low = (text or "").casefold()
+    return any(marker in low for marker in _THROTTLE_MARKERS)
+
+
+def _rest(path: str, *extra: str) -> Any:
+    return _run_json(["gh", "api", path, *extra])
+
+
+def _pr_from_rest(repo: str, number: int) -> dict[str, Any]:
+    """Rebuild the `gh pr view --json` shape from REST.
+
+    Field-for-field, so every consumer downstream is unchanged. `state` and
+    `mergeable` are re-spelled into GraphQL's vocabulary because the evaluator
+    compares against MERGED/MERGEABLE/CONFLICTING.
+    """
+    pr = _rest(f"repos/{repo}/pulls/{number}")
+    if not isinstance(pr, dict):
+        raise RuntimeError(f"invalid REST PR payload for {repo}#{number}")
+
+    if pr.get("merged"):
+        state = "MERGED"
+    else:
+        state = "OPEN" if pr.get("state") == "open" else "CLOSED"
+
+    mergeable_raw = pr.get("mergeable")
+    mergeable = (
+        "MERGEABLE" if mergeable_raw is True
+        else "CONFLICTING" if mergeable_raw is False
+        else "UNKNOWN"
+    )
+
+    # REST spells the merge state in lowercase with the same state names.
+    merge_state = str(pr.get("mergeable_state") or "unknown").upper()
+
+    return {
+        "number": pr.get("number"),
+        "title": pr.get("title"),
+        "url": pr.get("html_url"),
+        "author": {"login": ((pr.get("user") or {}).get("login") or "")},
+        "state": state,
+        "isDraft": bool(pr.get("draft")),
+        "baseRefName": (pr.get("base") or {}).get("ref"),
+        "headRefOid": (pr.get("head") or {}).get("sha"),
+        "mergeable": mergeable,
+        "mergeStateStatus": merge_state,
+        "reviewDecision": _review_decision_from_rest(repo, number),
+        "body": pr.get("body") or "",
+        # Left absent deliberately: required checks are fetched separately, and
+        # a fabricated empty rollup would read as "no checks" rather than
+        # "not fetched here".
+        "statusCheckRollup": None,
+    }
+
+
+def _review_decision_from_rest(repo: str, number: int) -> str:
+    """Derive reviewDecision, which REST does not expose directly.
+
+    Latest review per reviewer wins, matching how GitHub computes it. Errs
+    toward REVIEW_REQUIRED: this value can only ADD a blocker, so guessing low
+    is safe and guessing high would let a PR through.
+    """
+    reviews = _rest(f"repos/{repo}/pulls/{number}/reviews", "--paginate")
+    if not isinstance(reviews, list):
+        return "REVIEW_REQUIRED"
+    latest: dict[str, str] = {}
+    for review in reviews:
+        if not isinstance(review, dict):
+            continue
+        state = str(review.get("state") or "").upper()
+        if state in {"COMMENTED", "PENDING"}:
+            continue  # neither approves nor blocks
+        login = str((review.get("user") or {}).get("login") or "")
+        if login:
+            latest[login] = state
+    if "CHANGES_REQUESTED" in latest.values():
+        return "CHANGES_REQUESTED"
+    if "APPROVED" in latest.values():
+        return "APPROVED"
+    return "REVIEW_REQUIRED"
+
+
+def _required_checks_from_rest(repo: str, number: int, head_sha: str) -> list[dict[str, Any]]:
+    """Required contexts from branch protection, resolved against check-runs."""
+    pr = _rest(f"repos/{repo}/pulls/{number}")
+    base = (pr or {}).get("base", {}).get("ref") or "main"
+    try:
+        protection = _rest(f"repos/{repo}/branches/{base}/protection")
+    except RuntimeError:
+        return []
+    contexts = (
+        ((protection or {}).get("required_status_checks") or {}).get("contexts") or []
+    )
+    if not contexts:
+        return []
+
+    # A required context can be EITHER a check-run or a legacy commit status,
+    # and GitHub serves them from different endpoints. Reading only check-runs
+    # would report a passing status context as "pending" forever -- this repo
+    # has at least one (CodeRabbit), so the gap is real, not hypothetical.
+    by_name: dict[str, dict[str, Any]] = {}
+
+    runs_payload = _rest(f"repos/{repo}/commits/{head_sha}/check-runs", "--paginate")
+    runs = (runs_payload or {}).get("check_runs", []) if isinstance(runs_payload, dict) else []
+    for run in runs:
+        if isinstance(run, dict) and run.get("name"):
+            by_name[str(run["name"])] = run
+
+    status_payload = _rest(f"repos/{repo}/commits/{head_sha}/status")
+    for status in (status_payload or {}).get("statuses", []) if isinstance(status_payload, dict) else []:
+        if not isinstance(status, dict) or not status.get("context"):
+            continue
+        name = str(status["context"])
+        if name in by_name:
+            continue  # a check-run of the same name is the richer record
+        state = str(status.get("state") or "").casefold()
+        by_name[name] = {
+            "name": name,
+            "status": "completed" if state in {"success", "failure", "error"} else "in_progress",
+            "conclusion": {"success": "success", "failure": "failure", "error": "failure"}.get(state),
+            "html_url": status.get("target_url") or "",
+        }
+
+    resolved: list[dict[str, Any]] = []
+    for name in contexts:
+        run = by_name.get(str(name))
+        if run is None:
+            bucket = "pending"
+        elif run.get("status") != "completed":
+            bucket = "pending"
+        elif str(run.get("conclusion")) in {"success", "neutral", "skipped"}:
+            bucket = "pass"
+        else:
+            bucket = "fail"
+        resolved.append(
+            {
+                "name": str(name),
+                "state": str((run or {}).get("conclusion") or (run or {}).get("status") or "PENDING").upper(),
+                "bucket": bucket,
+                "link": str((run or {}).get("html_url") or ""),
+                "workflow": "",
+            }
+        )
+    return resolved
+
+
 def _repo_name(explicit_repo: str) -> str:
     if explicit_repo.strip():
         return explicit_repo.strip()
@@ -114,27 +288,41 @@ def _repo_name(explicit_repo: str) -> str:
 
 
 def _fetch_pr(repo: str, number: int) -> dict[str, Any]:
-    payload = _run_json(
-        [
-            "gh",
-            "pr",
-            "view",
-            str(number),
-            "--repo",
-            repo,
-            "--json",
-            (
-                "number,title,url,author,state,isDraft,baseRefName,headRefOid,"
-                "mergeable,mergeStateStatus,reviewDecision,body,statusCheckRollup"
-            ),
-        ]
+    command = [
+        "gh",
+        "pr",
+        "view",
+        str(number),
+        "--repo",
+        repo,
+        "--json",
+        (
+            "number,title,url,author,state,isDraft,baseRefName,headRefOid,"
+            "mergeable,mergeStateStatus,reviewDecision,body,statusCheckRollup"
+        ),
+    ]
+    proc = _run(command, allow_failure=True)
+    if proc.returncode == 0 and proc.stdout.strip():
+        payload = json.loads(proc.stdout)
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"invalid PR payload for {repo}#{number}")
+        return payload
+    # `gh pr view --json` is GraphQL. Only a THROTTLE earns the REST path -- any
+    # other failure (bad number, no auth, network) must still surface, or the
+    # fallback would paper over real errors.
+    if not _looks_throttled(proc.stderr):
+        raise RuntimeError(
+            f"command failed ({proc.returncode}): {' '.join(command)}\n"
+            f"{proc.stderr.strip()}"
+        )
+    print(
+        "[pr-closeout] GraphQL is throttled; reading the PR over REST instead.",
+        file=sys.stderr,
     )
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"invalid PR payload for {repo}#{number}")
-    return payload
+    return _pr_from_rest(repo, number)
 
 
-def _fetch_required_checks(repo: str, number: int) -> list[dict[str, Any]]:
+def _fetch_required_checks(repo: str, number: int, head_sha: str = "") -> list[dict[str, Any]]:
     command = [
         "gh",
         "pr",
@@ -151,6 +339,17 @@ def _fetch_required_checks(repo: str, number: int) -> list[dict[str, Any]]:
     if not raw_payload:
         if "no required checks reported" in proc.stderr.casefold():
             return []
+        if proc.returncode != 0 and _looks_throttled(proc.stderr):
+            # `gh pr checks` is GraphQL. Branch protection + check-runs give the
+            # same answer over REST: the required CONTEXTS, resolved against the
+            # runs on this head. Same fail-closed rule as elsewhere -- only a
+            # throttle takes this path.
+            print(
+                "[pr-closeout] GraphQL is throttled; resolving required checks "
+                "over REST instead.",
+                file=sys.stderr,
+            )
+            return _required_checks_from_rest(repo, number, head_sha)
         if proc.returncode != 0:
             raise RuntimeError(
                 f"required-check query failed ({proc.returncode}): "
@@ -170,10 +369,23 @@ def _fetch_required_checks(repo: str, number: int) -> list[dict[str, Any]]:
 
 
 def _fetch_threads(repo: str, number: int) -> list[Any]:
+    """Review threads, or ThreadsUnmeasured when GraphQL will not answer.
+
+    There is no REST fallback for this one: GitHub's REST API exposes review
+    COMMENTS but never a thread's resolution state, so `isResolved` is
+    reachable only through GraphQL. Returning [] here would read as "no
+    unresolved threads" and let a PR merge over live review feedback, which is
+    the single worst thing this tool could do. It refuses instead.
+    """
     # Import lazily so pure evaluator tests do not need a live GitHub session.
     from pr_hedge_trim import fetch_threads
 
-    return fetch_threads(repo, number)
+    try:
+        return fetch_threads(repo, number)
+    except Exception as exc:  # noqa: BLE001 - transport shape varies by caller
+        if _looks_throttled(str(exc)):
+            raise ThreadsUnmeasured(str(exc)) from exc
+        raise
 
 
 def _value(item: Any, key: str, default: Any = "") -> Any:
@@ -269,8 +481,15 @@ def evaluate_closeout(
     allow_admin_review_bypass: bool = False,
     expected_admin_author: str = "",
     allowed_advisory_failures: Iterable[str] = (),
+    threads_unmeasured: str = "",
 ) -> CloseoutReport:
-    """Evaluate a PR snapshot without mutating GitHub state."""
+    """Evaluate a PR snapshot without mutating GitHub state.
+
+    ``threads_unmeasured``, when non-empty, means review-thread resolution
+    could not be READ (GraphQL unavailable, and REST does not expose it). It
+    becomes a blocker in its own right, because an unread thread set is not an
+    empty one.
+    """
 
     head_sha = str(pr.get("headRefOid") or "")
     author_data = pr.get("author")
@@ -373,6 +592,13 @@ def evaluate_closeout(
                 is_outdated=bool(_value(thread, "is_outdated", False)),
             )
         )
+    if threads_unmeasured:
+        _append_blocker(
+            report.blockers,
+            "unresolved review threads: COULD NOT MEASURE -- GitHub REST does "
+            "not expose thread resolution and GraphQL was unavailable "
+            f"({threads_unmeasured}). Not assumed to be zero.",
+        )
     if report.unresolved_threads:
         _append_blocker(
             report.blockers,
@@ -421,8 +647,17 @@ def audit_pr(
     allowed_advisory_failures: Iterable[str] = (),
 ) -> CloseoutReport:
     pr = _fetch_pr(repo, number)
-    required_checks = _fetch_required_checks(repo, number)
-    threads = _fetch_threads(repo, number)
+    required_checks = _fetch_required_checks(repo, number, str(pr.get("headRefOid") or ""))
+    try:
+        threads = _fetch_threads(repo, number)
+        threads_unmeasured = ""
+    except ThreadsUnmeasured as exc:
+        # GraphQL is throttled and REST cannot answer this. Report it as a
+        # blocker naming the gap -- the rest of the audit still runs, so the
+        # operator sees which checks are green and exactly what is unknown,
+        # instead of the whole tool aborting on one unavailable transport.
+        threads = []
+        threads_unmeasured = str(exc)[:160] or "GraphQL unavailable"
     return evaluate_closeout(
         pr,
         required_checks,
@@ -433,6 +668,7 @@ def audit_pr(
         allow_admin_review_bypass=allow_admin_review_bypass,
         expected_admin_author=expected_admin_author,
         allowed_advisory_failures=allowed_advisory_failures,
+        threads_unmeasured=threads_unmeasured,
     )
 
 
@@ -446,7 +682,7 @@ def _print_report(report: CloseoutReport) -> None:
         f"  Base: {report.base}\n"
         f"  Merge: {report.mergeable}/{report.merge_state_status}\n"
         f"  Review: {report.review_decision}\n"
-        f"  Required checks: {len(report.required_checks)} green\n"
+        f"  Required checks: {sum(1 for c in report.required_checks if c.get('bucket') in PASS_REQUIRED_BUCKETS)}/{len(report.required_checks)} green\n"
         f"  Unchecked tasks: {len(report.unchecked_tasks)}\n"
         f"  Unresolved threads: {len(report.unresolved_threads)}\n"
         f"  Allowed advisory failures: {len(report.advisory_failures)}"
