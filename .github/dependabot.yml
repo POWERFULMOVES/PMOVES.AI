@@ -92,7 +92,28 @@ updates:
       # respect it — #2804 proposed scipy<1.19, which admits both that silent
       # break (1.15-1.17) and a hard conflict (1.18 requires numpy>=2.0.0).
       #
-      # Revisit only when the base image moves to numpy 2.x.
+      # UNVERIFIED PREMISE -- read before relaxing OR trusting this.
+      # The rationale above says the image runs numpy 1.26. The lock that the
+      # very same commit introduced (#2750, 59cc5e826) resolves
+      # `numpy==2.2.6` alongside `scipy==1.14.1`, and the Dockerfile has
+      # installed with `--constraint requirements.lock` since 2026-05-19. If
+      # that constraint upgrades the base image's numpy, the final environment
+      # is numpy 2.x, scipy 1.15-1.18 are all compatible, and this ignore is
+      # over-broad -- it would block valid updates indefinitely.
+      #
+      # It is kept as-is only because the opposite is also possible: pip-style
+      # constraints apply to what is INSTALLED, and numpy 1.26 already
+      # satisfies scipy 1.14.1 (numpy>=1.23.5,<2.3), so a resolver may leave it
+      # untouched and the constraint never fires. Inference cannot settle which
+      # happens; relaxing a runtime pin on a guess buys a container that boots
+      # and then dies at import.
+      #
+      # One command settles it, against the built image:
+      #   docker run --rm --entrypoint python <agent-zero-image>       #     -c "import numpy, scipy; print(numpy.__version__, scipy.__version__)"
+      # numpy 2.x  -> narrow this to `>=1.19` (only 1.19+ needs numpy>=2.5)
+      #               or drop it, and fix requirements.txt's comment too.
+      # numpy 1.26 -> the pin is right; add numpy==1.26.* to the lock so the
+      #               invariant is expressed rather than assumed.
       - dependency-name: "scipy"
         versions: [">=1.15"]
     labels:
