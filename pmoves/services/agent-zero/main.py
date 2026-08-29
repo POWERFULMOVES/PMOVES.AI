@@ -831,7 +831,9 @@ async def healthz() -> Dict[str, Any]:
             runtime_health = await client.health()
             detail["runtime"] = runtime_health
         except AgentZeroRequestError as exc:
-            detail["runtime"] = {"status": "error", "detail": str(exc)}
+            # Expose only the exception type to clients; full detail stays in logs.
+            logger.warning("Runtime health check failed: %s", exc)
+            detail["runtime"] = {"status": "error", "detail": type(exc).__name__}
     http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
     return detail
 

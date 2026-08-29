@@ -79,7 +79,7 @@ async def main():
 
     try:
         await nc.connect(nats_url, connect_timeout=10)
-        logger.info("Connected to NATS at %s", _redact_url(nats_url))
+        logger.info("Connected to NATS (broker details withheld)")
     except Exception as e:
         # Fail fast with a non-zero exit so container supervisors (Docker/K8s)
         # restart the worker on a startup-order race instead of seeing exit 0.
