@@ -150,19 +150,46 @@ def test_a_corrected_entry_names_both_authors():
     assert "d85b46961" in why, "the correction cites no recoverable evidence"
 
 
-def test_every_correction_preserves_the_original_string():
+def test_every_correction_carries_its_evidence():
+    """Evidence is universal; `recorded_as` is not.
+
+    An AUTHORSHIP correction must preserve the string the register originally
+    carried, or the repair is laundered into the line. A correction of a
+    measurement or a count has no original identity string -- the entry was
+    signed correctly and only a figure was wrong -- so requiring one there
+    would make a legitimate repair unexpressible.
+    """
     vocab = il.load_vocabulary()
     assert vocab.corrections, "no corrections recorded"
     for record in vocab.corrections:
-        assert record.get("recorded_as"), record
         assert record.get("evidence"), record
+        if record.get("corrects", "authorship") == "authorship":
+            assert record.get("recorded_as"), record
 
 
-def test_all_seven_annotated_corrections_are_recorded():
-    """Seven, not six. The seventh is B850's own from 2026-08-25 and is a
-    different class -- key drift, not misattribution."""
+def test_a_non_authorship_correction_needs_no_identity():
+    """The gate used to demand `actual` from every record, which no factual
+    correction can supply. Proven against the real gate, not a stub."""
+    findings = il.verify()
+    assert not any("unknown identity" in f for f in findings), findings
+
+
+# The register grows, so this is a RATCHET rather than a fixed count: a new
+# annotated correction is expected, an annotation that loses its record is not.
+# The number lived in the test's NAME once and went stale the moment an eighth
+# correction landed -- a count belongs in an assertion, never an identifier.
+MIN_ANNOTATED_CORRECTIONS = 8
+
+
+def test_every_annotated_correction_is_recorded():
+    """The property, not the count: no prose correction may stand alone.
+
+    Eight today. Six were the 2026-05-16 misattribution sweep, the seventh is
+    B850's 2026-08-25 lane-key drift, and the eighth is #2811's measurement
+    repair -- the first that corrects a FIGURE rather than an author.
+    """
     annotated = il.annotated_corrections()
-    assert len(annotated) == 7, [a[:2] for a in annotated]
+    assert len(annotated) >= MIN_ANNOTATED_CORRECTIONS, [a[:2] for a in annotated]
     for timestamp, kind, _ in annotated:
         assert il.correction_for(timestamp, kind) is not None, (timestamp, kind)
 
