@@ -225,8 +225,21 @@ venv-bringup: check-prereqs ## Bringup-ready venv: service+tool deps PLUS glance
 	@INCLUDE_BRINGUP=1 bash scripts/create_venv.sh
 	@echo
 	@echo "✅ Bringup venv ready at pmoves/.venv-pmoves/"
-	@echo "   Glances: $$(./.venv-pmoves/bin/glances --version 2>&1 | head -1 || echo 'NOT FOUND')"
-	@echo "   Activate: source pmoves/.venv-pmoves/bin/activate"
+	@# Both layouts: a venv is bin/ on POSIX and Scripts/ on Windows. Hardcoding
+	@# bin/ made this report "NOT FOUND" against a perfectly healthy Windows venv
+	@# and then print an activate path that does not exist there.
+	@glances=""; \
+	for g in ./.venv-pmoves/bin/glances ./.venv-pmoves/Scripts/glances.exe ./.venv-pmoves/Scripts/glances; do \
+	  [ -x "$$g" ] && { glances="$$g"; break; }; \
+	done; \
+	if [ -n "$$glances" ]; then \
+	  echo "   Glances: $$("$$glances" --version 2>&1 | head -1)"; \
+	else \
+	  echo "   Glances: NOT FOUND (re-run with INCLUDE_BRINGUP=1)"; \
+	fi
+	@act="pmoves/.venv-pmoves/bin/activate"; \
+	[ -f "./.venv-pmoves/bin/activate" ] || act="pmoves/.venv-pmoves/Scripts/activate"; \
+	echo "   Activate: source $$act"
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
