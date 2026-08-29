@@ -125,6 +125,10 @@ secrets-funnel-from-prod: secrets-pull secrets-funnel-sync-from-bundle ## One-sh
 	@echo "✔ env.shared force-refreshed from prod bundle — prod-managed keys (incl. rotations) now current"
 	@echo "  Note: local.env is the prod-secrets overlay; keep genuinely node-local overrides in env.shared, not local.env."
 
+.PHONY: gh-secret-capacity-audit
+gh-secret-capacity-audit: ## Reconcile CHIT manifest github_secret targets against GitHub's 100-per-scope cap (ENV=<name> for an environment; JSON=1). Exit 1 on findings, 3 if unmeasurable.
+	@$(CODEX_PY) tools/github_secret_capacity_audit.py $(if $(ENV),--env "$(ENV)") $(if $(JSON),--json)
+
 .PHONY: docker-mcp-secrets-hydrate
 docker-mcp-secrets-hydrate: ## Re-push funnel-managed values into the Docker MCP Toolkit secret store (recovery after a Docker Desktop VMM/migration wipes the MCP resolver). DRY_RUN=1 to preview. PROFILE=<id> to force a gateway profile (otherwise discovered from .mcp.json, else PMOVES_MCP_PROFILE_ID). Run AFTER Docker Desktop restart (resolver must be up).
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/docker_mcp_secrets_hydrate.py $(if $(DRY_RUN),--dry-run) $(if $(PROFILE),--profile "$(PROFILE)")
