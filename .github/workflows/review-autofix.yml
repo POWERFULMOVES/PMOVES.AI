@@ -47,7 +47,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Auto-fix from bot review
-        uses: anthropics/claude-code-action@16b3b310c3d7b5279df73130324d5205aeea8eac # v1.0.205
+        uses: anthropics/claude-code-action@50b26a71effe456d50842a733597491c5636cb6f # v1.0.210
         with:
           # Coding plan, not the metered API key. See review-comment-monitor.yml.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
