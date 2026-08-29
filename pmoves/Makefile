@@ -216,6 +216,22 @@ include mk/review.mk
 check-prereqs: ## Verify system binaries required for bringup (jq, make, curl, git, python3)
 	@bash scripts/check_prereqs.sh
 
+.PHONY: check-prereqs-agent
+check-prereqs-agent: ## Verify the agent CLI contract (Known Road tools + agent binaries); advisory, reports what each gap costs
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --agent
+
+.PHONY: check-prereqs-env
+check-prereqs-env: ## Verify the bringup interpreter resolves and the tool imports work; advisory
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --env
+
+.PHONY: check-prereqs-all
+check-prereqs-all: ## All tiers: bringup prereqs (fatal) + agent CLI contract + bringup interpreter (advisory)
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --all
+
+.PHONY: check-prereqs-strict
+check-prereqs-strict: ## All tiers, non-zero exit on ANY gap (CI gate). --strict covers the env tier too.
+	@PMOVES_PREREQ_PY="$(PRECHECK_PY)" bash scripts/check_prereqs.sh --all --strict
+
 .PHONY: venv
 venv: ## Create pmoves/.venv-pmoves and install service + tool requirements
 	@bash scripts/create_venv.sh
@@ -225,8 +241,21 @@ venv-bringup: check-prereqs ## Bringup-ready venv: service+tool deps PLUS glance
 	@INCLUDE_BRINGUP=1 bash scripts/create_venv.sh
 	@echo
 	@echo "✅ Bringup venv ready at pmoves/.venv-pmoves/"
-	@echo "   Glances: $$(./.venv-pmoves/bin/glances --version 2>&1 | head -1 || echo 'NOT FOUND')"
-	@echo "   Activate: source pmoves/.venv-pmoves/bin/activate"
+	@# Both layouts: a venv is bin/ on POSIX and Scripts/ on Windows. Hardcoding
+	@# bin/ made this report "NOT FOUND" against a perfectly healthy Windows venv
+	@# and then print an activate path that does not exist there.
+	@glances=""; \
+	for g in ./.venv-pmoves/bin/glances ./.venv-pmoves/Scripts/glances.exe ./.venv-pmoves/Scripts/glances; do \
+	  [ -x "$$g" ] && { glances="$$g"; break; }; \
+	done; \
+	if [ -n "$$glances" ]; then \
+	  echo "   Glances: $$("$$glances" --version 2>&1 | head -1)"; \
+	else \
+	  echo "   Glances: NOT FOUND (re-run with INCLUDE_BRINGUP=1)"; \
+	fi
+	@act="pmoves/.venv-pmoves/bin/activate"; \
+	[ -f "./.venv-pmoves/bin/activate" ] || act="pmoves/.venv-pmoves/Scripts/activate"; \
+	echo "   Activate: source $$act"
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata

@@ -176,7 +176,10 @@ def correction_for(
         entry = record.get("entry") or {}
         if entry.get("timestamp") != timestamp or entry.get("kind") != kind:
             continue
-        if author is not None:
+        if author is not None and record.get("corrects", "authorship") == "authorship":
+            # Only an authorship correction carries `actual`. A correction of a
+            # measurement or a count has no identity to compare against, so
+            # matching on one would reject every non-authorship record.
             if canonical_identity(author, vocab) != record.get("actual"):
                 continue
         return record
@@ -269,6 +272,14 @@ def verify(vocab: Vocabulary | None = None) -> list[str]:
 
     # Every prose correction must be backed by a structured record, or the
     # workaround silently spreads again.
+    #
+    # A record does NOT have to be an authorship correction. The schema began
+    # as `recorded_as -> actual`, an identity pair, and the finding below still
+    # explains itself in those terms -- but a register entry can also correct a
+    # measurement, a count, or a factual claim, and those have no author to
+    # recover. Demanding `actual` for them made a legitimate repair
+    # unexpressible, so the gate rejected corrections it should have accepted.
+    # `corrects:` names the kind; only `authorship` needs `actual`.
     for timestamp, kind, author in annotated_corrections(text):
         if correction_for(timestamp, kind, author, vocab) is None:
             findings.append(
@@ -294,6 +305,8 @@ def verify(vocab: Vocabulary | None = None) -> list[str]:
 
     known = {i.canonical for i in vocab.index.values()}
     for record in vocab.corrections:
+        if record.get("corrects", "authorship") != "authorship":
+            continue  # nothing to name: the correction is not about an author
         if record.get("actual") not in known:
             findings.append(f"correction names unknown identity {record.get('actual')!r}")
     for record in vocab.successions:
