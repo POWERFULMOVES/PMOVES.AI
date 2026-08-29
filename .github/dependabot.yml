@@ -92,30 +92,37 @@ updates:
       # respect it — #2804 proposed scipy<1.19, which admits both that silent
       # break (1.15-1.17) and a hard conflict (1.18 requires numpy>=2.0.0).
       #
-      # UNVERIFIED PREMISE -- read before relaxing OR trusting this.
-      # The rationale above says the image runs numpy 1.26. The lock that the
-      # very same commit introduced (#2750, 59cc5e826) resolves
-      # `numpy==2.2.6` alongside `scipy==1.14.1`, and the Dockerfile has
-      # installed with `--constraint requirements.lock` since 2026-05-19. If
-      # that constraint upgrades the base image's numpy, the final environment
-      # is numpy 2.x, scipy 1.15-1.18 are all compatible, and this ignore is
-      # over-broad -- it would block valid updates indefinitely.
+      # MEASURED 2026-08-29, against the built image rather than inferred.
+      # The premise above -- "the base image ships numpy 1.26" -- does not hold
+      # for what actually runs:
       #
-      # It is kept as-is only because the opposite is also possible: pip-style
-      # constraints apply to what is INSTALLED, and numpy 1.26 already
-      # satisfies scipy 1.14.1 (numpy>=1.23.5,<2.3), so a resolver may leave it
-      # untouched and the constraint never fires. Inference cannot settle which
-      # happens; relaxing a runtime pin on a guess buys a container that boots
-      # and then dies at import.
+      #     pmoves-agent-zero:latest   /opt/venv-a0/bin/python
+      #       numpy 2.3.5
+      #       scipy 1.16.3
+      #       import scipy.special      -> OK
+      #       sph_legendre_p present    -> True
+      #       scipy.stats, scipy.linalg -> OK
       #
-      # One command settles it, against the built image:
-      #   docker run --rm --entrypoint python <agent-zero-image>       #     -c "import numpy, scipy; print(numpy.__version__, scipy.__version__)"
-      # numpy 2.x  -> narrow this to `>=1.19` (only 1.19+ needs numpy>=2.5)
-      #               or drop it, and fix requirements.txt's comment too.
-      # numpy 1.26 -> the pin is right; add numpy==1.26.* to the lock so the
-      #               invariant is expressed rather than assumed.
+      # That is scipy >=1.15 on numpy 2.x, running, with the exact ufunc the
+      # rationale names present and importable. The incompatibility is real but
+      # CONDITIONAL on numpy 1.26, and nothing in this build path produces it:
+      # requirements.lock pins numpy==2.2.6, and the image measured above
+      # carries 2.3.5.
+      #
+      # Stated honestly: that image was built 2026-08-23, two days BEFORE the
+      # scipy pin landed (59cc5e826, 08-25), so it does not test the pin itself.
+      # What it does test is the COMPATIBILITY CLAIM, which is what the ignore
+      # rests on.
+      #
+      # So the bound moves to where the real constraint is. scipy 1.19 requires
+      # numpy>=2.5, which neither 2.2.6 nor 2.3.5 satisfies; 1.15 through 1.18
+      # are fine on numpy 2.x. Ignoring >=1.15 blocked four minor lines for a
+      # break that only occurs on a numpy this image does not have.
+      #
+      # Re-measure before widening again -- run the venv python in the built
+      # image and print numpy.__version__ and scipy.__version__.
       - dependency-name: "scipy"
-        versions: [">=1.15"]
+        versions: [">=1.19"]
     labels:
       - "dependencies"
       - "python"
