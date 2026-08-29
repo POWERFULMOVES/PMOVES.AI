@@ -21,3 +21,14 @@ known_gaps:
   - "NO_USER|pmoves/services/voice-sampler/Dockerfile"
   - "NO_USER|pmoves/services/watch-folder-router/Dockerfile"
   - "ROOT_USER|pmoves/images/jellyfin/Dockerfile"
+  # nginx serving on port 80. A non-root user cannot bind a port below 1024,
+  # so this one cannot take a USER directive without ALSO changing the listen
+  # port (80 -> 8080) or the base image (nginxinc/nginx-unprivileged). Both are
+  # deployment changes that would break the compose port mapping, not lint
+  # fixes, so this is recorded rather than silently "hardened" into something
+  # that fails to start.
+  #
+  # Its two siblings in the same stack WERE fixed and are deliberately not
+  # here: api-gateway runs as `node`, audio-processor as a created `appuser`.
+  # Neither binds a privileged port, which is the whole difference.
+  - "NO_USER|CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/docker-stacks/jellyfin-ai/dashboard/Dockerfile"
