@@ -255,15 +255,43 @@ class SpecValidatorTests(unittest.TestCase):
             bp.load_spec(Path("/nonexistent/spec.json"))
         self.assertIn("spec not found at", str(cm.exception))
 
-    def test_A13_validator_accepts_required_conversation_resolution(self):
+    def test_A13_validator_rejects_required_conversation_resolution(self):
+        """It is a CLASSIC branch-protection field, not a ruleset rule type.
+
+        This test asserted the opposite, and the assertion is why the bad
+        entry survived: the validator accepted the type, a test pinned the
+        acceptance, and the only thing that disagreed was the live API --
+
+            PUT repos/POWERFULMOVES/PMOVES.AI/rulesets/10887588
+            422  Invalid property /rules/4: data matches no possible input
+
+        The rulesets way to express the same intent is the `pull_request`
+        rule's `required_review_thread_resolution` parameter, which
+        pmoves_standard.json already sets (see test_A13b).
+        """
+        self.assertNotIn(
+            "required_conversation_resolution", bp.VALID_RULESET_RULE_TYPES
+        )
         spec = json.loads(json.dumps(MINIMAL_SPEC))
-        # Make sure required_conversation_resolution is in the validator's set.
-        self.assertIn("required_conversation_resolution", bp.VALID_RULESET_RULE_TYPES)
-        # And the spec can carry it.
         spec["profiles"]["monorepo"]["rulesets"][0]["rules"].append(
             {"type": "required_conversation_resolution"}
         )
-        bp.SpecValidator(spec).validate()  # should not raise
+        with self.assertRaises(bp.BranchProtectionError):
+            bp.SpecValidator(spec).validate()
+
+    def test_A13b_thread_resolution_is_kept_as_a_pull_request_parameter(self):
+        """The intent must survive removing the invalid rule.
+
+        Anchored to the real spec rather than a fixture: dropping rule 4
+        without this would silently drop conversation-resolution enforcement.
+        """
+        spec = bp.load_spec()
+        rules = spec["profiles"]["monorepo"]["rulesets"][0]["rules"]
+        pr = [r for r in rules if r["type"] == "pull_request"][0]
+        self.assertTrue(pr["parameters"]["required_review_thread_resolution"])
+        self.assertNotIn(
+            "required_conversation_resolution", [r["type"] for r in rules]
+        )
 
     def test_A14_validator_accepts_required_linear_history(self):
         # Caught a real bug: spec used "require_linear_history" (typo) but
