@@ -143,7 +143,17 @@ jobs:
           # protection across every per_repo_overrides entry is a different and
           # much larger decision than fixing an accident. What changes is that
           # the posture is now stated, and the summary says which one ran.
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'true' }}
+          #
+          # The decision is made in SHELL, not in an expression. The obvious
+          # `github.event_name == 'workflow_dispatch' && inputs.dry_run ||
+          # 'true'` is wrong in the one case that matters: the docs say
+          # "falsy values (false, 0, -0, \"\", '', null) are coerced to false",
+          # so dispatching with dry_run=false makes the left side falsy and the
+          # whole expression falls through to 'true' -- leaving the manual
+          # apply path permanently read-only, the same defect one trigger over.
+          # The idiom's return semantics are not documented either. Two plain
+          # string comparisons are.
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
           TRIGGER: ${{ github.event_name }}
         run: |
           # `set +e` here is intentional — we want to count failures
@@ -164,7 +174,9 @@ jobs:
             # says dry_run=false. Passing the nonexistent --dry-run flag
             # would make arg-parse fail and silently no-op every repo.
             args=("--repo" "$repo")
-            if [ "$DRY_RUN" = "false" ]; then args+=("--no-dry-run"); fi
+            if [ "$TRIGGER" = "workflow_dispatch" ] && [ "$DRY_RUN_INPUT" = "false" ]; then
+              args+=("--no-dry-run")
+            fi
             python -m pmoves.tools.branch_protection apply "${args[@]}" 2>&1 | tee -a "apply.${repo//\//_}.log"
             rc=${PIPESTATUS[0]}
             if [ "$rc" -eq 0 ]; then
@@ -177,8 +189,13 @@ jobs:
           echo "## Apply summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- applied: $APPLIED" >> "$GITHUB_STEP_SUMMARY"
           echo "- failed: $FAILED" >> "$GITHUB_STEP_SUMMARY"
-          echo "- dry-run: $DRY_RUN (trigger: $TRIGGER)" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$DRY_RUN" != "false" ]; then
+          if [ "$TRIGGER" = "workflow_dispatch" ] && [ "$DRY_RUN_INPUT" = "false" ]; then
+            WROTE=yes
+          else
+            WROTE=no
+          fi
+          echo "- trigger: $TRIGGER, dry_run input: '${DRY_RUN_INPUT:-<unset>}', wrote: $WROTE" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$WROTE" != "yes" ]; then
             echo "- **NOTHING WAS WRITTEN.** This run audited only. To apply, dispatch" >> "$GITHUB_STEP_SUMMARY"
             echo "  this workflow with \`dry_run: false\`." >> "$GITHUB_STEP_SUMMARY"
           fi
