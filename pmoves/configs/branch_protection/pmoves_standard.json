@@ -17,7 +17,6 @@
             { "type": "non_fast_forward" },
             { "type": "required_signatures" },
             { "type": "required_linear_history" },
-            { "type": "required_conversation_resolution" },
             { "type": "copilot_code_review" },
             {
               "type": "required_status_checks",
