@@ -16,6 +16,10 @@ permissions:
 
 env:
   UPSTREAM_REPO: agent0ai/agent-zero
+  # The fork the Dockerfile actually clones, and the branch carrying the PMOVES
+  # overlays. Needed to MEASURE the sync size instead of reprinting a literal.
+  FORK_REPO: POWERFULMOVES/PMOVES-Agent-Zero
+  FORK_BRANCH: PMOVES.AI-Edition-Hardened
   DOCKERFILE: pmoves/services/agent-zero/Dockerfile.multiarch
 
 jobs:
@@ -204,6 +208,41 @@ jobs:
           git push origin --delete "${BRANCH}" 2>/dev/null || true
           git push origin "${BRANCH}"
 
+      - name: Measure the fork's divergence from the new tag
+        id: divergence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The review checklist used to carry two HARDCODED numbers -- "24
+          # overlay commits" and "6 conflicting files" -- in a template where
+          # every other field was interpolated. They were true once and were
+          # reprinted unchanged on every bump after. Measured 2026-08-30, the
+          # real figures for v2.11 were 51 commits (30 non-merge) and 37 files.
+          #
+          # An unreachable API must NOT fall back to a plausible-looking number:
+          # that is how the literals survived. It emits "unmeasured", and the
+          # checklist says so.
+          FORK_OWNER="${FORK_REPO%%/*}"
+          FORK_NAME="${FORK_REPO##*/}"
+          if CMP=$(gh api                 "repos/${UPSTREAM_REPO}/compare/${{ needs.check-upstream.outputs.new_tag }}...${FORK_OWNER}:${FORK_NAME}:${FORK_BRANCH}"                 2>/dev/null); then
+            AHEAD=$(jq -r '.ahead_by' <<<"$CMP")
+            BEHIND=$(jq -r '.behind_by' <<<"$CMP")
+            FILES=$(jq -r '.files | length' <<<"$CMP")
+            MERGES=$(jq -r '[.commits[] | select(.parents | length > 1)] | length' <<<"$CMP")
+            SUBSTANTIVE=$(( AHEAD - MERGES ))
+            {
+              echo "OVERLAY_COMMITS=**${AHEAD}** overlay commits (${SUBSTANTIVE} non-merge)"
+              echo "DIVERGED_FILES=the **${FILES}** files that differ from upstream"
+              echo "UPSTREAM_BEHIND=${BEHIND}"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "OVERLAY_COMMITS=overlay commits (count UNMEASURED -- compare API unreachable)"
+              echo "DIVERGED_FILES=the diverged files (count UNMEASURED -- compare API unreachable)"
+              echo "UPSTREAM_BEHIND=unmeasured"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create draft PR
         id: create_pr
         env:
@@ -235,8 +274,9 @@ jobs:
              - Change `AGENT_ZERO_REPO` if needed
 
           ### Review Checklist
-          - [ ] Fork sync completed with all 24 overlay commits
-          - [ ] 6 conflicting files re-implemented on new upstream architecture
+          - [ ] Fork sync completed with all ${{ steps.divergence.outputs.OVERLAY_COMMITS }}
+          - [ ] ${{ steps.divergence.outputs.DIVERGED_FILES }} re-implemented on the new upstream architecture
+          - [ ] Fork is **${{ steps.divergence.outputs.UPSTREAM_BEHIND }}** upstream commits behind `${{ needs.check-upstream.outputs.new_tag }}`
           - [ ] NATS compatibility verified
           - [ ] API schema changes reviewed
           - [ ] Healthcheck endpoint confirmed
