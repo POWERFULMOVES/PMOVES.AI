@@ -222,6 +222,32 @@ def _fetch_remote_theme(agent_id: str) -> Optional[AgentTheme]:
         return None
 
 
+# Module-level ON PURPOSE. `botz_cli.py` kept a byte-identical copy of this
+# map, so `botz_cli whoami` still returned "unknown" on PMOVES-4090 after the
+# theme resolver was fixed -- two maps, one fix. Caught in review. One map,
+# imported, is the only shape where fixing it once fixes it everywhere.
+# Keys are HOSTNAME fragments. Two of the original three were hostnames
+# ("z890", "powerfulmoves") and the third was a description of the hardware
+# ("laptop") -- so when the 4090 was named PMOVES-4090, nothing matched and
+# the node resolved to "unknown". Measured 2026-08-30 on that machine:
+# hostname PMOVES-4090, signature `4090-claude` defined, --whoami returned
+# "unknown (not in signatures)".
+#
+# "laptop" is kept for any host still named that way, but the hostname key
+# is the one that should match. Add nodes here by their REAL hostname; a
+# description of the machine is not an identity, and renaming the box
+# silently breaks the binding.
+_HOST_MAP = {
+    "z890": "z890-claude",
+    "pmoves-z890": "z890-claude",
+    "powerfulmoves": "5090-claude",
+    "pmoves-powerfulmoves": "5090-claude",
+    "pmoves-4090": "4090-claude",
+    "4090": "4090-claude",
+    "laptop": "4090-claude",
+    "pmoves-laptop": "4090-claude",
+}
+
 def _resolve_whoami() -> str:
     """Resolve current agent identity from environment, hostname, or gateway."""
     # 1. Explicit env var (set by BoTZ session or Claude Code hook)
@@ -231,27 +257,6 @@ def _resolve_whoami() -> str:
 
     # 2. Hostname heuristic — match against known node patterns
     hostname = socket.gethostname().lower()
-    # Keys are HOSTNAME fragments. Two of the original three were hostnames
-    # ("z890", "powerfulmoves") and the third was a description of the hardware
-    # ("laptop") -- so when the 4090 was named PMOVES-4090, nothing matched and
-    # the node resolved to "unknown". Measured 2026-08-30 on that machine:
-    # hostname PMOVES-4090, signature `4090-claude` defined, --whoami returned
-    # "unknown (not in signatures)".
-    #
-    # "laptop" is kept for any host still named that way, but the hostname key
-    # is the one that should match. Add nodes here by their REAL hostname; a
-    # description of the machine is not an identity, and renaming the box
-    # silently breaks the binding.
-    _HOST_MAP = {
-        "z890": "z890-claude",
-        "pmoves-z890": "z890-claude",
-        "powerfulmoves": "5090-claude",
-        "pmoves-powerfulmoves": "5090-claude",
-        "pmoves-4090": "4090-claude",
-        "4090": "4090-claude",
-        "laptop": "4090-claude",
-        "pmoves-laptop": "4090-claude",
-    }
     for pattern, aid in _HOST_MAP.items():
         if pattern in hostname:
             return aid

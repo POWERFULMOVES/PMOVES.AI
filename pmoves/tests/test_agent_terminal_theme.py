@@ -1,5 +1,6 @@
 """Tests for agent_terminal_theme.py — W1 Agent Theming renderer."""
 import json
+import re
 import os
 import subprocess
 import sys
@@ -196,3 +197,32 @@ def test_host_map_keys_are_hostnames_not_hardware_descriptions():
     known = set(sigs) if isinstance(sigs, dict) else {s.get("id") for s in sigs}
     unknown = {v for v in mapping.values() if v not in known}
     assert not unknown, f"_HOST_MAP points at signatures that do not exist: {unknown}"
+
+
+def test_there_is_exactly_one_host_map():
+    """A second copy is how the first fix missed half the problem.
+
+    `botz_cli.py::_resolve_agent_id` carried a byte-identical hostname map, so
+    fixing the theme resolver left `botz_cli whoami` returning "unknown" on
+    PMOVES-4090. Two maps, one fix. This asserts the map is DEFINED once and
+    imported elsewhere, so the next person cannot reintroduce the split.
+    """
+    tools = os.path.join(os.path.dirname(__file__), "..", "tools")
+    definitions = []
+    for name in os.listdir(tools):
+        if not name.endswith(".py"):
+            continue
+        text = open(os.path.join(tools, name), encoding="utf-8").read()
+        # a DEFINITION assigns a dict literal; an import does not
+        # re.I matters: the first version of this pattern used [Hh]ost, which
+        # cannot match _HOST_MAP -- it missed the real definition and flagged
+        # only the lowercase copy. A test that looks for duplicates must be
+        # able to see the original.
+        # A POPULATED literal only. `host_map = {}` in an import-guard is not a
+        # second source of truth; requiring the brace to open onto a newline or
+        # a string key tells the two apart.
+        if re.search(r"^\s*_?host_?map\s*=\s*\{\s*(?:$|[\"'])", text, re.M | re.I):
+            definitions.append(name)
+    assert definitions == ["agent_terminal_theme.py"], (
+        f"hostname map should be defined once; found definitions in {definitions}"
+    )
