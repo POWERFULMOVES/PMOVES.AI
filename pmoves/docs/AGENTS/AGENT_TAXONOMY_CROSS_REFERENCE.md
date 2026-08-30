@@ -1,8 +1,21 @@
 # Agent Taxonomy Cross-Reference Hub
 
-_Last updated: 2026-02-18 — v1.4.0 (76 agents)_
-
-> **Freshness Note — 2026-05-08:** Last substantive update was 2026-02-18 (v1.4.0). The taxonomy is now at v1.5.0 (76 agents). Cross-references may be stale. Verify against `PMOVES_AGENT_CLASS_TAXONOMY.md` before relying on this hub.
+> **This hub does not restate the agent count or taxonomy version.** Both are
+> data, in the registry this document itself calls the single source of truth:
+>
+> ```bash
+> python -c "import yaml,io; d=yaml.safe_load(io.open('pmoves/config/agent_registry.yaml',encoding='utf-8')); print(d['taxonomy_version'], len(d['agents']), 'agents')"
+> ```
+>
+> The header used to read `v1.4.0 (76 agents)`, under a 2026-05-08 note saying
+> "the taxonomy is now at v1.5.0 (76 agents) — cross-references may be stale."
+> The note corrected the version and carried the stale count forward, which
+> reads as re-verified and is worse than not updating at all. Measured
+> 2026-08-30: **104** agents at **1.5.0**, so the count had been wrong by 28 for
+> however long, in the document whose whole job is to say what needs updating.
+>
+> A caveat is not a correction. Numbers that live in the registry are not
+> restated here, so they cannot drift from it.
 
 Master cross-reference for all documents, concepts, and implementation files involved in the PMOVES Agent Class Taxonomy. When the taxonomy changes, use this document to identify which files need updates.
 
@@ -26,7 +39,7 @@ Master cross-reference for all documents, concepts, and implementation files inv
 | 12 | **NATS Subjects** | `.claude/context/nats-subjects.md` | Research, media, agent, mesh, remote event subjects | Events |
 | 13 | **Geometry NATS Subjects** | `.claude/context/geometry-nats-subjects.md` | ToKenism, geometry core, CGP schema subjects | Events |
 | 14 | **Original Vision (agnotes2)** | `pmoves/docs/AGENTS/agnotes2.md` | Pokemon/Transformers metaphor, latent space amplification, portal mapping | Vision |
-| 15 | **Agent Registry** | `pmoves/config/agent_registry.yaml` | Single source of truth: 76 agents with class, type, tier, layers, NATS, toggles | Data |
+| 15 | **Agent Registry** | `pmoves/config/agent_registry.yaml` | Single source of truth: the `classes` / `types` / `role_classes` / `resilience_classes` vocabularies, plus a record per agent. Per-agent fields are **optional and unevenly populated** — measured 2026-08-30, `chit_toggles` is set on 100 of 104 (absent on `claude_b850`, `claude_5090`, `claude_z890`, `crush_glm52`), `role_class` on 2, `type` and `resilience_class` on 0. Read the file, not this row, for what any given agent carries | Data |
 | 16 | **CLI Helper Tool** | `pmoves/tools/agent_taxonomy_helper.py` | list/show/connections/types commands | Tool |
 | 17 | **Agent Resilience Patterns** | `pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md` | 3-layer resilience model, Cipher snapshots, checkpoint protocol, budget classes, recovery strategies | Pattern |
 | 18 | **Agent Topology & TAC Tree** | `pmoves/docs/AGENTS/PMOVES_AGENT_TOPOLOGY.md` | 5 Mermaid diagrams: master topology, TAC tree, evolution path, data flow, NATS nervous system | Visual |
