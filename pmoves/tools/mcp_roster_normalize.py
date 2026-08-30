@@ -319,7 +319,14 @@ def main(argv: list[str] | None = None) -> int:
 
     out_dir = args.out_dir or tempfile.gettempdir()
 
-    with open(args.src) as fh:
+    # utf-8-sig, not the default: it strips a UTF-8 BOM when present and is a
+    # no-op when absent. A BOM'd roster fails a plain open()+json.load() with
+    # "Expecting value: line 1 column 1", and because the roster carries bare
+    # ${VAR}s the caller then takes its fail-closed path and refuses to launch.
+    # Any Windows producer can hand us one -- `Set-Content -Encoding UTF8` under
+    # PowerShell 5.1 writes EF BB BF -- so the reader tolerates it rather than
+    # trusting every writer to get it right.
+    with open(args.src, encoding="utf-8-sig") as fh:
         data = json.load(fh)
 
     payload, dropped, degraded = normalize(data, args.root, os.environ)

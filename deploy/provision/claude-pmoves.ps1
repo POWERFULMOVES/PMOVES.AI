@@ -227,7 +227,17 @@ if (-not $env:PMOVES_ROSTER_FROM_TREE) {
     $blob = & git -C $root show origin/main:.claude/mcp.json 2>$null
     $ErrorActionPreference = $prev
     if ($LASTEXITCODE -eq 0 -and $blob) {
-        Set-Content -Path $mainRoster -Value ($blob -join "`n") -Encoding UTF8
+        # BOM-LESS. Windows PowerShell 5.1's `-Encoding UTF8` writes EF BB BF,
+        # and mcp_roster_normalize.py reads with a plain open()+json.load()
+        # (:322) which rejects a BOM outright:
+        #     JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+        # The roster carries bare ${VAR}s, so a failed normalize takes the
+        # fail-closed path and REFUSES TO LAUNCH. Every successful origin/main
+        # lookup would have broken the default Windows launcher -- the platform
+        # the shipped .cmd targets. Caught in review; verified by writing a file
+        # both ways and reading it back.
+        [System.IO.File]::WriteAllText(
+            $mainRoster, ($blob -join "`n"), (New-Object System.Text.UTF8Encoding($false)))
         $roster = $mainRoster
         $rosterSource = 'origin/main'
     } else {
