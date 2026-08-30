@@ -6,13 +6,13 @@
 
 ## Goal
 
-Make visible, at three layers, the moment a **name** binds to a **different
+Make visible, at every layer, the moment a **name** binds to a **different
 artifact than the reader assumes** — so that a fix which has landed but is not
 on the path that executes cannot pass unnoticed.
 
 ## The defect class
 
-Three incidents this week share one shape: a name resolved in one context and
+Five incidents this week share one shape: a name resolved in one context and
 consumed in another, where the name stays stable and correct while what it
 binds to varies invisibly.
 
@@ -21,9 +21,20 @@ binds to varies invisibly.
 | 1 | `pmoves/tools/pr_closeout.py` | the operator's `cwd` when `make` runs | `PRECHECK_PY` | The repo root sits on a long-lived wip branch, so the merged fix (#2826) executed nowhere. Its `Required checks: N green` line printed the *count* labelled green. |
 | 2 | `hardening-validation` | whichever workflow emits a job of that name | branch protection on `PMOVES.AI-Edition-Hardened` | The only producer triggered on `main` only, so no PR into hardened could satisfy its own protection. Unmergeable from 2026-03-17 until #2828. |
 | 3 | `pmoves/integrations/archon/archon-ui-main/Dockerfile` | the runner's checkout depth | `validate_dockerfile_paths.py` | The file is present at the pinned submodule commit and absent in CI. The ratchet reported a broken build for a build that works (#2833). |
+| 4 | `E2E Tests (Playwright)` | the workflow, via `continue-on-error: true` | `pr_closeout.py`, reading check-runs | The workflow treats the job as advisory and concludes **success**; the job still publishes a check-run with `conclusion: failure`. The merge gate blocks on a failure the workflow author declared tolerable. |
+| 5 | `- [ ] <text>` | `UNCHECKED_TASK_RE` (`pr_closeout.py:25`), scanning the whole body | the merge gate's task check | The regex has no fenced-code awareness, so *quoting* an unchecked box reads as *having* one. #2839 — the PR removing two bad checklist literals — was blocked by displaying them. |
 
 In each case every individual value is correct. The failure is that the binding
 is invisible at the point of use.
+
+Incidents 4 and 5 sharpen the class. In 1-3 one side is simply wrong once you
+look. In 4 **both readings are correct**: `continue-on-error: true` is the
+author saying "this may fail", and a `conclusion: failure` check-run is the
+gate saying "something failed". Neither can see the other's intent, because
+the advisory status is declared in the workflow and absent from the rollup the
+gate reads. In 5 the two readings are of the *same characters* in the same
+string. So the goal is not to decide which reading wins — it is to carry the
+declaring side's intent to the consuming side.
 
 ## What GitHub documents
 
@@ -153,6 +164,47 @@ mode.
 **Auth.** The current token reads branch protection (verified 2026-08-30 —
 returned 4 contexts for `main`). If a token cannot read protection or rulesets,
 that is exit 3, never a pass.
+
+### Layer 2b — advisory status is part of the resolution
+
+Layer 2 as scoped resolves a required context to its producer. The general form
+is richer: a check's **advisory status** is declared in the workflow and is
+invisible to anything reading the status rollup.
+
+Measured 2026-08-30: exactly one job in this repo is declared advisory —
+`ui-tests.yml:e2e-tests`, name `E2E Tests (Playwright)`. Its workflow concluded
+**success** on `884180a17` with its four sibling jobs green, while the job
+published `conclusion: failure`. #2818 was merged by naming it in
+`ALLOW_ADVISORY_FAILURE`, which is an operator restating, per merge, a fact the
+workflow already declares.
+
+So the resolver additionally records, for every check name it can attribute to a
+job, whether that job carries `continue-on-error: true`. Two consumers:
+
+- **`required_context_coverage`** reports an advisory job producing a REQUIRED
+  context as its own finding. That combination is incoherent — the branch
+  demands the check pass while the workflow declares its failure tolerable —
+  and nothing surfaces it today.
+- **`pr_closeout`** can classify a failing check as advisory from the workflow's
+  own declaration instead of requiring `ALLOW_ADVISORY_FAILURE` for it. The flag
+  stays for checks that are advisory by human judgement rather than by
+  declaration; what changes is that a *declared* advisory failure stops needing
+  a per-merge decision.
+
+The flag must remain narrow where it remains: exact name match, completed
+checks only, never able to excuse a required context — the properties verified
+in `pr_closeout.py` on 2026-08-30 (`:460`, `:480`, and the separate
+required-check loop at `:642` which has no advisory branch).
+
+### Layer 2c — the task-checkbox regex
+
+`UNCHECKED_TASK_RE` (`pr_closeout.py:25`) is
+`^\s*[-*]\s+\[\s\]\s+(.+?)\s*$`, applied to the entire PR body with no
+fenced-code awareness. A PR that quotes a checklist is read as owning it.
+
+Fix: skip fenced code blocks before matching. Small, and it belongs with this
+work because it is the same defect — a string whose meaning depends on a
+context the reader does not model.
 
 ## Layer 3 — submodule binding sitrep
 
