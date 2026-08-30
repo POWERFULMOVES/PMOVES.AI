@@ -138,6 +138,18 @@
           "env": {
             "HOSTINGER_API_TOKEN": "${HOSTINGER_API_TOKEN}"
           }
+        },
+        {
+          "key": "composio",
+          "description": "Composio hosted MCP gateway - SaaS toolkits behind one server; exact per-toolkit server URL + COMPOSIO_API_KEY come from the operator's Composio dashboard via the secrets funnel (never committed)",
+          "transport": "sse",
+          "endpoint": "external",
+          "url": "https://mcp.composio.dev",
+          "headers": {
+            "X-API-Key": "${COMPOSIO_API_KEY}"
+          },
+          "disabled": true,
+          "_note": "Operator-approved 2026-08-27. Disabled until toolkit URL + key are funneled and transport/header name verified against the Composio dashboard - F-07: no unverified endpoints live."
         }
       ]
     },

@@ -545,12 +545,43 @@ services:
   #   adopting Supabase's updated self-hosted compose defaults OR enabling custom
   #   OAuth/SAML, move the WHOLE set together (API_EXTERNAL_URL + Kong routes +
   #   issuer) and re-test auth — applying any one piece alone breaks auth.
+  # - THE VALUE, as distinct from the scheme (checked 2026-08-23). The note above
+  #   settles WHICH scheme we use. It does not address why the value is
+  #   `http://localhost:8000`, which looks wrong next to seven public
+  #   *.pmoves.ai names. It is correct, for three independent reasons:
+  #     1. Kong publishes on 127.0.0.1:8000 and 127.0.0.1:8001 -- loopback, by
+  #        DEFAULT. This is a default, not an invariant: the bind is
+  #        `${KONG_PROXY_BIND:-127.0.0.1}` (see the kong stanza), so setting
+  #        KONG_PROXY_BIND=0.0.0.0 in env.shared -- the documented Docker Desktop
+  #        workaround, and the way LAN access gets enabled -- makes the API
+  #        reachable off-host with NO Traefik router involved. Check the live
+  #        bind, do not assume this line.
+  #     2. No Traefik router targets Kong. `auth.pmoves.ai` resolves to
+  #        `service=sso-auth@docker` (docker-compose.traefik.yml:71) -- the
+  #        forward-auth service, NOT GoTrue.
+  #     3. So there is no public Supabase endpoint for the value to name.
+  #        Per Supabase's reverse-proxy guide, API_EXTERNAL_URL/SUPABASE_PUBLIC_URL
+  #        must name the URL END USERS reach the API at. Today that is loopback.
+  #   Corroborating: auth.users is EMPTY (0 rows) and GOTRUE_SMTP_HOST is unset,
+  #   so the confirmation-email path this value feeds has never been exercised.
+  #   TRIGGER (either of these, not just the first): a Traefik router starts
+  #   pointing at Kong, OR Kong gains any non-loopback bind via KONG_PROXY_BIND.
+  #   Both make the API reachable by clients that are not this host, and both
+  #   make `localhost:8000` wrong for them -- a LAN client handed a
+  #   GoTrue-generated localhost URL resolves it against ITSELF and fails. Move
+  #   the whole set together then -- SUPABASE_PUBLIC_URL + SUPABASE_SITE_URL
+  #   (currently http://localhost:3000) + GOTRUE_URI_ALLOW_LIST (currently EMPTY,
+  #   so only SITE_URL is an allowed redirect) + Kong routes + issuer -- per the
+  #   SET rule above. Raised and closed twice now; recorded so it is not a third.
   # - OPTIONAL hardening: asymmetric JWT signing keys (ES256/RS256) over the
   #   current HS256 symmetric secret — larger migration (touches every
   #   JWT-validating service); tracked separately.
   # =============================================================================
 
   supabase-db:
+    # Graceful stop: PostgreSQL: SIGTERM is SMART shutdown (waits for ALL sessions); SIGINT is FAST (aborts txns, clean exit). ~39 consumers hold pooled sessions, so SIGTERM never completes inside the 10s default and Docker escalates to SIGKILL -> WAL recovery. This is the 2026-08-19 6-minute fsync.
+    stop_grace_period: 90s
+    stop_signal: SIGINT
     <<: *tier-supabase-hardened
     image: supabase/postgres:17.6.1.108
     restart: unless-stopped
@@ -578,6 +609,11 @@ services:
     volumes:
     - supabase-db-data:/var/lib/postgresql/data
     - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
+    # Repo-managed pg_hba. The image ships this at /etc/postgresql/pg_hba.conf --
+    # the container's WRITABLE LAYER, not the data volume -- so an in-container
+    # edit is discarded by the next recreate. Mounting it makes the tailnet
+    # role-scoping durable. See the file's own header for why the rules exist.
+    - ./supabase/config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     networks:
     - pmoves_data
     - pmoves_api  # Services on pmoves_api need DB access
@@ -604,6 +640,19 @@ services:
     - GOTRUE_API_PORT=9999
     # Database connection
     - GOTRUE_DB_DRIVER=postgres
+    # PRECEDENCE TRAP (bit us 2026-08-23, during a real rotation).
+    # POSTGRES_PASSWORD_URLENCODED wins over POSTGRES_PASSWORD here, and it is
+    # NOT sourced from the CHIT manifest -- it is emitted by
+    # tools/credential_urlencoder.py into env.tier-supabase.urlencoded, which
+    # compose loads LAST of all env files. So this chain resolves to whatever
+    # that encoder last wrote, overriding every other source.
+    #
+    # The encoder merges env.shared then env.tier-supabase (later wins), so it
+    # MUST run after secrets-funnel-sync. It used to run before, which meant a
+    # rotation re-published the PREVIOUS password as the winning value: the
+    # funnel reported success and postgrest, gotrue and storage came back 28P01
+    # holding a correct POSTGRES_PASSWORD in their own env. Order fixed in
+    # mk/codex.mk; see the note above the secrets-funnel target.
     - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
     # JWT configuration — standard names with legacy fallbacks
     - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
@@ -709,8 +758,25 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
     - PMOVES_NETWORKS=pmoves_api,pmoves_public
+    # Admin server backs `postgrest --ready` (healthcheck below). Container-internal only, never published.
+    - PGRST_ADMIN_SERVER_PORT=${SUPABASE_POSTGREST_ADMIN_PORT:-3001}
+    # REQUIRED for `--ready`, not cosmetic. PostgREST's default server-host is `!4`,
+    # and the probe refuses to run against it: "The `--ready` flag cannot be used when
+    # server-host is configured as !4". Verified that 0.0.0.0 both satisfies the probe
+    # AND keeps the API reachable from other containers (published-port test returned
+    # HTTP 503 from outside the container — socket bound, just no DB in that test).
+    - PGRST_SERVER_HOST=${SUPABASE_POSTGREST_HOST:-0.0.0.0}
+    # The image IS distroless (no shell), so this is a CMD probe, not CMD-SHELL:
+    # postgrest ships its own `--ready` which queries the admin server /ready endpoint.
+    # Verified against the live container: without the admin port it exits 1 with
+    # "Admin server is not running" — so the env var above is REQUIRED, not optional.
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -967,7 +1033,7 @@ services:
       supabase-db:
         condition: service_healthy
       supabase-postgrest:
-        condition: service_started  # distroless image — no shell for healthcheck
+        condition: service_healthy  # postgrest --ready probe (admin server); distroless, so CMD not CMD-SHELL
       supabase-imgproxy:
         condition: service_healthy
     volumes:
@@ -1237,6 +1303,15 @@ services:
   supabase-vector:
     <<: *tier-supabase-hardened
     image: timberio/vector:0.28.1-alpine
+    # vector 0.28.1 builds a proxy connector from HTTP_PROXY/HTTPS_PROXY and fails
+    # on an EMPTY one -- "Failed to build Proxy connector: empty string" -- then
+    # crash-loops. An ABSENT var is fine; an empty one is fatal. Compose has no
+    # syntax to UNSET a variable, so unset here and exec the image's entrypoint.
+    #
+    # The pass-through form below was added to fix this and cannot: compose
+    # resolves bare `- HTTP_PROXY` from --env-file too, so it inherits the very
+    # empty string it was meant to escape. Measured:
+    #   compose: environment: [- FOO]  +  vars.cfg: FOO=  ->  FOO is SET-EMPTY
     entrypoint: ["/bin/sh", "-c", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; exec /usr/local/bin/vector \"$$@\"", "--"]
     command: ["--config", "/etc/vector/vector.yml"]
     restart: unless-stopped
@@ -1262,8 +1337,8 @@ services:
     healthcheck:
       # Docker execs the healthcheck SEPARATELY, with the container's configured
       # environment -- so it still sees the empty proxy vars the entrypoint unsets
-      # for the main process. Without this the container runs fine and is marked
-      # unhealthy forever (observed: FailingStreak 472).
+      # for the main process. Without this the container RUNS FINE and is marked
+      # unhealthy forever (observed on the node: FailingStreak 472, status=running).
       test: ["CMD-SHELL", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; vector validate /etc/vector/vector.yml || exit 1"]
       interval: 30s
       timeout: 10s
@@ -1334,6 +1409,8 @@ services:
           cpus: '0.5'
           memory: 256M
   qdrant:
+    # Graceful stop: Segment flush.
+    stop_grace_period: 30s
     image: qdrant/qdrant:v1.16.0
     restart: unless-stopped
     cap_drop:
@@ -1371,6 +1448,8 @@ services:
           cpus: '2.0'
           memory: 4G
   meilisearch:
+    # Graceful stop: Index write.
+    stop_grace_period: 30s
     <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.34.1
     restart: unless-stopped
@@ -1402,6 +1481,8 @@ services:
           cpus: '2.0'
           memory: 4G
   neo4j:
+    # Graceful stop: Page-cache flush and checkpoint on shutdown.
+    stop_grace_period: 60s
     image: neo4j:5.26.22
     env_file:
     - env.tier-data
@@ -1454,6 +1535,8 @@ services:
           cpus: '2.0'
           memory: 4G
   minio:
+    # Graceful stop: Completes in-flight PUTs before exit.
+    stop_grace_period: 30s
     <<: *tier-data-hardened
     # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
     # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
@@ -2093,8 +2176,29 @@ services:
       dockerfile: backend/Dockerfile
     image: ${TRANSCRIBE_BACKEND_IMAGE:-ghcr.io/powerfulmoves/pmoves-transcribe-backend:latest}
     restart: unless-stopped
+    # The image ships /app/app/monitoring/logs as dr-xr-xr-x -- owned by nonroot
+    # (the Dockerfile's `chown -R` worked) but writable by NOBODY, because chown
+    # sets ownership and not mode. The app opens a log file there on startup, so
+    # it crash-looped on PermissionError as uid 65532 before serving anything.
+    #
+    # Fixed here rather than in the image: a container writing its own logs into
+    # an image layer is the wrong shape anyway -- it is invisible to `docker logs`,
+    # unbounded by the daemon's log-rotation policy (#2660), and lost on recreate.
+    # tmpfs makes the path writable, keeps it off the disk, and discards it with
+    # the container.
+    #
+    # `size=` is load-bearing, not tidiness. The app still opens its own
+    # sse_monitor_*.log here -- this mount does NOT put that output under Docker's
+    # stdout rotation, and an earlier version of this comment wrongly implied it
+    # did. An unbounded tmpfs defaults to 50% of HOST RAM, while tmpfs pages are
+    # charged to the container's memory cgroup, which is capped at 512M below. So
+    # a busy or long-running worker would grow the log until the cgroup OOM-killed
+    # it -- trading a startup crash-loop for a slower, harder-to-read one.
+    # 32M bounds it well under the limit and is ample for diagnostic logging; the
+    # mount fills and writes fail loudly rather than taking the process with them.
+    # Ref: https://docs.docker.com/engine/storage/tmpfs/
     tmpfs:
-    - /app/app/monitoring/logs:uid=65532,gid=65532,mode=0700
+    - /app/app/monitoring/logs:uid=65532,gid=65532,mode=0700,size=32m
     environment:
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
@@ -2587,7 +2691,8 @@ services:
     - PORT=${BGUTIL_PORT:-4417}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
     depends_on:
-    - minio
+      minio:
+        condition: service_healthy
     profiles:
     - orchestration
     - yt
@@ -2958,6 +3063,8 @@ services:
   # Auth: nats://nats:***@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
   nats:
+    # Graceful stop: JetStream state flush.
+    stop_grace_period: 30s
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
     image: nats:2.11.8-alpine
@@ -3226,6 +3333,9 @@ services:
   # a single port (3090, /api/health). Backed by a dedicated Postgres (pg_notify
   # realtime); Archon auto-inits its schema on first boot.
   archon-postgres:
+    # Graceful stop: PostgreSQL: same reason as supabase-db, fewer sessions.
+    stop_grace_period: 60s
+    stop_signal: SIGINT
     image: ${ARCHON_POSTGRES_IMAGE:-postgres:17-alpine}
     container_name: pmoves-archon-postgres
     hostname: archon-postgres
@@ -3279,6 +3389,47 @@ services:
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    # -- Coding-plan auth for the bundled Claude Code CLI --
+    #
+    # Two separate facts, both measured in-container against Claude Code 2.1.209
+    # (the binary the Agent SDK ships at
+    #  /app/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude):
+    #
+    # 1. That CLI does NOT read CLAUDE_CODE_OAUTH_TOKEN. It reads
+    #    ANTHROPIC_AUTH_TOKEN, which it sends as `Authorization: Bearer`.
+    #      ANTHROPIC_AUTH_TOKEN=<plan token>     -> OK
+    #      CLAUDE_CODE_OAUTH_TOKEN=<same token>  -> 401 Invalid bearer token
+    #    The same token authenticates fine against the API with a Bearer header,
+    #    so this is about which variable the CLI reads, not the credential.
+    #    CLAUDE_CODE_OAUTH_TOKEN is still set above because the Archon TS server
+    #    exits(1) at boot if none of its expected auth vars is present -- it gates
+    #    startup, it does not authenticate the CLI.
+    #
+    # 2. ANTHROPIC_API_KEY OUTRANKS the bearer token, so it must be emptied or the
+    #    plan is never reached:
+    #      api key + AUTH_TOKEN    -> "Credit balance is too low"  (key wins)
+    #      AUTH_TOKEN alone        -> OK
+    #      api key="" + AUTH_TOKEN -> OK                           (empty == absent)
+    #    Emptying is sufficient; no vector-style entrypoint `unset` wrapper needed.
+    #    This is NOT about one stale key: the account bills through a coding plan,
+    #    so any ANTHROPIC_API_KEY it carries is creditless. Verified against both
+    #    the pre- and post-rotation keys -- both "Credit balance is too low".
+    #
+    # Scoped to archon: other services keep what the shared env provides.
+    #
+    # The nested default is load-bearing. env.shared.example:90 documents
+    # ANTHROPIC_AUTH_TOKEN as a variable an operator may set directly, and a
+    # service-level `environment:` entry OVERRIDES what env_file supplies -- so a
+    # bare ${CLAUDE_CODE_OAUTH_TOKEN:-} would expand to empty and wipe out a
+    # perfectly good token that was configured the documented way. Falling back to
+    # the inherited value keeps both setups working. Verified with
+    # `docker compose config`:
+    #   only CLAUDE_CODE_OAUTH_TOKEN -> that value
+    #   only ANTHROPIC_AUTH_TOKEN    -> preserved (was silently emptied before)
+    #   both                         -> CLAUDE_CODE_OAUTH_TOKEN wins
+    #   neither                      -> ""
+    - ANTHROPIC_API_KEY=
+    - ANTHROPIC_AUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-${ANTHROPIC_AUTH_TOKEN:-}}
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
     # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
     # Default empty (uses $PATH). The upstream Archon Dockerfile installs
@@ -3419,7 +3570,7 @@ services:
       nats:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     profiles: ["agents", "cipher"]
     extra_hosts:
     - "host.docker.internal:host-gateway"
@@ -3496,7 +3647,15 @@ services:
       nats:
         condition: service_healthy
     networks: [pmoves_app, pmoves_bus, pmoves_external]
-    profiles: ["agents", "p7"]
+    # "ui" so the OpenRoom lane brings up the /api/p7 upstream its nginx proxy
+    # targets (p7:8120) — without it the proxy 502s on every session call.
+    # This carries the OVERLAY path specifically: `up-ui-new` runs
+    # `--profile ui up -d` with NO service named, so profile membership is the
+    # only thing that starts p7 there. The named-service path needs the other
+    # half — naming a service limits `up` to it and its declared dependencies,
+    # and openroom has no `depends_on: p7`, so `up-openroom` names p7 outright.
+    # `up-ui` is unaffected either way: it names pmoves-ui.
+    profiles: ["agents", "p7", "ui"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)"]
       interval: 30s
@@ -3535,7 +3694,9 @@ services:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
-    depends_on: [nats]
+    depends_on:
+      nats:
+        condition: service_healthy
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
     healthcheck:
@@ -3861,7 +4022,7 @@ services:
     - pmoves_bus
     - pmoves_data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8107/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8107/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -4044,7 +4205,8 @@ services:
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
     - PMOVES_NETWORKS=pmoves_bus
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     profiles:
     - agents
     - diag
@@ -4072,7 +4234,8 @@ services:
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
     - PMOVES_NETWORKS=pmoves_bus
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     profiles:
     - agents
     - diag
@@ -4208,6 +4371,8 @@ services:
       retries: 5
       start_period: 30s
   tensorzero-clickhouse:
+    # Graceful stop: Flushes parts to disk; a kill mid-merge leaves temp parts behind.
+    stop_grace_period: 60s
     <<: *tier-llm-hardened
     image: clickhouse/clickhouse-server:24.12-alpine
     restart: unless-stopped
@@ -4686,7 +4851,9 @@ services:
     - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring
     ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
-    depends_on: [nats]
+    depends_on:
+      nats:
+        condition: service_healthy
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
@@ -4717,7 +4884,7 @@ services:
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8504/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8504/ >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -4943,7 +5110,10 @@ services:
     networks: [pmoves_app, pmoves_api, pmoves_external]
     profiles: ["ui"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      # Image has node but no curl/wget — node>=18 fetch keeps the check dependency-free
+      test:
+      - CMD-SHELL
+      - node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 20s
       timeout: 5s
       retries: 3
@@ -4965,7 +5135,6 @@ services:
     environment:
     - PORT=8100
     - NATS_URL=${NATS_URL}
-    - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
     ports:
     - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
@@ -5142,7 +5311,9 @@ services:
     - SSL_CERT_DIR=
     - REQUESTS_CA_BUNDLE=
     - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
-    depends_on: [nats]
+    depends_on:
+      nats:
+        condition: service_healthy
     ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
     volumes:
     - ./services/github-runner-ctl/config:/app/config:ro

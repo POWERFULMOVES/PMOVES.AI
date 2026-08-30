@@ -229,6 +229,47 @@ services:
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    # -- Coding-plan auth for the bundled Claude Code CLI --
+    #
+    # Two separate facts, both measured in-container against Claude Code 2.1.209
+    # (the binary the Agent SDK ships at
+    #  /app/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude):
+    #
+    # 1. That CLI does NOT read CLAUDE_CODE_OAUTH_TOKEN. It reads
+    #    ANTHROPIC_AUTH_TOKEN, which it sends as `Authorization: Bearer`.
+    #      ANTHROPIC_AUTH_TOKEN=<plan token>     -> OK
+    #      CLAUDE_CODE_OAUTH_TOKEN=<same token>  -> 401 Invalid bearer token
+    #    The same token authenticates fine against the API with a Bearer header,
+    #    so this is about which variable the CLI reads, not the credential.
+    #    CLAUDE_CODE_OAUTH_TOKEN is still set above because the Archon TS server
+    #    exits(1) at boot if none of its expected auth vars is present -- it gates
+    #    startup, it does not authenticate the CLI.
+    #
+    # 2. ANTHROPIC_API_KEY OUTRANKS the bearer token, so it must be emptied or the
+    #    plan is never reached:
+    #      api key + AUTH_TOKEN    -> "Credit balance is too low"  (key wins)
+    #      AUTH_TOKEN alone        -> OK
+    #      api key="" + AUTH_TOKEN -> OK                           (empty == absent)
+    #    Emptying is sufficient; no vector-style entrypoint `unset` wrapper needed.
+    #    This is NOT about one stale key: the account bills through a coding plan,
+    #    so any ANTHROPIC_API_KEY it carries is creditless. Verified against both
+    #    the pre- and post-rotation keys -- both "Credit balance is too low".
+    #
+    # Scoped to archon: other services keep what the shared env provides.
+    #
+    # The nested default is load-bearing. env.shared.example:90 documents
+    # ANTHROPIC_AUTH_TOKEN as a variable an operator may set directly, and a
+    # service-level `environment:` entry OVERRIDES what env_file supplies -- so a
+    # bare ${CLAUDE_CODE_OAUTH_TOKEN:-} would expand to empty and wipe out a
+    # perfectly good token that was configured the documented way. Falling back to
+    # the inherited value keeps both setups working. Verified with
+    # `docker compose config`:
+    #   only CLAUDE_CODE_OAUTH_TOKEN -> that value
+    #   only ANTHROPIC_AUTH_TOKEN    -> preserved (was silently emptied before)
+    #   both                         -> CLAUDE_CODE_OAUTH_TOKEN wins
+    #   neither                      -> ""
+    - ANTHROPIC_API_KEY=
+    - ANTHROPIC_AUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-${ANTHROPIC_AUTH_TOKEN:-}}
     - CLAUDE_USE_GLOBAL_AUTH=${CLAUDE_USE_GLOBAL_AUTH:-true}
     # CLAUDE_BIN_PATH: path to the Claude CLI binary inside the container.
     # Default empty (uses $PATH). The upstream Archon Dockerfile installs
@@ -736,7 +777,9 @@ services:
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     - PMOVES_NETWORKS=pmoves_app,pmoves_bus
-    depends_on: [nats]
+    depends_on:
+      nats:
+        condition: service_healthy
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
     healthcheck:
@@ -781,7 +824,7 @@ services:
       nats:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     profiles: ["agents", "cipher"]
     extra_hosts:
     - "host.docker.internal:host-gateway"
@@ -880,7 +923,8 @@ services:
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
     - PMOVES_NETWORKS=pmoves_bus
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     profiles:
     - agents
     - diag
@@ -908,7 +952,8 @@ services:
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
     - PMOVES_NETWORKS=pmoves_bus
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     profiles:
     - agents
     - diag
