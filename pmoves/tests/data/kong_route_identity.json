@@ -1,7 +1,7 @@
 {
   "MiniMax-M3": {
     "api_base": "https://api.minimax.chat/v1",
-    "api_key_env": "MINIMAX_API_KEY",
+    "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
     "model_id": "MiniMax-M3",
     "provider": "minimax"
   },
@@ -91,13 +91,13 @@
   },
   "minimax-m2.1": {
     "api_base": "https://api.minimax.chat/v1",
-    "api_key_env": "MINIMAX_API_KEY",
+    "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
     "model_id": "minimax-m2.1",
     "provider": "minimax"
   },
   "minimax-m2.7": {
     "api_base": "https://api.minimax.chat/v1",
-    "api_key_env": "MINIMAX_API_KEY",
+    "api_key_env": "MINIMAX_TOKEN_PLAN_API_KEY",
     "model_id": "minimax-m2.7",
     "provider": "minimax"
   },

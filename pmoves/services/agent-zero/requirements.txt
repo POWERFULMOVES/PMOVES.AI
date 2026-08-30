@@ -63,4 +63,10 @@ pytest-asyncio
 # (sph_legendre_p) that only register under numpy 2.x -- run_ui.py dies at
 # import with "All ufuncs must have type numpy.ufunc". scipy 1.14.x is the
 # newest line that supports numpy>=1.23.5,<2.3.
+#
+# Enforced against dependabot by an `ignore` rule in .github/dependabot.yml
+# (agent-zero pip ecosystem). Metadata does NOT express this constraint --
+# scipy 1.15 declares numpy>=1.23.5,<2.5, so pip resolves it happily against
+# the base image's numpy 1.26 and the failure only appears at import. If you
+# relax this pin, relax the ignore rule too.
 scipy<1.15

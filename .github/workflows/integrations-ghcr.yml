@@ -319,6 +319,8 @@ jobs:
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]
     timeout-minutes: 15
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:

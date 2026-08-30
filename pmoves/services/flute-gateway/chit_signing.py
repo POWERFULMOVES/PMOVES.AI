@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 from services.common.env import get_secret
 from typing import Any, Dict
 
@@ -53,7 +54,9 @@ def sign_cgp(
             "CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var required for sign_cgp()"
         )
     doc = json.loads(json.dumps(cgp))  # deep copy
-    kid = kid or hashlib.sha256(key.encode()).hexdigest()[:16]
+    # kid mirrors the canonical signer (pmoves/tools/chit_security.py): a
+    # static/env-provided identifier, never a digest of the key material.
+    kid = kid or os.environ.get("CHIT_SIGNING_KEY_ID") or "chit-signing-v01"
     doc_nosig = json.loads(json.dumps(doc))
     doc_nosig.pop("sig", None)
     mac = hmac.new(key.encode("utf-8"), _canon(doc_nosig), hashlib.sha256).digest()
