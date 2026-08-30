@@ -164,3 +164,35 @@ class TestDemoRoster:
         result = _run([])
         assert result.returncode == 1
         assert "usage:" in result.stdout.lower() or "usage:" in result.stderr.lower()
+
+
+def test_host_map_keys_are_hostnames_not_hardware_descriptions():
+    """The 4090 resolved to "unknown" because its key was a DESCRIPTION.
+
+    `_HOST_MAP` had "z890" and "powerfulmoves" (hostnames) alongside "laptop"
+    (what the machine is). When the box was named PMOVES-4090, nothing matched:
+    the signature `4090-claude` existed, the node had an identity, and --whoami
+    returned "unknown (not in signatures)".
+
+    Asserted against the REAL signature list so a node cannot be mapped to an
+    identity that does not exist, and so the 4090's own hostname keeps
+    resolving.
+    """
+    import re
+    src = open(_SCRIPT, encoding="utf-8").read()
+    block = re.search(r"_HOST_MAP = \{(.*?)\}", src, re.S)
+    assert block, "_HOST_MAP not found"
+    pairs = re.findall(r'"([^"]+)":\s*"([^"]+)"', block.group(1))
+    mapping = dict(pairs)
+
+    # the concrete regression: this machine's real hostname must resolve
+    assert "pmoves-4090" in mapping, "the 4090's real hostname is not mapped"
+    assert mapping["pmoves-4090"] == "4090-claude"
+
+    # and every target must be a signature that actually exists
+    import yaml
+    sig_path = os.path.join(os.path.dirname(__file__), "..", "config", "agent_signatures.yaml")
+    sigs = yaml.safe_load(open(sig_path, encoding="utf-8"))["signatures"]
+    known = set(sigs) if isinstance(sigs, dict) else {s.get("id") for s in sigs}
+    unknown = {v for v in mapping.values() if v not in known}
+    assert not unknown, f"_HOST_MAP points at signatures that do not exist: {unknown}"

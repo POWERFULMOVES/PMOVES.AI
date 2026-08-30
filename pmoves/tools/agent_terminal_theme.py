@@ -231,11 +231,24 @@ def _resolve_whoami() -> str:
 
     # 2. Hostname heuristic — match against known node patterns
     hostname = socket.gethostname().lower()
+    # Keys are HOSTNAME fragments. Two of the original three were hostnames
+    # ("z890", "powerfulmoves") and the third was a description of the hardware
+    # ("laptop") -- so when the 4090 was named PMOVES-4090, nothing matched and
+    # the node resolved to "unknown". Measured 2026-08-30 on that machine:
+    # hostname PMOVES-4090, signature `4090-claude` defined, --whoami returned
+    # "unknown (not in signatures)".
+    #
+    # "laptop" is kept for any host still named that way, but the hostname key
+    # is the one that should match. Add nodes here by their REAL hostname; a
+    # description of the machine is not an identity, and renaming the box
+    # silently breaks the binding.
     _HOST_MAP = {
         "z890": "z890-claude",
         "pmoves-z890": "z890-claude",
         "powerfulmoves": "5090-claude",
         "pmoves-powerfulmoves": "5090-claude",
+        "pmoves-4090": "4090-claude",
+        "4090": "4090-claude",
         "laptop": "4090-claude",
         "pmoves-laptop": "4090-claude",
     }
@@ -252,6 +265,16 @@ def _resolve_whoami() -> str:
             data = json_mod.loads(resp.read())
         return data.get("agent_id", "unknown")
     except Exception:
+        # Say WHY, not just "unknown". A bare "unknown" reads as "this node has
+        # no identity"; the truth is usually "this hostname matched no pattern",
+        # which is a one-line fix somebody can actually make.
+        print(
+            f"[whoami] hostname {socket.gethostname()!r} matched no _HOST_MAP "
+            f"pattern, PMOVES_AGENT_ID is unset, and the BoTZ gateway is "
+            f"unreachable. Add the hostname to _HOST_MAP in "
+            f"pmoves/tools/agent_terminal_theme.py, or export PMOVES_AGENT_ID.",
+            file=sys.stderr,
+        )
         return "unknown"
 
 
