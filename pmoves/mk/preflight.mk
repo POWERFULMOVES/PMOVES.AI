@@ -102,7 +102,7 @@ else
 	@command -v claude-pmoves >/dev/null 2>&1 && echo "launcher-check: OK - $$(command -v claude-pmoves)" || { echo "launcher-check: MISSING - claude-pmoves does not resolve."; echo "  Every server in .claude/mcp.json stays dark without it."; echo "  Fix: make -C pmoves launcher-install"; exit 1; }
 endif
 
-launcher-install: ## Install the claude-pmoves / crush-pmoves shell commands
+launcher-install: ## Install the launcher shell command(s): claude-pmoves everywhere, crush-pmoves on Windows (no POSIX crush installer exists yet)
 	@# Both installers existed and NEITHER was invoked by anything: crush-pmoves
 	@# had been run by hand at some point, claude-pmoves never had. A bootstrap
 	@# step that is only ever run by memory cannot tell "installed" from "never
@@ -112,10 +112,22 @@ ifeq ($(OS),Windows_NT)
 	@powershell -NoProfile -ExecutionPolicy Bypass -File ../deploy/provision/install-crush-pmoves-command.ps1
 else
 	@bash ../deploy/provision/install-claude-pmoves-command.sh
+	@# The target advertises BOTH commands; installing only one while reporting
+	@# success is the same "advertises coverage it lacks" defect this file is
+	@# full of. Caught in review.
+	@if [ -f ../deploy/provision/install-crush-pmoves-command.sh ]; then 	  bash ../deploy/provision/install-crush-pmoves-command.sh; 	else 	  echo "launcher-install: no POSIX crush installer present; crush-pmoves NOT installed"; 	fi
 endif
 	@echo "Open a NEW shell, then: make -C pmoves launcher-check"
 
-env-check: launcher-check ## Run cross-platform environment preflight checks
+env-check: ## Run cross-platform environment preflight checks
+	@# launcher-check is REPORTED here, never required. A first draft made it a
+	@# prerequisite, which would have failed the repo's canonical environment
+	@# validation on any fresh clone, CI runner, container, or non-Claude
+	@# operator host -- for a Claude-specific optional tool that neither
+	@# `env-setup` nor the documented bring-up sequence installs. Caught in
+	@# review. A missing launcher is worth SAYING; it is not worth blocking a
+	@# fleet's env validation over.
+	@$(MAKE) --no-print-directory launcher-check || 	  echo "env-check: continuing -- launcher-check is advisory here (run 'make -C pmoves launcher-install' if you use Claude Code on this host)"
 ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 $(ARGS)
 else
