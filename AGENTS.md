@@ -256,15 +256,31 @@ Full stack with NATS, TensorZero, Supabase, monitoring. See `pmoves/docker-compo
 
 This file follows the **[agents.md open format](https://agents.md)** — a universal contract for guiding coding agents (Claude Code, Codex, Copilot, Cursor, Aider, etc.). The PMOVES fork of the format spec lives at [`PMOVES-agents.md/`](PMOVES-agents.md/) (submodule, fork of [agentsmd/agents.md](https://github.com/agentsmd/agents.md)).
 
-The PMOVES-agents.md submodule is the canonical home for:
-- AGENTS.md format reference + extensions
-- Agent taxonomy & class definitions
-- Persona schema and seed personas
-- Universal coding-agent docs
+**That submodule holds the upstream website, and nothing else.** A recursive
+listing of the pinned tree: 61 blobs, all Next.js — `components/Hero.tsx`,
+`pages/_app.tsx` — and **zero** files matching taxonomy / persona / pmoves /
+capacity / autonomy (measured 2026-08-30). Its own `AGENTS.md` documents how to
+run that site.
 
-**Tier:** *Tier-2 always-relevant* — load when discussing agent classes, taxonomy, persona schema, or AGENTS.md format itself.
+This section used to name it "the canonical home for" the format reference,
+agent taxonomy, class definitions and persona schema. That described a planned
+migration — the same paragraph admitted the docs "live in `pmoves/docs/`" and
+that moving them was "gated on explicit user confirmation" — written in the
+present tense. Agents read the claim, not the caveat, and followed a pointer to
+a Next.js site.
 
-**Cross-refs:** This `AGENTS.md` (project root) carries project-specific structure & commands; the format/taxonomy reference lives in the submodule. Today, taxonomy docs (`pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`, `PMOVES_AGENT_TOPOLOGY.md`) live in `pmoves/docs/`; migrating them into `PMOVES-agents.md/` is gated on explicit user confirmation since it changes git history paths.
+**Where the taxonomy actually lives:**
+
+| you want | load |
+|---|---|
+| the model itself — classes, types, `role_classes`, `resilience_classes`, every agent | `pmoves/config/agent_registry.yaml` (source of truth) |
+| the prose hub | `pmoves/docs/AGENTS/AGENT_TAXONOMY_CROSS_REFERENCE.md` |
+| class definitions & topology | `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`, `PMOVES_AGENT_TOPOLOGY.md` |
+
+Worth stating plainly, because it changes what "following the format" can mean:
+**the agents.md convention specifies one thing** — a root `AGENTS.md` in plain
+Markdown for coding agents. It has no vocabulary for class, persona, capacity or
+autonomy. There is no upstream model to map PMOVES agents onto; ours is ours.
 
 <!-- autoclaw:skill-path-guidance -->
 <!-- PMOVES-EXT: skill_path_guidance -->
