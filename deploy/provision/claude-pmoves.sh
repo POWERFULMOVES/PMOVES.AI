@@ -150,8 +150,32 @@ fi
 # NOT --strict-mcp-config: we want a MERGE, so the per-node `.mcp.json` written
 # by `make -C pmoves mcp-toolkit-connect` (the Docker MCP gateway entry) stays
 # live alongside the tracked roster.
+# WHICH ROSTER: origin/main, not whatever branch this checkout sits on.
+# Kept deliberately in step with the PowerShell twin -- these two have drifted
+# before, and that drift shipped a Windows node a literal ${TS_Z890} hostname.
+#
+# The roster is FLEET configuration, not branch content. Measured 2026-08-30 on
+# the 4090: the repo root sat on a wip snapshot branch and the launcher loaded 14
+# servers where origin/main has 19 -- five missing, including
+# `pmoves-cipher-local`, the loopback entry that needs no bearer. The symptom was
+# `pmoves-cipher / failed` and a 401, which reads as a credential problem and was
+# a checkout problem.
+#   PMOVES_ROSTER_FROM_TREE=1  use the working tree (editing the roster itself)
 MCP_ROSTER="$ROOT/.claude/mcp.json"
+MCP_ROSTER_SOURCE="working tree"
+if [ -z "${PMOVES_ROSTER_FROM_TREE:-}" ]; then
+  _main_roster="${TMPDIR:-/tmp}/pmoves-roster-origin-main.json"
+  git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
+  if git -C "$ROOT" show origin/main:.claude/mcp.json > "$_main_roster" 2>/dev/null      && [ -s "$_main_roster" ]; then
+    MCP_ROSTER="$_main_roster"
+    MCP_ROSTER_SOURCE="origin/main"
+  else
+    echo "[claude-pmoves] could not read the roster from origin/main; using the working tree." >&2
+    echo "[claude-pmoves]   (offline, or origin/main not fetched -- servers may differ from the fleet's)" >&2
+  fi
+fi
 if [ -f "$MCP_ROSTER" ]; then
+  echo "[claude-pmoves] MCP roster source: $MCP_ROSTER_SOURCE"
   # Normalize the roster before handing it to Claude:
   #   P2 — drop servers whose key starts with "_" (disabled-in-name-only, e.g.
   #        `_pmoves-cipher-legacy-python-wrapper`; `_disabled` is metadata, not a
