@@ -121,16 +121,24 @@ test_http_endpoint() {
     print_info "Testing: $url"
 
     if [ "$VERBOSE" = true ]; then
-        response=$(curl -sf --max-time "$TIMEOUT" -w "\n%{http_code}" "$url" 2>&1)
+        response=$(curl -s --max-time "$TIMEOUT" -w "\n%{http_code}" "$url" 2>&1)
         status=$?
         http_code=$(echo "$response" | tail -n1)
         body=$(echo "$response" | head -n-1)
     else
-        http_code=$(curl -sf --max-time "$TIMEOUT" -w "%{http_code}" -o /dev/null "$url" 2>/dev/null)
+        http_code=$(curl -s --max-time "$TIMEOUT" -w "%{http_code}" -o /dev/null "$url" 2>/dev/null)
         status=$?
     fi
 
-    if [ $status -eq 0 ] && [ "$http_code" = "$expected_status" ]; then
+    # No -f on the two calls above: -f turns any 4xx into exit 22, so this helper
+    # could only ever assert a 2xx status -- $status -eq 0 rejected a 401 before
+    # http_code was ever compared. The http_code comparison is the real assertion;
+    # transport failures still surface as exit 7 (refused) and 28 (timeout).
+    # expected_status may be an alternation ("200|401") for checks whose correct
+    # answer is deployment-dependent. NOTE: =~ with the pattern from a variable,
+    # not case: bash parses case-alternation before expansion, so a "|" arriving
+    # via $expected_status would be a literal pipe, never an alternation.
+    if [ $status -eq 0 ] && [[ "$http_code" =~ ^(${expected_status})$ ]]; then
         print_pass "$name"
         [ "$VERBOSE" = true ] && echo "       Response: $body"
         return 0
@@ -309,7 +317,21 @@ main() {
     # Data Tier Services
     print_section "Data Tier Services"
     test_tcp_connectivity "Supabase Postgres" "localhost" "5432" "default"
-    test_http_endpoint "Supabase PostgREST" "http://localhost:3010/" "200" "default"
+    # 200 or 401, not one hardcoded: the root's unauthenticated status is
+    # deployment-dependent and BOTH are healthy. Fresh bootstrap sets
+    # PGRST_ANON_ROLE=anon (docker-compose.core.yml) with the role granted in
+    # supabase/initdb/01_public_init.sql, so root is served as anon and answers
+    # 200 with the OpenAPI document; PGRST_JWT_SECRET only validates supplied
+    # tokens, it does not require them. A node that revokes the anon role
+    # (B850's hardening) gets 401 instead. Either proves PostgREST is up and
+    # answering; the smoke asserts liveness, the security posture is audited by
+    # auth-alignment/secrets-audit. This also keeps the shell harness consistent
+    # with tests/smoke/test_critical_path.py, which asserts 200.
+    # Port: read the same knob compose does (${SUPABASE_POSTGREST_PORT:-3010});
+    # hardcoding 3010 fails on nodes whose env overrides it (observed on SPARK,
+    # where the CLI-stack postgrest binds 127.0.0.1:3000).
+    SUPABASE_POSTGREST_PORT="${SUPABASE_POSTGREST_PORT:-3010}"
+    test_http_endpoint "Supabase PostgREST" "http://localhost:${SUPABASE_POSTGREST_PORT}/" "200|401" "default"
     test_tcp_connectivity "Qdrant" "localhost" "6333" "default"
     test_http_endpoint "Qdrant health" "http://localhost:6333/healthz" "200" "default"
     test_tcp_connectivity "Neo4j HTTP" "localhost" "7474" "default"
@@ -334,13 +356,18 @@ main() {
     print_section "Agent Coordination Services"
     test_http_endpoint "Agent Zero" "http://localhost:8080/healthz" "200" "agents"
     test_http_endpoint "Agent Zero UI" "http://localhost:8081/" "200" "agents"
-    test_http_endpoint "Archon" "http://localhost:8091/healthz" "200" "agents"
+    # Archon 0.6.0 retired the Python :8091/:8051 service — unified :3090
+    # (CATALOG: "0.6.0 rewrote the old Python :8091/:8051 service"). :3737 is
+    # the host alias onto 3090; the health path is /api/health.
+    # ${ARCHON_PORT:-3090} is the published host port (compose:3503); probe
+    # the configured one or an override silently skips the deployed instance.
+    test_http_endpoint "Archon" "http://localhost:${ARCHON_PORT:-3090}/api/health" "200" "agents"
     test_http_endpoint "Archon UI" "http://localhost:3737/" "200" "agents"
     test_http_endpoint "Channel Monitor" "http://localhost:8097/healthz" "200" "orchestration"
 
     # Retrieval & Knowledge Services
     print_section "Retrieval & Knowledge Services"
-    test_http_endpoint "Hi-RAG v2 (CPU)" "http://localhost:8086/health" "200" "default"
+    test_http_endpoint "Hi-RAG v2 (CPU)" "http://localhost:8086/hirag/admin/stats" "200" "default"
     test_http_endpoint "Hi-RAG v1 (CPU)" "http://localhost:8089/health" "200" "legacy"
     test_http_endpoint "DeepResearch" "http://localhost:8098/healthz" "200" "orchestration"
     test_http_endpoint "SupaSerch" "http://localhost:8099/healthz" "200" "orchestration"
@@ -348,7 +375,7 @@ main() {
 
     # Media Ingestion Services
     print_section "Media Ingestion Services"
-    test_http_endpoint "PMOVES.YT" "http://localhost:8077/health" "200" "yt"
+    test_http_endpoint "PMOVES.YT" "http://localhost:8077/healthz" "200" "yt"
     test_http_endpoint "FFmpeg-Whisper" "http://localhost:8078/healthz" "200" "gpu"
     test_http_endpoint "Media-Video Analyzer" "http://localhost:8079/healthz" "200" "gpu"
     test_http_endpoint "Media-Audio Analyzer" "http://localhost:8082/healthz" "200" "gpu"
@@ -371,7 +398,7 @@ main() {
     # Monitoring Stack
     print_section "Monitoring Stack"
     test_http_endpoint "Prometheus" "http://localhost:9090/-/healthy" "200" "monitoring"
-    test_http_endpoint "Grafana" "http://localhost:3000/api/health" "200" "monitoring"
+    test_http_endpoint "Grafana" "http://localhost:${GRAFANA_HOST_PORT:-3002}/api/health" "200" "monitoring"
     test_http_endpoint "Loki" "http://localhost:3100/ready" "200" "monitoring"
 
     # Integration Tests (connectivity between services)

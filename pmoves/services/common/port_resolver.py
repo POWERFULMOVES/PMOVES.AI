@@ -24,7 +24,7 @@ try:
 except ImportError:
     DEFAULT_PORTS = {}
 
-from services.common.topology import TopologyContext, TopologyMode, get_topology
+from .topology import TopologyContext, TopologyMode, get_topology
 
 
 # Docker DNS names for services (slug → container hostname)

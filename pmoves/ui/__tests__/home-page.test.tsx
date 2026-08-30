@@ -3,9 +3,11 @@ import HomePage from '@/app/page';
 
 // Mock Next.js Link component to avoid router dependency
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
+  const MockLink = ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
     <a href={href} {...props}>{children}</a>
   );
+  MockLink.displayName = 'MockLink';
+  return MockLink;
 });
 
 // Mock SystemHubSection to isolate home page rendering
@@ -13,32 +15,41 @@ jest.mock('@/components/hub/SystemHubSection', () => ({
   SystemHubSection: () => <div data-testid="system-hub-section">Hub</div>,
 }));
 
+jest.mock('@/components/home/HomeRoomLauncher', () => ({
+  HomeRoomLauncher: () => <div data-testid="home-room-launcher">Room launcher</div>,
+}));
+
 describe('HomePage', () => {
-  it('renders the main heading', () => {
-    render(<HomePage />);
+  it('renders the main heading', async () => {
+    render(await HomePage());
     expect(screen.getByText('POWERFUL')).toBeInTheDocument();
     expect(screen.getByText('MOVES')).toBeInTheDocument();
   });
 
-  it('provides navigation to the ingestion dashboard', () => {
-    render(<HomePage />);
+  it('provides navigation to the launcher flow', async () => {
+    render(await HomePage());
     const link = screen.getByRole('link', { name: /launch console/i });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', expect.stringContaining('/login'));
   });
 
-  it('renders pipeline steps', () => {
-    render(<HomePage />);
+  it('renders pipeline steps', async () => {
+    render(await HomePage());
     expect(screen.getByText('Create')).toBeInTheDocument();
     expect(screen.getByText('Webhook')).toBeInTheDocument();
     expect(screen.getByText('Approve')).toBeInTheDocument();
     expect(screen.getByText('Publish')).toBeInTheDocument();
   });
 
-  it('renders agent personas', () => {
-    render(<HomePage />);
+  it('renders agent personas', async () => {
+    render(await HomePage());
     expect(screen.getByText('Archon')).toBeInTheDocument();
     expect(screen.getByText('Catalyst')).toBeInTheDocument();
     expect(screen.getByText('Ledger')).toBeInTheDocument();
+  });
+
+  it('renders the room launcher surface', async () => {
+    render(await HomePage());
+    expect(screen.getByTestId('home-room-launcher')).toBeInTheDocument();
   });
 });

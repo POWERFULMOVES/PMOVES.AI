@@ -109,11 +109,36 @@ def gateway_v2_module():
                     return func
 
                 return decorator
-
             def mount(self, *_args, **_kwargs):
                 return None
 
+            def include_router(self, *args, **kwargs):
+                pass
+
+        class APIRouter:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def get(self, *_args, **_kwargs):
+                def decorator(func):
+                    return func
+                return decorator
+
+            def post(self, *_args, **_kwargs):
+                def decorator(func):
+                    return func
+                return decorator
+
+            def websocket(self, *_args, **_kwargs):
+                def decorator(func):
+                    return func
+                return decorator
+
+            def include_router(self, *args, **kwargs):
+                pass
+
         fastapi_module.FastAPI = FastAPI
+        fastapi_module.APIRouter = APIRouter
         fastapi_module.Body = Body
         fastapi_module.HTTPException = HTTPException
         fastapi_module.Request = Request
@@ -380,6 +405,10 @@ def _sample_cgp(namespace: str = "pmoves", modality: str = "text") -> dict:
 def test_swarm_meta_updates_builder_pack(monkeypatch, gateway_v2_module):
     module = gateway_v2_module
     module.shape_store = module.ShapeStore(capacity=128)
+    # Patch geometry_bus submodule so _apply_swarm_meta sees the same shape_store
+    gb_mod = sys.modules.get('geometry_bus')
+    if gb_mod is not None:
+        gb_mod.shape_store = module.shape_store
     module._active_builder_packs.clear()
 
     module.shape_store.on_geometry_event({"type": "geometry.cgp.v1", "data": _sample_cgp()})
@@ -393,6 +422,8 @@ def test_swarm_meta_updates_builder_pack(monkeypatch, gateway_v2_module):
         return fetch_payloads.get(pack_id)
 
     monkeypatch.setattr(module, "_fetch_geometry_pack", _fake_fetch)
+    if gb_mod is not None:
+        monkeypatch.setattr(gb_mod, "_fetch_geometry_pack", _fake_fetch)
 
     clear_calls: list[bool] = []
 
@@ -400,6 +431,8 @@ def test_swarm_meta_updates_builder_pack(monkeypatch, gateway_v2_module):
         clear_calls.append(True)
 
     monkeypatch.setattr(module.geometry_params, "clear_cache", _clear_cache)
+    if gb_mod is not None and gb_mod.geometry_params is not None:
+        monkeypatch.setattr(gb_mod.geometry_params, "clear_cache", _clear_cache)
 
     payload_one = {
         "namespace": "pmoves",
@@ -442,8 +475,18 @@ def test_swarm_meta_updates_builder_pack(monkeypatch, gateway_v2_module):
 def test_geometry_decode_includes_builder_pack(gateway_v2_module):
     module = gateway_v2_module
     module.shape_store = module.ShapeStore(capacity=128)
+    gb_mod = sys.modules.get('geometry_bus')
+    if gb_mod is not None:
+        gb_mod.shape_store = module.shape_store
     module._active_builder_packs.clear()
     module.CHIT_DECODE_TEXT = True
+    # Propagate CHIT_DECODE_TEXT to config submodule so routes see it
+    cfg_mod = sys.modules.get('config')
+    if cfg_mod is not None:
+        cfg_mod.CHIT_DECODE_TEXT = True
+    rg_mod = sys.modules.get('routes.geometry')
+    if rg_mod is not None:
+        rg_mod.CHIT_DECODE_TEXT = True
 
     module.shape_store.on_geometry_event({"type": "geometry.cgp.v1", "data": _sample_cgp()})
 

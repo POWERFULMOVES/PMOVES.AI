@@ -1,60 +1,72 @@
-# Core
-fastapi
-uvicorn
-pydantic
-nats-py
+# PMOVES additions to upstream Agent Zero — OVERLAY ONLY.
+#
+# READ THIS BEFORE ADDING A LINE
+# ------------------------------
+# The Dockerfile installs upstream's requirements.txt FIRST (Stage 1), then this
+# file SECOND, constrained by requirements.lock. Anything listed here is
+# therefore installed *over* whatever upstream already resolved.
+#
+# So this file must contain ONLY what PMOVES code imports and upstream does not
+# provide. Re-listing an upstream dependency here does not "make sure we get it"
+# — it makes us the authority on its version, silently, forever.
+#
+# That is not hypothetical. This file previously carried 56 packages, of which
+# 42 were verbatim copies of upstream's list that no PMOVES code imports, plus
+# `playwright` and `browser-use`. Upstream v2.10 replaced playwright with
+# patchright; our stale copy would have kept installing playwright==1.57.0 on
+# top of it — a second browser stack, pinned by us, wanted by nobody.
+#
+# Rule: if `grep -r "import <pkg>"` finds nothing under this directory, it does
+# not belong here. Version-pin only to fix a specific defect, and say which.
+
+# --- Additions: imported by PMOVES code, absent from upstream ---
+httpx
 jsonschema
+nats-py              # NATS bus integration
+python-jose[cryptography]==3.5.0
 PyYAML
+requests             # security/hooks/probabilistic.py
 
-# Metrics
-prometheus-client==0.24.1
+# --- NOT declared here on purpose ---
+# anthropic, fastapi, prometheus-client, pydantic, uvicorn, flaredantic
+# PMOVES code imports all of these, and it is tempting to list them. Do not.
+#
+# Stage 2 installs into the SAME venv it copied from stage 1 (/opt/venv-a0), so
+# upstream's copies are already importable. Listing them here does not add them
+# - it makes our lock the authority on the shared web stack, and our lock then
+# installs *second*.
+#
+# That is not theoretical. fastapi caps starlette (fastapi<=0.124 requires
+# starlette<0.51), so declaring fastapi here dragged starlette DOWN below the
+# exact version upstream pins for a published advisory. The image ended up
+# running a starlette the fork had deliberately moved off.
+#
+# All of them are declared where they belong: in the FORK's requirements.txt.
+# There they participate in upstream's single coherent resolution - which picks
+# fastapi 0.141.1 alongside upstream's pinned starlette - instead of fighting it
+# afterwards. `anthropic` was moved there by PMOVES-Agent-Zero#18 for exactly
+# this reason: it depends on pydantic, which the fork pins exactly, so resolving
+# it here dragged pydantic to 2.13.4 and would have replaced that pin at runtime.
+#
+# Rule: if upstream and PMOVES both need a package, declare it in the FORK's
+# requirements.txt, never here. This file is for things only PMOVES needs.
 
-# Testing
+# --- Test-only ---
+# `COPY services /app/services` puts services/agent-zero/tests into the image,
+# so these are importable at runtime. Kept for in-container test runs.
 pytest
 pytest-asyncio
 
-# Optional (dev/debug)
-a2wsgi
-ansio
-browser-use
-crontab
-docker
-duckduckgo-search
-faiss-cpu
-fastmcp
-fasta2a
-flaredantic
-flask[async]
-flask-basicauth
-GitPython
-inputimeout
-kokoro
-langchain-community
-langchain-core
-langchain-unstructured[all-docs]
-litellm
-lxml_html_clean
-markdown
-markdownify
-mcp
-nest-asyncio
-newspaper3k
-openai-whisper
-paramiko
-pathspec
-pdf2image
-playwright
-psutil
-pymupdf
-pypdf
-python-dotenv
-python-jose[cryptography]==3.5.0
-pytesseract
-pytz
-sentence-transformers
-simpleeval
-soundfile
-tiktoken
-unstructured-client
-unstructured[all-docs]
-webcolors
+# --- Runtime compatibility pin (2026-08-25) ---
+# The base image (agent0ai/agent-zero-base) ships numpy 1.26.x. scipy is a
+# transitive install with no upstream pin, and >=1.15 imports ufuncs
+# (sph_legendre_p) that only register under numpy 2.x -- run_ui.py dies at
+# import with "All ufuncs must have type numpy.ufunc". scipy 1.14.x is the
+# newest line that supports numpy>=1.23.5,<2.3.
+#
+# Enforced against dependabot by an `ignore` rule in .github/dependabot.yml
+# (agent-zero pip ecosystem). Metadata does NOT express this constraint --
+# scipy 1.15 declares numpy>=1.23.5,<2.5, so pip resolves it happily against
+# the base image's numpy 1.26 and the failure only appears at import. If you
+# relax this pin, relax the ignore rule too.
+scipy<1.15

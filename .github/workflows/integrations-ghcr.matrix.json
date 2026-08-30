@@ -13,27 +13,27 @@
   },
   {
     "name": "archon",
-    "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
-    "ref": "main",
-    "context": "pmoves",
-    "dockerfile": "pmoves/services/archon/Dockerfile",
+    "git_url": "https://github.com/POWERFULMOVES/PMOVES-Archon.git",
+    "ref": "PMOVES.AI-Edition-Hardened",
+    "context": ".",
+    "dockerfile": "Dockerfile",
     "image_name": "pmoves-archon",
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": false,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "archon-ui",
     "git_url": "https://github.com/POWERFULMOVES/PMOVES-Archon.git",
     "ref": "PMOVES.AI-Edition-Hardened",
-    "context": "archon-ui-main",
-    "dockerfile": "archon-ui-main/Dockerfile",
+    "context": ".",
+    "dockerfile": "Dockerfile",
     "image_name": "pmoves-archon-ui",
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ".github/trivy/archon-ui.trivyignore"
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "open-notebook",
@@ -45,7 +45,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ".github/trivy/open-notebook.trivyignore"
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "wger",
@@ -57,7 +57,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "firefly-iii",
@@ -69,7 +69,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "jellyfin",
@@ -87,13 +87,16 @@
     "name": "pmoves-yt",
     "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
     "ref": "main",
-    "context": "pmoves/services/pmoves-yt",
-    "dockerfile": "pmoves/services/pmoves-yt/Dockerfile",
+    "context": "PMOVES.YT",
+    "dockerfile": "PMOVES.YT/pmoves_yt_service/Dockerfile",
     "image_name": "pmoves-yt",
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore",
+    "verify_port": "8077",
+    "verify_health_path": "/healthz",
+    "verify_timeout_seconds": "180"
   },
   {
     "name": "deepresearch",
@@ -105,31 +108,43 @@
     "build_args": "",
     "platforms": "linux/amd64",
     "generate_sbom": false,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/deepresearch.trivyignore"
   },
   {
     "name": "supaserch",
     "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
     "ref": "main",
-    "context": "pmoves/services",
+    "context": "pmoves",
     "dockerfile": "pmoves/services/supaserch/Dockerfile",
     "image_name": "pmoves-supaserch",
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "a2ui-nats-bridge",
     "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
     "ref": "main",
-    "context": "pmoves/services/a2ui-nats-bridge",
+    "context": "pmoves",
     "dockerfile": "pmoves/services/a2ui-nats-bridge/Dockerfile",
     "image_name": "pmoves-a2ui-nats-bridge",
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": false,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
+  },
+  {
+    "name": "a2ui-renderer",
+    "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+    "ref": "main",
+    "context": "pmoves",
+    "dockerfile": "pmoves/services/a2ui-renderer/Dockerfile",
+    "image_name": "pmoves-a2ui-renderer",
+    "build_args": "",
+    "platforms": "linux/amd64,linux/arm64",
+    "generate_sbom": false,
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "session-context-worker",
@@ -141,7 +156,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": false,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "tokenism-ui",
@@ -153,7 +168,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "llama-throughput-lab",

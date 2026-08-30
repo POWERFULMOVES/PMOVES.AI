@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>&lt;pm-project-card&gt; — demo</title>
+  <style>
+    :root {
+      --pm-accent: #7C3AED;
+      --pm-accent-soft: #A78BFA;
+      --pm-accent-strong: #5B21B6;
+      --pm-bg: #0b0b10;
+      --pm-bg-elevated: #13131a;
+      --pm-fg: #FFFFFF;
+      --pm-fg-muted: #9ca3af;
+      --pm-border: rgba(255, 255, 255, 0.08);
+      --pm-radius: 12px;
+      --pm-radius-sm: 6px;
+      --pm-font-display: 'Orbitron', system-ui;
+      --pm-font-body: system-ui, -apple-system, sans-serif;
+      --pm-spacing-unit: 8px;
+      --pm-motion-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+      --pm-motion-slow: 400ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--pm-bg);
+      color: var(--pm-fg);
+      font-family: var(--pm-font-body);
+      min-height: 100vh;
+    }
+    h1 {
+      font-family: var(--pm-font-display);
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--pm-fg-muted);
+      margin: 0 0 16px;
+    }
+    .stack {
+      display: grid;
+      gap: 12px;
+      max-width: 560px;
+    }
+  </style>
+</head>
+<body>
+  <h1>&lt;pm-project-card&gt; — v0.1 demo</h1>
+
+  <div class="stack">
+    <pm-project-card
+      title="Mesh pilot: Fordham Hill"
+      description="50-family mesh + private AI. Voice that goes through walls. Community-owned infrastructure."
+      status="live"
+      tags='["mesh", "voice", "tenancy"]'
+      links='[{"label":"Capability brief","href":"#brief"},{"label":"Discord","href":"https://discord.gg/example"}]'
+    ></pm-project-card>
+
+    <pm-project-card
+      title="St. Maarten disaster response"
+      description="Pelican-case mobile node. Solar + Starlink + HaLow mesh. Voice translation in 4 languages."
+      status="rehearsal"
+      tags='["disaster", "voice", "mesh", "off-grid"]'
+      links='[{"label":"Field report","href":"#report"}]'
+    ></pm-project-card>
+
+    <pm-project-card
+      title="Tokenism Exchange (Q3 2026)"
+      description="Token-economy simulation floor. Run scenarios, export to Firefly III."
+      status="planned"
+      tags='["tokenism", "wealth", "ledger"]'
+    ></pm-project-card>
+
+    <pm-project-card
+      title="Pilot-1 (archived)"
+      description="Initial mesh test, 5 families, 3 months. Lessons learned."
+      status="archived"
+    ></pm-project-card>
+  </div>
+
+  <script type="module" src="./pm-project-card.js"></script>
+</body>
+</html>

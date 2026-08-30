@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PreTeXt source for the persona-room technical panel (Phase 4).
+     Canonical render: scaffold a project with `pretext new`, drop this in as the
+     source, then `pretext build web` (HTML + MathJax). Output embeds into the
+     PreTeXt slot of pmoves/rooms/persona/index.html on the deployed pmoves.ai
+     room. This .ptx is the source of truth. -->
+<pretext>
+  <article xml:id="chit-mof">
+    <title>CHIT and the Metal-Organic Framework: A Structural Isomorphism</title>
+    <frontmatter>
+      <titlepage>
+        <author><personname>Russell Richardson (DARKXSIDE)</personname></author>
+      </titlepage>
+      <abstract>
+        <p>A short case study behind PMOVES.AI: why the platform's identity and
+        transport layers are modeled on material science, and how one concrete
+        control — the external-egress gate — falls out of a set-membership
+        predicate that is verified at runtime and enforced in the compose graph.</p>
+      </abstract>
+    </frontmatter>
+
+    <section xml:id="egress">
+      <title>The egress gate as set membership</title>
+      <p>Each service carries the set of Docker network tiers it is attached to.
+      Let <m>N(s)</m> be that set for service <m>s</m>, drawn from the fleet's
+      five tiers</p>
+      <me>T = \{\, \texttt{pmoves\_data},\ \texttt{pmoves\_api},\ \texttt{pmoves\_app},\ \texttt{pmoves\_bus},\ \texttt{pmoves\_external} \,\}.</me>
+      <p>External reachability is then not a flag but a predicate — membership of
+      the egress tier:</p>
+      <md>
+        <mrow>\operatorname{egress}(s) &amp;\iff \texttt{pmoves\_external} \in N(s),</mrow>
+        <mrow>\operatorname{on}(s, t) &amp;\iff t \in N(s).</mrow>
+      </md>
+      <p>The <c>TopologyContext</c> reads <m>N(s)</m> from a comma-separated
+      <c>PMOVES_NETWORKS</c> environment value, so <m>N(s)=\varnothing</m> whenever
+      nothing populates it — and then <m>\operatorname{egress}(s)</m> is
+      identically false for every service. Closing that gap means mirroring each
+      service's declared <c>networks:</c> list into its own environment across all
+      <m>93</m> networked services, and guarding the mirror with a CI drift check
+      so <m>N(s)</m> in code always equals <m>N(s)</m> in the compose graph.</p>
+    </section>
+
+    <section xml:id="isomorphism">
+      <title>Why "Metal-Organic Framework" is not a metaphor</title>
+      <p>A Metal-Organic Framework is a crystalline lattice of metal nodes joined
+      by organic linkers, prized for enormous internal surface area. PMOVES maps
+      onto it as a structural isomorphism rather than a mood:</p>
+      <definition xml:id="mof-map">
+        <title>The mapping <m>\Phi</m></title>
+        <statement>
+          <p>Let <m>\Phi</m> send platform components to their material analogues:</p>
+          <md>
+            <mrow>\text{NATS JetStream} &amp;\xmapsto{\ \Phi\ } \text{traveling wave (transport that sustains oscillation)}</mrow>
+            <mrow>\text{TensorZero} &amp;\xmapsto{\ \Phi\ } \text{impedance matcher (routes across provider mismatch)}</mrow>
+            <mrow>\text{CHIT} &amp;\xmapsto{\ \Phi\ } \text{self-stabilizing equilibrium (signed identity that restores trust)}</mrow>
+            <mrow>\text{Neo4j} &amp;\xmapsto{\ \Phi\ } \text{high-surface-area adsorption framework (graph memory)}</mrow>
+          </md>
+        </statement>
+      </definition>
+      <p>The map is useful because it is <em>predictive</em>: properties of the
+      material target (reflection at an impedance discontinuity, restoring force
+      toward equilibrium) suggest where the platform will fail or self-heal.</p>
+    </section>
+
+    <section xml:id="cgp">
+      <title>The CGP packet as a state vector</title>
+      <p>Voice and agent state travel the Geometry Bus as a Compressed Geometric
+      Packet — a small typed vector rather than free text:</p>
+      <me>\mathrm{CGP} = \{\, \delta,\ \mathrm{Hz},\ \kappa,\ A,\ F \,\}</me>
+      <p>with <m>\delta</m> mood, <m>\mathrm{Hz}</m> tempo, <m>\kappa</m> posture,
+      and <m>A, F</m> amplitude and frequency envelopes. Agents subscribe to the
+      vector, not to a transcript: they <em>read the room</em>. A beat at
+      <m>120</m> BPM is thus literally a state — <m>\mathrm{Hz} = 2</m> — carried on
+      the same bus that carries every other signed event.</p>
+    </section>
+
+    <conclusion>
+      <p>One predicate (egress as membership), one map (<m>\Phi</m>), one vector
+      (CGP): the same discipline — make the structure explicit, then enforce it —
+      applied to identity, transport, and state.</p>
+    </conclusion>
+  </article>
+</pretext>

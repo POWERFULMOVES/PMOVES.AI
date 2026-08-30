@@ -37,7 +37,7 @@ jobs:
       TRIVY_IMAGE: aquasec/trivy:0.57.1
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Resolve current and candidate versions
         id: versions
@@ -46,7 +46,7 @@ jobs:
           INPUT_WHEEL_VERSION: ${{ github.event.inputs.wheel_version || '' }}
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           import pathlib
@@ -107,7 +107,7 @@ jobs:
           CANDIDATE_WHEEL: ${{ steps.versions.outputs.candidate_wheel }}
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python3 - <<'PY'
           import os
           import pathlib
           import re
@@ -117,7 +117,6 @@ jobs:
               pathlib.Path("pmoves/services/supaserch/Dockerfile"),
               pathlib.Path("pmoves/services/deepresearch/Dockerfile"),
               pathlib.Path("pmoves/services/pmoves-yt/Dockerfile"),
-              pathlib.Path("pmoves/services/archon/Dockerfile"),
           ]
 
           pin = (
@@ -184,7 +183,6 @@ jobs:
             "supaserch|pmoves/services|pmoves/services/supaserch/Dockerfile|local/pmoves-supaserch:toolchain-canary"
             "deepresearch|pmoves|pmoves/services/deepresearch/Dockerfile|local/pmoves-deepresearch:toolchain-canary"
             "pmoves-yt|pmoves/services/pmoves-yt|pmoves/services/pmoves-yt/Dockerfile|local/pmoves-yt:toolchain-canary"
-            "archon|pmoves|pmoves/services/archon/Dockerfile|local/pmoves-archon:toolchain-canary"
           )
 
           for entry in "${targets[@]}"; do
@@ -205,7 +203,7 @@ jobs:
 
       - name: Create PR for pinned bump (all integration Python images)
         if: ${{ steps.versions.outputs.should_update == 'true' && github.event.inputs.open_pr != 'false' }}
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           branch: chore/python-images-toolchain-canary
           delete-branch: true
@@ -239,4 +237,3 @@ jobs:
             pmoves/services/supaserch/Dockerfile
             pmoves/services/deepresearch/Dockerfile
             pmoves/services/pmoves-yt/Dockerfile
-            pmoves/services/archon/Dockerfile

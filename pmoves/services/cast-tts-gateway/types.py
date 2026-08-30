@@ -4,7 +4,7 @@ This module provides type-safe response structures for all API endpoints,
 improving type checking and IDE autocomplete support.
 """
 
-from typing import TypedDict, Optional, Any, List
+from typing import TypedDict, Optional, List
 
 
 class SuccessResponse(TypedDict):

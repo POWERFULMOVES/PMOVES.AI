@@ -219,6 +219,13 @@ def test_v2_rejects_spoofed_forwarded_for(gateway_modules, monkeypatch):
     monkeypatch.setattr(gateway_v2, "TAILSCALE_ONLY", False)
     monkeypatch.setattr(gateway_v2, "TAILSCALE_ADMIN_ONLY", True)
     monkeypatch.setattr(gateway_v2, "_TRUSTED_PROXY_NETWORKS", [], raising=False)
+    # After decomposition, require_admin_tailscale lives in security.py which
+    # holds its own module-level copies of the config constants.
+    _sec = sys.modules.get("security")
+    if _sec is not None:
+        monkeypatch.setattr(_sec, "TAILSCALE_ONLY", False)
+        monkeypatch.setattr(_sec, "TAILSCALE_ADMIN_ONLY", True)
+        monkeypatch.setattr(_sec, "_TRUSTED_PROXY_NETWORKS", [], raising=False)
     request = _make_request("198.51.100.20", "100.64.5.10")
     with pytest.raises(HTTPException) as exc:
         gateway_v2.require_admin_tailscale(request)
@@ -231,5 +238,10 @@ def test_v2_allows_trusted_proxy_forwarded_for(gateway_modules, monkeypatch):
     monkeypatch.setattr(gateway_v2, "TAILSCALE_ONLY", False)
     monkeypatch.setattr(gateway_v2, "TAILSCALE_ADMIN_ONLY", True)
     monkeypatch.setattr(gateway_v2, "_TRUSTED_PROXY_NETWORKS", [network], raising=False)
+    _sec = sys.modules.get("security")
+    if _sec is not None:
+        monkeypatch.setattr(_sec, "TAILSCALE_ONLY", False)
+        monkeypatch.setattr(_sec, "TAILSCALE_ADMIN_ONLY", True)
+        monkeypatch.setattr(_sec, "_TRUSTED_PROXY_NETWORKS", [network], raising=False)
     request = _make_request("10.20.0.5", "100.64.6.10")
     gateway_v2.require_admin_tailscale(request)

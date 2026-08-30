@@ -1,0 +1,585 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Room Manifest",
+  "description": "Declarative contract for an agent-owned room that binds persona, shell layout, notebook state, apps, and reusable skills.",
+  "type": "object",
+  "required": [
+    "room_id",
+    "version",
+    "display_name",
+    "agent_id",
+    "shell",
+    "apps",
+    "notebook",
+    "skill_bindings",
+    "policies"
+  ],
+  "properties": {
+    "room_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Stable room identifier"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic or dated manifest version"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable room title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short statement of the room's purpose"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Primary PMOVES agent identity owning this room"
+    },
+    "stage": {
+      "type": "string",
+      "enum": ["rehearsal", "live", "review", "archive"],
+      "description": "Persistent room lifecycle stage. Transient session state is managed separately by P7."
+    },
+    "alter": {
+      "type": "string",
+      "description": "Optional alter or room profile chosen for this manifestation"
+    },
+    "room_type": {
+      "type": "string",
+      "enum": ["operator", "builder", "scout", "creator", "viewer", "hybrid", "exchange"],
+      "description": "Primary operating pattern for the room. 'exchange' = financial/economic-exchange floor (e.g. ToKenism public face). Added 2026-07-20 via open-room-lane schema extension — see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md, pending operator signoff per AGNOTE4482 §1348."
+    },
+    "owner_mode": {
+      "type": "string",
+      "enum": ["primary", "alter", "shared", "ephemeral"],
+      "description": "Identity mode for the room session"
+    },
+    "access": {
+      "type": "object",
+      "description": "Room privacy and content posture. Governs the room INTERNALLY; public egress is enforced separately by policies.publish.egress_redaction_floor.",
+      "properties": {
+        "visibility": { "type": "string", "enum": ["public", "private", "unlisted"] },
+        "owner_only": { "type": "boolean" },
+        "invite_list": { "type": "array", "items": { "type": "string" } },
+        "content_rating": { "type": "string", "enum": ["standard", "uncensored"], "description": "'uncensored' means unrestricted authentic expression inside the room — not a pornography flag." },
+        "exclude_from_public_catalog": { "type": "boolean" },
+        "rating_note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "description": "Versioned room metadata used by control-plane integrations.",
+      "properties": {
+        "chit": {
+          "type": "object",
+          "description": "Cryptographic Handshake for Identity & Trust activation metadata.",
+          "required": ["card_id"],
+          "properties": {
+            "card_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Active signing card used for the current room activation posture."
+            },
+            "creator_id": { "type": "string" },
+            "interim": { "type": "boolean" },
+            "transition_to": { "type": "string" },
+            "transition_date": { "type": "string", "format": "date" },
+            "steward_card_id": { "type": "string", "format": "uuid" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "shell": {
+      "type": "object",
+      "required": ["theme", "layout"],
+      "properties": {
+        "theme": {
+          "type": "object",
+          "required": ["theme_id"],
+          "properties": {
+            "theme_id": {
+              "type": "string"
+            },
+            "accent_color": {
+              "type": "string",
+              "pattern": "^#[0-9A-Fa-f]{6}$"
+            },
+            "skin": {
+              "type": "string"
+            },
+            "icon": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "layout": {
+          "type": "object",
+          "required": ["default_route", "panels"],
+          "properties": {
+            "default_route": {
+              "type": "string"
+            },
+            "panels": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["panel_id", "kind", "position"],
+                "properties": {
+                  "panel_id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["chat", "notebook", "graph", "media", "controls", "tasks", "logs", "custom", "browser"],
+                    "description": "Panel kind. 'browser' = webview/iframe surface for external apps (e.g. ToKenism simulator, Firefly ledger). Added 2026-07-20 via open-room-lane schema extension — see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md, pending operator signoff per AGNOTE4482 §1348."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": ["left", "right", "top", "bottom", "center", "floating"]
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "pinned": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "apps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["app_id", "kind", "route", "capabilities"],
+        "properties": {
+          "app_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["notebook", "chat", "media", "graph", "editor", "browser", "dashboard", "custom"]
+          },
+          "route": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "action_namespace": {
+            "type": "string",
+            "description": "Structured action namespace the room can call into"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pinned": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "planned", "deprecated"],
+            "description": "Lifecycle status of the app surface. Planned apps render as inactive in the room UI."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "notebook": {
+      "type": "object",
+      "required": ["provider", "workspace_ref", "sync"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["open-notebook", "pmoves-notebook-workbench", "external"]
+        },
+        "workspace_ref": {
+          "type": "string",
+          "description": "Notebook or workspace identifier"
+        },
+        "thread_ref": {
+          "type": "string",
+          "description": "Optional default conversation thread or page identifier"
+        },
+        "default_page": {
+          "type": "string"
+        },
+        "sync": {
+          "type": "object",
+          "required": ["mode", "writeback_targets"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["authoritative", "mirrored", "read-only"]
+            },
+            "writeback_targets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["sources", "entries", "pages", "threads", "snapshots"]
+              }
+            },
+            "artifact_prefix": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "description": "Durable FILE plane for the room. The notebook owns structured durable state; storage owns opaque files (media, drops, exports). A room declares LOGICAL mounts only - never host paths, node names, or absolute filesystem locations, which are runtime concerns resolved per node.",
+      "required": ["provider", "volume", "mounts"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["juicefs", "minio", "local", "external"]
+        },
+        "volume": {
+          "type": "string",
+          "description": "Logical volume name, e.g. pmoves-media. Not a path."
+        },
+        "mounts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["mount_id", "role", "path"],
+            "properties": {
+              "mount_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              "role": {
+                "type": "string",
+                "enum": ["inbox", "outbox", "library", "scratch"],
+                "description": "inbox = files arrive here for the room; outbox = room-approved output staged for egress; library = curated read surface; scratch = ephemeral."
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
+                "description": "Volume-relative path. Must not be absolute and must not contain '..' - a room cannot escape its volume."
+              },
+              "access": {
+                "type": "string",
+                "enum": ["read-only", "read-write"],
+                "default": "read-write"
+              },
+              "watch": {
+                "type": "boolean",
+                "default": false,
+                "description": "Emit an event when files land here."
+              },
+              "emit_subject": {
+                "type": "string",
+                "description": "NATS subject published on arrival when watch is true, e.g. room.storage.arrived.v1"
+              },
+              "visibility": {
+                "type": "string",
+                "enum": ["private", "room", "public"],
+                "default": "room",
+                "description": "Reach of this mount's contents. Never widens access.visibility, and never bypasses policies.publish.egress_redaction_floor."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "persona": {
+      "type": "object",
+      "properties": {
+        "signature_ref": {
+          "type": "string",
+          "description": "Reference into agent_signatures.yaml"
+        },
+        "voice": {
+          "type": "string"
+        },
+        "role": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Persona roles within the room (e.g. co-creator, witness)"
+        },
+        "register": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Voice register cues (e.g. uncensored, signifying, poetic)"
+        },
+        "twin_target": {
+          "type": "string",
+          "description": "Identity this persona is a digital twin of, if any"
+        },
+        "glyph": {
+          "type": "string",
+          "maxLength": 2
+        },
+        "resonance": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "skill_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "skill.binding.v1.schema.json"
+      }
+    },
+    "policies": {
+      "type": "object",
+      "required": ["model_routing", "publish", "memory"],
+      "properties": {
+        "model_routing": {
+          "type": "string",
+          "enum": ["tensorzero", "hybrid", "native"],
+          "description": "Model routing plane for this room"
+        },
+        "publish": {
+          "type": "object",
+          "required": ["allow_nats_emit", "allow_external_publish"],
+          "properties": {
+            "allow_nats_emit": {
+              "type": "boolean"
+            },
+            "allow_external_publish": {
+              "type": "boolean"
+            },
+            "allowed_subjects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "gate_param": {
+              "type": "string",
+              "description": "Name of the geometry-state param that gates external publish (e.g. publish_gate)."
+            },
+            "gate_mode": {
+              "type": "string",
+              "enum": ["manual", "village-rules-auto"]
+            },
+            "egress_redaction_floor": {
+              "type": "object",
+              "description": "Fail-closed redaction applied to ALL public egress regardless of room rating. Cannot be bypassed by opening the gate.",
+              "properties": {
+                "enforce_on": { "type": "string" },
+                "rules": { "type": "array", "items": { "type": "string" } },
+                "fail_closed": { "type": "boolean" },
+                "note": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "memory": {
+          "type": "object",
+          "required": ["graphiti", "notebook_writeback", "chit_handoff"],
+          "properties": {
+            "graphiti": {
+              "type": "boolean"
+            },
+            "notebook_writeback": {
+              "type": "boolean"
+            },
+            "chit_handoff": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "graphiti_phase": {
+          "type": "string"
+        },
+        "room_events_subject": {
+          "type": "string"
+        },
+        "healthcheck_route": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source", "updated_at"],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "related_docs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[a-z0-9][a-z0-9._-]*$"
+      },
+      "description": "Agent team identifiers from agent-teams.yaml that this room coordinates"
+    },
+    "service_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[a-z0-9][a-z0-9._-]*$"
+      },
+      "description": "Docker Compose service names or service catalog slugs this room depends on"
+    },
+    "launcher_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[a-z0-9][a-z0-9._-]*$"
+      },
+      "description": "Pinokio launcher or make target identifiers for room bringup"
+    },
+    "meta": {
+      "type": "object",
+      "description": "Free-form room metadata. Currently used for inline CHIT signing-card references (see fordham.room.community) and any other operator-level annotations. Sub-objects like 'meta.chit' should mirror the canonical signing-card fields (card_id, creator_id, etc.) from pmoves/contracts/schemas/identity/signing-card.v1.schema.json. Added 2026-07-20 via open-room-lane schema extension — see pmoves/docs/specs/room-manifest-schema-extensions-2026-07-20.md, pending operator signoff per AGNOTE4482 §1348.",
+      "additionalProperties": true
+    },
+    "room_purpose": {
+      "type": "string",
+      "enum": ["community", "control", "studio", "operator", "classroom", "field", "showroom", "intake", "exchange", "custom"],
+      "description": "Social / topological role the room plays in the PMOVES lattice. Distinct from `room_type` (which is the operating pattern, e.g. 'creator'/'scout'/'hybrid'); `room_purpose` answers 'who comes here and why'. Examples: 'community' for Fordham/pilot rooms where residents ask questions, 'studio' for full creator surfaces (e.g. creator-studio.room.collab), 'control' for ops/infra rooms, 'intake' for help desks that route to other rooms. Added 2026-07-27 via creator-collab-lane — see pmoves/docs/specs/creator-collab-room-extensions-2026-07-27.md."
+    },
+    "creator_surface": {
+      "type": "string",
+      "enum": ["primary", "ambient", "background", "off"],
+      "description": "How the ComfyUI / Pinokio creator surface shows up in the room. 'primary' = full collab canvas (prompt queue + live progress + artifact gallery + whiteboard), 'ambient' = chat-overlay only (small 'render this' button next to chat, no main panel), 'background' = no UI on the desktop but the skill runs on explicit agent request, 'off' = not available. Every room gets the comfy-mesh-skill bound; this field just tunes the UI mode. Added 2026-07-27 via creator-collab-lane."
+    },
+    "hardware_requirements": {
+      "type": "object",
+      "description": "Hardware pin the room needs to operate. P7's session-open handler uses this + the current node's profile (from pmoves/config/profiles/) to pick the right physical host for the room session. 'false' for cpu-only rooms (Fordham, helpdesk); 'true' with vram_mb for GPU rooms. Added 2026-07-27 via creator-collab-lane. gpu + min_vram_mb are required so P7 has a complete request to schedule against; the allOf block adds a conditional check that gpu:true rooms carry positive VRAM while gpu:false rooms carry exactly 0. Updated 2026-07-27 via creator-collab-lane review-iter-2 per CodeRabbit on PR #2264 (thread 3657849847).",
+      "required": ["gpu", "min_vram_mb"],
+      "properties": {
+        "gpu": {
+          "type": "boolean",
+          "description": "Whether the room requires a GPU. Set false for CPU-only rooms (e.g. Fordham, helpdesk); true for rooms that need to render locally."
+        },
+        "min_vram_mb": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum total VRAM the host needs. 0 for CPU rooms; 12000+ for typical ComfyUI workflows; 24000+ for video gen / LoRA training; 120000+ for 120B-class inference. Must be 0 when gpu=false and >=1 when gpu=true (enforced via the allOf conditional below)."
+        },
+        "gpu_arch": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["sm_75", "sm_80", "sm_86", "sm_87", "sm_89", "sm_90", "sm_100", "sm_110", "sm_120"]
+          },
+          "description": "Allowed NVIDIA compute capabilities. sm_75 = Turing (RTX 20-series, T4), sm_80 = A100 (data-center Ampere), sm_86 = RTX 3060-3090 / RTX 3090 Ti (consumer Ampere, also the Z890 fleet node), sm_87 = Jetson Orin NX (edge Ampere), sm_89 = RTX 4090 (Ada Lovelace), sm_90 = H100 (Hopper), sm_100 = GB100 / B200 (data-center Blackwell), sm_110 = GB10 (DGX Spark, unified-memory Blackwell), sm_120 = RTX 5090 (consumer Blackwell)."
+        },
+        "node_roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["primary-gpu-tts", "infra-coordinator", "mobile-relay", "gpu-inference", "edge-ai", "api-gateway", "data-storage", "exit-proxy"]
+          },
+          "description": "Fleet node roles (from pmoves/configs/pinokio-network-inventory.yaml) that can host this room. Used by P7 session-open to pick a host."
+        },
+        "cpu_arch": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["x86_64", "arm64"] }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "gpu": { "const": true } }, "required": ["gpu"] },
+          "then": { "properties": { "min_vram_mb": { "minimum": 1 } } }
+        },
+        {
+          "if": { "properties": { "gpu": { "const": false } }, "required": ["gpu"] },
+          "then": { "properties": { "min_vram_mb": { "const": 0 } } }
+        }
+      ]
+    },
+    "pinokio_app_refs": {
+      "type": "array",
+      "description": "Pinokio apps the room brings up on launch via `PINOKIO_SCRIPT_AUTOLAUNCH` / `PINOKIO_SCRIPT_REQUIRES`. Each ref resolves to `pmoves/config/pinokio-apps/curated/<slug>.yaml` (or `user/<slug>.yaml`) for endpoint, healthcheck, gpu_required, node_affinity, pinokio_skill_ref. P7 session-open calls `pinokio start <slug>` per app in dependency order, respecting the declared GPU reservations. Added 2026-07-27 via creator-collab-lane.",
+      "items": {
+        "type": "object",
+        "required": ["slug"],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "description": "Pinokio app slug matching `pmoves/config/pinokio-apps/curated/<slug>.yaml` or `user/<slug>.yaml`"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["primary", "optional", "fallback"],
+            "description": "primary = the room depends on this app, optional = nice-to-have, fallback = only if primary not available"
+          },
+          "gpu_reservation_mb": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "VRAM the room reserves for this app when computing room capacity. Used by P7 to refuse to start the room if the host node can't satisfy the union of reservations."
+          },
+          "gpu_reservation_mode": {
+            "type": "string",
+            "enum": ["concurrent", "exclusive"],
+            "default": "concurrent",
+            "description": "How this app's VRAM reservation combines with sibling refs. 'concurrent' = shares the host GPU with other concurrent apps (default; the host must satisfy the SUM of concurrent reservations). 'exclusive' = claims the whole GPU for this app while it runs (P7 only admits this ref when no other concurrent ref is loaded on the same host). Use exclusive for big models (wan video gen, LoRA training) that won't fit alongside anything else. Added 2026-07-27 via creator-collab-lane review-iter-1 per P2 review on PR #2264."
+          },
+          "autostart": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether P7 session-open auto-starts this Pinokio app when the room opens. Default true. Set false for apps that should only launch on explicit skill request (e.g. WAN video gen - 24GB exclusive; doesn't belong in the room's initial launch set). With autostart=false P7 treats the ref as an on-demand app: not in the launch set, not counted toward the concurrent reservation sum, and only started by the skill that names it. If a manifest has any auto-launched ref with gpu_reservation_mode=exclusive AND any other auto-launched ref, P7 rejects the room (the scheduler can't satisfy both at session-open). Added 2026-07-27 via creator-collab-lane review-iter-2 per CodeRabbit on PR #2264 (thread 3657849853)."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

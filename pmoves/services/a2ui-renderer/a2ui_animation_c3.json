@@ -1,0 +1,127 @@
+{
+  "spec": {
+    "_remotion_version": "4.0.436",
+    "version": "a2ui.animation.v2",
+    "metadata": {
+      "title": "CGP Visualization",
+      "origin_subject": "unknown.cgp",
+      "durationInFrames": 300,
+      "fps": 30,
+      "width": 1920,
+      "height": 1080,
+      "colorSpace": "bt601"
+    },
+    "defaultProps": {
+      "cgp_id": "unknown",
+      "source": "cipher_beats_analyst",
+      "audio_file": null,
+      "playbackRate": 1.0
+    },
+    "calculateMetadata": {
+      "_note": "Implemented in a2ui-renderer src/remotion/A2UIComposition.tsx",
+      "resolves": [
+        "durationInFrames",
+        "fps"
+      ],
+      "audio_driven": false
+    },
+    "schema": {
+      "_type": "zod",
+      "_ref": "A2UIProps",
+      "_pkg": "@remotion/zod-types",
+      "fields": {
+        "cgp_id": "z.string()",
+        "source": "z.string()",
+        "audio_file": "z.string().nullable()",
+        "playbackRate": "z.number().min(0.1).max(4.0)"
+      }
+    },
+    "sfx_anchors": [
+      {
+        "id": "sfx_0",
+        "freq_hz": 2000.0,
+        "amplitude": 0.495,
+        "frame_hint": 0,
+        "sfx_type": "beat_pulse"
+      }
+    ],
+    "scenes": [
+      {
+        "id": "scene_01_cgp_topology",
+        "startFrame": 0,
+        "durationInFrames": 300,
+        "elements": [
+          {
+            "id": "anchor_Allegro_balanced_Deep_c3",
+            "type": "text",
+            "content": "Allegro_balanced_Deep_c3",
+            "style": {
+              "x": 960,
+              "y": 7288,
+              "fontSize": 48,
+              "color": "#00FFCC",
+              "fontFamily": "Inter, sans-serif"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 1,
+                "startFrame": 0,
+                "durationInFrames": 15,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "spectral_pulse_0",
+            "type": "glyph",
+            "symbol": "\u25c8",
+            "style": {
+              "x": 960,
+              "y": 540,
+              "fontSize": 49,
+              "color": "#FF00FF"
+            },
+            "sfx_anchor_id": "sfx_0",
+            "animations": [
+              {
+                "property": "scale",
+                "from": 1.0,
+                "to": 1.7475,
+                "startFrame": 0,
+                "durationInFrames": 5,
+                "loop": true,
+                "easing": "spring"
+              }
+            ]
+          },
+          {
+            "id": "point_338a86c23c99",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 534,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "data_bindings": {
+      "cgp_source": "unknown"
+    }
+  }
+}

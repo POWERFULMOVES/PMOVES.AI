@@ -84,6 +84,125 @@ class TestHealthEndpoint:
         assert data["nats"] == "disconnected"
 
 
+def _load_main():
+    """Return the flute-gateway ``main`` module without ever re-executing it.
+
+    ``main`` defines its Prometheus Counters at module scope and
+    ``prometheus_client.REGISTRY`` is process-GLOBAL, so the two outlive each other
+    badly: if anything evicts ``main`` from ``sys.modules`` (other service test groups
+    in the same worker do), a plain ``import main`` re-runs those definitions against a
+    registry that still holds them and raises ``DuplicateTimeseries``. That is a harness
+    artifact, not a defect in the code under test — but it fails the test just as loudly,
+    and it only reproduces under CI's grouping, not a local file or directory run.
+
+    Reuse the cached module; if it really is gone, drop the stale flute_* collectors
+    first so the re-import can succeed.
+    """
+    import sys
+
+    if "main" in sys.modules:
+        return sys.modules["main"]
+
+    from prometheus_client import REGISTRY
+
+    for collector in list(getattr(REGISTRY, "_collector_to_names", {})):
+        names = REGISTRY._collector_to_names.get(collector, set())
+        if any(str(n).startswith("flute_") for n in names):
+            REGISTRY.unregister(collector)
+
+    import main as _main
+
+    return _main
+
+
+@requires_deps
+class TestHealthProbeConcurrency:
+    """The probes must run CONCURRENTLY, not in sequence.
+
+    Regression test for the B850 incident: the five provider probes and the Supabase
+    probe were awaited one after another, so every dependency that was DOWN added its
+    full timeout to the wall clock. With three providers unreachable, /healthz answered
+    HTTP 200 in 15.038s against a 15s container healthcheck timeout — marked unhealthy
+    by 38 milliseconds, 1,950 consecutive times, while serving correctly throughout.
+
+    The pre-existing health tests all passed the whole time: they asserted status codes
+    and payload keys, and never once asserted how long the answer took. A health endpoint
+    that is correct but slower than the thing measuring it is indistinguishable from a
+    dead one — so latency is part of this endpoint's contract, and is now tested.
+    """
+
+    def test_probes_run_concurrently_not_serially(self):
+        """Six 0.3s probes must finish in ~0.3s (max), not ~1.8s (sum)."""
+        import asyncio
+        import time
+
+        DELAY = 0.3
+        N_PROVIDERS = 5
+
+        def _slow_provider():
+            provider = MagicMock()
+
+            async def _slow_health_check():
+                await asyncio.sleep(DELAY)
+                return True
+
+            provider.health_check = AsyncMock(side_effect=_slow_health_check)
+            return provider
+
+        async def _slow_supabase(*_args, **_kwargs):
+            await asyncio.sleep(DELAY)
+            raise RuntimeError("supabase unreachable in test")
+
+        main_mod = _load_main()
+        with patch.object(main_mod, "vibevoice_provider", _slow_provider()), \
+             patch.object(main_mod, "whisper_provider", _slow_provider()), \
+             patch.object(main_mod, "ultimate_tts_provider", _slow_provider()), \
+             patch.object(main_mod, "voicebox_provider", _slow_provider()), \
+             patch.object(main_mod, "omnivoice_provider", _slow_provider()), \
+             patch.object(main_mod, "nats_client", None), \
+             patch("httpx.AsyncClient.get", new=AsyncMock(side_effect=_slow_supabase)):
+            from fastapi.testclient import TestClient
+
+            client = TestClient(main_mod.app)
+            started = time.monotonic()
+            response = client.get("/healthz")
+            elapsed = time.monotonic() - started
+
+        assert response.status_code == 200
+        serial = DELAY * (N_PROVIDERS + 1)  # 5 providers + supabase == 1.8s
+        assert elapsed < serial / 2, (
+            f"/healthz took {elapsed:.2f}s; serial execution would be ~{serial:.2f}s. "
+            "The probes are running one after another again."
+        )
+
+    def test_raising_probe_does_not_break_the_endpoint(self):
+        """A provider whose health_check RAISES must not 500 the whole endpoint.
+
+        gather(return_exceptions=True) keeps one broken provider from taking down the
+        only endpoint an operator can use to find out which provider is broken.
+        """
+        exploding = MagicMock()
+        exploding.health_check = AsyncMock(side_effect=RuntimeError("provider exploded"))
+        healthy = MagicMock()
+        healthy.health_check = AsyncMock(return_value=True)
+
+        main_mod = _load_main()
+        with patch.object(main_mod, "vibevoice_provider", exploding), \
+             patch.object(main_mod, "whisper_provider", healthy), \
+             patch.object(main_mod, "ultimate_tts_provider", None), \
+             patch.object(main_mod, "voicebox_provider", None), \
+             patch.object(main_mod, "omnivoice_provider", None), \
+             patch.object(main_mod, "nats_client", None):
+            from fastapi.testclient import TestClient
+
+            response = TestClient(main_mod.app).get("/healthz")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["providers"]["vibevoice"] is False
+        assert data["providers"]["whisper"] is True
+
+
 @requires_deps
 class TestConfigEndpoint:
     """Tests for /v1/voice/config endpoint."""
@@ -521,3 +640,56 @@ class TestProviders:
         provider = WhisperProvider("http://localhost:8078")
         with pytest.raises(NotImplementedError):
             await provider.synthesize("text")
+
+
+@requires_deps
+class TestVoiceBindingEndpoint:
+    """Tests for /v1/voice/binding — the agent→voice resolution HTTP seam."""
+
+    _AUTH = {"X-API-Key": "test-api-key"}
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        with patch("main.nats_client", None):
+            from fastapi.testclient import TestClient
+            from main import app
+            self.client = TestClient(app)
+            yield
+
+    def test_binding_requires_api_key(self):
+        """Read-only but topology-bearing → gated behind the API key."""
+        r = self.client.get("/v1/voice/binding", params={"agent_id": "claude-opus"})
+        assert r.status_code == 401
+
+    def test_binding_returns_voicebinding_shape(self):
+        """A known agent resolves to a complete VoiceBinding."""
+        r = self.client.get(
+            "/v1/voice/binding", params={"agent_id": "claude-opus"}, headers=self._AUTH
+        )
+        assert r.status_code == 200
+        d = r.json()
+        for k in ("agent_id", "alter", "engine", "voice_id", "provider",
+                  "prosody", "node", "target_url", "floos_suit", "source"):
+            assert k in d, f"missing key: {k}"
+        assert d["agent_id"] == "claude-opus"
+        assert d["engine"]  # some engine always resolves
+
+    def test_binding_unknown_agent_is_failopen(self):
+        """An unregistered agent falls open to the provider default, not a 500."""
+        r = self.client.get(
+            "/v1/voice/binding", params={"agent_id": "no-such-agent-xyz"}, headers=self._AUTH
+        )
+        assert r.status_code == 200
+        assert r.json()["engine"]
+
+    def test_binding_floos_alter_carries_prosody(self):
+        """A FlOO$ suit alter surfaces its prosody + floos_suit tag."""
+        r = self.client.get(
+            "/v1/voice/binding",
+            params={"agent_id": "kilocode", "alter": "mr-clean"},
+            headers=self._AUTH,
+        )
+        assert r.status_code == 200
+        d = r.json()
+        assert d["floos_suit"] == "mr-clean"
+        assert d["prosody"] and d["prosody"]["bpm"] == 120

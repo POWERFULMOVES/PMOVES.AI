@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import FastAPI, Header, HTTPException, status
+from fastapi import APIRouter, FastAPI, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 import uvicorn
 
@@ -24,15 +24,10 @@ from .types import (
     AgentCard,
     AgentDiscoveryResponse,
     Artifact,
-    ArtifactType,
     Task,
-    TaskCreateRequest,
-    TaskCreateResponse,
-    TaskErrorResponse,
     TaskState,
     TaskStatusMessage,
     Message,
-    SendMessageRequest,
     SendMessageResponse,
     JSONRPCError,
     AGENT_ZERO_CARD,
@@ -56,6 +51,9 @@ except Exception:
 # In-memory task storage (replace with persistent storage in production)
 _tasks: Dict[str, Task] = {}
 _tasks_lock = asyncio.Lock()
+
+# Module-level agent card — used by router mode and standalone app mode
+_agent_card: AgentCard = AGENT_ZERO_CARD
 
 
 def _is_enabled_env(var_name: str, default: str = "false") -> bool:
@@ -117,11 +115,6 @@ def _require_a2a_auth(authorization: Optional[str], public_mode: bool = False) -
             detail="Token expired",
             headers={"WWW-Authenticate": "Bearer"},
         ) from None
-    except jose_jwt.InvalidSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid token signature",
-        ) from None
     except jose_jwt.JWTError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -143,84 +136,44 @@ def _require_task_auth(authorization: Optional[str]) -> None:
     _require_a2a_auth(authorization, public_mode=_is_task_api_public())
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """
-    Lifespan context manager for startup and shutdown events.
-
-    This is the recommended pattern for FastAPI 0.100+. Replaces
-    deprecated startup/shutdown decorator pattern.
-
-    Yields:
-        None: Control is yielded to the application while running
-    """
-    # Startup: Initialize resources
-    logger.info("Starting Agent Zero A2A server...")
-    logger.info(f"Agent: {AGENT_ZERO_CARD.name} v{AGENT_ZERO_CARD.version}")
-    logger.info(f"Capabilities: {', '.join(AGENT_ZERO_CARD.capabilities)}")
-
-    # Initialize task storage (could connect to database here)
-    global _tasks
-    _tasks.clear()
-
-    # Yield control to the application
-    yield
-
-    # Shutdown: Clean up resources
-    logger.info("Shutting down Agent Zero A2A server...")
-    logger.info(f"Processed {len(_tasks)} tasks during session")
-
-    # Cleanup task storage
-    async with _tasks_lock:
-        _tasks.clear()
+# ---------------------------------------------------------------------------
+# A2A Router — mountable into any FastAPI application
+# ---------------------------------------------------------------------------
 
 
-def create_app(
+def create_a2a_router(
     agent_card: Optional[AgentCard] = None,
-    title: str = "Agent Zero A2A Server",
-    version: str = "2.0.0"
-) -> FastAPI:
+) -> APIRouter:
     """
-    Create and configure the FastAPI application.
+    Create an APIRouter with all A2A protocol routes.
+
+    Designed to be mounted into an existing FastAPI application via
+    ``app.include_router(create_a2a_router())``. This avoids running a
+    separate uvicorn process and shares the main server's port.
 
     Args:
         agent_card: Optional custom agent card. Defaults to AGENT_ZERO_CARD.
-        title: API title for documentation.
-        version: API version.
 
     Returns:
-        Configured FastAPI application instance
+        APIRouter with A2A discovery, task, and artifact routes.
     """
-    # Use provided card or default
-    card = agent_card or AGENT_ZERO_CARD
+    global _agent_card
+    _agent_card = agent_card or AGENT_ZERO_CARD
 
-    # Create FastAPI app with lifespan context manager
-    app = FastAPI(
-        title=title,
-        version=version,
-        description="Agent2Agent protocol server for PMOVES.AI Agent Zero",
-        lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
-    )
-
-    # Store agent card in app state for access in endpoints
-    app.state.agent_card = card
-
-    # Register endpoints
-    _register_endpoints(app)
-
-    # Register exception handlers
-    _register_exception_handlers(app)
-
-    return app
+    router = APIRouter(tags=["A2A"])
+    _register_a2a_routes(router)
+    return router
 
 
-def _register_endpoints(app: FastAPI) -> None:
-    """Register all route handlers with the application."""
+def _register_a2a_routes(target: Any) -> None:
+    """Register A2A route handlers on a FastAPI app or APIRouter.
 
-    @app.get(WELL_KNOWN_AGENT_CARD_PATH, tags=["Discovery"])
-    @app.get(LEGACY_AGENT_CARD_PATH, include_in_schema=False, tags=["Discovery"])
+    NOTE: /healthz is intentionally excluded here — the parent application
+    owns its own health endpoint to avoid route conflicts.
+    """
+
+    @target.get(WELL_KNOWN_AGENT_CARD_PATH, tags=["Discovery"])
+    @target.get(LEGACY_AGENT_CARD_PATH, include_in_schema=False, tags=["Discovery"])
     async def get_agent_card(
         authorization: Optional[str] = Header(default=None, alias="Authorization"),
     ) -> AgentCard:
@@ -234,23 +187,9 @@ def _register_endpoints(app: FastAPI) -> None:
             AgentCard: Agent identity and capability statement
         """
         _require_discovery_auth(authorization)
-        return app.state.agent_card
+        return _agent_card
 
-    @app.get("/healthz", tags=["Health"])
-    async def health_check() -> Dict[str, str]:
-        """
-        Health check endpoint.
-
-        Returns:
-            Health status response
-        """
-        return {
-            "status": "healthy",
-            "agent": app.state.agent_card.name,
-            "version": app.state.agent_card.version
-        }
-
-    @app.post("/a2a/v1/tasks", response_model=SendMessageResponse, tags=["Tasks"])
+    @target.post("/a2a/v1/tasks", response_model=SendMessageResponse, tags=["Tasks"])
     async def create_task(
         request: Dict[str, Any],
         authorization: Optional[str] = Header(default=None, alias="Authorization"),
@@ -339,7 +278,7 @@ def _register_endpoints(app: FastAPI) -> None:
                 detail=f"Failed to create task: {str(e)}"
             )
 
-    @app.get("/a2a/v1/tasks/{task_id}", tags=["Tasks"])
+    @target.get("/a2a/v1/tasks/{task_id}", tags=["Tasks"])
     async def get_task(
         task_id: str,
         authorization: Optional[str] = Header(default=None, alias="Authorization"),
@@ -375,7 +314,7 @@ def _register_endpoints(app: FastAPI) -> None:
 
         return task
 
-    @app.post("/a2a/v1/tasks/{task_id}/cancel", tags=["Tasks"])
+    @target.post("/a2a/v1/tasks/{task_id}/cancel", tags=["Tasks"])
     async def cancel_task(
         task_id: str,
         authorization: Optional[str] = Header(default=None, alias="Authorization"),
@@ -424,7 +363,7 @@ def _register_endpoints(app: FastAPI) -> None:
 
         return task
 
-    @app.post("/a2a/v1/tasks/{task_id}/artifacts", tags=["Tasks"])
+    @target.post("/a2a/v1/tasks/{task_id}/artifacts", tags=["Tasks"])
     async def add_artifact(
         task_id: str,
         artifact: Dict[str, Any],
@@ -471,7 +410,7 @@ def _register_endpoints(app: FastAPI) -> None:
 
         return task
 
-    @app.get("/a2a/v1/tasks", tags=["Tasks"])
+    @target.get("/a2a/v1/tasks", tags=["Tasks"])
     async def list_tasks(
         status_filter: Optional[TaskState] = None,
         limit: int = 100,
@@ -497,7 +436,7 @@ def _register_endpoints(app: FastAPI) -> None:
 
         return tasks[:limit]
 
-    @app.post("/a2a/v1/discover", response_model=AgentDiscoveryResponse, tags=["Discovery"])
+    @target.post("/a2a/v1/discover", response_model=AgentDiscoveryResponse, tags=["Discovery"])
     async def discover_agents(
         authorization: Optional[str] = Header(default=None, alias="Authorization"),
     ) -> AgentDiscoveryResponse:
@@ -513,9 +452,99 @@ def _register_endpoints(app: FastAPI) -> None:
         _require_discovery_auth(authorization)
 
         return AgentDiscoveryResponse(
-            agents=[app.state.agent_card],
+            agents=[_agent_card],
             total=1
         )
+
+
+# ---------------------------------------------------------------------------
+# Standalone app (backward compatible — used by test_server.py and __main__)
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """
+    Lifespan context manager for startup and shutdown events.
+
+    This is the recommended pattern for FastAPI 0.100+. Replaces
+    deprecated startup/shutdown decorator pattern.
+
+    Yields:
+        None: Control is yielded to the application while running
+    """
+    # Startup: Initialize resources
+    logger.info("Starting Agent Zero A2A server...")
+    logger.info(f"Agent: {_agent_card.name} v{_agent_card.version}")
+    logger.info(f"Capabilities: {', '.join(_agent_card.capabilities)}")
+
+    # Initialize task storage (could connect to database here)
+    global _tasks
+    _tasks.clear()
+
+    # Yield control to the application
+    yield
+
+    # Shutdown: Clean up resources
+    logger.info("Shutting down Agent Zero A2A server...")
+    logger.info(f"Processed {len(_tasks)} tasks during session")
+
+    # Cleanup task storage
+    async with _tasks_lock:
+        _tasks.clear()
+
+
+def create_app(
+    agent_card: Optional[AgentCard] = None,
+    title: str = "Agent Zero A2A Server",
+    version: str = "2.0.0"
+) -> FastAPI:
+    """
+    Create and configure the FastAPI application (standalone mode).
+
+    Args:
+        agent_card: Optional custom agent card. Defaults to AGENT_ZERO_CARD.
+        title: API title for documentation.
+        version: API version.
+
+    Returns:
+        Configured FastAPI application instance
+    """
+    global _agent_card
+    _agent_card = agent_card or AGENT_ZERO_CARD
+
+    # Create FastAPI app with lifespan context manager
+    app = FastAPI(
+        title=title,
+        version=version,
+        description="Agent2Agent protocol server for PMOVES.AI Agent Zero",
+        lifespan=lifespan,
+        docs_url="/docs",
+        redoc_url="/redoc",
+    )
+
+    # Mount A2A routes from shared router
+    app.include_router(create_a2a_router(_agent_card))
+
+    # App-specific health endpoint (not in router — avoids conflict with main.py)
+    @app.get("/healthz", tags=["Health"])
+    async def health_check() -> Dict[str, str]:
+        """
+        Health check endpoint.
+
+        Returns:
+            Health status response
+        """
+        return {
+            "status": "healthy",
+            "agent": _agent_card.name,
+            "version": _agent_card.version
+        }
+
+    # Register exception handlers
+    _register_exception_handlers(app)
+
+    return app
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
@@ -560,7 +589,7 @@ def run_server(
     )
 
 
-# Create default app instance for direct import
+# Create default app instance for direct import (backward compat with tests)
 app = create_app()
 
 

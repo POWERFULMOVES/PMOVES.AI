@@ -21,7 +21,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from events.bus import EventBus, Event, get_event_bus
+from events.bus import EventBus
 from events.subjects import (
     AGENT_STARTED,
     TASK_CREATED,
@@ -50,7 +50,7 @@ class EventBusTester:
     async def setup(self):
         """Initialize event bus for testing."""
         logger.info("Setting up event bus...")
-        self.bus = EventBus(nats_url="nats://localhost:4222")
+        self.bus = EventBus(nats_url="nats://nats:pmoves@nats:4222")
         await self.bus.connect()
 
         # Register schema for AGENT_STARTED events
@@ -256,7 +256,7 @@ class EventBusTester:
             # Publish some events
             for i in range(3):
                 await self.bus.publish(
-                    subject=f"pmoves.test.metric.v1",
+                    subject="pmoves.test.metric.v1",
                     event_type="TEST_METRIC",
                     data={"index": i},
                     source="test"

@@ -1,4 +1,15 @@
-import os, re, time, threading, ipaddress, math, requests, logging, json, sys, io, socket
+import os
+import re
+import time
+import threading
+import ipaddress
+import math
+import requests
+import logging
+import json
+import sys
+import io
+import socket
 import urllib3
 from pathlib import Path
 from urllib.parse import urlparse
@@ -17,6 +28,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 from services.common.geometry_params import get_decoder_pack
 from services.common.hrm_sidecar import HrmDecoderController
+from services.common.env import get_secret
 from sentence_transformers import SentenceTransformer
 try:
     from sentence_transformers import CrossEncoder  # for optional rerank
@@ -28,10 +40,18 @@ from neo4j import GraphDatabase
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
 SENTENCE_MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
-USE_OLLAMA_EMBED = os.environ.get("USE_OLLAMA_EMBED","false").lower()=="true"
+EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", os.environ.get("EXTRACT_WORKER_EMBEDDING_BACKEND", "sentence-transformers")).lower()
+USE_OLLAMA_EMBED = EMBEDDING_BACKEND == "ollama" or os.environ.get("USE_OLLAMA_EMBED","false").lower()=="true"
+USE_TENSORZERO_EMBED = EMBEDDING_BACKEND == "tensorzero"
+OLLAMA_EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding:4b")
+_raw_tz_url = os.environ.get("TENSORZERO_BASE_URL", "http://tensorzero-gateway:3000")
+if urlparse(_raw_tz_url).scheme not in ("http", "https"):
+    raise ValueError("TENSORZERO_BASE_URL must use http/https scheme")
+TENSORZERO_BASE_URL = _raw_tz_url
+TENSORZERO_EMBED_MODEL = os.environ.get("TENSORZERO_EMBED_MODEL", "tensorzero::embedding_model_name::qwen3_embedding_4b_local")
 _raw_ollama_url = os.environ.get("OLLAMA_URL","http://ollama:11434")
-if not urlparse(_raw_ollama_url).scheme in ("http", "https"):
-    raise ValueError(f"OLLAMA_URL must use http/https scheme")
+if urlparse(_raw_ollama_url).scheme not in ("http", "https"):
+    raise ValueError("OLLAMA_URL must use http/https scheme")
 OLLAMA_URL = _raw_ollama_url
 HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
 NEO4J_URL = (os.environ.get("NEO4J_URL","bolt://neo4j:7687") or "").strip()
@@ -156,7 +176,7 @@ _hrm_controller = HrmDecoderController(get_decoder_pack)
 
 # --- CHIT security and decode flags ---
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower() == "true"
-CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
+CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE", "")
 CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower() == "true"
 CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_dataset.jsonl")
 CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"
@@ -177,6 +197,7 @@ _clip_lock = threading.Lock()
 _clap_model = None
 _clap_lock = threading.Lock()
 _cross_encoder = None
+_cross_encoder_failed = False
 _cross_lock = threading.Lock()
 
 def _load_codebook(path: str):
@@ -201,20 +222,43 @@ def _load_codebook(path: str):
         return items
     except FileNotFoundError:
         return []
-    except Exception as e:
+    except Exception:
         logger.exception("codebook load error")
         return []
 
 _model = None
 def embed_query(text: str):
     global _model
+    if USE_TENSORZERO_EMBED:
+        try:
+            r = requests.post(
+                f"{TENSORZERO_BASE_URL}/openai/v1/embeddings",
+                json={"model": TENSORZERO_EMBED_MODEL, "input": text},
+                timeout=30,
+            )
+            if not r.ok:
+                logger.error("TensorZero embed error: %s", r.text[:300])
+                raise HTTPException(502, f"TensorZero embed error: {r.status_code}")
+            try:
+                embedding = r.json()["data"][0]["embedding"]
+            except (KeyError, IndexError, ValueError, TypeError) as e:
+                logger.error("TensorZero embed response malformed: %s (body: %s)", e, r.text[:300])
+                raise HTTPException(502, f"TensorZero embed response malformed: {e}")
+            return embedding
+        except requests.RequestException as e:
+            logger.exception("TensorZero embed request failed")
+            raise HTTPException(502, f"TensorZero embed request failed: {e}")
     if USE_OLLAMA_EMBED:
         try:
-            r = requests.post(f"{OLLAMA_URL}/api/embeddings", json={"model":"nomic-embed-text","prompt":text}, timeout=30)
+            r = requests.post(f"{OLLAMA_URL}/api/embeddings", json={"model": OLLAMA_EMBED_MODEL, "prompt": text}, timeout=30)
             if not r.ok:
                 logger.error("Ollama embed bad response: %s", r.text[:300])
                 raise HTTPException(502, f"Ollama embed error: {r.status_code}")
-            return r.json().get("embedding")
+            embedding = r.json().get("embedding")
+            if embedding is None:
+                logger.error("Ollama returned no embedding for model %s", OLLAMA_EMBED_MODEL)
+                raise HTTPException(502, "Ollama returned no embedding vector")
+            return embedding
         except requests.RequestException as e:
             logger.exception("Ollama request failed")
             raise HTTPException(502, f"Ollama request failed: {e}")
@@ -267,16 +311,17 @@ def _get_clap_model():
 
 
 def _get_cross_encoder():
-    global _cross_encoder
-    if not RERANK_ENABLE:
+    global _cross_encoder, _cross_encoder_failed
+    if not RERANK_ENABLE or _cross_encoder_failed:
         return None
     if CrossEncoder is None:
-        raise HTTPException(500, "Rerank requested but CrossEncoder not available; check sentence-transformers install")
+        logger.warning("CrossEncoder not available; disabling rerank")
+        _cross_encoder_failed = True
+        return None
     if _cross_encoder is None:
         with _cross_lock:
-            if _cross_encoder is None:
+            if _cross_encoder is None and not _cross_encoder_failed:
                 try:
-                    # Auto-select CUDA if available
                     device = "cuda"
                     try:
                         import torch  # type: ignore
@@ -285,8 +330,9 @@ def _get_cross_encoder():
                         device = "cpu"
                     _cross_encoder = CrossEncoder(RERANK_MODEL, device=device)
                 except Exception as e:
-                    logger.exception("Failed to load CrossEncoder %s", RERANK_MODEL)
-                    raise HTTPException(500, f"Reranker load error: {e}")
+                    logger.warning("Failed to load CrossEncoder %s; disabling rerank: %s", RERANK_MODEL, e)
+                    _cross_encoder_failed = True
+                    return None
     return _cross_encoder
 
 def hybrid_score(vec_score: float, lex_score: float, alpha: float=0.7) -> float:
@@ -338,7 +384,7 @@ def refresh_warm_dictionary():
                 tmp.setdefault(t, set()).add(v)
         _warm_entities = tmp
         _warm_last = time.time()
-    except Exception as e:
+    except Exception:
         logger.exception("warm dictionary error")
 
 def warm_loop():
@@ -645,23 +691,29 @@ def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_
         })
 
     # Optional rerank using cross-encoder
+    reranked = False
     if RERANK_ENABLE and prelim:
         ce = _get_cross_encoder()
-        try:
-            pairs = [(query, r["text"] or "") for r in prelim]
-            rr = ce.predict(pairs)
-            for r, s in zip(prelim, rr):
-                r["rerank_score"] = float(s)
-            prelim.sort(key=lambda x: x.get("rerank_score", x.get("score", 0.0)), reverse=True)
-            return prelim[:max(k, RERANK_K)]
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.exception("Rerank error; falling back to preliminary scores")
-            # fall through to sort by prelim score
+        if ce is None:
+            logger.info("Reranker unavailable; returning preliminary scores")
+        else:
+            try:
+                pairs = [(query, r["text"] or "") for r in prelim]
+                rr = ce.predict(pairs)
+                for r, s in zip(prelim, rr):
+                    r["rerank_score"] = float(s)
+                prelim.sort(key=lambda x: x.get("rerank_score", x.get("score", 0.0)), reverse=True)
+                reranked = True
+                prelim = prelim[:max(k, RERANK_K)]
+            except HTTPException:
+                raise
+            except Exception:
+                logger.exception("Rerank error; falling back to preliminary scores")
 
-    prelim.sort(key=lambda x: x["score"], reverse=True)
-    return prelim[:k]
+    if not reranked:
+        prelim.sort(key=lambda x: x["score"], reverse=True)
+        prelim = prelim[:k]
+    return prelim, reranked
 
 @app.post("/hirag/query")
 def http_query(body: dict, _=Depends(require_tailscale)):
@@ -684,9 +736,9 @@ def http_query(body: dict, _=Depends(require_tailscale)):
     # run query and log request/results for observability
     try:
         logger.info("/hirag/query received: q=%s namespace=%s k=%d alpha=%s entity_types=%s", q if len(q) < 200 else q[:200] + "...", ns, k, alpha, et)
-        results = run_query(q, ns, k, alpha, gb, et)
-        logger.info("/hirag/query results count=%d for q=%s", len(results), q if len(q) < 80 else q[:80] + "...")
-        return {"query": q, "results": results}
+        results, reranked = run_query(q, ns, k, alpha, gb, et)
+        logger.info("/hirag/query results count=%d reranked=%s for q=%s", len(results), reranked, q if len(q) < 80 else q[:80] + "...")
+        return {"query": q, "results": results, "reranked": reranked}
     except HTTPException:
         # re-raise HTTPExceptions from lower layers
         raise
@@ -699,7 +751,8 @@ def hirag_admin_stats(_=Depends(require_admin_tailscale)):
     return {
         "entity_cache": {"keys": len(_cache_entities), "ttl": ENTITY_CACHE_TTL, "max": ENTITY_CACHE_MAX},
         "warm_dictionary": {"types": len(_warm_entities), "entries": int(sum(len(s) for s in _warm_entities.values())), "last_refresh": _warm_last},
-        "config": {"USE_MEILI": USE_MEILI, "GRAPH_BOOST": GRAPH_BOOST, "NEO4J_DICT_REFRESH_SEC": NEO4J_DICT_REFRESH_SEC, "NEO4J_DICT_LIMIT": NEO4J_DICT_LIMIT, "USE_OLLAMA_EMBED": USE_OLLAMA_EMBED}
+        "rerank": {"enabled": RERANK_ENABLE, "active": _cross_encoder is not None, "failed": _cross_encoder_failed, "model": RERANK_MODEL if RERANK_ENABLE else None},
+        "config": {"EMBEDDING_BACKEND": EMBEDDING_BACKEND, "USE_MEILI": USE_MEILI, "GRAPH_BOOST": GRAPH_BOOST, "NEO4J_DICT_REFRESH_SEC": NEO4J_DICT_REFRESH_SEC, "NEO4J_DICT_LIMIT": NEO4J_DICT_LIMIT, "USE_OLLAMA_EMBED": USE_OLLAMA_EMBED, "USE_TENSORZERO_EMBED": USE_TENSORZERO_EMBED}
     }
 
 @app.post("/hirag/admin/refresh")
@@ -801,7 +854,7 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
         pts = []
         if const_id and const:
             for p in const.get("points", []) or []:
-                cid = p.get("id");
+                cid = p.get("id")
                 if not cid: continue
                 pts.append({
                     "id": cid,
@@ -819,7 +872,6 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
 
 
 def _js_divergence(p: List[float], q: List[float]) -> float:
-    import math
     def _kl(a, b):
         eps = 1e-9
         s = 0.0
@@ -835,7 +887,6 @@ def _wasserstein_1d(p: List[float], q: List[float]) -> float:
     # discrete 1D: sum |CDF_p - CDF_q|
     import itertools
     from itertools import accumulate
-    import math
     cdp = list(accumulate(p))
     cdq = list(accumulate(q))
     return sum(abs(a-b) for a, b in itertools.zip_longest(cdp, cdq, fillvalue=1.0)) / max(1, len(cdp))

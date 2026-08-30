@@ -1,0 +1,28 @@
+id: notebooklm-agent
+name: NotebookLM MCP Agent
+# STATUS: parked-stub (2026-07-09 tandem review). The MCP/OAuth scaffold is real but the
+# two tools below return placeholder strings — NotebookLM has no public API, so this is not
+# a functional integration. Do NOT wire into the live gateway toolset expecting results.
+# Real notebook capability = the Open Notebook self-host lane. See AGNOTE4482 + PR #2025.
+status: parked-stub
+description: Integrates NotebookLM and Google Services via Universal OAuth to provide source-grounded research, document querying, and Notebook management.
+required_commands:
+  - docker
+environment:
+  - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+  - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+  - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+setup_instructions:
+  - Ensure Google Universal OAuth credentials are set in env.shared (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN).
+  - Start via the canonical make pipeline (base+agents compose, COMPOSE_ENV_FILES injected) - run "make -C pmoves secrets-funnel" then "make -C pmoves up-notebooklm". The container is named pmoves-notebooklm-agent-1.
+transport: stdio
+command: docker
+args:
+  - exec
+  - -i
+  - pmoves-notebooklm-agent-1
+  - node
+  - dist/index.js
+tools:
+  - notebooklm_list_notebooks
+  - notebooklm_query

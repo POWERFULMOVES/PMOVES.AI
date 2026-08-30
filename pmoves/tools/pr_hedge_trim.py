@@ -8,7 +8,7 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List
@@ -36,7 +36,22 @@ ACTIONABLE_TOKENS = (
     "invalid",
     "incompatible",
 )
-NITPICK_TOKENS = ("nitpick", "nit:", "nits", "style-only")
+# CodeRabbit tags Nitpick findings with 🧹; that TYPE marker is authoritative over
+# incidental keyword matches (a "🧹 Nitpick: foo is missing a prefix" is a nitpick,
+# not an actionable "missing" hit).
+NITPICK_TOKENS = ("🧹", "nitpick", "nit:", "nits", "style-only")
+# Explicit high-severity markers from the review bots — an authoritative "this is a real
+# issue" signal that must NOT fall through to the nitpick default:
+#   CodeRabbit: ⚠️ Potential issue, 🔴 Critical, 🟠 Major
+#   Codex:      P0/P1/P2 Badge (rendered as image alt-text in the comment body)
+ACTIONABLE_MARKERS = (
+    "potential issue",
+    "🔴",
+    "🟠",
+    "p0 badge",
+    "p1 badge",
+    "p2 badge",
+)
 DESIGN_TOKENS = (
     "intentional",
     "by design",
@@ -62,6 +77,54 @@ BOT_LOGINS = {"coderabbitai[bot]", "chatgpt-codex-connector[bot]"}
 DEFAULT_REPO = "POWERFULMOVES/PMOVES.AI"
 DEFAULT_BASE = "PMOVES.AI-Edition-Hardened"
 LOGS_DIR = Path(__file__).resolve().parent.parent / "docs" / "logs"
+
+# ---------------------------------------------------------------------------
+# Node Agent Review Routing (mirrors mesh.gpu.status.v1 pattern)
+# ---------------------------------------------------------------------------
+# Maps content keywords to the best-fit node agent for review.
+# 4090-claude is the default — the "noise reducer" catches everything else.
+
+_NODE_REVIEW_KEYWORDS: dict[str, str] = {
+    "docker": "z890-claude",
+    "compose": "z890-claude",
+    "dockerfile": "z890-claude",
+    "secrets": "z890-claude",
+    "nats": "z890-claude",
+    "makefile": "z890-claude",
+    "env.shared": "z890-claude",
+    "env.tier": "z890-claude",
+    "tts": "5090-claude",
+    "voice": "5090-claude",
+    "pipecat": "5090-claude",
+    "gpu": "5090-claude",
+    "model": "5090-claude",
+    "whisper": "5090-claude",
+    "ollama": "5090-claude",
+    "vram": "5090-claude",
+    "nitpick": "4090-claude",
+    "pattern": "4090-claude",
+    "submodule": "4090-claude",
+    "docs": "4090-claude",
+    "audit": "4090-claude",
+    "readme": "4090-claude",
+}
+
+_DEFAULT_REVIEWER = "4090-claude"
+
+
+def suggest_reviewer(thread_body: str) -> str:
+    """Route a PR thread to the best-fit node agent based on content keywords.
+
+    Scoring: each keyword match adds +1 to the matching agent's score.
+    Ties and zero-score threads default to 4090-claude (noise reducer).
+    """
+    body_lower = thread_body.lower()
+    scores: dict[str, int] = {"z890-claude": 0, "5090-claude": 0, "4090-claude": 0}
+    for keyword, agent in _NODE_REVIEW_KEYWORDS.items():
+        if keyword in body_lower:
+            scores[agent] += 1
+    best = max(scores, key=scores.get)  # type: ignore[arg-type]
+    return best if scores[best] > 0 else _DEFAULT_REVIEWER
 
 
 # ---------------------------------------------------------------------------
@@ -176,15 +239,25 @@ def classify_comment(body: str, *, is_bot: bool = True) -> str:
             default to actionable.
     """
     text = body.lower()
+    # 1. An author reply explicitly calling it a false positive wins.
     if any(token in text for token in FALSE_POSITIVE_TOKENS):
         return "false-positive"
-    if any(token in text for token in DESIGN_TOKENS):
-        return "design-decision"
+    # 2. High-severity explicit markers win FIRST — a Codex P1/P2 badge or CodeRabbit
+    #    🔴 Critical / 🟠 Major / ⚠️ Potential issue is actionable even if its PROSE
+    #    mentions the word "nitpick" (Codex #1985 P2: badges before broad nitpick words).
+    if any(token in text for token in ACTIONABLE_MARKERS):
+        return "actionable"
+    # 3. Then CodeRabbit's 🧹 Nitpick TYPE marker — authoritative over the keyword
+    #    heuristics below, so a "🧹 Nitpick: x is missing a prefix" stays a nitpick and
+    #    is not swept up by the "missing"/"must" actionable keywords.
     if any(token in text for token in NITPICK_TOKENS):
         return "nitpick"
+    # 4. Fall back to keyword heuristics.
+    if any(token in text for token in DESIGN_TOKENS):
+        return "design-decision"
     if any(token in text for token in ACTIONABLE_TOKENS):
         return "actionable"
-    # Default: unclassified comments from bots are nitpick, from humans are actionable
+    # Default: unclassified comments from bots are nitpick, from humans are actionable.
     return "nitpick" if is_bot else "actionable"
 
 
@@ -393,8 +466,8 @@ def cmd_analyze(repo: str, pr_number: int, *, json_out: Path | None = None) -> T
     # Print classification table
     print(f"\n## PR #{pr_number} — Hedge Trim Analysis")
     print(f"Total threads: {report.total_threads} | Unresolved: {report.unresolved_threads}")
-    print(f"| # | Classification | Path | Line | Excerpt |")
-    print(f"|--:|---|---|---:|---|")
+    print("| # | Classification | Path | Line | Excerpt |")
+    print("|--:|---|---|---:|---|")
     for i, thread in enumerate(unresolved, 1):
         excerpt = " ".join((thread.comments[0].body if thread.comments else "").split())[:120]
         if len(excerpt) == 120:
@@ -467,8 +540,8 @@ def cmd_report(repo: str, pr_number: int, *, md_out: Path | None = None) -> None
     lines.append("")
     lines.append("## Summary")
     lines.append("")
-    lines.append(f"| Metric | Count |")
-    lines.append(f"|---|---:|")
+    lines.append("| Metric | Count |")
+    lines.append("|---|---:|")
     lines.append(f"| Total threads | {report.total_threads} |")
     lines.append(f"| Unresolved | {report.unresolved_threads} |")
     lines.append(f"| Actionable | {report.actionable} |")
@@ -592,7 +665,7 @@ def main(argv: list[str] | None = None) -> int:
         classifications = ["false-positive", "design-decision"]
         if args.include_actionable:
             classifications.append("actionable")
-        resolved = cmd_resolve(repo, args.pr, dry_run=args.dry_run, classifications=tuple(classifications))
+        cmd_resolve(repo, args.pr, dry_run=args.dry_run, classifications=tuple(classifications))
         # Fetch remaining unresolved to detect failures
         remaining = [t for t in fetch_threads(repo, args.pr) if not t.is_resolved]
         target_threads = [t for t in remaining if t.classification in classifications]

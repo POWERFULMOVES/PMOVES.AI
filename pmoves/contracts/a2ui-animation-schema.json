@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pmoves.ai/schemas/a2ui-animation-v1.json",
   "title": "A2UI Animation Schema",
-  "description": "Animation extension for A2UI declarative UI specs. Defines how A2UI components animate via Remotion, Three.js, or CSS.",
+  "description": "A2UI Animation v1 — a scene/element timeline consumed by the a2ui-renderer service (port 8107) and rendered via Remotion. This is one of three distinct schemas sharing the a2ui prefix; it is NOT the A2UI Protocol (beginRendering/surfaceUpdate) and NOT the pm-* component contract in a2ui-v0.1.md. See pmoves/docs/audit/A2UI_INTEGRATION_AUDIT_2026-08-14.md section F1.",
   "version": "1.0.0",
   "type": "object",
   "properties": {
@@ -187,6 +187,59 @@
                   "easing": { "type": "string" }
                 }
               }
+            }
+          }
+        },
+        "text_layout": {
+          "type": "object",
+          "description": "Optional multiline text layout hints. Use engine=pretext to force deterministic wrapping inside the Remotion browser runtime.",
+          "properties": {
+            "engine": {
+              "type": "string",
+              "enum": ["browser", "pretext"],
+              "default": "browser"
+            },
+            "maxWidth": {
+              "type": ["number", "string"],
+              "description": "Maximum text width in px or percent of the canvas width."
+            },
+            "lineHeight": {
+              "type": "number",
+              "minimum": 1
+            },
+            "letterSpacing": {
+              "type": "number"
+            },
+            "whiteSpace": {
+              "type": "string",
+              "enum": ["normal", "pre-wrap"],
+              "default": "normal"
+            },
+            "wordBreak": {
+              "type": "string",
+              "enum": ["normal", "keep-all"],
+              "default": "normal"
+            },
+            "textAlign": {
+              "type": "string",
+              "enum": ["left", "center", "right"],
+              "default": "left"
+            },
+            "maxLines": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "shrinkWrap": {
+              "type": "boolean",
+              "default": false
+            },
+            "debugBoxes": {
+              "type": "boolean",
+              "default": false
+            },
+            "locale": {
+              "type": "string",
+              "description": "Optional Intl.Segmenter locale override for prepare/layout calls."
             }
           }
         },

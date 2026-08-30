@@ -23,6 +23,10 @@ from typing import Dict, Any, List, Tuple, Optional
 
 import yaml
 
+# Known Roads — contextualized, provable bypass for readOnlyPath domains.
+sys.path.insert(0, str(Path(__file__).parent))
+from known_roads import evaluate_known_road, known_road_hint  # noqa: E402
+
 
 def is_glob_pattern(pattern: str) -> bool:
     """Check if pattern contains glob wildcards."""
@@ -30,30 +34,48 @@ def is_glob_pattern(pattern: str) -> bool:
 
 
 def match_path(file_path: str, pattern: str) -> bool:
-    """Match file path against pattern, supporting both prefix and glob matching."""
-    expanded_pattern = os.path.expanduser(pattern)
+    """Match file path against pattern, supporting both prefix and glob matching.
+
+    Handles Windows absolute paths vs relative patterns by resolving against
+    CLAUDE_PROJECT_DIR and normalizing path separators.
+    """
+    # Resolve relative patterns against project dir for Windows absolute path matching
+    project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
+    if project_dir and not os.path.isabs(pattern) and not pattern.startswith("~"):
+        abs_pattern = os.path.join(project_dir, pattern)
+    else:
+        abs_pattern = pattern
+
+    expanded_pattern = os.path.expanduser(abs_pattern)
     normalized = os.path.normpath(file_path)
     expanded_normalized = os.path.expanduser(normalized)
 
-    if is_glob_pattern(pattern):
-        # Glob pattern matching (case-insensitive for security)
-        basename = os.path.basename(expanded_normalized)
-        basename_lower = basename.lower()
-        pattern_lower = pattern.lower()
-        expanded_pattern_lower = expanded_pattern.lower()
+    # Normalize separators for cross-platform comparison
+    norm_fwd = expanded_normalized.replace("\\", "/").lower()
+    pat_fwd = expanded_pattern.replace("\\", "/").lower()
+    raw_pat_fwd = pattern.replace("\\", "/").lower()
 
-        # Match against basename for patterns like *.pem, .env*
-        if fnmatch.fnmatch(basename_lower, expanded_pattern_lower):
-            return True
-        if fnmatch.fnmatch(basename_lower, pattern_lower):
-            return True
-        # Also try full path match for patterns like /path/*.pem
-        if fnmatch.fnmatch(expanded_normalized.lower(), expanded_pattern_lower):
+    if is_glob_pattern(pattern):
+        basename_lower = os.path.basename(expanded_normalized).lower()
+        pattern_basename = os.path.basename(pattern).lower()
+
+        # Match basename against filename portion (e.g., *.pem, .env*, docker-compose*.yml)
+        if fnmatch.fnmatch(basename_lower, pattern_basename):
+            # If pattern has a directory prefix, verify the directory matches too
+            pattern_dir = os.path.dirname(raw_pat_fwd)
+            if not pattern_dir or pattern_dir in norm_fwd:
+                return True
+
+        # Full path glob match (resolved against project dir)
+        if fnmatch.fnmatch(norm_fwd, pat_fwd):
             return True
         return False
     else:
-        # Prefix matching (original behavior for directories)
-        if expanded_normalized.startswith(expanded_pattern) or expanded_normalized == expanded_pattern.rstrip('/'):
+        # Prefix matching with normalized separators (resolved path)
+        if norm_fwd.startswith(pat_fwd) or norm_fwd == pat_fwd.rstrip("/"):
+            return True
+        # Suffix matching for relative patterns (e.g., "pmoves/env.shared" in "/full/path/pmoves/env.shared")
+        if not os.path.isabs(pattern) and not pattern.startswith("~") and raw_pat_fwd in norm_fwd:
             return True
         return False
 
@@ -97,23 +119,56 @@ def load_config() -> Dict[str, Any]:
 TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".defaults")
 
 
-def check_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, str, bool]:
-    """Check if file_path is blocked. Returns (blocked, reason, is_template)."""
-    # CHIT safe paths — CGP archives and CHIT data directories bypass zero-access
-    chit_safe = config.get("chitSafePaths", [])
-    normalized_fwd = os.path.normpath(file_path).replace("\\", "/")
-    for safe_pat in chit_safe:
-        safe_normalized = safe_pat.replace("\\", "/")
-        if safe_normalized in normalized_fwd:
-            return False, "", False
+def _dir_prefix_match(normalized_fwd: str, pattern: str) -> bool:
+    """True when `pattern` names a DIRECTORY prefix of the path.
 
-    # Check zero-access paths first (no access at all)
+    chitSafePaths carries directory entries written with a trailing separator.
+    match_path handles file and glob patterns; this covers the directory form,
+    anchored to a path boundary so "a/b/" cannot match "xa/b-c/".
+    """
+    pat = pattern.replace("\\", "/")
+    if not pat.endswith("/"):
+        return False
+    return normalized_fwd.startswith(pat) or ("/" + pat) in ("/" + normalized_fwd)
+
+
+def check_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, str, bool]:
+    """Check if file_path is blocked. Returns (blocked, reason, is_template).
+
+    ORDER MATTERS AND IS DELIBERATE: zero-access is decided FIRST.
+
+    chitSafePaths used to run ahead of everything, so a safe-list entry could
+    open a path the config declares zero-access. That was not theoretical: a
+    chitSafePaths directory entry is a prefix of a zeroAccessPaths glob under
+    the same tree, and every file the glob protects was editable through it.
+    A safe-list may relax read-only; it must never reach a file the config says
+    has no access at all.
+    """
+    normalized_fwd = os.path.normpath(file_path).replace("\\", "/")
+
+    # 1. Zero-access wins over every bypass, including chitSafePaths.
     for zero_path in config.get("zeroAccessPaths", []):
         if match_path(file_path, zero_path):
             basename = os.path.basename(file_path).lower()
             if any(basename.endswith(suffix) for suffix in TEMPLATE_SUFFIXES):
                 return True, f"zero-access path {zero_path}", True
             return True, f"zero-access path {zero_path} (no operations allowed)", False
+
+    # 2. CHIT safe paths — CGP archives and CHIT data dirs bypass read-only.
+    #    match_path, not a bare `in`: substring matching made every entry an
+    #    unanchored wildcard, so a bare filename entry also matched that name
+    #    with any suffix appended, and any path merely containing those bytes.
+    for safe_pat in config.get("chitSafePaths", []):
+        if match_path(file_path, safe_pat) or _dir_prefix_match(normalized_fwd, safe_pat):
+            return False, "", False
+
+    # Known Road — contextualized, provable bypass (see known_roads.py / PATTERNS.md).
+    kr_allowed, kr_detail = evaluate_known_road("Edit", file_path, normalized_fwd)
+    if kr_allowed:
+        return False, "", False
+    if kr_detail:
+        # File is in a Known Road domain but the road is invalid — block with detail.
+        return True, kr_detail, False
 
     # Check read-only paths (edits not allowed)
     for readonly in config.get("readOnlyPaths", []):
@@ -163,7 +218,9 @@ def main() -> None:
             print(json.dumps(output))
             sys.exit(0)
         else:
-            print(f"SECURITY: Blocked edit to {reason}: {file_path}", file=sys.stderr)
+            hint = "" if "Known Road" in reason else known_road_hint(
+                os.path.normpath(file_path).replace("\\", "/"))
+            print(f"SECURITY: Blocked edit to {reason}: {file_path}{hint}", file=sys.stderr)
             sys.exit(2)
 
     sys.exit(0)

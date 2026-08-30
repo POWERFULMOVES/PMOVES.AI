@@ -1,4 +1,9 @@
-import os, json, base64, hashlib, hmac, logging
+import os
+import json
+import base64
+import hashlib
+import logging
+import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -9,14 +14,28 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # type: ignore
 from cryptography.hazmat.primitives import hashes as _hashes  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
-from services.common.env import get_secret
+try:
+    from services.common.env import get_secret
+except ModuleNotFoundError:  # package-qualified import path used by repo tests
+    from pmoves.services.common.env import get_secret
+from pmoves.tools.chit_security import _unpack_floats, verify_cgp as _verify_cgp
+from pmoves.tools.chit_common import canon
 
 router = APIRouter(tags=["CHIT"])
 logger = logging.getLogger(__name__)
 
 CHIT_REQUIRE_SIGNATURE = os.getenv("CHIT_REQUIRE_SIGNATURE","false").lower()=="true"
 CHIT_DECRYPT_ANCHORS = os.getenv("CHIT_DECRYPT_ANCHORS","false").lower()=="true"
-CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE","change-me")
+_CHIT_PASSPHRASE: str | None = get_secret("CHIT_PASSPHRASE")
+
+def _require_chit_passphrase() -> str:
+    """Fail-closed accessor — raises only when passphrase is actually needed."""
+    if not _CHIT_PASSPHRASE:
+        raise RuntimeError(
+            "CHIT_PASSPHRASE not set — gateway cannot operate without a passphrase. "
+            "Refusing to fall back to a default (fail-closed)."
+        )
+    return _CHIT_PASSPHRASE
 CHIT_CODEBOOK_PATH = os.getenv("CHIT_CODEBOOK_PATH","tests/data/codebook.jsonl")
 CHIT_LEARNED_TEXT = os.getenv("CHIT_LEARNED_TEXT","false").lower()=="true"
 CHIT_T5_MODEL = os.getenv("CHIT_T5_MODEL")  # optional HF model path/name
@@ -35,9 +54,6 @@ except Exception:  # pragma: no cover
 shape_store: Optional["ShapeStore"] = None
 _shape_to_constellations: Dict[str, List[str]] = {}
 
-def canon(obj: Dict[str, Any]) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",",":")).encode()
-
 
 def set_shape_store(store: Optional["ShapeStore"]) -> None:
     """Configure the module-level ShapeStore instance."""
@@ -51,18 +67,23 @@ def compute_shape_id(cgp: Dict[str, Any]) -> str:
     return hashlib.sha256(canon(doc)).hexdigest()[:16]
 
 def verify_hmac(cgp: Dict[str, Any]) -> bool:
-    sig = cgp.get("sig")
-    if not sig: return not CHIT_REQUIRE_SIGNATURE
-    mac_b64 = sig.get("hmac","")
-    doc = dict(cgp); doc.pop("sig", None)
-    mac2 = hmac.new(CHIT_PASSPHRASE.encode("utf-8"), canon(doc), hashlib.sha256).digest()
-    try:
-        mac1 = base64.b64decode(mac_b64)
-    except Exception:
-        return False
-    return hmac.compare_digest(mac1, mac2)
+    """Verify CGP HMAC signature — delegates to canonical chit_security.verify_cgp.
 
+    Preserved for backward compatibility; internal logic now uses the canonical
+    implementation from pmoves.tools.chit_security.
+    """
+    if not cgp.get("sig"):
+        return not CHIT_REQUIRE_SIGNATURE
+    passphrase = _require_chit_passphrase()
+    return _verify_cgp(cgp, passphrase=passphrase)
 def decrypt_anchor(const: Dict[str, Any]) -> None:
+    """Decrypt an encrypted anchor in-place — delegates to canonical chit_security.
+
+    Uses _unpack_floats from canonical chit_security for float deserialization.
+    The full batch decrypt_anchors from chit_security operates on CGP dicts
+    with super_nodes; this function handles single-constellation inline decryption
+    preserving the gateway's in-place mutation pattern.
+    """
     if "anchor" in const: return
     enc = const.get("anchor_enc")
     if not enc:
@@ -70,8 +91,8 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
     if not CHIT_DECRYPT_ANCHORS:
         raise HTTPException(status_code=400, detail="Encrypted anchor but CHIT_DECRYPT_ANCHORS=false")
     iv = base64.b64decode(enc["iv"]); salt = base64.b64decode(enc["salt"]); ct = base64.b64decode(enc["ct"])
-    kdf = PBKDF2HMAC(algorithm=_hashes.SHA256(), length=32, salt=salt, iterations=600_000)
-    key = kdf.derive(CHIT_PASSPHRASE.encode("utf-8"))
+    _kdf = PBKDF2HMAC(algorithm=_hashes.SHA256(), length=32, salt=salt, iterations=600_000)
+    key = _kdf.derive(_require_chit_passphrase().encode("utf-8"))
     aead = AESGCM(key); aad = canon({"id": const.get("id","")})
     try:
         pt = aead.decrypt(iv, ct, aad)
@@ -80,8 +101,8 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
                      const.get("id", "<unknown>"), exc)
         return
     try:
-        const["anchor"] = json.loads(pt.decode())
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        const["anchor"] = _unpack_floats(pt)
+    except (struct.error, ValueError, AttributeError, ModuleNotFoundError) as exc:
         logger.error("Failed to decode anchor for constellation %s: %s", const.get("id", "<unknown>"), exc)
         return
     const.pop("anchor_enc", None)
@@ -384,9 +405,9 @@ def geometry_calibration_report(body: GeometryCalibrationRequest):
     if not anchor: raise HTTPException(status_code=400, detail="No anchor")
     nrm = sum(x*x for x in anchor) ** 0.5 or 1.0
     u = [x/nrm for x in anchor]
-    vals=[]; 
+    vals=[] 
     for it in items:
-        vec = it.get("vec"); 
+        vec = it.get("vec") 
         if vec: vals.append(sum(a*b for a,b in zip(u, vec)))
     rmin, rmax = const.radial_minmax; bins = len(const.spectrum)
     width = (rmax-rmin)/bins; hist=[0]*bins

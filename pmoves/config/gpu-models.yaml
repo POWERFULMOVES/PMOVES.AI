@@ -7,8 +7,8 @@ models:
   - id: "qwen3:8b"
     provider: ollama
     vram_mb: 6144
-    description: "Qwen3 8B - Fast reasoning and code"
-    priority_default: 5
+    description: "[Reflexive Loadout] Qwen3 8B - Fast reasoning and code"
+    priority_default: 10
     quantization: "Q4_K_M"
     context_length: 8192
 
@@ -31,6 +31,9 @@ models:
   - id: "nomic-embed-text"
     provider: ollama
     vram_mb: 512
+    dimensions: 768
+    hf_id: "nomic-ai/nomic-embed-text-v1.5"
+    cuda_supported: true
     description: "Nomic Embed Text - Embeddings"
     priority_default: 3
     context_length: 8192
@@ -76,8 +79,8 @@ models:
   - id: "qwen2-vl:7b"
     provider: ollama
     vram_mb: 6000
-    description: "Qwen2-VL 7B - Vision-language"
-    priority_default: 5
+    description: "[Reflexive Loadout] Qwen2-VL 7B - Vision-language"
+    priority_default: 10
     context_length: 32768
 
   - id: "qwen3-reranker:4b"
@@ -168,17 +171,36 @@ models:
     quantization: "Q4_K_M"
     context_length: 262144
 
+  # Nemotron-3-Super-120B-A12B NVFP4 (DGX Spark — 128GB unified LPDDR5X fits FP8-class footprint)
+  # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified 2026-04-19 via HF API)
+  # License: NVIDIA Open Model License (OML). NOT viable on RDNA4 gfx1201 (no FP8/FP4 kernels).
+  - id: "nemotron-3-super-120b-nvfp4"
+    provider: ollama
+    vram_mb: 90000                # ~88 GB NVFP4 weights; sits inside 128GB unified with activation headroom
+    hf_id: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4"
+    description: "NVIDIA Nemotron-3-Super 120B-A12B NVFP4 - Spark-only (unified memory, agentic MoE)"
+    priority_default: 9
+    quantization: "NVFP4"
+    context_length: 131072
+    target_hardware: ["gb10"]
+
   # Embedding Models (Ollama)
   - id: "qwen3-embedding:4b"
     provider: ollama
     vram_mb: 3000
-    description: "Qwen3 Embedding 4B"
+    dimensions: 2560
+    hf_id: "Qwen/Qwen3-Embedding-4B"
+    cuda_supported: true
+    description: "Qwen3 Embedding 4B - Primary CUDA embedding"
     priority_default: 3
     context_length: 32768
 
   - id: "qwen3-embedding:8b"
     provider: ollama
     vram_mb: 6000
+    dimensions: 4096
+    hf_id: "Qwen/Qwen3-Embedding-8B"
+    cuda_supported: true
     description: "Qwen3 Embedding 8B - High quality"
     priority_default: 4
     context_length: 32768
@@ -186,9 +208,101 @@ models:
   - id: "embeddinggemma:300m"
     provider: ollama
     vram_mb: 1500
+    dimensions: 768
+    hf_id: "google/gemma-embedding-300m"
+    cuda_supported: true
     description: "Gemma Embedding 300M - Lightweight"
     priority_default: 2
     context_length: 32768
+
+  # 4090 Coding Workstation additions
+  - id: "qwen3-coder:30b"
+    provider: ollama
+    vram_mb: 6500
+    description: "Qwen3-Coder 30B MoE - SWE-Bench SOTA, 3.3B active params"
+    priority_default: 8
+    quantization: "MoE"
+    context_length: 262144
+
+  - id: "deepseek-r1:14b"
+    provider: ollama
+    vram_mb: 9000
+    description: "DeepSeek-R1 14B - Chain-of-thought reasoning specialist"
+    priority_default: 6
+    quantization: "Q4_K_M"
+    context_length: 131072
+
+  # NVIDIA Nemotron Super 49B (NIM container)
+  - id: "nemotron-super:49b"
+    provider: nvidia_nim
+    vram_mb: 30000
+    description: "NVIDIA Nemotron Super 49B - Requires NIM container, exclusive GPU access at 30GB"
+    priority_default: 9
+    quantization: "FP8"
+    context_length: 131072
+
+  # Qwen3-Coder-Next 80B MoE
+  - id: "qwen3-coder-next:80b"
+    provider: ollama
+    vram_mb: 7000
+    description: "Qwen3-Coder-Next 80B MoE - SWE-Bench SOTA, 3B active params. Apache 2.0"
+    priority_default: 9
+    quantization: "MoE-3B-active"
+    context_length: 262144
+
+  # Gemma 3n Family (Google edge-optimized multimodal)
+  - id: "gemma3n:e4b"
+    provider: ollama
+    vram_mb: 3500
+    description: "Google Gemma 3n E4B - Edge multimodal (text/image/video/audio), Per-Layer Embeddings"
+    priority_default: 5
+    quantization: "E4B"
+    context_length: 32768
+
+  - id: "gemma3n:e2b"
+    provider: ollama
+    vram_mb: 2000
+    description: "Google Gemma 3n E2B - Compact multimodal for Jetson edge deployment"
+    priority_default: 4
+    quantization: "E2B"
+    context_length: 32768
+
+  # Gemma 4 Family (Google, Apache 2.0, released 2026-04-02)
+  # Current SOTA open multimodal family — beats Llama 4 on AIME/LiveCodeBench/GPQA/τ2-bench
+  - id: "gemma4:e2b"
+    provider: ollama
+    vram_mb: 3200
+    description: "Google Gemma 4 E2B - Effective 2B multimodal (any-to-any), 128K ctx, Apache 2.0"
+    priority_default: 5
+    quantization: "Q4_K_M"
+    context_length: 131072
+
+  - id: "gemma4:e4b"
+    provider: ollama
+    vram_mb: 5200
+    description: "Google Gemma 4 E4B - Effective 4B multimodal (any-to-any), 128K ctx, Apache 2.0"
+    priority_default: 6
+    quantization: "Q4_K_M"
+    context_length: 131072
+
+  # Ollama publishes this as plain ":26b" tag (A4B MoE architecture is implied).
+  # Verified via https://registry.ollama.ai/v2/library/gemma4/manifests/26b (200 OK)
+  # — the ":26b-a4b" tag returns MANIFEST_UNKNOWN.
+  - id: "gemma4:26b"
+    provider: ollama
+    vram_mb: 15000
+    description: "Google Gemma 4 26B-A4B MoE - 3.8B active, speed-focused, 256K ctx, LMArena 1441"
+    priority_default: 8
+    quantization: "Q4_K_M-MoE"
+    context_length: 262144
+
+  - id: "gemma4:31b"
+    provider: ollama
+    vram_mb: 18000
+    description: "Google Gemma 4 31B Dense - SOTA quality, 256K ctx, LMArena 1452, beats Llama 4"
+    priority_default: 9
+    quantization: "Q4_K_M"
+    context_length: 262144
 
   # TTS Models (Ultimate TTS Studio)
   - id: "kokoro"
@@ -256,6 +370,12 @@ rtx4090:
   system_reserve_mb: 2048
   compute_capability: "8.9"
 
+rtx4090_laptop:
+  name: "NVIDIA GeForce RTX 4090 Laptop"
+  total_vram_mb: 16384
+  system_reserve_mb: 2048
+  compute_capability: "8.9"
+
 rtx3090ti:
   name: "NVIDIA GeForce RTX 3090 Ti"
   total_vram_mb: 24576
@@ -267,3 +387,45 @@ jetson_orin_nano:
   total_vram_mb: 8192  # Shared with system RAM
   system_reserve_mb: 4096
   compute_capability: "8.7"
+
+# NVIDIA DGX Spark (GB10 Grace-Blackwell)
+# Unified LPDDR5X shared between 20-core Arm CPU and Blackwell GPU.
+# Hostname convention: pmoves-gb10-spark. Inference backend: Ollama (ARM64 CUDA).
+gb10:
+  name: "NVIDIA DGX Spark (GB10 Grace-Blackwell)"
+  vendor: "NVIDIA"
+  arch: "grace-blackwell"
+  platform: "arm64"
+  total_vram_mb: 131072           # 128 GB unified LPDDR5X (CPU + GPU share the pool)
+  system_reserve_mb: 16384        # Leave ~16 GB for Arm host OS and inference runtime
+  compute_capability: "12.1"      # SM_121 — unique to GB10, NOT sm_120 and NOT sm_110.
+                                  # Read from NVML on the node (ollama "inference compute"
+                                  # log: compute=12.1, cc=1210, description="NVIDIA GB10",
+                                  # driver=13.0). sm_110 is Jetson THOR, a different part.
+                                  # Needs CUDA >= 12.9 to compile for; the node ships 13.0.
+                                  # This disagreed with profiles/dgx-spark-grace-blackwell.yaml,
+                                  # which already said 12.1 — two sources of truth, one wrong.
+  cpu_companion: "20-core Arm (10x Cortex-X925 + 10x Cortex-A725)"
+  inference_backend: "ollama"     # Ollama ARM64 build with CUDA-on-ARM (DGX OS stock)
+  hostname: "pmoves-gb10-spark"
+
+# AMD Radeon AI Pro R9700 (RDNA4, gfx1201)
+# Dual-GPU workstation: 2x 32 GB = 64 GB total VRAM on AMD Ryzen 9850X3D.
+# Hostname convention: pmoves-rdna4. Inference backend: llama.cpp HIP
+# (custom fork tlee933/llama.cpp-rdna4-gfx1201 — ROCm 7.1 + gfx1201 kernels NOT
+# in stock Ollama as of 2026-04). llama-server on :8080 exposes OpenAI-compat
+# API; rocm-smi-exporter on :9835 feeds Prometheus.
+radeon-ai-pro-r9700:
+  name: "AMD Radeon AI Pro R9700 (RDNA4 gfx1201)"
+  vendor: "AMD"
+  arch: "rdna4"
+  gpu_target: "gfx1201"
+  total_vram_mb: 32768            # Per-card; workstation has 2x for 64 GB total
+  system_reserve_mb: 2048
+  rocm_version: "7.1"
+  inference_backend: "llama.cpp-hip"
+  inference_server: "llama-server"
+  tensor_split: "0.5,0.5"         # Dual-GPU row-split mode
+  split_mode: "row"
+  cpu_companion: "AMD Ryzen 9850X3D (8C / 3D V-Cache)"
+  hostname: "pmoves-rdna4"

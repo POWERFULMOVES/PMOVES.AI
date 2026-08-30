@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PROFILE="${PROFILE:-}"
-HOST="${HOST:-workstation_5090}"
+HOST="${HOST:-desktop-9950xd}"
 TENSORZERO_BASE="${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}"
 
 if [ -z "$PROFILE" ]; then

@@ -99,7 +99,7 @@ async def publish_event(subject: str, data: dict):
     """Publish event to NATS message bus."""
     nc = NATS()
     try:
-        await nc.connect(servers=["nats://localhost:4222"])
+        await nc.connect(servers=["nats://nats:pmoves@nats:4222"])
         await nc.publish(subject, json.dumps(data).encode())
         logger.debug(f"Published to {subject}: {data}")
     finally:

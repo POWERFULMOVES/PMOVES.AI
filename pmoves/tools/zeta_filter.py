@@ -26,8 +26,8 @@ Usage:
 
 import logging
 import math
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Tuple, Map
+from dataclasses import dataclass
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -453,7 +453,7 @@ def optimize_spectrum_scale(
         Dict with scale recommendations and metrics
     """
     results = {}
-    filter_base = ZetaInspiredFilter()
+    ZetaInspiredFilter()
 
     for scale in scales:
         temp_filter = ZetaInspiredFilter(num_zeros=scale)

@@ -4,11 +4,14 @@
 
 # Unix line endings for code, configs, docs
 *.sh text eol=lf
+*.patch text eol=lf
 *.py text eol=lf
 *.md text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+# .mjs today = vendored ESM bundles (website/stage/vendor) — keep byte-stable vs build output
+*.mjs text eol=lf
 Makefile text eol=lf
 Dockerfile text eol=lf
 
@@ -16,3 +19,52 @@ Dockerfile text eol=lf
 *.ps1 text eol=crlf
 *.bat text eol=crlf
 
+# Append-only audit trails — union-merge so concurrent branch appends never conflict
+.claude/hooks/damage-control/known-roads.jsonl merge=union eol=lf
+
+# Machine-emitted, never hand-edited. `compose-split` regenerates all eight from
+# docker-compose.yml (Makefile: COMPOSE_SPLIT_FILES), and compose-split-check
+# fails if a committed overlay differs from the regenerated output.
+#
+# linguist-generated collapses them in diffs by default and drops them from the
+# language stats — per GitHub's guidance for generated files. The point is the
+# SIGNAL: two separate attempts to fix supabase-vector were made by hand-editing
+# docker-compose.core.yml, and both silently did nothing, because the live stack
+# reads docker-compose.yml and the next compose-split would overwrite the edit.
+# The header banner in each file said "Overlay", which was not enough.
+#
+# To change one of these: edit docker-compose.yml, run `make -C pmoves
+# compose-split`, commit the regenerated output.
+pmoves/docker-compose.base.yml linguist-generated
+pmoves/docker-compose.core.yml linguist-generated
+pmoves/docker-compose.agents.yml linguist-generated
+pmoves/docker-compose.media.yml linguist-generated
+pmoves/docker-compose.ui.yml linguist-generated
+pmoves/docker-compose.workers.yml linguist-generated
+pmoves/docker-compose.apps.yml linguist-generated
+pmoves/docker-compose.juicefs.yml linguist-generated
+
+# Same rule, other generators. Each of these has a drift gate that fails when the
+# committed output differs from a fresh run, which is what makes them emitted
+# rather than merely derived — a hand-edit is reverted by the next generator run
+# and reported as drift in between.
+#
+#   pmoves/design/build      <- make design-tokens      (design-tokens-check)
+#   pmoves/ui/lib/persona    <- make design-vendor      (design-vendor-check)
+#   website/persona          <- make design-vendor      (design-vendor-check)
+#   website/stage/data       <- make stage-data         (stage-data-check)
+pmoves/design/build/** linguist-generated
+pmoves/ui/lib/persona/** linguist-generated
+website/persona/** linguist-generated
+website/stage/data/** linguist-generated
+
+# Machine-emitted from the GitHub Actions runners API by
+# `make -C pmoves runner-labels-refresh`. Hand-editing it would let a workflow
+# claim a label no runner has -- the exact bug runner-labels-check exists to catch.
+pmoves/config/runner_labels.json linguist-generated
+
+# Derived from pmoves/config/signing_identity_cards.yaml by
+# pmoves/tools/build_allowed_signers.py; allowed-signers-check gates the drift.
+# Hand-editing it would add a trusted key that no card backs -- which is exactly
+# the substitution the keyring exists to prevent.
+pmoves/config/allowed_signers linguist-generated

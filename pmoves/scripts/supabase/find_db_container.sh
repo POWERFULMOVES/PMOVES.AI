@@ -11,4 +11,9 @@ fi
 
 names="$("${list_cmd[@]}" 2>/dev/null || true)"
 
-printf '%s\n' "$names" | grep -E -m1 '^pmoves-supabase-db-1$|^supabase_db(_.*)?$|^supabase-db$' || true
+# Prefer the compose-managed PMOVES container over any legacy/sibling project container
+result=$(printf '%s\n' "$names" | grep -E -m1 '^pmoves-supabase-db-1$' || true)
+if [ -z "$result" ]; then
+  result=$(printf '%s\n' "$names" | grep -E -m1 '^supabase_db(_.*)?$|^supabase-db$' || true)
+fi
+printf '%s\n' "$result"

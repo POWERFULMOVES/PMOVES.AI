@@ -21,6 +21,8 @@ Current production fetch order:
 | `CHANNEL_MONITOR_GOOGLE_SCOPES` | OAuth scopes used for YouTube access. | `https://www.googleapis.com/auth/youtube.readonly` |
 | `CHANNEL_MONITOR_SECRET` | Optional shared secret required by protected write endpoints (`/api/monitor/status`, `/api/monitor/discord-drop`). | _(unset)_ |
 | `CHANNEL_MONITOR_DISCORD_APPROVAL_MODE` | Default Discord intake mode (`ask` or `auto`). | `ask` |
+| `CHANNEL_MONITOR_CONTENT_RAW_PUBLISH` | Publish Discord/manual drop messages to `content.raw.v1` for provenance shaping. | `true` |
+| `NATS_URL` | NATS server used by the `content.raw.v1` publisher. | `nats://nats:pmoves@nats:4222` |
 
 ### Commands
 
@@ -137,6 +139,7 @@ The monitor will:
 - persist synthetic tracking rows in `pmoves.channel_monitoring`
 - in `auto` mode: queue each URL to `CHANNEL_MONITOR_QUEUE_URL` (`/yt/ingest` by default)
 - in `ask` mode: store rows as `pending` and wait for explicit review
+- emit a best-effort `content.raw.v1` event for the Discord/manual message so provenance gating can shape or reject it before HiRAG
 - propagate Discord context metadata so downstream events can fan out to
   `publisher-discord` and Open Notebook flows
 

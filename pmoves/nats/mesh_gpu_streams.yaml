@@ -1,0 +1,68 @@
+# JetStream stream definitions for mesh.gpu.* NATS subjects
+# Referenced by: DGX Spark TAC tree (pmoves/configs/tac_trees/dgx-spark.tac.yaml)
+#
+# NOTE (2026-06-29): This file is now reference-only / superseded.
+# The live topology uses a single catch-all stream created by
+# `pmoves/scripts/nats/init_streams.sh`:
+#   MESH_GPU  -> subjects mesh.gpu.>
+# The granular stream/consumer layout below documents the intended
+# subject namespace and durable-consumer design; services attach to the
+# catch-all stream directly. Do not deploy from this file.
+
+streams:
+  - name: mesh_gpu_inference
+    subjects: ["mesh.gpu.inference.>"]
+    retention: limits
+    max_msgs: 10000
+    max_age: 24h
+    max_bytes: 268435456
+    replicas: 1
+    consumers:
+      - name: gpu-inference-worker
+        durable_name: gpu-inference-worker
+        ack_policy: explicit
+        max_deliver: 3
+        filter_subject: "mesh.gpu.inference.request"
+
+  - name: mesh_gpu_health
+    subjects: ["mesh.gpu.health.>"]
+    retention: interest
+    max_msgs: 1000
+    max_age: 1h
+
+  - name: mesh_gpu_models
+    subjects: ["mesh.gpu.models.>"]
+    retention: limits
+    max_msgs: 5000
+    max_age: 72h
+
+  - name: mesh_gpu_training
+    subjects: ["mesh.gpu.training.>"]
+    retention: limits
+    max_msgs: 5000
+    max_age: 48h
+
+  - name: mesh_gpu_metrics
+    subjects: ["mesh.gpu.metrics.>"]
+    retention: limits
+    max_msgs: 50000
+
+  - name: mesh_gpu_command
+    subjects: ["mesh.gpu.command.>"]
+    retention: limits
+    max_msgs: 10000
+    max_age: 24h
+    max_bytes: 268435456
+    replicas: 1
+    consumers:
+      - name: gpu-command-worker
+        durable_name: gpu-command-worker
+        ack_policy: explicit
+        max_deliver: 3
+        filter_subject: "mesh.gpu.command.v1"
+
+  - name: mesh_gpu_status
+    subjects: ["mesh.gpu.status.>", "mesh.gpu.model.>"]
+    retention: interest
+    max_msgs: 1000
+    max_age: 1h

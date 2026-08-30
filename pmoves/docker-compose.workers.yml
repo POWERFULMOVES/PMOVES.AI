@@ -1,0 +1,904 @@
+##############################################################################
+# PMOVES.AI - Docker Compose Overlay: Worker Services
+##############################################################################
+# Services: workers tier
+# Always combine with base: docker compose -f docker-compose.base.yml -f docker-compose.workers.yml up -d
+#
+# Generated from docker-compose.yml by scripts/split_compose.py
+##############################################################################
+services:
+  extract-worker:
+    <<: &tier-worker-hardened
+      env_file:
+      - env.shared
+      - env.tier-worker
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build: ./services/extract-worker
+    restart: unless-stopped
+    environment:
+    - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+    - TENSORZERO_EMBED_TIMEOUT_SECS=${TENSORZERO_EMBED_TIMEOUT_SECS:-120}
+    - TENSORZERO_EMBED_BATCH_SIZE=${TENSORZERO_EMBED_BATCH_SIZE:-16}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_data,pmoves_external
+    ports:
+    - ${EXTRACT_WORKER_BIND:-0.0.0.0}:${EXTRACT_WORKER_PORT:-8083}:8083
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_api  # reach supabase-kong for REST API
+    - pmoves_data  # reach qdrant + meilisearch + minio
+    - pmoves_external  # HuggingFace model downloads at runtime
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  watch-folder-router:  # SEAP ingestion Bud 1: routes ingest.file.added.v1 by MIME to the right analyzer (SEAP_WATCHFOLDER_NATS_CONSTELLATION)
+    <<:
+      env_file:
+      - env.shared
+      - env.tier-media
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build:
+      context: ..
+      dockerfile: pmoves/services/watch-folder-router/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
+    - MEDIA_AUDIO_URL=${MEDIA_AUDIO_URL:-http://media-audio:8082}
+    - ROUTER_TRANSCRIBE_TIMEOUT_SEC=${ROUTER_TRANSCRIBE_TIMEOUT_SEC:-3600}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${WATCH_FOLDER_ROUTER_BIND:-127.0.0.1}:${WATCH_FOLDER_ROUTER_PORT:-8125}:8125
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8125/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+  spark-shape-worker:
+    <<: *tier-worker-hardened
+    build: ./services/spark-shape-worker
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - SPARK_SHAPE_SECRET=${SPARK_SHAPE_SECRET:-}
+    - MESH_PASSPHRASE=${MESH_PASSPHRASE:-}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; exit(0 if os.path.exists('/proc/1/cmdline') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  pdf-ingest:
+    <<: *tier-worker-hardened
+    build:
+      context: .
+      dockerfile: services/pdf-ingest/Dockerfile
+    restart: unless-stopped
+    environment:
+    # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:***@nats:4222
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
+    - MINIO_SECURE=false
+    - PDF_DEFAULT_BUCKET=${PDF_DEFAULT_BUCKET:-assets}
+    - PDF_DEFAULT_NAMESPACE=${PDF_DEFAULT_NAMESPACE:-pmoves}
+    - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
+    - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    depends_on:
+      extract-worker:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    ports:
+    - ${PDF_INGEST_BIND:-0.0.0.0}:${PDF_INGEST_PORT:-8092}:8092
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data  # MinIO access (minio:9000)
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  langextract:
+    <<: *tier-worker-hardened
+    build:
+      context: .
+      dockerfile: services/langextract/Dockerfile
+    restart: unless-stopped
+    ports:
+    - ${LANGEXTRACT_BIND:-0.0.0.0}:${LANGEXTRACT_PORT:-8084}:8084
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    environment:
+    - PMOVES_NETWORKS=pmoves_app
+  notebook-sync:
+    <<: *tier-worker-hardened
+    build: ./services/notebook-sync
+    restart: unless-stopped
+    environment:
+    - OPEN_NOTEBOOK_API_URL=${NOTEBOOK_SYNC_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+    - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+    - NOTEBOOK_SYNC_INTERVAL_SECONDS=${NOTEBOOK_SYNC_INTERVAL_SECONDS:-300}
+    - NOTEBOOK_SYNC_NAMESPACE=${NOTEBOOK_SYNC_NAMESPACE:-open-notebook}
+    - NOTEBOOK_SYNC_DB_PATH=${NOTEBOOK_SYNC_DB_PATH:-/data/notebook_sync.db}
+    - LANGEXTRACT_URL=${LANGEXTRACT_URL:-http://langextract:8084}
+    - EXTRACT_WORKER_URL=${EXTRACT_WORKER_URL:-http://extract-worker:8083}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    depends_on:
+      langextract:
+        condition: service_started
+      extract-worker:
+        condition: service_started
+    ports:
+    - ${NOTEBOOK_SYNC_BIND:-0.0.0.0}:${NOTEBOOK_SYNC_PORT:-8095}:8095
+    profiles:
+    - workers
+    - orchestration
+    volumes:
+    - notebook-sync-data:/data
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Transcribe-and-Fetch backend (submodule: PMOVES-transcribe-and-fetch)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  session-context-worker:
+    <<: *tier-worker-hardened
+    image: ${SESSION_CONTEXT_WORKER_IMAGE:-ghcr.io/powerfulmoves/pmoves-session-context-worker:latest}
+    build:
+      context: .
+      dockerfile: services/session-context-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+    - PORT=8100
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    depends_on:
+    - hi-rag-gateway-v2
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Wger - Fitness tracker with health metrics and workout logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  deepresearch:
+    <<: &tier-agent-hardened-rw
+      env_file:
+      - env.shared
+      - env.tier-agent
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build:
+      context: .
+      dockerfile: services/deepresearch/Dockerfile
+    image: ${DEEPRESEARCH_IMAGE:-}
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    # NATS_URL from env.tier-agent has credentials: nats://nats:***@nats:4222
+    - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
+    - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
+    - DEEPRESEARCH_TENSORZERO_BASE_URL=${DEEPRESEARCH_TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+    - DEEPRESEARCH_API_BASE=${DEEPRESEARCH_API_BASE:-http://deepresearch-local:8080}
+    - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
+    - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
+    - DEEPRESEARCH_OPENROUTER_API_BASE=${DEEPRESEARCH_OPENROUTER_API_BASE:-https://openrouter.ai/api}
+    - DEEPRESEARCH_NOTEBOOK_EMBED=${DEEPRESEARCH_NOTEBOOK_EMBED:-true}
+    - DEEPRESEARCH_NOTEBOOK_ASYNC=${DEEPRESEARCH_NOTEBOOK_ASYNC:-true}
+    - OPEN_NOTEBOOK_API_URL=${DEEPRESEARCH_NOTEBOOK_API_URL:-http://open-notebook:5055}
+    - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    depends_on:
+      nats:
+        condition: service_healthy
+    ports:
+    - ${DEEPRESEARCH_BIND:-127.0.0.1}:${DEEPRESEARCH_PORT:-8098}:8098
+    volumes:
+    - ./contracts:/app/contracts:ro
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_external  # OpenRouter API fallback mode
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  supaserch:
+    <<: &tier-agent-hardened-ro
+      env_file:
+      - env.shared
+      - env.tier-agent
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      read_only: true
+      tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+      - /var/tmp:noexec,nosuid,size=64m
+
+    build:
+      context: .
+      dockerfile: services/supaserch/Dockerfile
+    image: ${SUPASERCH_IMAGE:-}
+    restart: unless-stopped
+    environment:
+    - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
+      # Composed from NATS_USER/NATS_PASSWORD with the host PINNED, per #2610.
+      # The previous `${NATS_URL:-...}` form was doubly wrong: the default failed
+      # auth on a rotated password, AND Compose gives a host-session export
+      # precedence over every --env-file, so a shell exporting a localhost-oriented
+      # NATS URL reached the container, where localhost is the container itself.
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
+    - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
+    - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${SUPASERCH_BIND:-127.0.0.1}:${SUPASERCH_PORT:-8099}:8099
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  channel-monitor:
+    <<: *tier-agent-hardened-ro
+    build: ./services/channel-monitor
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
+    - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
+    - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
+    - OPEN_NOTEBOOK_API_URL=${CHANNEL_MONITOR_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+    # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
+    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${SUPABASE_DB_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}}@supabase-db:5432/${CHANNEL_MONITOR_DB_NAME:-postgres}}
+    - NATS_URL=${NATS_URL}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data,pmoves_external
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    volumes:
+    - ./config:/app/config
+    depends_on:
+      pmoves-yt:
+        condition: service_started
+      nats:
+        condition: service_healthy
+    ports:
+    - ${CHANNEL_MONITOR_BIND:-127.0.0.1}:${CHANNEL_MONITOR_PORT:-8097}:8097
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    - pmoves_external  # Required for YouTube API access
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  retrieval-eval:
+    <<: *tier-worker-hardened
+    build: ./services/retrieval-eval
+    restart: unless-stopped
+    environment:
+    - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+    - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus
+    depends_on:
+    - hi-rag-gateway-v2
+    ports:
+    - ${RETRIEVAL_EVAL_BIND:-0.0.0.0}:${RETRIEVAL_EVAL_PORT:-8090}:8090
+    volumes:
+    - ./services/retrieval-eval:/app:rw
+    - ./datasets:/app/data:rw
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  publisher-discord:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: ./services/publisher-discord/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Composed from NATS_USER/NATS_PASSWORD with the host PINNED, per #2610.
+      # The previous `${NATS_URL:-...}` form was doubly wrong: the default failed
+      # auth on a rotated password, AND Compose gives a host-session export
+      # precedence over every --env-file, so a shell exporting a localhost-oriented
+      # NATS URL reached the container, where localhost is the container itself.
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
+    # Credentials come from NATS_USER/NATS_PASSWORD, which the funnel writes into
+    # env.shared / env.tier-agent.
+    - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,tokenism.cgp.ready.v1,tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.swarm.population.v1}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    depends_on:
+      nats:
+        condition: service_healthy
+    ports:
+    - ${PUBLISHER_DISCORD_BIND:-0.0.0.0}:8094:8092
+    profiles:
+    - orchestration
+    - agents
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_external  # Discord webhook API
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  model-registry:
+    <<: &tier-api-hardened
+      env_file:
+      - env.shared
+      - env.tier-api
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build:
+      context: .
+      dockerfile: services/model-registry/Dockerfile
+    restart: unless-stopped
+    environment:
+    - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:?MODEL_REGISTRY requires SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
+    - NATS_URL=${NATS_URL}
+    - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
+    ports:
+    - ${MODEL_REGISTRY_BIND:-0.0.0.0}:${MODEL_REGISTRY_PORT:-8110}:8110
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - orchestration
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:8110/healthz || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    # pmoves_external: required for the ports: stanza to actually publish —
+    # pmoves_api/pmoves_bus are internal:true, and Docker silently skips host
+    # port publishing when a container has no non-internal network attached
+    # (HostConfig.PortBindings gets recorded but NetworkSettings.Ports stays null).
+    - pmoves_external
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  presign:
+    <<: *tier-api-hardened
+    build: ./services/presign
+    restart: unless-stopped
+    environment:
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
+    - MINIO_SECURE=false
+    - AWS_DEFAULT_REGION=us-east-1
+    - ALLOWED_BUCKETS=${ALLOWED_BUCKETS:-assets,outputs}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
+    ports:
+    - ${PRESIGN_BIND:-0.0.0.0}:${PRESIGN_PORT:-8088}:8080
+    profiles:
+    - data
+    - orchestration
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_external
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  render-webhook:
+    <<: *tier-api-hardened
+    build: ./services/render-webhook
+    restart: unless-stopped
+    environment:
+    - SUPA_REST_URL=${RENDER_WEBHOOK_SUPA_REST_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}}
+    - SUPABASE_SERVICE_ROLE_KEY=${RENDER_WEBHOOK_SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}}
+    - SUPABASE_ANON_KEY=${RENDER_WEBHOOK_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-${ANON_KEY:-}}}
+    - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
+    - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_external,pmoves_bus
+    ports:
+    - ${RENDER_WEBHOOK_BIND:-0.0.0.0}:${RENDER_WEBHOOK_PORT:-8085}:8085
+    profiles:
+    - orchestration
+    - workers
+    networks:
+    - pmoves_api
+    - pmoves_external
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  github-branch-cleanup:
+    <<: *tier-agent-hardened-ro
+    build: ./services/github-branch-cleanup
+    image: ${GITHUB_BRANCH_CLEANUP_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-cleanup:pmoves-latest}
+    container_name: pmoves-github-branch-cleanup
+    hostname: github-branch-cleanup
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - SERVICE_PORT=8100
+    - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
+    - DRY_RUN=${DRY_RUN:-true}
+    - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-v1.13,release-*}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - GH_APP_ID=${GH_APP_ID:-}
+    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
+    ports:
+    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
+    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      agent-zero:
+        condition: service_healthy
+    profiles: ["agents", "github-automation"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Tier: agent (GitHub Issue Triage - intelligent issue classification)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  github-issue-triage:
+    <<: *tier-agent-hardened-ro
+    build: ./services/github-issue-triage
+    image: ${GITHUB_ISSUE_TRIAGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-issue-triage:pmoves-latest}
+    container_name: pmoves-github-issue-triage
+    hostname: github-issue-triage
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL}
+    - SERVICE_PORT=8101
+    - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+    - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
+    - INDEX_HISTORICAL_ISSUES=${INDEX_HISTORICAL_ISSUES:-true}
+    - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_api,pmoves_monitoring,pmoves_external
+    ports:
+    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
+    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      hi-rag-gateway-v2:
+        condition: service_healthy
+      botz-gateway:
+        condition: service_healthy
+    profiles: ["agents", "github-automation"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  github-branch-naming:
+    # No `build:` block — the service sources live in a separate
+    # `pmoves-github-branch-naming` repo (operator-implementation).
+    # Local builds would fail: pmoves/services/github-branch-naming/
+    # does not exist. Pull the prebuilt image from ghcr.io via the
+    # env-var default; `GITHUB_BRANCH_NAMING_IMAGE` overrides as needed.
+    image: ${GITHUB_BRANCH_NAMING_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-naming:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8102
+    - NATS_URL=${NATS_URL}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
+    ports:
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8112:8102
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    - pmoves_external  # GitHub API
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8102/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  github-crossrepo-sync:
+    # No `build:` block — the service sources live in a separate
+    # `pmoves-github-crossrepo-sync` repo (operator-implementation).
+    # Local builds would fail: pmoves/services/github-crossrepo-sync/
+    # does not exist. Pull the prebuilt image from ghcr.io via the
+    # env-var default; `GITHUB_CROSSREPO_SYNC_IMAGE` overrides as needed.
+    image: ${GITHUB_CROSSREPO_SYNC_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-sync:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8103
+    - NATS_URL=${NATS_URL}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
+    - WORKDIR=${WORKDIR:-/tmp/github-crossrepo-sync}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
+    ports:
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8113:8103
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    - pmoves_external  # GitHub API + git clone
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8103/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  github-crossrepo-pr:
+    build:
+      context: ./services/github-crossrepo-pr
+      dockerfile: Dockerfile
+    image: ${GITHUB_CROSSREPO_PR_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-pr:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8104
+    - NATS_URL=${NATS_URL}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
+    ports:
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8114:8104
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    - pmoves_external  # GitHub API for PR management
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8104/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  github-runner-ctl:
+    build: ./services/github-runner-ctl
+    restart: unless-stopped
+    <<: *tier-agent-hardened-rw
+    environment:
+    - PORT=8104
+    - NATS_URL=${NATS_URL}
+    - GITHUB_PAT=${GITHUB_PAT:-}
+    - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
+    - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
+    - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
+    - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_monitoring,pmoves_external
+    depends_on:
+      nats:
+        condition: service_healthy
+    ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
+    volumes:
+    - ./services/github-runner-ctl/config:/app/config:ro
+    - ./secrets/github_pat:/run/secrets/github_pat:ro
+    profiles: ["orchestration", "workers"]
+    networks: [pmoves_api, pmoves_bus, pmoves_monitoring, pmoves_external]  # GitHub API for runner mgmt
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M

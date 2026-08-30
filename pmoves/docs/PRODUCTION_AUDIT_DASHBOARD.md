@@ -3,15 +3,26 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-15 (Platform Activation Session 2 — GPU serving, TAC trees, branded defaults)
-**Branch:** `fix/platform-activation-soundcloud-gpu`
-**Commit:** pending (session 2 work)
+**Last Updated:** 2026-07-29 (auto-reconciled)
+
+> ⚠️ **STALE — DO NOT TRUST AT FACE VALUE (as of 2026-07-21).** This dashboard has not been refreshed since 2026-04-24 (~3 months) and its "COMPLETE" assertions no longer reflect the repo. A 2026-07-21 ship-readiness assessment found gaps this doc does not mention: two services wired into the production compose are **empty scaffolds that crash-loop** (`media-video`, `media-audio`), and a dozen-plus fully-coded services have **no deployment path**. Treat this file as historical until it is re-reconciled. See the ship-readiness assessment for current state.
+**Branch:** `main`
+**Commit:** `1df8ba47d3` (post 6-PR merge batch)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
-## Latest Changes (Mar 15, 2026)
+## Latest Changes (Apr 10, 2026)
+
+### Session 11.2 Fleet Validation (Apr 10, 2026)
+
+- **Fleet:** 42 containers running, 34 healthy (fresh Docker reinstall bringup)
+- **Fixes applied:** model-registry Dockerfile COPY (crash-loop fix), Makefile bringup-layered SUPABASE_RUNTIME default, transcribe-backend pillow/crawl4ai conflict
+- **6 PRs merged:** #1196-#1204 (n8n registry, PR monitor, supabase fix, submodule advances, Hi-RAG 5090 commit extraction)
+- **ALIGNED_IMPLEMENTATION_ROADMAP phases annotated:** Phase 1 COMPLETE, Phase 2 PARTIAL, Phase 3 TEMPLATE, Phase 4 COMPLETE, Phase 5 COMPLETE (~80% implemented)
+
+## Previous Changes (Mar 15, 2026)
 
 ### TAC YAML Audit Trees + Umbrella Coverage (Mar 15, 2026)
 
@@ -32,7 +43,7 @@
   - `TAC_PMOVES_YT.md` — YouTube ingestion pipeline (8077)
   - `TAC_EVOSWARM.md` — Evolutionary optimization controller (8113)
   - `TAC_GPU_ORCHESTRATOR.md` — GPU mesh management (8200)
-  - `TAC_CONSCIOUSNESS.md` — CGP consciousness mapping (8105)
+  - `TAC_CONSCIOUSNESS.md` — CGP consciousness mapping (8106)
   - `TAC_GATEWAY_AGENT.md` — MCP tool orchestration gateway (8100)
 - **TAC Integration Topology** updated to v2.1 with complete index
 - **Coverage:** 23 markdown TACs + 12 YAML TACs = 35 total (up from 28)

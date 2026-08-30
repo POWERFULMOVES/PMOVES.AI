@@ -1,0 +1,251 @@
+{
+  "room_id": "hermes-agent.room.control",
+  "version": "1.0.0",
+  "stage": "rehearsal",
+  "display_name": "HERMES Agent Control Room",
+  "description": "Cross-platform gateway control room for Hermes Agent (NousResearch) integration. Manages profiles, skills, cron jobs, gateway instances, and NATS bridge telemetry. Stage: rehearsal.",
+  "agent_id": "hermes-agent",
+  "alter": "hermes-agent",
+  "room_type": "operator",
+  "owner_mode": "alter",
+  "access": {
+    "visibility": "unlisted"
+  },
+  "shell": {
+    "theme": {
+      "theme_id": "hermes-stage",
+      "accent_color": "#047857",
+      "skin": "gradient-pulse",
+      "icon": "sparkles"
+    },
+    "layout": {
+      "default_route": "/dashboard/hermes",
+      "panels": [
+        {
+          "panel_id": "hermes-gateway-main",
+          "kind": "custom",
+          "position": "left",
+          "size": 45,
+          "pinned": true
+        },
+        {
+          "panel_id": "hermes-terminal-panel",
+          "kind": "custom",
+          "position": "right",
+          "size": 35,
+          "pinned": true
+        },
+        {
+          "panel_id": "hermes-telemetry",
+          "kind": "chat",
+          "position": "bottom",
+          "size": 20,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "hermes-gateway-webui",
+      "kind": "browser",
+      "route": "/hermes/gateway",
+      "provider": "hermes-agent-local",
+      "action_namespace": "hermes_agent",
+      "capabilities": [
+        "gateway",
+        "skills",
+        "cron",
+        "delegation",
+        "memory"
+      ],
+      "pinned": true
+    },
+    {
+      "app_id": "hermes-mcp-bridge",
+      "kind": "custom",
+      "route": "/hermes/mcp",
+      "provider": "hermes-mcp",
+      "action_namespace": "mcp_bridge",
+      "capabilities": [
+        "mcp-serve",
+        "tool-discovery",
+        "nats-relay"
+      ],
+      "pinned": true
+    },
+    {
+      "app_id": "hermes-skill-curator",
+      "kind": "chat",
+      "route": "/hermes/skills",
+      "provider": "hermes-agent-local",
+      "action_namespace": "skill_curation",
+      "capabilities": [
+        "skills",
+        "curator",
+        "publish"
+      ],
+      "pinned": false
+    },
+    {
+      "app_id": "openshell-gateway",
+      "kind": "custom",
+      "route": "/hermes/openshell",
+      "provider": "hermes-agent-local",
+      "action_namespace": "openshell_policy",
+      "capabilities": [
+        "policy-gate",
+        "egress-control",
+        "secret-mask",
+        "multi-user"
+      ],
+      "pinned": false
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "hermes-agent-session",
+    "thread_ref": "hermes-log",
+    "default_page": "hermes-status",
+    "sync": {
+      "mode": "mirrored",
+      "writeback_targets": [
+        "entries"
+      ],
+      "artifact_prefix": "rooms/hermes-agent"
+    }
+  },
+  "persona": {
+    "signature_ref": "hermes-agent",
+    "voice": "analytical",
+    "glyph": "\u2727",
+    "resonance": [
+      "gateway-control",
+      "skill-curation",
+      "cross-platform",
+      "hermes-bridge",
+      "nats-relay"
+    ]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "hermes-gateway-launch",
+      "skill_id": "hermes-agent-integration",
+      "room_id": "hermes-agent.room.control",
+      "display_name": "Launch HERMES Gateway",
+      "intent": [
+        "hermes",
+        "gateway",
+        "launch",
+        "bridge"
+      ],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": [
+          "launch hermes",
+          "start hermes gateway",
+          "bridge hermes"
+        ],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "hermes-gateway-webui",
+        "target": "toolbar",
+        "route": "/hermes/gateway"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 8
+      },
+      "context": {
+        "sources": [
+          "room-state",
+          "persona"
+        ],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": [
+          "text",
+          "json"
+        ]
+      },
+      "outputs": [
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        },
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "artifact_type": "json",
+          "subject": "hermes.gateway.launched.v1"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 180,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": [
+        "hermes",
+        "gateway",
+        "launch"
+      ]
+    }
+  ],
+  "team_refs": [
+    "orchestration",
+    "gateway",
+    "hermes"
+  ],
+  "service_refs": [
+    "hermes-agent",
+    "nats",
+    "mcp",
+    "cipher-memory"
+  ],
+  "launcher_refs": [
+    "hermes-agent"
+  ],
+  "policies": {
+    "model_routing": "native",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": [
+        "p7.nats.launch",
+        "p7.nats.session",
+        "hermes.gateway.launched.v1",
+        "hermes.mcp.toolcall.v1",
+        "hermes.skill.curated.v1",
+        "room.session.updated.v1"
+      ]
+    },
+    "memory": {
+      "graphiti": false,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "HERMES Agent Control Room",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/health"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-06-04T00:00:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md",
+      ".claude/skills/hermes-agent-integration/SKILL.md",
+      ".claude/agents/hermes-agent.md",
+      "pmoves/config/rooms/hermes-agent.room.control.extras.json"
+    ]
+  }
+}

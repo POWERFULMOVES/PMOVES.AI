@@ -182,6 +182,8 @@ SHA-256("ANTHROPIC_API_KEY") -> 12 bytes -> 3 floats [0, 1)
 | Anchor encryption | AES-GCM | `chit_security.py` |
 | Value encoding | Hex (base16) | `chit_encode_secrets.py` |
 
+> **Key Separation (PR #1275):** `chit/__init__.py` performs base16 hex encoding (NOT encryption). Actual signing (HMAC-SHA256) and encryption (AES-GCM) happen in `chit_security.py`. As of PR #1275, CHIT supports separated `CHIT_SIGNING_KEY` and `CHIT_ENCRYPTION_KEY` env vars with `CHIT_PASSPHRASE` fallback for both. This enables independent key rotation.
+
 ### CGP Packet Structure
 
 ```json

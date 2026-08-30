@@ -5,14 +5,20 @@ on:
     branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
+      - 'pmoves/scripts/split_compose.py'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - 'pmoves/integrations/archon'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
+      - 'pmoves/scripts/split_compose.py'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - 'pmoves/integrations/archon'
   workflow_dispatch:
 
 concurrency:
@@ -35,12 +41,12 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Run hardening validation
         id: hardening-check
@@ -62,7 +68,7 @@ jobs:
 
       - name: Upload hardening report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: hardening-report
           path: hardening-report.md
@@ -70,7 +76,7 @@ jobs:
 
       - name: Comment PR with results
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const fs = require('fs');
@@ -95,7 +101,6 @@ jobs:
       max-parallel: 2
       matrix:
         dockerfile:
-          - pmoves/services/archon/Dockerfile
           - pmoves/services/agent-zero/Dockerfile
           - pmoves/services/flute-gateway/Dockerfile
           - pmoves/services/hi-rag-gateway/Dockerfile
@@ -106,12 +111,12 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Check USER directive
         run: |
@@ -162,25 +167,23 @@ jobs:
           fi
 
   # ============================================================================
-  # Docker Security Checks (Cross-Platform)
+  # Docker Security Checks
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
-    runs-on: [self-hosted, ai-lab]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      DOCKER_CONTENT_TRUST: 1
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      # ---- Cross-platform checks (Linux + Windows) ----
+      # ---- GitHub-hosted Linux runner checks ----
       - name: Check Docker daemon security config
         shell: bash
         run: |
@@ -194,18 +197,25 @@ jobs:
           fi
           echo "✓ Docker daemon reachable"
 
-          # 2. Check content trust (image signing)
-          if docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -qi "content-trust"; then
-            echo "✓ Content trust enabled"
+          # 2. Check rootless/user namespace isolation posture
+          SECURITY_OPTIONS=$(docker info --format '{{json .SecurityOptions}}' 2>/dev/null || echo '[]')
+          if printf '%s' "$SECURITY_OPTIONS" | grep -qi 'name=rootless'; then
+            echo "✓ Rootless Docker enabled"
+          elif printf '%s' "$SECURITY_OPTIONS" | grep -qi 'name=userns'; then
+            echo "✓ User namespace remap enabled"
           else
-            echo "⚠ Content trust not enabled (set DOCKER_CONTENT_TRUST=1)"
+            echo "ℹ Rootless/userns-remap not detected (runner compatibility decision)"
           fi
 
-          # 3. Check default runtime
+          # 3. Image provenance policy lives in CI and deploy refs, not daemon flags
+          echo "ℹ Image signing is enforced via cosign in the GHCR publish workflow."
+          echo "ℹ Prefer digest-pinned image refs in deployment manifests when practical."
+
+          # 4. Check default runtime
           RUNTIME=$(docker info --format '{{.DefaultRuntime}}' 2>/dev/null || echo "unknown")
           echo "ℹ Default runtime: $RUNTIME"
 
-          # 4. Check live-restore (daemon resilience)
+          # 5. Check live-restore (daemon resilience)
           LIVE_RESTORE=$(docker info --format '{{.LiveRestoreEnabled}}' 2>/dev/null || echo "unknown")
           if [ "$LIVE_RESTORE" = "true" ]; then
             echo "✓ Live restore enabled"
@@ -213,7 +223,7 @@ jobs:
             echo "ℹ Live restore disabled (daemon config — not CI-fixable)"
           fi
 
-          # 5. Check no containers running as privileged
+          # 6. Check no containers running as privileged
           # Exclude BuildKit builders (always privileged by design) and CI runners
           PRIV_CONTAINERS=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.Privileged}}' 2>/dev/null | grep "true" | grep -v "buildx_buildkit_\|github-runner" || true)
           if [ -n "$PRIV_CONTAINERS" ]; then
@@ -247,7 +257,7 @@ jobs:
           fi
 
           echo ""
-          echo "=== Cross-Platform Checks Complete ==="
+          echo "=== Docker Security Checks Complete ==="
 
       - name: Validate compose hardening directives
         shell: bash
@@ -331,12 +341,46 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Check PMOVES_NETWORKS wiring is in sync with services' networks (drift gate)
+        run: |
+          # Each service's networks: is mirrored into its own PMOVES_NETWORKS= env so
+          # topology.TopologyContext.from_env() sees a non-empty docker_networks (backs
+          # on_network()/has_external_egress()). --check fails if a service's networks:
+          # changed without re-running the injector. Run BEFORE the split gate since the
+          # injector mutates the SOURCE the overlays are generated from. ruamel pinned to
+          # match the Makefile COMPOSE_NETWORKS_RUN / COMPOSE_SPLIT_RUN pin.
+          python3 -m pip install --quiet "ruamel.yaml==0.19.1"
+          python3 pmoves/scripts/inject_pmoves_networks.py --check
+
+      - name: Check split overlays are in sync with source (drift gate)
+        run: |
+          # The split overlays (docker-compose.{base,core,agents,media,ui,workers,apps}.yml)
+          # are generated from docker-compose.yml. Regenerate and fail on any drift so the
+          # secondary up-overlay-* path can't silently diverge. ruamel pinned for byte-stable
+          # rendering (must match the Makefile COMPOSE_SPLIT_RUN pin).
+          python3 -m pip install --quiet "ruamel.yaml==0.19.1"
+          python3 pmoves/scripts/split_compose.py >/dev/null
+          # Use `git status --porcelain` (not `git diff --exit-code`): diff exits 0 for
+          # UNtracked files, so a PR that deletes a generated overlay would regenerate it
+          # as untracked and slip past. Porcelain catches modified AND untracked/missing.
+          DRIFT="$(git status --porcelain -- \
+              pmoves/docker-compose.base.yml pmoves/docker-compose.core.yml \
+              pmoves/docker-compose.agents.yml pmoves/docker-compose.media.yml \
+              pmoves/docker-compose.ui.yml pmoves/docker-compose.workers.yml \
+              pmoves/docker-compose.apps.yml pmoves/docker-compose.juicefs.yml)"
+          if [ -n "$DRIFT" ]; then
+            echo "$DRIFT"
+            echo "::error::Split overlays are out of sync with docker-compose.yml (modified or missing). Run 'make -C pmoves compose-split' and commit the regenerated overlays."
+            exit 1
+          fi
+          echo "Split overlays are in sync with docker-compose.yml."
 
       - name: Materialize compose env files from templates
         run: |
@@ -362,6 +406,21 @@ jobs:
           VAULT_ENC_KEY: ci-validation-placeholder
           LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-validation-placeholder
           LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-validation-placeholder
+          MINIO_USER: ci-validation-placeholder
+          MINIO_PASSWORD: ci-validation-placeholder
+          QDRANT__API_KEY: ci-validation-placeholder
+          NEO4J_PASSWORD: ci-validation-placeholder
+          MEILI_MASTER_KEY: ci-validation-placeholder
+          WGER_DB_PASSWORD: ci-validation-placeholder
+          WGER_SECRET_KEY: ci-validation-placeholder
+          WGER_ADMIN_PASSWORD: ci-validation-placeholder
+          ANON_KEY: ci-validation-placeholder
+          JWT_SECRET: ci-validation-placeholder
+          SERVICE_ROLE_KEY: ci-validation-placeholder
+          SUPABASE_DB_USER: ci-validation-placeholder
+          SUPABASE_DB_PASSWORD: ci-validation-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-validation-placeholder
+          MCP_SERVER_TOKEN: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 
@@ -379,6 +438,13 @@ jobs:
             docker compose -f pmoves/monitoring/docker-compose.monitoring.yml config --quiet
             echo "✓ pmoves/monitoring/docker-compose.monitoring.yml is valid"
           fi
+
+      - name: Validate GHCR matrix paths
+        run: |
+          python3 pmoves/tools/ghcr_local_prepublish.py \
+            --matrix-file .github/workflows/integrations-ghcr.matrix.json \
+            --repo-root . \
+            --paths-only
 
       - name: Check for network segmentation
         run: |
@@ -436,7 +502,7 @@ jobs:
           cat summary.md
 
       - name: Upload summary
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: validation-summary
           path: summary.md

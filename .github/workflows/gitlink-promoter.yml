@@ -1,0 +1,177 @@
+name: Gitlink Promoter
+
+# Layer 2: After fork-sync creates/merges a PR on a fork repo, this workflow
+# promotes the gitlink in PMOVES.AI automatically. Creates a PR (never direct commit).
+#
+# Triggers:
+#   - workflow_run: fires when fork-sync.yml completes (catches new fork PRs)
+#   - repository_dispatch: fired by fork repos when their hardened branch advances
+#   - workflow_dispatch: manual trigger for batch promotion
+#
+# The promoter:
+#   1. Reads .gitmodules to find all submodules + tracked branches
+#   2. Queries each fork's tracked branch tip via GitHub API
+#   3. Compares against current gitlink in the tree
+#   4. For each fast-forward gitlink, stages the update
+#   5. Creates a single PR with all promotions (batched, not one-per-submodule)
+
+on:
+  workflow_run:
+    workflows: ["Fork Sync"]
+    types: [completed]
+    branches: [main]
+  repository_dispatch:
+    types: [gitlink-promote]
+  workflow_dispatch:
+    inputs:
+      submodule:
+        description: 'Specific submodule path to promote (empty = all)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: Promote stale gitlinks
+    runs-on: ubuntu-latest
+    # Only run if fork-sync succeeded (not cancelled/failed)
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout PMOVES.AI
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Discover stale gitlinks
+        id: discover
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SUBMODULE: ${{ github.event.inputs.submodule || github.event.client_payload.submodule || '' }}
+        run: |
+          set -euo pipefail
+          echo "Scanning for stale gitlinks..."
+
+          # Build submodule → branch mapping from .gitmodules
+          declare -A SUBMODULE_BRANCHES
+          while IFS='=' read -r key value; do
+            if [[ "$key" =~ ^submodule\.(.+)\.branch$ ]]; then
+              name="${BASH_REMATCH[1]}"
+              SUBMODULE_BRANCHES["$name"]="$value"
+            fi
+          done < <(git config --file .gitmodules --list 2>/dev/null || true)
+
+          # Check each submodule
+          PROMOTIONS=""
+          COUNT=0
+          for name in "${!SUBMODULE_BRANCHES[@]}"; do
+            # Skip if targeting a specific submodule
+            if [[ -n "$TARGET_SUBMODULE" && "$name" != "$TARGET_SUBMODULE" ]]; then
+              continue
+            fi
+
+            branch="${SUBMODULE_BRANCHES[$name]}"
+
+            # Get current gitlink
+            cur_sha=$(git ls-tree HEAD "$name" 2>/dev/null | awk '{print $3}')
+            if [[ -z "$cur_sha" ]]; then
+              continue
+            fi
+
+            # Get fork's tracked branch tip via GitHub API
+            # Extract org from .gitmodules URL
+            url=$(git config --file .gitmodules "submodule.${name}.url" 2>/dev/null || echo "")
+            if [[ ! "$url" =~ github\.com/([^/]+/[^/]+) ]]; then
+              continue
+            fi
+            repo_slug="${BASH_REMATCH[1]%.git}"
+
+            # Query branch tip
+            new_sha=$(gh api "repos/${repo_slug}/git/ref/heads/${branch}" --jq '.object.sha' 2>/dev/null || echo "")
+            if [[ -z "$new_sha" ]]; then
+              continue
+            fi
+
+            # Same?
+            if [[ "$cur_sha" == "$new_sha" ]]; then
+              continue
+            fi
+
+            # Check if fast-forward (cur is ancestor of new)
+            # We can't check this locally without the submodule refs, so use the GitHub compare API
+            compare_status=$(gh api "repos/${repo_slug}/compare/${cur_sha}...${new_sha}" --jq '.status' 2>/dev/null || echo "error")
+            if [[ "$compare_status" != "ahead" ]]; then
+              echo "  SKIP $name: not a clean FF (status=$compare_status)"
+              continue
+            fi
+
+            echo "  PROMOTE $name: ${cur_sha:0:10} -> ${new_sha:0:10} ($branch)"
+            PROMOTIONS="${PROMOTIONS}${name} ${new_sha}"$'\n'
+            COUNT=$((COUNT + 1))
+          done
+
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "promotions<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROMOTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          if [[ $COUNT -eq 0 ]]; then
+            echo "No stale gitlinks found."
+          else
+            echo "Found $COUNT stale gitlinks to promote."
+          fi
+
+      - name: Create promotion branch + commit
+        if: steps.discover.outputs.count > 0
+        run: |
+          set -euo pipefail
+          BRANCH="chore/auto-promote-gitlinks-$(date +%Y%m%d-%H%M%S)"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+
+          git config --global user.name "pmoves-fleet-bot"
+          git config --global user.email "noreply@powerfulmoves.ai"
+
+          git checkout -b "$BRANCH"
+
+          # Apply each promotion
+          while IFS=' ' read -r name new_sha; do
+            [[ -z "$name" ]] && continue
+            git update-index --add --cacheinfo "160000,${new_sha},${name}"
+            echo "  Staged: $name -> ${new_sha:0:10}"
+          done <<< "${{ steps.discover.outputs.promotions }}"
+
+          git commit -m "chore(submodules): auto-promote ${{ steps.discover.outputs.count }} gitlinks
+
+          Promoted by gitlink-promoter workflow (event: ${{ github.event_name }}).
+          Each gitlink verified as clean fast-forward via GitHub compare API."
+
+      - name: Create PR
+        if: steps.discover.outputs.count > 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_BODY=$(cat <<'PRBODY'
+          ## Automated Gitlink Promotion
+
+          Promoted by the **gitlink-promoter** workflow after fork-sync completed.
+
+          **Event:** ${{ github.event_name }}
+          **Count:** ${{ steps.discover.outputs.count }} submodule(s)
+
+          Each gitlink was verified as a clean fast-forward via the GitHub compare API before staging.
+
+          ---
+          *Automated by gitlink-promoter workflow — review the diff and merge if CI passes.*
+          PRBODY
+          )
+
+          gh pr create \
+            --title "chore(submodules): auto-promote ${{ steps.discover.outputs.count }} gitlinks" \
+            --body "$PR_BODY" \
+            --head "$BRANCH" \
+            --base main \
+            --label "automated" || true

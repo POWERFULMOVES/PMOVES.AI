@@ -1,0 +1,829 @@
+# =============================================================================
+# Provider Activation Catalog
+# =============================================================================
+# Single source of truth for provider → env var → models → function assignments.
+# Used by provider_cascade.py to deterministically activate providers.
+#
+# Known models use `serves` declarations (deterministic routing).
+# Unknown models (not in this file) use the fit-score algorithm from
+# function_demands.yaml as a suggestion engine (requires operator approval).
+#
+# Schema:
+#   providers:
+#     <slug>:
+#       env_var: ENV_VAR_NAME          # Canonical env variable name
+#       key_pattern: "^regex$"         # Validation regex (loose ok for new providers)
+#       api_base: "https://..."        # API endpoint (null for native TZ providers)
+#       tz_type: openai|anthropic      # TensorZero provider type
+#       tier: llm                      # Always llm for external LLM keys
+#       coding_stack: <stack_slug>     # Optional: which coding_stack this provider powers
+#       models:                        # Models this provider offers
+#         <model_slug>:
+#           model_name: "..."          # Upstream model identifier
+#           tz_model_key: "..."        # Key in tensorzero.toml [models.<key>]
+#           serves:                    # Deterministic function assignments
+#             - function: <fn_name>
+#               variant_name: <name>   # Variant key in TZ function
+#               role: primary|secondary|fallback
+#               weight: 0.0-1.0        # TZ routing weight (0.0 = available but not active)
+#           strength_ref: "..."        # Key in model_strengths_seed.yaml (informational)
+#           vram_mb: 0                 # 0 for cloud-only models
+#       embedding_models:              # Optional: embedding models from this provider
+#         <embed_slug>:
+#           model_name: "..."
+#           tz_model_key: "..."
+# =============================================================================
+
+providers:
+
+  # ---------------------------------------------------------------------------
+  # Anthropic — Native provider (Claude family)
+  # ---------------------------------------------------------------------------
+  anthropic:
+    env_var: ANTHROPIC_API_KEY
+    key_pattern: "^sk-ant-"
+    api_base: null                     # Native Anthropic provider in TZ
+    tz_type: anthropic
+    tier: llm
+    coding_stack: claude_code
+    models:
+      claude_sonnet_4:
+        model_name: "claude-sonnet-4-20250514"
+        tz_model_key: claude_sonnet_4
+        serves:
+          - function: agent_zero
+            variant_name: hosted_claude_sonnet
+            role: primary
+            weight: 0.0                # Available, not default
+          - function: coding_claude_fallback
+            variant_name: cloud_claude
+            role: primary
+            weight: 0.0
+        strength_ref: claude_sonnet_4
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # OpenAI — GPT family
+  # ---------------------------------------------------------------------------
+  openai:
+    env_var: OPENAI_API_KEY
+    key_pattern: "^sk-"
+    api_base: "https://api.openai.com/v1"
+    tz_type: openai
+    tier: llm
+    coding_stack: codex_openai
+    models:
+      chat_openai_platform:
+        model_name: "gpt-4o-mini"
+        tz_model_key: chat_openai_platform
+        serves:
+          - function: agent_zero
+            variant_name: hosted_openai
+            role: secondary
+            weight: 0.0
+          - function: langextract
+            variant_name: langextract_openai
+            role: secondary
+            weight: 0.0
+          - function: orchestrator
+            variant_name: primary_cloud
+            role: primary
+            weight: 1.0
+          - function: coding_codex
+            variant_name: cloud_openai
+            role: primary
+            weight: 0.0
+        strength_ref: gpt-4o-mini
+        vram_mb: 0
+    embedding_models:
+      openai_text_embedding_small:
+        model_name: "text-embedding-3-small"
+        tz_model_key: openai_text_embedding_small
+
+  # ---------------------------------------------------------------------------
+  # Groq — Ultra-fast inference
+  # ---------------------------------------------------------------------------
+  groq:
+    env_var: GROQ_API_KEY
+    key_pattern: "^gsk_"
+    api_base: "https://api.groq.com/openai/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_groq:
+        model_name: "llama-3.1-8b-instant"
+        tz_model_key: chat_groq
+        serves:
+          - function: agent_zero
+            variant_name: hosted_groq
+            role: secondary
+            weight: 0.0
+        strength_ref: llama-3.1-8b-instant
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # Moonshot — CJK-optimized multilingual
+  # ---------------------------------------------------------------------------
+  moonshot:
+    env_var: MOONSHOT_API_KEY
+    key_pattern: ".*"
+    api_base: "https://api.moonshot.ai/v1"
+    tz_type: openai
+    tier: llm
+    coding_stack: kimi_coding_plan
+    models:
+      chat_moonshot:
+        model_name: "moonshot-v1-32k"
+        tz_model_key: chat_moonshot
+        serves:
+          - function: agent_zero
+            variant_name: hosted_moonshot
+            role: secondary
+            weight: 0.0
+          - function: langextract
+            variant_name: langextract_moonshot
+            role: secondary
+            weight: 0.0
+        strength_ref: moonshot-v1-32k
+        vram_mb: 0
+      chat_kimi_k2_7_code:
+        model_name: "kimi-k2.7-code"
+        tz_model_key: chat_kimi_k2_7_code
+        serves:
+          - function: coding_kimi
+            variant_name: cloud_kimi_k2_7_code
+            role: primary
+            weight: 1.0
+          - function: agent_zero
+            variant_name: hosted_kimi_k2_7
+            role: secondary
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # OpenRouter — Multi-model aggregator
+  # ---------------------------------------------------------------------------
+  openrouter:
+    env_var: OPENROUTER_API_KEY
+    key_pattern: "^sk-or-"
+    api_base: "https://openrouter.ai/api/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_openrouter:
+        model_name: "openai/gpt-4o-mini"
+        tz_model_key: chat_openrouter
+        serves:
+          - function: agent_zero
+            variant_name: hosted_openrouter
+            role: secondary
+            weight: 0.0
+          - function: langextract
+            variant_name: langextract_openrouter
+            role: secondary
+            weight: 0.0
+          - function: agent_zero_subordinate
+            variant_name: hosted_openrouter
+            role: secondary
+            weight: 0.0
+          - function: pmoves_research_coordinator
+            variant_name: hosted_openrouter
+            role: secondary
+            weight: 0.0
+          - function: archon_work_orders
+            variant_name: hosted_openrouter
+            role: secondary
+            weight: 0.0
+          - function: archon_code_review
+            variant_name: hosted_openrouter
+            role: secondary
+            weight: 0.0
+          - function: coding_codex
+            variant_name: cloud_openrouter
+            role: fallback
+            weight: 0.0
+          - function: coding_alibaba
+            variant_name: cloud_openrouter
+            role: fallback
+            weight: 0.0
+        strength_ref: gpt-4o-mini
+        vram_mb: 0
+    embedding_models:
+      openrouter_embedding:
+        model_name: "voyage/multilingual-2"
+        tz_model_key: openrouter_embedding
+
+  # ---------------------------------------------------------------------------
+  # Alibaba / DashScope — Qwen cloud models
+  # ---------------------------------------------------------------------------
+  alibaba:
+    env_var: ALIBABA_PRO_CODING_PLAN
+    key_pattern: "^sk-[a-f0-9]{32}"   # DashScope keys: sk- + 32 hex (disambiguates from OpenAI sk-proj-)
+    api_base: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    tz_type: openai
+    tier: llm
+    coding_stack: alibaba_coding_plan
+    models:
+      chat_alibaba_qwen:
+        model_name: "qwen3-coder-plus"
+        tz_model_key: chat_alibaba_qwen
+        serves:
+          - function: agent_zero
+            variant_name: hosted_alibaba_qwen
+            role: secondary
+            weight: 0.0
+          - function: langextract
+            variant_name: langextract_alibaba_qwen
+            role: secondary
+            weight: 0.0
+          - function: agent_zero_subordinate
+            variant_name: hosted_alibaba_qwen
+            role: secondary
+            weight: 0.0
+          - function: pmoves_research_coordinator
+            variant_name: hosted_alibaba_qwen
+            role: secondary
+            weight: 0.0
+          - function: archon_work_orders
+            variant_name: hosted_alibaba_qwen
+            role: secondary
+            weight: 0.0
+          - function: archon_code_review
+            variant_name: hosted_alibaba_qwen
+            role: secondary
+            weight: 0.0
+          - function: coding_claude_fallback
+            variant_name: cloud_alibaba
+            role: fallback
+            weight: 0.0
+          - function: coding_alibaba
+            variant_name: cloud_alibaba
+            role: primary
+            weight: 0.0
+          - function: coding
+            variant_name: fallback_alibaba_qwen
+            role: fallback
+            weight: 0.0
+          - function: deepresearch
+            variant_name: hosted_alibaba_qwen
+            role: fallback
+            weight: 0.0
+        strength_ref: null             # Needs seed: qwen3-coder-plus
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # Venice — Privacy-focused inference
+  # ---------------------------------------------------------------------------
+  venice:
+    env_var: VENICE_API_KEY
+    key_pattern: ".*"
+    api_base: "https://api.venice.ai/api/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_venice:
+        model_name: "venice/gpt-4o-mini"
+        tz_model_key: chat_venice
+        serves:
+          - function: agent_zero
+            variant_name: hosted_venice
+            role: secondary
+            weight: 0.0
+          - function: langextract
+            variant_name: langextract_venice
+            role: secondary
+            weight: 0.0
+        strength_ref: gpt-4o-mini      # Venice wraps GPT-4o-mini
+        vram_mb: 0
+    embedding_models:
+      venice_embedding:
+        model_name: "venice/embedding-gemma-300m"
+        tz_model_key: venice_embedding
+
+  # ---------------------------------------------------------------------------
+  # Z.AI — GLM family (Coding Plan endpoint)
+  # ---------------------------------------------------------------------------
+  zai:
+    env_var: Z_AI_API_KEY
+    key_pattern: ".*"
+    api_base: "https://api.z.ai/api/coding/paas/v4"
+    tz_type: openai
+    tier: llm
+    coding_stack: glm_coding_plan
+    models:
+      chat_zai:
+        model_name: "gpt-4o-mini"
+        tz_model_key: chat_zai
+        serves:
+          - function: agent_zero
+            variant_name: hosted_zai
+            role: secondary
+            weight: 0.0
+        strength_ref: gpt-4o-mini
+        vram_mb: 0
+      chat_zai_glm:
+        model_name: "glm-4-flash"
+        tz_model_key: chat_zai_glm
+        serves:
+          - function: agent_zero
+            variant_name: hosted_glm_flash
+            role: secondary
+            weight: 0.0
+          - function: coding_glm
+            variant_name: cloud_zai_glm_flash
+            role: fallback
+            weight: 0.0
+        strength_ref: glm-4-flash
+        vram_mb: 0
+      chat_zai_glm51:
+        model_name: "glm-5.1"
+        tz_model_key: chat_zai_glm51
+        serves:
+          - function: coding_glm
+            variant_name: cloud_zai_glm51
+            role: fallback
+            weight: 0.0
+        strength_ref: glm-5.1
+        vram_mb: 0
+      chat_zai_glm5_turbo:
+        model_name: "glm-5-turbo"
+        tz_model_key: chat_zai_glm5_turbo
+        serves:
+          - function: agent_zero
+            variant_name: hosted_zai_turbo
+            role: primary
+            weight: 0.6
+          - function: coding_glm
+            variant_name: cloud_zai_turbo
+            role: primary
+            weight: 0.8
+          - function: orchestrator
+            variant_name: primary_cloud_turbo
+            role: primary
+            weight: 0.7
+          - function: agent_zero_subordinate
+            variant_name: hosted_zai_turbo
+            role: primary
+            weight: 0.5
+          - function: archon_work_orders
+            variant_name: hosted_zai_turbo
+            role: primary
+            weight: 0.5
+          - function: deepresearch
+            variant_name: hosted_zai_turbo
+            role: secondary
+            weight: 0.3
+        strength_ref: glm-5-turbo
+        vram_mb: 0
+        notes: "OpenClaw-native model — optimized for tool calling, long chains, scheduled tasks, and agentic workflows"
+      chat_zai_glm52:
+        model_name: "glm-5.2"
+        tz_model_key: chat_zai_glm52
+        serves:
+          - function: agent_zero
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.8
+          - function: coding_glm
+            variant_name: cloud_zai_glm52
+            role: primary
+            weight: 0.9
+          - function: coding_kilocode
+            variant_name: cloud_zai_glm52
+            role: secondary
+            weight: 0.5
+          - function: archon_work_orders
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.7
+          - function: archon_code_review
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.6
+          - function: orchestrator
+            variant_name: primary_cloud_glm52
+            role: primary
+            weight: 0.8
+          - function: deepresearch
+            variant_name: hosted_zai_glm52
+            role: primary
+            weight: 0.6
+        strength_ref: glm-5.2
+        vram_mb: 0
+        notes: "Flagship 1M-context model — large-scale implementation, automated research, long-horizon coding agent scenarios"
+      chat_zai_glm5v_turbo:
+        model_name: "glm-5v-turbo"
+        tz_model_key: chat_zai_glm5v_turbo
+        serves:
+          - function: agent_zero
+            variant_name: hosted_zai_vision_turbo
+            role: secondary
+            weight: 0.3
+          - function: coding_glm
+            variant_name: cloud_zai_vision_turbo
+            role: secondary
+            weight: 0.4
+          - function: vl_sentinel
+            variant_name: vision_glm5v_turbo
+            role: primary
+            weight: 0.7
+          - function: deepresearch
+            variant_name: hosted_zai_vision_turbo
+            role: secondary
+            weight: 0.3
+          - function: pmoves_research_coordinator
+            variant_name: hosted_zai_vision_turbo
+            role: secondary
+            weight: 0.3
+        strength_ref: glm-5v-turbo
+        vram_mb: 0
+        notes: "Multimodal coding model — vision + text, frontend recreation, GUI exploration, visual debugging"
+        multimodal: true
+        input_modalities: ["text", "image", "video", "file"]
+
+  # ---------------------------------------------------------------------------
+  # GLM / BigModel.cn — GLM family (General endpoint, separate key)
+  # ---------------------------------------------------------------------------
+  glm_bigmodel:
+    env_var: GLM_API_KEY
+    key_pattern: ".*"
+    api_base: "https://open.bigmodel.cn/api/paas/v4"
+    tz_type: openai
+    tier: llm
+    models:
+      glm_4_plus:
+        model_name: "glm-4-plus"
+        tz_model_key: glm_4_plus
+        serves:
+          - function: agent_zero
+            variant_name: hosted_glm_plus
+            role: secondary
+            weight: 0.0
+        strength_ref: null             # Needs seed entry
+        vram_mb: 0
+      glm_4_long:
+        model_name: "glm-4-long"
+        tz_model_key: glm_4_long
+        serves:
+          - function: agent_zero
+            variant_name: hosted_glm_long
+            role: secondary
+            weight: 0.0
+        strength_ref: null             # Needs seed entry
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # MiniMax — Token Plan provider
+  # ---------------------------------------------------------------------------
+  minimax:
+    env_var: MINIMAX_API_KEY
+    key_pattern: ".*"
+    api_base: "https://api.minimaxi.chat/v1"
+    tz_type: openai
+    tier: llm
+    coding_stack: minimax_token_plan
+    models:
+      chat_minimax:
+        model_name: "MiniMax-M2.7"
+        tz_model_key: chat_minimax
+        serves:
+          - function: coding_minimax
+            variant_name: cloud_minimax
+            role: primary
+            weight: 0.8
+        strength_ref: minimax-m2.7
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # Together AI — Multi-model hosting
+  # ---------------------------------------------------------------------------
+  together:
+    env_var: TOGETHER_AI_API_KEY
+    key_pattern: ".*"
+    api_base: "https://api.together.xyz/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_together:
+        model_name: "meta-llama/Meta-Llama-3.1-70B-Instruct"
+        tz_model_key: chat_together
+        serves:
+          - function: agent_zero
+            variant_name: hosted_together
+            role: secondary
+            weight: 0.0
+          - function: agent_zero_subordinate
+            variant_name: hosted_together
+            role: secondary
+            weight: 0.0
+          - function: pmoves_media_processor
+            variant_name: hosted_together
+            role: fallback
+            weight: 0.0
+          - function: pmoves_log_analyzer
+            variant_name: hosted_together
+            role: fallback
+            weight: 0.0
+          - function: pmoves_research_coordinator
+            variant_name: hosted_together
+            role: secondary
+            weight: 0.0
+          - function: pmoves_knowledge_manager
+            variant_name: hosted_together
+            role: fallback
+            weight: 0.0
+          - function: archon_work_orders
+            variant_name: hosted_together
+            role: secondary
+            weight: 0.0
+          - function: coding_minimax
+            variant_name: cloud_together
+            role: fallback
+            weight: 0.0
+        strength_ref: meta-llama-3.1-70b-instruct
+        vram_mb: 0
+    embedding_models:
+      archon_bge_large_together:
+        model_name: "BAAI/bge-large-en-v1.5"
+        tz_model_key: archon_bge_large_together
+      archon_e5_large_together:
+        model_name: "intfloat/e5-large-v2"
+        tz_model_key: archon_e5_large_together
+      together_embedding:
+        model_name: "togethercomputer/text-embedding-20-light"
+        tz_model_key: together_embedding
+
+  # ---------------------------------------------------------------------------
+  # Cloudflare Workers AI — Edge inference
+  # ---------------------------------------------------------------------------
+  cloudflare:
+    env_var: CLOUDFLARE_API_TOKEN
+    key_pattern: ".*"
+    api_base: null                     # Requires CLOUDFLARE_ACCOUNT_ID — resolved at Stage 2 via env lookup
+    api_base_template: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai"
+    api_base_env: CLOUDFLARE_ACCOUNT_ID
+    tz_type: openai
+    tier: llm
+    models:
+      chat_cloudflare_gpt_oss:
+        model_name: "@cf/openai/gpt-oss-20b"
+        tz_model_key: chat_cloudflare_gpt_oss
+        serves:
+          - function: agent_zero
+            variant_name: hosted_gpt_oss
+            role: secondary
+            weight: 0.0
+          - function: langextract
+            variant_name: langextract_gpt_oss
+            role: secondary
+            weight: 0.0
+        strength_ref: cloudflare-gpt-oss-20b
+        vram_mb: 0
+      coding_llama3_cloud:
+        model_name: "@cf/meta/llama-3.1-8b-instruct"
+        tz_model_key: coding_llama3_cloud
+        serves:
+          - function: coding
+            variant_name: fallback_cloud
+            role: fallback
+            weight: 0.0
+        strength_ref: llama-3.1-8b-instant
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # Gemini — Google AI
+  # ---------------------------------------------------------------------------
+  gemini:
+    env_var: GEMINI_API_KEY
+    key_pattern: ".*"
+    api_base: "https://generativelanguage.googleapis.com/v1beta/openai"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_gemini_pro:
+        model_name: "gemini-2.5-flash"
+        tz_model_key: chat_gemini_pro
+        serves:
+          - function: agent_zero
+            variant_name: hosted_gemini
+            role: secondary
+            weight: 0.0
+        strength_ref: null             # Needs seed entry
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # NVIDIA NIM — Local Nemotron Super 49B on RTX 5090
+  # ---------------------------------------------------------------------------
+  # OpenAI-compatible endpoint served by the local `nvidia-nim` container.
+  # See pmoves/configs/tac_trees/nvidia-nims.tac.yaml for the integration plan
+  # and pmoves/config/model_nexus.yaml for the nexus-level provider record.
+  nvidia_nim:
+    env_var: NGC_API_KEY
+    key_pattern: ".*"
+    api_base: "http://nvidia-nim:8000/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      nemotron_super_49b_nim:
+        model_name: "nvidia/llama-3.3-nemotron-super-49b-v1"
+        tz_model_key: nemotron_super_49b_nim
+        serves:
+          # Variant name must match the TZ config in pmoves/tensorzero/config/tensorzero.toml.
+          # PR #1211 defines [functions.agent_zero.variants.hosted_nim_nemotron].
+          # No deepresearch variant exists yet — add one to tensorzero.toml before
+          # extending `serves` to cover that function.
+          - function: agent_zero
+            variant_name: hosted_nim_nemotron
+            role: secondary
+            weight: 0.0
+        strength_ref: null             # Needs seed entry
+        vram_mb: 0                     # GPU-resident; tracked via gpu-orchestrator
+
+  # ---------------------------------------------------------------------------
+  # llamacpp_rocm — AMD RDNA4 (dual R9700) via llama.cpp ROCm/HIP backend
+  # ---------------------------------------------------------------------------
+  # OpenAI-compatible endpoint served by `llama-server` (ships with llama.cpp)
+  # running on the 9850X3D dual-R9700 workstation via Tailscale hostname.
+  # Ollama's bundled ROCm v6 libs do NOT include gfx1201 kernels (RDNA4), so
+  # the canonical runtime is llama.cpp's HIP backend (built against ROCm 7.1+).
+  # See pmoves/docs/operations/TOPOLOGY.md for the rdna4 node entry.
+  llamacpp_rocm:
+    env_var: LLAMACPP_ROCM_API_KEY
+    key_pattern: ".*"
+    api_base: "http://pmoves-9850x3d-r9700:8080/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      gemma_4_31b_rocm:
+        model_name: "gemma-4-31b-it-Q4_K_M.gguf"
+        tz_model_key: gemma_4_31b_rocm
+        status: staging                # Phase C — pending 48h soak + load test
+        serves:
+          # Variant name matches functions.multimodal_large.variants.gemma_4_31b_rocm
+          # and functions.agent_zero.variants.local_gemma_4_31b_rocm in tensorzero.toml.
+          - function: multimodal_large
+            variant_name: gemma_4_31b_rocm
+            role: secondary
+            weight: 0.0
+          - function: agent_zero
+            variant_name: local_gemma_4_31b_rocm
+            role: secondary
+            weight: 0.0
+          # Phase C dedicated single-GPU variant
+          - function: multimodal_large
+            variant_name: llamacpp_rdna4_gemma4_31b_q4km
+            role: secondary
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 18000                 # Q4 on single R9700; FP16 splits across both cards
+      gemma_4_26b_a4b_rocm:
+        model_name: "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+        tz_model_key: gemma_4_26b_a4b_rocm
+        status: staging                # Phase C — dual-GPU row-split via tensor-split 0.5,0.5
+        serves:
+          - function: multimodal_large
+            variant_name: gemma_4_26b_a4b_rocm
+            role: secondary
+            weight: 0.0
+          - function: agent_zero
+            variant_name: local_gemma_4_26b_a4b_rocm
+            role: secondary
+            weight: 0.0
+          # Phase C dedicated dual-GPU variant (row-split across both R9700 cards)
+          - function: multimodal_large
+            variant_name: llamacpp_rdna4_gemma4_26b_dual
+            role: secondary
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 15000                 # Q4 MoE, 3.8B active
+
+  # ---------------------------------------------------------------------------
+  # ollama_spark — NVIDIA DGX Spark (GB10 Grace-Blackwell, 128 GB unified LPDDR5X)
+  # ---------------------------------------------------------------------------
+  # OpenAI-compatible endpoint served by Ollama running natively on the
+  # pmoves-spark ARM64 node (CUDA-on-ARM, stock DGX OS). Unified memory
+  # pool fits 120B-class models at NVFP4 without VRAM copies.
+  # Phase C introduction: all variants weight=0.0 pending ARM64 multi-arch CI
+  # and 48h soak test. See pmoves/config/profiles/dgx-spark-grace-blackwell.yaml.
+  ollama_spark:
+    env_var: OLLAMA_SPARK_API_KEY
+    key_pattern: ".*"
+    api_base: "http://pmoves-spark:11434/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      ollama_spark_gemma4_31b_fp16:
+        model_name: "gemma4:31b"
+        tz_model_key: ollama_spark_gemma4_31b_fp16
+        status: soak                   # Phase C promoted 2026-05-10 — SPARK online
+        serves:
+          - function: multimodal_large
+            variant_name: ollama_spark_gemma4_31b_fp16
+            role: secondary
+            weight: 0.1
+          - function: agent_zero
+            variant_name: ollama_spark_gemma4_31b_fp16
+            role: secondary
+            weight: 0.1
+          - function: coding
+            variant_name: spark_gemma4_31b_fp16
+            role: secondary
+            weight: 0.1
+        strength_ref: null
+        vram_mb: 36000                 # FP16 weights sit in unified LPDDR5X
+      ollama_spark_nemotron3_super_120b_nvfp4:
+        # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified via HF API 2026-04-19)
+        # License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201
+        # has no FP8/NVFP4 kernels in ROCm 7.1 as of this date.
+        model_name: "nemotron-3-super:120b"    # actual Ollama tag on pmoves-spark (verified 2026-05-10)
+        tz_model_key: ollama_spark_nemotron3_super_120b_nvfp4
+        status: soak                            # present on SPARK — promote to soak
+        serves:
+          - function: agent_zero
+            variant_name: ollama_spark_nemotron3_super_120b_nvfp4
+            role: secondary
+            weight: 0.1                             # soak — model verified on pmoves-spark 2026-05-10
+        strength_ref: null
+        vram_mb: 90000                 # NVFP4 quant; fits 128 GB unified with headroom
+
+  # ---------------------------------------------------------------------------
+  # Kilo Code — coding plan (OpenRouter-compatible gateway)
+  # Verified 2026-07-02: GET https://api.kilocode.ai/api/openrouter/models
+  # (335 models; kilo-auto/* are Kilo's own plan-routed lanes).
+  # NOTE: kilocode.ai (no api. prefix) 308-redirects — use api.kilocode.ai.
+  # ---------------------------------------------------------------------------
+  kilocode:
+    env_var: KILOCODE_API_KEY
+    key_pattern: ".*"
+    api_base: "https://api.kilocode.ai/api/openrouter"
+    tz_type: openai
+    tier: llm
+    coding_stack: kilocode_plan
+    models:
+      chat_kilocode:
+        model_name: "kilo-auto/balanced"   # Kilo plan-routed lane (provider picks model)
+        tz_model_key: chat_kilocode
+        model_suit: kilo-auto-balanced      # pmoves/configs/model-suits/kilo-auto-balanced.yaml
+        serves:
+          - function: pmoves_orchestrator_coding
+            variant_name: cloud_kilocode
+            role: secondary
+            weight: 0.3
+          - function: coding_kilocode
+            variant_name: cloud_kilocode
+            role: secondary
+            weight: 0.3
+        strength_ref: null
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # Ollama Cloud — Ollama Pro plan (hosted models at ollama.com)
+  # Verified 2026-07-02: glm-5.2 present in this account's model list
+  # (~/.hermes/ollama_cloud_models_cache.json — also kimi-k2.7-code,
+  # qwen3-coder:480b, nemotron-3-ultra as future lanes).
+  # ---------------------------------------------------------------------------
+  ollama_cloud:
+    env_var: OLLAMA_API_KEY
+    key_pattern: ".*"
+    api_base: "https://ollama.com/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_ollama_cloud_default:
+        model_name: "glm-5.2"
+        tz_model_key: chat_ollama_cloud_default
+        serves:
+          - function: pmoves_orchestrator_chat
+            variant_name: cloud_ollama_default
+            role: primary
+            weight: 0.0
+          - function: pmoves_orchestrator_coding
+            variant_name: cloud_ollama_default
+            role: fallback
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # HuggingFace Inference Router — orchestrator fallback + Unsloth weights source
+  # Verified 2026-07-02: GET https://router.huggingface.co/v1/models
+  # (123 models; Qwen/Qwen3-Coder-30B-A3B-Instruct live).
+  # ---------------------------------------------------------------------------
+  huggingface:
+    env_var: HF_TOKEN
+    key_pattern: "^hf_"
+    api_base: "https://router.huggingface.co/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_hf_router:
+        model_name: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+        tz_model_key: chat_hf_router
+        serves:
+          - function: pmoves_orchestrator_coding
+            variant_name: cloud_hf_router
+            role: fallback
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 0

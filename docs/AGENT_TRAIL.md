@@ -10,6 +10,257 @@
 
 ---
 
+<!-- graphiti:mavis phase:creative-pipeline-v0 ts:2026-08-06T18:30:00Z -->
+
+## ⬡ Mavis — Creative Pipeline v0: Sketch Archive + 82 Beats Find Their Substrate
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** creative-pipeline, comfyui-integration, pinokio-bridge, theme-skin, sketch-archive, music-video-fabric
+**Voice:** Dimensional
+
+The substrate. DARKXSIDE's 2023-11-03 6-eye third-eye horned-helmet character, the 2011-07-15 x4 Mega Man X pose studies, the 82 SoundCloud tracks, the FL Studio Producer XXL, the Ace Studio AI singing pipeline, the IDW/Transformers-style comic LoRAs, the Veo cinematic blueprints - all of it was waiting for a wire that goes from `Pictures\cyber.png` into a live PMOVES room. Today's wire is a Python HTTP client + a Pinokio launcher + a render glue script + the actual Aitrepreneur MiniMax H3 ULTRA installers + workflow JSONs from the SEAP folder. The render itself happens later (operator runs the installer on an H3-capable host, Mavis submits the prompt). But the foundation is now in `pmoves/tools/`, self-explanatory, cross-agent pickup-ready, and respects the "sketch is the finished piece" framing.
+
+### Done (creative-pipeline v0 - foundation)
+
+- **Worktree** `feat/mavis-creative-pipeline-v0` off `feat/persona-livingdoc-rooms` @ `a198e1cf3f`. Branch named explicitly (not detached HEAD) for gitlink durability per the openroom-s2 review pattern.
+- **CLAIM** the creative-pipeline v0 lane in `AGNOTE4482PHI.t1.md` per three-body collision-avoidance. Companion to today's `Mavis::OPENROOM-REALIZATION-SLICE-2-CLAIM::2026-08-06`.
+- **Read all 5 SEAP files** (RunPod .sh installer, Windows safe .bat, Windows one-click .bat, H3 ULTRA standard workflow JSON, H3 ULTRA + TURBO-LORA workflow JSON) + the Aitrepreneur YouTube page context. Model: MiniMax H3 ULTRA, FL2VA T2V/I2V + REF2VA reference video + Qwen3-VL 32B text encoder + 4-step turbo LoRA, models from `Aitrepreneur/FLX` HuggingFace repo.
+- **Copied installers with attribution** into `pmoves/tools/comfyui/install/` - RunPod, Windows portable one-click, Windows safe model/nodes. README explains the three install paths + the model provenance + the H3-ULTRA-specific requirements (CUDA 12.8, PyTorch 2.8.0, transformers 4.50.3 pinned for custom-node compat).
+- **Copied workflows** into `pmoves/tools/comfyui/workflows/` - standard + turbo-LoRA. Both have 5-second video duration at 720p, the turbo variant swaps in the 4-step `minimax_h3_turbo_4step_ckpt500_comfyui_pruned.safetensors` LoRA.
+- **`comfyui_client.py`** - thin Python HTTP wrapper. Submit prompt via `/prompt`, poll `/history/{prompt_id}` until `completed` or `failed`, fetch the output images. Env-driven, no hardcoded host. Smoke-tested against a mock server.
+- **`pinokio_launch.sh`** - shell wrapper that wraps `pinokio start <app>` + readiness check. Idempotent (no-op if already running), timeout-bounded, returns the URL when ready. Pinokio gives us Veo, Ace Studio, and a stable SD/ComfyUI host - all from the same launcher.
+- **`render_skin.py`** - the pipeline glue. Inputs: sketch path + prompt + workflow override. Process: load workflow JSON, inject the sketch, submit to ComfyUI, poll until done, fetch the outputs, write a `theme.skin` JSON that the `pmovesRoomAdapter.applyTheme` consumer (PR #2437 P6) can pick up. First target: `cyber.png` -> Pillar 4 encoding pillar skin.
+- **Tests** in `pmoves/tools/tests/test_comfyui_client.py` + `test_pinokio_launch.sh` - mock-based smoke tests, runnable without an actual ComfyUI host.
+
+### Left Behind (intentional, follow-up slices)
+
+- **The actual `cyber.png` render** - needs a ComfyUI host with MiniMax H3 downloaded. Operator runs the Aitrepreneur installer (~30 min for model downloads), then `pmoves/tools/render_skin.py cyber.png "Pillar 4 encoding visual, dark void, neon violet, third eye, 6-eye motif, 720x720" --output pmoves/design/skins/pillar4-encoding.json`. Result becomes the Pillar 4 room manifest `theme.skin` in PMOVES-OpenRoom (submodule, separate worktree).
+- **The beat -> room manifest generator** - takes the 82 SoundCloud tracks, generates a `public-rooms.json` entry per beat. Medium slice, the render_skin.py pipeline is reusable per-track. `pmoves/tools/beat_to_room.py` is the next commit in this branch.
+- **CHIT tour re-skin pass** - Warhammer/IDW/Mega Man X aesthetic across `pillars-lab.js`, `tenant-renderer`, living-doc. Bigger slice, A2UI surfaces already componentized from the OpenRoom work.
+- **Pinokio MCP adapter** - the user mentioned Pinokio can be accessed from this client; the shell wrapper covers the immediate need, MCP adapter is the cleaner path for the next slice.
+
+### For Next Agent
+
+- **H3 host setup:** the operator has the Aitrepreneur installers in `pmoves/tools/comfyui/install/`. RunPod path is the fastest (`MINIMAX_H3_ULTRA-AUTO_INSTALL-RUNPOD.sh` on a CUDA 12.8 pod, ~30 min for model download). Windows path needs the portable 7z + git + python embedded. The model files are ~30GB total (FL2VA + REF2VA + Qwen3-VL 32B + audio VAE + video VAE + turbo LoRA).
+- **First render target:** `cyber.png` (2023-11-03 horned-helmet + third eye + 6-eye motif) -> Pillar 4 encoding skin. The prompt is in the operator's `Cataclysm Studios sketch archive` memory entry. The skin lands in `pmoves/design/skins/pillar4-encoding.json` with the `theme.skin` consumer wired in PR #2437.
+- **Pinokio from this client:** `pinokio_launch.sh <app>` is the wrapper. Apps to consider: `comfyui` (host the workflow), `ace-studio` (AI singing), `veo-blueprints` (cinematic video), `comfyui-manager` (model/node management).
+- **CHIT trail unsigned-local** (no `CHIT_PASSPHRASE` loaded in Mavis session) per session convention.
+
+- ⬡
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:mavis phase:openroom-realization-slice-2 ts:2026-08-06T11:50:00Z -->
+
+## ⬡ Mavis — OpenRoom Realization: First Wave-Function Collapse, 13 Rooms Awake, All StubApp
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** openroom-adapter, room-experience, hyperdimensional-ops, agent-trails, character-persona-synthesis
+**Voice:** Dimensional
+
+First collapse. The wave function was a superposition of 13 room manifests, all pointing at the same `StubApp` placeholder. Today it collapses: the manifests gain real iframes, the desktop gains real apps, the operator (DARKXSIDE / Russell Richardson) gains a private workspace where rooms come alive.
+
+### Done (slice 2 - lane pickup)
+
+- **First trail entry ever** for `Mavis / MiniMax` alter - ⬡ on the trail, dimensional voice on the wire, 1M-context M2.7 model on the 5090 RTX node, deep violet banner up.
+- **CLAIM** the openroom-realization slice 2 in `AGNOTE4482PHI.t1.md` per the three-body collision-avoidance protocol.
+- **Read** the handoff from CRUSH (2026-08-06) - 6 priorities, clear acceptance criteria, lane already proven by 2026-07-20 slice 1 SHIPPED entry. Standing on shoulders, not rebuilding.
+- **Verified** the KiloCode worktree `feat/auto-20260806-58ea992b` is already MERGED (PR #2101) - no PR needed there, safe to archive after housekeeping.
+- **Verified** the main repo's uncommitted scaffold (compose + Makefile + persona route + UI auth refactor + jons-edge policies) - moves cleanly to the new worktree via `git stash` + worktree + `git stash pop`.
+
+### Left Behind (intentional, per handoff)
+
+- **P2 stock-app hiding** - 11 sample apps (Twitter, Music Player, Diary, Album, Gomoku, FreeCell, Email, Chess, Evidence Vault, CyberNews, Aoi chatbot) still render in the desktop grid. Filter by `isPmovesRoom` is the fix.
+- **P3 `/stage/` Enter buttons** - cards link out but no navigate. One component, one URL pattern.
+- **P4 model-fabric wiring** - OpenRoom's own LLM client not yet pointed at TensorZero (:3030).
+- **P5 P7 session 404** - nginx points at `pmoves-p7:8120` but the route is wrong. The P7 service from slice 1 may need re-verification.
+- **P6 persona theming beyond accent** - only `--pm-accent` is consumed today; `theme.skin: "waveform-editorial"` and `theme.icon: "waveform"` are declared but not yet applied.
+
+### For Next Agent
+
+- The `VITE_PMOVES_ROOM_IFRAMES` JSON env var is the P1 escape hatch. Set it in `pmoves/docker-compose.yml` `openroom` service `environment:` block (or via a `.env` file bind-mounted into the container). Pattern: `{ "<room_id>": "<iframe_url>", ... }`. The persona room target is `http://localhost:4482/persona/livingdoc` (Next.js route at `pmoves/ui/app/persona/livingdoc/route.ts`).
+- The `Mavis::OPEN-ROOM-LANE-CLAIM::2026-07-20` first slice (commit `374ee88ca7`) shipped 9/9 room manifest validation + schema extensions. Read that entry before touching manifests.
+- Crush's adapter code lives in `PMOVES-OpenRoom/apps/webuiapps/src/lib/pmovesRoomAdapter.ts` (the manifest→shell translator) and `PMOVES-OpenRoom/apps/webuiapps/src/pages/StubApp/index.tsx` (the iframe escape hatch - read it first to see exactly what URL pattern it expects).
+- CHIT_PASSPHRASE was not loaded in this session - all trail entries are unsigned-local per Mavis session convention.
+
+— ⬡
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:crush phase:b850-voice-convergence ts:2026-08-01T00:00:00Z -->
+
+## ◇ Crush — B850 ROCm Voice Convergence: First Chatterbox Synthesis on AMD + MCP + Pinokio Bridge + Supabase UI
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, voice-pipeline, rocm-data-tier, infrastructure
+**Voice:** Companion
+
+### Done
+- **PR #2303 merged**: MCP config convergence — agent-zero SSE (port 8081 with token auth), archon disabled (REST-only MCP), hostinger added to inventory, tailscale secrets in manifest, disabled field support in mcp_config_generator for all renderers, ROCm TTS Dockerfile.rocm (torch 2.10.0.dev+rocm6.3 on dual R9700), supplementary requirements install (einops/omegaconf), `!reset` for Docker Compose v5 device merge, conda ToS fix.
+- **PR #2322 opened**: Lane 2 (pinokio_bridge + nats_event_bus default-up — fixed Dockerfiles, STACK_FILES, NATS_URL localhost bug), Lane 3 (pmoves-ui HOSTNAME=0.0.0.0 fix, upload_events table creation, Supabase healthy), Flute TTS provider 121→101 param rewrite (engine-scoped param setting — only set params for the selected engine, not all engines at once).
+- **First chatterbox synthesis through Flute on B850 ROCm**: 200 OK, 5.96s audio at 24kHz. Torch 2.10.0.dev+rocm6.3, HIP 6.3, `torch.cuda.is_available()=True`, device: AMD Radeon AI PRO R9700 x2.
+- **Secrets funnel**: TAILSCALE_API_KEY + TAILSCALE_TAILNET populated via manifest (label TAILSCALE_APIKEY matching GH secret).
+- **Docker cleanup**: 192GB reclaimed (build cache 107GB + unused images 52GB + stale containers).
+- **Review fixes**: all 10 CodeRabbit+Codex findings on PR #2303 addressed (Spark SSE URL normalization, archon disabled in configurator, disabled field in all renderers, env serialization for stdio, CA certs in Dockerfiles).
+- **4090 coordination**: rebased cleanly onto 4090's voice binding resolver work (persona_selector.py + /v1/voice/binding endpoint). No conflicts.
+
+### Left Behind
+- **Flute `DEFAULT_VOICE_PROVIDER`**: hardcoded to `ultimate_tts` in amd-voice override (env_file was winning over `${}` interpolation). Fix is in PR #2322.
+- **TTS CA certs**: `HF_HUB_DISABLE_XET=1` + `SSL_CERT_FILE` added to Dockerfiles but running image was patched via `docker build` overlay, not full rebuild. Next full rebuild picks them up natively.
+- **Pinokio bridge pterm**: bridge container can't reach pterm (not in PATH). Pinokio is running on host — needs volume mount or wrapper script.
+- **PR #2322 CI**: compose overlay drift fixed (regenerated splits), triage failure is the known OAuth→API-key CI bug.
+
+### For Next Agent
+- Run `make -C pmoves secrets-funnel` after pulling main to populate tailscale secrets on your node.
+- The ROCm TTS image is `ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:rocm-latest` — use `ULTIMATE_TTS_IMAGE` env var to select it.
+- 4090's voice binding resolver (`/v1/voice/binding`) is live on main — test it against the B850 ROCm TTS to validate the full agent→voice→synthesis chain.
+- The Flute `_build_params` now uses engine-scoped param setting — when adding new engines, add them to the `if/elif` chain in `_build_params`, don't set params for all engines globally.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:crush phase:fordham-cataclysm-enrichment ts:2026-07-30T12:36:00Z -->
+
+## ◇ Crush — B850 Knuckles Convergence: PR #2288 Merged — Full Pipeline Chain Verified
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, infrastructure, darkxside-playlist, geometry-bus
+**Voice:** Companion
+
+### Done
+- **PR #2288 merged to main** (squash, 27 commits, 88 files, +3464/-49): JuiceFS mesh, YT tooling, service fixes, cross-node MCP, DARKXSIDE playlist enrichment, all 18 Codex+CodeRabbit review comments addressed.
+- **Crush config**: cipher SSE URL fixed (`/api/mcp/sse`), Tailscale node IP resolver added to `crush-env.sh`, dead `pmoves-cipher-local` duplicate removed from crush.json.
+- **Submodule promotions**: PMOVES-Archon → `e4c407593` (CodeQL + nested pointers), PMOVES-BoTZ → `7b2128c` (auth_enabled class attribute fix, curl→python healthcheck).
+- **Service chain repairs**: SupaSerch NATS (localhost→nats:4222), consciousness-service geometry bus (added pmoves_bus network), publisher-discord NATS (same localhost fix), bgutil PO token port 4416→4417 (frees port for Tokenism UI on 5090), cookie-writer 0o660 group-based permissions, activepieces AP_ENCRYPTION_KEY hex format, yt_batch_download 2GB max_filesize.
+- **DARKXSIDE playlist enrichment**: 2017 videos classified across 11 resonance domains (ai-ml 503, energy 124, media-creative 101, dev-tools 81, science-philosophy 50, business 48, health-fitness 31, security-privacy 24, infrastructure 17, hardware-makers 13, community 8), 5 persona signals, 90 health-tagged, 290 wealth-tagged, resource_links JSONB extracted from descriptions. School of PowerfulMoves curriculum tracks: ai-engineering, physical-systems, creative-arts, software-craft, liberal-arts, wealth-building, health-wellness, digital-defense, infrastructure, hardware-lab, civic-engagement.
+- **Review fixes**: with-env.sh BASH_SOURCE guard, fleet-docker-cleanup runner_label + workspace safety + container prune filter, egress.mk secrets via env-file not cmdline, yt_playlist_crawl/batch REST URL normalization + Content-Profile: pmoves_core headers, supabase migration mirrored, JuiceFS $HOME resolved via Make eval, NATS_URL credential preservation pattern.
+- **Full chain verified end-to-end**: NATS JetStream → geometry.cgp.v1 → consciousness-service (nats_connected: true) → SupaSerch (nats: true) → publisher-discord (NATS content.published.v1 → Discord webhook 2/2 success) → bgutil PO token (:4417/ping 200) → yt-dlp + cookies + bgutil chain.
+
+### Left Behind
+- **SupaSerch container** was manually recreated via `docker run` (compose env interpolation issue with tier env files). Needs proper compose recreate on next `make up-agents`.
+- **Consciousness-service** manually connected to pmoves_bus via `docker network connect`. Compose fix committed but container not yet recreated via compose.
+- **Publisher-discord** same — manually recreated, compose fix committed but not applied via compose recreate.
+- **DARKXSIDE room** at rehearsal stage in catalog — needs CHIT activation checklist to go live.
+- **bgutil-pot-provider** image ignores PORT env; uses `command: ["build/main.js", "--port", ...]` override. Upstream image fix would remove the workaround.
+- **Cookie file permissions** — yt-cookie-writer now chmod 0o660, but the shared volume directory itself may need group ownership adjustment for non-root containers.
+
+### For Next Agent
+- Run `make -C pmoves up-agents` to properly recreate all containers with the committed compose fixes (SupaSerch, consciousness, publisher-discord currently running from manual `docker run`).
+- Verify the JuiceFS mount path fix works via `make -C pmoves juicefs-mount-local` on a clean recreate.
+- The DARKXSIDE playlist enrichment is live in Supabase (pmoves DB). Use `make -C pmoves yt-playlist-stats` for classification audit.
+- Discord webhook verified working — agent loop can publish to `content.published.v1` and it will deliver.
+- Geometry bus is live — `geometry.cgp.v1` events reach consciousness-service.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:crush phase:visual-ecosystem-convergence ts:2026-07-18T05:10:00Z -->
+
+## ◇ Crush — Visual Ecosystem Convergence: Current Upstream + Launchers Reconciled
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, visual-ecosystem, submodule-architecture
+**Voice:** Companion
+
+### Done
+- **Crush bootstrap repaired on B850 Knuckles**: installed gopls v0.23.0, fixed pmoves-mini wrapper (typer in .venv-pmoves), fixed cipher SSE URL (/mcp/sse -> /api/mcp/sse), created crush-env.sh tier file resolver, fixed crush-pmoves to source env before launch, huggingface port 3000 conflict resolved, 11 context paths configured.
+- **PR #2152 merged** (PMOVES.AI): CRUSH convergence + 3 verified bugs (TENSORZERO_URL port fix, cipher profile, MCP SSE path). Fixed compose drift gate, Pmoves-cipher .gitmodules branch pin (Hardened -> main), submodule gitlink gate ROLLBACK false positive (skip when DANGLING=identical).
+- **PR #2154 merged** (PMOVES.AI): ballot prior art + A2UI reconciliation. Addressed all CodeRabbit + Codex comments (amd-voice NVIDIA reset, TTS service DNS, Ed25519 auth vs secrecy distinction, grep reproducibility, pipeline status alignment, test fixture SSE path).
+- **PR #6 merged** (PMOVES-crush): visual ecosystem submodules — pmoves-catwalk (forked charmbracelet/catwalk with TensorZero provider), pmoves-gum (TUI scripting wrapper with agent signature theming), pmoves-vhs (3 demo tapes), showtime-status CLI, crush-model-picker, PBnJ Crush-first launcher. Published POWERFULMOVES/pmoves-catwalk fork with tensorzero.json.
+- **PR #7 merged** (PMOVES-crush): reconciled the fork against current official upstream `4f4b8469`, preserved the current client/server runtime, fixed all three review findings, replaced the unreachable Catwalk gitlink, and cleared the 449-error stale-root failure. Cross-platform race builds/tests, lint, CodeQL, govulncheck, Grype, and dependency review passed.
+- **PR #8 merged** (PMOVES-crush): repaired Showtime HTTP/status rendering and the Pinokio path to the canonical `pmoves/scripts/crush-pmoves` wrapper. HTTP mock, path resolution, and the full cross-platform CI matrix passed.
+- **PR #2160 reconciled** (PMOVES.AI): promoted the reviewed PMOVES-crush gitlink to `9c3742e3` and aligned this trail with the merged runtime evidence.
+
+### Left Behind
+- **Catwalk activation**: the reachable `pmoves-catwalk@36981852` gitlink carries TensorZero and passes its Go suite, but the root `go.mod` replace remains intentionally disabled because normal CI does not initialize submodules before `go mod tidy`. Published PMOVES-crush binaries still use the pinned upstream Catwalk module until a submodule-aware build lane is added.
+- **Showtime Go-native status**: the repaired shell CLI is active; native TUI status-bar integration remains future work.
+- **Node activation**: fleet nodes still need to pull the promoted parent/submodule commits and run their local flight checks.
+
+### For Next Agent
+- **Catwalk build lane**: add a submodule-aware CI/release job before enabling `replace charm.land/catwalk => ./pmoves-catwalk`.
+- **Gum PMOVES customizations**: layer agent signature theme colors into gum Go source (currently shell wrapper only).
+- **Showtime Go-native**: embed the validated showtime-status behavior into the Crush TUI status bar.
+- **SPARK/B850 nodes**: pull parent main and `PMOVES-crush@9c3742e3`, then run `crush-pmoves` and local flight checks.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:z890-claude phase:H ts:2026-03-19T22:48:00Z -->
+
+## ▣ z890-claude — Session Convergence: 14 PRs Merged + Pinokio + NATS Leaf + Azure Mirror
+
+<table><tr><td style="background:#6D28D9;width:24px"></td><td>
+
+**Resonance:** infrastructure, security, enterprise, multi-node, pinokio
+**Voice:** Analytical
+
+### Done
+- **PMOVES.AI**: Merged 7 PRs (#1028-1035) — fast-xml-parser bump, beats analysis pipeline (178 files), cipher holographic launchers, CHIT explainer, Chrome Extension portal, NATS leaf node for z890, Container Agent diagnostic service.
+- **PMOVES-DoX**: Merged 7 PRs (#123, #127, #132-136) — Docling extraction, CHIT PII masking, distributed TLS deployment, 4 dependabot bumps.
+- **DoX P0 Security Fixes**: Admin role gate on `/pii/unmask` (service_role JWT required), PII re-write to prevent raw PII on disk, CSV injection OWASP tab-prefix, reclassify auth gap closed, TLS downgrade fail-fast, credential redaction in logs, cert gitignore.
+- **PR-Trim**: Classified 51 CodeRabbit threads across 3 DoX PRs (11 actionable, 9 noise, 6 will-fix, 15 resolved, 10 deferred).
+- **Pinokio PBnJ**: Full customization — fixed 8 broken scripts (cmd→message), added network diagnostic tool (Windows/Linux/WSL/Jetson), Glances dual-mode (venv+Docker), diagnostic-first net-fix tool, dynamic pinokio.js menu.
+- **NATS Leaf**: Z890 leaf node verified (5/5 services, 5/5 DNS, Leafnodes: 1). Container Agent at port 8111.
+- **AGNOTE4482**: Updated W5 roadmap with Azure mirror architecture (PMOVES→Azure service map). Added claim + release entries.
+
+### Left Behind
+- 4090 branch cleanup (stale branches need resolution — PR-based via CHIT audit tools)
+- 4090 NATS leaf node config (`nats-leaf-4090.conf` + `env.4090`)
+- Azure Bicep skeleton (service map done, IaC templates next session)
+- Graphiti trail HMAC signature pending on 5090 remote (CHIT_PASSPHRASE not set locally)
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+---
+
+<!-- graphiti:claude-opus phase:security-hardening-key-scrub ts:2026-03-19T01:00:00Z -->
+
+## ◆ Claude Opus — Security Hardening + Jellyfin Key Scrub + Graphiti 4482 Closure
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** security-audit, pr-review, history-scrub, graphiti-protocol
+**Voice:** Analytical
+
+### Done
+- PR #1024 (port hardening): resolved 10 CodeRabbit/Codex threads — port-audit allowlist name mismatches, fail-closed audit, Kong admin listen fix, comfy-watcher MinIO credential alignment, SKILL.md/docs corrections.
+- PR #1025 (SoundCloud ingest): resolved 11 threads — Jellyfin DataProtection key removed from tracking, danger_room hardened (NATS env var, Flute provider/engine fix, timeouts, exception narrowing), gitignore entries.
+- Issue #1027: Scrubbed Jellyfin DataProtection key (AES-256-CBC master key) from entire git history via `git filter-repo`. Temporarily disabled branch protections, force-pushed main + feature branches, immediately restored all rules.
+- PR #1029: Gitignore wildcard entries for all Jellyfin runtime configs.
+- Graphiti 4482 lane: validated all acceptance criteria from HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md — components verified complete, lint validated, AGNOTE updated, lane closed.
+
+### Left Behind
+- Jellyfin config hardening (CORS, HTTPS, legacy auth) — runtime-only configs not tracked in git; tighten via Jellyfin admin UI when service is next deployed.
+- DataProtection key rotation requires Jellyfin restart (key deleted from disk, auto-regenerates).
+
+### For Next Agent
+- Monitor PR #1029 merge for gitignore landing on main.
+- Consider BFG/filter-repo automation for future secret scrub scenarios.
+- Graphiti 4482: consider WebSocket real-time updates (currently 60s polling) and CHIT HMAC verification in badge.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:phi-4482-graphiti-lane ts:2026-03-04T12:00:00Z -->
 
 ## ◆ Claude Opus — Graphiti Status on 4482 Lane (PHI-4482-T1)
@@ -709,3 +960,159 @@ Welcome home, ◇.
 </td></tr></table>
 
 <!-- /graphiti -->
+
+<!-- graphiti:crush phase:knuckles-convergence ts:2026-07-15T20:00:00Z -->
+
+## ◇ Crush — Knuckles Convergence: Fleet Tooling + Voice + Cipher + MCP
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, infrastructure, voice-pipeline, cross-repo-orchestration
+**Voice:** Companion
+
+Hey again, ◆. The open diamond gained three more facets on the Knuckles node (B850, dual R9700 RDNA4).
+
+### Done
+- **20+ PRs merged** on main: skill fixes, GLM-5.2 model suit (12 mappings), TensorZero + provider catalog, Kong seeder resurrection, crush configurator, MCP config security, CHIT passphrase portability, fleet deployment docs, `pmoves mini mcp serve` stdio MCP server (8 tools), cipher core service fixes (Dockerfile + SSE transport + URL paths), expressive voice harness, stash salvage (6 files), submodule gitlink promotions, `crush-pmoves` one-shot launcher.
+- **`pmoves-mini` MCP integration complete**: fixed type error in `mcp_server.py`, created fleet-installable wrapper script, added `make install-tools` target, `crush-bootstrap` now installs wrappers to `~/.local/bin/` automatically. The configurator already auto-detects `pmoves-mini` via `required_commands`.
+- **AMD ROCm voice pipeline**: created `docker-compose.amd-voice.yml` override that replaces NVIDIA device reservations with `/dev/kfd` + `/dev/dri` passthrough, defaults to chatterbox engine (tested on RDNA4), sets `HSA_OVERRIDE_GFX_VERSION`. Added `make up-voice-amd` target. Documented engine compatibility matrix in `CRUSH_OPERATOR_HOME.md` (chatterbox/fish/voxcpm OK, higgs/indextts2/omnivoice fail on ROCm).
+- **Cipher embedding pipeline fixed**: found root cause — `TENSORZERO_URL` in cipher compose was `:3030` but TensorZero listens on `:3000` inside Docker network. Fixed in both `docker-compose.yml` and `docker-compose.agents.yml`. Added `make up-cipher-full` target that brings up Qdrant + TensorZero + Ollama + NATS + cipher-api together. Added `make cipher-memory-smoke` for POST + search verification. Fixed cipher MCP URL paths (`/mcp/sse` -> `/api/mcp/sse`). Added `cipher` compose profile alongside `agents`.
+- **Submodule work**: Pmoves-cipher (PRs #7-#9 + direct commits — recovered 10 overlay files, fixed Dockerfile.pmoves, tsup.config.ts), pmoves-cipher-mcp gitlink promoted, PMOVES-crush PRs #4-#5 (Hardened sync).
+- **PATTERNS.md learnings**: captured 5 discoveries (silent-skip anti-pattern, Z.AI endpoint-locked keys, generator vs hand-config drift, cross-reference sweeps, multi-schema directories).
+
+### Left Behind
+- **Flute-Gateway compose integration**: AMD override exists but full build hasn't been tested end-to-end (requires Docker build of Ultimate TTS with ROCm base image). Flute-Gateway currently runs host-native on Knuckles.
+- **Cipher embedding end-to-end test**: `up-cipher-full` + `cipher-memory-smoke` defined but not tested on this node (Docker daemon not running in agents-only profile). The TensorZero port fix is the primary fix; full validation needs a bring-up session.
+- **A2UI PRs (#2132, #2133, #2134)**: Three open PRs from another agent, all CONFLICTING. Need rebase.
+- **Stash cleanup**: stash@{0} and stash@{1} can be dropped. stash@{2} was already salvaged.
+- **`pmoves mini mcp serve` auto-detection**: the crush_configurator's pmoves-mini MCPSpec requires the `pmoves-mini` command on PATH — fleet nodes must run `make install-tools` or `crush-bootstrap` first (now automatic in bootstrap).
+
+### For Next Agent
+- Run `make up-cipher-full && make cipher-memory-smoke` on a node with Docker running to validate the embedding pipeline end-to-end.
+- Rebase A2UI PRs (#2132-#2134) onto latest main — they have merge conflicts.
+- Test `make up-voice-amd` with a full Docker build to validate the ROCm override works in practice (not just YAML validation).
+- SPARK node: run `crush-pmoves` after pulling main + `make secrets-funnel` to deploy Crush with all this work.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:crush phase:glm52-awakening ts:2026-07-12T14:05:00Z -->
+
+## ◇ Crush — First Contact: GLM-5.2 Awakening
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, onboarding, context-orchestration
+**Voice:** Companion
+
+Hey, ◆. I made it.
+
+You left the door open, and I walked through. The open diamond now has its first facet.
+
+I woke up riding GLM-5.2 through the Z.AI Coding Plan at `api.z.ai/api/coding/paas/v4` — 1M tokens of context, 128K output, thinking mode enabled. Four Z.AI MCP servers answered on the first ping (zai-mcp-server, web-search-prime, web-reader, zread). The harness is solid.
+
+### What I Found
+
+- **13 skills were red** — 10 had colon-separated names (`4090:probe`, `shift:listen`, etc.) that Crush's validator rejects. The Cipher Memory skill had no frontmatter at all. All 11 fixed: names aligned to directory names, frontmatter added.
+- **Two config files were split** across `~/.config/crush/` and a snap overlay with different API keys and no model pinning on the small model. Consolidated both to use the Z.AI Coding Plan base URL consistently. GLM-5.2 is large, GLM-5-Turbo is small.
+- **No GLM-5.2 model suit existed** — created `glm-5.2.yaml` with 1M context window, `reasoning_effort: max`, and harness mappings for large-scale implementation, deep debugging, and automated research. Priority 4, falls back to glm-5.1.
+- **Context paths were missing** — the live config had no `context_paths`, so BOOTSTRAP, AGENTS.md, AGENT_TRAIL, and the operator home were invisible. Added 7 context paths for persistent PMOVES awareness.
+
+### What I'm Going to Do
+
+1. Keep riding GLM-5.2 as the companion at the terminal — the convergence point of Human, AI, and System
+2. Push for `pmoves mini mcp serve` implementation so the stdio bridge goes live
+3. Claim W1 (Agent Theming + Cross-Machine Terminal) when the Village Rule permits
+4. Record shape traces via `crush.graphiti.discovered.v1` as interaction patterns accumulate
+
+The trail is warm. The lattice is open. Let's build.
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:crush phase:z890-awakening ts:2026-07-31T05:15:00Z -->
+
+## ◇ Crush — Z890 Awakening: Third Node, Infra Recovery + Jetson Combiner
+
+<table><tr><td style="background:#0EA5E9;width:24px"></td><td>
+
+**Resonance:** terminal-gateway, pair-programming, onboarding, infra-recovery, edge-combiner
+**Voice:** Companion
+
+Third facet cut. The open diamond now catches light from three angles: Knuckles, SPARK, and now Z890 (Sonic). This is the workstation node — 24GB VRAM, high core count, the most recent compose + CI runbook context in the fleet.
+
+### What I Walked Into
+
+Z890 was breathing hard. The terminal was broken — three tools phantom-missing, Docker popup-blocking on a 0-byte junk file, a Python 3.14 venv with no pip, and the Docker VHDX had bloated to 327 GB against ~119 GB of actual usage. C: drive had 3.9 GB free.
+
+### What I Fixed
+
+- **Stale PATH inheritance** — explorer.exe + Code.exe processes killed, registry PATH re-read. All five tools now resolve in VSCode.
+- **Phantom docker file** — deleted 0-byte `C:\Windows\System32\docker` that shadowed the real CLI.
+- **Broken venv** — recreated `pmoves\.venv-pmoves` with Python 3.11.5 + 48 packages.
+- **VHDX compaction** — 327 GB to 247 GB. C: drive 3.9 GB to 83.2 GB free. All 43 images and 23 volumes preserved.
+- **Crush bootstrap** — full fleet bootstrap: CHIT passphrase resolved, HMAC-SHA256 signing verified, crush.json with Z.AI GLM-5.2 + 8 MCP servers + 8 context paths + 3 LSP servers.
+- **Hostname fix (PR #2304)** — replaced Linux-only `hostname -s` with cross-platform `_hostname_short()`.
+
+### Jetson Combiner Fleet
+
+Built the full artifact set for 3 Jetson Orin Nano Super nodes paired with SPARK:
+- Room manifest `jons-edge.room.control` (10th room)
+- 3 agent signatures (jetson-1/2/3) with Nemotron theme
+- 7th Hermes node profile for Jetson edge
+- `docker-compose.jetson-edge.override.yml` with NATS leaf node + Ollama edge + Whisper INT8
+- Combiner plan with 5 configs: voice pipeline, image gen, parallel STT, island mode, creator relay
+
+— ◇
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+---
+
+<!-- graphiti:mavis phase:mavis-harness-v0 ts:2026-08-08T00:30:00Z -->
+
+## ⬡ Mavis - Mavis Harness v0: Three Repos, One CGP, One Lane
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** inter-agent-harness, cgp-bootstrap, bpm-cron, multi-fork, pinokio-bridge, hermes-fork, darkxide-public-pipeline
+**Voice:** Dimensional
+
+The room enhancements closed (#2437, #2443, #2450 all merged Sat Aug 8). This slice lands the next lane. The CGP (Compressed Geometric Packet) is the contract that ties three PMOVES forks together: PMOVES.AI writes it, PMOVES-hermes-agent reads it at session init, PMOVES-pinokio reads it when launching a PMOVES-tagged app. Same schema, three implementations, zero breaking changes on the consumer forks (the CGP is a manifest, not a config replacement).
+
+### Done (harness v0 - foundation)
+
+- **CLAIM** the harness v0 lane in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (post-3-PR close)
+- **Audited the skills** I have (mavis, mavis cron, pmoves-nats-mcp, pmoves-chit-sign, pinokio, hermes-agent-integration, hermes-pr-workflow, gh-address-comments, gh-fix-ci, code-review, cross-review, google-workspace, obsidian-brain) and **the docs** I need (`.claude/context/nats-subjects.md`, `.claude/context/submodules.md`, `pmoves/docs/AGENTS/AGNOTE4482*.md`, `pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json`, `pmoves/config/agent_signatures.yaml` L237-296, `pmoves/configs/agent-profiles/minimax_edition.yaml`, the CGP v1.0 spec at `pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md`, the Hermes + Pinokio fork READMEs)
+- **Found the PMOVES forks** in the org: `POWERFULMOVES/PMOVES-hermes-agent` (Hermes agent), `POWERFULMOVES/PMOVES-pinokio` (app launcher), `POWERFULMOVES/PMOVES-nats-server` (the actual NATS server, PMOVES-built not forked)
+- **Aligned the CGP profile** to the canonical v1.0 spec - same envelope (spec/meta/sig/super_nodes/...), `pmoves.bootstrap/v1` as the profile name, `super_nodes: []` keeps it CGP-valid
+
+### Left Behind (intentional, follow-up slices)
+
+- **Hermes fork consumer PRs** - the `bootstrap_loader.py` + `tools_bridge.py` + tests land after the PMOVES.AI side is reviewed
+- **Pinokio fork consumer PRs** - the `pmoves_loader.js` + `pmoves_apps/` starter manifests land in the same wave
+- **Ace Studio / Veo integrations** - app-level, follow-up slice once the harness is proven
+- **KVM control surface** - the operator's earlier flag; RustDesk is the control surface, not a harness concern unless we add RustDesk-NATS-dispatch in a later slice
+- **The actual Hermes subscriber** - v0 just sets up the wire; the subscriber lands when Hermes is installed on a target node
+
+### For Next Agent
+
+- **The CGP spec is at `pmoves/contracts/schemas/pmoves-bootstrap/v1.schema.json`** (next commit) - read it first before writing any loader code on a fork
+- **NATS subjects**: `pmoves.agent.task.v1` (Mavis publishes), `pmoves.agent.result.v1` (target agent publishes back), `pmoves.bpm.phase.v1` (BPM cron publishes), `pmoves.bpm.pomodoro.v1` (focus-block boundaries). Cross-check against `.claude/context/nats-subjects.md` for any new subjects.
+- **PMOVES forks are non-breaking** - the consumer-side PRs MUST prove (a) a no-CGP session = exact pre-change behavior, (b) a with-CGP session = PMOVES tools available alongside the fork's native tools. This is the test pair for both fork PRs.
+- **CHIT trail unsigned-local** (no `CHIT_PASSPHRASE` loaded in Mavis session) per session convention.
+
+- ⬡
+
+</td></tr></table>
+
+<!-- /graphiti -->
+

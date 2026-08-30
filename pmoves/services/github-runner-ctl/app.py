@@ -15,20 +15,17 @@ Port: 8100
 """
 
 import asyncio
-import json
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from pydantic import BaseModel
 
 # Local imports
 from metrics import (
@@ -215,9 +212,9 @@ async def lifespan(app: FastAPI):
         if connected:
             logger.info(f"NATS publisher connected to {NATS_URL}")
         else:
-            logger.warning(f"NATS connection failed, will retry in background")
+            logger.warning("NATS connection failed, will retry in background")
     except asyncio.TimeoutError:
-        logger.warning(f"NATS connection timed out, will retry in background")
+        logger.warning("NATS connection timed out, will retry in background")
     except Exception as e:
         logger.warning(f"NATS connection failed: {e} (continuing without NATS)")
         nats_publisher = None

@@ -1,0 +1,70 @@
+# DEPRECATED alias for desktop-9950xd profile.
+#
+# This file is retained for backward compatibility only. All new references
+# should use the canonical ID `desktop-9950xd`. This alias will be removed
+# in a future release.
+#
+# Canonical profile: pmoves/config/profiles/desktop-9950xd.yaml
+
+id: workstation_5090
+alias_of: desktop-9950xd
+name: "Desktop – AMD 9950XD / RTX 5090 (alias)"
+description: >
+  Alias for desktop-9950xd. High-end workstation with Ryzen 9 9950XD, RTX 5090,
+  192GB RAM. Preferred for full PMOVES stack, GPU inference (vLLM), and heavy
+  media pipelines.
+# Deployment audience (pmoves/config/deployment_classes.yaml); unset means
+# unset — loaders must not guess a class for a node they cannot place.
+deployment_class: private-mesh
+
+hardware:
+  cpu:
+    vendor: AMD
+    model: Ryzen 9 9950XD
+    cores: 16
+    threads: 32
+  gpu:
+    type: nvidia
+    models: ["RTX 5090"]
+    memory_gb: 32
+  ram_gb: 192
+  tags: [desktop, cuda, high-end]
+compose_overrides:
+  - docker-compose.gpu.yml
+  - docker-compose.external.yml
+model_bundles:
+  - ollama-high
+  - vllm-large
+  - reranker-qwen-large
+mcp:
+  - docker
+  - compose
+  - host
+  - telemetry
+messaging:
+  telegram: true
+  discord: true
+  whatsapp: true
+  webrtc: true
+
+# =============================================================================
+# MiniMax Provider Cascade Binding
+# =============================================================================
+# Per MINIMAX_GLM_PARITY_ANALYSIS.md Phase 1: Profile Binding
+# MiniMax is cloud-hosted, so this profile gets cascade routing hints
+minimax_cascade:
+  preferred_model: minimax-m2.7
+  cascade_priority: high
+  fallback_model: qwen3.5-9b
+  gpu_shape_store: true
+  tensorzero_routing: pmoves-architect
+
+# BoTZ Framework binding
+botz:
+  minimax_affinity: high
+  tactical_partner: true
+
+notes:
+  - Alias of desktop-9950xd. Both IDs resolve to the same hardware profile.
+  - Ensure NVIDIA Container Toolkit is installed.
+  - Preferred local model set: Mixtral 8x7B (vLLM), Whisper-large-v3, Qwen reranker.

@@ -1,0 +1,44 @@
+##############################################################################
+# PMOVES.AI - JuiceFS POSIX Mount (shared mesh media storage)
+##############################################################################
+# Mounts JuiceFS into service containers at /mnt/pmoves/media
+# Requires: juicefs-mount container running (see below)
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.juicefs-mount.yml \
+#     --profile juicefs up -d juicefs-mount
+#
+# Then add the volume to any service:
+#   volumes:
+#     - juicefs-media:/mnt/pmoves/media
+##############################################################################
+
+volumes:
+  juicefs-media:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/pmoves-knuckles/pmoves-fs
+      o: bind,rshared
+
+services:
+  juicefs-mount:
+    image: juicedata/mount:ce-v1.3.0
+    profiles: ["juicefs"]
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        exec juicefs mount --enable-xattr
+        "postgres://supabase_admin:${SUPABASE_DB_PASSWORD}@localhost:5432/postgres?search_path=juicefs_meta&sslmode=disable"
+        ${JUICEFS_MOUNT_POINT:-/home/pmoves-knuckles/pmoves-fs}
+    volumes:
+      - ${HOME}/.local/share/juicefs-data:/data
+      - ${JUICEFS_MOUNT_POINT:-/home/pmoves-knuckles/pmoves-fs}:${JUICEFS_MOUNT_POINT:-/home/pmoves-knuckles/pmoves-fs}:rshared
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M

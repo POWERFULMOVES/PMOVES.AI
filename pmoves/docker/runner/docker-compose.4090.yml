@@ -1,0 +1,65 @@
+# pmoves/docker/runner/docker-compose.4090.yml
+#
+# Two parallel GitHub Actions runners for the ai-lab lane on the 4090 Windows/Docker Desktop node.
+# Runs as Linux containers via Docker Desktop (WSL2 backend) alongside the native Windows runner.
+#
+# Start : make -C pmoves gha-runner-4090-up
+# Stop  : make -C pmoves gha-runner-4090-down
+# Status: make -C pmoves gha-runner-4090-status
+# Logs  : make -C pmoves gha-runner-4090-logs
+#
+# Token note: ACCESS_TOKEN requires GitHub repo scope for runner registration.
+# RUNNER_ACCESS_TOKEN resolved by make target: GITHUB_PAT (env.tier-agent) -> gh auth token.
+# Do NOT substitute GH_PAT_PUBLISH here (GHCR packages:write only -- wrong scope).
+# See: pmoves/docs/operations/WORKFLOW_RUNNER_MAP.md
+#
+# Networking note: network_mode=host on Docker Desktop gives containers the WSL2 VM network.
+# Tailscale MagicDNS is Windows-side only. Run make gha-runner-4090-preflight to validate
+# DNS resolution before starting. Enable Use system DNS in Docker Desktop
+# Settings -> Resources -> Network if the preflight DNS check fails.
+# The workflow is best-effort (failures do not block CI), so partial connectivity is safe.
+
+# Note on YAML merge keys: when a service redeclares `environment:` after
+# `<<: *runner-base`, the local mapping REPLACES the merged one. To preserve
+# REPO_URL/RUNNER_SCOPE/LABELS while adding ACCESS_TOKEN per runner, we split
+# environment into its own anchor (`x-runner-env`) and merge it inside each
+# runner's `environment:` block.
+x-runner-base: &runner-base
+  image: myoung34/github-runner:ubuntu-jammy
+  restart: unless-stopped
+  network_mode: host
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+
+x-runner-env: &runner-env
+  REPO_URL: https://github.com/POWERFULMOVES/PMOVES.AI
+  RUNNER_SCOPE: repo
+  LABELS: self-hosted,ai-lab,Linux,X64
+  RUNNER_NAME_PREFIX: pmoves-4090
+  RANDOM_RUNNER_SUFFIX: "true"
+  RUNNER_WORKDIR: /tmp/pmoves-runner
+  EPHEMERAL: "false"
+  DISABLE_AUTO_UPDATE: "false"
+
+services:
+  runner-1:
+    <<: *runner-base
+    container_name: pmoves-4090-runner-1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/pmoves-runner-1:/tmp/pmoves-runner
+    environment:
+      <<: *runner-env
+      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}
+
+  runner-2:
+    <<: *runner-base
+    container_name: pmoves-4090-runner-2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/pmoves-runner-2:/tmp/pmoves-runner
+    environment:
+      <<: *runner-env
+      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}

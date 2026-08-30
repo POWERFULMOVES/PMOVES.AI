@@ -22,7 +22,7 @@ import os
 import socket
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -229,7 +229,7 @@ class Gateway:
         analysis = self.task_analyzer.analyze_task(task)
         thread_type = analysis["thread_type"]
 
-        logger.info(f"Analysis result:")
+        logger.info("Analysis result:")
         logger.info(f"  Thread type: {thread_type.value}")
         logger.info(f"  Agents: {analysis['agents']}")
         logger.info(f"  Estimated duration: {analysis['estimated_duration']}")

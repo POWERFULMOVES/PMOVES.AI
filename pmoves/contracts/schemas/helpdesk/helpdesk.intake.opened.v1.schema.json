@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Helpdesk Intake Opened",
+  "description": "Creator-collab slice 6: a visitor opened an intake session in pmoves.room.helpdesk. Carries the intake_id, room_id, agent_id (the visitor's persona), intent hint (optional), and the room directory snapshot version that was used for routing. Emitted by pmoves-helpdesk-skill at session-open. Consumed by nats_event_bus + dashboard to render intake traffic.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intake_id", "room_id", "agent_id", "opened_at", "directory_version"],
+  "properties": {
+    "intake_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Stable identifier for the intake session"
+    },
+    "room_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Room that opened the intake (typically pmoves.room.helpdesk)"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent identity of the visitor (persona, fleet agent, or anonymous)"
+    },
+    "persona_role": {
+      "type": "string",
+      "description": "Optional role hint from the visitor's persona (e.g. 'resident', 'creator', 'operator')"
+    },
+    "intent_hint": {
+      "type": "string",
+      "description": "Optional short hint from the visitor (first sentence of the question)"
+    },
+    "directory_version": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Version of the room directory snapshot the helpdesk read to route this intake"
+    },
+    "opened_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": { "type": ["string", "number", "boolean"] },
+      "description": "Free-form metadata (parent session id, source surface, etc.)"
+    }
+  }
+}

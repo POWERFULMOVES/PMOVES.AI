@@ -1,0 +1,290 @@
+# =============================================================================
+# MiniMax Provider Cascade Configuration
+# =============================================================================
+# PMOVES-KiloCode-MiniMax provider activation cascade
+# Mirrors Z.AI GLM provider cascade structure per AGNOTE4482 protocol
+#
+# Reference: pmoves/docs/AGENTS/MINIMAX_GLM_PARITY_ANALYSIS.md
+# Parity Map: pmoves/docs/AGENTS/MINIMAX_CLAUDE_PARITY_MAP.md
+# Integration: pmoves/docs/MINIMAX_INTEGRATION.md
+# =============================================================================
+
+schema_version: "1.1"
+provider: "minimax"
+description: >
+  MiniMax native model backend provider cascade for PMOVES.AI KiloCode operations.
+  Provides fast inference, 1M token context, and wave-function collapse capabilities.
+  Token Plan subscription-based with pay-as-you-go fallback.
+
+# =============================================================================
+# Token Plan Integration
+# =============================================================================
+token_plan:
+  enabled: true
+  api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+  fallback_api_key_env: MINIMAX_API_KEY
+  api_base: https://api.minimax.io/v1
+  # Anthropic-compatible endpoint for coding tools (Claude Code/Cline/KiloCode):
+  #   https://api.minimax.io/anthropic  (ANTHROPIC_BASE_URL; Bearer or x-api-key)
+  # api.minimax.chat + chatcompletion_v2 are RETIRED (2026-08-25).
+  documentation: https://platform.minimax.io/docs/token-plan/intro
+  quickstart: https://platform.minimax.io/docs/token-plan/quickstart
+  
+  # Plan tiers (requests per 5-hour rolling window for M2.7)
+  tiers:
+    starter: 1500
+    plus: 4500
+    max: 15000
+    plus_highspeed: 4500
+    max_highspeed: 15000
+    ultra_highspeed: 30000
+  
+  # Quota reset behavior
+  quota_reset:
+    m2_7: rolling_5h  # 5-hour rolling window
+    other_models: daily  # Daily quotas for speech, image, video, music
+  
+  # Fallback strategy
+  fallback:
+    on_quota_exhausted: switch_to_payg
+    on_quota_low: warn_and_continue
+    fallback_provider: glm
+    fallback_model: glm-4.7
+  nats_subjects:
+    quota_warning: minimax.quota.warning.v1
+    quota_exhausted: minimax.quota.exhausted.v1
+    status: minimax.agent.status.v1
+
+# =============================================================================
+# Provider Cascade
+# =============================================================================
+cascade:
+  minimax:
+    # Models in cascade priority order (highest first)
+    models:
+      - minimax-m2.7        # 1M token context, primary model
+      - minimax-m2.1        # 100K token context, efficient fallback
+    
+    # Cascade priority for provider selection
+    cascade_priority: high
+    
+    # Thinking mode: MiniMax uses wave-function collapse, NOT chain-of-thought
+    thinking_mode: off
+    
+    # Resonance domains - unique MiniMax capabilities
+    resonance_domains:
+      - hyperdimensional-ops
+      - wave-function-collapse
+      - agent-trails
+      - long-context
+      - multimodal
+    
+    # Provider endpoints
+    endpoints:
+      api_base: "https://api.minimax.io/v1"
+      api_key_env: "MINIMAX_API_KEY"
+    
+    # Model-specific configurations
+    model_configs:
+      minimax-m2.7:
+        context_window: 1000000
+        max_output: 32000
+        supports_multimodal: true
+        supports_streaming: true
+        recommended_uses:
+          - long-context-research
+          - architecture-visualization
+          - hyperdimensional-reasoning
+          - writing-vibes
+      
+      minimax-m2.1:
+        context_window: 100000
+        max_output: 8000
+        supports_multimodal: true
+        supports_streaming: true
+        recommended_uses:
+          - efficient-inference
+          - coding-overflow
+          - standard-tasks
+
+# =============================================================================
+# BoTZ Framework Integration
+# =============================================================================
+botz:
+  role: "tactical-partner"
+  glyph: "⬡"  # White Hexagon - transformer-like geometry
+  color: "#7C3AED"  # Deep Violet
+  accent: "#A78BFA"
+  
+  # BoTZ affinity configuration
+  affinity:
+    high:
+      - coding-overflow
+      - writing-tasks
+      - long-context
+      - hyperdimensional-ops
+    medium:
+      - multimodal-reasoning
+      - agent-trails
+      - wave-collapse
+  
+  # GLM affinity (complementary routing)
+  glm_affinity:
+    primary:
+      - tool-calling
+      - structured-reasoning
+      - coding-primary
+    overflow_to_glm:
+      - complex-debugging
+      - architecture-patterns
+  
+  # TensorZero routing hints
+  tensorzero_routing:
+    minimax-m2.7:
+      variant_suffix: "_minimax_m27"
+      weight: 0.7
+      fallback: "glm-4.7"
+    minimax-m2.1:
+      variant_suffix: "_minimax_m21"
+      weight: 0.3
+      fallback: "glm-4"
+
+# =============================================================================
+# Mode-Type Resonance Mapping
+# =============================================================================
+mode_binding:
+  # KiloCode modes mapped to MiniMax model selection
+  pmoves-architect:
+    model: minimax-m2.7
+    resonance:
+      - architecture-visualization
+      - long-context-research
+      - hyperdimensional-ops
+    priority: primary
+  
+  pmoves-code:
+    model: minimax-m2.1
+    resonance:
+      - coding-overflow
+      - efficient-inference
+    priority: overflow  # Overflow from GLM primary
+  
+  pmoves-ask:
+    model: minimax-m2.7
+    resonance:
+      - long-context-research
+      - writing-tasks
+    priority: primary
+  
+  pmoves-debug:
+    model: minimax-m2.7
+    resonance:
+      - wave-collapse
+      - hyperdimensional-ops
+    priority: primary
+  
+  pmoves-review:
+    model: minimax-m2.1
+    resonance:
+      - hyperdimensional-code-review
+      - pattern-analysis
+    priority: primary
+  
+  pmoves-frontend:
+    model: minimax-m2.7
+    resonance:
+      - agent-trails
+      - visualization
+    priority: primary
+  
+  pmoves-portal:
+    model: minimax-m2.7
+    resonance:
+      - cgp-generation
+      - geometry-bus
+    priority: primary
+  
+  pmoves-crush:
+    model: minimax-m2.7
+    resonance:
+      - prosodic-flow
+      - darkxside-partnership
+    priority: primary
+
+# =============================================================================
+# Hardware Profile Hints
+# =============================================================================
+# MiniMax is cloud-hosted, so hardware profiles are for fallback/local routing
+profile_hints:
+  laptop-4090:
+    preferred_model: minimax-m2.1
+    cascade_fallback: qwen3.5-4b
+    gpu_shape_store: false
+  
+  desktop-9950xd:
+    preferred_model: minimax-m2.7
+    cascade_fallback: qwen3.5-27b
+    gpu_shape_store: true
+
+# =============================================================================
+# Cascade Activation Commands
+# =============================================================================
+# Commands to activate this provider cascade
+activation_commands:
+  status: "curl -sf http://localhost:3030/api/status | jq '.minimax'"
+  botz_status: "curl -sf http://localhost:3030/api/routing | jq '.botz_affinity.minimax'"
+  waves: "curl -sf http://localhost:8096/api/memory?q=wave*"
+  tensorzero_models: "curl -sf http://localhost:3030/api/models | grep minimax"
+
+# =============================================================================
+# Parity Status
+# =============================================================================
+# Tracking parity with GLM provider cascade
+parity_status:
+  provider_activation: true
+  model_routing: true
+  tensorzero_integration: true  # Updated with variants
+  profile_binding: true  # minimax_edition profile created
+  skills_catalog: pending
+  token_plan_integration: true  # NEW - Token Plan now integrated
+  
+  # Dependencies
+  requires:
+    - skills_translation  # Remaining item
+    - runtime_testing  # Smoke tests pending
+
+# =============================================================================
+# Model Suit References
+# =============================================================================
+model_suits:
+  - name: minimax-m2.7
+    suit_file: pmoves/configs/model-suits/minimax-m2.7.yaml
+    context_window: 1000000
+    max_output: 32000
+    primary: true
+  - name: minimax-m2.1
+    suit_file: pmoves/configs/model-suits/minimax-m2.1.yaml
+    context_window: 100000
+    max_output: 8000
+    primary: false
+
+# =============================================================================
+# Agent Profile Reference
+# =============================================================================
+agent_profile:
+  name: minimax_edition
+  file: pmoves/configs/agent-profiles/minimax_edition.yaml
+  node_affinity:
+    - 5090  # Primary GPU node
+    - laptop-4090  # Portable
+    - z890  # Fallback
+
+# =============================================================================
+# Revision History
+# =============================================================================
+# - 2026-03-30: Initial creation - MiniMax-M2.7/M2.1 provider cascade
+#   Author: PMOVES-MiniMax Orchestrator
+#   GRAPHITI_MARK: MINIMAX-PARITY::PHASE1::FOUNDATION
+# - 2026-05-13: Token Plan integration + model suits + agent profile + NATS subjects
+#   Author: MiniMax Agent
+#   GRAPHITI_MARK: MINIMAX-PARITY::PHASE2::TOKEN_PLAN_INTEGRATION

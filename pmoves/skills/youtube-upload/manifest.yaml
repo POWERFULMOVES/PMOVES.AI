@@ -1,0 +1,79 @@
+# YouTube Upload Skill
+# Upload video to YouTube with metadata, thumbnail, and scheduling
+
+name: youtube-upload
+version: "1.0.0"
+description: "Upload video to YouTube with metadata, thumbnail generation, and scheduled publishing via YouTube Data API v3"
+author: PMOVES.AI
+
+# Skill configuration
+category: content
+tier: agent
+
+# Input schema
+input:
+  type: object
+  required: [video_url, title]
+  properties:
+    video_url:
+      type: string
+      description: "MinIO URL to rendered video"
+    thumbnail_url:
+      type: string
+      description: "MinIO URL to generated thumbnail image"
+    title:
+      type: string
+      description: "Video title"
+    description:
+      type: string
+      description: "Video description with CHIT-enhanced context"
+    tags:
+      type: array
+      items:
+        type: string
+      description: "Video tags for discovery"
+    category_id:
+      type: string
+      default: "28"
+      description: "YouTube category ID (28 = Science & Technology)"
+    privacy_status:
+      type: string
+      enum: [public, unlisted, private]
+      default: unlisted
+    scheduled_at:
+      type: string
+      format: date-time
+      description: "ISO 8601 publish time (for scheduled uploads)"
+
+# Output schema
+output:
+  type: object
+  properties:
+    youtube_video_id:
+      type: string
+      description: "YouTube video ID"
+    youtube_url:
+      type: string
+      description: "Full YouTube URL to uploaded video"
+    status:
+      type: string
+      enum: [published, scheduled, draft]
+    thumbnail_set:
+      type: boolean
+
+# Service endpoint
+service:
+  url: "http://localhost:8111/upload"
+  method: POST
+  timeout_ms: 300000
+
+# Dependencies
+dependencies:
+  services:
+    - minio    # Video/thumbnail storage
+    - presign  # URL generation
+  nats_subjects:
+    - skills.pipeline.youtube-storytelling.v1
+
+# Agent binding
+agent: youtube_publisher

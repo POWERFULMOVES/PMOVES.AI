@@ -10,13 +10,11 @@ Usage:
 """
 
 import asyncio
-import json
 import logging
 import os
 import signal
 import sys
-from contextlib import asynccontextmanager
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 from aiohttp import web
@@ -104,7 +102,7 @@ class ResourceDetectorService:
                        ram_gb=self._profile.memory.total_gb,
                        gpu_count=len(self._profile.gpus),
                        tier=self._profile.tier.value)
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to refresh hardware profile")
             # Use default profile on error
             self._profile = self._get_default_profile()
@@ -348,6 +346,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
         sys.exit(0)
-    except Exception as e:
+    except Exception:
         logger.exception("Fatal error in Resource Detector service")
         sys.exit(1)

@@ -60,6 +60,10 @@ spec.loader.exec_module(bash_tool)
 READ_ONLY_BLOCKED = bash_tool.READ_ONLY_BLOCKED
 NO_DELETE_BLOCKED = bash_tool.NO_DELETE_BLOCKED
 
+# Known Roads — contextualized, provable bypass for readOnlyPath domains.
+sys.path.insert(0, str(Path(__file__).parent))
+from known_roads import evaluate_known_road  # noqa: E402
+
 
 def is_glob_pattern(pattern: str) -> bool:
     """Check if pattern contains glob wildcards."""
@@ -223,6 +227,14 @@ def check_file_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, List[
     """Check file path for Edit/Write tools. Returns (blocked, list of reasons, is_template)."""
     reasons = []
     is_template = False
+
+    # Known Road — contextualized, provable bypass (mirrors edit/write hooks).
+    normalized_fwd = os.path.normpath(file_path).replace("\\", "/")
+    kr_allowed, kr_detail = evaluate_known_road("Edit", file_path, normalized_fwd)
+    if kr_allowed:
+        return False, [], False
+    if kr_detail:
+        return True, [kr_detail], False
 
     # Check zeroAccessPaths - supports glob patterns
     for zero_path in config.get("zeroAccessPaths", []):

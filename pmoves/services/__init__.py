@@ -22,17 +22,18 @@ __all__ = [
     "common",
 ]
 
-# Import common package directly since it's a real package with __init__.py
-from . import common  # noqa: E402, F401
-
+# Ensure path and legacy alias are set BEFORE importing common,
+# because common/__init__.py -> config.py imports `services.common.env`.
 _BASE = Path(__file__).resolve().parent
 _ROOT = _BASE.parent
 _ROOT_STR = str(_ROOT)
 if _ROOT_STR not in sys.path:
     sys.path.insert(0, _ROOT_STR)
 
-# Register legacy top-level alias before dependent modules import `services.*`.
 sys.modules.setdefault("services", sys.modules[__name__])
+
+# Import common package directly since it's a real package with __init__.py
+from . import common  # noqa: E402, F401
 
 _ALIASES: Dict[str, Path] = {
     "publisher": _BASE / "publisher" / "publisher.py",

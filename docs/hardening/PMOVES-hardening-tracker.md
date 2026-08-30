@@ -1,8 +1,25 @@
+<!-- yt-dlp currency notes. `yt-dlp-bump.yml` prepends a dated line to this file
+     each week; those lines are UPSTREAM-RELEASE NOTIFICATIONS, not bumps. The
+     workflow moves no pin. Historical lines are preserved verbatim for provenance
+     and annotated in place rather than rewritten. This file is NOT a source of
+     truth for what yt-dlp version PMOVES runs -- do not read one off it, and do
+     not add one to it. Measured state and the commands that re-derive it live in
+     pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md. -->
+
+- 2026-08-24: bumped yt-dlp to 2026.8.19 (scheduled)
+  - **2026-08-27 correction — this note is a note, not a bump.** The PR it landed
+    in (#2713, `47c0c0d3b`) changed exactly one file — this tracker,
+    `1 insertion(+)`. No pin moved. `2026.8.19` is what PyPI reported as the latest
+    *upstream* release that morning, not what PMOVES runs. yt-dlp here is not a pip
+    dependency to bump: it is the `PMOVES.YT` submodule, which is itself a yt-dlp
+    fork, and the deployed image installs that fork from source. Changing the
+    version means a fork-sync plus a gitlink promotion — which `yt-dlp-bump.yml`
+    does not do and cannot do. See pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md.
 # PMOVES Hardening Tracker v4.0
 
 Comprehensive hardening posture, CI/CD build infrastructure, and service runtime status for the PMOVES.AI platform.
 
-Last updated: 2026-03-05
+Last updated: 2026-03-26
 
 Live snapshot (2026-03-04): `PMOVES.AI` open PRs `0`, CodeQL open alerts `0`, Dependabot open alerts `1` (`medium`). Use `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` as the source-of-truth for live counters.
 
@@ -125,7 +142,7 @@ Tracked in `pmoves/docs/security/P2_SUBMODULE_TRACKER.md`.
 | `env-preflight.yml` | Windows env validation | PR + manual |
 | `sync-secrets-local.yml` | CGP/env secret sync | Manual |
 | `webhook-smoke.yml` | Render webhook smoke test | Manual |
-| `yt-dlp-bump.yml` | Weekly yt-dlp dependency bump | Schedule (Mon 08:00) |
+| `yt-dlp-bump.yml` | Weekly upstream-release *check*. Build-validates the non-deployed `pmoves/services/pmoves-yt/Dockerfile` against the latest PyPI yt-dlp and files a tracker note; moves no pin (see pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md) | Schedule (Mon 08:00) |
 | `python-images-toolchain-canary.yml` | Weekly pinned Python image toolchain canary (build + Trivy + PR) | Schedule (Mon 09:00) + manual |
 
 ### Build Matrix (`pmoves/images.yaml` -- 16 services)
@@ -142,6 +159,47 @@ Exception: `deepresearch` is amd64-only.
 - GHCR: `ghcr.io/powerfulmoves/*`
 - Docker Hub: `powerfulmoves/*`
 - Multi-arch: amd64 + arm64 (with `docker-compose.arm64.override.yml`)
+
+---
+
+## Release Notes / CVE Funnel
+
+Use two documentation sinks on purpose:
+- `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`
+  - live counters, open-alert snapshots, release evidence, and current blockers
+- `docs/hardening/PMOVES-hardening-tracker.md`
+  - recurring cadence, unresolved issue classes, and the operator policy for how signals are reviewed
+
+### Cadence
+
+| Cadence | Signal source | Operator action | Documentation sink |
+|----------|---------------|-----------------|--------------------|
+| Daily / active merge lane | Production Audit Dashboard, open PR checks, current CodeQL / Dependabot counts | Re-triage blockers, keep release lane clean, update ownership if a service group drifts | Audit dashboard first; `pmoves/docs/NEXT_STEPS.md` if priorities change |
+| Weekly | `.github/workflows/codeql.yml`, `.github/workflows/yt-dlp-bump.yml`, `.github/workflows/python-images-toolchain-canary.yml`, Dependabot queue | Review new alerts/PRs, confirm image/toolchain bumps still pass the intended gates, merge or re-scope follow-ups | Hardening tracker + audit dashboard |
+| Pre-release / infra touch | `make -C pmoves smoke-prod`, `make -C pmoves ghcr-prepublish-inrepo`, `make -C pmoves audit-layers-static` / `audit-layers-runtime`, `make -C pmoves ci-runners-check-strict` | Capture evidence, confirm runner capacity, close Trivy/hardening drift before promotion | Audit dashboard, plus `pmoves/docs/operations/FIRST_RUN.md` / `pmoves/docs/operations/MAKE_TARGETS.md` / `pmoves/docs/services/supabase/README.md` when command paths change |
+
+### Current funnel components
+
+- Code scanning:
+  - `codeql.yml` provides recurring code-level CVE/security signal.
+- Dependency freshness:
+  - `yt-dlp-bump.yml` reports weekly on upstream yt-dlp releases. It does **not**
+    keep the extractor lane current, and nothing else does either: it builds a
+    throwaway image (`push: false`) from a Dockerfile the deployed stack does not
+    use, then commits a prose line. The extractor code that ships is the
+    `PMOVES.YT` submodule at its recorded gitlink. To learn how current that is,
+    run the commands in pmoves/docs/services/pmoves-yt/YTDLP_CURRENCY.md — do not read a version off this tracker.
+  - `python-images-toolchain-canary.yml` tests pinned Python image candidates weekly with a Trivy gate before opening a PR.
+- Image / runtime release gates:
+  - `make -C pmoves ghcr-prepublish-inrepo`
+  - `make -C pmoves ghcr-prepublish-all`
+  - `make -C pmoves smoke-prod`
+- Data-plane operator checks:
+  - `make -C pmoves supa-status`
+  - `make -C pmoves bootstrap-data`
+  - `make -C pmoves monitoring-smoke-prod`
+
+The goal is to keep release-note and CVE awareness on a predictable interval instead of waiting for a feature PR to stumble into stale dependencies or hidden infra drift.
 
 ---
 
@@ -199,7 +257,8 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 | Level | Count | Services |
 |-------|-------|----------|
-| **Full** | 5 | Tokenism Simulator, Hi-RAG v2, Gateway, Neo4j Mind Map, Agent Zero |
+| **None (verified -- zero chit_security imports found)** | 5 | Tokenism Simulator, Hi-RAG v2, Gateway, Neo4j Mind Map, Agent Zero |
+| *(Corrected 2026-04-17: grep confirmed no crypto imports in these service directories. See research/CHIT_SECRETS_MANAGEMENT_AUDIT.md finding F-20.)* | | |
 | **Partial** | 8 | A2UI Bridge, PMOVES.YT, DeepResearch, SupaSerch, Consciousness, Evo Controller, AgentGym, Flute |
 | **None** | 13 | Extract Worker, PDF Ingest, FFmpeg Whisper, Media analyzers, Channel Monitor, etc. |
 
@@ -302,10 +361,21 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 | `pmoves/tests/hardening/test_docker_hardening.py` | Validation suite (35 services) |
 | `.github/workflows/hardening-validation.yml` | CI hardening checks |
 | `.github/workflows/integrations-ghcr.yml` | Integration builds (Cosign+SBOM+Trivy) |
+| `.github/workflows/suit-release-policy.yml` | §6.4 suit update release-notes gate |
+
+---
+
+## Suit Update Release Policy
+
+**Standing rule:** Suit updates (Agent Zero hardened overlay, ClaWz profile normalization, persona/voice bindings, model routing changes) are **release concerns**, not background chores.
+
+- Any PR that modifies files under `pmoves/config/profiles/`, `pmoves/config/agent_signatures.yaml`, or suit-related Make targets must include a release-notes entry.
+- The hardening tracker scorecard above should reflect suit-update release status alongside security hardening status.
+- **CI gate:** `.github/workflows/suit-release-policy.yml` enforces this rule automatically on all PRs to main.
 
 ---
 
 **Target achieved:** 0 open P1, 0 open CodeQL alerts (live snapshot)
-**Dependabot posture:** 1 open medium alert, 0 open high alerts (live snapshot 2026-03-04)
+**Dependabot posture:** 0 open alerts (1H/17M/8L resolved in commit 21d95ef37, 2026-04-23)
 **Previous version:** v3.0 (2026-02-17)
-**Last updated:** 2026-03-05
+**Last updated:** 2026-04-23

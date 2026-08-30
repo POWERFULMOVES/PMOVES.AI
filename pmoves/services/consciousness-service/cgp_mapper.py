@@ -11,15 +11,16 @@ Features:
 """
 
 import os
-import json
 import logging
 import math
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List
 
 import httpx
 
 from pmoves.chit import CGP_SPEC_VERSION
+
+from chr_algorithm import chit_signature_required, get_chit_signing_key, sign_cgp
 
 # Zeta filter for spectral analysis
 try:
@@ -96,7 +97,7 @@ class CGPMapper:
         # Convert spherical to Cartesian coordinates
         x = radius * math.sin(theta) * math.cos(phi)
         y = radius * math.sin(theta) * math.sin(phi)
-        z = radius * math.cos(theta)
+        radius * math.cos(theta)
 
         theory_id = f"{category}:{name.lower().replace(' ', '_')}"
 
@@ -124,7 +125,7 @@ class CGPMapper:
                 )
                 zeta_analysis = zeta_filter.analyze_spectrum(spectrum)
                 # Use zeta-filtered spectrum as the anchor (preserves harmonic structure)
-                filtered_spectrum = zeta_analysis["filtered"]
+                zeta_analysis["filtered"]
 
                 # Add zeta metadata to packet
                 zeta_meta = {
@@ -270,7 +271,23 @@ class CGPMapper:
 
         Returns:
             Response from Hi-RAG v2 API
+
+        Raises:
+            RuntimeError: If CHIT_REQUIRE_SIGNATURE is set and no signing key is available
         """
+        # CHIT-sign at the publish boundary (single choke point for
+        # /cgp/publish, /cgp/batch and batch_publish). Empty key = dev mode,
+        # unsigned with a warning, unless fail-closed is switched on.
+        signing_key = get_chit_signing_key()
+        if signing_key:
+            packet = sign_cgp(packet, passphrase=signing_key)
+        elif chit_signature_required():
+            raise RuntimeError(
+                "CHIT_REQUIRE_SIGNATURE is set but no signing key is available "
+                "(set CHIT_SIGNING_KEY or CHIT_PASSPHRASE)"
+            )
+        else:
+            logger.warning("No CHIT signing key set — publishing CGP unsigned (dev mode)")
         try:
             response = await self.client.post(
                 GEOMETRY_EVENT_ENDPOINT,

@@ -99,7 +99,7 @@ Health is a **Django/wger** fitness tracking application integrated into the PMO
 | Docker hardening | **GREEN** | `*tier-api-hardened` in main compose (cap_drop ALL, security_opt) |
 | NATS integration | **GREEN** | `NATS_URL` + `WGER_ENABLE_NATS` in main compose |
 | `env.shared` format | **GREEN** | Main compose uses `env.shared` + `env.tier-api` via anchor |
-| Prometheus scrape | **MISSING** | Not yet in `prometheus.yml` — wger exposes metrics but isn't scraped |
+| Prometheus scrape | **GREEN** | `wger` job in `pmoves/monitoring/prometheus/prometheus.yml` (commit `4f6b05d30`, PR #980) |
 
 ## Hardening Roadmap
 
@@ -108,7 +108,7 @@ Wger has progressed significantly since initial audit. Phases 1-3 are largely co
 ### Phase 1: Health Check & Metrics — **DONE**
 1. ~~Add `/healthz` endpoint~~ → Implemented: 3-tier model in `wger/observability/views.py`
 2. ~~Add `/metrics` endpoint~~ → Implemented: Prometheus export in `wger/observability/views.py`
-3. Register in Prometheus scrape config → **PENDING** (wger not yet in `prometheus.yml`)
+3. ~~Register in Prometheus scrape config~~ → **DONE** `wger` job added PR #980 (`metrics_path: /metrics`)
 
 ### Phase 2: NATS Integration — **DONE**
 1. ~~Add `nats-py` client to wger~~ → Wired via compose `NATS_URL` + `WGER_ENABLE_NATS`
@@ -139,7 +139,7 @@ Wger has progressed significantly since initial audit. Phases 1-3 are largely co
 - ~~No NATS integration~~ → Wired in main compose + n8n workflows
 - ~~No Docker hardening~~ → `*tier-api-hardened` in main compose
 - ~~Port assignment needed~~ → Port 8000, profiles `health`/`wger`
-- Prometheus scrape job not yet configured (wger exposes metrics but isn't scraped)
+- ~~Prometheus scrape job not yet configured~~ → DONE PR #980
 - No CHIT integration
 - Auth bridge between wger and PMOVES JWT system needed
 - Mobile app integration docs needed in TAC (Flutter Android/iOS official apps)

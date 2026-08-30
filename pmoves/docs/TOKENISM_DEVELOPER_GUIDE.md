@@ -1,8 +1,8 @@
 # ToKenism Developer Guide
 
 **Layer:** L3 Applied
-**Status:** Current
-**Last Updated:** 2026-03-11
+**Status:** Current with implementation caveats
+**Last Updated:** 2026-05-22
 
 > Developer reference for integrating ToKenism attribution into PMOVES.AI services. Covers all 8 TypeScript CHIT modules, the factory pattern, NATS publishing, and service integration patterns.
 
@@ -25,7 +25,7 @@
 ## Quick Start
 
 ```typescript
-import { createCHITSystem } from '@pmoves/chit';
+import { createCHITPublisher, createCHITSystem } from '@pmoves/chit';
 
 // 1. Create system
 const chit = createCHITSystem({
@@ -37,23 +37,26 @@ const chit = createCHITSystem({
 });
 
 // 2. Record actions
-chit.attribution.recordAction({
-  address: '0xMEMBER0...',
-  action: 'spending',
-  amount: 50,
-  week: 12,
-  category: 'groceries'
-});
+const chitId = chit.attribution.recordAction(
+  '0xMEMBER0...',
+  'spending',
+  50,
+  12,
+  'groceries'
+);
 
 // 3. Generate CGP
 const cgp = chit.generator.generateWeeklyCGP(weekData, chit.attribution);
 
 // 4. Publish to NATS
-await chit.publisher.publishWeeklyCGP(12, cgp, {
+const publisher = createCHITPublisher(natsClient, { enabled: true });
+const published = await publisher.publishWeeklyCGP(12, cgp, {
   gini: 0.42,
   poverty_rate: 0.15
 });
 ```
+
+`createCHITSystem()` returns the local math/attribution modules. NATS publishing is separate so services can inject their own connected client and choose best-effort or strict publishing behavior.
 
 ---
 
@@ -72,7 +75,7 @@ await chit.publisher.publishWeeklyCGP(12, cgp, {
 
 **Location:** `PMOVES-ToKenism-Multi/integrations/contracts/chit/`
 
-All modules are pure TypeScript with no native dependencies. They can run in Node.js, Deno, or browser environments.
+The CHIT package is Node-first TypeScript. Merkle hashing uses Node `crypto` for SHA-256 and `ethers` for keccak256, so browser/Deno use requires an explicit bundling or polyfill plan.
 
 ---
 
@@ -163,21 +166,27 @@ interface PoincarePoint {
 import { ShapeAttribution } from '@pmoves/chit';
 
 const attr = new ShapeAttribution({
-  strategy: 'per_week'  // per_week | rolling | per_contract
+  merkle: {
+    strategy: 'per_week', // per_week | rolling | per_contract
+    hashAlgorithm: 'sha256',
+    signProofs: false
+  }
 });
 
 // Record an action
-const chitId = attr.recordAction({
-  address: '0xMEMBER0...',
-  action: 'spending',
-  amount: 50,
-  week: 12,
-  category: 'groceries'
-});
+const chitId = attr.recordAction(
+  '0xMEMBER0...',
+  'spending',
+  50,
+  12,
+  'groceries'
+);
 // Returns: "chit-1a2b3c-0001"
 
 // Get Merkle proof for verification
-const proof = attr.getProof(chitId);
+const record = attr.getRecord(chitId);
+if (!record) throw new Error(`Missing attribution record: ${chitId}`);
+const proof = record.proof;
 // { merkleRoot, leafHash, path, pathIndices, signature? }
 
 // Verify a proof
@@ -247,6 +256,8 @@ const cgp = gen.generateWeeklyCGP(weekData, attribution);
 **File:** `swarm-attribution.ts`
 **Purpose:** Track optimization experiments and fitness across simulation runs
 
+This module records generation metadata and bounded fitness scores. It does not perform mutation, crossover, selection, or particle updates. Real PSO/evolutionary operators belong to the PMOVES EvoSwarm/model-fitness workstream once runner topology and trusted identities are available.
+
 ```typescript
 import { SwarmAttribution } from '@pmoves/chit';
 
@@ -257,14 +268,15 @@ const swarm = new SwarmAttribution({
 });
 
 // Evaluate fitness for a week
-const fitness = swarm.evaluateFitness(weekMetrics);
+const fitness = swarm.calculateFitness(weekData);
 // Returns: 0.0 to 1.0
 
 // Create swarm meta for NATS
 const meta = swarm.createSwarmMeta(weekData);
 
 // Track populations
-swarm.recordGeneration('pop-42', 5, fitness, weekMetrics);
+swarm.createPopulation('pop-42', 'weekly-gini-tracking');
+swarm.recordGeneration('pop-42', 5, weekData);
 ```
 
 **Fitness Targets:**
@@ -280,7 +292,9 @@ swarm.recordGeneration('pop-42', 5, fitness, weekMetrics);
 ### 6. ZetaInspiredFilter
 
 **File:** `zeta-filter.ts`
-**Purpose:** Filter CGP spectra using Riemann zeta zeros as resonant frequencies
+**Purpose:** Apply a zeta-zero-weighted heuristic transform to CGP spectra
+
+This is not a validated Riemann zeta spectral method. Treat it as an experimental weighting heuristic until a separate method-design review accepts the math.
 
 ```typescript
 import { ZetaInspiredFilter } from '@pmoves/chit';
@@ -316,22 +330,15 @@ const similarity = zeta.spectralSimilarity(spectrumA, spectrumB);
 ```typescript
 import { CHITNATSPublisher } from '@pmoves/chit';
 
-const publisher = new CHITNATSPublisher({
-  natsUrl: 'nats://nats:pmoves@nats:4222'
+const publisher = new CHITNATSPublisher(natsClient, {
+  enabled: true,
+  strictPublish: false
 });
-
-await publisher.connect();
 
 // Publish attribution record
-await publisher.publishAttributionRecorded({
-  chit_id: 'chit-1a2b3c-0001',
-  address: '0xMEMBER0...',
-  action: 'spending',
-  amount: 50,
-  week: 12,
-  category: 'groceries',
-  merkle_root: '0xdef456...'
-});
+const record = chit.attribution.getRecord(chitId);
+if (!record) throw new Error(`Missing attribution record: ${chitId}`);
+await publisher.publishAttributionRecorded(record);
 
 // Publish weekly CGP
 await publisher.publishWeeklyCGP(12, cgp, {
@@ -344,9 +351,9 @@ await publisher.publishSwarmPopulation(meta, generation);
 
 // Publish CGP ready for consumption
 await publisher.publishCGPReady(cgp, { source: 'weekly-sim' });
-
-await publisher.disconnect();
 ```
+
+Publisher methods return `true` on success and `false` on best-effort validation/connect failure. Set `strictPublish: true` when invalid payloads or disconnected clients should throw.
 
 **Published Subjects:**
 
@@ -397,8 +404,9 @@ chit.attribution    // ShapeAttribution instance
 chit.generator      // CGPGenerator instance
 chit.swarm          // SwarmAttribution instance
 chit.zeta           // ZetaInspiredFilter instance
-chit.publisher      // CHITNATSPublisher instance
 ```
+
+Create `CHITNATSPublisher` separately with the service-owned NATS client.
 
 ---
 
@@ -442,29 +450,29 @@ For services that only record contributions without generating CGPs:
 ```typescript
 import { ShapeAttribution, CHITNATSPublisher } from '@pmoves/chit';
 
-const attribution = new ShapeAttribution({ strategy: 'rolling' });
-const publisher = new CHITNATSPublisher({ natsUrl: 'nats://nats:pmoves@nats:4222' });
-await publisher.connect();
+const attribution = new ShapeAttribution({
+  merkle: {
+    strategy: 'rolling',
+    hashAlgorithm: 'sha256',
+    signProofs: false
+  }
+});
+const publisher = new CHITNATSPublisher(natsClient);
 
 // On each economic event:
 app.post('/transaction', async (req) => {
-  const chitId = attribution.recordAction({
-    address: req.body.address,
-    action: 'spending',
-    amount: req.body.amount,
-    week: getCurrentWeek(),
-    category: req.body.category
-  });
+  const week = getCurrentWeek();
+  const chitId = attribution.recordAction(
+    req.body.address,
+    'spending',
+    req.body.amount,
+    week,
+    req.body.category
+  );
+  const record = attribution.getRecord(chitId);
+  if (!record) throw new Error(`Missing attribution record: ${chitId}`);
 
-  await publisher.publishAttributionRecorded({
-    chit_id: chitId,
-    address: req.body.address,
-    action: 'spending',
-    amount: req.body.amount,
-    week: getCurrentWeek(),
-    category: req.body.category,
-    merkle_root: attribution.getMerkleRoot()
-  });
+  await publisher.publishAttributionRecorded(record);
 
   return { chit_id: chitId };
 });
@@ -475,19 +483,20 @@ app.post('/transaction', async (req) => {
 For services that produce complete CGPs:
 
 ```typescript
-import { createCHITSystem } from '@pmoves/chit';
+import { CHITNATSPublisher, createCHITSystem } from '@pmoves/chit';
 
 const chit = createCHITSystem({ /* config */ });
-await chit.publisher.connect();
+const publisher = new CHITNATSPublisher(natsClient, { strictPublish: true });
 
 // Weekly cron job:
 cron.schedule('0 0 * * 0', async () => {
   const weekData = await fetchWeekData(getCurrentWeek());
   const cgp = chit.generator.generateWeeklyCGP(weekData, chit.attribution);
-  const metrics = chit.swarm.evaluateWeek(weekData);
+  const metrics = chit.swarm.createSwarmMeta(weekData);
 
-  await chit.publisher.publishWeeklyCGP(getCurrentWeek(), cgp, metrics);
-  await chit.publisher.publishCGPReady(cgp, { source: 'weekly-cron' });
+  await publisher.publishWeeklyCGP(getCurrentWeek(), cgp, weekData.metrics);
+  await publisher.publishSwarmPopulation(metrics, 0);
+  await publisher.publishCGPReady(cgp, { source: 'weekly-cron' });
 });
 ```
 
@@ -523,8 +532,8 @@ for await (const msg of sub) {
 
 | Version | Status | Features |
 |---------|--------|----------|
-| `chit.cgp.v1.0` | **Current** | Full spec: zeta, MACA, hyperbolic, attribution |
-| `chit.cgp.v0.2` | Stable | Attribution + Merkle proofs |
+| `chit.cgp.v1.0` | **Current** | Current schema with attribution, Merkle proofs, and optional geometry metadata |
+| `chit.cgp.v0.2` | Stable compatibility | Attribution + Merkle proofs |
 | `chit.cgp.v0.1` | Legacy | Basic super_nodes only |
 
 ### Version Detection
@@ -554,17 +563,19 @@ describe('CHIT System', () => {
   it('records attribution and generates CGP', () => {
     const chit = createCHITSystem({ /* defaults */ });
 
-    const chitId = chit.attribution.recordAction({
-      address: '0xTEST',
-      action: 'spending',
-      amount: 100,
-      week: 1,
-      category: 'groceries'
-    });
+    const chitId = chit.attribution.recordAction(
+      '0xTEST',
+      'spending',
+      100,
+      1,
+      'groceries'
+    );
 
     expect(chitId).toMatch(/^chit-/);
 
-    const proof = chit.attribution.getProof(chitId);
+    const record = chit.attribution.getRecord(chitId);
+    expect(record).toBeDefined();
+    const proof = record!.proof;
     expect(chit.attribution.verifyProof(proof.leafHash, proof)).toBe(true);
   });
 
@@ -576,7 +587,7 @@ describe('CHIT System', () => {
       { address: 'B', amount: 0, category: 'test' }
     ]);
 
-    // Both must be > 0 (fairness guarantee)
+    // Both must be > 0 when both participants are represented in the input set.
     expect(weights[0].weight).toBeGreaterThan(0);
     expect(weights[1].weight).toBeGreaterThan(0);
 
@@ -592,22 +603,16 @@ describe('CHIT System', () => {
 ```typescript
 describe('NATS Integration', () => {
   it('publishes attribution event', async () => {
-    const publisher = new CHITNATSPublisher({
-      natsUrl: 'nats://nats:pmoves@nats:4222'
-    });
-    await publisher.connect();
+    const attribution = new ShapeAttribution();
+    const chitId = attribution.recordAction('0xTEST', 'spending', 50, 1, 'test');
+    const record = attribution.getRecord(chitId);
+    expect(record).toBeDefined();
 
-    await publisher.publishAttributionRecorded({
-      chit_id: 'chit-test-0001',
-      address: '0xTEST',
-      action: 'spending',
-      amount: 50,
-      week: 1,
-      category: 'test',
-      merkle_root: '0xtest'
-    });
+    const publisher = new CHITNATSPublisher(natsClient, { strictPublish: true });
 
-    await publisher.disconnect();
+    const ok = await publisher.publishAttributionRecorded(record!);
+
+    expect(ok).toBe(true);
   });
 });
 ```

@@ -4,7 +4,6 @@ Provides dynamic GPU resource management, model lifecycle control,
 and VRAM visibility for PMOVES.AI deployments.
 """
 
-import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager

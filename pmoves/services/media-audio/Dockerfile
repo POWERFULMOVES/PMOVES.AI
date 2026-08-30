@@ -1,6 +1,8 @@
 # Media Audio Analyzer - GPU-enabled for PyTorch/Whisper
 # Uses CUDA runtime for emotion detection and audio analysis models
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# Base image: cu128 required for ARM64 (GB10/Jetson) — cu124 has no ARM64 wheels
+ARG CUDA_IMAGE=nvidia/cuda:12.8.1-runtime-ubuntu22.04
+FROM ${CUDA_IMAGE}
 
 # Install Python 3.11 and required system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -13,16 +15,52 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
+# Security: Force weights_only=True for torch.load() (prevents arbitrary code execution)
+ENV TORCH_FORCE_WEIGHTS_ONLY_LOAD=1
 
 RUN pip install --no-cache-dir --upgrade pip
 
-# With build context at pmoves/ root
-COPY services/common /app/services/common
-COPY services/media-audio/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-# services/common requires jsonschema (installed separately to avoid hash conflict)
-RUN pip install --no-cache-dir jsonschema>=4.0.0
-COPY services/media-audio/ ./
+# Build context is the REPO ROOT (compose: `context: ..`), not the service directory.
+# This is load-bearing, not cosmetic. The service publishes to the registered
+# `analysis.audio.v1` topic, which requires two things from outside this directory:
+# `pmoves/services/common` (the validated-envelope helper) and `pmoves/contracts`
+# (topics.json + the schemas it points at). A service-directory context can reach
+# neither — which is exactly why _maybe_publish used to hand-roll a partial contract
+# check and publish a bare payload instead of going through services.common.events.
+# Security: Reproducible builds from lockfile
+COPY pmoves/services/media-audio/requirements.txt pmoves/services/media-audio/requirements.lock pmoves/services/media-audio/requirements.arm64.lock ./
+# Install torch from cu128 index (ARM64 wheels available, proven by Hi-RAG GPU on SPARK)
+# Security: PyTorch extra-index-url required for CUDA packages (+cu128 variants)
+ARG TORCH_CUDA=cu128
+RUN --mount=type=cache,target=/root/.cache/pip \
+    # amd64 uses the x86-resolved lock (reproducible); arm64/Jetson uses the
+    # aarch64-compiled lock (requirements.arm64.lock, pins from
+    # arm64-overrides.txt). The unpinned requirements.txt path is retired on
+    # arm64: it floated torch 2.13.0 (PyPI) against torchaudio 2.11.0+cu128 and
+    # torch._dynamo died at import (Duplicate dispatch rule for intern). The
+    # arm64 lock pins the SPARK-proven stack (torch 2.9.0+cu128 +
+    # transformers 4.57.6 = the healthy hi-rag-gateway-v2-gpu set on GB10).
+    # The preinstall pins the wheel SOURCE (single index) so pip cannot pick a
+    # PyPI CUDA variant; the lock then sees its torch pins already satisfied.
+    # cu128 has ARM64 wheels (verified on SPARK GB10 via Hi-RAG GPU).
+    if [ "$(uname -m)" = "x86_64" ]; then \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.lock; \
+    else \
+      pip install --no-cache-dir --index-url https://download.pytorch.org/whl/${TORCH_CUDA} torch==2.9.0+${TORCH_CUDA} torchaudio==2.9.0 && \
+      pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/${TORCH_CUDA} -r requirements.arm64.lock; \
+    fi
+# Diarization deps (pyannote) installed separately so they land regardless of the
+# lock-vs-requirements.txt path above — the x86_64 lock does not pin pyannote, which
+# would leave diarization broken on the GPU image (Codex #2181 P1). Full pip-compile
+# regeneration of the lock with pyannote is the ideal follow-up.
+RUN pip install --no-cache-dir "pyannote.audio>=3.3.0,<4" "pydub>=0.25.1"
+COPY pmoves/services/media-audio/ ./
+# Shared envelope helper + contract registry. events.py resolves its contracts
+# directory by probing /app/contracts first (see events._contracts_dir), so the
+# registry must land exactly there for envelope()/validate_payload() to work.
+# PYTHONPATH=/app (set above) makes `services.common.events` importable.
+COPY pmoves/services/common/ ./services/common/
+COPY pmoves/contracts/ ./contracts/
 
 # Security: Run as non-root user (GPU services need video group)
 RUN groupadd -r pmoves --gid=65532 && \
@@ -32,4 +70,9 @@ RUN groupadd -r pmoves --gid=65532 && \
 USER pmoves:pmoves
 
 EXPOSE 8082
-CMD ["uvicorn","server:app","--host","127.0.0.1","--port","8082"]
+
+# Health check — real HTTP probe now that server.py exposes /healthz.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8082/healthz || exit 1
+# Bind 0.0.0.0 so the service is reachable across the compose network (not just in-container).
+CMD ["uvicorn","server:app","--host","0.0.0.0","--port","8082"]

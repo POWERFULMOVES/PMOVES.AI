@@ -1,0 +1,321 @@
+name: Submodule Upstream Update Check
+
+on:
+  schedule:
+    - cron: "0 6 * * 0"  # Sundays 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      submodules:
+        description: "Comma-separated submodule names (blank = all tracked)"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Dry run (detect only, no PR)"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-updates:
+    name: Check Submodule Updates
+    # ai-lab spans b850 (X64) and spark (ARM64) — pin the arch.
+    runs-on: [self-hosted, Linux, X64, ai-lab]
+    timeout-minutes: 30
+
+    env:
+      # Tracked submodules — name:path:branch triples
+      # Derived from .gitmodules; update here when adding new tracked submodules
+      TRACKED_SUBMODULES: >-
+        PMOVES-Agent-Zero:PMOVES-Agent-Zero:PMOVES.AI-Edition-Hardened
+        PMOVES-Archon:PMOVES-Archon:PMOVES.AI-Edition-Hardened
+        PMOVES-n8n:PMOVES-n8n:PMOVES.AI-Edition-Hardened
+        PMOVES-supabase:PMOVES-supabase:PMOVES.AI-Edition-Hardened
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Always compare against main — workflow_dispatch may run from any ref
+          # but gitlink comparison must use the canonical base branch.
+          ref: 'main'
+          fetch-depth: 0
+          submodules: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure upstream-update label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Fail fast if the label cannot be created — smoke workflow gates on this
+          if ! gh label list --search "upstream-update" --json name --jq '.[].name' | grep -qx "upstream-update"; then
+            echo "Creating upstream-update label..."
+            gh label create upstream-update \
+              --description "Automated upstream submodule update" \
+              --color "0E8A16" \
+              --force
+          else
+            echo "upstream-update label already exists"
+          fi
+
+      - name: Detect and propose updates
+        id: updates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_SUBMODULES: ${{ github.event.inputs.submodules || '' }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          updated_count=0
+          skipped_count=0
+          failed_count=0
+          summary_lines=""
+
+          # Build the list of submodules to check
+          declare -a check_list=()
+
+          if [[ -n "$INPUT_SUBMODULES" ]]; then
+            # User specified a subset
+            IFS=',' read -ra user_list <<< "$INPUT_SUBMODULES"
+            for name in "${user_list[@]}"; do
+              name="$(echo "$name" | xargs)"  # trim whitespace
+              for triple in $TRACKED_SUBMODULES; do
+                IFS=':' read -r t_name t_path t_branch <<< "$triple"
+                if [[ "$t_name" == "$name" ]]; then
+                  check_list+=("$triple")
+                fi
+              done
+            done
+          else
+            for triple in $TRACKED_SUBMODULES; do
+              check_list+=("$triple")
+            done
+          fi
+
+          if [[ ${#check_list[@]} -eq 0 ]]; then
+            echo "No submodules matched the filter. Exiting."
+            echo "updated_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Checking ${#check_list[@]} submodule(s) for upstream updates..."
+          echo ""
+
+          for triple in "${check_list[@]}"; do
+            IFS=':' read -r name path branch <<< "$triple"
+            echo "================================================================"
+            echo "Checking: $name (path=$path, branch=$branch)"
+            echo "================================================================"
+
+            # Verify the submodule path exists
+            if [[ ! -d "$path" ]]; then
+              echo "  SKIP: path '$path' does not exist"
+              skipped_count=$((skipped_count + 1))
+              continue
+            fi
+
+            # Get the currently pinned commit
+            old_sha=$(git ls-tree HEAD "$path" | awk '{print $3}')
+            if [[ -z "$old_sha" ]]; then
+              echo "  SKIP: could not read gitlink for '$path'"
+              skipped_count=$((skipped_count + 1))
+              continue
+            fi
+            echo "  Current gitlink: $old_sha"
+
+            # Fetch latest from upstream tracking branch
+            cd "$path"
+            git fetch origin "$branch" --depth=50 2>/dev/null || {
+              echo "  FAIL: could not fetch origin/$branch"
+              cd "$GITHUB_WORKSPACE"
+              failed_count=$((failed_count + 1))
+              continue
+            }
+
+            new_sha=$(git rev-parse "origin/$branch" 2>/dev/null || echo "")
+            if [[ -z "$new_sha" ]]; then
+              echo "  FAIL: could not resolve origin/$branch"
+              cd "$GITHUB_WORKSPACE"
+              failed_count=$((failed_count + 1))
+              continue
+            fi
+            echo "  Upstream HEAD:   $new_sha"
+
+            cd "$GITHUB_WORKSPACE"
+
+            if [[ "$old_sha" == "$new_sha" ]]; then
+              echo "  UP-TO-DATE: no new commits"
+              skipped_count=$((skipped_count + 1))
+              continue
+            fi
+
+            # Compute commit delta
+            cd "$path"
+            commit_count=$(git rev-list --count "${old_sha}..${new_sha}" 2>/dev/null || echo "?")
+            commit_log=$(git log --oneline --no-decorate -5 "${old_sha}..${new_sha}" 2>/dev/null || echo "(unable to retrieve log)")
+            cd "$GITHUB_WORKSPACE"
+
+            echo "  NEW COMMITS: $commit_count"
+            echo ""
+            echo "$commit_log" | sed 's/^/    /'
+            echo ""
+
+            summary_lines="${summary_lines}| ${name} | \`${old_sha:0:10}\` | \`${new_sha:0:10}\` | ${commit_count} |\n"
+
+            if [[ "$INPUT_DRY_RUN" == "true" ]]; then
+              echo "  DRY RUN: skipping PR creation"
+              updated_count=$((updated_count + 1))
+              continue
+            fi
+
+            # Check if a PR already exists for this submodule update
+            pr_branch="chore/upstream-update-${name,,}"
+            existing_pr=$(gh pr list --head "$pr_branch" --state open --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+            if [[ -n "$existing_pr" ]]; then
+              echo "  EXISTING PR #${existing_pr} for branch $pr_branch — updating"
+              git checkout "$pr_branch" 2>/dev/null || git checkout -b "$pr_branch"
+              git reset --hard origin/main
+            else
+              git checkout -b "$pr_branch" 2>/dev/null || {
+                git branch -D "$pr_branch"
+                git checkout -b "$pr_branch"
+              }
+            fi
+
+            # Update the submodule pointer
+            cd "$path"
+            git checkout "$new_sha"
+            cd "$GITHUB_WORKSPACE"
+            git add "$path"
+
+            git commit -m "chore(submodules): bump ${name} to upstream ${new_sha:0:10}
+
+          Update ${name} gitlink from ${old_sha:0:10} to ${new_sha:0:10}.
+          Upstream branch: ${branch}
+          New commits: ${commit_count}"
+
+            git push origin "$pr_branch" --force-with-lease 2>/dev/null || git push origin "$pr_branch" --force
+
+            # Build PR body
+            pr_body="$(cat <<PRBODY
+          ## Summary
+
+          - Bumps **${name}** submodule from \`${old_sha:0:10}\` to \`${new_sha:0:10}\`
+          - Tracking branch: \`${branch}\`
+          - New upstream commits: **${commit_count}**
+
+          ## Upstream Commit Log (last 5)
+
+          \`\`\`
+          ${commit_log}
+          \`\`\`
+
+          ## Review Checklist
+
+          - [ ] NATS subject compatibility (no removed/renamed subjects)
+          - [ ] API schema compatibility (no breaking endpoint changes)
+          - [ ] Docker healthcheck still passes
+          - [ ] Config format unchanged (env vars, compose overrides)
+          - [ ] No new secrets required (check submodule README)
+
+          ## Test Plan
+
+          - [ ] \`make -C pmoves verify-all\` passes
+          - [ ] Service health endpoint returns 200
+          - [ ] Smoke test for affected service(s)
+
+          ---
+          *Automated by submodule-update-check workflow*
+          PRBODY
+          )"
+
+            if [[ -n "$existing_pr" ]]; then
+              gh pr edit "$existing_pr" --body "$pr_body"
+              echo "  Updated PR #${existing_pr}"
+            else
+              # The "Ensure upstream-update label exists" step already guaranteed
+              # the label is present. Fail fast if PR creation errors — we never
+              # want an unlabeled PR because the smoke workflow gates on the label.
+              gh pr create \
+                --title "chore(submodules): bump ${name} to upstream ${new_sha:0:10}" \
+                --body "$pr_body" \
+                --label "upstream-update" \
+                --base main \
+                --head "$pr_branch"
+              echo "  PR created for ${name}"
+            fi
+
+            updated_count=$((updated_count + 1))
+
+            # Return to main for next submodule
+            git checkout main
+          done
+
+          echo ""
+          echo "================================================================"
+          echo "SUMMARY"
+          echo "================================================================"
+          echo "  Updated: $updated_count"
+          echo "  Skipped (up-to-date): $skipped_count"
+          echo "  Failed:  $failed_count"
+
+          echo "updated_count=$updated_count" >> "$GITHUB_OUTPUT"
+          echo "skipped_count=$skipped_count" >> "$GITHUB_OUTPUT"
+          echo "failed_count=$failed_count" >> "$GITHUB_OUTPUT"
+
+          # Write summary table for GitHub Actions summary
+          if [[ -n "$summary_lines" ]]; then
+            {
+              echo "## Submodule Update Summary"
+              echo ""
+              echo "| Submodule | Old SHA | New SHA | New Commits |"
+              echo "|-----------|---------|---------|-------------|"
+              echo -e "$summary_lines"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "All tracked submodules are up-to-date." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Post NATS event (if updates detected)
+        if: steps.updates.outputs.updated_count != '0' && steps.updates.outputs.updated_count != ''
+        continue-on-error: true
+        env:
+          # Credentials come from Actions secrets — never hardcode.
+          # Set NATS_URL in org/repo secrets (e.g. nats://user:pass@host:4222)
+          # or provide NATS_USER + NATS_PASSWORD and construct the URL here.
+          NATS_URL: ${{ secrets.NATS_URL }}
+        run: |
+          # Publish to NATS if nats CLI is available and a server URL is configured (best-effort)
+          if [[ -z "${NATS_URL:-}" ]]; then
+            echo "NATS_URL secret not set — skipping event publish"
+            exit 0
+          fi
+          if command -v nats >/dev/null 2>&1; then
+            nats pub "ops.submodule.update.detected.v1" \
+              "{\"workflow\":\"submodule-update-check\",\"updated\":${{ steps.updates.outputs.updated_count }},\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
+              --server "$NATS_URL" || true
+          fi

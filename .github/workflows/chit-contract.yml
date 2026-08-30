@@ -17,12 +17,6 @@ on:
     branches:
       - main
       - PMOVES.AI-Edition-Hardened
-    paths:
-      - 'pmoves/supabase/**/*.sql'
-      - 'pmoves/supabase/initdb/**'
-      - 'pmoves/services/**'
-      - 'pmoves/docs/**/SUPABASE_*.md'
-      - '.github/workflows/chit-contract.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,14 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
             github.com:443
             api.github.com:443
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           sparse-checkout: |
@@ -52,8 +46,46 @@ jobs:
             .github/workflows
           sparse-checkout-cone-mode: false
 
+      - name: Detect CHIT-relevant changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_checks=true
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            run_checks=false
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+
+            if ! merge_base="$(git merge-base "$base" "$head")"; then
+              echo "Unable to find pull request merge base; running CHIT checks fail-safe."
+              run_checks=true
+            elif ! git diff --name-only "$merge_base" "$head" > /tmp/chit-changed-files.txt; then
+              echo "Unable to diff pull request range; running CHIT checks fail-safe."
+              run_checks=true
+            else
+              while IFS= read -r path; do
+                case "$path" in
+                  pmoves/supabase/*.sql|pmoves/supabase/initdb/*|pmoves/services/*|pmoves/docs/*/SUPABASE_*.md|.github/workflows/chit-contract.yml)
+                    run_checks=true
+                    break
+                    ;;
+                esac
+              done < /tmp/chit-changed-files.txt
+            fi
+          fi
+
+          echo "run_checks=${run_checks}" >> "$GITHUB_OUTPUT"
+          if [[ "$run_checks" == "true" ]]; then
+            echo "CHIT contract checks required for this change set."
+          else
+            echo "No CHIT contract paths changed; required verify job will pass without scan."
+          fi
+
       # Install ripgrep
       - name: Install ripgrep
+        if: steps.changes.outputs.run_checks == 'true'
         run: |
           if ! command -v rg &> /dev/null; then
             echo "Installing ripgrep..."
@@ -63,6 +95,7 @@ jobs:
           fi
 
       - name: CHIT schema/endpoints checks
+        if: steps.changes.outputs.run_checks == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -123,6 +156,15 @@ jobs:
           echo "✅ Found all CHIT environment variables"
 
           echo ""
+          echo 'Check CHIT key separation awareness (informational — not required yet)'
+          rg -l 'CHIT_SIGNING_KEY|CHIT_ENCRYPTION_KEY' pmoves/ || echo "INFO: No key separation refs found (CHIT_PASSPHRASE fallback active)"
+
+          echo ""
           echo "======================================"
           echo "✅ All CHIT contract checks passed!"
           echo "======================================"
+
+      - name: CHIT checks skipped
+        if: steps.changes.outputs.run_checks != 'true'
+        run: |
+          echo "CHIT contract paths were not changed; verify check is present for branch protection."

@@ -1,16 +1,17 @@
 # Tokenism Simulator Integration Guide
 
 **Service:** tokenism-simulator
-**Port:** 8103
-**Status:** Production Ready
+**Port:** 8103 host / 8100 container
+**Status:** Implemented with scope caveats
 **Submodule:** PMOVES-ToKenism-Multi
 **Repository:** `PMOVES-ToKenism-Multi/`
+**Last reviewed:** 2026-05-22
 
 ---
 
 ## Overview
 
-Tokenism Simulator implements economic simulations with CHIT geometric attribution. It processes CGP packets from the GEOMETRY BUS, runs EVO SWARM population simulations, and publishes attribution records.
+Tokenism Simulator implements token economy simulations with CHIT geometric attribution. It processes CGP packets from the GEOMETRY BUS, exposes Flask simulation APIs, publishes compatible NATS events, and tracks fitness metadata. It does not run real mutation/crossover/PSO loops; those operators live in the PMOVES EvoSwarm/model-fitness workstream.
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -29,17 +30,17 @@ flowchart TD
     classDef output fill:#404040,stroke:#525252,color:#ededed
 
     START["Week Start"]:::init
-    POP["Swarm Population<br/>Initialize agents"]:::swarm
+    POP["Scenario Population<br/>Initialize participants"]:::swarm
     SIM["Economic Simulation<br/>GroToken, GroupPurchase"]:::econ
     ATTR["Attribution Tracking<br/>Dirichlet-weighted"]:::swarm
-    OPT["EvoSwarm RL<br/>Optimization"]:::swarm
-    NATS["NATS Publish<br/>tokenism.cgp.weekly.v1"]:::output
+    FIT["Fitness Tracking<br/>bounded score + metadata"]:::swarm
+    NATS["NATS Publish<br/>simulation + CGP events"]:::output
 
     START --> POP
     POP --> SIM
     SIM --> ATTR
-    ATTR --> OPT
-    OPT --> NATS
+    ATTR --> FIT
+    FIT --> NATS
 ```
 
 > **📊 Diagram Source:** [diagrams/tokenism-simulation.mmd](../diagrams/tokenism-simulation.mmd)
@@ -57,67 +58,55 @@ GET /healthz
 **Response:**
 ```json
 {
-  "status": "healthy",
-  "service": "tokenism-simulator",
-  "version": "1.0.0",
-  "nats_connected": true,
-  "simulator_ready": true
+  "status": "ok"
 }
 ```
 
 ### Run Simulation
 
 ```bash
-POST /simulation/run
+POST /api/v1/simulate
 Content-Type: application/json
 ```
 
 **Request:**
 ```json
 {
-  "cgps": [
-    {"cgp_id": "cgp_001", "weight": 0.5},
-    {"cgp_id": "cgp_002", "weight": 0.3}
-  ],
-  "config": {
-    "population_size": 100,
-    "generations": 50,
-    "mutation_rate": 0.1,
-    "crossover_rate": 0.8
-  },
-  "publish_attribution": true
+  "scenario": "baseline",
+  "parameters": {
+    "initial_supply": 1000000,
+    "initial_price": 1.0,
+    "weeks": 52
+  }
 }
 ```
 
 **Response:**
 ```json
 {
-  "status": "completed",
   "simulation_id": "sim_20260313_120000",
-  "generations": 50,
-  "final_fitness": 0.92,
-  "best_genome": {
-    "id": "genome_050",
-    "fitness": 0.92,
-    "genes": [0.1, 0.2, 0.3, 0.4, 0.5]
-  },
-  "attribution_published": true
+  "scenario": "baseline",
+  "weekly_metrics": [],
+  "final_avg_wealth": 1234.56,
+  "final_gini": 0.42,
+  "final_poverty_rate": 0.15
 }
 ```
 
-### Weekly CGP Aggregation
+### Async Simulation
 
 ```bash
-POST /cgp/weekly
+POST /api/v1/simulate/async
 Content-Type: application/json
 ```
 
 **Request:**
 ```json
 {
-  "week_id": "2026-W11",
-  "cgps": [...],
-  "aggregation_method": "weighted_average"
+  "scenario": "optimistic",
+  "parameters": {
+    "weeks": 52
+  }
 }
 ```
 
@@ -125,40 +114,37 @@ Content-Type: application/json
 
 ## Economic Simulation
 
-### EVO SWARM Algorithm
+### Fitness Tracking Contract
 
-Tokenism implements an evolutionary swarm optimization for economic simulation:
+Tokenism records bounded fitness and economic metrics for downstream optimizers:
 
-1. **Population Initialization**
-   - Generate initial genomes from CGP weights
-   - Population size configurable (default: 100)
+1. **Simulation Run**
+   - Run baseline, optimistic, pessimistic, or stress-test token economy scenarios.
+   - Generate weekly wealth, supply, participation, Gini, and poverty metrics.
 
-2. **Fitness Evaluation**
-   - Evaluate each genome against economic objectives
-   - Fitness: 0-1 scale (higher is better)
+2. **CHIT Encoding**
+   - Convert simulation results into CGP-compatible geometry records.
+   - Publish ready/weekly events when the configured NATS path is enabled.
 
-3. **Selection**
-   - Tournament selection (size: 3)
-   - Elitism: top 10% preserved
+3. **Fitness Metadata**
+   - Record scores in the `0..1` range for comparison and routing.
+   - Emit population summaries for consumers that perform external optimization.
 
-4. **Crossover & Mutation**
-   - Crossover: arithmetic blend
-   - Mutation: Gaussian noise
-
-5. **Termination**
-   - Max generations (default: 50)
-   - Fitness threshold (default: 0.95)
+4. **Optimizer Handoff**
+   - Real PSO/evolutionary operators are expected to consume these events from PMOVES EvoSwarm/model-fitness.
+   - Tokenism should not claim selection, crossover, mutation, or RL convergence unless those operators are wired and tested.
 
 ### Configuration Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `population_size` | 100 | Swarm population size |
-| `generations` | 50 | Maximum generations |
-| `mutation_rate` | 0.1 | Mutation probability |
-| `crossover_rate` | 0.8 | Crossover probability |
-| `tournament_size` | 3 | Selection tournament size |
-| `elitism_pct` | 0.1 | Elite preservation percentage |
+| `weeks` | 52 | Number of simulated weeks |
+| `scenario` | baseline | Scenario profile: baseline, optimistic, pessimistic, stress_test |
+| `initial_supply` | model default | Starting token supply |
+| `initial_price` | model default | Starting token price |
+| `staking_rate` | model default | Token staking participation |
+| `weekly_burn_rate` | model default | Weekly burn percentage |
+| `weekly_mint_rate` | model default | Weekly mint percentage |
 
 ---
 
@@ -200,17 +186,18 @@ Tokenism tracks agent contributions using geometric attribution:
 
 | Subject | Handler | Action |
 |---------|---------|--------|
-| `tokenism.cgp.ready.v1` | `on_cgp_ready` | Queue CGP for processing |
-| `geometry.cgp.v1` | `on_cgp_received` | Process CGP directly |
+| `geometry.cgp.v1` | `nats_consumer.py` | Extract BPM from canonical CGP and republish prosodic event |
 
 ### Published Subjects
 
 | Subject | When | Payload |
 |---------|------|---------|
-| `tokenism.cgp.weekly.v1` | Weekly aggregation | Weekly CGP packet |
-| `tokenism.swarm.population.v1` | Each generation | Population snapshot |
-| `tokenism.attribution.recorded.v1` | After attribution | Attribution record |
-| `geometry.swarm.meta.v1` | Simulation complete | Swarm metadata |
+| `tokenism.simulation.result.v1` | Simulation complete | Flask simulator result envelope |
+| `tokenism.calibration.result.v1` | Calibration complete | Calibration result envelope |
+| `tokenism.cgp.ready.v1` | CGP packet ready | CHIT geometry packet envelope |
+| `tokenism.prosodic.bpm.v1` | CGP consumed from `geometry.cgp.v1` | Flattened BPM/prosodic event |
+
+The TypeScript CHIT publisher in the ToKenism submodule separately publishes the hardened `tokenism.attribution.recorded.v1`, `tokenism.cgp.weekly.v1`, `tokenism.cgp.ready.v1`, and `tokenism.swarm.population.v1` contracts.
 
 ### Connection Configuration
 
@@ -243,10 +230,10 @@ for await (const msg of sub) {
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `SERVICE_NAME` | Service identifier | `tokenism-simulator` |
-| `SERVICE_PORT` | HTTP port | `8103` |
-| `POPULATION_SIZE` | Swarm population | `100` |
-| `MAX_GENERATIONS` | Simulation limit | `50` |
-| `MUTATION_RATE` | Mutation probability | `0.1` |
+| `TOKENISM_PORT` | Container HTTP port | `8100` |
+| `TOKENISM_HOST_PORT` | Host HTTP port in compose | `8103` |
+| `TENSORZERO_URL` | TensorZero gateway URL | `http://tensorzero-gateway:3000` |
+| `SUPABASE_URL` | Supabase URL | `http://supabase_kong_PMOVES.AI:8000` |
 
 ---
 
@@ -254,13 +241,12 @@ for await (const msg of sub) {
 
 ```yaml
 tokenism-simulator:
-  build: ./PMOVES-ToKenism-Multi
+  build: ./services/tokenism-simulator
   ports:
-    - "${TOKENISM_PORT:-8103}:8103"
+    - "${TOKENISM_HOST_PORT:-8103}:8100"
   environment:
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - POPULATION_SIZE=${TOKENISM_POPULATION:-100}
-    - MAX_GENERATIONS=${TOKENISM_GENERATIONS:-50}
+    - TOKENISM_PORT=${TOKENISM_PORT:-8100}
   depends_on:
     nats-init:
       condition: service_completed_successfully
@@ -276,28 +262,23 @@ tokenism-simulator:
 ### JavaScript/TypeScript Client
 
 ```typescript
-import { NATS } from 'nats';
-
-async function runSimulation(cgps: any[]) {
-  const nc = await NATS.connect({ servers: "localhost:8103" });
-
+async function runSimulation() {
   // Run simulation via HTTP
-  const response = await fetch('http://localhost:8103/simulation/run', {
+  const response = await fetch('http://localhost:8103/api/v1/simulate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cgps, publish_attribution: true })
+    body: JSON.stringify({
+      scenario: 'baseline',
+      parameters: { weeks: 52 }
+    })
   });
 
   return await response.json();
 }
 
 // Usage
-const cgps = [
-  { cgp_id: 'cgp_001', weight: 0.5 },
-  { cgp_id: 'cgp_002', weight: 0.3 }
-];
-const result = await runSimulation(cgps);
-console.log(`Final fitness: ${result.final_fitness}`);
+const result = await runSimulation();
+console.log(`Final Gini: ${result.final_gini}`);
 ```
 
 ### cURL
@@ -307,20 +288,19 @@ console.log(`Final fitness: ${result.final_fitness}`);
 curl http://localhost:8103/healthz
 
 # Run simulation
-curl -X POST http://localhost:8103/simulation/run \
+curl -X POST http://localhost:8103/api/v1/simulate \
   -H "Content-Type: application/json" \
   -d '{
-    "cgps": [{"cgp_id": "cgp_001", "weight": 0.5}],
-    "publish_attribution": true
+    "scenario": "baseline",
+    "parameters": {"weeks": 12}
   }'
 
-# Weekly aggregation
-curl -X POST http://localhost:8103/cgp/weekly \
+# Async simulation
+curl -X POST http://localhost:8103/api/v1/simulate/async \
   -H "Content-Type: application/json" \
   -d '{
-    "week_id": "2026-W11",
-    "cgps": [],
-    "aggregation_method": "weighted_average"
+    "scenario": "stress_test",
+    "parameters": {"weeks": 52}
   }'
 ```
 
@@ -345,7 +325,7 @@ async def handle_weekly_cgp(msg):
 
 ### EvoController
 
-EvoController subscribes to `tokenism.swarm.population.v1` for swarm optimization:
+EvoController subscribes to `tokenism.swarm.population.v1` for externally implemented optimization:
 
 ```python
 # EvoController subscriber
@@ -354,7 +334,7 @@ async def subscribe_population():
 
 async def handle_population(msg):
     population = json.loads(msg.data)
-    # Update swarm optimization
+    # Update external optimizer state from Tokenism fitness metadata
     await update_swarm(population)
 ```
 
@@ -385,16 +365,16 @@ Solution: Always provide credentials in connection string:
 servers: "nats://nats:pmoves@nats:4222"
 ```
 
-**Issue:** Swarm population not converging
-```
-Solution: Check mutation_rate and population_size
-Increase generations or adjust fitness function
+**Issue:** No optimizer convergence is visible
+```text
+Solution: Tokenism only publishes simulation and fitness metadata.
+Check the external EvoSwarm/model-fitness consumer for PSO/evolution execution.
 ```
 
 **Issue:** Attribution records not published
-```
-Solution: Verify publish_attribution=true in request
-Check NATS connection status in health endpoint
+```text
+Solution: Check NATS connectivity and publisher schema validation logs.
+The Flask /api/v1/simulate route is not the same API as the TypeScript CHIT publisher.
 ```
 
 ### Debug Commands

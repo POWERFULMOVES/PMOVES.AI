@@ -7,7 +7,7 @@ Usage:
     python scripts/cast_tts.py -d "Speaker group" --list-devices
     python scripts/cast_tts.py -d "Brysons Speaker set" "Alert: deployment complete"
 
-Requires: catt, Ultimate-TTS-Studio running on port 7861
+Requires: catt, Ultimate-TTS-Studio running on port 7860
 """
 import argparse
 import subprocess
@@ -18,7 +18,7 @@ import urllib.request
 import json
 import os
 
-ULTIMATE_TTS_URL = os.environ.get("ULTIMATE_TTS_URL", "http://localhost:7861")
+ULTIMATE_TTS_URL = os.environ.get("ULTIMATE_TTS_URL", "http://localhost:7860")
 DEFAULT_DEVICE = os.environ.get("CAST_DEFAULT_DEVICE", "Den speaker")
 
 

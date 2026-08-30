@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content Lexicon Shaped",
+  "type": "object",
+  "required": [
+    "content_id",
+    "text",
+    "source_ref",
+    "shape_id",
+    "anchor_terms",
+    "semantic_weights",
+    "noise_score",
+    "semantic_density"
+  ],
+  "properties": {
+    "content_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_type": {
+      "type": "string"
+    },
+    "shape_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "favorite_words": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "anchor_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "semantic_weights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "term",
+          "weight"
+        ],
+        "properties": {
+          "term": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0
+          },
+          "favorite": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "noise_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "semantic_density": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}

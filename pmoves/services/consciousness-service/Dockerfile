@@ -12,14 +12,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first (cache layer)
-COPY requirements.txt requirements.lock .
-RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+COPY services/consciousness-service/requirements.txt services/consciousness-service/requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
 
 # Copy application code
-COPY *.py ./
+COPY services/consciousness-service/*.py ./
 
-# Copy pmoves tools (chit_security, geometry_decoder) via volume mount or copy
-# These are expected to be available at runtime via /app/pmoves/tools
+# PMOVES namespace + shared tools (imported as pmoves.tools.*)
+RUN mkdir -p /app/pmoves \
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+COPY tools/__init__.py /app/pmoves/tools/__init__.py
+COPY tools/zeta_filter.py /app/pmoves/tools/zeta_filter.py
+# cgp_mapper imports pmoves.chit (CGP_SPEC_VERSION) unconditionally, and
+# chr_algorithm prefers the canonical pmoves.tools.chit_security signer.
+COPY chit/__init__.py /app/pmoves/chit/__init__.py
+COPY tools/chit_common.py /app/pmoves/tools/chit_common.py
+COPY tools/chit_security.py /app/pmoves/tools/chit_security.py
+
+# services/common — CHIT passphrase + secret helpers (imported as services.common.env).
+# Copy the WHOLE package (house pattern, cf. pdf-ingest / nats_event_bus): the
+# package __init__ eagerly star-imports .telemetry and .model_nexus, so a
+# file-by-file copy of just env.py detonates at import time
+# (ModuleNotFoundError: services.common.telemetry).
+COPY services/common /app/services/common
 
 # Set ownership
 RUN chown -R pmoves:pmoves /app
@@ -29,16 +44,16 @@ USER pmoves
 
 # Environment defaults
 ENV SERVICE_NAME=consciousness-service
-ENV SERVICE_PORT=8105
+ENV SERVICE_PORT=8106
 ENV NATS_URL=nats://nats:pmoves@nats:4222
 # CHIT_PROD_PASSPHRASE injected at runtime via docker-compose
 ENV SUPABASE_URL=http://supabase-kong:8000
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8105
+EXPOSE 8106
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8105/healthz').raise_for_status()"
+    CMD python -c "import httpx; httpx.get('http://localhost:8106/healthz').raise_for_status()"
 
 CMD ["python", "main.py"]

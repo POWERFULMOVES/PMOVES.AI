@@ -1,0 +1,248 @@
+# TAC Tree: Hermes / Warp / Pi Agent Integration
+# Tracks Hermes local mesh MOF agent, Warp terminal manager, and Pi Agent
+# integration into PMOVES SDK Super CLI suit.
+#
+# Key repos:
+#   hermes-mod.git/          (Customizable Hermes agent - local mesh MOF)
+#   warp-terminal/           (Warp terminal - now open source)
+#   PMOVES-SDK/              (Super CLI suit target)
+#   pi-agent/                (Pi Agent integration)
+#
+# Dependencies:
+#   pmoves/configs/tac_trees/pinokio-p7.tac.yaml    (P7 integration baseline)
+#   pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml  (B850 profile)
+
+name: "Hermes / Warp / Pi Agent Integration"
+version: "1.0.0"
+description: "Track integration of Hermes local mesh MOF agent, Warp terminal manager, and Pi Agent into PMOVES SDK Super CLI suit"
+
+root:
+  id: hermes-warp-pi
+  task: "Hermes/Warp/Pi Agent integration into PMOVES SDK"
+  context: "PMOVES.AI SDK + Super CLI suit + local mesh agents"
+  agent_hint: b850-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Hermes Assessment & Fork
+    # =========================================================================
+    - id: hermes.assess
+      task: "Assess hermes-mod.git for PMOVES integration"
+      action:
+        type: manual
+        expect: "hermes-mod.git forked and assessed for customization points"
+      context: "Review hermes-mod.git structure, identify MOF agent hooks, mesh integration points"
+      agent_hint: b850-claude
+      status: pending
+      notes: "Hermes is NOT deprecated - it's a local mesh MOF agent for PMOVES SDK integration"
+      children:
+        - id: hermes.assess.repo
+          task: "Locate and review hermes-mod.git"
+          action:
+            type: shell
+            command: "find . -type d -name '*hermes*' -o -name '*Hermes*' 2>/dev/null | head -10"
+          expect: "hermes-mod.git repository or submodule found"
+          context: "Search PMOVES.AI repo and submodules for existing Hermes integration"
+          agent_hint: b850-claude
+          status: pending
+          notes: "If not found, plan to add as submodule: git submodule add <hermes-mod-url> PMOVES-Hermes"
+
+        - id: hermes.assess.customization
+          task: "Identify Hermes customization points"
+          action:
+            type: manual
+            expect: "Documented list of hooks, plugins, and config surface"
+          context: "Review hermes-mod source for MOF agent protocol, mesh discovery, terminal integration"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Focus on: mesh protocol, MOF lattice integration, Pinokio launcher hooks"
+
+    # =========================================================================
+    # Phase 2: Warp Terminal Integration
+    # =========================================================================
+    - id: warp.integrate
+      task: "Integrate Warp terminal manager (now open source)"
+      action:
+        type: manual
+        expect: "Warp installed and configured for PMOVES development"
+      context: "Warp is now open source - evaluate as default terminal for PMOVES SDK"
+      agent_hint: b850-claude
+      status: pending
+      notes: "Warp provides modern terminal UX with AI integrations - good fit for Super CLI suit"
+      children:
+        - id: warp.assess
+          task: "Assess Warp for PMOVES SDK integration"
+          action:
+            type: web
+            url: "https://github.com/warpdotdev/WARP"
+          expect: "Warp open-source repo reviewed for integration options"
+          context: "Check Warp's plugin system, config management, AI assistant hooks"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Key areas: shell plugins, workflow automation, AI assistant API"
+
+        - id: warp.profile
+          task: "Create PMOVES Warp profile"
+          action:
+            type: manual
+            expect: "Warp profile with PMOVES-specific workflows, aliases, and integrations"
+          context: "Configure Warp for PMOVES development: docker, compose, pterm, git workflows"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Include: make targets, pterm shortcuts, agent zero commands, CHIT tools"
+
+    # =========================================================================
+    # Phase 3: Pi Agent Integration
+    # =========================================================================
+    - id: piagent.integrate
+      task: "Integrate Pi Agent into PMOVES SDK"
+      action:
+        type: manual
+        expect: "Pi Agent available in Super CLI suit"
+      context: "Pi Agent for lightweight local assistance and automation"
+      agent_hint: b850-claude
+      status: pending
+      notes: "Pi Agent complements Claude Code with fast, lightweight local operations"
+      children:
+        - id: piagent.assess
+          task: "Locate and assess Pi Agent"
+          action:
+            type: shell
+            command: "find . -type d -name '*pi*agent*' -o -name '*piagent*' 2>/dev/null | head -10"
+          expect: "Pi Agent repo or submodule found"
+          context: "Search PMOVES.AI for existing Pi Agent integration"
+          agent_hint: b850-claude
+          status: pending
+          notes: "If not found, plan to add as submodule or external integration"
+
+        - id: piagent.sdk
+          task: "Add Pi Agent to PMOVES SDK Super CLI suit"
+          action:
+            type: manual
+            expect: "Pi Agent invocable from PMOVES CLI (e.g., pmoves pi <command>)"
+          context: "Integrate Pi Agent commands into SDK CLI surface"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Commands: pi chat, pi run, pi status - all routable through Super CLI"
+
+    # =========================================================================
+    # Phase 4: Super CLI Suit Assembly
+    # =========================================================================
+    - id: supercli.assemble
+      task: "Assemble Super CLI suit with Hermes, Warp, Pi Agent"
+      action:
+        type: manual
+        expect: "PMOVES SDK Super CLI suit with all three components integrated"
+      context: "Create unified CLI surface that orchestrates Hermes, Warp, and Pi Agent"
+      agent_hint: b850-claude
+      status: pending
+      depends_on: [hermes.assess, warp.integrate, piagent.integrate]
+      notes: "Super CLI suit provides single entry point for PMOVES development operations"
+      children:
+        - id: supercli.commands
+          task: "Define Super CLI command surface"
+          action:
+            type: manual
+            expect: "Command taxonomy documented: pmoves <hermes|warp|pi> <subcommand>"
+          context: "Design CLI schema that routes to appropriate agent"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Example: pmoves hermes mesh-status, pmoves warp run-workflow, pmoves pi chat"
+
+        - id: supercli.config
+          task: "Create Super CLI configuration"
+          action:
+            type: manual
+            expect: "Unified config for all three components"
+          context: "pmoves/configs/supercli.yaml with agent profiles, endpoints, and defaults"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Config includes: Hermes mesh config, Warp profile path, Pi Agent model settings"
+
+        - id: supercli.binder
+          task: "Implement command routing/binder"
+          action:
+            type: manual
+            expect: "CLI router that dispatches to Hermes/Warp/Pi based on subcommand"
+          context: "Python/Node CLI layer that binds to each agent's API or CLI"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Use existing CLI patterns: pmoves CLI, pterm, agent-zero MCP"
+
+    # =========================================================================
+    # Phase 5: MOF Mesh Integration
+    # =========================================================================
+    - id: mof.mesh
+      task: "Integrate with PMOVES MOF lattice/mesh"
+      action:
+        type: manual
+        expect: "Hermes/Pi Agent discoverable and routable via MOF mesh"
+      context: "Register agents with PMOVES service mesh, enable cross-node discovery"
+      agent_hint: b850-claude
+      status: pending
+      depends_on: [supercli.assemble]
+      notes: "MOF = Metal-Organic Framework - every node is a pore in the lattice"
+      children:
+        - id: mof.nats
+          task: "Publish Hermes/Pi events to NATS"
+          action:
+            type: manual
+            expect: "Agent lifecycle events on NATS subjects (hermes.*, pi.*)"
+          context: "Use pmoves NATS infrastructure for mesh-wide coordination"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Subjects: hermes.agent.session.v1, pi.agent.command.v1, etc."
+
+        - id: mof.tailscale
+          task: "Enable Tailscale mesh discovery"
+          action:
+            type: manual
+            expect: "Hermes/Pi Agent reachable from any node via Tailscale"
+          context: "Use existing Tailscale mesh for cross-node agent routing"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Hostname pattern: pmoves-b850-ai-top, service discovery via DNS"
+
+    # =========================================================================
+    # Phase 6: Documentation & Validation
+    # =========================================================================
+    - id: hermes.docs
+      task: "Document Hermes/Warp/Pi integration"
+      action:
+        type: manual
+        expect: "Complete documentation for MOF agent integration"
+      context: "Create user-facing docs, integration guides, and API references"
+      agent_hint: b850-claude
+      status: pending
+      depends_on: [mof.mesh]
+      children:
+        - id: hermes.docs.guide
+          task: "Create integration guide"
+          action:
+            type: manual
+            expect: "pmoves/docs/HERMES_WARP_PI_AGENT_GUIDE.md"
+          context: "User guide for Hermes/Warp/Pi Agent in PMOVES SDK"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Include: installation, configuration, usage examples, troubleshooting"
+
+        - id: hermes.docs.api
+          task: "Document API surface"
+          action:
+            type: manual
+            expect: "API reference for Super CLI commands"
+          context: "Auto-generate or manually document all Super CLI endpoints"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Include: request/response formats, error codes, examples"
+
+        - id: hermes.validate
+          task: "Validate integration end-to-end"
+          action:
+            type: shell
+            command: "pmoves hermes status && pmoves warp version && pmoves pi ping"
+          expect: "All three agents respond correctly"
+          context: "Smoke test for complete integration"
+          agent_hint: b850-claude
+          status: pending
+          notes: "Add to CI: make -C pmoves test-hermes-warp-pi"

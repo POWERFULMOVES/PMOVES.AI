@@ -50,3 +50,7 @@ EXPOSE 8096
 
 # Run the server
 CMD ["python", "main.py"]
+
+# Non-root runtime (house pattern; restores #2285 intent without truncating)
+RUN useradd --create-home --shell /bin/bash pmoves 2>/dev/null || true
+USER pmoves

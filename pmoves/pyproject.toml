@@ -1,13 +1,35 @@
+# This file aggregates tool config (pytest, coverage) and a `dev` extra for the
+# pmoves/ workspace. It is NOT a distributable package — `[tool.uv] package =
+# false` tells uv to manage the environment without building/installing it.
+# The minimal `[project]` table exists only so uv stops rejecting the file with
+# "project.name field is not set" (which the `[project.optional-dependencies]`
+# table below otherwise triggers, forcing every `uv run` here to need
+# --no-project).
+[project]
+name = "pmoves-workspace"
+version = "0.0.0"
+requires-python = ">=3.11"
+description = "PMOVES.AI workspace tooling config + dev extra (non-distributable)"
+
+[tool.uv]
+package = false
+
 [tool.pytest.ini_options]
-# Pytest configuration for PMOVES.AI unified test framework
-# This file complements pytest.ini in the repository root
+# Pytest configuration for PMOVES.AI unified test framework.
+#
+# This is the ONLY pytest config in the repo. Three comments here used to say
+# it complemented / should match a `pytest.ini` in the repository root; there
+# has never been one, and `.github/workflows/python-tests.yml` was even
+# triggering on that nonexistent path. pytest resolves THIS file as
+# `configfile` for anything under pmoves/, so what is written below is what
+# actually applies.
 
 # Test discovery patterns
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 
-# Test paths (should match pytest.ini)
+# Test paths
 testpaths = [
     "pmoves/tests",
     "pmoves/tests/smoke",
@@ -16,7 +38,16 @@ testpaths = [
     "pmoves/tests/services",
 ]
 
-# Pytest markers (should match pytest.ini)
+# Every marker used anywhere under pmoves/tests must appear here, because
+# addopts below sets --strict-markers. The last three were missing, and each
+# one aborted COLLECTION of its whole file rather than failing a test:
+# integration/test_ui_integration.py (28 tests), smoke/test_critical_path.py
+# (8) and integration/test_pr483_critical_path.py (10) ran zero tests under a
+# strict invocation because of it. Declaring them is not a relaxation --
+# --strict-markers stays on, and the previously-uncollected files now run.
+#
+# This does not affect the merge-gate ratchet either way: pytest_ratchet.py
+# passes `-o addopts=`, so --strict-markers was never in force there.
 markers = [
     "smoke: Quick health checks (5-30s) - validates service endpoints",
     "integration: Service-to-service communication tests (1-5m)",
@@ -24,6 +55,9 @@ markers = [
     "performance: Load benchmarks and latency tests (5-30m)",
     "slow: Tests that take >10s to run",
     "gpu: Tests requiring GPU acceleration",
+    "unit: Isolated unit test - no I/O, no live service",
+    "requires(capability): documents the node capability a test assumes; no runner hook consumes it",
+    "dependency: pytest-dependency ordering marker; inert (so dependents RUN, not auto-skip) without that plugin",
 ]
 
 # Async test mode
@@ -56,4 +90,10 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
     "@abstractmethod",
+]
+
+[project.optional-dependencies]
+dev = [
+    "cryptography",
+    "google-auth-oauthlib>=1.2.0",
 ]

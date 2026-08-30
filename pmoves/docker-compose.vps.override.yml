@@ -28,7 +28,7 @@ services:
   # KVM4-1: API Gateway Node
   # ============================================================================
 
-  tensorzero:
+  tensorzero-gateway:
     <<: [*cpu-only, *vps-healthcheck]
     environment:
       # Route GPU-intensive requests to home network via Tailscale mesh
@@ -41,10 +41,11 @@ services:
   agent-zero:
     <<: [*cpu-only, *vps-healthcheck]
     build:
-      dockerfile: Dockerfile  # CPU-only version
+      context: .
+      dockerfile: ./services/agent-zero/Dockerfile  # CPU-only version (matches the build in pmoves/docker-compose.yml:2911-2913)
     environment:
       - AGENTZERO_MODE=api
-      - TENSORZERO_URL=http://tensorzero:3000
+      - TENSORZERO_URL=http://tensorzero-gateway:3000
 
   hi-rag-gateway-v2:
     <<: [*cpu-only, *vps-healthcheck]
@@ -52,7 +53,7 @@ services:
     build:
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
 
-  archon-server:
+  archon:
     <<: [*cpu-only, *vps-healthcheck]
 
   mesh-agent:
@@ -60,7 +61,7 @@ services:
     environment:
       - NODE_TYPE=vps
       - NODE_CAPABILITIES=cpu-only,api-gateway
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - NATS_URL=${NATS_URL}
 
   gateway-agent:
     <<: [*cpu-only, *vps-healthcheck]
@@ -70,12 +71,12 @@ services:
     image: pmoves/gateway-agent:latest
     container_name: pmoves-gateway-agent
     ports:
-      - "8100:8100"
+      - "8111:8111"
     environment:
-      - PORT=8100
+      - PORT=8111
       - AGENT_ZERO_URL=http://agent-zero:8080
-      - CIPHER_URL=http://cipher-api:8096
-      - TENSORZERO_URL=http://tensorzero:3000
+      - CIPHER_URL=http://cipher-api:8105
+      - TENSORZERO_URL=http://tensorzero-gateway:3000
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - TOOL_CACHE_TTL=300

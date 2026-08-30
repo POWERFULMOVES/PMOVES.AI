@@ -1,0 +1,65 @@
+# Baselined container-hardening gaps — hardening_ratchet.py
+#
+# Each entry is a tracked Dockerfile that runs as root: either it declares
+# no USER at all, or its last USER directive is root. They are recorded so
+# `hardening-validation` can be enforced today without turning main red in
+# a single step. They are NOT approved, and none of them is 'expected'.
+#
+# The list may shrink and must never silently grow. Removing an entry is
+# the goal; adding one should require saying why in the PR. A Dockerfile
+# that is fixed but still listed here fails the gate as a STALE entry, so
+# the count only goes down.
+#
+# Regenerate: python pmoves/tools/hardening_ratchet.py --write-baseline
+known_gaps:
+  - "NO_USER|.github/runners/Dockerfile"
+  - "NO_USER|pmoves-nats-mcp/Dockerfile"
+  - "NO_USER|pmoves/compose/n8n/Dockerfile"
+  - "NO_USER|pmoves/docker/pmoves-4090-web/Dockerfile"
+  - entry: "NO_USER|pmoves/docs/PMOVES.AI PLANS/Enhanced Media Stack with Advanced AudioVideo Analysis/Dockerfile"
+    kind: not-deployed
+    reason: >-
+      A documentation example under pmoves/docs/, referenced by no compose
+      file. Nothing builds or runs it, so it has no runtime posture to
+      harden. Counting it as debt overstates the number without giving
+      anyone something to fix.
+  - entry: "NO_USER|pmoves/docs/PMOVES.AI PLANS/cipher_pmoves_bundle/Dockerfile.cipher"
+    kind: not-deployed
+    reason: >-
+      Same: a bundled example under pmoves/docs/, referenced by no compose
+      file. The running Cipher is the pmoves-cipher service, not this.
+  - "NO_USER|pmoves/services/voice-sampler/Dockerfile"
+  - "NO_USER|pmoves/services/watch-folder-router/Dockerfile"
+  - entry: "ROOT_USER|pmoves/images/jellyfin/Dockerfile"
+    kind: deliberate
+    reason: >-
+      Root is chosen at the COMPOSE layer, not left by accident:
+      docker-compose.external.yml sets user: "${JELLYFIN_CONTAINER_USER:-0:0}"
+      with a numeric UID so the runtime stays valid on GHCR variants whose
+      image passwd lacks a named jellyfin entry. It is overridable per
+      deployment via that variable, which is where the decision belongs.
+
+  - entry: "NO_USER|CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/docker-stacks/jellyfin-ai/dashboard/Dockerfile"
+    kind: handled-elsewhere
+    reason: >-
+      nginx ALREADY drops privileges for the processes that matter. Verified
+      against the image rather than assumed: nginx:1.25-alpine has
+      `user  nginx;` at nginx.conf line 2, PID 1 root, and Config.User "" --
+      so the master runs as root to bind :80 and spawns WORKERS as the
+      unprivileged `nginx` user. Every process that parses untrusted request
+      data is already non-root; the root process only holds the listening
+      socket and manages workers. NO_USER is factually true here and
+      misleading as a risk signal. "Fixing" it means moving the listen port
+      (80 -> 8080, breaking the `3001:80` compose mapping) or swapping to
+      nginxinc/nginx-unprivileged -- real deployment churn to relocate a
+      master that already delegates all request handling. Its two siblings in
+      the same stack WERE fixed and are deliberately absent: api-gateway runs
+      as `node`, audio-processor as a created `appuser`. Neither binds a
+      privileged port and neither drops privileges internally -- that is the
+      whole difference.
+
+# How many of the entries above may carry no `reason`. These predate the
+# field and are grandfathered, not approved. The number may only go DOWN:
+# add an entry without a reason and it exceeds this, and the gate fails.
+# Lower it every time one of the entries above gains a reason.
+reasonless_allowance: 6

@@ -53,16 +53,29 @@ Full catalog: `.claude/context/nats-subjects.md`
 | `tokenism.cgp.ready.v1`             | Tokenism Simulator | CGP readiness              |
 | `tokenism.simulation.result.v1`     | Tokenism Simulator | Simulation results         |
 | `botz.skill.registered.v1`          | BoTZ gateway       | Skill registration         |
+| `comfy.collab.prompt.v1`             | comfy-watcher, comfyui, creator-canvas-primary | Creator Collab slice 3 prompt (COMFY_COLLAB stream) |
+| `comfy.collab.progress.v1`           | comfy-watcher, comfyui | Creator Collab slice 3 progress (COMFY_COLLAB stream) |
+| `comfy.collab.artifact.v1`           | comfy-watcher, comfyui | Creator Collab slice 3 artifact (COMFY_COLLAB stream) |
+| `room.presence.v1`                  | p7-room-orchestrator, notebook-workbench, creator-canvas-primary | P7 room presence (ROOMS stream) |
+| `room.directory.v1`                 | p7-room-orchestrator | P7 room directory snapshot (ROOMS stream) |
+| `helpdesk.intake.opened.v1`          | pmoves-helpdesk-skill | Helpdesk intake opened (HELPDESK stream) |
+| `helpdesk.intake.routed.v1`          | pmoves-helpdesk-skill | Helpdesk intake routed (HELPDESK stream) |
+| `helpdesk.room.suggested.v1`         | room-suggest-skill | Helpdesk suggested a room (HELPDESK stream) |
 
 ## JetStream Streams
 
 Created by `nats-init` sidecar (`pmoves/scripts/nats/init_streams.sh`):
 
-| Stream                 | Subject      | Retention | Max Age | Max Size |
-|------------------------|--------------|-----------|---------|----------|
-| `GEOMETRY_CGP`         | `geometry.>` | limits    | 30d     | 1 GB     |
-| `TOKENISM_ATTRIBUTION` | `tokenism.>` | interest  | 90d     | 2 GB     |
-| `BOTZ_COORDINATION`    | `botz.>`     | limits    | 7d      | 500 MB   |
+| Stream                 | Subject         | Retention | Max Age | Max Size | Notes |
+|------------------------|-----------------|-----------|---------|----------|-------|
+| `GEOMETRY_CGP`         | `geometry.>`    | limits    | 30d     | 1 GB     | CGP schema events, swarm signals |
+| `TOKENISM_ATTRIBUTION` | `tokenism.>`    | interest  | 90d     | 2 GB     | **Migration risk**: existing stream uses `interest`; the silent-discard hazard (no bound consumer = message vanished) is documented inline. Lane 5 (2026-08-01) added new streams with `limits` to avoid the same pitfall. |
+| `BOTZ_COORDINATION`    | `botz.>`        | limits    | 7d      | 500 MB   | BoTZ gateway skill events |
+| `MESH_GPU`             | `mesh.gpu.>`    | limits    | 7d      | 1 GB     | DGX Spark GB10 GPU mesh |
+| `CONTENT_PROVENANCE`   | `content.>`     | limits    | 90d     | 2 GB     | SPARK shaped packets / provenance |
+| `COMFY_COLLAB`         | `comfy.collab.>`| limits    | 7d      | 1 GB     | **Lane 5 added** — Creator Collab slice 3 (`comfy.collab.{prompt,progress,artifact}.v1`); without this, comfy-watcher publishes vanished |
+| `ROOMS`                | `room.>`        | limits    | 7d      | 500 MB   | **Lane 5 added** — P7 room presence/directory/manifest; `p7.room.*` is intentionally separate (see init script) |
+| `HELPDESK`             | `helpdesk.>`    | limits    | 30d     | 1 GB     | **Lane 5 added** — PMOVES-helpdesk intake/routed/room-suggested audit ledger |
 
 ## Debugging
 

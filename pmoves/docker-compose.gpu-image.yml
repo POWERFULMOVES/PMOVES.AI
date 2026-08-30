@@ -3,10 +3,17 @@ services:
     image: ${HIRAG_V2_GPU_IMAGE:-ghcr.io/powerfulmoves/hi-rag-gateway-v2-gpu:cu128-py310-stable}
     runtime: nvidia
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    env_file:
+      - env.shared.generated
+      - env.shared
+      - .env.generated
+      # .env.local is a per-node opt-in; short-form listing made it REQUIRED
+      # and hard-failed bring-up on nodes without it.
+      - path: .env.local
+        required: false
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - RERANK_ENABLE=${RERANK_ENABLE:-true}
@@ -29,7 +36,7 @@ services:
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
-      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
     gpus: all
     ports: ["${HIRAG_V2_GPU_HOST_PORT:-8087}:8086"]

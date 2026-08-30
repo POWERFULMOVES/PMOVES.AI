@@ -1,8 +1,8 @@
 # ToKenism Economic Model
 
 **Layer:** L2 Conceptual / L4 Vision
-**Status:** Current
-**Last Updated:** 2026-03-11
+**Status:** Current with implementation caveats
+**Last Updated:** 2026-05-22
 
 > How CGP shape attribution maps to economic tokens in the PMOVES.AI cooperative economy. Covers the token lifecycle, simulation mechanics, fairness metrics, and the bridge between CHIT geometry and real-world economic impact.
 
@@ -38,11 +38,27 @@ Content/Action → Embedding → Constellation → CGP Packet → Attribution �
    $50 spend     normalized   cluster      energy dist.     weight=0.32   award
 ```
 
+### Implementation Reality Check (2026-05-22)
+
+Working now:
+- Dirichlet attribution, temporal decay, deterministic CGP generation, and Merkle proof-path generation/verification in `PMOVES-ToKenism-Multi` (order-preserving proof paths work).
+- CGP schema compatibility for `chit.cgp.v0.2` and `chit.cgp.v1.0`.
+- Validated NATS publisher payloads for `tokenism.attribution.recorded.v1`, `tokenism.cgp.weekly.v1`, `tokenism.cgp.ready.v1`, and `tokenism.swarm.population.v1`.
+- Firefly integration modules for calibration and export.
+- Settlement planning contracts for `tokenism.settlement.requested.v1`, `tokenism.settlement.recorded.v1`, and `tokenism.settlement.failed.v1`, with deterministic idempotency keys.
+
+Bounded or planned:
+- Hyperbolic geometry is an embedding/encoding support layer, not a completed proof of economic fairness by itself.
+- Zeta behavior is heuristic and must stay labeled that way until a method design is reviewed.
+- ToKenism swarm records fitness and population metadata. Real PSO/evolutionary operators are handled by the PMOVES model-fitness/EvoSwarm workstream, not hidden in ToKenism.
+- Live production settlement still needs Firefly executor dry-runs, chain transaction execution, and deployment validation.
+- **Merkle hashing is not yet cryptographic.** The production `shape-attribution.ts` `hash()` uses a fast non-cryptographic 32-bit integer hash (self-labeled "simulation"), so proofs are structurally valid but not cryptographically tamper-evident. A real `crypto.createHash('sha256')` implementation exists in `PMOVES-ToKenism-Multi/.claude/skills/chit-geometry/tools/merkle-verify.ts` (the ToKenism submodule) but is not wired into the production path; `keccak256` is not implemented. Wiring real SHA-256 is a tracked follow-up (note: `crypto.createHash` is Node-only — the current hash was chosen for browser/Node parity, so the swap must preserve browser support).
+
 ### Key Principles
 
-1. **Geometric fairness**: Dirichlet distributions guarantee non-zero attribution for all participants
-2. **Cryptographic accountability**: Merkle proofs make every attribution tamper-evident
-3. **Evolutionary optimization**: EvoSwarm continuously improves attribution parameters
+1. **Geometric fairness**: Dirichlet smoothing preserves non-zero modeled attribution for participants represented in the attribution set
+2. **Attribution accountability**: Merkle proofs give every attribution an auditable proof structure (full cryptographic tamper-evidence lands once the real SHA-256 hash is wired in — see Reality Check above)
+3. **Fitness tracking first**: ToKenism records bounded fitness and population metadata; validated PSO/evolution happens in the PMOVES optimizer layer
 4. **Holographic transparency**: CGP spectra are publicly auditable without revealing raw data
 
 ---
@@ -82,13 +98,13 @@ Member Contribution → GroToken Award → Economic Activity → Attribution
 When a member performs an economic action:
 
 ```typescript
-const chitId = chit.attribution.recordAction({
-  address: '0xMEMBER0...',
-  action: 'spending',
-  amount: 50.0,
-  week: 12,
-  category: 'groceries'
-});
+const chitId = chit.attribution.recordAction(
+  '0xMEMBER0...',
+  'spending',
+  50.0,
+  12,
+  'groceries'
+);
 // Returns: chit-1a2b3c-0001
 ```
 
@@ -106,7 +122,7 @@ weight_i = alpha_i / sum(all_alpha)
 With smoothingAlpha = 0.1 and concentrationK = 1.0:
 - $50 spending → alpha = 50.1 → proportional weight
 - $5 spending → alpha = 5.1 → smaller but non-zero weight
-- No activity → alpha = 0.1 → minimal but non-zero weight (fairness guarantee)
+- Represented zero-amount activity → alpha = 0.1 → minimal but non-zero modeled weight
 
 ### Phase 3: Temporal Decay
 
@@ -158,7 +174,7 @@ Weekly CGPs capture the economic state as geometry:
 
 ### Phase 5: Token Distribution
 
-Based on CGP attribution weights, tokens are distributed:
+Based on CGP attribution weights, token awards are modeled:
 
 ```
 token_award_i = total_pool * weight_i
@@ -170,12 +186,16 @@ If the weekly pool is 1000 GRO:
 - Member C (weight 0.15): receives 150 GRO
 - ... etc.
 
+This is the model and contract-facing calculation. Production distribution is a separate settlement workflow through signed `tokenism.settlement.*.v1` events, not an implicit side effect of CHIT generation.
+
 ### Phase 6: Verification
 
 Any participant can verify their attribution:
 
 ```typescript
-const proof = chit.attribution.getProof(chitId);
+const record = chit.attribution.getRecord(chitId);
+if (!record) throw new Error(`Missing attribution record: ${chitId}`);
+const proof = record.proof;
 const valid = chit.attribution.verifyProof(proof.leafHash, proof);
 // Returns: true
 ```
@@ -497,9 +517,9 @@ Cooperative:
 1. **Group buying power**: 50 members buying together vs individually
 2. **Community currency**: GroTokens create local liquidity
 3. **Local production**: Reduced costs through cooperative production
-4. **Geometric fairness**: Dirichlet guarantees prevent wealth concentration
+4. **Geometric fairness**: Dirichlet smoothing reduces winner-take-all attribution in the modeled contribution set
 5. **Transparent accounting**: CGP-encoded attribution is publicly verifiable
-6. **Evolutionary optimization**: EvoSwarm continuously improves fairness parameters
+6. **Optimizer handoff**: PMOVES EvoSwarm can propose parameter changes when backed by signed fitness records and validated operators
 
 ---
 

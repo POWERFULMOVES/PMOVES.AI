@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:42 UTC",
+  "generated_at": "2026-04-05 15:07 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-BoTZ",
       "url": "https://github.com/POWERFULMOVES/PMOVES-BoTZ.git",
       "status_prefix": " ",
-      "commit": "ce87a8242f514fd1b973bb64a803fb6529de8b95",
+      "commit": "9970ab75a5edb5c50b2cd5e9d6805a652d1b3d5d",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

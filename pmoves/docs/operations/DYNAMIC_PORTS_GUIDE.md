@@ -109,6 +109,7 @@ Default ranges used by port allocator:
 | Agent Zero UI | 8081 | Orchestration |
 | Archon | 8091 | Agent Service |
 | Archon UI | 3737 | Agent UI |
+| P7 Room Orchestrator | 8122 | Room orchestration |
 | Mesh Agent | 0 | No HTTP |
 | Service Registry | 8100 | Discovery |
 | **Retrieval & Knowledge** |
@@ -117,8 +118,8 @@ Default ranges used by port allocator:
 | DeepResearch | 8098 | Research |
 | SupaSerch | 8099 | Search |
 | **Voice & Speech** |
-| Flute Gateway | 8055 | TTS HTTP |
-| Flute Gateway WS | 8056 | TTS WebSocket |
+| Flute Gateway | 8055 | TTS HTTP + WebSocket |
+| Flute Gateway WS | 8056 | Reserved — published, not bound (see PORT_REGISTRY.md) |
 | Ultimate TTS Studio | 7861 | TTS UI |
 | **Media Ingestion** |
 | PMOVES.YT | 8077 | YouTube |

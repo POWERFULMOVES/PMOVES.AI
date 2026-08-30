@@ -10,10 +10,9 @@ Following PMOVES.AI patterns:
 - LLM-powered analysis via TensorZero
 """
 
-import asyncio
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 import numpy as np
@@ -132,9 +131,10 @@ class SimulationEngine:
         if self.nats:
             await self.nats.publish_simulation_result(result.model_dump(mode='json'))
 
-            # Publish CGP packet to geometry bus
+            # Publish CGP packet to geometry bus (signed with canonical CHIT)
             if self.chit:
                 cgp = self.chit.encode_simulation_result(result)
+                cgp = self.chit.sign_cgp_packet(cgp)
                 await self.nats.publish_cgp_packet(cgp.model_dump(mode='json'))
 
         logger.info(f"Simulation {simulation_id} completed")

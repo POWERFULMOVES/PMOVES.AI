@@ -1,0 +1,89 @@
+name: Unreviewed Push Audit
+
+# Reports commits that reached `main` with no pull request AND changed files
+# outside the coordination ledger (pmoves/docs/AGENTS/).
+#
+# `main` requires 1 approval and up-to-date branches, but enforce_admins is
+# false and the `[ main ]` ruleset grants RepositoryRole a bypass of mode
+# `always`. Ledger pushes rely on that bypass deliberately -- a claim register
+# that needs PR latency to record a claim defeats the Village Rule. This audit
+# leaves those alone and reports everything else.
+#
+# DETECTIVE, NOT PREVENTIVE, and deliberately NOT a required check: a ruleset
+# cannot scope a bypass by path, so a required check here could not block the
+# push it is reporting (the push has already landed) and would only wedge
+# unrelated PRs. It fails the run so the failure is visible in the Actions
+# list, and writes the finding to the step summary.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      range:
+        description: 'git rev-list range to audit'
+        required: false
+        type: string
+        default: 'HEAD~50..HEAD'
+
+permissions:
+  contents: read
+  # Required by /repos/{o}/{r}/commits/{sha}/pulls. Without it every lookup
+  # returns "Resource not accessible by integration", the tool exits 2, and
+  # every run is an incomplete audit rather than a detection.
+  pull-requests: read
+
+jobs:
+  audit:
+    name: unreviewed-push-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Needs history to inspect parents and changed paths. 200 covers the
+          # default 50-commit range with room for a burst of merges.
+          fetch-depth: 200
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Audit
+        id: audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python pmoves/tools/unreviewed_push_audit.py \
+            --repo "${{ github.repository }}" \
+            --range "${{ inputs.range || 'HEAD~50..HEAD' }}" \
+            --json-out unreviewed-push-audit.json | tee audit.txt
+          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Unreviewed push audit"
+            echo
+            echo '```'
+            cat audit.txt 2>/dev/null || echo "(no output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: unreviewed-push-audit
+          path: unreviewed-push-audit.json
+          if-no-files-found: ignore
+
+      - name: Fail on findings
+        # Exit 2 is an API fault -- surfaced separately so "could not check"
+        # never reads as "nothing to report".
+        run: |
+          case "${{ steps.audit.outputs.code }}" in
+            0) echo "clean" ;;
+            1) echo "::error::Commits reached main without review outside the ledger. See the step summary."; exit 1 ;;
+            *) echo "::error::Audit could not complete (exit ${{ steps.audit.outputs.code }}) — this is NOT a clean result."; exit 1 ;;
+          esac

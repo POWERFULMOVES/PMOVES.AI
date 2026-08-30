@@ -1,0 +1,63 @@
+# NemoClaw — NVIDIA Jetson Edge GPU Agent
+# Hybrid: Kilo Code CLI + Agent Zero Subordinate
+#
+# Runs on Jetson Orin Nano devices for local inference and GPU lifecycle.
+# Routes to Nemotron model via local Ollama (no remote API calls).
+# Communicates with fleet via NATS mesh.gpu.* subjects.
+
+name: nemoclaw
+role: edge-gpu-agent
+description: "NVIDIA-themed edge GPU agent for local inference and model lifecycle management"
+
+node_affinity: jetson
+hostname_pattern: "nemoclaw-*"
+
+model:
+  provider: ollama
+  model: nemotron
+  endpoint: http://localhost:11434
+  fallback: null  # No fallback — local inference only
+
+multimodal_alternate:
+  provider: ollama
+  model: gemma3n:e2b
+  endpoint: http://localhost:11434
+  purpose: "Edge image/video/audio processing via Gemma 3n E2B multimodal"
+
+capabilities:
+  - local_inference
+  - gpu_monitoring
+  - tensorrt_optimization
+  - model_load_unload
+  - jetpack_management
+
+nats:
+  url: nats://nats:pmoves@nats:4222
+  subscribe:
+    - mesh.gpu.command.v1        # Receive model load/unload/optimize commands
+  publish:
+    - mesh.gpu.status.v1         # Periodic GPU status (every 5s)
+    - mesh.gpu.model.loaded.v1   # Model loaded event
+    - mesh.gpu.model.unloaded.v1 # Model unloaded event
+    - mesh.gpu.command.result.v1 # Command execution result
+
+exec_permissions:
+  - nvidia-smi       # GPU status and monitoring
+  - tegrastats       # Jetson system telemetry
+  - jetson_clocks    # Jetson clock management
+  - python3          # Python runtime for model ops
+  - trtexec          # TensorRT engine builder
+  - ollama           # Local model server
+  - curl             # Health checks
+  - git              # Model repo operations
+
+health:
+  endpoint: null  # No HTTP endpoint — health via NATS heartbeat
+  heartbeat_subject: mesh.gpu.status.v1
+  heartbeat_interval_seconds: 5
+
+agent_zero:
+  subordinate: true
+  profile: nemoclaw
+  inherit_context: false  # NemoClaw operates independently
+  report_to: agent_zero   # Reports results to orchestrator

@@ -4,7 +4,7 @@
 >
 > **See also:** [CHIT Documentation Suite](../PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for all Python tools.
 
-**Last Updated:** March 7, 2026
+**Last Updated:** March 24, 2026
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (stable), v1.0 (current)
 **Geometry Bus:** NATS-based event bus for geometric intelligence
 
@@ -12,15 +12,19 @@
 
 ## Overview
 
-> **Mar 1 review wave completed.** Mar 4 promotion sync merged fix PRs across 5 submodules.
+> **Mar 24 CHIT integration wave 1 + context_id correlation.**
+> Extract Worker + FFmpeg-Whisper publish CGP v1.0 packets with optional `context_id`
+> correlation (body field or `X-Context-ID` header). Enables P7/upstream session tracing.
 > Key status changes:
-> - **Agent Zero**: Phase C P1s fixed (non-root USER, NATS auth hardened)
-> - **BoTZ**: JWT `HAS_JOSE` fail-open (fixed in PR #70, merged via #75 on Mar 4)
-> - **DoX**: NATS auth fixed in `nats.conf`
+> - **Extract Worker**: None → Partial (CGP v1.0 producer, fire-and-forget NATS, context_id correlation)
+> - **FFmpeg-Whisper**: None → Partial (CGP v1.0 producer, persistent NATS client, context_id correlation)
+> - **DeepResearch**: Audit doc corrected to reflect v1.0 CGP + dual NATS publishing
+>
+> Previous: Mar 1 review wave, Mar 4 promotion sync (Agent Zero, BoTZ, DoX fixes)
 
 ### What is CHIT?
 
-**CHIT (Context-Hybrid Information Token)** is PMOVES.AI's protocol for encoding, transmitting, and decoding geometric intelligence across services. It combines:
+**CHIT (Compressed Hierarchical Information Transfer)** is PMOVES.AI's protocol for encoding, transmitting, and decoding geometric intelligence across services. It combines:
 
 - **Hyperbolic Geometry** (Poincaré disk model) for hierarchical data encoding
 - **Riemann Zeta Filtering** for spectral similarity analysis
@@ -154,7 +158,14 @@
 **NATS Subjects:**
 - `geometry.>` (subscribe - wildcard)
 
-**Gap:** Consumer-only, no CGP production
+**CHIT (2026-07 P0 completion):** consumer-edge signature gate in
+`geometry_handler` via `cgp_passes_signature_gate()` (canonical
+`services.common.geometry_decoder.verify_cgp`): tampered packets always
+dropped when a key is set; unsigned dropped under `CHIT_REQUIRE_SIGNATURE`;
+rejections counted in `a2ui_geometry_events_rejected_total`. Tests:
+`tests/test_signature_gate.py`.
+
+**Gap:** Consumer-only, no CGP production (by design — UI edge)
 
 ---
 
@@ -174,11 +185,13 @@
 **Port:** 8098
 **Role:** LLM-based research planning
 **Key Files:** `pmoves/services/deepresearch/worker.py`
+**CGP Version:** v1.0
 
 **NATS Subjects:**
 - `tokenism.cgp.ready.v1` (publish)
+- `research.deepresearch.result.v1` (publish)
 
-**Gap:** v0.1 packets only, no geometry consumption
+**Gap:** Producer only, no geometry consumption
 
 ---
 
@@ -195,19 +208,32 @@
 ---
 
 ### 10. Consciousness Service
-**Port:** 8096
-**Role:** Persona theory-to-geometry mapping
+**Port:** 8106
+**Role:** CHR clustering + persona theory-to-geometry mapping
 **Key Files:**
+- `pmoves/services/consciousness-service/main.py` (CHR pipeline + NATS publisher)
+- `pmoves/services/consciousness-service/chr_algorithm.py` (canonical CHIT signing)
 - `pmoves/services/consciousness-service/cgp_mapper.py`
 - `pmoves/services/consciousness-service/persona_gate.py`
 
 **NATS Subjects:**
+- `geometry.cgp.v1` (publish — signed CHR CGP)
+- `tokenism.cgp.ready.v1` (publish)
 - `persona.publish.result.v1` (publish)
 
+**CHIT (2026-07 P0 completion):** signs via the canonical
+`pmoves.tools.chit_security.sign_cgp` (aligned standalone fallback kept for
+images without `pmoves.tools`); key chain `CHIT_SIGNING_KEY` >
+`CHIT_PASSPHRASE` (legacy `CHIT_PROD_PASSPHRASE` still honored);
+`CHIT_REQUIRE_SIGNATURE` fail-closed; `cgp_mapper.publish_to_hirag` signs at
+the publish boundary. Tests: `tests/test_chit_signing.py` (incl.
+fallback-parity against the canonical signer).
+
 **Gap:**
-- CGP mapper exists but CHR pipeline not connected
 - No theory proponent database integration
 - No consciousness landscape visualization
+- Neo4j signature persistence (CLAUDE.md step 3) deferred — service holds no
+  Neo4j client; graph persistence happens downstream via Hi-RAG
 
 ---
 
@@ -218,6 +244,14 @@
 
 **NATS Subjects:**
 - `geometry.swarm.meta.v1` (publish, subscribe)
+
+**CHIT (2026-07 P0 completion):** signs the `geometry.swarm.meta.v1` payload
+before publish (via Agent Zero events API) and verifies inbound CGP
+signatures in `_filter_verified_cgps` (tampered always dropped; unsigned
+dropped under `CHIT_REQUIRE_SIGNATURE`); uses the canonical
+`services.common.geometry_decoder` wrappers; `/config` exposes
+`chit_signing_enabled`/`chit_signature_required`. Tests:
+`tests/test_chit_signing.py`.
 
 **Gap:** Fitness landscape geometry incomplete
 
@@ -233,7 +267,7 @@
 ---
 
 ### 13. Flute Gateway
-**Port:** 8055 (HTTP), 8056 (WebSocket)
+**Port:** 8055 (HTTP + WebSocket — a single uvicorn bind; 8056 is published by compose but nothing listens on it)
 **Role:** Voice prosodic synthesis
 **Key Files:** `pmoves/services/flute-gateway/main.py`
 
@@ -261,13 +295,43 @@
 
 ---
 
+### 15. Extract Worker
+**Port:** 8083
+**Role:** Text embedding & indexing to Qdrant + Meilisearch
+**Key Files:** `pmoves/services/extract-worker/worker.py`
+**CGP Version:** v1.0
+
+**NATS Subjects:**
+- `tokenism.cgp.ready.v1` (publish)
+- `skills.step.extract-worker.done.v1` (publish)
+
+**Correlation:** Accepts optional `context_id` via request body or `X-Context-ID` header. Propagated to CGP `meta.context_id` and NATS hook payload.
+
+**Gap:** Producer only, no geometry consumption
+
+---
+
+### 16. FFmpeg-Whisper
+**Port:** 8078
+**Role:** Media transcription (Whisper, Qwen2-Audio)
+**Key Files:** `pmoves/services/ffmpeg-whisper/server.py`
+**CGP Version:** v1.0
+
+**NATS Subjects:**
+- `tokenism.cgp.ready.v1` (publish)
+- `ingest.transcript.ready.v1` (publish)
+
+**Correlation:** Accepts optional `context_id` via request body or `X-Context-ID` header (both `/transcribe` and `/transcribe_file`). Propagated to CGP `meta.context_id` and NATS hook payload.
+
+**Gap:** Producer only, no geometry consumption
+
+---
+
 ## No CHIT Integration Services
 
 | Service | Port | Purpose | Priority |
 |---------|------|---------|----------|
-| **Extract Worker** | 8083 | Text embedding & indexing | MEDIUM |
 | **PDF Ingest** | 8092 | Document processing | LOW |
-| **FFmpeg Whisper** | 8078 | Media transcription | MEDIUM |
 | **Media Video Analyzer** | 8079 | YOLO object detection | MEDIUM |
 | **Media Audio Analyzer** | 8082 | Emotion detection | MEDIUM |
 | **Channel Monitor** | 8097 | Content watching | LOW |
@@ -442,4 +506,4 @@ Three naming schemes exist across the codebase:
 ---
 
 **Document Owner:** PMOVES.AI Infrastructure Team
-**Last Updated:** 2026-03-07
+**Last Updated:** 2026-03-24

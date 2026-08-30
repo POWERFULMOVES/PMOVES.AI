@@ -1,0 +1,46 @@
+# kokoro.compose.yml — CPU-only Kokoro TTS deploy unit (Apache-2.0 Kokoro-82M).
+# Named *.compose.yml (NOT docker-compose*.yml) so it lives outside the
+# damage-control compose-Known-Road glob and can be a real committed file.
+# CPU-only BY DESIGN — no GPU reservation: this is the unit that lets a GPU-less
+# node (a KVM VPS, role=announcer) serve voice. Model is baked into the image.
+# Opt-in via the `voice` (or `creator`) profile:
+#   docker compose -f services/kokoro-tts/kokoro.compose.yml --profile voice up -d kokoro-tts
+services:
+  kokoro-tts:
+    build:
+      context: .
+      dockerfile: Dockerfile.kokoro
+      args:
+        # REQUIRED — pin the model asset digests (fail-closed integrity check).
+        # Compute once from the release assets (sha256sum) and set in env/CI.
+        KOKORO_MODEL_SHA256: ${KOKORO_MODEL_SHA256:-}
+        KOKORO_VOICES_SHA256: ${KOKORO_VOICES_SHA256:-}
+    image: ${KOKORO_IMAGE:-pmoves-kokoro-tts:latest}
+    restart: unless-stopped
+    ports:
+      # Safe by default: publish only to loopback. In-stack consumers (flute-gateway)
+      # reach this over the compose network by service name and never need this host
+      # publish. For cross-node exposure, explicitly opt in: KOKORO_BIND=0.0.0.0 AND set
+      # KOKORO_TOKEN (the service serves /synthesize unauthenticated when the token is empty).
+      - "${KOKORO_BIND:-127.0.0.1}:${KOKORO_HOST_PORT:-8004}:8004"
+    environment:
+      - KOKORO_TOKEN=${KOKORO_TOKEN:-}
+      - KOKORO_DEFAULT_VOICE=${KOKORO_DEFAULT_VOICE:-af_heart}
+      - KOKORO_DEFAULT_LANG=${KOKORO_DEFAULT_LANG:-en-us}
+      # Cap CPU threads so a 4vCPU KVM stays responsive under other load.
+      - OMP_NUM_THREADS=${KOKORO_THREADS:-2}
+    # Hard ceiling alongside the thread cap: co-located on kvm4 with
+    # voice-relay + cast-tts-gateway, so a synth storm or onnxruntime leak
+    # must not starve the siblings.
+    deploy:
+      resources:
+        limits:
+          cpus: ${KOKORO_CPUS:-2.0}
+          memory: ${KOKORO_MEM_LIMIT:-2G}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8004/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 5
+    profiles: ["voice", "creator"]

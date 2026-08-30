@@ -1,0 +1,64 @@
+# Spark Claw — DGX Spark Heavyweight NVIDIA GPU Claw
+# Hybrid: OpenClaw + TensorZero/Ollama CUDA + NATS mesh participation
+#
+# Runs on the NVIDIA DGX Spark (GB10 Grace-Blackwell, 128GB unified LPDDR5X)
+# for 200B-param-class multimodal inference. Unified memory architecture
+# eliminates CPU↔VRAM copies, so models up to ~200B params can run without
+# traditional VRAM constraints.
+
+name: spark_claw
+role: dgx-spark-heavyweight-claw
+description: "NVIDIA DGX Spark heavyweight claw for 200B-class multimodal inference (Gemma 4 31B, Nemotron Super 49B, Qwen3-Coder 480B)"
+
+node_affinity:
+  - dgx-spark
+hostname_pattern: "pmoves-dgx-spark"
+
+model:
+  provider: ollama_spark
+  model: gemma4:31b
+  endpoint: http://pmoves-dgx-spark:11434/v1
+  fallback: tensorzero
+
+capabilities:
+  - heavyweight_llm_inference
+  - unified_memory_200b
+  - multimodal_any_to_any
+  - gemma4_support
+  - nemotron_support
+  - qwen3_coder_large_support
+  - agentic_reasoning
+  - gpu_monitoring
+
+nats:
+  url: nats://nats:pmoves@nats:4222
+  subscribe:
+    - mesh.gpu.command.v1
+    - pinokio.agent.session.v1
+  publish:
+    - mesh.gpu.status.v1
+    - mesh.gpu.model.loaded.v1
+    - mesh.gpu.model.unloaded.v1
+    - mesh.gpu.command.result.v1
+    - pinokio.telemetry.v1
+
+exec_permissions:
+  - nvidia-smi
+  - ollama
+  - docker
+  - python3
+  - curl
+  - git
+  - make
+  - nats
+
+health:
+  endpoint: http://pmoves-dgx-spark:11434/api/tags
+  heartbeat_subject: mesh.gpu.status.v1
+  heartbeat_interval_seconds: 10
+
+agent_zero:
+  subordinate: true
+  profile: spark_claw
+  inherit_context: true
+  report_to: agent_zero

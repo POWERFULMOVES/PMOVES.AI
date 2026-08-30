@@ -1,4 +1,10 @@
 version: 2
+# Grouping + auto-merge rationale (root-cause fix for stale-PR conflicts):
+#   - Each ecosystem groups minor+patch updates into ONE PR per run, so a week's
+#     bumps land as a single reviewable/mergeable unit instead of N PRs that go
+#     stale against each other and against main (the #1764 17-file conflict).
+#   - MAJOR updates are intentionally NOT grouped — they get individual PRs for
+#     human review (and are excluded from auto-merge in dependabot-auto-merge.yml).
 updates:
   # Docker base images in service Dockerfiles
   - package-ecosystem: "docker"
@@ -7,6 +13,11 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      docker-services-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "docker"
@@ -21,6 +32,11 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      docker-shared-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "docker"
@@ -35,6 +51,11 @@ updates:
       interval: "weekly"
       day: "wednesday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      github-actions-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "ci"
@@ -49,6 +70,59 @@ updates:
       interval: "weekly"
       day: "friday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      agent-zero-pip-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+    ignore:
+      # Runtime compatibility pin. See services/agent-zero/requirements.txt
+      # (the comment block above `scipy<1.15`), and keep the two in sync — a
+      # future editor who relaxes one should find the other.
+      #
+      # The base image (agent0ai/agent-zero-base) ships numpy 1.26.x. scipy
+      # >=1.15 registers ufuncs (sph_legendre_p) that only exist under numpy
+      # 2.x, and run_ui.py dies at import with "All ufuncs must have type
+      # numpy.ufunc".
+      #
+      # Crucially, package METADATA does not express this: scipy 1.15 declares
+      # numpy>=1.23.5,<2.5, so pip resolves it cleanly against numpy 1.26 and
+      # the container breaks at runtime instead of at resolve time. That is
+      # why a manual pin exists and why dependabot cannot be trusted to
+      # respect it — #2804 proposed scipy<1.19, which admits both that silent
+      # break (1.15-1.17) and a hard conflict (1.18 requires numpy>=2.0.0).
+      #
+      # MEASURED 2026-08-29, against the built image rather than inferred.
+      # The premise above -- "the base image ships numpy 1.26" -- does not hold
+      # for what actually runs:
+      #
+      #     pmoves-agent-zero:latest   /opt/venv-a0/bin/python
+      #       numpy 2.3.5
+      #       scipy 1.16.3
+      #       import scipy.special      -> OK
+      #       sph_legendre_p present    -> True
+      #       scipy.stats, scipy.linalg -> OK
+      #
+      # That is scipy >=1.15 on numpy 2.x, running, with the exact ufunc the
+      # rationale names present and importable. The incompatibility is real but
+      # CONDITIONAL on numpy 1.26, and nothing in this build path produces it:
+      # requirements.lock pins numpy==2.2.6, and the image measured above
+      # carries 2.3.5.
+      #
+      # Stated honestly: that image was built 2026-08-23, two days BEFORE the
+      # scipy pin landed (59cc5e826, 08-25), so it does not test the pin itself.
+      # What it does test is the COMPATIBILITY CLAIM, which is what the ignore
+      # rests on.
+      #
+      # So the bound moves to where the real constraint is. scipy 1.19 requires
+      # numpy>=2.5, which neither 2.2.6 nor 2.3.5 satisfies; 1.15 through 1.18
+      # are fine on numpy 2.x. Ignoring >=1.15 blocked four minor lines for a
+      # break that only occurs on a numpy this image does not have.
+      #
+      # Re-measure before widening again -- run the venv python in the built
+      # image and print numpy.__version__ and scipy.__version__.
+      - dependency-name: "scipy"
+        versions: [">=1.19"]
     labels:
       - "dependencies"
       - "python"
@@ -63,6 +137,11 @@ updates:
       interval: "weekly"
       day: "friday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      archon-pip-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "python"
@@ -77,6 +156,11 @@ updates:
       interval: "weekly"
       day: "friday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      deepresearch-pip-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "python"

@@ -59,8 +59,8 @@ This automatically configures GitHub App credentials for token minting and API a
 ### Model selection (Ollama / TensorZero / OpenAI-compatible)
 
 - List profiles: `make -C pmoves model-profiles`
-- Apply defaults for Hi‑RAG/Archon: `make -C pmoves model-apply PROFILE=archon HOST=workstation_5090`
-- Apply defaults for Agent Zero: `make -C pmoves model-apply PROFILE=agent-zero HOST=workstation_5090`
+- Apply defaults for Hi‑RAG/Archon: `make -C pmoves model-apply PROFILE=archon HOST=desktop-9950xd`
+- Apply defaults for Agent Zero: `make -C pmoves model-apply PROFILE=agent-zero HOST=desktop-9950xd`
 - Pre‑pull local models: `make -C pmoves models-seed-ollama`
 - Restart gateways after changes: `make -C pmoves recreate-v2` (and `recreate-v2-gpu` if using GPU)
 

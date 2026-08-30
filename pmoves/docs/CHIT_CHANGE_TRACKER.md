@@ -1,6 +1,6 @@
 # CHIT Change Tracker
 
-**Living Document** | **Last Updated:** 2026-02-19
+**Living Document** | **Last Updated:** 2026-04-25
 
 > Tracks documentation changes via CHIT metadata. Each entry follows a CGP-style format: timestamp, author, layer, affected docs, and PR/commit reference. This enables an auditable trail of documentation evolution.
 
@@ -21,6 +21,16 @@ Each entry uses the following structure:
 ---
 
 ## Changelog
+
+### 2026-04-25 | L3 | Codex CLI | working tree
+
+- **Action:** Created / Updated
+- **Files:**
+  - `pmoves/docs/architecture/PMOVES_SPARK_PROVENANCE_PARITY.md` (NEW)
+  - `pmoves/docs/AGENTS/AGNOTE-dgx-spark.md` (UPDATED - expanded from node stub to working lane note)
+  - `pmoves/docs/DOCUMENTATION_MAP.md` (UPDATED - added parity/control-plane entries)
+- **Summary:** Added a provenance-first working contract for the SPARK lane so raw content is shaped, scored, attested, and only then allowed into HiRAG. Cross-linked the new contract into the SPARK AGNOTE and the documentation map to reduce canon drift and make the Hyperdimensions + provenance lane discoverable.
+- **Cross-links:** `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`, `pmoves/docs/GRAPHITI_PROTOCOL_REFERENCE.md`, `pmoves/docs/CONCH_INTEGRATION_MAP.md`, `pmoves/docs/TOKENISM_DEVELOPER_GUIDE.md`
 
 ### 2026-02-19 | L5 | Claude Code CLI | docs/chit-living-docs branch
 
@@ -80,14 +90,14 @@ Each entry uses the following structure:
 
 | Metric | Value |
 |--------|-------|
-| Total entries | 5 |
+| Total entries | 6 |
 | L1 Protocol changes | 1 |
 | L2 Conceptual changes | 0 |
-| L3 Applied changes | 0 |
+| L3 Applied changes | 1 |
 | L4 Vision changes | 0 |
 | L5 Operations changes | 4 |
-| Documents created | 17+ |
-| Documents updated | 6 |
+| Documents created | 18+ |
+| Documents updated | 8 |
 | Documents deprecated | 0 |
 
 ---

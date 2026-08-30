@@ -1,0 +1,70 @@
+Claude as we normally would.
+And so it can use Archon as a tool just
+like it would use sub agents or just
+like it would use skills.
+It says it exited again.
+The error is actually from the Claude
+code off. The not logged in is coming
+from the Claude code agent that Archon
+spawns.
+Um
+Check Claude.
+Oh, I think I know what it is. I think
+it's because of the
+Uh it's because of this specific repo. I
+have the dot Claude folder with the
+settings.json.
+If I just remove this
+I might just do the demo on my computer
+instead of this VPS cuz I I think it's
+just this specific code base that I have
+some of my Claude code hooks that are
+running. It's a
+whole thing.
+Oh, wait. Oh, wait. I know what's wrong.
+It's because I have this already set up
+to use MiniMax M2.7 for the dark factory
+stuff I was going to show you guys.
+That's my bad.
+Uh okay, I have to I have to demo this
+on another machine here. And by the way,
+we were using MiniMax 2.7 for
+everything.
+&gt;&gt; [laughter]
+&gt;&gt; Um cuz I was getting some stuff set up
+ahead of time for the live stream here.
+Sorry guys, I'm complicating things more
+than I
+um
+I then I need to because I I'm I have
+some other things prepared for you guys
+here. So okay, here's what I'm going to
+do. I'm going to show you a
+demonstration by doing it right from
+Arkon. So um this will be better anyway
+cuz then I can show you guys the web UI.
+Uh which by the way, if you want to
+start the Arkon web UI, all you have to
+do is go into the Arkon code base and
+say start the back end and front end of
+Arkon. That's it.
+Um start the back end and front end of
+Arkon. I guess my speech text got cut
+off, but that's all you have to do. So I
+hope that like the pattern is clear here
+for your setup, for getting things up
+and running, for running Arkon. It just
+comes down to like the Arkon skill
+guides it through everything. All
+workflow execution managing the
+application, super super easy.
+So within my Arkon here let's go ahead
+and uh zoom in a bit. Let's say I just
+wanted to handle an issue. So this is
+going to be kind of meta cuz I'm using
+Arkon to improve Arkon. Um but like I
+said, you could do this on any code base
+where we have the Arkon skill.
+Um so I'm going to find an issue.
+There's quite a few issues that have
+been created in the last couple of days

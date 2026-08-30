@@ -1,0 +1,71 @@
+# ============================================================
+# GLM-5.1 Model Suit
+# Role: Long-horizon autonomy, sustained engineering
+# Best for: Deep debugging, 8-hour sessions, complex systems
+# Provider: Zhipu AI (Z.AI)
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: glm-5.1
+  provider: zai
+  base_url: "https://api.z.ai/v1"
+  api_key_env: Z_AI_API_KEY
+  
+  architecture:
+    type: moe
+    total_params: "744B"
+    active_params: "40B"
+    attention: standard
+    
+  context:
+    max_window: 202752
+    effective_window: 128000
+    working_window: 131072
+    
+  defaults:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 131072
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    mtp_steps: shared
+    
+  harness_mappings:
+    deep_debugging:
+      temperature: 0.3
+      top_p: 0.90
+      max_tokens: 131072
+      system_prompt: directive_debugger
+      
+    system_engineering:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+      
+    long_session:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 131072
+      system_prompt: directive_architect
+      
+    refactoring:
+      temperature: 0.5
+      top_p: 0.92
+      max_tokens: 16384
+      system_prompt: directive_refactorer
+
+  cgp_state_vector:
+    delta: 0.35
+    Hz: 0.1
+    kappa: 1.6
+    A: 0.4
+    F: 0.06
+    
+  fallback_to: glm-4-plus
+  priority: 5

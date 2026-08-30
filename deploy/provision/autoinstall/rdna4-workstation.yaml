@@ -1,0 +1,148 @@
+#cloud-config
+# Ubuntu 24.04 Server autoinstall for PMOVES AMD 9850X3D + dual R9700 workstation
+#
+# Embed this file at /nocloud/user-data on an Ubuntu 24.04 Server ISO
+# (see deploy/provision/build-usb.sh which handles the xorriso injection).
+#
+# Defaults:
+#   hostname: pmoves-9850x3d-r9700
+#   admin user: pmoves (SSH key-only, sudo NOPASSWD)
+#   filesystem: ZFS on root NVMe pair (or ext4 if single disk)
+#   post-install: curls hostinger-kvm-setup.sh --node-type=rdna4-workstation
+#
+# Override the hostname by running build-usb.sh with --hostname=<name>.
+
+autoinstall:
+  version: 1
+
+  # Locale + keyboard
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # --- Identity ---
+  identity:
+    hostname: pmoves-9850x3d-r9700
+    realname: PMOVES Operator
+    username: pmoves
+    # Password hash intentionally unset — SSH key auth only.
+    # Generate a disabled hash with:  mkpasswd -m sha-512 -S $(openssl rand -hex 8) '!'
+    password: "!"
+
+  # --- SSH ---
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+      # Populated from build-usb.sh via --ssh-keys-from-github=<username>
+      # OR manually replace these placeholders before burning ISO.
+      - "ssh-ed25519 AAAA__REPLACE_WITH_OWNER_PUBKEY__ pmoves-owner"
+
+  # --- Package selection ---
+  packages:
+    - curl
+    - wget
+    - gnupg
+    - ca-certificates
+    - git
+    - jq
+    - htop
+    - tmux
+    - build-essential
+    - dkms
+    - pciutils
+    - lshw
+    - ethtool
+
+  # --- APT ---
+  apt:
+    geoip: true
+    preserve_sources_list: false
+    primary:
+      - arches: [default]
+        uri: "http://archive.ubuntu.com/ubuntu"
+
+  # --- Storage ---
+  # ZFS mirror on 2x NVMe (strongly recommended for dev workstation).
+  # If only 1 NVMe present, autoinstall will fail out. Single-disk operators
+  # must hand-edit this block before burning the USB — replace the `storage:`
+  # section with:  storage: { layout: { name: direct } }
+  # A `--storage-mode=single|redundant` flag in build-usb.sh would automate the
+  # swap — not yet implemented; track in follow-up issue.
+  storage:
+    layout:
+      name: zfs
+      mode: redundant
+      sizing-policy: scaled
+
+  # --- Network ---
+  network:
+    ethernets:
+      # Match any physical NIC (the 10 GbE or 2.5 GbE on the R9700 board)
+      alleth:
+        match:
+          name: "en*"
+        dhcp4: true
+        dhcp6: true
+    version: 2
+
+  # --- Timezone ---
+  timezone: "America/New_York"
+
+  # --- Updates + drivers ---
+  updates: security
+  drivers:
+    # Ubuntu's driver autoinstaller — we'll override with ROCm in late-commands.
+    # Leave this false so stock amdgpu doesn't fight the ROCm DKMS.
+    install: false
+
+  # --- Refresh snap installer ---
+  refresh-installer:
+    update: true
+
+  # --- Late commands (run inside the target system, curtin/finish stage) ---
+  late-commands:
+    # Make sudo NOPASSWD for the pmoves user
+    - curtin in-target --target=/target -- bash -c 'echo "pmoves ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-pmoves && chmod 0440 /etc/sudoers.d/90-pmoves'
+
+    # Install cloud-init enough to wrap the rest (Ubuntu Server autoinstall runs post-install scripts via runcmd-equivalent hooks)
+    - curtin in-target --target=/target -- systemctl enable ssh
+
+    # Clone PMOVES.AI + provision the RDNA4 stack.
+    # NOTE: runs AFTER first boot via a one-shot systemd unit, so network is live.
+    - |
+      curtin in-target --target=/target -- bash -c '
+      cat >/etc/systemd/system/pmoves-first-boot.service <<SERVICE
+      [Unit]
+      Description=PMOVES first-boot provisioner
+      After=network-online.target
+      Wants=network-online.target
+      ConditionPathExists=!/var/lib/pmoves/first-boot.done
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/pmoves-first-boot.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+      SERVICE
+
+      cat >/usr/local/sbin/pmoves-first-boot.sh <<SCRIPT
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec >>/var/log/pmoves-first-boot.log 2>&1
+      echo "[pmoves-first-boot] starting: \$(date -Iseconds)"
+      git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES.AI.git /opt/pmoves
+      bash /opt/pmoves/deploy/provision/hostinger-kvm-setup.sh rdna4-workstation
+      mkdir -p /var/lib/pmoves && touch /var/lib/pmoves/first-boot.done
+      echo "[pmoves-first-boot] complete: \$(date -Iseconds)"
+      SCRIPT
+      chmod 0755 /usr/local/sbin/pmoves-first-boot.sh
+      systemctl enable pmoves-first-boot.service
+      '
+
+  # --- Reporting ---
+  reporting:
+    builtin:
+      type: print

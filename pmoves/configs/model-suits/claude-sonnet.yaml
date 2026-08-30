@@ -1,0 +1,99 @@
+# Claude Sonnet — Cloud via OpenRouter
+# Fallback coding model. Prefers XML tag prompt format per Anthropic docs.
+# Extended thinking support. No local weights.
+#
+# Distillation: context_priming (XML prompt style + extended thinking config)
+# Source: Anthropic documentation, PMOVES agent profile conventions
+
+name: claude-sonnet
+provider: openrouter
+provider_display: "OpenRouter (Anthropic)"
+distillation_stage: context_priming
+
+model_config:
+  model_name: anthropic/claude-sonnet-4
+  endpoint: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+  context_window: 200000
+  max_output_tokens: 65536
+  temperature: 0.5
+  top_p: 0.9
+
+prompt_style:
+  format: xml
+  system_prompt_template: |
+    <role>{role}</role>
+    <context>{context}</context>
+    <instructions>{instructions}</instructions>
+  preferred_language: en
+  notes: >
+    Anthropic models strongly prefer XML tag formatting. Use <thinking> for
+    extended thinking chains. Structured prompts with clear XML boundaries
+    produce significantly better outputs than markdown. Avoid nested markdown
+    code blocks inside XML tags.
+
+agent_zero:
+  role: chat
+  a0_set_prefix: A0_SET_chat_model
+  subordinate_profile: sidecar
+  strengths:
+  - coding
+  - extended reasoning
+  - long-context analysis
+  - careful instruction following
+  limitations:
+  - cloud-only (no local Claude weights)
+  - higher cost than Z.AI free tier
+  - OpenRouter latency adds to response time
+  - extended thinking increases token usage
+
+pinokio_p7:
+  discoverable: false
+  pbnj_launch: false
+  tac_node: null
+  nats_subject: null
+  notes: "Cloud API — not discoverable by P7 Agent Interpreter"
+
+local_fallback:
+  available: false
+  reason: "No local Claude weights — use Gemma4 dense or Qwen3.6 locally"
+  fallback_model_suit: gemma4-dense
+
+fine_tuning:
+  possible: false
+  reason: "Anthropic does not publish Claude weights for self-hosting"
+
+cross_agent:
+  agent_zero: full
+  clawz: full
+  typer: untested
+  pinokio: none
+
+# Harness fit. Seeded fresh, harness-only — NOT migrated from cross_agent, which
+# answers a different question (which components can address this model) and whose
+# key space includes agents, a UI and a launcher.
+fit:
+  clawz:
+    "*":
+      - verdict: full
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+
+metadata:
+  source: anthropic_docs
+  notes: "ClaWZ uses Claude as its native model — full compatibility"
+  last_verified: 2026-04-19
+  benchmark_data:
+  - source: anthropic_official
+    notes: "200K context window, extended thinking for complex reasoning chains"
+  - source: pmoves_convention
+    notes: "Fallback coding model when Z.AI/GLM models unavailable"
+
+ecosystem_role: |
+  Fallback coding model for Agent Zero and native model for ClaWZ.
+  Activated when Z.AI MAX plan is unavailable or when Claude-specific
+  capabilities (extended thinking, XML-native parsing) are needed.
+  Higher cost makes it secondary to GLM-5-turbo for general chat, but
+  preferred for complex multi-step coding tasks. ClaWZ Discord agent
+  uses Claude as its primary brain — this suit defines the shared config.

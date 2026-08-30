@@ -9,7 +9,7 @@ NATS Subjects:
   - agent.response.v1 (fallback)
 
 Config via env:
-  - CAST_FOLLOW_NATS_URL (default: nats://127.0.0.1:4222)
+  - CAST_FOLLOW_NATS_URL (default: nats://nats:pmoves@nats:4222; prod: CHIT-managed)
   - CAST_TTS_GATEWAY_URL (default: http://localhost:8060)
   - CAST_DEFAULT_DEVICE (default: None → auto-select)
   - CAST_FOLLOW_VOICE (default: default)
@@ -60,13 +60,16 @@ def _resolve_nats_url() -> str:
     nats_url = os.getenv("NATS_URL", "").strip()
     if nats_url:
         # Translate docker-only alias to host-accessible URL
+        # Docker-internal alias / unset both mean "host-run" here: return the
+        # host-published IPv4 port. `nats:4222` only resolves inside compose;
+        # `localhost` may resolve to ::1 first while NATS binds IPv4 only.
         if nats_url.startswith("nats://nats:") or nats_url.startswith("tls://nats:"):
-            return "nats://127.0.0.1:4222"
+            return "nats://nats:pmoves@127.0.0.1:4222"
         if nats_url.startswith("nats://localhost:") or nats_url.startswith("tls://localhost:"):
             return nats_url.replace("://localhost:", "://127.0.0.1:", 1)
         return nats_url
 
-    return "nats://127.0.0.1:4222"
+    return "nats://nats:pmoves@127.0.0.1:4222"
 
 
 def _extract_text(payload: Dict[str, Any]) -> Optional[str]:
@@ -298,7 +301,7 @@ class VoiceFollowCastAgent:
         if self.default_device:
             sys.stderr.write(f"  ↳ device: {self.default_device}\n")
         if self.notebook_client:
-            sys.stderr.write(f"  ↳ notebook_logging: enabled\n")
+            sys.stderr.write("  ↳ notebook_logging: enabled\n")
 
         self.running = True
         done = asyncio.Event()

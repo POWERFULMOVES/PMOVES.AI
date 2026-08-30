@@ -150,7 +150,7 @@ PMOVES already has unique capabilities beyond the video demo that should be high
 **5. CHIT Geometry Bus Integration** (Already Built!)
 - **Status**: `geometry.cgp.v1` events already flowing; ShapeStore cache operational
 - **Enhancement**: Add geometry visualization to observability dashboard
-- **Rationale**: CHIT (Cymatic-Holographic Information Transfer) provides geometric representations of knowledge that agents can share more efficiently than raw tokens
+- **Rationale**: CHIT (Cymatic Holographic Information Theory) provides geometric representations of knowledge that agents can share more efficiently than raw tokens
 - **Implementation**: 
   - Integrate `/geometry/` UI into the observability dashboard
   - Show constellation harvest paths for agent reasoning traces
@@ -205,7 +205,7 @@ Align with `docs/ROADMAP.md` M3 retrieval quality milestone and `docs/NEXT_STEPS
 
 ## Appendix: PMOVES Unique Capabilities Reference
 
-### CHIT (Cymatic-Holographic Information Transfer)
+### CHIT (Cymatic Holographic Information Theory)
 - **Spec**: `chit.cgp.v0.1` JSON format with constellations, anchors, spectra
 - **Backend**: CHR (Constellation Harvest Regularization) pipeline in `docs/understand/Constellation-Harvest-Regularization/`
 - **Frontend**: D3 visualization with fractal drill-down and cymatic ripple patterns

@@ -1,0 +1,55 @@
+# Semantic Cache overlay (#1427)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.cache.yml up
+#
+# IMPORTANT: All environment variables below have NO insecure defaults.
+# CACHE_DATABASE_URL is REQUIRED — the container will fail to start if not set.
+# This is intentional: we never fall back to hardcoded credentials.
+
+services:
+  semantic-cache:
+    build:
+      context: ./services/semantic-cache
+      dockerfile: Dockerfile
+    container_name: pmoves-semantic-cache
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+    environment:
+      # Required — must be set in env.shared or local.env
+      CACHE_DATABASE_URL: ${CACHE_DATABASE_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+
+      # Service endpoints
+      CACHE_HIRAG_GATEWAY_URL: ${CACHE_HIRAG_GATEWAY_URL:-http://hi-rag-gateway-v2:8086}
+      CACHE_TENSORZERO_URL: ${CACHE_TENSORZERO_URL:-http://tensorzero-gateway:3000/openai/v1}
+      CACHE_CIPHER_ENABLED: ${CACHE_CIPHER_ENABLED:-true}
+      CACHE_CIPHER_MCP_URL: ${CACHE_CIPHER_MCP_URL:-http://pmoves-cipher-mcp:8105}
+
+      # NATS / CHIT Bus
+      CACHE_NATS_URL: ${CACHE_NATS_URL:-${NATS_URL}}
+      CACHE_CHIT_BUS_ENABLED: ${CACHE_CHIT_BUS_ENABLED:-true}
+      CACHE_CHIT_INVALIDATE_TOPIC: ${CACHE_CHIT_INVALIDATE_TOPIC:-cache.invalidate.*}
+
+      # Embedding model — BGE-M3 (1024d) aligned with cache_store.py
+      CACHE_EMBEDDING_MODEL: ${CACHE_EMBEDDING_MODEL:-BAAI/bge-m3}
+      CACHE_EMBEDDING_DIM: ${CACHE_EMBEDDING_DIM:-1024}
+
+      # Cache behavior
+      CACHE_SIMILARITY_THRESHOLD: ${CACHE_SIMILARITY_THRESHOLD:-0.92}
+      CACHE_TTL_CHAT_SECS: ${CACHE_TTL_CHAT_SECS:-3600}
+      CACHE_MAX_ENTRIES: ${CACHE_MAX_ENTRIES:-10000}
+      MAX_CACHEABLE_TEMPERATURE: ${MAX_CACHEABLE_TEMPERATURE:-0.5}
+
+    networks:
+      - pmoves_app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

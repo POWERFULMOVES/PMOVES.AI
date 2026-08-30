@@ -1,0 +1,8 @@
+{
+  "title": "TTS Engine Test Harness",
+  "description": "End-to-end test for all 14 TTS engines in Ultimate-TTS-Studio. gradio_client over the real Gradio MCP surface — no mocks. Refactored to pterm + gepeto.",
+  "icon": "icon.png",
+  "version": "1.0.0",
+  "platform": ["darwin", "win32", "linux"],
+  "gpu": "nvidia"
+}

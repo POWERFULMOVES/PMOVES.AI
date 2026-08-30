@@ -1,0 +1,50 @@
+# PMOVES Health (wger) Alert Rules
+# W6-P1 Lane 6 — Phase 4.5
+# Purpose: Alerting for wger fitness tracking service
+
+groups:
+  - name: wger_health
+    rules:
+      - alert: WgerServiceDown
+        expr: up{job="wger"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: life
+        annotations:
+          summary: "wger health service is down"
+          description: "wger (port 8000) has been unreachable for more than 2 minutes."
+
+      - alert: WgerHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="wger"}[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: life
+        annotations:
+          summary: "wger API latency high"
+          description: "wger p95 latency is above 2 seconds for 5 minutes."
+
+      - alert: WgerNATSPublishFailures
+        expr: rate(wger_nats_publish_errors_total[5m]) > 0
+        for: 3m
+        labels:
+          severity: warning
+          team: life
+        annotations:
+          summary: "wger NATS publish failures"
+          description: "wger is failing to publish health metrics to NATS."
+
+      - alert: WgerCHITSignatureFailures
+        expr: rate(wger_chit_signature_errors_total[5m]) > 0
+        for: 3m
+        labels:
+          severity: critical
+          team: life
+          chit: true
+        annotations:
+          summary: "wger CHIT signature failures"
+          description: "wger CHIT signing is failing — health metrics may be untrusted."

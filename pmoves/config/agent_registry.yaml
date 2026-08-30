@@ -1,5 +1,5 @@
 # PMOVES Agent Registry — Single Source of Truth
-# Last updated: 2026-03-15
+# Last updated: 2026-07-02
 #
 # This file encodes every agent's class, type(s), tier, layers,
 # NATS subjects, health endpoint, CHIT toggles, and evolution stage.
@@ -7,14 +7,18 @@
 # Query with: python -m pmoves.tools.agent_taxonomy_helper list
 # Docs: pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
 
-taxonomy_version: "1.4.0"
+taxonomy_version: "1.5.0"
 
 # External contributors — AI agents and humans who contribute via git
 # Links to visual identity in agent_signatures.yaml
 external_contributors:
+  - hermes-agent
   - claude-opus
   - kilocode
   - codex
+  - agent-zero-codex
+  - hermes
+  - coder_claw
   - gemini
   - cline
   - powerfulmoves
@@ -22,6 +26,10 @@ external_contributors:
   - z890-claude
   - 5090-claude
   - 4090-claude
+  - b850-claude
+  - botz-architect
+  - botz-builder
+  - botz-auditor
 
 # Resilience attribute definitions
 # See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md
@@ -61,6 +69,38 @@ types:
   agent:  { tier: 6, element: "Psychic",  color: "#9370DB" }
   ui:     { tier: 7, element: "Light",    color: "#F5F5F5" }
 
+# Role classes — ORCHESTRATION roles (P0 Agent Role Consolidation,
+# ARCHON_ENHANCEMENT_ROADMAP §2). Orthogonal to `types` (service tiers) and
+# `classes` (naming prefixes): role_class says what an agent does in a
+# multi-agent workflow, not where it runs or what it's named.
+#
+# NAMING COLLISION GUARD: the `worker` ROLE below is unrelated to the
+# `worker` TYPE (tier 4) above. Never conflate them; the type system is
+# untouched by this addition.
+#
+# The trio maps onto the AGNOTE4482 Three-Body enforcement surface
+# (.claude/agents/{delivery,control,memory}-agent.md disallowedTools):
+# planner and reviewer are the pre-work and post-work faces of the Control
+# Body; worker is the Delivery Body; the Memory Body is orthogonal
+# (cross-cutting CHIT/Cipher custody, not a workflow role).
+role_classes:
+  planner:
+    three_body: control
+    phase: pre-work
+    description: "Decomposes intent into scoped work: specs, plans, lane claims. Read-heavy; produces no production edits."
+  worker:
+    three_body: delivery
+    phase: execution
+    description: "Implements the plan: code, fixes, docs, deploys. The only role_class that writes production changes."
+  reviewer:
+    three_body: control
+    phase: post-work
+    description: "Verifies and gates: review, evaluation gates, merge sequencing, Village Rule signoff. Never edits what it reviews."
+
+# Optional per-agent key: `role_class: planner|worker|reviewer` on any
+# entry below or in .claude/agents/*.md frontmatter. Absence = unclassified
+# (legacy), never an error.
+
 # Agent entries
 agents:
   agent_zero:
@@ -94,6 +134,301 @@ agents:
       ci_runner: ai-lab
       compose_profile: agents
     description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
+
+  claude_4090:
+    name: "4090 Claude"
+    class: standard
+    # ui/agent mirrors `crush` -- the other terminal coding harness. The surface a
+    # human drives is a UI; what it drives is an agent.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. This is a CLI session, not a service -- same as crush.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # Points at the existing external_contributors entry, exactly as agent_zero
+    # carries `signature: claude-opus`. The contributor list is the SIGNING roster
+    # and is referenced by CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/roster/users.yaml,
+    # so the name stays there; this adds the operational half that was missing.
+    signature: 4090-claude
+    # Deliberately empty. 41 of 99 registry agents publish nothing -- including
+    # archon -- and declaring subjects this session does not actually publish would
+    # be the same defect #2734 fixed: a definition describing an architecture that
+    # does not exist. Populate when the bus wiring is real.
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories:
+        - agent_plan
+        - agent_checkpoint
+        - agent_completion
+    topology:
+      # The node this identity IS. `kilocode_glm` sets the precedent for an agent
+      # claiming laptop-4090 while its team's own node_affinity does not list it.
+      node_affinity:
+        - laptop-4090
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: null
+    description: >-
+      Claude Code CLI identity on the laptop-4090 node. Operates the PMOVES stack
+      from the terminal -- review, merge, secrets funnel, service bring-up -- and
+      drives Agent Zero and Archon rather than being driven by them. Launched via
+      `claude-pmoves`, which supplies the MCP roster (incl. Cipher) and a role
+      agent; this entry supplies the node identity that pairing was missing.
+  claude_b850:
+    name: "B850 Claude"
+    class: standard
+    # Mirrors claude_4090, which mirrors `crush`: the surface a human drives is a
+    # UI; what it drives is an agent. Same harness family, same shape.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # `b850-claude` was ALREADY in external_contributors before this change -- the
+    # attribution half has existed all along, only the operational half was
+    # missing. Same split #2739 found for 4090: that list is the SIGNING roster and
+    # is referenced outside this repo, so the name stays there and this points at
+    # it rather than moving it.
+    signature: b850-claude
+    # Deliberately empty. This session publishes nothing to NATS today, and
+    # declaring subjects it does not publish is the defect #2734 exists to fix.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      # `pmoves-b850` is the spelling the registry already uses for this machine
+      # (hermes_agent claims it the same way). node-vocabulary.yaml canonicalises
+      # it to `knuckles`, so either resolves -- this matches the existing rows.
+      node_affinity: [pmoves-b850]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "B850/Knuckles node CLI identity -- data-tier host, infra + governance lane"
+  claude_5090:
+    name: "5090 Claude"
+    class: standard
+    # Same shape as claude_4090 / claude_b850, which mirror `crush`: the surface
+    # a human drives is a UI; what it drives is an agent.
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # `5090-claude` was ALREADY in external_contributors -- the signing roster,
+    # referenced outside this repo. The attribution half has existed all along;
+    # this adds the operational half and points back at it rather than moving it.
+    signature: 5090-claude
+    # Deliberately empty: this identity publishes nothing to NATS today, and
+    # declaring subjects it does not publish is the defect #2734 exists to fix.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [5090]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "5090 node CLI identity -- primary workhorse, GPU/TTS host"
+    # NOTE: hostname fallback does NOT reach this node. `POWERFULMOVES`
+    # casefolds onto the org-name vocabulary entry, so PMOVES_NODE_ID=5090
+    # must be set for the identity to bind. See node-vocabulary.yaml.
+  claude_z890:
+    name: "Z890 Claude"
+    class: standard
+    # Same shape as claude_4090 / claude_b850, which mirror `crush`: the surface
+    # a human drives is a UI; what it drives is an agent.
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # `z890-claude` was ALREADY in external_contributors -- the signing roster,
+    # referenced outside this repo. The attribution half has existed all along;
+    # this adds the operational half and points back at it rather than moving it.
+    signature: z890-claude
+    # Deliberately empty: this identity publishes nothing to NATS today, and
+    # declaring subjects it does not publish is the defect #2734 exists to fix.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [z890]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "Z890 node CLI identity -- infrastructure coordinator, NATS hub"
+
+  crush_glm52:
+    name: "Crush GLM-5.2 (Knuckles)"
+    class: standard
+    # The crush-harness twin of claude_b850 directly above: same node, same
+    # declared-not-inferred principle, different harness. The generic `crush`
+    # entry claims z890/5090 and cannot answer for this node, which is exactly
+    # why the resolver had nothing to bind when crush-pmoves launched.
+    primary_type: ui
+    secondary_type: agent
+    # No listening socket. A CLI session, not a service.
+    port: null
+    health: null
+    layers:
+      - L0
+      - L2
+      - L4
+    evolution_stage: stage_1
+    # The SIGNING roster is agent_signatures.yaml; the `crush` contributor
+    # (open-diamond glyph) already exists there and is shared by every Crush
+    # instance fleet-wide. This entry is the operational half for knuckles.
+    signature: crush
+    # Same posture as claude_b850: publishes nothing today. The generic `crush`
+    # entry carries the fleet-level subjects; duplicating them here would be the
+    # undeclared-emission defect #2734 exists to catch.
+    nats:
+      publishes: []
+      subscribes: []
+    topology:
+      node_affinity: [pmoves-b850]
+      team: orchestration
+      ci_runner: null
+      compose_profile: null
+    description: "B850/Knuckles Crush-on-GLM-5.2 identity -- the terminal companion harness on this node (Z.AI coding plan)"
+
+  kilocode_glm:
+    name: "KiloCode GLM"
+    class: standard
+    # A harness hosts models; a fitting may name it. Distinguished from agent
+    # services (agent_zero, archon), a UI (a2ui) and a launcher (pinokio), which
+    # appear in cross_agent for component compatibility but host nothing.
+    kind: harness
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_2
+    role_class: worker
+    signature: "kilocode"
+    nats:
+      publishes:
+        - claw.task.complete.v1
+        - agent.graphiti.signed.v1
+        - mesh.gpu.status.v1
+      subscribes:
+        - botz.workitem.claimed.v1
+        - mesh.gpu.model.loaded.v1
+        - claw.task.assign.v1
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [5090, laptop-4090, z890]
+      team: implementation
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "VS Code-native GLM-5-Turbo delivery agent via KiloCode. Blueprint-first implementation, MCP-integrated, DARKXSIDE witness."
+
+  darkxside_persona:
+    name: "DARKXSIDE Persona"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L1, L2, L5]
+    evolution_stage: stage_2
+    role_class: reviewer
+    signature: "darkxside-persona"
+    nats:
+      publishes:
+        - content.publish.approved.v1
+        - agent.graphiti.signed.v1
+      subscribes:
+        - geometry.cgp.v1
+        - room.session.updated.v1
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, agent_completion]
+    topology:
+      node_affinity: [powerfulmoves, 5090, laptop-4090]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "Private co-creator and witness identity for darkxsides.room; public egress remains approval- and redaction-gated."
+
+  space_agent:
+    name: "PMOVES Space-Agent"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: 3010
+    health: "/api/health"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["pmoves.space.action.v1", "pmoves.space.event.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    submodule: "PMOVES-space-agent"
+    topology:
+      node_affinity: [z890, 5090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "Node.js space/widget customware bridge — surfaces CRUD actions and lifecycle events on NATS"
 
   archon:
     name: "Archon"
@@ -187,12 +522,90 @@ agents:
       compose_profile: agents
     description: "Work item distribution across BoTZ CLI instances"
 
+  botz_architect:
+    name: "BoTZ Architect"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    signature: "botz-architect"
+    nats:
+      publishes: ["botz.plan.created.v1"]
+      subscribes: ["botz.workitem.assigned.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    topology:
+      node_affinity: [z890, 4090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: botz
+    description: "BoTZ planning agent — decomposes tasks into skill chains, designs system architecture"
+
+  botz_builder:
+    name: "BoTZ Builder"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    signature: "botz-builder"
+    nats:
+      publishes: ["botz.build.completed.v1"]
+      subscribes: ["botz.plan.created.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    topology:
+      node_affinity: [5090, z890]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: botz
+    description: "BoTZ execution agent — implements plans from Architect, generates code, runs skill chains"
+
+  botz_auditor:
+    name: "BoTZ Auditor"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    signature: "botz-auditor"
+    nats:
+      publishes: ["botz.audit.completed.v1"]
+      subscribes: ["botz.build.completed.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    topology:
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: botz
+    description: "BoTZ validation agent — reviews plans and output for security, compliance, and quality"
+
   gateway_agent:
     name: "Gateway Agent"
     class: standard
     primary_type: agent
     secondary_type: api
-    port: 8100
+    port: 8111   # compose default GATEWAY_AGENT_PORT (8110 reserved for model-registry)
     health: "/healthz"
     layers: [L0, L2, L4]
     evolution_stage: stage_1
@@ -212,6 +625,40 @@ agents:
       ci_runner: ai-lab
       compose_profile: tier-agent
     description: "MCP tool orchestration service — discovers and executes 100+ tools via Agent Zero"
+
+  p7_room_orchestrator:
+    name: "P7 Room Orchestrator"
+    class: standard
+    primary_type: agent
+    secondary_type: api
+    port: 8122
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes:
+        - "p7.room.session.started.v1"
+        - "p7.room.checkpoint.v1"
+        - "p7.room.session.ended.v1"
+        - "p7.room.stage.changed.v1"
+        - "p7.room.command.failed.v1"
+      subscribes:
+        - "p7.nats.launch"
+        - "p7.nats.launch.v1"
+        - "p7.nats.session"
+        - "p7.nats.session.v1"
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    topology:
+      node_affinity: [kvm4-1, z890, 5090, laptop-4090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "Room-aware stage manager with CHIT-gated live activation and distinct transient session state."
 
   mesh_agent:
     name: "Mesh Agent"
@@ -746,11 +1193,11 @@ agents:
   mai_ui:
     name: "MAI-UI"
     class: standard
-    primary_type: ui
-    secondary_type: agent
-    port: null
-    health: null
-    layers: [L0, L4, L5]
+    primary_type: agent
+    secondary_type: llm
+    port: 8220
+    health: "/healthz"
+    layers: [L0, L2, L4, L5]
     evolution_stage: base
     nats:
       publishes: []
@@ -763,11 +1210,20 @@ agents:
       attribution_gated: false
     submodule: "PMOVES-MAI-UI"
     topology:
-      node_affinity: [z890, 5090]
-      team: ui
+      node_affinity: [spark, 5090, z890]
+      team: sandbox
       ci_runner: ubuntu-latest
-      compose_profile: null
-    description: "Main user interface"
+      compose_profile: agents
+    models:
+      - "Tongyi-MAI/MAI-UI-2B"
+      - "Tongyi-MAI/MAI-UI-8B"
+    capabilities:
+      - gui_grounding
+      - screenshot_understanding
+      - browser_automation
+      - desktop_navigation
+      - mobile_navigation
+    description: "Foundation GUI agent model for screenshot understanding, GUI grounding, browser automation, and desktop/mobile navigation. Deployable variants are the 2B and 8B listed above; the upstream 32B and 235B-A22B are not wired here. SOTA ScreenSpot-Pro 73.5%. Built on Qwen3-VL architecture."
 
   crush:
     name: "Crush"
@@ -806,7 +1262,7 @@ agents:
     class: specialized
     primary_type: data
     secondary_type: agent
-    port: 8096
+    port: 8105
     health: "/health"
     layers: [L0, L5]
     evolution_stage: base
@@ -930,8 +1386,12 @@ agents:
     layers: [L0, L2]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -955,8 +1415,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -980,8 +1444,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1005,8 +1473,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1030,8 +1502,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1055,8 +1531,12 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1080,8 +1560,12 @@ agents:
     layers: [L0]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1105,8 +1589,12 @@ agents:
     layers: [L0]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1130,8 +1618,12 @@ agents:
     layers: [L0]
     evolution_stage: base
     nats:
-      publishes: []
-      subscribes: []
+      publishes:
+        - "health.metrics.scraped.v1"
+      subscribes:
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "finance.transactions.ingested.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1254,7 +1746,7 @@ agents:
     class: utility
     primary_type: data
     secondary_type: api
-    port: 8181
+    port: 8096
     health: "/health"
     layers: [L0]
     evolution_stage: base
@@ -1335,10 +1827,11 @@ agents:
     evolution_stage: base
     nats:
       publishes:
-        - "finance.transactions.ingested.v1"    # planned
-        - "finance.budget.alert.v1"             # planned
-        - "finance.monthly.summary.v1"          # planned
-      subscribes: []
+        - "finance.transactions.ingested.v1"
+        - "finance.budget.alert.v1"
+        - "finance.monthly.summary.v1"
+      subscribes:
+        - "mesh.node.announce.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1362,16 +1855,17 @@ agents:
     class: specialized
     primary_type: ui
     secondary_type: data
-    port: null
-    health: null
+    port: 8000
+    health: "/api/v2/"
     layers: [L0]
     evolution_stage: base
     nats:
       publishes:
-        - "health.metrics.updated.v1"           # planned
-        - "health.workout.completed.v1"         # planned
-        - "health.weekly.summary.v1"            # planned
-      subscribes: []
+        - "health.metrics.updated.v1"
+        - "health.workout.completed.v1"
+        - "health.weekly.summary.v1"
+      subscribes:
+        - "mesh.node.announce.v1"
     chit_toggles:
       delta_sensitive: false
       kappa_sensitive: false
@@ -1387,7 +1881,7 @@ agents:
       node_affinity: [z890]
       team: life
       ci_runner: ubuntu-latest
-      compose_profile: null
+      compose_profile: "wger"
     description: "Fitness tracking — the body is a system too"
 
   evoswarm_controller:
@@ -1460,11 +1954,11 @@ agents:
   a2ui:
     name: "A2UI"
     class: standard
-    primary_type: ui
-    secondary_type: agent
+    primary_type: agent
+    secondary_type: llm
     port: null
     health: null
-    layers: [L0, L4, L5]
+    layers: [L0, L2, L4, L5]
     evolution_stage: base
     nats:
       publishes: []
@@ -1750,6 +2244,10 @@ agents:
   clawz:
     name: "ClawZ (OpenClaw)"
     class: standard
+    # A harness hosts models; a fitting may name it. Distinguished from agent
+    # services (agent_zero, archon), a UI (a2ui) and a launcher (pinokio), which
+    # appear in cross_agent for component compatibility but host nothing.
+    kind: harness
     primary_type: ui
     secondary_type: agent
     port: 18789
@@ -1885,3 +2383,1022 @@ agents:
       ci_runner: ubuntu-latest
       compose_profile: null
     description: "MCP bridge for E2B sandboxed code execution"
+
+  metrics_specialist:
+    name: "Prometheus Metrics Specialist"
+    class: specialized
+    primary_type: data
+    secondary_type: api
+    port: null                         # CLI agent — queries Prometheus HTTP API
+    health: null
+    layers: [L4, L5, L6]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.metrics.anomaly.v1"
+        - "observability.metrics.trend.v1"
+      subscribes:
+        - "mesh.node.announce.v1"
+        - "observability.query.request.v1"
+    chit_toggles:
+      delta_sensitive: true            # metric rate changes → delta
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_query
+      recovery_strategy: none
+      cipher_categories: [metrics_analysis, anomaly_detection]
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: observability
+      ci_runner: ai-lab
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/metrics_specialist.py"
+    runtime: "uv run"
+    description: "Prometheus metrics analysis, anomaly detection, performance trending"
+
+  dashboard_specialist:
+    name: "Grafana Dashboard Specialist"
+    class: specialized
+    primary_type: ui
+    secondary_type: data
+    port: null                         # CLI agent — manages Grafana via HTTP API
+    health: null
+    layers: [L4, L5, L6, L7]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.dashboard.updated.v1"
+        - "observability.alert.configured.v1"
+      subscribes:
+        - "observability.metrics.anomaly.v1"
+        - "observability.query.request.v1"
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_dashboard
+      recovery_strategy: none
+      cipher_categories: [dashboard_management, alert_configuration]
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: observability
+      ci_runner: ai-lab
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/dashboard_specialist.py"
+    runtime: "uv run"
+    description: "Grafana dashboard creation, metric visualization, alert configuration"
+
+  logs_specialist:
+    name: "Loki Logs Specialist"
+    class: specialized
+    primary_type: data
+    secondary_type: worker
+    port: null                         # CLI agent — queries Loki HTTP API
+    health: null
+    layers: [L4, L5, L6]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.logs.pattern.v1"
+        - "observability.logs.error.v1"
+        - "observability.logs.correlation.v1"
+      subscribes:
+        - "ingest.file.added.v1"
+        - "observability.query.request.v1"
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_analysis
+      recovery_strategy: cipher_resumable
+      cipher_categories: [log_analysis, error_detection]
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: observability
+      ci_runner: vps
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/logs_specialist.py"
+    runtime: "uv run"
+    description: "Loki log pattern analysis, error detection, cross-service correlation"
+
+  tracing_specialist:
+    name: "Jaeger Tracing Specialist"
+    class: specialized
+    primary_type: data
+    secondary_type: api
+    port: null                         # CLI agent — queries Jaeger HTTP API
+    health: null
+    layers: [L4, L5, L6]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.trace.bottleneck.v1"
+        - "observability.trace.correlation.v1"
+      subscribes:
+        - "observability.query.request.v1"
+        - "agent.tool.executed.v1"
+    chit_toggles:
+      delta_sensitive: true            # latency changes → delta
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_trace
+      recovery_strategy: none
+      cipher_categories: [trace_analysis, bottleneck_detection]
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: observability
+      ci_runner: ai-lab
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/tracing_specialist.py"
+    runtime: "uv run"
+    description: "Jaeger distributed tracing, performance bottleneck identification"
+
+  llm_observability:
+    name: "TensorZero LLM Observability Specialist"
+    class: specialized
+    primary_type: llm
+    secondary_type: data
+    port: null                         # CLI agent — queries TensorZero ClickHouse
+    health: null
+    layers: [L3, L4, L5, L6]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.llm.performance.v1"
+        - "observability.llm.cost.v1"
+        - "observability.llm.model_comparison.v1"
+      subscribes:
+        - "mesh.gpu.model.loaded.v1"
+        - "observability.query.request.v1"
+    chit_toggles:
+      delta_sensitive: true            # token usage changes → delta
+      kappa_sensitive: true            # latency patterns → kappa
+      hz_sensitive: true               # throughput → Hz
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_analysis
+      recovery_strategy: cipher_resumable
+      cipher_categories: [llm_performance, cost_optimization]
+    topology:
+      node_affinity: [z890, 5090]      # GPU nodes preferred
+      team: observability
+      ci_runner: ai-lab
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/llm_observability_specialist.py"
+    runtime: "uv run"
+    description: "TensorZero LLM performance analysis, cost optimization, model comparison"
+
+  cipher_beats_analyst:
+    name: "Cipher Beats Analyst"
+    class: specialized
+    primary_type: media
+    secondary_type: agent
+    port: null                         # CLI tool — no HTTP server
+    health: null
+    layers: [L5, L6]
+    evolution_stage: active
+    signature: "gemini"                # Pinokio 7 / Gemini CLI driven
+    nats:
+      publishes:
+        - "pmoves.darkxside.beats.group.v1"
+        - "media.ingest.request.v1"
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true            # tempo / BPM drives geometry.delta
+      kappa_sensitive: true            # spectral curvature → kappa
+      hz_sensitive: true               # spectral centroid → Hz
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_batch
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, beats_fingerprint]
+    topology:
+      node_affinity: [z890, 5090]      # CPU/IO bound — run on either node
+      team: media
+      ci_runner: ubuntu-latest
+      compose_profile: null
+    tool_path: "pmoves/tools/analyze_beats.py"
+    runtime: "uv run"
+    pinokio_skill: "PMOVES-pinokio/api/pmoves-cipher-beats/SKILL.md"
+    description: |
+      Level 11 Cipher Gateway Specialist. Extracts sonic fingerprints via ffprobe/ffmpeg
+      lavfi (ebur128 R128 loudness, aspectralstats spectral analysis). Clusters DARKXSIDE
+      beats into named sonic constellations, writes M3U8 playlists, checkpoints to Cipher
+      Memory at :8105, emits geometry events to the NATS Geometry Bus for Holographic
+      CHIT Block generation. Monitored live via Glances REST API.
+
+  pmoves_ci_bot:
+    name: "PMOVES CI Bot"
+    class: ci
+    primary_type: ci
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L4]
+    evolution_stage: active
+    nats:
+      publishes:
+        - "branch.<path-segments>.trail.v1"
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: minimal
+      checkpoint_frequency: none
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [ai-lab]
+      team: automation
+      ci_runner: ai-lab
+      compose_profile: null
+    signing_card_id: "00000000-0000-4000-8000-000000000035"
+    description: |
+      CI emitter identity for §9.4 branch lifecycle trail (AGNOTE4482 Layer 4).
+      Runs on the tailnet-connected self-hosted ai-lab runner; publishes
+      HMAC-signed branch.<path-segments>.trail.v1 events to NATS via
+      .github/workflows/branch-trail-emit.yml.
+  hermes_agent:
+    name: "HERMES Agent"
+    class: utility
+    primary_type: agent
+    secondary_type: api
+    port: 7700
+    health: "/api/health"
+    layers: [L0, L1, L2, L4]
+    evolution_stage: stage_1
+    signature: "hermes-agent"
+    nats:
+      publishes:
+        - "hermes.gateway.launched.v1"
+        - "hermes.gateway.health.v1"
+        - "hermes.mcp.toolcall.v1"
+        - "hermes.skill.curated.v1"
+        - "hermes.cron.executed.v1"
+        - "hermes.delegate.completed.v1"
+      subscribes:
+        - "p7.nats.launch"
+        - "p7.nats.session"
+        - "mesh.node.announce.v1"
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    topology:
+      node_affinity: [z890, elder-melchor, 5090, 4090, kvm4-1, spark, pmoves-b850, rdna4]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: hermes
+    description: |
+      NousResearch Hermes Agent integration body. Cross-platform gateway operator,
+      skill curator, and NATS bridge. Runs profile-scoped instances per PMOVES node.
+      Publishes gateway lifecycle, MCP tool calls, skill curation, cron completions,
+      and delegation summaries to the NATS bus. Rehearsal stage until soak passes.
+  notebooklm_agent:
+    name: "NotebookLM Agent"
+    class: standard
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    # PARKED (2026-07-09, tandem review): MCP/OAuth plumbing is real, but both tools
+    # (notebooklm_list_notebooks, notebooklm_query) are stub placeholders — NotebookLM
+    # has no public API. Not deployable as functional capability. Use the Open Notebook
+    # self-host lane for real notebook capability. See AGNOTE4482 signoff + PR #2025.
+    evolution_stage: parked
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: research
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "PARKED stub. NotebookLM MCP/OAuth scaffold only — notebooklm_list_notebooks/notebooklm_query return placeholder strings (NotebookLM has no public API). Real notebook capability lives in the Open Notebook self-host lane."
+
+  # --- Fordham Hill community room agents (runtime-minted by Archon) ---------
+  # Room: fordham.room.community (stage rehearsal). Agent-facing kebab ids
+  # (fordham-steward, ...) map here via kebab->snake. All carry the pilot
+  # invariant set: DRAFT-REQUIRES-LEGAL-REVIEW on any dollar/vote/governance
+  # claim, transparency/auditable-records-only, no accusations.
+  fordham_steward:
+    name: "Fordham Steward"
+    class: specialized
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["room.session.updated.v1"]
+      subscribes: ["room.session.updated.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_completion]
+    topology:
+      node_affinity: [kvm4-1, z890, powerfulmoves]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Fordham room host/concierge; routes resident intent to the 4 specialists. No money/vote authority. Runtime-minted by Archon."
+
+  missinglinc_validator:
+    name: "MiSSinGLinC Validator"
+    class: specialized
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: "/healthz"
+    layers: [L2, L4]
+    evolution_stage: stage_0
+    nats:
+      publishes: ["validation.verdict.ready.v1", "validation.evidence.chain.v1", "validation.counter.evidence.v1"]
+      subscribes: ["voice.agent.response.v1", "ingest.file.added.v1", "validation.run.requested.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_completion]
+    topology:
+      node_affinity: [powerfulmoves, pmoves-laptop]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "External peer-review validator (DangerRuss frame) built on PMOVES-mike; adversarial claim validation with cryptographic evidence chains. Audits only - never drafts. Wave-0 staged; runtime-minted by Archon. Spec: pmoves/docs/AGENTS/MISSINGLINC_MINT_SPEC.md"
+
+  fordham_onboarding:
+    name: "Fordham Onboarding"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.roll.updated.v1", "fleet.enroll.token.v1", "chit.signed.v1"]
+      subscribes: ["fordham.onboarding.request.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, kvm2]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Enroll residents onto the mesh + the eligible-voter roll (record-only; consent-required; roll is 1-of-N, DRAFT-legal)."
+
+  fordham_transaction:
+    name: "Fordham Transaction"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.ledger.entry.v1", "fordham.surplus.updated.v1", "chit.signed.v1"]
+      subscribes: ["fordham.dues.received.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Pooled dues / Firefly co-op ledger / surplus. Deterministic-tools-only money path; never invents the adopted rate. All figures DRAFT-legal-accounting-review."
+
+  fordham_creator:
+    name: "Fordham Creator"
+    class: specialized
+    primary_type: agent
+    secondary_type: media
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["fordham.artifact.published.v1"]
+      subscribes: ["fordham.dashboard.request.v1", "fordham.ledger.entry.v1", "fordham.roll.updated.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Resident materials + pilot dashboard. Presents figures verbatim with a DRAFT watermark; never recomputes; preserves the proven/modeled/scaffolded honesty key."
+
+  fordham_voice:
+    name: "Fordham Voice"
+    class: specialized
+    primary_type: agent
+    secondary_type: media
+    port: null
+    health: "/healthz"
+    layers: [L1, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["voice.synth.request.v1", "fordham.voice.delivered.v1"]
+      subscribes: ["fordham.dashboard.request.v1", "tokenism.prosodic.bpm.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: fordham_community
+      ci_runner: vps
+      compose_profile: agents
+    description: "Accessible spoken interaction (FlOO$ suit via persona-bind + shift-from-bpm). Every spoken figure carries an audible draft/pending-legal disclaimer. Collaborates with 5090-voice.room.studio."
+
+
+  # --- Enterprise + media/infra agents (registry entries completing the teams coupling) ---
+  nemoclaw:
+    name: "NeMo Claw"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null   # NATS-only health (mesh.gpu.status.v1) — no HTTP endpoint on Jetson edge
+    layers: [L1, L3]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [jetson, spark, z890]
+      team: infra
+      ci_runner: vps
+      compose_profile: agents
+    source: "pmoves/configs/agent-profiles/nemoclaw.yaml"
+    description: "Enterprise NeMo-guardrailed agent (NVIDIA NeMo Guardrails). Kilo Code CLI + Agent Zero subordinate hybrid; runs natively on Jetson Orin edge nodes, local Nemotron inference via Ollama, NATS-only health (mesh.gpu.status.v1). Config: pmoves/configs/agent-profiles/nemoclaw.yaml. Generic enterprise agent — NVIDIA users may prefer NeMo Claw over the vanilla assistant."
+
+  nemotron_claw:
+    name: "Nemotron Claw"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: "/healthz"
+    layers: [L1, L3]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: evolution
+      ci_runner: ai-lab
+      compose_profile: gpu
+    source: "pmoves/configs/agent-profiles/nemotron_claw.yaml"
+    description: "Enterprise Nemotron/NIM-guardrailed agent for beefy-GPU local reasoning + agentic coding (NVIDIA NIM nemotron-super-49b at :8000, TensorZero fallback, HTTP health). Runs on 5090/z890-class nodes. Config: pmoves/configs/agent-profiles/nemotron_claw.yaml."
+
+  container_agent:
+    name: "Container Agent"
+    class: utility
+    primary_type: agent
+    secondary_type: worker
+    port: 8111   # z890-bound 127.0.0.1:8111 (docker-compose.z890.yml); matches agent-teams.yaml annotation
+    health: "/healthz"
+    layers: [L0, L2]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm2, jetson]
+      team: infra
+      ci_runner: vps
+      compose_profile: agents
+    source: "pmoves/services/container-agent/app.py"
+    description: "Real per-node Docker-networking diagnostics sidecar: /healthz, /diagnostic (local-service + upstream-route + DNS checks), /metrics (Prometheus). Source: pmoves/services/container-agent/app.py; deployed on z890 (pmoves/docker-compose.z890.yml, bound 127.0.0.1:8111)."
+
+  podcast_producer:
+    name: "Podcast Producer"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: null   # skill-only; 8110 is claimed by model-registry
+    health: null   # no HTTP service (skill-only) — /healthz would be unreachable
+    layers: [L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: yt
+    source: "pmoves/skills/podcast-publish/manifest.yaml"
+    description: "Aspirational / skill-only (no service or compose yet): TTS-segment stitching → RSS feed → MinIO upload. Defined in pmoves/skills/podcast-publish/manifest.yaml. NOTE: the 8110 in agent-teams.yaml is actually claimed by model-registry — not a live port for this."
+
+  remotion_renderer:
+    name: "Remotion Renderer"
+    class: standard
+    primary_type: media
+    secondary_type: ui
+    port: 8107   # a2ui-renderer compose service (creator profile) — #2228
+    health: /healthz
+    layers: [L2, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: [a2ui.render.completed.v1]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: creator
+    source: "pmoves/services/a2ui-renderer/"
+    description: "A2UI Remotion provenance renderer — HTTP daemon (POST /render/provenance) on port 8107, creator compose profile, publishes a2ui.render.completed.v1, uploads MP4/GIF/WebM to MinIO. Also usable headless via render:provenance:* npm scripts. Source: pmoves/services/a2ui-renderer/ (compose service added #2228)."
+
+  youtube_publisher:
+    name: "YouTube Publisher"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: null   # skill-only; 8111 is the real gateway-agent/container-agent port
+    health: null   # no HTTP service (skill-only) — /healthz would be unreachable
+    layers: [L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [powerfulmoves, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: yt
+    source: "pmoves/skills/youtube-upload/manifest.yaml"
+    description: "Aspirational / skill-only (no service or compose yet): YouTube Data API v3 upload + metadata + thumbnail, depends on minio/presign. Defined in pmoves/skills/youtube-upload/manifest.yaml. NOTE: 8111 is the real gateway-agent/container-agent port — not a live port for this."
+
+
+  # --- HF Agent services (model patrol + research evaluation) ---
+
+  hf_agent:
+    name: "HF Agent"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: 8201
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["hf.model.discovered.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_poll_cycle
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
+    description: "Autonomous HuggingFace model patrol — polls for new models matching criteria and publishes discovery events to NATS"
+
+  hf_research_agent:
+    name: "HF Research Agent"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: 8202
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["hf.model.evaluated.v1"]
+      subscribes: ["hf.model.discovered.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_evaluation
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
+    description: "HuggingFace model evaluation worker — subscribes to discovery events, evaluates models against benchmark criteria, publishes evaluation results"
+
+  hf_mcp_server:
+    name: "HF MCP Server"
+    class: utility
+    primary_type: agent
+    secondary_type: api
+    port: 8203
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["hf.model.downloaded.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_request
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890, 5090, laptop-4090]
+      team: research
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "Model Context Protocol server for HuggingFace Hub — model discovery, download, metadata, GGUF conversion; exposes SSE MCP and REST API"
+
+  mavis:
+    name: "Mavis"
+    class: standard
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    # Orchestrator identity of the MiniMax Edition KiloCode claw
+    # (agent-profiles/minimax_edition.yaml, signature `minimax` / glyph ⬡).
+    # Sessions to date ran on 4090; SPARK affinity added 2026-08-22 so the
+    # GB10 node can serve as a dispatch target once a pmoves.agent.task.v1
+    # subscriber is stood up there (the wire is the gate, not this entry).
+    evolution_stage: stage_1
+    signature: "minimax"
+    profile: "minimax_edition"
+    nats:
+      publishes:
+        - "pmoves.agent.task.v1"
+        - "pmoves.bpm.phase.v1"
+        - "pmoves.agent.result.v1"
+      subscribes:
+        - "pmoves.agent.result.v1"
+        - "pmoves.bpm.pomodoro.v1"
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: false
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    topology:
+      node_affinity: [5090, spark, laptop-4090, z890]
+      team: orchestration
+      ci_runner: ubuntu-latest
+      compose_profile: agents
+    description: |
+      MiniMax Edition orchestrator (Mavis). Dispatches inter-agent tasks on
+      pmoves.agent.task.v1 (kiloclaw / hermes / pinokio targets per the
+      pmoves-bootstrap/v1 CGP routing block) and runs the BPM phase cron.
+      Long-context and creative-pipeline lanes; Token Plan backed.
+
+
+# ── MCP Server Registry ─────────────────────────────────────────────────────
+# Root-level MCP servers that can be bound into room manifests as skills.
+# Endpoints are resolved at runtime via env.shared; status reflects compose
+# integration readiness. `action_namespace` matches room.manifest app entries.
+mcp_servers:
+  pmoves_cipher_mcp:
+    name: "pmoves-cipher-mcp"
+    submodule: "pmoves-cipher-mcp"
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_CIPHER_MCP_ENDPOINT:-http://pmoves-cipher-mcp:8080/sse}"
+    action_namespace: "mcp.v1.cipher"
+    capabilities: ["cipher", "chit", "announce", "health"]
+    rooms: ["z890-infra.room.fabric"]
+    # grounding_source: a discovering agent fetches startup grounding here
+    # (Cipher Memory = agent_plan/checkpoint/completion + CHIT trail). See §4a
+    # of docs/superpowers/specs/2026-06-26-voice-agents-design.md and
+    # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
+    grounding_source: true
+    status: "planned"
+
+  pmoves_e2b_mcp:
+    name: "pmoves-e2b-mcp-server"
+    submodule: "pmoves-e2b-mcp-server"
+    class: utility
+    transport: "sse"
+    # endpoint intentionally absent: status is `planned`, and no compose service
+    # serves this. The shipped server (see pmoves_e2b_mcp_server) is stdio-only -
+    # its Dockerfile has no EXPOSE and its entrypoint speaks stdio. Publishing
+    # http://pmoves-e2b-mcp:8080/sse here made the registry assert an address
+    # nothing answers on, while the sibling entry said `port: null`. Restore an
+    # endpoint here only when something actually listens.
+    endpoint: null
+    action_namespace: "mcp.v1.e2b"
+    capabilities: ["sandbox", "execution", "artifacts"]
+    rooms: ["4090-field.room.control", "hermes-agent.room.control"]
+    status: "planned"
+
+  pmoves_hirag_mcp:
+    name: "pmoves-hirag-mcp"
+    submodule: "pmoves-hirag-mcp"
+    class: utility
+    transport: "stdio"
+    # No endpoint: a stdio bridge is launched by the client, not dialled.
+    # See .claude/mcp.json for the command, and the submodule README.
+    action_namespace: "mcp.v1.hirag"
+    capabilities: ["retrieve", "graph", "search", "notebook"]
+    rooms: ["4090-field.room.control", "hermes-agent.room.control"]
+    # grounding_source: a discovering agent fetches startup grounding here
+    # (Hi-RAG hybrid vector+graph+full-text retrieval). See §4a of
+    # docs/superpowers/specs/2026-06-26-voice-agents-design.md and
+    # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
+    grounding_source: true
+    # Active: pmoves-hirag-mcp is wired into .claude/mcp.json (stdio, followups-v1
+    # commit 6). The container is built by the PMOVES-HiRAG + pmoves-hirag-mcp
+    # submodules and published on PMOVES.AI-Edition-Hardened; see the
+    # `services.pmoves_hirag_mcp` field in pmoves/contracts/schemas/pmoves-bootstrap/
+    # v1.schema.json for the typed service block that the bootstrap CGP profile
+    # uses to reference it.
+    status: "active"
+
+  pmoves_nats_mcp:
+    name: "pmoves-nats-mcp"
+    # FIRST-PARTY, in-repo — not a submodule. Verified: regular blobs in the
+    # index (100644), no entry in .gitmodules. It was declared as `submodule:`
+    # which made `git submodule update --init` look like a prerequisite when
+    # there is nothing to init.
+    path: "pmoves-nats-mcp"
+    class: utility
+    # stdio, NOT sse. server.py uses mcp.server.stdio.stdio_server() and the
+    # Dockerfile says so outright: "The MCP is stdio (client-spawned); this image
+    # is for CI / reproducible runs and a future HTTP/SSE transport."
+    # The previous `transport: sse` + `endpoint: http://pmoves-nats-mcp:8080/sse`
+    # described a server that does not exist: nothing listens on 8080, and no
+    # compose file defines that host. Removed rather than left pointing at air.
+    transport: "stdio"
+    # No endpoint: a stdio bridge is launched by the client, not dialled.
+    # See .claude/mcp.json for the command.
+    action_namespace: "mcp.v1.nats"
+    capabilities: ["publish", "subscribe", "jetstream", "health"]
+    rooms: ["z890-infra.room.fabric", "hermes-agent.room.control"]
+    # Code exists and is wired into .claude/mcp.json for direct client use.
+    # Not deployed as a service, and cannot be until an HTTP/SSE transport is
+    # added — the Dockerfile calls that "future".
+    status: "active-stdio-only"
+
+  pmoves_tailscale_mcp:
+    name: "pmoves-tailscale-mcp"
+    # FIRST-PARTY, in-repo — not a submodule (same defect as pmoves_nats_mcp).
+    path: "pmoves-tailscale-mcp"
+    class: utility
+    # stdio, NOT sse — tailscale_mcp/server.py uses stdio_server(). The old
+    # endpoint pointed at a host no compose file defines.
+    # NOTE: .claude/mcp.json currently wires the npm package `tailscale-mcp`,
+    # not this first-party module, so the two are not yet the same thing.
+    transport: "stdio"
+    action_namespace: "mcp.v1.tailscale"
+    capabilities: ["network", "devices", "authkeys", "tailnet"]
+    rooms: ["z890-infra.room.fabric"]
+    status: "active-stdio-only"
+
+  # Voice discovery shim (S1c, §4a "two planes, one join key"). Makes the voice
+  # capability reachable through the same agent_registry → room plane as every
+  # other capability. flute-gateway is the backing provider; the `resolves` join
+  # bridges this discovery plane to the voice_profiles TRUTH plane (v5_16) by the
+  # voice `name` slug. Truth + routing (engine_specific, RLS, media) stays in
+  # pmoves_core.voice_profiles — this shim is intentionally thin.
+  pmoves_voice_mcp:
+    name: "pmoves-voice-mcp"
+    submodule: null
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_VOICE_MCP_ENDPOINT:-http://flute-gateway:8055/sse}"
+    action_namespace: "mcp.v1.voice"
+    capabilities: ["voice", "tts", "voice-select", "clone"]
+    rooms: ["5090-voice.room.studio"]
+    # resolves: NET-NEW join from this discovery entry to the voice truth plane.
+    # A runtime resolves an agent-selected voice slug against the registry table.
+    resolves:
+      registry: supabase
+      table: pmoves_core.voice_profiles
+      by: name
+    status: "planned"
+
+  # PMOVES-MiniMax-MCP — text/image/video/TTS/voice-clone over MCP. Submodule
+  # (POWERFULMOVES/PMOVES-MiniMax-MCP, f4d6a61b on main) folds the upstream
+  # MiniMax model surface into one stdio server; `uvx minimax-mcp` is the
+  # entry point declared in the submodule's pyproject.toml. stdio (not SSE)
+  # matches the upstream server's design. The harness v0 follow-ups
+  # (pmoves/configs/submodule_skill_registry.json:770) register the skill
+  # surface [mcp/connect, mcp/list-tools, mcp/invoke]; this entry is the
+  # discovery-plane twin that lets rooms and rooms-tools find it by name.
+  pmoves_minimax_mcp:
+    name: "PMOVES-MiniMax-MCP"
+    submodule: "PMOVES-MiniMax-MCP"
+    class: utility
+    transport: "stdio"
+    command: "uvx"
+    args: ["minimax-mcp"]
+    env:
+      MINIMAX_API_KEY: "${MINIMAX_API_KEY}"
+      MINIMAX_API_HOST: "${MINIMAX_API_HOST:-https://api.minimax.io}"
+      MINIMAX_API_RESOURCE_MODE: "${MINIMAX_API_RESOURCE_MODE:-url}"
+    action_namespace: "mcp.v1.minimax"
+    capabilities: ["text", "image", "video", "tts", "voice-clone", "video-gen"]
+    rooms: ["z890-infra.room.fabric", "hermes-agent.room.control", "darkxsides.room"]
+    # grounding_source: a discovering agent fetches startup grounding here
+    # (MiniMax model surface: text/image/video/TTS/voice-clone via the
+    # PMOVES-MiniMax-MCP server). See §4a of
+    # docs/superpowers/specs/2026-06-26-voice-agents-design.md and
+    # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
+    grounding_source: true
+    status: "active"
+
+# ── A2A Server Registry ─────────────────────────────────────────────────────
+a2a_servers:
+  agent_zero_a2a:
+    name: "Agent Zero A2A"
+    agent_id: "agent_zero"
+    endpoint: "${A2A_AGENT_ZERO_ENDPOINT:-http://agent-zero:8080}"
+    discovery_path: "/.well-known/agent-card.json"
+    tasks_path: "/a2a/v1/tasks"
+    auth: "supabase_jwt"
+    enabled_by_default: false
+    status: "active"

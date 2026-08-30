@@ -2,8 +2,8 @@
 # Audits TTS engine availability, Flute-Gateway integration, Pipecat pipeline, prosodic bridge
 
 name: "Voice Agents & TTS Pipeline"
-version: "1.0.0"
-description: "Verify TTS Studio engines (native Pinokio), Flute-Gateway bridge, Pipecat voice pipeline, and prosodic BPM integration"
+version: "1.1.0"
+description: "Verify TTS Studio engines (native Pinokio), Flute-Gateway bridge, Pipecat voice pipeline, prosodic BPM integration, and Pinokio 7 Agent Interpreter routing"
 
 root:
   id: voice-agents
@@ -48,21 +48,21 @@ root:
           agent_hint: codex
 
         - id: va.tts-studio.start-js
-          task: "start.js uses correct URL capture pattern"
+          task: "TTS Studio launcher start.js present with URL capture pattern"
           action:
             type: grep
-            target: "D:/pinokio/api/Ultimate-TTS-Studio.git/start.js"
+            target: "PMOVES-Pinokio-Ultimate-TTS-Studio/start.js"
             pattern: 'input\.event\[1\]'
             expect: "URL captured via capture group [1], not [0]"
-          context: "CLAUDE.md Critical Pattern Lock compliance"
+          context: "Pinokio launcher start.js lives in the hardened submodule; grep asserts URL capture pattern is intact (regression guard)"
           agent_hint: codex
 
     # =========================================================================
     # Phase 2: TTS Engines Inventory
     # =========================================================================
     - id: va.engines
-      task: "TTS engine inventory (10 engines)"
-      context: "All engines loaded in TTS Studio via Pinokio"
+      task: "TTS engine inventory (14 engines)"
+      context: "All engines loaded in TTS Studio via Pinokio. Registry: pmoves/configs/tts-engine-capabilities.yaml"
       agent_hint: codex
       children:
         - id: va.engines.kitten-tts
@@ -137,12 +137,44 @@ root:
           context: "May need conda install sox for audio processing"
           agent_hint: codex
 
+        - id: va.engines.indextts
+          task: "IndexTTS available"
+          action:
+            type: manual
+            expect: "Fast indexing-based synthesis, lightweight model"
+          context: "Best for batch synthesis, ~1200MB VRAM"
+          agent_hint: codex
+
+        - id: va.engines.fish
+          task: "Fish Speech available"
+          action:
+            type: manual
+            expect: "Zero-shot voice cloning with temperature control"
+          context: "Quick cloning demos, ~1500MB VRAM"
+          agent_hint: codex
+
+        - id: va.engines.chatterbox
+          task: "ChatterboxTTS available"
+          action:
+            type: manual
+            expect: "Exaggeration + temperature + cfg_weight control"
+          context: "Expressive narration with emotion control"
+          agent_hint: codex
+
+        - id: va.engines.chatterbox-multilingual
+          task: "Chatterbox Multilingual available"
+          action:
+            type: manual
+            expect: "17-language synthesis with exaggeration control"
+          context: "Languages: en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh, ja, hu, ko, hi"
+          agent_hint: codex
+
         - id: va.engines.vibevoice
           task: "VibeVoice available"
           action:
             type: manual
-            expect: "Style transfer synthesis"
-          context: "Transfers vocal style from reference audio"
+            expect: "Multi-speaker podcast generation (separate endpoint)"
+          context: "Uses generate_vibevoice_podcast, NOT unified endpoint"
           agent_hint: codex
 
     # =========================================================================
@@ -163,13 +195,13 @@ root:
           agent_hint: codex
 
         - id: va.flute.predict-api
-          task: "UltimateTTSProvider uses predict API (not event API)"
+          task: "UltimateTTSProvider uses Gradio 4.x call API"
           action:
             type: grep
             target: "pmoves/services/flute-gateway/providers/ultimate_tts.py"
-            pattern: "predict_api_url"
-            expect: "Uses /api/ predict endpoint, not /gradio_api/call/ event endpoint"
-          context: "Event API SSE/WebSocket breaks with newer Gradio versions"
+            pattern: "gradio_api/call"
+            expect: "Uses /gradio_api/call/ endpoint (Gradio 4.x), not legacy /api/ predict endpoint"
+          context: "Gradio 4.x migrated from /api/ to /gradio_api/call/ event API"
           agent_hint: codex
 
         - id: va.flute.host-url
@@ -645,14 +677,14 @@ root:
     # =========================================================================
     - id: va.pinokio
       task: "Pinokio one-click voice stack launcher"
-      context: "pbnj/pinokio/api/pmoves-services/start-voice.js"
+      context: "PMOVES-pinokio/api/pmoves-services/start-voice.js"
       agent_hint: codex
       children:
         - id: va.pinokio.start-voice
           task: "start-voice.js launches orchestration+media+gpu profiles"
           action:
             type: file_exists
-            target: "pbnj/pinokio/api/pmoves-services/start-voice.js"
+            target: "PMOVES-pinokio/api/pmoves-services/start-voice.js"
             expect: "docker compose --profile orchestration --profile media --profile gpu up -d"
           context: "One-click voice stack via Pinokio Services launcher (PR #997)"
           agent_hint: codex
@@ -661,11 +693,58 @@ root:
           task: "Voice menu item appears when running"
           action:
             type: grep
-            target: "pbnj/pinokio/api/pmoves-services/pinokio.js"
+            target: "PMOVES-pinokio/api/pmoves-services/pinokio.js"
             pattern: "start-voice"
             expect: "Dynamic menu shows Flute Gateway URL when voice stack running"
           context: "info.running('start-voice.js') + info.local() for URL"
           agent_hint: codex
+
+    # =========================================================================
+    # Phase 15: Pinokio 7 Agent Interpreter → TTS
+    # =========================================================================
+    - id: va.p7
+      task: "P7 Agent Interpreter voice routing"
+      context: "Pinokio 7 Agent Interpreter auto-discovers TTS apps via SKILL.md"
+      agent_hint: 5090-claude
+      notes: "P7 upgraded on all machines. Cross-machine TTS verified (Gate 3). P7 Agent Interpreter discovery + speak-flow still pending (5090 responsibility)."
+      children:
+        - id: va.p7.discovery
+          task: "P7 discovers Ultimate-TTS-Studio as voice app"
+          action:
+            type: manual
+            expect: "Agent Interpreter lists TTS Studio in available apps"
+          context: "P7 'pinokio' skill scans installed apps for TTS capability"
+          agent_hint: 5090-claude
+          status: pending
+
+        - id: va.p7.speak-flow
+          task: "'speak [text]' routes through P7 → TTS"
+          action:
+            type: manual
+            expect: "Claude Code 'speak hello world' → Pinokio → TTS Studio → audio"
+          context: "End-to-end: agent → P7 interpreter → app launch → API call → result"
+          agent_hint: 5090-claude
+          status: pending
+
+        - id: va.p7.remote-speak
+          task: "Remote agent speaks via Tailscale mesh"
+          action:
+            type: manual
+            expect: "4090 laptop agent routes TTS to 5090 via P7 + Tailscale"
+          context: "Cross-machine: 4090 agent → Tailscale → 5090 P7 → TTS"
+          agent_hint: 4090-claude
+          status: done
+          depends_on: [va.p7.discovery, va.p7.speak-flow]
+          notes: "Verified 2026-03-22: 4090→5090 TTS via Tailscale Caddy proxy — 200 OK, 173ms. Network layer proven. P7 Agent Interpreter routing (va.p7.discovery + va.p7.speak-flow) still pending on 5090."
+
+        - id: va.p7.mobile-agent
+          task: "Mobile agent (Discord/Openclaw) triggers TTS"
+          action:
+            type: manual
+            expect: "Discord message from phone → 5090 P7 → TTS → audio response"
+          context: "Openclaw/Hermes Agent pattern from P7 announcement"
+          agent_hint: 4090-claude
+          status: pending
 
     # =========================================================================
     # Cross-References
@@ -675,3 +754,4 @@ root:
     # - NATS subject: skills.pipeline.voice-synthesis.v1
     # - Agent teams: Media & Voice (node_affinity: [powerfulmoves, z890])
     # - Agent identity: 5090-claude (voice-synthesis resonance)
+    # - TAC cross-ref: pinokio-p7.tac.yaml (Phase 2: Agent Interpreter discovery)

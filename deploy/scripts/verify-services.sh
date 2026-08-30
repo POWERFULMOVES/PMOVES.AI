@@ -38,7 +38,7 @@ SERVICES=(
   "notebook-sync     8095 /healthz"
   "publisher-discord 8094 /healthz"
   "render-webhook    8085 /healthz"
-  "cipher-memory     8096 /health"
+  "cipher-memory     8105 /health"
   "pmoves-yt         8077 /healthz"
   "nats              8222 /varz"
   "meilisearch       7700 /health"

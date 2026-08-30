@@ -4,32 +4,56 @@
     "voice.agent.response.v1": {
       "schema": "schemas/voice/agent.response.v1.schema.json",
       "description": "Voice agent response relayed from agentzero.task.result.v1 when meta.voice_mode is set. Published by voice-relay service.",
-      "publisher": ["voice-relay", "n8n-voice-platform-router"],
-      "subscriber": ["voice_follow_agent", "voice_follow_cast_agent"]
+      "publisher": [
+        "voice-relay",
+        "n8n-voice-platform-router"
+      ],
+      "subscriber": [
+        "voice_follow_agent",
+        "voice_follow_cast_agent"
+      ]
     },
     "voice.cast.completed.v1": {
       "schema": "schemas/voice/cast.completed.v1.schema.json",
       "description": "Published when TTS audio has been successfully cast to a Chromecast/Google Home device.",
-      "publisher": ["cast-tts-gateway"],
-      "subscriber": ["publisher-discord", "cast-notebook-logger"]
+      "publisher": [
+        "cast-tts-gateway"
+      ],
+      "subscriber": [
+        "publisher-discord",
+        "cast-notebook-logger"
+      ]
     },
     "voice.cast.failed.v1": {
       "schema": "schemas/voice/cast.failed.v1.schema.json",
       "description": "Published when a TTS synthesis or cast-to-device operation fails.",
-      "publisher": ["cast-tts-gateway"],
-      "subscriber": ["publisher-discord"]
+      "publisher": [
+        "cast-tts-gateway"
+      ],
+      "subscriber": [
+        "publisher-discord"
+      ]
     },
     "voice.cast.health_alert.v1": {
       "schema": "schemas/voice/cast.health_alert.v1.schema.json",
       "description": "Published when a Cast device health check detects degradation.",
-      "publisher": ["cast-tts-gateway"],
-      "subscriber": ["monitoring"]
+      "publisher": [
+        "cast-tts-gateway"
+      ],
+      "subscriber": [
+        "monitoring"
+      ]
     },
     "device.cast.discovered.v1": {
       "schema": "schemas/device/cast.discovered.v1.schema.json",
       "description": "Published when Cast device discovery completes with current inventory.",
-      "publisher": ["cast-tts-gateway"],
-      "subscriber": ["publisher-discord", "agent-zero"]
+      "publisher": [
+        "cast-tts-gateway"
+      ],
+      "subscriber": [
+        "publisher-discord",
+        "agent-zero"
+      ]
     },
     "agentzero.event.log.v1": {
       "schema": "schemas/agentzero/event.log.v1.schema.json"
@@ -54,7 +78,9 @@
     },
     "agentzero.task.result.v1": {
       "schema": "schemas/agentzero/task.result.v1.schema.json",
-      "subscriber": ["voice-relay"]
+      "subscriber": [
+        "voice-relay"
+      ]
     },
     "agentzero.task.status.v1": {
       "schema": "schemas/agentzero/task.status.v1.schema.json"
@@ -92,6 +118,69 @@
     "content.published.v1": {
       "schema": "schemas/content/published.v1.schema.json"
     },
+    "content.raw.v1": {
+      "schema": "schemas/content/raw.v1.schema.json",
+      "description": "Raw content entering the provenance-first shaping lane before SPARK lexicon processing.",
+      "publisher": [
+        "messaging-gateway",
+        "channel-monitor",
+        "content-provenance-gate"
+      ],
+      "subscriber": [
+        "content-provenance-gate",
+        "pmoves-dgx-spark"
+      ]
+    },
+    "content.lexicon.shaped.v1": {
+      "schema": "schemas/content/lexicon.shaped.v1.schema.json",
+      "description": "Context-shaped lexical payload with favorite words, anchors, and semantic weights.",
+      "publisher": [
+        "content-provenance-gate",
+        "pmoves-dgx-spark"
+      ],
+      "subscriber": [
+        "content-provenance-gate",
+        "pmoves-dgx-spark",
+        "pmoves-hyperdimensions"
+      ]
+    },
+    "content.provenance.attested.v1": {
+      "schema": "schemas/content/provenance.attested.v1.schema.json",
+      "description": "Lexicon-shaped payload attested with CHIT geometry, graphiti mark, and Merkle root.",
+      "publisher": [
+        "content-provenance-gate",
+        "pmoves-dgx-spark"
+      ],
+      "subscriber": [
+        "content-provenance-gate",
+        "hi-rag-gateway-v2",
+        "pmoves-hyperdimensions"
+      ]
+    },
+    "content.hirag.accepted.v1": {
+      "schema": "schemas/content/hirag.accepted.v1.schema.json",
+      "description": "Provenance-attested content accepted for HiRAG ingestion.",
+      "publisher": [
+        "content-provenance-gate"
+      ],
+      "subscriber": [
+        "hi-rag-gateway-v2",
+        "pmoves-hyperdimensions",
+        "messaging-gateway"
+      ]
+    },
+    "content.hirag.rejected.v1": {
+      "schema": "schemas/content/hirag.rejected.v1.schema.json",
+      "description": "Content rejected before HiRAG ingest because provenance or semantic gates failed.",
+      "publisher": [
+        "content-provenance-gate"
+      ],
+      "subscriber": [
+        "pmoves-dgx-spark",
+        "pmoves-hyperdimensions",
+        "messaging-gateway"
+      ]
+    },
     "finance.monthly.summary.v1": {
       "schema": "schemas/finance/monthly.summary.v1.schema.json"
     },
@@ -110,6 +199,34 @@
     "gen.text.result.v1": {
       "schema": "schemas/gen/text.result.v1.schema.json"
     },
+    "tokenism.attribution.recorded.v1": {
+      "schema": "schemas/tokenism/attribution.recorded.v1.schema.json"
+    },
+    "tokenism.cgp.weekly.v1": {
+      "schema": "schemas/tokenism/cgp.weekly.v1.schema.json"
+    },
+    "tokenism.cgp.ready.v1": {
+      "schema": "schemas/tokenism/cgp.ready.v1.schema.json"
+    },
+    "tokenism.swarm.population.v1": {
+      "schema": "schemas/tokenism/swarm.population.v1.schema.json"
+    },
+    "tokenism.activation.pack.v1": {
+      "schema": "schemas/tokenism/activation.pack.v1.schema.json",
+      "description": "Signed Tokenism production activation artifact binding deployment manifest, endpoint references, dry-run evidence, rollback, and approvals."
+    },
+    "tokenism.settlement.requested.v1": {
+      "schema": "schemas/tokenism/settlement.requested.v1.schema.json",
+      "description": "Signed Tokenism settlement batch planned from CGP attribution for Firefly/contract executors."
+    },
+    "tokenism.settlement.recorded.v1": {
+      "schema": "schemas/tokenism/settlement.recorded.v1.schema.json",
+      "description": "Settlement instruction was recorded or skipped idempotently by a Firefly/contract executor."
+    },
+    "tokenism.settlement.failed.v1": {
+      "schema": "schemas/tokenism/settlement.failed.v1.schema.json",
+      "description": "Settlement instruction failed with retryability metadata."
+    },
     "geometry.cgp.v1": {
       "schema": "schemas/geometry/cgp.v1.schema.json"
     },
@@ -117,8 +234,31 @@
       "schema": "schemas/geometry/cgp.v2.schema.json",
       "description": "CHIT Geometry Packet v2 with attribution, Merkle proofs, and hyperbolic encoding"
     },
+    "bpm.encoded.v1": {
+      "schema": "schemas/geometry/cgp.v2.schema.json",
+      "description": "Prosodic BPM-encoded CGP v0.2 packet emitted by bpm-encoder-worker from mesh.gpu.inference.result.v1.",
+      "publisher": [
+        "bpm-encoder-worker"
+      ]
+    },
     "geometry.swarm.meta.v1": {
       "schema": "schemas/geometry/swarm.meta.v1.schema.json"
+    },
+    "geometry.publish.gate.v1": {
+      "schema": "schemas/geometry/publish.gate.v1.schema.json",
+      "description": "Gate-open intent for a queued publishable artifact; consumed by the hi-rag-gateway pub-gate bridge which enforces the egress floor and emits content.publish.approved.v1.",
+      "publisher": [
+        "hyperdimensions-ui",
+        "pub-gate-notebook",
+        "operator-cli"
+      ],
+      "subscriber": [
+        "hi-rag-gateway-v2"
+      ]
+    },
+    "model.fitness.recorded.v1": {
+      "schema": "schemas/model/fitness.recorded.v1.schema.json",
+      "description": "Normalized model fitness score from TensorZero telemetry and optional Pinokio/Unsloth eval metrics."
     },
     "health.metrics.updated.v1": {
       "schema": "schemas/health/metrics.updated.v1.schema.json"
@@ -249,14 +389,216 @@
     "ops.pr.monitor.completed.v1": {
       "schema": "schemas/ops/pr.monitor.completed.v1.schema.json",
       "description": "PR monitor cycle completed — open PRs scanned and status updated",
-      "publisher": ["pr-monitor"],
-      "subscriber": ["claude-code-cli"]
+      "publisher": [
+        "pr-monitor"
+      ],
+      "subscriber": [
+        "claude-code-cli"
+      ]
     },
     "ops.pr.trim.completed.v1": {
       "schema": "schemas/ops/pr.trim.completed.v1.schema.json",
       "description": "PR Hedge Trim completed — review threads classified, fixed, and resolved",
-      "publisher": ["claude-code-cli"],
-      "subscriber": ["pr-monitor"]
+      "publisher": [
+        "claude-code-cli"
+      ],
+      "subscriber": [
+        "pr-monitor"
+      ]
+    },
+    "p7.room.session.started.v1": {
+      "schema": "schemas/room/p7.session.fact.v1.schema.json",
+      "description": "P7 room session entered active state.",
+      "publisher": [
+        "p7-room-orchestrator"
+      ]
+    },
+    "p7.room.checkpoint.v1": {
+      "schema": "schemas/room/p7.session.fact.v1.schema.json",
+      "description": "P7 room session checkpoint.",
+      "publisher": [
+        "p7-room-orchestrator"
+      ]
+    },
+    "p7.room.session.ended.v1": {
+      "schema": "schemas/room/p7.session.fact.v1.schema.json",
+      "description": "P7 room session entered ended state.",
+      "publisher": [
+        "p7-room-orchestrator"
+      ]
+    },
+    "p7.room.stage.changed.v1": {
+      "schema": "schemas/room/p7.stage.changed.v1.schema.json",
+      "description": "P7 durable room stage changed.",
+      "publisher": [
+        "p7-room-orchestrator"
+      ]
+    },
+    "p7.room.command.failed.v1": {
+      "schema": "schemas/room/p7.command.failed.v1.schema.json",
+      "description": "P7 rejected or failed a room command.",
+      "publisher": [
+        "p7-room-orchestrator"
+      ]
+    },
+    "comfy.collab.prompt.v1": {
+      "schema": "schemas/comfy/collab.prompt.v1.schema.json",
+      "description": "Creator-collab slice 3: a creative prompt was submitted to a ComfyUI collab session in a room. Carries parent_prompt_id for chain-of-edits. Published by creator-collab surfaces (notebook-workbench, creator-canvas-primary); consumed by comfy-watcher / comfyui / pinokio_bridge.",
+      "publisher": [
+        "creator-canvas-primary",
+        "notebook-workbench",
+        "pinokio_bridge"
+      ],
+      "subscriber": [
+        "comfy-watcher",
+        "comfyui",
+        "nats_event_bus"
+      ]
+    },
+    "comfy.collab.progress.v1": {
+      "schema": "schemas/comfy/collab.progress.v1.schema.json",
+      "description": "Creator-collab slice 3: progress update for a running ComfyUI workflow (phase, percent, current_node, step). Linked to the parent prompt via prompt_id. Published by comfy-watcher / comfyui; consumed by nats_event_bus and the room sidebar.",
+      "publisher": [
+        "comfy-watcher",
+        "comfyui"
+      ],
+      "subscriber": [
+        "nats_event_bus",
+        "notebook-workbench",
+        "creator-canvas-primary"
+      ]
+    },
+    "comfy.collab.artifact.v1": {
+      "schema": "schemas/comfy/collab.artifact.v1.schema.json",
+      "description": "Creator-collab slice 3: a ComfyUI workflow produced an artifact (image/video/audio/model/text). Linked to the parent prompt via prompt_id. Published by comfy-watcher / comfyui; consumed by notebook-workbench + creator-canvas-primary to surface the artifact in the room.",
+      "publisher": [
+        "comfy-watcher",
+        "comfyui"
+      ],
+      "subscriber": [
+        "nats_event_bus",
+        "notebook-workbench",
+        "creator-canvas-primary",
+        "minio-gateway"
+      ]
+    },
+    "room.presence.v1": {
+      "schema": "schemas/room/room.presence.v1.schema.json",
+      "description": "Creator-collab slice 3: presence event for a room — join/leave/focus/blur/active. Emitted by room UIs and P7. Consumed by nats_event_bus + room sidebar to render the active collaborator list.",
+      "publisher": [
+        "notebook-workbench",
+        "creator-canvas-primary",
+        "p7-room-orchestrator"
+      ],
+      "subscriber": [
+        "nats_event_bus",
+        "room-sidebar",
+        "pmoves-helpdesk-skill"
+      ]
+    },
+    "room.directory.v1": {
+      "schema": "schemas/room/room.directory.v1.schema.json",
+      "description": "Creator-collab slice 3: snapshot of the room directory (every known room with its stage, hardware summary, apps_count, skills_count). Published by p7-room-orchestrator on catalog reload or stage transition. Consumed by nats_event_bus, dashboard, room-suggest-skill, pmoves-helpdesk-skill.",
+      "publisher": [
+        "p7-room-orchestrator"
+      ],
+      "subscriber": [
+        "nats_event_bus",
+        "dashboard",
+        "room-suggest-skill",
+        "pmoves-helpdesk-skill"
+      ]
+    },
+    "helpdesk.intake.opened.v1": {
+      "schema": "schemas/helpdesk/helpdesk.intake.opened.v1.schema.json",
+      "description": "Creator-collab slice 6: a visitor opened an intake session in pmoves.room.helpdesk. Carries the intake_id, agent_id, optional intent hint, and the room directory snapshot version used for routing. Emitted by pmoves-helpdesk-skill at session-open. Consumed by nats_event_bus + dashboard to render intake traffic.",
+      "publisher": [
+        "pmoves-helpdesk-skill"
+      ],
+      "subscriber": [
+        "nats_event_bus",
+        "dashboard",
+        "helpdesk-log"
+      ]
+    },
+    "helpdesk.intake.routed.v1": {
+      "schema": "schemas/helpdesk/helpdesk.intake.routed.v1.schema.json",
+      "description": "Creator-collab slice 6: the helpdesk routed an intake to a target room + optional fleet node. Carries the parent intake_id, target room_id, routing rationale, and the structured intent match for debugging + persona-aware ranking. Emitted by pmoves-helpdesk-skill after visitor acceptance or auto-route. Consumed by nats_event_bus + dashboard to surface intake outcomes.",
+      "publisher": [
+        "pmoves-helpdesk-skill"
+      ],
+      "subscriber": [
+        "nats_event_bus",
+        "dashboard",
+        "helpdesk-log",
+        "room-suggest-skill"
+      ]
+    },
+    "helpdesk.room.suggested.v1": {
+      "schema": "schemas/helpdesk/helpdesk.room.suggested.v1.schema.json",
+      "description": "Creator-collab slice 6: room-suggest-skill produced a ranked list of candidate rooms for a persona + intent. Carries the suggestion_id, persona context (agent_id + role), the ranked candidates with persona-aware scores, and the directory snapshot version. Emitted by room-suggest-skill on every chat turn (ambient) or on the room-suggest UI (explicit). Consumed by nats_event_bus + room-suggestions panel.",
+      "publisher": [
+        "room-suggest-skill"
+      ],
+      "subscriber": [
+        "nats_event_bus",
+        "room-suggestions",
+        "pmoves-helpdesk-skill",
+        "dashboard"
+      ]
+    },
+    "chit.economics.usage.v1": {
+      "schema": "schemas/chit/economics.usage.v1.schema.json"
+    },
+    "archon.mint.agent.v1": {
+      "schema": "schemas/archon/mint.agent.v1.schema.json"
+    },
+    "archon.qa.result.v1": {
+      "schema": "schemas/archon/qa.result.v1.schema.json"
+    },
+    "archon.mint.confirmed.v1": {
+      "schema": "schemas/archon/mint.confirmed.v1.schema.json"
+    },
+    "archon.mint.skill.v1": {
+      "schema": "schemas/archon/mint.skill.v1.schema.json"
+    },
+    "archon.mint.creator.v1": {
+      "schema": "schemas/archon/mint.creator.v1.schema.json"
+    },
+    "studio.render.completed.v1": {
+      "description": "ComfyUI render completed in DARKXSIDE content studio",
+      "direction": "pub",
+      "producers": [
+        "pinokio-bridge",
+        "darkxsides.room"
+      ],
+      "consumers": [
+        "publisher-discord",
+        "open-notebook"
+      ]
+    },
+    "voice.synth.request.v1": {
+      "description": "Voice synthesis request from DARKXSIDE TTS studio",
+      "direction": "pub",
+      "producers": [
+        "flute-gateway",
+        "darkxsides.room"
+      ],
+      "consumers": [
+        "flute-gateway"
+      ]
+    },
+    "room.desktop.session.opened.v1": {
+      "description": "E2B shared desktop session opened in DARKXSIDE room",
+      "direction": "pub",
+      "producers": [
+        "e2b-desktop",
+        "darkxsides.room"
+      ],
+      "consumers": [
+        "agent-zero",
+        "open-notebook"
+      ]
     }
   }
 }

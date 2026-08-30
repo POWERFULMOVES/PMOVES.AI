@@ -10,25 +10,6 @@ services:
   archon:
     build: null
     image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
-  archon-ui:
-    build: null
-    image: ${ARCHON_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon-ui:pmoves-latest}
-    profiles: ["agents"]
-    environment:
-      - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
-      - VITE_ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
-      - VITE_API_URL=${ARCHON_UI_API_URL:-http://host.docker.internal:8091}
-      - HOST=0.0.0.0
-      - PROD=${ARCHON_UI_PROD:-true}
-      - DOCKER_ENV=true
-    ports:
-      - "${ARCHON_UI_PORT:-3737}:3737"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-      # Alias for vite proxy - maps archon-server to the host's published Archon port.
-      - "archon-server:host-gateway"
-    networks:
-      api_tier:
   deepresearch:
     build: null
   supaserch:

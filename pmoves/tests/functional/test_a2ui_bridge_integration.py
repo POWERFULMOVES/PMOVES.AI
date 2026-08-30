@@ -1,7 +1,7 @@
 """Functional integration tests for A2UI NATS Bridge.
 
 These tests require:
-- NATS server running at nats://localhost:4222
+- NATS server running at nats://nats:pmoves@nats:4222
 - A2UI bridge service running at http://localhost:9224
 
 Run with:
@@ -78,52 +78,35 @@ async def test_a2ui_simulate_endpoint():
 
 
 @pytest.mark.asyncio
-async def test_nats_stream_exists():
-    """Test that the A2UI NATS stream is created."""
-    try:
-        import nats
-    except ImportError:
-        pytest.skip("nats-py not installed")
+async def test_nats_stream_exists(nats_client):
+    """Test that the A2UI NATS stream is created.
 
-    try:
-        nc = await nats.connect("nats://localhost:4222")
-        js = nc.jetstream()
+    Uses the session-scoped ``nats_client`` fixture (see
+    ``pmoves/tests/conftest.py``) which handles authentication and
+    skips cleanly when the broker is unavailable.
+    """
+    js = nats_client.jetstream()
 
-        # Verify A2UI stream exists
-        streams = await js.streams_info()
-        stream_names = [s.config.name for s in streams]
-        assert "A2UI" in stream_names
+    # Verify A2UI stream exists
+    streams = await js.streams_info()
+    stream_names = [s.config.name for s in streams]
+    assert "A2UI" in stream_names
 
-        # Verify stream configuration
-        a2ui_stream = await js.stream_info("A2UI")
-        assert a2ui_stream is not None
-
-        await nc.close()
-    except ConnectionRefusedError:
-        pytest.skip("NATS server not available at nats://localhost:4222")
+    # Verify stream configuration
+    a2ui_stream = await js.stream_info("A2UI")
+    assert a2ui_stream is not None
 
 
 @pytest.mark.asyncio
-async def test_nats_a2ui_subjects():
+async def test_nats_a2ui_subjects(nats_client):
     """Test that A2UI subjects are configured."""
-    try:
-        import nats
-    except ImportError:
-        pytest.skip("nats-py not installed")
+    js = nats_client.jetstream()
 
-    try:
-        nc = await nats.connect("nats://localhost:4222")
-        js = nc.jetstream()
+    stream_info = await js.stream_info("A2UI")
+    subjects = stream_info.config.subjects
 
-        stream_info = await js.stream_info("A2UI")
-        subjects = stream_info.config.subjects
-
-        # Verify expected subjects
-        assert "a2ui.render.v1" in subjects or any("a2ui.>" in s for s in subjects)
-
-        await nc.close()
-    except ConnectionRefusedError:
-        pytest.skip("NATS server not available")
+    # Verify expected subjects
+    assert "a2ui.render.v1" in subjects or any("a2ui.>" in s for s in subjects)
 
 
 @pytest.mark.asyncio

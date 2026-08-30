@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   wger:
-    image: ghcr.io/POWERFULMOVES/Pmoves-Health-wger:main
+    image: ghcr.io/powerfulmoves/pmoves-health-wger:main
     restart: unless-stopped
     networks: [pmoves-net]
     environment:

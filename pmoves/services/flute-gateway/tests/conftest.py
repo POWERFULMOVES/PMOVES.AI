@@ -3,7 +3,6 @@
 import os
 import sys
 
-import pytest
 
 # Add parent directory to path for imports
 _parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,4 +25,4 @@ def pytest_configure(config):
 # Environment defaults for tests
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 os.environ.setdefault("FLUTE_API_KEY", "test-api-key")
-os.environ.setdefault("ULTIMATE_TTS_URL", "http://localhost:7861")
+os.environ.setdefault("ULTIMATE_TTS_URL", "http://localhost:7860")

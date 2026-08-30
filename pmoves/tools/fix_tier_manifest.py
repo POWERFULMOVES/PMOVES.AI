@@ -1,5 +1,40 @@
 #!/usr/bin/env python3
-"""Update CHIT secrets manifest to output to tier env files."""
+"""DEPRECATED -- do not extend. Update CHIT secrets manifest to output to tier env files.
+
+WHY THIS IS A WORKAROUND, NOT A MECHANISM
+-----------------------------------------
+This script carries a hardcoded TIER_MAPPING and rewrites the secrets manifest
+from it. Nothing invokes it: it is referenced by no Make target and no workflow
+(verified 2026-08-25). So the manifest's tier routing is a frozen snapshot of
+whatever this dict said the last time a human ran it by hand.
+
+The same routing is ALSO encoded, separately, in tools/generate_chit_v2.py --
+another orphan with its own map. Two hardcoded copies of one fact, neither
+executed by the pipeline, both able to drift from the manifest they describe and
+from each other.
+
+The observable consequence: a provider key can be present in .example, present
+in both maps, and absent from the runtime tier file, so every consumer reading
+that tier gets nothing while every declaration says it should work. Z_AI_API_KEY
+did exactly that -- crush-env.sh loads env.tier-llm, the key is mapped to
+env.tier-llm here and in generate_chit_v2, and sourcing that loader yields an
+empty value. SPARK hit the same shape with Hermes. An operator ended up pasting
+an API key into ~/.config/crush/crush.json by hand.
+
+RETIREMENT PATH
+---------------
+1. Reconcile TIER_MAPPING and generate_chit_v2's map INTO secrets_manifest_v2.yaml
+   so the manifest declares its own tier outputs -- one declaration, in the file
+   the funnel already reads.
+2. Make `secrets-funnel-sync` honour that declaration for every secret, so adding
+   a provider needs no script edit.
+3. Ratchet `check_tier_envs.py --strict` into the pipeline once the backlog of
+   drifted keys is cleared, so a future gap fails instead of being reported.
+4. Delete this file and generate_chit_v2's map.
+
+Until step 1 lands, adding a key here does not make it reach a node -- it only
+makes the declaration look complete. Prefer fixing the manifest directly.
+"""
 
 import yaml
 from pathlib import Path
@@ -22,6 +57,7 @@ TIER_MAPPING = {
     "SUPABASE_JWT_SECRET": ["env.tier-api"],
 
     # env.tier-llm: ALL external LLM provider API keys (security fence)
+    "ALIBABA_PRO_CODING_PLAN": ["env.tier-llm"],
     "ANTHROPIC_API_KEY": ["env.tier-llm"],
     "COHERE_API_KEY": ["env.tier-llm"],
     "DEEPSEEK_API_KEY": ["env.tier-llm"],
@@ -30,7 +66,10 @@ TIER_MAPPING = {
     "GEMINI_API_KEY": ["env.tier-llm"],
     "GOOGLE_API_KEY": ["env.tier-llm"],
     "GROQ_API_KEY": ["env.tier-llm"],
+    "HF_TOKEN": ["env.tier-llm"],
+    "KILOCODE_API_KEY": ["env.tier-llm"],
     "MISTRAL_API_KEY": ["env.tier-llm"],
+    "MOONSHOT_API_KEY": ["env.tier-llm"],
     "OPENAI_API_KEY": ["env.tier-llm"],
     "OPENAI_API_BASE": ["env.tier-llm"],
     "OPENAI_COMPATIBLE_BASE_URL": ["env.tier-llm"],
@@ -39,9 +78,12 @@ TIER_MAPPING = {
     "TOGETHER_AI_API_KEY": ["env.tier-llm"],
     "VOYAGE_API_KEY": ["env.tier-llm"],
     "XAI_API_KEY": ["env.tier-llm"],
+    "Z_AI_API_KEY": ["env.tier-llm"],
+    "DASHSCOPE_API_KEY": ["env.tier-llm"],
 
     # env.tier-llm also gets TensorZero and Ollama config
     "OLLAMA_BASE_URL": ["env.tier-llm"],
+    "OLLAMA_API_KEY": ["env.tier-llm"],
     "TENSORZERO_API_KEY": ["env.tier-llm"],
 
     # env.tier-agent: Agent orchestration

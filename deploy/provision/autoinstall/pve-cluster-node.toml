@@ -1,0 +1,69 @@
+# Proxmox VE 9 automated-installer answer file
+# Format: TOML. Introduced in PVE 8.2; enhanced in PVE 9 with cluster-aware hooks.
+#
+# Embed this file on the PVE ISO via proxmox-auto-install-assistant:
+#   proxmox-auto-install-assistant prepare-iso \
+#     proxmox-ve_9.x.iso \
+#     --fetch-from iso \
+#     --answer-file deploy/provision/autoinstall/pve-cluster-node.toml
+#
+# The resulting ISO is self-contained — boot it, answer NO questions.
+#
+# Docs: https://pve.proxmox.com/wiki/Automated_Installation
+
+[global]
+# Country / timezone / keyboard
+country = "us"
+fqdn = "pmoves-pve-REPLACEME.pmoves.ai"
+keyboard = "en-us"
+mailto = "ops@pmoves.ai"
+timezone = "America/New_York"
+
+# Root password — SSH key-only workflow preferred, but PVE installer REQUIRES
+# a root password. Set a random strong one here; rotate via pveum after first boot.
+# Generate: openssl rand -base64 32
+# PMOVES-AUTOINSTALL: build-usb.sh will substitute this line with the value from
+# the --root-password flag (or generate one and print to the build log).
+root_password = "REPLACE_WITH_STRONG_RANDOM_AT_BUILD_TIME"
+
+# Upload a post-install root public key so operators can SSH without the password.
+# Replace with the actual owner key or let build-usb.sh fetch from GitHub.
+root_ssh_keys = [
+  "ssh-ed25519 AAAA__REPLACE_WITH_OWNER_PUBKEY__ pmoves-owner",
+]
+
+# Reboot after install
+reboot_on_error = false
+
+[network]
+# DHCP on the first online NIC. Cluster network on 10 GbE is configured
+# AFTER first boot via Phase G scripts (deploy/proxmox/cluster/).
+source = "from-dhcp"
+
+[disk-setup]
+# ZFS RAID-1 on 2 NVMe devices. If you have 4 NVMe, change to raid10.
+filesystem = "zfs"
+zfs.raid = "raid1"
+# Select all SSD/NVMe devices by filter (documented proxmox-auto-install syntax).
+# Uncomment to restrict to a specific bus or use concrete device paths:
+# filter.bus = "nvme"
+# disk_list = ["/dev/nvme0n1", "/dev/nvme1n1"]
+filter.ssd = "yes"
+
+# Leave some free space for ZFS snapshots / PBS client staging.
+# ashift=12 is correct for 4k sector NVMe; override to 13 for enterprise PLP drives.
+zfs.ashift = 12
+zfs.compress = "lz4"
+zfs.checksum = "on"
+zfs.copies = 1
+
+[first-boot]
+# PVE 9's first-boot hook fetches + runs a remote script on the host after install.
+# We use this to clone PMOVES.AI and dispatch to hostinger-kvm-setup.sh with
+# --node-type=pve-member. The host will NOT install Docker (enforced by that
+# branch of the setup script).
+source = "from-url"
+# TODO: Add cert_fingerprint or fetch over Tailscale SSH for supply-chain safety
+url = "https://raw.githubusercontent.com/POWERFULMOVES/PMOVES.AI/main/deploy/provision/pve-first-boot.sh"
+# NOTE: hash pinning recommended in production. Omit for now; build-usb.sh
+# will inject the expected cert fingerprint via substitution.

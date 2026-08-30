@@ -1,0 +1,284 @@
+# Merge Gate — Required status checks for all PRs targeting main
+# Configure branch protection in GitHub Settings > Branches > main:
+#   Required status checks: merge-decision
+#
+# There used to be a job here literally named `merge-gate` whose entire body
+# was `echo "passed=true"`. It took no input, evaluated nothing, and could not
+# report anything but success — while carrying the name that reads, in the
+# checks list and in the branch-protection config, as THE gate. It was never in
+# merge-decision's `needs`, so nothing depended on it; it only ever supplied a
+# green tick next to an authoritative-sounding name. Removed, and the required
+# context moved to `merge-decision`, which actually evaluates the other jobs.
+#
+# Note: CodeQL scanning is handled by codeql.yml (CodeQL Advanced) separately.
+# This avoids duplicate scans and transient init failures.
+
+name: Merge Gate
+
+on:
+  pull_request:
+    # `PMOVES.AI-Edition-Hardened` is here because its branch protection
+    # REQUIRES the `hardening-validation` context, and that context is a job in
+    # THIS workflow. While the trigger was main-only the job never ran for a
+    # hardened PR, so the required check was never reported, so no PR into that
+    # branch could ever satisfy its own protection. The branch had not been
+    # synced since 2026-03-17 -- not for want of trying, but because every
+    # attempt was structurally unmergeable.
+    #
+    # A required context that no workflow produces is the same defect this
+    # file's header already records removing: a name in the protection config
+    # that reads as THE gate while nothing stands behind it. There it was a job
+    # that could only report success; here it was a job that could not report
+    # at all.
+    #
+    # Every job in this gate is branch-agnostic -- checkout, a pinned toolchain,
+    # and a ratchet run -- so widening the trigger changes what is CHECKED, not
+    # how anything is checked.
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    types: [opened, synchronize, reopened]
+
+# All eight jobs are read-only: checkout, install, run a make target or a python
+# script, and report. Verified before setting this -- no `gh pr`/`gh api`, no
+# github-script, no comment or label writes, and the ghcr/"packages" hits in this
+# file are all prose in comments, not registry pulls. So contents:read is the
+# whole requirement, matching the sibling workflows.
+permissions:
+  contents: read
+
+jobs:
+  # Ratcheted: runs ALL test_*.py (previously capped at `head -20` of 264 by
+  # filesystem order) and can actually fail (previously ended in `|| true`).
+  # New failures and fixed-but-still-baselined entries both fail the job.
+  python-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The repository default for GITHUB_TOKEN is `write`, so a job that omits
+    # this block runs the whole test suite with a token that can push to the
+    # repo. These jobs only need to read the checkout.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        # No `|| fallback` and no `2>/dev/null`: a missing or unresolvable
+        # requirements file must fail the job, not silently install four packages.
+        run: pip install -r .github/requirements-tests.txt
+      - name: Run Python tests (ratchet)
+        run: python pmoves/tools/pytest_ratchet.py
+
+  # This job could not fail. Its body parsed ONE of 55 tracked compose files,
+  # sent the error to /dev/null, and ended in `|| echo 'Compose validation
+  # skipped'` - so it exited 0 whatever happened, while sitting in
+  # merge-decision's `needs` supplying a guaranteed green vote under a name that
+  # reads as though Docker builds were being validated. Same shape as the
+  # `merge-gate` job removed from this file for the same reason.
+  #
+  # It now parses all 55 and fails on any that do not. Note the obvious version
+  # of that fix is wrong: two overlays use Compose's own `!reset` / `!override`
+  # merge tags, which plain safe_load rejects. The tool registers them.
+  docker-build-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Validate every tracked compose file parses
+        run: make -C pmoves compose-yaml-check
+
+  # Ratcheted: judges ALL 99 tracked Dockerfiles (previously globbed
+  # pmoves/services/*/Dockerfile, which sees 76 of them and misses 10 of the 12
+  # that run as root) and can actually fail (previously ended in `|| echo`).
+  # It also now judges the *effective* user: pmoves/images/jellyfin/Dockerfile
+  # sets a non-root USER and then switches back with a later `USER root`, which
+  # a substring search for USER scored as compliant.
+  # New findings and fixed-but-still-baselined entries both fail the job.
+  hardening-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # No pip install: the ratchet is stdlib-only and discovers via `git
+      # ls-files`, so it needs the checkout and nothing else.
+      - name: Check container hardening (ratchet)
+        run: python pmoves/tools/hardening_ratchet.py
+
+  # A SHA-pinned action that does not exist fails the workflow during SETUP —
+  # before runs-on resolves, before any step logs, before any annotation. The
+  # run shows `startup_failure`, which reads exactly like a runner hiccup. Two
+  # such pins were live and unnoticed: branch-protection-drift/ruleset-sync
+  # (0 successful runs, ever) and build-nats-workers (5/5 startup_failure since
+  # 2026-07-26). This gate makes the next one a PR failure instead.
+  action-pin-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Stdlib-only; resolves pins through the `gh` CLI preinstalled on the
+      # runner, authenticated with the workflow token.
+      - name: Validate SHA-pinned actions resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python pmoves/tools/action_pin_audit.py
+
+  # pmoves/config/agent_registry.yaml is what a human or a tool reads to answer
+  # "what is this component and how do I reach it". Two entries claimed a
+  # submodule that is not in .gitmodules and an SSE endpoint nothing listens on,
+  # while the code was first-party and stdio-only. A drifted registry does not
+  # fail loudly; it quietly sends people somewhere that does not exist.
+  agent-registry-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Installed via the official script rather than a marketplace action: no
+      # other workflow here uses setup-uv, so adding it would mean a new entry in
+      # the Actions allowlist and another SHA to keep pinned, for one binary.
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The same make target a human runs. A CI-only invocation drifts from the
+      # local one, and then only one of them is ever right.
+      - name: Check the agent registry describes reality
+        run: make -C pmoves agent-registry-check
+
+  # Bring-up order is DERIVED from the compose graph rather than authored, so it
+  # cannot drift silently as services are added. Blocking findings are a
+  # dependency cycle, a dependency nothing defines, and an unreadable or missing
+  # compose input. Healthcheck gaps and weak waits are advisory (exit 3) and only
+  # warn.
+  #
+  # Advisory is exit 3 and deliberately not 2, because 2 is what a FAILED RUNNER
+  # returns - argparse uses it, and uv returns it when the script cannot start.
+  # A caller that treated 2 as advisory could not tell "the graph has advice"
+  # from "the tool never ran", and would accept an empty result as success.
+  dep-matrix-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Installed via the official script rather than a marketplace action: no
+      # other workflow here uses setup-uv, so adding it would mean a new entry in
+      # the Actions allowlist and another SHA to keep pinned, for one binary.
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Validate the compose dependency graph
+        run: make -C pmoves dep-matrix-check
+
+  # The agent-zero image installs dependencies TWICE into one venv - the fork's
+  # requirements first, ours second as a --constraint - so ours wins. Our lock
+  # had resolved a package BELOW the version the fork pins for a published
+  # advisory, because we declared a package that caps it. The fork's pin was
+  # intact in the fork's file the whole time; the image ran something else.
+  #
+  # This lived in its own path-filtered workflow first. Per GitHub's own
+  # guidance, a path-filtered workflow can never safely be a required check: a
+  # skipped workflow leaves its checks Pending and blocks the merge, so the
+  # advice is to avoid requiring workflows that can be skipped. A check that can
+  # never gate anything is the same orphan this commit exists to remove, so it
+  # lives here instead - unfiltered, aggregated, and requirable.
+  #
+  # No submodule checkout needed: the tool falls back to fetching the fork's
+  # requirements.txt at the GITLINK sha over https, which keeps the comparison
+  # deterministic. Gitlink-vs-branch drift is submodule-freshness.yml's job.
+  agent-zero-pin-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check our lock against the fork's declared pins
+        run: make -C pmoves agent-zero-pin-check
+
+  merge-decision:
+    # Reads nothing and writes nothing - it only inspects `needs` results.
+    permissions: {}
+    needs: [python-tests, docker-build-validation, hardening-validation, action-pin-validation,
+            agent-registry-check, dep-matrix-check, agent-zero-pin-check]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Evaluate gate status
+        run: |
+          echo "Merge gate evaluation:"
+          echo "  python-tests: ${{ needs.python-tests.result }}"
+          echo "  docker-build-validation: ${{ needs.docker-build-validation.result }}"
+          echo "  hardening-validation: ${{ needs.hardening-validation.result }}"
+          echo "  action-pin-validation: ${{ needs.action-pin-validation.result }}"
+          echo "  agent-registry-check: ${{ needs.agent-registry-check.result }}"
+          echo "  dep-matrix-check: ${{ needs.dep-matrix-check.result }}"
+          echo "  agent-zero-pin-check: ${{ needs.agent-zero-pin-check.result }}"
+          # REQUIRE success — do not merely reject "failure".
+          #
+          # A needs.<job>.result is one of success | failure | cancelled | skipped.
+          # Testing only for "failure" let cancelled and skipped through, so a run
+          # that never evaluated a gate reported PASSED. That is the same fail-open
+          # shape this PR exists to remove, reproduced in the gate meant to close it:
+          # an instrument that reports fine without having measured anything.
+          #
+          # None of the seven jobs carries an `if:` or a path filter, so they always
+          # run — a skip is not a legitimate state here, and if one ever appears it
+          # is itself worth failing on rather than passing silently.
+          failed=0
+          for r in "python-tests:${{ needs.python-tests.result }}" \
+                   "docker-build-validation:${{ needs.docker-build-validation.result }}" \
+                   "hardening-validation:${{ needs.hardening-validation.result }}" \
+                   "action-pin-validation:${{ needs.action-pin-validation.result }}" \
+                   "agent-registry-check:${{ needs.agent-registry-check.result }}" \
+                   "dep-matrix-check:${{ needs.dep-matrix-check.result }}" \
+                   "agent-zero-pin-check:${{ needs.agent-zero-pin-check.result }}"; do
+            job="${r%%:*}"; res="${r#*:}"
+            if [[ "$res" != "success" ]]; then
+              echo "::error::Merge gate FAILED — $job did not succeed (result: ${res:-<empty>})"
+              failed=1
+            fi
+          done
+          if [[ "$failed" -ne 0 ]]; then
+            exit 1
+          fi
+          echo "Merge gate PASSED — all seven gates reported success"

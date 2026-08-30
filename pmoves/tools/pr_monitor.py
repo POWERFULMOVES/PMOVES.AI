@@ -14,7 +14,11 @@ from typing import Any, Iterable, List
 
 SUCCESS_STATES = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 BLOCKING_REVIEW_STATES = {"CHANGES_REQUESTED"}
-BOT_REVIEW_LOGINS = {"coderabbitai[bot]", "chatgpt-codex-connector[bot]"}
+# github-actions posts CI status output (hardening/validation reports) as issue
+# comments; real failures still block via failed_checks (check conclusions), so
+# classifying these as bot keeps green status reports from masquerading as
+# human actionable feedback.
+BOT_REVIEW_LOGINS = {"coderabbitai[bot]", "chatgpt-codex-connector[bot]", "github-actions"}
 NITPICK_TOKENS = ("nitpick", "nit:", "nits", "style-only")
 ACTIONABLE_TOKENS = (
     "[p0",
@@ -103,7 +107,42 @@ def _run_json(cmd: list[str]) -> Any:
     return json.loads(payload)
 
 
+def _parse_origin_remote() -> str | None:
+    """Parse owner/repo from the origin remote URL.
+
+    Prefers origin over whatever `gh repo view` auto-detects, because checkouts
+    with both origin (fork) and upstream (parent) remotes can confuse gh's
+    auto-detection and return the upstream instead of the fork being worked on.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            text=True, capture_output=True, check=False, encoding="utf-8",
+        )
+    except (FileNotFoundError, OSError):
+        return None
+    if proc.returncode != 0:
+        return None
+    url = proc.stdout.strip()
+    if not url:
+        return None
+    # Handle both SSH (git@github.com:owner/repo.git) and HTTPS (https://github.com/owner/repo.git)
+    for prefix in ("git@github.com:", "https://github.com/", "ssh://git@github.com/"):
+        if url.startswith(prefix):
+            url = url[len(prefix):]
+            break
+    if url.endswith(".git"):
+        url = url[:-4]
+    if "/" in url and url.count("/") == 1:
+        return url
+    return None
+
+
 def _repo_name(default_repo: str) -> str:
+    # Prefer origin remote over gh auto-detection (which may return upstream).
+    origin = _parse_origin_remote()
+    if origin:
+        return origin
     try:
         data = _run_json(["gh", "repo", "view", "--json", "nameWithOwner"])
     except RuntimeError:
@@ -591,7 +630,7 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="owner/repo override (default: auto-detect from current checkout, fallback POWERFULMOVES/PMOVES.AI)",
     )
-    parser.add_argument("--base", default="PMOVES.AI-Edition-Hardened", help="base branch filter (default: PMOVES.AI-Edition-Hardened)")
+    parser.add_argument("--base", default="main", help="base branch filter (default: main; use PMOVES.AI-Edition-Hardened for submodule tiers)")
     parser.add_argument("--state", default="open", choices=["open", "closed", "merged", "all"], help="PR state filter")
     parser.add_argument("--pr", dest="prs", action="append", type=int, default=[], help="monitor specific PR number (repeatable)")
     parser.add_argument("--json-out", type=Path, default=None, help="write full monitor payload as JSON")

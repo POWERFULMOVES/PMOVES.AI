@@ -1,0 +1,66 @@
+# =============================================================================
+# PMOVES.AI - OpenTelemetry Collector Configuration
+# =============================================================================
+# Purpose: Central trace collection and export to Jaeger
+# Recommendation: PMOVES Rec #8 - Distributed Tracing
+#
+# Receivers:
+#   - OTLP gRPC (:4317) and HTTP (:4318) for service instrumentation
+# Processors:
+#   - batch: groups spans into batches for efficient export
+#   - memory_limiter: prevents OOM under load
+# Exporters:
+#   - otlp/jaeger: sends traces to Jaeger all-in-one via OTLP
+#   - prometheus: exposes trace metrics for Grafana
+#   - debug: console logging for development
+# Extensions:
+#   - health_check: HTTP health endpoint on :13133 for Docker healthcheck
+# =============================================================================
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+    send_batch_max_size: 2048
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 400
+    spike_limit_mib: 100
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: pmoves_otel
+  debug:
+    verbosity: normal
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/jaeger, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus, debug]
+  telemetry:
+    logs:
+      level: info

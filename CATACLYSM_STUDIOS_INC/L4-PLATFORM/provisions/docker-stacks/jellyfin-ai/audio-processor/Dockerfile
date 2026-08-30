@@ -50,12 +50,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/output /app/temp
+# Create necessary directories and a runtime account to own them.
+# python:slim ships no unprivileged user, so one is made here. A fixed high uid
+# keeps ownership stable across rebuilds and matches bind-mounted host paths
+# predictably.
+RUN useradd --system --create-home --uid 10001 appuser     && mkdir -p /app/logs /app/output /app/temp     && chown -R appuser:appuser /app
 
 # Set permissions
 RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8001
+
+# Drop root. 8001 is unprivileged and every write target above is owned by
+# appuser; ffmpeg in /opt is read-only at runtime.
+USER appuser
 
 CMD ["./entrypoint.sh"]

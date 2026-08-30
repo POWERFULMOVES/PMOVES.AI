@@ -1,6 +1,8 @@
 # PMOVES Agent Topology & TAC Tree
 
-_v1.4.0 (60 agents) — Last updated: 2026-02-18_
+_v1.6.0 (91 agents; regenerated from agent_registry.yaml, with the Fordham cluster hand-reconciled — see refresh note) — Last updated: 2026-07-07_
+
+> **Refresh note (2026-07-07):** roster is now 91 agents / 13 teams (added the `fordham_community` team + 5 room agents; reconciled registry↔teams to zero drift). The `agent_taxonomy_helper mermaid` generator's subsystem map is stale for 31 agents (pre-existing gap — incl. `cast_tts_gateway`, `vps_fleet_manager`, the observability specialists, and the new fordham/nemo agents), so a full auto-regen currently drops them. The Fordham cluster is added by hand below; updating the generator's subsystem map is a tracked follow-up.
 
 Visual topology of the PMOVES.AI agent ecosystem. All diagrams are derived from the single source of truth at `pmoves/config/agent_registry.yaml` and can be regenerated with:
 
@@ -37,7 +39,7 @@ graph TD
 
     subgraph BOTZ_SHIP["BoTZ Ship — Agent Runtime"]
         botz_gateway["BoTZ Gateway<br/>:8054"]:::standard
-        gateway_agent["Gateway Agent<br/>:8100"]:::standard
+        gateway_agent["Gateway Agent<br/>:8111"]:::standard
     end
 
     subgraph DOX_INTEL["DoX Intel — Document Intelligence"]
@@ -47,7 +49,7 @@ graph TD
     subgraph RESEARCH_KNOWLEDGE["Research & Knowledge"]
         supaserch["SupaSerch<br/>:8099"]:::standard
         deep_research["DeepResearch<br/>:8098"]:::standard
-        hirag_v2["Hi-RAG v2<br/>:8086, :8087"]:::standard
+        hirag_v2["Hi-RAG v2<br/>:8086"]:::standard
         open_notebook["Open Notebook"]:::standard
     end
 
@@ -67,7 +69,7 @@ graph TD
     end
 
     subgraph CIPHER_EVOLUTION["Cipher Evolution Backbone"]
-        cipher_memory["Cipher Memory<br/>:8096"]:::specialized
+        cipher_memory["Cipher Memory<br/>:8105"]:::specialized
         consciousness_service["Consciousness Service"]:::specialized
         evoswarm_controller["EvoSwarm Controller<br/>:8113"]:::standard
         swarm_attribution["Swarm Attribution"]:::specialized
@@ -100,24 +102,24 @@ graph TD
 
     subgraph INFRA["Infrastructure Backbone"]
         nats["NATS<br/>:4222"]:::utility
-        tensorzero["TensorZero<br/>:3030"]:::standard
+        tensorzero["TensorZero Gateway<br/>:3030"]:::standard
         prometheus["Prometheus<br/>:9090"]:::utility
-        grafana["Grafana<br/>:3000"]:::utility
+        grafana["Grafana<br/>:3002"]:::utility
         loki["Loki<br/>:3100"]:::utility
-        n8n_wf["n8n<br/>:5678"]:::utility
-        headscale["Headscale<br/>:8181"]:::utility
+        n8n["n8n<br/>:5678"]:::utility
+        headscale["Headscale<br/>:8096"]:::utility
         rustdesk["RustDesk<br/>:21115"]:::utility
         invidious["Invidious<br/>:3333"]:::utility
     end
 
     subgraph DOMAIN_APPS["Domain Applications"]
-        wealth["Wealth"]:::specialized
-        health_app["Health"]:::specialized
+        wealth["Wealth (Firefly III)"]:::specialized
+        health["Health (wger)"]:::specialized
         creator["Creator"]:::standard
         llama_lab["Llama Throughput Lab"]:::specialized
         jellyfin_bridge["Jellyfin Bridge<br/>:8093"]:::specialized
-        jellyfin_ai["Jellyfin AI"]:::specialized
-        transcribe_and_fetch["Transcribe+Fetch"]:::specialized
+        jellyfin_ai["Jellyfin AI Media Stack"]:::specialized
+        transcribe_and_fetch["Transcribe and Fetch"]:::specialized
         pdf_ingest["PDF Ingest<br/>:8092"]:::standard
         notebook_sync["Notebook Sync<br/>:8095"]:::standard
         publisher_discord["Publisher-Discord<br/>:8094"]:::standard
@@ -126,16 +128,26 @@ graph TD
         mesh_agent["Mesh Agent"]:::standard
     end
 
+    subgraph FORDHAM_COMMUNITY["Fordham Community Room — Cost-Pooling + Self-Governance Pilot"]
+        fordham_steward["Fordham Steward<br/>(coordinator)"]:::specialized
+        fordham_onboarding["Fordham Onboarding<br/>mesh + voter roll"]:::specialized
+        fordham_transaction["Fordham Transaction<br/>dues + co-op ledger"]:::specialized
+        fordham_creator["Fordham Creator<br/>materials + dashboard"]:::specialized
+        fordham_voice["Fordham Voice<br/>FlOO$ suit"]:::specialized
+    end
+
+    fordham_steward --> fordham_onboarding
+    fordham_steward --> fordham_transaction
+    fordham_steward --> fordham_creator
+    fordham_steward --> fordham_voice
+    agent_zero -.-> fordham_steward
+
     %% MCP / orchestration links
     agent_zero --> archon
     agent_zero --> botz_gateway
+    agent_zero --> mesh_agent
     agent_zero --> supaserch
     agent_zero --> deep_research
-    agent_zero --> dox
-    agent_zero --> flute_gateway
-    agent_zero --> cipher_memory
-    agent_zero --> evoswarm_controller
-    agent_zero --> mai_ui
     archon --> tensorzero
     botz_gateway --> gateway_agent
 
@@ -146,9 +158,6 @@ graph TD
     hirag_v2 -.-> neo4j
     hirag_v2 -.-> meilisearch
     cipher_memory -.-> neo4j
-    deep_research -.-> open_notebook
-    pmoves_yt -.-> minio
-    ffmpeg_whisper -.-> minio
 
     %% NATS pub/sub
     pmoves_yt -.- |NATS| extract_worker
@@ -156,8 +165,6 @@ graph TD
     mesh_agent -.- |NATS| agent_zero
     flute_gateway -.- |NATS| hirag_v2
     evoswarm_controller -.- |NATS| swarm_attribution
-    consciousness_service -.- |NATS| hyperdimensions
-    crush -.- |NATS| agent_zero
 ```
 
 ---
@@ -176,82 +183,101 @@ graph TD
     classDef utility fill:#A9A9A9,stroke:#696969,color:#000
 
     PMOVES["POWERFULMOVES"]:::legendary
-    PMOVES --> agent_zero["Agent Zero"]:::standard
+    PMOVES --> agent_zero
 
-    agent_zero --> archon["Archon"]:::standard
-    agent_zero --> botz_gateway["BoTZ Gateway"]:::standard
-    agent_zero --> supaserch["SupaSerch"]:::standard
-    agent_zero --> deep_research["DeepResearch"]:::standard
-    agent_zero --> dox["DoX"]:::standard
-    agent_zero --> flute_gateway["Flute-Gateway"]:::standard
-    agent_zero --> cipher_memory["Cipher Memory"]:::specialized
-    agent_zero --> evoswarm_controller["EvoSwarm Controller"]:::standard
-    agent_zero --> mai_ui["MAI-UI"]:::standard
+    a2ui["A2UI"]:::standard
+    agent_zero["Agent Zero"]:::standard
+    agentgym["AgentGym"]:::standard
+    archon["Archon"]:::standard
+    botz_architect["BoTZ Architect"]:::standard
+    botz_auditor["BoTZ Auditor"]:::standard
+    botz_builder["BoTZ Builder"]:::standard
+    botz_gateway["BoTZ Gateway"]:::standard
+    cast_tts_gateway["Cast TTS Gateway"]:::standard
+    channel_monitor["Channel Monitor"]:::standard
+    clawz["ClawZ (OpenClaw)"]:::standard
+    creator["Creator"]:::standard
+    crush["Crush"]:::standard
+    deep_research["DeepResearch"]:::standard
+    dox["DoX"]:::standard
+    e2b_danger_room["E2B Danger Room"]:::standard
+    e2b_desktop["E2B Desktop"]:::standard
+    evoswarm_controller["EvoSwarm Controller"]:::standard
+    extract_worker["Extract Worker"]:::standard
+    ffmpeg_whisper["FFmpeg-Whisper"]:::standard
+    flute_gateway["Flute-Gateway"]:::standard
+    gateway_agent["Gateway Agent"]:::standard
+    hirag_v2["Hi-RAG v2"]:::standard
+    langextract["LangExtract"]:::standard
+    mai_ui["MAI-UI"]:::standard
+    media_audio["Media-Audio Analyzer"]:::standard
+    media_video["Media-Video Analyzer"]:::standard
+    mesh_agent["Mesh Agent"]:::standard
+    notebook_sync["Notebook Sync"]:::standard
+    open_notebook["Open Notebook"]:::standard
+    pdf_ingest["PDF Ingest"]:::standard
+    pmoves_yt["PMOVES.YT"]:::standard
+    publisher_discord["Publisher-Discord"]:::standard
+    space_agent["PMOVES Space-Agent"]:::standard
+    supaserch["SupaSerch"]:::standard
+    tensorzero["TensorZero Gateway"]:::standard
+    ultimate_tts["Ultimate-TTS-Studio"]:::standard
+    agentgym_rl["AgentGym RL"]:::specialized
+    autoresearch["autoresearch"]:::specialized
+    cipher_beats_analyst["Cipher Beats Analyst"]:::specialized
+    cipher_memory["Cipher Memory"]:::specialized
+    consciousness_service["Consciousness Service"]:::specialized
+    dashboard_specialist["Grafana Dashboard Specialist"]:::specialized
+    health["Health (wger)"]:::specialized
+    hyperdimensions["Hyperdimensions"]:::specialized
+    jellyfin_ai["Jellyfin AI Media Stack"]:::specialized
+    jellyfin_bridge["Jellyfin Bridge"]:::specialized
+    llama_lab["Llama Throughput Lab"]:::specialized
+    llm_observability["TensorZero LLM Observability Specialist"]:::specialized
+    logs_specialist["Loki Logs Specialist"]:::specialized
+    metrics_specialist["Prometheus Metrics Specialist"]:::specialized
+    swarm_attribution["Swarm Attribution"]:::specialized
+    tracing_specialist["Jaeger Tracing Specialist"]:::specialized
+    transcribe_and_fetch["Transcribe and Fetch"]:::specialized
+    wealth["Wealth (Firefly III)"]:::specialized
+    a0_plugins["a0-plugins"]:::utility
+    danger_infra["Danger Infra"]:::utility
+    e2b_spells["E2B Spells"]:::utility
+    grafana["Grafana"]:::utility
+    headscale["Headscale"]:::utility
+    hermes_agent["HERMES Agent"]:::utility
+    invidious["Invidious"]:::utility
+    loki["Loki"]:::utility
+    meilisearch["Meilisearch"]:::utility
+    minio["MinIO"]:::utility
+    n8n["n8n"]:::utility
+    nats["NATS"]:::utility
+    neo4j["Neo4j"]:::utility
+    pmoves_e2b_mcp_server["E2B MCP Server"]:::utility
+    pr_hedge_trim["PR Hedge Trim"]:::utility
+    presign["Presign"]:::utility
+    prometheus["Prometheus"]:::utility
+    qdrant["Qdrant"]:::utility
+    render_webhook["Render Webhook"]:::utility
+    rustdesk["RustDesk"]:::utility
+    supabase["Supabase"]:::utility
+    surf["Surf"]:::utility
+    vps_fleet_manager["VPS Fleet Manager"]:::utility
 
-    archon --> tensorzero["TensorZero"]:::standard
-    botz_gateway --> gateway_agent["Gateway Agent"]:::standard
-    supaserch --> hirag_v2["Hi-RAG v2"]:::standard
-    deep_research --> open_notebook["Open Notebook"]:::standard
-    cipher_memory --> consciousness_service["Consciousness Service"]:::specialized
-    evoswarm_controller --> swarm_attribution["Swarm Attribution"]:::specialized
+    agent_zero --> archon
+    agent_zero --> botz_gateway
+    agent_zero --> supaserch
+    agent_zero --> deep_research
+    agent_zero --> dox
+    agent_zero --> flute_gateway
+    agent_zero --> cipher_memory
+    agent_zero --> evoswarm_controller
+    agent_zero --> mai_ui
 
-    %% Media sub-tree
-    agent_zero --> pmoves_yt["PMOVES.YT"]:::standard
-    pmoves_yt --> ffmpeg_whisper["FFmpeg-Whisper"]:::standard
-    pmoves_yt --> media_video["Media-Video Analyzer"]:::standard
-    pmoves_yt --> media_audio["Media-Audio Analyzer"]:::standard
-    pmoves_yt --> channel_monitor["Channel Monitor"]:::standard
-    pmoves_yt --> extract_worker["Extract Worker"]:::standard
-    extract_worker --> langextract["LangExtract"]:::standard
-
-    %% Training sub-tree
-    agent_zero --> agentgym["AgentGym"]:::standard
-    agentgym --> agentgym_rl["AgentGym RL"]:::specialized
-    agentgym --> e2b_danger_room["E2B Danger Room"]:::standard
-    e2b_danger_room --> e2b_desktop["E2B Desktop"]:::standard
-    e2b_danger_room --> danger_infra["Danger Infra"]:::utility
-    e2b_danger_room --> e2b_spells["E2B Spells"]:::utility
-    agentgym --> surf["Surf"]:::utility
-
-    %% UI sub-tree
-    mai_ui --> a2ui["A2UI"]:::standard
-    mai_ui --> crush["Crush"]:::standard
-    mai_ui --> hyperdimensions["Hyperdimensions"]:::specialized
-
-    %% Voice sub-tree
-    flute_gateway --> ultimate_tts["Ultimate-TTS-Studio"]:::standard
-
-    %% Persistence (utility backbone)
-    agent_zero -.-> nats["NATS"]:::utility
-    agent_zero -.-> supabase["Supabase"]:::utility
-    hirag_v2 -.-> qdrant["Qdrant"]:::utility
-    hirag_v2 -.-> neo4j["Neo4j"]:::utility
-    hirag_v2 -.-> meilisearch["Meilisearch"]:::utility
-    agent_zero -.-> minio["MinIO"]:::utility
-
-    %% Infra
-    agent_zero -.-> prometheus["Prometheus"]:::utility
-    prometheus --> grafana["Grafana"]:::utility
-    prometheus --> loki["Loki"]:::utility
-    agent_zero -.-> n8n_wf["n8n"]:::utility
-    agent_zero -.-> headscale["Headscale"]:::utility
-
-    %% Domain apps
-    agent_zero --> creator["Creator"]:::standard
-    agent_zero --> pdf_ingest["PDF Ingest"]:::standard
-    agent_zero --> notebook_sync["Notebook Sync"]:::standard
-    agent_zero --> publisher_discord["Publisher-Discord"]:::standard
-    agent_zero -.-> mesh_agent["Mesh Agent"]:::standard
-    agent_zero -.-> jellyfin_bridge["Jellyfin Bridge"]:::specialized
-    agent_zero -.-> jellyfin_ai["Jellyfin AI"]:::specialized
-    agent_zero -.-> wealth["Wealth"]:::specialized
-    agent_zero -.-> health_app["Health"]:::specialized
-    agent_zero -.-> llama_lab["Llama Throughput Lab"]:::specialized
-    agent_zero -.-> transcribe_and_fetch["Transcribe+Fetch"]:::specialized
-    agent_zero -.-> presign["Presign"]:::utility
-    agent_zero -.-> render_webhook["Render Webhook"]:::utility
-    agent_zero -.-> rustdesk["RustDesk"]:::utility
-    agent_zero -.-> invidious["Invidious"]:::utility
+    archon --> tensorzero
+    botz_gateway --> gateway_agent
+    supaserch --> hirag_v2
+    deep_research --> open_notebook
 ```
 
 ### 2.2 Assignment Table
@@ -261,8 +287,14 @@ Every registered agent mapped to its subsystem, class, type, tier, and NATS part
 | Subsystem | Agent | Class | Type | Tier | Evo Stage | NATS Pub | NATS Sub |
 |-----------|-------|-------|------|------|-----------|----------|----------|
 | **Core** | Agent Zero | Standard | Agent/API | 6 | Mega | `agent.tool.executed.v1` | `mesh.node.announce.v1` |
+| **Fordham Community** | Fordham Steward | Specialized | Agent/API | 6 | Stage 1 | `room.session.updated.v1` | `room.session.updated.v1` |
+| **Fordham Community** | Fordham Onboarding | Specialized | Agent/Worker | 6 | Stage 1 | `fordham.roll.updated.v1`, `chit.signed.v1` | `fordham.onboarding.request.v1` |
+| **Fordham Community** | Fordham Transaction | Specialized | Agent/Worker | 6 | Stage 1 | `fordham.ledger.entry.v1`, `fordham.surplus.updated.v1` | `fordham.dues.received.v1` |
+| **Fordham Community** | Fordham Creator | Specialized | Agent/Media | 6 | Stage 1 | `fordham.artifact.published.v1` | `fordham.dashboard.request.v1` |
+| **Fordham Community** | Fordham Voice | Specialized | Agent/Media | 6 | Stage 1 | `fordham.voice.delivered.v1`, `voice.synth.request.v1` | `tokenism.prosodic.bpm.v1` |
 | **Archon Nexus** | Archon | Standard | Agent/LLM | 6 | Stage 2 | — | — |
 | **BoTZ Ship** | BoTZ Gateway | Standard | Agent/Worker | 6 | Stage 1 | `botz.workitem.assigned.v1`, `botz.work.available.v1` | `botz.heartbeat.v1`, `botz.register.v1`, `botz.work.claimed.v1` |
+| **ClaWZ Discord** | ClaWZ | Standard | Agent/API | 6 | Stage 1 | — | — |
 | **BoTZ Ship** | Gateway Agent | Standard | Agent/API | 6 | Stage 1 | — | — |
 | **DoX Intel** | DoX | Standard | Worker/Data | 4 | Stage 1 | — | — |
 | **Research** | SupaSerch | Standard | Agent/LLM | 6 | Stage 2 | `supaserch.result.v1` | `supaserch.request.v1` |
@@ -421,95 +453,229 @@ Only agents with declared NATS subjects (from registry `nats.publishes` / `nats.
 
 ```mermaid
 graph LR
+    classDef legendary fill:#FFD700,stroke:#B8860B,color:#000
     classDef standard fill:#9370DB,stroke:#6A0DAD,color:#fff
     classDef specialized fill:#00CED1,stroke:#008B8B,color:#000
     classDef utility fill:#A9A9A9,stroke:#696969,color:#000
     classDef subject fill:#FFF3E0,stroke:#FF9800,color:#000
 
-    %% Agents with NATS participation
     agent_zero["Agent Zero"]:::standard
+    space_agent["PMOVES Space-Agent"]:::standard
+    supaserch["SupaSerch"]:::standard
+    botz_gateway["BoTZ Gateway"]:::standard
+    botz_architect["BoTZ Architect"]:::standard
+    botz_builder["BoTZ Builder"]:::standard
+    botz_auditor["BoTZ Auditor"]:::standard
     mesh_agent["Mesh Agent"]:::standard
+    hirag_v2["Hi-RAG v2"]:::standard
+    deep_research["DeepResearch"]:::standard
+    flute_gateway["Flute-Gateway"]:::standard
+    cast_tts_gateway["Cast TTS Gateway"]:::standard
     pmoves_yt["PMOVES.YT"]:::standard
     extract_worker["Extract Worker"]:::standard
     publisher_discord["Publisher-Discord"]:::standard
-    deep_research["DeepResearch"]:::standard
-    supaserch["SupaSerch"]:::standard
-    hirag_v2["Hi-RAG v2"]:::standard
-    flute_gateway["Flute-Gateway"]:::standard
-    botz_gateway["BoTZ Gateway"]:::standard
+    crush["Crush"]:::standard
+    cipher_memory["Cipher Memory"]:::specialized
+    hyperdimensions["Hyperdimensions"]:::specialized
+    vps_fleet_manager["VPS Fleet Manager"]:::utility
+    pr_hedge_trim["PR Hedge Trim"]:::utility
+    consciousness_service["Consciousness Service"]:::specialized
+    wealth["Wealth (Firefly III)"]:::specialized
+    health["Health (wger)"]:::specialized
     evoswarm_controller["EvoSwarm Controller"]:::standard
     swarm_attribution["Swarm Attribution"]:::specialized
-    consciousness_service["Consciousness Service"]:::specialized
-    crush["Crush"]:::standard
-    hyperdimensions["Hyperdimensions"]:::specialized
+    autoresearch["autoresearch"]:::specialized
+    clawz["ClawZ (OpenClaw)"]:::standard
+    metrics_specialist["Prometheus Metrics Specialist"]:::specialized
+    dashboard_specialist["Grafana Dashboard Specialist"]:::specialized
+    logs_specialist["Loki Logs Specialist"]:::specialized
+    tracing_specialist["Jaeger Tracing Specialist"]:::specialized
+    llm_observability["TensorZero LLM Observability Specialist"]:::specialized
+    cipher_beats_analyst["Cipher Beats Analyst"]:::specialized
+    pmoves_ci_bot["PMOVES CI Bot"]:::ci
+    hermes_agent["HERMES Agent"]:::utility
 
-    %% NATS Subjects
-    agent_tool_executed{{"agent.tool.executed.v1"}}:::subject
-    mesh_node_announce{{"mesh.node.announce.v1"}}:::subject
-    ingest_file_added{{"ingest.file.added.v1"}}:::subject
-    ingest_transcript_ready{{"ingest.transcript.ready.v1"}}:::subject
-    ingest_summary_ready{{"ingest.summary.ready.v1"}}:::subject
-    ingest_chapters_ready{{"ingest.chapters.ready.v1"}}:::subject
-    research_request{{"research.deepresearch.request.v1"}}:::subject
-    research_result{{"research.deepresearch.result.v1"}}:::subject
-    supaserch_request{{"supaserch.request.v1"}}:::subject
-    supaserch_result{{"supaserch.result.v1"}}:::subject
-    geometry_encoded{{"geometry.packet.encoded.v1"}}:::subject
-    geometry_decoded{{"geometry.packet.decoded.v1"}}:::subject
-    geometry_vis_request{{"geometry.visualization.request.v1"}}:::subject
-    geometry_consciousness{{"geometry.consciousness.event.v1"}}:::subject
-    geometry_swarm_meta{{"geometry.swarm.meta.v1"}}:::subject
-    geometry_attribution_req{{"geometry.attribution.request.v1"}}:::subject
-    geometry_attribution_res{{"geometry.attribution.result.v1"}}:::subject
-    tokenism_event{{"tokenism.geometry.event.v1"}}:::subject
-    botz_workitem_assigned{{"botz.workitem.assigned.v1"}}:::subject
-    botz_work_available{{"botz.work.available.v1"}}:::subject
-    botz_heartbeat{{"botz.heartbeat.v1"}}:::subject
-    botz_register{{"botz.register.v1"}}:::subject
-    botz_work_claimed{{"botz.work.claimed.v1"}}:::subject
-    evoswarm_genome{{"evoswarm.training.genome.v1"}}:::subject
-    evoswarm_fitness{{"evoswarm.training.fitness.v1"}}:::subject
-    crush_graphiti{{"crush.graphiti.discovered.v1"}}:::subject
-    shape_trace{{"shape.trace.recorded.v1"}}:::subject
-    agent_graphiti_signed{{"agent.graphiti.signed.v1"}}:::subject
+    agent_graphiti_signed_v1{"agent.graphiti.signed.v1"}:::subject
+    agent_tool_executed_v1{"agent.tool.executed.v1"}:::subject
+    botz_audit_completed_v1{"botz.audit.completed.v1"}:::subject
+    botz_build_completed_v1{"botz.build.completed.v1"}:::subject
+    botz_heartbeat_v1{"botz.heartbeat.v1"}:::subject
+    botz_plan_created_v1{"botz.plan.created.v1"}:::subject
+    botz_register_v1{"botz.register.v1"}:::subject
+    botz_work_available_v1{"botz.work.available.v1"}:::subject
+    botz_work_claimed_v1{"botz.work.claimed.v1"}:::subject
+    botz_workitem_assigned_v1{"botz.workitem.assigned.v1"}:::subject
+    branch_<path-segments>_trail_v1{"branch.<path-segments>.trail.v1"}:::subject
+    cipher_memory_searched_v1{"cipher.memory.searched.v1"}:::subject
+    cipher_memory_stored_v1{"cipher.memory.stored.v1"}:::subject
+    cipher_reasoning_stored_v1{"cipher.reasoning.stored.v1"}:::subject
+    crush_graphiti_discovered_v1{"crush.graphiti.discovered.v1"}:::subject
+    device_cast_discovered_v1{"device.cast.discovered.v1"}:::subject
+    evoswarm_training_fitness_v1{"evoswarm.training.fitness.v1"}:::subject
+    evoswarm_training_genome_v1{"evoswarm.training.genome.v1"}:::subject
+    finance_budget_alert_v1{"finance.budget.alert.v1"}:::subject
+    finance_monthly_summary_v1{"finance.monthly.summary.v1"}:::subject
+    finance_transactions_ingested_v1{"finance.transactions.ingested.v1"}:::subject
+    geometry_attribution_request_v1{"geometry.attribution.request.v1"}:::subject
+    geometry_attribution_result_v1{"geometry.attribution.result.v1"}:::subject
+    geometry_consciousness_event_v1{"geometry.consciousness.event.v1"}:::subject
+    geometry_packet_decoded_v1{"geometry.packet.decoded.v1"}:::subject
+    geometry_packet_encoded_v1{"geometry.packet.encoded.v1"}:::subject
+    geometry_swarm_meta_v1{"geometry.swarm.meta.v1"}:::subject
+    geometry_visualization_request_v1{"geometry.visualization.request.v1"}:::subject
+    health_metrics_updated_v1{"health.metrics.updated.v1"}:::subject
+    health_weekly_summary_v1{"health.weekly.summary.v1"}:::subject
+    health_workout_completed_v1{"health.workout.completed.v1"}:::subject
+    hermes_cron_executed_v1{"hermes.cron.executed.v1"}:::subject
+    hermes_delegate_completed_v1{"hermes.delegate.completed.v1"}:::subject
+    hermes_gateway_health_v1{"hermes.gateway.health.v1"}:::subject
+    hermes_gateway_launched_v1{"hermes.gateway.launched.v1"}:::subject
+    hermes_mcp_toolcall_v1{"hermes.mcp.toolcall.v1"}:::subject
+    hermes_skill_curated_v1{"hermes.skill.curated.v1"}:::subject
+    ingest_chapters_ready_v1{"ingest.chapters.ready.v1"}:::subject
+    ingest_file_added_v1{"ingest.file.added.v1"}:::subject
+    ingest_summary_ready_v1{"ingest.summary.ready.v1"}:::subject
+    ingest_transcript_ready_v1{"ingest.transcript.ready.v1"}:::subject
+    media_ingest_request_v1{"media.ingest.request.v1"}:::subject
+    mesh_gpu_model_loaded_v1{"mesh.gpu.model.loaded.v1"}:::subject
+    mesh_node_announce_v1{"mesh.node.announce.v1"}:::subject
+    mesh_vps_command_v1{"mesh.vps.command.v1"}:::subject
+    mesh_vps_deploy_v1{"mesh.vps.deploy.v1"}:::subject
+    mesh_vps_status_v1{"mesh.vps.status.v1"}:::subject
+    observability_alert_configured_v1{"observability.alert.configured.v1"}:::subject
+    observability_dashboard_updated_v1{"observability.dashboard.updated.v1"}:::subject
+    observability_llm_cost_v1{"observability.llm.cost.v1"}:::subject
+    observability_llm_model_comparison_v1{"observability.llm.model_comparison.v1"}:::subject
+    observability_llm_performance_v1{"observability.llm.performance.v1"}:::subject
+    observability_logs_correlation_v1{"observability.logs.correlation.v1"}:::subject
+    observability_logs_error_v1{"observability.logs.error.v1"}:::subject
+    observability_logs_pattern_v1{"observability.logs.pattern.v1"}:::subject
+    observability_metrics_anomaly_v1{"observability.metrics.anomaly.v1"}:::subject
+    observability_metrics_trend_v1{"observability.metrics.trend.v1"}:::subject
+    observability_query_request_v1{"observability.query.request.v1"}:::subject
+    observability_trace_bottleneck_v1{"observability.trace.bottleneck.v1"}:::subject
+    observability_trace_correlation_v1{"observability.trace.correlation.v1"}:::subject
+    openclaw_channel_connected_v1{"openclaw.channel.connected.v1"}:::subject
+    openclaw_message_received_v1{"openclaw.message.received.v1"}:::subject
+    openclaw_message_sent_v1{"openclaw.message.sent.v1"}:::subject
+    ops_pr_monitor_completed_v1{"ops.pr.monitor.completed.v1"}:::subject
+    ops_pr_trim_completed_v1{"ops.pr.trim.completed.v1"}:::subject
+    p7_nats_launch{"p7.nats.launch"}:::subject
+    p7_nats_session{"p7.nats.session"}:::subject
+    pmoves_darkxside_beats_group_v1{"pmoves.darkxside.beats.group.v1"}:::subject
+    pmoves_space_action_v1{"pmoves.space.action.v1"}:::subject
+    pmoves_space_event_v1{"pmoves.space.event.v1"}:::subject
+    research_autoresearch_result_v1{"research.autoresearch.result.v1"}:::subject
+    research_deepresearch_request_v1{"research.deepresearch.request.v1"}:::subject
+    research_deepresearch_result_v1{"research.deepresearch.result.v1"}:::subject
+    shape_trace_recorded_v1{"shape.trace.recorded.v1"}:::subject
+    supaserch_request_v1{"supaserch.request.v1"}:::subject
+    supaserch_result_v1{"supaserch.result.v1"}:::subject
+    tokenism_geometry_event_v1{"tokenism.geometry.event.v1"}:::subject
+    tokenism_prosodic_bpm_v1{"tokenism.prosodic.bpm.v1"}:::subject
+    voice_cast_completed_v1{"voice.cast.completed.v1"}:::subject
+    voice_cast_failed_v1{"voice.cast.failed.v1"}:::subject
+    voice_cast_health_alert_v1{"voice.cast.health_alert.v1"}:::subject
 
-    %% Publisher --> Subject
-    agent_zero --> agent_tool_executed
-    mesh_agent --> mesh_node_announce
-    pmoves_yt --> ingest_file_added
-    pmoves_yt --> ingest_transcript_ready
-    deep_research --> research_result
-    supaserch --> supaserch_result
-    hirag_v2 --> geometry_encoded
-    flute_gateway --> tokenism_event
-    botz_gateway --> botz_workitem_assigned
-    botz_gateway --> botz_work_available
-    evoswarm_controller --> geometry_swarm_meta
-    evoswarm_controller --> evoswarm_genome
-    evoswarm_controller --> evoswarm_fitness
-    swarm_attribution --> geometry_attribution_res
-    consciousness_service --> geometry_consciousness
-    crush --> crush_graphiti
-    crush --> shape_trace
-
-    %% Subject --> Subscriber
-    mesh_node_announce --> agent_zero
-    ingest_file_added --> extract_worker
-    ingest_file_added --> publisher_discord
-    ingest_transcript_ready --> publisher_discord
-    ingest_summary_ready --> publisher_discord
-    ingest_chapters_ready --> publisher_discord
-    research_request --> deep_research
-    supaserch_request --> supaserch
-    geometry_decoded --> flute_gateway
-    geometry_vis_request --> hyperdimensions
-    geometry_encoded --> evoswarm_controller
-    geometry_attribution_req --> swarm_attribution
-    geometry_attribution_res --> evoswarm_controller
-    botz_heartbeat --> botz_gateway
-    botz_register --> botz_gateway
-    botz_work_claimed --> botz_gateway
-    agent_graphiti_signed --> crush
+    agent_graphiti_signed_v1 --> crush
+    agent_zero --> agent_tool_executed_v1
+    agent_tool_executed_v1 --> tracing_specialist
+    botz_auditor --> botz_audit_completed_v1
+    botz_builder --> botz_build_completed_v1
+    botz_build_completed_v1 --> botz_auditor
+    botz_heartbeat_v1 --> botz_gateway
+    botz_architect --> botz_plan_created_v1
+    botz_plan_created_v1 --> botz_builder
+    botz_register_v1 --> botz_gateway
+    botz_gateway --> botz_work_available_v1
+    botz_work_claimed_v1 --> botz_gateway
+    botz_gateway --> botz_workitem_assigned_v1
+    botz_workitem_assigned_v1 --> botz_architect
+    pmoves_ci_bot --> branch_<path-segments>_trail_v1
+    cipher_memory --> cipher_memory_searched_v1
+    cipher_memory --> cipher_memory_stored_v1
+    cipher_memory --> cipher_reasoning_stored_v1
+    crush --> crush_graphiti_discovered_v1
+    cast_tts_gateway --> device_cast_discovered_v1
+    evoswarm_controller --> evoswarm_training_fitness_v1
+    evoswarm_controller --> evoswarm_training_genome_v1
+    wealth --> finance_budget_alert_v1
+    wealth --> finance_monthly_summary_v1
+    wealth --> finance_transactions_ingested_v1
+    geometry_attribution_request_v1 --> swarm_attribution
+    swarm_attribution --> geometry_attribution_result_v1
+    geometry_attribution_result_v1 --> evoswarm_controller
+    consciousness_service --> geometry_consciousness_event_v1
+    geometry_packet_decoded_v1 --> flute_gateway
+    hirag_v2 --> geometry_packet_encoded_v1
+    geometry_packet_encoded_v1 --> evoswarm_controller
+    evoswarm_controller --> geometry_swarm_meta_v1
+    geometry_visualization_request_v1 --> hyperdimensions
+    health --> health_metrics_updated_v1
+    health --> health_weekly_summary_v1
+    health --> health_workout_completed_v1
+    hermes_agent --> hermes_cron_executed_v1
+    hermes_agent --> hermes_delegate_completed_v1
+    hermes_agent --> hermes_gateway_health_v1
+    hermes_agent --> hermes_gateway_launched_v1
+    hermes_agent --> hermes_mcp_toolcall_v1
+    hermes_agent --> hermes_skill_curated_v1
+    ingest_chapters_ready_v1 --> publisher_discord
+    pmoves_yt --> ingest_file_added_v1
+    ingest_file_added_v1 --> extract_worker
+    ingest_file_added_v1 --> publisher_discord
+    ingest_file_added_v1 --> logs_specialist
+    ingest_summary_ready_v1 --> publisher_discord
+    pmoves_yt --> ingest_transcript_ready_v1
+    ingest_transcript_ready_v1 --> publisher_discord
+    cipher_beats_analyst --> media_ingest_request_v1
+    mesh_gpu_model_loaded_v1 --> llm_observability
+    mesh_agent --> mesh_node_announce_v1
+    mesh_node_announce_v1 --> agent_zero
+    mesh_node_announce_v1 --> metrics_specialist
+    mesh_node_announce_v1 --> hermes_agent
+    mesh_vps_command_v1 --> vps_fleet_manager
+    vps_fleet_manager --> mesh_vps_deploy_v1
+    vps_fleet_manager --> mesh_vps_status_v1
+    dashboard_specialist --> observability_alert_configured_v1
+    dashboard_specialist --> observability_dashboard_updated_v1
+    llm_observability --> observability_llm_cost_v1
+    llm_observability --> observability_llm_model_comparison_v1
+    llm_observability --> observability_llm_performance_v1
+    logs_specialist --> observability_logs_correlation_v1
+    logs_specialist --> observability_logs_error_v1
+    logs_specialist --> observability_logs_pattern_v1
+    metrics_specialist --> observability_metrics_anomaly_v1
+    observability_metrics_anomaly_v1 --> dashboard_specialist
+    metrics_specialist --> observability_metrics_trend_v1
+    observability_query_request_v1 --> metrics_specialist
+    observability_query_request_v1 --> dashboard_specialist
+    observability_query_request_v1 --> logs_specialist
+    observability_query_request_v1 --> tracing_specialist
+    observability_query_request_v1 --> llm_observability
+    tracing_specialist --> observability_trace_bottleneck_v1
+    tracing_specialist --> observability_trace_correlation_v1
+    clawz --> openclaw_channel_connected_v1
+    clawz --> openclaw_message_received_v1
+    clawz --> openclaw_message_sent_v1
+    ops_pr_monitor_completed_v1 --> pr_hedge_trim
+    pr_hedge_trim --> ops_pr_trim_completed_v1
+    p7_nats_launch --> hermes_agent
+    p7_nats_session --> hermes_agent
+    cipher_beats_analyst --> pmoves_darkxside_beats_group_v1
+    space_agent --> pmoves_space_action_v1
+    space_agent --> pmoves_space_event_v1
+    autoresearch --> research_autoresearch_result_v1
+    research_deepresearch_request_v1 --> deep_research
+    deep_research --> research_deepresearch_result_v1
+    crush --> shape_trace_recorded_v1
+    supaserch_request_v1 --> supaserch
+    supaserch --> supaserch_result_v1
+    flute_gateway --> tokenism_geometry_event_v1
+    flute_gateway --> tokenism_prosodic_bpm_v1
+    cast_tts_gateway --> voice_cast_completed_v1
+    cast_tts_gateway --> voice_cast_failed_v1
+    cast_tts_gateway --> voice_cast_health_alert_v1
 ```
 
 ---
@@ -520,5 +686,21 @@ graph LR
 - [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) — Master cross-reference hub
 - [`AGENT_RESILIENCE_PATTERNS.md`](./AGENT_RESILIENCE_PATTERNS.md) — Resilience protocol and patterns
 - [`../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md`](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md) — Living template with CHIT examples
-- `pmoves/config/agent_registry.yaml` — Single source of truth (machine-readable)
 - `pmoves/tools/agent_taxonomy_helper.py` — CLI query tool (`mermaid` subcommand)
+- `pmoves/config/agent_registry.yaml` — Single source of truth (machine-readable)
+
+---
+
+## Topology Update Notes (2026-04-19)
+
+### ClaWZ — Active Discord Agent
+ClaWZ (PMOVES-ClawZ submodule) is now the **active** Discord agent, replacing the BoTZ Gateway pattern for Discord-mediated interactions. BoTZ Ship subgraphs and references are retained for historical context but marked as `_(legacy)_`.
+
+### A2A Server Topology (PR #1293)
+A2A (Agent-to-Agent) protocol is now wired into the compose stack. Agent Zero exposes an A2A endpoint for cross-agent communication. See `docker-compose.yml` and `.claude/mcp.json` for wiring details.
+
+### Sidecar Topology (PR #1299)
+Portable sidecar configuration enables Agent Zero to run as a standalone container on any device with Docker, using `host.docker.internal` for host service access. See `deploy/sidecar/` and `PMOVES_AI_CONFIG.promptinclude.md` for sidecar topology notes.
+
+### Publisher-Discord Gap
+Publisher-Discord remains **planned but not yet implemented**. It is listed in the assignment table but has no active service code. ClaWZ coding plan identifies this as a gap to close.

@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily PMOVES Fleet Docker Cleanup
+Requires=docker-fleet-cleanup.service
+
+[Timer]
+# Run daily at 03:00 local time
+OnCalendar=*-*-* 03:00:00
+# If missed (e.g. machine was off), run immediately on next boot
+Persistent=true
+# Random delay 0-15min to avoid thundering herd across nodes
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target

@@ -28,9 +28,11 @@
 |---------|------|-----------|--------|----------|---------------|--------|-------|-------|
 | Agent Zero | 8080, 8081 | `PMOVES-Agent-Zero/CLAUDE.md` | `PMOVES-Agent-Zero/README.md` | `.claude/context/mcp-api.md` | `agent.*`, `claude.code.*` | `/healthz` | P1 (root, NATS) | L3 |
 | Archon | 8091, 3737 | `PMOVES-Archon/CLAUDE.md` | `PMOVES-Archon/README.md` | `pmoves/docs/ARCHON_INTEGRATION.md` | `archon.*` | `/healthz` | -- | L3 |
+| P7 Room Orchestrator | 8122 | -- | `pmoves/services/p7-room-orchestrator/README.md` | Inline OpenAPI | `p7.nats.*`, `p7.room.*.v1` | `/healthz` | CHIT live gate | L3 |
 | Mesh Agent | -- | -- | -- | -- | `mesh.announce.*` | -- | -- | L3 |
 | Channel Monitor | 8097 | -- | `pmoves/services/channel-monitor/` | -- | -- | `/healthz` | -- | L3 |
-| Cipher Memory | 8096 | `Pmoves-cipher/CLAUDE.md` | `Pmoves-cipher/README.md` | Inline | `cipher.*` | `/health` | -- | L3 |
+| Cipher Memory | 8105 | `Pmoves-cipher/CLAUDE.md` | `Pmoves-cipher/README.md` | Inline | `cipher.*` | `/health` | -- | L3 |
+| HF MCP Server | 8203 | -- | `pmoves/services/hf-mcp-server/README.md` | `pmoves/services/hf-mcp-server/CLAUDE.md` | `hf.model.downloaded.v1` | `/healthz` | -- | L3 |
 
 ## Retrieval & Knowledge Services
 
@@ -46,7 +48,7 @@
 
 | Service | Port | CLAUDE.md | README | API Docs | NATS Subjects | Health | Audit | Layer |
 |---------|------|-----------|--------|----------|---------------|--------|-------|-------|
-| Flute-Gateway | 8055, 8056 | -- | -- | `.claude/context/flute-gateway.md` | `voice.tts.*`, `voice.stt.*` | `/healthz` | -- | L3 |
+| Flute-Gateway | 8055 | -- | -- | `.claude/context/flute-gateway.md` | `voice.tts.*`, `voice.stt.*` | `/healthz` | -- | L3 |
 | Ultimate-TTS-Studio | 7861 | -- | `PMOVES-Ultimate-TTS-Studio/README.md` | Gradio API | -- | `/gradio_api/info` | -- | L3 |
 | Pipecat | -- | `PMOVES-Pipecat/CLAUDE.md` | `PMOVES-Pipecat/README.md` | -- | `voice.*` | -- | P2 (no allowlist) | L3 |
 

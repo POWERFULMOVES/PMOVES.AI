@@ -141,7 +141,7 @@ root:
     # =========================================================================
     - id: mcp.cipher-memory
       task: "Cipher Memory MCP server"
-      context: "SSE transport at :8096/sse, Neo4j-backed knowledge-graph memory"
+      context: "SSE transport at :8105/mcp/sse, Neo4j-backed knowledge-graph memory"
       agent_hint: codex
       children:
         - id: mcp.cipher-memory.transport
@@ -149,8 +149,8 @@ root:
           action:
             type: grep
             target: ".claude/mcp.json"
-            pattern: "pmoves-cipher.*sse|8096/sse"
-            expect: "SSE transport at http://localhost:8096/sse"
+            pattern: "pmoves-cipher.*sse|8105/mcp/sse"
+            expect: "SSE transport at http://localhost:8105/mcp/sse"
           context: "Configured in .claude/mcp.json as pmoves-cipher server"
           agent_hint: codex
 
@@ -159,9 +159,9 @@ root:
           action:
             type: grep
             target: "pmoves/docker-compose.yml"
-            pattern: "cipher.*health|8096.*health"
-            expect: "GET http://localhost:8096/health"
-          context: "Healthcheck: GET http://localhost:8096/health"
+            pattern: "cipher.*health|8105.*health"
+            expect: "GET http://localhost:8105/health"
+          context: "Healthcheck: GET http://localhost:8105/health"
           agent_hint: codex
 
         - id: mcp.cipher-memory.submodule
@@ -411,7 +411,7 @@ root:
         Server inventory (transport | port | tool_count | auth | healthcheck):
         -----------------------------------------------------------------------
         Agent Zero MCP     | HTTP  | :8080/mcp/*  |  ~9 | Bearer MCP_CLIENT_SECRET | GET /mcp/health
-        Cipher Memory MCP  | SSE   | :8096/sse    |   4 | Service-level (Neo4j)    | GET /health
+        Cipher Memory MCP  | SSE   | :8105/mcp/sse    |   4 | Service-level (Neo4j)    | GET /health
         BoTZ MCP Gateway   | HTTP  | compose      |  ~6 | JWT (P1 fail-open audit) | compose healthcheck
         Airtable           | Cloud | plugin       |   8 | OAuth (Claude)           | ping tool
         Cloudflare         | Cloud | plugin       |  22 | OAuth (Claude)           | accounts_list

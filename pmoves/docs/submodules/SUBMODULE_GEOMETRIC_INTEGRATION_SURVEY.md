@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This survey documents CHIT (Cymatic-Holographic Information Transfer) and GEOMETRY BUS integration across all PMOVES.AI submodules. The geometric intelligence layer enables hyperbolic encoding, CGP (CHIT Geometry Packet) publishing, and NATS-based event coordination.
+This survey documents CHIT (Cymatic Holographic Information Theory) and GEOMETRY BUS integration across all PMOVES.AI submodules. The geometric intelligence layer enables hyperbolic encoding, CGP (CHIT Geometry Packet) publishing, and NATS-based event coordination.
 
 ### Key Findings
 
@@ -270,7 +270,7 @@ geometric:
   cgp_namespace: "pmoves.tokenism"
 
 nats:
-  url: "nats://localhost:4222"
+  url: "nats://nats:pmoves@nats:4222"
   jetstream: true
   subjects:
     cgp_ready: "tokenism.cgp.ready.v1"

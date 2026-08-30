@@ -13,29 +13,13 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+# Bootstrap import paths using shared module
+from services.common.bootstrap import bootstrap_import_paths
 
-def _bootstrap_import_paths() -> None:
-    """Ensure PMOVES package roots are importable in container/runtime variants."""
-    try:
-        here = Path(__file__).resolve()
-        candidates = (
-            here.parents[2],  # /app
-            here.parents[1],  # /app/services
-            here.parent,      # /app/services/agent-zero
-        )
-        for path in candidates:
-            text = str(path)
-            if text not in sys.path:
-                sys.path.insert(0, text)
-    except Exception:
-        # Keep startup resilient; downstream imports will raise explicit errors if unresolved.
-        pass
+bootstrap_import_paths()
 
-
-_bootstrap_import_paths()
-
-from services.common.env import get_secret
 
 # NATS service announcement integration
 try:
@@ -49,70 +33,10 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
 
 # ---------------------------------------------------------------------------
-# Configuration helpers
+# Configuration helpers — imported from shared modules
 # ---------------------------------------------------------------------------
-
-
-def _env_bool(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return value.lower() in {"1", "true", "yes", "on"}
-
-
-def _tensorzero_openai_base() -> str:
-    base = (os.environ.get("TENSORZERO_BASE_URL") or "").strip()
-    if not base:
-        return ""
-    base = base.rstrip("/")
-    if base.endswith("/openai/v1"):
-        return base
-    if base.endswith("/openai"):
-        return f"{base.rstrip('/')}/v1"
-    return f"{base}/openai/v1"
-
-
-def _sync_openai_compat_env() -> None:
-    resolved_base = ""
-    for candidate in (
-        os.environ.get("OPENAI_COMPATIBLE_BASE_URL"),
-        os.environ.get("OPENAI_API_BASE"),
-        _tensorzero_openai_base(),
-    ):
-        value = (candidate or "").strip()
-        if value:
-            resolved_base = value
-            break
-
-    if resolved_base:
-        targets = (
-            "OPENAI_COMPATIBLE_BASE_URL",
-            "OPENAI_API_BASE",
-            "OPENAI_COMPATIBLE_BASE_URL_LLM",
-            "OPENAI_COMPATIBLE_BASE_URL_EMBEDDING",
-            "OPENAI_COMPATIBLE_BASE_URL_TTS",
-            "OPENAI_COMPATIBLE_BASE_URL_STT",
-        )
-        updated = []
-        for target in targets:
-            current = (os.environ.get(target) or "").strip()
-            if current:
-                continue
-            os.environ[target] = resolved_base
-            os.putenv(target, resolved_base)
-            updated.append(target)
-        if updated:
-            logger.info("OpenAI-compatible base resolved to %s", resolved_base)
-        else:
-            logger.debug("OpenAI-compatible base already set to %s", resolved_base)
-    key = (get_secret("OPENAI_API_KEY") or "").strip()
-    if not key:
-        tz_key = (get_secret("TENSORZERO_API_KEY") or "").strip()
-        if tz_key:
-            os.environ["OPENAI_API_KEY"] = tz_key
-            os.putenv("OPENAI_API_KEY", tz_key)
-            logger.info("OpenAI-compatible API key derived from TensorZero settings")
-
+from services.common.config import env_bool as _env_bool
+from services.common.tensorzero import sync_openai_compat_env as _sync_openai_compat_env
 
 _sync_openai_compat_env()
 
@@ -126,6 +50,16 @@ from services.common.forms import (
 
 import mcp_server
 
+# A2A protocol integration
+try:
+    from python.features.a2a.server import create_a2a_router
+    _A2A_ROUTER_AVAILABLE = True
+except ImportError:
+    create_a2a_router = None
+    _A2A_ROUTER_AVAILABLE = False
+
+_A2A_ENABLED = os.environ.get("A2A_ENABLED", "true").lower() in ("true", "1", "yes", "on")
+
 
 @dataclass
 class AgentZeroRuntimeConfig:
@@ -133,7 +67,7 @@ class AgentZeroRuntimeConfig:
 
     root: Path = field(
         default_factory=lambda: Path(
-            os.environ.get("AGENT_ZERO_ROOT", "/opt/agent-zero")
+            os.environ.get("AGENT_ZERO_ROOT", "/a0")
         )
     )
     entrypoint: str = field(
@@ -145,7 +79,7 @@ class AgentZeroRuntimeConfig:
     extra_args: List[str] = field(default_factory=list)
     api_base_url: str = field(
         default_factory=lambda: os.environ.get(
-            "AGENT_ZERO_API_BASE", "http://127.0.0.1:80"
+            "AGENT_ZERO_API_BASE", "http://127.0.0.1:5000"
         )
     )
     api_key: Optional[str] = field(
@@ -166,6 +100,16 @@ class AgentZeroRuntimeConfig:
     )
     health_timeout: float = field(
         default_factory=lambda: float(os.environ.get("AGENT_ZERO_HEALTH_TIMEOUT", "5"))
+    )
+    message_timeout: float = field(
+        default_factory=lambda: float(
+            os.environ.get("AGENT_ZERO_MESSAGE_TIMEOUT", "600")
+        )
+    )
+    health_method: str = field(
+        default_factory=lambda: os.environ.get(
+            "AGENT_ZERO_HEALTH_METHOD", "GET"
+        ).upper()
     )
     message_path: str = field(
         default_factory=lambda: os.environ.get(
@@ -376,18 +320,25 @@ class AgentZeroClient:
     async def health(self) -> Dict[str, Any]:
         try:
             result = await self._request(
-                "GET",
+                self._config.health_method,
                 self._config.health_path,
                 timeout=self._config.health_timeout,
             )
             if isinstance(result, dict):
                 return result
             return {"status": "ok", "raw": result}
-        except AgentZeroRequestError as exc:  # pragma: no cover - runtime might not be ready
+        except AgentZeroRequestError as exc:
+            # 404 means the server IS running but has no health endpoint.
+            # This is expected for PMOVES-Agent-Zero fork — treat as healthy.
+            if exc.status_code == 404:
+                logger.info(
+                    "Agent Zero health endpoint returned 404 — "
+                    "server is responding, treating as healthy"
+                )
+                return {"status": "ok", "note": "health endpoint not found (404)"}
             fallback = self._config.health_path_fallback
             if (
-                exc.status_code == 404
-                and fallback
+                fallback
                 and fallback != self._config.health_path
             ):
                 try:
@@ -400,6 +351,13 @@ class AgentZeroClient:
                         return result
                     return {"status": "ok", "raw": result}
                 except AgentZeroRequestError as fallback_exc:
+                    # Same 404 heuristic for fallback path
+                    if fallback_exc.status_code == 404:
+                        logger.info(
+                            "Agent Zero fallback health endpoint returned 404 — "
+                            "server is responding, treating as healthy"
+                        )
+                        return {"status": "ok", "note": "health endpoint not found (404)"}
                     logger.debug(
                         "Agent Zero fallback health check failed: %s", fallback_exc
                     )
@@ -408,8 +366,28 @@ class AgentZeroClient:
             raise
 
     async def send_message(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Fail fast, and say why. The inner runtime auto-generates its own
+        # mcp_server_token when AGENT_ZERO_MCP_TOKEN and MCP_SERVER_TOKEN are
+        # both unset -- a supported mode for UI/MCP discovery, but one the
+        # wrapper cannot participate in, because it never learns the generated
+        # value. `_headers` then omits X-API-KEY and every message POST is
+        # rejected. Without this guard the operator gets a bare 401 (or, with
+        # no runtime up, "All connection attempts failed") from a request that
+        # could never have succeeded, and nothing points at the cause.
+        if not self._config.api_key:
+            raise AgentZeroRequestError(
+                503,
+                "Agent Zero message endpoint requires a pinned API key, but none "
+                "is configured. The inner runtime auto-generates a token the "
+                "wrapper cannot read, so this request would be rejected. Set "
+                "AGENT_ZERO_MCP_TOKEN (or the legacy MCP_SERVER_TOKEN) to the "
+                "same value on both sides.",
+            )
         result = await self._request(
-            "POST", self._config.message_path, json_body=payload
+            "POST",
+            self._config.message_path,
+            json_body=payload,
+            timeout=self._config.message_timeout,
         )
         if not isinstance(result, dict):
             raise AgentZeroRequestError(
@@ -667,8 +645,8 @@ async def lifespan(app: FastAPI):
     url = os.getenv("SERVICE_URL") or f"http://{hostname}:{port}"
     health_check = f"{url}/healthz"
 
-    # Announce service on NATS
-    if NATS_ANNOUNCE_AVAILABLE:
+    # Announce service on NATS (only in docked mode with JetStream)
+    if NATS_ANNOUNCE_AVAILABLE and _env_bool("AGENTZERO_JETSTREAM"):
         try:
             await announce_service(
                 nats_url=os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
@@ -689,9 +667,12 @@ async def lifespan(app: FastAPI):
     _warn_missing_notebook_config()
     await process_manager.start()
     _controller_shutdown.clear()
-    _controller_task = asyncio.create_task(
-        _controller_connect_loop(), name="agent-zero-controller-connect"
-    )
+    if _env_bool("AGENTZERO_JETSTREAM"):
+        _controller_task = asyncio.create_task(
+            _controller_connect_loop(), name="agent-zero-controller-connect"
+        )
+    else:
+        logger.info("JetStream disabled — skipping NATS controller connect loop")
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
@@ -717,6 +698,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
+
+# Mount A2A protocol routes
+if _A2A_ROUTER_AVAILABLE and _A2A_ENABLED:
+    a2a_router = create_a2a_router()
+    app.include_router(a2a_router)
+    logger.info("A2A protocol routes mounted (/.well-known/agent-card.json, /a2a/v1/*)")
+else:
+    if not _A2A_ROUTER_AVAILABLE:
+        logger.warning("A2A router not available — python.features.a2a.server import failed")
+    else:
+        logger.info("A2A protocol routes disabled via A2A_ENABLED=false")
 
 # Prometheus metrics
 from prometheus_client import (
@@ -853,7 +845,15 @@ async def healthz() -> Dict[str, Any]:
             runtime_health = await client.health()
             detail["runtime"] = runtime_health
         except AgentZeroRequestError as exc:
-            detail["runtime"] = {"status": "error", "detail": str(exc)}
+            # Expose only the exception type to clients; full detail stays in logs.
+            logger.warning("Runtime health check failed: %s", exc)
+            detail["runtime"] = {"status": "error", "detail": type(exc).__name__}
+    if not running:
+        # Inner runtime down: a 200 here kept Docker's healthcheck green while
+        # every message call failed (green-while-dead). Surface the real state;
+        # ensure_runtime_running on the next functional request lazily relaunches.
+        http_requests_total.labels(method='GET', endpoint='/healthz', status='503').inc()
+        return JSONResponse(status_code=503, content=detail)
     http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
     return detail
 
@@ -885,8 +885,7 @@ def list_mcp_commands(
 
 
 async def _execute_command(cmd: str, args: Dict[str, Any]) -> Dict[str, Any]:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, mcp_server.execute_command, cmd, args)
+    return await mcp_server.execute_command_async(cmd, args)
 
 
 @app.post("/mcp/execute", response_model=MCPExecuteResponse)

@@ -60,6 +60,7 @@
         "name": "Fetch Pending Approvals",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           -280,
           180
@@ -80,7 +81,7 @@
       },
       {
         "parameters": {
-          "functionCode": "const row = item.json || {};\nconst meta = (row.meta && typeof row.meta === 'object') ? row.meta : {};\nconst payload = {\n  artifact_uri: row.content_url,\n  title: row.title || meta.title || 'Untitled Artifact',\n  namespace: row.namespace || undefined,\n  description: meta.description || undefined,\n  tags: Array.isArray(meta.tags) ? meta.tags : undefined,\n  meta\n};\n\nif (!payload.namespace) {\n  delete payload.namespace;\n}\nif (!payload.description) {\n  delete payload.description;\n}\nif (!payload.tags || payload.tags.length === 0) {\n  delete payload.tags;\n}\n\nconst patch = {\n  status: 'published',\n  meta: {\n    ...meta,\n    publish_event_sent_at: new Date().toISOString()\n  }\n};\n\nreturn {\n  json: {\n    envelope: {\n      topic: 'content.publish.approved.v1',\n      payload\n    },\n    rowId: row.id,\n    patch\n  }\n};"
+          "functionCode": "const row = item.json || {};\nconst meta = (row.meta && typeof row.meta === 'object') ? row.meta : {};\nconst requestedAt = new Date().toISOString();\n// Stable, deterministic request id: a re-poll of the same row (e.g. after a\n// failed PATCH) produces the SAME id so the Agent Zero consumer can dedupe.\nconst publishRequestId = `pub:${row.id}`;\nconst payload = {\n  studio_board_id: row.id,\n  publish_request_id: publishRequestId,\n  artifact_uri: row.content_url,\n  title: row.title || meta.title || 'Untitled Artifact',\n  namespace: row.namespace || undefined,\n  description: meta.description || undefined,\n  tags: Array.isArray(meta.tags) ? meta.tags : undefined,\n  meta: {\n    ...meta,\n    studio_board_id: row.id,\n    publish_request_id: publishRequestId,\n    publish_requested_at: requestedAt,\n    publish_request_source: 'n8n-approval-poller'\n  }\n};\n\nif (!payload.namespace) {\n  delete payload.namespace;\n}\nif (!payload.description) {\n  delete payload.description;\n}\nif (!payload.tags || payload.tags.length === 0) {\n  delete payload.tags;\n}\n\nconst patch = {\n  status: 'publishing',\n  meta: {\n    ...meta,\n    studio_board_id: row.id,\n    publish_request_id: publishRequestId,\n    publish_requested_at: requestedAt,\n    publish_event_sent_at: requestedAt,\n    publish_request_source: 'n8n-approval-poller'\n  }\n};\n\nreturn {\n  json: {\n    envelope: {\n      topic: 'content.publish.approved.v1',\n      payload\n    },\n    rowId: row.id,\n    patch\n  }\n};"
         },
         "id": "prepare_event",
         "name": "Prepare Publish Envelope",
@@ -119,6 +120,7 @@
         "name": "Publish Approval Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           520,
           180
@@ -127,7 +129,7 @@
       {
         "parameters": {
           "method": "PATCH",
-          "url": "={{ $env.SUPABASE_REST_URL }}/studio_board?id=eq.{{$json.rowId}}",
+          "url": "={{ $env.SUPABASE_REST_URL }}/studio_board?id=eq.{{$node[\"Prepare Publish Envelope\"].json[\"rowId\"]}}&status=eq.approved&meta->>publish_event_sent_at=is.null",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -153,13 +155,14 @@
           "bodyParameters": {
             "parameters": []
           },
-          "body": "={{ JSON.stringify($json.patch) }}",
+          "body": "={{ JSON.stringify($node[\"Prepare Publish Envelope\"].json[\"patch\"]) }}",
           "options": {}
         },
         "id": "mark_processed",
-        "name": "Mark Approval Row",
+        "name": "Mark Publish Requested",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           780,
           180
@@ -185,6 +188,19 @@
           240,
           -20
         ]
+      },
+      {
+        "parameters": {
+          "functionCode": "const errorNode = $input.item.json.$error?.node?.name || 'unknown';\nconst errorMessage = $input.item.json.$error?.message || 'No error message';\nconst timestamp = new Date().toISOString();\nconsole.error(`[approval_poller] Error in ${errorNode}: ${errorMessage} at ${timestamp}`);\nreturn { json: { error: true, node: errorNode, message: errorMessage, timestamp } };"
+        },
+        "id": "error_handler",
+        "name": "Error Handler",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [
+          520,
+          400
+        ]
       }
     ],
     "connections": {
@@ -204,6 +220,13 @@
           [
             {
               "node": "Split Pending Approvals",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }
@@ -243,18 +266,32 @@
         "main": [
           [
             {
-              "node": "Mark Approval Row",
+              "node": "Mark Publish Requested",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Mark Approval Row": {
+      "Mark Publish Requested": {
         "main": [
           [
             {
               "node": "Split Pending Approvals",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }

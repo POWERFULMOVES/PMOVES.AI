@@ -1,0 +1,80 @@
+name: Review Comment Monitor
+
+# Surfaces automated-reviewer (CodeRabbit / Codex) findings for human attention.
+#
+# TRIAGE ONLY — this workflow classifies and summarizes a bot review; it does
+# NOT apply code fixes and does NOT resolve review threads. Acting on findings
+# (fixing + resolving) stays a deliberate human-invoked step via the pr-trimmer
+# agent / `/pr-trim`. Keeping monitor and mutation separate means an automated
+# reviewer can never trigger an unsupervised change to the PR.
+on:
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
+
+concurrency:
+  group: review-monitor-${{ github.event.pull_request.number }}-${{ github.event.review.id }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    # Re-enabled 2026-08-24, restoring the original bot-filter guard.
+    #
+    # It was disabled because ANTHROPIC_API_KEY was empty AND the OAuth token
+    # had expired, so every bot review produced a failing `triage` check — noise
+    # on a non-required gate. Both premises have changed: CLAUDE_CODE_OAUTH_TOKEN
+    # was rotated, and this job now authenticates with the coding plan instead of
+    # a metered API key, so running it costs plan quota rather than per-token spend.
+    #
+    # This does not replace CodeRabbit or the Codex bot. It triages what they
+    # produce, which is the step that went missing while this was off.
+    # Deliberately NOT same-repo-gated, unlike claude-code-review.yml and
+    # review-autofix.yml. The fork-secret restriction applies to `pull_request`
+    # events; this fires on `pull_request_review`, which runs in the BASE repo
+    # context and does receive secrets. review-autofix.yml shares this trigger
+    # and gates on same-repo for a different reason it states itself: it holds
+    # contents:write and pushes to the PR head, so it needs head==base. This job
+    # only posts a comment, so triage works on fork PRs and gating it would
+    # remove that.
+    if: |
+      github.event.review.user.login == 'coderabbitai' ||
+      github.event.review.user.login == 'coderabbitai[bot]' ||
+      github.event.review.user.login == 'chatgpt-codex-connector' ||
+      github.event.review.user.login == 'chatgpt-codex-connector[bot]'
+    runs-on: ubuntu-latest
+    # Least-privilege: reads the diff, posts ONE summary comment. No contents:write
+    # (it must not be able to push), no thread-resolution scope.
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Triage automated review
+        uses: anthropics/claude-code-action@a874e9ecd7bb36efdad65429c6b35815f5a08f10 # v1.0.210
+        with:
+          # Coding plan, not the metered API key. The subscription credential does
+          # expire and needs re-minting with `claude setup-token` — but ANTHROPIC_API_KEY
+          # was empty, so "persistent" meant persistently unauthenticated. An expiring
+          # credential that works beats a permanent one that is not set.
+          # Same across claude.yml, claude-code-review.yml and review-autofix.yml.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # claude-code-action rejects bot-triggered runs by default; this job is
+          # *intentionally* triggered by bot reviews, so allow exactly those bots.
+          allowed_bots: 'coderabbitai[bot],chatgpt-codex-connector[bot]'
+          prompt: |
+            The automated reviewer "${{ github.event.review.user.login }}" just submitted a review on ${{ github.repository }} PR #${{ github.event.pull_request.number }}.
+
+            Read that review's comments and the PR diff. Triage ONLY — you must not modify any file, push any commit, or resolve any review thread.
+
+            Classify each finding by the PMOVES pr-trim severity model (P0 = security/data-loss/broken-contract, P1 = real bug on a normal path, P2 = edge/robustness, P3 = nit/style). Then post exactly ONE summary comment on the PR:
+            - A short bullet list of every P0/P1 finding with `file:line` and a one-line why-it-matters, so a human can act via `/pr-trim`.
+            - A single count line for P2/P3 (e.g. "P2: 3, P3: 5").
+            - If there are no P0/P1 findings, post a one-line "no high-severity findings from <reviewer>" note instead.
+
+            Be terse. This comment is a triage signal for a human, not a re-review.

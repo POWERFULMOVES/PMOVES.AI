@@ -28,3 +28,17 @@ CREATE INDEX IF NOT EXISTS idx_consciousness_theories_content_trgm
 -- Comment for documentation
 COMMENT ON TABLE pmoves_core.consciousness_theories IS
   'Consciousness theories from Robert Lawrence Kuhn''s Landscape of Consciousness taxonomy (325 theories)';
+
+-- RLS for consciousness_theories
+ALTER TABLE pmoves_core.consciousness_theories ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON pmoves_core.consciousness_theories TO authenticated;
+GRANT ALL ON pmoves_core.consciousness_theories TO service_role;
+
+CREATE POLICY consciousness_theories_anon_deny ON pmoves_core.consciousness_theories
+  FOR ALL TO anon USING (false) WITH CHECK (false);
+
+CREATE POLICY consciousness_theories_auth_read ON pmoves_core.consciousness_theories
+  FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY consciousness_theories_svc ON pmoves_core.consciousness_theories
+  FOR ALL TO service_role USING (true) WITH CHECK (true);

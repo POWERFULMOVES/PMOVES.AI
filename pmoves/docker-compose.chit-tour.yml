@@ -1,0 +1,37 @@
+# CHIT Visual Tour — PUBLIC static site behind the Traefik edge
+# (docker-compose.traefik.yml, #2221) at chit.pmoves.ai.
+#
+# Serves the static tour (website/chit-tour/) with LIVE data regenerated from
+# the agent registry by `make chit-tour-data`. Public route — intentionally NO
+# pmoves-forward-auth middleware. Same hardening class as docker-compose.persona.yml.
+#
+# Bring-up (Known Road): make chit-tour-data && make up-chit-tour
+# Prereq: the Traefik edge must be up so the external pmoves_external network exists.
+services:
+  chit-tour:
+    image: ${CHIT_TOUR_NGINX_IMAGE:-nginxinc/nginx-unprivileged:1.27-alpine}
+    container_name: pmoves-chit-tour
+    restart: unless-stopped
+    volumes:
+      - ../website/chit-tour:/usr/share/nginx/html:ro
+      - ./config/nginx/chit-tour.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      pmoves_external: {}
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.chit-tour.rule=Host(`chit.pmoves.ai`)
+      - traefik.http.routers.chit-tour.entrypoints=websecure
+      - traefik.http.routers.chit-tour.tls.certresolver=cf
+      - traefik.http.services.chit-tour.loadbalancer.server.port=8080
+      # PUBLIC route — intentionally NO pmoves-forward-auth middleware.
+networks:
+  pmoves_external:
+    external: true

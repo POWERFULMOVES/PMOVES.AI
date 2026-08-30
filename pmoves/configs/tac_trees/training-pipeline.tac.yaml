@@ -1,0 +1,298 @@
+# TAC Tree: Training Pipeline
+# Unsloth + TensorZero + HuggingFace fine-tuning pipeline.
+# Three phases: Embeddings (Crawl) → Agentic (Walk) → Voice (Run).
+#
+# Cross-refs:
+#   - p7-agents-skills-lifecycle.tac.yaml (model assignment, VRAM budget)
+#   - tensorzero-gpu.tac.yaml (model routing)
+#   - voice-agents.tac.yaml (persona binding)
+#   - pmoves/configs/skill-pairings.yaml (FlOO$ pipelines)
+
+name: TAC_TRAINING_PIPELINE
+version: "1.0.0"
+description: >
+  Three-phase fine-tuning pipeline using Unsloth Studio on 5090 GPU.
+  Phase 1: embedding fine-tuning for Hi-RAG retrieval quality.
+  Phase 2: agentic model training for PMOVES tool-use patterns.
+  Phase 3: voice model adaptation for persona-specific synthesis.
+  Multi-node: 5090 trains, z890 serves TTS + data, VPS runs E2B eval.
+
+metadata:
+  unsloth_url: "http://127.0.0.1:42081"
+  tensorzero_url: "http://localhost:3030"
+  hf_org: "POWERFULMOVES"
+  training_node: powerfulmoves-5090
+  serving_node_during_training: z890
+  eval_node: vps-kvm
+  nats_subjects:
+    - "training.job.started.v1"
+    - "training.job.completed.v1"
+    - "training.job.failed.v1"
+    - "training.eval.result.v1"
+    - "training.model.published.v1"
+    - "training.model.deployed.v1"
+
+root:
+  id: training
+  task: "PMOVES training pipeline management"
+  context: "Unsloth → HuggingFace → TensorZero fine-tuning lifecycle"
+  agent_hint: 5090-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Embeddings (Crawl)
+    # =========================================================================
+    - id: training.embed
+      task: "Phase 1: Embedding fine-tuning for Hi-RAG retrieval"
+      context: >
+        Fine-tune Qwen3-4b on PMOVES content for domain-specific retrieval.
+        Base model: qwen3-embedding:4b (2560d). Training: contrastive learning
+        on (query, passage) pairs from PMOVES docs/transcripts.
+      agent_hint: 5090-claude
+      children:
+
+        - id: training.embed.data_prep
+          task: "Extract JSONL training pairs from PMOVES content"
+          context: |
+            Sources (all in MinIO/Supabase):
+            - CONCH 325 consciousness theories transcript
+            - CLAUDE.md files (main + 20 submodules)
+            - Agent Graphiti trail entries
+            - CHIT/CGP packet examples (AGNOTE4482)
+            - TAC tree definitions (29 trees)
+            - NATS subject catalog
+            - YouTube playlist transcripts (as ingested)
+            Format: JSONL with {"query": "...", "pos": "...", "neg": "..."} triplets
+            Tool: Python script in pmoves/tools/training/prep_embed_data.py
+          status: planned
+          owner: 5090-claude
+
+        - id: training.embed.validate
+          task: "Validate training data quality"
+          context: |
+            Check: deduplication, balance across domains, minimum pair count.
+            Target: 10K+ pairs for meaningful fine-tuning.
+            Validation script: pmoves/tools/training/validate_data.py
+          status: planned
+          owner: 5090-claude
+
+        - id: training.embed.train
+          task: "Run LoRA fine-tuning via Unsloth Studio"
+          context: |
+            Model: Qwen3-4b embedding
+            Method: LoRA rank 16-32, contrastive loss
+            VRAM: ~16GB (must unload TTS first)
+            Duration: ~1-2 hours on RTX 5090
+            Protocol: pterm stop TTS → train → pterm start TTS
+            z890 serves TTS during training window
+          status: planned
+          owner: 5090-claude
+
+        - id: training.embed.eval
+          task: "Benchmark retrieval quality in E2B sandbox"
+          context: |
+            Run on VPS via E2B sandboxed containers.
+            Metrics: NDCG@10, MRR, recall@k on held-out PMOVES queries.
+            Compare: base Qwen3-4b vs fine-tuned.
+            Publish: training.eval.result.v1 to NATS
+          status: planned
+          owner: 5090-claude
+
+        - id: training.embed.publish
+          task: "Push to HuggingFace"
+          context: |
+            Target: POWERFULMOVES/pmoves-qwen3-4b-embed
+            Include: model card, training metrics, dataset description
+            Tool: huggingface-cli upload
+          status: planned
+          owner: 5090-claude
+
+        - id: training.embed.register
+          task: "Register in TensorZero"
+          context: |
+            Add model as qwen3_embedding_4b_pmoves in tensorzero.toml
+            Route: embedding requests with namespace=pmoves use fine-tuned model
+            Fallback: base qwen3-4b for general queries
+          status: planned
+          owner: z890-claude
+
+        - id: training.embed.deploy
+          task: "Switch Hi-RAG v2 to fine-tuned embeddings"
+          context: |
+            Update TENSORZERO_EMBED_MODEL in env.shared
+            Rebuild extract-worker + hi-rag-gateway containers
+            Re-index existing content with new embeddings
+            Verify: !ask in Discord returns relevant results
+          status: planned
+          owner: z890-claude
+
+    # =========================================================================
+    # Phase 2: Agentic Models (Walk)
+    # =========================================================================
+    - id: training.agent
+      task: "Phase 2: Agentic model fine-tuning for PMOVES tool-use"
+      context: >
+        Fine-tune a 7B model on PMOVES-specific tool-use patterns, Known Roads,
+        MCP commands, and codebase conventions. Goal: local agent that understands
+        PMOVES without needing cloud LLMs for routine tasks.
+      agent_hint: 5090-claude
+      children:
+
+        - id: training.agent.data_prep
+          task: "Extract tool-use training data from Claude Code logs"
+          context: |
+            Sources:
+            - Claude Code conversation logs (tool calls + responses)
+            - MCP tool invocation patterns (Agent Zero, BoTZ)
+            - Known Roads make targets + damage control patterns
+            - CLAUDE.md instructions as system prompts
+            Format: ShareGPT/Alpaca instruction tuning format
+          status: planned
+          owner: 5090-claude
+
+        - id: training.agent.train
+          task: "QLoRA fine-tuning on 7B base model"
+          context: |
+            Base: Qwen2.5-7B-Instruct or Llama-3.1-8B-Instruct
+            Method: QLoRA (4-bit quantized base, full-precision adapters)
+            VRAM: ~20GB on RTX 5090
+            Duration: ~2-4 hours
+          status: planned
+          owner: 5090-claude
+
+        - id: training.agent.eval
+          task: "Tool-use accuracy evaluation in E2B sandbox"
+          context: |
+            Test: given a PMOVES task description, does the model select
+            the correct make target / MCP tool / skill?
+            Metrics: tool selection accuracy, parameter correctness
+            Benchmark: 50 curated PMOVES task scenarios
+          status: planned
+          owner: 5090-claude
+
+        - id: training.agent.publish
+          task: "Push to HuggingFace"
+          context: "POWERFULMOVES/pmoves-agent-7b + GGUF conversion for Ollama"
+          status: planned
+          owner: 5090-claude
+
+        - id: training.agent.deploy
+          task: "Register in TensorZero + Agent Zero routing"
+          context: |
+            TensorZero routes routine agent tasks to local model.
+            Cloud LLMs reserved for complex reasoning.
+            Agent Zero config: model_preference per task type.
+          status: planned
+          owner: z890-claude
+
+    # =========================================================================
+    # Phase 3: Voice Adaptation (Run)
+    # =========================================================================
+    - id: training.voice
+      task: "Phase 3: Voice model adaptation for personas"
+      context: >
+        Adapt TTS models for PMOVES-specific vocabulary, persona voices,
+        and accent/style control. Uses synthesized reference audio from
+        existing TTS engines as training data.
+      agent_hint: 5090-claude
+      children:
+
+        - id: training.voice.data_prep
+          task: "Synthesize reference audio + transcripts"
+          context: |
+            Use existing 14 TTS engines to generate training data:
+            - Persona-specific voice samples (agent_signatures.yaml)
+            - PMOVES vocabulary pronunciation (CHIT, CGP, Tokenism, etc.)
+            - Emotional range samples per persona
+            z890 generates audio while 5090 prepares datasets
+          status: planned
+          owner: z890-claude
+
+        - id: training.voice.train
+          task: "Voice model adaptation"
+          context: |
+            Fish S2 Pro fine-tuning for voice cloning
+            F5-TTS adapter training for custom voices
+            VRAM: ~24GB
+          status: planned
+          owner: 5090-claude
+
+        - id: training.voice.eval
+          task: "A/B listening tests via Discord"
+          context: |
+            Post original vs fine-tuned audio to #voice-lab
+            Community votes on quality (gated: Contributor+ role)
+            Automated MOS scoring via audio analysis
+          status: planned
+          owner: 5090-claude
+
+        - id: training.voice.deploy
+          task: "Flute-Gateway persona binding with fine-tuned voices"
+          context: |
+            persona_selector.py updated to prefer fine-tuned models
+            voice_persona table in Supabase gets new model references
+            NATS: training.model.deployed.v1
+          status: planned
+          owner: 5090-claude
+
+    # =========================================================================
+    # Infrastructure
+    # =========================================================================
+    - id: training.infra
+      task: "Training infrastructure management"
+      context: "VRAM swap, multi-node coordination, eval sandboxes"
+      agent_hint: 5090-claude
+      children:
+
+        - id: training.infra.vram_swap
+          task: "VRAM swap protocol: TTS ↔ Training"
+          context: |
+            Before training: pterm stop TTS Studio → free 31GB VRAM
+            During training: z890 serves TTS via Tailscale mesh
+            After training: pterm start TTS Studio → resume on 5090
+            NATS: training.job.started.v1 triggers z890 TTS activation
+          status: planned
+          owner: 5090-claude
+
+        - id: training.infra.z890_tts
+          task: "z890 TTS serving during 5090 training"
+          context: |
+            z890 has RTX 3090 Ti (24GB) — can run 2-3 TTS engines
+            Flute-Gateway routes to z890 TTS when 5090 is training
+            ULTIMATE_TTS_URL switches via NATS event or env update
+          status: planned
+          owner: z890-claude
+
+        - id: training.infra.e2b_sandbox
+          task: "E2B sandboxed eval containers on VPS"
+          context: |
+            E2B Danger Room Desktop for isolated model evaluation
+            PMOVES-E2B-Danger-Room-Desktop submodule
+            VPS runs eval benchmarks without affecting production
+          status: planned
+          owner: 5090-claude
+
+        - id: training.infra.nats_events
+          task: "Training lifecycle NATS events"
+          context: |
+            training.job.started.v1 — 5090 begins training run
+            training.job.completed.v1 — model exported successfully
+            training.job.failed.v1 — training error (include error detail)
+            training.eval.result.v1 — benchmark scores
+            training.model.published.v1 — pushed to HuggingFace
+            training.model.deployed.v1 — registered in TensorZero
+          status: planned
+          owner: 5090-claude
+
+    # =========================================================================
+    # FlOO$ Skill Pairing
+    # =========================================================================
+    - id: training.floos
+      task: "training-eval-deploy FlOO$ skill pairing"
+      context: |
+        New skill pairing for the training pipeline:
+        data-prep → unsloth-train → e2b-eval → hf-publish → tz-register
+        NATS subject: skills.pipeline.training-eval-deploy.v1
+        Agents: 5090-claude → 5090-claude → 5090-claude → z890-claude
+      status: planned
+      owner: 5090-claude

@@ -13,11 +13,19 @@ import hmac
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+if TYPE_CHECKING:  # pragma: no cover - typing helper only
+    from sentence_transformers import SentenceTransformer
+
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
 
 logger = logging.getLogger(__name__)
 
@@ -30,44 +38,92 @@ _ST_MODEL: Optional["SentenceTransformer"] = None  # type: ignore
 
 
 # =============================================================================
-# CHIT Security (Inline for standalone service)
+# CHIT Security — canonical single source of truth, with an aligned fallback
+# for standalone containers that do not package pmoves.tools (see PR #2070).
 # =============================================================================
 
+try:  # pragma: no cover - exercised implicitly wherever pmoves.tools is packaged
+    from pmoves.tools.chit_security import sign_cgp, verify_cgp
 
-def _canon(obj: Dict[str, Any]) -> bytes:
-    """Create canonical JSON representation for signing."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    CHIT_CANONICAL = True
+except ImportError:  # standalone image without pmoves.tools on the path
+    CHIT_CANONICAL = False
+
+    def _canon(obj: Dict[str, Any]) -> bytes:
+        """Canonical JSON bytes — byte-identical to pmoves.tools.chit_common.canon."""
+        return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+    def sign_cgp(
+        cgp: Dict[str, Any],
+        passphrase: Optional[str] = None,
+        kid: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fallback mirroring pmoves.tools.chit_security.sign_cgp exactly
+        (same key sourcing, kid default, and sig shape — no extra fields),
+        so signatures verify identically across the fleet."""
+        signing_key = (
+            passphrase
+            or get_secret("CHIT_SIGNING_KEY")
+            or get_secret("CHIT_PASSPHRASE", "")
+        )
+        if not signing_key:
+            raise RuntimeError("CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var is required")
+        doc = json.loads(json.dumps(cgp))  # deep copy
+        kid = kid or os.environ.get("CHIT_SIGNING_KEY_ID") or "chit-signing-v01"
+        doc_nosig = json.loads(json.dumps(doc))
+        doc_nosig.pop("sig", None)
+        mac = hmac.new(signing_key.encode("utf-8"), _canon(doc_nosig), hashlib.sha256).digest()
+        doc["sig"] = {
+            "alg": "HMAC-SHA256",
+            "kid": kid,
+            "hmac": base64.b64encode(mac).decode("ascii"),
+        }
+        return doc
+
+    def verify_cgp(cgp: Dict[str, Any], passphrase: Optional[str] = None) -> bool:
+        """Fallback mirroring pmoves.tools.chit_security.verify_cgp exactly."""
+        signing_key = (
+            passphrase
+            or get_secret("CHIT_SIGNING_KEY")
+            or get_secret("CHIT_PASSPHRASE", "")
+        )
+        if not signing_key:
+            raise RuntimeError("CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var is required")
+        if "sig" not in cgp:
+            return False
+        mac_b64 = cgp["sig"].get("hmac", "")
+        doc_nosig = json.loads(json.dumps(cgp))
+        doc_nosig.pop("sig", None)
+        mac2 = hmac.new(signing_key.encode("utf-8"), _canon(doc_nosig), hashlib.sha256).digest()
+        try:
+            mac1 = base64.b64decode(mac_b64)
+        except Exception:
+            return False
+        return hmac.compare_digest(mac1, mac2)
 
 
-def sign_cgp(cgp: Dict[str, Any], passphrase: str, kid: Optional[str] = None) -> Dict[str, Any]:
-    """Sign a CGP with HMAC-SHA256."""
-    doc = json.loads(json.dumps(cgp))  # deep copy
-    ts = int(datetime.now().timestamp())
-    kid = kid or hashlib.sha256(passphrase.encode()).hexdigest()[:16]
+def get_chit_signing_key() -> str:
+    """Resolve the service signing key without raising.
 
-    meta = {
-        "alg": "HMAC-SHA256",
-        "kid": kid,
-        "ts": ts,
+    Canonical env chain first (CHIT_SIGNING_KEY, CHIT_PASSPHRASE), then the
+    legacy consciousness-only CHIT_PROD_PASSPHRASE name kept for deployments
+    that still set it. Returns "" when unset (dev mode — CGP goes unsigned).
+    """
+    return (
+        get_secret("CHIT_SIGNING_KEY")
+        or get_secret("CHIT_PASSPHRASE")
+        or get_secret("CHIT_PROD_PASSPHRASE", "")
+    )
+
+
+def chit_signature_required() -> bool:
+    """Fail-closed switch — same env contract as gateway/Hi-RAG consumers."""
+    return os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
     }
-
-    # Remove existing signature before signing
-    doc_nosig = json.loads(json.dumps(doc))
-    doc_nosig.pop("sig", None)
-
-    # Compute HMAC
-    mac = hmac.new(
-        passphrase.encode("utf-8"),
-        _canon(doc_nosig),
-        hashlib.sha256,
-    ).digest()
-
-    doc["sig"] = {
-        **meta,
-        "hmac": base64.b64encode(mac).decode("ascii"),
-    }
-
-    return doc
 
 
 @dataclass
@@ -385,6 +441,7 @@ def chr_result_to_cgp(
 
     Raises:
         ValueError: If encrypt_anchors is True (not implemented)
+        RuntimeError: If CHIT_REQUIRE_SIGNATURE is set and no signing key is available
     """
     if encrypt_anchors:
         raise ValueError("Anchor encryption not implemented - do not set encrypt_anchors=True")
@@ -424,5 +481,14 @@ def chr_result_to_cgp(
         "super_nodes": [super_node],
     }
 
-    # Sign the CGP using inline function
+    # Sign via the canonical CHIT signer. Empty key = dev mode: publish
+    # unsigned with a warning, unless fail-closed is switched on.
+    if not passphrase:
+        if chit_signature_required():
+            raise RuntimeError(
+                "CHIT_REQUIRE_SIGNATURE is set but no signing key is available "
+                "(set CHIT_SIGNING_KEY or CHIT_PASSPHRASE)"
+            )
+        logger.warning("No CHIT signing key set — publishing CGP unsigned (dev mode)")
+        return cgp
     return sign_cgp(cgp, passphrase=passphrase)

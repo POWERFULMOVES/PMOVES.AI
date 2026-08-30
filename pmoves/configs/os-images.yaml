@@ -1,0 +1,143 @@
+# PMOVES AI — Reproducible OS Image Catalog
+# For Proxmox VM/LXC templates and bare-metal provisioning
+# Last updated: 2026-03-27
+
+images:
+  # --- Base Distros ---
+  ubuntu-2404-base:
+    name: "Ubuntu 24.04 LTS Base"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "General-purpose PMOVES node"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-pmoves.sh
+    tags: [base, pmoves, production]
+
+  debian-13-base:
+    name: "Debian 13 Trixie Base"
+    distro: debian
+    version: "13"
+    purpose: "Proxmox host or minimal container"
+    cloud_init: true
+    provision_script: provisions/debian-13-pmoves.sh
+    tags: [base, pmoves, pve, production]
+
+  # --- GPU Nodes ---
+  ubuntu-2404-gpu:
+    name: "Ubuntu 24.04 LTS GPU"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "GPU inference node (5090, 4090, Jetson)"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-gpu-pmoves.sh
+    nvidia_drivers: "550"
+    nvidia_container_toolkit: true
+    ollama_gpu: true
+    vllm: true
+    tags: [gpu, vllm, ollama, inference, production]
+
+  # --- YouTube Production ---
+  ubuntu-2404-yt-studio:
+    name: "Ubuntu 24.04 YouTube Studio"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "YouTube content production — recording, editing, rendering"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-yt-studio.sh
+    packages: [ffmpeg, obs-studio, yt-dlp, handbrake, audacity]
+    tags: [youtube, studio, production, media]
+
+  ubuntu-2404-yt-encoder:
+    name: "Ubuntu 24.04 YouTube Encoder"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "Hardware-accelerated video encoding (NVENC)"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-yt-encoder.sh
+    nvidia_drivers: "550"
+    nvenc: true
+    packages: [ffmpeg, handbrake, vmaf]
+    tags: [youtube, encoding, gpu, nvenc, production]
+
+  # --- Service Nodes ---
+  ubuntu-2404-monitoring:
+    name: "Ubuntu 24.04 Monitoring"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "Prometheus, Grafana, Loki, alerting"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-monitoring-pmoves.sh
+    tags: [monitoring, observability, production]
+
+  # --- ROCm / AMD GPU Workstations ---
+  ubuntu-2404-rdna4:
+    name: "Ubuntu 24.04 RDNA4 Workstation"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "AMD 9850X3D + dual R9700 inference (ROCm 7.1 + llama.cpp HIP)"
+    cloud_init: true
+    provision_script: deploy/provision/hostinger-kvm-setup.sh
+    provision_args: "rdna4-workstation"
+    autoinstall_template: deploy/provision/autoinstall/rdna4-workstation.yaml
+    rocm_version: "7.1"
+    gpu_targets: "gfx1201"
+    inference_backend: llamacpp-rocm
+    tags: [gpu, amd, rocm, rdna4, inference, production]
+
+  # --- Proxmox Cluster Member ---
+  pve9-cluster-node:
+    name: "Proxmox VE 9 Cluster Member"
+    distro: proxmox
+    version: "9"
+    base_distro: debian
+    base_version: "13"
+    purpose: "PVE cluster hypervisor (VMs + LXCs, no Docker on host)"
+    cloud_init: false
+    autoinstall_template: deploy/provision/autoinstall/pve-cluster-node.toml
+    first_boot_hook: deploy/provision/pve-first-boot.sh
+    provision_script: deploy/provision/hostinger-kvm-setup.sh
+    provision_args: "pve-member"
+    tags: [proxmox, pve, hypervisor, cluster, production]
+
+  # --- DGX Spark ARM64 Overlay (stock DGX OS retained) ---
+  dgx-spark-overlay:
+    name: "DGX Spark ARM64 Overlay"
+    distro: dgx-os
+    version: "factory"
+    arch: arm64
+    purpose: "NVIDIA DGX Spark GB10 — layer Tailscale + Ollama + fleet agent"
+    cloud_init: false
+    reinstall: false
+    provision_script: deploy/provision/hostinger-kvm-setup.sh
+    provision_args: "dgx-spark"
+    tags: [gpu, nvidia, spark, gb10, arm64, inference, production]
+
+# --- ISO Sources (for bare-metal USB provisioning) ---
+# Authoritative checksums updated during Phase B rollout. Update when upstream
+# releases new point versions.
+iso_sources:
+  ubuntu-24.04-server-amd64:
+    url: "https://releases.ubuntu.com/24.04/ubuntu-24.04.2-live-server-amd64.iso"
+    sha256: "TBD_AT_BUILD_TIME"  # fetch from releases.ubuntu.com/24.04/SHA256SUMS
+    size_gb: 3.1
+    used_by: [ubuntu-2404-base, ubuntu-2404-gpu, ubuntu-2404-rdna4]
+
+  ubuntu-24.04-server-arm64:
+    url: "https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.2-live-server-arm64.iso"
+    sha256: "TBD_AT_BUILD_TIME"
+    size_gb: 2.8
+    used_by: [ubuntu-2404-gpu]
+
+  proxmox-ve-9:
+    url: "https://enterprise.proxmox.com/iso/proxmox-ve_9.0-1.iso"
+    sha256: "TBD_AT_BUILD_TIME"
+    size_gb: 1.5
+    used_by: [pve9-cluster-node]
+    notes: "Use with proxmox-auto-install-assistant to embed answer file"
+
+# --- Build-USB Tooling ---
+build_usb:
+  script: deploy/provision/build-usb.sh
+  format_script: deploy/provision/format-usb.sh
+  required_tools: [xorriso, proxmox-auto-install-assistant, sgdisk, dd]
+  runbook: deploy/runbooks/fresh-install-fleet.md

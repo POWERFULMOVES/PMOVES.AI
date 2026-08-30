@@ -1,0 +1,411 @@
+[0.0s] Over the past year, the narrative in
+[2.4s] openweights LLMs has been that Chinese
+[4.9s] labs are winning. The Kimmy models, Zim
+[8.2s] models, Minia Max have all had these big
+[11.5s] impressive models. But in an attempt to
+[14.1s] take back that crown, Nvidia has just
+[16.5s] dropped a 550 billion parameter model
+[20.6s] that beats many of these trillion
+[22.6s] parameter models on agent benchmarks.
+[25.3s] And more importantly, they've published
+[26.8s] exactly how they did it. If you're
+[28.8s] building agents, this may just be a
+[31.0s] gamecher for which open models you
+[33.9s] should be reaching for. So, naturally,
+[36.0s] when Nvidia reached out to me to sponsor
+[38.0s] a video, this is the one that I wanted
+[40.3s] to get access to. And in this video, I'm
+[42.6s] going to show you the actual numbers,
+[44.3s] not just the marketing. We're going to
+[46.1s] break down some of the recipes of how
+[48.0s] they've actually made this model, and
+[49.8s] then we'll have a play with the model to
+[51.3s] see exactly how this holds up. So
+[53.3s] Nvidia's been working hard on making a
+[55.9s] whole suite of open models. So I've
+[58.6s] covered a few of the Neotron models on
+[60.6s] the channel. For the Neotron 3 series,
+[63.5s] they started with the Nano model, which
+[66.0s] was at the end of last year. And the
+[68.6s] Nano model was all about being a small,
+[70.9s] fast, high efficiency kind of model.
+[73.6s] Earlier this year, they released Neotron
+[75.7s] 3 Super, and that was really built for
+[77.5s] multi-agent applications. So, that one
+[79.8s] really took off with things like open
+[81.8s] claw and stuff like that. And that
+[84.0s] brings us to today where they're rolling
+[86.5s] out Neotron 3 Ultra. Now, Neotron 3
+[89.6s] Ultra is their most capable model yet.
+[92.3s] It's the flagship model that they've
+[93.9s] been working on for a while. This is not
+[96.5s] a small model. It's probably not a model
+[98.4s] that you can even run locally, but it
+[100.8s] certainly is a model that companies will
+[102.5s] be able to use on prem, be able to
+[105.0s] fine-tune for their use tasks, that kind
+[106.9s] of thing. So, Neimatron 3 Ultra is
+[109.4s] certainly a beast of a model. We're
+[111.1s] talking about a model that's 550 billion
+[113.8s] parameters, mixture of experts model
+[116.2s] with 55 billion parameters active. And
+[119.3s] the goal with this is that it's been
+[121.4s] trained again for agentic users. So,
+[124.1s] this model is made not to be any sort of
+[127.0s] chatbot. This is Benentic model where it
+[130.2s] can write, it can use tools, it can
+[132.8s] code, and it can do long horizon many
+[135.7s] step actions just like we've seen with
+[137.8s] some of the Chinese open models like the
+[139.9s] Kim K2.6 etc. You can really think of
+[142.7s] Neotron Ultra as Nvidia's attempt at
+[145.8s] making one of these huge models that
+[148.5s] while it is really big is trying to get
+[151.1s] on par with some of the Frontier Labs
+[153.1s] and some of the performance of models
+[155.1s] like Anthropic Opus, the recent GPT
+[158.3s] series, the sort of Gemini Pro kind of
+[160.6s] models. Now, for me again, what sets
+[162.9s] this apart, just like I talked about
+[164.6s] recently in the Nimitron Omni video, is
+[167.7s] that it's not just the model. It's
+[170.0s] really interesting thing here is the
+[172.1s] fact that they're actually openly
+[173.6s] talking about how it was made. The fact
+[176.0s] that they've released data sets, the
+[177.4s] fact that it looks like we've got
+[178.7s] recipes for what they actually did here
+[181.4s] means that if you do want to take this
+[183.3s] model and fine-tune it for a very
+[185.5s] specific task for an organization, and I
+[188.7s] should stress that nowadays more and
+[190.8s] more what I'm seeing is big
+[193.0s] organizations taking some of these open
+[195.4s] models, often the Chinese open weights
+[198.0s] models, but also things like Gemma 4 and
+[201.0s] the Neotron models, and then basically
+[203.5s] fine-tuning them to have custom versions
+[206.2s] that are really good for the company's
+[209.0s] specific use tasks to replace
+[211.9s] proprietary models, whether that's from
+[214.2s] Anthropic, OpenAI, Google, etc. If you
+[217.4s] listen to the Venturebe podcast that I
+[219.4s] do recently, we've had people on from
+[221.3s] LinkedIn and from Pinterest, from a
+[223.5s] number of these different really big
+[225.1s] companies talking about doing exactly
+[227.7s] that where they're taking these open
+[229.5s] weights models, customizing them for
+[232.1s] their very specific use cases and then
+[234.8s] serving them at scale for millions if
+[238.1s] not hundreds of millions of users. I
+[240.1s] think for LinkedIn it's over a billion
+[241.7s] users for what they've been doing with
+[243.4s] some of the small open weights models.
+[245.5s] So one of the techniques that Nvidia has
+[247.6s] used to create Neotron 3 Ultra is
+[250.9s] exactly one of the techniques that
+[252.4s] LinkedIn told us about on the podcast
+[254.7s] and this is this whole idea of
+[256.8s] multi-teer on policy distillation and
+[260.0s] the idea here is that you take a very
+[262.6s] strong base model. So they train up like
+[264.4s] the Neotron base model they then train
+[266.7s] one version of it for code. They train
+[269.2s] one version for tool use, one version
+[271.4s] for instruction following and stuff like
+[273.1s] that. And then what they do is they
+[275.5s] distill from each of these teachers that
+[278.4s] they've trained up to be really good at
+[280.7s] specific things down to one final model.
+[284.6s] So the advantage there is that you're
+[287.0s] getting basically these strong teachers
+[290.4s] that are very strong at what they've
+[293.0s] been sort of taught to be strong at, but
+[295.8s] then you're able to use those to distill
+[298.1s] them down to the final model that is
+[300.6s] able to be good at all of these things.
+[302.8s] Now what actually happens there is it
+[304.8s] turns out that by training the separate
+[307.5s] teachers and then distilling down you
+[309.7s] actually get a model that's much
+[311.6s] stronger than just taking the one model
+[314.1s] and training it on all of those things.
+[316.6s] And one of the cool things here is that
+[318.2s] this can be done in sort of an RL
+[320.5s] fashion where once you've basically got
+[323.4s] that teacher it can actually sort of
+[325.7s] coax this out of the base model as it
+[328.4s] goes along. Now, another thing that
+[330.2s] Nvidia has focused on with Neotron 3
+[332.7s] Ultra is this whole idea of
+[335.4s] post-training for agent harnesses. So,
+[338.4s] the idea here is that as agent
+[340.7s] harnesses, whether that's open claw,
+[342.8s] whether that's Hermes, whether that's
+[344.8s] some kind of lang deep agents, etc.,
+[347.4s] they create these trajectories. And if
+[350.1s] you train the model on those
+[351.4s] trajectories and train them specifically
+[353.6s] for task completion of these, so you
+[356.9s] give them things like where perhaps
+[359.0s] they're going to get things wrong. They
+[360.6s] learn to be able to backtrack. They
+[362.3s] learn to be able to fix errors by using
+[365.0s] the harness, by using the different tool
+[367.0s] calls, by using perhaps some kind of
+[369.0s] memory, etc. This just allows the model
+[371.8s] to be much much stronger at these
+[374.6s] particular kind of agentic tasks. Now,
+[377.4s] another thing is that this is often done
+[380.1s] in some kind of RL environments. So, one
+[383.0s] of the cool things that Nvidia has been
+[384.2s] talking about is actually opening up a
+[386.3s] lot of these data sets and the actual RL
+[389.8s] environments. So, we know for example
+[392.1s] that RL environments were the things
+[393.9s] that sort of made the Kimmy 2.5, the
+[397.4s] Miniax 2.7 models, you know, the GLM
+[400.7s] models around that time all have this
+[403.1s] sort of liftoff where they suddenly got
+[404.9s] a lot better. that was coming because of
+[407.4s] the RL environments with Nvidia opening
+[410.2s] up a lot of these R environments. And
+[411.8s] I've got to stress that as I'm recording
+[413.2s] this, I haven't had a chance to play
+[414.6s] with all of those. That's something that
+[416.3s] maybe I will look at in the future. But
+[418.4s] with them opening this up, people are
+[420.6s] actually going to be able to see how
+[422.7s] these things are being made and how
+[424.6s] these things are actually being used for
+[426.8s] different kinds of post-training on a
+[429.0s] large model like this. And usually that
+[431.4s] kind of thing is something that you know
+[433.4s] the different model companies don't want
+[435.5s] to make public. From what I've read so
+[437.8s] far, Nvidia plans on releasing a lot of
+[440.3s] these different environments, which is
+[442.2s] definitely a huge win for the open
+[443.7s] source community. Even if you don't end
+[445.9s] up using this model, there is a good
+[448.3s] chance that you will end up using a
+[450.2s] smaller version of some model that was
+[452.6s] trained on some of these data sets and
+[455.0s] with some of these RL environments. I
+[457.7s] should also point out that the model
+[459.4s] itself actually is like a hybrid mixture
+[462.3s] of experts architecture. It's actually
+[465.1s] supporting things like multi-token
+[467.1s] prediction. It's got a million context
+[469.4s] window. And while you're probably going
+[471.4s] to need something like, you know,
+[472.8s] multiple H100s or a B200 to be able to
+[476.3s] actually run this, you are certainly
+[478.4s] going to see this being served by a lot
+[481.0s] of the inference companies that are out
+[483.0s] there. and my guess is they'll see them
+[484.7s] making it available for fine-tuning etc.
+[487.2s] Okay, so when we come and look at the
+[489.0s] benchmarks for this, you can see that
+[491.4s] Neotron 3 Ultra is doing very well for a
+[494.7s] lot of the different tasks. Now, that
+[496.8s] doesn't mean that it's actually winning
+[498.2s] for all the tasks in here, but look at
+[501.1s] this. This is a 550 billion parameter
+[503.7s] model. It's comparing to models that are
+[505.6s] actually much bigger than it. The Quen
+[508.0s] 3.5 model, it easily beats. It would
+[510.6s] have been nice to see it being compared
+[512.2s] to some of the newer Quen models which
+[514.0s] have also had a lot more RL environment
+[516.8s] training. And I think that's one of the
+[518.7s] key things that's going on here. If you
+[520.6s] look at the GLM 5.1 which I covered
+[523.0s] before, this model was heavily
+[526.0s] post-trained on these RL environments.
+[529.5s] And even then, Neimatron Ultra is doing
+[531.8s] better than the one trillion parameter
+[534.4s] model. It does make me wonder if someone
+[536.2s] actually just takes this and runs it on
+[538.5s] a lot more of these RL environments,
+[542.2s] would we see a substantial bump in the
+[544.8s] actual results here? Now, of course, the
+[547.2s] biggest advantage of being smaller than
+[549.8s] the other models means that you're going
+[551.8s] to be faster than the other models. You
+[553.9s] can see here, this is from artificial
+[555.7s] analysis team where their 3 ultra is
+[560.2s] getting over 300 tokens per second, much
+[563.3s] faster than the Kimmy and the GLM
+[565.4s] models. Finally, if we come in and look
+[567.6s] at Pinchbench, so this is a benchmark
+[571.2s] that's basically geared towards agent
+[573.8s] harnesses like Open Claw. You can see
+[576.5s] that while Anthropic is best overall,
+[579.2s] the best openweights model here actually
+[581.9s] is this Nvidia Neotron 3 Ultra. And you
+[585.4s] can see coming in and looking at this
+[587.3s] that the Ultra model really isn't that
+[589.8s] far behind the proprietary models like
+[592.3s] the Claude Opus 4.8 in here. So knowing
+[596.0s] that you're getting a much cheaper model
+[597.8s] here, this definitely makes sense that
+[600.4s] Nvidia is positioning this as a model
+[603.6s] that people can use for running their
+[606.0s] agents both cheaply and efficiently. So
+[609.4s] let's jump into a notebook and have a
+[611.0s] look at how this actually works for
+[612.8s] reasoning and tool calling. Okay, so
+[615.4s] I'll quickly just go through a quick
+[617.6s] demo of using this. And as always, I'll
+[620.2s] put the notebook in the description. You
+[622.6s] can have a play with it yourself. So,
+[624.9s] I'm actually running this from Nvidia's
+[627.5s] cloud. So, basically, you just need to
+[629.4s] set up an account and put in your uh
+[631.9s] Nvidia API key in there, but you
+[634.6s] certainly don't need to run it here.
+[636.4s] You'll find this model on Open Router.
+[638.5s] You'll find it on a lot of the different
+[640.8s] inference providers. So, really pick the
+[643.1s] one that you're most comfortable with. I
+[644.9s] would say there. All right. We've just
+[646.6s] got then some streaming and some helper
+[648.8s] functions in here for just doing this.
+[651.3s] We also want to set up some tools for
+[653.5s] basically testing things out. So we've
+[656.0s] got a calculator tool. We've got kind of
+[658.0s] like a little rag tool that basically we
+[660.2s] can ask it about GPU specs since this is
+[662.6s] in and it will basically return back a
+[664.6s] bunch of information there. And you'll
+[666.6s] notice that everything that we're doing
+[668.0s] for sort of tool definitions and stuff
+[670.1s] like that is in the open AI uh sort of
+[672.5s] format and the model's been built so
+[674.6s] that it can use an open AI API endpoint,
+[677.4s] you know, very simply. All right, the
+[679.7s] key things here is this is a reasoning
+[682.0s] model, but you've got different options
+[684.1s] with the reasoning. So you can see here
+[686.8s] that we can basically just pass in
+[689.1s] enable thinking equals true. And you
+[691.8s] will see in this case we've got our
+[693.5s] helper function printing out the
+[694.9s] thinking in green. You can see that
+[697.0s] okay, we've got all the thinking for
+[698.6s] this simple test and then it comes to
+[700.9s] the answer and it just basically prints
+[702.7s] out the answer there. Now you've also
+[705.2s] got the ability to be able to set the
+[709.8s] level of thinking that you want. So this
+[712.1s] can be low effort of where you've
+[713.8s] basically just got short reasoning. This
+[716.0s] is for when you want a low cost, a low
+[718.6s] latency and stuff like that. You've then
+[720.4s] got default thinking which the model
+[723.4s] itself will actually decide how long the
+[725.7s] chain of thought is going to be. And
+[727.4s] they've got a reasoning budget. So you
+[729.1s] can actually explicitly sort of tell it,
+[732.2s] okay, this is the number of thinking
+[734.0s] tokens that I want you to sort of max
+[736.3s] out at. Now, even though you can see
+[738.5s] here, I've set that to 16,000. In my
+[741.0s] testing, very rarely it will even get
+[743.0s] close to that kind of budget here, it
+[745.4s] does seem to be very succinct in its
+[747.6s] reasoning. So you can see here if we
+[749.4s] look at the outputs here we've got the
+[751.5s] loweffort one where we've got a certain
+[754.1s] amount of reasoning and then we've got
+[756.2s] the answer coming out the default one
+[759.8s] we've got a certain amount of reasoning
+[762.2s] and then the answer out and then we've
+[763.9s] got our longer one. Now if we actually
+[765.9s] look at these we can see that okay the
+[768.9s] approximate amount of reasoning tokens
+[771.0s] yes went up but the interesting thing
+[773.4s] here is that the default one in this
+[775.8s] case the default one's actually longer
+[777.6s] than the sort of budget one that we set
+[779.7s] here. So I've given it another one here
+[782.3s] that's not a mathematical kind of thing.
+[784.6s] It's much more sort of you know a
+[786.0s] thinking thing. And you can see that
+[788.0s] sure enough on this one we had the
+[790.3s] loweffort be only about 100 tokens. the
+[793.4s] default one a little bit under 200 and
+[796.1s] then the budgeted one where we've said
+[798.2s] you know go for a long amount of time
+[800.2s] it's still only going to sort of 200
+[802.5s] tokens. So my testing this kind of fits
+[805.8s] for when you want a model just to
+[807.4s] basically get to the point and give you
+[809.6s] an answer back very quickly. All right,
+[812.1s] we can do the same thing with sort of
+[813.9s] tool calls. You can see here we're
+[816.1s] basically getting it some tools. These
+[818.2s] were the tools that we defined earlier
+[819.8s] on. So, we've got some tools about GPU
+[822.7s] specs and how much power they're using.
+[825.5s] We're asking it to basically calculate
+[827.4s] this out. So, we've passed in a
+[829.2s] calculator. We've passed in the GPU
+[831.9s] spec. You can see here that it's done a
+[834.3s] pretty good job at deciding, okay, this
+[837.1s] is the tool that it's going to use. This
+[839.3s] is the arguments for that tool. Then, we
+[841.5s] get the response back. In round two,
+[844.1s] it's going to basically use the
+[845.7s] calculator tool. it's going to decide,
+[847.9s] okay, what it's going to actually put
+[849.5s] into that calculator tool. And then
+[851.7s] finally, in round three, it's basically
+[853.7s] just going through, not using any tools.
+[855.4s] It's just giving the us the answer back.
+[857.8s] And you can see it does a quite a nice
+[859.9s] job at that. So the model is certainly
+[862.2s] good at doing these agentic runs of
+[864.8s] where you want it to basically run a
+[867.0s] bunch of tools, be able to use those
+[869.0s] outputs, process them, and to be able to
+[871.7s] work out what the next tool would be
+[874.2s] that makes sense for this particular
+[876.2s] agent use case. So overall, this is
+[878.8s] definitely what you want for things like
+[881.5s] your open claw, nano claw, your Hermes
+[885.1s] agent, that kind of thing where you've
+[887.5s] got an agent that you're injecting lots
+[889.2s] of tools in. you want to be able to get,
+[891.2s] you know, the various responses out,
+[893.1s] etc. So, overall, I would say check the
+[895.1s] model out. This is certainly a model
+[897.4s] that, while I necessarily wouldn't use
+[899.4s] it as my top tier model for everything,
+[902.1s] if you want to run a sort of personal
+[904.6s] agent, uh, single tenant user agent,
+[908.0s] this is definitely a good model for
+[909.7s] that. And it makes a lot of sense to do
+[911.4s] this because it's both very quick, it's
+[913.2s] reliable, it's got the reasoning that
+[915.3s] you need, but it's not going to break
+[917.6s] the bank like some of the Frontier
+[919.5s] models. And like I said earlier on in
+[921.5s] the video, for me, probably the biggest
+[923.4s] thing about this is not just the model
+[925.3s] itself. It's that Nvidia is making these
+[928.5s] training recipes available. They're
+[930.7s] making data available. They're making it
+[933.9s] possible for lots of companies to not
+[936.6s] only see how this was done, but to be
+[939.3s] able to take this and work on their own
+[942.2s] versions, which I think is a huge win
+[944.2s] for open weights models and for open
+[947.2s] LLMs in general. So, as always, let me
+[949.8s] know in the comments what you think, if
+[951.2s] you've got any questions or anything.
+[953.0s] Found the video useful, please click
+[954.7s] like and subscribe, and I will talk to
+[956.4s] you in the next video. Bye for now.

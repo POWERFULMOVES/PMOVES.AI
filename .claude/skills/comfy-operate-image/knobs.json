@@ -1,0 +1,7 @@
+{
+  "exposed_knobs": {
+    "prompt": "the text describing the image you want — the most important knob",
+    "seed": "fixes randomness; the same seed + prompt reproduces the same image",
+    "input_image": "optional reference/inpaint source; leave empty for text-to-image"
+  }
+}

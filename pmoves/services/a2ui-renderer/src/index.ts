@@ -4,10 +4,10 @@
  * Converts A2UI animation JSON specs into MP4/GIF/WebM via Remotion.
  * Uploads rendered output to MinIO and publishes NATS events.
  *
- * Port: 8105
+ * Port: 8107
  * Health: /healthz
  * Metrics: /metrics
- * Auth: JWT (fail-closed) on /render and /render/chart
+ * Auth: JWT (fail-closed) on /render, /render/chart, and /render/provenance
  *
  * Thread 2.1: Remotion Renderer Service
  */
@@ -24,9 +24,14 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import crypto from 'crypto';
+import {
+  estimateProvenanceDurationMs,
+  normalizeProvenanceLivingDoc,
+  summarizeProvenanceLivingDoc,
+} from './provenanceLivingDoc';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '8105', 10);
+const PORT = parseInt(process.env.PORT || '8107', 10);
 const sc = StringCodec();
 
 // --- Configuration ---
@@ -109,6 +114,58 @@ const renderDuration = new Histogram({
 
 const ALLOWED_RENDER_FORMATS = new Set(['mp4', 'gif', 'webm']);
 
+type LayoutSummary = {
+  text_elements: number;
+  pretext_elements: number;
+  debug_layout_elements: number;
+  bounded_text_elements: number;
+  engines: string[];
+};
+
+function summarizeLayoutUsage(spec: any): LayoutSummary {
+  const engines = new Set<string>();
+  let textElements = 0;
+  let pretextElements = 0;
+  let debugLayoutElements = 0;
+  let boundedTextElements = 0;
+
+  for (const scene of Array.isArray(spec?.scenes) ? spec.scenes : []) {
+    for (const element of Array.isArray(scene?.elements) ? scene.elements : []) {
+      if (element?.type !== 'text' && element?.type !== 'heading') {
+        continue;
+      }
+
+      textElements += 1;
+      const layout = element?.text_layout;
+      const engine = typeof layout?.engine === 'string' ? layout.engine : 'browser';
+      engines.add(engine);
+
+      if (engine === 'pretext') {
+        pretextElements += 1;
+      }
+      if (layout?.debugBoxes === true) {
+        debugLayoutElements += 1;
+      }
+      if (
+        layout?.maxWidth !== undefined
+        || element?.size?.width !== undefined
+        || element?.style?.width !== undefined
+        || element?.style?.maxWidth !== undefined
+      ) {
+        boundedTextElements += 1;
+      }
+    }
+  }
+
+  return {
+    text_elements: textElements,
+    pretext_elements: pretextElements,
+    debug_layout_elements: debugLayoutElements,
+    bounded_text_elements: boundedTextElements,
+    engines: Array.from(engines.values()),
+  };
+}
+
 function normalizeRenderFormat(rawFormat: unknown): string | null {
   const format = typeof rawFormat === 'string' ? rawFormat.trim().toLowerCase() : 'mp4';
   if (!ALLOWED_RENDER_FORMATS.has(format)) {
@@ -184,6 +241,12 @@ function inferIngestKind(format: string): 'audio' | 'video' | 'image' | 'documen
   return 'other';
 }
 
+function inferContentType(format: string): string {
+  if (format === 'gif') return 'image/gif';
+  if (format === 'webm') return 'video/webm';
+  return 'video/mp4';
+}
+
 // --- Middleware ---
 app.use(express.json({ limit: '10mb' }));
 
@@ -229,6 +292,7 @@ app.post('/render', renderLimiter, requireAuth, async (req: Request, res: Respon
   }
   const spec = req.body;
   const end = renderDuration.startTimer({ format });
+  const layoutSummary = summarizeLayoutUsage(spec);
 
   let tmpDir: string | undefined;
   try {
@@ -278,7 +342,7 @@ app.post('/render', renderLimiter, requireAuth, async (req: Request, res: Respon
         bucket: MINIO_BUCKET,
         format,
         source: 'a2ui-renderer',
-        agent_id: 'darkxside',
+        agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
         timestamp: new Date().toISOString(),
       },
     });
@@ -289,12 +353,13 @@ app.post('/render', renderLimiter, requireAuth, async (req: Request, res: Respon
       duration_ms: spec.animation.duration_ms || 6000,
       scenes: spec.scenes.length,
       composition_id: compositionId,
+      layout_summary: layoutSummary,
       timestamp: new Date().toISOString(),
     });
 
     // Graphiti emission (fire-and-forget)
     publishNats('agent.graphiti.signed.v1', {
-      agent_id: 'darkxside',
+      agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
       glyph: '\u2726',
       color: '#E11D48',
       phase: 'a2ui-render',
@@ -315,6 +380,7 @@ app.post('/render', renderLimiter, requireAuth, async (req: Request, res: Respon
       duration_ms: spec.animation.duration_ms || 6000,
       scenes: spec.scenes.length,
       spec_version: spec.version,
+      layout_summary: layoutSummary,
     });
   } catch (err) {
     if (tmpDir) {
@@ -361,6 +427,7 @@ app.post('/render/chart', renderLimiter, requireAuth, async (req: Request, res: 
       },
     ],
   };
+  const layoutSummary = summarizeLayoutUsage(spec);
 
   // Delegate to render logic inline
   req.body = spec;
@@ -401,7 +468,7 @@ app.post('/render/chart', renderLimiter, requireAuth, async (req: Request, res: 
         bucket: MINIO_BUCKET,
         format: 'mp4',
         source: 'a2ui-renderer',
-        agent_id: 'darkxside',
+        agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
         timestamp: new Date().toISOString(),
       },
     });
@@ -412,6 +479,7 @@ app.post('/render/chart', renderLimiter, requireAuth, async (req: Request, res: 
       duration_ms: 6000,
       scenes: 1,
       composition_id: 'A2UIComposition',
+      layout_summary: layoutSummary,
       timestamp: new Date().toISOString(),
     });
 
@@ -420,7 +488,7 @@ app.post('/render/chart', renderLimiter, requireAuth, async (req: Request, res: 
     renderCounter.inc({ format: 'mp4', status: 'success' });
     end();
 
-    res.json({ ok: true, url, format: 'mp4', duration_ms: 6000, scenes: 1 });
+    res.json({ ok: true, url, format: 'mp4', duration_ms: 6000, scenes: 1, layout_summary: layoutSummary });
   } catch (err) {
     if (tmpDir) {
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -430,6 +498,118 @@ app.post('/render/chart', renderLimiter, requireAuth, async (req: Request, res: 
     res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : 'Unknown chart render error',
+    });
+  }
+});
+
+/**
+ * POST /render/provenance
+ *
+ * Render a provenance-shaped living document directly into a Remotion composition.
+ * This is the preferred surface for transcript overlays, semantic-weight review,
+ * and motion-ready living docs that share the same source bundle as HiRAG.
+ */
+app.post('/render/provenance', renderLimiter, requireAuth, async (req: Request, res: Response) => {
+  const format = normalizeRenderFormat(req.query.format);
+  if (!format) {
+    res.status(400).json({
+      ok: false,
+      error: `Unsupported format: must be one of ${Array.from(ALLOWED_RENDER_FORMATS).join(', ')}`,
+    });
+    return;
+  }
+
+  const doc = normalizeProvenanceLivingDoc({
+    ...req.body,
+    duration_ms: req.body?.duration_ms ?? estimateProvenanceDurationMs(req.body ?? {}),
+  });
+  const docSummary = summarizeProvenanceLivingDoc(doc);
+  const end = renderDuration.startTimer({ format });
+
+  let tmpDir: string | undefined;
+  try {
+    const servedUrl = await ensureBundle();
+    const durationInFrames = Math.ceil((doc.duration_ms / 1000) * 30);
+
+    const composition = await selectComposition({
+      serveUrl: servedUrl,
+      id: 'ProvenanceLivingDoc',
+      inputProps: { doc },
+    });
+
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'a2ui-provenance-'));
+    const outputFile = path.join(tmpDir, `provenance.${format}`);
+    const codec = format === 'gif' ? 'gif' as const : format === 'webm' ? 'vp8' as const : 'h264' as const;
+
+    await renderMedia({
+      composition: { ...composition, durationInFrames },
+      serveUrl: servedUrl,
+      codec,
+      outputLocation: outputFile,
+      inputProps: { doc },
+    });
+
+    const renderKey = `a2ui/provenance/${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${format}`;
+    const url = await uploadToMinIO(outputFile, renderKey, inferContentType(format));
+
+    publishNats('ingest.file.added.v1', {
+      file_id: renderKey,
+      uri: `s3://${MINIO_BUCKET}/${renderKey}`,
+      kind: inferIngestKind(format),
+      meta: {
+        bucket: MINIO_BUCKET,
+        format,
+        source: 'a2ui-renderer',
+        artifact_kind: 'provenance-living-doc',
+        agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    publishNats('a2ui.render.completed.v1', {
+      render_key: renderKey,
+      format,
+      duration_ms: doc.duration_ms,
+      scenes: doc.sections.length,
+      composition_id: 'ProvenanceLivingDoc',
+      provenance_summary: docSummary,
+      timestamp: new Date().toISOString(),
+    });
+
+    publishNats('agent.graphiti.signed.v1', {
+      agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
+      glyph: '\u2726',
+      color: '#E11D48',
+      phase: 'a2ui-provenance',
+      timestamp: new Date().toISOString(),
+      summary: `Rendered ${format} provenance living doc (${doc.sections.length} sections)`,
+    });
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    renderCounter.inc({ format, status: 'success' });
+    end();
+
+    res.json({
+      ok: true,
+      url,
+      format,
+      duration_ms: doc.duration_ms,
+      composition_id: 'ProvenanceLivingDoc',
+      provenance_summary: docSummary,
+      title: doc.title,
+      merkle_root: doc.merkle_root,
+      shape_id: doc.shape_id,
+    });
+  } catch (err) {
+    if (tmpDir) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    }
+    renderCounter.inc({ format, status: 'error' });
+    end();
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : 'Unknown provenance render error',
     });
   }
 });

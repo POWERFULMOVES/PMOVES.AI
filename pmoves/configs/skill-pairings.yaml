@@ -339,12 +339,94 @@ pairings:
           on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.finance-sync.v1"
 
+  # Conch Consciousness Analysis Pipeline
+  # YouTube → Transcribe → CHR Theory Decomposition → Hi-RAG Index → DeepResearch → Visualize
+  conch-consciousness-analysis:
+    name: "CONCH Consciousness Analysis Pipeline"
+    description: >
+      Ingest YouTube content (Discover AI series), transcribe, analyze through
+      325-theory Kuhn consciousness framework via CHR algorithm, generate CGP
+      packets, index to Hi-RAG v2, research all perspectives, render visual
+      constellation via Remotion. The conch = logarithmic spiral = consciousness
+      geometry. The "C" in CHIT consciousness.
+    chain:
+      - skill: pmoves-yt-ingest
+        output: transcript
+        agent: pmoves-yt
+        depends:
+          services: ["nats:4222"]
+          health: "http://localhost:8077/healthz"
+        hooks:
+          on_complete: "ingest.transcript.ready.v1"
+          on_error: "skills.error.v1"
+      - skill: whisper-transcribe
+        input: transcript
+        output: full_text
+        agent: ffmpeg-whisper
+        depends:
+          services: ["nats:4222"]
+          skills: ["pmoves-yt-ingest"]
+          health: "http://localhost:8078/healthz"
+        hooks:
+          on_complete: "skills.step.whisper-transcribe.done.v1"
+          on_error: "skills.error.v1"
+      - skill: consciousness-chr
+        input: full_text
+        output: cgp_packets
+        agent: consciousness_service
+        depends:
+          services: ["nats:4222"]
+          skills: ["whisper-transcribe"]
+          health: "http://localhost:8106/healthz"
+        hooks:
+          on_complete: "geometry.cgp.v1"
+          on_error: "skills.error.v1"
+      - skill: hirag-index
+        input: cgp_packets
+        output: index_result
+        agent: hirag
+        depends:
+          services: ["nats:4222", "qdrant:6333", "neo4j:7687", "meilisearch:7700"]
+          skills: ["consciousness-chr"]
+          health: "http://localhost:8086/healthz"
+        hooks:
+          on_complete: "skills.step.hirag-index.done.v1"
+          on_error: "skills.error.v1"
+      - skill: deepresearch
+        input: [cgp_packets, index_result]
+        output: research_results
+        agent: deepresearch
+        depends:
+          services: ["nats:4222"]
+          skills: ["hirag-index"]
+          health: "http://localhost:8098/healthz"
+        hooks:
+          on_complete: "research.deepresearch.result.v1"
+          on_error: "skills.error.v1"
+      - skill: remotion-render
+        input: research_results
+        output: video_url
+        agent: creator
+        depends:
+          services: ["nats:4222"]
+          skills: ["deepresearch"]
+        hooks:
+          on_complete: "skills.pipeline.conch-consciousness.done.v1"
+          on_error: "skills.error.v1"
+    ultrathink: true
+    nats_subject: "skills.pipeline.conch-consciousness-analysis.v1"
+
 # Handoff protocol configuration
 handoff:
   # How agents pass work between each other
   protocol: "mcp"
-  # Agent Zero MCP endpoint for orchestration
-  mcp_endpoint: "http://localhost:8080/mcp/command"
+  # Agent Zero MCP endpoint for orchestration.
+  # /mcp/execute, not /mcp/command: the supervisor on 8080 serves POST /mcp/execute
+  # and GET /mcp/commands. /mcp/command (singular) was never implemented -- it is
+  # documented only in .claude/context/mcp-api.md, which is marked SUPERSEDED for
+  # exactly that reason. floos_resolver already POSTs {cmd, arguments}, which is
+  # /mcp/execute's contract, so only the path was wrong.
+  mcp_endpoint: "http://localhost:8080/mcp/execute"
   # NATS for async handoffs
   nats_url: "nats://nats:pmoves@nats:4222"
   # Timeout for each skill step (seconds)
@@ -374,6 +456,21 @@ skill_sources:
   n8n-finance-sync: "pmoves/integrations/firefly-iii/n8n/flows/"
   health-weekly-cgp: "pmoves/integrations/health-wger/n8n/flows/health_weekly_to_cgp.json"
   finance-monthly-cgp: "pmoves/integrations/firefly-iii/n8n/flows/finance_monthly_to_cgp.json"
+
+  # Fleet CLI wrappers + host CLIs (canonical inventory: pmoves/configs/cli_tools.yaml)
+  cli-tools-manifest: "pmoves/configs/cli_tools.yaml"
+  cli-wrapper-pmoves-mini: "pmoves/scripts/pmoves-mini"
+  cli-wrapper-claude-pmoves: "pmoves/scripts/claude-pmoves.sh"
+  cli-wrapper-codex-pmoves: "pmoves/scripts/codex-pmoves.sh"
+  cli-wrapper-kilo-pmoves: "pmoves/scripts/kilo-pmoves.sh"
+  cli-wrapper-kimi-pmoves: "pmoves/scripts/kimi-pmoves.sh"
+  cli-wrapper-crush-pmoves: "pmoves/scripts/crush-pmoves"
+  cli-wrapper-hermes-pmoves: "pmoves/scripts/hermes-pmoves"
+  cli-host-nats: "nats (host binary - CHIT bundle ops, subject checks)"
+  cli-host-supabase: "supabase (host binary - stack bring-up, migrations)"
+  cli-host-ollama: "ollama (host binary - local model runtime)"
+  cli-host-skills: "skills (host binary - open skills ecosystem CLI, backs find-skills)"
+  find-skills: "skills/PMOVES-skills/skills/find-skills/SKILL.md"
 
   # Fleet Secrets Sync → Bootstrap → Deploy
   fleet-secrets-bootstrap:

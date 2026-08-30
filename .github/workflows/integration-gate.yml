@@ -19,22 +19,33 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pyyaml
+        run: pip install pyyaml "pydantic>=2"
+
+      # Review P1 on #2778: the blocking half of the identity gate
+      # (pmoves/tests/test_identity_coupling_gate.py) rides the required
+      # `python-tests` context, which merge-gate.yml only enforces for main.
+      # On THIS branch (and Integrations) a config-only PR touching the
+      # registry/vocabulary/teams files ran neither python-tests (path filter)
+      # nor any required check — validate-agents-config reported but did not
+      # block. integration-gate is required on both protected branches and has
+      # no path filter, so the validator runs here as the blocking half.
+      - name: Identity coupling gate (registry ↔ teams ↔ vocabulary)
+        run: python pmoves/scripts/validate_agent_registry.py -v
 
       - name: Static audit layers
         run: |

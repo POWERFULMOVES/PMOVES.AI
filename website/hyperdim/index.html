@@ -1,0 +1,2437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyperdimensional Functions</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/theme/dracula.min.css">
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/mode/javascript/javascript.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.0.0/math.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="sidebar-wrapper">
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-header-top">
+                    <h2>Function Controls</h2>
+                    <button id="toggleSidebar">«</button>
+                </div>
+            </div>
+
+            <div id="controlsBody">
+
+                <div class="section">
+                    <div class="section-header" id="learnMoreHeader">
+                        <span class="section-caret" id="learnMoreCaret">▶</span>
+                        <span class="section-title">Learn More</span>
+                    </div>
+                    <div class="section-body" id="learnMoreBody">
+                        <div class="control-row">
+                            <div class="control-group learn-more-content">
+                                <p>This is a webtoy that allows you to create and visualize high-dimensional functions, or functions with lots of inputs and outputs.</p>
+                                <p>They are colored parametric surfaces that change over time. They take in u,v coordinates and output x,y,z coordinates and r,g,b,a color/transparency values. 
+                                    They can also take in other parameters, like t, that are defined in 'Parameters' Section.</p>
+                                <p>Click 'Load' to find some examples. 'Sphere' is a good place to start.</p>
+                                <p>Watch <a href="https://www.youtube.com/watch?v=349r0xJFGNw" target="_blank">this video</a> for an in-depth explanation.</p>
+                                <p>View the <a href="https://github.com/MaxRobinsonTheGreat/hyperdimensions" target="_blank">Source Code.</a></p>
+                                <p>❤️Support my work❤️</p>
+                                <p><a href="https://ko-fi.com/emergentgarden" target="_blank">Buy me a Coffee</a></p>
+                                <p><a href="https://www.patreon.com/emergentgarden" target="_blank">Join my Patreon</a></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <div class="section">
+                    <div class="section-header" id="visualsHeader">
+                        <span class="section-caret" id="visualsCaret">▶</span>
+                        <span class="section-title">Display</span>
+                    </div>
+                    <div class="section-body" id="visualsBody" style="display: none;">
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label>
+                                    <input type="checkbox" id="autoRotate">
+                                    Auto rotate
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="showAxes">
+                                    <input type="checkbox" id="showAxes">
+                                    Show axes
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label>
+                                    <input type="checkbox" id="showSurface" checked>
+                                    Show surface
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label>
+                                    <input type="checkbox" id="showWireframe">
+                                    Show wireframe
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="dirIntensity">Directional Light</label>
+                                <div class="slider-container">
+                                    <input type="range" id="dirIntensitySlider" min="0" max="5" step="0.1" value="1.0">
+                                    <input type="number" id="dirIntensity" min="0" max="5" step="0.1" value="1.0" class="slider-number">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="ambientIntensity">Ambient Light</label>
+                                <div class="slider-container">
+                                    <input type="range" id="ambientIntensitySlider" min="0" max="5" step="0.05" value="0.35">
+                                    <input type="number" id="ambientIntensity" min="0" max="5" step="0.05" value="0.35" class="slider-number">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="shininess">Shininess</label>
+                                <div class="slider-container">
+                                    <input type="range" id="shininessSlider" min="0" max="1000" step="10" value="100">
+                                    <input type="number" id="shininess" min="0" max="1000" step="10" value="100" class="slider-number">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="globalSaturation">Saturation</label>
+                                <div class="slider-container">
+                                    <input type="range" id="globalSaturationSlider" min="0" max="3" step="0.1" value="1.5">
+                                    <input type="number" id="globalSaturation" min="0" max="3" step="0.1" value="1.5" class="slider-number">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <div class="section" id="parametersSection">
+                    <div class="section-header" id="parametersHeader">
+                        <span class="section-caret" id="parametersCaret">▼</span>
+                        <span class="section-title">Parameters</span>
+                    </div>
+                    <div class="section-body" id="parametersBody">
+                        <div class="control-row">
+                            <div class="control-group-inline">
+                                <label for="uMin">U min</label>
+                                <input type="text" id="uMin" inputmode="decimal" value="0">
+                            </div>
+                            <div class="control-group-inline">
+                                <label for="uMax">max</label>
+                                <input type="text" id="uMax" inputmode="decimal" value="1">
+                            </div>
+                            <div class="control-group-inline">
+                                <label for="uSegs">resolution</label>
+                                <input type="number" id="uSegs" min="10" max="500" value="150">
+                            </div>
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-group-inline">
+                                <label for="vMin">V min</label>
+                                <input type="text" id="vMin" inputmode="decimal" value="0">
+                            </div>
+                            <div class="control-group-inline">
+                                <label for="vMax">max</label>
+                                <input type="text" id="vMax" inputmode="decimal" value="1">
+                            </div>
+                            <div class="control-group-inline">
+                                <label for="vSegs">resolution</label>
+                                <input type="number" id="vSegs" min="3" max="500" value="150">
+                            </div>
+                        </div>
+
+                        <div id="paramExtras"></div>
+                        <div class="control-row" id="globalParamControls" style="display: none;">
+                            <div class="control-group-inline">
+                                <button id="playAllParams">▶ Play All</button>
+                            </div>
+                            <div class="control-group-inline">
+                                <button id="pauseAllParams">⏸ Pause All</button>
+                            </div>
+                            <div class="control-group-inline">
+                                <button id="randomizeParams">🎲 Randomize</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group">
+                                <button id="addParam">Add Parameter</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <div class="section">
+                    <div class="section-header" id="surfaceHeader">
+                        <span class="section-caret" id="surfaceCaret">▶</span>
+                        <span class="section-title">Surface function</span>
+                    </div>
+                    <div class="section-body" id="surfaceBody" style="display: none;">
+                        <div class="control-row">
+                            <div class="control-group">
+                                <textarea id="surfaceEditor" spellcheck="false"></textarea>
+                            </div>
+                        </div>
+                        <div id="surfaceError" class="surface-error" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <div class="section">
+                    <div class="section-header" id="outputsHeader">
+                        <span class="section-caret" id="outputsCaret">▶</span>
+                        <span class="section-title">Outputs</span>
+                    </div>
+                    <div class="section-body" id="outputsBody" style="display: none;">
+                        <div class="control-row">
+                            <div class="control-group-inline outputs-row">
+                                <label for="coordConversion">Convert XYZ coordinates to</label>
+                                <select id="coordConversion">
+                                    <option value="none">None</option>
+                                    <option value="spherical">Spherical (r, θ, φ)</option>
+                                    <option value="cylindrical">Cylindrical (ρ, φ, z)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group-inline outputs-row">
+                                <label for="rgbToHsv">Convert RGB to HSV</label>
+                                <input type="checkbox" id="rgbToHsv">
+                            </div>
+                        </div>
+                        <div class="outputs-note">
+                            (conversions occur after function code is executed, they do not require any code changes)
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <hr class="section-divider">
+
+                <div class="section">
+                    <div class="section-header" id="replayHeader">
+                        <span class="section-caret" id="replayCaret">▶</span>
+                        <span class="section-title">Replay</span>
+                    </div>
+                    <div class="section-body" id="replayBody" style="display: none;">
+                        <!-- Tier 1: Timeline Scrubber -->
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="replayTimeline">Timeline Scrubber</label>
+                                <div class="replay-timeline-container">
+                                    <input type="range" id="replayTimeline" min="0" max="0" value="0" step="1">
+                                    <span class="replay-frame-counter" id="replayFrameCounter">0 / 0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group-inline replay-controls">
+                                <button id="replayPlay" title="Play/pause timeline">▶</button>
+                                <button id="replayStop" title="Stop and reset">⏹</button>
+                                <select id="replaySource" title="Replay source">
+                                    <option value="saves">All Saves</option>
+                                    <option value="recorded">Recorded</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- Tier 2: State Recording -->
+                        <div class="control-row">
+                            <div class="control-group-inline replay-record-controls">
+                                <button id="replayRecord" title="Capture current geometry state">● Record Frame</button>
+                                <button id="replayClear" title="Clear recorded frames" disabled>✕ Clear</button>
+                            </div>
+                        </div>
+                        <!-- Tier 3: Video Export -->
+                        <div class="control-row">
+                            <div class="control-group-inline replay-export-controls">
+                                <button id="replayExport" title="Export timeline as video" disabled>⬇ Export Video</button>
+                                <span class="replay-export-status" id="replayExportStatus"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="sidebar-footer">
+                <div class="footer-buttons-grid">
+                    <button id="applySurface" disabled>Apply</button>
+                    <button id="revertSurface" disabled>Revert</button>
+                    <button id="saveConfig">Save</button>
+                    <button id="loadConfig">Load</button>
+                    <button id="cancelPanels" class="footer-cancel" style="display: none; grid-column: 1 / -1;">Cancel</button>
+                </div>
+                <div class="sidebar-footer-panel" id="sidebarHeaderPanel" style="display: none;">
+                    <div id="savePanel" class="header-panel" style="display: none;">
+                        <div class="header-panel-row">
+                            <label for="saveName">Save As:</label>
+                            <input type="text" id="saveName" placeholder="Name">
+                            <button id="downloadSave">Download</button>
+                        </div>
+                    </div>
+                    <div id="loadPanel" class="header-panel" style="display: none;">
+                        <div class="header-panel-row header-panel-row-load">
+                            <label for="loadPreset">Choose Saved:</label>
+                            <select id="loadPreset">
+                                <option value="shell">shell</option>
+                            </select>
+                            <button id="loadPresetBtn">Load</button>
+                            <span class="header-panel-or-inline">~or~</span>
+                            <button id="uploadSaveBtn">Upload Custom</button>
+                            <input type="file" id="uploadSaveInput" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="sidebar-resizer"></div>
+    </div>
+
+    <div id="viewport">
+        <button id="resetCamera" class="floating-button" title="Reset camera">↻</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Parameters ---
+        const params = {
+            uMin: 0,
+            uMax: 1,
+            vMin: 0,
+            vMax: 1,
+            uSegs: 150,
+            vSegs: 150
+        };
+
+        // --- The Parametric Functions ---
+        
+        // Combined function that returns everything
+        // x, y, z: position
+        // r, g, b: color [0,1]
+        // a: alpha [0,1] (optional, defaults to 1)
+
+        // Default placeholder surface
+function surface(input) {
+    return { x: 0, y: 0, z: 0, r: 1, g: 1, b: 1, a: 1 };
+}
+
+        let surfaceFn = surface;
+        let currentLoadedFile = 'nautilus.json'; // Track currently loaded file
+        const surfaceInput = { u: 0, v: 0 };
+        const animatedParams = [];
+        let coordConversionMode = 'none'; // 'none' | 'spherical' | 'cylindrical'
+        let convertRgbToHsv = false;
+        let globalSaturation = 1.5;
+
+
+        function formatScalar(value) {
+            if (typeof value !== 'number' || !Number.isFinite(value)) return '';
+            return Number(value).toFixed(5).replace(/\.?0+$/, '');
+        }
+
+        // --- Three.js Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera.position.set(35, 25, 35);
+        camera.up.set(0, 0, 1); // Z-up orientation
+        const initialCameraPosition = camera.position.clone();
+        const initialTarget = new THREE.Vector3(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const viewport = document.getElementById('viewport');
+        viewport.appendChild(renderer.domElement);
+
+        function resizeRendererToViewport() {
+            const rect = viewport.getBoundingClientRect();
+            const width = rect.width || window.innerWidth;
+            const height = rect.height || window.innerHeight;
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        }
+
+        window.addEventListener('resize', resizeRendererToViewport);
+
+        resizeRendererToViewport();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.maxDistance = 4000;
+        controls.target.copy(initialTarget);
+        controls.autoRotateSpeed = 5;
+
+        // --- Geometry Generation ---
+        
+        let mesh;
+        let wireframe;
+        let geometry;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        let lastUSegs = -1;
+        let lastVSegs = -1;
+        
+        function createGridGeometry(uSegs, vSegs) {
+            const geometry = new THREE.BufferGeometry();
+            const vertexCount = (uSegs + 1) * (vSegs + 1);
+            
+            // Buffers
+            const positions = new Float32Array(vertexCount * 3);
+            const colors = new Float32Array(vertexCount * 4);
+            const indices = [];
+
+            // Indices
+            for (let i = 0; i < vSegs; i++) {
+                for (let j = 0; j < uSegs; j++) {
+                    const a = i * (uSegs + 1) + j;
+                    const b = i * (uSegs + 1) + j + 1;
+                    const c = (i + 1) * (uSegs + 1) + j;
+                    const d = (i + 1) * (uSegs + 1) + j + 1;
+
+                    // Two triangles per square
+                    indices.push(a, b, d);
+                    indices.push(a, d, c);
+                }
+            }
+
+            geometry.setIndex(indices);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+            
+            return geometry;
+        }
+
+        function getCurrentShininess() {
+            const input = document.getElementById('shininess');
+            if (!input) return 100;
+            const v = parseFloat(input.value);
+            return Number.isNaN(v) ? 100 : v;
+        }
+
+        function updateSurfaceExtraParams() {
+            // Clear existing extra keys (keep u, v)
+            Object.keys(surfaceInput).forEach((key) => {
+                if (key !== 'u' && key !== 'v') {
+                    delete surfaceInput[key];
+                }
+            });
+
+            const container = document.getElementById('paramExtras');
+            if (!container) return;
+            const rows = container.querySelectorAll('.param-row');
+            const identifier = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+            rows.forEach((row) => {
+                const nameInput = row.querySelector('.param-name');
+                const valueInput = row.querySelector('.param-value');
+                if (!nameInput || !valueInput) return;
+
+                const name = nameInput.value.trim();
+                if (!identifier.test(name)) return;
+
+                const val = parseFloat(valueInput.value);
+                if (Number.isNaN(val)) return;
+
+                surfaceInput[name] = val;
+            });
+        }
+
+        function updateGeometry() {
+            updateSurfaceExtraParams();
+            
+            const uSegs = params.uSegs;
+            const vSegs = params.vSegs;
+            const needRebuild = !geometry || uSegs !== lastUSegs || vSegs !== lastVSegs;
+
+            if (needRebuild) {
+                if (mesh) scene.remove(mesh);
+                if (wireframe) {
+                    scene.remove(wireframe);
+                    wireframe.geometry.dispose();
+                    wireframe.material.dispose();
+                    wireframe = null;
+                }
+                if (geometry) geometry.dispose();
+
+                // Create new geometry
+                geometry = createGridGeometry(uSegs, vSegs);
+                lastUSegs = uSegs;
+                lastVSegs = vSegs;
+
+                // Create Material
+                const material = new THREE.MeshPhongMaterial({
+                    vertexColors: true,
+                    shininess: getCurrentShininess(),
+                    transparent: true,
+                    opacity: 1.0,
+                    side: THREE.DoubleSide
+                });
+
+                mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+
+                const wireMat = new THREE.LineBasicMaterial({
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.2
+                });
+                wireframe = new THREE.LineSegments(geometry, wireMat);
+                scene.add(wireframe);
+
+                const surfaceToggle = document.getElementById('showSurface');
+                const wireToggle = document.getElementById('showWireframe');
+                mesh.visible = surfaceToggle ? surfaceToggle.checked : true;
+                wireframe.visible = wireToggle ? wireToggle.checked : false;
+            }
+
+            // Update Loop (Runs every time, whether rebuilt or not)
+            const positions = geometry.attributes.position;
+            const colors = geometry.attributes.color;
+            const uMin = params.uMin;
+            const uMax = params.uMax;
+            const vMin = params.vMin;
+            const vMax = params.vMax;
+            
+            let idx = 0;
+            const posArr = positions.array;
+            const colArr = colors.array;
+
+            // Pre-calculate constants for optimization
+            const isSpherical = coordConversionMode === 'spherical';
+            const isCylindrical = coordConversionMode === 'cylindrical';
+            const doHsv = convertRgbToHsv;
+            const doSat = globalSaturation !== 1.0;
+
+            for (let i = 0; i <= vSegs; i++) {
+                const v = i / vSegs;
+                const v_norm = vMin + v * (vMax - vMin);
+                
+                for (let j = 0; j <= uSegs; j++) {
+                    const u = j / uSegs;
+                    const u_norm = uMin + u * (uMax - uMin);
+
+                    surfaceInput.u = u_norm;
+                    surfaceInput.v = v_norm;
+
+                    const res = surfaceFn(surfaceInput) || {};
+                    
+                    // Direct access to avoid object creation
+                    let x = Number.isFinite(res.x) ? res.x : 0;
+                    let y = Number.isFinite(res.y) ? res.y : 0;
+                    let z = Number.isFinite(res.z) ? res.z : 0;
+                    let r = res.r; if(typeof r !== 'number') r = 1; else if(r<0) r=0; else if(r>1) r=1;
+                    let g = res.g; if(typeof g !== 'number') g = 1; else if(g<0) g=0; else if(g>1) g=1;
+                    let b = res.b; if(typeof b !== 'number') b = 1; else if(b<0) b=0; else if(b>1) b=1;
+                    let a = res.a != null ? res.a : 1; if(a<0) a=0; else if(a>1) a=1;
+
+                    // Apply Output Conversions
+                    if (isSpherical) {
+                        const radius = x;
+                        const theta = y;
+                        const phi = z;
+                        const sinTheta = Math.sin(theta);
+                        const cosTheta = Math.cos(theta);
+                        const sinPhi = Math.sin(phi);
+                        const cosPhi = Math.cos(phi);
+                        x = radius * sinTheta * cosPhi;
+                        y = radius * sinTheta * sinPhi;
+                        z = radius * cosTheta;
+                    } else if (isCylindrical) {
+                        const rho = x;
+                        const phi = y;
+                        const zVal = z;
+                        const cosPhi = Math.cos(phi);
+                        const sinPhi = Math.sin(phi);
+                        x = rho * cosPhi;
+                        y = rho * sinPhi;
+                        z = zVal;
+                    }
+
+                    if (doHsv) {
+                        const max = Math.max(r, g, b);
+                        const min = Math.min(r, g, b);
+                        const d = max - min;
+                        let h = 0;
+                        const vVal = max;
+                        const s = max === 0 ? 0 : d / max;
+
+                        if (d !== 0) {
+                            if (max === r) {
+                                h = (g - b) / d + (g < b ? 6 : 0);
+                            } else if (max === g) {
+                                h = (b - r) / d + 2;
+                            } else {
+                                h = (r - g) / d + 4;
+                            }
+                            h /= 6;
+                        }
+                        r = h;
+                        g = s;
+                        b = vVal;
+                    }
+
+                    // Apply global saturation
+                    if (doSat) {
+                        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                        r = lum + (r - lum) * globalSaturation;
+                        g = lum + (g - lum) * globalSaturation;
+                        b = lum + (b - lum) * globalSaturation;
+                        // Clamp
+                        if (r < 0) r = 0; else if (r > 1) r = 1;
+                        if (g < 0) g = 0; else if (g > 1) g = 1;
+                        if (b < 0) b = 0; else if (b > 1) b = 1;
+                    }
+
+                    // Set buffers directly
+                    posArr[idx * 3] = x;
+                    posArr[idx * 3 + 1] = y;
+                    posArr[idx * 3 + 2] = z;
+
+                    colArr[idx * 4] = r;
+                    colArr[idx * 4 + 1] = g;
+                    colArr[idx * 4 + 2] = b;
+                    colArr[idx * 4 + 3] = a;
+                    
+                    idx++;
+                }
+            }
+
+            positions.needsUpdate = true;
+            colors.needsUpdate = true;
+            geometry.computeVertexNormals();
+        }
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(20, 30, 10);
+        scene.add(dirLight);
+        
+        const pointLight = new THREE.PointLight(0xffaa00, 0.5);
+        pointLight.position.set(-15, -10, 10);
+        scene.add(pointLight);
+
+        const spotLight = new THREE.SpotLight(0xffddaa, 0.6, 120, Math.PI / 6, 0.4);
+        spotLight.position.set(0, 40, 20);
+        spotLight.target.position.set(0, 0, 0);
+        scene.add(spotLight);
+        scene.add(spotLight.target);
+
+        const axes = new THREE.AxesHelper(30);
+        scene.add(axes);
+        axes.visible = false;
+
+        // Click marker for camera target feedback
+        const clickMarkerGeo = new THREE.SphereGeometry(0.6, 16, 16);
+        const clickMarkerMat = new THREE.MeshBasicMaterial({
+            color: 0xffff66,
+            transparent: true,
+            opacity: 0.0
+        });
+        const clickMarker = new THREE.Mesh(clickMarkerGeo, clickMarkerMat);
+        clickMarker.visible = false;
+        scene.add(clickMarker);
+
+        let markerStartTime = 0;
+        const markerDuration = 400; // ms
+
+        // Camera tweening state
+        let isCameraTweening = false;
+        let camTweenStart = 0;
+        const camTweenDuration = 600; // ms
+        const camStartPos = new THREE.Vector3();
+        const camStartTarget = new THREE.Vector3();
+        const camEndPos = new THREE.Vector3();
+        const camEndTarget = new THREE.Vector3();
+
+        // Keyboard state for WASD camera panning
+        const keyState = { w: false, a: false, s: false, d: false, " ": false, x: false, shift: false };
+        window.addEventListener('keydown', (e) => {
+            if (e.target.matches('input, textarea, select')) return;
+            const key = e.key.toLowerCase();
+            if (keyState.hasOwnProperty(key)) {
+                keyState[key] = true;
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (keyState.hasOwnProperty(key)) {
+                keyState[key] = false;
+                e.preventDefault();
+            }
+        });
+
+        // Geometry update scheduling
+        let geometryNeedsUpdate = false;
+        function scheduleGeometryUpdate() {
+            if (geometryNeedsUpdate) return;
+            geometryNeedsUpdate = true;
+            requestAnimationFrame(() => {
+                geometryNeedsUpdate = false;
+                updateGeometry();
+            });
+        }
+
+        let lastFrameTime = performance.now();
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const now = performance.now();
+            const dt = (now - lastFrameTime) / 1000;
+            lastFrameTime = now;
+
+            // Handle WASD camera panning
+            if (keyState.w || keyState.a || keyState.s || keyState.d || keyState[" "] || keyState.x) {
+                // Determine speed based on distance to target
+                const dist = controls.getDistance();
+                let speed = dist * 0.5 * dt;
+
+                if (keyState.shift) {
+                    speed *= 5;
+                }
+
+                // We want to move relative to camera view
+                // 1. Get camera forward vector (3D)
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward);
+                forward.normalize();
+
+                // 2. Get camera right vector (local X) projected on XY to keep strafing level
+                // (Optional: remove .z=0 if you want 3D strafing when rolled, but usually horizontal strafe is preferred)
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                right.z = 0;
+                right.normalize();
+
+                const move = new THREE.Vector3();
+                if (keyState.w) move.add(forward);
+                if (keyState.s) move.sub(forward);
+                if (keyState.d) move.add(right);
+                if (keyState.a) move.sub(right);
+                
+                // Up/Down movement (Global Z)
+                if (keyState[" "]) move.add(new THREE.Vector3(0, 0, 1));
+                if (keyState.x) move.sub(new THREE.Vector3(0, 0, 1));
+
+                if (move.lengthSq() > 0) {
+                    move.normalize().multiplyScalar(speed);
+                    camera.position.add(move);
+                    controls.target.add(move);
+                }
+            }
+
+            // Animate camera tween
+            if (isCameraTweening) {
+                const tRaw = (now - camTweenStart) / camTweenDuration;
+                const t = tRaw >= 1 ? 1 : tRaw;
+                const smoothT = t * t * (3 - 2 * t); // smoothstep easing
+
+                camera.position.lerpVectors(camStartPos, camEndPos, smoothT);
+                controls.target.lerpVectors(camStartTarget, camEndTarget, smoothT);
+
+                if (t >= 1) {
+                    isCameraTweening = false;
+                }
+            }
+
+            // Animate click marker
+            if (clickMarker.visible) {
+                // Scale based on distance to camera to keep roughly constant screen size
+                const dist = camera.position.distanceTo(clickMarker.position);
+                const baseScale = dist * 0.015;
+
+                const mRaw = (now - markerStartTime) / markerDuration;
+                if (mRaw >= 1) {
+                    clickMarker.visible = false;
+                } else {
+                    const inv = 1 - mRaw;
+                    clickMarkerMat.opacity = inv;
+                    // Pulse animation on top of distance scaling
+                    const pulse = 1 + 0.5 * mRaw;
+                    const scale = baseScale * pulse;
+                    clickMarker.scale.set(scale, scale, scale);
+                }
+            }
+
+            // Animate parameter playback
+            let anyParamChanged = false;
+            if (animatedParams.length > 0) {
+                animatedParams.forEach((state) => {
+                    if (!state.playing) {
+                        state.lastTime = now;
+                        return;
+                    }
+                    const runtime = parseFloat(state.timeInput.value);
+                    const step = parseFloat(state.stepInput.value);
+                    let minVal = parseFloat(state.minInput.value);
+                    let maxVal = parseFloat(state.maxInput.value);
+                    if (!Number.isFinite(runtime) || runtime <= 0) {
+                        state.playing = false;
+                        state.playButton.textContent = '▶';
+                        state.lastTime = now;
+                        return;
+                    }
+                    if (!Number.isFinite(minVal) || !Number.isFinite(maxVal) || maxVal <= minVal) {
+                        state.lastTime = now;
+                        return;
+                    }
+                    const dtMs = now - state.lastTime;
+                    if (dtMs <= 0) return;
+                    state.lastTime = now;
+                    const dt = dtMs / 1000;
+                    const loopDuration = runtime; // seconds for min->max->min
+                    const range = maxVal - minVal;
+                    if (range <= 0) return;
+
+                    let phase = state.phase + dt / loopDuration;
+                    phase = phase - Math.floor(phase); // wrap 0..1
+                    state.phase = phase;
+
+                    let value;
+                    if (phase <= 0.5) {
+                        value = minVal + (phase * 2) * range;
+                    } else {
+                        value = maxVal - ((phase * 2 - 1) * range);
+                    }
+
+                    const s = Number.isFinite(step) && step > 0 ? step : (range / 100);
+                    let snapped = minVal + Math.round((value - minVal) / s) * s;
+                    if (snapped < minVal) snapped = minVal;
+                    if (snapped > maxVal) snapped = maxVal;
+
+                    const newVal = formatScalar(snapped);
+                    if (state.valueInput.value !== newVal) {
+                        state.valueInput.value = newVal;
+                    }
+                    const newSliderVal = String(snapped);
+                    if (state.sliderInput.value !== newSliderVal) {
+                        state.sliderInput.value = newSliderVal;
+                    }
+                    anyParamChanged = true;
+                });
+            }
+
+            if (anyParamChanged) {
+                scheduleGeometryUpdate();
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', resizeRendererToViewport);
+        
+        // --- UI Logic ---
+        function setupUI() {
+            const ids = ['uMin', 'uMax', 'vMin', 'vMax'];
+            
+            function evaluateMathExpression(raw) {
+                const expr = String(raw || '').trim();
+                if (!expr.length) return null;
+                if (!window.math || typeof window.math.evaluate !== 'function') return null;
+                const out = window.math.evaluate(expr);
+                const num = typeof out === 'number' ? out : Number(out);
+                return Number.isFinite(num) ? num : null;
+            }
+
+            function applyUvBoundFromInput(id) {
+                const el = document.getElementById(id);
+                if (!el) return;
+
+                const raw = String(el.value || '').trim();
+                const evaluated = evaluateMathExpression(raw);
+
+                const isMin = id === 'uMin' || id === 'vMin';
+                const axis = id[0]; // 'u' | 'v'
+                const otherId = axis + (isMin ? 'Max' : 'Min');
+                const otherEl = document.getElementById(otherId);
+                const otherVal = otherEl ? evaluateMathExpression(otherEl.value) : null;
+
+                let value;
+                if (evaluated == null) {
+                    if (otherVal != null) {
+                        value = isMin ? (otherVal - 1) : (otherVal + 1);
+                    } else {
+                        value = isMin ? 0 : 1;
+                    }
+                } else {
+                    value = evaluated;
+                }
+
+                params[id] = value;
+                el.value = formatScalar(value);
+                scheduleGeometryUpdate();
+            }
+
+            ids.forEach((id) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+
+                el.addEventListener('blur', () => applyUvBoundFromInput(id));
+                el.addEventListener('change', () => applyUvBoundFromInput(id));
+                el.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        applyUvBoundFromInput(id);
+                        el.blur();
+                    }
+                });
+            });
+
+            const axesCheckbox = document.getElementById('showAxes');
+            axesCheckbox.addEventListener('change', (e) => {
+                axes.visible = e.target.checked;
+            });
+
+            const surfaceToggle = document.getElementById('showSurface');
+            const wireToggle = document.getElementById('showWireframe');
+            const dirIntensity = document.getElementById('dirIntensity');
+            const dirIntensitySlider = document.getElementById('dirIntensitySlider');
+            const ambientIntensity = document.getElementById('ambientIntensity');
+            const ambientIntensitySlider = document.getElementById('ambientIntensitySlider');
+            const shininessInput = document.getElementById('shininess');
+            const shininessSlider = document.getElementById('shininessSlider');
+            const saturationInput = document.getElementById('globalSaturation');
+            const saturationSlider = document.getElementById('globalSaturationSlider');
+            const autoRotateCheckbox = document.getElementById('autoRotate');
+            const addParamBtn = document.getElementById('addParam');
+            const globalParamControls = document.getElementById('globalParamControls');
+            const playAllBtn = document.getElementById('playAllParams');
+            const pauseAllBtn = document.getElementById('pauseAllParams');
+            const randomizeBtn = document.getElementById('randomizeParams');
+
+            function updateGlobalControlsVisibility() {
+                if (globalParamControls) {
+                    globalParamControls.style.display = animatedParams.length > 1 ? '' : 'none';
+                }
+            }
+
+            playAllBtn.addEventListener('click', () => {
+                const now = performance.now();
+                animatedParams.forEach(state => {
+                    if (!state.playing) {
+                        // Calculate phase from current value so it doesn't jump
+                        let minVal = parseNum(state.minInput, -1);
+                        let maxVal = parseNum(state.maxInput, 1);
+                        let current = parseNum(state.valueInput, minVal);
+
+                        if (maxVal <= minVal) maxVal = minVal + 1;
+                        const range = maxVal - minVal;
+
+                        current = Math.min(Math.max(current, minVal), maxVal);
+                        const tUp = (current - minVal) / range;
+                        const clampedUp = Math.min(Math.max(tUp, 0), 1);
+                        
+                        // Triangle wave: 0..0.5 is rising edge
+                        state.phase = 0.5 * clampedUp;
+
+                        state.playing = true;
+                        state.playButton.textContent = '⏸';
+                        state.lastTime = now;
+                    }
+                });
+                scheduleGeometryUpdate();
+            });
+
+            pauseAllBtn.addEventListener('click', () => {
+                animatedParams.forEach(state => {
+                    if (state.playing) {
+                        state.playing = false;
+                        state.playButton.textContent = '▶';
+                        state.lastTime = performance.now(); // Not strictly needed for pause, but good hygiene
+                    }
+                });
+                scheduleGeometryUpdate();
+            });
+
+            randomizeBtn.addEventListener('click', () => {
+                const now = performance.now();
+                animatedParams.forEach(state => {
+                    let minVal = parseNum(state.minInput, -1);
+                    let maxVal = parseNum(state.maxInput, 1);
+                    const step = parseNum(state.stepInput, 0.001);
+
+                    if (maxVal <= minVal) {
+                        maxVal = minVal + 1;
+                    }
+                    const range = maxVal - minVal;
+                    
+                    // Generate random value within range
+                    let rawVal = minVal + Math.random() * range;
+
+                    // Snap to step
+                    if (step > 0) {
+                        const steps = Math.round((rawVal - minVal) / step);
+                        rawVal = minVal + steps * step;
+                    }
+
+                    // Clamp
+                    rawVal = Math.min(Math.max(rawVal, minVal), maxVal);
+
+                    // Update UI
+                    state.valueInput.value = formatScalar(rawVal);
+                    state.sliderInput.value = String(rawVal);
+
+                    // Update phase so animation continues smoothly from this new value (on rising edge)
+                    if (range > 0) {
+                        const tUp = (rawVal - minVal) / range;
+                        const clampedUp = Math.min(Math.max(tUp, 0), 1);
+                        state.phase = 0.5 * clampedUp;
+                    }
+                    state.lastTime = now;
+                });
+                scheduleGeometryUpdate();
+            });
+
+            surfaceToggle.addEventListener('change', (e) => {
+                if (mesh) mesh.visible = e.target.checked;
+            });
+
+            wireToggle.addEventListener('change', (e) => {
+                if (wireframe) wireframe.visible = e.target.checked;
+            });
+
+            function syncInput(src, dst) {
+                dst.value = src.value;
+            }
+
+            dirIntensity.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    dirLight.intensity = v;
+                    syncInput(dirIntensity, dirIntensitySlider);
+                }
+            });
+            dirIntensitySlider.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    dirLight.intensity = v;
+                    syncInput(dirIntensitySlider, dirIntensity);
+                }
+            });
+
+            ambientIntensity.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    ambientLight.intensity = v;
+                    syncInput(ambientIntensity, ambientIntensitySlider);
+                }
+            });
+            ambientIntensitySlider.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    ambientLight.intensity = v;
+                    syncInput(ambientIntensitySlider, ambientIntensity);
+                }
+            });
+
+            function updateShininess() {
+                if (!mesh || !Array.isArray(mesh.material) && !mesh.material) return;
+                const value = getCurrentShininess();
+                if (Array.isArray(mesh.material)) {
+                    mesh.material.forEach(m => { if (m && 'shininess' in m) m.shininess = value; });
+                } else if ('shininess' in mesh.material) {
+                    mesh.material.shininess = value;
+                }
+            }
+
+            shininessInput.addEventListener('input', () => {
+                updateShininess();
+                syncInput(shininessInput, shininessSlider);
+            });
+            shininessSlider.addEventListener('input', () => {
+                // Manually update input first so getCurrentShininess reads correct val (it reads from number input)
+                shininessInput.value = shininessSlider.value; 
+                updateShininess();
+            });
+
+            saturationInput.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    globalSaturation = v;
+                    syncInput(saturationInput, saturationSlider);
+                    scheduleGeometryUpdate();
+                }
+            });
+            saturationSlider.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    globalSaturation = v;
+                    syncInput(saturationSlider, saturationInput);
+                    scheduleGeometryUpdate();
+                }
+            });
+            
+            autoRotateCheckbox.addEventListener('change', (e) => {
+                controls.autoRotate = e.target.checked;
+            });
+            
+            function attachResolutionHandlers(inputEl, key, minVal, maxVal) {
+                function applyResolution() {
+                    const raw = inputEl.value;
+                    if (!raw.length) return;
+                    let value = parseInt(raw, 10);
+                    if (Number.isNaN(value)) return;
+                    if (value < minVal) value = minVal;
+                    if (value > maxVal) value = maxVal;
+                    inputEl.value = value;
+                    params[key] = value;
+                    scheduleGeometryUpdate();
+                }
+
+                ['blur', 'change'].forEach(evt => {
+                    inputEl.addEventListener(evt, applyResolution);
+                });
+
+                inputEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        applyResolution();
+                    }
+                });
+            }
+
+            const uSegsInput = document.getElementById('uSegs');
+            const vSegsInput = document.getElementById('vSegs');
+            attachResolutionHandlers(uSegsInput, 'uSegs', 10, 500);
+            attachResolutionHandlers(vSegsInput, 'vSegs', 3, 500);
+
+            const visualsHeader = document.getElementById('visualsHeader');
+            const visualsBody = document.getElementById('visualsBody');
+            const visualsCaret = document.getElementById('visualsCaret');
+
+            visualsHeader.addEventListener('click', () => {
+                const isHidden = visualsBody.style.display === 'none';
+                visualsBody.style.display = isHidden ? '' : 'none';
+                visualsCaret.textContent = isHidden ? '▼' : '▶';
+            });
+
+            const parametersHeader = document.getElementById('parametersHeader');
+            const parametersBody = document.getElementById('parametersBody');
+            const parametersCaret = document.getElementById('parametersCaret');
+
+            parametersHeader.addEventListener('click', () => {
+                const isHidden = parametersBody.style.display === 'none';
+                parametersBody.style.display = isHidden ? '' : 'none';
+                parametersCaret.textContent = isHidden ? '▼' : '▶';
+            });
+
+            const outputsHeader = document.getElementById('outputsHeader');
+            const outputsBody = document.getElementById('outputsBody');
+            const outputsCaret = document.getElementById('outputsCaret');
+
+            outputsHeader.addEventListener('click', () => {
+                const isHidden = outputsBody.style.display === 'none';
+                outputsBody.style.display = isHidden ? '' : 'none';
+                outputsCaret.textContent = isHidden ? '▼' : '▶';
+            });
+
+            const learnMoreHeader = document.getElementById('learnMoreHeader');
+            const learnMoreBody = document.getElementById('learnMoreBody');
+            const learnMoreCaret = document.getElementById('learnMoreCaret');
+
+            learnMoreHeader.addEventListener('click', () => {
+                const isHidden = learnMoreBody.style.display === 'none';
+                learnMoreBody.style.display = isHidden ? '' : 'none';
+                learnMoreCaret.textContent = isHidden ? '▼' : '▶';
+            });
+
+            const surfaceHeader = document.getElementById('surfaceHeader');
+            const surfaceBody = document.getElementById('surfaceBody');
+            const surfaceCaret = document.getElementById('surfaceCaret');
+
+            const coordSelect = document.getElementById('coordConversion');
+            const rgbToHsvCheckbox = document.getElementById('rgbToHsv');
+
+            coordSelect.addEventListener('change', () => {
+                coordConversionMode = coordSelect.value || 'none';
+                scheduleGeometryUpdate();
+            });
+
+            rgbToHsvCheckbox.addEventListener('change', () => {
+                convertRgbToHsv = rgbToHsvCheckbox.checked;
+                scheduleGeometryUpdate();
+            });
+
+            const saveBtn = document.getElementById('saveConfig');
+            const loadBtn = document.getElementById('loadConfig');
+            const cancelPanelsBtn = document.getElementById('cancelPanels');
+            const headerPanel = document.getElementById('sidebarHeaderPanel');
+            const savePanel = document.getElementById('savePanel');
+            const loadPanel = document.getElementById('loadPanel');
+            const uploadSaveBtn = document.getElementById('uploadSaveBtn');
+            const uploadSaveInput = document.getElementById('uploadSaveInput');
+            const loadPresetSelect = document.getElementById('loadPreset');
+            const loadPresetBtn = document.getElementById('loadPresetBtn');
+
+            function setFooterCancelVisible(visible) {
+                if (!saveBtn || !loadBtn || !cancelPanelsBtn) return;
+                saveBtn.style.display = visible ? 'none' : '';
+                loadBtn.style.display = visible ? 'none' : '';
+                cancelPanelsBtn.style.display = visible ? '' : 'none';
+            }
+
+            function hideHeaderPanels() {
+                headerPanel.style.display = 'none';
+                savePanel.style.display = 'none';
+                loadPanel.style.display = 'none';
+                setFooterCancelVisible(false);
+            }
+
+            saveBtn.addEventListener('click', () => {
+                const saveVisible = headerPanel.style.display !== 'none' && savePanel.style.display !== 'none';
+                if (saveVisible) {
+                    hideHeaderPanels();
+                    return;
+                }
+                headerPanel.style.display = '';
+                savePanel.style.display = '';
+                loadPanel.style.display = 'none';
+                setFooterCancelVisible(true);
+            });
+
+            function reloadSaveList() {
+                if (!loadPresetSelect) return;
+                fetch('saves/_list.json')
+                    .then((res) => {
+                        if (!res.ok) throw new Error('Failed to load save list');
+                        return res.json();
+                    })
+                    .then((list) => {
+                        if (!Array.isArray(list)) return;
+                        loadPresetSelect.innerHTML = '';
+                        list.forEach((item) => {
+                            if (!item || typeof item !== 'object') return;
+                            const name = item.name || item.file || 'unnamed';
+                            const file = item.file || '';
+                            if (!file) return;
+                            const opt = document.createElement('option');
+                            opt.value = file;
+                            opt.textContent = name;
+                            if (file === currentLoadedFile) {
+                                opt.selected = true;
+                            }
+                            loadPresetSelect.appendChild(opt);
+                        });
+                        if (!loadPresetSelect.options.length) {
+                            const opt = document.createElement('option');
+                            opt.value = '';
+                            opt.textContent = 'No saves found';
+                            loadPresetSelect.appendChild(opt);
+                        }
+                    })
+                    .catch((err) => {
+                        console.error(err);
+                    });
+            }
+
+            loadBtn.addEventListener('click', () => {
+                const loadVisible = headerPanel.style.display !== 'none' && loadPanel.style.display !== 'none';
+                if (loadVisible) {
+                    hideHeaderPanels();
+                    return;
+                }
+                headerPanel.style.display = '';
+                loadPanel.style.display = '';
+                savePanel.style.display = 'none';
+                setFooterCancelVisible(true);
+                reloadSaveList();
+            });
+
+            if (cancelPanelsBtn) {
+                cancelPanelsBtn.addEventListener('click', () => {
+                    hideHeaderPanels();
+                });
+            }
+
+            uploadSaveBtn.addEventListener('click', () => {
+                if (uploadSaveInput) {
+                    uploadSaveInput.click();
+                }
+            });
+
+            reloadSaveList();
+
+            if (loadPresetBtn && loadPresetSelect) {
+                loadPresetBtn.addEventListener('click', () => {
+                    const file = loadPresetSelect.value;
+                    if (!file) return;
+                    loadPresetFromFile(file);
+                });
+            }
+
+            function loadPresetFromFile(file) {
+                fetch('saves/' + file)
+                    .then((res) => {
+                        if (!res.ok) throw new Error('Failed to load preset');
+                        return res.json();
+                    })
+                    .then((cfg) => {
+                        currentLoadedFile = file;
+                        applyConfig(cfg);
+                        if (cfg.surface && cfg.surface.code) {
+                            editor.setValue(cfg.surface.code);
+                            applySurface();
+                        }
+                        hideHeaderPanels();
+                    })
+                    .catch((err) => {
+                        console.error(err);
+                        alert('Failed to load preset save file.');
+                    });
+            }
+
+            // Helper to parse numbers from inputs
+            function parseNum(el, fallback) {
+                const raw = el.value;
+                if (!raw.length) return fallback;
+                const v = parseFloat(raw);
+                return Number.isNaN(v) ? fallback : v;
+            }
+
+            function addParameterRow() {
+                const container = document.getElementById('paramExtras');
+                if (!container) return;
+
+                const section = document.createElement('div');
+                section.className = 'section param-section';
+
+                const body = document.createElement('div');
+                body.className = 'section-body';
+
+                const row = document.createElement('div');
+                row.className = 'control-row param-row';
+
+                const nameGroup = document.createElement('div');
+                nameGroup.className = 'control-group-inline';
+                const nameLabel = document.createElement('label');
+                nameLabel.textContent = 'name';
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'param-name';
+                nameGroup.appendChild(nameLabel);
+                nameGroup.appendChild(nameInput);
+
+                const eqSpan = document.createElement('span');
+                eqSpan.textContent = '=';
+                eqSpan.style.alignSelf = 'flex-end';
+                eqSpan.style.color = '#aaa';
+
+                const valueGroup = document.createElement('div');
+                valueGroup.className = 'control-group-inline';
+                const valueLabel = document.createElement('label');
+                valueLabel.textContent = 'value';
+                const valueInput = document.createElement('input');
+                valueInput.type = 'number';
+                valueInput.step = '0.01';
+                valueInput.className = 'param-value';
+                valueInput.value = '1';
+                valueGroup.appendChild(valueLabel);
+                valueGroup.appendChild(valueInput);
+
+                row.appendChild(nameGroup);
+                row.appendChild(eqSpan);
+                row.appendChild(valueGroup);
+
+                const sliderRow = document.createElement('div');
+                sliderRow.className = 'control-row';
+
+                const minGroup = document.createElement('div');
+                minGroup.className = 'control-group-inline';
+                const minLabel = document.createElement('label');
+                minLabel.textContent = 'min';
+                const minInput = document.createElement('input');
+                minInput.type = 'number';
+                minInput.step = '0.01';
+                minInput.className = 'param-min';
+                minGroup.appendChild(minLabel);
+                minGroup.appendChild(minInput);
+
+                const sliderGroup = document.createElement('div');
+                sliderGroup.className = 'control-group-inline param-slider-group';
+                const sliderLabel = document.createElement('label');
+                sliderLabel.textContent = '';
+                const sliderInput = document.createElement('input');
+                sliderInput.type = 'range';
+                sliderInput.className = 'param-slider';
+                sliderGroup.appendChild(sliderLabel);
+                sliderGroup.appendChild(sliderInput);
+
+                const maxGroup = document.createElement('div');
+                maxGroup.className = 'control-group-inline';
+                const maxLabel = document.createElement('label');
+                maxLabel.textContent = 'max';
+                const maxInput = document.createElement('input');
+                maxInput.type = 'number';
+                maxInput.step = '0.01';
+                maxInput.className = 'param-max';
+                maxGroup.appendChild(maxLabel);
+                maxGroup.appendChild(maxInput);
+
+                sliderRow.appendChild(minGroup);
+                sliderRow.appendChild(sliderGroup);
+
+                const stepGroup = document.createElement('div');
+                stepGroup.className = 'control-group-inline param-step-group';
+                const stepLabel = document.createElement('label');
+                stepLabel.textContent = 'step';
+                const stepInput = document.createElement('input');
+                stepInput.type = 'number';
+                stepInput.step = '0.001';
+                stepInput.className = 'param-step';
+                stepInput.value = '0.001';
+                stepGroup.appendChild(stepLabel);
+                stepGroup.appendChild(stepInput);
+
+                const playGroup = document.createElement('div');
+                playGroup.className = 'control-group param-play-group';
+                const playButton = document.createElement('button');
+                playButton.type = 'button';
+                playButton.textContent = '▶';
+                playGroup.appendChild(playButton);
+
+                sliderRow.appendChild(maxGroup);
+                sliderRow.appendChild(stepGroup);
+
+                const playRow = document.createElement('div');
+                playRow.className = 'control-row';
+                const timeGroup = document.createElement('div');
+                timeGroup.className = 'control-group-inline param-time-group';
+                const timeLabel = document.createElement('label');
+                timeLabel.textContent = 'runtime (s)';
+                const timeInput = document.createElement('input');
+                timeInput.type = 'number';
+                timeInput.step = '0.1';
+                timeInput.className = 'param-time';
+                timeInput.value = '8';
+                timeGroup.appendChild(timeLabel);
+                timeGroup.appendChild(timeInput);
+
+                playRow.appendChild(playGroup);
+                playRow.appendChild(timeGroup);
+
+                body.appendChild(row);
+                body.appendChild(sliderRow);
+                body.appendChild(playRow);
+                section.appendChild(body);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'param-remove';
+                removeBtn.textContent = '✕';
+                section.appendChild(removeBtn);
+
+                container.appendChild(section);
+
+                // Compute default unique name: t, t1, t2, ...
+                const existingNames = new Set(['u', 'v']);
+                Object.keys(params).forEach(k => existingNames.add(k));
+                container.querySelectorAll('.param-name').forEach(input => {
+                    const n = input.value.trim();
+                    if (n) existingNames.add(n);
+                });
+                let base = 't';
+                let candidate = base;
+                let idx = 1;
+                while (existingNames.has(candidate)) {
+                    candidate = base + idx;
+                    idx++;
+                }
+                nameInput.value = candidate;
+                nameInput.dataset.prevName = candidate;
+
+                function validateAndApplyName() {
+                    const raw = nameInput.value.trim();
+                    if (!raw) {
+                        nameInput.value = nameInput.dataset.prevName || '';
+                        return;
+                    }
+                    // Ensure valid identifier and uniqueness via quick eval
+                    try {
+                        new Function(`let ${raw};`);
+                    } catch {
+                        alert('Parameter name must be a valid JS identifier.');
+                        nameInput.value = nameInput.dataset.prevName || '';
+                        return;
+                    }
+                    const allNames = [];
+                    container.querySelectorAll('.param-name').forEach(input => {
+                        if (input === nameInput) return;
+                        const n = input.value.trim();
+                        if (n) allNames.push(n);
+                    });
+                    const reserved = new Set(['u', 'v']);
+                    Object.keys(params).forEach(k => reserved.add(k));
+                    if (reserved.has(raw) || allNames.includes(raw)) {
+                        alert('Parameter name must be unique.');
+                        nameInput.value = nameInput.dataset.prevName || '';
+                        return;
+                    }
+                    nameInput.dataset.prevName = raw;
+                    scheduleGeometryUpdate();
+                }
+
+                nameInput.addEventListener('focus', () => {
+                    nameInput.dataset.prevName = nameInput.value;
+                });
+                nameInput.addEventListener('blur', validateAndApplyName);
+                nameInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        validateAndApplyName();
+                        nameInput.blur();
+                    }
+                });
+
+                function applyValue() {
+                    const valRaw = valueInput.value;
+                    if (!valRaw.length) return;
+                    const num = parseFloat(valRaw);
+                    if (Number.isNaN(num)) return;
+                    valueInput.value = formatScalar(num);
+                    sliderInput.value = String(num);
+                    scheduleGeometryUpdate();
+                }
+
+                ['blur', 'change'].forEach(evt => {
+                    valueInput.addEventListener(evt, applyValue);
+                });
+                valueInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        applyValue();
+                        valueInput.blur();
+                    }
+                });
+
+                removeBtn.addEventListener('click', () => {
+                    const idx = animatedParams.indexOf(state);
+                    if (idx !== -1) animatedParams.splice(idx, 1);
+                    section.remove();
+                    scheduleGeometryUpdate();
+                    updateGlobalControlsVisibility();
+                });
+
+                // slider/min/max/step wiring
+                function applyMinMax(fromInput) {
+                    let minVal = parseNum(minInput, -1);
+                    let maxVal = parseNum(maxInput, 1);
+                    if (fromInput === minInput && minVal >= maxVal) {
+                        maxVal = minVal + 1;
+                    } else if (fromInput === maxInput && maxVal <= minVal) {
+                        minVal = maxVal - 1;
+                    }
+                    minInput.value = minVal;
+                    maxInput.value = maxVal;
+                    sliderInput.min = String(minVal);
+                    sliderInput.max = String(maxVal);
+
+                    let val = parseNum(valueInput, 0);
+                    if (val < minVal) val = minVal;
+                    if (val > maxVal) val = maxVal;
+                    valueInput.value = formatScalar(val);
+                    sliderInput.value = String(val);
+                    scheduleGeometryUpdate();
+                }
+
+                function applyStep() {
+                    const stepVal = parseNum(stepInput, 0.1);
+                    sliderInput.step = String(stepVal);
+                }
+
+                function applyMin() {
+                    applyMinMax(minInput);
+                }
+                function applyMax() {
+                    applyMinMax(maxInput);
+                }
+
+                function initSliderDefaults() {
+                    const val = parseNum(valueInput, 1);
+                    minInput.value = formatScalar(val - 1);
+                    maxInput.value = formatScalar(val + 1);
+                    sliderInput.min = minInput.value;
+                    sliderInput.max = maxInput.value;
+                    sliderInput.value = String(val);
+                    sliderInput.step = stepInput.value;
+                }
+
+                initSliderDefaults();
+
+                ['blur', 'change'].forEach(evt => {
+                    minInput.addEventListener(evt, applyMin);
+                    maxInput.addEventListener(evt, applyMax);
+                    stepInput.addEventListener(evt, applyStep);
+                });
+
+                minInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        applyMin();
+                        minInput.blur();
+                    }
+                });
+                maxInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        applyMax();
+                        maxInput.blur();
+                    }
+                });
+                stepInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        applyStep();
+                        stepInput.blur();
+                    }
+                });
+
+                sliderInput.addEventListener('input', () => {
+                    const v = parseNum(sliderInput, 0);
+                    valueInput.value = formatScalar(v);
+                    scheduleGeometryUpdate();
+                });
+
+                const state = {
+                    nameInput,
+                    valueInput,
+                    minInput,
+                    maxInput,
+                    sliderInput,
+                    stepInput,
+                    timeInput,
+                    playButton,
+                    phase: 0,
+                    playing: false,
+                    lastTime: performance.now()
+                };
+                animatedParams.push(state);
+                updateGlobalControlsVisibility();
+
+                playButton.addEventListener('click', () => {
+                    state.playing = !state.playing;
+
+                    if (state.playing) {
+                        const runtime = parseFloat(state.timeInput.value);
+                        let minVal = parseNum(minInput, -1);
+                        let maxVal = parseNum(maxInput, 1);
+                        let current = parseNum(valueInput, minVal);
+                        if (maxVal <= minVal) {
+                            maxVal = minVal + 1;
+                        }
+                        const range = maxVal - minVal;
+                        current = Math.min(Math.max(current, minVal), maxVal);
+                        const tUp = (current - minVal) / range; // 0..1
+                        const clampedUp = Math.min(Math.max(tUp, 0), 1);
+                        state.phase = 0.5 * clampedUp;
+                        state.lastTime = performance.now();
+                    }
+
+                    playButton.textContent = state.playing ? '⏸' : '▶';
+                });
+            }
+
+            addParamBtn.addEventListener('click', addParameterRow);
+            // add a default parameter (t) on load
+            addParameterRow();
+
+            const surfaceTextArea = document.getElementById('surfaceEditor');
+            const applySurfaceBtn = document.getElementById('applySurface');
+            const revertSurfaceBtn = document.getElementById('revertSurface');
+            const surfaceErrorEl = document.getElementById('surfaceError');
+
+            const editor = CodeMirror.fromTextArea(surfaceTextArea, {
+                mode: 'javascript',
+                theme: 'dracula',
+                lineNumbers: true,
+                tabSize: 2,
+                indentUnit: 4,
+                lineWrapping: false,
+                viewportMargin: Infinity
+            });
+            editor.setSize(null, 'auto');
+
+            let lastAppliedCode = surface.toString();
+            editor.setValue(lastAppliedCode);
+
+            function setSurfaceError(message) {
+                if (!surfaceErrorEl) return;
+                if (message) {
+                    surfaceErrorEl.textContent = message;
+                    surfaceErrorEl.style.display = '';
+                } else {
+                    surfaceErrorEl.textContent = '';
+                    surfaceErrorEl.style.display = 'none';
+                }
+            }
+
+            function updateSurfaceButtonsState() {
+                const current = editor.getValue();
+                const dirty = current !== lastAppliedCode;
+                applySurfaceBtn.disabled = !dirty;
+                revertSurfaceBtn.disabled = !dirty;
+            }
+
+            function applySurface() {
+                const code = editor.getValue();
+                try {
+                    const factory = new Function(code + '; return surface;');
+                    const fn = factory();
+                    if (typeof fn !== 'function') {
+                        throw new Error('surface is not a function');
+                    }
+
+                    try {
+                        const testInput = { u: 0.5, v: 0.5 };
+                        fn(testInput);
+                    } catch (innerErr) {
+                        throw new Error(innerErr && innerErr.message ? innerErr.message : 'Error when evaluating surface');
+                    }
+
+                    surfaceFn = fn;
+                    lastAppliedCode = code;
+                    updateGeometry();
+                    setSurfaceError('');
+                    updateSurfaceButtonsState();
+                } catch (err) {
+                    console.error(err);
+                    setSurfaceError(err && err.message ? err.message : 'Error in surface function');
+                }
+            }
+
+            applySurfaceBtn.addEventListener('click', applySurface);
+
+            revertSurfaceBtn.addEventListener('click', () => {
+                editor.setValue(lastAppliedCode);
+                setSurfaceError('');
+                updateSurfaceButtonsState();
+            });
+
+            editor.addKeyMap({
+                'Ctrl-Enter': function(cm) {
+                    applySurface();
+                }
+            });
+            editor.on('change', updateSurfaceButtonsState);
+
+            if (surfaceHeader) {
+                surfaceHeader.addEventListener('click', () => {
+                    const isHidden = surfaceBody.style.display === 'none';
+                    surfaceBody.style.display = isHidden ? '' : 'none';
+                    surfaceCaret.textContent = isHidden ? '▼' : '▶';
+                    if (isHidden && editor) {
+                        setTimeout(() => editor.refresh(), 10);
+                    }
+                });
+            }
+
+            const saveNameInput = document.getElementById('saveName');
+            const downloadSaveBtn = document.getElementById('downloadSave');
+
+            function applyConfig(cfg) {
+                if (!cfg || typeof cfg !== 'object') return;
+
+                const toNum = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+
+                const display = cfg.display || {};
+                autoRotateCheckbox.checked = !!display.autoRotate;
+                controls.autoRotate = autoRotateCheckbox.checked;
+
+                axesCheckbox.checked = !!display.showAxes;
+                axes.visible = axesCheckbox.checked;
+
+                surfaceToggle.checked = display.showSurface !== false;
+                if (mesh) mesh.visible = surfaceToggle.checked;
+
+                wireToggle.checked = !!display.showWireframe;
+                if (wireframe) wireframe.visible = wireToggle.checked;
+
+                const dirVal = toNum(display.dirIntensity, 1.0);
+                dirIntensity.value = String(dirVal);
+                dirIntensitySlider.value = String(dirVal);
+                dirLight.intensity = dirVal;
+
+                const ambientVal = toNum(display.ambientIntensity, 0.6);
+                ambientIntensity.value = String(ambientVal);
+                ambientIntensitySlider.value = String(ambientVal);
+                ambientLight.intensity = ambientVal;
+
+                const shininessVal = toNum(display.shininess, 100);
+                shininessInput.value = String(shininessVal);
+                shininessSlider.value = String(shininessVal);
+                if (mesh && !Array.isArray(mesh.material) && 'shininess' in mesh.material) {
+                    mesh.material.shininess = shininessVal;
+                } else if (mesh && Array.isArray(mesh.material)) {
+                    mesh.material.forEach(m => { if (m && 'shininess' in m) m.shininess = shininessVal; });
+                }
+
+                const saturationVal = toNum(display.globalSaturation, 1.5);
+                globalSaturation = saturationVal;
+                saturationInput.value = String(saturationVal);
+                saturationSlider.value = String(saturationVal);
+
+                if (display.camera) {
+                    const pos = display.camera.position;
+                    const tgt = display.camera.target;
+                    if (pos && typeof pos.x === 'number') {
+                        camera.position.set(pos.x, pos.y, pos.z);
+                    } else {
+                        // Default if missing
+                        camera.position.copy(initialCameraPosition);
+                    }
+                    if (tgt && typeof tgt.x === 'number') {
+                        controls.target.set(tgt.x, tgt.y, tgt.z);
+                    } else {
+                        controls.target.copy(initialTarget);
+                    }
+                    controls.update();
+                } else {
+                    // Reset to default if no camera info in save
+                    camera.position.copy(initialCameraPosition);
+                    controls.target.copy(initialTarget);
+                    controls.update();
+                }
+
+                const parameters = cfg.parameters || {};
+                params.uMin = toNum(parameters.uMin, 0);
+                params.uMax = toNum(parameters.uMax, 1);
+                params.vMin = toNum(parameters.vMin, 0);
+                params.vMax = toNum(parameters.vMax, 1);
+                params.uSegs = Math.max(10, Math.min(500, toNum(parameters.uSegs, 150)));
+                params.vSegs = Math.max(3, Math.min(500, toNum(parameters.vSegs, 150)));
+
+                document.getElementById('uMin').value = String(params.uMin);
+                document.getElementById('uMax').value = String(params.uMax);
+                document.getElementById('vMin').value = String(params.vMin);
+                document.getElementById('vMax').value = String(params.vMax);
+                document.getElementById('uSegs').value = String(params.uSegs);
+                document.getElementById('vSegs').value = String(params.vSegs);
+
+                const extras = Array.isArray(cfg.extraParameters) ? cfg.extraParameters : [];
+                const extrasContainer = document.getElementById('paramExtras');
+                if (extrasContainer) {
+                    animatedParams.splice(0, animatedParams.length);
+                    while (extrasContainer.firstChild) {
+                        extrasContainer.removeChild(extrasContainer.firstChild);
+                    }
+                }
+
+                extras.forEach((item) => {
+                    if (!item || typeof item !== 'object') return;
+                    addParameterRow();
+                    const state = animatedParams[animatedParams.length - 1];
+                    if (!state) return;
+
+                    const name = typeof item.name === 'string' ? item.name : '';
+                    state.nameInput.value = name;
+                    state.nameInput.dataset.prevName = name;
+
+                    const val = toNum(item.value, 1);
+                    const minVal = toNum(item.min, val - 1);
+                    const maxVal = toNum(item.max, val + 1);
+                    const stepVal = toNum(item.step, 0.001);
+                    let runtimeVal = toNum(item.runtime, 8);
+                    if (runtimeVal <= 0) runtimeVal = 8;
+
+                    state.valueInput.value = formatScalar(val);
+                    state.minInput.value = formatScalar(minVal);
+                    state.maxInput.value = formatScalar(maxVal);
+                    state.stepInput.value = formatScalar(stepVal);
+                    state.timeInput.value = formatScalar(runtimeVal);
+
+                    state.sliderInput.min = String(minVal);
+                    state.sliderInput.max = String(maxVal);
+                    state.sliderInput.value = String(val);
+                    state.sliderInput.step = String(stepVal);
+                });
+
+                const outputs = cfg.outputs || {};
+                const coordMode = outputs.coordConversion === 'spherical' || outputs.coordConversion === 'cylindrical' ? outputs.coordConversion : 'none';
+                coordConversionMode = coordMode;
+                const coordSelect = document.getElementById('coordConversion');
+                if (coordSelect) coordSelect.value = coordMode;
+
+                convertRgbToHsv = !!outputs.rgbToHsv;
+                const rgbToHsvCheckbox = document.getElementById('rgbToHsv');
+                if (rgbToHsvCheckbox) rgbToHsvCheckbox.checked = convertRgbToHsv;
+
+                const surfaceCfg = cfg.surface || {};
+                const code = typeof surfaceCfg.code === 'string' && surfaceCfg.code.trim().length ? surfaceCfg.code : surface.toString();
+                editor.setValue(code);
+                editor.refresh();
+                lastAppliedCode = code;
+                try {
+                    const factory = new Function(code + '; return surface;');
+                    const fn = factory();
+                    if (typeof fn === 'function') {
+                        surfaceFn = fn;
+                        try {
+                            const testInput = { u: 0.5, v: 0.5 };
+                            fn(testInput);
+                        } catch (innerErr) {
+                            console.warn('Surface function test failed:', innerErr);
+                        }
+                    } else {
+                        surfaceFn = surface;
+                    }
+                } catch (err) {
+                    console.error('Failed to compile surface function:', err);
+                    surfaceFn = surface;
+                }
+
+                setSurfaceError('');
+                updateSurfaceButtonsState();
+                scheduleGeometryUpdate();
+                updateGlobalControlsVisibility();
+            }
+
+            function collectCurrentConfig() {
+                const display = {
+                    autoRotate: !!autoRotateCheckbox.checked,
+                    showAxes: !!axesCheckbox.checked,
+                    showSurface: !!surfaceToggle.checked,
+                    showWireframe: !!wireToggle.checked,
+                    dirIntensity: parseFloat(dirIntensity.value) || 0,
+                    ambientIntensity: parseFloat(ambientIntensity.value) || 0,
+                    shininess: getCurrentShininess(),
+                    globalSaturation: globalSaturation,
+                    camera: {
+                        position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+                        target: { x: controls.target.x, y: controls.target.y, z: controls.target.z }
+                    }
+                };
+
+                const parameters = {
+                    uMin: params.uMin,
+                    uMax: params.uMax,
+                    vMin: params.vMin,
+                    vMax: params.vMax,
+                    uSegs: params.uSegs,
+                    vSegs: params.vSegs
+                };
+
+                const extraParameters = [];
+                animatedParams.forEach((state) => {
+                    const name = state.nameInput.value.trim();
+                    if (!name) return;
+                    const parse = (input) => {
+                        const raw = input.value;
+                        if (!raw || !raw.length) return null;
+                        const n = parseFloat(raw);
+                        return Number.isNaN(n) ? null : n;
+                    };
+                    extraParameters.push({
+                        name,
+                        value: parse(state.valueInput),
+                        min: parse(state.minInput),
+                        max: parse(state.maxInput),
+                        step: parse(state.stepInput),
+                        runtime: parse(state.timeInput)
+                    });
+                });
+
+                const surfaceConfig = {
+                    code: editor.getValue()
+                };
+
+                const outputs = {
+                    coordConversion: coordConversionMode,
+                    rgbToHsv: !!convertRgbToHsv
+                };
+
+                return {
+                    version: 1,
+                    display,
+                    parameters,
+                    extraParameters,
+                    surface: surfaceConfig,
+                    outputs
+                };
+            }
+
+            function downloadCurrentConfig() {
+                if (!saveNameInput || !downloadSaveBtn) return;
+                const rawName = saveNameInput.value.trim();
+                if (!rawName) {
+                    alert('Please enter a name for the save.');
+                    saveNameInput.focus();
+                    return;
+                }
+
+                const config = collectCurrentConfig();
+                const json = JSON.stringify(config, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                let filename = rawName;
+                if (!filename.toLowerCase().endsWith('.json')) {
+                    filename += '.json';
+                }
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                hideHeaderPanels();
+            }
+
+            if (downloadSaveBtn) {
+                downloadSaveBtn.addEventListener('click', downloadCurrentConfig);
+            }
+
+            if (uploadSaveInput) {
+                uploadSaveInput.addEventListener('change', () => {
+                    const file = uploadSaveInput.files && uploadSaveInput.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const text = String(e.target.result || '');
+                            const data = JSON.parse(text);
+                            applyConfig(data);
+                            hideHeaderPanels();
+                        } catch (err) {
+                            console.error(err);
+                            alert('Failed to load save file.');
+                        } finally {
+                            uploadSaveInput.value = '';
+                        }
+                    };
+                    reader.readAsText(file);
+                });
+            }
+
+            const resetButton = document.getElementById('resetCamera');
+            resetButton.addEventListener('click', () => {
+                camera.position.copy(initialCameraPosition);
+                controls.target.copy(initialTarget);
+                controls.update();
+                resizeRendererToViewport();
+            });
+
+            const sidebarWrapper = document.getElementById('sidebar-wrapper');
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('toggleSidebar');
+            let lastSidebarWidth = sidebar.getBoundingClientRect().width;
+
+            toggle.addEventListener('click', () => {
+                const willCollapse = !sidebarWrapper.classList.contains('collapsed');
+
+                if (willCollapse) {
+                    // Cache current width, then let CSS collapse to minimal
+                    lastSidebarWidth = sidebar.getBoundingClientRect().width;
+                    sidebarWrapper.classList.add('collapsed');
+                    toggle.textContent = '»';
+                    sidebar.style.width = '';
+                } else {
+                    // Restore previous width when expanding
+                    sidebarWrapper.classList.remove('collapsed');
+                    toggle.textContent = '«';
+                    if (lastSidebarWidth && Number.isFinite(lastSidebarWidth)) {
+                        sidebar.style.width = lastSidebarWidth + 'px';
+                    }
+                }
+
+                resizeRendererToViewport();
+            });
+
+            const resizer = document.getElementById('sidebar-resizer');
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+            const minWidth = 200;
+            let maxWidth = Infinity;
+
+            resizer.addEventListener('mousedown', (e) => {
+                if (sidebar.classList.contains('collapsed')) return;
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = sidebar.getBoundingClientRect().width;
+                const totalWidth = document.body.clientWidth || window.innerWidth;
+                maxWidth = Math.max(minWidth, totalWidth - 40);
+                document.body.classList.add('resizing-sidebar');
+                e.preventDefault();
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                const dx = e.clientX - startX;
+                let newWidth = startWidth + dx;
+                if (newWidth < minWidth) newWidth = minWidth;
+                if (newWidth > maxWidth) newWidth = maxWidth;
+                sidebar.style.width = newWidth + 'px';
+                lastSidebarWidth = newWidth;
+                resizeRendererToViewport();
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (!isResizing) return;
+                isResizing = false;
+                document.body.classList.remove('resizing-sidebar');
+            });
+
+            // Touch support for resizing
+            resizer.addEventListener('touchstart', (e) => {
+                if (sidebar.classList.contains('collapsed')) return;
+                isResizing = true;
+                startX = e.touches[0].clientX;
+                startWidth = sidebar.getBoundingClientRect().width;
+                const totalWidth = document.body.clientWidth || window.innerWidth;
+                maxWidth = Math.max(minWidth, totalWidth - 40);
+                document.body.classList.add('resizing-sidebar');
+                e.preventDefault(); 
+            }, { passive: false });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!isResizing) return;
+                const dx = e.touches[0].clientX - startX;
+                let newWidth = startWidth + dx;
+                if (newWidth < minWidth) newWidth = minWidth;
+                if (newWidth > maxWidth) newWidth = maxWidth;
+                sidebar.style.width = newWidth + 'px';
+                lastSidebarWidth = newWidth;
+                resizeRendererToViewport();
+                e.preventDefault(); 
+            }, { passive: false });
+
+            window.addEventListener('touchend', () => {
+                if (!isResizing) return;
+                isResizing = false;
+                document.body.classList.remove('resizing-sidebar');
+            });
+
+            renderer.domElement.addEventListener('dblclick', (event) => {
+                const rect = renderer.domElement.getBoundingClientRect();
+                const x = (event.clientX - rect.left) / rect.width;
+                const y = (event.clientY - rect.top) / rect.height;
+                mouse.set(x * 2 - 1, -(y * 2 - 1));
+
+                raycaster.setFromCamera(mouse, camera);
+                if (!mesh) return;
+                const intersects = raycaster.intersectObject(mesh, true);
+                if (!intersects.length) return;
+
+                const point = intersects[0].point.clone();
+
+                // Show marker at click point
+                clickMarker.position.copy(point);
+                clickMarker.scale.set(1, 1, 1);
+                clickMarker.visible = true;
+                clickMarkerMat.opacity = 1.0;
+                markerStartTime = performance.now();
+
+                // Setup camera tween
+                const offset = camera.position.clone().sub(controls.target);
+                camStartPos.copy(camera.position);
+                camStartTarget.copy(controls.target);
+                camEndTarget.copy(point);
+                camEndPos.copy(point.clone().add(offset));
+                camTweenStart = performance.now();
+                isCameraTweening = true;
+            });
+
+            // --- Replay System (Tier 1-3) ---
+            const replayTimeline = document.getElementById('replayTimeline');
+            const replayFrameCounter = document.getElementById('replayFrameCounter');
+            const replayPlayBtn = document.getElementById('replayPlay');
+            const replayStopBtn = document.getElementById('replayStop');
+            const replaySourceSelect = document.getElementById('replaySource');
+            const replayRecordBtn = document.getElementById('replayRecord');
+            const replayClearBtn = document.getElementById('replayClear');
+            const replayExportBtn = document.getElementById('replayExport');
+            const replayExportStatus = document.getElementById('replayExportStatus');
+            const replayHeader = document.getElementById('replayHeader');
+            const replayBody = document.getElementById('replayBody');
+            const replayCaret = document.getElementById('replayCaret');
+
+            // Replay state
+            let replayFrames = []; // Array of config snapshots
+            let replaySavesCache = []; // Cached save configs from saves/
+            let replayPlaying = false;
+            let replayPlayInterval = null;
+            const REPLAY_FPS = 2; // frames per second for auto-play (saves transition slowly)
+            const REPLAY_INTERVAL_MS = 1000 / REPLAY_FPS;
+
+            function updateReplayControls() {
+                const count = replayFrames.length;
+                replayTimeline.max = String(Math.max(0, count - 1));
+                replayFrameCounter.textContent = (count > 0 ? parseInt(replayTimeline.value) + 1 : 0) + ' / ' + count;
+                replayClearBtn.disabled = count === 0;
+                replayExportBtn.disabled = count < 2;
+            }
+
+            // Tier 1: Load all saves as replay frames
+            async function loadSavesAsFrames() {
+                if (replaySavesCache.length > 0) {
+                    replayFrames = replaySavesCache;
+                    updateReplayControls();
+                    return;
+                }
+                try {
+                    const res = await fetch('saves/_list.json');
+                    if (!res.ok) throw new Error('Failed to load saves list');
+                    const list = await res.json();
+                    const configs = [];
+                    for (const item of list) {
+                        if (!item || !item.file) continue;
+                        try {
+                            const cfgRes = await fetch('saves/' + item.file);
+                            if (!cfgRes.ok) continue;
+                            const cfg = await cfgRes.json();
+                            cfg._label = item.name || item.file;
+                            cfg._file = item.file;
+                            configs.push(cfg);
+                        } catch (e) {
+                            console.warn('Failed to load save for replay:', item.file, e);
+                        }
+                    }
+                    replaySavesCache = configs;
+                    replayFrames = configs;
+                    updateReplayControls();
+                } catch (err) {
+                    console.error('Replay: failed to load saves:', err);
+                }
+            }
+
+            function applyReplayFrame(index) {
+                if (index < 0 || index >= replayFrames.length) return;
+                const cfg = replayFrames[index];
+                applyConfig(cfg);
+                if (cfg.surface && cfg.surface.code) {
+                    editor.setValue(cfg.surface.code);
+                    applySurface();
+                }
+            }
+
+            replayTimeline.addEventListener('input', () => {
+                const idx = parseInt(replayTimeline.value);
+                applyReplayFrame(idx);
+                updateReplayControls();
+            });
+
+            function replayPlay() {
+                if (replayPlaying || replayFrames.length === 0) return;
+                replayPlaying = true;
+                replayPlayBtn.textContent = '⏸';
+                let idx = parseInt(replayTimeline.value);
+                replayPlayInterval = setInterval(() => {
+                    idx = (idx + 1) % replayFrames.length;
+                    replayTimeline.value = String(idx);
+                    applyReplayFrame(idx);
+                    updateReplayControls();
+                }, REPLAY_INTERVAL_MS);
+            }
+
+            function replayPause() {
+                replayPlaying = false;
+                replayPlayBtn.textContent = '▶';
+                if (replayPlayInterval) {
+                    clearInterval(replayPlayInterval);
+                    replayPlayInterval = null;
+                }
+            }
+
+            replayPlayBtn.addEventListener('click', () => {
+                if (replayPlaying) {
+                    replayPause();
+                } else {
+                    replayPlay();
+                }
+            });
+
+            replayStopBtn.addEventListener('click', () => {
+                replayPause();
+                replayTimeline.value = '0';
+                if (replayFrames.length > 0) {
+                    applyReplayFrame(0);
+                }
+                updateReplayControls();
+            });
+
+            // Tier 2: State Recording
+            let recordedFrames = [];
+
+            replayRecordBtn.addEventListener('click', () => {
+                const cfg = collectCurrentConfig();
+                cfg._label = 'Frame ' + (recordedFrames.length + 1);
+                cfg._recorded = true;
+                recordedFrames.push(cfg);
+                if (replaySourceSelect.value === 'recorded') {
+                    replayFrames = recordedFrames;
+                    replayTimeline.max = String(Math.max(0, replayFrames.length - 1));
+                    replayTimeline.value = String(replayFrames.length - 1);
+                }
+                updateReplayControls();
+            });
+
+            replayClearBtn.addEventListener('click', () => {
+                recordedFrames = [];
+                replayFrames = [];
+                replayTimeline.value = '0';
+                replayTimeline.max = '0';
+                updateReplayControls();
+            });
+
+            // Source switching
+            replaySourceSelect.addEventListener('change', async () => {
+                replayPause();
+                if (replaySourceSelect.value === 'saves') {
+                    await loadSavesAsFrames();
+                } else {
+                    replayFrames = recordedFrames;
+                    replayTimeline.value = '0';
+                    updateReplayControls();
+                }
+            });
+
+            // Tier 3: Video Export via MediaRecorder
+            replayExportBtn.addEventListener('click', async () => {
+                if (replayFrames.length < 2) return;
+                replayExportBtn.disabled = true;
+                replayExportStatus.textContent = 'Recording...';
+
+                try {
+                    const canvas = renderer.domElement;
+                    const stream = canvas.captureStream(30);
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+                        ? 'video/webm;codecs=vp9'
+                        : 'video/webm';
+                    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8000000 });
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
+                    recorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'hyperdim-replay-' + Date.now() + '.webm';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        replayExportBtn.disabled = false;
+                        replayExportStatus.textContent = 'Done!';
+                        setTimeout(() => { replayExportStatus.textContent = ''; }, 3000);
+                    };
+
+                    recorder.start();
+                    const frameDelay = 500; // ms per frame during export
+                    for (let i = 0; i < replayFrames.length; i++) {
+                        replayTimeline.value = String(i);
+                        applyReplayFrame(i);
+                        updateReplayControls();
+                        // Wait for frame to render
+                        await new Promise(resolve => setTimeout(resolve, frameDelay));
+                    }
+                    recorder.stop();
+                } catch (err) {
+                    console.error('Video export failed:', err);
+                    replayExportStatus.textContent = 'Export failed';
+                    replayExportBtn.disabled = false;
+                    setTimeout(() => { replayExportStatus.textContent = ''; }, 3000);
+                }
+            });
+
+            // Replay section toggle
+            if (replayHeader) {
+                replayHeader.addEventListener('click', () => {
+                    const isHidden = replayBody.style.display === 'none';
+                    replayBody.style.display = isHidden ? '' : 'none';
+                    replayCaret.textContent = isHidden ? '▼' : '▶';
+                    // Lazy-load saves when opened
+                    if (isHidden && replaySourceSelect.value === 'saves' && replayFrames.length === 0) {
+                        loadSavesAsFrames();
+                    }
+                });
+            }
+
+            // Initialize replay controls
+            updateReplayControls();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const presetQuery = urlParams.get('preset');
+            const uiQuery = urlParams.get('ui');
+
+            if (uiQuery === 'none') {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar) sidebar.style.display = 'none';
+                const viewportDiv = document.getElementById('viewport');
+                if (viewportDiv) viewportDiv.style.left = '0';
+                const resetBtn = document.getElementById('resetCamera');
+                if (resetBtn) resetBtn.style.display = 'none';
+                resizeRendererToViewport();
+            }
+
+            if (presetQuery) {
+                setTimeout(() => {
+                    loadPresetFromFile(presetQuery);
+                }, 100);
+            } else {
+                // Load nautilus by default on startup if no preset
+                fetch('saves/nautilus.json')
+                    .then((res) => {
+                        if (!res.ok) throw new Error('Failed to load default surface');
+                        return res.json();
+                    })
+                    .then((cfg) => {
+                        applyConfig(cfg);
+                        if (cfg.surface && cfg.surface.code) {
+                            editor.setValue(cfg.surface.code);
+                            applySurface();
+                        }
+                    })
+                    .catch((err) => {
+                        console.error('Failed to load default surface:', err);
+                        updateGeometry();
+                    });
+            }
+        }
+
+        setupUI();
+        animate();
+    </script>
+</body>
+</html>
+

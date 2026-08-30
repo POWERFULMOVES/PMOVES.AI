@@ -1,0 +1,64 @@
+name: Validate Agents Config
+
+# Hard gate: the agent registry <-> teams coupling and naming conventions must
+# hold on every PR that touches them. Ratchets pre-existing legacy drift
+# (baselined in the validator) so it is green today but blocks NEW drift.
+#
+# Also gates node-vocabulary.yaml's `default_identity` declarations against the
+# registry and the teams file. This workflow is NOT in branch protection's
+# required contexts, and it is paths-filtered, so it reports rather than blocks.
+# The blocking half of that check lives in pmoves/tests/test_identity_coupling_gate.py,
+# which runs under the required `python-tests` context (merge-gate.yml ->
+# pytest_ratchet.py, which discovers test_*.py repo-wide).
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+    paths:
+      - "pmoves/config/agent_registry.yaml"
+      - "pmoves/configs/agent-teams.yaml"
+      # The vocabulary declares `<node>.default_identity.<harness>: <agent>`,
+      # a reference INTO the registry. Omitting it here meant a PR that touched
+      # only this file could add a declaration naming an agent that does not
+      # exist and never run the gate that would say so -- a fixed gate is still
+      # unfixed if its call site cannot reach it.
+      - "pmoves/configs/node-vocabulary.yaml"
+      # The validator imports the resolver's alias folding and NON_NODE_KINDS,
+      # so a change there changes this gate's verdict.
+      - "pmoves/tools/node_identity.py"
+      - "pmoves/config/rooms/**"
+      - "pmoves/configs/model-suits/*.yaml"
+      - "pmoves/configs/model-roles.yaml"
+      - "pmoves/tools/fittings.py"
+      - "pmoves/scripts/validate_agent_registry.py"
+      - ".github/workflows/validate-agents-config.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  validate-agents-config:
+    name: validate-agents-config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install validator deps
+        run: python -m pip install --quiet "pydantic>=2" pyyaml
+
+      - name: Registry ↔ teams coupling gate (pydantic)
+        run: python pmoves/scripts/validate_agent_registry.py -v

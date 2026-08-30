@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document tracks the implementation status of PMOVESCHIT (Cymatic-Holographic Information Transfer) components across the PMOVES.AI ecosystem.
+This document tracks the implementation status of PMOVESCHIT (Cymatic Holographic Information Theory) components across the PMOVES.AI ecosystem.
 
 ---
 

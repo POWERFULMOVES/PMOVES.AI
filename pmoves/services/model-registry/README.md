@@ -149,7 +149,8 @@ docker compose restart model-registry
 - Review logs: `docker compose logs model-registry`
 
 ### Empty models list
-- Run seed script: `psql -f pmoves/supabase/initdb/12_model_registry_seed.sql`
+- Run the canonical bootstrap: `make -C pmoves supabase-bootstrap`
+- If debugging manually, apply `pmoves/supabase/migrations/20260115_model_registry.sql` before replaying `pmoves/supabase/initdb/12_model_registry_seed.sql`
 - Or run migration: `python migrate_tensorzero.py`
 
 ### TensorZero config errors
@@ -176,4 +177,5 @@ docker compose restart model-registry
 
 - Migration: `/pmoves/supabase/migrations/20260115_model_registry.sql`
 - Seed data: `/pmoves/supabase/initdb/12_model_registry_seed.sql`
+- Canonical bootstrap: `make -C pmoves supabase-bootstrap`
 - Architecture docs: `/pmoves/docs/MODEL_REGISTRY.md`

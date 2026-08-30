@@ -9,7 +9,6 @@ import logging
 import os
 import signal
 import sys
-from contextlib import asynccontextmanager
 
 import structlog
 from aiohttp import web
@@ -78,7 +77,7 @@ logger = structlog.get_logger(__name__)
 def get_settings():
     """Get service settings from environment variables."""
     return {
-        "nats_url": os.getenv("NATS_URL", "nats://localhost:4222"),
+        "nats_url": os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
         "api_host": os.getenv("NODE_REGISTRY_HOST", "0.0.0.0"),
         "api_port": int(os.getenv("NODE_REGISTRY_PORT", "8082")),
         "stale_threshold_seconds": int(os.getenv("STALE_THRESHOLD_SECONDS", "60")),
@@ -268,6 +267,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
         sys.exit(0)
-    except Exception as e:
+    except Exception:
         logger.exception("Fatal error in Node Registry service")
         sys.exit(1)

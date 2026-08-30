@@ -1,0 +1,4 @@
+name: pmoves_notes
+title: PMOVES.Notes Integration
+description: Persistent note-taking integration with PMOVES.AI Open Notebook (SurrealDB). Auto-saves conversation summaries and reasoning traces, and exposes save_note / search_notes tools, with NATS event publishing.
+version: 1.1.0

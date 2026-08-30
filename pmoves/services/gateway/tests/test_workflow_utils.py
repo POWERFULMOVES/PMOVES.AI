@@ -1,8 +1,6 @@
 import math
 from typing import List
 
-import math
-from typing import List
 
 import pytest
 
@@ -13,7 +11,6 @@ from services.gateway.gateway.api.workflow import (
     _build_cgp,
     _build_hirag_items,
     _chunk_segments,
-    _normalise_segments,
 )
 
 

@@ -341,6 +341,9 @@ class AgentZeroController:
     async def start(self) -> None:
         if self._started:
             return
+        if not self.settings.use_jetstream:
+            logger.info("JetStream disabled — skipping NATS controller start")
+            return
         if NATS is None:
             raise RuntimeError("nats-py is required to start the Agent Zero controller")
         logger.info("Connecting to NATS at %s", self.settings.nats_url)

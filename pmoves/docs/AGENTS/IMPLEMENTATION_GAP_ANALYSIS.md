@@ -1,7 +1,13 @@
+> **DEPRECATED** — This document references branch `PMOVES.AI-Edition-Hardened` which no longer exists. Retained for historical reference only. Updated 2026-05-15.
+
+> **DEPRECATION NOTICE (2026-05-08):** This document references the historical branch `PMOVES.AI-Edition-Hardened` (pre-v1.9 sync). Multiple gaps listed below are now RESOLVED per AGNOTE4482 self-review (2026-04-01): A2A server exposed, thread patterns (P/F/L-Thread) operational, SKILL.md template deployed. Read `AGNOTE4482.md` for current status. This file needs a full refresh or archival.
+>
 # AGENTS Documentation Implementation Gap Analysis
 
-**Date:** 2026-03-01 (updated from 2026-02-02)
-**Branch:** PMOVES.AI-Edition-Hardened / main
+> **DEPRECATION NOTICE (per issue #1436 C3):** This document references the historical `PMOVES.AI-Edition-Hardened` branch as its baseline. The active hardened branch is now `PMOVES.AI-Edition-v1.9` (sync completed 2026-04-25). Multiple gaps documented here have been **RESOLVED** in v1.9 — including A2A server, thread types, and SKILL.md pattern. Treat all gap claims below as **historical** until a full refresh against `PMOVES.AI-Edition-v1.9` is published. Do not use this document to plan new work without cross-checking against the v1.9 branch first.
+
+**Date:** 2026-04-10 (updated from 2026-03-01) — **historical baseline; see deprecation notice above**
+**Branch:** PMOVES.AI-Edition-Hardened (historical) — current: `PMOVES.AI-Edition-v1.9`
 **Purpose:** Identify gaps between AGENTS documentation and current hardened branch implementation
 **Cross-References:**
 - [CODEX_RUNTIME_PROTOCOL.md](./CODEX_RUNTIME_PROTOCOL.md) — Operating modes and validation standards
@@ -35,11 +41,11 @@ The AGENTS documentation in `pmoves/docs/AGENTS/` describes a sophisticated agen
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **Security Patterns** | ✅ Implemented | `security/patterns.yaml` with damage-control hooks (deterministic + probabilistic) |
-| **Cipher Memory** | ✅ Implemented | Port 8096, Neo4j backend, MCP bridge at `pmoves-cipher-mcp/`, `agent_plan/checkpoint/completion` categories |
+| **Cipher Memory** | ✅ Implemented | Port 8105, Neo4j backend, MCP bridge at `pmoves-cipher-mcp/`, `agent_plan/checkpoint/completion` categories |
 | **Codex Runtime Protocol** | ✅ Implemented | `CODEX_RUNTIME_PROTOCOL.md` with focus/scout modes, confidence gates, PR sweep |
 | **KRISS KROSS Accord** | ✅ Ratified | Collision-safe multi-agent traversal with Graphiti trail + CHIT attestation (2026-02-25) |
 | **Agent Resilience Patterns** | ✅ Implemented | 3-layer model (preventive → Cipher recovery → registry systemic) |
-| **Agent Class Taxonomy** | ✅ v1.4.0 | 60 agents registered in `agent_registry.yaml` with types, tiers, NATS, CHIT toggles |
+| **Agent Class Taxonomy** | ✅ v1.4.0 | 76 agents registered in `agent_registry.yaml` with types, tiers, NATS, CHIT toggles |
 | **Persona Seeds** | ✅ Implemented | 8 standard personas seeded via `17_persona_seed.sql` with model preferences |
 | **Model Registry** | ✅ Implemented | `gpu-models.yaml` reconciled with SQL registry (Anthropic, TTS, expanded mappings) |
 | **CHIT Geometry Bus** | ⚠️ Partial | Endpoints exist (`/geometry/calibration/report` on Hi-RAG), NATS subjects active (`geometry.cgp.v1`), but full CGP encode/decode pipeline incomplete |
@@ -223,7 +229,7 @@ CHIT Geometry Bus infrastructure is live but the full CGP pipeline is incomplete
 - ✅ NATS subjects active: `geometry.cgp.v1`, `geometry.swarm.meta.v1`, `pmoves.geometry.cgp.ready.v1`
 - ✅ EvoSwarm Controller (port 8113) publishes `geometry.swarm.meta.v1`
 - ✅ Swarm Attribution agent registered, subscribes to `geometry.attribution.request.v1`
-- ✅ CHIT toggles defined for all 60 agents in `agent_registry.yaml`
+- ✅ CHIT toggles defined for 76 agents in `agent_registry.yaml`
 - ✅ `sign_cgp()` available in `chit_security.py` for trail signing
 
 **Still Required:**
@@ -309,31 +315,37 @@ CHIT Geometry Bus infrastructure is live but the full CGP pipeline is incomplete
 2. ✅ Implement deterministic hooks (pre_command.py) — Known Roads + GAN defense active
 3. ✅ Create SKILL.md template — BoTZ skill marketplace operational
 4. ✅ Convert one instrument to skill format as proof-of-concept
-5. ✅ Cipher Memory deployed (port 8096) with agent plan/checkpoint/completion categories
-6. ✅ Agent Registry created (`agent_registry.yaml`) with 60 agents, resilience attributes
+5. ✅ Cipher Memory deployed (port 8105) with agent plan/checkpoint/completion categories
+6. ✅ Agent Registry created (`agent_registry.yaml`) with 76 agents, resilience attributes
 7. ✅ Codex Runtime Protocol ratified with focus/scout modes
 8. ✅ KRISS KROSS Accord ratified for multi-agent collision safety
 
-### Phase 2: Protocol Integration (Week 3-4)
+### Phase 2: Protocol Integration (Week 3-4) — PARTIAL ⚠️ (verified 2026-04-10)
 
-1. Implement A2A server in Agent Zero
-2. Add Agent Card endpoint
-3. Integrate A2A client in Archon
-4. Test basic agent discovery and task submission
+> A2A server.py exists; a2a_client.py for Archon NOT implemented. Low adoption (2 skill instances).
 
-### Phase 3: Architecture Refactoring (Week 5-6)
+1. ⚠️ Implement A2A server in Agent Zero — server.py exists
+2. ⚠️ Add Agent Card endpoint — partial
+3. ❌ Integrate A2A client in Archon — NOT implemented
+4. ❌ Test basic agent discovery and task submission — blocked on #3
 
-1. Refactor Agent Zero API to vertical slices
-2. Implement dynamic context priming
-3. Add expertise file system
-4. Create thread pattern templates
+### Phase 3: Architecture Refactoring (Week 5-6) — TEMPLATE COMPLETE ⚠️ (verified 2026-04-10)
 
-### Phase 4: Advanced Features (Week 7+)
+> Template + test-skill exist in Agent Zero skills dir; only 2 instances deployed.
 
-1. Implement P-Thread parallel execution
-2. Add F-Thread fusion consensus
-3. Implement L-Thread persistence
-4. Begin CHIT geometry integration
+1. ⚠️ Refactor Agent Zero API to vertical slices — partial
+2. ❌ Implement dynamic context priming
+3. ❌ Add expertise file system
+4. ⚠️ Create thread pattern templates — templates exist
+
+### Phase 4: Advanced Features (Week 7+) — COMPLETE ✅ (verified 2026-04-10)
+
+> bus.py + subjects.py + schema.py all exist. Event-driven coordination operational.
+
+1. ✅ Implement P-Thread parallel execution — mprocs + gateway operational
+2. ✅ Add F-Thread fusion consensus — threads.py + threads_persistent.py
+3. ✅ Implement L-Thread persistence — persistent thread store
+4. ✅ Begin CHIT geometry integration — CGP subjects active on NATS
 
 ---
 

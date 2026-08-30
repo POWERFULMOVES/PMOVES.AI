@@ -14,56 +14,28 @@ credentials that flow through the rest of the secrets-funnel pipeline.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 from typing import Dict, Sequence
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from pmoves.tools._secrets_common import (
+    PROJECT_ROOT,
+    is_placeholder,
+    local_env_path as _default_local_env,
+    parse_env_file as _parse_env,
+    validate_secret_value,
+)
+
+# Single source of truth for the tombstone list — imported rather than
+# reimplemented, so the writer (--clear) and the reader (hydrate) can never
+# drift apart on the file's format.
+from pmoves.scripts.bootstrap_env import read_cleared_keys
+
 DEFAULT_ENV_SHARED = PROJECT_ROOT / "env.shared"
-
-PLACEHOLDER_VALUES = frozenset({
-    "", "changeme", "change_me", "none", "null",
-    "your_key_here", "placeholder", "example",
-})
-
-
-def _default_local_env() -> Path:
-    """Resolve the platform-appropriate local.env path."""
-    if sys.platform == "win32":
-        base = os.environ.get("APPDATA", "")
-        if not base:
-            base = str(Path.home() / "AppData" / "Roaming")
-    else:
-        base = os.environ.get("XDG_CONFIG_HOME", "")
-        if not base:
-            base = str(Path.home() / ".config")
-    return Path(base) / "pmoves" / "secrets" / "local.env"
-
-
-def _parse_env(path: Path) -> Dict[str, str]:
-    """Parse KEY=VALUE lines, skipping comments and blanks."""
-    values: Dict[str, str] = {}
-    if not path.exists():
-        return values
-    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        # Strip optional 'export ' prefix (some env files use it)
-        if line.startswith("export "):
-            line = line[7:]
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key:
-            values[key] = value
-    return values
-
-
-def _is_empty_or_placeholder(value: str) -> bool:
-    """Return True if value is missing, empty, or a known placeholder."""
-    stripped = value.strip().lower()
-    return stripped in PLACEHOLDER_VALUES or stripped.startswith("placeholder_")
 
 
 def _masked(value: str) -> str:
@@ -85,7 +57,17 @@ def _write_updates(env_path: Path, updates: Dict[str, str]) -> None:
         key = stripped.split("=", 1)[0].strip()
         index[key] = idx
 
+    validated_updates = {}
     for key, value in updates.items():
+        # Validate each value before writing
+        is_valid, error = validate_secret_value(key, value)
+        if not is_valid:
+            # Log only key name (CodeQL safe: no value taint, no error message)
+            print(f"WARNING: Skipping malformed secret '{key}' (validation failed)", file=sys.stderr)
+            continue
+        validated_updates[key] = value
+
+    for key, value in validated_updates.items():
         entry = f"{key}={value}"
         if key in index:
             lines[index[key]] = entry
@@ -103,17 +85,37 @@ def hydrate(
     env_shared_path: Path,
     *,
     dry_run: bool = False,
+    force: bool = False,
+    cleared_keys_path: Path | None = None,
 ) -> Dict[str, str]:
-    """Overlay local.env values into env.shared for empty/placeholder keys."""
+    """Overlay local.env values into env.shared for empty/placeholder keys.
+
+    When force=True, overwrites ALL matching keys in env.shared with values
+    from local.env, even if the current value is non-placeholder. This is
+    needed when GH Secrets are rotated and the stale local value must be
+    replaced.
+
+    Keys listed in pmoves/configs/secrets_cleared.yaml are NEVER overlaid, not
+    even under force. They were emptied deliberately via
+    ``bootstrap_env.py --clear``, and the empty string is the first entry in
+    PLACEHOLDER_VALUES — so without that list a deliberately-empty key is
+    indistinguishable from a never-set one, and this function would restore the
+    stale local value on the next `secrets-funnel` run, silently undoing the
+    clear. force= exists to push a rotated GH Secret over a stale local value,
+    which is a different intent from "this key is supposed to be empty".
+    """
     local_values = _parse_env(local_env_path)
     shared_values = _parse_env(env_shared_path)
+    cleared = set(read_cleared_keys(cleared_keys_path))
 
     updates: Dict[str, str] = {}
     for key, local_val in sorted(local_values.items()):
-        if _is_empty_or_placeholder(local_val):
+        if key in cleared:
+            continue  # Deliberately empty — see secrets_cleared.yaml
+        if is_placeholder(local_val):
             continue  # Don't overlay empty local values
         current = shared_values.get(key, "")
-        if _is_empty_or_placeholder(current):
+        if force or is_placeholder(current):
             updates[key] = local_val
 
     if updates and not dry_run:
@@ -141,6 +143,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Show what would be updated without writing",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing non-placeholder values (use after rotating GH Secrets)",
+    )
     args = parser.parse_args(argv)
 
     local_env = args.local_env or _default_local_env()
@@ -156,9 +163,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     prefix = "[dry-run] " if args.dry_run else ""
-    updates = hydrate(local_env, env_shared, dry_run=args.dry_run)
+    if args.force:
+        prefix = "[force] " + prefix
+    updates = hydrate(local_env, env_shared, dry_run=args.dry_run, force=args.force)
 
     if not updates:
+        if args.force:
+            local_values = _parse_env(local_env)
+            if not local_values:
+                print(f"WARNING: --force specified but {local_env} contains no keys", file=sys.stderr)
+            else:
+                real_count = sum(1 for v in local_values.values() if not is_placeholder(v))
+                if real_count == 0:
+                    print(f"WARNING: --force specified but all {len(local_values)} keys in {local_env} are placeholders", file=sys.stderr)
         print("No keys needed hydration — env.shared already has real values.")
         return 0
 

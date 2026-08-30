@@ -1,0 +1,215 @@
+name: Provider Verifier Gate
+
+# The static half of the MiniMax-Provider-Verifier CI gate.
+#
+# The verifier submodule (Pmoves-MiniMax-Provider-Verifier/verify.py)
+# is the conformance gate for adding a new third-party provider to
+# the Mavis model cascade. It REQUIRES real API calls (--api-key,
+# --base-url, --model) so it cannot run in CI without exposing
+# secrets, which the F-07 supply-chain note explicitly forbids.
+#
+# This workflow runs the static half (pmoves/tools/
+# provider_verifier_gate.py) — 6 checks with no API calls. The
+# static half fails fast on config drift; the operator's full
+# conformance run is workflow_dispatch (manual, with real keys).
+#
+# Triggers:
+#   - pull_request to main when a touched file is in the verifier
+#     submodule or its registry; this catches the most common
+#     case (a PR that adds a provider entry or bumps the submodule)
+#   - workflow_dispatch for manual runs (operator uses this for
+#     the full conformance run with secrets from the operator's
+#     local env)
+#
+# Status check name (consumed by merge-gate.yml): verifier-gate
+# The merge-gate job references this check; a FAIL blocks merge.
+
+on:
+  pull_request:
+    branches: [main]
+    # NO paths: filter, deliberately -- see the `changed` step below.
+    #
+    # GitHub: "If a workflow is skipped due to path filtering, branch filtering
+    # or a commit message, then checks associated with that workflow will remain
+    # in a Pending state. A pull request that requires those checks to be
+    # successful will be blocked from merging." and "You should not use path or
+    # branch filtering to skip workflow runs if the workflow is required."
+    #
+    # A skipped WORKFLOW never reports. A skipped JOB reports success. Since this
+    # gate is meant to become a required check, the path decision has to move
+    # from the trigger into the job, or every PR that touches none of these paths
+    # would sit on "Waiting for status to be reported" forever.
+  workflow_dispatch:
+    inputs:
+      providers_json:
+        description: 'Path to a providers JSON file (relative to repo root) for the full conformance run'
+        required: false
+        type: string
+        default: 'Pmoves-MiniMax-Provider-Verifier/provider.json.example'
+      api_key:
+        description: 'Provider API key for the full conformance run (use repo secrets; not stored)'
+        required: false
+        type: string
+        default: ''
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  static-gate:
+    name: verifier-gate
+    runs-on: ubuntu-latest
+    # Override the workflow-level {} permissions: the PR-comment step
+    # uses actions/github-script, which needs issues: write. The static
+    # gate itself needs no scopes; this is the minimum that lets the
+    # comment step post on FAIL.
+    permissions:
+      issues: write
+      # the `changed` step lists PR files via the API
+      pull-requests: read
+    steps:
+      # Decide applicability HERE rather than in on.pull_request.paths. The job
+      # always runs and always reports; the work below is conditional. That is the
+      # shape GitHub prescribes for a workflow that is a required check.
+      #
+      # Uses the PR files API, not a local diff: checkout is fetch-depth 1, so
+      # neither `git diff base..head` nor `HEAD~1` resolves -- the first attempt
+      # here died with "ambiguous argument 'HEAD~1'". Deepening the clone would
+      # mean a full history fetch of a monorepo with 72 submodules to answer a
+      # question the API answers in one call.
+      #
+      # FAILS OPEN TOWARD RUNNING: if the API call fails we set relevant=true, so
+      # an unanswerable question runs the gate rather than silently skipping it.
+      - name: Does this PR touch the verifier surface?
+        id: changed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          num="${{ github.event.pull_request.number }}"
+          if [ -z "$num" ]; then
+            echo "no PR context (workflow_dispatch) — running the gate."
+            echo "relevant=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files="$(gh api --paginate "repos/${{ github.repository }}/pulls/$num/files"                      --jq '.[].filename' 2>/dev/null)"
+          if [ -z "$files" ]; then
+            echo "::warning::could not list PR files — running the gate rather than skipping it"
+            echo "relevant=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          relevant=false
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              Pmoves-MiniMax-Provider-Verifier/*) relevant=true ;;
+              pmoves/tools/provider_verifier_gate.py) relevant=true ;;
+              pmoves/tools/tests/test_provider_verifier_gate.py) relevant=true ;;
+              .github/workflows/provider-verifier.yml) relevant=true ;;
+            esac
+          done <<< "$files"
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
+          if [ "$relevant" = "true" ]; then
+            echo "Verifier surface touched — running the static gate."
+          else
+            echo "No verifier-surface change; gate is a no-op and reports success."
+          fi
+
+      # Checkout is deliberately AFTER the detection step and gated on it.
+      #
+      # `submodules: recursive` over a monorepo with 72 submodules measured
+      # 9m15s on run 32294521610 -- after which the detection step took 2s to
+      # decide the PR was irrelevant and every working step skipped. As a
+      # required check that cost would be paid by EVERY pull request in the
+      # repo, almost none of which touch the verifier surface.
+      #
+      # The detection step needs no repo content -- it asks the PR files API,
+      # naming the repo explicitly via github.repository -- so it can run
+      # first on a bare runner. Nothing above this line reads the working tree.
+      - name: Checkout repo (with submodules)
+        if: steps.changed.outputs.relevant == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Python
+        if: steps.changed.outputs.relevant == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install the verifier's runtime deps (best-effort)
+        if: steps.changed.outputs.relevant == 'true'
+        # The gate's 6 static checks don't need the verifier's heavy
+        # deps (numpy, openai, megfile). We install them only for the
+        # full-conformance dispatch path. The 'best-effort' install
+        # keeps the static path fast.
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r Pmoves-MiniMax-Provider-Verifier/requirements.txt || \
+            echo "::warning::verifier runtime deps not installed; the static gate still runs"
+
+      - name: Run the static gate
+        if: steps.changed.outputs.relevant == 'true'
+        id: gate
+        shell: bash
+        run: |
+          # 6 checks, no API calls. Output: JSON line on stdout.
+          set +e
+          # `python`, not `py`. This job is runs-on: ubuntu-latest and
+          # actions/setup-python exposes the selected interpreter as `python`;
+          # `py` is the Windows launcher and is absent here. It would exit 127,
+          # set verdict=FAIL, and block every PR matching the path filter without
+          # ever running a check. The install step two above already uses `python`.
+          OUTPUT=$(python pmoves/tools/provider_verifier_gate.py --json 2>&1)
+          RC=$?
+          set -e
+          echo "## Provider Verifier static gate result" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          echo "$OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$OUTPUT"
+          if [ "$RC" -ne 0 ]; then
+            echo "verdict=FAIL" >> "$GITHUB_OUTPUT"
+            exit "$RC"
+          fi
+          echo "verdict=PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Post PR comment on FAIL
+        if: failure() && steps.changed.outputs.relevant == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            // The gate wrote its JSON to the step summary, but the
+            // easiest way to grab the verdict is to re-run the
+            // helper inline. We just keep the comment short and
+            // point at PROVIDER_VERIFIER_GATE.md.
+            const body = [
+              '## Provider Verifier static gate: FAIL',
+              '',
+              'One or more of the 6 static checks failed. See the',
+              '**verifier-gate** job summary above for the per-check',
+              'detail.',
+              '',
+              'Common causes:',
+              '- `Pmoves-MiniMax-Provider-Verifier/provider.json.example`',
+              '  has a missing field, a real API key, or invalid JSON.',
+              '- `sample.jsonl` is missing or empty.',
+              '- `verify.py` has a syntax error or the submodule',
+              '  isn\'t initialized.',
+              '',
+              'See `pmoves/docs/operations/PROVIDER_VERIFIER_GATE.md`',
+              'for the full check list + how to fix.',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

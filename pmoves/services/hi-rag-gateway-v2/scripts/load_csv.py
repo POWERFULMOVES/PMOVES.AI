@@ -1,10 +1,19 @@
-import os, sys, csv
+import os
+import sys
+import csv
 from pathlib import Path
 from typing import List, Dict, Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
-import requests, json as pyjson
+import requests
+import json as pyjson
+
+_repo_root = Path(__file__).resolve().parents[4]
+if str(_repo_root) not in sys.path:
+    sys.path.append(str(_repo_root))
+
+from libs.providers.embedding import embed_text as embed_via_providers
 
 _repo_root = Path(__file__).resolve().parents[4]
 if str(_repo_root) not in sys.path:
@@ -13,9 +22,10 @@ if str(_repo_root) not in sys.path:
 from libs.providers.embedding import embed_text as embed_via_providers
 
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
+QDRANT_API_KEY = os.environ.get("QDRANT__API_KEY", "")
 COLL = os.environ.get("QDRANT_COLLECTION", "pmoves_chunks")
 MEILI_URL = os.environ.get("MEILI_URL", "http://meilisearch:7700")
-MEILI_API_KEY = os.environ.get("MEILI_API_KEY", "")
+MEILI_API_KEY = os.environ.get("MEILI_API_KEY") or os.environ.get("MEILI_MASTER_KEY", "")
 DEFAULT_NAMESPACE = os.environ.get("INDEXER_NAMESPACE", "pmoves")
 
 def ensure_qdrant_collection(client: QdrantClient, dim: int):
@@ -88,7 +98,7 @@ def main():
         vectors.append([float(v) for v in vec])
     if not vectors or not vectors[0]:
         raise RuntimeError('Embedding backend returned empty vectors')
-    client = QdrantClient(url=QDRANT_URL, timeout=60.0)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None, timeout=60.0)
     ensure_qdrant_collection(client, len(vectors[0]))
     points = [PointStruct(id=i+1, vector=vec, payload=doc) for i,(doc,vec) in enumerate(zip(docs, vectors))]
     client.upsert(collection_name=COLL, points=points)

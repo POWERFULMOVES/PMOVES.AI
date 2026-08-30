@@ -150,6 +150,15 @@ def parse_args() -> argparse.Namespace:
         default="local-smoke",
         help="Docker tag suffix for local images.",
     )
+    parser.add_argument(
+        "--paths-only",
+        action="store_true",
+        help=(
+            "Validate that matrix context/dockerfile paths exist without building images. "
+            "Initializes submodules under pmoves/integrations/ shallowly as needed. "
+            "Exits 1 if any path is missing."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -180,6 +189,87 @@ def resolve_entries(
         return [name_to_entry[name] for name in selected_names]
 
     return filtered
+
+
+def _init_submodule(repo_root: pathlib.Path, submodule_rel: str) -> None:
+    target = repo_root / submodule_rel
+    if target.is_dir() and any(target.iterdir()):
+        return
+    print(f"==> Initializing submodule: {submodule_rel}")
+    subprocess.run(
+        ["git", "submodule", "update", "--init", "--depth=1", submodule_rel],
+        cwd=str(repo_root),
+        check=False,
+    )
+
+
+def _declared_submodule_paths(repo_root: pathlib.Path) -> list[str]:
+    """Submodule paths declared in .gitmodules, longest first.
+
+    Read from the file rather than `git config` so this works on a plain
+    directory copy with no git metadata.
+    """
+    gitmodules = repo_root / ".gitmodules"
+    if not gitmodules.is_file():
+        return []
+    paths = [
+        line.split("=", 1)[1].strip()
+        for line in gitmodules.read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("path")
+    ]
+    return sorted(paths, key=len, reverse=True)
+
+
+def _submodule_owning(repo_root: pathlib.Path, context_rel: str) -> str | None:
+    """The submodule that IS, or contains, this build context.
+
+    Previously this was a hardcoded `pmoves/integrations/*` prefix test, so a
+    repo-root submodule context (PMOVES.YT) was never initialized and its paths
+    read as missing.
+    """
+    context_rel = context_rel.strip("/")
+    if not context_rel or context_rel == ".":
+        return None
+    for candidate in _declared_submodule_paths(repo_root):
+        if context_rel == candidate or context_rel.startswith(f"{candidate}/"):
+            return candidate
+    return None
+
+
+def check_paths(entry: dict[str, object], repo_root: pathlib.Path) -> ValidationResult:
+    name = str(entry.get("name", ""))
+    image_name = str(entry.get("image_name", ""))
+    context_rel = str(entry.get("context", ""))
+    dockerfile_rel = str(entry.get("dockerfile", ""))
+    tag = f"local/{image_name}:paths-check"
+
+    context_rel_path = pathlib.Path(context_rel)
+    dockerfile_rel_path = pathlib.Path(dockerfile_rel)
+    if context_rel_path.is_absolute() or dockerfile_rel_path.is_absolute():
+        print(f"[FAIL] {name}: paths must be repo-relative, not absolute")
+        return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note="paths must be repo-relative")
+
+    repo_root_resolved = repo_root.resolve()
+    owning_submodule = _submodule_owning(repo_root, context_rel)
+    if owning_submodule:
+        _init_submodule(repo_root, owning_submodule)
+
+    context_path = (repo_root / context_rel_path).resolve()
+    dockerfile_path = (repo_root / dockerfile_rel_path).resolve()
+
+    if not context_path.is_relative_to(repo_root_resolved) or not dockerfile_path.is_relative_to(repo_root_resolved):
+        print(f"[FAIL] {name}: path escapes repo root")
+        return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note="path escapes repo root")
+
+    if not context_path.exists():
+        print(f"[FAIL] {name}: context path missing: {context_rel}")
+        return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note=f"missing context: {context_rel}")
+    if not dockerfile_path.exists():
+        print(f"[FAIL] {name}: dockerfile missing: {dockerfile_rel}")
+        return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note=f"missing dockerfile: {dockerfile_rel}")
+
+    print(f"[PASS] {name}: {dockerfile_rel}")
+    return ValidationResult(name=name, tag=tag, build_ok=True, trivy_ok=None, note="paths-only")
 
 
 def build_and_scan(
@@ -318,6 +408,16 @@ def main() -> int:
         + ", ".join(str(entry.get("name", "?")) for entry in selected)
     )
 
+    if args.paths_only:
+        results = [check_paths(entry, repo_root) for entry in selected]
+        print_summary(results)
+        failed = [item for item in results if not item.ok]
+        if failed:
+            print(f"\nFAIL: {len(failed)} integration(s) have missing paths.", file=sys.stderr)
+            return 1
+        print(f"\nPASS: all {len(results)} integration path(s) verified.")
+        return 0
+
     try:
         ensure_builder(args.builder)
     except RuntimeError as exc:
@@ -336,6 +436,11 @@ def main() -> int:
 
             if git_url == LOCAL_REPO_URL:
                 source_root = repo_root
+                # The build context may live in a submodule that this checkout
+                # has only as a gitlink (e.g. pmoves-yt builds from PMOVES.YT).
+                owning = _submodule_owning(repo_root, str(entry.get("context", "")))
+                if owning:
+                    _init_submodule(repo_root, owning)
             else:
                 key = (git_url, git_ref)
                 source_root = clone_cache.get(key)

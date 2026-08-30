@@ -1,13 +1,15 @@
 [
   {
-    "name": "GitHub • Webhook → NATS v1",
+    "name": "GitHub \u2022 Webhook \u2192 NATS v1",
     "nodes": [
       {
         "parameters": {
           "httpMethod": "POST",
           "path": "github/webhooks/runner",
           "responseMode": "responseNode",
-          "options": {}
+          "options": {
+            "rawBody": true
+          }
         },
         "id": "webhook_receiver",
         "name": "Webhook: GitHub Runner Events",
@@ -21,16 +23,18 @@
       },
       {
         "parameters": {
-          "functionCode": "const crypto = require('crypto');\nconst body = $input.item.json.body || $json;\nconst headers = $input.item.json.headers || {};\nconst rawBody = JSON.stringify(body);\n\n// --- HMAC-SHA256 Signature Verification ---\nconst webhookSecret = $env.GH_WEBHOOK_SECRET;\nconst signatureHeader = headers['x-hub-signature-256'] || '';\n\nif (!webhookSecret) {\n  throw new Error('GH_WEBHOOK_SECRET not configured in n8n environment');\n}\n\nif (!signatureHeader) {\n  throw new Error('Missing x-hub-signature-256 header - rejecting unsigned webhook');\n}\n\nconst expectedSig = 'sha256=' + crypto.createHmac('sha256', webhookSecret).update(rawBody, 'utf8').digest('hex');\nconst sigBuffer = Buffer.from(signatureHeader);\nconst expectedBuffer = Buffer.from(expectedSig);\n\nif (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {\n  throw new Error('Invalid webhook signature - HMAC verification failed');\n}\n\n// Signature verified - parse event\nconst eventType = headers['x-github-event'] || body.event || 'unknown';\nconst deliveryId = headers['x-github-delivery'] || 'no-delivery-id';\n\nreturn {\n  json: {\n    event_type: eventType,\n    delivery_id: deliveryId,\n    original_body: body,\n    timestamp: new Date().toISOString(),\n    signature_verified: true,\n    headers: {\n      'x-github-event': eventType,\n      'x-github-delivery': deliveryId\n    }\n  }\n};"
+          "mode": "runOnceForEachItem",
+          "jsCode": "const crypto = require('crypto');\nconst headers = $input.item.json.headers || {};\n\n// --- HMAC-SHA256 Signature Verification over the RAW request bytes ---\n// GitHub signs the original bytes; JSON parse+stringify can change escaping\n// and whitespace, so the Webhook node runs with options.rawBody=true and we\n// hash the exact bytes it captured (binary property `data`).\nconst bin = $input.item.binary && $input.item.binary.data;\nif (!bin || !bin.data) {\n  throw new Error('Raw request body missing - Webhook rawBody option must be enabled');\n}\nconst rawBody = Buffer.from(bin.data, 'base64');\n\nconst webhookSecret = $env.GH_WEBHOOK_SECRET;\nconst signatureHeader = headers['x-hub-signature-256'] || '';\n\nif (!webhookSecret) {\n  throw new Error('GH_WEBHOOK_SECRET not configured in n8n environment');\n}\n\nif (!signatureHeader) {\n  throw new Error('Missing x-hub-signature-256 header - rejecting unsigned webhook');\n}\n\nconst expectedSig = 'sha256=' + crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');\nconst sigBuffer = Buffer.from(signatureHeader);\nconst expectedBuffer = Buffer.from(expectedSig);\n\nif (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {\n  throw new Error('Invalid webhook signature - HMAC verification failed');\n}\n\n// Signature verified - parse event from the same raw bytes we verified\nconst body = JSON.parse(rawBody.toString('utf8'));\nconst eventType = headers['x-github-event'] || body.event || 'unknown';\nconst deliveryId = headers['x-github-delivery'] || 'no-delivery-id';\n\nreturn {\n  json: {\n    event_type: eventType,\n    delivery_id: deliveryId,\n    original_body: body,\n    timestamp: new Date().toISOString(),\n    signature_verified: true,\n    headers: {\n      'x-github-event': eventType,\n      'x-github-delivery': deliveryId\n    }\n  }\n};"
         },
         "id": "parse_webhook",
         "name": "Parse & Verify Webhook",
-        "type": "n8n-nodes-base.functionItem",
-        "typeVersion": 1,
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
         "position": [
           660,
           280
-        ]
+        ],
+        "onError": "continueErrorOutput"
       },
       {
         "parameters": {
@@ -79,12 +83,20 @@
       },
       {
         "parameters": {
-          "functionCode": "// NATS Publishing Stub\n// Port 4222 is the NATS client protocol (TCP), NOT an HTTP API.\n// To publish to NATS from n8n, use one of:\n//   1. Install n8n-nodes-nats community node (recommended)\n//   2. Deploy a NATS-HTTP bridge service\n//   3. Use NATS WebSocket (ws://nats:9222) with a custom node\nconst subject = $json.nats_subject;\nconst payload = $json.nats_payload;\nconsole.log(`[NATS-STUB] Would publish to: ${subject}`);\nreturn { json: { nats_published: false, nats_stub: true, nats_subject: subject, nats_payload: payload, message: 'NATS publish requires n8n-nodes-nats community node or HTTP bridge' } };"
+          "method": "POST",
+          "url": "={{ $env.AGENT_ZERO_BASE_URL || 'http://agent-zero:8080' }}/events/publish",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ topic: $json.nats_subject, payload: $json.nats_payload.payload, correlation_id: $json.nats_payload.correlation_id, source: 'github-webhook' }) }}",
+          "options": {
+            "timeout": 10000
+          }
         },
         "id": "publish_nats",
-        "name": "Publish to NATS (stub)",
-        "type": "n8n-nodes-base.functionItem",
-        "typeVersion": 1,
+        "name": "Publish to NATS (Agent Zero bridge)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "onError": "continueErrorOutput",
         "position": [
           1320,
           120
@@ -92,12 +104,13 @@
       },
       {
         "parameters": {
-          "functionCode": "const payload = $json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nlet emoji = '⏳';\nif (status === 'in_progress') emoji = '🔄';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '✅' : conclusion === 'failure' ? '❌' : '⚠️';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: $env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/placeholder',\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
+          "functionCode": "const payload = $node['Create NATS Event Envelope'].json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nconst discordUrl = $env.DISCORD_WEBHOOK_URL;\nif (!discordUrl) {\n  throw new Error('DISCORD_WEBHOOK_URL not configured in n8n environment');\n}\n\nlet emoji = '\u23f3';\nif (status === 'in_progress') emoji = '\ud83d\udd04';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '\u2705' : conclusion === 'failure' ? '\u274c' : '\u26a0\ufe0f';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: discordUrl,\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
         },
         "id": "prepare_notification",
         "name": "Prepare Discord Notification",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
+        "onError": "continueErrorOutput",
         "position": [
           1540,
           120
@@ -117,6 +130,7 @@
         "name": "Send Discord Notification",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           1760,
           120
@@ -162,6 +176,35 @@
           1320,
           380
         ]
+      },
+      {
+        "parameters": {
+          "functionCode": "const errorNode = $input.item.json.$error?.node?.name || 'unknown';\nconst errorMessage = $input.item.json.$error?.message || $input.item.json.error?.message || 'No error message';\nconst timestamp = new Date().toISOString();\nconsole.error(`[github_webhook] Error in ${errorNode}: ${errorMessage} at ${timestamp}`);\nreturn { json: { error: true, node: errorNode, message: errorMessage, timestamp } };"
+        },
+        "id": "error_handler",
+        "name": "Error Handler",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [
+          1760,
+          340
+        ]
+      },
+      {
+        "parameters": {
+          "options": {
+            "responseCode": 500
+          },
+          "responseBody": "={{ JSON.stringify({ status: 'error', node: $json.node, message: $json.message, timestamp: $json.timestamp }) }}"
+        },
+        "id": "respond_error",
+        "name": "Respond Error",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          1980,
+          340
+        ]
       }
     ],
     "connections": {
@@ -181,6 +224,13 @@
           [
             {
               "node": "Check Event Type",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }
@@ -209,18 +259,25 @@
         "main": [
           [
             {
-              "node": "Publish to NATS (stub)",
+              "node": "Publish to NATS (Agent Zero bridge)",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Publish to NATS (stub)": {
+      "Publish to NATS (Agent Zero bridge)": {
         "main": [
           [
             {
               "node": "Prepare Discord Notification",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }
@@ -235,6 +292,13 @@
               "type": "main",
               "index": 0
             }
+          ],
+          [
+            {
+              "node": "Error Handler",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
@@ -243,6 +307,24 @@
           [
             {
               "node": "Respond Success",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Error Handler": {
+        "main": [
+          [
+            {
+              "node": "Respond Error",
               "type": "main",
               "index": 0
             }

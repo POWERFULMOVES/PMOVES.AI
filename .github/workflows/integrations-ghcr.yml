@@ -46,6 +46,19 @@ on:
       - 'PMOVES.YT'
       - 'PMOVES-Jellyfin'
       - 'PMOVES-Supaserch'
+      # Priority 1: production services
+      - 'PMOVES-HiRAG'
+      - 'PMOVES-BoTZ'
+      - 'PMOVES-tensorzero'
+      - 'PMOVES-Neo4j'
+      - 'Pmoves-cipher'
+      # Priority 2: agent infrastructure
+      - 'PMOVES-E2B-Danger-Room'
+      - 'PMOVES-Pipecat'
+      - 'PMOVES-ClawZ'
+      # Priority 3: media/content
+      - 'PMOVES-transcribe-and-fetch'
+      - 'PMOVES-autoresearch'
       - '.github/workflows/integrations-ghcr.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
       - '.github/trivy/**'
@@ -65,6 +78,19 @@ on:
       - 'PMOVES.YT'
       - 'PMOVES-Jellyfin'
       - 'PMOVES-Supaserch'
+      # Priority 1: production services
+      - 'PMOVES-HiRAG'
+      - 'PMOVES-BoTZ'
+      - 'PMOVES-tensorzero'
+      - 'PMOVES-Neo4j'
+      - 'Pmoves-cipher'
+      # Priority 2: agent infrastructure
+      - 'PMOVES-E2B-Danger-Room'
+      - 'PMOVES-Pipecat'
+      - 'PMOVES-ClawZ'
+      # Priority 3: media/content
+      - 'PMOVES-transcribe-and-fetch'
+      - 'PMOVES-autoresearch'
       - '.github/workflows/integrations-ghcr.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
       - '.github/trivy/**'
@@ -81,6 +107,8 @@ env:
   # Prefer PAT when supplied (package ownership/ACL edge cases), fallback to workflow token.
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || '' }}
   GHCR_PAT: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
+  GH_APP_ID: ${{ secrets.GH_APP_ID || '' }}
+  GH_APP_SEC: ${{ secrets.GH_APP_SEC || '' }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
@@ -96,7 +124,7 @@ jobs:
       names: ${{ steps.resolve.outputs.names }}
     steps:
       - name: Checkout (matrix config)
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Resolve integration matrix
         id: resolve
@@ -131,42 +159,28 @@ jobs:
           print(f"Resolved {len(names)} integration lane(s) (target={target})")
           PY
 
-  build-publish:
-    name: Build ${{ matrix.name }}
+  build-validate-pr:
+    name: Validate ${{ matrix.name }} (PR)
     needs: resolve-matrix
-    # Distribute across all available self-hosted Linux runners for parallel builds.
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 60
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
-      packages: write
-      id-token: write
     strategy:
       fail-fast: false
-      # Allow all self-hosted runners (ai-lab, vps, hotfix) to build in parallel.
       max-parallel: 4
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
         with:
           egress-policy: audit
-          allowed-endpoints: >
-            github.com:443
-            api.github.com:443
-            ghcr.io:443
-            registry-1.docker.io:443
-            auth.docker.io:443
-            production.cloudflare.docker.com:443
-            archive.ubuntu.com:80
-            archive.ubuntu.com:443
-            security.ubuntu.com:80
-            security.ubuntu.com:443
 
       - name: Checkout (stub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Load integration config
         id: cfg
@@ -182,6 +196,7 @@ jobs:
           import os
           import pathlib
           import sys
+          import uuid
 
           name = os.environ["MATRIX_NAME"]
           matrix_path = pathlib.Path(".github/workflows/integrations-ghcr.matrix.json")
@@ -209,19 +224,13 @@ jobs:
         env:
           MATRIX_NAME: ${{ matrix.name }}
 
-      - name: Generate GitHub App token (for clone + GHCR)
-        id: app_token
-        continue-on-error: true
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_SEC }}
-
       - name: Prepare integration source
         run: |
           set -euo pipefail
           cfg_url='${{ steps.cfg.outputs.git_url }}'
           cfg_ref='${{ steps.cfg.outputs.ref }}'
+          cfg_context='${{ steps.cfg.outputs.context }}'
+          cfg_dockerfile='${{ steps.cfg.outputs.dockerfile }}'
           case "$cfg_url" in
             https://github.com/*) ;;
             *)
@@ -236,9 +245,335 @@ jobs:
 
           if [ "$cfg_url" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
             echo "Using checked-out PMOVES.AI workspace as integration source"
+            # Materialize the submodule content this build actually needs.
+            # `git archive HEAD` (the prior approach) only emits gitlink mode
+            # 160000 entries, so submodule contents would be missing; we tar up
+            # `git ls-files --recurse-submodules` instead, which requires the
+            # submodule to be initialized first.
+            #
+            # TWO selectors, not one:
+            #  - every pmoves/integrations/* submodule (pre-existing behaviour)
+            #  - the submodule that IS, or contains, THIS entry's build context.
+            #    pmoves-yt builds from the repo-root PMOVES.YT submodule, which
+            #    the pmoves/integrations/ prefix filter never matched — so its
+            #    context arrived empty and the image was built from the shim.
+            if [ -f .gitmodules ]; then
+              git config --file .gitmodules --get-regexp '^submodule\..+\.path$' \
+                | awk '{print $2}' \
+                | while IFS= read -r submod_path; do
+                    want=0
+                    case "$submod_path" in
+                      pmoves/integrations/*) want=1 ;;
+                    esac
+                    case "${cfg_context%/}/" in
+                      "${submod_path}/"*) want=1 ;;
+                    esac
+                    [ "$want" = "1" ] || continue
+                    echo "→ Initializing submodule ${submod_path}"
+                    git submodule update --init --depth=1 "${submod_path}" 2>&1 \
+                      || echo "  (init failed — continuing without submodule content)"
+                  done
+            fi
             rm -rf integration-src
             mkdir -p integration-src
-            git archive --format=tar HEAD | tar -x -C integration-src
+            git ls-files --recurse-submodules -z | tar --null -T - -cf - | tar -xf - -C integration-src
+          else
+            git clone --depth=1 --branch "$cfg_ref" "$cfg_url" integration-src
+          fi
+
+          # Fail here, loudly, rather than letting docker/build-push-action emit a
+          # confusing "failed to read dockerfile". A missing Dockerfile at this
+          # point almost always means the entry's build context lives in a git
+          # submodule that was not materialized above.
+          if [ ! -f "integration-src/${cfg_dockerfile}" ]; then
+            echo "::error::Dockerfile 'integration-src/${cfg_dockerfile}' not found after source preparation. If this entry's build context is a git submodule, its content was not materialized — check the submodule init step above."
+            exit 1
+          fi
+          echo "✔ build context ready: integration-src/${cfg_context} (dockerfile: ${cfg_dockerfile})"
+
+      - name: Free disk space (runner)
+        run: |
+          set -euxo pipefail
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
+          sudo rm -rf /usr/local/share/boost || true
+          df -h
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+
+      - name: Build (PR validation, no push)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: integration-src/${{ steps.cfg.outputs.context }}
+          file: integration-src/${{ steps.cfg.outputs.dockerfile }}
+          push: false
+          pull: true
+          build-args: |
+            PIP_CONSTRAINT=requirements.lock
+            ${{ steps.cfg.outputs.build_args }}
+          platforms: linux/amd64
+
+  cleanup-self-hosted-runners:
+    name: Cleanup ${{ matrix.runner_label }} runner disk
+    needs: resolve-matrix
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both VPS runners (pmoves-kvm4-1-runner, pmoves-kvm4-2-runner) carry the
+        # `kvm4` label; there is NO runner labelled `kvm2`. A `kvm2` matrix leg can
+        # never be scheduled, and because build-publish `needs` this job, that
+        # orphaned leg deadlocks the entire publish (GHCR run 27020807888 hung
+        # queued on "Cleanup kvm2 runner disk", 2026-06-05).
+        runner_label: [kvm4]
+    steps:
+      - name: Free disk before image matrix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system df || true
+
+          # The publish matrix can leave recent BuildKit cache behind on shared
+          # self-hosted nodes. Clear all unused Docker state before the next
+          # image wave so heavy arm64 lanes do not inherit a nearly-full root.
+          # system prune minus --volumes: reclaims stopped containers + images +
+          # networks + build cache. NEVER --volumes: self-hosted runners co-host
+          # LIVE fleet data volumes; volume-pruning can destroy fleet data
+          # (Known Road: prune containers/images/cache, never volumes).
+          docker system prune -af || true
+          docker builder prune -af || true
+
+          # Work directories differ by node (for example kvm4-1/kvm4-2).
+          # Keep the current checkout area, but remove stale sibling workspaces.
+          for workdir in "${GITHUB_WORKSPACE}/.." /opt/actions-runner*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
+          done
+
+          for diagdir in /opt/actions-runner*/_diag/pages; do
+            [ -d "$diagdir" ] || continue
+            find "$diagdir" -type f -mtime +1 -delete || true
+          done
+
+          # Syft/stereoscope SBOM image extractions + anchore sbom-action scratch can
+          # be 20G+ each and live under /tmp — the docker prune above does NOT reclaim
+          # them. Orphaned when a job is cancelled mid-scan, they were the ACTUAL cause
+          # of the 2026-06-05 KVM4-1 disk-full incident (126G across ten /tmp/stereoscope-*
+          # dirs). Sweep entries older than a day; active scans are minutes old and untouched.
+          for pat in 'stereoscope-*' 'sbom-action-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          done
+
+          echo "Disk after cleanup:"
+          df -h
+          docker system df || true
+
+  build-publish:
+    name: Build ${{ matrix.name }}
+    needs: [resolve-matrix, cleanup-self-hosted-runners]
+    if: ${{ github.event_name != 'pull_request' }}
+    # Distribute across all available self-hosted Linux runners for parallel builds.
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      # The multi-arch publish lanes share Docker roots on self-hosted runners.
+      # Serialize them to keep heavyweight arm64 builds from compounding disk use.
+      max-parallel: 1
+      matrix:
+        name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudflare.docker.com:443
+            archive.ubuntu.com:80
+            archive.ubuntu.com:443
+            security.ubuntu.com:80
+            security.ubuntu.com:443
+
+      - name: Free build-host /tmp scratch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # cleanup-self-hosted-runners is pinned to a kvm4 node, but build-publish
+          # runs on ANY [self-hosted, Linux, X64] runner — which may be a different
+          # host whose /tmp SBOM scratch was never swept (Codex P1 on PR #1717).
+          # Runs FIRST (after Harden Runner, before checkout/config): if this host is
+          # already out of root from stale /tmp/stereoscope-* (the 2026-06-05 incident:
+          # 126G on KVM4-1), checkout and $GITHUB_OUTPUT writes would fail before any
+          # later cleanup could recover. This step needs no repo contents, so it leads.
+          # Mirrors the sweep in cleanup-self-hosted-runners; active scans (minutes
+          # old) are untouched by the -mtime +0 (>~24h) age gate.
+          echo "Build-host disk before /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
+          for pat in 'stereoscope-*' 'sbom-action-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          done
+          echo "Build-host disk after /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
+
+      - name: Checkout (stub)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Load integration config
+        id: cfg
+        run: |
+          set -euo pipefail
+          pybin="$(command -v python3 || command -v python || true)"
+          if [ -z "$pybin" ]; then
+            echo "::error::python3/python is required on runner for matrix config resolution."
+            exit 1
+          fi
+          "$pybin" - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+          import uuid
+
+          name = os.environ["MATRIX_NAME"]
+          matrix_path = pathlib.Path(".github/workflows/integrations-ghcr.matrix.json")
+          entries = json.loads(matrix_path.read_text(encoding="utf-8"))
+          match = next((entry for entry in entries if entry.get("name") == name), None)
+          if not match:
+              print(f"::error::No config found for integration '{name}'", file=sys.stderr)
+              sys.exit(1)
+
+          output = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as fh:
+              for key, value in match.items():
+                  if value is None:
+                      value = ""
+                  if isinstance(value, bool):
+                      fh.write(f"{key}={'true' if value else 'false'}\n")
+                  else:
+                      text = str(value)
+                      if "\n" in text:
+                          delim = f"EOF_{key}_{uuid.uuid4().hex}"
+                          fh.write(f"{key}<<{delim}\n{text}\n{delim}\n")
+                      else:
+                          fh.write(f"{key}={text}\n")
+          PY
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+
+      - name: Validate secrets presence
+        id: secrets_check
+        run: |
+          set -euo pipefail
+          missing=()
+          has_value() { [ -n "$(printenv "$1" || true)" ]; }
+
+          echo "::group::Auth secret audit"
+          if has_value GHCR_USERNAME && has_value GHCR_PAT; then
+            echo "✅ GHCR PAT auth available (GHCR_USERNAME + GHCR_TOKEN/GH_PAT_PUBLISH)"
+          else
+            echo "⚠️ GHCR PAT auth unavailable — will fallback to App token or workflow token"
+            [ -z "$(printenv GHCR_USERNAME || true)" ] && missing+=("GHCR_USERNAME")
+            [ -z "$(printenv GHCR_PAT || true)" ]      && missing+=("GHCR_TOKEN/GH_PAT_PUBLISH")
+          fi
+
+          if has_value GH_APP_ID && has_value GH_APP_SEC; then
+            echo "✅ GitHub App token generation available"
+          else
+            echo "⚠️ GitHub App token unavailable"
+            [ -z "$(printenv GH_APP_ID || true)" ]  && missing+=("GH_APP_ID")
+            [ -z "$(printenv GH_APP_SEC || true)" ] && missing+=("GH_APP_SEC")
+          fi
+          echo "::endgroup::"
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::Missing secrets: ${missing[*]} — GHCR push may fail if no valid auth method remains"
+          fi
+        env:
+          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
+          GHCR_PAT: ${{ env.GHCR_PAT }}
+          GH_APP_ID: ${{ env.GH_APP_ID }}
+          GH_APP_SEC: ${{ env.GH_APP_SEC }}
+
+      - name: Generate GitHub App token (for clone + GHCR)
+        id: app_token
+        if: ${{ env.GH_APP_ID != '' && env.GH_APP_SEC != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ env.GH_APP_ID }}
+          private-key: ${{ env.GH_APP_SEC }}
+          # Explicit token scopes required for clone + GHCR push
+          permission-contents: read
+          permission-packages: write
+
+      - name: Prepare integration source
+        run: |
+          set -euo pipefail
+          cfg_url='${{ steps.cfg.outputs.git_url }}'
+          cfg_ref='${{ steps.cfg.outputs.ref }}'
+          cfg_context='${{ steps.cfg.outputs.context }}'
+          cfg_dockerfile='${{ steps.cfg.outputs.dockerfile }}'
+          case "$cfg_url" in
+            https://github.com/*) ;;
+            *)
+              echo "::error::Unsupported git_url '$cfg_url' (only https://github.com/* is allowed)."
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$cfg_ref" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "::error::Unsupported git ref '$cfg_ref'."
+            exit 1
+          fi
+
+          if [ "$cfg_url" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
+            echo "Using checked-out PMOVES.AI workspace as integration source"
+            # Materialize the submodule content this build actually needs.
+            # `git archive HEAD` (the prior approach) only emits gitlink mode
+            # 160000 entries, so submodule contents would be missing; we tar up
+            # `git ls-files --recurse-submodules` instead, which requires the
+            # submodule to be initialized first.
+            #
+            # TWO selectors, not one:
+            #  - every pmoves/integrations/* submodule (pre-existing behaviour)
+            #  - the submodule that IS, or contains, THIS entry's build context.
+            #    pmoves-yt builds from the repo-root PMOVES.YT submodule, which
+            #    the pmoves/integrations/ prefix filter never matched — so its
+            #    context arrived empty and the image was built from the shim.
+            if [ -f .gitmodules ]; then
+              git config --file .gitmodules --get-regexp '^submodule\..+\.path$' \
+                | awk '{print $2}' \
+                | while IFS= read -r submod_path; do
+                    want=0
+                    case "$submod_path" in
+                      pmoves/integrations/*) want=1 ;;
+                    esac
+                    case "${cfg_context%/}/" in
+                      "${submod_path}/"*) want=1 ;;
+                    esac
+                    [ "$want" = "1" ] || continue
+                    echo "→ Initializing submodule ${submod_path}"
+                    git submodule update --init --depth=1 "${submod_path}" 2>&1 \
+                      || echo "  (init failed — continuing without submodule content)"
+                  done
+            fi
+            rm -rf integration-src
+            mkdir -p integration-src
+            git ls-files --recurse-submodules -z | tar --null -T - -cf - | tar -xf - -C integration-src
           else
             url="$cfg_url"
             # Prefer App token over PAT for clone authentication
@@ -252,6 +587,16 @@ jobs:
               exit 1
             fi
           fi
+
+          # Fail here, loudly, rather than letting docker/build-push-action emit a
+          # confusing "failed to read dockerfile". A missing Dockerfile at this
+          # point almost always means the entry's build context lives in a git
+          # submodule that was not materialized above.
+          if [ ! -f "integration-src/${cfg_dockerfile}" ]; then
+            echo "::error::Dockerfile 'integration-src/${cfg_dockerfile}' not found after source preparation. If this entry's build context is a git submodule, its content was not materialized — check the submodule init step above."
+            exit 1
+          fi
+          echo "✔ build context ready: integration-src/${cfg_context} (dockerfile: ${cfg_dockerfile})"
         env:
           APP_TOKEN: ${{ steps.app_token.outputs.token }}
 
@@ -260,56 +605,72 @@ jobs:
           set -euxo pipefail
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
           sudo rm -rf /usr/local/share/boost || true
+          docker system df || true
+          # system prune minus --volumes: reclaims stopped containers + images +
+          # networks + build cache. NEVER --volumes: self-hosted runners co-host
+          # LIVE fleet data volumes; volume-pruning can destroy fleet data
+          # (Known Road: prune containers/images/cache, never volumes).
+          docker system prune -af || true
+          docker builder prune -af || true
+          docker system df || true
           df -h
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: ./.github/actions/pmoves-buildx
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4.1.0
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
 
-      - name: Log in to GHCR (App token preferred)
-        id: login_ghcr_app
-        if: ${{ steps.app_token.outputs.token != '' }}
-        continue-on-error: true
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: x-access-token
-          password: ${{ steps.app_token.outputs.token }}
-
-      - name: Log in to GHCR (PAT fallback)
+      # Auth precedence: PAT > App > workflow token.
+      # PAT is preferred because the GitHub App installation lacks org-level
+      # `write:packages` (verified 2026-05-24 — App login succeeds but blob
+      # PUT returns 403 "installation not allowed to Write organization
+      # package"). Since docker/login-action only validates auth-server
+      # acceptance and not push permission, App login was preempting PAT
+      # fallback in the previous order. Swapping the order ensures the
+      # org-scoped PAT (when configured) is tried first.
+      - name: Log in to GHCR (PAT preferred)
         id: login_ghcr_pat
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
+        if: ${{ env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
           password: ${{ env.GHCR_PAT }}
 
+      - name: Log in to GHCR (App token fallback)
+        id: login_ghcr_app
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.app_token.outputs.token != '' }}
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: x-access-token
+          password: ${{ steps.app_token.outputs.token }}
+
       - name: Log in to GHCR (workflow token fallback)
         id: login_ghcr_actions
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' }}
         continue-on-error: true
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
       - name: Require GHCR authentication
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
         run: |
-          echo "::error::Unable to authenticate to GHCR. Check GH_APP_ID/GH_APP_SEC, or GHCR_USERNAME/GHCR_TOKEN."
+          echo "::error::Unable to authenticate to GHCR. Check GHCR_USERNAME/GHCR_TOKEN, GH_APP_ID/GH_APP_SEC, or the default workflow token."
           exit 1
 
       - name: Optional login to Docker Hub
-        if: ${{ github.event_name != 'pull_request' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-        uses: docker/login-action@v4
+        if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -324,15 +685,10 @@ jobs:
           USE_GHCR: ${{ steps.login_ghcr_app.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' || steps.login_ghcr_actions.outcome == 'success' }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "use_ghcr=false" >> $GITHUB_OUTPUT
-            echo "has_tags=false" >> $GITHUB_OUTPUT
-            echo "tags<<EOF" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "::notice::Pull request build detected; registry publish/sign/scan steps are skipped."
-            exit 0
-          fi
+          # Compute lowercased namespace for cache refs (needed by all event types)
+          OWNER_LC="${{ github.repository_owner }}"
+          OWNER_LC="${OWNER_LC,,}"
+          echo "ghcr_ns=${OWNER_LC}" >> $GITHUB_OUTPUT
 
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
@@ -382,40 +738,114 @@ jobs:
           echo -e "$TAGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # PRs validate Dockerfile/build correctness without publishing artifacts.
-      # Build native amd64 only — skip arm64 QEMU emulation to cut PR time ~50%.
-      - name: Build (PR validation, no push)
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: docker/build-push-action@v7
-        with:
-          context: integration-src/${{ steps.cfg.outputs.context }}
-          file: integration-src/${{ steps.cfg.outputs.dockerfile }}
-          push: false
-          build-args: |
-            PIP_CONSTRAINT=requirements.lock
-            ${{ steps.cfg.outputs.build_args }}
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Build and push (multi-arch)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
+          pull: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
           platforms: ${{ steps.cfg.outputs.platforms }}
-          tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # ONE immutable candidate tag, not the real ones. The runtime gate
+          # below runs AFTER this step, so publishing `:pmoves-latest` here
+          # meant a startup regression was already pullable by everyone the
+          # moment the gate failed -- red workflow, unsigned image, and users
+          # still getting the broken artifact. That is the failure this whole
+          # change exists to prevent, so the mutable tags are promoted onto the
+          # gated digest further down instead.
+          # run_id+run_attempt makes it unique per attempt, so a re-run never
+          # verifies a previous attempt's manifest.
+          tags: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache,mode=max
+
+      # RUNTIME GATE. Everything above proves the image BUILT. Nothing above
+      # proves it RUNS -- which is how ghcr.io/powerfulmoves/pmoves-yt shipped
+      # green for five months as an artifact that died at import
+      # (pmoves/docs/services/pmoves-yt/RUNBOOK.md section 1.3).
+      #
+      # Placed BEFORE attestation/cosign/SBOM on purpose: a digest that fails
+      # this gate gets no SLSA provenance and no cosign signature, because a
+      # failed step skips the rest of the job.
+      #
+      # `services:` cannot do this job. Per the context-availability table,
+      # jobs.<job_id>.services accepts only github/needs/strategy/matrix/vars/
+      # inputs -- NOT `steps` -- so it cannot reference the digest we just
+      # built, and would have to name a mutable tag, i.e. verify a stale
+      # artifact. That is the defect class, not the fix.
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability
+      - name: Verify pushed image starts (runtime gate)
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.build.outputs.digest != '' }}
+        env:
+          PRIMARY_TAG: ${{ steps.meta.outputs.primary_tag }}
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+          MATRIX_NAME: ${{ matrix.name }}
+          # Every platform in the manifest, not just the runner's own arch.
+          # build-publish runs on X64 while this matrix publishes
+          # linux/amd64,linux/arm64 -- so a plain `docker run` left the arm64
+          # variant unstarted and still signed it into the manifest. QEMU is
+          # configured in this job, which is what makes the arm64 leg runnable.
+          VERIFY_PLATFORMS: ${{ steps.cfg.outputs.platforms }}
+          VERIFY_PORT: ${{ steps.cfg.outputs.verify_port }}
+          VERIFY_HEALTH_PATH: ${{ steps.cfg.outputs.verify_health_path }}
+          VERIFY_TIMEOUT_SECONDS: ${{ steps.cfg.outputs.verify_timeout_seconds }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERIFY_PORT:-}" ] || [ -z "${VERIFY_HEALTH_PATH:-}" ]; then
+            echo "::warning title=No runtime gate for ${MATRIX_NAME}::Image pushed with no check that it starts. Add \"verify_port\" and \"verify_health_path\" to this entry in .github/workflows/integrations-ghcr.matrix.json to gate it."
+            exit 0
+          fi
+          # Verify by DIGEST, never by tag. ':pmoves-latest' is mutable and a
+          # concurrent matrix leg can move it between push and check;
+          # steps.build.outputs.digest is the exact manifest THIS job pushed.
+          # https://github.com/docker/build-push-action#outputs
+          ref="${PRIMARY_TAG%:*}@${BUILD_DIGEST}"
+          bash .github/scripts/verify-image-starts.sh "$ref"
+
+      # PROMOTION. Only reached if the runtime gate above passed, because a
+      # failed step skips the rest of the job. This is what makes the gate
+      # preventive rather than merely reportive: until this runs, the only
+      # thing in the registry is the candidate tag nobody pulls.
+      #
+      # `imagetools create` copies the MANIFEST LIST by digest -- no rebuild, no
+      # re-push of layers, and the digest the gate verified is the digest the
+      # tags end up pointing at. Multi-arch is preserved; a `docker pull && tag
+      # && push` round-trip would flatten it to the runner's own arch.
+      - name: Promote gated digest to release tags
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.build.outputs.digest != '' }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          SOURCE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [ -z "${tag}" ] && continue
+            args+=(--tag "${tag}")
+          done <<< "${TAGS}"
+          if [ "${#args[@]}" -eq 0 ]; then
+            echo "::error title=Nothing to promote::The runtime gate passed but no release tags were generated."
+            exit 1
+          fi
+          echo "Promoting ${SOURCE} to:"
+          printf '  %s\n' "${TAGS}"
+          docker buildx imagetools create "${args[@]}" "${SOURCE}"
+
+      - name: Attest build provenance (SLSA L3)
+        if: steps.build.outputs.digest != '' && steps.meta.outputs.has_tags == 'true'
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
       - name: Cosign sign GHCR digest (keyless)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
@@ -424,43 +854,108 @@ jobs:
           cosign sign --yes "$IMAGE_DIGEST_REF"
 
       - name: Install Syft (SBOM)
-        if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: anchore/sbom-action/download-syft@v0.23.1
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        env:
+          SYFT_VERSION: v1.45.0
+        run: |
+          set -euo pipefail
+          install_dir="${RUNNER_TEMP}/syft-bin"
+          mkdir -p "$install_dir"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" -o "${RUNNER_TEMP}/syft.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/syft.tar.gz" -C "$install_dir" syft
+          sudo install -m 0755 "${install_dir}/syft" /usr/local/bin/syft
+          syft version
+
+      - name: Free disk space before SBOM
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        run: |
+          set -euxo pipefail
+          docker system df || true
+          docker builder prune -af || true
+          docker image prune -f || true
+          docker container prune -f || true
+          rm -rf "${RUNNER_TEMP:-/tmp}/syft-cache"
+          df -h
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
-        if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        env:
+          SYFT_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          SYFT_CACHE_DIR: ${{ runner.temp }}/syft-cache
+          PAT_AUTH_OK: ${{ steps.login_ghcr_pat.outcome == 'success' }}
+          APP_AUTH_OK: ${{ steps.login_ghcr_app.outcome == 'success' }}
+          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
+          GHCR_PAT: ${{ env.GHCR_PAT }}
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          ACTIONS_ACTOR: ${{ github.actor }}
+          ACTIONS_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json
+          if [ "${PAT_AUTH_OK}" = "true" ]; then
+            export SYFT_REGISTRY_AUTH_USERNAME="${GHCR_USERNAME}"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${GHCR_PAT}"
+          elif [ "${APP_AUTH_OK}" = "true" ]; then
+            export SYFT_REGISTRY_AUTH_USERNAME="x-access-token"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${APP_TOKEN}"
+          else
+            export SYFT_REGISTRY_AUTH_USERNAME="${ACTIONS_ACTOR}"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${ACTIONS_TOKEN}"
+          fi
+
+          rm -rf "$SYFT_CACHE_DIR"
+          mkdir -p "$SYFT_CACHE_DIR"
+          syft scan --from registry "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json &
+          syft_pid=$!
+          while kill -0 "$syft_pid" 2>/dev/null; do
+            echo "Syft SBOM generation still running for ${{ matrix.name }}..."
+            sleep 60
+          done
+          wait "$syft_pid"
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact
-        if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: actions/upload-artifact@v7
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
-      - name: Free disk space (keep BuildKit cache)
+      - name: Free disk space before Trivy
         run: |
           set -euxo pipefail
+          echo "Disk BEFORE reclaim:"; df -h / || true
           docker system df || true
-          # Remove dangling images and stopped containers but preserve BuildKit
-          # layer cache and volumes for faster subsequent builds.
-          docker image prune -f || true
+          # Trivy must download its ~95MB vuln DB into .cache/trivy and pull the
+          # image; on the chronically-tight kvm4 runners that write fails with
+          # "no space left on device" (GHCR run 27042677318). The image is RE-PULLED
+          # in the next step, so a full prune here is safe — reclaim aggressively.
+          docker builder prune -af || true
+          docker image prune -af || true        # all unused (image re-pulled next step)
           docker container prune -f || true
-          df -h
+          # NOTE: deliberately NOT 'docker volume prune' — these self-hosted runners
+          # may co-host fleet data-store volumes (neo4j/supabase-db/etc.); pruning
+          # volumes could destroy a temporarily-stopped service's data. Image-layer
+          # reclaim above frees GBs; the Trivy DB needs only ~95MB.
+          # Stale Trivy DB cache can be corrupt/partial after a prior no-space abort;
+          # drop it so the next download starts clean (path per trivy-action cache-dir).
+          rm -rf "${GITHUB_WORKSPACE}/.cache/trivy/db" "${GITHUB_WORKSPACE}/.cache/trivy/fanal" 2>/dev/null || true
+          # Sweep the SBOM/scan scratch that the docker prune does NOT reclaim
+          # (same class as the build-host sweep in #1719) — frees the root volume.
+          for pat in 'stereoscope-*' 'sbom-action-*' 'trivy-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          done
+          echo "Disk AFTER reclaim:"; df -h / || true
 
       - name: Pull image for Trivy (private GHCR)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
           docker pull "${{ steps.meta.outputs.primary_tag }}"
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.35.0
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
@@ -476,8 +971,8 @@ jobs:
           timeout: '10m0s'
 
       - name: Trivy vulnerability scan report (includes unfixed)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.35.0
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table
@@ -492,14 +987,31 @@ jobs:
           timeout: '10m0s'
 
       - name: Upload Trivy report artifact
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: actions/upload-artifact@v7
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
 
+      - name: Clean up pulled image and dangling layers
+        if: ${{ steps.meta.outputs.has_tags == 'true' && always() }}
+        run: |
+          set -euxo pipefail
+          # Remove the image we pulled for Trivy to prevent accumulation on self-hosted runners
+          docker rmi "${{ steps.meta.outputs.primary_tag }}" || true
+          # Aggressive prune: prevent failed heavy builds from leaving the
+          # shared self-hosted Docker root near capacity for the next lane.
+          docker image prune -a -f || true
+          docker builder prune -af || true
+          # Clean old runner work directories (>7 days) to prevent checkout artifact bloat
+          for workdir in "${GITHUB_WORKSPACE}/.." /opt/actions-runner*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} \; || true
+          done
+          df -h
+
       - name: Cosign verify GHCR digest (keyless)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"

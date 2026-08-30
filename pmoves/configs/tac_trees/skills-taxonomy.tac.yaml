@@ -15,7 +15,7 @@ description: >
 # Metadata
 # ---------------------------------------------------------------------------
 metadata:
-  total_skills: 118
+  total_skills: 119
   total_domains: 36
   source_commands_dir: ".claude/commands/"
   source_pairings: "pmoves/configs/skill-pairings.yaml"
@@ -990,6 +990,14 @@ root:
           nats_subjects: []
           pairing: null
 
+        - id: skills.discord.read
+          command: "/discord:read"
+          file: "discord/read.md"
+          description: "Read messages from a Discord channel"
+          nats_subjects:
+            - "discord.messages.fetched.v1"
+          pairing: null
+
     # =======================================================================
     # Domain: minio
     # =======================================================================
@@ -1472,7 +1480,7 @@ audit:
     nats: 4            # status, publish, monitor, streams
     notebook: 3        # query, status, sync
     hyperdim: 3        # animate, export, render
-    discord: 2         # notify, status
+    discord: 3         # notify, status, read
     minio: 3           # presign, status, upload
     n8n: 4             # execute, nodes, suggest, workflows
     langextract: 4     # extract, process, provider, status

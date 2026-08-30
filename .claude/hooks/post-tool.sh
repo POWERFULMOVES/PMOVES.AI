@@ -8,7 +8,8 @@ TOOL_NAME="${1:-unknown}"
 TOOL_STATUS="${2:-unknown}"
 
 # NATS configuration (from environment or defaults)
-NATS_URL="${NATS_URL:-nats://localhost:4222}"
+# Default for local dev only; production reads NATS_URL from secrets-funnel.
+NATS_URL="${NATS_URL:-nats://nats:pmoves@localhost:4222}"
 NATS_SUBJECT="claude.code.tool.executed.v1"
 CONTEXT_SUBJECT="claude.code.session.context.v1"
 

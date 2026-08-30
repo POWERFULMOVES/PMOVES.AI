@@ -125,14 +125,14 @@
        Media Tier Services:
        - PMOVES.YT (8077 YouTube ingestion)
        - Jellyfin (8096 media server)
-       - Flute-Gateway (8055 HTTP, 8056 WebSocket for TTS)
+       - Flute-Gateway (8055 — HTTP + WebSocket; TTS stream at `/v1/voice/stream/tts`)
        - Ultimate-TTS-Studio (7861 Gradio)
 
        Agent Tier Services:
        - Agent Zero (8080 API, 8081 UI)
        - Archon (8091 API, 3737 UI)
        - Channel Monitor (8097)
-       - Cipher Memory (8096)
+       - Cipher Memory (8105)
        - Consciousness Service (CGP mapper)
        - DeepResearch (8098 NATS worker)
        - SupaSerch (8099 orchestrator)
@@ -818,7 +818,7 @@
 
        External Networks:
        - supabase_network_PMOVES.AI - Bridge to Supabase CLI stack
-       - cataclysim-net - Legacy (Jellyfin only)
+       - cataclysm-net - Legacy (Jellyfin only)
 
        ---
        SERVICE CATALOG WITH CROSS-REFERENCES
@@ -829,7 +829,7 @@
        - Agent Zero (8080/8081) → MCP API, NATS subscriptions → Hi-RAG, Archon, PMOVES.YT
        - Archon (8091/3737) → Supabase prompts → Agent Zero MCP
        - Channel Monitor (8097) → NATS watcher → PMOVES.YT ingest
-       - Cipher Memory (8096) → Neo4j backend → MCP bridge for Claude Code
+       - Cipher Memory (8105) → Neo4j backend → MCP bridge for Claude Code
 
        Retrieval & Knowledge:
        - Hi-RAG Gateway v2 (8086/8087) ← Qdrant + Neo4j + Meilisearch [CPU/GPU]
@@ -838,7 +838,7 @@
        - SupaSerch (8099) → NATS: supaserch.* + Supabase + Agent Zero MCP
 
        Voice & Speech:
-       - Flute-Gateway (8055/8056) → WebSocket streaming, Prosodic TTS
+       - Flute-Gateway (8055) → WebSocket streaming, Prosodic TTS
        - Ultimate-TTS-Studio (7861) → Gradio + 7 engines (Kokoro, F5-TTS, etc.)
 
        Media Ingestion:

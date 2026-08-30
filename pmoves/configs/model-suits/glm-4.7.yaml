@@ -1,0 +1,71 @@
+# ============================================================
+# GLM-4.7 Model Suit
+# Role: Balanced performance, coding-specialized
+# Best for: Agentic coding, long-document analysis
+# Provider: Zhipu AI (Z.AI)
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: glm-4.7
+  provider: zai
+  base_url: "https://api.z.ai/v1"
+  api_key_env: Z_AI_API_KEY
+  
+  architecture:
+    type: moe
+    total_params: "130B"
+    active_params: "130B"
+    attention: standard
+    
+  context:
+    max_window: 200000
+    effective_window: 128000
+    working_window: 64000
+    
+  defaults:
+    temperature: 0.7
+    top_p: 0.95
+    max_tokens: 16384
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    mtp_steps: 1
+    
+  harness_mappings:
+    agentic_coding:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+      
+    long_context_analysis:
+      temperature: 0.2
+      top_p: 0.85
+      max_tokens: 8192
+      system_prompt: directive_analytical
+      
+    debugging:
+      temperature: 0.3
+      top_p: 0.90
+      max_tokens: 8192
+      system_prompt: directive_debugger
+      
+    architecture_planning:
+      temperature: 0.4
+      top_p: 0.90
+      max_tokens: 16384
+      system_prompt: directive_architect
+
+  cgp_state_vector:
+    delta: 0.3
+    Hz: 0.08
+    kappa: 1.8
+    A: 0.35
+    F: 0.04
+    
+  fallback_to: glm-4-flash
+  priority: 8

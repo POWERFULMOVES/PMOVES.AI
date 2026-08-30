@@ -1,0 +1,1661 @@
+##############################################################################
+# PMOVES.AI - Docker Compose Overlay: Essential Infrastructure
+##############################################################################
+# Services: core tier
+# Always combine with base: docker compose -f docker-compose.base.yml -f docker-compose.core.yml up -d
+#
+# Generated from docker-compose.yml by scripts/split_compose.py
+##############################################################################
+services:
+  nats:
+    # Graceful stop: JetStream state flush.
+    stop_grace_period: 30s
+    <<: &tier-data-hardened
+      env_file:
+      - env.shared
+      - env.tier-data
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
+
+    # Pinned 2025-02-04: Latest stable 2.11.x alpine version
+    image: nats:2.11.8-alpine
+    command:
+    - -js
+    - -m
+    - '8222'
+    - --user
+    # Default to the canonical nats:pmoves creds when the runtime env doesn't
+    # supply NATS_USER/NATS_PASSWORD. Without a default, a blank env var starts
+    # the server with empty creds while every client (tier envs + init script)
+    # authenticates as nats:pmoves -> "Authorization Violation" for the whole
+    # bus. These are the documented weak defaults (env.shared.example, tier
+    # envs); a real NATS_PASSWORD still overrides. Keep in sync with clients.
+    - ${NATS_USER:-nats}
+    - --pass
+    - ${NATS_PASSWORD:-pmoves}
+    restart: unless-stopped
+    ports:
+    # NATS is the mesh-wide event bus — credential-guarded (nats:***@),
+    # so 0.0.0.0 default is intentional to allow Tailscale mesh peers to connect.
+    - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
+    # Monitoring (8222) is NOT credential-guarded — it answered HTTP 200
+    # unauthenticated on the LAN IP, exposing /varz, /connz (connected clients)
+    # and /subsz (subject subscriptions). It shared NATS_BIND with 4222, so it
+    # inherited a 0.0.0.0 default that is only justified for the GATED data port.
+    # Loopback by default; set NATS_MONITORING_BIND explicitly (ideally to the
+    # tailnet IP, not 0.0.0.0) if a node genuinely needs remote NATS monitoring.
+    - ${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    networks:
+    # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
+    # internal-only network gets NO published-port DNAT rules from Docker, so the
+    # ports above are recorded but never plumbed — Tailscale mesh peers can't reach
+    # 4222/9223 cross-node. Multi-home nats onto the non-internal pmoves_external so
+    # its published ports actually bind, while keeping pmoves_bus for in-stack comms.
+    - pmoves_bus
+    - pmoves_external
+    environment:
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_bus,pmoves_external
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  nats-init:
+    image: natsio/nats-box:0.14.5
+    entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
+    environment:
+    # Pin the internal bus URL explicitly. This one-shot has no env_file, so
+    # ${NATS_URL} would inherit compose's default env — which can carry a stale
+    # localhost value (e.g. a host-exported NATS_URL) and make the init
+    # unreachable (a container's localhost is itself, not the nats service).
+    # nats-init always runs on pmoves_bus where NATS is reachable as nats:4222,
+    # so hardcode it (matches the script default and env.shared.example).
+    - NATS_URL=nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222
+    - PMOVES_NETWORKS=pmoves_bus
+    volumes:
+    - ./scripts/nats:/scripts:ro
+    networks:
+    - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: "no"
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs:
+    - /tmp:size=16m,noexec,nosuid
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  supabase-db:
+    # Graceful stop: PostgreSQL: SIGTERM is SMART shutdown (waits for ALL sessions); SIGINT is FAST (aborts txns, clean exit). ~39 consumers hold pooled sessions, so SIGTERM never completes inside the 10s default and Docker escalates to SIGKILL -> WAL recovery. This is the 2026-08-19 6-minute fsync.
+    stop_grace_period: 90s
+    stop_signal: SIGINT
+    <<: &tier-supabase-hardened
+      env_file:
+      - env.shared
+      - env.tier-supabase
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+
+    image: supabase/postgres:17.6.1.108
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - POSTGRES_USER=${SUPABASE_DB_USER:?Set SUPABASE_DB_USER in env.tier-supabase}
+    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:?Set SUPABASE_DB_PASSWORD in env.tier-supabase}
+    - POSTGRES_DB=${SUPABASE_DB_NAME:-postgres}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    # PMOVES extensions
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_db_egress
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports:
+    - ${SUPABASE_DB_BIND:-127.0.0.1}:${SUPABASE_DB_PORT:-54322}:5432
+    volumes:
+    - supabase-db-data:/var/lib/postgresql/data
+    - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
+    # Repo-managed pg_hba. The image ships this at /etc/postgresql/pg_hba.conf --
+    # the container's WRITABLE LAYER, not the data volume -- so an in-container
+    # edit is discarded by the next recreate. Mounting it makes the tailnet
+    # role-scoping durable. See the file's own header for why the rules exist.
+    - ./supabase/config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    networks:
+    - pmoves_data
+    - pmoves_api  # Services on pmoves_api need DB access
+    # Step 4 of the juicefs cross-node lane. pmoves_data and pmoves_api are both
+    # `internal: true`, and a published port on a container attached only to
+    # internal networks is not reachable -- the port maps, nothing can dial it.
+    # A non-internal bridge is what actually plumbs it.
+    #
+    # DEDICATED bridge, NOT the shared egress network (review P1): joining
+    # pmoves_external would hand every internet-facing container on that bridge
+    # a direct route to supabase-db:5432, and the pg_hba catch-all accepts every
+    # role from 172.16.0.0/12 (docker bridges included) -- the tailnet scoping
+    # never sees those sources. pmoves_db_egress (172.30.8.0/24, internal:
+    # false) carries ONLY this database, and its pg_hba ruleset admits nothing
+    # from that subnet except juicefs_meta.
+    #
+    # This does NOT put the database on the open internet. Reachability is
+    # governed by:
+    #   1. SUPABASE_DB_BIND -- set to the node's TAILNET address, not 0.0.0.0, so
+    #      the listener exists only on the tailnet interface. Default stays
+    #      127.0.0.1, so a node that does not set it publishes nothing new.
+    #   2. pg_hba (supabase/config/pg_hba.conf) -- tailnet sources
+    #      (100.64.0.0/10, which DNAT preserves end-to-end) admit ONLY
+    #      juicefs_meta and reject every other role; the dedicated bridge subnet
+    #      carries the same juicefs_meta-only rule so a container that somehow
+    #      joined it gains nothing either.
+    #
+    # sslmode: the cross-node DSN carries sslmode=disable. JuiceFS's PostgreSQL
+    # best-practices doc advises against it. Recorded decision rather than an
+    # inherited default: WireGuard encrypts the tailnet transport, so the session
+    # is not on the wire in plaintext, and the metadata role is non-superuser and
+    # pg_hba-scoped. Revisit if the DB is ever reachable off-tailnet.
+    - pmoves_db_egress
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  supabase-gotrue:
+    <<: *tier-supabase-hardened
+    image: supabase/gotrue:v2.191.0
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
+    # Older consistent scheme: base URL here + Kong routes that add /auth/v1.
+    # The 2026-06-18 self-hosted alignment (API_EXTERNAL_URL incl. /auth/v1 +
+    # matching Kong OAuth/SAML routes + issuer) is applied as a SET, not piecemeal
+    # and not gated on the gotrue tag — see the stack header note before changing.
+    - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
+    - GOTRUE_API_HOST=0.0.0.0
+    - GOTRUE_API_PORT=9999
+    # Database connection
+    - GOTRUE_DB_DRIVER=postgres
+    # PRECEDENCE TRAP (bit us 2026-08-23, during a real rotation).
+    # POSTGRES_PASSWORD_URLENCODED wins over POSTGRES_PASSWORD here, and it is
+    # NOT sourced from the CHIT manifest -- it is emitted by
+    # tools/credential_urlencoder.py into env.tier-supabase.urlencoded, which
+    # compose loads LAST of all env files. So this chain resolves to whatever
+    # that encoder last wrote, overriding every other source.
+    #
+    # The encoder merges env.shared then env.tier-supabase (later wins), so it
+    # MUST run after secrets-funnel-sync. It used to run before, which meant a
+    # rotation re-published the PREVIOUS password as the winning value: the
+    # funnel reported success and postgrest, gotrue and storage came back 28P01
+    # holding a correct POSTGRES_PASSWORD in their own env. Order fixed in
+    # mk/codex.mk; see the note above the secrets-funnel target.
+    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
+    # JWT configuration — standard names with legacy fallbacks
+    - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET}}
+    - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
+    - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
+    # 2025 key naming (service_role_key from PMOVES-supabase standard)
+    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
+    - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
+    # Logging
+    - GOTRUE_LOG_LEVEL=info
+    - GOTRUE_LOG_LEVEL_STACK=info
+    # URI Allow list (for VPS deployment)
+    - GOTRUE_URI_ALLOW_LIST=${SUPABASE_URI_ALLOW_LIST}
+    # Optional Google OAuth (self-hosted Supabase auth)
+    - GOTRUE_EXTERNAL_GOOGLE_ENABLED=${SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED:-false}
+    - GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=${SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID:-}
+    - GOTRUE_EXTERNAL_GOOGLE_SECRET=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET:-}
+    - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=${SUPABASE_AUTH_EXTERNAL_GOOGLE_REDIRECT_URI:-}
+    - GOTRUE_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK:-false}
+    # Mailer. With NO SMTP configured, gotrue accepts a signup, fails to send
+    # the confirmation, leaves confirmed_at NULL, and then refuses the login —
+    # a user that exists and cannot get in, which reads as "signup is broken".
+    # Password reset is likewise impossible; the only recovery is the admin API.
+    #
+    # Every value below defaults EMPTY so an unconfigured node behaves exactly
+    # as it does today. Fill these via `make secrets-funnel` (SMTP_PASS is
+    # registered in tools/chit_manifest_register.py) — never hand-edit tier envs.
+    #
+    # SMTP_HOST/PORT for Titan Mail are smtp.titan.email:587 (STARTTLS) or :465
+    # (implicit TLS); confirm against Titan's own docs before relying on them.
+    - GOTRUE_SMTP_HOST=${SMTP_HOST:-}
+    - GOTRUE_SMTP_PORT=${SMTP_PORT:-587}
+    - GOTRUE_SMTP_USER=${SMTP_USER:-}
+    - GOTRUE_SMTP_PASS=${SMTP_PASS:-}
+    # Must be a real mailbox on the sending domain, or providers reject the mail.
+    - GOTRUE_SMTP_ADMIN_EMAIL=${SMTP_ADMIN_EMAIL:-}
+    - GOTRUE_SMTP_SENDER_NAME=${SMTP_SENDER_NAME:-PMOVES}
+    # Pinned to its current EFFECTIVE value (gotrue defaults this false when
+    # unset), so adding the knob changes nothing on its own. Flip to true ONLY
+    # on nodes with no working SMTP — it lets signup succeed but accepts
+    # unverified addresses. With SMTP working, leave it false.
+    - GOTRUE_MAILER_AUTOCONFIRM=${GOTRUE_MAILER_AUTOCONFIRM:-false}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # DNS configuration - Docker embedded DNS (default)
+    - PMOVES_NETWORKS=pmoves_api
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+      start_period: 120s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_AUTH_BIND:-127.0.0.1}:${SUPABASE_GOTRUE_PORT:-9999}:9999
+    networks:
+      pmoves_api:
+        aliases:
+        - auth   # upstream Supabase name used by vendored kong.yml
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-realtime:
+    <<: *tier-supabase-hardened
+    image: supabase/realtime:v2.102.3
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Database connection
+    - DB_HOST=supabase-db
+    - DB_PORT=5432
+    - DB_NAME=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - DB_SSL=false
+    - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
+    - DB_ENC_KEY=${SUPABASE_REALTIME_ENC_KEY:-supabaserealtime}
+    # App configuration
+    - APP_NAME=realtime
+    - PORT=4000
+    - RLIMIT_NOFILE=10000
+    - SEED_SELF_HOST=true
+    - RUN_JANITOR=true
+    - DISABLE_HEALTHCHECK_LOGGING=true
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - DNS_NODES=''
+    # JWT secret (must match gotrue) - standard variable name
+    - API_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
+    - SECRET_KEY_BASE=${SECRET_KEY_BASE:-${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}}
+    - METRICS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
+    # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
+    - PMOVES_NETWORKS=pmoves_api
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:4000/ > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
+    networks:
+      pmoves_api:
+        aliases:
+        # kong.yml addresses realtime by its upstream compose name
+        # `realtime-dev.supabase-realtime` (Supabase uses a dotted container_name
+        # there), so the /realtime/v1 websocket route 503s without this alias.
+        # Load-bearing for realtime voice + chat over WebRTC in pmoves-ui and
+        # flute-gateway, which subscribe through the Kong websocket route.
+        - realtime-dev.supabase-realtime
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-storage:
+    <<: *tier-supabase-hardened
+    image: supabase/storage-api:v1.60.4
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Standard key names with legacy fallbacks
+    - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    # JWT secret - standard variable name
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
+    # PostgREST connection
+    - POSTGREST_URL=http://supabase-postgrest:3000
+    # Database connection (use env variables, not hardcoded credentials)
+    - DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    # Storage configuration
+    - FILE_SIZE_LIMIT=52428800
+    - STORAGE_BACKEND=file
+    - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
+    - REQUEST_ALLOW_X_FORWARDED_PATH=true
+    # Image transformation via imgproxy
+    - ENABLE_IMAGE_TRANSFORMATION=true
+    - IMGPROXY_URL=http://supabase-imgproxy:5001
+    # Tenant mode (single tenant for self-hosted)
+    - TENANT_ID=stub
+    - REGION=${SUPABASE_STORAGE_REGION:-stub}
+    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET:-stub}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
+    - PMOVES_NETWORKS=pmoves_api
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-postgrest:
+        condition: service_healthy  # postgrest --ready probe (admin server); distroless, so CMD not CMD-SHELL
+      supabase-imgproxy:
+        condition: service_healthy
+    volumes:
+    - supabase-storage-data:/var/lib/storage
+    ports:
+    - ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
+    networks:
+      pmoves_api:
+        aliases:
+        - storage   # upstream Supabase name used by vendored kong.yml
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-imgproxy:
+    <<: &tier-supabase-hardened-ro
+      env_file:
+      - env.shared
+      - env.tier-supabase
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      read_only: true
+      tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+      - /var/tmp:noexec,nosuid,size=64m
+
+    image: darthsim/imgproxy:v3.30.1
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - IMGPROXY_BIND=:5001
+    - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/
+    - IMGPROXY_USE_ETAG=true
+    - IMGPROXY_ENABLE_WEBP_DETECTION=${IMGPROXY_ENABLE_WEBP_DETECTION:-true}
+    - IMGPROXY_MAX_SRC_RESOLUTION=16.8
+    - PMOVES_NETWORKS=pmoves_api
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    volumes:
+    - supabase-storage-data:/var/lib/storage:ro
+    networks:
+    - pmoves_api
+
+  # ---------------------------------------------------------------------------
+  # Supabase postgres-meta — database metadata API for Studio
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  supabase-meta:
+    <<: *tier-supabase-hardened-ro
+    image: supabase/postgres-meta:v0.96.6
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - PG_META_PORT=8080
+    - PG_META_DB_HOST=supabase-db
+    - PG_META_DB_PORT=5432
+    - PG_META_DB_NAME=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - PG_META_DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - PG_META_DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+      pmoves_data:
+      # supabase-meta was on pmoves_data ONLY, so it was unreachable from both
+      # Kong and Studio (both on pmoves_api). Studio's STUDIO_PG_META_URL points
+      # straight at supabase-meta:8080, so the schema browser and table editor
+      # could not work at all. This is the same both-legs pattern supabase-db and
+      # supabase-postgrest already use — meta simply never got the API leg.
+      pmoves_api:
+        aliases:
+        - meta   # upstream Supabase name used by vendored kong.yml
+
+  # ---------------------------------------------------------------------------
+  # Supabase Edge Runtime — Deno edge functions
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-kong:
+    <<: *tier-supabase-hardened
+    # Matches upstream PMOVES-supabase/docker/docker-compose.yml. Kong is the REST
+    # gateway; keeping it aligned with the submodule matters because its declarative
+    # config (kong.yml) is LIVE-MOUNTED from that submodule, so upstream config
+    # changes reach this container the moment the gitlink bumps - which is exactly
+    # how the expressions-router outage (#2593) arrived. Patch-level bump.
+    image: kong/kong:3.9.3
+    profiles:
+    - supabase-local
+    volumes:
+    # Upstream Supabase shape: the raw declarative config is mounted at temp.yml,
+    # and kong-entrypoint.sh env-substitutes it into KONG_DECLARATIVE_CONFIG.
+    - ../PMOVES-supabase/docker/volumes/api/kong.yml:/home/kong/temp.yml:ro
+    - ../PMOVES-supabase/docker/volumes/api/kong-entrypoint.sh:/home/kong/kong-entrypoint.sh:ro
+    environment:
+    # DB-less declarative mode. This was previously KONG_DATABASE=postgres, which
+    # made Kong store routing config in Postgres — and NOTHING ever seeded it, so
+    # Kong booted with 0 services / 0 routes and 404'd ("no Route matched with
+    # those values") every /rest/v1, /auth/v1 and /storage/v1 request while still
+    # reporting healthy. Declarative mode is what upstream Supabase ships and it
+    # makes the route table a reviewable file instead of unmanaged DB state.
+    - KONG_DATABASE=off
+    - KONG_DECLARATIVE_CONFIG=/usr/local/kong/kong.yml
+    # REQUIRED by the declarative config this mounts. Upstream Supabase commit
+    # 9777f051d6 (#45462, "restrict rest root anon") added a route using the
+    # EXPRESSIONS router syntax (expression: 'http.path == "/rest/v1/"').
+    # Under the default traditional router that is an unknown field and the ENTIRE
+    # kong.yml fails to parse, so Kong never starts - one route takes down all 21
+    # services (observed: 3,924 restarts). Upstream sets this same var in
+    # PMOVES-supabase/docker/docker-compose.yml:95; PMOVES defines its own
+    # supabase-kong service and had not carried it over, so the submodule's config
+    # outran this definition. Do NOT 'fix' the route to paths: instead - that is a
+    # PREFIX match where upstream means an EXACT one, which would widen the
+    # restricted-anon scope to all REST traffic.
+    # See docs/handoffs/supabase-kong-declarative-config-boot-failure-2026-08-18.md
+    - KONG_ROUTER_FLAVOR=expressions
+    # Supabase's CLI issue #14: force LAST so service short-names resolve.
+    - KONG_DNS_ORDER=LAST,A,CNAME
+    - KONG_DNS_NOT_FOUND_TTL=1
+    # Consumed by kong-entrypoint.sh when substituting temp.yml -> kong.yml.
+    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
+    - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
+    - ANON_KEY_ASYMMETRIC=${ANON_KEY_ASYMMETRIC:-}
+    - SERVICE_ROLE_KEY_ASYMMETRIC=${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+    - DASHBOARD_USERNAME=${DASHBOARD_USERNAME:-supabase}
+    - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-}
+    # Kong configuration
+    - KONG_PROXY_ACCESS_LOG=/dev/stdout
+    - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+    - KONG_PROXY_ERROR_LOG=/dev/stderr
+    - KONG_ADMIN_ERROR_LOG=/dev/stderr
+    - KONG_PROXY_LISTEN=0.0.0.0:8000
+    - KONG_ADMIN_LISTEN=0.0.0.0:8001  # container-internal; host restriction via Docker port mapping line below
+    # JWT plugin (already in bundled — no need to list separately)
+    - KONG_PLUGINS=bundled
+    - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
+    # Pin to single worker. Kong reads host /proc/cpuinfo for worker count,
+    # not the cpus cgroup limit, so on a 24-core host it would spawn 24
+    # workers × ~80MB each (full plugin load) = ~2GB before accepting any
+    # traffic. `1` matches the 0.5 CPU budget + keeps memory bounded.
+    - KONG_NGINX_WORKER_PROCESSES=1
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
+    entrypoint: /home/kong/kong-entrypoint.sh
+    healthcheck:
+      # NOTE: liveness only — `kong health` reports the Kong PROCESS, not whether
+      # any routes are loaded. A route-less Kong passes this check while 404'ing
+      # every request, which is exactly how the empty-config regression stayed
+      # green. Assert function separately with `make kong-routes-check`; an
+      # inline HTTP probe is not viable here (the image ships no curl/wget/nc).
+      test: ["CMD", "kong", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+    # Default host bind tightened to 127.0.0.1 for safer standalone/sidecar
+    # operation. Override with KONG_PROXY_BIND / KONG_ADMIN_BIND in env.shared
+    # if you need LAN access or are on Docker Desktop versions <29.5 where
+    # explicit loopback binds were silently dropped on multi-port services.
+    - ${KONG_PROXY_BIND:-127.0.0.1}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
+    - ${KONG_ADMIN_BIND:-127.0.0.1}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
+    networks:
+    - pmoves_api
+    - pmoves_public
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          # 512M fits a single-worker Kong with bundled plugins + DB cache
+          # warmup + modest request headroom. Previously set to 256M which
+          # OOM'd on startup; briefly raised to 1024M to confirm the root
+          # cause was worker-count-driven memory multiplication, not leak.
+          memory: 512M
+  supabase-edge-functions:
+    <<: *tier-supabase-hardened
+    image: supabase/edge-runtime:v1.74.0
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:?Set SUPABASE_JWT_SECRET or JWT_SECRET in env.tier-supabase}}
+    - SUPABASE_URL=http://supabase-kong:8000
+    - SUPABASE_ANON_KEY=${ANON_KEY:?Set ANON_KEY in env.tier-supabase}
+    - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY in env.tier-supabase}
+    - SUPABASE_DB_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - VERIFY_JWT=${FUNCTIONS_VERIFY_JWT:-true}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
+    command: ["start", "--main-service", "/home/deno/functions/main"]
+    volumes:
+    - ../PMOVES-supabase/docker/volumes/functions:/home/deno/functions:ro
+    healthcheck:
+      # The edge-runtime image ships NO curl/wget, and /health answers 401 under
+      # VERIFY_JWT=true — an HTTP-status probe can never pass here. bash IS in the
+      # image, so prove liveness with a /dev/tcp connect to the serving port.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    networks:
+      pmoves_api:  # supabase-db and analytics reachable via kong on pmoves_api
+        aliases:
+        - functions   # upstream Supabase name used by vendored kong.yml
+    # pmoves_public is required, not optional: pmoves_api is internal:true,
+    # so edge-runtime cannot reach external Deno imports unless it also joins
+    # the egress-capable bridge. DNS pins alone do not create an egress route.
+      pmoves_public:
+    # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
+    # image fetches https://deno.land/std@...` at worker-bootstrap time;
+    # Docker's embedded DNS (127.0.0.11) intermittently fails to forward
+    # external queries on Docker Desktop Windows, leaving the worker stuck
+    # in `failed to lookup address information: Temporary failure in name
+    # resolution`. Explicit resolvers avoid the flap.
+    dns:
+    - 1.1.1.1
+    - 8.8.8.8
+
+  # ---------------------------------------------------------------------------
+  # Supabase Analytics (Logflare) — log analytics backend
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-postgrest:
+    <<: *tier-supabase-hardened-ro
+    # PostgREST v14 documents a >=32-char minimum for symmetric JWT secrets
+    # (enforced as a hard startup error in newer tags). SUPABASE_POSTGREST_IMAGE
+    # exists for emergency pinning only — the fix for short-secret nodes is
+    # rotating to a >=32-char secret, not an older image.
+    image: ${SUPABASE_POSTGREST_IMAGE:-postgrest/postgrest:v14.12}
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Database connection (from env.tier-supabase)
+    - PGRST_DB_URI=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    # JWT secret (must match gotrue) - standard variable name
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
+    - PGRST_JWT_SECRET_IS_BASE64=false
+    # PostgREST v14+ settings
+    - PGRST_DB_USE_LEGACY_GUCS=false
+    - PGRST_APP_SETTINGS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
+    - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}}
+    # Extra search_path so pmoves_core and pmoves_kb objects are addressable
+    # without fully-qualified names. Must match env.tier-supabase.example.
+    - PGRST_DB_EXTRA_SEARCH_PATH=${PGRST_DB_EXTRA_SEARCH_PATH:-pmoves_core,pmoves_kb,public}
+    # API configuration
+    - PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}
+    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
+    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS:-1000}
+    - PGRST_DB_POOL=${SUPABASE_DB_POOL:-15}
+    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT:-5}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_public
+    # Admin server backs `postgrest --ready` (healthcheck below). Container-internal only, never published.
+    - PGRST_ADMIN_SERVER_PORT=${SUPABASE_POSTGREST_ADMIN_PORT:-3001}
+    # REQUIRED for `--ready`, not cosmetic. PostgREST's default server-host is `!4`,
+    # and the probe refuses to run against it: "The `--ready` flag cannot be used when
+    # server-host is configured as !4". Verified that 0.0.0.0 both satisfies the probe
+    # AND keeps the API reachable from other containers (published-port test returned
+    # HTTP 503 from outside the container — socket bound, just no DB in that test).
+    - PGRST_SERVER_HOST=${SUPABASE_POSTGREST_HOST:-0.0.0.0}
+    # The image IS distroless (no shell), so this is a CMD probe, not CMD-SHELL:
+    # postgrest ships its own `--ready` which queries the admin server /ready endpoint.
+    # Verified against the live container: without the admin port it exits 1 with
+    # "Admin server is not running" — so the env var above is REQUIRED, not optional.
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    # HOST side defaults to 3010, the value scripts/port_allocator.py already
+    # allocates for "postgrest", and which ~12 consumers already assume (smoke
+    # tests, tests/utils/service_catalog.py, generate_ports.sh, BRING_UP_GUIDE).
+    # It previously defaulted to 3000 — the same number as the CONTAINER port —
+    # so the host binding collided with anything else on 3000 (Invidious defaults
+    # there too) and `up-supabase` died with "address already in use" while
+    # PostgREST itself was fine.
+    #
+    # In-network callers are unaffected because they HARDCODE `rest:3000` /
+    # `supabase-postgrest:3000` and Kong routes `rest` -> `supabase-postgrest:3000`.
+    # An earlier version of this comment credited services/common/port_resolver.py
+    # instead; that was wrong and is corrected here rather than left as folklore:
+    # port_allocator keys the entry "postgrest" while port_resolver looks up the
+    # slug "supabase-postgrest" (port_resolver.py:58), so the lookup returns None
+    # and resolve() yields port 0. The resolver has no callers outside its own
+    # main(). Right conclusion, wrong evidence.
+    - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3010}:3000
+    networks:
+      pmoves_api:
+        aliases:
+        - rest   # upstream Supabase name used by vendored kong.yml
+      pmoves_public:
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  # entrypoint below is upstream Supabase's kong-entrypoint.sh: it env-substitutes
+  # /home/kong/temp.yml into KONG_DECLARATIVE_CONFIG, then execs kong docker-start.
+  # It replaces the old DB-mode entrypoint (wait-for-Postgres + `kong migrations
+  # bootstrap`), which is meaningless in DB-less mode and only ever created empty
+  # Kong schema tables, never any routes.
+  # (Kept here rather than inline above `entrypoint:` — inject_pmoves_networks.py
+  #  strips comments trailing the `environment:` sequence on its round-trip.)
+  supabase-pooler:
+    <<: *tier-supabase-hardened
+    image: supabase/supavisor:2.9.5
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - PORT=4000
+    - POSTGRES_PORT=5432
+    - POSTGRES_DB=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
+    - CLUSTER_POSTGRES=true
+    - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
+    - METRICS_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
+    - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
+    - API_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:?Set SUPABASE_JWT_SECRET or JWT_SECRET in env.tier-supabase}}
+    - REGION=local
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - POOLER_TENANT_ID=${POOLER_TENANT_ID:-default-tenant}
+    - POOLER_DEFAULT_POOL_SIZE=${POOLER_DEFAULT_POOL_SIZE:-20}
+    - POOLER_MAX_CLIENT_CONN=${POOLER_MAX_CLIENT_CONN:-100}
+    - POOLER_POOL_MODE=transaction
+    - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
+    - PMOVES_NETWORKS=pmoves_data
+    command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found,
+        skipping tenant seeding'; fi && /app/bin/server"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_PORT:-54329}:5432
+    - ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_TRANSACTION_PORT:-6543}:6543
+    networks:
+    - pmoves_data
+
+  # =============================================================================
+  # END SUPABASE STACK
+  # =============================================================================
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  supabase-analytics:
+    <<: *tier-supabase-hardened
+    image: supabase/logflare:1.30.3
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - LOGFLARE_NODE_HOST=127.0.0.1
+    - DB_USERNAME=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - DB_DATABASE=_supabase
+    - DB_HOSTNAME=supabase-db
+    - DB_PORT=5432
+    - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - DB_SCHEMA=_analytics
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:?Set LOGFLARE_PUBLIC_ACCESS_TOKEN in env.tier-supabase}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:?Set LOGFLARE_PRIVATE_ACCESS_TOKEN in env.tier-supabase}
+    - LOGFLARE_SINGLE_TENANT=true
+    - LOGFLARE_SUPABASE_MODE=true
+    - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
+    - POSTGRES_BACKEND_SCHEMA=_analytics
+    - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:4000/health -o /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+      pmoves_data:
+      # Same missing-API-leg bug as supabase-meta above: Studio's LOGFLARE_URL
+      # points at supabase-analytics:4000 and Kong declares an analytics route,
+      # but neither could reach it while this sat on pmoves_data alone.
+      pmoves_api:
+        aliases:
+        - analytics   # upstream Supabase name used by vendored kong.yml
+
+  # ---------------------------------------------------------------------------
+  # Supabase Vector — log collection pipeline (ships to Analytics)
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  supabase-studio:
+    <<: *tier-supabase-hardened
+    # Pinned 2025-02-04: Latest stable from Supabase
+    # Matches upstream. Dashboard UI only - no data path and nothing depends on it,
+    # so this is the lowest-risk half of the L2 currency slice.
+    image: supabase/studio:2026.08.03-sha-022b374
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Postgres Meta connection (Studio uses pg-meta, not PostgREST directly)
+    - STUDIO_PG_META_URL=http://supabase-meta:8080
+    # Auth / Kong gateway
+    - SUPABASE_URL=http://supabase-kong:8000
+    - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
+    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    # Prefer the secrets-sync name — the legacy local SERVICE_ROLE_KEY has been
+    # observed stale (retired-secret signature); same preference as #2333/#2346.
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}
+    - AUTH_JWT_SECRET=${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}
+    - PG_META_CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
+    # Analytics (Logflare) integration
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:-}
+    - LOGFLARE_URL=http://supabase-analytics:4000
+    - NEXT_PUBLIC_ENABLE_LOGS=true
+    - NEXT_ANALYTICS_BACKEND_PROVIDER=postgres
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Bind Studio's Next.js server to all interfaces without a DNS lookup.
+    # Next.js 16+ reads HOSTNAME to pick its listen address; Docker sets
+    # HOSTNAME to the container's short ID by default, and Next.js then
+    # resolves that ID as a DNS name before binding. Resolution fails with
+    # `getaddrinfo EAI_AGAIN` (the short ID isn't registered in Docker's
+    # embedded DNS) and the server exits, kicking the container into a
+    # restart loop. Pinning to 0.0.0.0 skips the lookup entirely.
+    - HOSTNAME=0.0.0.0
+    # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
+    # Note: Official Supabase uses node -e fetch but their image has different network config
+    # We rely on container being started successfully (logs show "Ready in Xms")
+    - PMOVES_NETWORKS=pmoves_api
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      supabase-meta:
+        condition: service_healthy
+      supabase-gotrue:
+        condition: service_healthy
+      supabase-analytics:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
+    networks:
+      pmoves_api:  # supabase-meta and analytics reachable via kong on pmoves_api
+        aliases:
+        - studio   # upstream Supabase name used by vendored kong.yml
+
+  # ---------------------------------------------------------------------------
+  # Supabase imgproxy — image transformation for Storage
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-vector:
+    <<: *tier-supabase-hardened
+    image: timberio/vector:0.28.1-alpine
+    # vector 0.28.1 builds a proxy connector from HTTP_PROXY/HTTPS_PROXY and fails
+    # on an EMPTY one -- "Failed to build Proxy connector: empty string" -- then
+    # crash-loops. An ABSENT var is fine; an empty one is fatal. Compose has no
+    # syntax to UNSET a variable, so unset here and exec the image's entrypoint.
+    #
+    # The pass-through form below was added to fix this and cannot: compose
+    # resolves bare `- HTTP_PROXY` from --env-file too, so it inherits the very
+    # empty string it was meant to escape. Measured:
+    #   compose: environment: [- FOO]  +  vars.cfg: FOO=  ->  FOO is SET-EMPTY
+    entrypoint: ["/bin/sh", "-c", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; exec /usr/local/bin/vector \"$$@\"", "--"]
+    command: ["--config", "/etc/vector/vector.yml"]
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    # Pass-through (no `=`) so these resolve to ABSENT from the host, overriding
+    # the empty-string values the supabase env files set. vector 0.28.1 fails to
+    # build its logflare proxy connector from an empty-string HTTP_PROXY ("Failed
+    # to build Proxy connector: empty string") and crash-loops; an ABSENT var is
+    # fine. (An `=` here would re-set the empty string and reintroduce the crash.)
+    - HTTP_PROXY
+    - HTTPS_PROXY
+    - NO_PROXY
+    - PMOVES_NETWORKS=pmoves_data
+    volumes:
+    - supabase-vector-data:/var/lib/vector
+    - ../PMOVES-supabase/docker/volumes/logs/vector.yml:/etc/vector/vector.yml:ro
+    # SECURITY: Docker socket required for Vector docker_logs source
+    # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      # Docker execs the healthcheck SEPARATELY, with the container's configured
+      # environment -- so it still sees the empty proxy vars the entrypoint unsets
+      # for the main process. Without this the container RUNS FINE and is marked
+      # unhealthy forever (observed on the node: FailingStreak 472, status=running).
+      test: ["CMD-SHELL", "unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; vector validate /etc/vector/vector.yml || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supavisor — connection pooler (PgBouncer replacement)
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  qdrant:
+    # Graceful stop: Segment flush.
+    stop_grace_period: 30s
+    image: qdrant/qdrant:v1.16.0
+    restart: unless-stopped
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    ports:
+    - ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
+    networks:
+    - pmoves_data
+    - pmoves_api
+    - pmoves_bus
+    environment:
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - QDRANT__SERVICE__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus
+    volumes:
+    - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  meilisearch:
+    # Graceful stop: Index write.
+    stop_grace_period: 30s
+    <<: *tier-data-hardened
+    image: getmeili/meilisearch:v1.34.1
+    restart: unless-stopped
+    environment:
+    - MEILI_ENV=production
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.shared or env.tier-data}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_api,pmoves_bus
+    ports:
+    - ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
+    networks:
+    - pmoves_data
+    - pmoves_api
+    - pmoves_bus
+    volumes:
+    - meilisearch-data:/meili_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7700/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  neo4j:
+    # Graceful stop: Page-cache flush and checkpoint on shutdown.
+    stop_grace_period: 60s
+    image: neo4j:5.26.22
+    env_file:
+    - env.tier-data
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
+    restart: unless-stopped
+    environment:
+    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
+    - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+    - NEO4J_server_config_strict__validation_enabled=false
+    # APOC extensions with safe procedure allowlist
+    - NEO4J_apoc_export_file_enabled=true
+    - NEO4J_apoc_import_file_enabled=true
+    - NEO4J_apoc_import_file_use__neo4j__config__true=true
+    - NEO4JLABS_PLUGINS=["apoc"]
+    - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data
+    ports:
+    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
+    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
+    volumes:
+    - neo4j-data:/data
+    - ./neo4j/cypher:/cypher:ro
+    networks:
+    - pmoves_data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1
+      interval: 20s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  minio:
+    # Graceful stop: Completes in-flight PUTs before exit.
+    stop_grace_period: 30s
+    <<: *tier-data-hardened
+    # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
+    # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
+    # RELEASE.2025-12-20T04-58-37Z was a phantom — a December date AFTER MinIO
+    # stopped publishing minio/minio community images, so it 404s on the registry
+    # ("not found") and broke every data-tier bring-up. Verified 2026-06-22:
+    # 2025-09-07 is the newest tag on hub.docker.com/r/minio/minio.
+    # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
+    # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    # Only data-tier service without a restart policy — every Docker Desktop
+    # restart left MinIO dead (Exited 255) until manually started, which is
+    # how it sat down for 9 days and silently blocked the YT pipeline.
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+    - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD:?Run make brand-defaults}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_bus,pmoves_external
+    ports:
+    - ${MINIO_BIND:-127.0.0.1}:${MINIO_PORT:-9000}:9000
+    - ${MINIO_CONSOLE_BIND:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001
+    volumes:
+    # MINIO_DATA_DIR lets the object store live off C: (which fills up) — set it to
+    # a host path (e.g. D:/pmoves-storage/minio, fast NVMe) for the content studio;
+    # defaults to the named volume for portability. Media/bulk goes to I: separately.
+    - ${MINIO_DATA_DIR:-minio-data}:/data
+    networks:
+    - pmoves_data
+    - pmoves_bus
+    # pmoves_external gives MinIO host connectivity so its ports: mapping actually
+    # publishes (internal-only nets silently drop it) — required for multi-node
+    # JuiceFS: remote nodes reach the object store via MINIO_BIND (z890 tailnet IP).
+    - pmoves_external
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+
+  # ── JuiceFS object store (PoC) — durable replacement for EOL MinIO ───────────
+  # See docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md. PROFILE-GATED ("juicefs")
+  # so it is purely additive — it does NOT start with the default data tier and does
+  # not touch existing MinIO consumers yet (consumer repoint = Phase 2).
+  #
+  # Metadata engine: POSTGRES on supabase-db (operator decision 2026-06-28).
+  # The juicefs_meta schema ships in supabase/initdb/00_2_juicefs_meta_schema.sql.
+  # Requires supabase-db to be running (make up-supabase before make up-juicefs).
+  tensorzero-clickhouse:
+    # Graceful stop: Flushes parts to disk; a kill mid-merge leaves temp parts behind.
+    stop_grace_period: 60s
+    <<: &tier-llm-hardened
+      env_file:
+      - env.shared
+      - env.tier-llm
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    image: clickhouse/clickhouse-server:24.12-alpine
+    restart: unless-stopped
+    environment:
+    - CLICKHOUSE_USER=tensorzero
+    - CLICKHOUSE_PASSWORD=tensorzero
+    - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_data
+    ports:
+    - ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
+    volumes:
+    - tensorzero-clickhouse-data:/var/lib/clickhouse
+    # Cap ClickHouse self-telemetry (Debug logging + no TTL flooded the vhdx at
+    # ~2.4 GB/min and filled the host drive — incident 2026-08-02). Fleet-wide fix.
+    - ./config/clickhouse/pmoves-system-log-limits.xml:/etc/clickhouse-server/config.d/pmoves-system-log-limits.xml:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --spider --tries=1 --timeout=5 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@127.0.0.1:8123/ping
+      start_period: 90s
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+    - pmoves_data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  tensorzero-gateway:
+    <<: *tier-llm-hardened
+    # Pinned 2025-02-04: Latest stable from TensorZero
+    image: tensorzero/gateway:2026.1.8
+    restart: unless-stopped
+    command:
+    - --config-file
+    - /app/config/tensorzero.toml
+    environment:
+    - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_GATEWAY_URL:-${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}}
+    # Keep gateway bootable in local-first mode when cloud provider keys are absent.
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-local-disabled}
+    - GLM_API_KEY=${GLM_API_KEY:-local-disabled}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
+    - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
+    - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
+    # Kimi Code SUBSCRIPTION key (canonical manifest/tier name, 2026-07-24).
+    # Read by models.chat_kimi_for_coding on api.kimi.com/coding/v1 — the
+    # subscription platform is ISOLATED from pay-per-token api.moonshot.ai,
+    # so this key must NOT be funneled into the legacy Moonshot location
+    # (it 401s there; verified live).
+    - KIMI_CODING_API=${KIMI_CODING_API:-local-disabled}
+    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
+    - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
+    - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
+    - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
+    - OLLAMA_API_KEY=${OLLAMA_API_KEY:-local-disabled}
+    - KILOCODE_API_KEY=${KILOCODE_API_KEY:-local-disabled}
+    - HF_TOKEN=${HF_TOKEN:-local-disabled}
+    - MINIMAX_API_KEY=${MINIMAX_API_KEY:-local-disabled}
+    - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
+    - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
+    - GEMINI_API_KEY=${GEMINI_API_KEY:-local-disabled}
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_data,pmoves_monitoring,pmoves_external
+    volumes:
+    - ./tensorzero/config:/app/config:ro
+    depends_on:
+      tensorzero-clickhouse:
+        condition: service_healthy
+    ports:
+    - ${TENSORZERO_BIND:-127.0.0.1}:${TENSORZERO_PORT:-3030}:3000
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_data
+    - pmoves_monitoring
+    - pmoves_external
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1 || curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  tensorzero-ui:
+    <<: *tier-llm-hardened
+    # Pinned 2025-02-04: Latest stable from TensorZero (matches gateway version)
+    image: tensorzero/ui:2026.1.8
+    restart: unless-stopped
+    environment:
+    - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_GATEWAY_URL:-${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}}
+    - TENSORZERO_POSTGRES_URL=${TENSORZERO_POSTGRES_URL:-postgresql://postgres:${SERVICE_PASSWORD_POSTGRES:-postgres}@supabase-db:5432/postgres}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - PMOVES_NETWORKS=pmoves_app,pmoves_data,pmoves_external
+    volumes:
+    - ./tensorzero/config:/app/config:ro
+    depends_on:
+      tensorzero-clickhouse:
+        condition: service_healthy
+      tensorzero-gateway:
+        condition: service_started
+    ports:
+    - ${TENSORZERO_UI_BIND:-0.0.0.0}:${TENSORZERO_UI_PORT:-4000}:4000
+    profiles:
+    - tensorzero
+    networks:
+    - pmoves_app
+    - pmoves_data
+    - pmoves_external
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/ >/dev/null 2>&1 || curl -fsS http://localhost:4000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  cloudflared:
+    image: cloudflare/cloudflared:2024.8.0
+    restart: unless-stopped
+    command:
+    - /bin/sh
+    - -c
+    - "if [ -n \"$$CLOUDFLARE_TUNNEL_TOKEN\" ]; then\n  exec cloudflared tunnel --no-autoupdate run;\nelif [ -n \"$$CLOUDFLARE_TUNNEL_NAME\" ]; then\n  exec cloudflared tunnel --no-autoupdate run \"$$CLOUDFLARE_TUNNEL_NAME\"\
+      ;\nelse\n  echo \"Set CLOUDFLARE_TUNNEL_TOKEN or CLOUDFLARE_TUNNEL_NAME before starting cloudflared.\";\n  exit 1;\nfi\n"
+    env_file:
+    - env.shared.generated
+    - env.shared
+    - .env.generated
+    - path: .env.local
+      required: false
+    environment:
+    - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    - CLOUDFLARE_TUNNEL_NAME=${CLOUDFLARE_TUNNEL_NAME:-}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_external
+    volumes:
+    - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
+    profiles:
+    - cloudflare
+    networks:
+    - pmoves_app
+    - pmoves_external  # Cloudflare edge tunnel (mandatory)
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'cloudflared' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  invidious-db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+    - POSTGRES_DB=${INVIDIOUS_PG_DB:-invidious}
+    - POSTGRES_USER=${INVIDIOUS_PG_USER:-kemal}
+    - POSTGRES_PASSWORD=${INVIDIOUS_PG_PASSWORD:-kemal}
+    - PMOVES_NETWORKS=pmoves_data,pmoves_app
+    volumes:
+    - invidious-postgres-data:/var/lib/postgresql/data
+    - ./services/invidious/config/sql:/config/sql:ro
+    - ./services/invidious/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1
+      interval: 20s
+      timeout: 5s
+      retries: 12
+    profiles:
+    - invidious
+    networks:
+    - pmoves_data
+    - pmoves_app
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  clip-embed:
+    <<: &tier-api-hardened
+      env_file:
+      - env.shared
+      - env.tier-api
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    build:
+      context: ./services/clip-embed
+      dockerfile: Dockerfile
+    image: pmoves/clip-embed:latest
+    environment:
+    - CLIP_MODEL_ID=${CLIP_MODEL_ID:-openai/clip-vit-large-patch14}
+    - CLIP_MODEL_REVISION=${CLIP_MODEL_REVISION:-main}
+    - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
+    - CLIP_EMBED_PORT=8109
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    ports:
+    - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
+    restart: unless-stopped
+    profiles:
+    - orchestration
+  clap-embed:
+    <<: *tier-api-hardened
+    build:
+      context: ./services/clap-embed
+      dockerfile: Dockerfile
+    image: pmoves/clap-embed:latest
+    environment:
+    - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
+    - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
+    - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
+    - CLAP_EMBED_PORT=8108
+    - NATS_URL=${NATS_URL:-}
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    ports:
+    - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - orchestration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8108/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  archon-postgres:
+    # Graceful stop: PostgreSQL: same reason as supabase-db, fewer sessions.
+    stop_grace_period: 60s
+    stop_signal: SIGINT
+    image: ${ARCHON_POSTGRES_IMAGE:-postgres:17-alpine}
+    container_name: pmoves-archon-postgres
+    hostname: archon-postgres
+    restart: unless-stopped
+    environment:
+    - POSTGRES_DB=${ARCHON_DB_NAME:-remote_coding_agent}
+    - POSTGRES_USER=${ARCHON_DB_USER:-archon}
+    - POSTGRES_PASSWORD=${ARCHON_DB_PASSWORD:-archon}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    - PMOVES_NETWORKS=pmoves_app
+    volumes:
+    - archon-pg-data:/var/lib/postgresql/data
+    networks:
+    - pmoves_app
+    profiles:
+    - agents
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  p7:
+    # PMOVES P7 — room-aware stage manager (open-room lane, 2026-07-20).
+    # Mediates room lifecycle (rehearsal → live → review → archive), with CHIT
+    # activation gating on rehearsal→live, atomic catalog writeback, and signed
+    # NATS control-plane events. See:
+    #   pmoves/docs/specs/p7-service-spec-2026-07-20.md
+    #   pmoves/docs/ROOMS_ON_A_STAGE.md
+    #   pmoves/services/p7-room-orchestrator/README.md
+    build:
+      context: .
+      dockerfile: services/p7-room-orchestrator/Dockerfile
+    container_name: pmoves-p7
+    restart: unless-stopped
+    environment:
+    - P7_HOST=0.0.0.0
+    - P7_HTTP_PORT=8120
+      # Broker requires auth (documented default creds convention) — without
+      # them P7 boots in log-only fallback (nats_connected:false, no signed
+      # lifecycle events on the control plane).
+      #
+      # Composed from NATS_USER/NATS_PASSWORD with the HOST PINNED to nats:4222,
+      # the same shape nats-init uses. Deliberately NOT `${NATS_URL:-...}` in the
+      # chain: Compose gives a host-session export precedence over every
+      # --env-file, so an interactive shell exporting a host-oriented NATS URL
+      # (one pointing at localhost:4222) would reach the container, where
+      # localhost is P7 itself — it boots log-only with nats_connected:false and
+      # silently drops lifecycle events. P7_NATS_URL stays the explicit override.
+      # (Phrased without the literal assignment form on purpose: the
+      # test_no_hardcoded_nats_urls_in_compose scanner greps raw lines and does
+      # not skip comments, so spelling it out here trips it on prose.)
+    - P7_NATS_URL=${P7_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
+    - P7_PMOVES_ROOT=/etc/pmoves
+    - P7_ROOM_CATALOG_PATH=/etc/pmoves/rooms/catalog.json
+    - P7_ROOMS_DIR=/etc/pmoves/rooms
+    - P7_ROOM_MANIFEST_SCHEMA=/etc/pmoves/schemas/room/room.manifest.v1.schema.json
+    - P7_SIGNING_CARDS_PATH=/etc/pmoves/config/signing_identity_cards.yaml
+    - P7_AGENT_REGISTRY_PATH=/etc/pmoves/config/agent_registry.yaml
+    - P7_SERVICE_CARD_ID=${P7_SERVICE_CARD_ID:-}
+    - P7_SIGNING_KEY=${P7_SIGNING_KEY:-}
+    - P7_SIGNING_KEY_FILE=${P7_SIGNING_KEY_FILE:-}
+    - P7_CHIT_REQUIRE_SIGNATURE=${P7_CHIT_REQUIRE_SIGNATURE:-true}
+    - P7_ALLOW_UNSIGNED_LOCAL=${P7_ALLOW_UNSIGNED_LOCAL:-true}
+    - P7_LOG_LEVEL=INFO
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_external
+    volumes:
+      # Catalog + per-room manifests: read-write so transitions can writeback current_stage
+    - ./config/rooms:/etc/pmoves/rooms:rw
+      # Schema + signing cards + agent registry: read-only (operator edits via git)
+    - ./contracts/schemas:/etc/pmoves/schemas:ro
+    - ./config/signing_identity_cards.yaml:/etc/pmoves/config/signing_identity_cards.yaml:ro
+    - ./config/agent_registry.yaml:/etc/pmoves/config/agent_registry.yaml:ro
+    - ./env.shared:/etc/pmoves/env.shared:ro
+    ports:
+    - "${P7_BIND:-127.0.0.1}:${P7_PORT:-8120}:8120"
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks: [pmoves_app, pmoves_bus, pmoves_external]
+    # "ui" so the OpenRoom lane brings up the /api/p7 upstream its nginx proxy
+    # targets (p7:8120) — without it the proxy 502s on every session call.
+    # This carries the OVERLAY path specifically: `up-ui-new` runs
+    # `--profile ui up -d` with NO service named, so profile membership is the
+    # only thing that starts p7 there. The named-service path needs the other
+    # half — naming a service limits `up` to it and its declared dependencies,
+    # and openroom has no `depends_on: p7`, so `up-openroom` names p7 outright.
+    # `up-ui` is unaffected either way: it names pmoves-ui.
+    profiles: ["agents", "p7", "ui"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8120/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  a2ui-renderer:
+    build:
+      context: .
+      dockerfile: services/a2ui-renderer/Dockerfile
+    image: ${A2UI_RENDERER_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-renderer:pmoves-latest}
+    container_name: pmoves-a2ui-renderer
+    hostname: a2ui-renderer
+    restart: unless-stopped
+    <<:
+      env_file:
+      - env.shared
+      - env.tier-agent
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      read_only: true
+      tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+      - /var/tmp:noexec,nosuid,size=64m
+
+    environment:
+    - PORT=8107
+    - NODE_ENV=production
+    # NATS (slice 3 publisher: emits a2ui.render.completed.v1 on success)
+    - NATS_URL=${NATS_URL}
+    # MinIO output mount per the creator pipeline doc - the renderer
+    # writes MP4/GIF/WebM to a2ui/* keys and publishes the S3 URI
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
+    - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
+    - MINIO_BUCKET=${A2UI_RENDERER_BUCKET:-outputs}
+    # CHIT fail-closed signing (house pattern, mirrors hi-rag-gateway*)
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    # Supabase JWT for /render, /render/chart, /render/provenance (fail-closed)
+    - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET in env.shared}
+    # Provenance agent identity for graphiti events
+    - PROVENANCE_AGENT_ID=${PROVENANCE_AGENT_ID:-a2ui-renderer}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus,pmoves_data
+    ports:
+    - ${A2UI_RENDERER_BIND:-0.0.0.0}:${A2UI_RENDERER_PORT:-8107}:8107
+    profiles:
+    - agents
+    - media
+    - docs  # living-docs hook (make docs-render-living) needs the renderer up
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8107/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+

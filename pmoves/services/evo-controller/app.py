@@ -47,6 +47,31 @@ try:
 except ImportError:
     NATS_ANNOUNCE_AVAILABLE = False
 
+# CHIT signing/verification — canonical wrappers from services.common
+# (single source of truth: pmoves.tools.chit_security). If the image does not
+# package pmoves.tools (see the service-tools packaging gate), signing degrades
+# to dev mode unless CHIT_REQUIRE_SIGNATURE forces fail-closed.
+try:
+    from services.common.geometry_decoder import sign_cgp, verify_cgp
+    CHIT_AVAILABLE = True
+except ImportError:
+    CHIT_AVAILABLE = False
+
+
+def _chit_signing_key() -> str:
+    """Canonical signing-key chain; empty string = dev mode (unsigned)."""
+    return get_secret("CHIT_SIGNING_KEY") or get_secret("CHIT_PASSPHRASE", "")
+
+
+def _chit_signature_required() -> bool:
+    """Fail-closed switch — same env contract as gateway/Hi-RAG consumers."""
+    return os.getenv("CHIT_REQUIRE_SIGNATURE", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 _controller: Optional[EvoSwarmController] = None
 
 
@@ -208,7 +233,56 @@ class EvoSwarmController:
         except Exception:
             logger.exception("unexpected error pulling CGPs")
             return []
-        return [row.get("payload") for row in rows if isinstance(row, dict)]
+        payloads = [row.get("payload") for row in rows if isinstance(row, dict)]
+        return self._filter_verified_cgps(payloads)
+
+    def _filter_verified_cgps(self, cgps: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+        """Verify CHIT signatures on inbound CGPs before they feed fitness.
+
+        Tampered packets (invalid signature) are ALWAYS dropped. Unsigned
+        packets (including non-dict payloads, which cannot carry a signature)
+        pass through in dev mode but are dropped when CHIT_REQUIRE_SIGNATURE
+        is set. Without a key (or the canonical wrappers), verification is
+        impossible: dev mode passes everything through unchanged; fail-closed
+        mode drops everything.
+        """
+        key = _chit_signing_key()
+        require = _chit_signature_required()
+        if not (CHIT_AVAILABLE and key):
+            if require:
+                logger.error(
+                    "CHIT_REQUIRE_SIGNATURE is set but CGP verification is "
+                    "unavailable (missing signing key or chit wrappers) — "
+                    "dropping all %s inbound CGPs",
+                    len(cgps),
+                )
+                return []
+            return cgps
+        kept: list[Dict[str, Any]] = []
+        unsigned = invalid = 0
+        for cgp in cgps:
+            if not isinstance(cgp, dict):
+                unsigned += 1
+                if not require:
+                    kept.append(cgp)
+                continue
+            if "sig" not in cgp:
+                unsigned += 1
+                if not require:
+                    kept.append(cgp)
+            elif verify_cgp(cgp, passphrase=key):
+                kept.append(cgp)
+            else:
+                invalid += 1
+        if unsigned or invalid:
+            logger.warning(
+                "CGP signature filter: %s kept, %s unsigned (%s), %s invalid (dropped)",
+                len(kept),
+                unsigned,
+                "dropped" if require else "kept",
+                invalid,
+            )
+        return kept
 
     async def _upsert_pack(self, pack: Dict[str, Any]) -> bool:
         if not self._client or not self.config.rest_url:
@@ -257,20 +331,38 @@ class EvoSwarmController:
         if not base:
             base = get_service_url_sync("agent-zero", default_port=8080)
         url = base.rstrip("/") + "/events/publish"
+        payload = {
+            "namespace": pack.get("namespace"),
+            "modality": pack.get("modality"),
+            "pack_id": pack.get("id") or "",
+            "status": pack.get("status"),
+            "version": pack.get("version"),
+            "population_id": pack.get("population_id"),
+            "best_fitness": pack.get("fitness"),
+            "metrics": pack.get("energy"),
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        # CHIT-sign the event payload before it enters the geometry bus
+        # (Agent Zero forwards the payload verbatim to geometry.swarm.meta.v1).
+        key = _chit_signing_key()
+        if CHIT_AVAILABLE and key:
+            payload = sign_cgp(payload, passphrase=key)
+        elif _chit_signature_required():
+            logger.error(
+                "CHIT_REQUIRE_SIGNATURE is set but signing is unavailable "
+                "(missing signing key or chit wrappers) — refusing to publish "
+                "unsigned geometry.swarm.meta.v1"
+            )
+            return
+        else:
+            logger.warning(
+                "No CHIT signing key set — publishing geometry.swarm.meta.v1 "
+                "unsigned (dev mode)"
+            )
         body = {
             "topic": "geometry.swarm.meta.v1",
             "source": "evo-controller",
-            "payload": {
-                "namespace": pack.get("namespace"),
-                "modality": pack.get("modality"),
-                "pack_id": pack.get("id") or "",
-                "status": pack.get("status"),
-                "version": pack.get("version"),
-                "population_id": pack.get("population_id"),
-                "best_fitness": pack.get("fitness"),
-                "metrics": pack.get("energy"),
-                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            },
+            "payload": payload,
         }
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
@@ -305,4 +397,6 @@ async def config() -> Dict[str, Any]:
         "sample_limit": cfg.sample_limit,
         "namespace": cfg.namespace,
         "rest_url_configured": bool(cfg.rest_url),
+        "chit_signing_enabled": bool(CHIT_AVAILABLE and _chit_signing_key()),
+        "chit_signature_required": _chit_signature_required(),
     }

@@ -8,7 +8,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .storage import InMemoryNodeStore, NodeRecord, SupabaseNodeStore
 from ..resource_detector.models import NodeCapabilities, NodeHeartbeat
@@ -35,7 +35,7 @@ class NodeRegistry:
 
     def __init__(
         self,
-        nats_url: str = "nats://localhost:4222",
+        nats_url: str = "nats://nats:pmoves@nats:4222",
         storage: Optional[InMemoryNodeStore] = None,
         stale_threshold_seconds: int = 60,
         cleanup_interval_seconds: int = 300,
@@ -130,7 +130,6 @@ class NodeRegistry:
 
     async def _subscribe_announce(self):
         """Subscribe to node announcements."""
-        import nats
 
         async def on_announce(msg):
             try:
@@ -162,7 +161,7 @@ class NodeRegistry:
                 cb=on_announce,
             )
             logger.info(f"Subscribed to {SUBJECTS['announce']}")
-        except Exception as e:
+        except Exception:
             # Fallback to regular subscription
             sub = await self._nc.subscribe(SUBJECTS["announce"], cb=on_announce)
             self._subscriptions.append(sub)
@@ -170,7 +169,6 @@ class NodeRegistry:
 
     async def _subscribe_heartbeat(self):
         """Subscribe to node heartbeats."""
-        import nats
 
         async def on_heartbeat(msg):
             try:
@@ -204,7 +202,6 @@ class NodeRegistry:
 
     async def _subscribe_query(self):
         """Subscribe to node queries."""
-        import nats
 
         async def on_query(msg):
             # Define error response helper
@@ -280,7 +277,6 @@ class NodeRegistry:
 
     async def _subscribe_drain(self):
         """Subscribe to node drain requests."""
-        import nats
 
         async def on_drain(msg):
             try:
@@ -395,7 +391,7 @@ class NodeRegistry:
 
 
 async def run_registry(
-    nats_url: str = "nats://localhost:4222",
+    nats_url: str = "nats://nats:pmoves@nats:4222",
     supabase_url: Optional[str] = None,
     supabase_key: Optional[str] = None,
 ):
@@ -442,7 +438,7 @@ async def run_registry(
 
 
 async def run_with_api(
-    nats_url: str = "nats://localhost:4222",
+    nats_url: str = "nats://nats:pmoves@nats:4222",
     api_host: str = "0.0.0.0",
     api_port: int = 8082,
     supabase_url: Optional[str] = None,
@@ -504,14 +500,13 @@ async def run_with_api(
 
 
 if __name__ == "__main__":
-    import sys
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
+    nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
     supabase_url = os.environ.get("SUPABASE_URL")
     supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
 

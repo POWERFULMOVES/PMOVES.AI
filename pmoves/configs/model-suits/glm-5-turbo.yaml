@@ -1,0 +1,65 @@
+# ============================================================
+# GLM-5-Turbo Model Suit
+# Role: High-throughput, agentic workflow execution
+# Best for: Multi-step workflows, sustained generation
+# Provider: Zhipu AI (Z.AI)
+# Version: 1.0.0
+# ============================================================
+
+model_suit:
+  name: glm-5-turbo
+  provider: zai
+  base_url: "https://api.z.ai/v1"
+  api_key_env: Z_AI_API_KEY
+  
+  architecture:
+    type: moe
+    total_params: "355B"
+    active_params: "32B"
+    attention: standard
+    
+  context:
+    max_window: 128000
+    effective_window: 32000
+    working_window: 16000
+    
+  defaults:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 8192
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+  advanced:
+    tool_call_parser: glm47
+    enable_thinking: true
+    mtp_steps: 1
+    
+  harness_mappings:
+    workflow_execution:
+      temperature: 0.8
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_engineer
+      
+    code_generation:
+      temperature: 0.7
+      top_p: 0.95
+      max_tokens: 16384
+      system_prompt: directive_engineer
+      
+    multi_step_reasoning:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 8192
+      system_prompt: directive_reasoner
+
+  cgp_state_vector:
+    delta: 0.5
+    Hz: 0.15
+    kappa: 1.4
+    A: 0.5
+    F: 0.08
+    
+  fallback_to: glm-5.1
+  priority: 6

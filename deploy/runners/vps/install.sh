@@ -124,7 +124,10 @@ install_runner() {
 
     # Create runner directory
     sudo mkdir -p "$RUNNER_DIR"
-    sudo chown "$USER:$USER" "$RUNNER_DIR"
+    # Only chown if not running as root (root already owns)
+    if [ "$EUID" -ne 0 ]; then
+        sudo chown "$USER:$USER" "$RUNNER_DIR"
+    fi
     cd "$RUNNER_DIR"
 
     # Download runner
@@ -145,7 +148,12 @@ install_runner() {
 
     # Configure runner
     log_info "Configuring runner..."
-    ./config.sh \
+    local config_env=""
+    if [ "$EUID" -eq 0 ]; then
+        config_env="RUNNER_ALLOW_RUNASROOT=1"
+        log_warn "Running as root — setting RUNNER_ALLOW_RUNASROOT=1"
+    fi
+    env $config_env ./config.sh \
         --url "https://github.com/${GITHUB_ORG}/${GITHUB_REPO}" \
         --token "$RUNNER_TOKEN" \
         --name "$RUNNER_NAME" \
@@ -176,7 +184,7 @@ WorkingDirectory=${RUNNER_DIR}
 ExecStart=${RUNNER_DIR}/run.sh
 Restart=always
 RestartSec=10
-Environment=RUNNER_ALLOW_RUNASROOT=0
+ Environment=RUNNER_ALLOW_RUNASROOT=1
 
 # Resource limits
 LimitNOFILE=65536

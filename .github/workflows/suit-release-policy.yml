@@ -1,0 +1,129 @@
+# Suit Update Release Policy Gate (§6.4)
+#
+# Enforces the standing rule from PMOVES-hardening-tracker.md:
+#   Suit updates (Agent Zero hardened overlay, ClaWz profile normalization,
+#   persona/voice bindings, model routing changes) are RELEASE CONCERNS,
+#   not background chores.
+#
+# Any PR that touches suit-related paths MUST include a release-notes entry
+# in the PR body (keyword: "release-note") or add/modify a file matching
+# docs/RELEASE_NOTES_*.md.
+
+name: Suit Release Policy Gate
+
+on:
+  pull_request:
+    branches: [main]
+    # `edited` so a PR-body update (adding "Release Note: ...") re-evaluates the
+    # gate — reruns replay the ORIGINAL event payload, so without this the body
+    # check can never be satisfied after the fact.
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  check-suit-release-notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect suit-related changes
+        id: detect
+        run: |
+          # event.pull_request.base.sha can be a STALE snapshot of the base
+          # branch, so a two-dot diff against it sweeps in unrelated commits
+          # that landed on main after the fork point (false positives — e.g.
+          # PR #2031 was flagged for a profile file it never touched). Diff
+          # from the merge-base so only the PR's own changes are considered.
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          BASE=$(git merge-base "${{ github.event.pull_request.base.sha }}" "$HEAD" 2>/dev/null \
+            || git merge-base "origin/${{ github.event.pull_request.base.ref }}" "$HEAD")
+
+          SUIT_PATHS=(
+            "pmoves/config/profiles/"
+            "pmoves/config/agent_signatures.yaml"
+          )
+
+          TOUCHED=false
+          TOUCHED_FILES=""
+
+          for p in "${SUIT_PATHS[@]}"; do
+            MATCHES=$(git diff --name-only "$BASE" "$HEAD" -- "$p" 2>/dev/null)
+            if [ -n "$MATCHES" ]; then
+              TOUCHED=true
+              TOUCHED_FILES="$TOUCHED_FILES"$'\n'"$MATCHES"
+            fi
+          done
+
+          # Also check Makefile for suit-related target changes
+          MAKE_DIFF=$(git diff "$BASE" "$HEAD" -- Makefile 2>/dev/null)
+          if echo "$MAKE_DIFF" | grep -qiE '(suit|profile|signature|clawz|persona|voice.bind|model.route)'; then
+            TOUCHED=true
+            TOUCHED_FILES="$TOUCHED_FILES"$'\n'"Makefile (suit-related target)"
+          fi
+
+          echo "touched=$TOUCHED" >> "$GITHUB_OUTPUT"
+          {
+            echo "files<<PMOVES_SUIT_EOF"
+            echo "$TOUCHED_FILES"
+            echo "PMOVES_SUIT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$TOUCHED" = "true" ]; then
+            echo "::notice::Suit-related files changed:$TOUCHED_FILES"
+          else
+            echo "No suit-related changes detected — gate passes trivially."
+          fi
+
+      - name: Verify release-notes entry
+        if: steps.detect.outputs.touched == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          echo "Suit files were modified. Checking for release-notes evidence..."
+          PASS=false
+
+          # Check 1: PR body contains release-note keyword
+          if echo "$PR_BODY" | grep -qiE '(release.note|release-note|RELEASE NOTE)'; then
+            echo "✓ PR body contains release-note reference."
+            PASS=true
+          fi
+
+          # Check 2: New or modified RELEASE_NOTES file in docs/
+          # (merge-base for the same stale-base.sha reason as the detect step)
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          BASE=$(git merge-base "${{ github.event.pull_request.base.sha }}" "$HEAD" 2>/dev/null \
+            || git merge-base "origin/${{ github.event.pull_request.base.ref }}" "$HEAD")
+          RN_CHANGES=$(git diff --name-only "$BASE" "$HEAD" -- "docs/RELEASE_NOTES_*" 2>/dev/null)
+          if [ -n "$RN_CHANGES" ]; then
+            echo "✓ Release notes file modified: $RN_CHANGES"
+            PASS=true
+          fi
+
+          # Check 3: New RELEASE_NOTES file added (untracked)
+          RN_NEW=$(git ls-files --others --exclude-standard -- "docs/RELEASE_NOTES_*" 2>/dev/null)
+          if [ -n "$RN_NEW" ]; then
+            echo "✓ New release notes file added: $RN_NEW"
+            PASS=true
+          fi
+
+          if [ "$PASS" = "false" ]; then
+            echo ""
+            echo "::error::SUIT RELEASE POLICY VIOLATION (§6.4)"
+            echo "::error::The following suit-related files were changed:"
+            echo "::error::${{ steps.detect.outputs.files }}"
+            echo "::error::"
+            echo "::error::Suit updates are release concerns (see docs/hardening/PMOVES-hardening-tracker.md §6.4)."
+            echo "::error::You MUST include a release-notes entry. Either:"
+            echo "::error::  1. Add 'Release Note: ...' to your PR body, or"
+            echo "::error::  2. Add/modify a docs/RELEASE_NOTES_*.md file."
+            exit 1
+          fi
+
+          echo "Suit release policy gate PASSED."
+
+      - name: Skip (no suit changes)
+        if: steps.detect.outputs.touched != 'true'
+        run: echo "Gate skipped — no suit-related files in this PR."

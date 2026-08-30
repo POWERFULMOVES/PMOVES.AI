@@ -67,7 +67,8 @@ export class FluteClient {
   private wsUrl?: string;
   private serviceSlug = 'flute-gateway';
   private httpPort = 8055;
-  private wsPort = 8056;
+  // Same port as HTTP -- see resolveUrls(). 8056 binds nothing.
+  private wsPort = 8055;
   private urlResolved = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 3;
@@ -118,7 +119,10 @@ export class FluteClient {
 
     // Resolve WebSocket URL (convert HTTP to WS protocol)
     if (!this.wsUrl && this.httpUrl) {
-      this.wsUrl = this.httpUrl.replace(/^http/, 'ws').replace(':8055', ':8056');
+      // Protocol swap ONLY. The previous ':8055' -> ':8056' rewrite aimed
+      // the socket at a port nothing binds, so the browser voice path could
+      // never connect no matter how healthy flute-gateway was.
+      this.wsUrl = this.httpUrl.replace(/^http/, 'ws');
     }
 
     this.urlResolved = true;

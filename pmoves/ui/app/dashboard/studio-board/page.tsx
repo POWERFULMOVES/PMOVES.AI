@@ -3,6 +3,12 @@
 import { useCallback, useMemo, useState } from "react";
 import useInfiniteSupabaseQuery from "../../../hooks/useInfiniteSupabaseQuery";
 import {
+  describePublishState,
+  PUBLISH_DETAIL_CLASS,
+  PUBLISH_TONE_CLASS,
+  shouldRenderSupplementalPublishFailureDetail,
+} from "../publishState";
+import {
   getSupabaseBrowserClient,
   getSupabaseRestUrl,
 } from "../../../lib/supabaseClient";
@@ -18,7 +24,14 @@ interface StudioBoardRowMeta {
   rejection_reason?: string | null;
   reviewed_at?: string | null;
   reviewed_by?: string | null;
+  publish_started_at?: string | null;
+  publish_completed_at?: string | null;
   publish_event_sent_at?: string | null;
+  publish_requested_at?: string | null;
+  publish_approval_event_sent_at?: string | null;
+  publish_failed_at?: string | null;
+  publish_failure_reason?: string | null;
+  publish_failure_stage?: string | null;
   tags?: string[];
   persona?: string;
   workflow?: string;
@@ -36,7 +49,7 @@ interface StudioBoardRow {
 
 type ReviewAction = "approve" | "reject";
 
-const STATUS_OPTIONS = ["all", "submitted", "approved", "rejected", "published"];
+const STATUS_OPTIONS = ["all", "submitted", "approved", "publishing", "publish_failed", "rejected", "published"];
 
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
@@ -168,6 +181,17 @@ export default function StudioBoardDashboardPage() {
           reviewed_at: now,
           reviewed_by: reviewer || null,
           rejection_reason: rejectionReason,
+          publish_state: action === "approve" ? null : meta.publish_state,
+          publish_requested_at: action === "approve" ? null : meta.publish_requested_at,
+          publish_approval_event_sent_at:
+            action === "approve" ? null : meta.publish_approval_event_sent_at,
+          publish_started_at: action === "approve" ? null : meta.publish_started_at,
+          publish_completed_at: action === "approve" ? null : meta.publish_completed_at,
+          publish_event_sent_at: action === "approve" ? null : meta.publish_event_sent_at,
+          publish_failed_at: action === "approve" ? null : meta.publish_failed_at,
+          publish_failure_reason: action === "approve" ? null : meta.publish_failure_reason,
+          publish_failure_stage: action === "approve" ? null : meta.publish_failure_stage,
+          publish_failure_meta: action === "approve" ? null : meta.publish_failure_meta,
         });
 
         const payload: Partial<StudioBoardRow> = {
@@ -359,6 +383,11 @@ export default function StudioBoardDashboardPage() {
                 ? meta.review_history
                 : [];
               const lastReview = history.length > 0 ? history[history.length - 1] : null;
+              const publishState = describePublishState({
+                rowStatus: row.status,
+                reviewedAt: meta.reviewed_at,
+                meta,
+              });
               return (
                 <tr key={row.id} className="align-top">
                   <td className="px-3 py-2 text-brand-subtle">
@@ -382,9 +411,45 @@ export default function StudioBoardDashboardPage() {
                   <td className="px-3 py-2 text-brand-ink">{row.namespace || "—"}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium capitalize text-brand-ink">{row.status || "unknown"}</div>
-                    {meta.publish_event_sent_at ? (
+                    {publishState ? (
+                      <div className={`text-xs font-semibold uppercase tracking-wide ${PUBLISH_TONE_CLASS[publishState.tone]}`}>
+                        {publishState.label}
+                      </div>
+                    ) : null}
+                    {publishState?.detailLabel && publishState.detailValue ? (
+                      <div className={`text-xs ${PUBLISH_DETAIL_CLASS[publishState.tone]}`}>
+                        {publishState.detailLabel}{" "}
+                        {publishState.detailLabel.endsWith("@")
+                          ? formatDate(publishState.detailValue)
+                          : publishState.detailValue}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_reason &&
+                    shouldRenderSupplementalPublishFailureDetail(
+                      publishState,
+                      "publish failure:"
+                    ) ? (
+                      <div className="text-xs text-brand-crimson">
+                        publish failure: {meta.publish_failure_reason}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_stage &&
+                    shouldRenderSupplementalPublishFailureDetail(
+                      publishState,
+                      "failure stage:"
+                    ) ? (
+                      <div className="text-xs text-brand-crimson">
+                        failure stage: {meta.publish_failure_stage}
+                      </div>
+                    ) : null}
+                    {meta.publish_requested_at && !meta.publish_event_sent_at ? (
                       <div className="text-xs text-brand-subtle">
-                        published @ {formatDate(meta.publish_event_sent_at)}
+                        publish requested @ {formatDate(meta.publish_requested_at)}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_reason ? (
+                      <div className="text-xs text-brand-crimson">
+                        publish failed: {meta.publish_failure_reason}
                       </div>
                     ) : null}
                     {meta.rejection_reason ? (

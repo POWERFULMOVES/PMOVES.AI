@@ -1,0 +1,101 @@
+# Jetson Edge Compose Override — NATS leaf node + edge inference services
+#
+# Applied on top of docker-compose.yml for Jetson Orin Nano Super nodes.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.jetson-edge.override.yml up -d
+#
+# What this does:
+#   - Sets platform: linux/arm64 for all services
+#   - Starts NATS leaf node (upstream to ts:powerfulmoves:4222 via Tailscale)
+#   - Starts mesh-agent (announces edge capabilities every 15s)
+#   - Starts Ollama with NVIDIA runtime (phi3-mini only)
+#   - Starts ffmpeg-whisper (Faster-Whisper INT8 on Orin GPU)
+#   - Resource limits respect 8GB unified memory (keep under 6GB for GPU+CPU)
+
+services:
+  nats-leaf:
+    image: nats:2.10-alpine
+    platform: linux/arm64
+    restart: unless-stopped
+    command: >
+      --name nats-leaf
+      --leafnodes
+      --leafnode_remotes=ts://powerfulmoves:4222
+      --max_payload=2MB
+      --jetstream
+      --store_dir=/data
+    ports:
+      - "4222:4222"
+    volumes:
+      - nats-leaf-data:/data
+    networks:
+      - pmoves_bus
+
+  mesh-agent:
+    platform: linux/arm64
+    restart: unless-stopped
+    environment:
+      - NODE_ID=${NODE_ID:-pmoves-jons-1}
+      - NODE_TIER=edge-inference
+      - NATS_URL=nats://nats-leaf:4222
+      - ANNOUNCE_INTERVAL=15
+      - NODE_CAPS_GPU=orin-nano-super-sm87
+      - NODE_CAPS_VRAM=8gb-unified
+      - NODE_CAPS_CUDA=sm_87
+      - NODE_CAPS_TOPS=67
+      - NODE_CAPS_ARCH=arm64
+      - NODE_CAPS_PINOKIO=true
+    depends_on:
+      - nats-leaf
+    networks:
+      - pmoves_bus
+
+  ollama-edge:
+    image: ollama/ollama:latest
+    platform: linux/arm64
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - OLLAMA_MAX_VRAM=6GB
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [compute, utility]
+              count: 1
+    networks:
+      - pmoves_bus
+
+  whisper-edge:
+    platform: linux/arm64
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - WHISPER_MODEL=small-int8
+      - NATS_URL=nats://nats-leaf:4222
+      - WHISPER_SUBJECT=voice.stt.edge.v1
+    depends_on:
+      - nats-leaf
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [compute, utility]
+              count: 1
+    networks:
+      - pmoves_bus
+
+networks:
+  pmoves_bus:
+    external: true
+    name: pmoves_bus
+
+volumes:
+  nats-leaf-data: {}
+  ollama-models: {}

@@ -30,6 +30,8 @@ root:
       task: "Service health and container configuration"
       context: "Dockerfile + docker-compose.yml"
       agent_hint: 4090-claude
+      status: done
+      notes: "Verified 2026-03-21: healthz, compose, Dockerfile uid 65532, hardening anchor"
       children:
         - id: cg.health.endpoint
           task: "/healthz endpoint responds on port 8060"
@@ -40,6 +42,7 @@ root:
             expect: "Health endpoint registered in aiohttp routes"
           context: "PORT=8060 from env, default in service.py"
           agent_hint: 4090-claude
+          status: done
 
         - id: cg.health.compose
           task: "Compose service defined with correct profiles"
@@ -50,6 +53,7 @@ root:
             expect: "profiles: [cast, media], depends_on flute-gateway + nats (service_healthy)"
           context: "Networks: pmoves_app, pmoves_bus, pmoves_api, pmoves_external"
           agent_hint: 4090-claude
+          status: done
 
         - id: cg.health.dockerfile
           task: "Dockerfile uses non-root user"
@@ -60,16 +64,23 @@ root:
             expect: "python:3.12-slim, useradd -m -u 65532, USER nonroot"
           context: "Also installs catt[all] for Cast device control"
           agent_hint: 4090-claude
+          status: done
 
         - id: cg.health.hardening
           task: "Compose hardening anchor applied"
           action:
             type: grep
             target: "pmoves/docker-compose.yml"
-            pattern: "cast-tts-gateway.*tier-agent-hardened-ro"
+            # Bounded [\s\S] span: tac_runner re.search has no DOTALL, so `.*`
+            # can't cross YAML lines. Anchored to the 2-space-indented service
+            # KEY line (literal \n + 2 spaces — no MULTILINE in tac_runner) so a
+            # rename that keeps the `pmoves-cast-tts-gateway:` image tag can't
+            # false-pass. Window stops short of the next service (keeps teeth).
+            pattern: "\\n  cast-tts-gateway:[\\s\\S]{0,400}tier-agent-hardened-ro"
             expect: "<<: *tier-agent-hardened-ro, user: 65532:65532"
           context: "Resource limits: 1 CPU, 512M memory"
           agent_hint: 4090-claude
+          status: done
 
     # =========================================================================
     # Phase 2: TTS Provider Chain
@@ -78,6 +89,8 @@ root:
       task: "TTS provider fallback chain"
       context: "pmoves/services/cast-tts-gateway/fallback.py + flute_client.py"
       agent_hint: 4090-claude
+      status: done
+      notes: "Verified: Flute primary, Ultimate fallback, Google last resort, FallbackManager with circuit breaker"
       children:
         - id: cg.tts.flute
           task: "Primary provider: Flute Gateway (prosodic TTS)"
@@ -88,6 +101,7 @@ root:
             expect: "http://flute-gateway:8055 via env"
           context: "FluteTTSProvider in flute_client.py, prosodic synthesis"
           agent_hint: 4090-claude
+          status: done
 
         - id: cg.tts.ultimate
           task: "Fallback provider: Ultimate TTS Studio"
@@ -98,6 +112,7 @@ root:
             expect: "http://ultimate-tts-studio:7861 via env"
           context: "UltimateTTSProvider in fallback.py"
           agent_hint: 4090-claude
+          status: done
 
         - id: cg.tts.google
           task: "Final fallback: Google TTS"
@@ -126,6 +141,8 @@ root:
       task: "Google Cast device discovery and management"
       context: "pmoves/services/cast-tts-gateway/device_manager.py + groups.py"
       agent_hint: 4090-claude
+      status: done
+      notes: "Verified: /cast/discover mDNS, CastGroupManager, ConcurrentCaster (max 4)"
       children:
         - id: cg.devices.discovery
           task: "POST /cast/discover — mDNS device scanning"
@@ -164,6 +181,8 @@ root:
       task: "Voice profile management"
       context: "pmoves/services/cast-tts-gateway/voices.py"
       agent_hint: 4090-claude
+      status: done
+      notes: "Verified: CRUD at /cast/voices, VoiceProfile dataclass, device/group/context binding"
       children:
         - id: cg.voices.crud
           task: "CRUD endpoints at /cast/voices"
@@ -212,6 +231,8 @@ root:
       task: "Scheduled announcements and priority queue"
       context: "pmoves/services/cast-tts-gateway/scheduler.py + queue.py + audio_queue.py"
       agent_hint: 4090-claude
+      status: done
+      notes: "Verified: RECURRING + ONE_SHOT, templates, CastPriorityQueue, AudioQueueManager"
       children:
         - id: cg.scheduler.recurring
           task: "POST /cast/schedule — cron-like recurring announcements"
@@ -270,6 +291,8 @@ root:
       task: "Prometheus metrics"
       context: "pmoves/services/cast-tts-gateway/service.py lines 72-123"
       agent_hint: 4090-claude
+      status: done
+      notes: "Verified: all 8 Prometheus counters + 1 histogram defined in service.py"
       children:
         - id: cg.metrics.requests
           task: "cast_tts_requests_total counter"
@@ -358,6 +381,8 @@ root:
       task: "Authentication, authorization, and audit"
       context: "pmoves/services/cast-tts-gateway/auth.py + security.py"
       agent_hint: 4090-claude
+      status: done
+      notes: "Verified: JWT middleware, RateLimiter, AuditLogEntry, container hardening"
       children:
         - id: cg.security.jwt
           task: "JWT auth middleware on all routes"
@@ -394,7 +419,12 @@ root:
           action:
             type: grep
             target: "pmoves/docker-compose.yml"
-            pattern: "cast-tts-gateway.*65532"
+            # Bounded [\s\S] span (see cg.health.hardening): match the service
+            # block's `user: "65532:65532"` line without crossing into the next
+            # service. Anchored to the service KEY line (\n + 2 spaces) so a
+            # rename keeping the image tag can't false-pass. `.*` alone never
+            # matched (no DOTALL) — false-fail, not a gap.
+            pattern: "\\n  cast-tts-gateway:[\\s\\S]{0,1200}user: \"65532"
             expect: "Non-root uid 65532, read_only FS, cap_drop ALL"
           context: "tier-agent-hardened-ro anchor applied"
           agent_hint: 4090-claude
@@ -406,6 +436,8 @@ root:
       task: "NATS event publishing"
       context: "pmoves/services/cast-tts-gateway/service.py — _publish_event()"
       agent_hint: 4090-claude
+      status: done
+      notes: "Verified: cast.completed (3 sites), health_alert (1), failed (7 sites), discovered (1), auth NATS URL"
       children:
         - id: cg.nats.cast-completed
           task: "voice.cast.completed.v1 published on successful cast"
@@ -428,26 +460,26 @@ root:
           agent_hint: 4090-claude
 
         - id: cg.nats.missing-failed
-          task: "GAP: voice.cast.failed.v1 not yet published"
+          task: "voice.cast.failed.v1 published on failure"
           action:
             type: grep
             target: "pmoves/services/cast-tts-gateway/service.py"
             pattern: "voice.cast.failed.v1"
-            invert: true
-            expect: "NOT YET IMPLEMENTED — failure events not published to NATS"
-          context: "Should publish on TTS synthesis failure or cast failure"
+            expect: "IMPLEMENTED — 7 call sites publish failure events to NATS"
+          context: "Published on TTS synthesis failure or cast failure"
           agent_hint: 4090-claude
+          status: done
 
         - id: cg.nats.missing-discovered
-          task: "GAP: device.cast.discovered.v1 not yet published"
+          task: "device.cast.discovered.v1 published on discovery"
           action:
             type: grep
             target: "pmoves/services/cast-tts-gateway/service.py"
             pattern: "device.cast.discovered.v1"
-            invert: true
-            expect: "NOT YET IMPLEMENTED — device discovery not announced via NATS"
-          context: "Should publish when /cast/discover finds new devices"
+            expect: "IMPLEMENTED — 1 call site in _on_device_discovery"
+          context: "Published when /cast/discover finds new devices"
           agent_hint: 4090-claude
+          status: done
 
         - id: cg.nats.authenticated-url
           task: "NATS_URL uses authenticated format"

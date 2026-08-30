@@ -3,12 +3,11 @@
 import pytest
 from datetime import datetime, timezone
 
-from pmoves.services.github_crossrepo_pr.workflow_templates import (
-    PRType,
-    get_template,
-    list_templates,
-    WORKFLOW_TEMPLATES
-)
+_wt = pytest.importorskip("pmoves.services.github_crossrepo_pr.workflow_templates", reason="github_crossrepo_pr service not installed")
+PRType = _wt.PRType
+get_template = _wt.get_template
+list_templates = _wt.list_templates
+WORKFLOW_TEMPLATES = _wt.WORKFLOW_TEMPLATES
 
 
 class TestWorkflowTemplates:
@@ -113,6 +112,7 @@ class TestWorkflowTemplates:
             assert isinstance(template.assignees, list)
 
 
+@pytest.mark.skipif(not _wt, reason="github_crossrepo_pr service not installed")
 class TestPRAPI:
     """Test PR API endpoints (integration tests)."""
 

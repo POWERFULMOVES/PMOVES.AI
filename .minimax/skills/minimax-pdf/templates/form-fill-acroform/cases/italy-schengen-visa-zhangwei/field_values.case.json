@@ -1,0 +1,252 @@
+{
+  "_meta": {
+    "schema_version": "2",
+    "case": "italy-schengen-visa-zhangwei",
+    "source_pdf": "italy_visa.pdf",
+    "data_source_doc": "docs/italy-schengen-visa-acroform-case.md",
+    "key_format": "qname is from `fill inspect`; page_no is 1-based; set_to is transformed value or checkbox on_value literal",
+    "widget_total_observed": 102,
+    "filled_observed": 17,
+    "data_sources": [
+      {
+        "file": "在职证明_张伟.pdf",
+        "fields_supplied": ["姓名", "护照号码", "出生日期", "出生地", "职位", "公司", "公司电话"]
+      },
+      {
+        "file": "意大利旅行行程单_张伟.docx",
+        "fields_supplied": ["入境日期", "离境日期", "停留天数", "首个入境城市", "首晚酒店"]
+      }
+    ],
+    "comments": [
+      "This is an editable case artifact, not a filled PDF.",
+      "Before applying, compare every qname/page_no/on_value against the current form's fill inspect output.",
+      "Do not include unknown fields with placeholders like NOT PROVIDED; leave them absent from writes and list them in missing_required.",
+      "Checkbox values must equal the current inspect on_value, e.g. Tourism=/1 and Applicant=/1 in the production form."
+    ]
+  },
+  "writes": [
+    {
+      "key": "p1-surname",
+      "qname": "Surname",
+      "page_no": 1,
+      "type": "text",
+      "set_to": "ZHANG",
+      "source": "在职证明: 申请人张伟",
+      "transform": "Chinese family name -> uppercase pinyin",
+      "validation": "required_if_name_present"
+    },
+    {
+      "key": "p1-first-name",
+      "qname": "First name",
+      "page_no": 1,
+      "type": "text",
+      "set_to": "WEI",
+      "source": "在职证明: 申请人张伟",
+      "transform": "Chinese given name -> uppercase pinyin",
+      "validation": "required_if_name_present"
+    },
+    {
+      "key": "p1-date-of-birth",
+      "qname": "date of birth",
+      "page_no": 1,
+      "type": "text",
+      "set_to": "20-03-1985",
+      "source": "在职证明: 出生日期 1985/03/20",
+      "transform": "YYYY/MM/DD -> DD-MM-YYYY",
+      "validation": "DD-MM-YYYY"
+    },
+    {
+      "key": "p1-place-of-birth",
+      "qname": "Place of birth",
+      "page_no": 1,
+      "type": "text",
+      "set_to": "GUANGDONG",
+      "source": "在职证明: 出生地 广东",
+      "transform": "place name -> uppercase pinyin/English",
+      "validation": "latin_only"
+    },
+    {
+      "key": "p1-passport-number",
+      "qname": "Travel document number",
+      "page_no": 1,
+      "type": "text",
+      "set_to": "EF1260892",
+      "source": "在职证明: 护照号码 EF1260892; 行程单同号",
+      "transform": "preserve verbatim",
+      "validation": "passport_number"
+    },
+    {
+      "key": "p1-occupation",
+      "qname": "Occupation",
+      "page_no": 1,
+      "type": "text",
+      "set_to": "SOFTWARE ENGINEER",
+      "source": "在职证明: 任职软件工程师",
+      "transform": "standard English occupation, uppercase",
+      "validation": "latin_only"
+    },
+    {
+      "key": "p1-employer",
+      "qname": "Employer",
+      "page_no": 1,
+      "type": "text",
+      "set_to": "BEIJING INNOVATION TECHNOLOGY CO., LTD.\nTEL: 010-88886666",
+      "source": "在职证明: 单位名称 北京创新科技有限公司; 联系电话 010-88886666",
+      "transform": "conservative company-name translation + phone",
+      "validation": "latin_only_multiline"
+    },
+    {
+      "key": "p1-purpose-tourism",
+      "qname": "Tourism",
+      "page_no": 1,
+      "type": "checkbox",
+      "set_to": "/1",
+      "source": "行程单: 旅行目的 旅游",
+      "transform": "checkbox on_value from inspect",
+      "validation": "must_equal_inspect_on_value"
+    },
+    {
+      "key": "p2-destination",
+      "qname": "Destination",
+      "page_no": 2,
+      "type": "text",
+      "set_to": "ITALY",
+      "source": "行程单: 赴意大利旅行",
+      "transform": "country name uppercase English",
+      "validation": "latin_only"
+    },
+    {
+      "key": "p2-first-entry",
+      "qname": "First entry",
+      "page_no": 2,
+      "type": "text",
+      "set_to": "ITALY - ROME",
+      "source": "行程单首日: 罗马; 抵达罗马菲乌米奇诺机场",
+      "transform": "country + first-entry city uppercase English",
+      "validation": "latin_only"
+    },
+    {
+      "key": "p2-duration",
+      "qname": "Duration of stay",
+      "page_no": 2,
+      "type": "text",
+      "set_to": "11",
+      "source": "行程单: 停留天数 11天",
+      "transform": "remove 天, digits only",
+      "validation": "integer_days"
+    },
+    {
+      "key": "p2-arrival",
+      "qname": "Intended date of arrival",
+      "page_no": 2,
+      "type": "text",
+      "set_to": "15-04-2025",
+      "source": "行程单: 2025年4月15日 / 2025-04-15",
+      "transform": "YYYY-MM-DD -> DD-MM-YYYY",
+      "validation": "DD-MM-YYYY"
+    },
+    {
+      "key": "p2-departure",
+      "qname": "Intended date of departure",
+      "page_no": 2,
+      "type": "text",
+      "set_to": "25-04-2025",
+      "source": "行程单: 2025年4月25日 / 2025-04-25",
+      "transform": "YYYY-MM-DD -> DD-MM-YYYY",
+      "validation": "DD-MM-YYYY"
+    },
+    {
+      "key": "p2-accommodation-name",
+      "qname": "Inviting person surname",
+      "page_no": 2,
+      "type": "text",
+      "set_to": "HOTEL ARTEMIDE",
+      "source": "行程单首晚住宿: Hotel Artemide, Via Nazionale 22, Rome",
+      "transform": "hotel name uppercase",
+      "validation": "latin_only"
+    },
+    {
+      "key": "p2-accommodation-address",
+      "qname": "Address of inviting person",
+      "page_no": 2,
+      "type": "text",
+      "set_to": "VIA NAZIONALE 22, ROME",
+      "source": "行程单首晚住宿: Hotel Artemide, Via Nazionale 22, Rome",
+      "transform": "hotel address uppercase, omit booking confirmation",
+      "validation": "latin_only"
+    },
+    {
+      "key": "p2-cost-free-text",
+      "qname": "Cost",
+      "page_no": 2,
+      "type": "text",
+      "set_to": "APPLICANT HIMSELF/HERSELF",
+      "source": "在职证明: 费用均由申请人自行承担",
+      "transform": "official-form wording",
+      "validation": "latin_only"
+    },
+    {
+      "key": "p2-cost-applicant-checkbox",
+      "qname": "Applicant",
+      "page_no": 2,
+      "type": "checkbox",
+      "set_to": "/1",
+      "source": "在职证明: 费用均由申请人自行承担",
+      "transform": "checkbox on_value from inspect",
+      "validation": "must_equal_inspect_on_value"
+    }
+  ],
+  "missing_required": [
+    {
+      "field_name": "Passport date of issue / valid until / issuing authority",
+      "page_no": 1,
+      "type": "text",
+      "reason": "Not present in employment certificate or itinerary."
+    },
+    {
+      "field_name": "Applicant home address, reliable phone, email",
+      "page_no": 1,
+      "type": "text",
+      "reason": "Home address absent; itinerary phone/email looked placeholder-like and should not be written without confirmation."
+    },
+    {
+      "field_name": "Current nationality / country of birth / nationality at birth",
+      "page_no": 1,
+      "type": "text",
+      "reason": "Not explicit in source materials; do not infer."
+    },
+    {
+      "field_name": "Sex / marital status / national ID number",
+      "page_no": 1,
+      "type": "checkbox/text",
+      "reason": "Not provided."
+    },
+    {
+      "field_name": "Schengen visa history and fingerprints",
+      "page_no": 2,
+      "type": "checkbox/text",
+      "reason": "Not provided."
+    },
+    {
+      "field_name": "Photo",
+      "page_no": 1,
+      "type": "visual_only",
+      "reason": "Visual photo frame, not an AcroForm text value; user must attach/upload a photo."
+    },
+    {
+      "field_name": "Place/date/signature",
+      "page_no": 3,
+      "type": "visual_or_text",
+      "reason": "Requires applicant confirmation and handwritten/e-signature."
+    }
+  ],
+  "validation_summary": {
+    "total_widgets_observed": 102,
+    "filled_observed": 17,
+    "missing_required_observed": 7,
+    "warnings": [
+      "Do not fill placeholder-looking phone +86-138-0000-1234 or email zhangwei@email.com without confirmation.",
+      "Re-check checkbox on_value literals against the current inspect output before applying to a different form revision."
+    ]
+  }
+}

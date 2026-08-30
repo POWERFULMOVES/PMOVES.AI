@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Dashboard Navigation — Cymatic Neo-Brutalism
@@ -26,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/notebook/runtime', label: 'Runtime', key: 'notebook-runtime' },
   { href: '/notebook-workbench', label: 'Workbench', key: 'notebook-workbench' },
   { href: '/dashboard/personas', label: 'Personas', key: 'personas', accent: 'gold' },
+  { href: '/dashboard/rooms', label: 'Rooms', key: 'rooms', accent: 'cyan' },
   { href: '/dashboard/chat', label: 'Chat', key: 'chat' },
   { href: '/dashboard/services', label: 'Services', key: 'services' },
   { href: '/dashboard/chit', label: 'Chit', key: 'chit', accent: 'cyan' },
@@ -33,6 +35,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/agents', label: 'Agents', key: 'agents', accent: 'violet' },
   { href: '/dashboard/github', label: 'GitHub', key: 'github', accent: 'forest' },
   { href: '/dashboard/graphiti', label: 'Graphiti', key: 'graphiti', accent: 'gold' },
+  { href: '/dashboard/review', label: 'Review', key: 'review', accent: 'forest' },
+  { href: '/dashboard/voice', label: 'Voice', key: 'voice', accent: 'violet' },
+  { href: '/dashboard/media', label: 'Media', key: 'media', accent: 'ember' },
 ];
 
 export type NavKey =
@@ -47,13 +52,17 @@ export type NavKey =
   | 'notebook-runtime'
   | 'notebook-workbench'
   | 'personas'
+  | 'rooms'
   | 'chat'
   | 'services'
   | 'chit'
   | 'tokenism'
   | 'agents'
   | 'github'
-  | 'graphiti';
+  | 'graphiti'
+  | 'review'
+  | 'voice'
+  | 'media';
 
 interface DashboardNavigationProps {
   active?: NavKey;
@@ -120,6 +129,9 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ title, subtitle, active, actions }: DashboardHeaderProps) {
+  const { user, loading } = useSupabaseAuth();
+  const displayName = user?.email?.split('@')[0] || user?.user_metadata?.full_name || null;
+
   return (
     <header className="border-b border-border-subtle bg-void-elevated">
       {/* Top bar */}
@@ -131,6 +143,12 @@ export function DashboardHeader({ title, subtitle, active, actions }: DashboardH
 
         <div className="flex items-center gap-4">
           {actions}
+          {displayName && !loading && (
+            <span className="text-xs font-mono text-ink-secondary">
+              <span className="text-ink-muted">Welcome back, </span>
+              <span className="text-cata-cyan">{displayName}</span>
+            </span>
+          )}
           <Link href="/dashboard/services" className="btn-ghost text-xs">
             All Services
           </Link>

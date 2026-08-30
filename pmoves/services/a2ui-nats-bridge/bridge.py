@@ -36,6 +36,20 @@ A2UI_WS_URL = os.getenv("A2UI_WS_URL", "ws://localhost:9223")
 A2UI_RENDER_SUBJECT = os.getenv("A2UI_RENDER_SUBJECT", "a2ui.render.v1")
 A2UI_REQUEST_SUBJECT = os.getenv("A2UI_REQUEST_SUBJECT", "a2ui.request.v1")
 GEOMETRY_WILDCARD = os.getenv("GEOMETRY_WILDCARD", "geometry.>")
+GEOMETRY_CGP_SUBJECT = os.getenv("GEOMETRY_CGP_SUBJECT", "geometry.cgp.v1")
+GEOMETRY_WS_ROOM = os.getenv("GEOMETRY_WS_ROOM", "geometry")
+# P7 room-aware stage manager subjects (open-room lane, 2026-07-20).
+# `room.session.updated.v1` is emitted on every room stage transition;
+# `pmoves.config.rooms.reloaded.v1` is emitted when the catalog is re-read
+# from disk. The A2UI bridge subscribes per-client and forwards both as
+# room envelopes so the A2UI renderer can show room lifecycle in real-time.
+P7_ROOM_SESSION_UPDATED_SUBJECT = os.getenv(
+    "P7_ROOM_SESSION_UPDATED_SUBJECT", "room.session.updated.v1"
+)
+P7_CONFIG_RELOADED_SUBJECT = os.getenv(
+    "P7_CONFIG_RELOADED_SUBJECT", "pmoves.config.rooms.reloaded.v1"
+)
+P7_WS_ROOM = os.getenv("P7_WS_ROOM", "p7-rooms")
 PORT = int(os.getenv("PORT", "9224"))
 
 # Logging
@@ -45,10 +59,78 @@ logging.basicConfig(
 )
 logger = logging.getLogger("a2ui-nats-bridge")
 
+# CHIT signature gate (consumer edge) — canonical verification via
+# services.common (single source of truth: pmoves.tools.chit_security).
+# The bridge is the last hop before geometry reaches the frontend; when a
+# signing key is available, tampered packets are dropped here. Unsigned
+# packets pass through unless CHIT_REQUIRE_SIGNATURE flips fail-closed.
+# Images that do not package the wrappers degrade to the historical
+# trust-passthrough behavior (dev mode).
+try:
+    from services.common.geometry_decoder import verify_cgp
+    CHIT_AVAILABLE = True
+except ImportError:
+    CHIT_AVAILABLE = False
+
+
+try:
+    from services.common.env import get_secret
+except ImportError:  # pragma: no cover - narrow test/sys.path contexts
+    from pmoves.services.common.env import get_secret
+
+
+def _chit_signing_key() -> str:
+    """Canonical signing-key chain; empty string = dev mode (no verification)."""
+    return get_secret("CHIT_SIGNING_KEY") or get_secret("CHIT_PASSPHRASE", "") or ""
+
+
+def _chit_signature_required() -> bool:
+    """Fail-closed switch — same env contract as gateway/Hi-RAG consumers."""
+    return os.getenv("CHIT_REQUIRE_SIGNATURE", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def cgp_passes_signature_gate(payload: Any) -> tuple[bool, str]:
+    """Decide whether a geometry payload may be forwarded to WebSocket clients.
+
+    Returns (passes, reject_reason). Rules:
+    - non-dict payloads carry no verifiable signature: they pass in dev mode
+      and are rejected fail-closed ("non-dict");
+    - with a key: invalid signatures are ALWAYS rejected ("invalid");
+      unsigned payloads pass in dev mode, rejected fail-closed ("unsigned");
+    - without a key (or wrappers): everything passes in dev mode, everything
+      is rejected fail-closed ("unverifiable").
+    """
+    if not isinstance(payload, dict):
+        return (not _chit_signature_required()), "non-dict"
+    key = _chit_signing_key()
+    require = _chit_signature_required()
+    if not (CHIT_AVAILABLE and key):
+        return (not require), "unverifiable"
+    if "sig" not in payload:
+        return (not require), "unsigned"
+    if verify_cgp(payload, passphrase=key):
+        return True, ""
+    return False, "invalid"
+
 # Prometheus Metrics
 a2ui_events_published = Counter("a2ui_events_published_total", "A2UI events published to NATS", ["event_type"])
 a2ui_events_received = Counter("a2ui_events_received_total", "Events received from A2UI agents")
 a2ui_events_forwarded = Counter("a2ui_events_forwarded_total", "A2UI events forwarded to WebSocket clients")
+geometry_events_forwarded = Counter("a2ui_geometry_events_forwarded_total", "Geometry CGP events forwarded to WebSocket clients")
+geometry_events_rejected = Counter("a2ui_geometry_events_rejected_total", "Geometry CGP events dropped by the CHIT signature gate", ["reason"])
+room_session_events_forwarded = Counter(
+    "a2ui_room_session_events_forwarded_total",
+    "P7 room.session.updated.v1 events forwarded to WebSocket clients",
+)
+room_config_reloaded_events_forwarded = Counter(
+    "a2ui_room_config_reloaded_events_forwarded_total",
+    "P7 pmoves.config.rooms.reloaded.v1 events forwarded to WebSocket clients",
+)
 active_websockets = Gauge("a2ui_active_websockets", "Active WebSocket connections")
 nats_connected = Gauge("a2ui_nats_connected", "NATS connection status")
 
@@ -61,6 +143,59 @@ A2UI_UPDATE_DATA_MODEL = "updateDataModel"
 A2UI_DATA_MODEL_UPDATE = "dataModelUpdate"
 A2UI_USER_ACTION = "userAction"
 A2UI_CLOSE_SURFACE = "closeSurface"
+
+
+# --------------------------------------------------------------------------- #
+# P7 room-lifecycle handlers (module-level so unit tests can call them directly)
+# --------------------------------------------------------------------------- #
+
+async def forward_room_session_event(msg, websocket) -> None:
+    """Forward P7 ``room.session.updated.v1`` events to a WebSocket client.
+
+    Wraps the payload in a ``p7-rooms`` envelope so the A2UI renderer can
+    route it to the room-lifecycle surface. The payload (per P7 service
+    spec §6.3) carries ``room_id``, ``previous_stage``, ``new_stage``,
+    ``reason``, ``requester``, and a ``chit`` envelope; clients use the
+    ``previous_stage`` → ``new_stage`` delta to update their room card /
+    list / detail views.
+
+    Module-level (not a closure) so unit tests in
+    ``tests/test_room_envelope.py`` can call it directly. Named
+    ``forward_*`` (not ``*_handler``) to avoid shadowing the per-client
+    closure in ``client_websocket``.
+    """
+    try:
+        payload = json.loads(msg.data.decode())
+        envelope = {
+            "room": P7_WS_ROOM,
+            "subject": msg.subject,
+            "data": payload,
+        }
+        await websocket.send_text(json.dumps(envelope) + "\n")
+        room_session_events_forwarded.inc()
+    except Exception as e:
+        logger.warning(f"Failed to forward {msg.subject}: {e}")
+
+
+async def forward_config_reloaded_event(msg, websocket) -> None:
+    """Forward P7 ``pmoves.config.rooms.reloaded.v1`` events to a WebSocket client.
+
+    Carries ``schema_version`` + ``rooms_loaded``; the A2UI renderer uses
+    this to invalidate cached catalog snapshots and re-fetch.
+
+    Module-level (not a closure) so unit tests can call it directly.
+    """
+    try:
+        payload = json.loads(msg.data.decode())
+        envelope = {
+            "room": P7_WS_ROOM,
+            "subject": msg.subject,
+            "data": payload,
+        }
+        await websocket.send_text(json.dumps(envelope) + "\n")
+        room_config_reloaded_events_forwarded.inc()
+    except Exception as e:
+        logger.warning(f"Failed to forward {msg.subject}: {e}")
 
 
 @dataclass
@@ -124,6 +259,7 @@ nc: Optional[nats.aio.client.Client] = None
 js: Optional["nats.js.client.JetStreamContext"] = None
 active_ws_connections: set[WebSocket] = set()
 connected_a2ui_surfaces: dict[str, str] = {}  # surface_id -> client_id
+_js_geom_sub_active: bool = False  # True when startup JetStream geometry sub succeeded
 
 
 async def connect_nats() -> None:
@@ -135,15 +271,17 @@ async def connect_nats() -> None:
     Retries up to 5 times with linear backoff (5s, 10s, 15s, 20s, 25s).
 
     Side effects:
-        - Sets global `nc` and `js` variables
+        - Sets global `nc`, `js`, and `_js_geom_sub_active` variables
         - Updates `nats_connected` Prometheus gauge
         - Creates A2UI JetStream stream if not exists
         - Subscribes to geometry.* wildcard subject
 
     Note:
         Logs error but continues if geometry subscription fails (non-critical).
+        When geometry JetStream sub succeeds, per-connection core NATS subs are
+        skipped to prevent double delivery once the JS consumer is wired to forward.
     """
-    global nc, js
+    global nc, js, _js_geom_sub_active
     retry_count = 0
     max_retries = 5
 
@@ -173,16 +311,18 @@ async def connect_nats() -> None:
                     logger.error(f"Failed to create A2UI stream: {e}")
                     raise
 
-            # Subscribe to geometry events for bidirectional communication
+            # Register the durable JetStream geometry consumer.
+            # _js_geom_sub_active stays False until a forwarding callback is
+            # wired here — per-connection core NATS subs handle delivery until then.
             try:
                 await js.subscribe(
                     GEOMETRY_WILDCARD,
                     "a2ui_geom_sub",
                     stream="GEOMETRY"
                 )
-                logger.info(f"Subscribed to {GEOMETRY_WILDCARD}")
+                logger.info(f"Registered durable JetStream consumer for {GEOMETRY_WILDCARD} (forwarding via core NATS per-connection subs)")
             except Exception as e:
-                logger.warning(f"Could not subscribe to geometry: {e}")
+                logger.warning(f"Could not register geometry JetStream consumer: {e} — per-connection core subs will handle forwarding")
 
             nats_connected.set(1)
             logger.info("NATS connection established")
@@ -267,7 +407,7 @@ async def handle_user_action(action: dict[str, Any]) -> None:
     """
     action_name = action.get("name", "unknown")
     surface_id = action.get("surfaceId", "")
-    context = action.get("context", {})
+    action.get("context", {})
 
     logger.info(f"User action: {action_name} on surface {surface_id}")
 
@@ -478,12 +618,78 @@ async def client_websocket(websocket: WebSocket):
         except Exception as e:
             logger.warning(f"Failed to forward A2UI message: {e}")
 
+    async def geometry_handler(msg):
+        """Forward NATS geometry.cgp.v1 messages to WebSocket client.
+
+        Wraps the payload in a room envelope so the frontend can route it
+        to the geometry/cymatic visualization room.
+        """
+        try:
+            payload = json.loads(msg.data.decode())
+            passes, reject_reason = cgp_passes_signature_gate(payload)
+            if not passes:
+                geometry_events_rejected.labels(reason=reject_reason).inc()
+                logger.warning(
+                    f"Dropped geometry message from {msg.subject}: "
+                    f"CHIT signature gate rejected it ({reject_reason})"
+                )
+                return
+            envelope = {
+                "room": GEOMETRY_WS_ROOM,
+                "subject": msg.subject,
+                "data": payload,
+            }
+            await websocket.send_text(json.dumps(envelope) + "\n")
+            geometry_events_forwarded.inc()
+        except Exception as e:
+            logger.warning(f"Failed to forward geometry message: {e}")
+
+    async def room_session_handler(msg):
+        """Per-client NATS callback. Delegates to the module-level
+        ``forward_room_session_event`` so unit tests can call the canonical
+        implementation directly. The closure captures ``websocket`` so the
+        nats-py callback signature is preserved.
+        """
+        return await forward_room_session_event(msg, websocket)
+
+    async def config_reloaded_handler(msg):
+        """Per-client NATS callback. Same pattern as ``room_session_handler``."""
+        return await forward_config_reloaded_event(msg, websocket)
+
     sub = None
+    geom_sub = None
+    room_session_sub = None
+    config_reloaded_sub = None
     try:
         if nc:
             # Subscribe to all A2UI events
             sub = await nc.subscribe("a2ui.>", cb=a2ui_handler)
             logger.info(f"Forwarding A2UI events to {client_id}")
+
+            # Subscribe to geometry CGP events only when the startup JetStream
+            # consumer is not active; otherwise that consumer handles delivery.
+            if not _js_geom_sub_active:
+                geom_sub = await nc.subscribe(GEOMETRY_CGP_SUBJECT, cb=geometry_handler)
+                logger.info(f"Forwarding {GEOMETRY_CGP_SUBJECT} -> room '{GEOMETRY_WS_ROOM}' to {client_id}")
+
+            # P7 room lifecycle (open-room lane, 2026-07-20).
+            # Per-client subscription mirrors the geometry pattern; the A2UI
+            # renderer can subscribe to the p7-rooms envelope and reflect
+            # room stage transitions in real-time.
+            room_session_sub = await nc.subscribe(
+                P7_ROOM_SESSION_UPDATED_SUBJECT, cb=room_session_handler
+            )
+            logger.info(
+                f"Forwarding {P7_ROOM_SESSION_UPDATED_SUBJECT} -> room "
+                f"'{P7_WS_ROOM}' to {client_id}"
+            )
+            config_reloaded_sub = await nc.subscribe(
+                P7_CONFIG_RELOADED_SUBJECT, cb=config_reloaded_handler
+            )
+            logger.info(
+                f"Forwarding {P7_CONFIG_RELOADED_SUBJECT} -> room "
+                f"'{P7_WS_ROOM}' to {client_id}"
+            )
 
             # Keep connection alive
             while True:
@@ -497,6 +703,12 @@ async def client_websocket(websocket: WebSocket):
         active_websockets.set(len(active_ws_connections))
         if sub:
             await sub.unsubscribe()
+        if geom_sub:
+            await geom_sub.unsubscribe()
+        if room_session_sub:
+            await room_session_sub.unsubscribe()
+        if config_reloaded_sub:
+            await config_reloaded_sub.unsubscribe()
 
 
 def main() -> None:

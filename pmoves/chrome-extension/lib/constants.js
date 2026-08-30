@@ -8,6 +8,7 @@ export const DEFAULT_SERVICES = {
   pmovesYt:        'http://localhost:8077',
   agentZero:       'http://localhost:8080',
   fluteGateway:    'http://localhost:8055',
+  botzGateway:     'http://localhost:8054',
   prometheus:      'http://localhost:9090',
   gateway:         'http://localhost:8085',
 };
@@ -28,12 +29,13 @@ export const DEFAULT_CONFIG = {
 };
 
 export const HEALTH_ENDPOINTS = {
-  tensorzero:      { path: '/v1/models',    method: 'GET' },
+  tensorzero:      { path: '/health',        method: 'GET' },
   gpuOrchestrator: { path: '/api/gpu/status', method: 'GET' },
   hirag:           { path: '/',              method: 'GET' },
   pmovesYt:        { path: '/healthz',       method: 'GET' },
   agentZero:       { path: '/healthz',       method: 'GET' },
   fluteGateway:    { path: '/healthz',       method: 'GET' },
+  botzGateway:     { path: '/healthz',       method: 'GET' },
   prometheus:      { path: '/-/healthy',     method: 'GET' },
   gateway:         { path: '/',              method: 'GET' },
 };

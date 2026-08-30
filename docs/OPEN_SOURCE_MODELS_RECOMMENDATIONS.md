@@ -128,7 +128,7 @@ PMOVES.AI prioritizes:
 
 ## Hardware Profile Mappings
 
-### RTX 5090 (32GB VRAM) - `workstation_5090`
+### RTX 5090 (32GB VRAM) - `desktop-9950xd`
 
 ```yaml
 # Ollama model names (exact)
@@ -323,7 +323,7 @@ ollama pull qwen3-vl:8b
 ollama pull qwen3:8b
 
 # Or use the seed script with profile detection:
-PMOVES_PROFILE=workstation_5090 ./pmoves/scripts/seed-local-models.sh
+PMOVES_PROFILE=desktop-9950xd ./pmoves/scripts/seed-local-models.sh
 ```
 
 ### Quick Reference - Ollama Model Names

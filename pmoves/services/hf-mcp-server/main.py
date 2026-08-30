@@ -17,12 +17,10 @@ MCP Tools:
 - hf.model.convert_gguf: Convert to GGUF for Ollama
 """
 
-import asyncio
 import json
 import logging
 import os
 import re
-import shutil
 import threading
 import time
 from dataclasses import dataclass, field
@@ -33,16 +31,14 @@ from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
 
 import nats as nats_lib
-import aiohttp
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 from huggingface_hub import (
     HfApi,
-    ModelFilter,
-    hf_hub_download,
     snapshot_download,
 )
 from huggingface_hub.utils import tqdm as hf_tqdm
+from mcp.server import MCPServer
 
 # Configure logging
 logging.basicConfig(
@@ -65,6 +61,17 @@ _download_lock = threading.Lock()
 
 
 _SAFE_MODEL_RE = re.compile(r"^[a-zA-Z0-9._/-]+$")
+
+
+_SAFE_COMPONENT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+_ALLOWED_QUANTIZE = {"f16", "q4_0", "q4_k_m", "q5_0", "q8_0"}
+
+
+def _validated_component(value: str, field: str) -> str:
+    """Strict allowlist gate for user-provided path/file-name components."""
+    if not value or not _SAFE_COMPONENT_RE.fullmatch(value):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+    return value
 
 
 def _safe_model_path(model_id: str) -> Path:
@@ -513,6 +520,9 @@ app = FastAPI(title="Hugging Face MCP Server", version="1.0.0", lifespan=lifespa
 # Hugging Face API client
 hf_api = HfApi()
 
+# MCP server (SSE endpoint exposed via app.mount at /mcp)
+mcp_server = MCPServer("hf-mcp-server")
+
 
 # =============================================================================
 # MCP Tool Handlers
@@ -537,7 +547,35 @@ async def hf_model_search(
     Returns:
         List of matching model metadata dictionaries
     """
-    # Filter models from catalog
+    # Query the live model-registry first; fall back to static catalog if unreachable.
+    import os as _os
+    _REGISTRY_URL = _os.environ.get("MODEL_REGISTRY_URL", "http://model-registry:8110")
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=10) as _client:
+            _resp = await _client.get(f"{_REGISTRY_URL}/api/models")
+            _resp.raise_for_status()
+            _live = _resp.json()
+            if isinstance(_live, list) and _live:
+                # Filter the live registry results
+                results = []
+                for m in _live:
+                    model_type = (m.get("model_type") or m.get("type") or "").lower()
+                    if task and task.lower() not in model_type:
+                        continue
+                    if architecture and architecture.lower() not in (m.get("id") or m.get("name") or "").lower():
+                        continue
+                    results.append({
+                        "key": m.get("id") or m.get("name"),
+                        "model_id": m.get("hf_id") or m.get("id"),
+                        "source": "registry",
+                        **{k: v for k, v in m.items() if k not in ("id", "name", "hf_id")},
+                    })
+                return results
+    except Exception:
+        pass  # fall through to static catalog
+
+    # Filter models from static catalog (fallback)
     results = []
 
     for model_key, model_data in MODEL_CATALOG.items():
@@ -556,6 +594,7 @@ async def hf_model_search(
 
         results.append({
             "key": model_key,
+            "source": "catalog",
             **model_data,
         })
 
@@ -745,12 +784,17 @@ async def hf_model_convert_gguf(
     Returns:
         Conversion result with output path
     """
-    # This is a placeholder - actual GGUF conversion requires llama.cpp
-    # In production, this would spawn a conversion job or call an external service
-
+    # Resolve the HF model cache path via _safe_model_path (path-injection sanitized)
+    # CodeQL gate: re-validate every user-provided component with a strict
+    # fullmatch allowlist so no tainted value reaches a path expression.
+    model_id = _validated_component(model_id, "model_id")
+    quantize = _validated_component(quantize, "quantize")
+    if quantize not in _ALLOWED_QUANTIZE:
+        raise HTTPException(status_code=400, detail=f"Unsupported quantize format: {quantize}")
+    output_dir = _validated_component(output_dir, "output_dir") if output_dir else None
     cache_dir = _safe_model_path(model_id)
 
-    if not cache_dir.exists():  # CodeQL path-injection: sanitized by _safe_model_path (basename + regex allowlist)
+    if not cache_dir.exists():
         raise HTTPException(
             status_code=404,
             detail=f"Model {model_id} not found in cache. Download first.",
@@ -764,13 +808,98 @@ async def hf_model_convert_gguf(
     else:
         output_path = str(cache_dir / "gguf")
 
+    os.makedirs(output_path, exist_ok=True)
+
+    # --- G2 fix: real llama.cpp convert_hf_to_gguf.py + quantize subprocess ---
+    convert_script = os.environ.get("LLAMA_CONVERT_SCRIPT", "/opt/llama.cpp/convert_hf_to_gguf.py")
+    quantize_bin = os.environ.get("LLAMA_QUANTIZE_BIN", "/usr/local/bin/llama-quantize")
+    model_cache = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface/hub"))
+
+    gguf_name = f"{model_id.replace('/', '--')}-{quantize}.gguf"
+    gguf_f16_name = f"{model_id.replace('/', '--')}-f16.gguf"
+    gguf_f16_path = os.path.join(output_path, gguf_f16_name)
+    gguf_final_path = os.path.join(output_path, gguf_name)
+
+    import asyncio
+    import shutil
+
+    # Step 1: convert HF → GGUF (F16)
+    if not os.path.exists(gguf_f16_path):
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "python3", convert_script,
+                str(cache_dir),
+                "--outfile", gguf_f16_path,
+                "--outtype", "f16",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                err = stderr.decode(errors="replace")[-500:] if stderr else "unknown"
+                raise HTTPException(status_code=500, detail=f"convert_hf_to_gguf failed: {err}")
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=503,
+                detail=f"llama.cpp convert script not found at {convert_script}. Set LLAMA_CONVERT_SCRIPT env.",
+            )
+
+    # Step 2: quantize if not f16
+    if quantize != "f16":
+        if not os.path.exists(quantize_bin):
+            raise HTTPException(
+                status_code=503,
+                detail=f"llama-quantize not found at {quantize_bin}. Install llama.cpp.",
+            )
+        proc = await asyncio.create_subprocess_exec(
+            quantize_bin,
+            gguf_f16_path,
+            gguf_final_path,
+            quantize.upper(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err = stderr.decode(errors="replace")[-500:] if stderr else "unknown"
+            raise HTTPException(status_code=500, detail=f"llama-quantize failed: {err}")
+        final_path = gguf_final_path
+    else:
+        final_path = gguf_f16_path
+
+    # Step 3: publish completion event
+    try:
+        from nats.aio.client import Client as NATSClient
+        nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+        nc = NATSClient()
+        await nc.connect(nats_url, max_reconnect_attempts=1, connect_timeout=5)
+        import json as _json
+        await nc.publish("hf.model.gguf.converted.v1", _json.dumps({
+            "model_id": model_id,
+            "gguf_path": final_path,
+            "quantize": quantize,
+            "size_mb": round(os.path.getsize(final_path) / (1024 * 1024), 1),
+        }).encode())
+        await nc.close()
+    except Exception:
+        # Publish stays best-effort — the conversion itself succeeded and that is what
+        # the ok:true below reports. But swallowing this silently meant a subscriber
+        # waiting on hf.model.gguf.converted.v1 could wait forever while the caller was
+        # told everything worked, with nothing anywhere recording that the event never
+        # left. Best-effort is a delivery guarantee, not a licence to be unobservable.
+        logger.exception(
+            "NATS publish of hf.model.gguf.converted.v1 failed for %s "
+            "(conversion succeeded; downstream consumers will not be notified)",
+            model_id,
+        )
+
     return {
         "ok": True,
         "model_id": model_id,
         "quantize": quantize,
-        "output_path": output_path,
-        "message": "GGUF conversion initiated. Check /status/{job_id} for progress.",
-        "note": "Actual GGUF conversion requires llama.cpp integration",
+        "output_path": final_path,
+        "size_mb": round(os.path.getsize(final_path) / (1024 * 1024), 1),
+        "message": f"GGUF conversion complete: {gguf_name}",
     }
 
 
@@ -836,6 +965,74 @@ async def _publish_download_event(model_id: str, path: str):
         logger.info("Published download event for %s", model_id)
     except Exception as exc:
         logger.error("Failed to publish NATS event: %s", exc, exc_info=True)
+
+
+# =============================================================================
+# MCP Server Registration
+# =============================================================================
+
+@mcp_server.tool(name="hf.model.search")
+async def mcp_model_search(
+    task: str | None = None,
+    size: str | None = None,
+    architecture: str | None = None,
+    tier: str | None = None,
+    use_case: str | None = None,
+) -> str:
+    """Search the PMOVES model catalog by task, size, architecture, tier, or use case."""
+    result = await hf_model_search(
+        task=task, size=size, architecture=architecture, tier=tier, use_case=use_case
+    )
+    return json.dumps(result, default=str)
+
+
+@mcp_server.tool(name="hf.model.info")
+async def mcp_model_info(model_id: str) -> str:
+    """Get metadata and requirements for a model by its catalog key or HuggingFace ID."""
+    result = await hf_model_info(model_id)
+    return json.dumps(result, default=str)
+
+
+@mcp_server.tool(name="hf.model.download")
+async def mcp_model_download(
+    model_id: str,
+    variant: str | None = None,
+    quantization: str | None = None,
+) -> str:
+    """Download a model from HuggingFace Hub to the local cache."""
+    result = await hf_model_download(
+        model_id=model_id,
+        variant=variant,
+        quantization=quantization,
+    )
+    return json.dumps(result, default=str)
+
+
+@mcp_server.tool(name="hf.model.list")
+async def mcp_model_list() -> str:
+    """List all models currently cached in the local HF Hub cache."""
+    result = await hf_model_list()
+    return json.dumps(result, default=str)
+
+
+@mcp_server.tool(name="hf.model.convert_gguf")
+async def mcp_model_convert_gguf(
+    model_id: str,
+    quantize: str = "q4_0",
+    output_dir: str | None = None,
+) -> str:
+    """Initiate GGUF conversion for a cached model (requires llama.cpp integration)."""
+    result = await hf_model_convert_gguf(
+        model_id=model_id,
+        quantize=quantize,
+        output_dir=output_dir,
+    )
+    return json.dumps(result, default=str)
+
+
+# Mount the MCP SSE transport under /mcp so clients connect at /mcp/sse and
+# POST JSON-RPC messages to /mcp/messages/.
+app.mount("/mcp", mcp_server.sse_app(sse_path="/sse", message_path="/messages/"))
 
 
 # =============================================================================
@@ -913,7 +1110,6 @@ hf_mcp_cached_models_total {cached_count}
 # TYPE hf_mcp_downloads_total counter
 hf_mcp_downloads_total {_download_count}
 """
-    from fastapi.responses import Response
     return Response(
         content=metrics_text,
         media_type="text/plain",
@@ -975,78 +1171,6 @@ async def api_tensorzero_config():
     """Generate TensorZero config for catalog models."""
     result = await hf_tensorzero_config()
     return result
-
-
-# =============================================================================
-# SSE MCP Transport (for MCP clients)
-# =============================================================================
-
-@app.get("/sse")
-async def sse_endpoint():
-    """Server-Sent Events endpoint for MCP protocol."""
-    from fastapi.responses import StreamingResponse
-
-    async def event_stream():
-        """Stream MCP events."""
-        # Send initial endpoint announcement
-        import json
-
-        endpoints = [
-            {
-                "name": "hf.model.search",
-                "description": "Search for models in the catalog",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "task": {"type": "string"},
-                        "size": {"type": "string", "enum": ["small", "medium", "large"]},
-                        "use_case": {"type": "string"},
-                    },
-                },
-            },
-            {
-                "name": "hf.model.info",
-                "description": "Get model metadata",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "model_id": {"type": "string"},
-                    },
-                    "required": ["model_id"],
-                },
-            },
-            {
-                "name": "hf.model.download",
-                "description": "Download model to local cache",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "model_id": {"type": "string"},
-                        "variant": {"type": "string"},
-                    },
-                    "required": ["model_id"],
-                },
-            },
-            {
-                "name": "hf.model.list",
-                "description": "List cached models",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {},
-                },
-            },
-        ]
-
-        yield f"event: tools\ndata: {json.dumps(endpoints)}\n\n"
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    )
 
 
 # =============================================================================

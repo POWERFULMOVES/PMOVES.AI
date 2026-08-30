@@ -1,0 +1,132 @@
+# Gemma4 Dense — Local via Ollama on DGX Spark
+# Best local throughput model. 10,000 tok/s prompt at 8K on dual 4090.
+# 8,526 tok/s generate at 32K context. DGX Spark primary candidate.
+# DENSE variant (not MoE) — critical: dense >> MoE when VRAM available.
+#
+# Distillation: model_fine_tune (open weights + LoRA path on DGX Spark)
+# Source: YouTube Signals Analysis §2.4 (Digital Spaceport benchmark)
+
+name: gemma4-dense
+provider: ollama_spark
+provider_display: "Ollama on DGX Spark"
+distillation_stage: model_fine_tune
+
+model_config:
+  model_name: "gemma4:31b-q4"
+  endpoint: http://pmoves-dgx-spark:11434/v1
+  api_key_env: null
+  context_window: 32768
+  max_output_tokens: 8192
+  temperature: 0.7
+  top_p: 0.9
+  ollama_config:
+    num_gpu: 999
+    num_batch: 4096
+    ubatch: 1024
+    quantization: Q4
+
+prompt_style:
+  format: markdown
+  system_prompt_template: null
+  preferred_language: en
+  notes: >
+    Gemma models work well with structured markdown. Dense variant maintains
+    consistent quality across long contexts (32K tested). No special prompt
+    formatting required — clean, direct instructions work best.
+
+agent_zero:
+  role: chat
+  a0_set_prefix: A0_SET_chat_model
+  subordinate_profile: spark_claw
+  strengths:
+  - best local throughput (10,000 tok/s prompt, 8,526 tok/s generate)
+  - maintains speed at 32K context
+  - dense architecture (no MoE sharding penalties)
+  - excellent for long-context agentic workflows
+  limitations:
+  - larger VRAM footprint than Qwen3.6 (~20-24GB vs ~16GB)
+  - requires DGX Spark or dual 4090 minimum
+  - 32K context window (less than cloud models)
+
+pinokio_p7:
+  discoverable: true
+  pbnj_launch: false
+  tac_node: p7.nats.model-discovery
+  nats_subject: mesh.gpu.model.loaded.v1
+  notes: >
+    Discoverable by P7 Agent Interpreter when running on DGX Spark Ollama.
+    Publishes mesh.gpu.model.loaded.v1 on NATS. P7 can route requests
+    through Tailscale mesh to DGX Spark endpoint.
+
+local_fallback:
+  available: true
+  reason: "Local model — IS the fallback target for cloud chat models"
+  fallback_model_suit: qwen3.6
+  notes: "On machines without DGX Spark, qwen3.6 is the fallback (same as cloud model fallbacks)"
+
+fine_tuning:
+  possible: true
+  method: lora
+  target_platform: dgx-spark
+  notes: >
+    Open weights from Google. LoRA fine-tuning on DGX Spark with 128GB unified
+    memory is highly viable. Dense architecture makes LoRA more effective
+    than on MoE variants. Use Unsloth for efficient training.
+    Top candidate for PMOVES-specific reasoning distillation.
+
+cross_agent:
+  agent_zero: full
+  clawz: limited
+  typer: untested
+  pinokio: full
+
+# Harness fit. Seeded fresh, harness-only — NOT migrated from cross_agent, which
+# answers a different question (which components can address this model) and whose
+# key space includes agents, a UI and a launcher.
+fit:
+  clawz:
+    "*":
+      - verdict: limited
+        by: darkxside
+        method: hand
+        "on": 2026-06-11
+        note: "requires adapter layer; tool-call parsing assumes an Anthropic-shaped response"
+
+huggingface:
+  model_id: google/gemma-4-31B-it
+  gguf_repo: unsloth/gemma-4-31B-it-GGUF
+  unsloth_repo: unsloth/gemma-4-31B-it-unsloth-bnb-4bit
+  collection: DARKXSIDE/pmoves-68bcb20613cef7a0aa745e0e
+
+metadata:
+  source: youtube_benchmark_digital_spaceport
+  last_verified: 2026-04-19
+  benchmark_data:
+  - source: youtube_signals_benchmark
+    hardware: "dual RTX 4090 (24GB each)"
+    quantization: Q4 (dense, not MoE)
+    vram_required: "20-24GB"
+    prompt_tok_per_sec_8k: 10000
+    prompt_tok_per_sec_16k: 9500
+    generate_tok_per_sec_32k: 8526
+    notes: "Best numbers of entire benchmark — insane performance"
+  - source: inferred_dgx_spark
+    notes: "Should exceed 15,000+ tok/s with 128GB unified memory on DGX Spark"
+  - source: youtube_signals_key_insight
+    notes: "Dense >> MoE when VRAM is available — always use dense variant"
+
+ecosystem_role: |
+  DGX Spark primary local model. Best throughput of any tested local model —
+  the throughput champion for the PMOVES fleet. Serves as the local chat model
+  when Agent Zero runs on DGX Spark (spark_claw profile). On non-Spark machines,
+  Agent Zero falls back to Qwen3.6 for local inference. Dense architecture is
+  critical — MoE variant showed 830 tok/s (12x slower) due to VRAM sharding.
+  When paired with Nemotron-3 Super, forms the DGX Spark two-model local stack:
+  Gemma4 for general tasks, Nemotron for single-purpose agents.
+nats:
+  publish:
+    - mesh.gpu.model.loaded.v1
+    - mesh.gpu.model.unloaded.v1
+    - mesh.gpu.status.v1
+  subscribe:
+    - mesh.gpu.command.v1

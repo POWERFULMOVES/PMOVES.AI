@@ -3,7 +3,6 @@
 import json
 import os
 import sys
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -68,7 +67,7 @@ class TestConfig:
         from main import Config
 
         config = Config(
-            nats_url="nats://localhost:4222",
+            nats_url="nats://nats:pmoves@nats:4222",
             supabase_url="",
             supabase_service_role_key="key",
             health_port=8102
@@ -82,7 +81,7 @@ class TestConfig:
         from main import Config
 
         config = Config(
-            nats_url="nats://localhost:4222",
+            nats_url="nats://nats:pmoves@nats:4222",
             supabase_url="http://localhost:3010",
             supabase_service_role_key="",
             health_port=8102
@@ -96,7 +95,7 @@ class TestConfig:
         from main import Config
 
         config = Config(
-            nats_url="nats://localhost:4222",
+            nats_url="nats://nats:pmoves@nats:4222",
             supabase_url="http://localhost:3010",
             supabase_service_role_key="test-key",
             health_port=8102
@@ -115,7 +114,7 @@ class TestChatRelayService:
         """Create test config."""
         from main import Config
         return Config(
-            nats_url="nats://localhost:4222",
+            nats_url="nats://nats:pmoves@nats:4222",
             supabase_url="http://localhost:3010",
             supabase_service_role_key="test-key",
             health_port=8102
@@ -343,12 +342,12 @@ class TestMessageParsing:
         from main import ChatRelayService, Config
 
         config = Config(
-            nats_url="nats://localhost:4222",
+            nats_url="nats://nats:pmoves@nats:4222",
             supabase_url="http://localhost:3010",
             supabase_service_role_key="test-key",
             health_port=8102
         )
-        service = ChatRelayService(config)
+        ChatRelayService(config)
 
         # Test that 'content' has highest priority
         data1 = {"content": "A", "response": "B", "message": "C"}

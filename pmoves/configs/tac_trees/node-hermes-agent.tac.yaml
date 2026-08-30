@@ -1,0 +1,873 @@
+# TAC Tree: HERMES Agent Integration
+# Defines the integration roadmap for NousResearch Hermes Agent into PMOVES.AI.
+# Covers: agent identity, room manifest, profile configs, NATS bridge, gateway,
+# skills hub, MCP server, cron jobs, and fleet deployment.
+#
+# Cross-refs:
+#   - agent_registry.yaml / agent_signatures.yaml (identity)
+#   - pmoves/config/rooms/hermes-agent.room.control.json (room manifest)
+#   - pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md (integration spec)
+#   - .claude/skills/hermes-agent-integration/SKILL.md (operator skill)
+#   - .claude/agents/hermes-agent.md (Three-Body agent definition)
+
+name: TAC_HERMES_AGENT_INTEGRATION
+version: "1.0.0"
+description: >
+  HERMES Agent integration roadmap for PMOVES.AI.
+  Onboard Hermes Agent as a first-class citizen: identity, room, profiles,
+  NATS bridge, gateway, skills, MCP, cron, and fleet deployment.
+
+metadata:
+  integration_phase: "rehearsal"
+  target_stage: "live"
+  owner: hermes-agent
+  agent_hint: hermes-agent
+  nodes:
+    - id: elder-melchor
+      gpu: "NVIDIA GTX 1650 4GB + Intel UHD 630"
+      cpu: "Intel Core i7-9750H 6C/12T"
+      ram: "32GB"
+      role: "Ageless Beauty practice workstation -- Nurse Practitioner clinical workstation + PMOVES dev. Cloud-first inference. HIPAA-aware."
+      practice:
+        name: "Ageless Beauty"
+        type: "Nurse Practitioner Independent Practice"
+        hipaa_mode: true
+        hosting: "Hostinger VPS with encrypted storage"
+        integrations: [PMOVES-Health-wger, PMOVES-Wealth, BPM, Chakra]
+    - id: z890
+      gpu: "RTX 3090 Ti 24GB"
+      role: "Windows 11 Pro workstation -- Hermes CLI + gateway staging + Ollama local inference"
+    - id: pmoves-5090
+      gpu: "RTX 5090 32GB"
+      role: "Primary GPU node -- Hermes gateway production + skill curation + Ollama primary"
+    - id: pmoves-4090
+      gpu: "RTX 4090 Mobile 16GB"
+      role: "Mobile node -- Hermes CLI + lightweight gateway + Ollama local"
+    - id: kvm4-1
+      gpu: none
+      role: "VPS gateway -- Hermes gateway headless + NATS leaf"
+    - id: spark
+      gpu: "GB10 Grace-Blackwell 128GB unified"
+      role: "DGX-Spark primary inference -- 70B+ models, NeMo Omni, AgentGym, Hermes 70B"
+    - id: pmoves-b850
+      gpu: "Dual AMD R9700 64GB VRAM (ROCm 7.1)"
+      role: "PMOVES-Knuckles Linux container host -- ROCm inference, dual-GPU row-split, Gemma4 embed"
+    - id: rdna4
+      gpu: "Dual AMD R9700 64GB VRAM (ROCm 7.1)"
+      role: "Alias for pmoves-b850 -- dual-GPU local inference, Gemma4 GGUF row-split"
+
+root:
+  id: hermes.integration
+  task: "HERMES Agent integration into PMOVES.AI"
+  context: "Full lifecycle from identity registration to production gateway"
+  agent_hint: hermes-agent
+  children:
+
+    # ========================================================================
+    # Phase 1: Identity & Registry
+    # ========================================================================
+    - id: hermes.integration.identity
+      task: "Agent identity registration"
+      context: "Distinguish hermes-agent (framework) from hermes (LLM model persona)"
+      agent_hint: codex
+      children:
+        - id: hermes.integration.identity.signatures
+          task: "agent_signatures.yaml entry"
+          context: |
+            Add hermes-agent signature with glyph (star), color (#047857),
+            voice (analytical), resonance (gateway, skill-curation, cross-platform).
+            Must NOT collide with existing `hermes` entry (Hermes-3 LLM persona).
+          status: done
+          owner: hermes-agent
+
+        - id: hermes.integration.identity.registry
+          task: "agent_registry.yaml entry"
+          context: |
+            Add hermes-agent to external_contributors and as a full agent entry.
+            Class: utility (prefix pmoves-). Type: agent + api.
+            Port: 7700. Health: /api/health.
+            NATS publishes: hermes.gateway.*, hermes.mcp.*, hermes.skill.*
+            NATS subscribes: p7.nats.launch, p7.nats.session, mesh.node.announce.v1
+          status: done
+          owner: hermes-agent
+
+        - id: hermes.integration.identity.agent_def
+          task: ".claude/agents/hermes-agent.md"
+          context: |
+            Three-Body Delivery Body agent definition.
+            Tools: Read, Write, Edit, Bash, Grep, Glob, Agent, Skill.
+            disallowedTools: EnterPlanMode.
+            Initial prompt loads AGNOTE4482_SITREP + HERMES_AGENT_INTEGRATION docs.
+          status: done
+          owner: hermes-agent
+
+    # ========================================================================
+    # Phase 2: Room Manifest
+    # ========================================================================
+    - id: hermes.integration.room
+      task: "Room manifest and catalog binding"
+      context: "HERMES Agent Control Room -- gateway-oriented room type"
+      agent_hint: hermes-agent
+      children:
+        - id: hermes.integration.room.manifest
+          task: "hermes-agent.room.control.json"
+          context: |
+            Room manifest with 3 apps: gateway-webui (port 7700),
+            mcp-bridge (api), skill-curator (chat).
+            P7 suits: hermes-gateway, mcp-bridge, skill-curator.
+            Stage: rehearsal until gateway soak passes.
+          status: done
+          owner: hermes-agent
+
+        - id: hermes.integration.room.catalog
+          task: "catalog.json patch"
+          context: |
+            Append hermes-agent.room.control entry to catalog.json.
+            Bump schema_version to 1.1.0.
+          status: done
+          owner: hermes-agent
+
+    # ========================================================================
+    # Phase 3: Profile & Config
+    # ========================================================================
+    - id: hermes.integration.profile
+      task: "Hermes profile and node configs"
+      context: "Per-node Hermes config.yaml profiles for PMOVES fleet"
+      agent_hint: hermes-agent
+      children:
+        - id: hermes.integration.profile.pmoves_hermes
+          task: "pmoves-hermes profile (shared base)"
+          context: |
+            hermes profile create pmoves-hermes
+            Config: skills dir = pmoves/hermes-skills, memory provider = sqlite,
+            toolsets default = web, terminal, file, messaging, cronjob, delegation,
+            model = openrouter/nous-hermes or local ollama fallback.
+            NATS MCP server wired to pmoves-nats:4222.
+          status: done   # 2026-07-12: default profile configured with fallback_providers + credential_pool_strategies
+          owner: hermes-agent
+
+        - id: hermes.integration.profile.node_elder_melchor
+          task: "elder-melchor node profile (THIS NODE — Ageless Beauty practice)"
+          context: |
+            Hardware: Intel Core i7-9750H 6C/12T, GTX 1650 4GB, 32GB RAM, Windows 10.
+            Cloud-first model routing: Z.AI primary, local GPU for embeddings only.
+            Config aligned to Hermes v0.18.2 schema on 2026-07-12:
+            - fallback_providers: kimi → minimax-oauth → openrouter → ollama-cloud
+            - credential_pool_strategies: zai fill_first, openrouter round_robin
+            - privacy.redact_pii: true (HIPAA-aware — PII redaction, not full compliance)
+            - Profile .env: GLM_API_KEY, KIMI_API_KEY, OLLAMA_API_KEY populated
+            - Config version: v33 (migrated)
+            - hermes doctor: all checks passed
+            See: pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md §v0.18.2 Config Alignment
+          status: done
+          owner: hermes-agent
+
+        - id: hermes.integration.profile.node_z890
+          task: "z890 node profile"
+          context: |
+            Hardware: RTX 3090 Ti 24GB, Windows 11 Pro, 20C/32GB RAM.
+            Terminal backend: local (bash via git-bash; PowerShell fallback disabled).
+            Gateway port: 7700. Ollama port: 11434.
+            Local models:
+              - hermes3:8b (Ollama, ~5GB VRAM) -- PRIMARY local model
+              - Gemma4 embed via HF (cpu/gpu hybrid)
+            Model fallback: Tailscale -> 5090 Ollama or Spark Ollama for 70B.
+            TTS: edge (default). STT: faster-whisper local (base model).
+            Toolsets: web, terminal, file, browser, image_gen, vision.
+            Notes: Ctrl+Enter for newline (Alt+Enter trapped by Windows Terminal fullscreen).
+            Forward-slash paths preferred in bash. UTF-8 BOM config fix if needed.
+          status: planned
+          owner: z890-claude
+
+        - id: hermes.integration.profile.node_5090
+          task: "5090 node profile"
+          context: |
+            Hardware: RTX 5090 32GB, primary GPU workhorse.
+            Gateway port: 7700. Ollama primary host.
+            Local models:
+              - hermes3:8b (Ollama, ~5GB VRAM)
+              - hermes3:70b (Ollama, ~40GB VRAM) -- STAGING, not primary
+              - Gemma4 embed via Ollama (2560d)
+              - Unsloth Hermes 8B GGUF (optimized)
+            Toolsets: +rl, +moa, +video (GPU-available). Cron jobs: enabled.
+            TTS: elevenlabs or edge. STT: faster-whisper local (small/medium).
+            TensorZero gateway (3030) routes to Ollama for local preference.
+          status: planned
+          owner: 5090-claude
+
+        - id: hermes.integration.profile.node_4090
+          task: "4090-laptop node profile"
+          context: |
+            Hardware: RTX 4090 Mobile 16GB, mobile/laptop node.
+            Gateway port: 7700 (disabled when battery-saver).
+            Local models:
+              - hermes3:8b (Ollama, ~5GB VRAM) -- PRIMARY
+              - Unsloth Hermes 8B GGUF (mobile-optimized)
+            Toolsets minimal: web, terminal, file, messaging.
+            Memory: sqlite (no cloud sync on mobile).
+            Model fallback: Tailscale -> 5090 for heavier inference.
+          status: planned
+          owner: 4090-claude
+
+        - id: hermes.integration.profile.node_spark
+          task: "spark (DGX-Spark GB10) node profile"
+          context: |
+            Hardware: GB10 Grace-Blackwell 128GB unified memory.
+            Role: PRIMARY inference node for 70B+ models and NeMo Omni.
+            Gateway port: 7700 (optional -- primarily inference host, not gateway).
+            Local models:
+              - hermes3:70b (Ollama, ~40GB VRAM) -- PRIMARY 70B host
+              - hermes3:8b (Ollama, ~5GB VRAM) -- secondary / testing
+              - NeMo Omni VL (NVLM-D-72B, HuggingFace, requires NeMo >= 2.1)
+              - Gemma4 embed via HF (sentence-transformers)
+              - Unsloth Hermes 70B GGUF (optimized for GB10)
+            Toolsets: +rl, +moa, +video, +image_gen (massive GPU headroom).
+            Cron: enabled for model-sync and dataset prep jobs.
+            TTS: elevenlabs (premium) or local edge. STT: faster-whisper (medium/large-v3).
+            NATS: publishes large inference completion events.
+            Notes: 70B models are SPARK-ONLY. Do not attempt on 5090/4090/Z890.
+          status: planned
+          owner: spark-codex
+
+        - id: hermes.integration.profile.node_b850
+          task: "b850 / rdna4 (PMOVES-Knuckles) node profile"
+          context: |
+            Hardware: Dual AMD R9700 64GB VRAM total, ROCm 7.1.
+            Role: Linux container host + ROCm dual-GPU inference.
+            Gateway port: 7700. Ollama with ROCm backend.
+            Local models:
+              - hermes3:8b (Ollama ROCm, ~5GB VRAM per GPU)
+              - Gemma4 embed via HF sentence-transformers + ROCm
+              - GGUF row-split across dual R9700 (llama.cpp with ROCm)
+            Toolsets: web, terminal, file, messaging, cronjob, code_execution.
+            TTS: edge (local). STT: faster-whisper (base).
+            Notes: ROCm stack required (rocm-dev, hip-runtime). Not CUDA.
+            Row-split inference tested with Gemma4 GGUF; Hermes GGUF pending.
+          status: done   # 2026-07-03: pmoves-hermes-knuckles profile live (v0.18.0), TZ-first, registry lanes
+          owner: b850-claude
+
+        - id: hermes.integration.profile.node_kvm
+          task: "KVM VPS headless profile"
+          context: |
+            No GPU. Gateway port: 7700. Model: openrouter/nous-hermes.
+            Toolsets: web, terminal, file, messaging, cronjob.
+            No TTS/STT (headless). NATS leaf node to pmoves-nats.
+          status: planned
+          owner: z890-claude
+
+    # ========================================================================
+    # Phase 4: NATS Bridge
+    # ========================================================================
+    - id: hermes.integration.nats
+      task: "NATS subject wiring and MCP bridge"
+      context: "Connect Hermes Agent gateway events to PMOVES NATS bus"
+      agent_hint: hermes-agent
+      children:
+        - id: hermes.integration.nats.subjects
+          task: "Subject catalog update"
+          context: |
+            New subjects:
+            - hermes.gateway.launched.v1
+            - hermes.gateway.health.v1
+            - hermes.mcp.toolcall.v1
+            - hermes.skill.curated.v1
+            - hermes.cron.executed.v1
+            - hermes.delegate.completed.v1
+            Add to pmoves/config/nats-subjects.yaml and .claude/context/nats-subjects.md.
+          status: planned
+          owner: hermes-agent
+
+        - id: hermes.integration.nats.mcp
+          task: "MCP server as NATS bridge"
+          context: |
+            hermes mcp serve exposes PMOVES tools via MCP protocol.
+            NATS relay: each MCP tool call publishes to hermes.mcp.toolcall.v1
+            with payload {room, tool, args, result, latency_ms}.
+          status: planned
+          owner: hermes-agent
+
+    # ========================================================================
+    # Phase 5: Gateway Deployment
+    # ========================================================================
+    - id: hermes.integration.gateway
+      task: "Hermes gateway fleet deployment"
+      context: "Multi-platform gateway instances across PMOVES fleet"
+      agent_hint: hermes-agent
+      children:
+        - id: hermes.integration.gateway.install
+          task: "Install Hermes Agent on fleet nodes"
+          context: |
+            curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+            Per node: hermes setup, hermes auth add, hermes profile create pmoves-hermes.
+          status: planned
+          owner: z890-claude
+
+        - id: hermes.integration.gateway.discord
+          task: "Discord bot bridge"
+          context: |
+            hermes gateway setup -> Discord platform.
+            Bot token via CHIT secrets funnel (env.shared -> hermes .env).
+            PMOVES-ClawZ replacement path: hermes-agent handles Discord
+            gateway while ClaWZ focuses on coding-agent coordination.
+          status: planned
+          owner: hermes-agent
+
+        - id: hermes.integration.gateway.telegram
+          task: "Telegram bot bridge"
+          context: |
+            hermes gateway setup -> Telegram platform.
+            Bot token via CHIT funnel. Target: PMOVES community bot.
+          status: planned
+          owner: hermes-agent
+
+    # ========================================================================
+    # Phase 6: Skills & Curation
+    # ========================================================================
+    - id: hermes.integration.skills
+      task: "PMOVES-specific Hermes skills"
+      context: "Skills that bridge PMOVES services to Hermes Agent operators"
+      agent_hint: hermes-agent
+      children:
+        - id: hermes.integration.skills.integration_skill
+          task: "hermes-agent-integration skill"
+          context: |
+            SKILL.md in .claude/skills/hermes-agent-integration/.
+            Covers: launch gateway, install skill, run cron, delegate task,
+            query NATS, check room health.
+          status: done
+          owner: hermes-agent
+
+        - id: hermes.integration.skills.pmoves_skills
+          task: "PMOVES service skills"
+          context: |
+            Proposed skills:
+            - pmoves-health: fleet health check via NATS + make smoke
+            - pmoves-deploy: sidecar deployment workflow
+            - pmoves-cipher: CHIT memory store/search wrapper
+            - pmoves-nats: publish/subscribe helper
+            - pmoves-room: room stage transition helper
+          status: planned
+          owner: hermes-agent
+
+    # ========================================================================
+    # Phase 7: CHIT & Security
+    # ========================================================================
+    - id: hermes.integration.security
+      task: "CHIT-aware security hardening"
+      context: "Hermes Agent secrets and identity within PMOVES trust fabric"
+      agent_hint: hermes-agent
+      children:
+        - id: hermes.integration.security.secrets
+          task: "Secrets funnel integration"
+          context: |
+            Hermes .env and auth.json live in ~/.hermes/profiles/pmoves-hermes/.
+            These paths are gitignored. Secrets populated via:
+            make -C pmoves secrets-funnel -> hermes config env-path.
+            CHIT signing required for production gateway tokens.
+          status: planned
+          owner: z890-claude
+
+        - id: hermes.integration.security.chit
+          task: "CHIT attestation for gateway events"
+          context: |
+            hermes.gateway.* events carry CHIT signature field.
+            Node identity attested via Tailscale machine key + CHIT signing key.
+            See pmoves/docs/security/CHIT_AGENT_GATEWAY_SPEC.md (proposed).
+          status: planned
+          owner: hermes-agent
+
+    # ========================================================================
+    # Phase 8: Documentation & Signoff
+    # ========================================================================
+    - id: hermes.integration.docs
+      task: "Integration docs and AGNOTE signoff"
+      context: "Canonical docs for operators and agents"
+      agent_hint: hermes-agent
+      children:
+        - id: hermes.integration.docs.spec
+          task: "HERMES_AGENT_INTEGRATION.md"
+          context: |
+            pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md -- full spec.
+            Covers: architecture, bridge contracts, deployment runbook,
+            troubleshooting, security boundaries.
+          status: done
+          owner: hermes-agent
+
+        - id: hermes.integration.docs.agnote
+          task: "AGNOTE4482 convergence entry"
+          context: |
+            Add HERMES Integration Wave to AGNOTE4482.md convergence index
+            and AGNOTE4482_SITREP.md wave index.
+            Claim register entry in AGNOTE4482PHI.t1.md.
+          status: planned
+          owner: hermes-agent
+
+        - id: hermes.integration.docs.signoff
+          task: "AGNOTE4482_SIGNOFF_CHECKLIST.md update"
+          context: |
+            Add HERMES section to signoff checklist:
+            - Room manifest validated
+            - NATS subjects catalogued
+            - Gateway health checks pass
+            - CHIT secrets flow documented
+            - Profile configs reviewed per node
+          status: planned
+          owner: hermes-agent
+
+    # ========================================================================
+    # Phase 9: Research Integration (2026-06-04)
+    # ========================================================================
+    - id: hermes.integration.research
+      task: "Research integration from YouTube deep dives"
+      context: |
+        Integrate findings from NVIDIA Neotron 3 Ultra video and NousResearch Hermes Agent demo.
+      status: done
+      owner: z890-claude
+      children:
+        - id: hermes.integration.research.neotron3
+          task: "Evaluate Neotron 3 Ultra for Spark node"
+          context: |
+            550B MoE / 55B active, 300+ tok/sec, best open model on Pinchbench.
+            Training recipes and datasets released openly by NVIDIA.
+            Add to Spark node profile as PRIMARY model candidate.
+            Evaluate vLLM/TensorRT-LLM serving on GB10.
+            See: pmoves/research/RESEARCH_Neotron3_Ultra.md
+          status: done
+          owner: spark-codex
+
+        - id: hermes.integration.research.openshell
+          task: "Integrate OpenShell sandboxing concepts"
+          context: |
+            Policy-based egress controls, environment variable masking, multi-user Alice/Bob pattern.
+            Add sandbox_policy to hermes-agent.room.control.json.
+            Document in CHIT secrets funnel.
+            See: pmoves/research/RESEARCH_Hermes_Agent_Deep_Dive.md
+          status: done
+          owner: z890-claude
+
+        - id: hermes.integration.research.pr_workflow
+          task: "Create PR workflow automation skill"
+          context: |
+            Review PRs, cherry-pick commits, merge via rebase, salvage as reusable skill.
+            Inspired by NousResearch demo with Alice/Bob multi-user pattern.
+            See: .claude/skills/hermes-pr-workflow/SKILL.md
+          status: done
+          owner: z890-claude
+
+        - id: hermes.integration.research.model_mesh
+          task: "Update Local Model Mesh with Neotron 3 Ultra"
+          context: |
+            Add Neotron 3 Ultra to Spark node profile.
+            Update Model Routing Matrix in HERMES_AGENT_INTEGRATION.md.
+            Monitor for quantized variants (INT8/FP8) for 5090 staging.
+          status: done
+          owner: spark-codex
+
+    # ========================================================================
+    # Phase 10: Production Hardening (Pending)
+    # ========================================================================
+    - id: hermes.integration.hardening
+      task: "Production hardening for Live stage promotion"
+      context: "Security audit, soak testing, CHIT signing, voice-activated tokens"
+      status: planned
+      owner: z890-claude
+      children:
+        - id: hermes.integration.hardening.sandbox_audit
+          task: "OpenShell sandbox policy audit"
+          context: "Verify egress rules, masking effectiveness, forbidden patterns"
+          status: planned
+          owner: z890-claude
+
+        - id: hermes.integration.hardening.neotron_bench
+          task: "Benchmark Neotron 3 Ultra on Spark"
+          context: "Pinchbench, agent harness tests, throughput measurement"
+          status: planned
+          owner: spark-codex
+
+        - id: hermes.integration.hardening.chit_signing
+          task: "CHIT voice-activated signing for production tokens"
+          context: "Gateway production token generation requires voice auth"
+          status: planned
+          owner: z890-claude
+
+        - id: hermes.integration.hardening.soak
+          task: "Multi-node soak test (all 7 nodes)"
+          context: "72-hour soak with NATS bridge, gateway health, cron jobs"
+          status: planned
+          owner: hermes-agent
+
+    # ========================================================================
+    # Hardware Correction Log
+    # ========================================================================
+    - id: hermes.integration.hardware.correction.z890
+      task: "Z890 hardware spec correction"
+      context: |
+        2026-06-04 live system scan corrected Z890 (Elder-Melchor) specs:
+        - GPU: RTX 3090 Ti 24GB (WRONG) -> GTX 1650 4GB (CORRECT)
+        - OS: Windows 11 Pro (WRONG) -> Windows 10 (CORRECT)
+        - CPU: 20C (WRONG) -> 6 physical / 12 logical @ 2592 MHz (CORRECT)
+        - RAM: 32GB (close) -> 31.73 GB (CORRECT)
+        - Network: Wi-Fi <LOCAL_IP_ELDER_MELCHOR> + Tailscale <TAILSCALE_IP_ELDER_MELCHOR> + WSL bridge
+        Impact: Model routing matrix, Ollama config, glances thresholds all updated.
+        Commit: fix(hermes-profile): correct Z890 GPU from RTX 3090 Ti to GTX 1650
+      status: done
+      owner: z890-claude
+
+
+# ============================================================
+# POST-PR FOLLOW-UP: Provider Review + Docker MCP + Unsloth/HF
+# Added: 2026-06-04
+# ============================================================
+# This section tracks actions to take AFTER the initial 5 PRs are merged.
+# These require real subscription credentials and runtime testing.
+
+post_pr_provider_review:
+  summary: "Validate provider hierarchy against actual subscriptions"
+  tasks:
+    - id: provider-soak-1
+      action: "Test Z.AI Coding Plan with real ZAI_API_KEY -- run coding benchmark"
+      assignee: elder-melchor
+      blocked_by: CHIT secrets populated
+    - id: provider-soak-2
+      action: "Test Kimi Allegro Coding Plan -- verify long-context (>128K) handling"
+      assignee: elder-melchor
+      blocked_by: CHIT secrets populated
+    - id: provider-soak-3
+      action: "Test MiniMax Token Plan -- creative writing + dialogue benchmark"
+      assignee: elder-melchor
+      blocked_by: CHIT secrets populated
+    - id: provider-soak-4
+      action: "Test Alibaba Coding Plan -- Chinese code completion benchmark"
+      assignee: elder-melchor
+      blocked_by: CHIT secrets populated
+    - id: credential-pool
+      action: "Verify comma-separated key rotation (ZAI_API_KEYS, OPENROUTER_API_KEYS)"
+      assignee: elder-melchor
+      blocked_by: Multiple keys obtained from subscriptions
+
+post_pr_docker_mcp:
+  summary: "Expand Docker MCP toolkit integration"
+  tasks:
+    - id: docker-mcp-1
+      action: "Verify docker container execution on Elder-Melchor (WSL2 + Docker Desktop)"
+      assignee: elder-melchor
+      command: "docker run --rm nikolaik/python-nodejs:python3.11-nodejs20 python --version"
+    - id: docker-mcp-2
+      action: "Add n8n MCP server to room manifest"
+      assignee: z890-claude  # Z890 has more Docker infra experience
+    - id: docker-mcp-3
+      action: "Add ComfyUI MCP server for image_gen on 5090 remote"
+      assignee: spark  # Spark has GB10 GPU headroom
+    - id: docker-mcp-4
+      action: "Add Hi-RAG gateway MCP for RAG queries"
+      assignee: 5090  # 5090 runs Hi-RAG v2 GPU
+
+post_pr_hf_unsloth:
+  summary: "HuggingFace + Unsloth local model optimization"
+  tasks:
+    - id: hf-1
+      action: "Install llama.cpp with CUDA support on Elder-Melchor"
+      assignee: elder-melchor
+      note: "GTX 1650 may need CLBlast instead of full CUDA. Test Q4_K_M GGUF."
+    - id: hf-2
+      action: "Install Unsloth loaders and test hermes3-8b-GGUF"
+      assignee: elder-melchor
+      blocked_by: llama.cpp CUDA/CLBlast working
+    - id: hf-3
+      action: "Evaluate NeMo Omni 72B on Spark via vLLM / TensorRT-LLM"
+      assignee: spark
+      blocked_by: NeMo 2.1+ installed, vLLM serving configured
+    - id: hf-4
+      action: "Update model routing matrix with HF/Unsloth benchmarks"
+      assignee: elder-melchor
+      blocked_by: All HF tasks complete
+
+
+post_pr_ageless_beauty:
+  summary: "Ageless Beauty practice-specific integrations"
+  tasks:
+    - id: ab-theme-1
+      action: "Apply 4090 CLAUDE theme work to Pinokio HERMES mod"
+      assignee: elder-melchor
+      reference: "4090-claude-themes"  # Referenced from 4090 node work
+      note: "Rose gold + sage green terminal skin. Patient mode auto-redact."
+    - id: ab-hipaa-1
+      action: "Configure Hostinger VPS for HIPAA-compliant patient portal"
+      assignee: elder-melchor
+      blocked_by: "Hostinger account + domain configured"
+    - id: ab-health-1
+      action: "Integrate PMOVES-Health-wger for patient fitness plans"
+      assignee: elder-melchor
+      blocked_by: "wger API credentials + patient consent workflow"
+    - id: ab-wealth-1
+      action: "Integrate PMOVES-Wealth for practice financial tracking"
+      assignee: elder-melchor
+      blocked_by: "QuickBooks / Stripe credentials"
+    - id: ab-bpm-1
+      action: "Design BPM³ workflows: patient intake -> insurance -> follow-up"
+      assignee: elder-melchor
+      blocked_by: "BPM engine selection (n8n / temporal / custom)"
+      notes: |
+        BPM in PMOVES is THREE layers:
+        BPM¹ Beats Per Minute: Flute Gateway prosodic timing for voice reminders
+        BPM² Bridge Protocol Module: CHIT geometry for HIPAA-safe patient data
+        BPM³ Business Process Management: Practice workflow automation
+        All three communicate via NATS: tokenism.prosodic.bpm.v1 -> tokenism.geometry.event.v1 -> hermes.mcp.toolcall.v1"
+    - id: ab-chakra-1
+      action: "Implement Chakra wellness tracking for patient energy assessments"
+      assignee: elder-melchor
+      blocked_by: "Chakra data model + patient consent"
+    - id: ab-voice-1
+      action: "Configure 'Ageless Beauty, activate' wake word for hands-free charting"
+      assignee: elder-melchor
+      note: "Uses local STT (faster-whisper base) + voice activation gate"
+
+
+# ============================================================
+# v0.18.2 CONFIG ALIGNMENT (2026-07-12)
+# ============================================================
+# Hermes Agent v0.18.2 config schema alignment for Elder-Melchor.
+# Profile config rewritten from custom PMOVES keys to standard
+# Hermes v0.18.2 keys (fallback_providers, credential_pool_strategies).
+# See: pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md §v0.18.2 Config Alignment
+
+v0182_config_alignment:
+  summary: "Align pmoves-hermes-elder profile to Hermes v0.18.2 config schema"
+  date: "2026-07-12"
+  owner: hermes-agent
+  changes:
+    - id: v0182-1
+      action: "Migrate config version v0 → v33 via hermes config migrate"
+      status: done
+    - id: v0182-2
+      action: "Set fallback_providers: kimi → minimax-oauth → openrouter → ollama-cloud"
+      status: done
+    - id: v0182-3
+      action: "Set credential_pool_strategies: zai fill_first, openrouter round_robin"
+      status: done
+    - id: v0182-4
+      action: "Populate profile .env with real API keys (GLM_API_KEY, KIMI_API_KEY, OLLAMA_API_KEY)"
+      status: done
+    - id: v0182-5
+      action: "Enable privacy.redact_pii: true (HIPAA-aware)"
+      status: done
+    - id: v0182-6
+      action: "Activate pmoves-hermes-elder as default profile"
+      status: done
+    - id: v0182-7
+      action: "Verify with hermes doctor — all checks passed"
+      status: done
+
+kilo_provider_integration:
+  summary: "Kilo Gateway built-in provider (kilocode) for PMOVES-crush integration"
+  date: "2026-07-12"
+  owner: hermes-agent
+  findings:
+    - "Kilo Gateway (api.kilo.ai/api/gateway) is a built-in Hermes v0.18.2 provider"
+    - "Provider key: kilocode, env var: KILOCODE_API_KEY"
+    - "Configure via: hermes model → Kilo Code, or add as fallback_providers entry"
+    - "Kilo offers 500+ models via single key, including auto-balanced routing"
+    - "PMOVES-crush integration can use Kilo without custom code"
+    - "No KILOCODE_API_KEY on Elder-Melchor yet — add when subscription activated"
+  status: planned
+  blocked_by: "KILOCODE_API_KEY from Kilo subscription"
+
+
+# ============================================================
+# PMOVES.AI Submodule Fleet (Real .gitmodules Structure)
+# ============================================================
+# All PMOVES services are Git submodules. Most are not initialized.
+# Full fleet: 50+ submodules across 10 tiers.
+# Canonical: .gitmodules at repo root.
+# ============================================================
+
+submodule_fleet:
+  summary: "PMOVES.AI submodule fleet for Ageless Beauty practice"
+  init_command: "git submodule update --init <submodule-path>"
+  
+  priority_for_ageless_beauty:
+    - submodule: "Pmoves-Health-wger"
+      tier: "Health"
+      git: "https://github.com/POWERFULMOVES/Pmoves-Health-wger.git"
+      branch: "PMOVES.AI-Edition-Hardened"
+      use: "Patient wellness tracking, fitness prescriptions"
+      hipaa: true
+      
+    - submodule: "PMOVES-Wealth"
+      tier: "Financial"
+      git: "https://github.com/POWERFULMOVES/PMOVES-Wealth.git"
+      branch: "PMOVES.AI-Edition-Hardened"
+      use: "Practice billing, insurance claims, financial dashboard"
+      hipaa: true
+
+    - submodule: "PMOVES-n8n"
+      tier: "Workflow"
+      git: "https://github.com/POWERFULMOVES/PMOVES-n8n.git"
+      branch: "PMOVES.AI-Edition-Hardened"
+      use: "BPM³ workflow automation: intake → insurance → follow-up"
+      
+    - submodule: "PMOVES-MAI-UI"
+      tier: "UI"
+      git: "https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git"
+      branch: "main"
+      use: "Practice web interface, patient portal"
+      
+    - submodule: "Pmoves-Jellyfin-AI-Media-Stack"
+      tier: "Media"
+      git: "https://github.com/POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack.git"
+      branch: "PMOVES.AI-Edition-Hardened"
+      use: "Patient education videos, BPM¹ audio content hosting"
+      
+    - submodule: "PMOVES-supabase"
+      tier: "Data"
+      git: "https://github.com/POWERFULMOVES/PMOVES-supabase.git"
+      branch: "PMOVES.AI-Edition-Hardened"
+      use: "Patient database, encrypted storage, HIPAA audit logging"
+      
+    - submodule: "Pmoves-cipher"
+      tier: "Security"
+      git: "https://github.com/POWERFULMOVES/Pmoves-cipher.git"
+      branch: "main"
+      use: "CHIT encryption, patient identity verification"
+      
+    - submodule: "PMOVES-Pinokio-Ultimate-TTS-Studio"
+      tier: "Voice"
+      git: "https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git"
+      branch: "PMOVES.AI-Edition-Hardened"
+      use: "BPM¹ prosodic TTS for patient reminders and education"
+      
+    - submodule: "Pmoves-hyperdimensions"
+      tier: "Geometry"
+      git: "https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git"
+      branch: "PMOVES.AI-Edition-Hardened"
+      use: "BPM² CHIT visualization, patient data as geometric shapes"
+      
+    - submodule: "PMOVES-ToKenism-Multi"
+      tier: "Attribution"
+      git: "https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git"
+      branch: "PMOVES.AI-Edition-Hardened"
+      use: "BPM² shape attribution, SHA-256 Shape IDs for 30-day replay"
+
+
+
+# ============================================================
+# REVISED SCOPE: HERMES Config First, Practice Second
+# ============================================================
+# Date: 2026-06-04
+# Decision: Ageless Beauty practice deferred until HERMES is
+#   fully configured across the fleet. Current website hosting
+#   platform is UNKNOWN and will be researched separately.
+#   Hostinger migration requires separate research task.
+# ============================================================
+
+revised_scope_hermes_config_first:
+  statement: "HERMES configuration and fleet integration is the primary deliverable."
+  priority_order:
+    - "1. HERMES config files (elder-melchor.yaml, TAC tree, registry, skills)"
+    - "2. Fleet profile verification (SPARK + B850 real context)"
+    - "3. Gateway launch and health validation"
+    - "4. NATS bridge soak test"
+    - "5. CHIT signing and PR review"
+    - "6. Ageless Beauty practice (DEFERRED)"
+
+  ageless_beauty_deferred:
+    reason: "Practice integrations require working HERMES gateway first."
+    current_status: "Website hosted on UNKNOWN platform (not Hostinger yet)."
+    research_required:
+      - item: "Identify current Ageless Beauty website host"
+      - item: "Research Hostinger migration path (domain transfer, SSL, WordPress)"
+      - item: "HIPAA compliance review of Hostinger vs current host"
+      - item: "Patient portal requirements (Joomla? WordPress? Custom?)"
+    blocked: true
+    blocked_by:
+      - "HERMES gateway running on elder-melchor"
+      - "Website host identified and documented"
+      - "Hostinger account created (if migration proceeds)"
+
+  fleet_context_plan:
+    phase_1_elder_melchor:
+      status: DONE
+      deliverables:
+        - "Hermes Agent v0.15.1 installed"
+        - "Profile pmoves-hermes-elder created"
+        - "Config validated (hermes doctor)"
+        - "6 atomic commits on main"
+
+    phase_2_spark:
+      status: CONFIG-READY   # spark.yaml v2 (TZ-first) landed 2026-07-03; node offline on tailnet — apply via SPARK_HERMES_APPLY runbook
+      node: "spark (GB10 128GB, 70B primary)"
+      goal: "Gather real HERMES config context"
+      steps:
+        - "SSH/tailscale to spark"
+        - "Install Hermes Agent"
+        - "Create profile pmoves-hermes-spark"
+        - "Inspect config.yaml for NeMo model settings"
+        - "Return real config to update spark.yaml DRAFT"
+      estimated_time: "30-60 min"
+      blocked_by: "elder-melchor commits pushed + Z890 review started"
+
+    phase_3_b850_knuckles:
+      status: DONE   # 2026-07-03 live standup: hermes v0.18 profile, dynamic model plane, worker_qwen promoted
+      node: "b850 (Dual AMD R9700 64GB ROCm)"
+      goal: "Gather real HERMES config context"
+      steps:
+        - "SSH to b850"
+        - "ROCm check (rocm-smi, rocminfo)"
+        - "Install Hermes Agent"
+        - "Create profile pmoves-hermes-knuckles"
+        - "Inspect config.yaml for ROCm flags"
+        - "Return real config to update b850.yaml DRAFT"
+      estimated_time: "30-60 min"
+      blocked_by: "SPARK context gathered"
+
+    phase_4_profile_refinement:
+      status: PENDING
+      goal: "Replace DRAFT profiles with verified ones"
+      deliverable: "New PR: feat(hermes-profile): verified fleet profiles v2"
+      replaces: "DRAFT_PR1_hermes-profiles.md"
+      blocked_by: "SPARK + B850 context gathered"
+
+    phase_5_gateway_validation:
+      status: PENDING
+      goal: "Start HERMES gateway on elder-melchor, verify health"
+      blocked_by: "CHIT secrets populated (OpenRouter, ZAI, etc.)"
+
+
+# ============================================================
+# DOCKER MCP TOOLKIT (2026-07-12)
+# ============================================================
+# Docker MCP Gateway connecting Hermes Agent to external MCP servers
+# via stdio transport. 167 tools discovered across 3 servers.
+
+docker_mcp_toolkit:
+  summary: "Docker MCP Toolkit integration for Hermes Agent on Elder-Melchor"
+  date: "2026-07-12"
+  owner: hermes-agent
+  status: done
+  config:
+    docker_mcp_config: "~/.docker/mcp/config.yaml"
+    servers_enabled:
+      - github-official      # 36 tools — PMOVES repo operations, PR management
+      - hostinger-mcp-server  # 78 tools — VPS, domain, hosting for Ageless Beauty
+      - hugging-face          # 8 tools — model search, paper search, space search
+      - markitdown            # document conversion
+    total_tools_discovered: 167
+    transport: stdio
+  hermes_mcp_config:
+    command: "docker"
+    args: ["mcp", "gateway", "run", "--servers", "github-official,hostinger-mcp-server,hugging-face,markitdown"]
+    enabled: true
+    timeout_seconds: 60
+    connection_time_ms: 28359
+  use_cases:
+    - "GitHub: create PRs, list issues, search code, manage branches from Hermes chat"
+    - "Hostinger: manage VPS, domains, DNS for agelessbeauty.pmoves.ai"
+    - "HuggingFace: search models, find papers, discover Spaces for fleet research"
+  notes: |
+    Docker MCP Gateway connects Hermes to 3 MCP servers via stdio transport.
+    Gateway takes ~6s to read config + pull images on first connect.
+    MCP timeout set to 60s (default 40s too short for cold start).
+    Credentials via Docker Desktop secrets API:
+    - GITHUB_PERSONAL_ACCESS_TOKEN (from gh auth)
+    - APITOKEN (Hostinger — needs Docker Desktop secrets)
+    - HF_TOKEN (HuggingFace — needs Docker Desktop secrets)

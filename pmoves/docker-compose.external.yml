@@ -15,6 +15,10 @@ services:
       DJANGO_CLEAR_STATIC_FIRST: "${WGER_CLEAR_STATIC_FIRST:-True}"
       TIME_ZONE: "${WGER_TIME_ZONE:-America/New_York}"
       SITE_URL: "${WGER_SITE_URL:-http://localhost:8010}"
+      # SSO gateway: trust the Remote-User header injected by Traefik forward-auth.
+      # wger's nginx front (wger-nginx) must proxy_set_header Remote-User upstream.
+      WGER_ALLOW_REMOTE_USER: "True"
+      WGER_REMOTE_USER_HEADER: "Remote-User"
     volumes:
       - wger-static:/home/wger/static
       - wger-media:/home/wger/media
@@ -30,8 +34,26 @@ services:
         aliases:
           - pmoves-wger-nginx
       pmoves_external: {}
-    ports:
-      - "${WGER_HOST_PORT:-8010}:80"
+    # No host `ports:` — reachable only through Traefik (health.pmoves.ai), so the
+    # forward-auth Remote-User header cannot be spoofed by bypassing the proxy.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      # Web UI router — SSO forward-auth (strip runs first, forward-auth re-adds trusted headers)
+      - traefik.http.routers.health.rule=Host(`health.pmoves.ai`)
+      - traefik.http.routers.health.entrypoints=websecure
+      - traefik.http.routers.health.tls.certresolver=cf
+      - traefik.http.routers.health.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
+      - traefik.http.services.health.loadbalancer.server.port=80
+      # API router — higher priority, token auth only (no SSO redirect).
+      # wger phone app uses Authorization: Token <key>, can't follow browser redirects.
+      # strip-client-auth-headers prevents Remote-User spoofing on the unauthenticated path.
+      - traefik.http.routers.health-api.rule=Host(`health.pmoves.ai`) && PathPrefix(`/api/`)
+      - traefik.http.routers.health-api.entrypoints=websecure
+      - traefik.http.routers.health-api.tls.certresolver=cf
+      - traefik.http.routers.health-api.priority=100
+      - traefik.http.routers.health-api.middlewares=strip-client-auth-headers@file
+      - traefik.http.routers.health-api.service=health
     volumes:
       - wger-static:/wger/static:ro
       - wger-media:/wger/media:ro
@@ -41,6 +63,12 @@ services:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
     container_name: pmoves-firefly
     restart: unless-stopped
+    # Host port for operator UI access (first-user registration + PAT minting).
+    # The committed auth bootstrap (integrations/firefly-iii/auth/bootstrap.sh)
+    # defaults FIREFLY_BASE_URL to http://localhost:8075 — this mapping is the
+    # other half of that contract.
+    ports:
+      - "${FIREFLY_HTTP_PORT:-8075}:8080"
     networks:
       pmoves_app:
         aliases:
@@ -54,8 +82,24 @@ services:
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
-    ports:
-      - "${FIREFLY_PORT:-8075}:8080"  # Default 8075; 8082 reserved for media-audio in docker-compose.yml
+      # Neutralise Windows SSL_CERT_FILE leak
+      SSL_CERT_FILE: ""
+      # SSO gateway: Firefly III has NO native OIDC (FR #10662) — remote_user_guard
+      # IS the documented SSO path. Auto-provisions the X-Auth-Email user on first
+      # header-auth. DISABLE_FRAME_HEADER lets it render behind the proxy.
+      AUTHENTICATION_GUARD: remote_user_guard
+      AUTHENTICATION_GUARD_HEADER: Remote-User
+      AUTHENTICATION_GUARD_EMAIL: X-Auth-Email
+      DISABLE_FRAME_HEADER: "true"
+    # No host `ports:` — reachable only through Traefik (wealth.pmoves.ai).
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.wealth.rule=Host(`wealth.pmoves.ai`)
+      - traefik.http.routers.wealth.entrypoints=websecure
+      - traefik.http.routers.wealth.tls.certresolver=cf
+      - traefik.http.routers.wealth.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
+      - traefik.http.services.wealth.loadbalancer.server.port=8080
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
@@ -69,10 +113,24 @@ services:
       - SETGID
       - SETUID
     tmpfs:
+      # A tmpfs mount starts EMPTY and ROOT-OWNED on every container start. Firefly's
+      # php-fpm workers run as www-data (uid=33, gid=33), so without uid/gid they cannot
+      # create the subdirectories Laravel needs — notably storage/framework/cache/data —
+      # and EVERY request 500s with `file_put_contents(...): No such file or directory`.
+      # That is what filled a 10.7 GB container log while Blackbox Exporter polled it.
+      # Docker's tmpfs reference lists uid/gid/mode as supported options and recommends
+      # uid/gid precisely because tmpfs permissions reset across restarts.
+      # noexec,nosuid are RETAINED — the hardening intent is preserved, not traded away.
+      # See docs/handoffs/firefly-tmpfs-ownership-500-log-flood-2026-08-16.md
+      # (size= limits deliberately NOT set here: an unmeasured bound would risk a new
+      #  outage of the same shape. Tracked as a follow-up in that handoff.)
       - /tmp:noexec,nosuid
-      - /var/www/html/storage/framework/sessions:noexec,nosuid
-      - /var/www/html/storage/framework/views:noexec,nosuid
-      - /var/www/html/storage/framework/cache:noexec,nosuid
+      - /var/www/html/storage/framework/sessions:noexec,nosuid,uid=33,gid=33,mode=0770
+      - /var/www/html/storage/framework/views:noexec,nosuid,uid=33,gid=33,mode=0770
+      - /var/www/html/storage/framework/cache:noexec,nosuid,uid=33,gid=33,mode=0770
+    # Health check — Firefly III is upstream Laravel with no /healthz endpoint.
+    # Probe the /api/v1/about route (Firefly-specific health indicator).
+    # Matches the Archon/agent-zero blackbox pattern for upstream services.
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/v1/about || exit 1"]
       interval: 30s
@@ -89,6 +147,8 @@ services:
           memory: 256M
 
   open-notebook-surrealdb-ext:
+    # Graceful stop: RocksDB flush before Docker escalates to SIGKILL.
+    stop_grace_period: 30s
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: pmoves-open-notebook-surrealdb
     restart: unless-stopped
@@ -106,6 +166,16 @@ services:
       - --pass
       - ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
       - rocksdb:/mydata/surreal.db
+    # Distroless image: no shell, so CMD (not CMD-SHELL) and an absolute binary path.
+    # `surreal isready` is SurrealDB's own probe — verified against the live
+    # container: exits 0 printing OK. Without this, any dependant using
+    # condition: service_healthy would wait forever.
+    healthcheck:
+      test: ["CMD", "/surreal", "isready", "--conn", "http://localhost:8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       pmoves_app:
         aliases:
@@ -115,13 +185,17 @@ services:
       - ./data/open-notebook/surreal_data:/mydata
 
   open-notebook-ext:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:1.8.0}
-    # Pinned upstream default; override OPEN_NOTEBOOK_IMAGE for PMOVES fork/custom tags.
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
+    # Default points at the PMOVES.AI-Edition-v1.13 fork image (matches
+    # docker-compose.open-notebook.yml). The `*-ext` suffix here indicates the
+    # sidecar SurrealDB topology; still the same hardened fork image underneath.
     depends_on:
-      - open-notebook-surrealdb-ext
+      open-notebook-surrealdb-ext:
+        condition: service_healthy
     networks:
       pmoves_app:
         aliases:
+          - pmoves-open-notebook-ext
           - open-notebook-ext
       pmoves_external: {}
     environment:
@@ -130,6 +204,14 @@ services:
       HOSTNAME: 0.0.0.0
       OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-${OPEN_NOTEBOOK_PASSWORD:?Set OPEN_NOTEBOOK_API_TOKEN or OPEN_NOTEBOOK_PASSWORD}}
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-${OPEN_NOTEBOOK_API_TOKEN}}
+      # Enable the SSO Remote-User path (fork RemoteUserAuthMiddleware). Safe
+      # to default on: the middleware is fail-closed — it also requires
+      # SSO_FORWARD_AUTH_SECRET plus the Traefik-injected X-Forward-Auth-Secret
+      # header, so direct :8503 hits still fall back to the password check.
+      TRUST_REMOTE_USER_HEADER: ${TRUST_REMOTE_USER_HEADER:-true}
+      # The -ext stanza has no env_file chain, so the proof-of-proxy secret
+      # must be passed explicitly or header trust can never engage.
+      SSO_FORWARD_AUTH_SECRET: ${SSO_FORWARD_AUTH_SECRET:-}
       # Ensure notebook can reach SurrealDB over the compose network.
       SURREAL_URL: ws://open-notebook-surrealdb-ext:8000/rpc
       SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
@@ -138,14 +220,27 @@ services:
       SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
       SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
       SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
-    ports:
-      - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"
-      - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"
+    # No host `ports:` — reachable only through Traefik (notebook.pmoves.ai). The
+    # UI (8502) is fronted; the API (5055) is internal (UI calls it on localhost).
+    # RemoteUserMiddleware in the fork (Task 8) trusts the injected Remote-User.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.notebook.rule=Host(`notebook.pmoves.ai`)
+      - traefik.http.routers.notebook.entrypoints=websecure
+      - traefik.http.routers.notebook.tls.certresolver=cf
+      - traefik.http.routers.notebook.middlewares=strip-client-auth-headers@file,pmoves-forward-auth@file
+      - traefik.http.services.notebook.loadbalancer.server.port=8502
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
     container_name: pmoves-jellyfin
     restart: unless-stopped
+    # The fork image's default CMD is `--webdir /jellyfin/web`, which is EMPTY in the
+    # image; the web client is at /jellyfin/jellyfin-web (2262 files). Without this
+    # override Jellyfin crash-loops: "content directory is either invalid or empty:
+    # /jellyfin/web". See docs/handoffs/jellyfin-webdir-crashloop-2026-08-22.md
+    command: ["--webdir", "/jellyfin/jellyfin-web"]
     # Use numeric UID/GID so runtime stays valid even when image passwd lacks a named
     # `jellyfin` user entry (observed on some GHCR variants).
     user: "${JELLYFIN_CONTAINER_USER:-0:0}"
@@ -157,13 +252,23 @@ services:
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
-    ports:
-      - "8096:8096"
+    # No host `ports:` — reachable only through Traefik (media.pmoves.ai). NOTE:
+    # NO forward-auth middleware here — Jellyfin's OIDC plugin (Task 9) handles
+    # auth itself; the plugin's web UI must reach /oidc/* unauthenticated.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pmoves_external
+      - traefik.http.routers.media.rule=Host(`media.pmoves.ai`)
+      - traefik.http.routers.media.entrypoints=websecure
+      - traefik.http.routers.media.tls.certresolver=cf
+      - traefik.http.services.media.loadbalancer.server.port=8096
     volumes:
       - ./data/jellyfin/config:/config
       - ./data/jellyfin/cache:/cache
       - ./data/jellyfin/transcode:/transcodes
-      - ./data/jellyfin/media:/media
+      # Media library → I: (9TB bulk) for the content studio; keeps media off C:/D:.
+      # JELLYFIN_MEDIA_DIR set inline (I:/pmoves-media); defaults to the repo path.
+      - ${JELLYFIN_MEDIA_DIR:-./data/jellyfin/media}:/media
 
 networks:
   pmoves_app:

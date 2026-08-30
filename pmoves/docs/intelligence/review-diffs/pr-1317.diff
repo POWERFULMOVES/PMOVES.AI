@@ -1,0 +1,912 @@
+diff --git a/deploy/provision/autoinstall/pve-cluster-node.toml b/deploy/provision/autoinstall/pve-cluster-node.toml
+new file mode 100644
+index 000000000..3c70adbb6
+--- /dev/null
++++ b/deploy/provision/autoinstall/pve-cluster-node.toml
+@@ -0,0 +1,68 @@
++# Proxmox VE 9 automated-installer answer file
++# Format: TOML. Introduced in PVE 8.2; enhanced in PVE 9 with cluster-aware hooks.
++#
++# Embed this file on the PVE ISO via proxmox-auto-install-assistant:
++#   proxmox-auto-install-assistant prepare-iso \
++#     proxmox-ve_9.x.iso \
++#     --fetch-from iso \
++#     --answer-file deploy/provision/autoinstall/pve-cluster-node.toml
++#
++# The resulting ISO is self-contained — boot it, answer NO questions.
++#
++# Docs: https://pve.proxmox.com/wiki/Automated_Installation
++
++[global]
++# Country / timezone / keyboard
++country = "us"
++fqdn = "pmoves-pve-REPLACEME.pmoves.ai"
++keyboard = "en-us"
++mailto = "ops@pmoves.ai"
++timezone = "America/New_York"
++
++# Root password — SSH key-only workflow preferred, but PVE installer REQUIRES
++# a root password. Set a random strong one here; rotate via pveum after first boot.
++# Generate: openssl rand -base64 32
++# PMOVES-AUTOINSTALL: build-usb.sh will substitute this line with the value from
++# the --root-password flag (or generate one and print to the build log).
++root_password = "REPLACE_WITH_STRONG_RANDOM_AT_BUILD_TIME"
++
++# Upload a post-install root public key so operators can SSH without the password.
++# Replace with the actual owner key or let build-usb.sh fetch from GitHub.
++root_ssh_keys = [
++  "ssh-ed25519 AAAA__REPLACE_WITH_OWNER_PUBKEY__ pmoves-owner",
++]
++
++# Reboot after install
++reboot_on_error = false
++
++[network]
++# DHCP on the first online NIC. Cluster network on 10 GbE is configured
++# AFTER first boot via Phase G scripts (deploy/proxmox/cluster/).
++source = "from-dhcp"
++
++[disk-setup]
++# ZFS RAID-1 on 2 NVMe devices. If you have 4 NVMe, change to raid10.
++filesystem = "zfs"
++zfs.raid = "raid1"
++# Select all SSD/NVMe devices by filter (documented proxmox-auto-install syntax).
++# Uncomment to restrict to a specific bus or use concrete device paths:
++# filter.bus = "nvme"
++# disk_list = ["/dev/nvme0n1", "/dev/nvme1n1"]
++filter.ssd = "yes"
++
++# Leave some free space for ZFS snapshots / PBS client staging.
++# ashift=12 is correct for 4k sector NVMe; override to 13 for enterprise PLP drives.
++zfs.ashift = 12
++zfs.compress = "lz4"
++zfs.checksum = "on"
++zfs.copies = 1
++
++[first-boot]
++# PVE 9's first-boot hook fetches + runs a remote script on the host after install.
++# We use this to clone PMOVES.AI and dispatch to hostinger-kvm-setup.sh with
++# --node-type=pve-member. The host will NOT install Docker (enforced by that
++# branch of the setup script).
++source = "from-url"
++url = "https://raw.githubusercontent.com/POWERFULMOVES/PMOVES.AI/main/deploy/provision/pve-first-boot.sh"
++# NOTE: hash pinning recommended in production. Omit for now; build-usb.sh
++# will inject the expected cert fingerprint via substitution.
+diff --git a/deploy/provision/autoinstall/rdna4-workstation.yaml b/deploy/provision/autoinstall/rdna4-workstation.yaml
+new file mode 100644
+index 000000000..2b4ac1d52
+--- /dev/null
++++ b/deploy/provision/autoinstall/rdna4-workstation.yaml
+@@ -0,0 +1,144 @@
++#cloud-config
++# Ubuntu 24.04 Server autoinstall for PMOVES AMD 9850X3D + dual R9700 workstation
++#
++# Embed this file at /nocloud/user-data on an Ubuntu 24.04 Server ISO
++# (see deploy/provision/build-usb.sh which handles the xorriso injection).
++#
++# Defaults:
++#   hostname: pmoves-9850x3d-r9700
++#   admin user: pmoves (SSH key-only, sudo NOPASSWD)
++#   filesystem: ZFS on root NVMe pair (or ext4 if single disk)
++#   post-install: curls hostinger-kvm-setup.sh --node-type=rdna4-workstation
++#
++# Override the hostname by running build-usb.sh with --hostname=<name>.
++
++autoinstall:
++  version: 1
++
++  # Locale + keyboard
++  locale: en_US.UTF-8
++  keyboard:
++    layout: us
++
++  # --- Identity ---
++  identity:
++    hostname: pmoves-9850x3d-r9700
++    realname: PMOVES Operator
++    username: pmoves
++    # Password hash intentionally unset — SSH key auth only.
++    # Generate a disabled hash with:  mkpasswd -m sha-512 -S $(openssl rand -hex 8) '!'
++    password: "!"
++
++  # --- SSH ---
++  ssh:
++    install-server: true
++    allow-pw: false
++    authorized-keys:
++      # Populated from build-usb.sh via --ssh-keys-from-github=<username>
++      # OR manually replace these placeholders before burning ISO.
++      - "ssh-ed25519 AAAA__REPLACE_WITH_OWNER_PUBKEY__ pmoves-owner"
++
++  # --- Package selection ---
++  packages:
++    - curl
++    - wget
++    - gnupg
++    - ca-certificates
++    - git
++    - jq
++    - htop
++    - tmux
++    - build-essential
++    - dkms
++    - pciutils
++    - lshw
++    - ethtool
++
++  # --- APT ---
++  apt:
++    geoip: true
++    preserve_sources_list: false
++    primary:
++      - arches: [default]
++        uri: "http://archive.ubuntu.com/ubuntu"
++
++  # --- Storage ---
++  # ZFS mirror on 2x NVMe (strongly recommended for dev workstation).
++  # If only 1 NVMe present, autoinstall will fail out; rerun with --storage-mode=single.
++  storage:
++    layout:
++      name: zfs
++      mode: redundant
++      sizing-policy: scaled
++
++  # --- Network ---
++  network:
++    ethernets:
++      # Match any physical NIC (the 10 GbE or 2.5 GbE on the R9700 board)
++      alleth:
++        match:
++          name: "en*"
++        dhcp4: true
++        dhcp6: true
++    version: 2
++
++  # --- Timezone ---
++  timezone: "America/New_York"
++
++  # --- Updates + drivers ---
++  updates: security
++  drivers:
++    # Ubuntu's driver autoinstaller — we'll override with ROCm in late-commands.
++    # Leave this false so stock amdgpu doesn't fight the ROCm DKMS.
++    install: false
++
++  # --- Refresh snap installer ---
++  refresh-installer:
++    update: true
++
++  # --- Late commands (run inside the target system, curtin/finish stage) ---
++  late-commands:
++    # Make sudo NOPASSWD for the pmoves user
++    - curtin in-target --target=/target -- bash -c 'echo "pmoves ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-pmoves && chmod 0440 /etc/sudoers.d/90-pmoves'
++
++    # Install cloud-init enough to wrap the rest (Ubuntu Server autoinstall runs post-install scripts via runcmd-equivalent hooks)
++    - curtin in-target --target=/target -- systemctl enable ssh
++
++    # Clone PMOVES.AI + provision the RDNA4 stack.
++    # NOTE: runs AFTER first boot via a one-shot systemd unit, so network is live.
++    - |
++      curtin in-target --target=/target -- bash -c '
++      cat >/etc/systemd/system/pmoves-first-boot.service <<SERVICE
++      [Unit]
++      Description=PMOVES first-boot provisioner
++      After=network-online.target
++      Wants=network-online.target
++      ConditionPathExists=!/var/lib/pmoves/first-boot.done
++
++      [Service]
++      Type=oneshot
++      ExecStart=/usr/local/sbin/pmoves-first-boot.sh
++      RemainAfterExit=yes
++
++      [Install]
++      WantedBy=multi-user.target
++      SERVICE
++
++      cat >/usr/local/sbin/pmoves-first-boot.sh <<SCRIPT
++      #!/usr/bin/env bash
++      set -euo pipefail
++      exec >>/var/log/pmoves-first-boot.log 2>&1
++      echo "[pmoves-first-boot] starting: \$(date -Iseconds)"
++      git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES.AI.git /opt/pmoves
++      bash /opt/pmoves/deploy/provision/hostinger-kvm-setup.sh rdna4-workstation
++      mkdir -p /var/lib/pmoves && touch /var/lib/pmoves/first-boot.done
++      echo "[pmoves-first-boot] complete: \$(date -Iseconds)"
++      SCRIPT
++      chmod 0755 /usr/local/sbin/pmoves-first-boot.sh
++      systemctl enable pmoves-first-boot.service
++      '
++
++  # --- Reporting ---
++  reporting:
++    builtin:
++      type: print
+diff --git a/deploy/provision/build-usb.sh b/deploy/provision/build-usb.sh
+new file mode 100644
+index 000000000..da7db609b
+--- /dev/null
++++ b/deploy/provision/build-usb.sh
+@@ -0,0 +1,273 @@
++#!/usr/bin/env bash
++# Build a self-contained bootable USB for PMOVES fleet provisioning.
++#
++# Supports two ISO families:
++#   - Ubuntu 24.04 Server  (cloud-init autoinstall yaml embedded at /nocloud/user-data)
++#   - Proxmox VE 9+        (TOML answer file embedded via proxmox-auto-install-assistant)
++#
++# The script AUTO-DETECTS which family based on the ISO volume label + presence of
++# proxmox-auto-install-assistant in PATH.
++#
++# Safety: refuses to write to devices larger than 512 GB (protects the 4 TB external
++# PBS backup drive from accidental overwrite).
++#
++# Usage:
++#   sudo bash build-usb.sh \
++#     --iso=/path/to/ubuntu-24.04.x-live-server-amd64.iso \
++#     --autoinstall=deploy/provision/autoinstall/rdna4-workstation.yaml \
++#     --device=/dev/sdX \
++#     --hostname=pmoves-9850x3d-r9700 \
++#     --ssh-keys-from-github=POWERFULMOVES
++#
++#   sudo bash build-usb.sh \
++#     --iso=/path/to/proxmox-ve_9.x.iso \
++#     --autoinstall=deploy/provision/autoinstall/pve-cluster-node.toml \
++#     --device=/dev/sdX \
++#     --hostname=pmoves-pve-01
++#
++# Flags:
++#   --iso=PATH                 Source ISO (required)
++#   --autoinstall=PATH         Autoinstall/answer file (required)
++#   --device=PATH              Target USB device (required, e.g. /dev/sdb)
++#   --hostname=STR             Substitute REPLACEME hostname in the answer file
++#   --ssh-keys-from-github=USR Fetch pubkeys from https://github.com/USR.keys
++#   --dry-run                  Show what would be done, don't write
++#   --allow-large-device       Override the 512 GB safety limit (requires --yes-really)
++#   --yes-really               Confirmation token for destructive flags
++
++set -euo pipefail
++
++ISO=""
++AUTOINSTALL=""
++DEVICE=""
++HOSTNAME_OVERRIDE=""
++GITHUB_USER=""
++DRY_RUN=false
++ALLOW_LARGE=false
++YES_REALLY=false
++ROOT_PASSWORD=""
++GEN_ROOT_PASSWORD=false
++
++for arg in "$@"; do
++  case "$arg" in
++    --iso=*) ISO="${arg#*=}" ;;
++    --autoinstall=*) AUTOINSTALL="${arg#*=}" ;;
++    --device=*) DEVICE="${arg#*=}" ;;
++    --hostname=*) HOSTNAME_OVERRIDE="${arg#*=}" ;;
++    --ssh-keys-from-github=*) GITHUB_USER="${arg#*=}" ;;
++    --dry-run) DRY_RUN=true ;;
++    --allow-large-device) ALLOW_LARGE=true ;;
++    --yes-really) YES_REALLY=true ;;
++    --root-password=*) ROOT_PASSWORD="${arg#*=}" ;;
++    --generate-root-password) GEN_ROOT_PASSWORD=true ;;
++    -h|--help) sed -n '2,35p' "$0"; exit 0 ;;
++    *) echo "Unknown flag: $arg" >&2; exit 2 ;;
++  esac
++done
++
++log() { echo "[build-usb] $*"; }
++err() { echo "[build-usb] ERROR: $*" >&2; exit 1; }
++
++[[ -z "$ISO" ]]          && err "--iso is required"
++[[ -z "$AUTOINSTALL" ]]  && err "--autoinstall is required"
++[[ -z "$DEVICE" ]]       && err "--device is required"
++[[ -f "$ISO" ]]          || err "ISO not found: $ISO"
++[[ -f "$AUTOINSTALL" ]]  || err "Autoinstall file not found: $AUTOINSTALL"
++
++if [[ "$DRY_RUN" == "false" ]] && [[ $EUID -ne 0 ]]; then
++  err "Writing to block devices requires root (or use --dry-run)"
++fi
++
++# --- Device safety checks ---
++if [[ "$DRY_RUN" == "false" ]]; then
++  [[ -b "$DEVICE" ]] || err "Not a block device: $DEVICE"
++
++  # System-disk protection (same pattern as format-usb.sh)
++  root_src="$(findmnt -no SOURCE /)"
++  root_pk="$(lsblk -no pkname "$root_src" 2>/dev/null | head -1)"
++  [[ -z "$root_pk" ]] && root_pk="$(findmnt -no PKNAME / 2>/dev/null || true)"
++  if [[ -z "$root_pk" ]]; then
++    err "Could not determine root parent block device. Refusing."
++  fi
++  root_dev="/dev/$root_pk"
++  if [[ "$DEVICE" == "$root_dev" ]] || [[ "$DEVICE" == "${root_dev}"* && "$DEVICE" != "$root_dev" ]]; then
++    err "$DEVICE is the system disk (root at $root_src). Refusing."
++  fi
++
++  device_size_gb="$(($(blockdev --getsize64 "$DEVICE") / 1024 / 1024 / 1024))"
++  log "Target device: $DEVICE (${device_size_gb} GB)"
++
++  if [[ "$device_size_gb" -gt 512 ]]; then
++    if [[ "$ALLOW_LARGE" != "true" ]] || [[ "$YES_REALLY" != "true" ]]; then
++      err "Device is ${device_size_gb} GB (>512 GB). Refusing to write — this may be the 4 TB external backup drive. Pass --allow-large-device --yes-really to override."
++    fi
++    log "WARN: large device override in effect — you have 5 seconds to Ctrl-C"
++    sleep 5
++  fi
++
++  # Must be unmounted
++  if mount | grep -q "^$DEVICE"; then
++    err "$DEVICE has mounted partitions. Unmount first: sudo umount ${DEVICE}*"
++  fi
++fi
++
++# --- Auto-detect ISO family ---
++iso_label="$(blkid -o value -s LABEL "$ISO" 2>/dev/null || true)"
++log "ISO label: ${iso_label:-<none>}"
++
++family="unknown"
++case "${iso_label,,}" in
++  *ubuntu*)  family="ubuntu" ;;
++  *proxmox*) family="proxmox" ;;
++  *)
++    # Fall back to answer file extension
++    case "$AUTOINSTALL" in
++      *.yaml|*.yml) family="ubuntu" ;;
++      *.toml)       family="proxmox" ;;
++      *) err "Could not auto-detect ISO family. Label: '$iso_label', answer file: $AUTOINSTALL" ;;
++    esac
++    ;;
++esac
++log "Detected ISO family: $family"
++
++# --- Prepare a working copy of the answer file with substitutions ---
++work_dir="$(mktemp -d)"
++trap 'rm -rf "$work_dir"' EXIT
++answer_file="$work_dir/$(basename "$AUTOINSTALL")"
++cp "$AUTOINSTALL" "$answer_file"
++
++if [[ -n "$HOSTNAME_OVERRIDE" ]]; then
++  log "Substituting hostname: $HOSTNAME_OVERRIDE"
++  esc_host="$(printf '%s\n' "$HOSTNAME_OVERRIDE" | sed -e 's/[\/&]/\\&/g')"
++  sed -i "s/pmoves-9850x3d-r9700/$esc_host/g; s/pmoves-pve-REPLACEME/$esc_host/g" "$answer_file"
++fi
++
++# PVE root password substitution (required when answer file contains placeholder)
++if grep -q "REPLACE_WITH_STRONG_RANDOM_AT_BUILD_TIME" "$answer_file"; then
++  if [[ "$GEN_ROOT_PASSWORD" == "true" ]] && [[ -z "$ROOT_PASSWORD" ]]; then
++    ROOT_PASSWORD="$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-24)"
++    log "Generated random root password (24 chars). SAVE THIS: $ROOT_PASSWORD"
++  fi
++  if [[ -z "$ROOT_PASSWORD" ]]; then
++    err "Answer file has root password placeholder. Pass --root-password=STRING or --generate-root-password."
++  fi
++  # Escape sed metacharacters
++  esc_pwd="$(printf '%s\n' "$ROOT_PASSWORD" | sed -e 's/[\/&]/\\&/g')"
++  sed -i "s/REPLACE_WITH_STRONG_RANDOM_AT_BUILD_TIME/$esc_pwd/" "$answer_file"
++  log "Substituted root password (${#ROOT_PASSWORD} chars)."
++fi
++
++if [[ -n "$GITHUB_USER" ]]; then
++  log "Fetching SSH keys from https://github.com/$GITHUB_USER.keys"
++  keys="$(curl -fsSL "https://github.com/$GITHUB_USER.keys")" \
++    || err "Failed to fetch GitHub SSH keys for $GITHUB_USER"
++  [[ -z "$keys" ]] && err "No SSH keys found for GitHub user $GITHUB_USER"
++  # Replace the placeholder line(s) with a properly-indented list
++  # (applies to both ubuntu yaml and PVE toml — they use identical placeholder)
++  indented=""
++  while IFS= read -r k; do
++    indented+="      - \"$k\""$'\n'
++  done <<<"$keys"
++  # For TOML we need the [] array format instead
++  if [[ "$family" == "proxmox" ]]; then
++    toml_array="[\n"
++    while IFS= read -r k; do
++      toml_array+="  \"$k\",\n"
++    done <<<"$keys"
++    toml_array+="]"
++    python3 -c "
++import re, sys, pathlib
++p = pathlib.Path(sys.argv[1])
++s = p.read_text()
++s = re.sub(
++    r'root_ssh_keys\s*=\s*\[[^\]]*\]',
++    'root_ssh_keys = [\n' + '\n'.join(['  \"' + k + '\",' for k in '''$keys'''.strip().split('\n')]) + '\n]',
++    s, count=1, flags=re.DOTALL
++)
++p.write_text(s)
++" "$answer_file"
++  else
++    # YAML: simple sed replace of the placeholder line
++    python3 -c "
++import re, sys, pathlib
++p = pathlib.Path(sys.argv[1])
++s = p.read_text()
++keys = '''$keys'''.strip().split('\n')
++lines = ['      - \"' + k + '\"' for k in keys]
++s = re.sub(
++    r'      - \"ssh-ed25519 AAAA__REPLACE_WITH_OWNER_PUBKEY__ pmoves-owner\"',
++    '\n'.join(lines),
++    s, count=1
++)
++p.write_text(s)
++" "$answer_file"
++  fi
++fi
++
++# --- Build the injected ISO ---
++out_iso="$work_dir/pmoves-$(basename "$ISO")"
++
++if [[ "$family" == "ubuntu" ]]; then
++  command -v xorriso >/dev/null 2>&1 || err "xorriso not installed. Run: apt install -y xorriso"
++
++  log "Building Ubuntu autoinstall ISO via xorriso"
++  # Create a nocloud directory with user-data + meta-data
++  iso_extract="$work_dir/iso-extract"
++  mkdir -p "$iso_extract/nocloud"
++  cp "$answer_file" "$iso_extract/nocloud/user-data"
++  touch "$iso_extract/nocloud/meta-data"
++
++  # Inject the nocloud directory into the ISO
++  if [[ "$DRY_RUN" == "true" ]]; then
++    log "DRY RUN: would run xorriso to inject $answer_file"
++  else
++    # Extract + patch grub.cfg (UEFI boot) and isolinux/txt.cfg (BIOS boot)
++    # so subiquity sees `autoinstall ds=nocloud;s=/cdrom/nocloud/` on the kernel cmdline.
++    xorriso -osirrox on -indev "$ISO" -extract /boot/grub/grub.cfg "$work_dir/grub.cfg" 2>/dev/null || true
++    if [[ -f "$work_dir/grub.cfg" ]]; then
++      sed -i 's|---|autoinstall ds=nocloud\\;s=/cdrom/nocloud/ ---|g' "$work_dir/grub.cfg"
++    fi
++    xorriso -osirrox on -indev "$ISO" -extract /isolinux/txt.cfg "$work_dir/txt.cfg" 2>/dev/null || true
++    if [[ -f "$work_dir/txt.cfg" ]]; then
++      sed -i 's|append |append autoinstall ds=nocloud\\;s=/cdrom/nocloud/ |g' "$work_dir/txt.cfg"
++    fi
++
++    xorriso_args=(-indev "$ISO" -outdev "$out_iso" -map "$iso_extract/nocloud" /nocloud)
++    [[ -f "$work_dir/grub.cfg" ]] && xorriso_args+=(-map "$work_dir/grub.cfg" /boot/grub/grub.cfg)
++    [[ -f "$work_dir/txt.cfg" ]] && xorriso_args+=(-map "$work_dir/txt.cfg" /isolinux/txt.cfg)
++    xorriso_args+=(-boot_image any replay)
++
++    xorriso "${xorriso_args[@]}"
++    log "Built: $out_iso"
++  fi
++
++elif [[ "$family" == "proxmox" ]]; then
++  command -v proxmox-auto-install-assistant >/dev/null 2>&1 \
++    || err "proxmox-auto-install-assistant not installed. On Debian/Ubuntu: apt install -y proxmox-auto-install-assistant. On other hosts, install via https://pve.proxmox.com"
++
++  log "Building Proxmox auto-install ISO"
++  if [[ "$DRY_RUN" == "true" ]]; then
++    log "DRY RUN: would run proxmox-auto-install-assistant prepare-iso"
++  else
++    proxmox-auto-install-assistant prepare-iso \
++      "$ISO" \
++      --fetch-from iso \
++      --answer-file "$answer_file" \
++      --output "$out_iso"
++    log "Built: $out_iso"
++  fi
++fi
++
++# --- Write to USB ---
++if [[ "$DRY_RUN" == "true" ]]; then
++  log "DRY RUN: would dd $out_iso -> $DEVICE"
++  log "DRY RUN complete. Re-run without --dry-run to write."
++  exit 0
++fi
++
++log "Writing ISO to $DEVICE (this will destroy all data on it)"
++dd if="$out_iso" of="$DEVICE" bs=4M status=progress conv=fsync
++sync
++
++log "USB ready. Boot the target machine from $DEVICE and answer NO questions."
++log "After install completes, first-boot provisioner will clone PMOVES.AI and run hostinger-kvm-setup.sh."
+diff --git a/deploy/provision/format-usb.sh b/deploy/provision/format-usb.sh
+new file mode 100644
+index 000000000..1b20faa7c
+--- /dev/null
++++ b/deploy/provision/format-usb.sh
+@@ -0,0 +1,117 @@
++#!/usr/bin/env bash
++# Format a USB stick or external drive for PMOVES fleet staging.
++#
++# Two roles:
++#   --role=install-media   Small/medium USB (formatted FAT32 for UEFI boot compat).
++#                          Actual ISO burning happens separately via build-usb.sh.
++#   --role=pbs-store       4 TB external for Proxmox Backup Server (PBS) target.
++#                          GPT + single ext4 partition + labeled PBS_STORE.
++#
++# Refuses to operate on the system disk. Requires explicit --yes-really to destroy data.
++#
++# Usage:
++#   sudo bash format-usb.sh --device=/dev/sdX --role=install-media --yes-really
++#   sudo bash format-usb.sh --device=/dev/sdY --role=pbs-store     --yes-really
++
++set -euo pipefail
++
++DEVICE=""
++ROLE=""
++YES=false
++
++for arg in "$@"; do
++  case "$arg" in
++    --device=*) DEVICE="${arg#*=}" ;;
++    --role=*)   ROLE="${arg#*=}" ;;
++    --yes-really) YES=true ;;
++    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
++    *) echo "Unknown flag: $arg" >&2; exit 2 ;;
++  esac
++done
++
++err() { echo "[format-usb] ERROR: $*" >&2; exit 1; }
++log() { echo "[format-usb] $*"; }
++
++[[ -z "$DEVICE" ]] && err "--device required"
++[[ -z "$ROLE" ]]   && err "--role required (install-media | pbs-store)"
++[[ "$YES" != "true" ]] && err "Refusing to destroy $DEVICE without --yes-really"
++[[ $EUID -ne 0 ]] && err "Must run as root"
++[[ -b "$DEVICE" ]] || err "Not a block device: $DEVICE"
++
++# --- System disk guard ---
++# Resolve the parent block device of root via PKNAME (handles NVMe, LVM, mdraid)
++root_src="$(findmnt -no SOURCE /)"
++root_pk="$(lsblk -no pkname "$root_src" 2>/dev/null | head -1)"
++[[ -z "$root_pk" ]] && root_pk="$(findmnt -no PKNAME / 2>/dev/null || true)"
++if [[ -z "$root_pk" ]]; then
++  err "Could not determine root parent block device (source=$root_src). Refusing — too risky to proceed."
++fi
++root_dev="/dev/$root_pk"
++if [[ "$DEVICE" == "$root_dev" ]] || [[ "$DEVICE" == "${root_dev}"* && "$DEVICE" != "$root_dev" ]]; then
++  err "$DEVICE is the system disk (root at $root_src, parent $root_dev). Refusing."
++fi
++# Defense-in-depth: refuse if target device hosts any system-critical mountpoint
++if lsblk -no MOUNTPOINTS "$DEVICE" 2>/dev/null | grep -qE '^/(boot|home|var|usr|)$'; then
++  err "$DEVICE has system-critical mountpoints. Refusing."
++fi
++
++# --- Unmount any existing partitions ---
++for p in "${DEVICE}"*; do
++  [[ -b "$p" ]] && mount | grep -q "^$p" && umount "$p"
++done
++
++device_size_gb="$(($(blockdev --getsize64 "$DEVICE") / 1024 / 1024 / 1024))"
++log "Target: $DEVICE (${device_size_gb} GB, role=$ROLE)"
++
++case "$ROLE" in
++  install-media)
++    if [[ "$device_size_gb" -gt 128 ]]; then
++      err "Device is ${device_size_gb} GB — too large for install-media role (use pbs-store instead)"
++    fi
++
++    log "Creating GPT + single FAT32 partition"
++    sgdisk --zap-all "$DEVICE"
++    sgdisk --new=1:0:0 --typecode=1:EF00 --change-name=1:PMOVES_INSTALL "$DEVICE"
++    partprobe "$DEVICE"
++    sleep 1
++
++    part="${DEVICE}1"
++    [[ -b "$part" ]] || part="${DEVICE}p1"
++    [[ -b "$part" ]] || err "Partition not found after sgdisk"
++
++    mkfs.vfat -F 32 -n PMOVES_INSTALL "$part"
++    log "Formatted $part as FAT32 (label=PMOVES_INSTALL)"
++    log "Next step: bash deploy/provision/build-usb.sh --iso=... --device=$DEVICE --autoinstall=..."
++    ;;
++
++  pbs-store)
++    if [[ "$device_size_gb" -lt 500 ]]; then
++      err "Device is ${device_size_gb} GB — pbs-store role expects ≥500 GB"
++    fi
++
++    log "Creating GPT + single ext4 partition for Proxmox Backup Server"
++    sgdisk --zap-all "$DEVICE"
++    sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:PBS_STORE "$DEVICE"
++    partprobe "$DEVICE"
++    sleep 1
++
++    part="${DEVICE}1"
++    [[ -b "$part" ]] || part="${DEVICE}p1"
++    [[ -b "$part" ]] || err "Partition not found after sgdisk"
++
++    mkfs.ext4 -L PBS_STORE -m 0 -E lazy_itable_init=0,lazy_journal_init=0 "$part"
++    log "Formatted $part as ext4 (label=PBS_STORE)"
++    log ""
++    log "Mount on the PBS host with:"
++    log "  mkdir -p /mnt/pbs-store && mount LABEL=PBS_STORE /mnt/pbs-store"
++    log "  echo 'LABEL=PBS_STORE /mnt/pbs-store ext4 defaults,noatime 0 2' >> /etc/fstab"
++    log "Then add as datastore via proxmox-backup-manager:"
++    log "  proxmox-backup-manager datastore create pmoves-backups /mnt/pbs-store"
++    ;;
++
++  *)
++    err "Unknown role: $ROLE (expected: install-media | pbs-store)"
++    ;;
++esac
++
++log "Done."
+diff --git a/deploy/provision/pve-first-boot.sh b/deploy/provision/pve-first-boot.sh
+new file mode 100644
+index 000000000..57ea00299
+--- /dev/null
++++ b/deploy/provision/pve-first-boot.sh
+@@ -0,0 +1,37 @@
++#!/usr/bin/env bash
++# PVE first-boot hook — runs once after Proxmox automated install completes.
++# Clones PMOVES.AI and dispatches to the pve-member node type in
++# hostinger-kvm-setup.sh, which prepares the host for cluster join WITHOUT
++# installing Docker (PVE hypervisor never runs Docker containers directly).
++#
++# Invoked by the [first-boot] section of pve-cluster-node.toml.
++
++set -euo pipefail
++
++LOG=/var/log/pmoves-pve-first-boot.log
++exec >>"$LOG" 2>&1
++
++echo "[pve-first-boot] starting: $(date -Iseconds)"
++
++# Wait for network-online (cloud-init already gated, but belt-and-suspenders)
++for i in $(seq 1 30); do
++  if ping -c1 -W2 github.com >/dev/null 2>&1; then break; fi
++  sleep 2
++done
++
++# Install git if missing (minimal PVE install lacks it)
++if ! command -v git >/dev/null 2>&1; then
++  apt-get update -qq
++  apt-get install -y -qq git ca-certificates
++fi
++
++# Clone PMOVES.AI
++if [[ ! -d /opt/pmoves/.git ]]; then
++  git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES.AI.git /opt/pmoves
++fi
++
++# Dispatch to the pve-member node type
++bash /opt/pmoves/deploy/provision/hostinger-kvm-setup.sh pve-member
++
++echo "[pve-first-boot] complete: $(date -Iseconds)"
++echo "[pve-first-boot] NEXT: run 'pvecm add <controller-tailscale-host>' to join a cluster"
+diff --git a/deploy/runbooks/fresh-install-fleet.md b/deploy/runbooks/fresh-install-fleet.md
+new file mode 100644
+index 000000000..5ee2b2ede
+--- /dev/null
++++ b/deploy/runbooks/fresh-install-fleet.md
+@@ -0,0 +1,156 @@
++# Fresh-Install Runbook: PMOVES Fleet (Linux track)
++
++Bootable USB provisioning for Linux targets:
++
++1. **9850X3D + dual R9700** — Ubuntu 24.04 Server + ROCm 7.1 + llama.cpp HIP
++2. **New Proxmox host** — Debian 13 + PVE 9 answer-file auto-install
++3. **DGX Spark** — no USB; stock DGX OS retained, apply overlay via SSH after boot
++
++Windows tracks (Z890, 5090, 4090) are documented separately in `fresh-install-fleet-windows.md`.
++
++## Prerequisites
++
++On the build host (any Linux with root, or Windows WSL2):
++
++```bash
++sudo apt install -y xorriso sgdisk coreutils jq curl
++# For Proxmox auto-install, also install the assistant (Debian/Ubuntu):
++sudo apt install -y proxmox-auto-install-assistant
++```
++
++Two USB sticks (32 GB+ recommended, FAT32-formattable) and the 4 TB external drive on hand.
++
++Set these environment variables (match the target node):
++- `TAILSCALE_AUTHKEY` — reusable Tailscale pre-auth key (from admin console)
++- `CHIT_PASSPHRASE` — optional, for signed provisioning beacons
++- `GITHUB_PAT` — required for GitHub Actions runner install on new nodes
++
++## Step 1 — Format the USBs and 4 TB external
++
++**USB 1 + 2** (install media):
++```bash
++sudo bash deploy/provision/format-usb.sh --device=/dev/sdb --role=install-media --yes-really
++sudo bash deploy/provision/format-usb.sh --device=/dev/sdc --role=install-media --yes-really
++```
++
++**4 TB external** (PBS backup target for the eventual Proxmox cluster):
++```bash
++sudo bash deploy/provision/format-usb.sh --device=/dev/sdd --role=pbs-store --yes-really
++```
++
++Safety: the format script refuses to touch the system disk and applies a size-band check per role.
++
++## Step 2 — Download ISOs
++
++SHAs in `pmoves/configs/os-images.yaml` are placeholders; verify against upstream
++before each run.
++
++```bash
++# Ubuntu 24.04 Server amd64
++curl -fLO https://releases.ubuntu.com/24.04/ubuntu-24.04.2-live-server-amd64.iso
++curl -fsSL https://releases.ubuntu.com/24.04/SHA256SUMS | grep live-server-amd64 | sha256sum -c -
++
++# Proxmox VE 9
++curl -fLO https://enterprise.proxmox.com/iso/proxmox-ve_9.0-1.iso
++# Verify against https://www.proxmox.com/en/downloads (SHA256 listed on page)
++```
++
++## Step 3 — Build and burn installer USBs
++
++**Target A — 9850X3D + dual R9700 (Ubuntu 24.04 autoinstall):**
++```bash
++sudo bash deploy/provision/build-usb.sh \
++  --iso=$PWD/ubuntu-24.04.2-live-server-amd64.iso \
++  --autoinstall=deploy/provision/autoinstall/rdna4-workstation.yaml \
++  --device=/dev/sdb \
++  --hostname=pmoves-9850x3d-r9700 \
++  --ssh-keys-from-github=POWERFULMOVES
++```
++
++**Target B — New Proxmox host (PVE 9 auto-install):**
++```bash
++sudo bash deploy/provision/build-usb.sh \
++  --iso=$PWD/proxmox-ve_9.0-1.iso \
++  --autoinstall=deploy/provision/autoinstall/pve-cluster-node.toml \
++  --device=/dev/sdc \
++  --hostname=pmoves-pve-01 \
++  --ssh-keys-from-github=POWERFULMOVES
++```
++
++Use `--dry-run` first to validate; the script refuses to write to devices >512 GB
++unless you pass `--allow-large-device --yes-really` (protects the 4 TB external).
++
++## Step 4 — Pre-reinstall data migration (Z890 only)
++
++The Z890 host (this CLI box) is hitting disk pressure. Before any Windows
++reinstall, stage data onto the 4 TB external:
++
++- `.claude/worktrees/` (all)
++- Any uncommitted work across worktrees (`git status` per tree first)
++- Docker volumes relevant to local dev
++- `D:\pinokio\api\*` (creator pipeline data)
++- Model caches (`D:\huggingface_cache`, `%APPDATA%\.cache\huggingface`)
++
++Do NOT copy secrets (`.env`, credential files) — regenerate post-reinstall via
++`make -C pmoves secrets-funnel`.
++
++## Step 5 — Install
++
++1. Insert the installer USB, boot the target machine, select the USB in UEFI.
++2. Autoinstall runs unattended. Expect:
++   - Ubuntu: ~8-12 min to first-boot login prompt
++   - Proxmox: ~5-8 min, then automatic reboot
++3. First-boot hook clones PMOVES.AI and runs `hostinger-kvm-setup.sh` with the
++   matching `--node-type`. Watch `/var/log/pmoves-first-boot.log` (Ubuntu) or
++   `/var/log/pmoves-pve-first-boot.log` (Proxmox) to track progress.
++
++## Step 6 — Fleet enrollment
++
++After first boot completes:
++
++```bash
++# On an operator machine with CHIT_PASSPHRASE available:
++make -C pmoves fleet-enroll ROLE=owner DEVICE=pmoves-9850x3d-r9700
++make -C pmoves fleet-enroll ROLE=owner DEVICE=pmoves-pve-01
++```
++
++Paste/scan the QR on the target node to complete the tailnet join. Verify:
++
++```bash
++tailscale status | grep pmoves-9850x3d-r9700
++```
++
++## Step 7 — Smoke tests
++
++**RDNA4 workstation:**
++```bash
++ssh pmoves@pmoves-9850x3d-r9700
++rocminfo | head -40                              # should list gfx1201 GPUs
++curl http://localhost:8080/v1/models             # llama-server responds
++curl http://localhost:9835/ | head -20           # rocm-smi metrics
++```
++
++**PVE host:**
++```bash
++ssh root@pmoves-pve-01
++pveversion                                        # PVE 9.x
++pvecm status                                      # (no cluster yet — Phase G creates it)
++```
++
++## Troubleshooting
++
++- **USB won't boot**: verify UEFI (not legacy BIOS) + Secure Boot disabled on
++  RDNA4 workstation (ROCm DKMS needs it off).
++- **Autoinstall stalls**: check `/var/log/installer/autoinstall-user-data` on
++  the target — syntax errors in user-data land there.
++- **First-boot hook fails**: SSH in, run `/usr/local/sbin/pmoves-first-boot.sh`
++  manually to surface the error. Check network + `git` availability.
++- **amdgpu-dkms won't build**: kernel headers must match the running kernel
++  (`apt install linux-headers-$(uname -r)`). Reboot after ROCm install.
++
++## Next phase
++
++After both Linux targets are up, proceed to:
++- **Phase C** — register the new hardware in the profile + registry files (5-file atomic commit).
++- **Phase G** — create the Proxmox cluster, add the PVE host, set up PBS on the 4 TB external.
++- **Phase H** — consider activating Headscale on KVM2 (deferred).
+diff --git a/pmoves/configs/os-images.yaml b/pmoves/configs/os-images.yaml
+index 469e17178..c22237cd6 100644
+--- a/pmoves/configs/os-images.yaml
++++ b/pmoves/configs/os-images.yaml
+@@ -68,3 +68,76 @@ images:
+     cloud_init: true
+     provision_script: provisions/ubuntu-2404-monitoring-pmoves.sh
+     tags: [monitoring, observability, production]
++
++  # --- ROCm / AMD GPU Workstations ---
++  ubuntu-2404-rdna4:
++    name: "Ubuntu 24.04 RDNA4 Workstation"
++    distro: ubuntu
++    version: "24.04"
++    purpose: "AMD 9850X3D + dual R9700 inference (ROCm 7.1 + llama.cpp HIP)"
++    cloud_init: true
++    provision_script: deploy/provision/hostinger-kvm-setup.sh
++    provision_args: "rdna4-workstation"
++    autoinstall_template: deploy/provision/autoinstall/rdna4-workstation.yaml
++    rocm_version: "7.1"
++    gpu_targets: "gfx1201"
++    inference_backend: llamacpp-rocm
++    tags: [gpu, amd, rocm, rdna4, inference, production]
++
++  # --- Proxmox Cluster Member ---
++  pve9-cluster-node:
++    name: "Proxmox VE 9 Cluster Member"
++    distro: proxmox
++    version: "9"
++    base_distro: debian
++    base_version: "13"
++    purpose: "PVE cluster hypervisor (VMs + LXCs, no Docker on host)"
++    cloud_init: false
++    autoinstall_template: deploy/provision/autoinstall/pve-cluster-node.toml
++    first_boot_hook: deploy/provision/pve-first-boot.sh
++    provision_script: deploy/provision/hostinger-kvm-setup.sh
++    provision_args: "pve-member"
++    tags: [proxmox, pve, hypervisor, cluster, production]
++
++  # --- DGX Spark ARM64 Overlay (stock DGX OS retained) ---
++  dgx-spark-overlay:
++    name: "DGX Spark ARM64 Overlay"
++    distro: dgx-os
++    version: "factory"
++    arch: arm64
++    purpose: "NVIDIA DGX Spark GB10 — layer Tailscale + Ollama + fleet agent"
++    cloud_init: false
++    reinstall: false
++    provision_script: deploy/provision/hostinger-kvm-setup.sh
++    provision_args: "dgx-spark"
++    tags: [gpu, nvidia, spark, gb10, arm64, inference, production]
++
++# --- ISO Sources (for bare-metal USB provisioning) ---
++# Authoritative checksums updated during Phase B rollout. Update when upstream
++# releases new point versions.
++iso_sources:
++  ubuntu-24.04-server-amd64:
++    url: "https://releases.ubuntu.com/24.04/ubuntu-24.04.2-live-server-amd64.iso"
++    sha256: "TBD_AT_BUILD_TIME"  # fetch from releases.ubuntu.com/24.04/SHA256SUMS
++    size_gb: 3.1
++    used_by: [ubuntu-2404-base, ubuntu-2404-gpu, ubuntu-2404-rdna4]
++
++  ubuntu-24.04-server-arm64:
++    url: "https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.2-live-server-arm64.iso"
++    sha256: "TBD_AT_BUILD_TIME"
++    size_gb: 2.8
++    used_by: [ubuntu-2404-gpu]
++
++  proxmox-ve-9:
++    url: "https://enterprise.proxmox.com/iso/proxmox-ve_9.0-1.iso"
++    sha256: "TBD_AT_BUILD_TIME"
++    size_gb: 1.5
++    used_by: [pve9-cluster-node]
++    notes: "Use with proxmox-auto-install-assistant to embed answer file"
++
++# --- Build-USB Tooling ---
++build_usb:
++  script: deploy/provision/build-usb.sh
++  format_script: deploy/provision/format-usb.sh
++  required_tools: [xorriso, proxmox-auto-install-assistant, sgdisk, dd]
++  runbook: deploy/runbooks/fresh-install-fleet.md

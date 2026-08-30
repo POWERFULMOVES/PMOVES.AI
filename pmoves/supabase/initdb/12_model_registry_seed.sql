@@ -11,10 +11,28 @@
 -- Version: 2.0 (reconciled with gpu-models.yaml + tensorzero.toml)
 -- Idempotent: Uses ON CONFLICT to allow safe re-seeding
 
--- =============================================================================
--- Providers
--- =============================================================================
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'model_providers'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'models'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'model_aliases'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'service_model_mappings'
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = '12_model_registry_seed.sql requires the model registry schema to exist first.',
+      HINT = 'Run make -C pmoves supabase-bootstrap, or apply 20260115_model_registry.sql before replaying this seed manually.';
+  END IF;
+END $$;
 
+-- 
 -- Ollama local (primary local provider)
 INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
 VALUES (
@@ -205,6 +223,29 @@ VALUES (
   'Ultimate TTS Studio - Multi-engine local TTS with GPU acceleration',
   true,
   '{"network": "internal", "location": "local", "engines": 6}'::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
+  api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
+  description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
+  updated_at = NOW();
+
+-- NVIDIA NIM (local NIM container runtime)
+-- Name matches the canonical key used in pmoves/config/model_nexus.yaml,
+-- pmoves/configs/agent-profiles/nemotron_claw.yaml, and
+-- pmoves/configs/flare-model-namespace.yaml.
+INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
+VALUES (
+  'nvidia_nim',
+  'openai_compatible',
+  'http://nvidia-nim:8000/v1',
+  'NGC_API_KEY',
+  'NVIDIA NIM local container runtime for Nemotron models',
+  true,
+  '{"network": "pmoves_api", "location": "local", "runtime": "nim"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
   type = EXCLUDED.type,
@@ -523,6 +564,191 @@ BEGIN
     description = EXCLUDED.description,
     updated_at = NOW();
 
+  -- Qwen3-Coder-Next 80B MoE - SWE-Bench SOTA coding model
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'qwen3_coder_next_80b_local',
+    'qwen3-coder-next:80b',
+    'chat',
+    '["chat", "code_generation", "code_review", "function_calling", "json_mode"]'::jsonb,
+    7000,
+    262144,
+    'Qwen3-Coder-Next 80B MoE - 3B active params, SWE-Bench SOTA. Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 3n E4B - Edge-optimized multimodal
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_3n_e4b_local',
+    'gemma3n:e4b',
+    'chat',
+    '["chat", "vision", "video", "audio", "multimodal"]'::jsonb,
+    3500,
+    32768,
+    'Google Gemma 3n E4B - Edge multimodal with Per-Layer Embeddings',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 3n E2B - Compact edge multimodal (Jetson)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_edge_id,
+    'gemma_3n_e2b_edge',
+    'gemma3n:e2b',
+    'chat',
+    '["chat", "vision", "video", "audio", "multimodal"]'::jsonb,
+    2000,
+    32768,
+    'Google Gemma 3n E2B - Compact multimodal for Jetson edge deployment',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 E2B - Effective 2B multimodal (any-to-any, 128K ctx)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_4_e2b_local',
+    'gemma4:e2b',
+    'chat',
+    '["chat", "vision", "audio", "video", "multimodal"]'::jsonb,
+    3200,
+    131072,
+    'Google Gemma 4 E2B - Effective 2B multimodal, Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 E4B - Effective 4B multimodal (any-to-any, 128K ctx)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_4_e4b_local',
+    'gemma4:e4b',
+    'chat',
+    '["chat", "vision", "audio", "video", "multimodal"]'::jsonb,
+    5200,
+    131072,
+    'Google Gemma 4 E4B - Effective 4B multimodal, Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 26B-A4B MoE - 3.8B active, speed-focused, 256K ctx
+  -- HF pipeline_tag: image-text-to-text (vision only, NO audio/video despite HF multimodal family)
+  -- Ollama publishes this as plain ":26b" tag (A4B MoE architecture is implied)
+  -- Clean up legacy tag from pre-rename (gemma4:26b-a4b -> gemma4:26b)
+  DELETE FROM pmoves_core.models WHERE provider_id = v_ollama_local_id AND model_id = 'gemma4:26b-a4b';
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_4_26b_a4b_local',
+    'gemma4:26b',
+    'chat',
+    '["chat", "code_generation", "vision"]'::jsonb,
+    15000,
+    262144,
+    'Google Gemma 4 26B-A4B MoE - 3.8B active, LMArena 1441, Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 31B Dense - SOTA quality, 256K ctx, LMArena 1452
+  -- HF pipeline_tag: image-text-to-text (vision only, NO audio/video — E-prefix variants only)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_4_31b_local',
+    'gemma4:31b',
+    'chat',
+    '["chat", "code_generation", "reasoning", "vision"]'::jsonb,
+    18000,
+    262144,
+    'Google Gemma 4 31B Dense - SOTA quality, beats Llama 4 on AIME/LiveCodeBench, Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+END $$;
+
+-- =============================================================================
+-- NVIDIA NIM Local Models
+-- =============================================================================
+
+DO $$
+DECLARE
+  v_nim_local_id UUID;
+BEGIN
+  SELECT id INTO v_nim_local_id FROM pmoves_core.model_providers WHERE name = 'nvidia_nim';
+
+  -- Nemotron Super 49B - Agentic NIM model requiring exclusive GPU
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_nim_local_id,
+    'nemotron_super_49b_local',
+    'nvidia/llama-3_3-nemotron-super-49b-v1',
+    'chat',
+    '["chat", "function_calling", "json_mode", "tool_use", "agentic_reasoning"]'::jsonb,
+    30000,
+    131072,
+    'NVIDIA Nemotron Super 49B - FP8, requires NIM container with exclusive GPU access',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
 END $$;
 
 -- =============================================================================
@@ -576,6 +802,66 @@ BEGIN
     0,
     128000,
     'Z.ai GLM-4-Flash - Chinese language model with fast inference',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Z.AI GLM-5.1 (Flagship - META-AGENT RUNTIME MODEL)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_5_1',
+    'glm-5.1',
+    'chat',
+    '["chat", "function_calling", "extended_thinking", "vision", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-5.1 - Flagship model with extended reasoning and vision (META-AGENT RUNTIME MODEL)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Z.AI GLM-4-Plus (Premium tier)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_4_plus',
+    'glm-4-plus',
+    'chat',
+    '["chat", "function_calling", "vision", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-4-Plus - Premium tier for complex reasoning with vision support',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Z.AI GLM-4-Air (Balanced tier)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_4_air',
+    'glm-4-air',
+    'chat',
+    '["chat", "function_calling", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-4-Air - Balanced performance and efficiency',
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -856,8 +1142,8 @@ BEGIN
   SELECT id INTO v_openrouter_id FROM pmoves_core.model_providers WHERE name = 'openrouter_primary';
   SELECT id INTO v_venice_id FROM pmoves_core.model_providers WHERE name = 'venice_primary';
 
-  -- Qwen3 Embedding 4B (local)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  -- Qwen3 Embedding 4B (local) — primary CUDA embedding model
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_ollama_local_id,
     'qwen3_embedding_4b_local',
@@ -866,7 +1152,8 @@ BEGIN
     '["embeddings"]'::jsonb,
     3000,
     32768,
-    'Qwen3 Embedding 4B - Local embedding model',
+    'Qwen3 Embedding 4B - Primary CUDA embedding model (2560d)',
+    '{"hf_id": "Qwen/Qwen3-Embedding-4B", "dimensions": 2560, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -875,6 +1162,7 @@ BEGIN
     vram_mb = EXCLUDED.vram_mb,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW()
   RETURNING id INTO v_model_id;
 
@@ -884,7 +1172,7 @@ BEGIN
   ON CONFLICT (model_id, context) DO NOTHING;
 
   -- Qwen3 Embedding 8B (local, high-quality)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_ollama_local_id,
     'qwen3_embedding_8b_local',
@@ -893,7 +1181,8 @@ BEGIN
     '["embeddings"]'::jsonb,
     6000,
     32768,
-    'Qwen3 Embedding 8B - High-quality local embedding (4096-dim, RTX 5090)',
+    'Qwen3 Embedding 8B - High-quality local embedding (4096d, RTX 5090)',
+    '{"hf_id": "Qwen/Qwen3-Embedding-8B", "dimensions": 4096, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -902,10 +1191,11 @@ BEGIN
     vram_mb = EXCLUDED.vram_mb,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- Gemma Embedding (local, lightweight)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_ollama_local_id,
     'gemma_embed_local',
@@ -915,6 +1205,7 @@ BEGIN
     1500,
     32768,
     'Gemma Embedding 300M - Lightweight local embedding model',
+    '{"hf_id": "google/gemma-embedding-300m", "dimensions": 768, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -923,10 +1214,11 @@ BEGIN
     vram_mb = EXCLUDED.vram_mb,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- Nomic Embed Text (local, popular)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_ollama_local_id,
     'archon_nomic_embed_local',
@@ -936,6 +1228,7 @@ BEGIN
     512,
     8192,
     'Nomic Embed Text - Popular local embedding model',
+    '{"hf_id": "nomic-ai/nomic-embed-text-v1.5", "dimensions": 768, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -944,10 +1237,11 @@ BEGIN
     vram_mb = EXCLUDED.vram_mb,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- BGE Large (Together)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_together_id,
     'archon_bge_large_together',
@@ -957,6 +1251,7 @@ BEGIN
     0,
     512,
     'BGE Large v1.5 - High-quality English embedding via Together',
+    '{"hf_id": "BAAI/bge-large-en-v1.5", "dimensions": 1024}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -964,6 +1259,7 @@ BEGIN
     capabilities = EXCLUDED.capabilities,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- E5 Large (Together)
@@ -987,7 +1283,7 @@ BEGIN
     updated_at = NOW();
 
   -- OpenAI text-embedding-3-small
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_openai_id,
     'openai_text_embedding_small',
@@ -997,6 +1293,7 @@ BEGIN
     0,
     8191,
     'OpenAI text-embedding-3-small - Official OpenAI embedding',
+    '{"dimensions": 1536}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -1004,6 +1301,7 @@ BEGIN
     capabilities = EXCLUDED.capabilities,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- OpenRouter multilingual embedding
@@ -1489,6 +1787,151 @@ BEGIN
   VALUES ('knowledge_manager', 'indexing', v_qwen3_8b_id, 'local_qwen8b', 2, 1.0)
   ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
     model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+END $$;
+
+-- =============================================================================
+-- Phase C: DGX Spark (GB10 Grace-Blackwell) + dual R9700 (RDNA4) providers
+-- =============================================================================
+-- Registered as staging endpoints. TensorZero routing_weight defaults to 0.0
+-- (serves via [functions.*.variants.*] wrt variant weights in tensorzero.toml).
+-- Flip to active/positive weight after 48h soak + load test on hardware.
+
+-- Ollama on DGX Spark (ARM64 + CUDA-on-ARM, stock DGX OS, 128 GB unified LPDDR5X)
+INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
+VALUES (
+  'ollama_spark',
+  'ollama',
+  'http://pmoves-gb10-spark:11434/v1',
+  'OLLAMA_SPARK_API_KEY',
+  'Ollama on NVIDIA DGX Spark (GB10 Grace-Blackwell ARM64, 128GB unified LPDDR5X)',
+  true,
+  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "arm64", "gpu": "gb10", "hostname": "pmoves-gb10-spark", "phase": "C"}'::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
+  api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
+  description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
+  updated_at = NOW();
+
+-- llama.cpp HIP on AMD Ryzen 9850X3D + dual Radeon AI Pro R9700 (RDNA4 gfx1201)
+-- Custom fork: tlee933/llama.cpp-rdna4-gfx1201 (ROCm 7.1 + gfx1201 kernels NOT
+-- in stock Ollama as of 2026-04). llama-server on :8080 exposes OpenAI-compat.
+INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
+VALUES (
+  'llamacpp_rocm',
+  'openai_compatible',
+  'http://pmoves-rdna4:8080/v1',
+  'LLAMACPP_ROCM_API_KEY',
+  'llama-server (HIP) on AMD Ryzen 9850X3D + dual R9700 RDNA4 gfx1201 (ROCm 7.1)',
+  true,
+  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "rdna4", "gpu": "radeon-ai-pro-r9700", "gpu_count": 2, "total_vram_mb": 65536, "hostname": "pmoves-rdna4", "phase": "C", "fork": "tlee933/llama.cpp-rdna4-gfx1201"}'::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
+  api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
+  description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
+  updated_at = NOW();
+
+-- Phase C models (staging — routing_weight 0.0 via TZ variant weights)
+DO $$
+DECLARE
+  v_spark_id UUID;
+  v_rocm_id UUID;
+BEGIN
+  SELECT id INTO v_spark_id FROM pmoves_core.model_providers WHERE name = 'ollama_spark';
+  SELECT id INTO v_rocm_id FROM pmoves_core.model_providers WHERE name = 'llamacpp_rocm';
+
+  -- Gemma 4 31B FP16 on DGX Spark (unified memory, SOTA multimodal)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_spark_id,
+    'ollama_spark_gemma4_31b_fp16',
+    'gemma4:31b',
+    'chat',
+    '["chat", "code_generation", "reasoning", "vision"]'::jsonb,
+    36000,
+    262144,
+    'Google Gemma 4 31B FP16 on DGX Spark — unified LPDDR5X (staging, Phase C)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark (Spark-only, no RDNA4 FP8 kernels)
+  -- HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_spark_id,
+    'ollama_spark_nemotron3_super_120b_nvfp4',
+    'nemotron-3-super-120b-nvfp4',
+    'chat',
+    '["chat", "function_calling", "json_mode", "tool_use", "agentic_reasoning"]'::jsonb,
+    90000,
+    131072,
+    'NVIDIA Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark — NVIDIA OML license (staging, Phase C)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_rocm_id,
+    'llamacpp_rdna4_gemma4_31b_q4km',
+    'gemma-4-31b-it-Q4_K_M.gguf',
+    'chat',
+    '["chat", "code_generation", "reasoning", "vision"]'::jsonb,
+    18000,
+    262144,
+    'Google Gemma 4 31B Q4_K_M on single R9700 via llama.cpp HIP (staging, Phase C)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 26B-A4B MoE on dual R9700 (row-split --tensor-split 0.5,0.5)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_rocm_id,
+    'llamacpp_rdna4_gemma4_26b_dual',
+    'gemma-4-26B-A4B-it-Q4_K_M.gguf',
+    'chat',
+    '["chat", "code_generation", "vision"]'::jsonb,
+    15000,
+    262144,
+    'Google Gemma 4 26B-A4B MoE on dual R9700 (row-split) via llama.cpp HIP (staging, Phase C)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
 
 END $$;
 

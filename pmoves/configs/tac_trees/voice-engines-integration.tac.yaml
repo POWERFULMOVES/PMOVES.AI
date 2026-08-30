@@ -1,0 +1,411 @@
+# TAC Tree: Voice-Engines Integration (no-guess A2A · MCP · runbook · ears · gradio-mcp)
+# ---------------------------------------------------------------------------
+# The go-time convergence audit for the EXPRESSIVE TTS ENGINES as a fabric an
+# autonomous native agent (HERMES on SPARK/5090) can manage WITHOUT guessing.
+#
+# "No guess" means every engine is grounded on six rails, each verifiable:
+#   1. CONTRACT  — the engine is reachable via a real API surface
+#                  (Flute HTTP /v1/voice/* + the MCP SSE bridge tools), not a
+#                  hand-rolled mock.
+#   2. ROUTING   — the engine has a host_affinity row (persona→engine→node) so
+#                  the fabric self-heals across GPU nodes.
+#   3. RUNBOOK   — a documented bring-up/reachability Known Road exists, so an
+#                  agent follows a road instead of improvising.
+#   4. LICENSE   — upstream attribution is tracked (self-host transparency).
+#   5. EARS      — prosodic input + the auto-wake subjects agents wake on.
+#   6. GRADIO_MCP — test+implement protocol: gradio_client end-to-end harness
+#                  + per-engine review READMEs + gepeto 1-click launcher
+#                  (Lane 4 redo, 2026-08-01).
+#
+# Plus the EARS (input side): prosodic parsing + the subjects agents wake on.
+#
+# Companion doc: pmoves/docs/voice/VOICE_ENGINES_INTEGRATION.md
+# Cross-refs:    voice-cast-loop.tac.yaml (the sign->voice loop),
+#                voice-agents.tac.yaml (TTS Studio native + pipecat),
+#                pinokio-p7.tac.yaml (Ultimate-TTS-Studio discovery),
+#                pmoves/tools/test_all_tts_engines/ (Rail 6 — gradio_mcp lane).
+
+name: "Voice-Engines Integration"
+version: "1.1.0"
+description: "Grounded audit: each expressive TTS engine is contract-reachable (Flute HTTP + MCP SSE), host-affinity-routed, runbook-documented, license-attributed, ears-wired, gradio_mcp-testable — so autonomous native agents (HERMES) manage voices with no guessing. Includes the ears (prosodic input + auto-wake subjects) and the test+implement protocol (gradio_client harness + per-engine READMEs + gepeto launcher)."
+
+root:
+  id: voice-engines-integration
+  task: "Expressive TTS engines as an agent-manageable fabric (no guess)"
+  context: "pmoves/services/flute-gateway (mcp_bridge + providers + main) + pmoves/configs/tts-engine-*.yaml + the ears (whisper/prosodic/listeners)"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Rail 1 — CONTRACT surface (the real API an agent calls, not a mock)
+    # =========================================================================
+    - id: vei.contract
+      task: "Engines are reachable via a real API surface"
+      context: "Flute-Gateway HTTP + the MCP SSE bridge — the no-guess grounding"
+      agent_hint: codex
+      children:
+        - id: vei.contract.mcp-bridge
+          task: "MCP SSE bridge exposes the engines as tools"
+          action:
+            type: file_exists
+            target: "pmoves/services/flute-gateway/mcp_bridge.py"
+            expect: "SSE /sse + /messages JSON-RPC; no external MCP SDK dependency"
+          context: "The A2A/MCP entrypoint an autonomous agent drives"
+          agent_hint: codex
+
+        - id: vei.contract.mcp-tools
+          task: "MCP bridge advertises the 6 engine-management tools"
+          action:
+            type: grep
+            target: "pmoves/services/flute-gateway/mcp_bridge.py"
+            pattern: 'tts_(list_engines|synthesize|engine_status|load_engine|unload_engine)'
+            expect: "list/synthesize/status/load/unload — enough for an agent to manage VRAM + cast"
+          context: "tools/list + tools/call surface"
+          agent_hint: codex
+
+        - id: vei.contract.http-synthesize
+          task: "Flute HTTP synthesize endpoints exist"
+          action:
+            type: grep
+            target: "pmoves/services/flute-gateway/main.py"
+            pattern: '/v1/voice/synthesize/audio'
+            expect: "POST /v1/voice/synthesize{,/audio,/prosodic} with X-API-Key"
+          context: "The path the CHIT-sign->voice subscriber POSTs to"
+          agent_hint: codex
+
+        - id: vei.contract.capabilities
+          task: "Engine capability specs are declared (VRAM, latency, category)"
+          action:
+            type: file_exists
+            target: "pmoves/configs/tts-engine-capabilities.yaml"
+            expect: "Per-engine specs the MCP bridge + selector read — single source of truth"
+          context: "No hard-coded engine lists in code"
+          agent_hint: codex
+
+        - id: vei.contract.expressions
+          task: "Expression intents map to engines"
+          action:
+            type: file_exists
+            target: "pmoves/configs/tts-engine-expressions.yaml"
+            expect: "intent (narrate/emote/dramatic/...) -> primary engine + params"
+          context: "persona_selector layer-1 resolution"
+          agent_hint: codex
+
+    # =========================================================================
+    # Rail 2 — ROUTING (host_affinity: persona->engine->NODE, self-healing)
+    # =========================================================================
+    - id: vei.routing
+      task: "Every engine has a fleet-node routing rule"
+      context: "host_affinity in tts-engine-capabilities.yaml + resolve_engine_host()"
+      agent_hint: codex
+      children:
+        - id: vei.routing.host-affinity
+          task: "host_affinity table present"
+          action:
+            type: grep
+            target: "pmoves/configs/tts-engine-capabilities.yaml"
+            pattern: 'host_affinity:'
+            expect: "engine -> {requires, min_vram_mb?, nodes, preferred} (PR #2037)"
+          context: "Node affinity keyed by engine hardware needs, not per-voice"
+          agent_hint: codex
+
+        - id: vei.routing.resolver
+          task: "Resolver selects an up node or falls to the CPU floor"
+          action:
+            type: grep
+            target: "pmoves/services/flute-gateway/persona_selector.py"
+            pattern: 'def resolve_engine_host'
+            expect: "preferred-if-up else first-eligible-up else None (caller floors to kokoro)"
+          context: "Self-healing is the routing layer, not the engine"
+          agent_hint: codex
+
+        - id: vei.routing.indextts
+          task: "indextts (live on 5090) has an affinity row"
+          action:
+            type: grep
+            target: "pmoves/configs/tts-engine-capabilities.yaml"
+            pattern: 'indextts:.*preferred: *"?5090"?'
+            expect: "The engine the operator just loaded routes to 5090 first"
+          context: "GPU CUDA engine, min_vram gated"
+          agent_hint: codex
+
+        - id: vei.routing.vibevoice-spark
+          task: "vibevoice (heavy) prefers SPARK's 128GB headroom"
+          action:
+            type: grep
+            target: "pmoves/configs/tts-engine-capabilities.yaml"
+            pattern: 'vibevoice:.*preferred: *spark'
+            expect: "3GB+ engine hosted where the VRAM headroom is"
+          context: "SPARK = autonomous-native-agent host for heavy voices"
+          agent_hint: codex
+
+        - id: vei.routing.kokoro-floor
+          task: "kokoro is the CPU-viable self-heal floor"
+          action:
+            type: grep
+            target: "pmoves/configs/tts-engine-capabilities.yaml"
+            pattern: 'kokoro:.*requires: *cpu'
+            expect: "Runs anywhere; the designated fallback when the expressive tier is down"
+          context: "Never the expressive voice, always the floor"
+          agent_hint: codex
+
+    # =========================================================================
+    # Rail 3 — A2A / autonomous management (HERMES drives the fabric)
+    # =========================================================================
+    - id: vei.a2a
+      task: "An autonomous native agent can manage the voices"
+      context: "HERMES agent + the CHIT-sign->voice loop + NATS voice subjects"
+      agent_hint: codex
+      children:
+        - id: vei.a2a.hermes-agent
+          task: "HERMES agent definition present (MCP/NATS bridge body)"
+          action:
+            type: file_exists
+            target: ".claude/agents/hermes-agent.md"
+            expect: "Delivery-body agent with MCP/NATS bridge privileges — the voice manager on SPARK"
+          context: "Spawns per-node; drives the MCP bridge tools"
+          agent_hint: codex
+
+        - id: vei.a2a.sign-to-voice
+          task: "CHIT-sign -> voice subscriber wires signs to synthesis"
+          action:
+            type: file_exists
+            target: "pmoves/tools/voice_cast_on_sign.py"
+            expect: "agent.graphiti.signed.v1 -> flute synth, no speak tool call"
+          context: "An agent's normal sign_trail IS the trigger"
+          agent_hint: codex
+
+        - id: vei.a2a.persona-bridge
+          task: "Alter/persona maps to intent for routing"
+          action:
+            type: file_exists
+            target: "pmoves/tools/voice_persona_bridge.py"
+            expect: "FlOO$ suit -> intent (mr-clean -> dramatic, etc.)"
+          context: "resolve(payload) never raises"
+          agent_hint: codex
+
+        - id: vei.a2a.response-subject
+          task: "A follow agent reacts to a cast on voice.agent.response.v1"
+          action:
+            type: grep
+            target: "pmoves/tools/voice_follow_cast_agent.py"
+            pattern: 'voice\.agent\.response\.v1'
+            expect: "voice.agent.response.v1 closes the A2A loop — an agent reacts to a voice having been cast"
+          context: "The 'other agents respond to convo' half of the fabric"
+          agent_hint: codex
+
+    # =========================================================================
+    # Rail 4 — RUNBOOK + LICENSE (documented road + self-host transparency)
+    # =========================================================================
+    - id: vei.doc
+      task: "Documented Known Road + upstream attribution"
+      context: "Deployment doctrine + per-engine license registry"
+      agent_hint: codex
+      children:
+        - id: vei.doc.deployment
+          task: "Per-node deployment doctrine exists"
+          action:
+            type: manual
+            target: "pmoves/docs/voice/VOICE_FABRIC_DEPLOYMENT.md"
+            expect: "Per-node runtime x host_affinity routing + reachability rule (lands with PR #2072)"
+          context: "The road an agent follows to stand an engine up"
+          agent_hint: codex
+
+        - id: vei.doc.framework
+          task: "Engines-integration framework doc (this tree's companion)"
+          action:
+            type: file_exists
+            target: "pmoves/docs/voice/VOICE_ENGINES_INTEGRATION.md"
+            expect: "The no-guess contract standard + how HERMES consumes it + the ears lane"
+          context: "Defines what 'integrated' means per engine"
+          agent_hint: codex
+
+        - id: vei.doc.mirror-plan
+          task: "Mirror/flute execution plan present"
+          action:
+            type: file_exists
+            target: "pmoves/docs/operations/MIRROR_FLUTE_EXECUTION_PLAN.md"
+            expect: "Cross-node flute bring-up coordination"
+          context: "Mirror-lane coordination for the fabric"
+          agent_hint: codex
+
+        - id: vei.doc.license-registry
+          task: "Per-engine license + upstream-attribution registry"
+          action:
+            type: manual
+            expect: "PR #2050 (feat/engine-license-attribution) — each engine tagged with license + upstream; f5_tts/fish_s2 gates. Merge to clear."
+          context: "Self-host transparency: ship only what the license permits"
+          agent_hint: codex
+
+    # =========================================================================
+    # Rail 5 — THE EARS (input side: prosodic + the subjects agents wake on)
+    # =========================================================================
+    # "Other agents wake auto based on convo — they wait, then respond." The
+    # output voice fabric is only half; the ears are how info reaches agents.
+    - id: vei.ears
+      task: "Prosodic input + auto-wake seam"
+      context: "whisper STT provider + bpm_encoder_worker + the listener/inbox tools"
+      agent_hint: codex
+      children:
+        - id: vei.ears.whisper
+          task: "Whisper STT provider present (the literal ears)"
+          action:
+            type: file_exists
+            target: "pmoves/services/flute-gateway/providers/whisper.py"
+            expect: "Speech-in provider — the transcription seam feeding the prosodic layer"
+          context: "Input counterpart to the TTS providers"
+          agent_hint: codex
+
+        - id: vei.ears.prosodic-worker
+          task: "Prosodic BPM encoder turns inference results into boundaries"
+          action:
+            type: file_exists
+            target: "pmoves/services/flute-gateway/bpm_encoder_worker.py"
+            expect: "mesh.gpu.inference.result.v1 -> bpm.encoded.v1 (prosodic timeline)"
+          context: "How info gets its rhythm/emphasis — the ears' understanding layer"
+          agent_hint: codex
+
+        - id: vei.ears.encoded-subject
+          task: "Prosodic result publishes on bpm.encoded.v1"
+          action:
+            type: grep
+            target: "pmoves/services/flute-gateway/bpm_encoder_worker.py"
+            pattern: 'bpm\.encoded\.v1'
+            expect: "The subject downstream agents subscribe to for prosody-aware waking"
+          context: "Boundary/BPM signal on the geometry bus"
+          agent_hint: codex
+
+        - id: vei.ears.auto-wake
+          task: "Auto-wake seam: a persistent inbox/listener agents park on"
+          action:
+            type: file_exists
+            target: "pmoves/tools/nats_agent_inbox.py"
+            expect: "Persistent NATS inbox for node-bound agent coordination — agents wait here and wake on a message"
+          context: "The 'aliens on the wall' pattern: dormant until convo triggers (see also realtime_listener.py)"
+          agent_hint: codex
+
+    # =========================================================================
+    # Live check (runtime — needs the stack up)
+    # =========================================================================
+    - id: vei.live
+      task: "Live engine reachable through the contract"
+      context: "Requires flute-gateway up + an expressive engine loaded (indextts on 5090 or omnivoice)"
+      agent_hint: codex
+      children:
+        - id: vei.live.mcp-list
+          task: "MCP tools/list returns engines over SSE"
+          action:
+            type: manual
+            expect: "GET :8055/sse + tools/call tts_list_engines -> engine roster incl. indextts"
+          context: "Verified when the operator's IndexTTS is loaded"
+          agent_hint: codex
+
+        - id: vei.live.dramatic-cast
+          task: "intent=dramatic casts via the expressive engine end-to-end"
+          action:
+            type: manual
+            expect: "make voice-cast-smoke with a dramatic alter -> WAV via indextts/ultimate_tts; self-heals to kokoro if down"
+          context: "The no-guess proof: a real cast through the real contract"
+          agent_hint: codex
+
+    # =========================================================================
+    # Rail 6 — GRADIO MCP CONTRACT (Lane 4 redo, 2026-08-01)
+    # =========================================================================
+    # The test+implement protocol. Every engine is grounded in a real
+    # gradio_client end-to-end path (not a mock), has a per-engine review
+    # README that captures the contract, and is reachable via the gepeto
+    # launcher for 1-click test runs. Without this rail, implementers can
+    # drift from the actual TTS Studio surface; with it, the lane is
+    # self-documenting and self-testing.
+    - id: vei.gradio-mcp
+      task: "Test+implement protocol: gradio_client end-to-end + per-engine READMEs + gepeto launcher"
+      context: "pmoves/tools/test_all_tts_engines.py + pmoves/tools/test_all_tts_engines/{engines,pinokio,README.md}"
+      agent_hint: codex
+      children:
+
+        - id: vei.gradio-mcp.harness
+          task: "gradio_client test harness exists and uses the real Gradio client (not a mock)"
+          action:
+            type: grep
+            target: "pmoves/tools/test_all_tts_engines.py"
+            pattern: 'from gradio_client import Client'
+            expect: "Real gradio_client import — no fake/mock client"
+          context: "End-to-end test path; mocks defeat the no-guess guarantee"
+          agent_hint: codex
+
+        - id: vei.gradio-mcp.engine-count
+          task: "14 engine entries declared in the harness's ENGINES list"
+          action:
+            type: grep
+            target: "pmoves/tools/test_all_tts_engines.py"
+            pattern: '"id": "(kitten_tts|kokoro|f5_tts|indextts|indextts2|fish|fish_s2|chatterbox|chatterbox_turbo|chatterbox_multilingual|voxcpm|higgs|qwen|vibevoice)"'
+            expect: "All 14 engines registered — single source of truth for the test surface"
+          context: "Tied to the curated registry + the 14 per-engine READMEs"
+          agent_hint: codex
+
+        - id: vei.gradio-mcp.per-engine-readmes
+          task: "Per-engine review READMEs exist for all 14 engines"
+          action:
+            type: file_exists
+            target: "pmoves/tools/test_all_tts_engines/engines/{kitten_tts,kokoro,f5_tts,indextts,indextts2,fish,fish_s2,chatterbox,chatterbox_turbo,chatterbox_multilingual,voxcpm,higgs,qwen,vibevoice}.md"
+            expect: "14 review READMEs capturing: kwargs, voices, hardware, failure modes, file locations, reviewer notes"
+          context: "The 'how to actually test' lane — implementer + reviewer read these, not launch.py"
+          agent_hint: codex
+
+        - id: vei.gradio-mcp.repo-readme
+          task: "Repo-level README documents the lane + pterm + gepeto integration"
+          action:
+            type: file_exists
+            target: "pmoves/tools/test_all_tts_engines/README.md"
+            expect: "README explaining the test harness, the pterm pre-flight, the gepeto launcher, the TAC rail, the per-engine READMEs"
+          context: "Single landing page for the lane; reviewer starts here"
+          agent_hint: codex
+
+        - id: vei.gradio-mcp.gepeto-launcher
+          task: "Gepeto launcher present (install.js, start.js, start-one.js, pinokio.js, pinokio.json)"
+          action:
+            type: file_exists
+            target: "pmoves/tools/test_all_tts_engines/pinokio/{install.js,start.js,start-one.js,pinokio.js,pinokio.json}"
+            expect: "1-click Pinokio UI for the test harness; per-engine submenu; pterm push/clipboard post-step"
+          context: "Wrap don't reinvent: gepeto is the Pinokio app-launcher pattern, applied to the test tool"
+          agent_hint: codex
+
+        - id: vei.gradio-mcp.pterm-clean
+          task: "Harness uses real pterm subcommands (no hand-rolled wrappers)"
+          action:
+            type: grep
+            target: "pmoves/tools/test_all_tts_engines.py"
+            pattern: 'pterm_(bring_up_tts_studio|notify|clipboard_write|_call|_find_tts_app|_wait_ready|_pterm_path)'
+            expect: "Real pterm primitives: list / status / start / running / push / clipboard write — no fake subcommands (pterm search / pterm run)"
+          context: "The Lane 4 redo removed the 180-line hand-rolled wrapper that called non-existent subcommands"
+          agent_hint: codex
+
+        - id: vei.gradio-mcp.no-handrolled
+          task: "No hand-rolled pterm wrapper functions remain in the harness"
+          action:
+            type: grep_negative
+            target: "pmoves/tools/test_all_tts_engines.py"
+            pattern: '(def _resolve_pterm|def _run_pterm|def _parse_pterm_status|def pterm_preflight|pterm_preflight\()'
+            expect: "The old _resolve_pterm / _run_pterm / _parse_pterm_status / pterm_preflight are GONE"
+          context: "Regression guard — prevents the hand-rolled wrapper from sneaking back in"
+          agent_hint: codex
+
+        - id: vei.gradio-mcp.pterm-call-shape
+          task: "pterm subprocess calls pin encoding=utf-8 (Windows code-page safety)"
+          action:
+            type: grep
+            target: "pmoves/tools/test_all_tts_engines.py"
+            pattern: 'encoding="utf-8"'
+            expect: "Per the Lane 3 learning — text=True without encoding masks real numbers on Windows"
+          context: "Encoding pin is a hard-won lesson, not optional"
+          agent_hint: codex
+
+        - id: vei.gradio-mcp.tac-self-ref
+          task: "This TAC tree references itself in the harness's CLAIM notes"
+          action:
+            type: grep
+            target: "pmoves/configs/tac_trees/voice-engines-integration.tac.yaml"
+            pattern: 'vei\.gradio-mcp'
+            expect: "The rail is registered (you are reading it)"
+          context: "Self-referential sanity check; the rail exists and is the source of truth"
+          agent_hint: codex

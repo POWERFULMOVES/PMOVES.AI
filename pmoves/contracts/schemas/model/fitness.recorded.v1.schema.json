@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.pmoves.ai/schemas/model/fitness.recorded.v1.schema.json",
+  "title": "Model Fitness Recorded v1",
+  "type": "object",
+  "required": [
+    "model_id",
+    "source",
+    "lane",
+    "score",
+    "metrics",
+    "run_id",
+    "timestamp",
+    "agent_id",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "model_id": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "string",
+      "enum": ["tensorzero", "pinokio", "unsloth", "hf-autoresearch", "evoswarm", "manual"]
+    },
+    "lane": { "type": "string", "minLength": 1 },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "metrics": { "type": "object", "additionalProperties": true },
+    "run_id": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "agent_id": { "type": "string", "minLength": 1 },
+    "signature": {
+      "type": "object",
+      "required": ["alg", "kid", "hmac"],
+      "additionalProperties": true,
+      "properties": {
+        "alg": { "type": "string" },
+        "kid": { "type": "string" },
+        "hmac": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

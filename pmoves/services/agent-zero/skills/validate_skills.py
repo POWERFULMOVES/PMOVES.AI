@@ -13,7 +13,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class SkillValidator:
@@ -299,7 +299,7 @@ class SkillValidator:
                 print(f"  {i}. {warning}")
 
         if self.strict and self.warnings:
-            print(f"\n⚠️  Strict mode enabled: Treating warnings as errors")
+            print("\n⚠️  Strict mode enabled: Treating warnings as errors")
 
 
 def find_skill_files(root_dir: Path) -> List[Path]:
@@ -394,7 +394,7 @@ Examples:
             validator.print_report(skill_file)
 
             if not success and args.fail_fast:
-                print(f"\n❌ Validation failed (fail-fast mode)")
+                print("\n❌ Validation failed (fail-fast mode)")
                 return 1
 
         # Summary

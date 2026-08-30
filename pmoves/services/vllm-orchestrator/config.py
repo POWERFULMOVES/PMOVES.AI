@@ -519,7 +519,7 @@ class VLLMConfig:
                 "${MODEL_PATH:-/models}:/root/.cache/huggingface",
             ],
             "healthcheck": {
-                "test": ["CMD", "curl", f"http://localhost:8000/health"],
+                "test": ["CMD", "curl", "http://localhost:8000/health"],
                 "interval": "10s",
                 "timeout": "5s",
                 "retries": 3,
@@ -568,8 +568,8 @@ class VLLMConfig:
     def _environment(self) -> List[str]:
         """Generate environment variables."""
         return [
-            f"HF_DATASET_LOADED_LIMIT=500",
-            f"PYTHONUNBUFFERED=1",
+            "HF_DATASET_LOADED_LIMIT=500",
+            "PYTHONUNBUFFERED=1",
             f"HF_HOME={os.environ.get('HF_HOME', '/models')}",
             f"HF_HUB_CACHE={os.environ.get('HF_HUB_CACHE', '/models/hub')}",
             f"HF_HUB_ENABLE_HF_TRANSFER={os.environ.get('HF_HUB_ENABLE_HF_TRANSFER', '1')}",
