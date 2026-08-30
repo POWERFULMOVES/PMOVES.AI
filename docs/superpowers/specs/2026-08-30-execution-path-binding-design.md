@@ -179,6 +179,71 @@ and states its age rather than implying currency.
 
 ## Layer 2 — required-context coverage (CI + local)
 
+> **Scope revised after reading the existing machinery.** The first draft
+> proposed a new tool. The repo already has `branch_protection.py` (audit +
+> apply), `branch_protection_publisher.py` (drift → NATS), and three
+> `branch-protection-*` workflows. What is missing is smaller and more specific
+> than a tool, and it has a required ORDER — see "Ordering constraint" below.
+
+### What the existing chain already does, and where it is wrong
+
+`branch_protection.audit()` diffs the DECLARED rulesets against the LIVE
+rulesets. Run against this repo on 2026-08-30 it returns:
+
+```
+compliant: False — 8 drift items, 4 at severity "block"
+  [block] rulesets[[ main ]].rules[type=required_status_checks]  expected=present actual=missing
+  [block] rulesets[[ main ]].rules[type=required_signatures]     expected=present actual=missing
+  [block] rulesets[[ main ]].rules[type=required_linear_history] expected=present actual=missing
+  [block] rulesets[[ main ]].rules[type=required_conversation_resolution] …
+```
+
+**`main` has four required status checks.** They live in CLASSIC branch
+protection, and `_list_rulesets()` calls `/rulesets` only — the tool never reads
+the other source. So the drift signal is not merely non-failing; it is FALSE, in
+the direction that invites an operator to `apply`.
+
+Two defects that happen to cancel: a wrong signal, into
+`branch-protection-drift.yml:20` whose own doctrine is *"0 = drift check ran
+(compliant or non-compliant — both are OK)"*. Nobody acts on it, so nobody
+notices it is wrong.
+
+### Ordering constraint
+
+Fixing either alone makes things worse:
+
+1. **Read both sources first.** Harden the exit code before that, and the gate
+   starts failing `main` on a false positive.
+2. **Then add producibility and uniqueness** — the checks that are genuinely
+   absent. `audit()` compares declared-vs-live and never asks whether a required
+   context can be produced at all (#2828), or whether it names exactly one
+   producer (`verify`).
+3. **Only then let the drift gate fail.** An exit code is a promise about the
+   measurement behind it.
+
+### What applying the declared policy actually does
+
+Worth stating because the obvious next step is more than it appears. Dispatching
+`branch-protection-ruleset-sync` with `dry_run: false` imposes FOUR rules on
+`main`, not just the missing `merge-decision`. Measured as GitHub reports them,
+not as `git log %G?` reports them — that flag reads the local keyring and says
+`E` for commits GitHub verifies fine:
+
+```
+required_signatures              last 8 main commits verified=true/valid   safe
+required_linear_history          last 8 main commits parents=1             safe on main
+required_conversation_resolution already enforced by the closeout road     safe
+required_status_checks           adds merge-decision                       the intent
+```
+
+All four survive contact with how `main` is actually used. But
+`required_linear_history` would forbid the real merge commit #2818 needed for a
+4,632-commit sync — that PR targets `PMOVES.AI-Edition-Hardened`, which the
+`[ main ]` ruleset does not reach. The distinction is load-bearing and has to be
+checked, not assumed, before any future ruleset is scoped to the hardened
+branches.
+
+
 **Problem.** Nothing asserts that a required context is producible on the branch
 that requires it, or that it names exactly one producer.
 
@@ -422,7 +487,8 @@ non-zero; one where all three states agree exits zero and says so.
 
 ## Further instances, found by review
 
-Five more, all measured, none yet addressed. They are listed because the class
+Seven more, all measured. Two are now fixed (#2843, and #12 is Layer 2's
+revised first step); the rest are open. They are listed because the class
 is clearly larger than the incidents that prompted the design.
 
 | # | Name | Actually binds to |
@@ -431,6 +497,8 @@ is clearly larger than the incidents that prompted the design.
 | 7 | `hardening-validation.yml` | produces **none** of `hardening-validation` — its jobs are `Validate Hardening Patterns`, `Validate Dockerfiles`, `Docker Bench Security`, `Validate Compose Files`, `Validation Summary`. The required one is again `merge-gate.yml`'s. **This bears directly on incident 3**: `validate_dockerfile_paths.py` runs in `hardening-validation.yml::validate-dockerfiles`, which is NOT the required check the incident table implies. |
 | 8 | "main's required checks" | three sources, three answers (see Layer 2), with an existing drift gate that exits 0 either way. |
 | 9 | `pr_closeout.py:356` | a merge decision keyed on a CLI's prose: `if "no required checks reported" in proc.stderr.casefold()`. Low blast radius — both that path and the empty path fail closed at `:625` — but the same shape, in the file this design already edits. |
+| 11 | `inputs.dry_run` in `branch-protection-ruleset-sync.yml` | the operator's checkbox on `workflow_dispatch`, and the **empty string** on `schedule` — the `inputs` context exists for dispatch/`workflow_call` only, and a nonexistent property "will evaluate to an empty string". So the weekly "safety net that catches any repo that drifted" never added `--no-dry-run` and never wrote. Scheduled runs on 2026-08-23 and 2026-08-30 both report **success**. Fixed in #2843. |
+| 12 | `branch_protection.audit()` | reads `/rulesets` **only**, so it reports `main`'s four classic required checks as `missing` at severity `block` — a false signal, into a workflow that exits 0 either way. |
 | 10 | `attest-provenance.yml` | declares `workflow_call` and has **zero callers**. A reusable workflow whose name binds to no execution path at all. Layer 2 never notices: it walks required→producer, never producer→consumer. |
 
 ## Open decisions for the operator
