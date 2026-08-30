@@ -46,6 +46,11 @@ jobs:
           EOF
 
   build:
+    # Named explicitly: with no `name:` this job's context was the bare
+    # `build`, which build-nats-workers.yml (push on main) also publishes.
+    # Required checks match on name alone, and dispatch-only is not
+    # protection -- see self-hosted-builds.yml and #2840.
+    name: Manual Image Build
     needs: setup-matrix
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
