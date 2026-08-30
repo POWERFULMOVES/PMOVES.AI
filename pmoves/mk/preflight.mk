@@ -347,7 +347,9 @@ pr-trim: ## Full hedge trim cycle: analyze + resolve + trail sign
 pr-closeout-audit: ## Fail-closed closeout audit for an exact PR head (PR=N EXPECTED_HEAD=full-sha)
 	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
 	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
-	@$(PRECHECK_PY) tools/pr_closeout.py audit \
+	@$(PRECHECK_PY) tools/pr_closeout.py \
+		--repo "$${PR_CLOSEOUT_REPO:-POWERFULMOVES/PMOVES.AI}" \
+		audit \
 		--pr "$$PR" \
 		--expected-head "$$EXPECTED_HEAD" \
 		--base "$${PR_CLOSEOUT_BASE:-main}" \
@@ -360,7 +362,9 @@ pr-closeout-merge: ## Audit + guarded admin squash merge (PR=N EXPECTED_HEAD=sha
 	@test -n "$${PR:-}" || { echo "ERROR: PR is required"; exit 2; }
 	@test -n "$${EXPECTED_HEAD:-}" || { echo "ERROR: EXPECTED_HEAD is required"; exit 2; }
 	@test -n "$${CONFIRM:-}" || { echo "ERROR: CONFIRM is required"; exit 2; }
-	@$(PRECHECK_PY) tools/pr_closeout.py merge \
+	@$(PRECHECK_PY) tools/pr_closeout.py \
+		--repo "$${PR_CLOSEOUT_REPO:-POWERFULMOVES/PMOVES.AI}" \
+		merge \
 		--pr "$$PR" \
 		--expected-head "$$EXPECTED_HEAD" \
 		--base "$${PR_CLOSEOUT_BASE:-main}" \

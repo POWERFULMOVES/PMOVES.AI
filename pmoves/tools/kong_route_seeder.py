@@ -269,6 +269,13 @@ def _parse_model_suits(model_suits_dir: Path) -> list[dict[str, Any]]:
             )
 
             if model_id and provider:
+                # An ENABLED token plan is the declared primary credential;
+                # the pay-as-you-go key is its declared FALLBACK (issue #2748
+                # break 3: _infer_key_env silently substituted the fallback,
+                # so every plan-backed route billed on the PAYG key).
+                token_plan = doc.get("token_plan") or {}
+                if token_plan.get("enabled") and token_plan.get("api_key_env"):
+                    api_key_env = api_key_env or token_plan["api_key_env"]
                 suits.append(
                     {
                         "file": yaml_file.name,
@@ -363,12 +370,21 @@ def _generate_plan(
     for provider, models in groups.items():
         service_name = f"pmoves-{provider}"
         api_base = models[0].get("api_base", _infer_api_base(provider))
+        # `api_key_env` is carried into the plan even though `_execute_plan`
+        # cannot act on it yet. Computing the right credential and then
+        # dropping it made the selection unauditable: the identity snapshot
+        # said MINIMAX_TOKEN_PLAN_API_KEY while the plan -- the thing that
+        # actually reaches Kong -- had no opinion at all, so nothing downstream
+        # could tell the two apart.
+        key_envs = sorted({m.get("api_key_env") for m in models if m.get("api_key_env")})
         services.append(
             {
                 "name": service_name,
                 "url": api_base,
                 "provider": provider,
                 "models": [m["model_id"] for m in models],
+                "api_key_env": key_envs[0] if len(key_envs) == 1 else None,
+                "api_key_envs": key_envs,
             }
         )
 
@@ -423,6 +439,25 @@ def _execute_plan(
             else:
                 log.error("Failed to upsert route: %s", route["name"])
                 results["errors"] += 1
+
+    # Kong is NOT switched to this credential by anything above. The seeder
+    # upserts services and routes; it configures no authentication plugin and
+    # sets no upstream header, so whichever key the gateway already holds is
+    # the key that bills -- regardless of what the plan selected.
+    #
+    # Said out loud because the alternative is a silent false assurance: a run
+    # that reports "routes created" reads as "routes are using the token plan",
+    # and #2748 is what that costs when it is not true.
+    declared = sorted({
+        env for svc in plan["services"] for env in (svc.get("api_key_envs") or [])
+    })
+    if declared and not dry_run:
+        log.warning(
+            "Routes seeded, but Kong auth is NOT configured by this tool. The "
+            "plan selected %s; the gateway will keep using whatever credential "
+            "it already holds. Configure the upstream key on Kong itself.",
+            ", ".join(declared),
+        )
 
     return results
 

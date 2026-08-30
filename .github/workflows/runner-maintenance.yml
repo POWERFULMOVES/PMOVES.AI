@@ -54,6 +54,8 @@ jobs:
     name: Cleanup ${{ matrix.label }}
     runs-on: [self-hosted, "${{ matrix.label }}"]
     timeout-minutes: 15
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:

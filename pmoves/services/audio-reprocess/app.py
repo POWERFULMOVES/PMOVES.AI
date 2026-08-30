@@ -13,13 +13,16 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import os
+import socket
 import tempfile
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -110,7 +113,27 @@ publisher = NATSPublisher(NATS_URL)
 # Pipeline helpers
 # --------------------------------------------------------------------------- #
 
+def _assert_public_http_url(url: str) -> None:
+    """SSRF guard: only absolute http(s) URLs resolving to public addresses."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("Only absolute http(s) URLs are allowed")
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    for info in socket.getaddrinfo(parsed.hostname, port):
+        ip = ipaddress.ip_address(info[4][0])
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise ValueError(f"Refusing to fetch non-public address ({ip})")
+
+
 async def download_audio(url: str, dest: Path) -> Path:
+    _assert_public_http_url(url)
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.get(url)
         resp.raise_for_status()

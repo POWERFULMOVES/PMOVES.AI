@@ -116,6 +116,36 @@
 - Single-env + branded defaults: integrations run against one environment bundle. Keep branded login defaults/API tokens in GitHub secrets and the vault; avoid committing real secrets in `pmoves/env.shared` (rotate and load through secrets for production values).
 - Quick start (local): `cp pmoves/env.shared.example pmoves/env.shared`, fill values, `make env-setup`, `make env-check`, then `./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev` to mirror into GitHub Secrets.
 
+#### Adding a NEW secret label — never hand-edit the manifests
+
+The CHIT secrets manifests are **machine-emitted**. Agents and operators edit
+the code-level registry, never the YAML — `pmoves/tools/chit_manifest_register.py`
+states the doctrine in its own docstring, and a hand-edited entry either gets
+overwritten or drifts from what the generator would produce.
+
+The road, in order:
+
+1. add the label to `REGISTRY` in `pmoves/tools/chit_manifest_register.py`
+2. `make -C pmoves chit-manifest-register` — emits the v2 entry (additive; never reorders or modifies existing ones)
+3. `make -C pmoves chit-manifest-sync` — derives v1 from v2
+4. `make -C pmoves secrets-funnel` — projects the tier env files
+
+Gate it without writing: `make -C pmoves chit-manifest-register ARGS='--check'`
+reports pending additions and exits 1 if any.
+
+To check whether a secret is actually funnel-owned rather than operator-set:
+`python pmoves/tools/github_secret_capacity_audit.py` lists **orphans** — present
+in GitHub, declared in no manifest — alongside per-scope capacity. GitHub caps
+secrets at 100 **per scope**, and `env:Prod` is at that ceiling today, so a new
+`github_secret` target is not free.
+
+Stated here rather than only in the root `AGENTS.md` because that is where it
+was: the root file carries the pipeline, this file did not, and an agent working
+inside `pmoves/` reads this one. Root `AGENTS.md` already records that "a
+duplicate funnel has been written twice by agents who checked only the root
+Makefile" — the same discoverability gap, one directory down.
+
+
 #### Health badges and custom endpoints
 
 The console Quick Links probe Agent Zero and Archon using `/healthz` by default. If your forks expose different health endpoints, set:

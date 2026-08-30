@@ -79,7 +79,6 @@ known_gaps:
   - "GHOST_ENDPOINT|pmoves/docs/superpowers/specs/2026-05-20-supercli-integration-design.md|agent-zero/mcp"
   - "GHOST_ENDPOINT|pmoves/docs/tensorzero/README.md|agent-zero/config/reload"
   - "GHOST_ENDPOINT|pmoves/docs/tensorzero/README.md|agent-zero/config/validate"
-  - "GHOST_PATH|pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md|pmoves/services/flute-gateway/pipecat/pipelines/voice_agent.py"
   - "GHOST_PATH|pmoves/docs/reviews/2026-03-01/tokenism-multi-review.md|.claude/skills/pmoves-integration/tools/nats-monitor.ts"
   - "GHOST_PATH|pmoves/docs/reviews/2026-03-01/tokenism-multi-review.md|.github/workflows/ci.yml"
   - "GHOST_TARGET|.claude/commands/test/smoke.md|test-smoke"

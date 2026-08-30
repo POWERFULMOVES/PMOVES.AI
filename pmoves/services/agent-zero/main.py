@@ -845,7 +845,9 @@ async def healthz() -> Dict[str, Any]:
             runtime_health = await client.health()
             detail["runtime"] = runtime_health
         except AgentZeroRequestError as exc:
-            detail["runtime"] = {"status": "error", "detail": str(exc)}
+            # Expose only the exception type to clients; full detail stays in logs.
+            logger.warning("Runtime health check failed: %s", exc)
+            detail["runtime"] = {"status": "error", "detail": type(exc).__name__}
     if not running:
         # Inner runtime down: a 200 here kept Docker's healthcheck green while
         # every message call failed (green-while-dead). Surface the real state;

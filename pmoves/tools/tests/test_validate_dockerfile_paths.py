@@ -8,7 +8,9 @@ The ratchet is the durable answer to the operator's #2358 meta-callout:
   2. Fail when a compose `build:` points to a missing Dockerfile.
   3. Pass when an orphan Dockerfile is in the baseline.
   4. Fail when a new orphan Dockerfile appears (not in baseline).
-  5. Skip sibling-submodule / vendor / provisions paths
+  5. Skip vendor / provisions paths, sibling checkouts outside
+     `pmoves/`, and any path inside a submodule registered in
+     .gitmodules — INCLUDING one nested under an in-scope parent dir
      (out of scope for the ratchet; the operator keeps those synced).
   6. Emit JSON with the right shape when --json is passed.
 """
@@ -204,6 +206,99 @@ services:
         assert not archon_findings, f"expected sibling-submodule to be skipped, got: {archon_findings}"
     finally:
         _cleanup(path)
+
+
+def test_registered_submodule_inside_pmoves_is_skipped():
+    """The case the test above only appears to cover.
+
+    `test_sibling_submodule_path_skipped` uses `../PMOVES-Archon`, which
+    is rejected by the FIRST line of the scope predicate for starting
+    outside `pmoves/` -- swap it for `../anything` and it still passes.
+    Every one of this repo's 75 registered submodules is at a path
+    INSIDE `pmoves/`, and `pmoves/integrations/archon` sits under
+    `integrations/`, which the parent-dir allowlist calls in-scope. So
+    the ratchet flagged `pmoves/docker-compose.archon-ui.submodule.yml`
+    as a broken build for a Dockerfile that is present at the pinned
+    submodule commit and merely absent from a CI checkout.
+    """
+    payload = """
+services:
+  archon-ui:
+    build:
+      context: integrations/archon/archon-ui-main
+      dockerfile: Dockerfile
+    image: archon-ui:test
+"""
+    path = _write_tmp_compose("test_validate_dockerfile_paths_registered_sub", payload)
+    try:
+        r = _run_ratchet("--compose", str(path))
+        out = json.loads(r.stdout)
+        findings = [
+            p for p in out["problems"]
+            if p.get("service") == "archon-ui" and p.get("kind") == "broken-build"
+        ]
+        assert not findings, f"registered submodule should be out of scope, got: {findings}"
+    finally:
+        _cleanup(path)
+
+
+def test_missing_dockerfile_under_in_scope_dir_is_still_flagged():
+    """Negative control for the exemption above.
+
+    Consulting .gitmodules must exempt submodule paths and NOTHING
+    else. `pmoves/integrations/` is in scope; a path under it that is
+    not inside any registered submodule must still fail, or the fix
+    would have traded a false positive for a false negative.
+    """
+    payload = """
+services:
+  notasub:
+    build:
+      context: integrations/definitely-not-a-submodule
+      dockerfile: Dockerfile
+    image: notasub:test
+"""
+    path = _write_tmp_compose("test_validate_dockerfile_paths_notasub", payload)
+    try:
+        r = _run_ratchet("--compose", str(path))
+        out = json.loads(r.stdout)
+        findings = [
+            p for p in out["problems"]
+            if p.get("service") == "notasub" and p.get("kind") == "broken-build"
+        ]
+        assert findings, "a missing Dockerfile under an in-scope non-submodule dir must still be flagged"
+    finally:
+        _cleanup(path)
+
+
+def test_submodule_paths_are_read_from_gitmodules_not_a_name_convention():
+    """Structural assertion on the source, not a copy of the logic.
+
+    Anchored to the real `.gitmodules` so that the property the fix
+    depends on -- registered submodules living INSIDE the in-scope
+    parent dirs -- is asserted against the tree rather than restated.
+    A test that rebuilt the set from the same regex could not fail.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_vdp", RATCHET)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    subs = module._registered_submodule_paths()
+    assert subs, "expected registered submodules; .gitmodules parsed as empty"
+
+    inside_scope = {
+        s for s in subs
+        if s.startswith("pmoves/")
+        and s.split("/")[1] in module.DOCKERFILE_PARENT_DIRS
+    }
+    assert inside_scope, (
+        "no registered submodule sits under an in-scope parent dir -- if this "
+        "ever becomes true the exemption is dead code, but today it is the "
+        "whole reason it exists"
+    )
+    assert "pmoves/integrations/archon" in subs
 
 
 def test_vendor_path_skipped():
