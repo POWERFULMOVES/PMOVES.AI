@@ -39,6 +39,17 @@ services:
     # only proves Flask is up. Fallback chain kept for older forks.
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/api/plugins/_a0_connector/v1/capabilities}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
+    # The connector capabilities route is POST-only; the wrapper health probe
+    # method must match or it gets 405 and degrades to the 404-means-alive
+    # heuristic (measured live on SPARK 2026-08-28).
+    - AGENT_ZERO_HEALTH_METHOD=${AGENT_ZERO_HEALTH_METHOD:-POST}
+    # Inner-call timeout for message sends. Was hardcoded 60s, so any agent
+    # task longer than a minute surfaced as a wrapper 503 (SPARK 2026-08-28:
+    # three failed long-research dispatches before root cause).
+    - AGENT_ZERO_MESSAGE_TIMEOUT=${AGENT_ZERO_MESSAGE_TIMEOUT:-600}
+    # OTEL traces for cloud-model calls — parity with tensorzero-gateway
+    # (the A0 runtime honors the OTLP env contract for provider calls).
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
     # Wrapper -> inner contract (validated live 2026-08-26 on SPARK):
     #   1. The inner fork registers its handlers under the /api/ prefix
@@ -269,6 +280,10 @@ services:
       # `nats:pmoves` default this replaces fails auth on any node with a rotated
       # NATS_PASSWORD. ARCHON_BUS_NATS_URL remains the explicit per-node override.
     - NATS_URL=${ARCHON_BUS_NATS_URL:-nats://${NATS_USER:-nats}:${NATS_PASSWORD:-pmoves}@nats:4222}
+    # OTEL traces for cloud-model calls — same collector endpoint the
+    # tensorzero-gateway already exports to. Both agent runtimes support the
+    # OTLP env contract; previously only TZ received it.
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
     # Claude auth — the TS server exits(1) at boot if none of these is present.
     - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
