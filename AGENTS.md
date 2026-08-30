@@ -69,7 +69,21 @@ After significant multi-file work, sign a provenance entry: `make -C pmoves sign
 
 If `patterns.yaml` ever carries unresolved merge-conflict markers, the Bash hook fails closed and blocks **all** Bash commands (you cannot even run `git status`). Recovery escape hatch: the **Edit tool** routes through a separate hook that does not depend on `patterns.yaml` parsing. Use Read + Edit to resolve the conflict markers; Bash resumes on the next call. `patterns.yaml` is intentionally not in `readOnlyPaths` so this path stays open — do not add it.
 
-### Node identity & cross-node state
+### Node identity, capacity, and cross-node state
+
+A node has an **identity** — its own env, MCP roster, containers, worktrees and
+claim-register entries — and a **capacity**, which is what it can run. The
+MOF invariant is about the second: capacity-class, not expertise-lane, meaning
+no node owns a subject area. It does not make nodes interchangeable, and it says
+nothing about who a node is.
+
+Write authority is neither of those. It is a property of `role_class` in
+`pmoves/config/agent_registry.yaml` — where `worker` is defined as "the only
+role_class that writes". Node, capacity, and authority are three separate
+questions; a doc that answers one while appearing to answer another is how
+`claude-pmoves` came to be described as loading a default agent it has never
+selected.
+
 
 This is a multi-node fleet (Z890, 5090, 4090, SPARK, Knuckles, KVM4-1/2, KVM2, Jetsons). Per the MOF invariant (PR #1378), every node is a **pore in the lattice** — capacity-class, not expertise-lane. Always verify state locally before assuming; Claude's context is **not** consistent across nodes (different containers, worktrees, claim-register state may exist).
 
@@ -80,7 +94,22 @@ git worktree list   # am I in a worktree?
 make -C pmoves fleet-status   # fleet view (no raw tailscale status — it leaks IPs)
 ```
 
-Cross-node delegation: Agent Zero `POST http://localhost:8080/mcp/*` (sync), A2A `/.well-known/agent-card.json` (disabled by default), NATS `agent.peer.heartbeat.v1` (Phase D, pending).
+**Cross-node delegation — the routes that exist:**
+
+| path | status |
+|---|---|
+| `GET http://localhost:8080/mcp/commands` · `POST /mcp/execute` (`{cmd, arguments}`) | **live.** The A0 supervisor's REST facade, no inbound auth |
+| MCP protocol server, port **8081**, `/t-{MCP_SERVER_TOKEN}/sse` \| `/http` \| `/messages/` | **live.** Authenticates with `X-API-KEY` |
+| A2A `/.well-known/agent-card.json` | gated by `A2A_DISCOVERY_PUBLIC` / `A2A_TASKS_PUBLIC` |
+| NATS `agent.peer.heartbeat.v1` | Phase D, pending |
+
+This line used to read `POST http://localhost:8080/mcp/*`. There is **no
+`/mcp/*` wildcard mount** — it is a REST facade, not an MCP protocol server, and
+`.claude/context/mcp-api.md` and `agent-zero-orchestration.md` both carry
+SUPERSEDED banners naming those never-implemented routes. The banners went on the
+archived docs and not on this one, which every agent on every node reads first.
+Canonical surface: `pmoves/docs/operations/AGENT_ZERO_API.md`, probed from
+`/openapi.json`.
 
 ### Progressively-disclosed context
 

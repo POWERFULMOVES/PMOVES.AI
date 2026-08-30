@@ -21,7 +21,8 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 | Cold-start orientation | `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` |
 | Audit gateway + convergence waves | `pmoves/docs/AGENTS/AGNOTE4482.md` |
 | Architecture thesis | `pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md`, `PMOVES_GRAND_CONVERGENCE.md` |
-| AGENTS.md format reference & taxonomy | [`PMOVES-agents.md/`](../PMOVES-agents.md/) submodule (fork of agentsmd/agents.md, Tier-2 always-relevant) |
+| Agent taxonomy & autonomy model | [`pmoves/config/agent_registry.yaml`](../pmoves/config/agent_registry.yaml) — the source of truth (`classes`, `types`, `role_classes`, `resilience_classes`, every agent). Prose hub: [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](../pmoves/docs/AGENTS/AGENT_TAXONOMY_CROSS_REFERENCE.md) |
+| AGENTS.md *format* convention | [`PMOVES-agents.md/`](../PMOVES-agents.md/) — fork of agentsmd/agents.md. It is the upstream **website** (61 blobs, all Next.js) and its own `AGENTS.md` documents how to run that site. It carries **no** PMOVES taxonomy or persona content — verified at the pinned commit, 2026-08-30 |
 | Skills constellation | [`skills/`](../skills/) — Anthropic skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js (see `skills/README.md`) |
 | Pinokio launcher development | [`PINOKIO_LAUNCHER_GUIDE.md`](./PINOKIO_LAUNCHER_GUIDE.md) — on-demand context for `D:\pinokio\` work |
 | Living-docs freshness rules | [`pmoves/configs/living_docs_registry.yaml`](../pmoves/configs/living_docs_registry.yaml) — tracked by `make -C pmoves docs-reconcile-check` |
@@ -35,7 +36,15 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 - `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` (cold-start orientation)
 
 **Tier 2 — On-Demand (Major Subsystems):**
-- `PMOVES-agents.md/` — AGENTS.md format reference + agent taxonomy/persona docs (Tier-2 *always-relevant*: load when discussing agent class, taxonomy, or AGENTS.md format)
+- `PMOVES-agents.md/` — the agents.md **website** fork, nothing more. This line
+  used to promise "agent taxonomy/persona docs"; a recursive listing of the
+  pinned tree finds zero files matching taxonomy / persona / pmoves / capacity /
+  autonomy. The submodule is also unpopulated locally, so anyone following the
+  old pointer found nothing and moved on rather than discovering the gap.
+  The taxonomy lives in `pmoves/config/agent_registry.yaml` +
+  `pmoves/docs/AGENTS/`. The agents.md convention specifies one thing — a
+  root `AGENTS.md` in plain Markdown for coding agents — and has no vocabulary
+  for class, persona, or autonomy, so there is no upstream model to map onto.
 - `PMOVES-Archon/.claude/CLAUDE.md` — agent service architecture
 - `PMOVES-BoTZ/.claude/CLAUDE.md` — skills marketplace framework (legacy/archived per 2026-04-19)
 - Agent Zero — the submodule has **no** `.claude/CLAUDE.md` (verified 2026-08-06). Use `pmoves/services/agent-zero/README.md` for the service, and `pmoves/docs/operations/AGENT_ZERO_API.md` for the live API surface.
