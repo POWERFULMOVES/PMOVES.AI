@@ -69,7 +69,21 @@ After significant multi-file work, sign a provenance entry: `make -C pmoves sign
 
 If `patterns.yaml` ever carries unresolved merge-conflict markers, the Bash hook fails closed and blocks **all** Bash commands (you cannot even run `git status`). Recovery escape hatch: the **Edit tool** routes through a separate hook that does not depend on `patterns.yaml` parsing. Use Read + Edit to resolve the conflict markers; Bash resumes on the next call. `patterns.yaml` is intentionally not in `readOnlyPaths` so this path stays open — do not add it.
 
-### Node identity & cross-node state
+### Node identity, capacity, and cross-node state
+
+A node has an **identity** — its own env, MCP roster, containers, worktrees and
+claim-register entries — and a **capacity**, which is what it can run. The
+MOF invariant is about the second: capacity-class, not expertise-lane, meaning
+no node owns a subject area. It does not make nodes interchangeable, and it says
+nothing about who a node is.
+
+Write authority is neither of those. It is a property of `role_class` in
+`pmoves/config/agent_registry.yaml` — where `worker` is defined as "the only
+role_class that writes". Node, capacity, and authority are three separate
+questions; a doc that answers one while appearing to answer another is how
+`claude-pmoves` came to be described as loading a default agent it has never
+selected.
+
 
 This is a multi-node fleet (Z890, 5090, 4090, SPARK, Knuckles, KVM4-1/2, KVM2, Jetsons). Per the MOF invariant (PR #1378), every node is a **pore in the lattice** — capacity-class, not expertise-lane. Always verify state locally before assuming; Claude's context is **not** consistent across nodes (different containers, worktrees, claim-register state may exist).
 
@@ -80,7 +94,22 @@ git worktree list   # am I in a worktree?
 make -C pmoves fleet-status   # fleet view (no raw tailscale status — it leaks IPs)
 ```
 
-Cross-node delegation: Agent Zero `POST http://localhost:8080/mcp/*` (sync), A2A `/.well-known/agent-card.json` (disabled by default), NATS `agent.peer.heartbeat.v1` (Phase D, pending).
+**Cross-node delegation — the routes that exist:**
+
+| path | status |
+|---|---|
+| `GET http://localhost:8080/mcp/commands` · `POST /mcp/execute` (`{cmd, arguments}`) | **live.** The A0 supervisor's REST facade, no inbound auth |
+| MCP protocol server, port **8081**, `/t-{MCP_SERVER_TOKEN}/sse` \| `/http` \| `/messages/` | **live.** Authenticates with `X-API-KEY` |
+| A2A `/.well-known/agent-card.json` | gated by `A2A_DISCOVERY_PUBLIC` / `A2A_TASKS_PUBLIC` |
+| NATS `agent.peer.heartbeat.v1` | Phase D, pending |
+
+This line used to read `POST http://localhost:8080/mcp/*`. There is **no
+`/mcp/*` wildcard mount** — it is a REST facade, not an MCP protocol server, and
+`.claude/context/mcp-api.md` and `agent-zero-orchestration.md` both carry
+SUPERSEDED banners naming those never-implemented routes. The banners went on the
+archived docs and not on this one, which every agent on every node reads first.
+Canonical surface: `pmoves/docs/operations/AGENT_ZERO_API.md`, probed from
+`/openapi.json`.
 
 ### Progressively-disclosed context
 
@@ -227,15 +256,31 @@ Full stack with NATS, TensorZero, Supabase, monitoring. See `pmoves/docker-compo
 
 This file follows the **[agents.md open format](https://agents.md)** — a universal contract for guiding coding agents (Claude Code, Codex, Copilot, Cursor, Aider, etc.). The PMOVES fork of the format spec lives at [`PMOVES-agents.md/`](PMOVES-agents.md/) (submodule, fork of [agentsmd/agents.md](https://github.com/agentsmd/agents.md)).
 
-The PMOVES-agents.md submodule is the canonical home for:
-- AGENTS.md format reference + extensions
-- Agent taxonomy & class definitions
-- Persona schema and seed personas
-- Universal coding-agent docs
+**That submodule holds the upstream website, and nothing else.** A recursive
+listing of the pinned tree: 61 blobs, all Next.js — `components/Hero.tsx`,
+`pages/_app.tsx` — and **zero** files matching taxonomy / persona / pmoves /
+capacity / autonomy (measured 2026-08-30). Its own `AGENTS.md` documents how to
+run that site.
 
-**Tier:** *Tier-2 always-relevant* — load when discussing agent classes, taxonomy, persona schema, or AGENTS.md format itself.
+This section used to name it "the canonical home for" the format reference,
+agent taxonomy, class definitions and persona schema. That described a planned
+migration — the same paragraph admitted the docs "live in `pmoves/docs/`" and
+that moving them was "gated on explicit user confirmation" — written in the
+present tense. Agents read the claim, not the caveat, and followed a pointer to
+a Next.js site.
 
-**Cross-refs:** This `AGENTS.md` (project root) carries project-specific structure & commands; the format/taxonomy reference lives in the submodule. Today, taxonomy docs (`pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`, `PMOVES_AGENT_TOPOLOGY.md`) live in `pmoves/docs/`; migrating them into `PMOVES-agents.md/` is gated on explicit user confirmation since it changes git history paths.
+**Where the taxonomy actually lives:**
+
+| you want | load |
+|---|---|
+| the model itself — classes, types, `role_classes`, `resilience_classes`, every agent | `pmoves/config/agent_registry.yaml` (source of truth) |
+| the prose hub | `pmoves/docs/AGENTS/AGENT_TAXONOMY_CROSS_REFERENCE.md` |
+| class definitions & topology | `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`, `PMOVES_AGENT_TOPOLOGY.md` |
+
+Worth stating plainly, because it changes what "following the format" can mean:
+**the agents.md convention specifies one thing** — a root `AGENTS.md` in plain
+Markdown for coding agents. It has no vocabulary for class, persona, capacity or
+autonomy. There is no upstream model to map PMOVES agents onto; ours is ours.
 
 <!-- autoclaw:skill-path-guidance -->
 <!-- PMOVES-EXT: skill_path_guidance -->
