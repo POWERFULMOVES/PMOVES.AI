@@ -23,11 +23,11 @@
               "type": "required_status_checks",
               "parameters": {
                 "required_status_checks": [
-                  { "context": "merge-decision" },
-                  { "context": "python-tests" },
-                  { "context": "hardening-validation" },
-                  { "context": "verify" },
-                  { "context": "submodule-gitlink-gate" }
+                  { "context": "merge-decision", "integration_id": 15368 },
+                  { "context": "python-tests", "integration_id": 15368 },
+                  { "context": "hardening-validation", "integration_id": 15368 },
+                  { "context": "verify", "integration_id": 15368 },
+                  { "context": "submodule-gitlink-gate", "integration_id": 15368 }
                 ],
                 "strict_required_status_checks_policy": true
               }
