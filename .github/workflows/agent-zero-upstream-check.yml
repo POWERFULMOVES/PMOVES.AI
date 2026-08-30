@@ -212,36 +212,88 @@ jobs:
         id: divergence
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ needs.check-upstream.outputs.new_tag }}
+          CURRENT_TAG: ${{ needs.check-upstream.outputs.current_tag }}
         run: |
           # The review checklist used to carry two HARDCODED numbers -- "24
           # overlay commits" and "6 conflicting files" -- in a template where
           # every other field was interpolated. They were true once and were
-          # reprinted unchanged on every bump after. Measured 2026-08-30, the
-          # real figures for v2.11 were 51 commits (30 non-merge) and 37 files.
+          # reprinted unchanged on every bump after.
+          #
+          # What is measured here matters as much as measuring at all. The
+          # endpoint diff `NEW_TAG...fork` reports 37 files for v2.11, but that
+          # array is the OVERALL difference between the two trees: it includes
+          # every file the intervening upstream commits touched, which the fork
+          # does not have to reimplement. Calling it a conflict count would tell
+          # a maintainer to redo work already present in the new base.
+          #
+          # The conflict SURFACE is the intersection: files the overlay touched
+          # AND upstream changed between the fork's base and the new tag.
+          # Measured 2026-08-30 for v2.11: overlay 37, upstream 192, both 4.
+          # A fresh number that measures the wrong thing misleads harder than a
+          # stale one, because it carries more authority.
+          #
+          # `${OWNER}:${REPO}:${BRANCH}` names the fork explicitly. The
+          # documented `${OWNER}:${BRANCH}` shorthand also works -- both were
+          # exercised against the live API -- but it resolves through the base
+          # repo's fork network rather than by name, and POWERFULMOVES/agent-zero
+          # does not exist. Naming the repo does not depend on that lookup.
           #
           # An unreachable API must NOT fall back to a plausible-looking number:
-          # that is how the literals survived. It emits "unmeasured", and the
+          # that is how the literals survived. It emits UNMEASURED, and the
           # checklist says so.
           FORK_OWNER="${FORK_REPO%%/*}"
           FORK_NAME="${FORK_REPO##*/}"
-          if CMP=$(gh api                 "repos/${UPSTREAM_REPO}/compare/${{ needs.check-upstream.outputs.new_tag }}...${FORK_OWNER}:${FORK_NAME}:${FORK_BRANCH}"                 2>/dev/null); then
-            AHEAD=$(jq -r '.ahead_by' <<<"$CMP")
-            BEHIND=$(jq -r '.behind_by' <<<"$CMP")
-            FILES=$(jq -r '.files | length' <<<"$CMP")
-            MERGES=$(jq -r '[.commits[] | select(.parents | length > 1)] | length' <<<"$CMP")
-            SUBSTANTIVE=$(( AHEAD - MERGES ))
+          FORK_HEAD="${FORK_OWNER}:${FORK_NAME}:${FORK_BRANCH}"
+
+          set_unmeasured() {
             {
-              echo "OVERLAY_COMMITS=**${AHEAD}** overlay commits (${SUBSTANTIVE} non-merge)"
-              echo "DIVERGED_FILES=the **${FILES}** files that differ from upstream"
-              echo "UPSTREAM_BEHIND=${BEHIND}"
-            } >> "$GITHUB_OUTPUT"
-          else
-            {
-              echo "OVERLAY_COMMITS=overlay commits (count UNMEASURED -- compare API unreachable)"
-              echo "DIVERGED_FILES=the diverged files (count UNMEASURED -- compare API unreachable)"
+              echo "OVERLAY_COMMITS=overlay commits (count UNMEASURED -- $1)"
+              echo "CONFLICT_SURFACE=the files upstream also changed (count UNMEASURED -- $1)"
+              echo "OVERLAY_FILES=unmeasured"
               echo "UPSTREAM_BEHIND=unmeasured"
+              echo "BASE_NOTE="
             } >> "$GITHUB_OUTPUT"
+          }
+
+          AHEAD_CMP=$(gh api "repos/${UPSTREAM_REPO}/compare/${NEW_TAG}...${FORK_HEAD}" 2>/dev/null) || {
+            set_unmeasured "compare API unreachable"; exit 0; }
+
+          AHEAD=$(jq -r '.ahead_by' <<<"$AHEAD_CMP")
+          BEHIND=$(jq -r '.behind_by' <<<"$AHEAD_CMP")
+          MERGES=$(jq -r '[.commits[] | select(.parents | length > 1)] | length' <<<"$AHEAD_CMP")
+          SUBSTANTIVE=$(( AHEAD - MERGES ))
+
+          # The overlay's own surface, measured from the tag the fork was last
+          # synced to -- NOT from the new tag, or upstream's changes leak in.
+          OVERLAY_CMP=$(gh api "repos/${UPSTREAM_REPO}/compare/${CURRENT_TAG}...${FORK_HEAD}" 2>/dev/null) || {
+            set_unmeasured "overlay compare unreachable"; exit 0; }
+          UPSTREAM_CMP=$(gh api "repos/${UPSTREAM_REPO}/compare/${CURRENT_TAG}...${NEW_TAG}" 2>/dev/null) || {
+            set_unmeasured "upstream compare unreachable"; exit 0; }
+
+          jq -r '.files[].filename' <<<"$OVERLAY_CMP" | sort -u > /tmp/overlay_files.txt
+          jq -r '.files[].filename' <<<"$UPSTREAM_CMP" | sort -u > /tmp/upstream_files.txt
+          OVERLAY_FILES=$(wc -l < /tmp/overlay_files.txt)
+          UPSTREAM_FILES=$(wc -l < /tmp/upstream_files.txt)
+          BOTH=$(comm -12 /tmp/overlay_files.txt /tmp/upstream_files.txt | wc -l)
+
+          # State the assumption instead of relying on it. The intersection is
+          # exact only if the fork really sits at CURRENT_TAG; if it has drifted,
+          # say so rather than publishing a number that quietly means something
+          # slightly different.
+          OVERLAY_BEHIND=$(jq -r '.behind_by' <<<"$OVERLAY_CMP")
+          if [ "${OVERLAY_BEHIND}" = "0" ]; then
+            BASE_NOTE=""
+          else
+            BASE_NOTE=" (approximate: the fork is ${OVERLAY_BEHIND} commits behind \`${CURRENT_TAG}\`, so its true base is older)"
           fi
+
+          {
+            echo "OVERLAY_COMMITS=**${AHEAD}** overlay commits (${SUBSTANTIVE} non-merge)"
+            echo "CONFLICT_SURFACE=the **${BOTH}** files the overlay touched that upstream also changed${BASE_NOTE}"
+            echo "OVERLAY_FILES=${OVERLAY_FILES} overlay files vs ${UPSTREAM_FILES} upstream-changed files"
+            echo "UPSTREAM_BEHIND=${BEHIND}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create draft PR
         id: create_pr
@@ -275,7 +327,8 @@ jobs:
 
           ### Review Checklist
           - [ ] Fork sync completed with all ${{ steps.divergence.outputs.OVERLAY_COMMITS }}
-          - [ ] ${{ steps.divergence.outputs.DIVERGED_FILES }} re-implemented on the new upstream architecture
+          - [ ] ${{ steps.divergence.outputs.CONFLICT_SURFACE }} re-implemented on the new upstream architecture
+          - [ ] Remaining files reviewed, not reimplemented (${{ steps.divergence.outputs.OVERLAY_FILES }}; the rest of the endpoint diff is upstream's own work, already in the new base)
           - [ ] Fork is **${{ steps.divergence.outputs.UPSTREAM_BEHIND }}** upstream commits behind `${{ needs.check-upstream.outputs.new_tag }}`
           - [ ] NATS compatibility verified
           - [ ] API schema changes reviewed
