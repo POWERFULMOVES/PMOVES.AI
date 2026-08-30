@@ -99,9 +99,30 @@ class ApplyArgsTests(unittest.TestCase):
         # tool accepts (dry-run is the default; the override is
         # `--no-dry-run`).
         self.assertNotIn('"--dry-run"', self.apply_run)
-        # The flag should be conditional on `DRY_RUN = false`.
+        # The flag should be conditional -- and the condition must name BOTH
+        # the trigger and the input.
+        #
+        # This assertion used to read `"$DRY_RUN" = "false"` against a
+        # `DRY_RUN: ${{ inputs.dry_run }}` env. That was true and insufficient:
+        # the `inputs` context exists for workflow_dispatch/workflow_call only
+        # and "will evaluate to an empty string" otherwise, so on the weekly
+        # `schedule` the guard silently never matched and the "safety net"
+        # never wrote -- while reporting success.
+        #
+        # The obvious repair, `github.event_name == 'workflow_dispatch' &&
+        # inputs.dry_run || 'true'`, is WORSE: the docs say "falsy values
+        # (false, 0, -0, \"\", '', null) are coerced to false", so dispatching
+        # with dry_run=false falls through to 'true' and the one path that can
+        # write becomes read-only. The idiom's return value is undocumented.
+        #
+        # So the decision lives in shell, in two plain string comparisons, and
+        # this test pins BOTH halves. Dropping either one restores a silent
+        # never-writes.
         self.assertIn('--no-dry-run', self.apply_run)
-        self.assertIn('"$DRY_RUN" = "false"', self.apply_run)
+        self.assertIn('"$TRIGGER" = "workflow_dispatch"', self.apply_run)
+        self.assertIn('"$DRY_RUN_INPUT" = "false"', self.apply_run)
+        # And the expression form must NOT come back.
+        self.assertNotIn("inputs.dry_run || ", self.apply_run)
 
     def test_A3_apply_subcommand_receives_args_array(self):
         # The apply call must spread the array, not concat.
