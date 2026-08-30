@@ -203,8 +203,40 @@ function Test-PmovesRosterHasBarePlaceholder {
 # the vars loaded above have nothing to resolve into (Unix twin: claude-pmoves.sh).
 # NOT --strict-mcp-config: merge, so the per-node `.mcp.json` written by
 # `make -C pmoves mcp-toolkit-connect` stays live alongside the tracked roster.
+# WHICH ROSTER: origin/main, not whatever branch this checkout sits on.
+#
+# The roster is FLEET configuration, not branch content, and binding it to the
+# working tree made the toolset depend on a checkout's branch. Measured
+# 2026-08-30 on the 4090: the repo root sat on a wip snapshot branch and the
+# launcher loaded 14 servers where origin/main has 19 -- five missing, including
+# `pmoves-cipher-local`, the loopback entry that needs no bearer. The visible
+# symptom was `pmoves-cipher / failed` and a 401, which reads as a credential
+# problem and was a checkout problem. Nothing reported the shortfall; you would
+# have had to know 19 was the number.
+#
+# So: prefer origin/main's copy. Fall back to the tree when git cannot answer,
+# and SAY WHICH in either case -- a launcher that silently picks a source is how
+# this happened.
+#   PMOVES_ROSTER_FROM_TREE=1  use the working tree (editing the roster itself)
 $roster = Join-Path $root '.claude\mcp.json'
+$rosterSource = 'working tree'
+if (-not $env:PMOVES_ROSTER_FROM_TREE) {
+    $mainRoster = Join-Path ([System.IO.Path]::GetTempPath()) 'pmoves-roster-origin-main.json'
+    $prev = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+    & git -C $root fetch --quiet origin main 2>$null | Out-Null
+    $blob = & git -C $root show origin/main:.claude/mcp.json 2>$null
+    $ErrorActionPreference = $prev
+    if ($LASTEXITCODE -eq 0 -and $blob) {
+        Set-Content -Path $mainRoster -Value ($blob -join "`n") -Encoding UTF8
+        $roster = $mainRoster
+        $rosterSource = 'origin/main'
+    } else {
+        Write-Warning "[claude-pmoves] could not read the roster from origin/main; using the working tree."
+        Write-Warning "[claude-pmoves]   (offline, or origin/main not fetched -- servers may differ from the fleet's)"
+    }
+}
 if (Test-Path $roster) {
+    Write-Host ("[claude-pmoves] MCP roster source: " + $rosterSource)
     # Normalize the roster before handing it to Claude. The transform used to be
     # inline here AND, separately, as a heredoc in claude-pmoves.sh -- two copies
     # that drifted: the POSIX one grew ${VAR} resolution and this one did not, so
