@@ -88,8 +88,8 @@ def _build_default_entries() -> list[tuple[str, str]]:
     supabase_url = _resolve_supabase_url()
     supabase_key = _resolve_supabase_key()
     gateway_endpoint = (
-        os.environ.get("A0_MCP_GATEWAY_ENDPOINT", "http://gateway:8086").strip()
-        or "http://gateway:8086"
+        os.environ.get("A0_MCP_GATEWAY_ENDPOINT", "http://mcp-gateway:8091").strip()
+        or "http://mcp-gateway:8091"
     )
 
     return [
