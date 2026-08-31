@@ -574,3 +574,222 @@ def test_a_cited_file_path_is_still_not_a_lane(tmp_path):
         existing=existing,
     )
     assert r.returncode == ALLOW, "a merely-cited spec file must not register as a lane"
+
+
+# ---------------------------------------------------------------------------
+# CO-OWNERS -- lanes are shared just like nodes, and the register can say so.
+#
+# The gap these pin: the row grammar captured exactly ONE backticked owner, so a
+# lane worked by four bodies could only ever be attributed to one and every
+# co-worker was invisible to any machine reading the ledger. The hook already
+# BELIEVED shared lanes were legitimate -- its docstring says "more than one
+# node on a lane is the village working, not a violation" -- it simply could not
+# tell a declared collaboration apart from a genuine clash.
+#
+# The load-bearing assertion in this section is NOT that a declared shared lane
+# is allowed. It is the pair: declared -> allow, UNDECLARED -> still block. A
+# gate that only got quieter would be a regression wearing a feature's clothes.
+# ---------------------------------------------------------------------------
+
+
+def test_a_declared_co_owner_may_claim_the_shared_lane(tmp_path):
+    """The motivating case: four bodies on #2807, one of them claiming next."""
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (ran the validation) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: **picking up widget.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, (
+        "a lane whose holder DECLARED this claimant as a co-owner is shared work, "
+        f"not a collision; got {r.returncode}: {r.stderr}"
+    )
+
+
+def test_declaring_the_holder_as_a_co_owner_also_shares_the_lane(tmp_path):
+    """Symmetry: the newcomer declaring the incumbent works too.
+
+    Without this the field would only work if the FIRST agent had foreseen who
+    would join -- which is backwards, since a lane picks up co-workers as it
+    goes. That is why 198 rows say `Three-body: delivery=...` after the fact.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · "
+        "co-owners: `AGENT-A` (holds the open claim) · scope: **joining.**",
+    )
+    assert r.returncode == ALLOW, (
+        f"declaring the incumbent must share the lane; got {r.returncode}: {r.stderr}"
+    )
+
+
+def test_an_UNDECLARED_collision_still_blocks(tmp_path):
+    """The negative control, and the reason this feature is not just a mute button.
+
+    Same file, same lane, co-owners declared -- but naming somebody ELSE. The
+    lane is shared with C, not with the claimant, so the clash is real.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-C` (did the docs) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: **also widget.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == BLOCK, (
+        "declaring SOME co-owner must not excuse a claimant who is not among "
+        f"them; got {r.returncode}"
+    )
+    assert "feat/widget" in r.stderr
+    assert "AGENT-A" in r.stderr
+
+
+def test_collision_still_keys_on_the_lane_not_the_claimant(tmp_path):
+    """The original inversion, re-pinned with the field present.
+
+    Participants changed HOW two claims are compared; it must not have changed
+    WHAT they are keyed on. A co-owned claim on a different branch is still a
+    different lane.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (helped) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-A` scope: **unrelated.** Branch `feat/gadget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, "one owner running several lanes is the normal case"
+
+
+def test_a_co_owner_id_is_folded_through_the_same_vocabulary(tmp_path):
+    """A co-owner written in a different spelling of one identity still matches.
+
+    Co-owner IDs go through canonical_owner() exactly as the signing owner
+    does. Anything less and the field would open a second uncontrolled name
+    space beside the one identity_vocabulary.yaml exists to control -- and a
+    declaration written in the wrong spelling would silently do nothing.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `B850-CLAUDE` (ran it) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `B850-CLAUDE (Knuckles)` scope: **mine too.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, (
+        "`B850-CLAUDE` as a co-owner must fold to the same identity as "
+        f"`B850-CLAUDE (Knuckles)` claiming; got {r.returncode}: {r.stderr}"
+    )
+
+
+def test_the_agent_registry_key_spelling_folds_too(tmp_path):
+    """`claude_b850` -- the agent_registry.yaml key -- was the fifth spelling.
+
+    canonical_owner() bridged `B850-CLAUDE (Knuckles)` -> `B850-CLAUDE` ->
+    `b850-claude` and stopped there. The `2026-08-28T16:47:00Z` CLAIM on
+    `docs/governance-enforcement-gap` recorded the split (item 3) and left it
+    open; it is closed by aliasing the registry key.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `claude_b850` (delivery) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `B850-CLAUDE (Knuckles)` scope: **mine.** Branch `feat/widget`",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, (
+        f"registry key `claude_b850` must fold to b850-claude; got {r.returncode}: {r.stderr}"
+    )
+
+
+def test_a_single_owner_row_is_completely_unchanged(tmp_path):
+    """Backward compatibility, asserted rather than assumed.
+
+    Every row written before this field existed carries no marker, so it never
+    enters the co-owner code path. Both directions of the original rule are
+    re-checked here against the new implementation.
+    """
+    blocked = run_hook(
+        tmp_path, "- `t` CLAIM `AGENT-B` scope: **also widget.** Branch `feat/widget`"
+    )
+    assert blocked.returncode == BLOCK, "different owner, same lane must still block"
+    allowed = run_hook(
+        tmp_path, "- `t` CLAIM `AGENT-A` scope: **other.** Branch `feat/gadget`"
+    )
+    assert allowed.returncode == ALLOW, "same owner, different lane must still allow"
+
+
+def test_an_unreadable_co_owners_field_is_reported_not_skipped(tmp_path):
+    """`co-owners: 4090 and SPARK` satisfies a human and is empty to a machine.
+
+    That is this lane's own defect reintroduced one layer down, so it must be
+    LOUD. Reporting it as `[]` would be indistinguishable from a row that
+    genuinely has no co-owners -- a silent gate is the failure mode.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+        "co-owners: 4090 and SPARK and DARKXSIDE · scope: **gadget.**",
+    )
+    assert "NOT MEASURED" in r.stderr, (
+        f"an unparseable co-owners field must say so; stderr was: {r.stderr!r}"
+    )
+
+
+def test_a_co_owner_id_does_not_register_as_a_lane(tmp_path):
+    """Blast radius. LANE_RE matches branch-shaped tokens loosely.
+
+    A backticked co-owner ID must not be mistaken for a claimed branch, or the
+    field would silently widen what every row claims. LANE_RE needs a
+    conventional-commit prefix and BRANCH_MARKER_RE keys on the word `branch`,
+    so neither can fire here -- pinned so a later regex edit cannot quietly
+    break it.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+        "co-owners: `AGENT-C` (helped) · scope: **gadget.**",
+    )
+    assert r.returncode == ALLOW
+    second = run_hook(
+        tmp_path,
+        "- `t2` CLAIM `AGENT-D` scope: **unrelated.** Branch `feat/widget`",
+        existing=(
+            "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+            "co-owners: `AGENT-C` (helped) · scope: **gadget.**\n"
+        ),
+    )
+    assert second.returncode == ALLOW, (
+        "AGENT-B's row claims only feat/gadget; a co-owner ID must not have "
+        f"widened it. got {second.returncode}: {second.stderr}"
+    )
+
+
+def test_the_advisory_names_who_a_lane_is_shared_with(tmp_path):
+    """The Bash path exists to put state in front of whoever is deciding.
+
+    "AGENT-A holds feat/widget" and "AGENT-A holds feat/widget, shared with
+    AGENT-B" call for different decisions, so the advisory has to distinguish
+    them.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (ran the validation) · scope: **widget.**\n"
+    )
+    r = _run_bash(tmp_path, f"cat >> {REGISTER_NAME} <<'EOF'\nrow\nEOF", existing=existing)
+    # _decision() returns only the decision string; the prompt text is what is
+    # under test here, so read it from the payload directly.
+    reason = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "shared with" in reason, f"advisory hid the co-owner: {reason!r}"
+    assert "AGENT-B" in reason

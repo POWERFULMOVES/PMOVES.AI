@@ -45,6 +45,152 @@ SPLIT = re.compile(r"^([^(]+?)\s*\((.*)\)\s*$")
 
 NON_IDENTITY_KINDS = frozenset({"unresolved"})
 
+# ---------------------------------------------------------------------------
+# CO-OWNERS -- every body that worked a lane, not only the one that signed it.
+#
+# The row grammar above captures exactly ONE backticked author, so a lane worked
+# by several bodies could only ever be attributed to one of them. The register
+# has been working around that in prose for months, and the workarounds are the
+# evidence the field is needed:
+#
+#   * `Three-body: delivery=..., control=..., memory=...` -- 198 rows. Already
+#     key=value, already names three agents, and parses as nothing.
+#   * `Cross-node review team (4090 + SPARK + DARKXSIDE) acknowledged` (L797)
+#     and `Cross-node team formed for review: 4090-CLAUDE + SPARK` (L772).
+#   * `(assisting CRUSH-GLM52 claim at L1256)` (L1415) -- an assisting agent
+#     cross-referencing its primary by LINE NUMBER, in an APPEND-ONLY file where
+#     line numbers shift under every later entry.
+#
+# So this is not a new ceremony. It is the existing practice, given a grammar.
+#
+# THE FIELD RIDES THE HEADER SEGMENT THE REGISTER ALREADY GREW: nine rows carry
+# ``branch: `x` * **TTL ...** * scope: ...`` before their prose. `co-owners:`
+# sits in the same place and reads the same way. It may also appear inside the
+# scope prose -- the parser is position-independent, because requiring a
+# position would invalidate rows people will write either way.
+#
+# BACKWARD COMPATIBILITY IS STRUCTURAL, NOT PROMISED: a row with no marker never
+# enters this code path and yields an empty list, which is byte-for-byte what
+# every row does today. Nothing needs rewriting and no existing row changes
+# meaning.
+#
+# THE BACKTICKS DELIMIT THE ID; THE PARENTHETICAL AFTER THEM IS THE
+# CONTRIBUTION. This matters because identities ALREADY carry parentheticals --
+# `B850-CLAUDE (Knuckles)` is one identity string, not an ID plus a note. Put
+# the ID inside backticks and that ambiguity cannot arise:
+#
+#   co-owners: `B850-CLAUDE (Knuckles)` (posted the cross-node correction)
+#              ^--------- identity ---^  ^------- contribution -------^
+# ---------------------------------------------------------------------------
+
+# Shaped after BRANCH_MARKER_RE in claim-collision-pre.py
+# (`\bbranch\b[:=]?\s*`) with ONE deliberate difference: the `:` or `=` is
+# REQUIRED here, where `branch` makes it optional.
+#
+# The reason is measured, not stylistic. `branch` could afford optional
+# punctuation because ``Branch `x`` was already in the wild before the marker
+# existed and the regex had to accept history. `co-owners` is a new field, so it
+# gets to set its own terms -- and it needs to, because the WORD occurs in
+# ordinary prose in a way `branch` does not. This lane's own CLAIM row contains
+# "keys on PARTICIPANTS (owner U co-owners) intersected with the LANE", which an
+# optional-punctuation marker read as a field declaration and then reported as
+# an unreadable one. Found by running the gate, on its second live run, against
+# the row that introduced the field.
+#
+# So: `co-owners:` and `co_owners =` declare the field; the bare noun never
+# does. Spelling variants are folded because the register's own history is a
+# catalogue of one thing written several ways.
+CO_OWNER_MARKER = re.compile(r"\bco[-_ ]?owners?\b\s*[:=]\s*", re.IGNORECASE)
+
+# One item: a backticked ID, optionally followed by a parenthetical note. The
+# note admits ONE level of nested parens, because a real contribution note reads
+# "cross-node correction (false positive)" often enough to matter.
+_CO_OWNER_ITEM = re.compile(
+    r"`([^`]+)`(?:\s*\(((?:[^()]|\([^()]*\))*)\))?"
+)
+
+# Items are separated by commas and whitespace ONLY. Deliberately NOT the `*`
+# field separator: consuming it would let the parser walk out of its own field
+# and into the next one, and a scope that happens to open with a backticked
+# token would then be read as a co-owner. The field must end where it ends.
+_CO_OWNER_SEP = re.compile(r"[,\s]*")
+
+
+def _in_code_span(text: str, pos: int) -> bool:
+    """True when `pos` falls inside a Markdown backtick span.
+
+    FOUND BY THE GATE, ON ITS FIRST LIVE RUN, AGAINST THIS LANE'S OWN CLAIM ROW.
+    That row DESCRIBES the field -- it contains the phrase "a `co-owners:` field
+    carrying backticked IDs" -- and the marker matched the mention, so a row
+    that declares no co-owners at all was reported as an unreadable attribution.
+
+    A row that TALKS ABOUT the field is not a row that USES it, and the register
+    is a document about its own governance: rows describing the grammar are
+    normal here, not exotic. Without this the very first row to explain the
+    field would have been the first row to fail the gate.
+
+    RULE: an odd number of backticks before `pos` means `pos` is inside a span.
+    LIMIT, stated rather than discovered later: a double-backtick span (``...``)
+    reads as even, so a marker inside one counts as real usage. The register
+    uses ``...`` to show examples containing backticks, so that case is a
+    genuine mention read as a use. It is left as-is deliberately -- the
+    alternative is a Markdown inline parser in a governance gate, and the
+    failure it would prevent is a false "could not measure", which is loud,
+    self-explanatory, and fixed by writing the example differently.
+    """
+    return text.count("`", 0, pos) % 2 == 1
+
+
+def _co_owner_markers(text: str) -> list[int]:
+    """End offsets of every `co-owners` marker that is NOT a code-span mention."""
+    return [
+        m.end() for m in CO_OWNER_MARKER.finditer(text)
+        if not _in_code_span(text, m.start())
+    ]
+
+
+def co_owners_in(text: str) -> list[tuple[str, str]]:
+    """[(id_as_written, contribution)] declared by a `co-owners:` field.
+
+    Empty when the row declares no co-owners -- which is every row written
+    before this field existed, and is why adding it changes nothing for them.
+
+    Parsing stops at the first token that is not a backticked ID, so the field
+    terminates naturally at ` * `, at `scope:`, or at end of line without
+    needing a closing delimiter nobody would remember to write.
+    """
+    # EVERY marker is tried, not just the first. A row may describe the field
+    # and then use it -- this lane's own RELEASE does exactly that -- and
+    # stopping at the first marker would read the description and miss the data.
+    for start in _co_owner_markers(text):
+        pos = start
+        found: list[tuple[str, str]] = []
+        while True:
+            pos = _CO_OWNER_SEP.match(text, pos).end()
+            item = _CO_OWNER_ITEM.match(text, pos)
+            if not item:
+                break
+            identity = item.group(1).strip()
+            if identity:
+                found.append((identity, (item.group(2) or "").strip()))
+            pos = item.end()
+        if found:
+            return found
+    return []
+
+
+def co_owner_field_is_unparseable(text: str) -> bool:
+    """True when a row ANNOUNCES co-owners and names none the parser can read.
+
+    This is the "could not measure" case and it must be loud. A row like
+    `co-owners: 4090 and SPARK` (no backticks) looks attributed to a human and
+    is empty to a machine -- exactly the failure this whole field exists to
+    remove, reintroduced one layer down. Reporting it as `[]` would be
+    indistinguishable from a row that simply has no co-owners, so the two are
+    kept apart here rather than silently merged.
+    """
+    return bool(_co_owner_markers(text)) and not co_owners_in(text)
+
 
 @dataclass(frozen=True)
 class Identity:
@@ -143,6 +289,59 @@ def read_register(path: Path | None = None) -> str:
 def register_entries(text: str | None = None) -> list[tuple[str, str, str]]:
     """(timestamp, kind, author) for every CLAIM/RELEASE/UPDATE line."""
     return ENTRY.findall(text if text is not None else read_register())
+
+
+def entry_lines(text: str | None = None) -> list[tuple[int, str]]:
+    """(1-based line number, line) for every row matching the entry grammar.
+
+    `split("\n")`, NOT `splitlines()`, for the same reason the collision hook
+    spells it that way: the register carries vertical-tab and form-feed
+    characters that `splitlines()` breaks on and grep, sed and every editor do
+    not, so the two disagree by a growing offset that lands hardest on the
+    NEWEST entries -- the ones any message points at.
+    """
+    text = text if text is not None else read_register()
+    return [
+        (lineno, line)
+        for lineno, line in enumerate(text.split("\n"), start=1)
+        if ENTRY.match(line)
+    ]
+
+
+def co_owner_attribution(
+    text: str | None = None,
+) -> list[tuple[int, str, str, list[tuple[str, str]]]]:
+    """(lineno, kind, owner, [(co-owner, contribution)]) for rows declaring one.
+
+    This is the query the register could not answer before: "which bodies worked
+    this lane", as data rather than as prose a person has to read.
+    """
+    text = text if text is not None else read_register()
+    out = []
+    for lineno, line in entry_lines(text):
+        co = co_owners_in(line)
+        if not co:
+            continue
+        _, kind, owner = ENTRY.match(line).groups()
+        out.append((lineno, kind, owner, co))
+    return out
+
+
+def unmeasured_rows(text: str | None = None) -> list[tuple[int, str]]:
+    """Rows that ANNOUNCE co-owners and name none a machine can read.
+
+    Kept separate from findings on purpose. A finding is "I looked and this is
+    wrong"; this is "I could not look". Collapsing the two lets a row that
+    defeated the parser be reported as clean, which is the failure mode this
+    whole lane exists to remove -- an attribution that satisfies a human reader
+    and is empty to every machine.
+    """
+    text = text if text is not None else read_register()
+    return [
+        (lineno, ENTRY.match(line).group(3))
+        for lineno, line in entry_lines(text)
+        if co_owner_field_is_unparseable(line)
+    ]
 
 
 def undeclared_authors(
@@ -301,6 +500,22 @@ def verify(vocab: Vocabulary | None = None) -> list[str]:
             f"unclassified token {token!r} in {count} author string(s) -- "
             f"declare it as a model, lane, harness, node relation or "
             f"provisioning token in {VOCABULARY_PATH.name}"
+        )
+
+    # A co-owner is an author. It goes through the SAME vocabulary as the
+    # signing owner -- otherwise the field would let an identity in through a
+    # side door under any spelling at all, and the register would grow a second
+    # uncontrolled name space right next to the one this file was written to
+    # control.
+    co_missing: dict[str, int] = {}
+    for _, _, _, co_owners in co_owner_attribution(text):
+        for identity, _contribution in co_owners:
+            if canonical_identity(identity, vocab) is None:
+                co_missing[identity] = co_missing.get(identity, 0) + 1
+    for identity, count in sorted(co_missing.items(), key=lambda kv: -kv[1]):
+        findings.append(
+            f"undeclared co-owner {identity!r} ({count} row(s)) -- add it as an "
+            f"alias in {VOCABULARY_PATH.name}, same as a signing author"
         )
 
     known = {i.canonical for i in vocab.index.values()}
@@ -519,6 +734,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--census", action="store_true",
                         help="spellings per canonical identity")
     parser.add_argument("--verify", action="store_true", help="run the gate")
+    parser.add_argument("--co-owners", action="store_true",
+                        help="every lane that names more than one body")
     args = parser.parse_args(argv)
 
     vocab = load_vocabulary()
@@ -542,11 +759,46 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {count:4}  {author}")
         return 0
 
+    if args.co_owners:
+        text = read_register()
+        rows = co_owner_attribution(text)
+        print(f"{len(rows)} row(s) name a co-owner")
+        for lineno, kind, owner, co_owners in rows:
+            print(f"\nL{lineno}  {kind}  {owner}")
+            for identity, contribution in co_owners:
+                canonical = canonical_identity(identity, vocab) or "UNDECLARED"
+                note = f" -- {contribution}" if contribution else ""
+                print(f"    + {identity}  [{canonical}]{note}")
+        unmeasured = unmeasured_rows(text)
+        for lineno, owner in unmeasured:
+            print(f"\nL{lineno}  {owner}: co-owners field present, NOT PARSEABLE")
+        return 3 if unmeasured else 0
+
     findings = verify(vocab)
+
+    # EXIT-CODE DOCTRINE: 0 clean, 1 findings, 3 could not measure.
+    #
+    # 3 is not a worse 1. A finding means the gate looked and something was
+    # wrong; 3 means part of the register defeated the parser, so "no findings
+    # there" is not a result -- it is an absence of one. Folding 3 into 0 would
+    # report an unreadable attribution as a clean one, which is precisely the
+    # thing being fixed, one layer down. It therefore takes precedence over
+    # findings: you cannot call a run measured when part of it was not.
+    unmeasured = unmeasured_rows()
+    if unmeasured:
+        print(f"COULD NOT MEASURE: {len(unmeasured)} row(s) announce co-owners "
+              f"the parser cannot read:")
+        for lineno, owner in unmeasured:
+            print(f"  - L{lineno} `{owner}`: `co-owners` marker present, zero "
+                  f"backticked IDs parsed. Write each ID in backticks, e.g. "
+                  f"co-owners: `4090-CLAUDE` (what they did)")
     if findings:
         print(f"{len(findings)} finding(s):")
         for finding in findings:
             print(f"  - {finding}")
+    if unmeasured:
+        return 3
+    if findings:
         return 1
     print("identity lineage: clean")
     return 0

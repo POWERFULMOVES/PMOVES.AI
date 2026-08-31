@@ -129,14 +129,28 @@ def lanes_in(text: str) -> set[str]:
 
 _UNSET = object()
 _FOLDER = _UNSET
+_LINEAGE = _UNSET
 
 
-def _load_folder():
-    """Return a name-folding callable, or None if it is unavailable."""
-    global _FOLDER
-    if _FOLDER is not _UNSET:
-        return _FOLDER
-    _FOLDER = None
+def _load_lineage():
+    """Return the identity_lineage module, or None if it is unavailable.
+
+    Both name-folding AND co-owner parsing come from here, so they share one
+    import and one failure mode instead of two.
+
+    WHAT IS LOST WHEN THIS RETURNS None, stated because the direction matters:
+    co-owner declarations stop being parsed, so a lane two nodes have EXPLICITLY
+    declared they share reads as a lane one node holds -- and the gate blocks
+    the other. That is fail-CLOSED: noisy, not silent, and recoverable by the
+    operator who reads the block message. The opposite arrangement -- assuming
+    collaboration when you cannot read the declaration -- would let a real
+    collision through while looking calm, which is the failure this hook exists
+    to prevent.
+    """
+    global _LINEAGE
+    if _LINEAGE is not _UNSET:
+        return _LINEAGE
+    _LINEAGE = None
     try:
         import importlib.util
         root = Path(__file__).resolve().parents[3]
@@ -151,19 +165,53 @@ def _load_folder():
         # the import dies with a bare AttributeError about __dict__.
         sys.modules["identity_lineage"] = module
         spec.loader.exec_module(module)
-        vocab = module.load_vocabulary()
-
-        def _fold(owner: str) -> str:
-            return module.canonical_identity(owner, vocab) or owner
-
-        _FOLDER = _fold
+        module.load_vocabulary()  # fail here, not on the first fold
+        _LINEAGE = module
     except Exception as exc:  # noqa: BLE001 -- a guard must not die here
         sys.stderr.write(
             f"claim-collision-pre: identity vocabulary unavailable ({exc}); "
             "comparing owner strings exactly, as before. Spelling drift "
-            "will not be folded.\n"
+            "will not be folded, and declared co-owners will not be read.\n"
         )
+    return _LINEAGE
+
+
+def _load_folder():
+    """Return a name-folding callable, or None if it is unavailable."""
+    global _FOLDER
+    if _FOLDER is not _UNSET:
+        return _FOLDER
+    module = _load_lineage()
+    if module is None:
+        _FOLDER = None
+        return _FOLDER
+    vocab = module.load_vocabulary()
+
+    def _fold(owner: str) -> str:
+        return module.canonical_identity(owner, vocab) or owner
+
+    _FOLDER = _fold
     return _FOLDER
+
+
+def co_owners_in(text: str) -> set[str]:
+    """Canonical identities declared as co-owners on a row.
+
+    Co-owner IDs go through canonical_owner(), the SAME normalisation the
+    signing owner gets. Anything less would let one identity appear as a
+    co-owner under a spelling the gate does not recognise, and the declaration
+    would then fail to do the one thing it is for.
+    """
+    module = _load_lineage()
+    if module is None:
+        return set()
+    return {canonical_owner(name) for name, _note in module.co_owners_in(text)}
+
+
+def declares_unreadable_co_owners(text: str) -> bool:
+    """True when a row announces co-owners and names none a machine can read."""
+    module = _load_lineage()
+    return bool(module) and module.co_owner_field_is_unparseable(text)
 
 
 def canonical_owner(owner: str) -> str:
@@ -212,13 +260,23 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
     A line number that does not resolve sends the reader hunting, and this hook
     only speaks when it is blocking someone.
     """
-    open_claims: dict[str, list[tuple[int, set[str], str]]] = {}
+    open_claims: dict[str, list[tuple[int, set[str], str, set[str]]]] = {}
     for lineno, line in enumerate(text.split("\n"), start=1):
         if m := CLAIM_RE.search(line):
-            open_claims.setdefault(canonical_owner(m.group(1)), []).append(
-                (lineno, lanes_in(line), m.group(1))
+            owner_key = canonical_owner(m.group(1))
+            # PARTICIPANTS = the signing owner PLUS everyone the row declares as
+            # a co-owner. This is the whole point of the field: a lane worked by
+            # four bodies now says so, instead of naming one and losing three.
+            participants = {owner_key} | co_owners_in(line)
+            open_claims.setdefault(owner_key, []).append(
+                (lineno, lanes_in(line), m.group(1), participants)
             )
         elif m := RELEASE_RE.search(line):
+            # Pairing stays on the SIGNING owner, deliberately. A co-owner is
+            # declared as having worked the lane, not as having authority to
+            # close someone else's claim -- letting a co-worker's RELEASE close
+            # the primary's lane would make the field a way to release work you
+            # do not own. Attribution and authority are different powers.
             owner = canonical_owner(m.group(1))
             released = lanes_in(line)
             if not released:
@@ -231,8 +289,8 @@ def open_claims_in(text: str) -> dict[str, tuple[int, set[str], str]]:
                 # A release that NAMES lanes closes only those. Anything
                 # else the owner still holds stays held.
                 kept = [
-                    (ln, lanes - released, raw)
-                    for ln, lanes, raw in open_claims.get(owner, [])
+                    (ln, lanes - released, raw, participants)
+                    for ln, lanes, raw, participants in open_claims.get(owner, [])
                     if lanes - released
                 ]
                 if kept:
@@ -309,8 +367,12 @@ def _advise_on_shell_write(payload: dict) -> None:
     ]
     # Report the AS-WRITTEN owner, not the canonical key: `B850-CLAUDE
     # (Knuckles)` locates the entry in the register and `b850-claude` does not.
-    for lineno, lanes, raw in sorted(keyed, key=lambda c: c[0]):
-        lines.append(f"  L{lineno}  {raw} -> {', '.join(sorted(lanes))}")
+    for lineno, lanes, raw, participants in sorted(keyed, key=lambda c: c[0]):
+        shared = sorted(participants - {canonical_owner(raw)})
+        with_whom = f"  (shared with {', '.join(shared)})" if shared else ""
+        lines.append(
+            f"  L{lineno}  {raw} -> {', '.join(sorted(lanes))}{with_whom}"
+        )
     unkeyed = total_open - len(keyed)
     if unkeyed:
         lines.append(
@@ -374,7 +436,7 @@ def main() -> None:
     proposed = ti.get("new_string") if tool == "Edit" else ti.get("content")
     proposed = proposed or ""
     new_claims = [
-        (m.group(1), lanes_in(proposed))
+        (m.group(1), lanes_in(proposed), co_owners_in(proposed))
         for m in CLAIM_RE.finditer(proposed)
     ]
     if not new_claims:
@@ -395,19 +457,48 @@ def main() -> None:
     # hook shipped with.
     collisions = []
     unkeyed = []
-    for owner, lanes in new_claims:
+    for owner, lanes, declared in new_claims:
         if not lanes:
             unkeyed.append(owner)
             continue
         owner_key = canonical_owner(owner)
-        for other_key, open_list in existing_open.items():
-            # Canonical: re-claiming your own lane under a different
-            # spelling of your own name is not a collision.
-            if other_key == owner_key:
-                continue
-            for lineno, held, other_as_written in open_list:
+        # The claimant's own participant set: itself, plus anyone it declares it
+        # is working with.
+        mine = {owner_key} | declared
+        for _other_key, open_list in existing_open.items():
+            for lineno, held, other_as_written, theirs in open_list:
+                # A SHARED PARTICIPANT MEANS THE LANE IS SHARED ON PURPOSE.
+                #
+                # This subsumes the old `other_key == owner_key` skip (an owner
+                # is always in its own participant set, so re-claiming your own
+                # lane under a different spelling still is not a collision) and
+                # extends it to the case the register could not express: a lane
+                # two nodes have declared they work together.
+                #
+                # The gate does NOT get quieter in general. An UNDECLARED
+                # overlap still blocks, exactly as before -- the only thing that
+                # stops colliding is collaboration somebody wrote down. That is
+                # the durable fix this file's docstring asked for: the hook
+                # already believed "more than one node on a lane is the village
+                # working"; it just had no way to tell that apart from a
+                # genuine clash. Now it does, and the difference is a
+                # declaration in the ledger rather than a guess.
+                if mine & theirs:
+                    continue
                 for lane in sorted(lanes & held):
                     collisions.append((lane, other_as_written, lineno))
+
+    # A row that ANNOUNCES co-owners and names none the parser can read is
+    # UNMEASURED, not clean. Silently treating it as "no co-owners" would let an
+    # attribution that satisfies a human reader be empty to every machine --
+    # which is the exact defect this field was added to remove.
+    if declares_unreadable_co_owners(proposed):
+        sys.stderr.write(
+            "claim-collision-pre: NOT MEASURED - this row declares `co-owners:` "
+            "but no backticked ID could be parsed from it, so the shared-lane "
+            "check ran WITHOUT them. Write each ID in backticks, e.g. "
+            "co-owners: `4090-CLAUDE` (filed the blocker).\n"
+        )
 
     if collisions:
         sys.stderr.write(
