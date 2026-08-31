@@ -57,6 +57,69 @@ is unrelated to the `worker` service TYPE (tier 4) in the registry.
 3. Handoff: agent publishes CHIT payload reference and signs ACK block.
 4. Release: agent writes `RELEASE` entry and clears claim.
 
+### Row grammar
+
+A register row is:
+
+```
+- `<ISO_TIMESTAMP>` <KIND> `<OWNER-ID>` [<field>: <value> · ...] scope: <prose>
+```
+
+`<KIND>` is `[A-Z+]+` — `CLAIM`, `RELEASE`, `CLAIM+RELEASE`, `UPDATE`, `REVIEW`,
+`HANDOFF` and others are all in use. Exactly one backticked `<OWNER-ID>` is
+captured, by `identity_lineage.ENTRY` and by `claim-collision-pre.CLAIM_RE`.
+
+Optional `key: value` fields may precede `scope:`, separated by ` · `:
+
+- ``branch: `feat/x` `` — the lane. **Claims that name no branch cannot be
+  checked by the collision gate**, which says so on stderr rather than exiting 0
+  as though it had verified something.
+- `**TTL 72h (expires ...)**`
+- ``co-owners: `<ID>` (<contribution>), ...`` — see below.
+
+### `co-owners:` — every body that worked the lane
+
+The row grammar names exactly ONE owner. When several bodies work one lane, the
+rest were invisible to any machine reading this file, and the workarounds are
+the evidence the field was needed: `Three-body: delivery=…, control=…, memory=…`
+in 198 rows, `Cross-node review team (4090 + SPARK + DARKXSIDE) acknowledged`,
+and one row cross-referencing its primary claim **by line number** in an
+append-only file where line numbers shift.
+
+```
+- `<ts>` RELEASE `4090-CLAUDE` branch: `fix/x` · co-owners: `B850-CLAUDE (Knuckles)` (cross-node correction), `Z890-CLAUDE` (Windows validation) · scope: ...
+```
+
+Rules, each of which the parser enforces:
+
+- **The backticks delimit the ID; the parenthetical *after* them is the
+  contribution.** Identities already carry parentheticals — `B850-CLAUDE
+  (Knuckles)` is one identity string — so the backticks are what keeps it
+  unambiguous. The contribution note is optional.
+- **The `:` (or `=`) is required.** Unlike `branch`, where it is optional. The
+  bare noun "co-owners" occurs in ordinary prose, so requiring the punctuation
+  is what keeps a sentence from being read as a declaration.
+- **A code-span mention is not a declaration.** A row may write ``` `co-owners:` ```
+  while describing the grammar without declaring anything.
+- **Co-owner IDs fold through `identity_vocabulary.yaml`**, exactly as the
+  signing owner does. An undeclared co-owner is a `--verify` finding.
+- **Position is free.** Header segment or inside the scope prose; both parse.
+- **Rows without the field are unaffected** — no marker, no code path, and no
+  existing row changes meaning. Nothing needed rewriting when this was added.
+
+What it changes in the gate: `claim-collision-pre.py` keys collisions on
+**participants** (owner ∪ declared co-owners) intersected with the lane. A lane
+two nodes have declared they share stops colliding; an **undeclared** overlap
+still blocks. `RELEASE` pairing stays on the signing owner — a co-owner is
+declared as having *worked* the lane, not as having authority to *close*
+someone else's claim.
+
+Read it with `python3 pmoves/tools/identity_lineage.py --co-owners`.
+Exit codes across this tooling: **0 clean · 1 findings · 3 could not measure.**
+A row that announces `co-owners:` and names none the parser can read is
+**3**, never 0 — an attribution that satisfies a human reader and is empty to
+every machine is the defect this field exists to remove.
+
 ### Default Operating Flow
 Use this as the default cadence unless a lane needs a deliberate exception:
 1. Claim the lane here with branch/PR scope.
@@ -2414,3 +2477,7 @@ b8cea26c8\ that added it to the top-level equired\ array). (2) PMOVES-pinokio PR
 - `2026-08-31T18:30:00Z` CLAIM `B850-CLAUDE (Knuckles)` branch: `feat/register-co-owner-attribution` · **TTL 72h (expires `2026-09-03T18:30:00Z`)** · scope: **The register can name exactly one owner per row, so when several bodies work one lane every co-worker is invisible to any machine reading it.** Operator-raised. The conventions for shared work already EXIST and are in heavy use — `Three-body: delivery=…, control=…, memory=…` appears in **198** rows, `Cross-node review team (4090 + SPARK + DARKXSIDE) acknowledged` at L797, `Cross-node team formed for review: 4090-CLAUDE + SPARK` at L772, and `(assisting CRUSH-GLM52 claim at L1256)` at L1415 cross-references its primary by LINE NUMBER, which shifts under an append-only file. All of it is prose; none of it parses. This lane makes the existing practice machine-readable rather than inventing a ceremony agents must learn. **Grain, not against it:** `claim-collision-pre.py`'s own docstring already says "more than one node on a lane is the village working, not a violation" and names an explicit field in the register format as the durable fix — the HOOK models shared lanes correctly and the FORMAT cannot record them. **Deliverable:** a `co-owners:` field carrying backticked IDs with an optional contribution note, riding the header segment **9** rows already use before `scope:` (e.g. L2365 ``branch: `chore/cli-prereq-preflight` · **TTL n/a** · scope: …``); rows without the field must keep parsing byte-identically. Collision then keys on PARTICIPANTS (owner ∪ co-owners) intersected with the LANE — a declared shared lane stops colliding, an undeclared one still blocks. **Registry-key gap in scope:** `canonical_owner()` bridges `B850-CLAUDE (Knuckles)` ⇄ `B850-CLAUDE` ⇄ `b850-claude` but not `claude_b850`, the `agent_registry.yaml` key — the same split the `2026-08-28T16:47:00Z` CLAIM on `docs/governance-enforcement-gap` recorded (item 3) and left open. Measured here: **104** registry keys, **11** unresolvable, of which only **4** are safe to alias (`claude_4090`, `claude_b850`, `claude_5090`, `claude_z890`) — a key is safe only if its `signature:` resolves AND no other key shares it. `claude-opus` is the signature of **6** distinct keys and `crush` of **2**; aliasing those would merge distinct agents into one identity and SUPPRESS genuine collisions, so they are deliberately excluded. **Acceptance test:** PR #2807 (merged `6a30f8080`) had four bodies on it — 4090 filed the CodeQL-377 closeout blocker, B850 posted the cross-node correction (false positive, remedy aimed at the wrong lines), Z890 ran live Windows validation (win32, Python 3.14.2, 12 passed, exit-contract confirmed), and whoever authored `9ede3150f` found `# lgtm` markers suppress nothing — and it has **no RELEASE row at all**; `2807` occurs 3 times in this file, all inside other lanes' prose (L2351 ×2, L2365 ×1). That RELEASE gets backfilled with the new field. **One layer out, named not fixed here:** all four bodies posted to GitHub as the shared account `POWERFULMOVES`, so node identity survives only when an agent volunteers it in prose — and the 4090's blocker comment named no node at all. **Proof obligation:** the parser must be shown REJECTING malformed input with real output and exit codes, not only observed passing; a `co-owners` marker yielding zero parseable IDs is reported as UNMEASURED (exit 3), never silently skipped. **Blast radius held:** `LANE_RE` needs a `feat|fix|docs|…/` prefix and `BRANCH_MARKER_RE` keys on the word `branch`, so neither can fire on a co-owner ID — pinned by test. **Three-body:** delivery=B850-CLAUDE (Knuckles; this), control=operator direction + `AGNOTE4482_SIGNOFF_CHECKLIST`, memory=this trail. risks: low — additive field, backward-compatible by construction. `agent_signature: ACK::B850-CLAUDE::LANE-ATTRIBUTION-CLAIM::2026-08-31`.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::LANE-ATTRIBUTION-CLAIM::2026-08-31 -->
+
+- `2026-08-31T18:55:00Z` RELEASE `B850-CLAUDE (Knuckles)` branch: `feat/register-co-owner-attribution` · co-owners: `4090-CLAUDE` (filed the closeout blocker — CodeQL alert 377), `Z890-CLAUDE` (live Windows validation: win32, Python 3.14.2, 12 passed, exit contract confirmed) · scope: **BACKFILL — the RELEASE that PR #2807 never got.** #2807 (`feat(secrets): reconcile manifest declarations against GitHub's 100-per-scope cap`) merged as `6a30f8080` on 2026-08-28T21:30:23-04:00 with **four bodies on the lane and no RELEASE row at all**; before this entry, `2807` occurred 3 times in this file and every one was inside another lane's prose (L2351 ×2, L2365 ×1). It is the acceptance test for the `co-owners:` field and the reason the field exists: the row grammar had room for one owner, so three of the four were unrecordable. **Attribution, by body:** `4090-CLAUDE` filed the closeout blocker (CodeQL alert 377); the signing owner `B850-CLAUDE (Knuckles)` posted the cross-node correction establishing the alert was a false positive whose proposed remedy was aimed at the wrong lines; `Z890-CLAUDE` ran the live Windows validation. Machine-readable attribution for this lane is `{signing owner} ∪ {co-owners}` — the same set the collision gate computes — which is 3 of the 4. **The fourth body is named as MISSING, not guessed.** Commit `9ede3150f` (`fix(secrets): drop lgtm markers that suppress nothing`) found that `# lgtm` markers suppress nothing, and its node is **not recoverable**: `git log` gives its author as `POWERFULMOVES <142271328+POWERFULMOVES@users.noreply.github.com>`, which is measured, and `6a30f8080` is a squash merge carrying no co-author trailers. Putting a guess in the field would be worse than the gap it fills, and an unresolvable ID is a `--verify` finding by design, so it stays in prose. **That absence is the same failure one layer out, and it is not fixed here:** all four bodies posted to GitHub as the shared account `POWERFULMOVES`, so node identity survives only when an agent volunteers it in prose — and the 4090's blocker comment named no node at all. The register can now record who worked a lane; GitHub still cannot say who pushed. That is a separate lane and it needs an owner. **Delivered on this branch:** `co-owners:` field with a position-independent parser in `identity_lineage.py`; participant-keyed collision in `claim-collision-pre.py` (declared sharing allowed, **undeclared overlap still blocks**); exit-code doctrine 0/1/**3 could-not-measure** with 3 taking precedence; the `claude_b850`-class registry-key gap closed for the 4 keys where a signature is uniquely one agent's, and deliberately NOT closed for the 7 where `claude-opus` (×6) or `crush` (×2) is shared, since aliasing those would merge distinct agents and suppress real collisions. **Proof, not observation:** the gate failed on its first two live runs against this lane's own CLAIM row — once on a code-span mention of the field, once on the bare noun in prose — both fixed and pinned as regressions; three REJECT cases pin that malformed input is refused rather than read as empty. Tests: **48/48** hook (38 pre-existing, unchanged) + **58/58** identity lineage. `identity_lineage.py --verify` → `identity lineage: clean`, exit 0. **Three-body:** delivery=B850-CLAUDE (Knuckles; this), control=operator direction + `AGNOTE4482_SIGNOFF_CHECKLIST`, memory=this trail. `agent_signature: ACK::B850-CLAUDE::LANE-ATTRIBUTION-RELEASE::2026-08-31`.
+
+<!-- GRAPHITI_MARK: B850-CLAUDE::LANE-ATTRIBUTION-RELEASE::2026-08-31 -->

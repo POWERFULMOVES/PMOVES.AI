@@ -63,12 +63,42 @@ any of that. `permissionDecision: "ask"` puts the state in front of whoever is
 deciding and lets them decide.
 
 Owner-ID format in the register (per existing entries):
-  `<ISO_TIMESTAMP>` CLAIM `<OWNER-ID>` scope: ...
-  `<ISO_TIMESTAMP>` RELEASE `<OWNER-ID>` scope: ...
+  `<ISO_TIMESTAMP>` CLAIM `<OWNER-ID>` [<field>: <value> · ...] scope: ...
+  `<ISO_TIMESTAMP>` RELEASE `<OWNER-ID>` [<field>: <value> · ...] scope: ...
 
 We treat the backtick-quoted token immediately following CLAIM/RELEASE as
 the owner identifier — that is the canonical lane axis used throughout the
 register.
+
+CO-OWNERS: THE DURABLE FIX THIS DOCSTRING ASKED FOR IS NOW IN THE FORMAT.
+The paragraph above about shared lanes ("more than one node on a lane is the
+village working, not a violation") described what this hook BELIEVED and could
+not act on, because the row grammar had room for exactly one owner. A lane
+worked by four bodies could only be attributed to one, so a declared
+collaboration and a genuine clash looked identical from here.
+
+    co-owners: `4090-CLAUDE` (filed the blocker), `Z890-CLAUDE` (ran Windows)
+
+Collisions now key on PARTICIPANTS -- the signing owner plus everyone the row
+declares -- intersected with the lane. THIS DOES NOT MAKE THE GATE QUIETER IN
+GENERAL: an UNDECLARED overlap still blocks exactly as before. The only thing
+that stops colliding is collaboration somebody wrote down, so the difference
+between "the village working" and "two nodes about to clobber each other" is
+now a declaration in the ledger instead of a guess made here.
+
+RELEASE pairing deliberately stays keyed on the SIGNING owner. A co-owner is
+declared as having worked the lane, not as having authority to close someone
+else's claim -- attribution and authority are different powers, and conflating
+them would make the field a way to release work you do not own.
+
+A row that announces `co-owners:` and names none the parser can read is
+reported as NOT MEASURED on stderr. It is not treated as a row with no
+co-owners: an attribution that satisfies a human reader and is empty to every
+machine is the exact defect the field was added to remove, and silently
+accepting it would reproduce that defect one layer down.
+
+Grammar and rationale: AGNOTE4482PHI.t1.md § Row grammar.
+Parser: pmoves/tools/identity_lineage.py (co_owners_in).
 
 Exit codes:
   0  allow
