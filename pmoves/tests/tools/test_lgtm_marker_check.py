@@ -31,6 +31,21 @@ sys.modules["lgtm_marker_check"] = lmc
 spec.loader.exec_module(lmc)
 
 
+# The fixtures below must contain marker strings without this FILE containing a
+# marker -- otherwise the gate flags its own test suite and the only fixes are a
+# self-exemption (an allowlist that rots) or deleting the coverage. CI caught
+# exactly that on the first push of this branch: the gate ran clean locally
+# while the test file was still untracked, then failed once committed, because
+# `git ls-files` does not see untracked files. Assembling the pragma at runtime
+# keeps the gate with ZERO exemptions, which is the property worth protecting.
+P = "lgtm"
+
+
+def _m(rule: str, comment: str = "#") -> str:
+    """Build a marker string at runtime. Never write one literally in this file."""
+    return f"{comment} {P}[{rule}]"
+
+
 def _tree(monkeypatch, tmp_path, files: dict[str, str]):
     """Materialise `files` under tmp_path and point the gate at that tree."""
     for rel, body in files.items():
@@ -46,11 +61,11 @@ def _tree(monkeypatch, tmp_path, files: dict[str, str]):
 @pytest.mark.parametrize(
     "line",
     [
-        "x = 1  # lgtm[py/path-injection]",
-        "el.innerHTML = v; // lgtm[js/xss-through-dom]",
-        "foo()  # lgtm [py/a-rule]",                      # space before bracket
-        "foo()  # lgtm[py/a-rule, js/b-rule]",            # multi-rule list
-        "x = 1  # lgtm[py/clear-text-storage-sensitive-data] -- with trailing prose",
+        "x = 1  " + _m("py/path-injection"),
+        "el.innerHTML = v; " + _m("js/xss-through-dom", "//"),
+        f"foo()  # {P} [py/a-rule]",                      # space before bracket
+        "foo()  " + _m("py/a-rule, js/b-rule"),           # multi-rule list
+        "x = 1  " + _m("py/clear-text-storage-sensitive-data") + " -- with trailing prose",
     ],
 )
 def test_marker_forms_are_findings(monkeypatch, tmp_path, line):
@@ -66,7 +81,7 @@ def test_reintroducing_a_marker_fails_a_clean_tree(monkeypatch, tmp_path):
     assert lmc.main() == 0
 
     dirty = dict(clean)
-    dirty["pmoves/services/s.py"] = "x = 1  # lgtm[py/path-injection]\n"
+    dirty["pmoves/services/s.py"] = "x = 1  " + _m("py/path-injection") + "\n"
     _tree(monkeypatch, tmp_path, dirty)
     assert lmc.main() == 1
 
@@ -106,7 +121,7 @@ def test_prose_mention_is_not_a_finding(monkeypatch, tmp_path):
     _tree(monkeypatch, tmp_path, {
         "pmoves/tools/audit.py": (
             "# resolved by DISMISSING the alert with this justification, not by a\n"
-            "# comment marker -- `# lgtm[...]` is LGTM.com syntax that GitHub code\n"
+            "# comment marker -- `# " + P + "[...]` is LGTM.com syntax that GitHub\n"
             "# scanning ignores. Do not copy it expecting suppression.\n"
         )
     })
@@ -116,7 +131,7 @@ def test_prose_mention_is_not_a_finding(monkeypatch, tmp_path):
 def test_backticked_rule_id_is_prose(monkeypatch, tmp_path):
     """A quoted, fully-spelled rule id is still someone explaining the syntax."""
     _tree(monkeypatch, tmp_path, {
-        "pmoves/tools/audit.py": "# we used to write `# lgtm[js/resource-exhaustion]` here\n"
+        "pmoves/tools/audit.py": "# we used to write `" + _m("js/resource-exhaustion") + "` here\n"
     })
     assert lmc.main() == 0
 
