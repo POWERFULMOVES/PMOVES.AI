@@ -140,7 +140,12 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
         return f"{content}{sep}{new_line}\n"
 
     text = _upsert(text, "DOCKERHUB_USERNAME", username)
-    text = _upsert(text, "DOCKERHUB_PAT", token)  # lgtm[py/clear-text-storage-of-sensitive-data]
+    # This DOES place a live PAT into env-file text in clear text — that is the tool's
+    # entire purpose, not an oversight, and NOT a false positive. Accepted because the
+    # destination is an untracked, gitignored env file written 0600 under a 0700 parent
+    # (below). CodeQL py/clear-text-storage-sensitive-data is triaged as "won't fix" in
+    # the code scanning UI; an inline pragma would suppress nothing.
+    text = _upsert(text, "DOCKERHUB_PAT", token)
 
     try:
         env_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -150,7 +155,10 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
 
     tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
     try:
-        tmp_path.write_text(text, encoding="utf-8")  # lgtm[py/clear-text-storage-of-sensitive-data]
+        # Same accepted risk as the _upsert() above. Written to a temp file first, then
+        # chmod 0600 BEFORE the atomic replace(), so the PAT is never briefly readable
+        # at the final path with default umask.
+        tmp_path.write_text(text, encoding="utf-8")
         try:
             os.chmod(tmp_path, 0o600)
         except OSError:
