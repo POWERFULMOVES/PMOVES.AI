@@ -71,8 +71,18 @@ services:
       - "${OTEL_GRPC_PORT:-4327}:4317"
       - "${OTEL_HTTP_PORT:-4318}:4318"
       - "${OTEL_METRICS_PORT:-8889}:8889"
+    # pmoves_monitoring: reach Jaeger/Tempo (the export backend) + Prometheus scrape.
+    # pmoves_app + pmoves_bus: the collector must be reachable BY the trace exporters,
+    # which live on those networks. agent-zero and archon set
+    # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://pmoves-otel-collector:4317 but sit on
+    # pmoves_app/pmoves_bus only (not pmoves_monitoring), so without this the collector
+    # DNS name never resolves for them and every span export silently fails. tensorzero
+    # already reaches it because it is multi-homed onto pmoves_monitoring. Multi-homing
+    # the collector fixes all app/bus exporters in one place (see handoff 2026-08-31).
     networks:
       - pmoves_monitoring
+      - pmoves_app
+      - pmoves_bus
     depends_on:
       jaeger:
         condition: service_healthy

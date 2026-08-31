@@ -64,3 +64,4 @@
 {"agent": "pmoves-b850", "domain": "compose", "file": "/home/pmoves-knuckles/pinokio/api/PMOVES.AI/pmoves/docker-compose.mcp-gateway.yml", "reason": "pr:2656", "session": "unknown", "tool": "Edit", "ts": "2026-08-21T11:13:34Z"}
 {"agent": "pmoves-b850", "domain": "compose", "file": "/home/pmoves-knuckles/pinokio/api/PMOVES.AI/pmoves/docker-compose.mcp-gateway.yml", "reason": "pr:2656", "session": "unknown", "tool": "Edit", "ts": "2026-08-21T11:14:07Z"}
 {"agent": "pmoves-b850", "domain": "compose", "file": "/home/pmoves-knuckles/pinokio/api/PMOVES.AI/pmoves/docker-compose.mcp-gateway.yml", "reason": "pr:2656", "session": "unknown", "tool": "Edit", "ts": "2026-08-21T15:19:55Z"}
+{"agent": "5090", "domain": "compose", "file": "C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.tracing.yml", "reason": "handoff:otel-collector-network-reach-2026-08-31.md", "session": "unknown", "tool": "Edit", "ts": "2026-08-31T23:16:06Z"}
