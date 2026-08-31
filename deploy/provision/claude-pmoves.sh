@@ -119,10 +119,27 @@ if [ -f "$ENVF" ]; then
   rm -f "$tmpf"
   set -H 2>/dev/null || true
   echo "[claude-pmoves] loaded $n vars from $ENVF" >&2
+  PMOVES_LAUNCHER_SESSION="claude-pmoves.sh ($n vars)"
 else
   echo "[claude-pmoves] WARN: $ENVF not found — MCP creds may be missing." >&2
   echo "[claude-pmoves]       run: make -C pmoves ensure-env-shared" >&2
+  PMOVES_LAUNCHER_SESSION="claude-pmoves.sh (env file NOT FOUND)"
 fi
+
+# Leave a marker in the child's environment so "did this session come through
+# the launcher" is ANSWERABLE from inside the session.
+#
+# `launcher-check` asks whether the command resolves on this host. That is a
+# question about the installer, and it passes on a host where the launcher is
+# installed and simply was not used -- which is the actual failure mode, since
+# starting `claude` directly is the habit the launcher exists to replace. Both
+# were true simultaneously on Z890 (2026-08-31): launcher-check OK, and 13 of
+# 20 roster entries missing their variables in the live process.
+#
+# The marker carries the count, not just a flag, because "loaded 0 vars" and
+# "never ran" are different faults with different remedies and would otherwise
+# be indistinguishable to anything reading it.
+export PMOVES_LAUNCHER_SESSION
 
 # Resolve ${TS_<NODE>} for the cross-node MCP servers in the roster.
 #

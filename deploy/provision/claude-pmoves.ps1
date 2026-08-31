@@ -72,9 +72,18 @@ if (Test-Path $envf) {
     $n = 0
     foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process'); $n++ }
     Write-Host "[claude-pmoves] loaded $n vars from $envf"
+    $script:launcherSession = "claude-pmoves.ps1 ($n vars)"
 } else {
     Write-Warning "[claude-pmoves] $envf not found - MCP creds may be missing. Run: make -C pmoves ensure-env-shared"
+    $script:launcherSession = 'claude-pmoves.ps1 (env file NOT FOUND)'
 }
+
+# Leave a marker in the process environment so "did this session come through
+# the launcher" is ANSWERABLE from inside the session. Mirrors the export in
+# claude-pmoves.sh; see the comment there for why launcher-check cannot answer
+# it. Set on BOTH branches -- "loaded 0 vars" and "never ran" are different
+# faults with different remedies, and a bare boolean would merge them.
+[Environment]::SetEnvironmentVariable('PMOVES_LAUNCHER_SESSION', $script:launcherSession, 'Process')
 
 # ---------------------------------------------------------------------------
 # Interpreter discovery — the Windows half of pmoves/scripts/pm-python.sh.
