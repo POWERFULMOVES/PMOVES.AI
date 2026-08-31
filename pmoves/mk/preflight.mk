@@ -153,7 +153,17 @@ env-check: ## Run cross-platform environment preflight checks
 	@# CI runner or any non-Claude host there is no roster to authenticate and
 	@# "13 servers degraded" is not a finding, it is noise. It exits 0 unless
 	@# --strict is passed, so this cannot fail env-check even by accident.
-	@$(MAKE) --no-print-directory session-check || true
+	@#
+	@# `ARGS=` is REQUIRED, and CI caught its absence
+	@# (tests/make/test_args_no_leak_to_submake.py). env-check consumes $(ARGS)
+	@# and forwards it to env_check.ps1 / env_check.sh; session-check consumes
+	@# $(ARGS) and forwards it to session_check.py. Without the literal clear,
+	@# one ARGS value would have to satisfy two argparse surfaces, so
+	@# `make env-check ARGS=--some-env-check-flag` would hand that flag to
+	@# session_check.py, which rejects unknown flags. The `|| true` would have
+	@# HIDDEN it -- an advisory that silently stops advising is the worst of
+	@# both. Clearing ARGS keeps the advisory honest.
+	@$(MAKE) --no-print-directory ARGS= session-check || true
 ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 $(ARGS)
 else
