@@ -1828,6 +1828,8 @@ nats server report connections
 **`kb.upsert.result.v1`** — Upsert confirmation (Hi-RAG → requesting agent)
 **`compute.vllm.load.v1`** — Model load command (GPU orchestrator → vLLM worker)
 **`compute.vllm.status.v1`** — vLLM instance status (vLLM worker → GPU orchestrator)
+**`hf.model.discovered.v1`** — HuggingFace model discovery (hf-agent → hf-research-agent; live 2026-08-31, 2275+ models seen)
+**`hf.model.evaluated.v1`** — Discovery scored against benchmark criteria (hf-research-agent → model-registry G4 auto-register; threshold 110)
 **`hf.model.download.v1`** — HuggingFace model download (any agent → HF downloader)
 **`hf.model.ready.v1`** — Model download complete (HF downloader → requesting agent)
 **`botz.skill.register.v1`** — Skill registration (BoTZ gateway → Agent Zero)
