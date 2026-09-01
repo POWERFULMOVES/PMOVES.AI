@@ -3,6 +3,16 @@
 **Node:** `PMOVES-4090` · `4090-claude` · founder directives this session
 **Companion:** [`4090-open-findings-2026-08-31.md`](./4090-open-findings-2026-08-31.md) (defects), this file (work)
 
+**Scope, so this does not compete with the canonical plans.** This is a
+*bring-up* queue: the specific blockers between the fleet's current state and
+services running, found by measuring this node on 2026-09-01. It does **not**
+supersede `pmoves/docs/ROADMAP.md` or `pmoves/docs/NEXT_STEPS.md`, which carry
+product and release priority and which `pmoves/AGENTS.md:34-36` makes mandatory
+reading before changes. Where they disagree about what to do next, the canonical plans win on
+*what to build* and this file wins on *what is currently broken underneath it*.
+Items here graduate into those plans or close; nothing here is a long-lived
+priority statement.
+
 Every item below is measured, not recalled. Where a number appears, the command
 that produced it is next to it, because a tally quoted forward is how this fleet
 keeps rediscovering the same defect.
@@ -60,9 +70,14 @@ not a new WAN port) → read specs off each node → fill T3.
 
 ## T3 — the three KVM profiles have no hardware block, on purpose  ·  **P2**
 
-`kvm4-1.yaml`, `kvm4-2.yaml`, `kvm2.yaml` were created 2026-09-01 (branch
-`feat/node-role-axis`) declaring `deployment_class`, `provides: [egress,
-always-on]`, `runtime_shape: [persistent]` and `reach:` — and **no hardware**.
+`kvm4-1.yaml`, `kvm4-2.yaml`, `kvm2.yaml` declare `deployment_class`,
+`provides: [egress, always-on]`, `runtime_shape: [persistent]` and `reach:` —
+and **no hardware**.
+
+> **T3 is BLOCKED on PR #2867.** Those three files live on branch
+> `feat/node-role-axis` and are **not on `main`**. Anyone picking T3 up from
+> this commit alone will find at most one of them. Do not start T3 until #2867
+> merges.
 
 That was deliberate: the work order (L12) records
 `kvm-exit-node-hosting-strategy.md` as STALE with *"wrong kvm2 specs"*, and
@@ -94,10 +109,10 @@ table from L12 audit before rewriting any platform doc."*
 Measured 2026-09-01 across all `pmoves/docker-compose*.yml`:
 
 ```
-PMOVES_NETWORKS == networks:            206 services
+PMOVES_NETWORKS == networks:            208 services   (was 206)
 MISMATCH                                  0
 networks: but no PMOVES_NETWORKS         57   (network-blind)
-PMOVES_NETWORKS but no networks:          2   (clip-embed, phantom)
+PMOVES_NETWORKS but no networks:          0   (was 2 -- both clip-embed; FIXED, PR #2870)
 /topology endpoint                        2   (media-audio, media-video only)
 gw-priority applied                       0   of 107 that need it
 ```
@@ -106,9 +121,13 @@ gw-priority applied                       0   of 107 that need it
   the host-unreachable class — is unapplied everywhere. It appears exactly once
   in the repo, as a *comment* in `services/common/topology.py:27`. Highest
   leverage item here.
-- **`clip-embed`** declares `PMOVES_NETWORKS=pmoves_api,pmoves_bus` with no
-  `networks:` key (both `docker-compose.yml` and `.core.yml`) — it self-reports
-  a topology it does not have.
+- **`clip-embed` / `clap-embed` — FIXED in PR #2870.** clip-embed had
+  `PMOVES_NETWORKS` and no `networks:` key at all; clap-embed had a `networks:`
+  key with the wrong contents. **Both** call `from_pretrained` at first request
+  and sat on `internal: true` tiers only, so each would report healthy and then
+  fail its first real request. Recorded here because the lesson generalises:
+  fixing one by copying its sibling propagated a second defect. Matching a twin
+  is only sound if the twin has been exercised — and neither had ever run.
 - **AgentGym cannot start standalone**: `docker-compose.agentgym.yml` declares
   `app_tier`/`api_tier`/`data_tier`/`monitoring_tier` as `external: true` with
   **no `name:` mapping**; none of those networks exist and nothing creates them.
@@ -117,22 +136,41 @@ gw-priority applied                       0   of 107 that need it
 - **`/topology` is on 2 of 263 services** — the spec's two named first adopters.
   The helper was never rolled out from `services/common`.
 
-## T6 — wire the readers to `node-vocabulary.yaml`  ·  **P2**
+## T6 — point the REMAINING consumers at the existing resolver  ·  **P2**
 
-The canonical node vocabulary **exists and is good**: 53 entries, aliases,
-`reach`, and a `kind:` discriminator that already classifies `cloud`/`any` as
-`placeholder`, `jetson` as `class`, `ai-lab` as `runner-label`, and
-`powerfulmoves` as `unresolved` ("the GitHub org name, not a machine").
+**Corrected 2026-09-01 after review.** An earlier version of this file claimed
+node-vocabulary.yaml had "one reader, zero runtime consumers" and proposed
+building a resolver in `services/common`. **That was false**, and following it
+would have created a second resolver beside a working one.
 
-It has **one reader**: `.github/workflows/validate-agents-config.yml`, which
-gates its `default_identity` field. **Zero runtime consumers.**
+`pmoves/tools/node_identity.py` (11.5 KB) already loads the vocabulary
+(`VOCABULARY_PATH`, line 41) and exposes `load_vocabulary()`, `canonical_node()`,
+`this_node()`, `load_registry()`, `agents_claiming()`, `resolve_identity()`.
+Seven consumers, including every launcher at session startup:
 
-So these still disagree with a registry that already reconciles them:
-`agent_terminal_theme.py::_HOST_MAP` · `agent_registry.yaml`'s 17 `node_affinity`
-tokens · the claim register's 20 agent names.
+```
+pmoves/scripts/claude-pmoves.sh          pmoves/tools/crush_configurator.py
+pmoves/scripts/crush-pmoves              pmoves/tools/identity_lineage.py
+pmoves/scripts/windows/claude-pmoves.bat pmoves/scripts/validate_agent_registry.py
+```
 
-**Do:** a resolver in `services/common`, then point those three at it. The data
-is done; this is wiring, not authoring.
+*How the wrong claim happened, because the method matters more than the fact:*
+the search that produced it was a repo-wide ripgrep that **timed out** and
+returned partial results. It reported the CI workflow and nothing else, and I
+read silence as absence. A timed-out search is not a measurement.
+
+**The real remaining work is smaller than what this file first proposed** —
+these three still resolve node names on their own instead of asking
+`node_identity.py`:
+
+- `pmoves/tools/agent_terminal_theme.py::_HOST_MAP`
+- `agent_registry.yaml`'s 17 raw `node_affinity` tokens (no validation against
+  the vocabulary)
+- the claim register's 20 agent names
+
+So: inventory those, point them at the existing resolver, and add a gate that
+rejects a `node_affinity` token the vocabulary does not know. **Do not write a
+new resolver.**
 
 ## T7 — A0 + Archon dispatch wiring  ·  **P2**
 
