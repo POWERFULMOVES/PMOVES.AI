@@ -35,6 +35,11 @@ when working on the 5090 desktop workstation.
 
 ```bash
 echo "=== 5090 SITREP $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+# PREFER THE SHARED SCRIPT. The inline block below is a fallback, and
+# fallbacks drift: every sitrep skill carried its own copy of these checks
+# and all of them probed the wrong NATS port for months.
+bash .claude/scripts/node-sitrep.sh 2>/dev/null && exit 0
+
 echo "--- GIT ---"
 git status --short
 git log --oneline -3
@@ -43,7 +48,15 @@ git worktree list
 echo "--- GPU ---"
 nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader 2>/dev/null || echo "GPU: not available"
 echo "--- NATS ---"
-curl -sf http://localhost:8222/healthz && echo " NATS: OK" || echo "NATS: DOWN"
+  # Derive the monitoring port; do NOT hardcode it. `8222` is the
+  # CONTAINER-side port and never answers on the host: pmoves-nats-1 publishes
+  # `127.0.0.1:9223->8222/tcp`. Probing 8222 reported a healthy NATS as DOWN
+  # (measured 2026-08-31: uptime 2d15h, 7 connections, on :9223).
+  # a0-archon-bridge/SKILL.md:71 already documented this — the correction had
+  # landed where the error was found and not where it is read.
+  NATS_MON=$(docker port pmoves-nats-1 8222 2>/dev/null | head -1 | sed 's/.*://')
+  NATS_MON=${NATS_MON:-9223}
+  curl -sf "http://localhost:$NATS_MON/healthz" >/dev/null 2>&1     && echo "NATS: OK (:$NATS_MON)" || echo "NATS: DOWN (:$NATS_MON)"
 echo "--- TTS ENGINES ---"
 curl -sf http://localhost:7860/gradio_api/info >/dev/null 2>&1 && echo "Ultimate-TTS-Studio (:7860): UP" || echo "Ultimate-TTS-Studio (:7860): DOWN"
 echo "--- KEY SERVICES ---"
@@ -63,7 +76,9 @@ echo "=== END SITREP ==="
 Fastest triage: NATS + git + GPU + TTS hub only.
 
 ```bash
-curl -sf http://localhost:8222/healthz && echo " NATS OK" || echo "NATS DOWN"
+NATS_MON=$(docker port pmoves-nats-1 8222 2>/dev/null | head -1 | sed 's/.*://')
+NATS_MON=${NATS_MON:-9223}
+curl -sf "http://localhost:$NATS_MON/healthz" >/dev/null 2>&1   && echo "NATS: OK (:$NATS_MON)" || echo "NATS: DOWN (:$NATS_MON)"
 curl -sf http://localhost:7860/gradio_api/info >/dev/null 2>&1 && echo "TTS UP" || echo "TTS DOWN"
 git log --oneline -1
 nvidia-smi --query-gpu=memory.used,memory.free --format=csv,noheader

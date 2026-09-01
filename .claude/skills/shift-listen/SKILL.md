@@ -18,7 +18,9 @@ Starts the Shift Crew voice pipeline in reactive push mode. Subscribes to
 
 ```bash
 # Verify NATS is reachable
-curl -sf http://localhost:8222/healthz && echo "NATS: OK" || echo "NATS: DOWN"
+NATS_MON=$(docker port pmoves-nats-1 8222 2>/dev/null | head -1 | sed 's/.*://')
+NATS_MON=${NATS_MON:-9223}
+curl -sf "http://localhost:$NATS_MON/healthz" >/dev/null 2>&1   && echo "NATS: OK (:$NATS_MON)" || echo "NATS: DOWN (:$NATS_MON)"
 
 # Check beats_to_voice.py is available
 ls pmoves/tools/beats_to_voice.py || echo "MISSING"

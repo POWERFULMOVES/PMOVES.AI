@@ -22,7 +22,15 @@ Launches an AgentGym reinforcement learning session using the 4090 node configur
 curl -sf http://localhost:3030/health && echo "TensorZero: OK" || echo "TensorZero: DOWN"
 
 # Verify NATS is reachable (for episode event publishing)
-curl -sf http://localhost:8222/healthz && echo "NATS: OK" || echo "NATS: unreachable"
+# Derive the monitoring port; do NOT hardcode it. `8222` is the
+  # CONTAINER-side port and never answers on the host: pmoves-nats-1 publishes
+  # `127.0.0.1:9223->8222/tcp`. Probing 8222 reported a healthy NATS as DOWN
+  # (measured 2026-08-31: uptime 2d15h, 7 connections, on :9223).
+  # a0-archon-bridge/SKILL.md:71 already documented this — the correction had
+  # landed where the error was found and not where it is read.
+  NATS_MON=$(docker port pmoves-nats-1 8222 2>/dev/null | head -1 | sed 's/.*://')
+  NATS_MON=${NATS_MON:-9223}
+  curl -sf "http://localhost:$NATS_MON/healthz" >/dev/null 2>&1     && echo "NATS: OK (:$NATS_MON)" || echo "NATS: DOWN (:$NATS_MON)"
 
 # Check Ollama fallback available
 ollama list | grep qwen3 || echo "Ollama qwen3 models not found"

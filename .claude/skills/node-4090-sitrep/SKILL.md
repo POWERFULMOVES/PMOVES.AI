@@ -2,7 +2,7 @@
 name: node-4090-sitrep
 description: >
   Full situation report for the 4090 laptop node: git status, active worktrees,
-  GPU (nvidia-smi), NATS health (port 8222), running containers, and open PRs.
+  GPU (nvidia-smi), NATS health (monitoring port, derived — published as 9223 here), running containers, and open PRs.
   Output formatted as AGNOTE4482 audit record block. Run before every
   CLAIM/RELEASE in AGNOTE4482PHI.t1.md.
 ---
@@ -26,7 +26,15 @@ bash .claude/scripts/node-sitrep.sh 2>/dev/null || {
   echo "--- GPU ---"
   nvidia-smi --query-gpu=name,memory.used,memory.free --format=csv,noheader 2>/dev/null || echo "GPU: not available"
   echo "--- NATS ---"
-  curl -sf http://localhost:8222/healthz && echo "NATS: OK" || echo "NATS: DOWN"
+  # Derive the monitoring port; do NOT hardcode it. `8222` is the
+  # CONTAINER-side port and never answers on the host: pmoves-nats-1 publishes
+  # `127.0.0.1:9223->8222/tcp`. Probing 8222 reported a healthy NATS as DOWN
+  # (measured 2026-08-31: uptime 2d15h, 7 connections, on :9223).
+  # a0-archon-bridge/SKILL.md:71 already documented this — the correction had
+  # landed where the error was found and not where it is read.
+  NATS_MON=$(docker port pmoves-nats-1 8222 2>/dev/null | head -1 | sed 's/.*://')
+  NATS_MON=${NATS_MON:-9223}
+  curl -sf "http://localhost:$NATS_MON/healthz" >/dev/null 2>&1     && echo "NATS: OK (:$NATS_MON)" || echo "NATS: DOWN (:$NATS_MON)"
   echo "--- CONTAINERS ---"
   docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | head -20
   echo "--- OPEN PRs ---"
@@ -45,7 +53,7 @@ The sitrep produces an audit block suitable for pasting into `AGNOTE4482PHI.t1.m
 **Branch**: feat/shift-crew-4090-skills
 **Worktrees**: 2 active
 **GPU**: NVIDIA RTX 4090 — 4096MB used / 20480MB free
-**NATS**: OK (localhost:8222)
+**NATS**: OK (localhost:9223 — container 8222)
 **Containers**: [list]
 **Open PRs**: #1535 feat(w0-pr4), #1536 feat(shift-crew-4090-skills)
 
@@ -56,7 +64,15 @@ The sitrep produces an audit block suitable for pasting into `AGNOTE4482PHI.t1.m
 
 ```bash
 # NATS + git only — fastest
-curl -sf http://localhost:8222/healthz && echo "NATS OK" || echo "NATS DOWN"
+# Derive the monitoring port; do NOT hardcode it. `8222` is the
+  # CONTAINER-side port and never answers on the host: pmoves-nats-1 publishes
+  # `127.0.0.1:9223->8222/tcp`. Probing 8222 reported a healthy NATS as DOWN
+  # (measured 2026-08-31: uptime 2d15h, 7 connections, on :9223).
+  # a0-archon-bridge/SKILL.md:71 already documented this — the correction had
+  # landed where the error was found and not where it is read.
+  NATS_MON=$(docker port pmoves-nats-1 8222 2>/dev/null | head -1 | sed 's/.*://')
+  NATS_MON=${NATS_MON:-9223}
+  curl -sf "http://localhost:$NATS_MON/healthz" >/dev/null 2>&1     && echo "NATS: OK (:$NATS_MON)" || echo "NATS: DOWN (:$NATS_MON)"
 git log --oneline -1
 git worktree list | wc -l
 ```
