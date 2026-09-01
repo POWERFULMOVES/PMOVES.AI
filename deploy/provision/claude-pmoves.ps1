@@ -254,6 +254,12 @@ if (-not $env:PMOVES_ROSTER_FROM_TREE) {
         Write-Warning "[claude-pmoves]   (offline, or origin/main not fetched -- servers may differ from the fleet's)"
     }
 }
+# Tell the session which roster it got, and from where. Mirrors the export in
+# claude-pmoves.sh -- see the comment there for why this is the RAW roster and
+# not the normalized copy handed to Claude.
+[Environment]::SetEnvironmentVariable('PMOVES_MCP_ROSTER', $roster, 'Process')
+[Environment]::SetEnvironmentVariable('PMOVES_MCP_ROSTER_SOURCE', $rosterSource, 'Process')
+
 if (Test-Path $roster) {
     Write-Host ("[claude-pmoves] MCP roster source: " + $rosterSource)
     # Normalize the roster before handing it to Claude. The transform used to be

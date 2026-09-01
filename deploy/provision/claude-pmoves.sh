@@ -191,6 +191,18 @@ if [ -z "${PMOVES_ROSTER_FROM_TREE:-}" ]; then
     echo "[claude-pmoves]   (offline, or origin/main not fetched -- servers may differ from the fleet's)" >&2
   fi
 fi
+# Tell the session which roster it got, and from where.
+#
+# Deliberately the RAW roster, not the normalized "$RESOLVED" produced below.
+# The normalized copy has every ${VAR} already expanded and every unresolvable
+# server DROPPED, so anything reading it sees a clean roster and cannot tell a
+# healthy session from one that lost five servers on the way in -- it would
+# report OK precisely when something went wrong. The raw file still carries the
+# references, so `make -C pmoves session-check` evaluates the same expressions
+# the launcher evaluated, against the same environment.
+export PMOVES_MCP_ROSTER="$MCP_ROSTER"
+export PMOVES_MCP_ROSTER_SOURCE="$MCP_ROSTER_SOURCE"
+
 if [ -f "$MCP_ROSTER" ]; then
   echo "[claude-pmoves] MCP roster source: $MCP_ROSTER_SOURCE"
   # Normalize the roster before handing it to Claude:
