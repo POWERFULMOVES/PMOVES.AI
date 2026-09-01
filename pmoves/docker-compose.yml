@@ -1947,7 +1947,7 @@ services:
     - CLIP_DEVICE=${CLIP_DEVICE:-cpu}
     - CLIP_EMBED_PORT=8109
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - "${CLIP_EMBED_BIND:-0.0.0.0}:8109:8109"
     # networks: clip-embed carried PMOVES_NETWORKS but NO networks: key, so it
@@ -1956,9 +1956,18 @@ services:
     # which lives on pmoves_api/bus/external -- from the default network that
     # name does not resolve. Its twin clap-embed, the very next block with the
     # same *tier-api-hardened anchor, already had this key.
+    # pmoves_external is REQUIRED, not optional: this service calls
+    # CLIPModel.from_pretrained at first request, which downloads weights from
+    # HuggingFace. pmoves_api and pmoves_bus are both `internal: true`, so
+    # without an egress network the container reports HEALTHY and then fails
+    # the first real request. Codex caught this on clip-embed; clap-embed had
+    # the identical defect, which is why copying clap-embed's network list
+    # onto clip-embed fixed one bug and propagated another. Neither service
+    # has ever been run.
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external
     restart: unless-stopped
     profiles:
     - orchestration
@@ -1975,7 +1984,7 @@ services:
     - CLAP_EMBED_PORT=8108
     - NATS_URL=${NATS_URL:-}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
-    - PMOVES_NETWORKS=pmoves_api,pmoves_bus
+    - PMOVES_NETWORKS=pmoves_api,pmoves_bus,pmoves_external
     ports:
     - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
     restart: unless-stopped
@@ -1991,9 +2000,18 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 3
+    # pmoves_external is REQUIRED, not optional: this service calls
+    # ClapModel.from_pretrained at first request, which downloads weights from
+    # HuggingFace. pmoves_api and pmoves_bus are both `internal: true`, so
+    # without an egress network the container reports HEALTHY and then fails
+    # the first real request. Codex caught this on clip-embed; clap-embed had
+    # the identical defect, which is why copying clap-embed's network list
+    # onto clip-embed fixed one bug and propagated another. Neither service
+    # has ever been run.
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
     deploy:

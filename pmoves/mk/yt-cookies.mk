@@ -12,6 +12,21 @@
 
 .PHONY: yt-cookies-auth yt-cookies-refresh yt-cookies-status yt-cookies-revoke yt-cookies-check yt-cookies-bootstrap yt-ingest-bootstrap yt-ingest-bootstrap-noegress up-yt-cookies build-yt-image
 
+# SERVICE-ROLE KEY PRECEDENCE MUST MATCH THE TOOL.
+# tools/yt_oauth_flow.py:109 reads
+#     _env("SUPABASE_SERVICE_ROLE_KEY") or _env("SERVICE_ROLE_KEY")
+# This preflight used the REVERSE order, so it validated one key while the
+# tool authenticated with a different one -- a green preflight followed by a
+# 401. Measured 2026-09-01: SERVICE_ROLE_KEY (len 180) is rejected by
+# PostgREST (401, identical to sending no key); SUPABASE_SERVICE_ROLE_KEY
+# (len 211) authenticates -- the PostgREST access log records the request as
+# user `service_role`. The gate was blessing the stale key. A gate that
+# resolves a name differently from its consumer is not checking that consumer.
+#
+# These comments live ABOVE the target on purpose. The recipe below is one
+# backslash-continued shell command; a `@#` line placed inside it is handed
+# to bash as a command and fails with "@#: command not found" (exit 127),
+# which breaks yt-cookies-check and everything depending on it.
 yt-cookies-check: ## Preflight: verify Google OAuth + Supabase env vars are set
 	@echo "=== YT Cookies: preflight check ==="
 	@hard=0; \
@@ -23,16 +38,6 @@ yt-cookies-check: ## Preflight: verify Google OAuth + Supabase env vars are set
 	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
 	if [ -z "$$cid" ] || [ "$$cid" = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com" ]; then echo "✗ client id (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_CLIENT_ID / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client id: set (length=$${#cid})"; fi; \
 	if [ -z "$$csec" ] || [ "$$csec" = "GOCSPX-YOUR_CLIENT_SECRET_HERE" ]; then echo "✗ client secret (GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_CLIENT_SECRET / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client secret: set (length=$${#csec})"; fi; \
-	@# PRECEDENCE MUST MATCH THE TOOL. tools/yt_oauth_flow.py:109 reads
-	@#   _env("SUPABASE_SERVICE_ROLE_KEY") or _env("SERVICE_ROLE_KEY")
-	@# This preflight used the REVERSE order, so it validated one key while the
-	@# tool authenticated with a different one -- a green preflight followed by
-	@# a 401. Measured 2026-09-01: SERVICE_ROLE_KEY (len 180) is rejected by
-	@# PostgREST (401, identical to sending no key); SUPABASE_SERVICE_ROLE_KEY
-	@# (len 211) authenticates -- the PostgREST access log records the request
-	@# as user `service_role`. The gate was blessing the stale key.
-	@# A gate that resolves a name differently from its consumer is not
-	@# checking that consumer.
 	srk=$$(bash scripts/with-env.sh printenv SUPABASE_SERVICE_ROLE_KEY 2>/dev/null || true); \
 	[ -z "$$srk" ] && srk=$$(bash scripts/with-env.sh printenv SERVICE_ROLE_KEY 2>/dev/null || true); \
 	if [ -z "$$srk" ]; then echo "✗ SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY): not configured (required to store the token)"; hard=$$((hard+1)); else echo "✓ service role key: set (length=$${#srk})"; fi; \
