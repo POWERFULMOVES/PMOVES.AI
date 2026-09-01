@@ -404,8 +404,8 @@ async def _run_video(req: VideoAnalysisRequest) -> JSONResponse:
 
             # `cleanup` is only set for the MinIO branch of `_resolve_source()`, where it is
             # `os.path.dirname()` of a uuid4-named tempfile under `tempfile.mkdtemp()` — never
-            # built from client-supplied bucket/key/file_path text. CodeQL py/path-injection
-            # flags this anyway; triage it in the code scanning UI, not with an inline pragma.
+            # built from client-supplied bucket/key/file_path text, so the directory this
+            # deletes is provably not attacker-controlled.
             shutil.rmtree(cleanup, ignore_errors=True)
 
 
@@ -437,7 +437,7 @@ async def analyze_frame(req: VideoAnalysisRequest):
             import shutil
 
             # Same reasoning as `_run_video()`: `cleanup` is a uuid4-named tempdir, never
-            # built from client-supplied text (CodeQL py/path-injection false positive).
+            # built from client-supplied text.
             shutil.rmtree(cleanup, ignore_errors=True)
 
 
