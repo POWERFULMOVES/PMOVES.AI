@@ -49,15 +49,30 @@
 # registry key IS a spelling of the identity and this file is where spellings
 # live.
 #
-# ONLY FOUR OF ELEVEN UNRESOLVED KEYS WERE ADDED, AND THE RULE IS NOT
-# "whatever was left over". Measured against the two files, 2026-08-31: 104
-# keys under `agents:`, 11 of which do not resolve. A key is safe to alias only
-# when its `signature:` resolves here AND no OTHER key shares that signature:
+# ONLY A FEW KEYS WERE ADDED, AND THE RULE IS NOT "whatever was left over".
+#
+# CORRECTION (2026-09-01, review of PR #2858): the first version of this note
+# said "104 keys under `agents:`, 11 of which do not resolve", which reads as
+# "11 of 104 are unresolvable". That is wrong by an order of magnitude and the
+# reviewer was right to flag it. Measured: **97 of 104 keys do not resolve as
+# keys.** The 11 was a different, unstated population -- keys whose `signature:`
+# resolves while the key itself does not, i.e. the only keys ALIASING COULD
+# HELP. The decision was right; the sentence was not, and an unstated
+# denominator in a governance file is the kind of thing that gets quoted later.
+#
+# Measured 2026-09-01, after `hermes-agent` was declared:
+#   104 keys · 7 resolve as keys · 97 do not
+#   20 keys carry a `signature:` · 13 of those signatures resolve here
+#   7 of those 13 are keys that still do not resolve -- deliberately, below
+#
+# A key is safe to alias only when its `signature:` resolves here AND no OTHER
+# key shares that signature:
 #
 #   claude_4090 -> 4090-claude    claude_5090 -> 5090-claude
 #   claude_b850 -> b850-claude    claude_z890 -> z890-claude
+#   hermes_agent -> hermes-agent
 #
-# The other seven are deliberately NOT aliased. `claude-opus` is the signature
+# The remaining seven are deliberately NOT aliased. `claude-opus` is the signature
 # of SIX distinct keys (agent_zero, metrics_specialist, dashboard_specialist,
 # logs_specialist, tracing_specialist, llm_observability) and `crush` of TWO.
 # Aliasing those would declare six different agents to be one identity, and the
@@ -149,6 +164,17 @@ identities:
 
   - canonical: missing-link-hermes
     aliases: ["MISSING-LINK-HERMES"]
+
+  - canonical: hermes-agent
+    aliases: ["HERMES-AGENT", "hermes_agent"]
+    note: >-
+      Surfaced when ENTRY was widened to cover indented rows -- HERMES-AGENT
+      holds an OPEN claim the audit surface could not see. Declared, not
+      aliased into anything else. `agent_registry.yaml` carries `hermes_agent`
+      with the signature `hermes-agent`, held by exactly one key, and the
+      register spells it `HERMES-AGENT`. Same rule the four node CLAUDEs were
+      added under -- a unique registry signature matching the register's own
+      spelling is a declaration, not a guess about who somebody is.
 
   - canonical: cowork-claude
     aliases: ["COWORK-CLAUDE"]

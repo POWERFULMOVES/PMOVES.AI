@@ -36,7 +36,18 @@ REGISTER_PATH = REPO_ROOT / "pmoves" / "docs" / "AGENTS" / "AGNOTE4482PHI.t1.md"
 SIGNATURES_PATH = REPO_ROOT / "pmoves" / "config" / "agent_signatures.yaml"
 
 # `- `<ts>` <KIND> `<author>`` -- the register's entry grammar.
-ENTRY = re.compile(r"^- `([0-9TZ:\-]+)` ([A-Z+]+) `([^`]+)`", re.M)
+#
+# THE AUDIT SURFACE MUST NOT BE NARROWER THAN THE ENFORCEMENT SURFACE. This
+# used to require a bare `[0-9TZ:\-]+` timestamp at column 0, while the
+# collision hook's CLAIM_RE/RELEASE_RE match anywhere on any line. Measured on
+# the live register, 10 rows the GATE treats as claims were invisible here: 6
+# carry fractional seconds or a UTC offset (`...:35.7340973-05:00`) and 2 are
+# indented. That gap was a reporting nicety until `co-owners:` existed; now a
+# field on such a row can GRANT PARTICIPATION and suppress a collision while
+# being unreachable by `--verify`, `--co-owners` and `unmeasured_rows()` -- an
+# unaudited participant grant. So: allow leading whitespace, and `.`/`+` in the
+# timestamp. Measured effect: 404 -> 415 entries, 11 newly visible, all real.
+ENTRY = re.compile(r"^[ \t]*- `([0-9TZ:.+\-]+)` ([A-Z+]+) `([^`]+)`", re.M)
 CORRECTION = re.compile(r"\[CORRECTION ([^\]]*)\]")
 
 # An identity written as `BASE (parenthetical)`. The parenthetical carries a
@@ -116,6 +127,63 @@ _CO_OWNER_ITEM = re.compile(
 _CO_OWNER_SEP = re.compile(r"[,\s]*")
 
 
+def _code_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) of every Markdown code span, matched by BACKTICK RUN LENGTH.
+
+    This replaced a parity test -- "an odd number of backticks before `pos`
+    means `pos` is inside a span" -- which was documented as failing toward a
+    loud false "could not measure". Measured, it failed the other way, in both
+    directions, and silently:
+
+      * a ``...`` example is EVEN, so a marker inside one read as real usage. A
+        row that merely DOCUMENTS the grammar (``co-owners: `X` (note)``)
+        parsed as a successful declaration and could suppress a real collision.
+        A silent grant produced by documentation, in a file whose whole subject
+        is its own governance.
+      * an unbalanced backtick earlier in a row flipped parity for everything
+        after it, so a GENUINE field read as being inside a span and was
+        dropped -- and dropped is not reported as unmeasured, so the
+        attribution vanished from --co-owners and --verify with no signal. That
+        is "satisfies a human reader, empty to every machine", which is the
+        defect the field exists to remove.
+
+    Run-length matching is the CommonMark rule and it fixes both: a run of N
+    backticks opens a span that only a later run of exactly N closes, and a run
+    that is never closed is not a span at all. It is ~20 lines and no more a
+    Markdown parser than the parity test was -- the earlier note calling the
+    alternative "a Markdown inline parser in a governance gate" overestimated
+    the cost of the correct rule and underestimated the failure.
+    """
+    spans: list[tuple[int, int]] = []
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] != "`":
+            i += 1
+            continue
+        j = i
+        while j < n and text[j] == "`":
+            j += 1
+        run = j - i
+        k = j
+        while k < n:
+            if text[k] != "`":
+                k += 1
+                continue
+            e = k
+            while e < n and text[e] == "`":
+                e += 1
+            if e - k == run:
+                spans.append((i, e))
+                i = e
+                break
+            k = e
+        else:
+            # Unterminated run: not a span. Everything after it stays outside,
+            # instead of the rest of the row flipping polarity.
+            i = j
+    return spans
+
+
 def _in_code_span(text: str, pos: int) -> bool:
     """True when `pos` falls inside a Markdown backtick span.
 
@@ -128,24 +196,16 @@ def _in_code_span(text: str, pos: int) -> bool:
     is a document about its own governance: rows describing the grammar are
     normal here, not exotic. Without this the very first row to explain the
     field would have been the first row to fail the gate.
-
-    RULE: an odd number of backticks before `pos` means `pos` is inside a span.
-    LIMIT, stated rather than discovered later: a double-backtick span (``...``)
-    reads as even, so a marker inside one counts as real usage. The register
-    uses ``...`` to show examples containing backticks, so that case is a
-    genuine mention read as a use. It is left as-is deliberately -- the
-    alternative is a Markdown inline parser in a governance gate, and the
-    failure it would prevent is a false "could not measure", which is loud,
-    self-explanatory, and fixed by writing the example differently.
     """
-    return text.count("`", 0, pos) % 2 == 1
+    return any(start <= pos < end for start, end in _code_spans(text))
 
 
 def _co_owner_markers(text: str) -> list[int]:
     """End offsets of every `co-owners` marker that is NOT a code-span mention."""
+    spans = _code_spans(text)
     return [
         m.end() for m in CO_OWNER_MARKER.finditer(text)
-        if not _in_code_span(text, m.start())
+        if not any(start <= m.start() < end for start, end in spans)
     ]
 
 

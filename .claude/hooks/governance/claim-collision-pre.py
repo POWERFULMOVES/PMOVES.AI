@@ -79,12 +79,33 @@ collaboration and a genuine clash looked identical from here.
 
     co-owners: `4090-CLAUDE` (filed the blocker), `Z890-CLAUDE` (ran Windows)
 
-Collisions now key on PARTICIPANTS -- the signing owner plus everyone the row
-declares -- intersected with the lane. THIS DOES NOT MAKE THE GATE QUIETER IN
-GENERAL: an UNDECLARED overlap still blocks exactly as before. The only thing
-that stops colliding is collaboration somebody wrote down, so the difference
-between "the village working" and "two nodes about to clobber each other" is
-now a declaration in the ledger instead of a guess made here.
+Collisions key on PARTICIPANTS -- the signing owner plus everyone the row
+declares -- intersected with the lane. An UNDECLARED overlap still blocks
+exactly as before.
+
+WHO DECLARED IT DECIDES WHAT HAPPENS, because a set intersection cannot tell
+consent from assertion. The first cut of this feature tested `mine & theirs`,
+which is symmetric, so "the incumbent invited me" and "I named the incumbent
+without asking" were the same fact from here -- and BOTH exited 0 with empty
+stderr. That is a self-issued exemption with no trace, and a gate with one of
+those is not a gate. Worse, it is the locally cheapest move available to an
+agent that just got blocked: the block message says "coordinate a handoff",
+`co-owners:` is in the grammar, and typing the incumbent's name makes the red
+text go away.
+
+So the three cases are kept apart:
+
+  * RECIPROCATED -- the incumbent's own open row names this claimant. The party
+    who HOLDS the lane consented. Allowed, and announced on stderr: a
+    suppressed collision that prints nothing is indistinguishable from a gate
+    that never ran, which is exactly how the silent version shipped.
+  * UNILATERAL -- only this row declares the sharing (or both rows merely name
+    some third party). Not blocked and not waved through: raised as
+    `permissionDecision: "ask"`, naming who declared whom. Refusing would be
+    wrong -- an incumbent that went offline is precisely why the register is a
+    ledger and not a lock -- but so is silence. The failure mode being removed
+    here is silence, not permissiveness.
+  * UNDECLARED -- nobody wrote anything down. Blocks, as before.
 
 RELEASE pairing deliberately stays keyed on the SIGNING owner. A co-owner is
 declared as having worked the lane, not as having authority to close someone
@@ -92,17 +113,27 @@ else's claim -- attribution and authority are different powers, and conflating
 them would make the field a way to release work you do not own.
 
 A row that announces `co-owners:` and names none the parser can read is
-reported as NOT MEASURED on stderr. It is not treated as a row with no
-co-owners: an attribution that satisfies a human reader and is empty to every
-machine is the exact defect the field was added to remove, and silently
-accepting it would reproduce that defect one layer down.
+reported as NOT MEASURED on stderr AND raised as an `ask`. It is not treated as
+a row with no co-owners: an attribution that satisfies a human reader and is
+empty to every machine is the exact defect the field was added to remove, and
+silently accepting it would reproduce that defect one layer down. Stderr alone
+was not enough -- on exit 0 it is not fed back the way exit-2 stderr is, so the
+signal was close to invisible on the path that actually gates.
 
 Grammar and rationale: AGNOTE4482PHI.t1.md § Row grammar.
 Parser: pmoves/tools/identity_lineage.py (co_owners_in).
 
 Exit codes:
-  0  allow
+  0  allow -- possibly carrying `permissionDecision: "ask"` on stdout
   2  block (stderr fed back to Claude)
+
+THERE IS NO EXIT 3 HERE, deliberately. identity_lineage.py's CLI uses 3 for
+"could not measure", and the register documents that doctrine "across this
+tooling" -- but a PreToolUse hook has a two-code vocabulary (0 allow, 2 block)
+and reads anything else as a non-blocking error. Exiting 0 with only stderr
+made could-not-measure indistinguishable from clean on the surface an agent
+actually hits, so it is raised as an `ask` instead: a decision-carrying signal,
+which is what the doctrine was after.
 """
 
 import json
@@ -137,8 +168,19 @@ FILE_SUFFIXES = (
 # dropping it left BOTH claims unkeyed, which let two owners hold one lane with
 # no collision. The gate failed open, silently. The filter still applies to
 # unmarked tokens, where a backticked `docs/...` really is usually a cited file.
+#
+# THE LOOKBEHIND IS LOAD-BEARING. With `:` optional and `\s*` permissive, the
+# word "branch" INSIDE a code span -- "BRANCH_MARKER_RE keys on the word
+# `branch`, so neither can fire..." -- matched, then captured everything up to
+# the next backtick as a lane. Two CLAIM rows in the live register hold a
+# phantom lane made of prose that way (L1949 on `main`, and the row that
+# introduced the co-owners field), and in an append-only file a phantom lane
+# stays open forever: it is a lane nobody is working that blocks whoever tries.
+# `(?<!`)` says a marker that is itself the tail of a code span is a MENTION.
+# Measured over the whole register: exactly 2 lane sets change, both of them
+# these phantoms, and no real branch is lost on any row.
 BRANCH_MARKER_RE = re.compile(
-    r'\bbranch\b[:=]?\s*`([^`]+)`',
+    r'(?<!`)\bbranch\b[:=]?\s*`([^`]+)`',
     re.IGNORECASE,
 )
 
@@ -445,6 +487,31 @@ def _locate_register(payload: dict, command: str) -> Path | None:
     return hit if hit.is_file() else None
 
 
+def _row_at(text: str, pos: int) -> str:
+    """The single register row containing `pos`.
+
+    A register entry is one line, and open_claims_in() has always read the
+    EXISTING side that way. The PROPOSED side did not: co_owners_in() ran once
+    over the whole edit and its result was attached to every CLAIM match in it,
+    so one honest declaration on row 1 granted participation to every other row
+    in the same write. Deleting the field from an unrelated row flipped a
+    squatting row from ALLOW to BLOCK -- the field was being read from outside
+    its own row's scope.
+
+    That is not only an adversarial case. Multi-row appends here are routine,
+    and the result was that the gate and the register disagreed about who is on
+    a lane -- worse than either being wrong alone, because the register looked
+    correct while the gate acted on something else.
+
+    `split`-on-newline semantics, for the reason open_claims_in() documents at
+    length: the register carries vertical tabs and form feeds that
+    `splitlines()` breaks on and no editor, grep or sed counts as a line.
+    """
+    start = text.rfind("\n", 0, pos) + 1
+    end = text.find("\n", pos)
+    return text[start:] if end == -1 else text[start:end]
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -465,10 +532,22 @@ def main() -> None:
     # Proposed-text source differs across tools.
     proposed = ti.get("new_string") if tool == "Edit" else ti.get("content")
     proposed = proposed or ""
-    new_claims = [
-        (m.group(1), lanes_in(proposed), co_owners_in(proposed))
-        for m in CLAIM_RE.finditer(proposed)
-    ]
+    new_claims = []
+    for m in CLAIM_RE.finditer(proposed):
+        row = _row_at(proposed, m.start())
+        # LANES per row, with the whole-edit read kept as a FALLBACK for a row
+        # that names no branch of its own. Scoping alone would have made this
+        # blinder than it was: a claim whose branch is written on a
+        # neighbouring line would stop being compared and start reporting
+        # "NOT CHECKED", which is a quiet downgrade from blocking. Fail-closed
+        # is the direction to err in, so the row is taken at its word when it
+        # gives one and inherits the edit's lanes when it does not.
+        lanes = lanes_in(row) or lanes_in(proposed)
+        # CO-OWNERS strictly per row, NO fallback. A declaration is the one
+        # thing that can SUPPRESS a collision, so inheriting one from a
+        # neighbouring row is the entire defect. A row that declares nothing
+        # declares nothing.
+        new_claims.append((m.group(1), lanes, co_owners_in(row)))
     if not new_claims:
         sys.exit(0)
 
@@ -485,7 +564,9 @@ def main() -> None:
     # Same owner re-naming their own lane is not a collision: it is the node
     # that already holds it, and blocking that was the false positive this
     # hook shipped with.
-    collisions = []
+    collisions = []   # nobody declared anything: block
+    shared = []       # the INCUMBENT declared this claimant: allow, out loud
+    one_sided = []    # only this row declared it: ask
     unkeyed = []
     for owner, lanes, declared in new_claims:
         if not lanes:
@@ -495,28 +576,66 @@ def main() -> None:
         # The claimant's own participant set: itself, plus anyone it declares it
         # is working with.
         mine = {owner_key} | declared
-        for _other_key, open_list in existing_open.items():
+        for other_key, open_list in existing_open.items():
             for lineno, held, other_as_written, theirs in open_list:
-                # A SHARED PARTICIPANT MEANS THE LANE IS SHARED ON PURPOSE.
-                #
-                # This subsumes the old `other_key == owner_key` skip (an owner
-                # is always in its own participant set, so re-claiming your own
-                # lane under a different spelling still is not a collision) and
-                # extends it to the case the register could not express: a lane
-                # two nodes have declared they work together.
-                #
-                # The gate does NOT get quieter in general. An UNDECLARED
-                # overlap still blocks, exactly as before -- the only thing that
-                # stops colliding is collaboration somebody wrote down. That is
-                # the durable fix this file's docstring asked for: the hook
-                # already believed "more than one node on a lane is the village
-                # working"; it just had no way to tell that apart from a
-                # genuine clash. Now it does, and the difference is a
-                # declaration in the ledger rather than a guess.
-                if mine & theirs:
+                overlap = sorted(lanes & held)
+                if not overlap:
                     continue
-                for lane in sorted(lanes & held):
-                    collisions.append((lane, other_as_written, lineno))
+                if other_key == owner_key:
+                    # The node that already holds it, under any spelling. Not a
+                    # collision, and not worth a word: this is the routine case
+                    # the first cut of the hook broke.
+                    continue
+                if owner_key in theirs:
+                    # RECIPROCATED. The party who HOLDS the lane named this
+                    # claimant on their own open row, so the sharing was
+                    # consented to by the side that had something to give up.
+                    shared += [(lane, other_as_written, lineno) for lane in overlap]
+                    continue
+                witnesses = sorted(mine & theirs)
+                if witnesses:
+                    # UNILATERAL. Something is shared -- this row says so, or
+                    # both rows happen to name the same third party -- but the
+                    # incumbent's row does not name this claimant back. That is
+                    # attribution, not a handoff, and the difference is not
+                    # decidable from inside a PreToolUse hook. Surface it.
+                    one_sided += [
+                        (owner, lane, other_as_written, lineno, witnesses)
+                        for lane in overlap
+                    ]
+                    continue
+                collisions += [
+                    (lane, other_as_written, lineno) for lane in overlap
+                ]
+
+    # NOTHING SUPPRESSED LEAVES NO TRACE. A consented share is allowed without
+    # a prompt -- that workflow has to stay frictionless or nobody uses the
+    # field -- but it is still announced. An allow that prints nothing cannot be
+    # told apart from a gate that did not run, and that is precisely the state
+    # the reviewer found this hook in.
+    for lane, other, lineno in shared:
+        sys.stderr.write(
+            f"claim-collision-pre: SHARED LANE - `{lane}` is held by `{other}` "
+            f"(open CLAIM at line {lineno}), whose own row declares this claimant "
+            "as a co-owner. Allowing: the incumbent declared the sharing.\n"
+        )
+
+    asks = []
+    for owner, lane, other, lineno, witnesses in one_sided:
+        # As-written where we have it, for the reason the advisory documents:
+        # `4090-CLAUDE` locates the row and `4090-claude` does not. The
+        # canonical key is only shown for a third party whose own spelling
+        # lives on neither of these two rows.
+        named = ", ".join(
+            f"`{other if canonical_owner(other) == w else w}`" for w in witnesses
+        )
+        asks.append(
+            f"  - `{owner}` claims lane `{lane}`, held by `{other}` "
+            f"(open CLAIM at line {lineno}).\n"
+            f"    Shared participant(s) {named} are declared by THIS row; "
+            f"`{other}`'s open row does not declare `{owner}` back, so the "
+            "sharing is UNILATERAL."
+        )
 
     # A row that ANNOUNCES co-owners and names none the parser can read is
     # UNMEASURED, not clean. Silently treating it as "no co-owners" would let an
@@ -528,6 +647,11 @@ def main() -> None:
             "but no backticked ID could be parsed from it, so the shared-lane "
             "check ran WITHOUT them. Write each ID in backticks, e.g. "
             "co-owners: `4090-CLAUDE` (filed the blocker).\n"
+        )
+        asks.append(
+            "  - a row declares `co-owners:` and names none the parser can "
+            "read, so the shared-lane check ran WITHOUT them. Could not "
+            "measure is not the same as clean."
         )
 
     if collisions:
@@ -544,6 +668,30 @@ def main() -> None:
             "branch (see Village Rule in AGNOTE4482PHI.t1.md).\n"
         )
         sys.exit(2)
+
+    if asks:
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": "\n".join([
+                    "This CLAIM does not collide only because of something "
+                    "written in the edit itself. Nobody on the other side has "
+                    "said so:",
+                    "",
+                    *asks,
+                    "",
+                    "A one-sided declaration is attribution, not a handoff, and "
+                    "this hook cannot tell the two apart from here. If you have "
+                    "coordinated -- or the incumbent is offline and you are "
+                    "picking the lane up -- proceed. If you have not, coordinate "
+                    "first or pick a different branch. Asking rather than "
+                    "refusing is deliberate: the register is a shared ledger, "
+                    "not a lock, and more than one node on a lane is often the "
+                    "village working.",
+                ]),
+            }
+        }))
 
     # Say plainly when the gate could not check, instead of exiting 0 as though
     # it had. An unkeyed claim is unguarded, not cleared.

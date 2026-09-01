@@ -605,3 +605,80 @@ def test_the_live_register_is_measurable():
         "rows announce co-owners the parser cannot read: "
         + "; ".join(f"L{n} `{owner}`" for n, owner in unmeasured)
     )
+
+
+# --------------------------------------------------------------------------
+# Code spans are matched by BACKTICK RUN LENGTH, not by parity.
+#
+# Parity ("odd number of backticks before pos means inside a span") was
+# documented as failing toward a loud false "could not measure". Measured, it
+# fails the other way: a ``...`` example containing a backticked ID parses as a
+# SUCCESSFUL declaration, so a row that merely documents the grammar grants
+# participation. And an unbalanced backtick earlier in a row silently DROPS a
+# genuine field without reporting it unmeasured -- an attribution that
+# satisfies a human reader and is empty to every machine, which is the exact
+# defect the field exists to remove.
+# --------------------------------------------------------------------------
+
+def test_a_double_backtick_EXAMPLE_is_not_a_declaration():
+    row = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: the grammar is "
+        "``co-owners: `4090-CLAUDE` (what they did)`` as shown."
+    )
+    assert il.co_owners_in(row) == [], (
+        "an example inside a double-backtick span must not read as a use"
+    )
+    assert not il.co_owner_field_is_unparseable(row), (
+        "and must not be reported unmeasured either -- it declares nothing"
+    )
+
+
+def test_a_documented_example_does_not_shadow_the_row_s_REAL_declaration():
+    """The sharpest form of the parity defect: a WRONG attribution, silently.
+
+    co_owners_in() tries every marker and returns the first that yields items,
+    which is right -- a row may describe the field and then use it. Under
+    parity, the marker inside a ``...`` example counted as real usage, so the
+    example won and the genuine field after it was never reached. The row then
+    attributed its lane to an ID that exists only in a documentation sample,
+    and dropped the co-owner who actually did the work. Both halves silent.
+    """
+    row = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: the grammar is "
+        "``co-owners: `EXAMPLE-ID` (ex)`` · co-owners: `4090-CLAUDE` (the real one)"
+    )
+    assert il.co_owners_in(row) == [("4090-CLAUDE", "the real one")], (
+        "the example must not shadow the declaration that follows it"
+    )
+
+
+def test_an_unclosed_backtick_reads_the_way_the_row_RENDERS():
+    """Direction B, resolved by AGREEING with the renderer rather than guessing.
+
+    An unbalanced backtick used to flip polarity for the whole REST of the row,
+    so a genuine field far away vanished from every machine surface while the
+    source still read as an attribution to a human. Run matching bounds the
+    damage to where Markdown itself bounds it: the stray opens a span that
+    closes at the next backtick, which is exactly what the renderer shows. The
+    field inside is still not read -- but the reader and the parser now see the
+    same thing, and closing the backtick recovers it.
+    """
+    stray = (
+        "- `t` CLAIM `A` branch: `feat/x` · scope: see ` the note · "
+        "co-owners: `4090-CLAUDE` (ran the validation)"
+    )
+    closed = stray.replace("see ` the note", "see `the note`")
+    assert il.co_owners_in(closed) == [("4090-CLAUDE", "ran the validation")]
+    # And the damage stops at the span: a second, later field is still read.
+    assert il.co_owners_in(stray + " ` · co-owners: `Z890-CLAUDE` (after)") == [
+        ("Z890-CLAUDE", "after")
+    ]
+
+
+def test_a_triple_backtick_fence_does_not_flip_the_rest_of_the_text():
+    """The hook feeds multi-line text through this; a fence is 3 backticks."""
+    text = (
+        "```\n- `t` RELEASE `4090-CLAUDE` branch: `fix/x`\n```\n"
+        "- `t2` CLAIM `A` branch: `feat/y` · co-owners: `Z890-CLAUDE` (helped)"
+    )
+    assert il.co_owners_in(text) == [("Z890-CLAUDE", "helped")]

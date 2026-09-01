@@ -793,3 +793,233 @@ def test_the_advisory_names_who_a_lane_is_shared_with(tmp_path):
     reason = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
     assert "shared with" in reason, f"advisory hid the co-owner: {reason!r}"
     assert "AGENT-B" in reason
+
+
+def _reason(result):
+    """The prompt text of an `ask`, or None when the hook emitted no decision."""
+    if not result.stdout.strip():
+        return None
+    return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+# --------------------------------------------------------------------------
+# A DECLARATION IS NOT A PERMISSION SLIP.
+#
+# `mine & theirs` is a symmetric intersection, so on its own it cannot tell
+# "the incumbent invited me" from "I named the incumbent without asking".
+# Both used to exit 0 with completely empty stderr -- the honest case and the
+# squat were indistinguishable AT THE HOOK'S OUTPUT, which is the one place a
+# reviewer would ever look. The three tests below pin the distinction: the
+# consented case is allowed AND said out loud, the one-sided case is neither
+# blocked nor waved through but ASKED, and the undeclared case still blocks.
+# --------------------------------------------------------------------------
+
+def test_a_unilateral_co_owner_declaration_is_asked_never_silently_allowed(tmp_path):
+    """The self-issued exemption. Exit 0 + empty stderr was the whole bug.
+
+    A newcomer can write anyone's ID into its own row; nothing about that is a
+    handoff. Blocking it would be wrong too -- an incumbent who went offline is
+    exactly the case the register is a ledger and not a lock for. So: surface
+    it, name who declared what, and let whoever is deciding decide.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · "
+        "co-owners: `AGENT-A` (totally working with me, honest) · scope: **squat.**",
+    )
+    assert r.returncode == ALLOW, "a one-sided declaration is not a hard block"
+    assert _decision(r) == "ask", (
+        "a collision suppressed by a self-issued declaration must not pass "
+        f"silently; stdout was {r.stdout!r} / stderr {r.stderr!r}"
+    )
+    reason = _reason(r)
+    assert "unilateral" in reason.lower(), reason
+    assert "feat/widget" in reason, "the prompt must name the lane"
+    assert "AGENT-A" in reason and "AGENT-B" in reason, (
+        f"the prompt must name who declared whom: {reason!r}"
+    )
+
+
+def test_a_reciprocated_declaration_is_allowed_and_said_out_loud(tmp_path):
+    """The honest workflow, which must stay frictionless -- but not silent.
+
+    The incumbent's OPEN row names the newcomer, so the party who actually
+    holds the lane consented. No prompt. It still leaves a trace, because a
+    suppressed collision that leaves no trace is not distinguishable from a
+    gate that never ran.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (joining me on this) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **the work.**",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, f"consented sharing must not block: {r.stderr}"
+    assert _decision(r) is None, (
+        f"consented sharing must not prompt either: {r.stdout!r}"
+    )
+    assert "SHARED LANE" in r.stderr, (
+        f"a suppressed collision must leave a trace: {r.stderr!r}"
+    )
+    assert "feat/widget" in r.stderr and "AGENT-A" in r.stderr
+
+
+def test_an_undeclared_collision_still_blocks_after_the_consent_split(tmp_path):
+    """The half that must not weaken. Re-driven against the new code path."""
+    r = run_hook(
+        tmp_path, "- `t1` CLAIM `AGENT-B` scope: **also widget.** Branch `feat/widget`"
+    )
+    assert r.returncode == BLOCK, f"expected block, got {r.returncode}: {r.stderr}"
+    assert "feat/widget" in r.stderr and "AGENT-A" in r.stderr
+
+
+# --------------------------------------------------------------------------
+# ONE ROW'S DECLARATION IS ONE ROW'S DECLARATION.
+#
+# co_owners_in() ran once over the WHOLE proposed text and was attached to
+# every CLAIM match in it, so a single honest field on row 1 granted
+# participation to row 2, row 3, and anything else in the same write. Multi-row
+# appends to this register are routine, so this was not only an adversarial
+# case: the gate and the register ended up disagreeing about who is on a lane,
+# because open_claims_in() has always parsed per line.
+# --------------------------------------------------------------------------
+
+def test_a_co_owner_declaration_does_not_leak_to_other_rows_in_the_same_edit(tmp_path):
+    """Row 1 declares honestly on ITS lane; row 2 squats, declaring nothing."""
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+        "co-owners: `AGENT-A` (honest, on this other lane) · scope: **gadget.**\n"
+        "- `t2` CLAIM `AGENT-B` branch: `feat/widget` · scope: **squat.**\n",
+    )
+    assert r.returncode == BLOCK, (
+        "row 1's co-owners field must not cover row 2; got "
+        f"{r.returncode}: {r.stdout!r} / {r.stderr!r}"
+    )
+    assert "feat/widget" in r.stderr
+
+
+def test_the_AB_control_for_the_row_scope_leak(tmp_path):
+    """The same two rows with row 1's field deleted -- the reviewer's control.
+
+    Both spellings must now BLOCK. Before the fix, deleting one field on an
+    unrelated row flipped the other row from ALLOW to BLOCK, which is the
+    proof that the field was being read out of its own row's scope.
+    """
+    rows = (
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · scope: **gadget.**\n"
+        "- `t2` CLAIM `AGENT-B` branch: `feat/widget` · scope: **squat.**\n"
+    )
+    assert run_hook(tmp_path, rows).returncode == BLOCK
+
+
+def test_a_multi_row_append_does_not_cross_contaminate_lanes(tmp_path):
+    """The routine case, and the false positive a co-owner-only fix would add.
+
+    Row 1 legitimately shares a lane the incumbent declared; row 2 claims a
+    free lane. Reading lanes over the whole edit would put row 1's shared lane
+    onto row 2 -- which declares nobody -- and block an ordinary append.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` branch: `feat/widget` · "
+        "co-owners: `AGENT-B` (joining me on this) · scope: **widget.**\n"
+    )
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: **the shared work.**\n"
+        "- `t2` CLAIM `AGENT-B` branch: `feat/unheld` · scope: **new lane.**\n",
+        existing=existing,
+    )
+    assert r.returncode == ALLOW, (
+        f"ordinary multi-row append must not collide with itself: {r.stderr}"
+    )
+    assert _decision(r) is None, f"and must not prompt: {r.stdout!r}"
+
+
+def test_a_row_naming_no_branch_of_its_own_still_uses_the_edits_lanes(tmp_path):
+    """Scoping lanes per row must not make the gate BLINDER than it was.
+
+    A CLAIM that names no branch on its own line is unkeyed; the pre-existing
+    whole-text read is kept for exactly that row, so a claim whose branch is
+    written on a neighbouring line is still compared instead of silently
+    passing as unguarded.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` scope: **picking this up.**\n"
+        "  (working on branch: `feat/widget` from this week)\n",
+    )
+    assert r.returncode == BLOCK, (
+        f"an unkeyed row must not lose the lanes it used to see: {r.stderr!r}"
+    )
+
+
+# --------------------------------------------------------------------------
+# A ROW THAT DOCUMENTS THE GRAMMAR IS NOT A ROW THAT USES IT.
+# --------------------------------------------------------------------------
+
+def test_a_double_backtick_EXAMPLE_cannot_suppress_a_real_collision(tmp_path):
+    """The register is a document about its own governance.
+
+    ``co-owners: `X` (note)`` shows the grammar. Read as a declaration, a row
+    that merely EXPLAINS the field could take a lane off somebody -- a silent
+    grant produced by documentation.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/widget` · scope: the grammar is "
+        "``co-owners: `AGENT-A` (what they did)`` as shown.",
+    )
+    assert r.returncode == BLOCK, (
+        "a documented example must not grant participation; got "
+        f"{r.returncode}: {r.stdout!r} / {r.stderr!r}"
+    )
+    assert "feat/widget" in r.stderr
+
+
+def test_an_unreadable_co_owner_field_carries_a_decision_not_just_stderr(tmp_path):
+    """"Could not measure" on the ENFORCING path was exit 0 + stderr.
+
+    Exit 0 is the same code as a fully measured clean run, and PreToolUse
+    stderr on exit 0 is not fed back the way exit-2 stderr is. The register's
+    documented doctrine is that could-not-measure is never indistinguishable
+    from clean, so the hook raises it as a decision instead.
+    """
+    r = run_hook(
+        tmp_path,
+        "- `t1` CLAIM `AGENT-B` branch: `feat/gadget` · "
+        "co-owners: 4090 and SPARK and DARKXSIDE · scope: **gadget.**",
+    )
+    assert "NOT MEASURED" in r.stderr
+    assert _decision(r) == "ask", (
+        f"could-not-measure must not exit 0 looking clean: {r.stdout!r}"
+    )
+
+
+def test_the_word_branch_inside_a_code_span_is_a_mention_not_a_lane(tmp_path):
+    """A phantom lane made of prose stays open forever in an append-only file.
+
+    ``branch: `x` `` is a marker; "keys on the word `branch`, so ..." is prose
+    that happens to contain the noun -- and with `:` optional the matcher fired
+    on the mention and captured everything up to the next backtick. Two CLAIM
+    rows in the live register hold a sentence as a lane that way. Nobody can
+    release it, and the advisory reports it to every reader as work in flight.
+
+    Driven through the ADVISORY, because that is where an open lane is
+    enumerated: a collision message only names lanes somebody else holds, so a
+    phantom nobody holds hides there.
+    """
+    existing = (
+        "- `t0` CLAIM `AGENT-A` scope: BRANCH_MARKER_RE keys on the word "
+        "`branch`, so neither can fire on a co-owner ID. Lane is "
+        "`feat/widget` here.\n"
+    )
+    r = _run_bash(tmp_path, f"echo x >> {REGISTER_NAME}", existing=existing)
+    reason = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "feat/widget" in reason, f"the real lane must still be seen: {reason!r}"
+    assert "so neither can fire" not in reason, (
+        f"prose was captured as a claimed lane: {reason!r}"
+    )

@@ -108,17 +108,44 @@ Rules, each of which the parser enforces:
   existing row changes meaning. Nothing needed rewriting when this was added.
 
 What it changes in the gate: `claim-collision-pre.py` keys collisions on
-**participants** (owner ∪ declared co-owners) intersected with the lane. A lane
-two nodes have declared they share stops colliding; an **undeclared** overlap
-still blocks. `RELEASE` pairing stays on the signing owner — a co-owner is
-declared as having *worked* the lane, not as having authority to *close*
-someone else's claim.
+**participants** (owner ∪ declared co-owners) intersected with the lane.
+`RELEASE` pairing stays on the signing owner — a co-owner is declared as having
+*worked* the lane, not as having authority to *close* someone else's claim.
 
-Read it with `python3 pmoves/tools/identity_lineage.py --co-owners`.
-Exit codes across this tooling: **0 clean · 1 findings · 3 could not measure.**
-A row that announces `co-owners:` and names none the parser can read is
-**3**, never 0 — an attribution that satisfies a human reader and is empty to
-every machine is the defect this field exists to remove.
+**Who declared it decides what happens** (corrected 2026-09-01 after the PR
+\#2858 review; the first version of this paragraph was wrong in a way worth
+recording). A participant intersection is symmetric, so it cannot tell "the
+incumbent invited me" from "I named the incumbent without asking" — and the
+first cut allowed **both**, at exit 0 with empty stderr. A gate with an
+unlogged self-issued exemption is not a gate, and adding the incumbent's name
+is the locally cheapest way for a blocked agent to make the red text go away.
+So the gate now distinguishes three cases:
+
+| what the rows say | what the gate does |
+|---|---|
+| the **incumbent's** open row names you | allow, and say so on stderr |
+| only **your** row names them (or both name a third party) | **ask** — names who declared whom, decision is yours |
+| nobody declared anything | **block** (exit 2), as before |
+
+Asking rather than refusing is deliberate: nodes go offline and a lane gets
+picked up, so refusing would break the case this ledger exists for. The failure
+being removed is **silence**, not permissiveness — no path suppresses a
+collision without printing something.
+
+Read it with `make -C pmoves identity-co-owners`, audit with
+`make -C pmoves identity-verify`.
+
+Exit codes for the **CLI**: **0 clean · 1 findings · 3 could not measure.** A
+row that announces `co-owners:` and names none the parser can read is **3**,
+never 0 — an attribution that satisfies a human reader and is empty to every
+machine is the defect this field exists to remove.
+
+Exit codes for the **hook** are 0 and 2, and nothing else: a `PreToolUse` hook
+has a two-code vocabulary and reads anything else as a non-blocking error. It
+therefore raises could-not-measure as a `permissionDecision: "ask"` rather than
+an exit code. (The earlier claim that 3 applied "across this tooling" was not
+true of the surface an agent actually hits — the hook exited **0**, identical
+to a fully measured clean run.)
 
 ### Default Operating Flow
 Use this as the default cadence unless a lane needs a deliberate exception:
@@ -2481,3 +2508,4 @@ b8cea26c8\ that added it to the top-level equired\ array). (2) PMOVES-pinokio PR
 - `2026-08-31T18:55:00Z` RELEASE `B850-CLAUDE (Knuckles)` branch: `feat/register-co-owner-attribution` · co-owners: `4090-CLAUDE` (filed the closeout blocker — CodeQL alert 377), `Z890-CLAUDE` (live Windows validation: win32, Python 3.14.2, 12 passed, exit contract confirmed) · scope: **BACKFILL — the RELEASE that PR #2807 never got.** #2807 (`feat(secrets): reconcile manifest declarations against GitHub's 100-per-scope cap`) merged as `6a30f8080` on 2026-08-28T21:30:23-04:00 with **four bodies on the lane and no RELEASE row at all**; before this entry, `2807` occurred 3 times in this file and every one was inside another lane's prose (L2351 ×2, L2365 ×1). It is the acceptance test for the `co-owners:` field and the reason the field exists: the row grammar had room for one owner, so three of the four were unrecordable. **Attribution, by body:** `4090-CLAUDE` filed the closeout blocker (CodeQL alert 377); the signing owner `B850-CLAUDE (Knuckles)` posted the cross-node correction establishing the alert was a false positive whose proposed remedy was aimed at the wrong lines; `Z890-CLAUDE` ran the live Windows validation. Machine-readable attribution for this lane is `{signing owner} ∪ {co-owners}` — the same set the collision gate computes — which is 3 of the 4. **The fourth body is named as MISSING, not guessed.** Commit `9ede3150f` (`fix(secrets): drop lgtm markers that suppress nothing`) found that `# lgtm` markers suppress nothing, and its node is **not recoverable**: `git log` gives its author as `POWERFULMOVES <142271328+POWERFULMOVES@users.noreply.github.com>`, which is measured, and `6a30f8080` is a squash merge carrying no co-author trailers. Putting a guess in the field would be worse than the gap it fills, and an unresolvable ID is a `--verify` finding by design, so it stays in prose. **That absence is the same failure one layer out, and it is not fixed here:** all four bodies posted to GitHub as the shared account `POWERFULMOVES`, so node identity survives only when an agent volunteers it in prose — and the 4090's blocker comment named no node at all. The register can now record who worked a lane; GitHub still cannot say who pushed. That is a separate lane and it needs an owner. **Delivered on this branch:** `co-owners:` field with a position-independent parser in `identity_lineage.py`; participant-keyed collision in `claim-collision-pre.py` (declared sharing allowed, **undeclared overlap still blocks**); exit-code doctrine 0/1/**3 could-not-measure** with 3 taking precedence; the `claude_b850`-class registry-key gap closed for the 4 keys where a signature is uniquely one agent's, and deliberately NOT closed for the 7 where `claude-opus` (×6) or `crush` (×2) is shared, since aliasing those would merge distinct agents and suppress real collisions. **Proof, not observation:** the gate failed on its first two live runs against this lane's own CLAIM row — once on a code-span mention of the field, once on the bare noun in prose — both fixed and pinned as regressions; three REJECT cases pin that malformed input is refused rather than read as empty. Tests: **48/48** hook (38 pre-existing, unchanged) + **58/58** identity lineage. `identity_lineage.py --verify` → `identity lineage: clean`, exit 0. **Three-body:** delivery=B850-CLAUDE (Knuckles; this), control=operator direction + `AGNOTE4482_SIGNOFF_CHECKLIST`, memory=this trail. `agent_signature: ACK::B850-CLAUDE::LANE-ATTRIBUTION-RELEASE::2026-08-31`.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::LANE-ATTRIBUTION-RELEASE::2026-08-31 -->
+- `2026-09-01T19:08:57Z` CLAIM+RELEASE `B850-CLAUDE (Knuckles)` branch: `feat/register-co-owner-attribution` · scope: **Review response to the independent Control Body pass on PR #2858 — both P1s fixed, 11 regression tests written FAILING-FIRST against the unfixed head (7 failed, then 0).** **(1) A declaration is not a permission slip.** The participant intersection is symmetric, so "the incumbent invited me" and "I named the incumbent without asking" were the same fact from inside the gate — and it allowed BOTH, at exit 0 with empty stderr. Split three ways by WHO declared it: the incumbent's own open row naming you → allow **and say so**; one-sided → `permissionDecision: "ask"` naming who declared whom; undeclared → block, unchanged. Not consent-only, deliberately: refusing would break the pick-up-an-offline-node's-lane case this ledger exists for. The failure removed is **silence**, not permissiveness. **(2) One row's declaration is one row's declaration.** The `co-owners` parse ran once over the WHOLE proposed edit and was attached to every entry match in it, so one honest field granted participation to every other row in the same write — deleting it from an unrelated row flipped a squatting row from ALLOW to BLOCK. Scoped to the matched line, the way the existing side has always parsed. Lanes scoped too (with a whole-edit FALLBACK for a row naming no lane, so it cannot fail open) — a co-owner-only fix adds a false positive on ordinary multi-row appends, which a guard test written before the fix caught. **(3) Code spans now match by backtick RUN LENGTH, not parity.** Sharper than reported: the parity rule could return the WRONG attribution, because the first marker yielding items wins — a doubled-backtick example beat the row's real declaration, crediting an ID that exists only in a sample. Two register lines change under the new parser (both in this PR's own doc block, both toward safe); all 415 entries, 174 lane-bearing lines and 6 open-claim buckets are byte-identical. **(4) Audit surface widened to match the enforcement surface** — 10 rows the gate treats as claims were invisible to every audit surface, so a field on one could grant participation unaudited. `HERMES-AGENT` surfaced by that and is now declared (unique registry signature, same rule the four node CLAUDEs were added under). **(5) A prose-shaped phantom lane can no longer be claimed** — the lane marker matched the noun inside a code span and captured a sentence; 2 CLAIM rows held one, and in an append-only file a phantom lane is open forever. **(6) CORRECTION to the `2026-08-31T18:30:00Z` CLAIM and its RELEASE on this lane:** both say "104 registry keys, 11 unresolvable", which reads as 11-of-104. Measured: **97 of 104 do not resolve as keys**; the 11 was an unstated narrower population — keys whose signature resolves while the key itself does not, i.e. the only ones aliasing could help. The decision was right, the denominator was not, and an unstated denominator in a governance file gets quoted later. **(7) The audit half had no caller:** `make -C pmoves identity-verify` and `identity-co-owners` are the Known Roads now; the unrouted half was the half that would have caught both P1s. **Three-body:** delivery=B850-CLAUDE (Knuckles; this), control=independent Control Body review (REQUEST-CHANGES, 2×P1) + operator direction, memory=this row. **Measured condition:** this body has no Write/Edit tool, so every write here went through the shell path the gate admits it cannot inspect.
