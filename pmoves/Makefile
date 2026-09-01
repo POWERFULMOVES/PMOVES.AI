@@ -827,7 +827,20 @@ supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase D
 .PHONY: supabase-bootstrap supabase-bootstrap-mark-applied
 supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in public.pmoves_bootstrap_history)
 	@echo "🗄️ Applying Supabase schema + seeds..."
-	@$(MAKE) --no-print-directory supa-start >/dev/null
+	@# BEST EFFORT, NOT A PRECONDITION. This used to be a hard dependency and
+	@# that created a bootstrap DEADLOCK: supa-start waits for supabase-postgrest
+	@# to report healthy, PostgREST cannot become healthy until its schema cache
+	@# builds, and the schema this bootstrap installs is what the cache needs.
+	@# So the repair required the thing it repairs. Measured 2026-09-01: the
+	@# stack had been in that state for 3 days --
+	@#   "dependency failed to start: container pmoves-supabase-postgrest-1 is unhealthy"
+	@# and every attempt to fix it through the documented path failed identically.
+	@#
+	@# Nothing below needs PostgREST. The DDL runs via `docker exec` into the DB
+	@# container, and the NEXT recipe line already fails loudly with
+	@# "Supabase DB container not found" if that container is absent -- which is
+	@# the real precondition, checked in the right place.
+	-@$(MAKE) --no-print-directory supa-start >/dev/null 2>&1
 	@set -uo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
