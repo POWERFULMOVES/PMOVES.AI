@@ -7,14 +7,34 @@ enforced, so these tests hold the join:
 
   * every role's `enforced_by` names a tag the ACL actually defines in
     tagOwners -- a declaration pointing at a tag nobody grants is decoration
+
+WHAT THIS SUITE DOES *NOT* PROVE (corrected after review, 2026-09-01):
+tagOwners says an administrator MAY assign a tag. It does not say the node
+carries it, nor -- for `egress` -- that the tailnet has approved that node's
+routes. So removing a KVM's tag or its route approval leaves these tests green
+while `provides: [egress]` still routes work to a node that cannot carry it.
+`always-on` is weaker still: `tag:vps` describes where a box lives and cannot
+enforce uptime at all.
+
+An earlier version of this docstring called the tagOwners check "load-bearing"
+and said the registry "cannot drift from enforcement without going red". That
+was an overclaim of exactly the kind this repo keeps producing -- a gate
+advertising coverage it does not have. It binds the registry to the ACL's
+VOCABULARY, which is real but narrow, and it is worth having for that.
+
+The genuine enforcement check needs live tailnet state (node -> assigned tags,
+and approved routes for egress). That is a follow-up and is not available to
+CI here; until it exists, treat `provides:` as reviewed INTENT and the tag as
+necessary-but-not-sufficient.
   * every `provides:` / `runtime_shape:` value in ANY profile resolves to the
     registry -- no free-text roles
   * unset stays unset; nothing infers a role for a node that declares none
     (declare-never-infer, same posture as deployment_class and node identity)
 
-The first test is the load-bearing one. It is what makes this registry
-different from a fifth naming system: it cannot drift away from the enforcement
-layer without going red.
+The first test is what keeps this registry from becoming a fifth naming
+system: its role names cannot drift away from the ACL's tag vocabulary without
+going red. That is a smaller guarantee than 'joined to enforcement', and the
+section below says so plainly.
 """
 
 from __future__ import annotations
@@ -68,8 +88,14 @@ def test_schema_version_matches_loader():
     assert _registry()["schema_version"] == SCHEMA_VERSION
 
 
-def test_every_role_is_enforced_by_a_real_acl_tag():
-    """THE point of this registry: declaration joined to enforcement."""
+def test_every_role_names_a_tag_the_acl_actually_defines():
+    """Binds the registry to the ACL's tag VOCABULARY.
+
+    Deliberately narrow, and named for what it proves. It does NOT show the
+    node carries the tag or that a route is approved -- see the module
+    docstring. Renamed from test_every_role_is_enforced_by_a_real_acl_tag,
+    which promised enforcement it cannot check.
+    """
     owned = _acl_tag_owners()
     assert owned, "ACL parsed but declared no tagOwners -- refusing to pass"
     for name, spec in _registry()["roles"].items():
