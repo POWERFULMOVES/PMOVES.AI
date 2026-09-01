@@ -19,6 +19,18 @@ services:
       # wger's nginx front (wger-nginx) must proxy_set_header Remote-User upstream.
       WGER_ALLOW_REMOTE_USER: "True"
       WGER_REMOTE_USER_HEADER: "Remote-User"
+      # DB: the pmoves-latest image is FROM wger/wger and runs UPSTREAM settings, which
+      # REQUIRE DJANGO_DB_* (no baked-in sqlite fallback) — without these the container
+      # crash-loops on "Set the DJANGO_DB_ENGINE environment variable". Point at the fleet's
+      # wger-db postgres (docker-compose.apps.yml:45-83; must be up + on pmoves_app). The var
+      # is DJANGO_DB_DATABASE (NOT _NAME) — that exact name is what upstream wger reads.
+      # See handoff wger-postgres-db-config-2026-09-01 for the SQLite->postgres apply sequence.
+      DJANGO_DB_ENGINE: "django.db.backends.postgresql"
+      DJANGO_DB_DATABASE: "${WGER_DB_NAME:-wger}"
+      DJANGO_DB_USER: "${WGER_DB_USER:-wger}"
+      DJANGO_DB_HOST: "${WGER_DB_HOST:-wger-db}"
+      DJANGO_DB_PORT: "${WGER_DB_PORT:-5432}"
+      DJANGO_DB_PASSWORD: "${WGER_DB_PASSWORD:?set WGER_DB_PASSWORD in env.tier-data}"
     volumes:
       - wger-static:/home/wger/static
       - wger-media:/home/wger/media
