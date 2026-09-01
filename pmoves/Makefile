@@ -592,6 +592,35 @@ rebuild-svc: ## build-svc + recreate-svc in one move (the stale-container-object
 	@$(MAKE) --no-print-directory recreate-svc SVC=$(SVC)
 
 # Back-compat alias: the recreate primitive predates the generic name.
+# READ-ONLY SQL against the active Supabase DB, for schemas PostgREST cannot see.
+#
+# WHY THIS EXISTS. `/db:query` and the Supabase MCP both route through
+# PostgREST, which only serves PGRST_DB_SCHEMAS (public,pmoves_core,pmoves_kb).
+# Anything outside that -- `_supavisor`, `auth`, `storage`, `_realtime` -- was
+# unreadable by any sanctioned path, so the only way to answer a question about
+# those schemas was raw `psql`, which the damage-control guard correctly blocks.
+# That gap turned "is there encrypted tenant state in _supavisor?" into an
+# unanswerable question, and an unanswerable question becomes a guess.
+#
+# Exposing those schemas over REST would answer it by widening the attack
+# surface onto a credential vault. This answers it without doing that.
+#
+# READ-ONLY IS ENFORCED BY POSTGRES, NOT BY A REGEX. The statement runs inside
+# `BEGIN; SET TRANSACTION READ ONLY; ...; ROLLBACK;` so any write is rejected by
+# the server. A pattern-matching guard on the SQL string would be the same class
+# of defect this repo keeps producing: a check that looks like enforcement and
+# is really a hope.
+#
+# Usage: make supa-query SQL="select count(*) from _supavisor.tenants"
+supa-query: ## Read-only SQL against the active Supabase DB (server-enforced). Usage: SQL="select ..."
+	$(if $(strip $(SQL)),,$(error Usage: make -C pmoves supa-query SQL="select ..."))
+	@set -uo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "error: Supabase DB container not found"; exit 1; fi; \
+	PGDB=$${POSTGRES_DB:-pmoves}; \
+	printf 'BEGIN; SET TRANSACTION READ ONLY;\n%s;\nROLLBACK;\n' "$$SQL" | \
+	  docker exec -i "$$db" sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -w -h 127.0.0.1 -U supabase_admin -d "'"$$PGDB"'" -v ON_ERROR_STOP=1 -A -F"|" -q'
+
 supa-recreate-svc: ## Surgical recreate of ONE Supabase service with current env: make supa-recreate-svc SVC=supabase-kong
 	@test -n "$(SVC)" || { echo "Usage: make supa-recreate-svc SVC=<compose-service>"; exit 1; }
 	@echo "Recreating $(SVC) with current env (no deps)..."
