@@ -19,13 +19,16 @@ Content-Type: application/json
 X-API-KEY: <mcp_server_token>        # only needed off-loopback; loopback callers pass session auth
 ```
 
-Handler inventory (29): `message_send`, `chats_list`, `chat_get`, `chat_reset`, `chat_delete`, `compact_chat`, `log_tail`, `pause`, `nudge`, `capabilities`, `agents_list`, `agent_editor`, `agent_profile_set`, `model_presets`, `model_switcher`, `projects`, `settings_get`, `settings_set`, `skills_list`, `skills_activate`, `skills_delete`, `installed_plugins`, `browser_runtime`, `launcher_gateway_status`, `launcher_gateway_control`, `token_status`, `capabilities`.
+Handler inventory (33 features, live on v2.11-hardened `5c280a9`): `chat_create`, `chats_list`, `chat_get`, `chat_reset`, `chat_delete`, `pause`, `nudge`, `message_send`, `message_queue`, `log_tail`, `projects`, `text_editor_remote`, `code_execution_remote`, `computer_use_remote`, `browser_host_remote`, `connector_browser_op`, `remote_file_tree`, `token_status`, `launcher_gateway`, `launcher_gateway_file_write`, `settings_get`, `settings_set`, `agent_profile_set`, `agent_editor`, `agents_list`, `skills_list`, `skills_activate`, `skills_delete`, `installed_plugins`, `model_presets`, `model_switcher`, `browser_runtime_config`, `compact_chat`.
+
+`capabilities` also reports `auth` modes (`["session"]`), `streaming: true`, the websocket namespace (`/ws`, handler `plugins/_a0_connector/ws_connector`), and an attachments contract (`path_or_url`, `http_upload: base64_to_file`, `max_files: 20`).
 
 Key shapes (live-verified):
-- `capabilities` → `{"protocol":"a0-connector.v1", "agent_zero_version":..., "transports":["http","websocket"]}` — best readiness probe (200 only when the plugin system booted)
-- `message_send` `{"message":"...","context_id":opt}` → `{"context_id","status":"completed","response"}` (~7s warm; 35s if routed to a cold 51GB local model)
+- `capabilities` → `{"protocol":"a0-connector.v1", "agent_zero_version":..., "auth":["session"], "auth_required":false, "transports":["http","websocket"], "streaming":true, "websocket_namespace":"/ws", "attachments":{...}, "features":[...33]}` — best readiness probe (200 only when the plugin system booted)
+- `message_send` `{"message":"...","context_id":opt,"attachments":[{"filename","base64"}]}` → `{"context_id","status":"completed","response"}` (~7s warm; 35s if routed to a cold 51GB local model)
 - `log_tail` `{"context_id","limit"}` → `{"context_id","events":[{"sequence","event","timestamp","data"}]}` — event names like `assistant_message`; the wrapper's fetch_log still uses `/api/api_log_get` until a consumer maps this shape
 - `pause`/`token_status` require `context_id` (400 otherwise)
+- **MCP arg filter (v2.11-hardened `5c280a9`+)**: `filter_declared_args` drops schema-undeclared argument keys at the client boundary and logs `dropping undeclared args for '<tool>': ...` — tool calls must stick to the declared `input_schema.properties`; extras are stripped with an orange log, not rejected
 
 ## 2. Agent Zero — PMOVES wrapper (compose :8080)
 
@@ -38,7 +41,7 @@ GET  http://<a0-host>:8080/mcp/commands                   → 17 PMOVES MCP comm
 POST http://<a0-host>:8080/mcp/execute {"cmd","arguments":{...}}   ← note: "arguments", not "args"
 ```
 
-Wrapper env contract — **requires PR #2780's compose wiring to be merged** (until then a clean checkout defaults to the raw `/api_message` path and sends no key; on such nodes set these three env vars explicitly): `AGENT_ZERO_MESSAGE_PATH=/api/plugins/_a0_connector/v1/message_send`, `AGENT_ZERO_HEALTH_PATH=/api/plugins/_a0_connector/v1/capabilities`, `AGENT_ZERO_API_KEY=<AGENT_ZERO_MCP_TOKEN value>` (canonical #2056 token; env.shared's `MCP_SERVER_TOKEN=dev-local-...` is a placeholder that must never win interpolation).
+Wrapper env contract — **requires PR #2780's compose wiring to be merged** (until then a clean checkout defaults to the raw `/api_message` path and sends no key; on such nodes set these env vars explicitly): `AGENT_ZERO_MESSAGE_PATH=/api/plugins/_a0_connector/v1/message_send`, `AGENT_ZERO_HEALTH_PATH=/api/plugins/_a0_connector/v1/capabilities`, `AGENT_ZERO_API_KEY=<AGENT_ZERO_MCP_TOKEN value>` (canonical #2056 token; env.shared's `MCP_SERVER_TOKEN=dev-local-...` is a placeholder that must never win interpolation). Post-#2813 additions: `AGENT_ZERO_HEALTH_METHOD=POST` (capabilities is POST-only — a GET probe 405s and degrades to the 404-means-alive heuristic) and `AGENT_ZERO_MESSAGE_TIMEOUT=600` (inner-call timeout, was hardcoded 60s — long tasks surfaced as wrapper 503s). `healthz` returns 503 when the inner runtime is down.
 
 ## 3. Archon — REST only
 
