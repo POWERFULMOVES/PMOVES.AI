@@ -126,10 +126,22 @@ def _supabase_url() -> str:
     """
     url = _env("SUPABASE_URL", _env("SUPA_REST_URL", "http://localhost:8000"))
     # This tool always runs on the host (via `make yt-cookies-auth`), not in a
-    # container. The tier env files set SUPABASE_URL=http://supabase-kong:8000
-    # which is the in-compose hostname and won't resolve from the host process.
-    if "supabase-kong" in url:
-        url = url.replace("supabase-kong", "localhost")
+    # container, so any CONTAINER-SIDE name for the gateway has to be rewritten.
+    #
+    # There are two such names and the original guard only covered one:
+    #   supabase-kong          the in-compose service name; no host DNS at all
+    #   host.docker.internal   resolves ON the host, to the host's own LAN
+    #                          address -- and Kong binds ${KONG_PROXY_BIND:-127.0.0.1},
+    #                          so that address is REFUSED. Measured 2026-09-01:
+    #                          host.docker.internal:8000 -> 000,
+    #                          localhost:8000 -> 401 (Kong answering).
+    #
+    # The second is the nastier of the two precisely because it resolves: the
+    # failure is a connection refusal rather than a DNS error, which reads like
+    # "Supabase is down" instead of "wrong name for this context".
+    for _container_side in ("supabase-kong", "host.docker.internal"):
+        if _container_side in url:
+            url = url.replace(_container_side, "localhost")
     # Strip trailing /rest/v1 or /rest/v1/ to get base URL
     for suffix in ("/rest/v1/", "/rest/v1"):
         if url.endswith(suffix):
