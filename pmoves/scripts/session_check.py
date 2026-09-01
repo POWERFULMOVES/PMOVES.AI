@@ -233,22 +233,32 @@ def main() -> int:
 
     content, display, source = resolve_roster(args.roster, _ROOT)
 
+    # INDETERMINATE is not OK under --strict.
+    #
+    # Every one of these branches used to return 0, so `session-check --strict`
+    # reported success without having validated a single server -- an operator
+    # or CI gate could pass it by pointing at a path that does not exist. A
+    # gate that cannot tell "nothing is wrong" from "I could not look" is worse
+    # than no gate, and this is the same reports-success-while-blind failure
+    # the whole module was written to catch. Advisory mode still returns 0:
+    # env-check must not fail on a host that simply has no roster.
     if content is None:
         print("  roster     NOT READ: %s" % display)
         print("             source: %s" % source)
-        return 0
+        return 1 if args.strict else 0
 
     try:
         data = json.loads(content.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         print("  roster     UNPARSEABLE at %s: %s" % (display, exc))
         print("             source: %s" % source)
-        return 0
+        return 1 if args.strict else 0
 
     servers = data.get("mcpServers", {})
     if not isinstance(servers, dict) or not servers:
         print("  roster     no mcpServers declared in %s" % display)
-        return 0
+        print("             source: %s" % source)
+        return 1 if args.strict else 0
 
     # A `_`-prefixed key under mcpServers is a DISABLED entry, not a live one --
     # the roster's convention for retiring a server without deleting its

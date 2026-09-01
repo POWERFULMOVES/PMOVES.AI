@@ -230,7 +230,12 @@ function Test-PmovesRosterHasBarePlaceholder {
 $roster = Join-Path $root '.claude\mcp.json'
 $rosterSource = 'working tree'
 if (-not $env:PMOVES_ROSTER_FROM_TREE) {
-    $mainRoster = Join-Path ([System.IO.Path]::GetTempPath()) 'pmoves-roster-origin-main.json'
+    # PER-LAUNCH name, not a fixed one. Mirrors claude-pmoves.sh; see the
+    # comment there. A fixed name is shared by every concurrent session on the
+    # node, so a later launch overwrites the file an earlier one still points
+    # at -- and PMOVES_MCP_ROSTER now makes something read it after launch.
+    $mainRoster = Join-Path ([System.IO.Path]::GetTempPath()) `
+        ('pmoves-roster-origin-main.' + [System.IO.Path]::GetRandomFileName() + '.json')
     $prev = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
     & git -C $root fetch --quiet origin main 2>$null | Out-Null
     $blob = & git -C $root show origin/main:.claude/mcp.json 2>$null

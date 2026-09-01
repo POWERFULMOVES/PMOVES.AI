@@ -181,7 +181,22 @@ fi
 MCP_ROSTER="$ROOT/.claude/mcp.json"
 MCP_ROSTER_SOURCE="working tree"
 if [ -z "${PMOVES_ROSTER_FROM_TREE:-}" ]; then
-  _main_roster="${TMPDIR:-/tmp}/pmoves-roster-origin-main.json"
+  # PER-LAUNCH name, not a fixed one. The old fixed
+  # `$TMPDIR/pmoves-roster-origin-main.json` is shared by every concurrent
+  # session on the node, so a second launch overwrites the file the first is
+  # still pointing at: if origin/main moved in between, the older session now
+  # reads the NEWER roster. That is invisible while nothing reads the file
+  # after launch -- and this change makes something read it, since
+  # PMOVES_MCP_ROSTER is exported for `make -C pmoves session-check`. An older
+  # session could report success against a roster it never loaded, which is the
+  # exact false-negative that tool exists to prevent.
+  #
+  # Same lesson the normalizer already learned two blocks down ("the old fixed
+  # name is squattable in a world-writable /tmp"); the raw copy simply never
+  # got the fix. mktemp also removes the squat, since this file is written
+  # before anything validates it.
+  _main_roster="$(mktemp "${TMPDIR:-/tmp}/pmoves-roster-origin-main.XXXXXXXX.json" 2>/dev/null)" \
+    || _main_roster="${TMPDIR:-/tmp}/pmoves-roster-origin-main.$$.json"
   git -C "$ROOT" fetch --quiet origin main >/dev/null 2>&1 || true
   if git -C "$ROOT" show origin/main:.claude/mcp.json > "$_main_roster" 2>/dev/null      && [ -s "$_main_roster" ]; then
     MCP_ROSTER="$_main_roster"

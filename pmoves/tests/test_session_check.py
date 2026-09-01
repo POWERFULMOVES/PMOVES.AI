@@ -225,3 +225,45 @@ def test_advisory_mode_never_fails(tmp_path, monkeypatch):
     monkeypatch.delenv("NOPE", raising=False)
     monkeypatch.setattr("sys.argv", ["session_check.py", "--roster", str(roster)])
     assert sc.main() == 0
+
+
+# --------------------------------------------------------------------------
+# --strict must not pass when it could not look (Codex, second pass)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(None, id="file-missing"),
+        pytest.param("{ not json", id="unparseable"),
+        pytest.param('{"somethingElse": {}}', id="no-mcpServers"),
+    ],
+)
+def test_strict_fails_when_the_roster_is_indeterminate(tmp_path, monkeypatch, body):
+    """A gate that cannot tell "nothing is wrong" from "I could not look" is
+    worse than no gate. Every one of these branches used to return 0, so
+    --strict could be satisfied by pointing at a path that does not exist."""
+    roster = tmp_path / "r.json"
+    if body is not None:
+        roster.write_text(body, encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["session_check.py", "--roster", str(roster), "--strict"])
+    assert sc.main() == 1
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(None, id="file-missing"),
+        pytest.param("{ not json", id="unparseable"),
+        pytest.param('{"somethingElse": {}}', id="no-mcpServers"),
+    ],
+)
+def test_advisory_still_passes_when_the_roster_is_indeterminate(tmp_path, monkeypatch, body):
+    """The other half of the same rule: env-check runs this without --strict on
+    CI runners and non-Claude hosts, where having no roster is normal."""
+    roster = tmp_path / "r.json"
+    if body is not None:
+        roster.write_text(body, encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["session_check.py", "--roster", str(roster)])
+    assert sc.main() == 0
