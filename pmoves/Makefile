@@ -827,7 +827,34 @@ supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase D
 .PHONY: supabase-bootstrap supabase-bootstrap-mark-applied
 supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in public.pmoves_bootstrap_history)
 	@echo "🗄️ Applying Supabase schema + seeds..."
-	@$(MAKE) --no-print-directory supa-start >/dev/null
+	@# BEST EFFORT, NOT A PRECONDITION. This used to be a hard dependency and
+	@# that created a bootstrap DEADLOCK: supa-start waits for supabase-postgrest
+	@# to report healthy, PostgREST cannot become healthy until its schema cache
+	@# builds, and the schema this bootstrap installs is what the cache needs.
+	@# So the repair required the thing it repairs. Measured 2026-09-01: the
+	@# stack had been in that state for 3 days --
+	@#   "dependency failed to start: container pmoves-supabase-postgrest-1 is unhealthy"
+	@# and every attempt to fix it through the documented path failed identically.
+	@#
+	@# Nothing below needs PostgREST. The DDL runs via `docker exec` into the DB
+	@# container, and the NEXT recipe line already fails loudly with
+	@# "Supabase DB container not found" if that container is absent -- which is
+	@# the real precondition, checked in the right place.
+	@# Tolerate ONLY the known deadlock, never a runtime-guard rejection.
+	@# A blanket `-` prefix would swallow a conflicting-runtime rejection too,
+	@# after which find_db_container.sh falls back to ANY running
+	@# supabase_db_* container -- so a sibling or stale CLI database could
+	@# receive this repo's DDL. Match the specific failure instead.
+	@log=$$(mktemp); \
+	if $(MAKE) --no-print-directory supa-start >"$$log" 2>&1; then \
+	  rm -f "$$log"; \
+	elif grep -q 'supabase-postgrest' "$$log" && grep -qi 'unhealthy\|failed to start' "$$log"; then \
+	  echo "warn: supa-start failed only on PostgREST health -- continuing; that is precisely what this bootstrap repairs"; \
+	  rm -f "$$log"; \
+	else \
+	  echo "error: supa-start failed for a reason OTHER than PostgREST health -- refusing to apply DDL:"; \
+	  cat "$$log"; rm -f "$$log"; exit 1; \
+	fi
 	@set -uo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
