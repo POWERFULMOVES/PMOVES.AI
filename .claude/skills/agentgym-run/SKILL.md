@@ -21,8 +21,11 @@ Launches an AgentGym reinforcement learning session using the 4090 node configur
 # Verify TensorZero is running (required for Qwen 3.5 9B)
 curl -sf http://localhost:3030/health && echo "TensorZero: OK" || echo "TensorZero: DOWN"
 
-# Verify NATS is reachable (for episode event publishing)
-curl -sf http://localhost:8222/healthz && echo "NATS: OK" || echo "NATS: unreachable"
+  # One derivation, one place. `8222` is the CONTAINER-side port; the host half
+  # AND the port vary per node (compose default 9223, Z890 8222, and
+  # NATS_MONITORING_BIND can move the host off loopback). See nats-endpoint.sh.
+  NATS_URL=$(bash .claude/scripts/nats-endpoint.sh)
+  curl -sf "$NATS_URL/healthz" >/dev/null 2>&1 && echo "NATS: OK ($NATS_URL)" || echo "NATS: DOWN ($NATS_URL)"
 
 # Check Ollama fallback available
 ollama list | grep qwen3 || echo "Ollama qwen3 models not found"
