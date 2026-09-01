@@ -10,13 +10,15 @@ Check health of:
 3. **Active streams** - List configured streams
 
 ```bash
+NATS_URL=$(bash .claude/scripts/nats-endpoint.sh)  # derives host AND port; see that file
 # NATS server health
-curl -s http://localhost:8222/varz | python -c "import sys,json; d=json.load(sys.stdin); print(f'NATS: {d.get(\"server_name\",\"?\")} uptime={d.get(\"uptime\",\"?\")} connections={d.get(\"connections\",0)}')"
+curl -s $NATS_URL/varz | python -c "import sys,json; d=json.load(sys.stdin); print(f'NATS: {d.get(\"server_name\",\"?\")} uptime={d.get(\"uptime\",\"?\")} connections={d.get(\"connections\",0)}')"
 ```
 
 ```bash
+NATS_URL=$(bash .claude/scripts/nats-endpoint.sh)  # derives host AND port; see that file
 # JetStream status
-curl -s http://localhost:8222/jsz | python -c "import sys,json; d=json.load(sys.stdin); js=d.get('server',{}); print(f'JetStream: streams={js.get(\"total_streams\",0)} messages={js.get(\"total_messages\",0)} bytes={js.get(\"total_bytes\",0)}')"
+curl -s $NATS_URL/jsz | python -c "import sys,json; d=json.load(sys.stdin); js=d.get('server',{}); print(f'JetStream: streams={js.get(\"total_streams\",0)} messages={js.get(\"total_messages\",0)} bytes={js.get(\"total_bytes\",0)}')"
 ```
 
 ```bash

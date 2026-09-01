@@ -17,10 +17,11 @@ Starts the Shift Crew voice pipeline in reactive push mode. Subscribes to
 ## Pre-flight
 
 ```bash
-# Verify NATS is reachable
-NATS_MON=$(docker port pmoves-nats-1 8222 2>/dev/null | head -1 | sed 's/.*://')
-NATS_MON=${NATS_MON:-9223}
-curl -sf "http://localhost:$NATS_MON/healthz" >/dev/null 2>&1   && echo "NATS: OK (:$NATS_MON)" || echo "NATS: DOWN (:$NATS_MON)"
+# One derivation, one place. `8222` is the CONTAINER-side port; the host half
+# AND the port vary per node (compose default 9223, Z890 8222, and
+# NATS_MONITORING_BIND can move the host off loopback). See nats-endpoint.sh.
+NATS_URL=$(bash .claude/scripts/nats-endpoint.sh)
+curl -sf "$NATS_URL/healthz" >/dev/null 2>&1 && echo "NATS: OK ($NATS_URL)" || echo "NATS: DOWN ($NATS_URL)"
 
 # Check beats_to_voice.py is available
 ls pmoves/tools/beats_to_voice.py || echo "MISSING"

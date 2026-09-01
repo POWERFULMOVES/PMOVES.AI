@@ -8,18 +8,31 @@
 # So every sitrep skill carried its own copy of the same checks, and the copies
 # drifted.
 #
-# The drift had a cost. All of them probed `localhost:8222` for NATS. That is
-# the CONTAINER-side port; pmoves-nats-1 publishes `127.0.0.1:9223->8222/tcp`,
-# so 8222 never answers on the host and every sitrep reported a healthy NATS as
-# DOWN. Measured 2026-08-31: :8222 DOWN, :9223 OK with uptime 2d15h and 7
-# connections.
+# The drift had a cost. All of them probed `localhost:8222` for NATS. 8222 is
+# the CONTAINER-side port, and the base compose publishes it as
+# `${NATS_MONITORING_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222`
+# (docker-compose.yml:3136) — so on a default node 8222 is closed and every
+# sitrep reported a healthy NATS as DOWN. Measured on the 4090, 2026-08-31:
+# :8222 DOWN, :9223 OK with uptime 2d15h and 7 connections.
 #
-# `.claude/skills/a0-archon-bridge/SKILL.md:71` had already written the answer
-# down — "host port is 9223 (container 8222)" — so the correction existed, in a
-# file nobody consulted when running a sitrep. Six copies, one of them right.
+# BUT THE FIX IS NOT "USE 9223". `docker-compose.z890.yml:32` publishes
+# `127.0.0.1:8222:8222`, so on the Z890 the "wrong" port is the right one —
+# and `NATS_MONITORING_BIND` means the HOST half varies too, not just the port
+# (KVM4-2 binds a specific address, where `localhost` is what fails). An
+# earlier draft of this header asserted "8222 never answers on the host", which
+# is one node's measurement stated as a fleet law; the Z890 falsifies it.
 #
-# Nothing here hardcodes a port or a node. Values are DERIVED, so a node with a
-# different mapping reports its own truth rather than this one's.
+# That is the actual lesson, and it is stronger than the one it replaced: a
+# hardcoded endpoint cannot be right everywhere, because the mapping is
+# per-node by design. `.claude/skills/a0-archon-bridge/SKILL.md:71` recorded
+# the 4090's answer — "host port is 9223 (container 8222)" — in a file nobody
+# consulted when running a sitrep. Copying that literal to the other five would
+# have fixed four nodes and broken the Z890.
+#
+# So: nothing here hardcodes a port, a host, or a node. Every value is DERIVED
+# from the running system, and a node with a different mapping reports its own
+# truth rather than this one's. `docker port` answers with the WHOLE published
+# endpoint and both halves are kept.
 
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
@@ -29,9 +42,28 @@ echo "=== PMOVES SITREP $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 echo "--- IDENTITY ---"
 # The announcer resolves this from hostname or PMOVES_AGENT_ID; ask it rather
 # than restating a map. `unknown` is a real answer and says why.
-python pmoves/tools/agent_terminal_theme.py --whoami 2>/dev/null \
-  | sed 's/\x1b\[[0-9;]*m//g' | grep -E '^[◉⚙▲✦●]' | head -1 | sed 's/^/  /' \
-  || echo "  identity: announcer unavailable"
+#
+# Read the JSON, not the banner. The first version of this scraped the rendered
+# banner and kept only lines starting with one of `◉⚙▲✦●` -- five glyphs, chosen
+# by looking at THIS node's output. agent_signatures.yaml declares 26, so the
+# filter dropped the banner on nearly every other node (`♫` on the 5090, `⌬` on
+# Knuckles, `⬡`, `❖`, `⚡`, ...) and, under `pipefail`, an empty grep turned a
+# WORKING announcer into "announcer unavailable". A hand-written allowlist is a
+# hardcoded literal wearing a regex costume -- the same defect as the `:8222`
+# port this script exists to fix, which is why it survived review of that fix.
+# `--json` is the machine-readable contract: no glyphs, no ANSI, no line shapes.
+python pmoves/tools/agent_terminal_theme.py --whoami --json 2>/dev/null \
+  | python -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+name = d.get('display_name') or d.get('agent_id') or 'unknown'
+spec = d.get('specialization') or (d.get('node') or {}).get('specialization') or ''
+print(f\"  identity: {name} [{d.get('agent_id','?')}] via {d.get('source','?')}\"
+      + (f' -- {spec}' if spec else ''))
+" 2>/dev/null || echo "  identity: announcer unavailable"
 echo "  hostname: $(hostname)"
 
 echo "--- GIT ---"
@@ -59,15 +91,22 @@ nvidia-smi --query-gpu=name,memory.used,memory.free --format=csv,noheader 2>/dev
   || echo "  GPU: not available"
 
 echo "--- NATS ---"
-# DERIVED, never hardcoded — see the header.
-NATS_MON=$(docker port pmoves-nats-1 8222 2>/dev/null | head -1 | sed 's/.*://')
-NATS_MON=${NATS_MON:-9223}
-if curl -sf --max-time 5 "http://localhost:$NATS_MON/healthz" >/dev/null 2>&1; then
-  curl -s --max-time 5 "http://localhost:$NATS_MON/varz" 2>/dev/null \
-    | python -c "import sys,json; d=json.load(sys.stdin); print(f\"  OK (:$NATS_MON) uptime {d.get('uptime')} connections {d.get('connections')}\")" 2>/dev/null \
-    || echo "  OK (:$NATS_MON)"
+# DERIVED, never hardcoded — see the header. The derivation itself lives in one
+# place (`nats-endpoint.sh`) because copying it is what produced six wrong
+# copies the first time. Its exit status distinguishes measured from assumed,
+# so a DOWN caused by "Docker did not answer" reads differently from a DOWN
+# caused by "the monitor did not answer".
+if NATS_URL=$(bash "$(dirname "$0")/nats-endpoint.sh" 2>/dev/null); then
+  NATS_SRC="measured"
 else
-  echo "  DOWN (:$NATS_MON)"
+  NATS_SRC="assumed (docker port unavailable)"
+fi
+if curl -sf --max-time 5 "$NATS_URL/healthz" >/dev/null 2>&1; then
+  curl -s --max-time 5 "$NATS_URL/varz" 2>/dev/null \
+    | python -c "import sys,json; d=json.load(sys.stdin); print(f\"  OK ($NATS_URL, $NATS_SRC) uptime {d.get('uptime')} connections {d.get('connections')}\")" 2>/dev/null \
+    || echo "  OK ($NATS_URL, $NATS_SRC)"
+else
+  echo "  DOWN ($NATS_URL, $NATS_SRC)"
 fi
 
 echo "--- CONTAINERS ---"
