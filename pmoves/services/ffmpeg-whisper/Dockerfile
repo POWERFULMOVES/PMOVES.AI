@@ -324,8 +324,20 @@ WORKDIR /app
 
 COPY pmoves/services/ffmpeg-whisper/requirements.txt ./requirements.txt
 COPY pmoves/services/ffmpeg-whisper/requirements.lock ./requirements.lock
+# Arm64 (SPARK GB10 sm_121): the pypi aarch64 wheels for torch are CPU-only and
+# ctranslate2 ships without CUDA, so GPU transcription 500s at Whisper init
+# ("CTranslate2 package was not compiled with CUDA support", measured
+# 2026-09-01). The CUDA path on arm64 is the torch-cu128 stack (proven by
+# media-video/media-audio #2758 and hi-rag-v2-gpu): preinstall the pinned
+# torch from the cu128 index so the lock's `torch==2.9.1` is satisfied by the
+# +cu128 local version and no CPU wheel lands (same preinstall mechanism as
+# media-video). The whisperx provider then runs on the GPU; faster-whisper
+# stays CPU (ctranslate2) -- pass provider=whisper per request on GB10.
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system --no-cache-dir -r requirements.txt
+    if [ "$(uname -m)" = "aarch64" ]; then \
+      uv pip install --system --no-cache-dir --index-url https://download.pytorch.org/whl/cu128 torch==2.9.1; \
+    fi && \
+    uv pip install --system --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu128 -r requirements.txt
 
 COPY pmoves/services /app/services
 
