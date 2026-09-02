@@ -343,6 +343,52 @@ type = "openai"
 # MiniMax-M3 is the current token-plan model. TP key is primary, PAYG fallback.
 api_base = "https://api.minimax.io/v1"
 model_name = "MiniMax-M3"
+# CORRECT AS WRITTEN -- do not "fix" this to MINIMAX_API_KEY. MiniMax-M3 is the
+# token-plan model and MINIMAX_TOKEN_PLAN_API_KEY is its own credential (founder,
+# 2026-09-02). Both secrets exist in GitHub Prod on separate rotation schedules
+# (MINIMAX_API_KEY 2026-03-31, MINIMAX_TOKEN_PLAN_API_KEY 2026-08-26); aliasing TP
+# onto the PAYG key would bill token-plan traffic against the wrong account.
+# PROVIDER_KEY_CHECKLIST.md row 17 files TP as a mere "variant" of MINIMAX_API_KEY
+# -- that row is WRONG and is what invites the aliasing edit.
+#
+# THERE ARE TWO GAPS, NOT ONE. An earlier version of this comment said the gap
+# was "delivery, not naming". That was wrong, and the correction is worth
+# keeping because the wrong half is the reassuring half.
+#
+# (a) DELIVERY. No compose change is needed -- the gateway already loads
+#     env.tier-llm via the x-tier-llm-hardened anchor -- the key simply has no
+#     value in env.shared on this node, so the funnel emits nothing.
+#     sync-secrets-local.yml carries it (line 129) but dispatches to ai-lab
+#     runners, and the 4090 has none registered (spark's is offline), so CI
+#     cannot deliver here. Note that secrets_funnel_populate.py:130 is only a
+#     validation REGEX for an already-supplied value; it neither declares the
+#     secret nor routes it, so its presence is not evidence of delivery.
+#
+# (b) ROUTING, in the manifest. secrets_manifest_v2.yaml entry
+#     minimax_token_plan_api_key carries label MINIMAX_TOKEN_PLAN_API_KEY but
+#     `github_secret: MINIMAX_API_KEY` -- it routes the token-plan credential to
+#     the PAYG secret name, which is the very aliasing this comment warns
+#     against, one layer down. chit_target_drift_check.py reports it and exits
+#     1 today (measured on B850, 2026-09-02: "213 entries, 161 with a
+#     github_secret target, 2 diverging"). So the token-plan key is declared by
+#     no manifest entry at all and the capacity audit reports it as an orphan.
+#
+# (b) is NOT fixed here, deliberately. pmoves/configs/chit_target_drift/
+# _accepted.yaml records why: repairing a drifted target needs the registry to
+# learn to reconcile TARGETS, since chit_manifest_register.py is additive-only
+# with RECONCILED_FIELDS = ("min_length",), and the machine-emitted manifest
+# must not be hand-edited. Re-pointing which GitHub secret a provider key is
+# read from is also an operator decision, not a side effect of a comment fix.
+# The gate already fails on it, which is the right place for it to stay visible.
+#
+# Operator lane -- set the real value, then funnel; never generate one, a provider
+# key is issued by MiniMax and a random value is meaningless:
+#   export PMOVES_ROTATE_VALUE=<the token-plan key>
+#   make -C pmoves secrets-rotate KEY=MINIMAX_TOKEN_PLAN_API_KEY
+#
+# Until then TensorZero fails its ENTIRE config load on this one missing key,
+# which takes down all model routing AND degrades Cipher (its embed() calls
+# TensorZero first; on null it falls through to a "search" that ignores the query).
 api_key_location = "env::MINIMAX_TOKEN_PLAN_API_KEY"
 
 # --- GLM 5.1 (Upgraded per Z.AI coding plan docs — PR #1151) ---
