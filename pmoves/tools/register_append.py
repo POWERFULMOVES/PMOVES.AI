@@ -217,12 +217,33 @@ def main(argv: list[str] | None = None) -> int:
                         help="the lane. A claim naming no branch cannot be "
                              "checked by the collision gate, so this is "
                              "REQUIRED for a claim.")
-    parser.add_argument("--scope", default="", help="what this lane covers")
+    parser.add_argument("--scope", default=os.environ.get("REGISTER_SCOPE", ""),
+                        help="what this lane covers (or set REGISTER_SCOPE). "
+                             "PREFER THE ENVIRONMENT for prose: a register row "
+                             "is full of backticks, and any layer that hands "
+                             "the text to a shell will command-substitute "
+                             "them. Discovered by filing a real RELEASE "
+                             "through `make`, which re-parses its own "
+                             "variables -- the row came back with its code "
+                             "spans executed and deleted.")
     parser.add_argument("--ttl", default="",
                         help="e.g. 72h, 7d, or n/a")
-    parser.add_argument("--co-owner", action="append", default=[],
+    parser.add_argument("--co-owner", action="append",
+                        default=[c for c in
+                                 os.environ.get("REGISTER_CO_OWNERS", "").split("\n")
+                                 if c.strip()],
                         metavar="ID[:note]",
                         help="another body that worked this lane; repeatable")
+    parser.add_argument("--scope-file", default="",
+                        help="read the scope prose from a FILE. The most "
+                             "robust option and the one to reach for with long "
+                             "rows: prose never becomes part of a command "
+                             "string, so nothing downstream can expand, "
+                             "substitute or pattern-match against it. "
+                             "(A register row quoting an ordinary path fragment "
+                             "was refused by the damage-control hook, which "
+                             "matches literal strings anywhere in a command -- "
+                             "including inside prose.)")
     parser.add_argument("--dry-run", action="store_true",
                         help="render and check the row, write nothing")
     args = parser.parse_args(argv)
@@ -233,6 +254,9 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
             return EXIT_UNMEASURED
         return insert_docs(args.anchor, Path(args.text_file).read_text(encoding="utf-8"))
+
+    if args.scope_file:
+        args.scope = Path(args.scope_file).read_text(encoding="utf-8").strip()
 
     if not args.owner:
         print("register-append: no --owner and no REGISTER_OWNER. The row must "

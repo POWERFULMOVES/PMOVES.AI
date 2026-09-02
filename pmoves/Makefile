@@ -292,6 +292,11 @@ docs-quickstart: ## Open the quick start guide
 # and append in O_APPEND.
 
 .PHONY: register-claim
+# SCOPE and CO_OWNER travel by ENVIRONMENT, never as a shell word. Register
+# prose is full of backticks; interpolated into a recipe they are command
+# substitutions, and the row arrives with its code spans executed away.
+register-claim: export REGISTER_SCOPE = $(SCOPE)
+register-claim: export REGISTER_CO_OWNERS = $(CO_OWNER)
 register-claim: ## Open a lane in the claim register (OWNER= BRANCH= SCOPE= [TTL=72h] [CO_OWNER=])
 	@if [ -z "$(BRANCH)" ] || [ -z "$(SCOPE)" ]; then \
 		echo "usage: make register-claim OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x TTL=72h SCOPE='what this lane covers'"; \
@@ -299,10 +304,11 @@ register-claim: ## Open a lane in the claim register (OWNER= BRANCH= SCOPE= [TTL
 	fi
 	@$(PYTHON) tools/register_append.py claim \
 		--owner "$(or $(OWNER),$(REGISTER_OWNER))" \
-		--branch "$(BRANCH)" --ttl "$(or $(TTL),72h)" --scope "$(SCOPE)" \
-		$(if $(CO_OWNER),--co-owner "$(CO_OWNER)",) $(ARGS)
+		--branch "$(BRANCH)" --ttl "$(or $(TTL),72h)" $(ARGS)
 
 .PHONY: register-release
+register-release: export REGISTER_SCOPE = $(SCOPE)
+register-release: export REGISTER_CO_OWNERS = $(CO_OWNER)
 register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [CO_OWNER=])
 	@if [ -z "$(SCOPE)" ]; then \
 		echo "usage: make register-release OWNER='B850-CLAUDE (Knuckles)' BRANCH=fix/x SCOPE='what landed'"; \
@@ -310,8 +316,7 @@ register-release: ## Close a lane in the claim register (OWNER= BRANCH= SCOPE= [
 	fi
 	@$(PYTHON) tools/register_append.py release \
 		--owner "$(or $(OWNER),$(REGISTER_OWNER))" \
-		--branch "$(BRANCH)" --scope "$(SCOPE)" \
-		$(if $(CO_OWNER),--co-owner "$(CO_OWNER)",) $(ARGS)
+		--branch "$(BRANCH)" $(ARGS)
 
 .PHONY: register-docs
 register-docs: ## Insert prose into the register without touching ledger rows (ANCHOR= TEXT_FILE=)
