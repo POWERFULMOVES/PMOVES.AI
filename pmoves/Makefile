@@ -2137,7 +2137,20 @@ check-tier-envs: ## Validate all tier environment files exist
 	@# a year invoking the checker with no flags, which silently disabled the half
 	@# that catches a key declared in .example and absent from the runtime tier.
 	@# Add --strict here once the current backlog is cleared, to ratchet it shut.
-	@$(PYTHON) tools/check_tier_envs.py --drift
+	@#
+	@# --shadow is named for the same reason as --drift, and catches the opposite
+	@# half of the same failure: drift is the funnelled value never ARRIVING in a
+	@# tier file; shadow is it arriving and being OVERRULED, because Compose reads
+	@# the process environment ahead of every --env-file. Measured 2026-09-02: 43
+	@# pipeline-owned keys on the 4090 resolve from a shell export rather than
+	@# from the pipeline, SECRET_KEY_BASE among them -- two rotations wrote the
+	@# correct value to all eight tier files and the container kept the stale one.
+	@#
+	@# It reports and does not strip. Two of those 43 (SUPABASE_ANON_KEY,
+	@# SUPABASE_SERVICE_ROLE_KEY) are EMPTY in the tier file and real only in the
+	@# shell, so unsetting pipeline-owned exports wholesale would hand Supabase
+	@# empty credentials. The operator decides; the check only refuses to be silent.
+	@$(PYTHON) tools/check_tier_envs.py --drift --shadow
 
 .PHONY: bootstrap-tier-envs
 bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
