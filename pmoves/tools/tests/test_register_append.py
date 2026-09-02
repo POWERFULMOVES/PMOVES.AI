@@ -422,3 +422,113 @@ def test_amend_leaves_a_row_with_no_scope_field_valid(tmp_path, monkeypatch):
                    "--co-owner", "AGENT-B"]) == m.EXIT_OK
     assert "co-owners: `AGENT-B`" in _rows(m)[0]
     assert len(_rows(m)) == 1
+
+
+# --------------------------------------------------------------------------
+# Two defects found by driving `amend` against a copy of the LIVE register
+# instead of a fixture. Both are the same shape as the bug this whole lane
+# exists to remove -- a literal matched anywhere in the text, including inside
+# prose that merely QUOTES the grammar -- and both were invisible to the tool's
+# own purity check, because inserting in the wrong place is still an insertion.
+#
+# MEASURED before the fix, on a copy of the live register:
+#
+#     amend --owner 'B850-CLAUDE (Knuckles)' --branch chore/cli-prereq-preflight
+#     -> EXIT=0 "amended line 2657 ... one row changed by insertion only"
+#
+# The row it amended has its own lane `feat/register-co-owner-attribution` and
+# merely cites `chore/cli-prereq-preflight` inside a ``...`` example. The field
+# went into the middle of the sentence "a `co-owners:` field", so the real field
+# was never set and the tool reported success.
+# --------------------------------------------------------------------------
+
+
+def test_amend_is_not_aimed_by_a_branch_the_row_only_cites(tmp_path, monkeypatch):
+    """A ``quoted example`` is documentation, not a claim on the lane."""
+    m = _load()
+    register = tmp_path / "AGNOTE4482PHI.t1.md"
+    citing = (
+        "- `2026-09-01T00:00:00Z` CLAIM `OWNER-NODE` branch: `feat/real-lane` "
+        "\xb7 scope: **Deliverable:** a `co-owners:` field, e.g. "
+        "``branch: `chore/quoted-lane` \xb7 **TTL n/a**``.\n"
+    )
+    register.write_text("# register\n" + citing, encoding="utf-8")
+    monkeypatch.setattr(m, "REGISTER", register)
+    before = register.read_text(encoding="utf-8")
+
+    assert m.main(["amend", "--owner", "OWNER-NODE",
+                   "--branch", "chore/quoted-lane",
+                   "--co-owner", "PROBE:note"]) == m.EXIT_REFUSED
+    assert register.read_text(encoding="utf-8") == before, (
+        "a cited branch aimed the amend at a row that does not hold that lane"
+    )
+
+
+def test_amend_picks_the_row_that_really_holds_the_lane(tmp_path, monkeypatch):
+    """The A/B control: same citation present, plus the row that truly holds it."""
+    m = _load()
+    register = tmp_path / "AGNOTE4482PHI.t1.md"
+    citing = (
+        "- `2026-09-01T00:00:00Z` CLAIM `OWNER-NODE` branch: `feat/real-lane` "
+        "\xb7 scope: e.g. ``branch: `chore/quoted-lane` \xb7 **TTL n/a**``.\n"
+    )
+    real = (
+        "- `2026-09-01T00:00:00Z` CLAIM `OWNER-NODE` branch: `chore/quoted-lane` "
+        "\xb7 scope: **the row that really holds it.**\n"
+    )
+    register.write_text("# register\n" + citing + real, encoding="utf-8")
+    monkeypatch.setattr(m, "REGISTER", register)
+
+    assert m.main(["amend", "--owner", "OWNER-NODE",
+                   "--branch", "chore/quoted-lane",
+                   "--co-owner", "PROBE:note"]) == m.EXIT_OK
+    rows = _rows(m)
+    assert "co-owners:" not in rows[0], "amended the citing row"
+    assert "co-owners: `PROBE` (note)" in rows[1]
+    assert "``branch: `chore/quoted-lane`" in rows[0], "the citation was edited"
+
+
+def test_amend_ignores_a_co_owners_mention_in_the_prose(tmp_path, monkeypatch):
+    """The field goes in the header, never into a sentence that discusses it."""
+    m = _load()
+    register = tmp_path / "AGNOTE4482PHI.t1.md"
+    row = (
+        "- `2026-09-01T00:00:00Z` CLAIM `OWNER-NODE` branch: `feat/real-lane` "
+        "\xb7 scope: **Deliverable:** a `co-owners:` field carrying IDs.\n"
+    )
+    register.write_text("# register\n" + row, encoding="utf-8")
+    monkeypatch.setattr(m, "REGISTER", register)
+
+    assert m.main(["amend", "--owner", "OWNER-NODE",
+                   "--branch", "feat/real-lane",
+                   "--co-owner", "PROBE:note"]) == m.EXIT_OK
+    amended = _rows(m)[0]
+    header = amended[:amended.index("scope:")]
+    assert "co-owners: `PROBE` (note)" in header, (
+        "the field was inserted into the prose, not the header: " + amended
+    )
+    assert "**Deliverable:** a `co-owners:` field carrying IDs." in amended, (
+        "the sentence discussing the field was rewritten"
+    )
+
+
+def test_a_row_whose_timestamp_is_not_an_iso_date_refuses_cleanly(
+        tmp_path, monkeypatch):
+    """`open_claims_in` accepts it, `_ledger_rows` does not -- say so, do not raise.
+
+    The gap used to reach `before.index(row)` and throw. Exit 3 either way
+    thanks to `_guarded`, but a sanctioned road that prints a traceback teaches
+    the reader that the road is broken rather than that the input is.
+    """
+    m = _load()
+    register = tmp_path / "AGNOTE4482PHI.t1.md"
+    register.write_text(
+        "# register\n- `t0` CLAIM `OWNER-NODE` branch: `feat/real-lane` "
+        "\xb7 scope: **x.**\n", encoding="utf-8")
+    monkeypatch.setattr(m, "REGISTER", register)
+    before = register.read_text(encoding="utf-8")
+
+    assert m.main(["amend", "--owner", "OWNER-NODE",
+                   "--branch", "feat/real-lane",
+                   "--co-owner", "PROBE:note"]) == m.EXIT_UNMEASURED
+    assert register.read_text(encoding="utf-8") == before

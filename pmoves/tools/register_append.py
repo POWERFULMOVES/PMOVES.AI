@@ -207,6 +207,45 @@ def _render_co_owners(specs):
     return ", ".join(out)
 
 
+# A ``double-backticked`` span is how these rows quote the register's OWN
+# grammar -- e.g. ``branch: `chore/x` \xb7 **TTL n/a**`` cited as an example.
+_QUOTED_EXAMPLE_RE = re.compile(r"``.*?``")
+
+
+def _without_quoted_examples(row: str) -> str:
+    """The row with its ``quoted examples`` removed.
+
+    Amend is a WRITE and must not be aimed by a branch marker the row merely
+    CITES. Measured against the live register: `amend --branch
+    chore/cli-prereq-preflight` matched a row whose own lane is
+    `feat/register-co-owner-attribution` and which quotes that branch as an
+    example inside a ``...`` span -- the row that really held the lane was
+    already released, so the citing row was the only "open claim" left.
+
+    Scoped by code span rather than by position, because the row grammar is not
+    uniform: hand-filed rows put `scope:` BEFORE `branch:`, so "everything up to
+    `scope:`" would refuse the very rows an incumbent most needs to amend.
+
+    Collision detection deliberately still reads the WHOLE row. A cited branch
+    there causes an over-block, which is safe; narrowing it would trade a false
+    refusal for a missed collision.
+    """
+    return _QUOTED_EXAMPLE_RE.sub(" ", row)
+
+
+def _row_header(row: str) -> str:
+    """The part of a row BEFORE `scope:` -- the fields, not the free prose.
+
+    Used only to decide whether the row ALREADY carries a `co-owners:` field.
+    These rows discuss the field in prose constantly, and matching the prose
+    occurrence inserted the new IDs into the middle of a sentence, left the real
+    field unset, and reported success -- the purity check cannot catch it,
+    because inserting in the wrong place is still an insertion.
+    """
+    idx = row.find("scope:")
+    return row if idx == -1 else row[:idx]
+
+
 def amend_co_owners(owner, branch, co_owners, register=None, gate=None):
     """Add `co-owners:` to the caller's OWN open CLAIM row, in validated code.
 
@@ -240,8 +279,15 @@ def amend_co_owners(owner, branch, co_owners, register=None, gate=None):
     gate = gate or _load_gate()
 
     key = gate.canonical_owner(owner)
+    lines_all = original.split("\n")
+
+    def _declares(c):
+        """The row's OWN branch marker, not one its prose merely cites."""
+        row = lines_all[c[0] - 1] if 0 < c[0] <= len(lines_all) else ""
+        return branch in gate.lanes_in(_without_quoted_examples(row))
+
     mine = [c for c in gate.open_claims_in(original).get(key, [])
-            if branch in c[1]]
+            if _declares(c)]
     if not mine:
         print(f"register-append: refusing - no OPEN CLAIM by `{owner}` naming "
               f"branch `{branch}`. You may only amend a row you filed and have "
@@ -264,7 +310,7 @@ def amend_co_owners(owner, branch, co_owners, register=None, gate=None):
               file=sys.stderr)
         return EXIT_UNMEASURED
 
-    if "co-owners:" in row:
+    if "co-owners:" in _row_header(row):
         inserted = rendered + ", "
         new_row = re.sub(r"(co-owners:\s*)", lambda m: m.group(1) + inserted,
                          row, count=1)
@@ -282,7 +328,7 @@ def amend_co_owners(owner, branch, co_owners, register=None, gate=None):
             inserted = mid + "co-owners: " + rendered
             new_row = row.replace(canonical, inserted + canonical, 1)
         elif "scope:" in row:
-            idx = row.index("scope:")
+            idx = row.index("scope:")   # the first one: the field, not a mention
             inserted = chr(183) + " co-owners: " + rendered + " " + chr(183) + " "
             new_row = row[:idx] + inserted + row[idx:]
         else:
@@ -304,6 +350,16 @@ def amend_co_owners(owner, branch, co_owners, register=None, gate=None):
               f"({len(before)} rows before, {len(after)} after).",
               file=sys.stderr)
         return EXIT_REFUSED
+    if row not in before:
+        # `open_claims_in` accepts a row whose timestamp is not an ISO date;
+        # `_ledger_rows` requires one. A row in that gap used to reach
+        # `before.index(row)` and raise. Exit 3 either way, but a sanctioned road
+        # should say what happened instead of printing a traceback at it.
+        print("register-append: NOT MEASURED - the located row is not a "
+              "CLAIM/RELEASE-shaped ledger row (its timestamp is not an ISO "
+              "date), so the no-other-row-moved check cannot be made. Nothing "
+              "was written.", file=sys.stderr)
+        return EXIT_UNMEASURED
     changed = [i for i, (a, b) in enumerate(zip(before, after)) if a != b]
     if changed != [before.index(row)] or len(changed) != 1:
         print(f"register-append: refusing - {len(changed)} ledger rows changed; "
