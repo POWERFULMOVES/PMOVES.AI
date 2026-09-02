@@ -41,7 +41,18 @@ GET  http://<a0-host>:8080/mcp/commands                   → 17 PMOVES MCP comm
 POST http://<a0-host>:8080/mcp/execute {"cmd","arguments":{...}}   ← note: "arguments", not "args"
 ```
 
-Wrapper env contract — **requires PR #2780's compose wiring to be merged** (until then a clean checkout defaults to the raw `/api_message` path and sends no key; on such nodes set these env vars explicitly): `AGENT_ZERO_MESSAGE_PATH=/api/plugins/_a0_connector/v1/message_send`, `AGENT_ZERO_HEALTH_PATH=/api/plugins/_a0_connector/v1/capabilities`, `AGENT_ZERO_API_KEY=<AGENT_ZERO_MCP_TOKEN value>` (canonical #2056 token; env.shared's `MCP_SERVER_TOKEN=dev-local-...` is a placeholder that must never win interpolation). Post-#2813 additions: `AGENT_ZERO_HEALTH_METHOD=POST` (capabilities is POST-only — a GET probe 405s and degrades to the 404-means-alive heuristic) and `AGENT_ZERO_MESSAGE_TIMEOUT=600` (inner-call timeout, was hardcoded 60s — long tasks surfaced as wrapper 503s). `healthz` returns 503 when the inner runtime is down.
+Wrapper env contract — **requires PR #2780's compose wiring to be merged** (until then a clean checkout defaults to the raw `/api_message` path and sends no key; on such nodes set these env vars explicitly): `AGENT_ZERO_MESSAGE_PATH=/api/plugins/_a0_connector/v1/message_send`, `AGENT_ZERO_HEALTH_PATH=/api/plugins/_a0_connector/v1/capabilities`, `AGENT_ZERO_API_KEY=<AGENT_ZERO_MCP_TOKEN value>` (canonical #2056 token; env.shared's `MCP_SERVER_TOKEN=dev-local-...` is a placeholder that must never win interpolation). Post-#2813 additions: `AGENT_ZERO_HEALTH_METHOD=POST` (capabilities is POST-only — a GET probe 405s and degrades to the 404-means-alive heuristic) and `AGENT_ZERO_MESSAGE_TIMEOUT=600` (inner-call timeout, was hardcoded 60s — long tasks surfaced as wrapper 503s).
+
+**`healthz` is a child-process check, not a reachability check.** It returns 503 **only** when the child process is not running -- the 503 branch tests `process_manager.is_running` and nothing else (`pmoves/services/agent-zero/main.py:851-856`). Two ways a **200** can come back over a runtime you cannot actually talk to:
+
+- the probe raises: `healthz()` catches `AgentZeroRequestError`, records `runtime.status = "error"`, and falls through to 200 (`main.py:843-858`);
+- the probe 404s: `client.health()` treats 404 as "running but no health endpoint" and returns `{"status": "ok", "note": "health endpoint not found (404)"}` (`main.py:331-338`, and the same for the fallback path at `:354-360`).
+
+The second is not hypothetical -- it is what this node returns today (measured B850, 2026-09-02): `GET :8080/healthz` -> **HTTP 200**, `runtime: {"status": "ok", "note": "health endpoint not found (404)"}`, i.e. the connector path is not being reached at all and the body still says `ok`.
+
+So **do not read the HTTP code alone**: read `runtime.status` *and* `runtime.note` from the body. `status: ok` with a 404 note means the wrapper is up and the connector wiring above is not in place.
+
+This is the same green-while-dead shape the 503 branch was added to fix (its own comment at `main.py:852-854` says so), still open one level in. Documented rather than patched here: making probe failures 503 changes Docker healthcheck semantics for every A0 container on the fleet, including the nodes this same paragraph describes as lacking the connector wiring, so it belongs to the service lane and not to a docs change.
 
 ## 3. Archon — REST only
 
