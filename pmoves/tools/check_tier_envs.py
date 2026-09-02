@@ -68,6 +68,89 @@ def check_drift() -> list[str]:
     return drift
 
 
+def check_shadow() -> list[str]:
+    """Report pipeline-owned keys that a process-environment export shadows.
+
+    THE FAILURE THIS CATCHES. Docker Compose resolves interpolation from the
+    shell environment BEFORE any `--env-file`. So an exported variable silently
+    outranks the entire secrets pipeline: `secrets-rotate` writes env.shared,
+    `secrets-funnel` propagates to every tier file, every file on disk is
+    correct -- and the container still receives the stale exported value. Every
+    step reports success. Only the container disagrees, and nothing asks it.
+
+    Measured 2026-09-02: SECRET_KEY_BASE was rotated 48 -> 96 chars and funnelled
+    to all eight tier files. supabase-realtime was then recreated and came up
+    with 48 chars, still crash-looping on "cookie store expects
+    conn.secret_key_base to be at least 64 bytes". The session shell held a stale
+    48-char export. Two rotations looked like they had failed; both had in fact
+    succeeded on disk.
+
+    This is the same family as check_drift(): the pipeline produced the right
+    value and something downstream silently won. Drift catches the value never
+    arriving; shadow catches it arriving and being overruled.
+
+    WHY THIS REPORTS RATHER THAN UNSETS. Stripping the offending variables before
+    invoking compose would "fix" it, but it would also silently break anyone
+    deliberately overriding a value for a one-off run -- a regression that would
+    itself be invisible. Detection is the honest half: name the variable, name
+    the fix, let the operator decide. `env -u <KEY> make ...` unblocks a single
+    command; clearing it from the launching shell fixes it for good.
+
+    Values are compared by digest and never printed. Identical values are not
+    reported -- an export that agrees with the file is harmless.
+    """
+    import hashlib
+    import os
+
+    def digest(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+    # env.shared is compose's PRIMARY --env-file; the tier files layer over it.
+    sources = [Path("env.shared")] + [Path(f"env.tier-{t}") for t in TIERS]
+    owned: dict[str, tuple[str, str]] = {}  # key -> (file, value)
+    for path in sources:
+        if not path.exists():
+            continue
+        for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            if key:
+                # Later files override earlier ones, matching compose's own order.
+                owned[key] = (path.name, value.strip())
+
+    shadowed: list[str] = []
+    for key, (source, file_value) in sorted(owned.items()):
+        shell_value = os.environ.get(key)
+        if shell_value is None or shell_value == file_value:
+            continue
+        shadowed.append(
+            f"  - {key}: shell={digest(shell_value)} but {source}={digest(file_value)}"
+        )
+
+    if not shadowed:
+        return []
+    return (
+        [
+            f"SHADOWED {len(shadowed)} pipeline-owned key(s): a process-environment "
+            "export outranks every --env-file,",
+            "  so compose injects the exported value and the funnelled value never "
+            "reaches the container.",
+            "  (values shown as sha256[:12] -- never the secrets themselves)",
+        ]
+        + shadowed
+        + [
+            "  Fix (one command):  env -u <KEY> make -C pmoves <target>",
+            "  Fix (permanent):    unset <KEY> in the shell that launches your tooling,",
+            "                      then re-run the recreate so the container re-reads it.",
+            "  Verify at the far end, not here: "
+            "docker exec <ctr> sh -c 'echo ${#<KEY>}'",
+        ]
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate tiered env files.")
     # Drift ON by default. It shipped opt-in, the Makefile target passed no
@@ -88,11 +171,28 @@ def main(argv: list[str] | None = None) -> int:
         action="store_false",
         help="Skip the drift check (existence only).",
     )
+    # Default ON, for the reason the --drift comment above records: a check that
+    # ships opt-in, behind a Makefile target that passes no flags, never runs.
+    parser.add_argument(
+        "--shadow",
+        action="store_true",
+        default=True,
+        help=(
+            "Check whether a process-environment export shadows a pipeline-owned "
+            "key (default: on). Compose prefers the shell over every --env-file."
+        ),
+    )
+    parser.add_argument(
+        "--no-shadow",
+        dest="shadow",
+        action="store_false",
+        help="Skip the shadow check.",
+    )
     parser.add_argument(
         "--strict",
         action="store_true",
         default=False,
-        help="Treat drift warnings as errors (non-zero exit)",
+        help="Treat drift/shadow warnings as errors (non-zero exit)",
     )
     args = parser.parse_args(argv)
 
@@ -119,7 +219,27 @@ def main(argv: list[str] | None = None) -> int:
             if args.strict:
                 rc = 1
 
-    if rc == 0:
+    # 3. Shadow check: the files can be perfect and still lose to the shell.
+    shadow_found = False
+    if args.shadow or args.strict:
+        shadow = check_shadow()
+        if shadow:
+            print("")
+            for line in shadow:
+                print(line)
+            shadow_found = True
+            if args.strict:
+                rc = 1
+
+    if rc == 0 and shadow_found:
+        # Never let the summary contradict the lines above it, for the same
+        # reason the drift summary was fixed: the reader believes the last line.
+        print(
+            "SHADOWED KEYS PRESENT (not failing: pass --strict to make this an "
+            "error). The files on disk are correct; the container will not get "
+            "them until the export is cleared."
+        )
+    elif rc == 0:
         if args.drift and drift_found:
             # Previously this branch printed "no drift detected" unconditionally,
             # immediately after listing the drift. A summary that contradicts the
