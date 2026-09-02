@@ -56,8 +56,26 @@ def test_mints_when_key_is_present_but_empty(tmp_path):
         "SECRET_KEY_BASE", env_path=env, registry_path=str(REGISTRY)
     )
     assert generated is True
-    # Supabase requires >= 64 chars (docker/CONFIG.md: "recommended length: 64").
-    assert len(be.read_env_value("SECRET_KEY_BASE", env)) == 64
+
+    # 64 is a FLOOR, not a target. Phoenix rejects a shorter value at boot
+    # ("cookie store expects conn.secret_key_base to be at least 64 bytes") and
+    # PMOVES-supabase/docker/CONFIG.md:926 calls 64 the *recommended* length --
+    # neither is an upper bound. #2881 raised the registry 64 -> 96 for margin,
+    # after a 48-char value held supabase-realtime in a crash loop.
+    #
+    # Units: `random_urlsafe` is `secrets.token_urlsafe(n)[:n]`, so a declared
+    # length is output CHARACTERS. That alphabet is ASCII, so N characters is N
+    # bytes and the registry and Phoenix specs are directly comparable.
+    # (Contrast VAULT_ENC_KEY: `random_hex` length is also characters, but the
+    # yt OAuth vault feeds it to bytes.fromhex(), so 32 chars is 16 bytes.)
+    #
+    # Assert against the registry so a deliberate bump is not a test failure,
+    # and assert the floor separately so a bump *below* what Supabase accepts
+    # fails here rather than at container boot.
+    minted = be.read_env_value("SECRET_KEY_BASE", env)
+    declared = be._registry_generator("SECRET_KEY_BASE", str(REGISTRY))
+    assert len(minted) == declared["length"]
+    assert len(minted) >= 64
 
 
 def test_never_overwrites_an_existing_value(tmp_path):
@@ -149,7 +167,13 @@ def test_the_four_blocking_keys_are_generatable_from_the_registry():
         for s in data.get("services", [])
         for v in s.get("variables", [])
     }
-    assert specs["SECRET_KEY_BASE"] == {"type": "random_urlsafe", "length": 64}
+    # 96, not 64, since #2881: 64 is Phoenix's floor and Supabase's
+    # "recommended length", not a maximum, and it cleared the floor with zero
+    # margin. Pinned literally on purpose -- this test's job is to notice an
+    # edit to the registry, so it is meant to fail on a bump and be updated
+    # deliberately. If you are here because it failed: check the new value is
+    # still >= 64 characters before changing it.
+    assert specs["SECRET_KEY_BASE"] == {"type": "random_urlsafe", "length": 96}
     assert specs["VAULT_ENC_KEY"] == {"type": "random_hex", "length": 32}
     assert specs["LOGFLARE_PUBLIC_ACCESS_TOKEN"] == {"type": "random_urlsafe", "length": 32}
     assert specs["LOGFLARE_PRIVATE_ACCESS_TOKEN"] == {"type": "random_urlsafe", "length": 32}
@@ -211,3 +235,74 @@ def test_ensure_is_mutually_exclusive_with_rotate(tmp_path, monkeypatch):
                   "--registry", str(REGISTRY)])
     assert rc == 2
     assert be.read_env_value("SECRET_KEY_BASE", env) == "live"
+
+
+def test_ensure_secret_never_returns_the_minted_value(tmp_path, capsys):
+    """The property CodeQL 388/389 asked about, pinned so it stays true.
+
+    `py/clear-text-logging-sensitive-data` flags bootstrap_env.py:89 and :93 --
+    the generic `_warn`/`_info` printers -- with the source given as the call
+    expression `ensure_secret(key, registry_path=args.registry)`. That is the
+    analyzer's name heuristic (a callable matching *secret* is assumed to return
+    sensitive data), not an observed dataflow: `main()` tuple-unpacks the result
+    into `generated, reason` and prints `reason`, so both elements inherit the
+    taint mark.
+
+    It is a false positive only for as long as `reason` stays metadata. Nothing
+    in the type signature enforces that, and the obvious future edit -- adding
+    the value to the message to help someone debug -- would turn it into a real
+    leak silently, because the alert is already dismissed. So assert it:
+    `reason` is built from the registry's declared generator type and length,
+    the minted value is never interpolated into it, and nothing reaches stdout
+    or stderr either.
+    """
+    env = _write(tmp_path / "env.shared", "SECRET_KEY_BASE=\n")
+    generated, reason = be.ensure_secret(
+        "SECRET_KEY_BASE", env_path=env, registry_path=str(REGISTRY)
+    )
+    assert generated is True
+
+    minted = be.read_env_value("SECRET_KEY_BASE", env)
+    assert minted  # the mint really happened, so the check below is not vacuous
+
+    # The returned reason carries generator metadata, not the material.
+    assert minted not in reason
+    assert reason == "generated (random_urlsafe length 96)"
+
+    # And ensure_secret itself emits nothing: main() owns the reporting, so a
+    # value cannot escape through a print inside the primitive either.
+    captured = capsys.readouterr()
+    assert minted not in captured.out
+    assert minted not in captured.err
+
+
+def test_ensure_cli_never_prints_the_minted_value(tmp_path, monkeypatch, capsys):
+    """Same property one level up, at the sinks CodeQL actually flagged.
+
+    Drives `main(--ensure ...)` for real over all four blocking keys and asserts
+    no minted value appears on stdout or stderr -- covering the `_info` sink
+    (line 93), the `_warn` sink (line 89) and the plain prints around them.
+    """
+    keys = (
+        "SECRET_KEY_BASE",
+        "VAULT_ENC_KEY",
+        "LOGFLARE_PUBLIC_ACCESS_TOKEN",
+        "LOGFLARE_PRIVATE_ACCESS_TOKEN",
+    )
+    env = _write(tmp_path / "env.shared", "")
+    monkeypatch.setattr(be, "ENV_SHARED_PATH", env)
+
+    argv = []
+    for key in keys:
+        argv += ["--ensure", key]
+    rc = be.main(argv + ["--registry", str(REGISTRY)])
+    assert rc == 0
+
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    for key in keys:
+        minted = be.read_env_value(key, env)
+        assert minted, f"{key} was not minted, so this assertion would be vacuous"
+        assert minted not in combined, f"{key}'s value reached the log"
+        # The name is expected in the log -- that is the whole report.
+        assert key in combined
