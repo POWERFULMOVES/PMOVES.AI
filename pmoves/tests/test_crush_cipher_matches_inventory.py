@@ -60,13 +60,28 @@ def test_cipher_path_agrees_with_inventory():
     )
 
 
-def test_no_bare_cipher_token_expansion():
-    """`${VAR}` with no default is sent literally and is a guaranteed 401."""
+def test_no_defaulted_cipher_token_expansion():
+    """The `:-` default must NOT come back now that the token is real.
+
+    INVERTED 2026-09-02 (B850). The old assertion required
+    `${CIPHER_API_TOKEN:-}` on the premise that "the shim rejects any non-empty
+    bearer" -- true only while NO node had a token configured, when an empty
+    bearer was accepted (200). Measured against a cipher process WITH the token
+    set: empty bearer is 401, literal `${CIPHER_API_TOKEN}` is 401, correct
+    token is 200. Both forms now fail identically when the variable is missing,
+    so the tiebreaker is observability, not reachability:
+    `mcp_roster_normalize.expand()` records a miss only for a reference with NO
+    default, and treats an exported-but-empty value as missing. The `:-` form
+    therefore 401s SILENTLY; the bare form 401s and lands in the
+    `_pmoves_roster_verdicts` degraded list. See
+    pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md.
+    """
     text = _configurator_text()
-    assert "${CIPHER_API_TOKEN}" not in text, (
-        "bare ${CIPHER_API_TOKEN} found. An unset variable is forwarded as the "
-        "literal string and the cipher shim rejects any non-empty bearer, so "
-        "cipher never connects. Use ${CIPHER_API_TOKEN:-}."
+    assert "${CIPHER_API_TOKEN:-}" not in text, (
+        "defaulted ${CIPHER_API_TOKEN:-} found. An empty bearer is a 401 now "
+        "that the token is provisioned, and the `:-` default suppresses the "
+        "roster's missing-variable verdict, so the failure is invisible. "
+        "Use bare ${CIPHER_API_TOKEN}."
     )
 
 

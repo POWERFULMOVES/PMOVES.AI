@@ -97,16 +97,30 @@ def test_tracked_roster_agrees_with_the_generator(
             )
 
 
-def test_cipher_bearer_keeps_the_load_bearing_default(generated: Dict[str, Any]) -> None:
-    """`${VAR}` is forwarded LITERALLY by Claude Code and the shim 401s it.
+def test_cipher_bearer_stays_bare_so_a_miss_is_recorded(
+    generated: Dict[str, Any],
+) -> None:
+    """The bearer must carry NO `:-` default, so an absent token is auditable.
 
-    `${CIPHER_API_TOKEN:-}` sends an empty bearer when unset -- which the shim
-    accepts -- and a real token on nodes that set one. Dropping the `:-` turns
-    a working local cipher into a 401 on every node without a token.
+    INVERTED 2026-09-02 (B850). The previous assertion pinned
+    `${CIPHER_API_TOKEN:-}` because an empty bearer was ACCEPTED (200) while no
+    node had a token, making `:-` the reachable form. That premise expired when
+    the token was provisioned. Measured against a cipher process with the token
+    set: no header 401, empty bearer 401, literal `${CIPHER_API_TOKEN}` 401,
+    correct token 200 plus a full MCP handshake (initialize + tools/list = 10
+    tools). Both forms fail the same way when the variable is missing, so the
+    deciding property is whether the failure is VISIBLE:
+    `mcp_roster_normalize.expand()` records a miss only for a reference with no
+    default (and counts an exported-empty value as missing). `:-` therefore
+    yields a silent 401 -- a server that loads, looks configured, and offers no
+    tools, which is how this fleet lost persistent memory for weeks. Bare yields
+    the same 401 plus a `_pmoves_roster_verdicts` degraded entry naming
+    CIPHER_API_TOKEN. See pmoves/docs/operations/CIPHER_AUTH_RUNBOOK.md.
     """
     for key, entry in _cipher_entries(generated["mcpServers"]).items():
         auth = entry.get("headers", {}).get("Authorization")
-        assert auth == "Bearer ${CIPHER_API_TOKEN:-}", (
-            f"{key} Authorization header is {auth!r}; the `:-` default is "
-            "load-bearing and must survive tracked-config generation."
+        assert auth == "Bearer ${CIPHER_API_TOKEN}", (
+            f"{key} Authorization header is {auth!r}; it must be the bare "
+            "reference so a missing token is recorded as degraded rather than "
+            "sent as a silent empty bearer."
         )

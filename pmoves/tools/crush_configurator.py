@@ -300,7 +300,7 @@ MCP_SPECS: List[MCPSpec] = [
         config={
             "type": "sse",
             "url": "http://${TS_Z890}:8105/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
         # Deliberately NO required_env: the shim accepts an EMPTY bearer
@@ -315,7 +315,7 @@ MCP_SPECS: List[MCPSpec] = [
         config={
             "type": "sse",
             "url": "http://localhost:8105/mcp/sse",
-            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN:-}"},
+            "headers": {"Authorization": "Bearer ${CIPHER_API_TOKEN}"},
             "timeout": 30,
         },
         # See pmoves-cipher above: no required_env, the empty bearer is
