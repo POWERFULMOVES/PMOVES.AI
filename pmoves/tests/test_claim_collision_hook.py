@@ -102,11 +102,42 @@ def test_release_must_match_the_claim_key_exactly(tmp_path):
     assert r.returncode == BLOCK, "a mismatched RELEASE key must not close the lane"
 
 
-def test_unkeyed_claim_reports_that_it_was_not_checked(tmp_path):
-    """Partial coverage must be audible. Silence would read as 'verified'."""
+def test_unkeyed_claim_is_refused_not_merely_reported(tmp_path):
+    """A claim with no lane is unenforceable, so it is refused rather than logged.
+
+    THIS ASSERTION USED TO BE `ALLOW` plus a "NOT CHECKED" line on stderr, and
+    that made the raw shell write MORE PERMISSIVE than the sanctioned tool it is
+    supposed to be replaced by. Measured at 776b429b9 with the identical claim:
+
+        EXIT=0  Bash echo-redirect / Bash heredoc / Write
+        EXIT=3  make -C pmoves register-claim   ("a CLAIM must name --branch")
+
+    AGENTS.md requires a CLAIM row to carry branch + scope + TTL, and 78 rows in
+    the live register name no branch and are enforceable by nothing. Could not
+    measure is not a pass.
+    """
     r = run_hook(tmp_path, "- `t` CLAIM `AGENT-B` scope: **freeform prose, no branch**")
-    assert r.returncode == ALLOW
-    assert "NOT CHECKED" in r.stderr, "unkeyed claims must not pass silently"
+    assert r.returncode == BLOCK, f"an unenforceable claim must be refused: {r.stderr!r}"
+    assert "names no branch" in r.stderr
+    assert "register-claim" in r.stderr, "a refusal must name the road that works"
+
+
+def test_an_unkeyed_claim_is_refused_the_same_way_on_the_shell_path(tmp_path):
+    """Same row, same verdict, whichever tool the agent happens to have.
+
+    The gap Codex found was between the shell path and `register_append.py`.
+    Fixing it on Bash alone would have re-opened the gap this PR closed --
+    Write and Bash disagreeing about one register row.
+    """
+    row = "- `t` CLAIM `AGENT-B` scope: **freeform prose, no branch**"
+    via_write = run_hook(tmp_path, row)
+    via_bash = _run_bash(tmp_path, f"echo '{row}' >> {REGISTER_NAME}")
+    assert via_write.returncode == BLOCK
+    assert via_bash.returncode == BLOCK
+    assert via_write.stderr == via_bash.stderr, (
+        "the two matchers must say the same thing:\n"
+        f"WRITE: {via_write.stderr!r}\nBASH:  {via_bash.stderr!r}"
+    )
 
 
 def test_non_register_file_is_ignored(tmp_path):
@@ -499,13 +530,19 @@ def test_a_file_path_is_not_a_lane(tmp_path):
     Unfiltered, two agents citing the same spec file would collide on it, and
     the register showed lanes nobody was working.
     """
+    # Each row names its OWN lane. Without that these two claims are unkeyed,
+    # and an unkeyed claim is now refused on its own account -- which would let
+    # this test pass while saying nothing about the suffix filter. With distinct
+    # lanes the only thing that can produce a collision here is the cited file
+    # being read as a lane, which is exactly the property under test.
     existing = (
-        "- `t` CLAIM `AGENT-A` scope: **wrote it up.** "
+        "- `t` CLAIM `AGENT-A` scope: **wrote it up.** Branch `feat/write-the-spec` "
         "See `docs/superpowers/specs/thing-design.md`\n"
     )
     r = run_hook(
         tmp_path,
-        "- `t` CLAIM `AGENT-B` scope: **read it.** See `docs/superpowers/specs/thing-design.md`",
+        "- `t` CLAIM `AGENT-B` scope: **read it.** Branch `feat/read-the-spec` "
+        "See `docs/superpowers/specs/thing-design.md`",
         existing=existing,
     )
     assert r.returncode == ALLOW, "a shared file citation must not read as a collision"
@@ -641,10 +678,12 @@ def test_an_explicitly_marked_branch_keeps_its_file_suffix(tmp_path):
 
 def test_a_cited_file_path_is_still_not_a_lane(tmp_path):
     """Negative control for the fix above: no marker, so the suffix filter holds."""
-    existing = "- `t0` CLAIM `AGENT-A` scope: reviewed `docs/superpowers/specs/x-design.md`\n"
+    existing = ("- `t0` CLAIM `AGENT-A` branch: `fix/reviewer-notes` \xb7 scope: "
+                "reviewed `docs/superpowers/specs/x-design.md`\n")
     r = run_hook(
         tmp_path,
-        "- `t1` CLAIM `AGENT-B` scope: also read `docs/superpowers/specs/x-design.md`",
+        "- `t1` CLAIM `AGENT-B` branch: `fix/reader-notes` \xb7 scope: also read "
+        "`docs/superpowers/specs/x-design.md`",
         existing=existing,
     )
     assert r.returncode == ALLOW, "a merely-cited spec file must not register as a lane"

@@ -10,6 +10,10 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import shutil
+import subprocess
+import sys
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -532,3 +536,293 @@ def test_a_row_whose_timestamp_is_not_an_iso_date_refuses_cleanly(
                    "--branch", "feat/real-lane",
                    "--co-owner", "PROBE:note"]) == m.EXIT_UNMEASURED
     assert register.read_text(encoding="utf-8") == before
+
+
+# --- the check and the append are ONE transaction ---------------------------
+# THE GATE'S OWN FAILURE MODE, INSIDE THE TOOL BUILT TO CLOSE IT. Two filers
+# read a free lane, both pass evaluate_claims(), and both append: one lane, two
+# owners, produced by the sanctioned path under exactly the concurrent filing it
+# exists to support. O_APPEND orders bytes; it does not order decisions.
+#
+# The window is forced open deliberately in these tests rather than hoped for.
+# A race test that relies on timing passes on a fast box and reports nothing.
+
+
+class _RaceGate:
+    """The real gate, with the read/check/append window held open on request.
+
+    Purely test-side: `_dispatch()` obtains the gate through `_load_gate()`, so
+    the delay is injected by patching that lookup. No fault-injection seam is
+    added to the shipped tool, which would be a second thing to get wrong.
+    """
+
+    def __init__(self, real, arrive):
+        self._real = real
+        self._arrive = arrive
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def evaluate_claims(self, proposed, existing):
+        verdict = self._real.evaluate_claims(proposed, existing)
+        self._arrive()          # after the read, before the append
+        return verdict
+
+
+def test_two_threads_racing_one_free_lane_cannot_both_land(mod, monkeypatch):
+    """Both filers reach the decision point with the lane free. One row lands.
+
+    Pre-fix this returns [EXIT_OK, EXIT_OK] and writes two rows for one lane.
+    The barrier makes that deterministic: neither filer can append until both
+    have read, which is the interleaving Codex described.
+
+    Post-fix the second filer cannot even READ until the first has appended, so
+    it waits, sees the row, and refuses. The barrier then times out, which is
+    the positive evidence that the two transactions were serialized rather than
+    merely lucky.
+    """
+    lane = "feat/free-lane-under-race"
+    barrier = threading.Barrier(2)
+    tripped = []
+
+    def arrive():
+        try:
+            barrier.wait(timeout=2.0)
+            tripped.append(True)
+        except threading.BrokenBarrierError:
+            pass    # serialized: the other filer never got here at the same time
+
+    real = mod._load_gate()
+    monkeypatch.setattr(mod, "_load_gate", lambda: _RaceGate(real, arrive))
+
+    results = {}
+
+    def file_row(owner):
+        results[owner] = mod.main(
+            ["claim", "--owner", owner, "--branch", lane, "--scope", "racing"])
+
+    threads = [threading.Thread(target=file_row, args=(o,))
+               for o in ("AGENT-B", "AGENT-C")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+        assert not t.is_alive(), "a filer never returned -- the lock deadlocked"
+
+    rows = [r for r in _rows(mod) if lane in r]
+    assert len(rows) == 1, (
+        f"one lane, {len(rows)} owners: {rows}. The check and the append are "
+        "not one transaction."
+    )
+    assert sorted(results.values()) == [mod.EXIT_OK, mod.EXIT_REFUSED], (
+        f"exactly one filer must be told no: {results}"
+    )
+    assert not tripped, (
+        "both filers were inside the decision window at once, so the "
+        "transactions were not serialized"
+    )
+
+
+_RACE_CHILD = r"""
+import importlib.util, os, sys, time, pathlib
+TOOL, REG, BARRIER, OWNER, LANE = sys.argv[1:6]
+spec = importlib.util.spec_from_file_location("register_append", TOOL)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+mod.REGISTER = pathlib.Path(REG)
+
+real = mod._load_gate()
+
+class Gate:
+    def __getattr__(self, name):
+        return getattr(real, name)
+    def evaluate_claims(self, proposed, existing):
+        v = real.evaluate_claims(proposed, existing)
+        # Filesystem barrier: announce, then wait for the other process to have
+        # read too. Both children are therefore holding a 'lane is free' verdict
+        # at the same moment -- if the lock does not exist.
+        with open(BARRIER, 'a') as fh:
+            fh.write(str(os.getpid()) + '\n')
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            if len(open(BARRIER).read().split()) >= 2:
+                break
+            time.sleep(0.02)
+        return v
+
+mod._load_gate = lambda: Gate()
+sys.exit(mod.main(['claim', '--owner', OWNER, '--branch', LANE,
+                   '--scope', 'racing across processes']))
+"""
+
+
+def test_two_PROCESSES_racing_one_free_lane_cannot_both_land(mod, tmp_path):
+    """The same race between separate processes -- what the fleet actually does.
+
+    The threaded test above proves the lock serializes two open file
+    descriptions; only this one proves it serializes two `make register-claim`
+    invocations, which is the case in the report.
+    """
+    lane = "feat/free-lane-cross-process"
+    child = tmp_path / "race_child.py"
+    child.write_text(_RACE_CHILD, encoding="utf-8")
+    barrier = tmp_path / "barrier.txt"
+    barrier.write_text("", encoding="utf-8")
+
+    procs = [
+        subprocess.Popen(
+            [sys.executable, str(child), str(TOOL), str(mod.REGISTER),
+             str(barrier), owner, lane],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for owner in ("AGENT-B", "AGENT-C")
+    ]
+    outs = [p.communicate(timeout=90) for p in procs]
+    codes = [p.returncode for p in procs]
+
+    rows = [r for r in _rows(mod) if lane in r]
+    assert len(rows) == 1, (
+        f"one lane, {len(rows)} owners across processes: {rows}\n"
+        + "\n".join(o[1] for o in outs)
+    )
+    assert sorted(codes) == [mod.EXIT_OK, mod.EXIT_REFUSED], (
+        f"exit codes {codes}\n" + "\n".join(o[1] for o in outs)
+    )
+
+
+def test_a_lock_this_tool_cannot_take_is_exit_3_and_never_exit_1(mod, monkeypatch):
+    """A wedged holder must not be reported as 'another owner holds your lane'.
+
+    Exit 1 is a fact about the register. If the transaction never ran, no such
+    fact was established, and a filer who backs off on that reading has been
+    misinformed by the only write path they have.
+    """
+    monkeypatch.setattr(mod, "LOCK_TIMEOUT_SECONDS", 0.2)
+    before = mod.REGISTER.read_text(encoding="utf-8")
+    with mod.register_lock(mod.REGISTER):
+        rc = mod.main(["claim", "--owner", "AGENT-B", "--branch", "feat/blocked",
+                       "--scope", "cannot get in"])
+    assert rc == mod.EXIT_UNMEASURED, f"a lock timeout must be 3, got {rc}"
+    assert mod.REGISTER.read_text(encoding="utf-8") == before
+
+
+def test_the_read_modify_write_roads_take_the_lock_too(mod, monkeypatch, tmp_path):
+    """`docs` and `amend` rewrite the WHOLE file, so an unlocked append is LOST.
+
+    Codex named only the append path. These two are worse in kind: the append
+    race duplicates a row, while a read-modify-write racing an append DELETES
+    one, silently, from a ledger whose whole contract is append-only. Both must
+    contend for the same lock, which is what this asserts.
+    """
+    monkeypatch.setattr(mod, "LOCK_TIMEOUT_SECONDS", 0.2)
+    prose = tmp_path / "block.md"
+    prose.write_text("some prose\n", encoding="utf-8")
+    before = mod.REGISTER.read_text(encoding="utf-8")
+
+    with mod.register_lock(mod.REGISTER):
+        docs_rc = mod.main(["docs", "--anchor", "# register",
+                            "--text-file", str(prose)])
+        amend_rc = mod.main(["amend", "--owner", "AGENT-A",
+                             "--branch", "feat/widget", "--co-owner", "AGENT-B"])
+
+    assert docs_rc == mod.EXIT_UNMEASURED, f"docs ignored the lock: {docs_rc}"
+    assert amend_rc == mod.EXIT_UNMEASURED, f"amend ignored the lock: {amend_rc}"
+    assert mod.REGISTER.read_text(encoding="utf-8") == before
+
+
+# --- the make road: a field value must never become a shell word -------------
+
+MAKEFILE = Path(__file__).resolve().parents[2] / "Makefile"
+REGISTER_TARGETS = ("register-claim", "register-release", "register-amend",
+                    "register-docs")
+# Everything a caller supplies as CONTENT. Not ARGS, which carries flags the
+# caller wrote themselves and is expanded deliberately.
+FIELD_VARS = ("OWNER", "BRANCH", "SCOPE", "TTL", "CO_OWNER", "ANCHOR", "TEXT_FILE")
+
+
+def _register_recipe_lines():
+    """The tab-indented recipe lines of the four register targets."""
+    text = MAKEFILE.read_text(encoding="utf-8")
+    out, current = [], None
+    for line in text.split("\n"):
+        if line.startswith("\t"):
+            if current:
+                out.append((current, line))
+            continue
+        name = line.split(":")[0].strip()
+        current = name if name in REGISTER_TARGETS else None
+    return out
+
+
+def test_no_register_field_is_expanded_into_a_recipe_line():
+    """A value interpolated into a recipe is handed to a SHELL before python.
+
+    Measured at 776b429b9, when SCOPE already travelled by environment and only
+    the emptiness guard still expanded it:
+
+        make register-claim ... SCOPE='scope with `touch /tmp/MARK` inside'
+        -> the recorded row was CORRECT, and /tmp/MARK was created
+
+    A correct row is not the whole test; the command ran. 6 of 7 field/target
+    combinations executed an embedded substitution, OWNER / BRANCH / TTL /
+    ANCHOR having no environment door at all. The guards now test the exported
+    variable, so no field is ever part of a command string.
+    """
+    offenders = []
+    for target, line in _register_recipe_lines():
+        for var in FIELD_VARS:
+            if "$(%s)" % var in line or "$(or $(%s)" % var in line:
+                offenders.append(f"{target}: {line.strip()}")
+    assert not offenders, (
+        "register field values expanded into a recipe -- a shell sees them "
+        "before python does:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_the_register_targets_use_a_dependency_aware_interpreter():
+    """`$(PYTHON)` honours no PEP 723 declaration.
+
+    `register_append.py` imports the collision hook, which needs PyYAML to read
+    the identity vocabulary. Without it the gate compares owner strings exactly
+    -- and one identity in this register spells itself several ways, so a
+    RELEASE stops closing the CLAIM it is closing.
+    """
+    bad = [f"{t}: {l.strip()}" for t, l in _register_recipe_lines()
+           if "register_append.py" in l and "$(REGISTER_PYTHON)" not in l]
+    assert not bad, (
+        "the sanctioned path must run on an interpreter chosen for the gate's "
+        "dependencies:\n  " + "\n  ".join(bad))
+
+
+def test_the_tool_declares_its_own_pep723_dependency():
+    """The hook's block does nothing for an interpreter chosen by THIS file.
+
+    `uv run --script` reads the PEP 723 block of the script it is pointed at.
+    Pointed at `register_append.py`, the hook's declaration is never consulted.
+    """
+    head = TOOL.read_text(encoding="utf-8").split('"""')[0]
+    assert "# /// script" in head, "no PEP 723 block"
+    assert "pyyaml" in head, f"PyYAML not declared:\n{head}"
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+def test_a_substitution_in_a_field_value_is_not_executed_by_make(tmp_path):
+    """The behavioural half of the static check above. Runs the real target.
+
+    `--dry-run`, so nothing is written to any register; the marker file is the
+    only evidence sought.
+    """
+    marker = tmp_path / "EXECUTED"
+    payload = "scope with `touch %s` inside" % marker
+    r = subprocess.run(
+        ["make", "-C", str(MAKEFILE.parent), "register-claim",
+         "OWNER=PROBE-NODE", "BRANCH=fix/probe-lane-not-real",
+         "TTL=n/a", "SCOPE=" + payload, "ARGS=--dry-run"],
+        capture_output=True, text=True, timeout=180)
+    # ASSERTED FIRST, because a target that fell over would make the marker
+    # check pass while proving nothing. The row must come out correct AND the
+    # substitution must not have run -- the defect produced a correct row.
+    assert r.returncode == 0, f"the target did not run:\n{r.stdout}\n{r.stderr}"
+    assert payload in r.stdout, (
+        f"the row does not carry the scope verbatim:\n{r.stdout}")
+    assert not marker.exists(), (
+        "make executed a command substitution embedded in SCOPE")

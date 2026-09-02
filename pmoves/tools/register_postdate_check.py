@@ -1,11 +1,29 @@
 #!/usr/bin/env python3
 """Assert every register row was filed no LATER than the commit carrying it.
 
-THE INVARIANT: `row_timestamp <= commit_author_time`.
+THE INVARIANT: `row_timestamp <= commit_creation_time` (`%cI`).
 
-It has no false-positive mode. A row records an event; a commit carries the
-row. The row cannot honestly claim a moment that had not happened yet when it
-was written down. Anything failing this was typed, not read off a clock.
+A row records an event; a commit carries the row. The row cannot honestly claim
+a moment that had not happened yet when it was written down. Anything failing
+this was typed, not read off a clock.
+
+AGAINST `%cI`, THE COMMITTER DATE, AND NOT `%aI`. The first cut compared against
+the AUTHOR date and claimed to have no false-positive mode. It has one, and it
+is the commonest git operation there is: `git commit --amend` preserves the
+original author date and updates only the committer date, so a row filed at
+11:30 by the clock-reading sanctioned path and folded into a commit authored at
+10:00 was reported POSTDATED by 1h30m. Measured on a scratch repo, exit 1 -- a
+required gate manufacturing the exact defect it was written to detect, against
+a filer who did everything right. `git rebase` and `git cherry-pick` rewrite
+the same way.
+
+`%cI` is also the CORRECT bound rather than merely the forgiving one: it is when
+this commit object came into existence, and the row was necessarily written
+before that. The looser reading `row <= max(%aI, %cI)` was considered and
+REJECTED -- an author date is settable to any value (`git commit --date=...`),
+so max() would accept a row postdated to a future author date and call it
+clean. That is postdating laundered through a flag, which is this check's whole
+subject. `%cI` fixes the false failure without widening what passes.
 
 WHY IT MATTERS. The register is provenance-bearing and feeds TTL-lateness
 arithmetic: rows carry `**TTL 72h (expires <ts>)**` and lateness is measured
@@ -116,8 +134,13 @@ def added_rows(sha: str) -> list[tuple[str, str, str]]:
 
 
 def commit_time(sha: str) -> datetime | None:
+    """When this commit OBJECT was created -- `%cI`, not `%aI`.
+
+    See the module docstring: `--amend`, `rebase` and `cherry-pick` all keep the
+    author date and move the committer date, so `%aI` fails honest rows.
+    """
     try:
-        raw = _git("show", "-s", "--format=%aI", sha).strip()
+        raw = _git("show", "-s", "--format=%cI", sha).strip()
     except subprocess.CalledProcessError:
         return None
     return parse_ts(raw)
@@ -130,7 +153,7 @@ def check(revs: list[str]) -> tuple[list[str], list[str]]:
     for sha in revs:
         ctime = commit_time(sha)
         if ctime is None:
-            unmeasured.append(f"{sha[:9]}: commit author time unreadable")
+            unmeasured.append(f"{sha[:9]}: commit creation time unreadable")
             continue
         for raw_ts, kind, owner in added_rows(sha):
             rts = parse_ts(raw_ts)
@@ -146,7 +169,7 @@ def check(revs: list[str]) -> tuple[list[str], list[str]]:
                 findings.append(
                     f"{sha[:9]}  {kind} by `{owner}`\n"
                     f"      row says   {rts:%Y-%m-%dT%H:%M:%SZ}\n"
-                    f"      commit was {ctime:%Y-%m-%dT%H:%M:%SZ}\n"
+                    f"      commit made {ctime:%Y-%m-%dT%H:%M:%SZ}\n"
                     f"      POSTDATED by {total // 3600}h{total % 3600 // 60:02d}m"
                 )
     return findings, unmeasured
@@ -196,7 +219,8 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_FINDINGS
     if unmeasured:
         return EXIT_UNMEASURED
-    print("register-postdate: clean - every added row is at or before its commit.")
+    print("register-postdate: clean - every added row is at or before the "
+          "commit that carried it.")
     return EXIT_CLEAN
 
 

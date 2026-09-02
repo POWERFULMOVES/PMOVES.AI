@@ -145,3 +145,81 @@ def test_cli_exit_codes(repo: Path, tmp_path: Path) -> None:
     _commit_row(repo, ROW.format(ts="2026-09-03T11:00:00Z"),
                 "2026-09-02T12:00:00+00:00")
     assert mod.main(["--repo", str(repo), "--base", "HEAD~1", "--head", "HEAD"]) == 1
+
+
+# --- the amend case: %cI, not %aI -------------------------------------------
+
+def _amend_row(repo: Path, row: str, committer_date: str) -> None:
+    """Fold a row into the PREVIOUS commit, as `git commit --amend` really does.
+
+    No GIT_AUTHOR_DATE: git preserves the amended commit's original author date,
+    which is the whole point. Only the committer date moves.
+    """
+    with (repo / REGISTER_REL).open("a", encoding="utf-8") as fh:
+        fh.write(row + "\n")
+    env = {"PATH": "/usr/bin:/bin",
+           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
+           "GIT_COMMITTER_DATE": committer_date}
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=env)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "--amend", "--no-edit"],
+                   check=True, env=env)
+
+
+def test_a_row_folded_in_with_commit_amend_is_not_postdated(repo: Path) -> None:
+    """The false-failure mode the first cut claimed it did not have.
+
+    An honest sequence: a commit is authored at 10:00, work continues, a row is
+    filed at 11:30 by the clock-reading sanctioned path, and the author folds it
+    into the commit they were already building. `--amend` keeps the 10:00 author
+    date and sets the committer date to 11:35.
+
+    Against `%aI` this reported POSTDATED by 1h30m and exited 1 -- a required
+    gate manufacturing the exact defect it exists to detect, against a filer who
+    used the sanctioned path precisely so this could not happen. Against `%cI`
+    it is clean, because 11:30 is genuinely before the commit object existed.
+    """
+    mod = _load()
+    _commit_row(repo, ROW.format(ts="2026-09-02T09:55:00Z"),
+                "2026-09-02T10:00:00+00:00")
+    _amend_row(repo, ROW.format(ts="2026-09-02T11:30:00Z"),
+               "2026-09-02T11:35:00+00:00")
+    mod.set_repo(repo)
+    findings, unmeasured = mod.check(mod._git("rev-list", "-1", "HEAD").split())
+    assert findings == [], (
+        "an amended commit's author date is not when the row was written:\n"
+        + "\n".join(findings)
+    )
+    assert unmeasured == []
+
+
+def test_a_future_author_date_cannot_launder_a_postdated_row(repo: Path) -> None:
+    """Why `%cI` alone, and not `row <= max(%aI, %cI)`.
+
+    An author date is settable to anything (`git commit --date=...`). Under
+    max() a row could be postdated to a future author date and read clean --
+    postdating laundered through a flag, which is this check's entire subject.
+    The row here is 3 hours ahead of when the commit object was made and must
+    still be a finding.
+
+    It fails at the previous head too, and for a reason worth stating: against
+    `%aI` the row and the author date agree exactly, so a row asserting a
+    moment three hours after the commit was made read CLEAN. `%cI` catches it.
+    So the switch is not purely a loosening -- it closes a hole in the same
+    move, and `max(%aI, %cI)` would leave that hole open.
+    """
+    mod = _load()
+    with (repo / REGISTER_REL).open("a", encoding="utf-8") as fh:
+        fh.write(ROW.format(ts="2026-09-02T13:00:00Z") + "\n")
+    env = {"PATH": "/usr/bin:/bin",
+           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
+           "GIT_AUTHOR_DATE": "2026-09-02T13:00:00+00:00",
+           "GIT_COMMITTER_DATE": "2026-09-02T10:00:00+00:00"}
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=env)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "row"],
+                   check=True, env=env)
+    mod.set_repo(repo)
+    findings, _ = mod.check(mod._git("rev-list", "-1", "HEAD").split())
+    assert len(findings) == 1, f"a future author date must not clear a row: {findings}"
+    assert "POSTDATED by 3h00m" in findings[0], findings[0]

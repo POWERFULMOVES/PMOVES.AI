@@ -62,9 +62,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The check compares each row against the author time of the COMMIT
-          # that added it, so it needs the commits -- a depth-1 checkout has
-          # nothing to compare and would report "could not measure" on every PR.
+          # The check compares each row against the CREATION time (%cI) of the
+          # commit that added it, so it needs the commits -- a depth-1 checkout
+          # has nothing to compare and would report "could not measure" on
+          # every PR. %cI and not the author time: `--amend`, `rebase` and
+          # `cherry-pick` keep the author date and move the committer date, so
+          # comparing against the author time failed honest amended rows.
           fetch-depth: 0
 
       - name: Set up Python

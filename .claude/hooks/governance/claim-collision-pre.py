@@ -41,11 +41,13 @@ gate reads it from BOTH sides:
   * the INCUMBENT declares the claimant -> allow, and say so on stderr
   * only the claimant declares          -> ask; attribution is not a handoff
 
-COVERAGE IS PARTIAL, AND DELIBERATELY VISIBLE. The lane is extracted from
-freeform scope prose, so it only works when the claim names its branch. A claim
-that names no branch CANNOT be checked -- the hook says so on stderr rather than
-exiting 0 as though it had verified something. Treat the unkeyed path as
-unguarded, not as passing.
+A CLAIM THAT NAMES NO LANE IS REFUSED. The lane is extracted from freeform
+scope prose, so the check only works when the claim names its branch. A claim
+that names none cannot be compared against anything -- 78 rows in the live
+register are in that state and none of them is enforceable. This used to warn
+and exit 0, which left the raw shell write MORE permissive than
+`register_append.py`, the tool every refusal message points at. Could not
+measure is not a pass, here as everywhere else in this repo.
 
 THE BASH PATH BLOCKS, AND IT ANSWERS THE SAME QUESTION THE WRITE PATH DOES.
 It used to be advisory. Measured 2026-09-02, identical content against a
@@ -1288,12 +1290,47 @@ def _report_shared(shared) -> None:
 
 
 def _report_unkeyed(unkeyed) -> None:
+    """Refuse a CLAIM that names no lane. Exits 2; it does not return.
+
+    THIS USED TO WARN AND EXIT 0, and that made the gate the most permissive
+    door in the system. Measured at 776b429b9, same unenforceable claim by
+    three routes:
+
+        EXIT=0  Bash, echo-redirect      "NOT CHECKED ... names no branch"
+        EXIT=0  Bash, heredoc            "NOT CHECKED ... names no branch"
+        EXIT=0  Write                    "NOT CHECKED ... names no branch"
+        EXIT=3  make register-claim      "a CLAIM must name --branch"
+
+    So the sanctioned path -- the one every refusal message points people to --
+    was STRICTER than the raw shell write it replaces. An agent told to stop
+    using heredocs would find the heredoc accepted a row the tool rejects,
+    which teaches the opposite of what the deny is for.
+
+    An unkeyed claim is not a small documentation problem. It is a claim the
+    Village Rule cannot enforce: no lane, nothing to compare, so two nodes can
+    hold one branch and this gate stays silent. 78 rows in the live register
+    are already in that state. Could-not-measure is not a pass, and this file
+    applies that to a truncating redirect already; a claim with no lane is the
+    same verdict arriving through the content instead of the verb.
+
+    BOTH MATCHERS, deliberately. Refusing on Bash alone would restore the
+    defect this PR removed -- same register, same row, a different answer
+    depending on which tool the agent happened to have.
+    """
+    if not unkeyed:
+        return
     for owner in unkeyed:
         sys.stderr.write(
-            f"claim-collision-pre: NOT CHECKED - CLAIM by `{owner}` names no branch, "
-            "so no lane could be compared. Add ``Branch `<name>``` to the scope to "
-            "make this claim enforceable.\n"
+            f"claim-collision-pre: REFUSED - CLAIM by `{owner}` names no branch, "
+            "so no lane could be compared and the claim is unenforceable. Add "
+            "``branch: `<name>``` to the row.\n"
         )
+    sys.stderr.write(
+        "Could not measure is NOT a pass (0 clean / 1 findings / 3 could not "
+        "measure).\n"
+        f"Sanctioned path, which requires the lane: {SANCTIONED_PATH}\n"
+    )
+    sys.exit(2)
 
 
 def _build_asks(verdict: ClaimVerdict):
@@ -1370,12 +1407,14 @@ def _apply_verdict(verdict: ClaimVerdict) -> None:
     if verdict.collisions:
         _report_collisions(verdict.collisions)
         sys.exit(2)
+    # BEFORE the ask, not after. A row this gate cannot check is refused on its
+    # own account; putting a question to a human about some OTHER row first
+    # would emit `permissionDecision: "ask"` on stdout and then exit 2 -- two
+    # contradictory answers in one response.
+    _report_unkeyed(verdict.unkeyed)
     asks = _build_asks(verdict)
     if asks:
         _emit_ask(asks)
-    # Say plainly when the gate could not check, instead of exiting 0 as though
-    # it had. An unkeyed claim is unguarded, not cleared.
-    _report_unkeyed(verdict.unkeyed)
 
 
 def _gate_shell_write(payload: dict) -> None:
