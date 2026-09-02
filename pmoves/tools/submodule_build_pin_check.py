@@ -86,6 +86,13 @@ would discard uncommitted work to make a check pass. This REPORTS and refuses,
 and prints the exact command to run. The human decides whether the worktree or
 the pin is the thing that is wrong.
 
+Which puts the whole weight of the recovery on that printed command, so it is
+anchored absolutely rather than relatively -- see ``_abs()``. Every road into
+this gate is ``make -C pmoves ...``, so the operator reading a block is standing
+in ``pmoves/``, and ``Pmoves-cipher`` is a SIBLING of that directory, not a
+child. A root-relative remediation is wrong on 100% of real invocations, which
+are the only ones anybody ever sees (Codex P2, comment 3910500690, 2026-09-02).
+
 Blast radius, measured: of 19 distinct ``build.context`` values in
 ``pmoves/docker-compose.yml``, 7 are rooted in a submodule -- PMOVES-Archon,
 PMOVES-OpenRoom, PMOVES-llama-throughput-lab, PMOVES-transcribe-and-fetch,
@@ -99,7 +106,9 @@ gitlink, that is exit 3 -- could not measure, NOT a pass. A gate that returns
 "clean" because it read nothing is worse than no gate, and is the failure this
 whole check exists to stop.
 
-Usage:
+Usage (paths are relative to the repo ROOT, and so is this invocation; the
+Makefile runs it from ``pmoves/`` as ``tools/submodule_build_pin_check.py``,
+which is why everything it PRINTS is absolute instead):
   python3 pmoves/tools/submodule_build_pin_check.py Pmoves-cipher
   python3 pmoves/tools/submodule_build_pin_check.py Pmoves-cipher:Dockerfile.pmoves
   python3 pmoves/tools/submodule_build_pin_check.py Pmoves-cipher --json
@@ -141,6 +150,33 @@ def _repo_root() -> Path | None:
 
 
 REPO_ROOT = _repo_root()
+
+
+def _abs(*parts: str) -> str:
+    """An absolute path under the repo root, for strings a human will paste.
+
+    Every remediation this tool prints is anchored with ``git -C <absolute>``
+    rather than a root-relative path, because the tool does not run from the
+    root. The canonical road is ``make -C pmoves up-cipher``, so the process --
+    and the operator reading its output -- stands in ``pmoves/``, where
+    ``git -C Pmoves-cipher fetch`` is ``fatal: cannot change to 'Pmoves-cipher'``
+    and ``git submodule update --checkout Pmoves-cipher`` is ``error: pathspec
+    ... did not match``. The submodule is a SIBLING of ``pmoves``, not a child.
+
+    That is worth more than its cosmetic weight, because these strings are only
+    ever read by an operator the gate has just blocked. A recovery command that
+    fails when pasted is how a correct gate gets switched off with
+    ``CIPHER_BUILD_PIN=warn`` by a frustrated human -- and the whole point of the
+    gate is that it is the only thing between them and a stale image.
+
+    ``REPO_ROOT`` is already absolute (``git rev-parse --show-toplevel``), so
+    ``-C`` makes each string correct from ANY directory rather than from exactly
+    one. Both halves need it: anchoring the submodule half and leaving the
+    superproject half relative is the original defect
+    (Codex P2, review comment 3910500690, 2026-09-02).
+    """
+    base = REPO_ROOT if REPO_ROOT is not None else Path(".")
+    return str(base.joinpath(*parts))
 
 
 def run_git(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -276,6 +312,33 @@ def dirty_build_inputs(path: str, watched: set | None) -> list[str] | None:
     return [ln for ln in proc.stdout.splitlines() if ln.strip()]
 
 
+def _remediation(status: str, path: str) -> list[str]:
+    """The commands printed to an operator this gate has just blocked.
+
+    Every entry must survive being pasted verbatim from ANY directory -- see
+    ``_abs()``. They are stored on the finding rather than formatted at print
+    time so that the strings a test executes are the identical objects the
+    operator sees; a parallel copy would let the two drift apart, which is the
+    same class of defect as the one this function fixes.
+
+    Nothing here is a mutation the human did not ask for. Drift gets the sync
+    command because the tool already knows the answer (the checkout is wrong).
+    Dirty deliberately does NOT get an automatic ``git stash -u``: the dirt may
+    be work in progress, and on the real Pmoves-cipher an ``--include-untracked``
+    stash would also sweep the runtime ``data/`` directory. It gets a read-only
+    inspect command instead and leaves the decision where this file's
+    "WHY A GATE AND NOT AN AUTO-SYNC" section puts it -- with the human.
+    """
+    if status == "drift":
+        return [
+            "git -C %s fetch && git -C %s submodule update --checkout %s"
+            % (_abs(path), _abs(), path),
+        ]
+    if status == "dirty":
+        return ["git -C %s status --short" % _abs(path)]
+    return []
+
+
 def check(specs: list[str]) -> tuple[int, list[dict]]:
     """Answer for each ``<path>`` or ``<path>:<dockerfile>`` spec.
 
@@ -296,6 +359,10 @@ def check(specs: list[str]) -> tuple[int, list[dict]]:
                 "path": path,
                 "status": "unmeasured",
                 "detail": "no gitlink recorded at this path in HEAD",
+                "remediation_verb": "inspect",
+                "remediation": [
+                    "git -C %s ls-tree HEAD %s" % (_abs(), path),
+                ],
             })
             unmeasured = True
             continue
@@ -304,8 +371,11 @@ def check(specs: list[str]) -> tuple[int, list[dict]]:
             findings.append({
                 "path": path,
                 "status": "unmeasured",
-                "detail": "submodule not initialized (or git unreadable) -- "
-                          "run: git submodule update --init " + path,
+                "detail": "submodule not initialized (or git unreadable)",
+                "remediation_verb": "run",
+                "remediation": [
+                    "git -C %s submodule update --init %s" % (_abs(), path),
+                ],
             })
             unmeasured = True
             continue
@@ -320,9 +390,13 @@ def check(specs: list[str]) -> tuple[int, list[dict]]:
                 findings.append({
                     "path": path,
                     "status": "unmeasured",
-                    "detail": "cannot read the build inputs from %s/%s -- "
+                    "detail": "cannot read the build inputs from %s -- "
                               "missing, unparseable, or it copies nothing from "
-                              "the build context" % (path, dockerfile),
+                              "the build context" % _abs(path, dockerfile),
+                    "remediation_verb": "inspect",
+                    "remediation": [
+                        "cat %s" % _abs(path, dockerfile),
+                    ],
                 })
                 unmeasured = True
                 continue
@@ -333,7 +407,11 @@ def check(specs: list[str]) -> tuple[int, list[dict]]:
                 "path": path,
                 "status": "unmeasured",
                 "detail": "git status failed in %s -- cannot tell whether the "
-                          "build inputs are modified" % path,
+                          "build inputs are modified" % _abs(path),
+                "remediation_verb": "inspect",
+                "remediation": [
+                    "git -C %s status --porcelain" % _abs(path),
+                ],
             })
             unmeasured = True
             continue
@@ -357,6 +435,7 @@ def check(specs: list[str]) -> tuple[int, list[dict]]:
             "watched": ("<whole worktree>" if watched is None
                         else "<whole build context>" if WHOLE_CONTEXT in watched
                         else sorted(watched)),
+            "remediation": _remediation(status, path),
         })
 
     if unmeasured:
@@ -412,18 +491,29 @@ def main() -> int:
             if f["dirty"]:
                 print("              and its build inputs are modified on top:")
                 _print_dirt(f)
-            print(f"              fix: git -C {f['path']} fetch && "
-                  f"git submodule update --checkout {f['path']}")
+            for cmd in f["remediation"]:
+                print(f"              fix: {cmd}")
         elif f["status"] == "dirty":
             print(f"  DIRTY     {f['path']} @ {f['gitlink'][:12]}")
             print("              HEAD matches the pin, but docker reads FILES, and")
             print("              these build inputs are not the recorded ones:")
             _print_dirt(f)
             print("              `git submodule status` shows no `+` for this state.")
-            print(f"              fix: commit or stash them in {f['path']}, or set")
-            print("              CIPHER_BUILD_PIN=warn to build mid-change on purpose.")
+            print(f"              fix: commit or stash the changes in {_abs(f['path'])}")
+            for cmd in f["remediation"]:
+                print(f"              inspect: {cmd}")
+            print("              or set CIPHER_BUILD_PIN=warn to build mid-change on")
+            print("              purpose (an env var -- correct from any directory).")
         else:
             print(f"  UNMEASURED {f['path']}: {f['detail']}")
+            # "run" = executing this clears the block. "inspect" = this is a
+            # read to tell you WHICH of the causes in `detail` you have; it may
+            # legitimately exit non-zero (a `cat` of a genuinely missing file),
+            # and that is an answer, not the wrong-directory failure this
+            # anchoring fixes. Both must RESOLVE from any cwd.
+            verb = f.get("remediation_verb", "run")
+            for cmd in f.get("remediation", []):
+                print(f"              {verb}: {cmd}")
 
     if code == 0:
         print("submodule build pins: clean")

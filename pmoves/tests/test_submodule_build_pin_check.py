@@ -19,6 +19,7 @@ any number of clean siblings.
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -351,3 +352,201 @@ def test_git_status_failing_is_unmeasured_not_clean(superproject):
     code, findings = _run(top, "Pmoves-cipher:Dockerfile.pmoves")
     assert findings[0]["status"] == "unmeasured"
     assert code == 3
+
+
+# --------------------------------------------------------------------------
+# Codex P2, review comment 3910500690 (2026-09-02): the remediation this gate
+# prints could not work from the directory the gate actually runs in.
+#
+# Every road in is `make -C pmoves ...` (up-cipher, up-cipher-full,
+# up-agents-stack, up-core-capable), so the process stands in `pmoves/` and
+# `Pmoves-cipher` is a SIBLING of it. `git -C Pmoves-cipher fetch` from there is
+# `fatal: cannot change to 'Pmoves-cipher'`; `git submodule update --checkout
+# Pmoves-cipher` is `error: pathspec ... did not match`. The string was wrong on
+# 100% of real invocations -- the only ones an operator ever sees.
+#
+# These tests do not assert on the SHAPE of the string. They run the tool as a
+# CLI from the subdirectory, scrape the command it printed, and EXECUTE it
+# there. A string that merely looks right is exactly what shipped, so looking
+# right is not the property under test; being pasteable is.
+# --------------------------------------------------------------------------
+
+def _make_subdir(top: Path) -> Path:
+    """`top/pmoves/` -- stands in for the cwd `make -C pmoves` runs the gate in."""
+    d = top / "pmoves"
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def _cli(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run the tool as the Makefile does: a real process, with a real cwd."""
+    return subprocess.run(
+        [sys.executable, str(TOOLS_DIR / "submodule_build_pin_check.py"), *args],
+        cwd=str(cwd), capture_output=True, text=True, check=False,
+    )
+
+
+def _printed_commands(stdout: str, verb: str) -> list[str]:
+    return [
+        line.strip()[len(verb) + 2:]
+        for line in stdout.splitlines()
+        if line.strip().startswith(verb + ": ")
+    ]
+
+
+def _sh(cmd: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    """Execute a printed command VERBATIM, in a shell, from `cwd`.
+
+    The only env addition is protocol.file.allow, because git >= 2.38 refuses
+    file:// submodule clones and this fixture's remote is a local path. That is
+    a property of the fixture's transport, not of the command: the real
+    Pmoves-cipher remote is https. It is passed through the ENVIRONMENT so the
+    command string itself is still executed character-for-character.
+    """
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "protocol.file.allow",
+        "GIT_CONFIG_VALUE_0": "always",
+    }
+    return subprocess.run(
+        cmd, shell=True, cwd=str(cwd), capture_output=True, text=True,
+        check=False, env=env,
+    )
+
+
+def test_drift_remediation_pasted_from_the_make_subdir_heals_the_block(superproject):
+    """The headline: scrape what it printed, paste it there, and it must work.
+
+    Before the fix this failed with `fatal: cannot change to 'Pmoves-cipher'`
+    (exit 128) and the drift was still there afterwards.
+    """
+    top, first = superproject
+    _git("checkout", "-q", first, cwd=top / "Pmoves-cipher")
+    sub = _make_subdir(top)
+
+    blocked = _cli(sub, "Pmoves-cipher:Dockerfile.pmoves")
+    assert blocked.returncode == 1, blocked.stdout + blocked.stderr
+    cmds = _printed_commands(blocked.stdout, "fix")
+    assert cmds, "a blocked operator was given nothing to run:\n" + blocked.stdout
+
+    for cmd in cmds:
+        done = _sh(cmd, cwd=sub)
+        assert done.returncode == 0, (
+            "the printed remediation failed when pasted from %s:\n  %s\n%s"
+            % (sub, cmd, done.stdout + done.stderr)
+        )
+
+    healed = _cli(sub, "Pmoves-cipher:Dockerfile.pmoves")
+    assert healed.returncode == 0, (
+        "the remediation ran but did not clear the block:\n" + healed.stdout
+    )
+
+
+def test_uninitialized_remediation_pasted_from_the_make_subdir_heals_the_block(superproject):
+    """Same defect, exit-3 lane -- not in the review, found by sweeping.
+
+    `git submodule update --init Pmoves-cipher` from `pmoves/` is
+    `error: pathspec ... did not match any file(s) known to git`, exit 1.
+    """
+    top, _ = superproject
+    _git("submodule", "deinit", "-f", "Pmoves-cipher", cwd=top)
+    sub = _make_subdir(top)
+
+    blocked = _cli(sub, "Pmoves-cipher:Dockerfile.pmoves")
+    assert blocked.returncode == 3, blocked.stdout + blocked.stderr
+    cmds = _printed_commands(blocked.stdout, "run")
+    assert cmds, "an unmeasured submodule left the operator nothing to run:\n" + blocked.stdout
+
+    for cmd in cmds:
+        done = _sh(cmd, cwd=sub)
+        assert done.returncode == 0, (
+            "the printed remediation failed when pasted from %s:\n  %s\n%s"
+            % (sub, cmd, done.stdout + done.stderr)
+        )
+
+    healed = _cli(sub, "Pmoves-cipher:Dockerfile.pmoves")
+    assert healed.returncode == 0, healed.stdout
+
+
+def test_dirty_inspect_command_pasted_from_the_make_subdir_resolves(superproject):
+    """The dirty lane's command is a read, so it must still RESOLVE from there.
+
+    Its job is to show the operator the dirt. It gets no automatic
+    `git stash --include-untracked`: on the real Pmoves-cipher that would also
+    sweep the untracked runtime `data/`, and this tool's doctrine is that the
+    human decides. So it is asserted to exit 0, not to heal.
+    """
+    top, _ = superproject
+    (top / "Pmoves-cipher" / "src" / "app.ts").write_text("export const a = 999\n")
+    sub = _make_subdir(top)
+
+    blocked = _cli(sub, "Pmoves-cipher:Dockerfile.pmoves")
+    assert blocked.returncode == 1
+    assert "DIRTY" in blocked.stdout
+    cmds = _printed_commands(blocked.stdout, "inspect")
+    assert cmds, blocked.stdout
+    for cmd in cmds:
+        done = _sh(cmd, cwd=sub)
+        assert done.returncode == 0, cmd + "\n" + done.stdout + done.stderr
+        assert "src/app.ts" in done.stdout, (
+            "the inspect command resolved but showed the wrong tree: " + done.stdout
+        )
+
+
+@pytest.mark.parametrize("spec", [
+    "Pmoves-cipher:Dockerfile.absent",   # named Dockerfile unreadable
+    "README",                            # path records no gitlink
+])
+def test_every_unmeasured_lane_prints_a_command_that_resolves_from_the_subdir(
+    superproject, spec,
+):
+    """Sweep, not spot-fix: no exit-3 lane may print a path only the root can open.
+
+    The property is DIRECTORY INDEPENDENCE, so it is measured directly rather
+    than guessed from the shape of the string: run each printed command from two
+    unrelated directories and require identical behaviour. Asserting "contains
+    no relative token" would be wrong -- `git -C <abs> ls-tree HEAD README`
+    carries a bare `README`, and that is a pathspec the `-C` anchor already
+    resolves. What must not vary is the ANSWER.
+
+    Both commands in this lane are reads, so running them twice is safe. A `cat`
+    of a genuinely missing file exits non-zero from both directories, and that
+    consistency is the point: it is a real finding, not a wrong-directory error.
+    """
+    top, _ = superproject
+    sub = _make_subdir(top)
+    elsewhere = top.parent
+    got = _cli(sub, spec)
+    assert got.returncode == 3, got.stdout + got.stderr
+
+    cmds = _printed_commands(got.stdout, "inspect") + _printed_commands(got.stdout, "run")
+    assert cmds, "an exit-3 lane told the operator nothing:\n" + got.stdout
+    for cmd in cmds:
+        from_sub = _sh(cmd, cwd=sub)
+        from_elsewhere = _sh(cmd, cwd=elsewhere)
+        assert (from_sub.returncode, from_sub.stdout) == \
+               (from_elsewhere.returncode, from_elsewhere.stdout), (
+            "the remediation means different things in different directories, so "
+            "it depends on a cwd the tool does not control:\n  %s\n  from %s -> %s\n"
+            "  from %s -> %s" % (cmd, sub, from_sub.returncode,
+                                 elsewhere, from_elsewhere.returncode)
+        )
+
+
+def test_remediation_is_the_string_that_gets_printed(superproject):
+    """No parallel copy: the field a test executes IS what the operator reads.
+
+    Formatting the command a second time at print time is how the two would
+    drift apart -- the same class of defect as the one being fixed here.
+    """
+    top, first = superproject
+    _git("checkout", "-q", first, cwd=top / "Pmoves-cipher")
+    sub = _make_subdir(top)
+
+    as_json = _cli(sub, "Pmoves-cipher:Dockerfile.pmoves", "--json")
+    finding = json.loads(as_json.stdout)["findings"][0]
+    printed = _printed_commands(_cli(sub, "Pmoves-cipher:Dockerfile.pmoves").stdout, "fix")
+    assert finding["remediation"] == printed

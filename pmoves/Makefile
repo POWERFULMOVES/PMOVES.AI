@@ -3411,6 +3411,11 @@ cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that
 	@# this node carries does not produce a false block (review F1, 2026-09-02).
 	@# Set CIPHER_BUILD_PIN=warn to build anyway — e.g. deliberately testing an
 	@# unpushed submodule change. It must be typed, and it says so in the output.
+	@# The override is echoed as a whole pasteable command, built from $(CURDIR)
+	@# and $(MAKECMDGOALS) so it is correct from any directory — the operator
+	@# reading this is NOT standing in pmoves/, make is. Same reason the check
+	@# itself prints absolute git -C paths (review comment 3910500690). GOALS is
+	@# never empty here: .DEFAULT_GOAL is help, which does not depend on this gate.
 	@rc=0; $(PYTHON) tools/submodule_build_pin_check.py Pmoves-cipher:Dockerfile.pmoves || rc=$$?; \
 	if [ $$rc -ne 0 ]; then \
 		if [ "$${CIPHER_BUILD_PIN}" = "warn" ]; then \
@@ -3420,7 +3425,8 @@ cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that
 				echo "CIPHER_BUILD_PIN=warn — building from the drifted/dirty worktree anyway (exit $$rc suppressed)"; \
 			fi; \
 		else \
-			echo "Refusing to build. Sync the worktree, or set CIPHER_BUILD_PIN=warn to override."; \
+			echo "Refusing to build. Run the command the check printed above, or override with:"; \
+			echo "    CIPHER_BUILD_PIN=warn $(MAKE) -C $(CURDIR) $(MAKECMDGOALS)"; \
 			exit $$rc; \
 		fi; \
 	fi
