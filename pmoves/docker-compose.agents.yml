@@ -1353,4 +1353,45 @@ services:
           cpus: '1.0'
           memory: 1G
 
+  notebook-mcp:
+    # notebook-mcp — MCP server bridging Open Notebook REST to ANY MCP-consuming
+    # agent (A0 runtime client :8081, deepseek-harness dsh-mcp-client). "Build once,
+    # mount twice": tools mcp__notebook__save_note / search_notes reuse the exact
+    # calls proven by the pmoves_notes A0 plugin. See handoff
+    # notebook-mcp-build-2026-09-02 + services/notebook-mcp/README.md.
+    <<: *tier-agent-hardened-rw
+    build:
+      context: ./services/notebook-mcp
+      dockerfile: Dockerfile
+    image: ${NOTEBOOK_MCP_IMAGE:-ghcr.io/powerfulmoves/pmoves-notebook-mcp:pmoves-latest}
+    container_name: pmoves-notebook-mcp
+    hostname: notebook-mcp
+    restart: unless-stopped
+    environment:
+    - MCP_HOST=0.0.0.0
+    - MCP_PORT=8092
+    - MCP_TRANSPORT=${NOTEBOOK_MCP_TRANSPORT:-streamable-http}
+    # Reaches Open Notebook on pmoves_app; token optional (per-tenant seam lives in
+    # the mounting harness, not here — see the service README).
+    - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+    - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+    - NATS_URL=${NATS_URL}
+    - PMOVES_NETWORKS=pmoves_app,pmoves_bus
+    ports:
+    - ${NOTEBOOK_MCP_BIND:-127.0.0.1}:${NOTEBOOK_MCP_PORT:-8092}:8092
+    profiles: ["agents", "research"]
+    networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      # python:3.12-slim has no curl; a TCP connect proves the MCP server is bound.
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost',8092),3).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   # Tier: agent (NotebookLM Agent - Google NotebookLM integration)
