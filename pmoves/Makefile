@@ -3390,8 +3390,27 @@ up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker 
 	@$(DC) --profile agents up -d --build notebooklm-agent
 	@echo "✔ NotebookLM MCP agent up (stdio via docker exec; needs GOOGLE_REFRESH_TOKEN for live NotebookLM calls)"
 
+.PHONY: cipher-build-pin-check
+cipher-build-pin-check: ## Refuse to build cipher from a submodule worktree that drifted off the recorded gitlink
+	@# docker compose's build.context for cipher-api is ../Pmoves-cipher — the
+	@# WORKTREE. Docker reads files on disk and knows nothing about gitlinks, so a
+	@# drifted checkout is faithfully compiled and the road still prints "ready".
+	@# That is how B850 served `initialize -> 400 stream is not readable` for two
+	@# weeks while main carried the fix (c69adb43, pinned since PR #2366).
+	@# Set CIPHER_BUILD_PIN=warn to build anyway — e.g. deliberately testing an
+	@# unpushed submodule change. It must be typed, and it says so in the output.
+	@rc=0; $(PYTHON) tools/submodule_build_pin_check.py Pmoves-cipher || rc=$$?; \
+	if [ $$rc -ne 0 ]; then \
+		if [ "$${CIPHER_BUILD_PIN}" = "warn" ]; then \
+			echo "CIPHER_BUILD_PIN=warn — building from the drifted worktree anyway (exit $$rc suppressed)"; \
+		else \
+			echo "Refusing to build. Sync the worktree, or set CIPHER_BUILD_PIN=warn to override."; \
+			exit $$rc; \
+		fi; \
+	fi
+
 .PHONY: up-cipher
-up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+up-cipher: cipher-build-pin-check ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
 	@# Idempotent. ONLY the schema-mismatch exit 2 is tolerated (the smoke
 	@# gate fails loudly on it); every other failure — bad Qdrant creds,
@@ -3480,7 +3499,7 @@ qdrant-verify-cipher: ## Provision + round-trip a probe through the Cipher colle
 		python3 -u /scripts/provision_qdrant_cipher_memory.py --self-test
 
 .PHONY: up-cipher-full
-up-cipher-full: ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
+up-cipher-full: cipher-build-pin-check ## Start Cipher Memory with full embedding pipeline (Qdrant + TensorZero + Ollama + NATS)
 	@echo "Starting full Cipher embedding stack..."
 	@$(DC) up -d nats qdrant
 	@$(DC) --profile tensorzero up -d tensorzero-gateway pmoves-ollama
